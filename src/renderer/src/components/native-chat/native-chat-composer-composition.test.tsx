@@ -35,7 +35,6 @@ function TestField(props: TestFieldProps): React.JSX.Element {
 
 function fieldProps(overrides: Partial<TestFieldProps> = {}): TestFieldProps {
   return {
-    dropScopeKey: 'pane-test',
     draftScopeKey: 'pane-test',
     textareaRef: createRef<HTMLTextAreaElement>(),
     draft: '',
@@ -78,19 +77,11 @@ function textarea(): HTMLTextAreaElement {
   return screen.getByRole('textbox') as HTMLTextAreaElement
 }
 
-describe('native chat composer drop-scope marker', () => {
-  // The drop pipeline stops walking at the drop-target marker, so a scope key on
-  // any other element would never reach the payload.
-  it('publishes the pane key, not the draft key, on the same element as the drop-target marker', () => {
-    const view = render(
-      <TestField
-        {...fieldProps({ dropScopeKey: 'tab-7:pane-9', draftScopeKey: 'agent-session:session-9' })}
-      />
-    )
-    const marker = view.container.querySelector('[data-native-file-drop-target="composer"]')
-    expect(marker).not.toBeNull()
-    expect(marker?.getAttribute('data-composer-scope-key')).toBe('tab-7:pane-9')
-    expect(view.container.querySelectorAll('[data-composer-scope-key]')).toHaveLength(1)
+describe('native chat composer drop ownership', () => {
+  it('keeps the conversation editor key without publishing drop routing markers', () => {
+    const view = render(<TestField {...fieldProps({ draftScopeKey: 'agent-session:session-9' })} />)
+    expect(view.container.querySelector('[data-composer-scope-key]')).toBeNull()
+    expect(view.container.querySelector('.ProseMirror')).not.toBeNull()
   })
 })
 

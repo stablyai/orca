@@ -96,6 +96,18 @@ describe('ACP launch resolution', () => {
     expect(searched[0]).toContain('/home/user/.grok-work/bin')
   })
 
+  it('creates a new ACP session after clear instead of probing the old session', async () => {
+    const value = grokRecord({
+      providerContextBoundary: { operationId: 'clear', afterFence: 2, clearedAt: 100 },
+      providerHandleChain: []
+    })
+    const readJournal = () => {
+      throw new Error('old history must not be sampled for resume')
+    }
+    const launch = await resolver(value, false, readJournal).resolve({ identity })
+    expect(launch.resume).toBeNull()
+  })
+
   it('asks the agent to approve everything only under full access', async () => {
     const launch = await resolver(grokRecord(), true).resolve({ identity })
     expect(launch.args).toContain('--always-approve')

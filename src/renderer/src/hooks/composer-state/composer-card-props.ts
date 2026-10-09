@@ -1,9 +1,11 @@
+import { resolveComposerAttachmentTarget } from './composer-attachment-target'
 import { getAttachmentLabel } from '@/lib/new-workspace'
 import { getQuickComposerCreateDisabled } from '@/lib/new-workspace-create-gates'
 import type { ComposerModel } from './composer-model'
 import type { ComposerCardActionProps, ComposerCardSourceProps } from './composer-card-contract'
 
 export function buildComposerCardProps(state: ComposerModel) {
+  const attachmentTarget = resolveComposerAttachmentTarget(state)
   const {
     advancedOpen,
     agentPrompt,
@@ -78,7 +80,6 @@ export function buildComposerCardProps(state: ComposerModel) {
     selectedProjectHostSetupId,
     selectedProjectId,
     selectedRepo,
-    selectedRepoExecutionHostId,
     selectedRepoConnectInProgress,
     selectedRepoConnectionId,
     selectedRepoGitHubSourceContext,
@@ -152,7 +153,7 @@ export function buildComposerCardProps(state: ComposerModel) {
     onBranchNameOverrideChange: isProjectGroupTarget ? () => {} : handleBranchNameOverrideChange,
     parentWorktreeId: isProjectGroupTarget ? null : parentWorktreeId,
     onParentWorktreeIdChange: isProjectGroupTarget ? () => {} : setParentWorktreeId,
-    selectedRepoExecutionHostId: isProjectGroupTarget ? null : selectedRepoExecutionHostId,
+    selectedRepoExecutionHostId: attachmentTarget.hostId,
     selectedRepoProjectId: isProjectGroupTarget ? null : selectedRepoProjectId,
     onSmartGitHubItemSelect: handleSmartGitHubItemSelect,
     onSmartGitLabItemSelect: handleSmartGitLabItemSelect,
@@ -181,6 +182,8 @@ export function buildComposerCardProps(state: ComposerModel) {
     linkedOnlyTemplatePreview: shouldApplyLinkedOnlyTemplate ? linkedOnlyTemplatePrompt : null,
     attachmentPaths,
     getAttachmentLabel,
+    // Quick create has no attachment display or launch-prompt destination.
+    onNativeFileDrop: undefined,
     onAddAttachment: () => void handleAddAttachment(),
     onRemoveAttachment: (pathValue) =>
       setAttachmentPaths((current) => current.filter((currentPath) => currentPath !== pathValue)),
@@ -210,7 +213,7 @@ export function buildComposerCardProps(state: ComposerModel) {
     onBaseBranchMrSelect: isProjectGroupTarget ? () => {} : handleBaseBranchMrSelect,
     baseBranchLinkedPrNumber:
       linkedWorkItem?.type === 'pr' && baseBranch ? linkedWorkItem.number : null,
-    selectedRepoPath: isProjectGroupTarget ? null : (selectedRepo?.path ?? null),
+    selectedRepoPath: attachmentTarget.path,
     selectedRepoIsRemote: isProjectGroupTarget
       ? folderTargetIsRemote
       : Boolean(selectedRepo?.connectionId),

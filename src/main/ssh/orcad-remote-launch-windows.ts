@@ -2,7 +2,7 @@
  * Starting a candidate orcad on a Windows SSH host.
  *
  * Win32-OpenSSH kills the session's job when the session ends, so orcad must leave that job.
- * `orcad.js --windows-breakaway-launch` does it the way the relay does: one CreateProcessW with
+ * The server entry's `--windows-breakaway-launch` mode does it the way the relay does: one CreateProcessW with
  * CREATE_BREAKAWAY_FROM_JOB through the slot's staged process-tree addon. Unlike the relay there
  * is no WMI fallback: Win32_Process.Create is EDR-scored remote execution and refused to a
  * standard user's network logon, so a host that cannot break away refuses the launch.
@@ -23,21 +23,24 @@ import {
 } from '../../shared/windows-breakaway-launch'
 import { joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
 import {
-  orcadWindowsBaseDir,
-  orcadWindowsHostOpCommand,
   orcadWindowsNodeCommandLine,
+  orcadWindowsSlotOpCommand,
   readOrcadWindowsEncodedAnswer
 } from './orcad-remote-windows-node'
-import { ORCAD_WINDOWS_RUNTIME_MARKER } from './orcad-windows-host-script'
+import {
+  ORCAD_WINDOWS_ENTRY_MARKER,
+  ORCAD_WINDOWS_RUNTIME_MARKER
+} from './orcad-windows-host-script'
 import {
   ORCAD_LOG_FILENAME,
   ORCAD_READINESS_FILENAME,
   ORCAD_WINDOWS_PROCESS_FILENAME
 } from './orcad-remote-host-support'
 import { orcadManagedLaunchEnv, type OrcadLaunchSpec } from './orcad-remote-launch'
+import { ORCAD_WINDOWS_LAUNCH_REFUSED_CODE } from './orcad-host-unavailable'
 
 export class OrcadWindowsLaunchRefusedError extends Error {
-  readonly code = 'orcad_windows_launch_refused'
+  readonly code = ORCAD_WINDOWS_LAUNCH_REFUSED_CODE
   constructor(reason: string) {
     super(
       `The Windows host refused to start orcad outside the SSH session (${reason}). orcad needs ` +
@@ -53,10 +56,7 @@ export function windowsOrcadLaunchRuntimeCommand(
   host: RemoteHostPlatform,
   slotDir: string
 ): string {
-  return orcadWindowsHostOpCommand(host, orcadWindowsBaseDir(host, slotDir), 'slot-runtime', [
-    slotDir,
-    'clear-stop-request'
-  ])
+  return orcadWindowsSlotOpCommand(host, slotDir, 'slot-runtime', [slotDir, 'clear-stop-request'])
 }
 
 export function readWindowsOrcadSlotRuntime(output: string): string {
@@ -67,14 +67,27 @@ export function readWindowsOrcadSlotRuntime(output: string): string {
   return runtime
 }
 
+/** Older host-script answers omit the entry; those slots used the single-file launcher. */
+export function readWindowsOrcadSlotEntry(
+  output: string,
+  host: RemoteHostPlatform,
+  slotDir: string
+): string {
+  return (
+    readOrcadWindowsEncodedAnswer(output, ORCAD_WINDOWS_ENTRY_MARKER) ??
+    joinRemotePath(host, slotDir, 'orcad.js')
+  )
+}
+
 export function windowsOrcadLaunchCommand(
   host: RemoteHostPlatform,
   spec: OrcadLaunchSpec,
-  slotRuntime: string
+  slotRuntime: string,
+  slotEntry = joinRemotePath(host, spec.remoteInstallDir, 'orcad.js')
 ): string {
   const dir = spec.remoteInstallDir
   return orcadWindowsNodeCommandLine(slotRuntime, [
-    joinRemotePath(host, dir, 'orcad.js'),
+    slotEntry,
     WINDOWS_BREAKAWAY_LAUNCH_FLAG,
     // The addon creates both with CREATE_ALWAYS, so a previous run's readiness line is gone
     // before the launcher returns.

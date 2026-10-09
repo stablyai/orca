@@ -1,11 +1,11 @@
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import {
   consumePendingActivationSpawn,
   getPendingActivationSpawnCount,
-  isCurrentDirectSshAuthority,
-  isRemoteRuntimePtyId
+  isCurrentDirectSshAuthority
 } from './terminal-pty-identities'
 
 export function createTerminalPtyReleaseActions(

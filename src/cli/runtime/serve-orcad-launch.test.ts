@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { formatServeRuntimeSelection } from '../../shared/orcad-local-serve-selection'
 import type { runProcess } from '../../shared/child-process/run-process'
-import { orcadServeArgs, resolveLocalServeRuntime } from './serve-orcad-launch'
+import { orcadServeArgs, resolveLocalServeRuntime, serveOptionArgs } from './serve-orcad-launch'
 
 type RunProcess = typeof runProcess
 
@@ -99,5 +99,36 @@ describe('orca serve asking the app which host to run', () => {
       '/work/app'
     ])
     expect(orcadServeArgs({})).toEqual(['--bind', '0.0.0.0'])
+  })
+
+  it('spells the same flags with the --serve- prefix for the Electron host', () => {
+    expect(
+      serveOptionArgs(
+        {
+          json: true,
+          port: '6768',
+          pairingAddress: '10.0.0.5',
+          noPairing: true,
+          mobilePairing: true,
+          grantDesktopControl: true,
+          recipeJson: true,
+          projectRoot: '/work/app'
+        },
+        '--serve-'
+      )
+    ).toEqual([
+      '--serve-json',
+      '--serve-port',
+      '6768',
+      '--serve-pairing-address',
+      '10.0.0.5',
+      '--serve-no-pairing',
+      '--serve-mobile-pairing',
+      '--serve-grant-desktop-control',
+      '--serve-recipe-json',
+      '--serve-project-root',
+      '/work/app'
+    ])
+    expect(serveOptionArgs({ recipeJson: true }, '--serve-')).toEqual([])
   })
 })

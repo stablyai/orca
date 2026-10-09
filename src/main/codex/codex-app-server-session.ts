@@ -40,6 +40,8 @@ export type CodexAppServerInvocation = {
   envToDelete?: readonly string[]
   /** Whole-session deadline. The codex child is stopped when it lapses. */
   timeoutMs: number
+  /** Stops the session and its child early, as the deadline would. */
+  signal?: AbortSignal
 }
 
 /** Codex-side absence of the requested app-server RPC surface (old CLI without
@@ -194,18 +196,30 @@ export async function runCodexAppServerSession<T>(
   const deadlinePromise = new Promise<never>((_resolve, reject) => {
     rejectDeadline = reject
   })
-  const deadline = setTimeout(() => {
+  function endSession(error: Error): void {
     timedOut = true
-    const error = new CodexAppServerTimeoutError(
-      `codex app-server session exceeded ${invocation.timeoutMs}ms (${invocation.command})`
-    )
     // A supervised child is stopped by the finally below, which this rejection runs at once.
     if (!managed.supervised) {
       killCodexAppServerProcessTree(child)
     }
     failPending(error)
     rejectDeadline(error)
-  }, invocation.timeoutMs)
+  }
+  const deadline = setTimeout(
+    () =>
+      endSession(
+        new CodexAppServerTimeoutError(
+          `codex app-server session exceeded ${invocation.timeoutMs}ms (${invocation.command})`
+        )
+      ),
+    invocation.timeoutMs
+  )
+  const onAbort = (): void => endSession(new Error('codex app-server session stopped'))
+  if (invocation.signal?.aborted) {
+    onAbort()
+  } else {
+    invocation.signal?.addEventListener('abort', onAbort, { once: true })
+  }
 
   function sendLine(payload: Record<string, unknown>): void {
     child.stdin.write(`${JSON.stringify(payload)}\n`)
@@ -333,5 +347,6 @@ export async function runCodexAppServerSession<T>(
     // Ends stdin, gives a supervisor its full stop time (a direct child 1.5 s), then the tree.
     await managed.close()
     clearTimeout(deadline)
+    invocation.signal?.removeEventListener('abort', onAbort)
   }
 }

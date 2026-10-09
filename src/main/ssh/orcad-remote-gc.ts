@@ -28,7 +28,7 @@ import { gcRemoteNodeRuntimeStore } from './remote-node-runtime-store-gc'
 import { readOrcadGcTransactionPins } from './orcad-gc-transaction-pins'
 import { isWindowsRemoteHost, joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
 import { RELAY_REMOTE_DIR } from './relay-protocol'
-import { orcadRemoteBaseDir, orcadWindowsHostOpCommand } from './orcad-remote-windows-node'
+import { orcadWindowsHomeOpCommand } from './orcad-remote-windows-node'
 import { ORCAD_WINDOWS_LIVENESS_MANY_MARKER } from './orcad-windows-host-script'
 
 export type OrcadGcOptions = {
@@ -119,12 +119,7 @@ async function windowsLiveCandidates(
   try {
     output = await execCommand(
       options.conn,
-      orcadWindowsHostOpCommand(
-        options.host,
-        orcadRemoteBaseDir(options.host, options.remoteHome),
-        'liveness-many',
-        dirs
-      ),
+      orcadWindowsHomeOpCommand(options.host, options.remoteHome, 'liveness-many', dirs),
       { wrapCommand: false, signal: options.signal }
     )
   } catch (error) {

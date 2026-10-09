@@ -13,8 +13,8 @@ import {
   restoreLocalStructuredChatsAtStartup
 } from './local-structured-chats'
 
-const SETTING_OFF = { experimentalStructuredNativeChat: false }
-const SETTING_ON = { experimentalStructuredNativeChat: true }
+const SETTING_OFF = { experimentalNativeChat: false }
+const SETTING_ON = { experimentalNativeChat: true }
 
 beforeEach(() => {
   mocks.held = false

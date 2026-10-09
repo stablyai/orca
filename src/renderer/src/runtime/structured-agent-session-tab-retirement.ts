@@ -8,7 +8,9 @@ import {
   markStructuredAgentSessionLaunchCancelled
 } from '@/lib/structured-agent-session-launch-registry'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
-import { discardStructuredAgentSessionLaunchOutbox } from '@/components/native-chat/structured-agent-session-outbox-storage'
+import { discardStructuredAgentSessionChatSends } from '@/lib/structured-agent-session-launch-prompt'
+import { stopStructuredAgentSessionSends } from '@/components/native-chat/structured-agent-session-message-sender'
+import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
 import { closeStructuredAgentSession } from './structured-agent-session-close'
 import { withLocalSessionTabCloseOwner } from './local-session-tab-close-owner'
 import { executionHostIdForStructuredTarget } from './structured-agent-session-owner'
@@ -28,6 +30,7 @@ export function retireStructuredAgentSessionTab(args: {
   sessionId: string
   onError?: (error: unknown) => void
 }): void {
+  retireStructuredAgentSessionReadOwner(args.sessionId, args.target)
   const key = retirementKey(args.target, args.worktreeId, args.sessionId)
   const existing = inFlightRetirements.get(key)
   if (existing) {
@@ -75,8 +78,12 @@ export function beginStructuredAgentSessionTabClose(args: {
       args.sessionId,
       executionHostIdForStructuredTarget(args.target)
     )
+    discardStructuredAgentSessionChatSends(args.sessionId)
+  } else {
+    // Nothing more goes out, and nothing is dropped: one on its way settles from its answer, and
+    // the rest goes back to the conversation's draft.
+    stopStructuredAgentSessionSends(args.sessionId)
   }
-  discardStructuredAgentSessionLaunchOutbox(args.sessionId)
   retireStructuredAgentSessionTab(args)
 }
 

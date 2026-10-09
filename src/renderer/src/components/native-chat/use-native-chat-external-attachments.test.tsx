@@ -587,15 +587,77 @@ describe('useNativeChatExternalAttachments', () => {
         '/srv/agent-session-attachments/u1/shot.png',
         null
       )
-      expect(chips.drop).toHaveBeenCalledExactlyOnceWith('chip-2')
+      expect(chips.drop).not.toHaveBeenCalled()
       expect(chips.attachReferences).toHaveBeenCalledExactlyOnceWith([
-        '/srv/agent-session-attachments/u2/notes.md'
+        { id: 'chip-2', path: '/srv/agent-session-attachments/u2/notes.md' }
       ])
       // The client never reads its own disk for these paths: the server stores the bytes.
       expect(mocks.stat).not.toHaveBeenCalled()
     })
 
-    it('does not insert a file whose chip the user removed while it uploaded', async () => {
+    it('refuses a captured drop if its destination changed before preparation finished', async () => {
+      const chips = trackingChips()
+      const probe = await renderProbe({
+        structuredWorktreeId: 'worktree-1',
+        structuredSession: session,
+        attachResolvedPaths: vi.fn(),
+        pendingChips: chips
+      })
+      let current = true
+      const deliver = probe.latest().captureExternalDrop(() => current)
+      current = false
+      await act(async () => deliver(['/Users/me/notes.md']))
+      expect(chips.begun).toEqual([])
+      expect(mocks.prepareNativeChatSessionAttachmentUpload).not.toHaveBeenCalled()
+    })
+
+    it('discards uploaded files if the captured drop destination changed during upload', async () => {
+      const upload = deferred<AgentSessionAttachmentPathUploadResult>()
+      mocks.uploadNativeChatSessionAttachmentPaths.mockReturnValueOnce(upload.promise)
+      const chips = trackingChips()
+      const probe = await renderProbe({
+        structuredWorktreeId: 'worktree-1',
+        structuredSession: session,
+        attachResolvedPaths: vi.fn(),
+        pendingChips: chips
+      })
+      let current = true
+      const deliver = probe.latest().captureExternalDrop(() => current)
+      act(() => void deliver(['/Users/me/notes.md']))
+      current = false
+      await act(async () =>
+        upload.resolve(
+          uploaded([['/Users/me/notes.md', '/srv/agent-session-attachments/u1/notes.md']])
+        )
+      )
+      expect(chips.drop).toHaveBeenCalledExactlyOnceWith('chip-1')
+      expect(chips.attachReferences).not.toHaveBeenCalled()
+    })
+
+    it('settles an upload into its captured chips while a prompt card unmounts the composer', async () => {
+      const upload = deferred<AgentSessionAttachmentPathUploadResult>()
+      mocks.uploadNativeChatSessionAttachmentPaths.mockReturnValueOnce(upload.promise)
+      const chips = trackingChips()
+      const probe = await renderProbe({
+        structuredWorktreeId: 'worktree-1',
+        structuredSession: session,
+        attachResolvedPaths: vi.fn(),
+        pendingChips: chips
+      })
+      act(() => void probe.latest().captureExternalDrop(() => true)(['/Users/me/notes.md']))
+      act(() => root?.unmount())
+      root = null
+      await act(async () =>
+        upload.resolve(
+          uploaded([['/Users/me/notes.md', '/srv/agent-session-attachments/u1/notes.md']])
+        )
+      )
+      expect(chips.attachReferences).toHaveBeenCalledExactlyOnceWith([
+        { id: 'chip-1', path: '/srv/agent-session-attachments/u1/notes.md' }
+      ])
+    })
+
+    it('keeps each file operation ID through reference settlement, including removed chips', async () => {
       const upload = deferred<AgentSessionAttachmentPathUploadResult>()
       mocks.uploadNativeChatSessionAttachmentPaths.mockReturnValueOnce(upload.promise)
       const chips = trackingChips()
@@ -619,7 +681,8 @@ describe('useNativeChatExternalAttachments', () => {
       )
 
       expect(chips.attachReferences).toHaveBeenCalledExactlyOnceWith([
-        '/srv/agent-session-attachments/u2/notes.md'
+        { id: 'chip-1', path: '/srv/agent-session-attachments/u1/report.pdf' },
+        { id: 'chip-2', path: '/srv/agent-session-attachments/u2/notes.md' }
       ])
     })
 
@@ -647,7 +710,7 @@ describe('useNativeChatExternalAttachments', () => {
 
       expect(chips.drop).toHaveBeenCalledWith('chip-1')
       expect(chips.attachReferences).toHaveBeenCalledExactlyOnceWith([
-        '/srv/agent-session-attachments/u2/notes.md'
+        { id: 'chip-2', path: '/srv/agent-session-attachments/u2/notes.md' }
       ])
       // The cause, the size limit here, rides in the same notice.
       expect(notices).toEqual([

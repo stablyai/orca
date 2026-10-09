@@ -7,9 +7,19 @@ export type ExternalEditorOpenCapability =
 
 export function getExternalEditorOpenCapability(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
-  context: { connectionId?: string | null; command?: string }
+  context: {
+    connectionId?: string | null
+    command?: string
+    runtimeEnvironmentId?: string | null
+    /** The path's owner could not be placed; a null runtime then proves nothing about locality. */
+    ownerUnresolved?: boolean
+  }
 ): ExternalEditorOpenCapability {
-  if (settings?.activeRuntimeEnvironmentId?.trim()) {
+  if (
+    context.ownerUnresolved ||
+    settings?.activeRuntimeEnvironmentId?.trim() ||
+    context.runtimeEnvironmentId?.trim()
+  ) {
     return { allowed: false, reason: 'remote-runtime' }
   }
   if (!context.connectionId?.trim()) {

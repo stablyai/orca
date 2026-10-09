@@ -174,7 +174,8 @@ export async function flushStructuredAgentSessionHost(
               stopped: context.restartResume.confirmStopped
             }
           },
-          retainSessionIds
+          retainSessionIds,
+          context.trigger
         ),
       beginResumeMarkers: () => context.restartResume.beginTeardown(context.trigger),
       recordResumeMarkers: context.restartResume.recordMarkers,

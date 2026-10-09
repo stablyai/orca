@@ -116,6 +116,8 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       resolveCodexStructuredLaunchHome?: (input: {
         launchEnv: NodeJS.ProcessEnv
       }) => string | null | Promise<string | null>
+      // The sync launch prep runs on the shared mirror, for the catalog probe's read-only server.
+      prepareCodexCatalogProbeHome?: (homePath: string) => void
       buildAgentHookPtyEnv?: () => Record<string, string>
       getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus
       agentSessionClaimSigner?: AgentSessionClaimSigner
@@ -270,6 +272,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
     this.prepareAiVaultSessionResumeFn = deps?.prepareAiVaultSessionResume ?? null
     this.prepareCodexStructuredLaunchFn = deps?.prepareCodexStructuredLaunch ?? null
     this.resolveCodexStructuredLaunchHomeFn = deps?.resolveCodexStructuredLaunchHome ?? null
+    this.prepareCodexCatalogProbeHomeFn = deps?.prepareCodexCatalogProbeHome ?? null
     this.agentSessionClaimSigner =
       deps?.agentSessionClaimSigner ?? createEphemeralAgentSessionClaimSigner(this.runtimeId)
     this.onTerminalSideEffects = deps?.onTerminalSideEffects ?? null

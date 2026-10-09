@@ -20,6 +20,7 @@ describe('NativeChatComposerNotices', () => {
       <NativeChatComposerNotices
         notices={[
           { key: 'composer', kind: 'attachment', text: 'Worktree not ready.' },
+          { key: 'host', kind: 'host', tone: 'warning', text: 'Build box is offline' },
           { key: 'session', kind: 'error', text: 'Orca couldn’t save your message.' },
           { key: 'slash', kind: 'error', text: 'sonnet-9 is not an available model.' }
         ]}
@@ -29,7 +30,8 @@ describe('NativeChatComposerNotices', () => {
     expect(texts).toEqual([
       'Orca couldn’t save your message.',
       'sonnet-9 is not an available model.',
-      'Worktree not ready.'
+      'Worktree not ready.',
+      'Build box is offline'
     ])
     expect(container.querySelectorAll('[data-notice-kind="error"]')).toHaveLength(2)
   })

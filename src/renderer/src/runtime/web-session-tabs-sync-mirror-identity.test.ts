@@ -11,10 +11,10 @@ import type { RuntimeBrowserPlacement } from '../../../shared/runtime-browser-pl
 import {
   applyWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshots,
-  applyFreshWebSessionTabsSnapshot,
-  resetWebSessionTabsSnapshotFreshnessForTests,
-  type WebSessionTabsSyncState
-} from './web-session-tabs-sync'
+  applyFreshWebSessionTabsSnapshot
+} from './web-session-tabs-sync/snapshot-api'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 
 const ENVIRONMENT_ID = 'web-env-1'
 const NOW = 1_700_000_000_000

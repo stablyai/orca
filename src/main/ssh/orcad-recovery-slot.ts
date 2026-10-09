@@ -21,7 +21,7 @@ import {
   type OrcadStopOutcome
 } from './orcad-remote-process-control'
 import { execOrcadRemote, type OrcadRemoteExecTarget } from './orcad-remote-runtime-control'
-import { orcadActivationTransactionRoot } from './orcad-activation-lock'
+import { orcadActivationTransactionRoot } from './orcad-activation-transaction'
 import {
   initialOrcadActivationAdmissionCommand,
   parseInitialOrcadActivationAdmission

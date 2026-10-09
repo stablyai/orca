@@ -1,6 +1,8 @@
 import { settleStructuredAgentLaunchPrompt } from '@/lib/structured-agent-session-launch-prompt'
-import type { StructuredPromptDeliveryResult } from '@/lib/structured-agent-session-launch-prompt'
-import type { StructuredAgentSessionOutboxEntry } from '../../../shared/structured-agent-session-outbox'
+import type {
+  StagedStructuredLaunchPrompt,
+  StructuredPromptDeliveryResult
+} from '@/lib/structured-agent-session-launch-prompt'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
 import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -13,6 +15,8 @@ export type StructuredAgentLaunchOptions = {
   prompt?: string
   promptDelivery?: 'auto-submit' | 'submit-after-ready' | 'draft'
   onPromptDelivered?: () => void
+  /** The caller keeps the prompt's text if it does not go out (notes), so no composer gets it. */
+  promptKeptByCaller?: true
   /** Adopt an existing provider conversation instead of starting a fresh one. Part of the launch's
    *  identity, not a preference — see `launchIdentity`. */
   resumeFrom?: StructuredAgentSessionResumeSource
@@ -20,8 +24,6 @@ export type StructuredAgentLaunchOptions = {
   executionHostId?: ExecutionHostId
   /** The saved selection a paired host reported it will seed; read only by the starting caller. */
   hostSeedOptions?: Readonly<Record<string, string>>
-  /** The tab group the chat opens in; a request with no text reuses an empty chat only there. */
-  targetGroupId?: string
 }
 
 export type StructuredLaunchCaller = {
@@ -67,7 +69,7 @@ export function addStructuredLaunchCaller(args: {
   launchResult: Promise<{ sessionId: string; fence: number }>
   target: RuntimeClientTarget
   options: StructuredAgentLaunchOptions
-  stagedEntry: StructuredAgentSessionOutboxEntry | null
+  stagedPrompt: StagedStructuredLaunchPrompt | null
 }): StructuredLaunchCaller {
   const caller: StructuredLaunchCaller = {}
   args.group.entries.add(caller)
@@ -75,7 +77,7 @@ export function addStructuredLaunchCaller(args: {
     launchResult: args.launchResult,
     target: args.target,
     options: args.options,
-    stagedEntry: args.stagedEntry
+    stagedPrompt: args.stagedPrompt
   })
   caller.promptDeliveryResult = promptDeliveryResult?.catch(() => ({
     delivered: false,

@@ -32,6 +32,7 @@ it('shares one setup and runs the unchanged compiler after static checks finish'
     'node config/scripts/ci-unit-plan.mjs'
   ])
   expect(plan.env.ORCA_UNIT_SELECTION_MODE).toContain('vars.ORCA_UNIT_SELECTION_MODE')
+  expect(plan.env.ORCA_UNIT_FULL_SHARD_COUNT).toBe("${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '5' }}")
   expect(steps.indexOf(plan)).toBeLessThan(steps.indexOf(compiler))
   expect(steps.indexOf(compiler)).toBeGreaterThan(
     steps.findIndex((step) => step.wait?.includes('localization-extraction'))

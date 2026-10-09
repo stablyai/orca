@@ -118,7 +118,6 @@ export type TerminalCreateSurfacingStore = {
   settings: {
     terminalFontSize: number
     experimentalNativeChat: boolean
-    openAgentTabsInChatByDefault: boolean
     activeRuntimeEnvironmentId: string | undefined
   }
 }

@@ -65,10 +65,18 @@ export function discoverNodeServerTests(root = ROOT) {
 }
 
 export async function collectNodeServerInputs({ root = ROOT, entryPoints } = {}) {
-  const [{ build }, { externalNativeAddons, ORCAD_CHILD_ENTRY_POINTS, ORCAD_ENTRY_POINT }] =
-    await Promise.all([import('esbuild'), import('./orcad-entry-build.mjs')])
+  const [
+    { build },
+    {
+      externalNativeAddons,
+      ORCAD_CHILD_ENTRY_POINTS,
+      ORCAD_ENTRY_POINT,
+      ORCAD_LAUNCHER_ENTRY_POINT
+    }
+  ] = await Promise.all([import('esbuild'), import('./orcad-entry-build.mjs')])
   const entries = entryPoints ?? [
     ORCAD_ENTRY_POINT,
+    ORCAD_LAUNCHER_ENTRY_POINT,
     ...Object.values(ORCAD_CHILD_ENTRY_POINTS),
     ...BUILD_SCRIPTS,
     ...discoverNodeServerTests(root)
@@ -98,6 +106,14 @@ export async function collectNodeServerInputs({ root = ROOT, entryPoints } = {})
   )
 }
 
+function isSourceUnitTest(file) {
+  return (
+    /^src\/(?:[^/]+\/)*[^/]+\.test\.(?:ts|tsx)$/.test(file) &&
+    !file.includes('/../') &&
+    !file.includes('/./')
+  )
+}
+
 export async function classifyNodeServerChanges(
   changedFiles,
   collect = collectNodeServerInputs,
@@ -110,7 +126,7 @@ export async function classifyNodeServerChanges(
   const forced = changedFiles.find(
     (file) =>
       ALWAYS_FILES.has(file) ||
-      ALWAYS_PREFIXES.some((prefix) => file.startsWith(prefix)) ||
+      (ALWAYS_PREFIXES.some((prefix) => file.startsWith(prefix)) && !isSourceUnitTest(file)) ||
       selectors.some((selector) => file.includes(selector))
   )
   if (forced) {

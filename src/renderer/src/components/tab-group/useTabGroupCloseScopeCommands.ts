@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
 import { captureWorkspaceEmptiedReaction } from './workspace-emptied-reaction'
+import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 
 export function useTabGroupCloseScopeCommands({
   groupId,
@@ -35,12 +36,7 @@ export function useTabGroupCloseScopeCommands({
 
   const closeAllEditorTabsInGroup = useCallback(() => {
     for (const item of groupTabs) {
-      if (
-        item.contentType === 'editor' ||
-        item.contentType === 'diff' ||
-        item.contentType === 'conflict-review' ||
-        item.contentType === 'check-details'
-      ) {
+      if (isEditorTabContentType(item.contentType)) {
         if (!item.isPinned) {
           closeItem(item.id)
         }

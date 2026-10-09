@@ -1,7 +1,7 @@
 import { open } from 'node:fs/promises'
 import { throwIfAiVaultScanCancelled } from '../main/ai-vault/ai-vault-scan-cancellation'
 import { BinarySessionTranscriptError } from '../main/ai-vault/remote-session-content-lines'
-import { BINARY_PROBE_BYTES, isBinaryBuffer } from './fs-handler-utils'
+import { BINARY_PROBE_BYTES, isBinaryBuffer } from '../shared/binary-buffer'
 import { readNodeFileWithinLimit } from '../shared/node-bounded-file-reader'
 
 /** The same open handle supplies the probe and stream, including across renames. */

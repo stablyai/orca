@@ -1,6 +1,5 @@
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { agentHookServer } from '../../../agent-hooks/server'
-import { markClaudePtySpawned } from '../../../claude-accounts/live-pty-gate'
 import { registerPty } from '../../../memory/pty-registry'
 import type { PtySpawnResult } from '../../../providers/types'
 import { clearMigrationUnsupportedPtysForPaneKey } from '../../../agent-hooks/migration-unsupported-pty-state'
@@ -124,9 +123,6 @@ async function commitReservedPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpaw
       ctx.result.id,
       typeof ctx.launchCommand === 'string' ? ctx.launchCommand : null
     )
-  }
-  if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
-    markClaudePtySpawned(ctx.result.id)
   }
   // Why: record the paneKey mapping so clearProviderPtyState can clear the agent-hooks server's per-paneKey caches on exit.
   // Why: args.env is untrusted IPC JSON (type unenforced); bound the paneKey so malformed/oversized values can't pollute ptyPaneKey or clearPaneState.

@@ -1,4 +1,5 @@
 import { sha256 } from './sha256'
+import type { StructuredAgentSessionFirstMessage } from './structured-agent-session-create'
 import {
   isAgentSessionHandleProvider,
   type StructuredAgentId
@@ -48,6 +49,8 @@ export function structuredAgentSessionCreateFingerprint(input: {
   agent: StructuredAgentId
   resumeFrom?: { providerSessionId: string }
   tabId?: string
+  firstMessage?: StructuredAgentSessionFirstMessage
+  options?: Readonly<Record<string, string>>
 }): string {
   return structuredAgentSessionPayloadFingerprint({
     method: 'agentSession.create',
@@ -60,7 +63,9 @@ export function structuredAgentSessionCreateFingerprint(input: {
       resumeFrom: input.resumeFrom,
       // The host digests the same field; a retry naming another tab still replays with the
       // recorded one, since the host owns the id.
-      tabId: input.tabId
+      tabId: input.tabId,
+      firstMessage: input.firstMessage,
+      options: input.options
     }
   })
 }

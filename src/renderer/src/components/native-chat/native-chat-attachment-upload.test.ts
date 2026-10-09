@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { getDefaultSettings } from '../../../../shared/constants'
 
 const mocks = vi.hoisted(() => ({
   toastLoading: vi.fn(() => 'toast-1'),
@@ -37,6 +39,7 @@ import {
 } from './native-chat-attachment-upload'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { repoFixture, worktreeFixture } from './native-chat-workspace-test-fixtures'
 
 function terminalTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
   return {
@@ -52,23 +55,33 @@ function terminalTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
   }
 }
 
-function state(overrides: Partial<AppState> = {}): AppState {
+type OwnerState = Parameters<typeof resolveNativeChatAttachmentOwner>[0]
+
+function state(overrides: Partial<OwnerState> = {}): OwnerState {
   return {
+    detectedWorktreesByRepo: {},
     folderWorkspaces: [],
-    getKnownWorktreeById: (worktreeId: string) =>
-      worktreeId === 'wt-1' ? ({ id: 'wt-1', path: '/repo/worktree' } as never) : undefined,
+    floatingWorkspacePath: null,
     projectGroups: [],
-    repos: [{ id: 'repo', connectionId: null }],
-    settings: { activeRuntimeEnvironmentId: null },
+    repos: [repoFixture({ connectionId: null })],
+    settings: { ...getDefaultSettings('/home/me'), activeRuntimeEnvironmentId: null },
     sshConnectionStates: new Map(),
     tabsByWorktree: {
       'wt-1': [terminalTab()]
     },
+    unifiedTabsByWorktree: {},
     worktreesByRepo: {
-      repo: [{ id: 'wt-1', repoId: 'repo', path: '/repo/worktree' } as never]
+      repo: [
+        worktreeFixture('wt-1', '/repo/worktree', {
+          hostId:
+            overrides.repos?.length === 0
+              ? undefined
+              : getRepoExecutionHostId(overrides.repos?.[0] ?? { connectionId: null })
+        })
+      ]
     },
     ...overrides
-  } as AppState
+  }
 }
 
 describe('resolveNativeChatAttachmentOwner', () => {
@@ -128,13 +141,13 @@ describe('resolveNativeChatAttachmentOwner', () => {
     ).toEqual({ kind: 'runtime' })
   })
 
-  it('routes unowned repos to the focused runtime host, matching terminal drops', () => {
+  it('keeps a recorded local workspace local when a runtime is focused', () => {
     expect(
       resolveNativeChatAttachmentOwner(
         state({ settings: { activeRuntimeEnvironmentId: 'env-9' } as AppState['settings'] }),
         'tab-1'
       )
-    ).toEqual({ kind: 'runtime' })
+    ).toEqual({ kind: 'local' })
   })
 
   it('reports not-ready when the tab has no worktree owner', () => {
@@ -166,7 +179,6 @@ describe('resolveNativeChatAttachmentOwner', () => {
       resolveNativeChatAttachmentOwner(
         state({
           repos: [{ id: 'repo', connectionId: 'conn-1' }] as never,
-          getKnownWorktreeById: () => undefined,
           worktreesByRepo: { repo: [{ id: 'wt-1', repoId: 'repo' } as never] },
           tabsByWorktree: { 'wt-1': [terminalTab()] }
         }),

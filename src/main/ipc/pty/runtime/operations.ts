@@ -1,10 +1,16 @@
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { IPtyProvider } from '../../../providers/types'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
-import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
 import { ptyOwnership } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
 import { rendererSerializerReadiness } from '../pane/serializer-state'
-import { getProviderForPty, localProvider } from '../provider/registry'
+import {
+  getProviderForPty,
+  getPtySshConnectionId,
+  localProvider,
+  resolvePtyExecutionHost
+} from '../provider/registry'
 import { inspectPtyProviderProcess } from '../../../providers/pty-process-inspection'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import {
@@ -38,7 +44,7 @@ export function writePtyFromRuntimeController(
   options?: { waitForSettlement: true }
 ): boolean | WriteSettlement | Promise<WriteSettlement> {
   const observeAcceptedInput = (): void => {
-    if (inputKind === 'driving' && ptyOwnership.get(ptyId) === null) {
+    if (inputKind === 'driving' && ptyOwnership.get(ptyId) === LOCAL_EXECUTION_HOST_ID) {
       deps.runtime?.observeClaudeTerminalEvidence?.(ptyId, { kind: 'input', data })
     }
   }
@@ -88,10 +94,10 @@ export async function probePtyLivenessFromRuntimeController(
   try {
     // Why: no locally routed provider can authoritatively answer for a
     // remote host's PTY, so remote-scoped ids stay unknown, never absent.
-    if (ptyId.startsWith('remote:')) {
+    if (isRemoteRuntimePtyId(ptyId)) {
       return null
     }
-    const connectionId = ptyOwnership.get(ptyId) ?? parseAppSshPtyId(ptyId)?.connectionId
+    const connectionId = getPtySshConnectionId(ptyId)
     // Why: during cold start the daemon swap is in flight; the pre-swap
     // fallback would answer absent for every daemon-owned id.
     const startupPromise = deps.getLocalPtyProviderStartupPromise(connectionId)
@@ -117,7 +123,7 @@ export async function attachPtyFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
   ptyId: string
 ): Promise<boolean> {
-  if (ptyOwnership.get(ptyId) != null || parseAppSshPtyId(ptyId)) {
+  if (resolvePtyExecutionHost(ptyId) !== LOCAL_EXECUTION_HOST_ID) {
     return false
   }
   let provider: IPtyProvider
@@ -235,10 +241,10 @@ export function hasPtyFromRuntimeController(
   try {
     // Why: no locally routed provider can authoritatively answer for a
     // remote host's PTY, so remote-scoped ids stay unknown, never absent.
-    if (ptyId.startsWith('remote:')) {
+    if (isRemoteRuntimePtyId(ptyId)) {
       return null
     }
-    const connectionId = ptyOwnership.get(ptyId) ?? parseAppSshPtyId(ptyId)?.connectionId
+    const connectionId = getPtySshConnectionId(ptyId)
     const startupPromise = deps.getLocalPtyProviderStartupPromise(connectionId)
     if (startupPromise && !settledLocalPtyProviderStartups.has(startupPromise)) {
       // Why: a sync probe cannot wait out the cold-start daemon swap the way

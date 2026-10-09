@@ -11,6 +11,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'src/main/daemon/**'
+      - '!src/main/daemon/**/*.test.ts'
       - 'src/main/orcad/**'
       - 'src/cli/runtime/**'
       - 'src/shared/orcad-local-serve-selection.ts'

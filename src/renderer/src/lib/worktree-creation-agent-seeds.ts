@@ -2,10 +2,6 @@ import { useAppStore } from '@/store'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed-delivery'
-import { decideInitialAgentTabViewMode } from '@/lib/native-chat-initial-view-mode'
-import { getConnectionIdFromState } from '@/lib/connection-context'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import { nativeChatRequiresLocalTranscript } from '@/lib/native-chat-supported-agent'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { toWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
@@ -45,46 +41,6 @@ function resolveLaunchAgentTabId(
   return stamped ?? args.primaryTabId ?? args.startupTerminalTabId ?? null
 }
 
-function applyBackendSpawnedDraftViewMode(args: {
-  state: AppStoreSnapshot
-  request: SeedRequest
-  agent: TuiAgent
-  tabId: string
-  worktreeId: string
-  backendSpawned: boolean
-}): void {
-  const { state, request, agent, tabId, worktreeId, backendSpawned } = args
-  if (!backendSpawned || !request.launchDraftPrompt) {
-    return
-  }
-  const desiredViewMode =
-    decideInitialAgentTabViewMode({
-      experimentalNativeChat: state.settings?.experimentalNativeChat,
-      openAgentTabsInChatByDefault: state.settings?.openAgentTabsInChatByDefault,
-      agent,
-      promptDelivery: 'draft',
-      launchDraftText: request.launchDraftPrompt,
-      ...(nativeChatRequiresLocalTranscript(agent)
-        ? {
-            nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-              getConnectionIdFromState(state, worktreeId)
-            )
-          }
-        : {})
-    }) ?? 'terminal'
-  const tab = state.unifiedTabsByWorktree?.[worktreeId]?.find((tab) => tab.id === tabId)
-  if (!tab && getRuntimeEnvironmentIdForWorktree(state, worktreeId)) {
-    void import('@/runtime/web-runtime-session').then(({ setWebRuntimeTabProps }) =>
-      setWebRuntimeTabProps({ worktreeId, tabId, viewMode: desiredViewMode })
-    )
-    return
-  }
-  const currentViewMode = tab?.viewMode ?? 'terminal'
-  if (currentViewMode !== desiredViewMode) {
-    state.setTabViewMode(tabId, desiredViewMode)
-  }
-}
-
 function applyAgentTabSeeds(args: {
   state: AppStoreSnapshot
   request: SeedRequest
@@ -94,7 +50,6 @@ function applyAgentTabSeeds(args: {
   backendSpawned: boolean
 }): void {
   const { request, agent, tabId } = args
-  applyBackendSpawnedDraftViewMode(args)
   seedNativeChatAppliedSessionOptions(tabId, agent, request.startupPlan?.sessionOptions)
   // Why: draft launch context reaches only the TUI input; seed the
   // chat-composer copy so it isn't invisible in the chat view.

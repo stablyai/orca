@@ -5,7 +5,7 @@
  * A held fence without a journal, or a journal this client cannot read, means a transaction
  * this client cannot see into, so GC keeps everything rather than guess.
  */
-import { remoteInstallDirName, ORCAD_INSTALL_MODEL } from './remote-install-model'
+import { orcadInstallDirNames } from './orcad-activation-record'
 import type { OrcadActivationTransaction } from './orcad-activation-transaction'
 import { readOrcadActivationTransaction } from './orcad-activation-transaction-store'
 import { orcadActivationFenceExists } from './orcad-activation-lock'
@@ -37,15 +37,7 @@ export async function readOrcadGcTransactionPins(
         ? { state: 'keep-all' }
         : { state: 'pinned', dirNames: [] }
     }
-    const versions = transactionVersions(transaction).filter(
-      (version): version is string => typeof version === 'string' && version.length > 0
-    )
-    return {
-      state: 'pinned',
-      dirNames: [...new Set(versions)].map((version) =>
-        remoteInstallDirName(ORCAD_INSTALL_MODEL, version)
-      )
-    }
+    return { state: 'pinned', dirNames: orcadInstallDirNames(transactionVersions(transaction)) }
   } catch (error) {
     if (isUnconfirmedSshCommandTermination(error)) {
       throw error

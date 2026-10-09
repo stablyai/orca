@@ -94,6 +94,15 @@ describe('SSH retained payload admission', () => {
     expect(malformed).not.toHaveProperty('plainSsh')
   })
 
+  it('admits only a literal Host Node runtime flag', () => {
+    const state = { targetId: 'ssh-a', status: 'connected', error: null, reconnectAttempt: 0 }
+
+    const flagged = admitSshConnectionState({ ...state, hostNodeRuntime: true }, 'ssh-a')
+    expect(flagged?.hostNodeRuntime).toBe(true)
+    const malformed = admitSshConnectionState({ ...state, hostNodeRuntime: 'yes' }, 'ssh-a')
+    expect(malformed).not.toHaveProperty('hostNodeRuntime')
+  })
+
   it('admits only a literal move offer on a relay server status', () => {
     const state = { targetId: 'ssh-a', status: 'connected', error: null, reconnectAttempt: 0 }
     const relay = { kind: 'relay', reason: 'relay_terminals_live', terminals: 2 }

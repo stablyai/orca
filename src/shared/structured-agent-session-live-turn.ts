@@ -26,6 +26,7 @@ import {
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import type { AgentSessionLatestTurn, AgentSessionSubscribeEvent } from './agent-session-wire'
 import { readAgentJournalTurn } from './agent-session-turn-record'
+import { isAgentSessionContextClear } from './agent-session-context-clear'
 import type { NativeChatToolCallBlock } from './native-chat-types'
 import {
   isRunningStructuredAgentSessionToolAction,
@@ -38,6 +39,9 @@ export function activeStructuredAgentSessionTurnId(
   items: readonly AgentJournalRenderItem[]
 ): string | null {
   for (let index = items.length - 1; index >= 0; index -= 1) {
+    if (isAgentSessionContextClear(items[index]?.body)) {
+      return null
+    }
     const turn = readAgentJournalTurn(items[index]?.body)
     if (turn) {
       return turn.state === 'running' ? turn.turnId : null
@@ -58,6 +62,11 @@ export function newestStructuredAgentSessionTurnBySequence(
     if (item.sequence < newestSequence) {
       continue
     }
+    if (isAgentSessionContextClear(item.body)) {
+      newestSequence = item.sequence
+      newest = null
+      continue
+    }
     const turn = readAgentJournalTurn(item.body)
     if (turn) {
       newestSequence = item.sequence
@@ -74,7 +83,10 @@ export function liveStructuredAgentSessionTurnScope(
 ): AgentJournalTurnScope {
   let newest: AgentJournalRenderItem | null = null
   for (const item of items) {
-    if ((newest === null || item.sequence >= newest.sequence) && readAgentJournalTurn(item.body)) {
+    if (
+      (newest === null || item.sequence >= newest.sequence) &&
+      (readAgentJournalTurn(item.body) || isAgentSessionContextClear(item.body))
+    ) {
       newest = item
     }
   }
@@ -111,6 +123,9 @@ export function latestStructuredAgentSessionTurn(
 ): AgentSessionLatestTurn | null {
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
+    if (isAgentSessionContextClear(item?.body)) {
+      return null
+    }
     const turn = readAgentJournalTurn(item?.body)
     if (item && turn) {
       return { itemId: item.itemId, observedAt: item.observedAt, turn }
@@ -172,6 +187,9 @@ export function isStructuredAgentSessionThinking({ items, latestTurn }: HostTurn
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
     const body = item?.body
+    if (isAgentSessionContextClear(body)) {
+      return false
+    }
     const turn = readAgentJournalTurn(body)
     if (turn) {
       return (hostRunning ?? turn.state === 'running') && newestContentIsReasoning === true
@@ -212,6 +230,9 @@ export function statusStructuredAgentSessionToolCall(
       continue
     }
     const body = item.body
+    if (isAgentSessionContextClear(body)) {
+      return null
+    }
     const turn = readAgentJournalTurn(body)
     if (turn) {
       const named = turn.state === 'running' ? (running ?? newest) : null

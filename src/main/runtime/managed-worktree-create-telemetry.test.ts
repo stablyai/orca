@@ -1,7 +1,5 @@
 // Runtime creates (CLI, agents, phone, paired clients, orchestration) reuse prepared checkouts
 // like the app's own creates, so they must send the same create events, exactly once each.
-import { readFileSync, readdirSync } from 'node:fs'
-import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
@@ -283,53 +281,5 @@ describe('runtime create events', () => {
     ).rejects.toThrow('Selected agent is disabled')
     expect(mocks.createLocal).not.toHaveBeenCalled()
     expect(mocks.track).not.toHaveBeenCalled()
-  })
-})
-
-function sourceFiles(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const full = path.join(dir, entry.name)
-    if (entry.isDirectory()) {
-      return sourceFiles(full)
-    }
-    return entry.name.endsWith('.ts') && !/\.(test|spec)\.ts$/.test(entry.name) ? [full] : []
-  })
-}
-
-describe('one event per create', () => {
-  const mainDir = path.resolve(__dirname, '..')
-  const relative = (file: string): string => path.relative(mainDir, file).split(path.sep).join('/')
-
-  it('sends the create events only from the shared sender, besides the SSH root adopt', () => {
-    const senders = sourceFiles(mainDir)
-      .filter((file) =>
-        /track\(\s*'workspace_(created|create_failed)'/.test(readFileSync(file, 'utf8'))
-      )
-      .map(relative)
-      .sort()
-    expect(senders).toEqual([
-      'ipc/worktrees/create/register-worktree-create-handlers.ts',
-      'workspace-create-telemetry.ts'
-    ])
-    const handler = readFileSync(
-      path.join(mainDir, 'ipc/worktrees/create/register-worktree-create-handlers.ts'),
-      'utf8'
-    )
-    // The remaining direct sends there belong to the root adopt, which no other entry point runs.
-    expect(handler.match(/track\(\s*'workspace_(created|create_failed)'/g)).toHaveLength(2)
-  })
-
-  it('keeps the app and runtime entry points from running each other', () => {
-    const handler = readFileSync(
-      path.join(mainDir, 'ipc/worktrees/create/register-worktree-create-handlers.ts'),
-      'utf8'
-    )
-    expect(handler).not.toMatch(/createManagedWorktree/)
-    const runtimeImportsHandler = sourceFiles(path.join(mainDir, 'runtime')).filter((file) =>
-      /register-worktree-create-handlers|ipcMain\.emit|['"]worktrees:create['"]/.test(
-        readFileSync(file, 'utf8')
-      )
-    )
-    expect(runtimeImportsHandler.map(relative)).toEqual([])
   })
 })

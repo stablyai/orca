@@ -23,14 +23,17 @@ const target: SshTarget = {
 const HOST_KEY_ERROR =
   'Host key verification failed for build-01.internal. The key does not match the entry in your known_hosts file. ssh and git will refuse this host too. Run: ssh-keygen -R build-01.internal'
 
-async function renderCard(state: SshConnectionState | undefined): Promise<HTMLElement> {
+async function renderCard(
+  state: SshConnectionState | undefined,
+  cardTarget: SshTarget = target
+): Promise<HTMLElement> {
   const container = document.createElement('div')
   document.body.appendChild(container)
   await act(async () => {
     createRoot(container).render(
       <TooltipProvider>
         <SshTargetCard
-          target={target}
+          target={cardTarget}
           state={state}
           testing={false}
           onConnect={vi.fn()}
@@ -80,5 +83,40 @@ describe('the connection error on an SSH target card', () => {
     const container = await renderCard(undefined)
 
     expect(container.textContent).not.toContain('Host key verification failed')
+  })
+})
+
+describe('the Host Node runtime on an SSH target card', () => {
+  const connected: SshConnectionState = {
+    targetId: 'target-1',
+    status: 'connected',
+    error: null,
+    reconnectAttempt: 0
+  }
+
+  it('marks a relay running on the opt-in Host Node runtime as unsupported', async () => {
+    const container = await renderCard(
+      { ...connected, hostNodeRuntime: true },
+      { ...target, remoteRuntime: 'legacy' }
+    )
+
+    const note = container.querySelector('[data-ssh-host-node-runtime]')
+    expect(note?.textContent).toContain('Unsupported configuration')
+    expect(note?.textContent).toContain('Set Runtime to Auto')
+  })
+
+  it('marks an Auto host that fell back to Host Node without advice it already follows', async () => {
+    const container = await renderCard({ ...connected, hostNodeRuntime: true })
+
+    const note = container.querySelector('[data-ssh-host-node-runtime]')
+    expect(note?.textContent).toContain('Unsupported configuration')
+    expect(note?.textContent).toContain('Orca-managed Node isn’t available')
+    expect(note?.textContent).not.toContain('Set Runtime to Auto')
+  })
+
+  it('says nothing about the runtime on a default connect', async () => {
+    const container = await renderCard(connected)
+
+    expect(container.querySelector('[data-ssh-host-node-runtime]')).toBeNull()
   })
 })

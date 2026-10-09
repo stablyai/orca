@@ -1,3 +1,4 @@
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { useEffect, useRef } from 'react'
 import {
   FOCUS_TERMINAL_PANE_EVENT,
@@ -9,7 +10,6 @@ import {
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import type { IDisposable } from '@xterm/xterm'
-import { handleTerminalFileDrop } from './terminal-drop-handler'
 import { handleFocusTerminalPaneDetail } from './focus-terminal-pane-event'
 import { surfaceStaleAgentRow } from './stale-agent-row'
 import { useAppStore } from '@/store'
@@ -53,7 +53,7 @@ function reportRendererPtyVisibility(
 ): void {
   for (const transport of paneTransports.values()) {
     const ptyId = transport.getPtyId()
-    if (!ptyId || ptyId.startsWith('remote:')) {
+    if (!ptyId || isRemoteRuntimePtyId(ptyId)) {
       // Why: remote-runtime PTYs use a relay path outside main's local
       // renderer-visibility registry, so reporting them here is misleading.
       continue
@@ -65,7 +65,6 @@ function reportRendererPtyVisibility(
 export function useTerminalPaneGlobalEffects({
   tabId,
   worktreeId,
-  cwd,
   isActive,
   isVisible,
   isChatViewMode = false,
@@ -82,8 +81,6 @@ export function useTerminalPaneGlobalEffects({
 }: UseTerminalPaneGlobalEffectsArgs): void {
   const worktreeIdRef = useRef(worktreeId)
   worktreeIdRef.current = worktreeId
-  const cwdRef = useRef(cwd)
-  cwdRef.current = cwd
   // Starts true so the first render with isVisible=false triggers a
   // suspendRendering(). Background worktrees that mount hidden would
   // otherwise leak WebGL contexts — openTerminal() unconditionally creates
@@ -194,7 +191,7 @@ export function useTerminalPaneGlobalEffects({
 
   useEffect(() => {
     const ptyId = isActive && isVisible && isWorktreeActive ? activeLeafPtyId : null
-    if (!ptyId || ptyId.startsWith('remote:')) {
+    if (!ptyId || isRemoteRuntimePtyId(ptyId)) {
       return
     }
     // Why: main uses this as a scheduler hint only, so the foreground pane's
@@ -296,32 +293,4 @@ export function useTerminalPaneGlobalEffects({
     document.addEventListener('dictation:insertText', onDictationInsert)
     return () => document.removeEventListener('dictation:insertText', onDictationInsert)
   }, [isActiveRef, managerRef, paneTransportsRef, tabId])
-
-  // Why: visible, unfocused terminals receive drops only when the payload names their tab.
-  useEffect(() => {
-    if (!isActive && !isVisible) {
-      return
-    }
-    return window.api.ui.onFileDrop((data) => {
-      if (data.target !== 'terminal' || data.tabId !== tabId) {
-        return
-      }
-      const manager = managerRef.current
-      if (!manager) {
-        return
-      }
-      const wtId = worktreeIdRef.current
-      if (!wtId) {
-        return
-      }
-      void handleTerminalFileDrop({
-        manager,
-        paneTransports: paneTransportsRef.current,
-        worktreeId: wtId,
-        tabId,
-        cwd: cwdRef.current,
-        data
-      })
-    })
-  }, [isActive, isVisible, managerRef, paneTransportsRef, tabId])
 }

@@ -63,14 +63,17 @@ describe('the structured agent registration list', () => {
 
   it("resolves an account home through the agent's registration, with the read purpose", async () => {
     const claude = structuredAgentRuntimeRegistration('claude')!
-    vi.spyOn(claude, 'resolveAccountHomePath').mockResolvedValue('/accounts/claude')
+    vi.spyOn(claude, 'resolveAccountHome').mockResolvedValue({
+      variable: 'CLAUDE_CONFIG_DIR',
+      path: '/accounts/claude'
+    })
     const { runtime, installHost } = runtimeAt()
 
     expect(await runtime.resolveStructuredAgentAccountHome('claude')).toEqual({
       variable: 'CLAUDE_CONFIG_DIR',
       path: '/accounts/claude'
     })
-    expect(claude.resolveAccountHomePath).toHaveBeenCalledWith(
+    expect(claude.resolveAccountHome).toHaveBeenCalledWith(
       expect.objectContaining({ purpose: 'read', location: null, workspacePath: null }),
       expect.anything()
     )

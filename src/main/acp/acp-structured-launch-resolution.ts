@@ -14,7 +14,14 @@ import {
   type AgentSessionProviderHandleChain
 } from '../../shared/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
+import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import type { resolveCliCommand } from '../../shared/node-cli-command-resolution'
+import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import {
+  resolveStructuredAgentCommand,
+  type StructuredAgentCommandSettings
+} from '../native-chat/structured-agent-command-resolution'
+import { probeAgentCliVersion } from '../agent-cli-version-probe'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import type { JournalLoad } from '../native-chat/agent-session-journal/journal-open'
 import {
@@ -23,8 +30,13 @@ import {
   spelledProviderTimelineItemKey
 } from '../native-chat/agent-session-timeline/provider-timeline-identity'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
+import {
+  NATIVE_CHAT_VISUALS_DIR_ENV,
+  withNativeChatVisualsEnv
+} from '../native-chat/native-chat-visuals-delivery'
 import type { AcpLaunchSpec } from './acp-launch-specs'
 import { acpSessionNotRestoredItem } from './acp-session-reopen-failure'
+import { loadAcpVisualsSkill, type AcpLaunchVisualsDeps } from './acp-structured-launch-visuals'
 
 export type AcpStructuredLaunch = {
   spec: AcpLaunchSpec
@@ -32,6 +44,8 @@ export type AcpStructuredLaunch = {
   args: string[]
   cwd: string
   env: Record<string, string>
+  /** Keys the child must not inherit from this process's own environment. */
+  envToDelete: string[]
   fullAccess: boolean
   /** The provider session to load; null starts a new one. */
   resume: {
@@ -58,8 +72,104 @@ export type AcpStructuredLaunchResolverDeps = {
   resolveLaunchEnv?: (agent: string) => Record<string, string>
   /** The Agent Permissions setting's bypass posture for this agent, re-read per acquisition. */
   resolveFullAccess?: (agent: string) => boolean
+  /** The user's per-agent Command setting, re-read per acquisition; none runs the stock binary. */
+  resolveCommandSettings?: () => StructuredAgentCommandSettings
   resolveCommand?: typeof resolveCliCommand
   homePath?: string
+  /** The environment the child process inherits at spawn; this process's own by default. */
+  inheritedEnv?: NodeJS.ProcessEnv
+  probeVersion?: typeof probeAgentCliVersion
+} & AcpLaunchVisualsDeps
+
+/** The binary a launch with `env` spawns: the user's Command setting when set, else the stock
+ *  binary from PATH, then the agent's own install directories. A create's version check resolves
+ *  through here too, so it asks about the same file. */
+export function resolveAcpLaunchCommand(
+  spec: AcpLaunchSpec,
+  env: Readonly<Record<string, string>>,
+  options: {
+    commandSettings?: StructuredAgentCommandSettings
+    resolveCommand?: typeof resolveCliCommand
+    homePath?: string
+  } = {}
+): string {
+  const homePath = env.HOME ?? env.USERPROFILE ?? options.homePath ?? homedir()
+  const pathEnv = [env.PATH ?? env.Path, ...spec.installDirectories({ env, homePath })]
+    .filter((entry): entry is string => Boolean(entry))
+    .join(delimiter)
+  return resolveStructuredAgentCommand(
+    spec.agent,
+    options.commandSettings ?? {},
+    { pathEnv, homePath },
+    {
+      command: spec.command,
+      ...(options.resolveCommand ? { resolve: options.resolveCommand } : {})
+    }
+  )
+}
+
+/** Whether `command` is a release the spec runs a structured chat on (true when it names none),
+ *  and the version it printed. Asked only when the spec names releases or `wantVersion`. */
+async function probeAcpLaunchVersion(
+  spec: AcpLaunchSpec,
+  launch: { command: string; cwd: string; env: Record<string, string> },
+  wantVersion: boolean,
+  probe: typeof probeAgentCliVersion = probeAgentCliVersion
+): Promise<{ supported: boolean; version: string | null }> {
+  const { supportsVersion } = spec
+  if (!supportsVersion && !wantVersion) {
+    return { supported: true, version: null }
+  }
+  const seen: { version: string | null } = { version: null }
+  const answered = await probe(
+    { program: launch.command, cwd: launch.cwd, env: launch.env },
+    (version) => {
+      seen.version = version
+      return supportsVersion?.(version) ?? true
+    }
+  )
+  // Without named releases a failed probe costs only what needed the version.
+  return { supported: answered || !supportsVersion, version: answered ? seen.version : null }
+}
+
+/** Whether `command` is a release the spec runs a structured chat on; true when it names none. */
+export async function acpLaunchVersionSupported(
+  spec: AcpLaunchSpec,
+  launch: { command: string; cwd: string; env: Record<string, string> },
+  probe: typeof probeAgentCliVersion = probeAgentCliVersion
+): Promise<boolean> {
+  return (await probeAcpLaunchVersion(spec, launch, false, probe)).supported
+}
+
+export type AcpLaunchInvocationDeps = Pick<
+  AcpStructuredLaunchResolverDeps,
+  | 'resolveEnvironment'
+  | 'resolveLaunchEnv'
+  | 'resolveCommandSettings'
+  | 'resolveCommand'
+  | 'homePath'
+  | 'inheritedEnv'
+>
+
+/** The binary and environment any child of this agent runs under for `accountHome`: a session's
+ *  launch and a catalog probe both resolve here, so neither can reach another account or install. */
+export async function resolveAcpLaunchInvocation(
+  spec: AcpLaunchSpec,
+  accountHome: AgentSessionAccountHome,
+  deps: AcpLaunchInvocationDeps
+): Promise<{ command: string; env: Record<string, string>; envToDelete: string[] }> {
+  const base = await deps.resolveEnvironment()
+  const env: Record<string, string> = spec.account.environment(accountHome, {
+    ...base,
+    ...deps.resolveLaunchEnv?.(spec.agent)
+  })
+  const envToDelete = spec.scrubEnvironment?.(env, deps.inheritedEnv ?? process.env) ?? []
+  Object.assign(env, spec.env)
+  const command = resolveAcpLaunchCommand(spec, env, {
+    ...deps,
+    ...(deps.resolveCommandSettings ? { commandSettings: deps.resolveCommandSettings() } : {})
+  })
+  return { command, env, envToDelete }
 }
 
 export function createAcpStructuredLaunchResolver(
@@ -82,33 +192,44 @@ export function createAcpStructuredLaunchResolver(
         `${spec.agent} structured sessions run on this runtime's host, not ${location.executionHostId}`
       )
     }
-    if (accountHome.variable !== spec.accountHomeVariable) {
-      throw new Error(
-        `${spec.agent} sessions pin ${spec.accountHomeVariable}, not ${accountHome.variable}`
-      )
+    const { env, envToDelete, command } = await resolveAcpLaunchInvocation(spec, accountHome, deps)
+    const cwd = await deps.resolveWorkspacePath(location.workspaceId)
+    const visuals = spec.visualsSkill
+      ? ((await deps.prepareVisuals?.(identity.sessionId)) ?? null)
+      : null
+    // Again at every launch: the binary on PATH may have changed since the chat was created.
+    const launchVersion = await probeAcpLaunchVersion(
+      spec,
+      { command, cwd, env },
+      visuals !== null,
+      deps.probeVersion
+    )
+    if (!launchVersion.supported) {
+      throw agentSessionRefusalError('structured_agent_session_unsupported', {
+        reason: 'hostUnsupported'
+      })
     }
-    const base = await deps.resolveEnvironment()
-    const env: Record<string, string> = {
-      ...base,
-      ...deps.resolveLaunchEnv?.(spec.agent),
-      ...spec.env,
-      [spec.accountHomeVariable]: accountHome.path
-    }
-    const pathEnv = [env.PATH ?? env.Path, ...spec.installDirectories(accountHome.path)]
-      .filter((entry): entry is string => Boolean(entry))
-      .join(delimiter)
-    const command = (deps.resolveCommand ?? resolveCliCommand)(spec.command, {
-      pathEnv,
-      homePath: env.HOME ?? env.USERPROFILE ?? deps.homePath ?? homedir()
-    })
+    const skill = visuals
+      ? await loadAcpVisualsSkill(spec, deps, {
+          sessionId: identity.sessionId,
+          visuals,
+          version: launchVersion.version,
+          env,
+          envToDelete,
+          inherited: deps.inheritedEnv ?? process.env
+        })
+      : null
+    // Without visuals, a folder Orca itself inherited (started from a chat) names another chat's.
+    const childEnv = withNativeChatVisualsEnv({ ...env, ...skill?.env }, skill ? visuals : null)
     const fullAccess = deps.resolveFullAccess?.(spec.agent) ?? false
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     return {
       spec,
       command,
-      args: spec.args({ fullAccess }),
-      cwd: await deps.resolveWorkspacePath(location.workspaceId),
-      env,
+      args: spec.args({ fullAccess, pluginDir: skill?.pluginDir ?? null }),
+      cwd,
+      env: childEnv,
+      envToDelete: skill ? envToDelete : [...envToDelete, NATIVE_CHAT_VISUALS_DIR_ENV],
       fullAccess,
       resume: head
         ? {

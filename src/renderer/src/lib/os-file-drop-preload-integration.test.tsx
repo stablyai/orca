@@ -16,7 +16,6 @@ vi.mock('electron', () => ({
   webUtils: { getPathForFile: electron.getPathForFile }
 }))
 
-import { installNativeFileDropHandlers } from '../../../preload/preload-runtime-support'
 import { createOsFileDropSequence, useOsFileDropOwner } from '../hooks/use-os-file-drop-owner'
 import { installOsFileDropCancellationGuard } from './os-file-drop-cancellation-guard'
 
@@ -25,11 +24,9 @@ const prepareDroppedPaths = vi.fn(
 )
 
 function OwnerProbe({
-  onDrop,
-  legacyChild = false
+  onDrop
 }: {
   onDrop: (prepared: PreparedDroppedPaths) => void
-  legacyChild?: boolean
 }): React.JSX.Element {
   const ownerElementRef = useRef<HTMLElement | null>(null)
   const [sequence] = useState(createOsFileDropSequence)
@@ -40,10 +37,7 @@ function OwnerProbe({
   })
   return (
     <div ref={attach}>
-      <span
-        data-testid="target"
-        data-native-file-drop-target={legacyChild ? 'composer' : undefined}
-      />
+      <span data-testid="target" />
     </div>
   )
 }
@@ -71,8 +65,15 @@ function drag(
 
 let disposeGuard: (() => void) | null = null
 
-beforeAll(() => {
-  installNativeFileDropHandlers()
+beforeAll(async () => {
+  // Exercise the stacked base's preload setup when replaying this regression.
+  const preload = await import('../../../preload/preload-runtime-support')
+  if (
+    'installNativeFileDropHandlers' in preload &&
+    typeof preload.installNativeFileDropHandlers === 'function'
+  ) {
+    preload.installNativeFileDropHandlers()
+  }
 })
 
 beforeEach(() => {
@@ -92,20 +93,23 @@ afterEach(() => {
 })
 
 describe('preload and renderer file drop guard', () => {
-  it('preserves preload copy acceptance and one IPC delivery on unmarked chrome', () => {
+  it('refuses unowned chrome without opening, uploading, or showing a toast', async () => {
     const target = document.createElement('div')
     document.body.append(target)
     const hover = drag(target, 'dragover')
     expect(hover.event.defaultPrevented).toBe(true)
-    expect(hover.transfer.dropEffect).toBe('copy')
+    expect(hover.transfer.dropEffect).toBe('none')
 
-    drag(target, 'drop')
-    expect(electron.send).toHaveBeenCalledOnce()
-    expect(electron.send.mock.calls[0][0]).toBe('terminal:file-dropped-from-preload')
+    const dropped = drag(target, 'drop')
+    await act(async () => undefined)
+    expect(dropped.event.defaultPrevented).toBe(true)
+    expect(dropped.transfer.dropEffect).toBe('none')
+    expect(electron.send).not.toHaveBeenCalled()
+    expect(electron.getPathForFile).not.toHaveBeenCalled()
     expect(prepareDroppedPaths).not.toHaveBeenCalled()
   })
 
-  it('lets a migrated owner claim the real event and keep the copy cursor', async () => {
+  it('lets a registered owner claim the real event and keep the copy cursor', async () => {
     const onDrop = vi.fn()
     const view = render(<OwnerProbe onDrop={onDrop} />)
     const target = view.getByTestId('target')
@@ -122,17 +126,5 @@ describe('preload and renderer file drop guard', () => {
       paths: ['/dropped/a.txt'],
       failures: []
     })
-  })
-
-  it('keeps a legacy child as a barrier inside a migrated owner', () => {
-    const onDrop = vi.fn()
-    const view = render(<OwnerProbe onDrop={onDrop} legacyChild />)
-    const target = view.getByTestId('target')
-    const hover = drag(target, 'dragover')
-    expect(hover.transfer.dropEffect).toBe('copy')
-    drag(target, 'drop')
-    expect(electron.send).toHaveBeenCalledOnce()
-    expect(prepareDroppedPaths).not.toHaveBeenCalled()
-    expect(onDrop).not.toHaveBeenCalled()
   })
 })

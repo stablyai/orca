@@ -27,6 +27,7 @@ class RenewalStatementProbe implements RelayDatabase {
   readonly dialect = 'postgres' as const
   readonly statements: Array<{ sql: string; params: unknown[] }> = []
   failuresRemaining = 0
+  failureMessage = 'canceling statement due to statement timeout'
 
   constructor(private readonly outcomeFor: (userId: string) => ControlRenewalOutcome) {}
 
@@ -34,7 +35,7 @@ class RenewalStatementProbe implements RelayDatabase {
     this.statements.push({ sql, params })
     if (this.failuresRemaining > 0) {
       this.failuresRemaining -= 1
-      throw new Error('canceling statement due to statement timeout')
+      throw new Error(this.failureMessage)
     }
     const userIds = params[0] as string[]
     return userIds.map((userId, index) => ({
@@ -144,6 +145,58 @@ describe('batched control renewals on PostgreSQL', () => {
         event: 'orca_relay_control_renewal_batch_failed',
         rows: 2
       })
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('runs the batch on the priority lane and the per-host fallback on the general one', async () => {
+    const probe = new RenewalStatementProbe(() => 'renewed')
+    probe.failuresRemaining = 1
+    const lanes: string[] = []
+    const database: RelayDatabase = {
+      dialect: 'postgres',
+      query: async (sql, params) => {
+        lanes.push('general')
+        return await probe.query(sql, params)
+      },
+      queryPriority: async (sql, params) => {
+        lanes.push('priority')
+        return await probe.query(sql, params)
+      },
+      queryLocked: async () => await probe.queryLocked(),
+      transaction: async () => await probe.transaction(),
+      close: async () => undefined
+    }
+    const store = new RelayAssignmentStore(database, () => now)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      await store.renewControlActivities([
+        renewal('user-a', 'host000000000001'),
+        renewal('user-a', 'host000000000002')
+      ])
+
+      // A 200-row fallback would otherwise jump the whole general queue.
+      expect(lanes).toEqual(['priority', 'general', 'general'])
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('does not fan out per host when the batch never got a connection', async () => {
+    const probe = new RenewalStatementProbe(() => 'renewed')
+    probe.failuresRemaining = 1
+    probe.failureMessage = 'timeout exceeded when trying to connect'
+    const store = new RelayAssignmentStore(probe, () => now)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      const outcomes = await store.renewControlActivities([
+        renewal('user-a', 'host000000000001'),
+        renewal('user-a', 'host000000000002')
+      ])
+
+      expect(outcomes).toEqual(['database_error', 'database_error'])
+      expect(probe.statements).toHaveLength(1)
     } finally {
       warn.mockRestore()
     }

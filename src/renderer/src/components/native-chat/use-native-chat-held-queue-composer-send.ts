@@ -73,6 +73,12 @@ export function useNativeChatHeldQueueComposerSend(args: UseNativeChatStructured
   // From a Clear queue choice until its message has gone out: the draft still holds that message,
   // and sending it again meanwhile would send it twice.
   const clearingRef = useRef(false)
+  // The chat's send is out (or a /clear runs): no message goes, so nothing asks or clears meanwhile.
+  const sendOut = structuredTransport?.sendOut === true
+  const sendOutRef = useRef(sendOut)
+  useLayoutEffect(() => {
+    sendOutRef.current = sendOut
+  }, [sendOut])
 
   const send = useCallback<StructuredComposerSend>(
     (text, attachments) => {
@@ -84,6 +90,9 @@ export function useNativeChatHeldQueueComposerSend(args: UseNativeChatStructured
         structuredTransport &&
         !isNativeChatStructuredHostCommand(text, agent, structuredTransport)
       ) {
+        if (sendOut) {
+          return
+        }
         const asked = {
           text,
           attachments,
@@ -97,7 +106,7 @@ export function useNativeChatHeldQueueComposerSend(args: UseNativeChatStructured
       }
       void sendNow(text, attachments)
     },
-    [agent, args.draftScopeKey, queueHold, sendNow, structuredTransport]
+    [agent, args.draftScopeKey, queueHold, sendNow, sendOut, structuredTransport]
   )
 
   const sendMessage = useCallback(() => {
@@ -108,7 +117,8 @@ export function useNativeChatHeldQueueComposerSend(args: UseNativeChatStructured
   }, [take])
   const clearQueue = useCallback(() => {
     const taken = take()
-    if (!taken) {
+    // Its message could not go now, so the cards stay; the draft keeps the text.
+    if (!taken || sendOutRef.current) {
       return
     }
     clearingRef.current = true

@@ -17,6 +17,7 @@ import type Database from '../sqlite/sync-database'
 import type { HostCliPassthroughOptions } from './ssh-remote-cli-host-passthrough'
 import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
 import { acknowledgeRemoteOrcaCliPostOutput } from './ssh-remote-orchestration-post-output'
+import { CONTROL_GRANTED_SSH_BRIDGE_SCOPE } from './ssh-bridge-caller-scope.test-fixture'
 import { createRootDispatch } from '../runtime/orchestration/db/root-dispatch-test-fixture'
 
 const LEGACY_FALLBACK_OPTIONS: HostCliPassthroughOptions = {
@@ -137,6 +138,7 @@ describe('legacy SSH orchestration fallback', () => {
       subject: 'retained SSH mail'
     })
     const request = {
+      callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
       argv: ['orchestration', 'check', '--unread', '--inject', '--json'],
       cwd: '/home/alice/repo',
       env: WORKER_ENV,
@@ -164,6 +166,7 @@ describe('legacy SSH orchestration fallback', () => {
       expect(db.getMessageById(message.id)?.read).toBe(0)
 
       await acknowledgeRemoteOrcaCliPostOutput(runtime, {
+        callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
         postOutput: first.postOutput!,
         env: WORKER_ENV,
         runtimeAuthority: RUNTIME_AUTHORITY
@@ -192,6 +195,7 @@ describe('legacy SSH orchestration fallback', () => {
       const peek = await runRemoteOrcaCli(
         runtime,
         {
+          callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
           argv: ['orchestration', 'check', '--peek', '--format', '--json'],
           cwd: '/home/alice/repo',
           env: WORKER_ENV,
@@ -246,6 +250,7 @@ describe('legacy SSH orchestration fallback', () => {
       const checked = await runRemoteOrcaCli(
         runtime,
         {
+          callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
           ...baseRequest,
           argv: ['orchestration', 'check', '--run', run.id]
         },
@@ -258,6 +263,7 @@ describe('legacy SSH orchestration fallback', () => {
       const checkedJson = await runRemoteOrcaCli(
         runtime,
         {
+          callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
           ...baseRequest,
           argv: ['orchestration', 'check', '--run', run.id, '--json']
         },
@@ -271,6 +277,7 @@ describe('legacy SSH orchestration fallback', () => {
       const acknowledged = await runRemoteOrcaCli(
         runtime,
         {
+          callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
           ...baseRequest,
           argv: [
             'orchestration',
@@ -310,6 +317,7 @@ describe('legacy SSH orchestration fallback', () => {
       '--json'
     ]
     const request = {
+      callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
       argv,
       cwd: '/home/alice/repo',
       env: WORKER_ENV,
@@ -366,6 +374,7 @@ describe('legacy SSH orchestration fallback', () => {
       const result = await runRemoteOrcaCli(
         runtime,
         {
+          callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
           argv: ['orchestration', 'ask', '--resume', pending.question.message_id, '--json'],
           cwd: '/home/alice/repo',
           env: WORKER_ENV,
@@ -389,6 +398,7 @@ describe('legacy SSH orchestration fallback', () => {
       expect(db.getMessageById(answer.message.id)?.read).toBe(0)
 
       await acknowledgeRemoteOrcaCliPostOutput(runtime, {
+        callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
         postOutput: result.postOutput!,
         env: WORKER_ENV,
         runtimeAuthority: RUNTIME_AUTHORITY
@@ -418,6 +428,7 @@ describe('legacy SSH orchestration fallback', () => {
         const result = await runRemoteOrcaCli(
           runtime,
           {
+            callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
             argv: [
               'orchestration',
               'send',
@@ -463,6 +474,7 @@ describe('legacy SSH orchestration fallback', () => {
       const result = await runRemoteOrcaCli(
         runtime,
         {
+          callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
           argv: [...commandArgv, '--retry-request', '--json'],
           cwd: '/home/alice/repo',
           env: WORKER_ENV,

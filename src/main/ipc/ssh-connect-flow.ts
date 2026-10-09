@@ -55,6 +55,7 @@ import {
   abandonFailedSshSession
 } from './ssh-session-teardown'
 import { awaitTargetLifecycle } from './ssh-target-lifecycle-queue'
+import { errorMessage } from '../../shared/error-message'
 
 export async function connectTarget(targetId: string): Promise<SshConnectionState> {
   const e2eProbePath = process.env.ORCA_E2E_FORBID_LOCAL_SSH_CONNECT_PROBE
@@ -320,7 +321,7 @@ async function doConnect(
     } catch (disconnectError) {
       // Why: the establish failure is the actionable error; a teardown throw must not replace it.
       console.warn(
-        `[ssh] Failed to disconnect transport after failed establish for ${targetId}: ${disconnectError instanceof Error ? disconnectError.message : String(disconnectError)}`
+        `[ssh] Failed to disconnect transport after failed establish for ${targetId}: ${errorMessage(disconnectError)}`
       )
     }
     throw err

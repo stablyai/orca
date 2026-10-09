@@ -9,13 +9,14 @@ import type { AgentType } from '../../../shared/agent-status-types'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { ResolveDispatchInput } from '../agent-session-journal/journal-store-contracts'
 
 /** What the derivation reads; absent members (a narrow double) withdraw nothing. */
 export type UnopenedSendJournal = {
   agent?: AgentType
   queuedMessages?: Pick<AgentSessionJournal['queuedMessages'], 'userStopInForce'>
   snapshot: () => Pick<ReturnType<AgentSessionJournal['snapshot']>, 'items'>
-  submissions?: () => Pick<
+  submissions?: () => (Pick<
     AgentJournalSubmission,
     | 'clientMessageId'
     | 'dispatchState'
@@ -23,7 +24,7 @@ export type UnopenedSendJournal = {
     | 'handoverRecorded'
     | 'handedOverAt'
     | 'acceptedSequence'
-  >[]
+  > & { reason?: string | null })[]
   resolveDispatch?: AgentSessionJournal['resolveDispatch']
 }
 
@@ -54,9 +55,21 @@ export async function withdrawCodexSendsNoTurnOpenedFor(
   journal: UnopenedSendJournal,
   fence: number
 ): Promise<void> {
-  const stop = journal.agent === 'codex' ? journal.queuedMessages?.userStopInForce() : null
-  if (!stop || !journal.submissions || !journal.resolveDispatch) {
+  if (!journal.resolveDispatch) {
     return
+  }
+  for (const resolution of codexUnopenedSendResolutions(journal, fence)) {
+    await journal.resolveDispatch(resolution)
+  }
+}
+
+export function codexUnopenedSendResolutions(
+  journal: UnopenedSendJournal,
+  fence: number
+): ResolveDispatchInput[] {
+  const stop = journal.agent === 'codex' ? journal.queuedMessages?.userStopInForce() : null
+  if (!stop || !journal.submissions) {
+    return []
   }
   const { items } = journal.snapshot()
   const turns = items.flatMap((item) => {
@@ -86,13 +99,11 @@ export async function withdrawCodexSendsNoTurnOpenedFor(
   const withdrawn = agentSessionFailureWords(agentSessionFailureFact('cancelled'), {
     surface: 'rejection'
   })
-  for (const entry of unopened) {
-    await journal.resolveDispatch({
-      clientMessageId: entry.clientMessageId,
-      state: 'rejected',
-      ...withdrawn,
-      fence,
-      recovered: true
-    })
-  }
+  return unopened.map((entry): ResolveDispatchInput => ({
+    clientMessageId: entry.clientMessageId,
+    state: 'rejected',
+    ...withdrawn,
+    fence,
+    recovered: true
+  }))
 }

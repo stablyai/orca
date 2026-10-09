@@ -8,6 +8,7 @@ import {
 } from './daemon-launched-child-spawn'
 import { parseDaemonReadyIdentity } from './daemon-ready-identity'
 import { unlinkOwnedDaemonPidFile } from './daemon-spawner'
+import { childProcessHasExited } from '../../shared/child-process/process-tree-termination'
 
 /** How long a forked daemon gets to report ready over IPC, unless the caller overrides it. */
 export const DAEMON_CHILD_STARTUP_TIMEOUT_MS = 10_000
@@ -86,9 +87,8 @@ async function launchDaemonChildAttempt(
     child.stderr?.destroy()
   }
 
-  // Wait for the daemon to signal readiness via IPC
   let launchedIdentity: DaemonEndpointIdentity | null = null
-  let endpointUnavailableReason: string | null = null
+  let endpointOccupied = false
   const startupSignal = new Promise<void>((resolve, reject) => {
     let timer: ReturnType<typeof setTimeout> | undefined
     let settled = false
@@ -136,18 +136,19 @@ async function launchDaemonChildAttempt(
       reject(startupError)
     }
     function onReadyMessage(msg: unknown): void {
-      if (
-        msg &&
-        typeof msg === 'object' &&
-        (msg as { type?: string }).type === 'endpoint-unavailable'
-      ) {
-        // Why: the child lost the endpoint race rather than crashing. Record it so the
-        // launcher can adopt the winner instead of reporting a generic startup failure.
-        endpointUnavailableReason = (msg as { reason?: string }).reason ?? 'occupied'
-        void fail(new Error(`Daemon could not take the endpoint: ${endpointUnavailableReason}`))
+      if (!msg || typeof msg !== 'object') {
         return
       }
-      if (msg && typeof msg === 'object' && (msg as { type?: string }).type === 'ready') {
+      const type = 'type' in msg ? msg.type : undefined
+      if (type === 'endpoint-unavailable') {
+        // Why: the child lost the endpoint race rather than crashing. Record it so the
+        // launcher can adopt the winner instead of reporting a generic startup failure.
+        const reason = 'reason' in msg && typeof msg.reason === 'string' ? msg.reason : 'occupied'
+        endpointOccupied = reason === 'occupied'
+        void fail(new Error(`Daemon could not take the endpoint: ${reason}`))
+        return
+      }
+      if (type === 'ready') {
         if (settled) {
           return
         }
@@ -182,7 +183,7 @@ async function launchDaemonChildAttempt(
       if (code === DAEMON_EXIT_ENDPOINT_OCCUPIED) {
         // Why here and not only on the IPC message: the exit is the event this wait settles
         // on, so keying off it cannot lose to a notification still in the channel.
-        endpointUnavailableReason = 'occupied'
+        endpointOccupied = true
       }
       void fail(new Error(`Daemon exited during startup with code ${code}`))
     }
@@ -199,7 +200,7 @@ async function launchDaemonChildAttempt(
   try {
     await startupSignal
   } catch (error) {
-    if (endpointUnavailableReason === 'occupied') {
+    if (endpointOccupied) {
       throw new DaemonEndpointUnavailableError('occupied', { cause: error })
     }
     throw error
@@ -220,10 +221,7 @@ async function launchDaemonChildAttempt(
  */
 export async function terminateLaunchedDaemonChild(child: ChildProcess): Promise<void> {
   try {
-    if (
-      (child.exitCode !== null && child.exitCode !== undefined) ||
-      (child.signalCode !== null && child.signalCode !== undefined)
-    ) {
+    if (childProcessHasExited(child)) {
       return
     }
     await new Promise<void>((resolve, reject) => {

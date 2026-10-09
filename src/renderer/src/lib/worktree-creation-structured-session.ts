@@ -4,9 +4,12 @@ import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
 import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/structured-agent-session-provisional-tab'
-import type { StructuredLaunchTerminal } from '@/lib/structured-agent-session-paired-admission'
+import type { StructuredLaunchTerminal } from '@/lib/structured-agent-session-launch-admission'
 import { buildWorktreeCreationStartupOpt } from '@/lib/worktree-creation-flow-startup'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
+import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
+import { mountCreatedWorktreeStartupTabsInBackground } from '@/lib/worktree-creation-background-mount'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 
 export type WorktreeCreationStructuredSessionResult = {
   accepted: boolean
@@ -27,19 +30,38 @@ type LaunchStructuredWorktreeSessionArgs = {
 }
 
 /**
- * A paired server's "no" to a create the user moved away from opens the agent terminal the way a
+ * The host's "no" to a create the user moved away from opens the agent terminal the way a
  * background terminal create does: in place, without selecting the workspace (#23974). A create the
  * user is still watching keeps the default, which opens it as a new agent tab there.
  */
 function openBackgroundDeclinedTerminal(
-  args: LaunchStructuredWorktreeSessionArgs
+  args: LaunchStructuredWorktreeSessionArgs,
+  host: RuntimeClientTarget
 ): StructuredLaunchTerminal {
-  ensureWebRuntimeWorktreeTerminalAfterWake(args.worktreeId, {
-    startup: buildWorktreeCreationStartupOpt(args.request, false),
-    agent: args.request.agent,
-    activate: false
-  })
-  return { opened: true }
+  const startup = buildWorktreeCreationStartupOpt(args.request, false)
+  if (host.kind === 'environment') {
+    ensureWebRuntimeWorktreeTerminalAfterWake(args.worktreeId, {
+      startup,
+      agent: args.request.agent,
+      activate: false
+    })
+    return { opened: true }
+  }
+  if (!startup) {
+    return { opened: false }
+  }
+  // This machine seeds the agent terminal itself; a background workspace mounts it without showing it.
+  const tabId = ensureWorktreeHasInitialTerminal(
+    useAppStore.getState(),
+    args.worktreeId,
+    startup,
+    undefined,
+    undefined,
+    undefined,
+    { activateCreatedTabs: false, createNewTerminalForStartup: true }
+  )
+  mountCreatedWorktreeStartupTabsInBackground(args.worktreeId)
+  return { opened: tabId !== null }
 }
 
 export async function launchStructuredWorktreeSession(
@@ -83,7 +105,7 @@ export async function launchStructuredWorktreeSession(
       activate: args.shouldActivateOnCompletion,
       ...(args.shouldActivateOnCompletion
         ? {}
-        : { onHostDeclined: () => openBackgroundDeclinedTerminal(args) }),
+        : { onHostDeclined: (host) => openBackgroundDeclinedTerminal(args, host) }),
       beforeOpen: () => {
         // Why: cancellation can arrive through the launch signal while reveal is running, before
         // the pending-creation store snapshot has caught up.

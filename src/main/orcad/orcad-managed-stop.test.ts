@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, sep } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type * as WindowsAcl from '../../shared/secure-path-windows-acl'
 import {
   OrcadManagedStopCompletionSchema,
   type OrcadManagedStopRequest
@@ -28,8 +29,38 @@ import {
   ORCAD_STOP_COMPLETION_POLL_MS
 } from './orcad-stop-deadlines'
 
+const hardening = vi.hoisted(() => ({ pending: new Set<Promise<void>>() }))
+
+vi.mock('../../shared/secure-path-windows-acl', async (importOriginal) => {
+  const acl = await importOriginal<typeof WindowsAcl>()
+  return {
+    ...acl,
+    bestEffortRestrictWindowsPath: (
+      targetPath: string,
+      isDirectory: boolean,
+      onSettled?: (restricted: boolean) => void
+    ): void => {
+      let finish!: () => void
+      const pending = new Promise<void>((resolve) => {
+        finish = resolve
+      })
+      hardening.pending.add(pending)
+      acl.bestEffortRestrictWindowsPath(targetPath, isDirectory, (restricted) => {
+        try {
+          onSettled?.(restricted)
+        } finally {
+          hardening.pending.delete(pending)
+          finish()
+        }
+      })
+    }
+  }
+})
+
 const roots: string[] = []
-afterEach(() => {
+afterEach(async () => {
+  // ACL updates must finish before their temporary directories disappear.
+  await Promise.all(hardening.pending)
   vi.restoreAllMocks()
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })

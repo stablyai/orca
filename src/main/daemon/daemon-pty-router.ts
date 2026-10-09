@@ -291,13 +291,7 @@ export class DaemonPtyRouter implements IPtyProvider {
     }
   }
 
-  // Why: restart swaps to a fresh router carrying the *same* legacy adapter
-  // instances. If we called dispose() on the outgoing router it would tear
-  // down those legacy adapters along with it. disposeRouterOnly() detaches
-  // only this router's subscriptions from the adapters — the adapters and
-  // their daemon connections keep running, and the new router re-subscribes.
-  // Without this, each restart leaked a router instance pinned by the legacy
-  // adapters' listener arrays (one pair per adapter per restart).
+  // Why: restart reuses the legacy adapters in a new router, so detach only our subscriptions (dispose() would tear them down; skipping this leaked a router per restart).
   disposeRouterOnly(): void {
     this.subscriptions.dispose()
   }
@@ -307,16 +301,11 @@ export class DaemonPtyRouter implements IPtyProvider {
     await Promise.all([...this.allAdapters()].map((adapter) => adapter.disconnectOnly()))
   }
 
-  // Why: the Manage Sessions panel iterates all adapters to list sessions
-  // across every protocol version, and the restart handler needs to preserve
-  // surviving legacy adapters across the current-adapter swap. On this branch
-  // (pre-#1323) the legacy list is set once at construction and never mutated,
-  // so returning the internal array by reference is safe for the intended
-  // read-only use.
   getCurrentAdapter(): DaemonPtyAdapter {
     return this.current
   }
 
+  // Why by reference: legacy is set once in the constructor and never mutated; callers (Manage Sessions, restart swap) only read it.
   getLegacyAdapters(): readonly DaemonPtyAdapter[] {
     return this.legacy
   }

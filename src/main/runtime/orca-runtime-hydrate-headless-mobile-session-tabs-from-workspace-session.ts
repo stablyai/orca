@@ -15,7 +15,8 @@ import {
   collectHeadlessParentTabOrder,
   distributeHeadlessTabsAcrossGroups,
   getHeadlessMobileSessionGroupId,
-  pickHeadlessActiveTerminalTab
+  pickHeadlessActiveTerminalTab,
+  pickRestoredActiveGroupId
 } from './mobile-session-layout-projection'
 import {
   mergeMobileSessionSnapshotTabs,
@@ -236,7 +237,13 @@ export class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession
           ? this.getMergedMobileSessionPublicationEpoch(existing, tabs)
           : `headless-hydrated:${Date.now().toString(36)}`,
         snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
-        activeGroupId: existing?.activeGroupId ?? groupId,
+        activeGroupId: hasPersistedSplit
+          ? pickRestoredActiveGroupId(
+              nextTabGroups,
+              [existing?.activeGroupId, session.activeGroupIdByWorktree?.[entryWorktreeId]],
+              activeTopLevelId
+            )
+          : (existing?.activeGroupId ?? groupId),
         activeTabId: mergedActiveTab?.id ?? null,
         activeTabType: mergedActiveTab?.type ?? null,
         tabGroups: nextTabGroups,

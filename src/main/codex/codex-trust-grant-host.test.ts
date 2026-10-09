@@ -11,7 +11,7 @@ beforeEach(() => {
   // Stand in for the guest shell: rc banner first, then the payload inside the
   // command's own fence. The identity script execs, so no closing fence is written.
   runProcessMock.mockImplementation((spec: { args: string[] }) => {
-    const nonce = /__ORCA_WSL_CAPTURE_BEGIN_([^_]+)__/.exec(String(spec.args.at(-1)))?.[1] ?? ''
+    const nonce = /__ORCA_WSL_CAPTURE_BEGIN_ ([^_]+)__/.exec(String(spec.args.at(-1)))?.[1] ?? ''
     return Promise.resolve({
       code: 0,
       signal: null,

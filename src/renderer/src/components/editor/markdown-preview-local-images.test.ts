@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { unified } from 'unified'
+import type * as Unified from 'unified'
 import {
   MARKDOWN_PREVIEW_LOCAL_IMAGE_PREWARM_CONCURRENCY,
   MARKDOWN_PREVIEW_LOCAL_IMAGE_PREWARM_LIMIT,
@@ -6,6 +8,11 @@ import {
   prewarmMarkdownPreviewLocalImages,
   type MarkdownPreviewLocalImageCandidate
 } from './markdown-preview-local-images'
+
+vi.mock('unified', async (importOriginal) => {
+  const actual = await importOriginal<typeof Unified>()
+  return { ...actual, unified: vi.fn(() => actual.unified()) }
+})
 
 async function flushPromises(): Promise<void> {
   await Promise.resolve()
@@ -17,6 +24,25 @@ function markdownImages(count: number): string {
 }
 
 describe('extractMarkdownPreviewLocalImageCandidates', () => {
+  it.each([
+    '# Notes\n\nA [link](./page.md) and ordinary text.',
+    '&#33;[Entity](./image.png)\n！[Fullwidth](./image.png)',
+    '<img src="./image.png" />\n[logo]: ./image.png'
+  ])('skips the image-prewarm parser when no image introducer exists', (markdown) => {
+    vi.mocked(unified).mockClear()
+
+    expect(extractMarkdownPreviewLocalImageCandidates(markdown, '/repo/docs/readme.md')).toEqual([])
+    expect(unified).not.toHaveBeenCalled()
+
+    expect(
+      extractMarkdownPreviewLocalImageCandidates(
+        `${markdown}\n\n![Logo](./logo.png)`,
+        '/repo/docs/readme.md'
+      )
+    ).toHaveLength(1)
+    expect(unified).toHaveBeenCalledOnce()
+  })
+
   it('extracts direct, reference-style, and GFM table images in document order', () => {
     const candidates = extractMarkdownPreviewLocalImageCandidates(
       [

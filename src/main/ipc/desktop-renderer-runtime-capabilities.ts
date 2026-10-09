@@ -5,12 +5,15 @@ import {
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../shared/protocol-version'
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../shared/agent-session-create-capabilities'
+import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../shared/agent-session-optional-model-capability'
 import {
   AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
@@ -26,12 +29,13 @@ import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from '../../shar
  * capability the host uses as an authorization gate has to be named here or the method is refused.
  * That is why this stays a curated set rather than the remote list: several remote-only entries
  * would change local behaviour if adopted (`SESSION_TAB_CLOSE_INTENT` alone would start refusing
- * an unattributed desktop tab close), and the divergence is pinned in this module's test.
+ * an unattributed desktop tab close), the lists remain curated for those reasons.
  *
  * One constant, not one list per dispatch path: the unary and streaming handlers held separate
  * copies, and a capability added to one and missed on the other is invisible until a user hits it.
  */
 export const DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES: readonly RuntimeCapability[] = [
+  AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
@@ -40,8 +44,10 @@ export const DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES: readonly RuntimeCapab
   AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY,
   // The renderer reads `agentSession.agents` and renders a chat tab of any agent its host lists.
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
+  PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   // Without this `supportsAgentLaunch` refuses the renderer outright, while the same renderer

@@ -92,8 +92,8 @@ export function useNativeChatStructuredComposerSend({
       }
       const submitted = sentFrom ?? readNativeChatComposerDraft(draftScopeKey)
       await dispatchNativeChatStructuredComposerText(structuredTransport, text, attachments)
-        .then(({ accepted, error, revealsTranscript }) => {
-          structuredTransport.onError(error)
+        .then(({ accepted, error, refusedWhile, revealsTranscript }) => {
+          structuredTransport.onError(error, refusedWhile ? { refusedWhile } : undefined)
           if (!accepted) {
             return
           }
@@ -102,8 +102,8 @@ export function useNativeChatStructuredComposerSend({
             structuredTransport.onSubmitted?.()
           }
           // A real user send is a takeover, exactly as typing into a worker's pane is. Only past
-          // `accepted`, and only from this hook: the outbox dispatcher retries and would re-fire,
-          // and orchestration's own pointer nudges never reach the composer at all.
+          // `accepted`, and only from this hook: orchestration's own pointer nudges never reach
+          // the composer at all.
           reportStructuredSessionUserInput(
             structuredTransport.sessionId,
             structuredTransport.runtimeEnvironmentId
@@ -129,7 +129,7 @@ export function useNativeChatStructuredComposerSend({
             error,
             agentSessionWriteNoticeText([hostCommand ? 'notDoneCommand' : 'notDoneSend'])
           )
-          structuredTransport.onError(notice.text, notice.errorText)
+          structuredTransport.onError(notice.text, { errorText: notice.errorText })
         })
     },
     [

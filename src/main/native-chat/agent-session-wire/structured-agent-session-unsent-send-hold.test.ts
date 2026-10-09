@@ -9,7 +9,7 @@ import { agentSessionFailureWords } from '../../../shared/agent-session-failure-
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
 import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
-import { createStructuredAgentSessionOutboxEntry } from '../../../shared/structured-agent-session-outbox'
+import { structuredAgentSessionSendBody } from '../../../shared/structured-agent-session-send-mutation'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
@@ -254,15 +254,11 @@ describe('the next accepted turn releases a kept card', () => {
     if (!page.ok) {
       throw new Error('history refused')
     }
+    // The sending desktop's own bubble, had it not settled yet.
     const lingering = {
-      ...createStructuredAgentSessionOutboxEntry({
-        clientMessageId: id,
-        sessionId: SESSION,
-        text: 'the kept words',
-        attachments: [],
-        queuedAt: 1
-      }),
-      state: 'rejected' as const
+      clientMessageId: id,
+      body: structuredAgentSessionSendBody('the kept words', []),
+      queuedAt: 1
     }
     const shown = projectStructuredAgentSessionMessages(
       page.page.items,
@@ -631,7 +627,7 @@ describe('what is not kept', () => {
 })
 
 describe('/clear carries a kept card', () => {
-  it('the first turn in the new conversation releases it, after that turn', async () => {
+  it('the first turn after clear releases the same kept card after that turn', async () => {
     const id = await acceptWhileStarting(sendRequest('carried through clear'))
     await quitRestart()
     expect(await rig.drafts()).toHaveLength(1)
@@ -640,9 +636,9 @@ describe('/clear carries a kept card', () => {
       envelope: rig.envelope(fields, 'agentSession.conversationCommand', hostTestOperationId()),
       ...fields
     })
-    const replacementId = cleared.ok ? cleared.value.replacementSessionId : undefined
+    const replacementId = cleared.ok ? SESSION : undefined
     if (!replacementId) {
-      throw new Error('expected a replacement session')
+      throw new Error('expected clear to succeed')
     }
     expect(await rig.drafts(replacementId)).toEqual([{ messageId: id, ...KEPT }])
     // Nothing runs in the fresh conversation, so no paused row.
@@ -653,7 +649,7 @@ describe('/clear carries a kept card', () => {
       envelope: {
         sessionId: replacementId,
         clientOperationId: hostTestOperationId(),
-        expectedRuntimeFence: 1,
+        expectedRuntimeFence: rig.store.getRecord(replacementId)!.lease.runtimeFence,
         payloadFingerprint: computeAgentSessionPayloadFingerprint({
           method: 'agentSession.send',
           sessionId: replacementId,
@@ -674,7 +670,12 @@ describe('/clear carries a kept card', () => {
     await rig.host.settleLateDispatch({
       sessionId: replacementId,
       clientMessageId: turnId,
-      providerIdentity: { provider: 'codex', threadId: 'thread-1', turnId: 'turn-x', ordinal: 0 }
+      providerIdentity: {
+        provider: 'codex',
+        threadId: rig.store.getRecord(replacementId)!.providerHandleChain.at(-1)!.handle.nativeId,
+        turnId: 'turn-x',
+        ordinal: 0
+      }
     })
     await eventually(() =>
       expect(dispatchedTexts()).toEqual(['first turn after the clear', 'carried through clear'])

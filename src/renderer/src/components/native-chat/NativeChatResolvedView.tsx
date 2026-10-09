@@ -16,6 +16,8 @@ import {
 import { useNativeChatLaunchPromptDeliveryNotice } from './use-native-chat-launch-prompt-delivery-notice'
 import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
 import { useNativeChatFontSize } from './use-native-chat-font-size'
+import { useNativeChatFind } from './use-native-chat-find'
+import { NativeChatFindBar } from './NativeChatFindBar'
 import { useNativeChatCanSend } from './use-native-chat-can-send'
 import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
 import { useNativeChatInteractivePromptCard } from './use-native-chat-interactive-prompt-card'
@@ -49,12 +51,13 @@ import {
   emptyNativeChatContextMenuActions,
   useNativeChatContextMenu
 } from './use-native-chat-context-menu'
-import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owner'
+import { createNativeChatRuntimeSelector } from './native-chat-runtime-owner'
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { useNativeChatLinkActions } from './use-native-chat-link-actions'
 import type { NativeChatResolvedViewProps } from './native-chat-view-types'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
+import { useRecheckNativeChatFileLinksWhenTurnEnds } from './use-native-chat-file-link-existence'
 import { useNativeChatLocalCommandAnswer } from './use-native-chat-local-command-answer'
 import { matchNativeChatSplitShortcut } from './native-chat-split-shortcut'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
@@ -77,9 +80,8 @@ export function NativeChatResolvedView({
 }: NativeChatResolvedViewProps): React.JSX.Element {
   // Primitive owner selection (no useShallow): routes the pane's read/subscribe to
   // the remote runtime host for a runtime-owned pane; null keeps the local path.
-  const runtimeEnvironmentId = useAppStore((s) =>
-    selectNativeChatRuntimeEnvironmentId(s, terminalTabId)
-  )
+  const selectOwner = useMemo(() => createNativeChatRuntimeSelector(terminalTabId), [terminalTabId])
+  const runtimeEnvironmentId = useAppStore(selectOwner)
   const keybindings = useAppStore((s) => s.keybindings)
   const session = useNativeChatRetainedSession({
     paneKey,
@@ -132,13 +134,10 @@ export function NativeChatResolvedView({
   // replaces the composer.
   const questionAnswerInputRef = useRef<HTMLInputElement>(null)
   const fileLinkContext = useNativeChatFileLinkContext(terminalTabId)
-  const pasteClipboardIntoComposer = useNativeChatPasteBridge({
-    rootRef,
-    composerRef,
-    questionAnswerInputRef
-  })
+  const onPaste = useNativeChatPasteBridge({ rootRef, composerRef, questionAnswerInputRef })
   const contextMenu = useNativeChatContextMenu({
     rootRef,
+    composerRef,
     enabled: isVisible,
     onSwitchToTerminal,
     splitShortcutLabels: {
@@ -146,7 +145,7 @@ export function NativeChatResolvedView({
       down: formatShortcutLabel('terminal.splitDown', keybindings)
     },
     actions: {
-      onPaste: pasteClipboardIntoComposer,
+      onPaste,
       ...(contextMenuActions ?? emptyNativeChatContextMenuActions)
     }
   })
@@ -315,6 +314,7 @@ export function NativeChatResolvedView({
     hasPromptCard: promptCard !== null
   })
   const turnTiming = useNativeChatTerminalTurnTiming(paneKey, session.messages, turnActive)
+  useRecheckNativeChatFileLinksWhenTurnEnds(turnActive)
 
   const stopAgent = useCallback(() => {
     setWorkingInterrupted(true)
@@ -332,6 +332,7 @@ export function NativeChatResolvedView({
 
   // Only the focused conversation accepts chat text-size shortcuts.
   useNativeChatFontSize(isConversation && isVisible && isFocusedGroup, rootRef)
+  const find = useNativeChatFind(isVisible && isFocusedGroup, rootRef, composerRef, messageListRef)
   const appearanceStyle = useNativeChatStoreAppearanceStyle()
 
   return (
@@ -351,6 +352,7 @@ export function NativeChatResolvedView({
         }
       }}
       onKeyDownCapture={(event) => {
+        find.onKeyDownCapture(event)
         const splitDirection = event.repeat
           ? null
           : matchNativeChatSplitShortcut(event, getShortcutPlatform(), keybindings)
@@ -374,7 +376,8 @@ export function NativeChatResolvedView({
       style={appearanceStyle}
       data-native-chat-scheme={appearanceStyle.colorScheme}
     >
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        {find.isOpen ? <NativeChatFindBar find={find} isVisible={isVisible} /> : null}
         {viewState.kind === 'loading' ? (
           <NativeChatEmptyState kind="loading" />
         ) : viewState.kind === 'error' ? (

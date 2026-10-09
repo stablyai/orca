@@ -45,8 +45,8 @@ it('files nothing for a chat the user moved on in before its attempt, and spends
   const capsule = new AgentSessionRecoveryCapsule(root)
   expect(await capsule.listFailed(NOW)).toEqual([])
   expect(await capsule.list(NOW)).toEqual([])
-  expect(await statusNotes(host)).toEqual([])
-  // No note took over, so the cut turn keeps its one notice.
+  // Only the quit's own row about the cut: no note took over, so it stays the turn's one notice.
+  expect(await statusNotes(host)).toEqual([QUIT_CUT_NOTICE])
   expect(await readerNotes(host)).toEqual([QUIT_CUT_NOTICE])
 })
 

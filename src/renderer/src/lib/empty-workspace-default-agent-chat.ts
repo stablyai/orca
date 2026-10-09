@@ -1,4 +1,4 @@
-import { agentTabsDefaultToNativeChat } from '../../../shared/structured-native-chat-launch-route'
+import { isNativeChatEnabled } from '../../../shared/structured-native-chat-launch-route'
 import { pickTuiAgent } from '../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
@@ -26,10 +26,7 @@ function defaultChatDetectionTarget(
   worktreeId: string
 ): AgentDetectionTarget | undefined {
   // Why: a 'blank' default means the user wants workspaces to open without an agent.
-  if (
-    !agentTabsDefaultToNativeChat(state.settings) ||
-    state.settings?.defaultTuiAgent === 'blank'
-  ) {
+  if (!isNativeChatEnabled(state.settings) || state.settings?.defaultTuiAgent === 'blank') {
     return undefined
   }
   // Why: an unresolved owner is an unknown host, not the local machine.
@@ -74,10 +71,12 @@ export async function loadEmptyWorkspaceDefaultChatDetection(worktreeId: string)
 
 /**
  * When the user's new agent tabs open as chat, an empty workspace opens their default agent as a
- * chat instead of a bare shell. Null means nothing opened and the caller seeds the shell.
+ * chat instead of a bare shell. Null means nothing opened and the caller seeds the shell; so does
+ * `seedShell` when the host declines the chat, since nobody asked for the agent's terminal.
  */
 export function openDefaultAgentChatInEmptyWorkspace(
-  worktreeId: string
+  worktreeId: string,
+  seedShell: () => boolean
 ): { primaryTabId: string | null } | null {
   const state = useAppStore.getState()
   const target = defaultChatDetectionTarget(state, worktreeId)
@@ -107,7 +106,8 @@ export function openDefaultAgentChatInEmptyWorkspace(
     worktreeId,
     launchSource: 'unknown',
     agentSessionLaunchPlan,
-    pendingActivationSpawn: true
+    pendingActivationSpawn: true,
+    onStructuredHostDeclined: () => ({ opened: seedShell() })
   })
   if (!result) {
     return null

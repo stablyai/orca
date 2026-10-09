@@ -3,13 +3,16 @@ import { RetryableProcessExitProof } from '../../shared/child-process/retryable-
 import type { ProviderProcessLaunch } from './provider-process-launch'
 import {
   PROVIDER_SUPERVISOR_MAX_STOP_MS,
-  createProviderSpawnSpec
+  createProviderSpawnSpec,
+  type ProviderSupervisorLifetime
 } from './provider-process-supervisor'
 import {
   terminateProviderProcessTree,
   type ProviderProcessTeardownVerdict
 } from './provider-process-teardown'
 import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
+import { isMissingProviderExecutable } from './provider-executable-missing'
+import { supervisedProviderSpawnFailure } from './provider-spawn-failure-report'
 import {
   acceptProviderRootExit,
   closeProviderProcess,
@@ -36,6 +39,10 @@ type ManagedProviderProcessOptions = {
   inheritedEnv?: NodeJS.ProcessEnv
   /** Defaults to "the root is gone". */
   acceptClose?: (result: ProviderProcessCloseResult) => boolean
+  /** Defaults to `session`; a one-shot's stdin end completes its request instead of stopping it. */
+  lifetime?: ProviderSupervisorLifetime
+  /** Any stdout or stderr chunk: the child is doing something. */
+  onOutput?: () => void
 }
 
 export type ManagedProviderProcess = {
@@ -50,6 +57,9 @@ export type ManagedProviderProcess = {
   /** The last close that ran the ladder; the already-exited answer only when none did. */
   readonly lastCloseResult: ProviderProcessCloseResult | null
   readonly exitPromise: Promise<void>
+  /** The provider's own executable was not found: a direct spawn's ENOENT, or the one a
+   *  supervisor reported before exiting. */
+  readonly executableMissing: boolean
   /** The last 8 KiB of stderr, which the managed process drains so the child never blocks on it. */
   stderrTail(): string
   onExit(listener: (exit: ProviderProcessExit) => void): void
@@ -66,7 +76,8 @@ export function spawnManagedProviderProcess(
   const closePolicy = options.policy ?? rootOnlyProviderClosePolicy
   const spec = createProviderSpawnSpec(launch, options.inheritedEnv ?? process.env, platform, {
     // A gone owner gets the close this provider's own close would make under the supervisor.
-    closeRequest: closePolicy(true).signalSupervisorOnClose ? 'stdin-end-and-sigterm' : 'stdin-end'
+    closeRequest: closePolicy(true).signalSupervisorOnClose ? 'stdin-end-and-sigterm' : 'stdin-end',
+    ...(options.lifetime ? { lifetime: options.lifetime } : {})
   })
   const policy = closePolicy(spec.supervised)
   if (spec.supervised && !(policy.gracefulExitMs >= PROVIDER_SUPERVISOR_MAX_STOP_MS)) {
@@ -85,13 +96,18 @@ export function spawnManagedProviderProcess(
   const listeners = new Set<(exit: ProviderProcessExit) => void>()
   let observed: ProviderProcessExit | null = null
   let spawnFailed = false
+  let spawnError: unknown = null
   let lastCloseResult: ProviderProcessCloseResult | null = null
   const exitProof = new RetryableProcessExitProof(options.acceptClose ?? acceptProviderRootExit)
   let stderrTail = ''
   // An undrained stderr pipe blocks the child once it fills.
   child.stderr.setEncoding('utf8').on('data', (chunk: string) => {
     stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_MAX_CHARS)
+    options.onOutput?.()
   })
+  if (options.onOutput) {
+    observeReaderOutput(child.stdout, options.onOutput)
+  }
   let resolveExit = (): void => {}
   const exitPromise = new Promise<void>((resolve) => {
     resolveExit = resolve
@@ -108,8 +124,9 @@ export function spawnManagedProviderProcess(
     listeners.clear()
   }
   child.on('exit', (code, signal) => observeExit({ code, signal, processless: false }))
-  child.on('error', () => {
+  child.on('error', (error) => {
     spawnFailed ||= child.pid === undefined
+    spawnError ??= error
   })
   child.on('close', (code, signal) => {
     const processless = spawnFailed && child.pid === undefined
@@ -134,6 +151,12 @@ export function spawnManagedProviderProcess(
     },
     get rootExitObserved() {
       return observed !== null && !observed.processless
+    },
+    get executableMissing() {
+      const failure =
+        spawnError ??
+        (observed ? supervisedProviderSpawnFailure(observed.code, stderrTail)?.error : null)
+      return isMissingProviderExecutable(failure, launch.command)
     },
     stderrTail: () => stderrTail,
     get lastCloseResult() {
@@ -169,4 +192,21 @@ export function spawnManagedProviderProcess(
       })
     }
   }
+}
+
+/** Watches stdout only once its reader subscribes: a listener of our own would start the stream
+ *  flowing and drop whatever arrived before a reader that subscribes late. */
+function observeReaderOutput(
+  stdout: Pick<NodeJS.ReadableStream, 'on' | 'removeListener'>,
+  onOutput: () => void
+): void {
+  const onSubscribe = (event: string | symbol): void => {
+    if (event !== 'data' && event !== 'readable') {
+      return
+    }
+    stdout.removeListener('newListener', onSubscribe)
+    // After the reader's own listener lands; no chunk can arrive before a microtask runs.
+    queueMicrotask(() => stdout.on('data', onOutput))
+  }
+  stdout.on('newListener', onSubscribe)
 }

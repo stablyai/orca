@@ -489,6 +489,7 @@ describe('OrcaRuntimeService', () => {
       })
     )
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(TEST_WORKTREE_ID)
+    expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalledWith(store, TEST_REPO_ID)
     expect(result.warning).toBe(
       `orca.yaml archive hook skipped for ${TEST_WORKTREE_PATH}; pass --run-hooks to run it.`
     )

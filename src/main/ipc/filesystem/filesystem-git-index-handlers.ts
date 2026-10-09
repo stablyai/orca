@@ -5,16 +5,22 @@ import {
   discardChanges,
   bulkDiscardChanges,
   bulkStageFiles,
-  bulkUnstageFiles
+  bulkUnstageFiles,
+  stageWorktreeChanges
 } from '../../git/status'
 import {
   getSshGitProvider,
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
 } from '../../providers/ssh-git-dispatch'
 import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
-import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
+import {
+  getLocalGitOptionsForRegisteredWorktree,
+  getLocalRepoForRegisteredWorktree
+} from '../local-worktree-runtime-options'
+import { getWorktreeSharedLinkPaths } from '../../git/worktree-shared-directories'
 import { validateGitRelativeFilePath } from '../filesystem-path-containment'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
+import { parseGitStageWorktreeScope } from '../../../shared/git-stage-worktree-scope'
 
 export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
@@ -121,14 +127,15 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
     'git:bulkStage',
     async (
       _event,
-      args: { worktreePath: string; filePaths: string[]; connectionId?: string }
+      args: { worktreePath: string; filePaths: string[]; connectionId?: string; scope?: unknown }
     ): Promise<void> => {
+      const scope = parseGitStageWorktreeScope(args.scope)
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
-        return provider.bulkStageFiles(args.worktreePath, args.filePaths)
+        return provider.bulkStageFiles(args.worktreePath, args.filePaths, scope)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePaths = args.filePaths.map((p) => validateGitRelativeFilePath(worktreePath, p))
@@ -137,6 +144,15 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
         args.worktreePath,
         worktreePath
       )
+      if (scope) {
+        const repo = getLocalRepoForRegisteredWorktree(store, args.worktreePath, worktreePath)
+        await stageWorktreeChanges(worktreePath, scope, {
+          ...gitOptions,
+          admissionTier: 'interactive',
+          sharedLinkPaths: repo ? getWorktreeSharedLinkPaths(repo) : []
+        })
+        return
+      }
       await bulkStageFiles(worktreePath, filePaths, {
         ...gitOptions,
         admissionTier: 'interactive'

@@ -162,6 +162,10 @@
       "reason": "The auth-failed banner offers Retry, Re-pair and Remove, and on the page only Re-pair works. /pair-scan sits outside the page's route root of app/h (config/scripts/mobile-web-app-route-manifest.mjs:6), so route-handoff.web.ts:207 hands the push to the shell, which opens the native scan screen and returns to the same page document on Back. Retry and Remove are inert here: forceReconnect is null (client-context.web.tsx:57, read through host-client-hooks.ts:88) and removal refuses (page-host-removal-refusal.ts). The banner is reachable on the page because the shell forwards the native client's state (mobile-web-shell/bridge-host.ts:301) and auth-failed is in the wire enum (bridge/bridge-envelope.ts:44). So this one renders Re-pair as native does and one line naming the app for reconnect and removal."
     },
     {
+      "file": "src/session/MobileNativeChatVisualFrame.web.tsx",
+      "reason": "The native frame runs a chat visual's scripts in a sandboxed child of a trusted host document inside a react-native-webview, which throws at import in a browser. The page's response-header policy (script-src 'self', frame-src 'none') is inherited by a srcdoc frame, so a visual's inline scripts cannot run here without loosening the page policy. This one renders the visual sealed, as MobileHtmlPreview.web.tsx does: an empty sandbox, no script, a fixed-height frame the visual scrolls inside."
+    },
+    {
       "file": "src/components/MobileHtmlPreview.web.tsx",
       "reason": "The native preview renders an agent-produced HTML artifact inside a sandboxed WebView with navigation locked to the initial inline document, and react-native-webview throws at import in a browser for the reason above. This one renders the artifact in a sandboxed iframe with no allow-scripts and no allow-same-origin, keeping the Preview/Source toggle. srcdoc rather than a blob: URL and no CSP change at all: a srcdoc frame has no URL for frame-src to match and inherits its embedder's policy instead, so it is admitted under the shipped frame-src 'none' on Chromium and WebKit alike, while a blob: frame is refused by frame-src and refused again in WebKit by the frame-ancestors 'none' it inherits. The inherited policy is also what seals it -- script-src 'self' refuses the artifact's inline script, img-src bounds its images, font-src 'none' its fonts -- and allow-top-navigation-by-user-activation is the one capability granted, so a tapped link becomes a top-frame navigation the shell opens externally (ruling 29) while a meta refresh, a form submit, target=_blank and any script-initiated navigation produce none. That token is granted only when the shell says it can open such a navigation: without the externalNavigation grant this file renders the artifact with its links as text and seals the frame with an empty sandbox instead (C8.1, ruling 37.2)."
     },
@@ -172,6 +176,10 @@
     {
       "file": "src/mobile-web-shell/catch-all-page-route.web.tsx",
       "reason": "The catch-all's native body mounts the shell, and the page is what that shell displays; nesting one here would open a second document inside the first, and the shell module calls requireNativeViewManager at import, which throws in a browser."
+    },
+    {
+      "file": "src/mobile-web-shell/page-owns-host-area.web.ts",
+      "reason": "Natively there is no `init` and the shell layout decides who draws the host sidebar. Inside the page the only answer is the `ownsHostArea` init fact, never the page's own width, because a detail-route page on a wide iPad sits beside the shell's sidebar."
     },
     {
       "file": "src/session/use-notification-pane-navigation.web.ts",

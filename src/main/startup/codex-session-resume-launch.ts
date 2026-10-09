@@ -1,6 +1,9 @@
 import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
-import type { CodexSessionResumePreparation } from '../codex/codex-session-resume-home'
+import {
+  trustedCodexResumeHomes,
+  type CodexSessionResumePreparation
+} from '../codex/codex-session-resume-home'
 import { prepareCodexSessionResume } from '../codex/codex-session-resume-preparation'
 import {
   prepareCodexAccountRestartResume,
@@ -27,8 +30,7 @@ export async function prepareCodexSessionResumeForLaunch(args: {
     return null
   }
   const systemHomePath = getSystemCodexHomePath()
-  // Why: codexSessionSourceHome is import-only; treating it as CODEX_HOME would mutate history sources and bypass account auth.
-  const trustedHomes = [systemHomePath, ...runtimeHome.getHostCodexHomePathsForSessionDiscovery()]
+  const trustedHomes = trustedCodexResumeHomes(runtimeHome, systemHomePath)
   // Why: resolved eagerly, once, before any ranking or provenance match. The
   // marker read used to be deferred into the ranking thunk so a
   // provenance-present resume never paid for it, but that optimisation let an
@@ -87,29 +89,7 @@ export async function prepareCodexSessionResumeForLaunch(args: {
         : migrated.useRealCodexHome
           ? systemHomePath
           : sessionSource.homePath
-      const isSystemHome =
-        normalizeRuntimePathForComparison(resumeHome) ===
-        normalizeRuntimePathForComparison(systemHomePath)
-      const isHooksEnabled = (): boolean =>
-        isAgentStatusHooksEnabledForAgent(store.getSettings(), 'codex')
-      const hooksEnabled = isHooksEnabled()
-      try {
-        if (isSystemHome) {
-          // Why bounded: the resume waits only briefly for a reconcile; it runs on ~/.codex whatever the selection.
-          await reconcileCodexHooksForLaunch()
-        } else if (hooksEnabled) {
-          await codexHookService.installForLaunchPrep(resumeHome, true, isHooksEnabled)
-        } else {
-          await codexHookService.refreshRuntimeUserHooksForLaunchPrep(resumeHome)
-        }
-      } catch (error) {
-        // Why: hook repair is best-effort; session provenance must still win over the currently selected home.
-        console.warn('[codex-hook-service] failed to prepare automatic resume home:', error)
-      }
-      if (!isSystemHome) {
-        // Why: this pins the resumed pane's CODEX_HOME, and hook repair above can skip or fail before its config mirror applies the daemon guard.
-        ensureCodexDaemonSocketGuard(resumeHome)
-      }
+      await prepareCodexPinnedLaunchHome(resumeHome, systemHomePath)
       return resumeHome
     }
   })
@@ -121,4 +101,33 @@ export async function prepareCodexSessionResumeForLaunch(args: {
           normalizeRuntimePathForComparison(getOrcaManagedCodexHomePath())
       }
     : preparation
+}
+
+/** Hook repair and the daemon-socket guard for a pane that pins `home` as its CODEX_HOME rather
+ *  than launching in the selected account's home, which the pane spawn prepares itself. */
+export async function prepareCodexPinnedLaunchHome(
+  home: string,
+  systemHomePath: string = getSystemCodexHomePath()
+): Promise<void> {
+  const isSystemHome =
+    normalizeRuntimePathForComparison(home) === normalizeRuntimePathForComparison(systemHomePath)
+  const isHooksEnabled = (): boolean =>
+    isAgentStatusHooksEnabledForAgent(state.store?.getSettings(), 'codex')
+  try {
+    if (isSystemHome) {
+      // Why bounded: the resume waits only briefly for a reconcile; it runs on ~/.codex whatever the selection.
+      await reconcileCodexHooksForLaunch()
+    } else if (isHooksEnabled()) {
+      await codexHookService.installForLaunchPrep(home, true, isHooksEnabled)
+    } else {
+      await codexHookService.refreshRuntimeUserHooksForLaunchPrep(home)
+    }
+  } catch (error) {
+    // Why: hook repair is best-effort; it must not stop the pane from launching in this home.
+    console.warn('[codex-hook-service] failed to prepare automatic resume home:', error)
+  }
+  if (!isSystemHome) {
+    // Why: this pins the pane's CODEX_HOME, and hook repair above can skip or fail before its config mirror applies the daemon guard.
+    ensureCodexDaemonSocketGuard(home)
+  }
 }

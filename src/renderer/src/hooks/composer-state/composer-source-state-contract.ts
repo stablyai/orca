@@ -16,6 +16,7 @@ export type ComposerSourceState = {
     | 'uploadComposerPaths'
     | 'handleAddAttachment'
     | 'applyLocalComposerDrop'
+    | 'applyNativeDrop'
   >
   targetChangeActions: Pick<
     ComposerModel,

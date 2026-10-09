@@ -1,4 +1,5 @@
 import { isTableSeparator, splitTableRow } from './rich-markdown/markdown-table-rows'
+import { mobileMarkdownVisualPlaceholderIndex } from './mobile-markdown-visual-lines'
 
 export type MobileMarkdownBlock =
   | { type: 'paragraph'; text: string }
@@ -9,11 +10,17 @@ export type MobileMarkdownBlock =
   | { type: 'image'; alt: string; url: string }
   | { type: 'table'; headers: string[]; rows: string[][] }
   | { type: 'rule' }
+  /** A native-chat visual directive; `index` is its position in the protected directive list. */
+  | { type: 'visual'; index: number }
 
 const HEADING = /^(#{1,6})\s+(.+)$/
 const CODE_FENCE = /^```([A-Za-z0-9_-]+)?\s*$/
 
-export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
+/** `visualCount`: how many directive placeholders `protectMobileMarkdownVisualLines` left in
+ *  `content`; zero (the default) leaves every line to the ordinary rules. */
+export function parseMobileMarkdown(content: string, visualCount = 0): MobileMarkdownBlock[] {
+  const visualIndex = (line: string): number | null =>
+    visualCount > 0 ? mobileMarkdownVisualPlaceholderIndex(line, visualCount) : null
   const lines = content.replace(/\r\n?/g, '\n').split('\n')
   const blocks: MobileMarkdownBlock[] = []
   let index = 0
@@ -39,6 +46,13 @@ export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
         index += 1
       }
       blocks.push({ type: 'code', text: code.join('\n'), language: fence[1], closed })
+      continue
+    }
+
+    const visual = visualIndex(line)
+    if (visual !== null) {
+      blocks.push({ type: 'visual', index: visual })
+      index += 1
       continue
     }
 
@@ -116,7 +130,8 @@ export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
       !HEADING.test(lines[index] ?? '') &&
       !/^>\s?/.test(lines[index] ?? '') &&
       !/^\s*(?:[-*+]|\d+[.)])\s+/.test(lines[index] ?? '') &&
-      !/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(lines[index] ?? '')
+      !/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(lines[index] ?? '') &&
+      visualIndex(lines[index] ?? '') === null
     ) {
       paragraph.push(lines[index] ?? '')
       index += 1

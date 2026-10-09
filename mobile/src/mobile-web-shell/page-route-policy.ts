@@ -213,14 +213,76 @@ export function grantsForRoute(
  * covered by what this session holds. A pair naming the required lane alone would keep a hop whose
  * target then runs without the capability it asked for, which is the drift that rule exists against.
  */
-export function routeViewOf(routes: readonly MobileWebPageRoute[] | undefined, pathname: string) {
+export function routeViewOf(
+  routes: readonly MobileWebPageRoute[] | undefined,
+  pathname: string,
+  wide = false
+) {
   const entries = implementedPageRouteEntries(routes)
+  const root = hostAreaRoot(pathname)
+  // Native unless the page declares it: an older page draws its own sidebar beside the native one.
+  if (wide && (root === null || !pageCanOwnHostArea(entries, root))) {
+    return { pageRoutes: [], pageRouteGrants: [], routeGrants: [], ownsHostArea: false }
+  }
+  const ownsHostArea = wide && pathname === root
+  // No pair for the host route in a wide detail session, so a hop there goes to the shell, which
+  // opens it owning the area rather than as a second host list in this pane.
+  const paired =
+    wide && !ownsHostArea && root !== null
+      ? entries.filter((route) => !matchesRoutePattern(root, route.pathname))
+      : entries
   return {
     pageRoutes: entries.map((route) => route.pathname),
-    pageRouteGrants: entries.map((route) => ({
+    pageRouteGrants: paired.map((route) => ({
       pathname: route.pathname,
       grants: effectiveRouteGrants(route)
     })),
-    routeGrants: grantsForRoute(routes, pathname)
+    routeGrants: ownsHostArea ? hostAreaGrants(entries) : grantsForRoute(routes, pathname),
+    ownsHostArea
   }
+}
+
+type RouteViewFacts = {
+  readonly pageRoutes: readonly string[]
+  readonly pageRouteGrants: readonly { readonly pathname: string }[]
+  readonly routeGrants: readonly string[]
+  readonly ownsHostArea: boolean
+}
+
+/** Whether two views serve the same routes with the same grants and the same host-area answer.
+ *  The paired routes count too: a wide detail session has no host-route pair to hop in-page on. */
+export function sameRouteView(a: RouteViewFacts, b: RouteViewFacts): boolean {
+  const same = (x: readonly string[], y: readonly string[]) =>
+    x.length === y.length && x.every((item, index) => item === y[index])
+  const paired = (view: RouteViewFacts) => view.pageRouteGrants.map((pair) => pair.pathname)
+  return (
+    a.ownsHostArea === b.ownsHostArea &&
+    same(a.pageRoutes, b.pageRoutes) &&
+    same(paired(a), paired(b)) &&
+    same(a.routeGrants, b.routeGrants)
+  )
+}
+
+/** Whether `href` is this host's own host route, whatever its search. */
+export function isHostRouteOf(href: string, hostId: string): boolean {
+  const [path] = href.split(/[?#]/)
+  return path === `/h/${hostId}` || path === `/h/${encodeURIComponent(hostId)}`
+}
+
+/** The `/h/<host>` route a pathname sits under, or null outside a host. */
+function hostAreaRoot(pathname: string): string | null {
+  const [empty, h, host] = pathname.split('/')
+  return empty === '' && h === 'h' && host !== undefined && host !== '' ? `/h/${host}` : null
+}
+
+function pageCanOwnHostArea(entries: readonly MobileWebPageRoute[], root: string): boolean {
+  return entries.some(
+    (route) => route.canOwnHostArea === true && matchesRoutePattern(root, route.pathname)
+  )
+}
+
+/** Every served route's grants, so `route-handoff.web.ts` keeps each hop in the page, plus the read
+ *  of a workspace key that page opens in-page. */
+function hostAreaGrants(entries: readonly MobileWebPageRoute[]): string[] {
+  return [...new Set([...entries.flatMap(effectiveRouteGrants), 'native.storage.read'])]
 }

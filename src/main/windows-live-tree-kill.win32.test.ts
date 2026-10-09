@@ -7,6 +7,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { setAppEnvironment, type AppEnvironment } from '../shared/app-environment'
 import { setProcessTreeKillGate } from '../shared/child-process/process-tree-kill-gate'
 import { signalProcessTree } from '../shared/child-process/process-tree-termination'
+import { windowsSystem32Binary } from '../shared/child-process/windows-system-binary'
 import { removeTreeSync } from '../shared/windows-transient-lock-removal'
 import {
   findSelfInitiatedTreeKills,
@@ -190,7 +191,9 @@ describeOnWindows('own-Chromium gate against real Windows process trees', () => 
 
     await expect(signalProcessTree(child, 'SIGKILL')).resolves.toBe(true)
 
-    expect(observedSpawns.map((child) => child.spawnfile)).toEqual(['taskkill'])
+    expect(observedSpawns.map((child) => child.spawnfile)).toEqual([
+      windowsSystem32Binary('taskkill.exe')
+    ])
     expect(await waitFor(() => !isAlive(rootPid))).toBe(true)
     expect(await waitFor(() => !isAlive(leafPid))).toBe(true)
   })

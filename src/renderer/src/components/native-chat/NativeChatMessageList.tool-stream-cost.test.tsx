@@ -21,7 +21,13 @@ vi.mock('../../../../shared/native-chat-edit-normalize', async (importOriginal) 
     }
   }
 })
+// Pacing is not this test's subject.
+vi.mock('./use-native-chat-paced-text', async (importOriginal) =>
+  (await import('./native-chat-unpaced-text-fixture')).unpacedTextModule(importOriginal)
+)
+
 const { NativeChatMessageList } = await import('./NativeChatMessageList')
+const { openToolRunMembers } = await import('./native-chat-tool-run-members-test-support')
 let restoreViewport = (): void => {}
 beforeAll(() => {
   restoreViewport = installNativeChatMessageListTestViewport()
@@ -72,6 +78,7 @@ it('does not re-diff expanded historical edits when an unrelated answer streams'
   })
   const { rerender } = render(<Transcript items={[...items, tail]} />)
   expect(cost.edits).toBe(20)
+  openToolRunMembers()
   cost.edits = 0
   cost.milliseconds = 0
   for (let frame = 0; frame < 20; frame += 1) {

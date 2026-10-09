@@ -9,6 +9,7 @@ const handler = vi.fn(() => ({ source: 'server' }))
 const methods = [
   defineMethod({
     name: 'browser.click',
+    permission: 'workspace',
     params: z.object({ page: z.string(), x: z.number() }),
     handler
   })

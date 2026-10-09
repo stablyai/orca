@@ -28,7 +28,10 @@ export function acpPermissionPresentation(params: unknown): AcpRequestPresentati
       kind: 'approval',
       title: toolCall.title ?? 'Permission requested',
       detail: null,
-      options: options.map((option) => ({ id: option.optionId, label: option.name })),
+      options: options.map((option) => ({
+        id: option.optionId,
+        label: option.name
+      })),
       resolution: pendingAcpResolution
     },
     reply: (response) => {
@@ -47,6 +50,7 @@ export function acpPermissionPresentation(params: unknown): AcpRequestPresentati
 }
 
 const requestSessionSchema = z.object({ sessionId: z.string() })
+const UNADVERTISED_CLIENT_METHOD = /^(?:fs|terminal)\//
 const requestToolSchema = z.object({
   toolCallId: z.string().optional(),
   toolCall: z.object({ toolCallId: z.string() }).optional()
@@ -105,6 +109,11 @@ export function translateAcpRequest(
       ? acpPermissionPresentation(params)
       : options.dialect.request?.(method, params)
   if (!presentation) {
+    // A file system or terminal call Orca never advertised is the agent's own misstep (OpenCode 1.x
+    // repeats each approved edit as a file write it already made): refused, with no row.
+    if (UNADVERTISED_CLIENT_METHOD.test(method)) {
+      return { events: [] }
+    }
     return {
       events: [{ type: 'provider.frame', frameKind: `request:${method}`, payload: params, join }]
     }

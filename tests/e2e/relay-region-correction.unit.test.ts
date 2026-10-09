@@ -9,6 +9,9 @@ import {
   readRelayDatabasePoolPressure
 } from '../../cloud/apps/relay/src/database'
 import { createRelayServer } from '../../cloud/apps/relay/src/relay-server'
+import { IDLE_REHOME_MIN_CONTROL_AGE_MS } from '../../cloud/apps/relay/src/host-session-registry'
+import { CONTROL_RENEWAL_BATCH_INTERVAL_MS } from '../../cloud/apps/relay/src/control-renewal-batch'
+import { RELAY_PROTOCOL_LIMITS } from '../../cloud/packages/relay-contract/src/protocol-limits'
 import type { RelayConfig } from '../../cloud/apps/relay/src/config'
 import type * as AdminTokenVerifier from '../../cloud/apps/relay/src/admin-token-verifier'
 import { RelayOriginPool } from '../../src/main/runtime/relay/relay-origin-pool'
@@ -283,15 +286,62 @@ async function topology() {
     pool.closeNow()
   })
   const assignment = await source.assignments.assign(identity, 'us-central1')
-  await pool.openInitial(
-    {
-      v: 1,
-      cellUrl: assignment.cellUrl,
-      assignmentEpoch: assignment.assignmentEpoch,
-      lease: 'synthetic-assignment-lease'
-    },
-    hostId
-  )
+  const controlIntervals = vi.spyOn(globalThis, 'setInterval')
+  let controlHeartbeat: (() => void) | undefined
+  try {
+    await pool.openInitial(
+      {
+        v: 1,
+        cellUrl: assignment.cellUrl,
+        assignmentEpoch: assignment.assignmentEpoch,
+        lease: 'synthetic-assignment-lease'
+      },
+      hostId
+    )
+    const session = source.sessions.get(identity)
+    if (session?.heartbeatTimer) {
+      const intervals = controlIntervals.mock.calls.filter(
+        (call, index) =>
+          controlIntervals.mock.results[index]?.type === 'return' &&
+          controlIntervals.mock.results[index]?.value === session.heartbeatTimer &&
+          call[1] === RELAY_PROTOCOL_LIMITS.controlPingIntervalMs &&
+          typeof call[0] === 'function'
+      )
+      if (intervals.length === 1 && typeof intervals[0]?.[0] === 'function') {
+        controlHeartbeat = intervals[0][0]
+      }
+    }
+  } finally {
+    controlIntervals.mockRestore()
+  }
+  const sourceControl = source.sessions.get(identity)
+  if (!sourceControl || !controlHeartbeat) {
+    throw new Error('missing source control heartbeat')
+  }
+  for (
+    let elapsed = 0;
+    elapsed < IDLE_REHOME_MIN_CONTROL_AGE_MS;
+    elapsed += RELAY_PROTOCOL_LIMITS.controlPingIntervalMs
+  ) {
+    const renewalDueAt = sourceControl.activityRenewalDueAt
+    const completedRenewal = sourceControl.activityRenewalCompletedAttempt
+    clock += Math.min(
+      RELAY_PROTOCOL_LIMITS.controlPingIntervalMs,
+      IDLE_REHOME_MIN_CONTROL_AGE_MS - elapsed
+    )
+    controlHeartbeat()
+    await expect
+      .poll(() => [sourceControl.lastPongAt, sourceControl.pendingPingAt])
+      .toEqual([clock, null])
+    if (clock >= renewalDueAt) {
+      await expect
+        .poll(() => sourceControl.activityRenewalCompletedAttempt, {
+          timeout: CONTROL_RENEWAL_BATCH_INTERVAL_MS * 2
+        })
+        .toBeGreaterThan(completedRenewal)
+    }
+  }
+  await heartbeat()
   const attachPhone = async (cellIndex: number, device: string) => {
     const invite = await source.store.createInvite(identity, device)
     const socket = connect(`${cells[cellIndex]!.url}/v1/connect/${hostId}`)

@@ -1,3 +1,4 @@
+import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import {
   CODEX_STRUCTURED_HANDLE_NAMESPACE,
   isAgentSessionProviderHandleInNamespace
@@ -15,14 +16,15 @@ import {
 import { CodexBackgroundTaskTracker, codexChildWorkSink } from './codex-background-task-tracker'
 import { CodexSubagentExecutions } from './codex-subagent-executions'
 import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
-import { createCodexJournalTranslator } from './codex-structured-journal-translation'
+import { createCodexSessionJournalTranslator } from './codex-structured-session-journal'
 import { openCodexAppServerConnection } from './codex-app-server-connection'
 import {
   codexProviderHandleLink,
   codexSpawnedProcessIdentity
 } from './codex-structured-owner-identity'
-import { buildCodexStructuredChildEnvironment } from './codex-structured-child-environment'
+import { codexStructuredChildEnvironment } from './codex-structured-child-environment'
 import { openCodexThread } from './codex-structured-thread-open'
+import { withCodexVisualsThreadConfig } from './codex-structured-visuals'
 import {
   closeCodexPublishedSession,
   handleCodexSessionExit
@@ -83,30 +85,20 @@ export async function acquireCodexStructuredSession(input: {
       : null
   const subagentExecutions = new CodexSubagentExecutions()
   const dispatchEchoes = createCodexDispatchEchoes()
+  let account: AgentSessionAccountKind | undefined
   // Minted before the translator, which names this connection's frame rows with it.
   const acquisitionGeneration = mintCodexAcquisitionGeneration(deps)
-  const translator = acquireInput.events
-    ? createCodexJournalTranslator({
-        sink: acquireInput.events,
-        sessionId,
-        acquisitionId: acquisitionGeneration,
-        ...(deps.now ? { now: deps.now } : {}),
-        primaryThreadId: () => primaryThreadId,
-        onPrimaryThreadStoppedRunning: () => deps.onPrimaryThreadStoppedRunning?.({ sessionId }),
-        dispatchRequestOrigin: (clientMessageId) => dispatchEchoes.requestOrigin(clientMessageId),
-        subagentExecutions,
-        bindPromptItemId: (journalItemId, threadId, promptKey, turnId) =>
-          acquisition.prompts.bindJournalItemId(journalItemId, threadId, promptKey, turnId),
-        clearPromptTurn: (threadId, turnId) => acquisition.prompts.clearTurn(threadId, turnId),
-        onUserMessageEcho: (clientMessageId, providerIdentity) => {
-          // Only a send THIS session admitted; an echo from history restore or
-          // another client names no submission of ours to settle.
-          if (dispatchEchoes.settle(clientMessageId)) {
-            deps.onDispatchSettledLate?.({ sessionId, clientMessageId, providerIdentity })
-          }
-        }
-      })
-    : null
+  const translator = createCodexSessionJournalTranslator({
+    sink: acquireInput.events,
+    account: () => account,
+    sessionId,
+    acquisitionId: acquisitionGeneration,
+    deps,
+    primaryThreadId: () => primaryThreadId,
+    dispatchEchoes,
+    subagentExecutions,
+    prompts: acquisition.prompts
+  })
   const open = deps.openConnection ?? openCodexAppServerConnection
   const spawnIdentity = codexSpawnedProcessIdentity(acquireInput, deps.readProcessStartTime)
   try {
@@ -134,12 +126,13 @@ export async function acquireCodexStructuredSession(input: {
         throw new AgentSessionPreSpawnError(error)
       })
     acquisitions.assertCurrent(sessionId, attempt)
+    account = launch.codexHome ? deps.resolveAccountKind?.(launch.codexHome) : undefined
     const connection = await open(
       {
         command: launch.command,
         args: launch.args,
         cwd: launch.cwd,
-        env: buildCodexStructuredChildEnvironment(launch, acquireInput.spawnToken, sessionId)
+        ...codexStructuredChildEnvironment(launch, acquireInput.spawnToken, sessionId)
       },
       {
         onNotification: codexAcquisitionNotificationHandler({
@@ -165,6 +158,7 @@ export async function acquireCodexStructuredSession(input: {
             Buffer.byteLength(JSON.stringify(payload ?? null), 'utf8')
           ),
         onSpawned: spawnIdentity.onSpawned,
+        ...(acquireInput.onOutput ? { onOutput: acquireInput.onOutput } : {}),
         onExit: (error, exit) => {
           try {
             handleCodexSessionExit({
@@ -195,7 +189,12 @@ export async function acquireCodexStructuredSession(input: {
       })
     }
     acquisitions.assertCurrent(sessionId, attempt)
-    const opened = await openCodexThread(connection, launch, deps.requestTimeoutMs)
+    const threadLaunch = await withCodexVisualsThreadConfig(connection, launch, {
+      sessionId,
+      ...(deps.logger ? { logger: deps.logger } : {})
+    })
+    acquisitions.assertCurrent(sessionId, attempt)
+    const opened = await openCodexThread(connection, threadLaunch, deps.requestTimeoutMs)
     acquisitions.assertCurrent(sessionId, attempt)
     primaryThreadId = opened.threadId
     const restoreAdmission = translator?.restoreThread(opened.threadId, opened.thread ?? {})
@@ -234,6 +233,7 @@ export async function acquireCodexStructuredSession(input: {
     // Where this session's child work goes: the host's records, after each frame is journaled.
     const sink = codexChildWorkSink(sessionId, deps)
     const session: CodexSession = {
+      account,
       connection,
       ...codexSessionLifecycle(acquireInput.fence, acquired.acquisitionGeneration as string),
       threadId: opened.threadId,

@@ -4,6 +4,7 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   HOST_STICKY_PINNED_HEIGHT,
   buildLineageRowRekeyMap,
+  estimateRenderRowSize,
   extractWorktreeVirtualRowIndexes,
   getActiveStickyIndexesForScroll,
   getStickyHeaderIndexes,
@@ -77,6 +78,75 @@ describe('getRenderRowKey', () => {
 })
 
 describe('getActiveStickyIndexesForScroll', () => {
+  it('hands off adjacent collapsed project headers at the slot below the host', () => {
+    const adjacentRows = [hostRow('local'), groupRow('collapsed'), groupRow('incoming')]
+    const items = [virtualItem(0, 0), virtualItem(1, 42), virtualItem(2, 80)]
+    const resolve = (scrollOffset: number) =>
+      getActiveStickyIndexesForScroll({
+        rows: adjacentRows,
+        rangeStartIndex: 1,
+        scrollOffset,
+        stickyHeaderIndexes: getStickyHeaderIndexes(adjacentRows),
+        virtualItems: items
+      })
+
+    expect(resolve(43)).toEqual({ hostIndex: 0, groupIndex: 1 })
+    expect(resolve(44)).toEqual({ hostIndex: 0, groupIndex: 2 })
+    expect(resolve(43)).toEqual({ hostIndex: 0, groupIndex: 1 })
+  })
+
+  it('pins the first project once it reaches the host slot while the range still starts at the host', () => {
+    const firstRows = [hostRow('local'), groupRow('first')]
+    expect(
+      getActiveStickyIndexesForScroll({
+        rows: firstRows,
+        rangeStartIndex: 0,
+        scrollOffset: 6,
+        stickyHeaderIndexes: getStickyHeaderIndexes(firstRows),
+        virtualItems: [virtualItem(0, 0), virtualItem(1, 42)]
+      })
+    ).toEqual({ hostIndex: 0, groupIndex: 1 })
+  })
+
+  it('selects the last header at the slot after crossing several collapsed groups', () => {
+    const adjacentRows = [
+      hostRow('local'),
+      groupRow('first'),
+      groupRow('second'),
+      groupRow('third')
+    ]
+    expect(
+      getActiveStickyIndexesForScroll({
+        rows: adjacentRows,
+        rangeStartIndex: 0,
+        scrollOffset: 82,
+        stickyHeaderIndexes: getStickyHeaderIndexes(adjacentRows),
+        virtualItems: [
+          virtualItem(0, 0),
+          virtualItem(1, 42),
+          virtualItem(2, 80),
+          virtualItem(3, 118)
+        ]
+      })
+    ).toEqual({ hostIndex: 0, groupIndex: 3 })
+  })
+
+  it.each([
+    { scrollOffset: 399, hostIndex: 0, groupIndex: 1 },
+    { scrollOffset: 400, hostIndex: 4, groupIndex: null },
+    { scrollOffset: 464, hostIndex: 4, groupIndex: 5 }
+  ])('resolves host transitions with a lagging range at $scrollOffset', (expected) => {
+    expect(
+      getActiveStickyIndexesForScroll({
+        rows,
+        rangeStartIndex: 3,
+        scrollOffset: expected.scrollOffset,
+        stickyHeaderIndexes,
+        virtualItems
+      })
+    ).toEqual({ hostIndex: expected.hostIndex, groupIndex: expected.groupIndex })
+  })
+
   it('pins the host and its inner group while scrolled inside a section', () => {
     expect(
       getActiveStickyIndexesForScroll({
@@ -192,6 +262,14 @@ describe('getActiveStickyIndexesForScroll', () => {
     })
     expect(result.hostIndex).toBe(0)
     expect(result.groupIndex).toBe(1)
+  })
+})
+
+describe('host header row height', () => {
+  it('reserves the host card height and its padding before the next row', () => {
+    const hostRows = [hostRow('local'), groupRow('first'), hostRow('ssh:remote')]
+    expect(estimateRenderRowSize(hostRows, 0, 0, null)).toBe(36)
+    expect(estimateRenderRowSize(hostRows, 2, 0, null)).toBe(40)
   })
 })
 

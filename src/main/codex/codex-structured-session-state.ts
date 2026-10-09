@@ -1,4 +1,5 @@
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import type {
   AgentJournalAnsweredTurnIdentity,
   AgentJournalItemIdentity,
@@ -26,6 +27,7 @@ import type {
   AgentModelCatalogSessionAccess,
   AgentModelCatalogStore
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import type { NativeChatVisualsLaunch } from '../native-chat/native-chat-visuals-delivery'
 
 export type CodexSessionCatalogAccess = AgentModelCatalogSessionAccess
 
@@ -43,6 +45,8 @@ export type CodexStructuredLaunch = {
   /** The model the session chose; the thread opens on it so its first turn is not a switch. */
   model?: string
   env?: Record<string, string>
+  /** This chat's visuals folder and skill; absent when the chat has no visuals. */
+  visuals?: NativeChatVisualsLaunch
 }
 
 /** Turn and item boundaries, timed by when the host received them, never by when a buffered or
@@ -83,6 +87,7 @@ export type CodexStructuredSessionEvent =
   | { type: 'ended'; sessionId: string; reason: string; observedAt?: number }
 
 export type CodexStructuredSessionAdapterDeps = {
+  resolveAccountKind?: (home: string) => AgentSessionAccountKind | undefined
   resolveLaunch: (input: {
     identity: AgentSessionJournalIdentity
   }) => Promise<CodexStructuredLaunch>
@@ -116,6 +121,7 @@ export type CodexStructuredSessionAdapterDeps = {
 }
 
 export type CodexSession = {
+  account?: AgentSessionAccountKind
   connection: CodexAppServerConnection
   ended: boolean
   /** First observed child exit survives rejected settlement admission. */

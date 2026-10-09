@@ -6,6 +6,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { Profiler, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
+import type { AgentChildWorkView } from '../../../../shared/agent-status-child-work-view'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 
 afterEach(() => {
@@ -96,8 +97,55 @@ describe('NativeChatBackgroundTasksStatus stop affordances', () => {
     expect(screen.getByLabelText('Stop backgrounded subagent')).toBeInTheDocument()
   })
 
+  it('stops a backgrounded Codex command by its own id, and offers none on the subagent beside it', () => {
+    const view = (overrides: Partial<AgentChildWorkView>): AgentChildWorkView => ({
+      id: 'child',
+      kind: 'agent',
+      state: 'working',
+      membership: 'live',
+      firstObservedAt: Date.now() - 65_000,
+      observedAt: Date.now() - 1_000,
+      stoppable: true,
+      invocation: { invocationId: 'spawn-1', generation: 1 },
+      ...overrides
+    })
+    const onStop = vi.fn()
+    render(
+      <DisclosureHost
+        isVisible
+        tasks={[]}
+        settledTasks={[]}
+        childViews={[
+          view({
+            id: 'agent',
+            providerId: 'codex-agent:child-1',
+            description: 'count_a',
+            stoppable: false
+          }),
+          view({
+            id: 'cmd',
+            kind: 'command',
+            providerId: 'codex-command:exec-1',
+            description: 'pnpm dev'
+          })
+        ]}
+        indicatorActive
+        supportsTaskStop
+        supportsStopAll
+        stoppingTaskIds={new Set()}
+        stoppingAll={false}
+        onStop={onStop}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { expanded: false }))
+
+    expect(screen.queryByLabelText('Stop count_a')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText('Stop pnpm dev'))
+    expect(onStop).toHaveBeenCalledWith('codex-command:exec-1')
+  })
+
   it('offers no stop at all when the provider exposes none', () => {
-    // Codex: a Stop button here would be a control that cannot act.
+    // An older Codex: a Stop button here would be a control that cannot act.
     renderStrip({ supportsTaskStop: false, supportsStopAll: false })
     expect(screen.queryByLabelText('Stop background tasks')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Stop count_a')).not.toBeInTheDocument()
@@ -202,6 +250,31 @@ describe('background-tasks strip header', () => {
     expect(separators[0].classList).toContain('text-muted-foreground')
     // One space either side; the icon's own margin is the icon-to-label gap.
     expect(header.textContent).toBe('1 agent · 1 shell')
+  })
+
+  describe('on a narrow strip', () => {
+    const wideWindow = window.innerWidth
+    afterEach(() => {
+      window.innerWidth = wideWindow
+    })
+
+    it('totals a breakdown across kinds', () => {
+      window.innerWidth = 320
+      const header = renderHeader([
+        { id: 'a1', kind: 'agent' },
+        { id: 'c1', kind: 'command' }
+      ])
+      expect(header).toHaveAttribute('aria-label', '2 background tasks')
+    })
+
+    it('keeps one kind in its attention form', () => {
+      window.innerWidth = 320
+      const header = renderHeader([
+        { id: 'a1', kind: 'agent', state: 'waiting' },
+        { id: 'a2', kind: 'agent', state: 'waiting' }
+      ])
+      expect(header).toHaveAttribute('aria-label', '2 agents waiting — needs approval')
+    })
   })
 
   it('carries no icon on a collapsed total, which spans kinds', () => {

@@ -114,6 +114,7 @@ import {
   SshOwnerAdmissionBlockedError
 } from './ssh-owner-admission-blocked-error'
 import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
+import type { SshBridgeCallerScope } from '../runtime/rpc/ssh-bridge-credentials'
 import {
   acknowledgeRemoteOrcaCliPostOutput,
   parseRemoteOrcaCliPostOutput
@@ -354,8 +355,7 @@ export class SshRelaySession {
     run: RemoteOpenCodeRuntimePreparation
     controller: AbortController
   } | null = null
-  private aiVaultListMethodSupported: boolean | null = null
-  private aiVaultTitleMethodSupported: boolean | null = null
+  private readonly unsupportedRelayMethods = new Set<string>()
   private pendingPtyReattaches = new Map<string, PendingPtyReattach>()
   private readonly ptyRecoveryRetention = new SshPtyRecoveryRetentionBudget()
   private activePtyProviderGeneration: number | null = null
@@ -493,51 +493,51 @@ export class SshRelaySession {
     params: SshAiVaultRelayListParams,
     options: { signal?: AbortSignal; timeoutMs?: number } = {}
   ): Promise<unknown> {
-    if (this.aiVaultListMethodSupported === false) {
-      return null
-    }
-    const mux = this.mux
-    if (!mux || mux.isDisposed() || this._state !== 'ready') {
-      throw new Error('SSH relay is not ready')
-    }
-    this.prepareOpenCodeRuntimeForScan()
-    try {
-      const result = await mux.request(SSH_AI_VAULT_LIST_SESSIONS_METHOD, params, {
-        signal: options.signal,
-        timeoutMs: options.timeoutMs ?? SSH_AI_VAULT_LIST_SESSIONS_TIMEOUT_MS
-      })
-      this.aiVaultListMethodSupported = true
-      return result
-    } catch (error) {
-      if (isMethodNotFoundError(error)) {
-        this.aiVaultListMethodSupported = false
-        return null
-      }
-      throw error
-    }
+    return this.requestOptionalRelayMethod(
+      SSH_AI_VAULT_LIST_SESSIONS_METHOD,
+      params,
+      options,
+      SSH_AI_VAULT_LIST_SESSIONS_TIMEOUT_MS,
+      () => this.prepareOpenCodeRuntimeForScan()
+    )
   }
 
   async requestAiVaultSessionTitles(
     params: SshAiVaultRelayTitleParams,
     options: { signal?: AbortSignal; timeoutMs?: number } = {}
   ): Promise<unknown> {
-    if (this.aiVaultTitleMethodSupported === false) {
+    return this.requestOptionalRelayMethod(
+      SSH_AI_VAULT_RESOLVE_SESSION_TITLES_METHOD,
+      params,
+      options,
+      SSH_AI_VAULT_RESOLVE_SESSION_TITLES_TIMEOUT_MS
+    )
+  }
+
+  private async requestOptionalRelayMethod(
+    method: string,
+    params: Record<string, unknown>,
+    options: { signal?: AbortSignal; timeoutMs?: number },
+    defaultTimeoutMs: number,
+    before?: () => void
+  ): Promise<unknown> {
+    if (this.unsupportedRelayMethods.has(method)) {
       return null
     }
     const mux = this.mux
     if (!mux || mux.isDisposed() || this._state !== 'ready') {
       throw new Error('SSH relay is not ready')
     }
+    before?.()
     try {
-      const result = await mux.request(SSH_AI_VAULT_RESOLVE_SESSION_TITLES_METHOD, params, {
+      return await mux.request(method, params, {
         signal: options.signal,
-        timeoutMs: options.timeoutMs ?? SSH_AI_VAULT_RESOLVE_SESSION_TITLES_TIMEOUT_MS
+        timeoutMs: options.timeoutMs ?? defaultTimeoutMs
       })
-      this.aiVaultTitleMethodSupported = true
-      return result
     } catch (error) {
+      // Why: older relays lack optional methods; remember per session so callers degrade to null.
       if (isMethodNotFoundError(error)) {
-        this.aiVaultTitleMethodSupported = false
+        this.unsupportedRelayMethods.add(method)
         return null
       }
       throw error
@@ -562,8 +562,7 @@ export class SshRelaySession {
       throw new Error(`Cannot establish relay session in state: ${this._state}`)
     }
     this._state = 'deploying'
-    this.aiVaultListMethodSupported = null
-    this.aiVaultTitleMethodSupported = null
+    this.unsupportedRelayMethods.clear()
     this.currentConnection = conn
     this.lastGraceTimeSeconds = graceTimeSeconds
 
@@ -723,8 +722,7 @@ export class SshRelaySession {
     this.abortController = abortController
 
     this._state = 'reconnecting'
-    this.aiVaultListMethodSupported = null
-    this.aiVaultTitleMethodSupported = null
+    this.unsupportedRelayMethods.clear()
     this.currentConnection = conn
     this.lastGraceTimeSeconds = graceTimeSeconds
 
@@ -1581,6 +1579,15 @@ export class SshRelaySession {
     }
   }
 
+  // Why: read per invocation so turning the per-host opt-in off takes effect on the next command.
+  private remoteCliCallerScope(): SshBridgeCallerScope {
+    return {
+      kind: 'ssh-bridge',
+      targetId: this.targetId,
+      remoteCliControl: this.store.getSshTarget(this.targetId)?.allowRemoteCliControl === true
+    }
+  }
+
   private wireUpRemoteOrcaCli(mux: SshChannelMultiplexer, connectionIncarnation: string): void {
     mux.onRequest('orca.cli', async (params) => {
       if (!this.runtime) {
@@ -1614,7 +1621,8 @@ export class SshRelaySession {
           env,
           ...(stdin !== undefined ? { stdin } : {}),
           ...(artifactInput ? { artifactInput } : {}),
-          runtimeAuthority
+          runtimeAuthority,
+          callerScope: this.remoteCliCallerScope()
         })
       } finally {
         this.activeCompatibilityAttachmentIds.delete(runtimeAuthority.attachmentId)
@@ -1644,7 +1652,8 @@ export class SshRelaySession {
         await acknowledgeRemoteOrcaCliPostOutput(this.runtime, {
           postOutput: parseRemoteOrcaCliPostOutput(params.postOutput),
           env,
-          runtimeAuthority
+          runtimeAuthority,
+          callerScope: this.remoteCliCallerScope()
         })
         return { acknowledged: true }
       } finally {
@@ -2797,7 +2806,7 @@ export class SshRelaySession {
           return
         }
       } else {
-        setPtyOwnership(appPtyId, this.targetId)
+        setPtyOwnership(appPtyId, toSshExecutionHostId(this.targetId))
       }
       attachedLeaseIds.add(ptyId)
       pendingReattach.activated = true
@@ -3047,7 +3056,7 @@ export class SshRelaySession {
         this.store.markSshRemotePtyLease(this.targetId, appPtyId, 'expired')
         return 'missing-surface'
       }
-      setPtyOwnership(appPtyId, this.targetId)
+      setPtyOwnership(appPtyId, toSshExecutionHostId(this.targetId))
       restorePtyIncarnation(appPtyId, incarnationId)
       this.runtime?.registerPty(appPtyId, lease.worktreeId, this.targetId, {
         tabId,
@@ -3056,7 +3065,7 @@ export class SshRelaySession {
       })
       return 'restored'
     }
-    setPtyOwnership(appPtyId, this.targetId)
+    setPtyOwnership(appPtyId, toSshExecutionHostId(this.targetId))
     restorePtyIncarnation(appPtyId, incarnationId)
     this.runtime?.onPtySpawned(appPtyId, incarnationId, { awaitsRegistration: false })
     return 'restored'
@@ -3100,7 +3109,7 @@ export class SshRelaySession {
         return true
       }
     } else {
-      setPtyOwnership(appPtyId, this.targetId)
+      setPtyOwnership(appPtyId, toSshExecutionHostId(this.targetId))
     }
     args.attachedLeaseIds.add(args.ptyId)
     this.forwardReattachReplay(appPtyId, result.replay ?? '')

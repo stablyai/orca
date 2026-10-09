@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../../shared/ai-vault-types'
 import {
   dropDeletedSshResumeCwd,
+  prepareAiVaultSessionForFork,
   prepareAiVaultSessionForResume
 } from './ai-vault-session-resume-preparation'
 
@@ -94,6 +95,46 @@ describe('prepareAiVaultSessionForResume', () => {
     })
 
     await expect(prepareAiVaultSessionForResume(current)).resolves.toBe(current)
+    expect(prepareSessionResume).not.toHaveBeenCalled()
+  })
+})
+
+describe('prepareAiVaultSessionForFork', () => {
+  // A fork of a chat-owned conversation must run under the selected account, as a resume does.
+  it('repins a chat-owned per-account session, asking the host as a fork', async () => {
+    const prepareSessionResume = vi.fn().mockResolvedValue({
+      useRealCodexHome: false,
+      substituteCodexHome: '/tmp/orca/codex-accounts/account-2/home'
+    })
+    stubPreparation(prepareSessionResume)
+    const owned = session({
+      codexHome: '/tmp/orca/codex-accounts/account-1/home',
+      structuredSession: { sessionId: 'session-1', workspaceId: 'worktree-1' }
+    })
+
+    const prepared = await prepareAiVaultSessionForFork(owned)
+
+    expect(prepared.codexHome).toBe('/tmp/orca/codex-accounts/account-2/home')
+    expect(prepareSessionResume).toHaveBeenCalledWith({
+      agent: 'codex',
+      sessionId: owned.sessionId,
+      filePath: owned.filePath,
+      codexHome: owned.codexHome,
+      executionHostId: 'local',
+      fork: true
+    })
+  })
+
+  it('does not ask the host for a home that needs no preparation', async () => {
+    const prepareSessionResume = vi.fn()
+    stubPreparation(prepareSessionResume)
+    const owned = session({
+      agent: 'claude',
+      codexHome: null,
+      structuredSession: { sessionId: 'session-1', workspaceId: 'worktree-1' }
+    })
+
+    await expect(prepareAiVaultSessionForFork(owned)).resolves.toBe(owned)
     expect(prepareSessionResume).not.toHaveBeenCalled()
   })
 })

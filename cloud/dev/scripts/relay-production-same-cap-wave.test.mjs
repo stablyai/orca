@@ -634,16 +634,22 @@ function fastWave(overrides = {}) {
 }
 
 test('admits only the reviewed drain pace windows', () => {
-  assert.deepEqual(SAME_CAP_DRAIN_PACE_WINDOWS_MS, [300_000, 60_000, 30_000])
+  assert.deepEqual(
+    SAME_CAP_DRAIN_PACE_WINDOWS_MS,
+    [300_000, 60_000, 30_000, 900_000, 1_200_000]
+  )
   assert.equal(validateSameCapWave(fastWave()).drainPaceWindowMs, 60_000)
   assert.equal(validateSameCapWave(fastWave({
     drainPaceWindowMs: '30000',
     confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} ${usGeneral} drain-pace-window-ms=30000`
   })).drainPaceWindowMs, 30_000)
-  for (const pace of [undefined, '', '0', '120000', '299999', '600000', '60000.0', '060000', ' 60000']) {
+  for (const pace of [
+    undefined, '', '0', '120000', '299999', '600000', '60000.0', '060000', ' 60000',
+    '1200001', '1800000'
+  ]) {
     assert.throws(
       () => validateSameCapWave(fastWave({ drainPaceWindowMs: pace })),
-      /drain pace window must be one of 300000, 60000, 30000 ms/,
+      /drain pace window must be one of 300000, 60000, 30000, 900000, 1200000 ms/,
       String(pace)
     )
   }
@@ -682,6 +688,33 @@ test('keeps Asia and migration-only cells on the default pace', () => {
     confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} production-gce-c17 drain-pace-window-ms=60000`,
     canaryRunId: ''
   })), /not production-gce-c17/)
+})
+
+test('admits the slower paces on every cell class, Asia and migration-only included', () => {
+  for (const pace of ['900000', '1200000']) {
+    for (const cellIds of [
+      usGeneral,
+      'production-gce-c28,production-gce-c29',
+      'production-gce-c8,production-gce-c29',
+      'production-gce-c17'
+    ]) {
+      const single = !cellIds.includes(',')
+      const wave = validateSameCapWave(fastWave({
+        cellIds,
+        ...(single ? { mode: 'canary-apply', canaryRunId: '' } : {}),
+        drainPaceWindowMs: pace,
+        confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} ${cellIds} drain-pace-window-ms=${pace}`
+      }))
+      assert.equal(wave.drainPaceWindowMs, Number(pace), `${cellIds} ${pace}`)
+    }
+    assert.throws(() => validateSameCapWave(fastWave({
+      mode: 'canary-apply',
+      canaryRunId: '',
+      cellIds: 'production-gce-c29',
+      drainPaceWindowMs: pace,
+      confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} production-gce-c29`
+    })), /confirmation does not match/)
+  }
 })
 
 test('binds a non-default pace into the confirmation, in both directions', () => {
@@ -746,6 +779,17 @@ test('a canary authorizes batches at its own pace or slower, never faster', () =
   for (const pace of ['60000', '300000']) assert.equal(verify(seal('60000'), pace).cellId, 'production-gce-c7')
   assert.throws(() => verify(seal('60000'), '30000'), /drained over 60000 ms/)
   assert.throws(() => verify(seal('300000'), '60000'), /drained over 300000 ms/)
+  // Slower than the default needs no PASS, and a slow canary authorizes only slower-or-equal.
+  for (const pace of ['900000', '1200000']) {
+    assert.equal(verify(seal('300000'), pace).cellId, 'production-gce-c7')
+    assert.equal(verify(seal('300000', shadowReport('300000', 'WARN')), pace).cellId, 'production-gce-c7')
+    assert.equal(verify(seal('60000'), pace).cellId, 'production-gce-c7')
+  }
+  assert.equal(seal('1200000').drainPaceWindowMs, 1_200_000)
+  assert.equal(verify(seal('900000'), '1200000').cellId, 'production-gce-c7')
+  assert.equal(verify(seal('1200000'), '1200000').cellId, 'production-gce-c7')
+  assert.throws(() => verify(seal('900000'), '300000'), /drained over 900000 ms/)
+  assert.throws(() => verify(seal('1200000'), '900000'), /drained over 1200000 ms/)
   // An authority sealed before the pace was recorded proves nothing about it.
   const { drainPaceWindowMs: _dropped, ...unpaced } = seal('300000')
   assert.throws(() => verify({ ...unpaced, v: 1 }, '300000'), /does not match/)
@@ -865,8 +909,29 @@ test('the workflows offer exactly the closed set and scale the drain wait with i
   assert.match(job, /\n      DRAIN_PACE_WINDOW_MS: \$\{\{ inputs\.drain-pace-window-ms \}\}\n/)
   assert.doesNotMatch(job, /DRAIN_PACE_WINDOW_MS: '/)
   assert.match(job, /cell-class \\\n\s+--cell-id "\$\{TARGET_CELL_ID\}" --drain-pace-window-ms "\$\{DRAIN_PACE_WINDOW_MS\}"/)
-  // The 15-min migration lease plus the window: exactly today's 20 min at the default.
-  assert.match(job, /--timeout-ms "\$\(\(900000 \+ DRAIN_PACE_WINDOW_MS\)\)"/)
-  assert.equal(900_000 + SAME_CAP_DRAIN_PACE_WINDOWS_MS[0], 1_200_000)
-  assert.ok(Math.max(...SAME_CAP_DRAIN_PACE_WINDOWS_MS) === DEFAULT_SAME_CAP_DRAIN_PACE_WINDOW_MS)
+  // The 15-min migration lease plus the window, plus its excess over the default: restart-safe
+  // waits a whole window of quiet after the last send, so a slow drain needs about twice it.
+  const timeout = /--timeout-ms "\$\(\((.+)\)\)"\n/.exec(job)[1]
+  const timeoutMs = (pace) => Number(execFileSync(
+    'bash', ['-c', `DRAIN_PACE_WINDOW_MS=${pace}; echo $((${timeout}))`], { encoding: 'utf8' }
+  ))
+  // Exactly the timeouts every pace had before the slower ones existed.
+  for (const pace of [300_000, 60_000, 30_000]) assert.equal(timeoutMs(pace), 900_000 + pace)
+  for (const pace of SAME_CAP_DRAIN_PACE_WINDOWS_MS) {
+    assert.ok(timeoutMs(pace) >= 2 * pace + 600_000, String(pace))
+  }
+  assert.equal(timeoutMs(1_200_000), 3_000_000)
+  const slowest = timeoutMs(Math.max(...SAME_CAP_DRAIN_PACE_WINDOWS_MS))
+  // The rest of the job keeps the 70 min it had beside the old 20-min drain step in 90.
+  const jobMinutes = Number(/\n  rollout:\n(?:    [^\n]*\n)*?    timeout-minutes: (\d+)\n/.exec(job)[1])
+  assert.ok(jobMinutes * 60_000 >= slowest + 70 * 60_000)
+  // The drain step's fresh one-hour ID token must outlive its wait, with room for the drain call.
+  assert.ok(slowest + 5 * 60_000 <= 60 * 60_000)
+  // The pace check runs before the isolate and before the failsafe treats the cell as touched.
+  const drainStep = job.slice(job.indexOf('- name: Reversibly isolate and drain only the selected cell'))
+  const paceCheck = drainStep.indexOf('--mode pace-check')
+  assert.notEqual(paceCheck, -1)
+  assert.match(drainStep.slice(paceCheck, drainStep.indexOf('\n', paceCheck) + 80), /--pace-window-ms "\$\{DRAIN_PACE_WINDOW_MS\}"/)
+  assert.ok(paceCheck < drainStep.indexOf('MUTATION_STARTED=true'))
+  assert.ok(paceCheck < drainStep.indexOf('--mode isolate'))
 })

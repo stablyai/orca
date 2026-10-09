@@ -8,7 +8,7 @@ vi.mock('./ssh-remote-runtime-telemetry', () => ({ trackSshRemoteRuntimeResolved
 
 import {
   RelayRuntimeLadderRun,
-  remoteRuntimeUnavailableError,
+  RemoteRuntimeUnavailableError,
   type RelayRuntimeDecisionStore
 } from './ssh-relay-runtime-resolution'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
@@ -27,7 +27,7 @@ function memoryStore(): RelayRuntimeDecisionStore & { value?: SshRemoteRuntimeRe
 }
 
 function rememberedNoexecRun(store: RelayRuntimeDecisionStore): RelayRuntimeLadderRun {
-  const run = new RelayRuntimeLadderRun('ssh-1', store)
+  const run = new RelayRuntimeLadderRun('ssh-1', store, true)
   run.host = getRemoteHostPlatform('linux-x64')
   run.facts = facts
   run.refused('A', 'noexec')
@@ -40,7 +40,7 @@ describe('RelayRuntimeLadderRun', () => {
   })
 
   it('reports a rung whose self-test was unverifiable or failed, and nothing else', () => {
-    const run = new RelayRuntimeLadderRun('ssh-1', null)
+    const run = new RelayRuntimeLadderRun('ssh-1', null, true)
     run.host = getRemoteHostPlatform('linux-x64')
     run.facts = facts
     run.unresolved('A')
@@ -63,7 +63,7 @@ describe('RelayRuntimeLadderRun', () => {
     const store = memoryStore()
     rememberedNoexecRun(store).settle('D')
     expect(store.value).toMatchObject({ rung: 'D', pinnedRefusal: 'noexec', glibc: '2.31' })
-    const replay = new RelayRuntimeLadderRun('ssh-1', store)
+    const replay = new RelayRuntimeLadderRun('ssh-1', store, true)
     expect(replay.persistedPinnedRefusal(facts)).toBe('noexec')
     expect(replay.persistedPinnedRefusal({ ...facts, glibc: { major: 2, minor: 35 } })).toBeNull()
   })
@@ -85,7 +85,7 @@ describe('RelayRuntimeLadderRun', () => {
 
   it('drops a replayed noexec at rung D, so a remounted home is re-proved next connect', () => {
     const store = memoryStore()
-    const run = new RelayRuntimeLadderRun('ssh-1', store)
+    const run = new RelayRuntimeLadderRun('ssh-1', store, true)
     run.host = getRemoteHostPlatform('linux-x64')
     run.facts = facts
     run.refused('A', 'noexec', true)
@@ -93,26 +93,36 @@ describe('RelayRuntimeLadderRun', () => {
     run.settle('D')
     expect(store.value?.rung).toBe('D')
     expect(store.value).not.toHaveProperty('pinnedRefusal')
-    expect(remoteRuntimeUnavailableError(run)).toMatchObject({ data: { reason: 'home_noexec' } })
+    expect(new RemoteRuntimeUnavailableError(run)).toMatchObject({
+      data: { reason: 'home_noexec' }
+    })
   })
 
   it('reports a remembered noexec at rung D without advising a host Node install', () => {
-    const run = new RelayRuntimeLadderRun('ssh-1', null)
+    const run = new RelayRuntimeLadderRun('ssh-1', null, true)
     run.host = getRemoteHostPlatform('linux-x64')
     run.facts = facts
     run.refused('A', 'noexec', true)
     run.refused('B', 'runtime_unavailable')
     run.refused('C', 'host_node_missing')
-    const error = remoteRuntimeUnavailableError(run)
+    const error = new RemoteRuntimeUnavailableError(run)
     expect(error.message).toContain('earlier connect found the home directory mounted noexec')
     expect(error.message).not.toContain('Install Node.js')
     expect(error).toMatchObject({ data: { reason: 'home_noexec' } })
   })
 
+  it('keeps a replayed noexec remembered when a later rung proves noexec again', () => {
+    const run = new RelayRuntimeLadderRun('ssh-1', null, true)
+    run.refused('A', 'noexec', true)
+    run.refused('legacy', 'noexec')
+    expect(run.noexec).toBe('remembered')
+    expect(new RemoteRuntimeUnavailableError(run).message).toContain('earlier connect found')
+  })
+
   it('still advises a host Node when rung A refused for another reason', () => {
-    const run = new RelayRuntimeLadderRun('ssh-1', null)
+    const run = new RelayRuntimeLadderRun('ssh-1', null, true)
     run.refused('A', 'libc_floor')
     run.refused('C', 'host_node_missing')
-    expect(remoteRuntimeUnavailableError(run).message).toContain('Install Node.js 18+')
+    expect(new RemoteRuntimeUnavailableError(run).message).toContain('Install Node.js 18+')
   })
 })
