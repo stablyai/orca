@@ -132,6 +132,21 @@ describe('a desktop launch through the host', () => {
     })
   })
 
+  it('asks the host to skip the startup update prompt only when told to', () => {
+    callRuntimeRpc.mockReturnValue(new Promise(() => {}))
+    launch()
+    expect(lastParams()).not.toHaveProperty('suppressStartupUpdatePrompt')
+
+    launchAgentThroughHost({
+      agent: 'codex',
+      worktreeId: WT,
+      prompt: 'continue from the previous session',
+      suppressStartupUpdatePrompt: true
+    })
+
+    expect(lastParams()).toMatchObject({ agent: 'codex', suppressStartupUpdatePrompt: true })
+  })
+
   it('names every click as its own operation', () => {
     callRuntimeRpc.mockReturnValue(new Promise(() => {}))
     launch()

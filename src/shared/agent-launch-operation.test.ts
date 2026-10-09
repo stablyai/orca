@@ -49,6 +49,15 @@ describe('fields the launch fingerprint covers', () => {
     )
   })
 
+  it('separates a launch that skips the startup update prompt, and leaves older digests alone', () => {
+    expect(computeAgentLaunchFingerprint({ ...BASE, suppressStartupUpdatePrompt: true })).not.toBe(
+      computeAgentLaunchFingerprint(BASE)
+    )
+    expect(computeAgentLaunchFingerprint({ ...BASE, suppressStartupUpdatePrompt: undefined })).toBe(
+      computeAgentLaunchFingerprint(BASE)
+    )
+  })
+
   it('separates two launches that differ only in cwd', () => {
     expect(computeAgentLaunchFingerprint({ ...BASE, cwd: '/repo/packages/a' })).not.toBe(
       computeAgentLaunchFingerprint({ ...BASE, cwd: '/repo/packages/b' })

@@ -88,6 +88,9 @@ export const AgentLaunchFields = z.object({
   reuseTerminal: z.object({ handle: z.string().min(1, 'Missing terminal handle') }).optional(),
   /** Nullable on purpose: `null` is "no arguments", absent is "use the settings default". */
   agentArgs: z.string().nullable().optional(),
+  /** Skip the agent's interactive startup update prompt for a terminal launched into an existing
+   *  workspace, whose caller holds context to deliver once it is ready. Older hosts drop it. */
+  suppressStartupUpdatePrompt: z.boolean().optional(),
   /** A start directory other than the workspace root. Terminal-only, and the host downgrades a
    *  structured launch that carries one rather than ignoring it. */
   cwd: z.string().min(1, 'Empty launch cwd').optional(),

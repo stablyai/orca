@@ -478,6 +478,31 @@ describe('OrcaRuntimeService', () => {
     expect(spawnCall?.env).toMatchObject({ CURSOR_PROFILE: 'captured' })
   })
 
+  // Why: agent.launch builds a host-launched continuation's command here, not in the window (#18153).
+  it('skips the startup update prompt on the spawned command only when the launch asks', async () => {
+    const spawn = vi.fn(async (_options: { command?: string }) => ({ id: 'pty-bg' }))
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => ({ ...store.getSettings(), disabledTuiAgents: [], agentCmdOverrides: {} })
+    })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      startupAgent: 'codex',
+      suppressStartupUpdatePrompt: true
+    })
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { startupAgent: 'codex' })
+
+    const [suppressed, ordinary] = spawn.mock.calls.map(([options]) => options.command)
+    expect(ordinary).not.toContain('check_for_update_on_startup')
+    expect(suppressed).toBe(`${ordinary} '-c' 'check_for_update_on_startup=false'`)
+  })
+
   it('resolves a startupAgent to the CLI binary on Windows, where `cursor` is the IDE', async () => {
     setPlatform('win32')
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })

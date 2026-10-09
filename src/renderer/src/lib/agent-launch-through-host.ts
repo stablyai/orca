@@ -37,6 +37,8 @@ export type HostAgentLaunchArgs = {
   prompt: string
   /** Absent uses the settings default; `null` means no arguments. */
   agentArgs?: string | null
+  /** The host builds the command, so this window's launch-only args must be asked of it. */
+  suppressStartupUpdatePrompt?: boolean
   cwd?: string
   /** The launch's session options; only string values reach the host, which reads no others. */
   sessionOptions?: Record<string, SessionOptionValue>
@@ -98,6 +100,7 @@ function launchParams(args: HostAgentLaunchArgs) {
     agent: args.agent,
     target: { kind: 'existing', worktree: `id:${args.worktreeId}` },
     ...(args.agentArgs !== undefined ? { agentArgs: args.agentArgs } : {}),
+    ...(args.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
     ...(args.cwd ? { cwd: args.cwd } : {}),
     ...stringSessionOptions(args.sessionOptions),
     ...(args.launchSource ? { launchSource: args.launchSource } : {}),

@@ -32,6 +32,8 @@ export type AgentLaunchSurfaceFactory = {
     startupPrompt?: string
     /** Replaces the settings default for this launch only; `null` means no arguments at all. */
     agentArgs?: string | null
+    /** Launch-only args skip the agent's startup update prompt; never part of its resume config. */
+    suppressStartupUpdatePrompt?: boolean
     cwd?: string
     /** The one member of the `agent_started` triple the host cannot derive for itself. */
     launchSource?: string

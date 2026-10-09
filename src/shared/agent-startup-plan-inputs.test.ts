@@ -110,6 +110,35 @@ describe('resolveAgentStartupPlanInputs', () => {
     expect(withOptions.sessionOptionsOverrideAgentArgs).toBe(true)
     expect(withOptions.sessionOptions).toEqual({ model: 'gpt-5' })
   })
+
+  it('skips Codex’s startup update prompt on the typed line only, never in resume config', () => {
+    const base = {
+      settings: EMPTY_SETTINGS,
+      platform: 'darwin' as const,
+      isRemote: false,
+      suppressStartupUpdatePrompt: true
+    }
+    const plan = (suppressStartupUpdatePrompt: boolean) =>
+      buildAgentStartupPlan({
+        ...resolveAgentStartupPlanInputs({ ...base, agent: 'codex', suppressStartupUpdatePrompt }),
+        prompt: '',
+        allowEmptyPromptLaunch: true
+      })
+    const suppressed = plan(true)
+    const ordinary = plan(false)
+
+    expect(suppressed?.launchCommand).toBe(
+      `${ordinary?.launchCommand} '-c' 'check_for_update_on_startup=false'`
+    )
+    expect(suppressed?.launchConfig).toEqual(ordinary?.launchConfig)
+    // An agent with no interactive startup updater gets nothing, and nothing is asked by default.
+    expect(resolveAgentStartupPlanInputs({ ...base, agent: 'claude' })).not.toHaveProperty(
+      'transientAgentArgs'
+    )
+    expect(
+      resolveAgentStartupPlanInputs({ ...base, agent: 'codex', suppressStartupUpdatePrompt: false })
+    ).not.toHaveProperty('transientAgentArgs')
+  })
 })
 
 describe('a picked session option outranks configured launch arguments', () => {

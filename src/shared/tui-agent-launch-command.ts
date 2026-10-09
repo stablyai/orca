@@ -1,3 +1,4 @@
+import { findAgentTerminatorStart } from './agent-command-terminator'
 import {
   removeOverriddenAgentSessionArgs,
   resolveAgentSessionOptionLaunch
@@ -28,6 +29,8 @@ export function resolveAgentLaunchCommand(args: {
   platform: NodeJS.Platform
   shell: AgentStartupShell
   agentArgs?: string | null
+  /** Launch-only arguments omitted from persisted resume configuration. */
+  transientAgentArgs?: readonly string[]
   sessionOptions?: Record<string, SessionOptionValue>
   sessionOptionsOverrideAgentArgs?: boolean
   isRemote?: boolean
@@ -38,9 +41,9 @@ export function resolveAgentLaunchCommand(args: {
     getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[args.agent], args.platform, {
       isRemote: args.isRemote
     })
-  const suffix = planAgentCliArgsSuffix(args.agentArgs, args.shell)
-  if (!suffix.ok) {
-    return suffix
+  const persistedSuffix = planAgentCliArgsSuffix(args.agentArgs, args.shell)
+  if (!persistedSuffix.ok) {
+    return persistedSuffix
   }
   const trailingTokens = args.agentArgs?.trim()
     ? tokenizeStartupCommand(args.agentArgs.trim(), args.shell)
@@ -48,6 +51,20 @@ export function resolveAgentLaunchCommand(args: {
   if (!trailingTokens.ok) {
     return { ok: false, error: `CLI arguments are invalid: ${trailingTokens.error}` }
   }
+  // A command override can carry its own `--`, and anything appended lands after it as a positional.
+  const launchCommand = spliceTransientArgsBeforeCommandTerminator(
+    args.agent,
+    command,
+    args.transientAgentArgs ?? [],
+    args.shell
+  )
+  const pendingTransientArgs = launchCommand.consumed ? [] : (args.transientAgentArgs ?? [])
+  const launchTokens = insertBeforeTerminator(
+    args.agent,
+    trailingTokens.tokens,
+    pendingTransientArgs
+  )
+  const launchSuffix = launchTokens.map((token) => quoteStartupArg(token, args.shell)).join(' ')
   const resolvedOptions = resolveAgentSessionOptionLaunch(
     args.agent,
     args.sessionOptions,
@@ -78,27 +95,61 @@ export function resolveAgentLaunchCommand(args: {
     }
   }
   const optionSuffix = resolvedOptions.args.map((arg) => quoteStartupArg(arg, args.shell)).join(' ')
-  const commandWithoutSessionOptions = suffix.suffix ? `${command} ${suffix.suffix}` : command
-  const commandWithOptions = optionSuffix ? `${command} ${optionSuffix}` : command
+  const commandWithoutSessionOptions = persistedSuffix.suffix
+    ? `${command} ${persistedSuffix.suffix}`
+    : command
+  const commandWithOptions = optionSuffix
+    ? `${launchCommand.command} ${optionSuffix}`
+    : launchCommand.command
   const overrideTokens = args.sessionOptionsOverrideAgentArgs
     ? insertBeforeTerminator(
         args.agent,
-        removeOverriddenAgentSessionArgs(args.agent, args.sessionOptions, trailingTokens.tokens),
-        resolvedOptions.args
+        insertBeforeTerminator(
+          args.agent,
+          removeOverriddenAgentSessionArgs(args.agent, args.sessionOptions, trailingTokens.tokens),
+          resolvedOptions.args
+        ),
+        pendingTransientArgs
       )
     : []
   const commandWithOverrides = overrideTokens.length
-    ? `${command} ${overrideTokens.map((token) => quoteStartupArg(token, args.shell)).join(' ')}`
-    : command
+    ? `${launchCommand.command} ${overrideTokens.map((token) => quoteStartupArg(token, args.shell)).join(' ')}`
+    : launchCommand.command
   return {
     ok: true,
     command: args.sessionOptionsOverrideAgentArgs
       ? commandWithOverrides
-      : suffix.suffix
-        ? `${commandWithOptions} ${suffix.suffix}`
+      : launchSuffix
+        ? `${commandWithOptions} ${launchSuffix}`
         : commandWithOptions,
     commandWithoutSessionOptions,
     appliedSessionOptions: resolvedOptions.appliedValues
+  }
+}
+
+/** Splice launch-only args before the agent's own `--` in the command, so they stay flags. */
+function spliceTransientArgsBeforeCommandTerminator(
+  agent: TuiAgent,
+  command: string,
+  transientArgs: readonly string[],
+  shell: AgentStartupShell
+): { command: string; consumed: boolean } {
+  if (transientArgs.length === 0) {
+    return { command, consumed: false }
+  }
+  const config = TUI_AGENT_CONFIG[agent]
+  const terminatorStart = findAgentTerminatorStart(command, shell, [
+    config.detectCmd,
+    ...(config.detectCmdAliases ?? [])
+  ])
+  if (terminatorStart === null) {
+    return { command, consumed: false }
+  }
+  // Splice the original text: re-emitting tokens would requote env assignments and wrapper commands.
+  const quoted = transientArgs.map((token) => quoteStartupArg(token, shell)).join(' ')
+  return {
+    command: `${command.slice(0, terminatorStart)}${quoted} ${command.slice(terminatorStart)}`,
+    consumed: true
   }
 }
 

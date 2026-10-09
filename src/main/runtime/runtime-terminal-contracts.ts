@@ -63,6 +63,8 @@ export type TerminalCreateOptions = {
    * the runtime still builds, so overriding them does not take the launch away from it.
    */
   agentArgs?: string | null
+  /** Adds `startupAgent`'s launch-only args that skip its startup update prompt; never resumed. */
+  suppressStartupUpdatePrompt?: boolean
   launchPreferences?: AgentLaunchPreferences
   terminalKittyKeyboardProtocol?: boolean
   terminalColorQueryReplies?: TerminalOscColorQueryReplyColors

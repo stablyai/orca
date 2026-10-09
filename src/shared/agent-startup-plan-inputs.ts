@@ -1,3 +1,4 @@
+import { startupUpdatePromptSuppressionInputs } from './agent-startup-update-prompt-suppression'
 import type { GlobalSettings } from './global-settings-types'
 import type { SessionOptionValue } from './native-chat-session-options'
 import type { TuiAgent } from './tui-agent'
@@ -25,6 +26,8 @@ export type AgentStartupPlanInputs = {
   isRemote: boolean
   sessionOptions?: Record<string, SessionOptionValue>
   sessionOptionsOverrideAgentArgs: boolean
+  /** Launch-only arguments omitted from persisted resume configuration. */
+  transientAgentArgs?: readonly string[]
 }
 
 /**
@@ -49,6 +52,8 @@ export function resolveAgentStartupPlanInputs(args: {
   /** A requested shell is the one this PTY will be, so it owns the quoting family. */
   windowsShellOverride?: string | null
   sessionOptions?: Record<string, SessionOptionValue> | undefined
+  /** The launch carries context its caller delivers after start, so no startup update may end it. */
+  suppressStartupUpdatePrompt?: boolean
 }): AgentStartupPlanInputs {
   const { agent, settings, platform, isRemote, sessionOptions } = args
   // A per-launch override wins over the Settings default; `null` is "no arguments", so this
@@ -85,6 +90,7 @@ export function resolveAgentStartupPlanInputs(args: {
     ...(sessionOptions ? { sessionOptions } : {}),
     // Why: session options are an explicit per-launch pick, so they outrank configured args —
     // without this the two spellings of the same flag both reach argv and the last one wins.
-    sessionOptionsOverrideAgentArgs: Boolean(sessionOptions)
+    sessionOptionsOverrideAgentArgs: Boolean(sessionOptions),
+    ...startupUpdatePromptSuppressionInputs(agent, args.suppressStartupUpdatePrompt)
   }
 }

@@ -77,6 +77,9 @@ export type AgentLaunchIntent = {
    * per-call overrides remain terminal-only and the host reports that in `warning`.
    */
   agentArgs?: string | null
+  /** Launch-only, never resumed: an agent's startup update can exit it before the caller's context
+   *  arrives (Codex's "Update now"). Not a route input; honoured by an existing-workspace terminal. */
+  suppressStartupUpdatePrompt?: boolean
   /**
    * Where the agent starts, when that is not the workspace root — a resumed session's recorded
    * subdirectory is the case that needs it.

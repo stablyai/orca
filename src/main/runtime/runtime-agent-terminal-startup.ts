@@ -52,6 +52,7 @@ export async function buildRuntimeAgentTerminalStartupOptions(
       platform,
       isRemote,
       ...(opts.agentArgs !== undefined ? { agentArgs: opts.agentArgs } : {}),
+      ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
       // A requested shell is the one this PTY will actually be, so it owns the quoting family.
       windowsShellOverride: opts.shellOverride,
       sessionOptions: sessionOptions

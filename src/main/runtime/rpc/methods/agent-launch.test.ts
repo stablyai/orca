@@ -646,6 +646,19 @@ describe('launch inputs that cross the wire', () => {
     })
   })
 
+  it('asks the terminal create to skip the startup update prompt only when the caller does', async () => {
+    const runtime = runtimeStub({ settings: {} })
+    await launch({ ...EXISTING_LAUNCH, agent: 'codex', suppressStartupUpdatePrompt: true }, runtime)
+    expect(terminalOptions(runtime)).toMatchObject({
+      startupAgent: 'codex',
+      suppressStartupUpdatePrompt: true
+    })
+
+    const plain = runtimeStub({ settings: {} })
+    await launch({ ...EXISTING_LAUNCH, agent: 'codex' }, plain)
+    expect(terminalOptions(plain)).not.toHaveProperty('suppressStartupUpdatePrompt')
+  })
+
   it("hands the caller's launch_source to the runtime, which attributes the launch", async () => {
     const runtime = runtimeStub({ settings: {} })
     await launch({ ...EXISTING_LAUNCH, launchSource: 'source_control_recovery' }, runtime)

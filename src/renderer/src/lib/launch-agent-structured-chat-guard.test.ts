@@ -258,8 +258,9 @@ describe('structured chat adoption guard on the launch path', () => {
   })
 
   it('takes the structured path when the chat-default view is selected', async () => {
-    const { launchAgentInNewTab, shouldQueueTerminalFocusAfterMenuClose } =
-      await import('./launch-agent-in-new-tab')
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    const { shouldQueueTerminalFocusAfterMenuClose } =
+      await import('./launch-agent-in-new-tab-result')
 
     const result = launchAgentInNewTab({
       requestId: 'request-1',

@@ -51,6 +51,7 @@ async function agentLaunchIntent(
     ...(params.reuseTerminal ? { reuseTerminal: params.reuseTerminal } : {}),
     // `null` means "no arguments" and must survive; only absence falls back to the settings default.
     ...(params.agentArgs !== undefined ? { agentArgs: params.agentArgs } : {}),
+    ...(params.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
     ...(params.cwd ? { cwd: params.cwd } : {}),
     ...(params.launchSource ? { launchSource: params.launchSource } : {}),
     ...(paneKey ? { paneKey } : {}),

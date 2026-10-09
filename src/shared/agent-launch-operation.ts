@@ -39,6 +39,8 @@ export type AgentLaunchFingerprintInput = {
    *  that changed them must conflict rather than replay the first answer. `null` is a value here,
    *  not an absence — "explicitly no arguments" differs from "use the settings default". */
   agentArgs?: string | null
+  /** In, like `agentArgs`: it changes the argv the agent starts with. */
+  suppressStartupUpdatePrompt?: boolean
   /** In: it decides both where the agent runs and, through the `tui_launch_command` downgrade,
    *  which surface it gets. Two launches differing only in `cwd` are genuinely two operations. */
   cwd?: string
@@ -72,6 +74,7 @@ export function computeAgentLaunchFingerprint(input: AgentLaunchFingerprintInput
     sessionOptions: input.sessionOptions,
     reuseTerminal: input.reuseTerminal,
     agentArgs: input.agentArgs,
+    suppressStartupUpdatePrompt: input.suppressStartupUpdatePrompt,
     cwd: input.cwd,
     // Absent keys are dropped by the canonical form, so every digest without one is unchanged.
     paneKey: input.paneKey,

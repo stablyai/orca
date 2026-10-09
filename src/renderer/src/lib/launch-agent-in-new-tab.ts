@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+import type { LaunchAgentInNewTabResult } from '@/lib/launch-agent-in-new-tab-result'
 import { planLaunchAgentStartupPrompt } from '@/lib/launch-agent-startup-prompt-plan'
 import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
@@ -17,11 +17,11 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { startupUpdatePromptSuppressionInputs } from '../../../shared/agent-startup-update-prompt-suppression'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { resolveAgentLaunchExecutionContext } from '@/lib/launch-agent-execution-context'
 import { launchStructuredAgentFromNewTab } from '@/lib/launch-agent-in-new-tab-structured-route'
-import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
 import type { StructuredLaunchTerminal } from '@/lib/structured-agent-session-launch-admission'
 import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
 import type { AgentSessionLaunchPlan } from '@/lib/agent-session-launch-plan'
@@ -50,6 +50,8 @@ export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
   prompt?: string
   /** Optional CLI arguments appended to the selected agent command. */
   agentArgs?: string | null
+  /** Prevent a startup update prompt from replacing a launch that carries generated context. */
+  suppressStartupUpdatePrompt?: boolean
   initialCwd?: string | null
   /** How to deliver the prompt: `draft` leaves it editable, `submit-after-ready` sends it once the TUI is ready. */
   promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
@@ -81,26 +83,6 @@ export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
   onStructuredHostDeclined?: () => StructuredLaunchTerminal
 }
 
-/** `host-published`: the surface opens once its host answers, a structured chat's included. */
-export type AgentLaunchSurface =
-  | { kind: 'local-terminal'; tabId: string }
-  | { kind: 'host-published' }
-
-export type LaunchAgentInNewTabResult = {
-  surface: AgentLaunchSurface
-  startupPlan: AgentStartupPlan
-  pasteDraftAfterLaunch: boolean
-  promptDeliveryResult?: Promise<{ delivered: boolean; failureNotified: boolean }>
-  /** Structured route only: what the launch did once it settled. The call stays synchronous. */
-  structuredSettlement?: Promise<StructuredAgentLaunchSettlement>
-} | null
-
-export function shouldQueueTerminalFocusAfterMenuClose(
-  result: NonNullable<LaunchAgentInNewTabResult>
-): boolean {
-  return result.surface.kind === 'host-published'
-}
-
 /**
  * Create a new terminal tab and queue the agent's launch command, optionally
  * with an initial prompt.
@@ -118,6 +100,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     groupId,
     prompt,
     agentArgs,
+    suppressStartupUpdatePrompt,
     initialCwd,
     promptDelivery = 'auto-submit',
     launchSource,
@@ -157,6 +140,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     shell: queuedShell,
     isRemote,
     agentArgs: effectiveAgentArgs,
+    ...startupUpdatePromptSuppressionInputs(agent, suppressStartupUpdatePrompt),
     agentEnv
   }
   const { startupPlan, pasteDraftAfterLaunch, submitPastedPrompt } = planLaunchAgentStartupPrompt({
@@ -250,6 +234,8 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       ...(groupId ? { groupId } : {}),
       prompt: trimmedPrompt,
       ...(agentArgs !== undefined ? { agentArgs } : {}),
+      // The host builds this command; the window's startupPlan never reaches it.
+      ...(suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
       ...(initialCwd?.trim() ? { cwd: initialCwd } : {}),
       // The same source main's window stamps on its own launches.
       launchSource: launchSource ?? 'tab_bar_quick_launch',

@@ -568,6 +568,23 @@ describe('a launch into an existing workspace, by workspace kind', () => {
 describe('caller-supplied launch inputs', () => {
   const EXISTING = { kind: 'existing' as const, worktree: 'wt-7' }
 
+  it('asks the terminal it creates to skip the startup update prompt when the caller does', async () => {
+    // A host that cannot make the chat here (SSH) downgrades to a terminal; the flag must survive.
+    const noChat = { createSupport: { supported: false, reason: 'remote' as const } }
+    const h = harness(noChat)
+    await h.run({ agent: 'codex', target: EXISTING, suppressStartupUpdatePrompt: true })
+    expect(h.createTerminalAgent.mock.calls[0]?.[0]).toMatchObject({
+      agent: 'codex',
+      suppressStartupUpdatePrompt: true
+    })
+
+    const plain = harness(noChat)
+    await plain.run({ agent: 'codex', target: EXISTING })
+    expect(plain.createTerminalAgent.mock.calls[0]?.[0]).not.toHaveProperty(
+      'suppressStartupUpdatePrompt'
+    )
+  })
+
   it('downgrades a structured preference to a terminal when the launch names a cwd', async () => {
     const h = harness({})
     const result = await h.run({ agent: 'claude', target: EXISTING, cwd: '/repo/packages/api' })

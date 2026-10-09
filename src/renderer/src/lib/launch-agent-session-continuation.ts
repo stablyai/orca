@@ -91,6 +91,7 @@ export async function launchAgentSessionContinuation({
     ...(groupId ? { groupId } : {}),
     prompt,
     promptDelivery: agent === 'claude' ? 'draft' : 'submit-after-ready',
+    suppressStartupUpdatePrompt: true,
     launchSource,
     ...(initialCwd ? { initialCwd } : {}),
     onPromptDeliveryUnconfirmed: () => {

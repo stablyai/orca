@@ -8,10 +8,8 @@ import {
 } from '@/lib/agent-session-launch-plan'
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
 import type { StructuredPromptDeliveryResult } from '@/lib/structured-agent-session-launch-prompt'
-import type {
-  LaunchAgentInNewTabArgs,
-  LaunchAgentInNewTabResult
-} from '@/lib/launch-agent-in-new-tab'
+import type { LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab'
+import type { LaunchAgentInNewTabResult } from '@/lib/launch-agent-in-new-tab-result'
 
 /** How long a new tab waits for its host's answer before deciding without it; the same bound a
  *  local chat's admission waits. */
