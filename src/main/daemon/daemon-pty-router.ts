@@ -10,6 +10,7 @@ import type {
   PtySpawnResult
 } from '../providers/types'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import { isDaemonEndpointGoneError } from './daemon-errors'
 import { shouldHandoffDaemonHistory } from './daemon-history-handoff'
 import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
@@ -234,10 +235,31 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
-    // Why: runtime exact-stop/liveness flows must fail closed if any adapter
-    // cannot provide a trustworthy process list.
+    // Why: worktree removal fails closed on this list. A dead legacy socket is an
+    // empty inventory, not proof the live daemon failed; anything else still throws.
     const results = await Promise.all(
-      this.allAdapters().map((adapter) => adapter.listProcesses(opts))
+      this.allAdapters().map(async (adapter) => {
+        try {
+          return await adapter.listProcesses(opts)
+        } catch (error) {
+          if (adapter === this.current || !isDaemonEndpointGoneError(error)) {
+            throw error
+          }
+          const index = this.legacy.indexOf(adapter)
+          if (index !== -1) {
+            this.legacy.splice(index, 1)
+            // Why: the resolver and fanout were built from a copy of allAdapters().
+            // Splicing this.legacy alone leaves them querying the dead socket.
+            this.ownerResolver.dropProvider(adapter)
+            this.subscriptions.dropAdapter(adapter)
+          }
+          // Why: the socket is already gone; a failed disconnect must not fail the list.
+          void Promise.resolve()
+            .then(() => adapter.disconnectOnly())
+            .catch(() => undefined)
+          return []
+        }
+      })
     )
     return results.flat()
   }
@@ -307,12 +329,8 @@ export class DaemonPtyRouter implements IPtyProvider {
     await Promise.all([...this.allAdapters()].map((adapter) => adapter.disconnectOnly()))
   }
 
-  // Why: the Manage Sessions panel iterates all adapters to list sessions
-  // across every protocol version, and the restart handler needs to preserve
-  // surviving legacy adapters across the current-adapter swap. On this branch
-  // (pre-#1323) the legacy list is set once at construction and never mutated,
-  // so returning the internal array by reference is safe for the intended
-  // read-only use.
+  // Why: restart and Manage Sessions read these instances by identity. A gone
+  // legacy socket is spliced out in place, so holders of this array see the drop.
   getCurrentAdapter(): DaemonPtyAdapter {
     return this.current
   }
