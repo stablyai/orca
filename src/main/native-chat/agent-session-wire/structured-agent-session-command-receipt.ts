@@ -40,11 +40,6 @@ export async function runCommandReceiptMutation<TValue>(
   }
 ): Promise<TurnOutcome<TValue> | { committedReceipt: CommandReceipt }> {
   const { envelope, plan, context, commandReceipt, wakeDelivery } = input
-  const unrecorded = await commitUnrecordedNoOp(input)
-  if (unrecorded) {
-    // A differing fingerprint is answered as the conflict it is, from the uncommitted receipt.
-    return unrecorded === 'unknown' ? unknownOutcome(input) : { committedReceipt: unrecorded }
-  }
   let acceptedReceipt: CommandReceipt | undefined
   let submissionWritten = false
   const receipt = acceptanceReceipt(input, (row) => {
@@ -154,18 +149,9 @@ function unknownOutcome(input: CommandReceiptIdentity): TurnOutcome<never> {
   }
 }
 
-/** No-ops answered unknown because their receipt did not commit, per store and receipt key. */
-const unrecordedNoOps = new WeakMap<AgentSessionRecordStore, Map<string, CommandReceipt>>()
-
-function unrecordedKey({ operationCallerKey, plan, envelope }: CommandReceiptIdentity): string {
-  const scope = commandReceiptScope(operationCallerKey, plan.operationIdScope)
-  return `${scope.kind === 'caller' ? scope.callerKey : ''}\u0000${envelope.clientOperationId}`
-}
-
-/** A no-op is answered only once its receipt commits, alone. An identity verdict (duplicate,
- *  conflict, unreadable) throws for admission to answer; any other failure is logged, and the
- *  decision is held so a retry in this process commits it rather than deciding again on newer
- *  work. A restart forgets it. */
+/** A no-op is answered only once its receipt commits, alone. An identity verdict or a classified
+ *  refusal throws for admission to answer; an unclassified storage failure is logged and answered
+ *  unknown, with nothing recorded, so a retry decides afresh. */
 async function commitNoOpReceipt(
   input: CommandReceiptIdentity,
   receipt: CommandReceipt
@@ -174,11 +160,7 @@ async function commitNoOpReceipt(
     await input.store.commitOperationReceipt(acceptanceReceipt(input, () => receipt))
     return true
   } catch (error) {
-    if (
-      error instanceof CommandReceiptExistsError ||
-      (isAgentSessionRefusalError(error) &&
-        error.refusal.code === 'agent_session_operation_conflict')
-    ) {
+    if (error instanceof CommandReceiptExistsError || isAgentSessionRefusalError(error)) {
       throw error
     }
     input.context.logger.warn(
@@ -190,21 +172,6 @@ async function commitNoOpReceipt(
         error
       }
     )
-    const held = unrecordedNoOps.get(input.store) ?? new Map<string, CommandReceipt>()
-    unrecordedNoOps.set(input.store, held.set(unrecordedKey(input), receipt))
     return false
   }
-}
-
-/** The no-op this id was answered unknown for, committed now; null when none is held. */
-async function commitUnrecordedNoOp(
-  input: CommandReceiptIdentity
-): Promise<CommandReceipt | 'unknown' | null> {
-  const key = unrecordedKey(input)
-  const receipt = unrecordedNoOps.get(input.store)?.get(key)
-  if (!receipt || receipt.fingerprint !== input.fingerprint) {
-    return receipt ?? null
-  }
-  unrecordedNoOps.get(input.store)?.delete(key)
-  return (await commitNoOpReceipt(input, receipt)) ? receipt : 'unknown'
 }

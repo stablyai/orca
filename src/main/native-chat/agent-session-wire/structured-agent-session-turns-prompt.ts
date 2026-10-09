@@ -24,7 +24,7 @@ import {
   AgentSessionPromptUnavailableError
 } from './structured-agent-session-adapter'
 import type { CommandReceiptResult } from '../agent-session-journal/command-receipt-schema'
-import { readJournalItemRevision } from '../agent-session-journal/journal-item-revision-read'
+import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import { settledPrompt, validatePendingPrompt } from './structured-agent-session-prompt-state'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 
@@ -172,24 +172,48 @@ export async function performPrompt(
   }
 }
 
-/** The resolution an answer was accepted at, read where its receipt points, never the prompt's
- *  latest revision; null once that epoch or row is gone, so the answer is spent, never run again. */
+/** The answer a resolved prompt row carries, the one its writer was accepted with. */
+export function promptRowAnswer(row: JournalRow | undefined): AgentSessionPromptResult {
+  const body = row?.kind === 'item' ? row.body : undefined
+  if (row?.kind !== 'item' || (body?.kind !== 'approval' && body?.kind !== 'question')) {
+    throw new Error('an accepted prompt answer requires its prompt row')
+  }
+  return { itemId: row.itemId, revision: row.revision, resolution: body.resolution }
+}
+
+/** What a receipt keeps of an accepted answer: everything its replay says, so the journal's
+ *  later revisions or a rewind never change it. */
+export function promptAnswerReceipt(answer: AgentSessionPromptResult): CommandReceiptResult {
+  const { state, selectedOptionId, answers, resolvedBy, resolvedAt } = answer.resolution
+  if (state !== 'resolved') {
+    throw new Error('an accepted prompt answer is resolved')
+  }
+  return {
+    kind: 'prompt-answer',
+    itemId: answer.itemId,
+    revision: answer.revision,
+    resolution: {
+      state,
+      selectedOptionId,
+      ...(answers
+        ? {
+            answers: answers.map(({ questionId, optionIds, other }) => ({
+              questionId,
+              optionIds,
+              ...(other === undefined ? {} : { other })
+            }))
+          }
+        : {}),
+      resolvedBy,
+      resolvedAt
+    }
+  }
+}
+
 export function acceptedPromptAnswer(
-  ctx: Pick<AgentSessionTurnContext, 'journal'>,
   receipt: CommandReceiptResult | undefined
 ): AgentSessionPromptResult | null {
-  const at =
-    receipt?.kind === 'journal-row'
-      ? { epoch: receipt.epoch, sequence: receipt.sequence }
-      : receipt?.kind === 'item-revision'
-        ? receipt
-        : null
-  const written = at ? readJournalItemRevision(ctx.journal, at) : null
-  const body = written?.body
-  if (!written || (body?.kind !== 'approval' && body?.kind !== 'question')) {
-    return null
-  }
-  return body.resolution.state === 'pending'
-    ? null
-    : { itemId: written.itemId, revision: written.revision, resolution: body.resolution }
+  return receipt?.kind === 'prompt-answer'
+    ? { itemId: receipt.itemId, revision: receipt.revision, resolution: receipt.resolution }
+    : null
 }

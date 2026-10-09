@@ -29,12 +29,27 @@ export const commandReceiptResultSchema = z.discriminatedUnion('kind', [
     kind: z.literal('queued-draft'),
     messageId: z.string().min(1)
   }),
-  /** An earlier operation's revision this command acknowledged instead of writing its own. */
+  /** An accepted prompt answer, kept whole: no rewind or later revision changes its replay. Its
+   *  values are the resolution the prompt's row holds, bounded as that row is. */
   z.strictObject({
-    kind: z.literal('item-revision'),
-    epoch: z.string().min(1),
+    kind: z.literal('prompt-answer'),
     itemId: z.string().min(1),
-    revision: z.int().nonnegative()
+    revision: z.int().positive(),
+    resolution: z.strictObject({
+      state: z.literal('resolved'),
+      selectedOptionId: z.string().nullable(),
+      answers: z
+        .array(
+          z.strictObject({
+            questionId: z.string(),
+            optionIds: z.array(z.string()),
+            other: z.string().optional()
+          })
+        )
+        .optional(),
+      resolvedBy: z.string().nullable(),
+      resolvedAt: z.number().nullable()
+    })
   }),
   z.strictObject({
     kind: z.literal('no-op'),

@@ -1,8 +1,8 @@
 // One plan per mutating method: what it fingerprints, what it does, and how its
 // answer is rebuilt on a replay.
 //
-// A plan with `commandReceipt` proves acceptance by that receipt, the rest by their ledger row. The
-// journal projects the answer: a prompt's from the revision it was accepted at, others' as they stand.
+// A plan with `commandReceipt` proves acceptance by that receipt, the rest by their ledger row. A
+// prompt answer replays from its receipt alone; the journal projects the others' current answer.
 
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import {
@@ -40,6 +40,8 @@ import {
 } from './structured-agent-session-turns'
 import {
   acceptedPromptAnswer,
+  promptAnswerReceipt,
+  promptRowAnswer,
   type AgentSessionPromptRequest
 } from './structured-agent-session-turns-prompt'
 import { queuedSendAnswer } from './structured-agent-session-queued-send-answer'
@@ -320,18 +322,13 @@ export function promptPlan(
       optionId: params.optionId,
       answers: params.answers
     },
-    // The resolved revision carries it; an answer the prompt already holds points at that revision.
+    // The resolved revision's answer, or the answer the prompt already held, kept in the receipt.
     commandReceipt: {
-      result: (row) => journalRowReceiptResult(row, 'item'),
-      unwritten: (value, ctx) => ({
-        kind: 'item-revision',
-        epoch: ctx.journal.epoch,
-        itemId: value.itemId,
-        revision: value.revision
-      })
+      result: (row) => promptAnswerReceipt(promptRowAnswer(row)),
+      unwritten: (value) => promptAnswerReceipt(value)
     },
     run: (ctx) => performPrompt(ctx, params),
-    replay: (ctx, _outcome, receipt) => acceptedPromptAnswer(ctx, receipt)
+    replay: (_ctx, _outcome, receipt) => acceptedPromptAnswer(receipt)
   }
 }
 

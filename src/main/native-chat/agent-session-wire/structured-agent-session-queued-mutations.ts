@@ -25,6 +25,7 @@ import {
   type MutationPlan
 } from './structured-agent-session-mutation-plans'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
+import type { CommandReceiptResult } from '../agent-session-journal/command-receipt-schema'
 import { structuredQueueHold } from './structured-agent-session-queued-messages'
 import {
   resumeStructuredQueue,
@@ -53,6 +54,17 @@ function submissionFor(
   clientMessageId: string
 ): AgentJournalSubmission | undefined {
   return ctx.journal.submissions().find((entry) => entry.clientMessageId === clientMessageId)
+}
+
+/** Where the journal wrote a hand-off's submission, so a replay answers with that one. */
+function submissionRowReceipt(
+  ctx: AgentSessionTurnContext,
+  submission: AgentJournalSubmission | undefined
+): CommandReceiptResult {
+  if (submission?.submittedSequence === undefined) {
+    throw new Error('an acknowledged hand-off requires its submission row')
+  }
+  return { kind: 'journal-row', epoch: ctx.journal.epoch, sequence: submission.submittedSequence }
 }
 
 /** One transaction, stamped with the operation's caller-scoped key so a replay
@@ -126,10 +138,11 @@ export function sendQueuedStructuredAgentMessage(
     method: 'agentSession.queuedMessageSend',
     fields: { messageId },
     conversationWrite: true,
-    // Its own submission, or the card another hand-off already turned into one.
+    // Its own submission's row, or the row of the hand-off that already took the card.
     commandReceipt: {
       result: (row) => journalRowReceiptResult(row, 'submission'),
-      unwritten: () => ({ kind: 'queued-draft', messageId })
+      unwritten: (value, ctx) =>
+        submissionRowReceipt(ctx, 'submission' in value ? value.submission : undefined)
     },
     run: async (ctx): Promise<TurnOutcome<AgentSessionSendResult>> => {
       // The one queue gate; Send-now's override set is exactly `working` (plus
@@ -193,12 +206,12 @@ export function sendQueuedStructuredAgentMessage(
       }
       return { ok: true, value: { clientMessageId: submissionId, submission } }
     },
+    // The hand-off the receipt points at, never whichever one the card holds now.
     replay: (ctx, _outcome, receipt) => {
-      // An acknowledged hand-off answers with the card's submission; this one's, with its own.
-      const card =
-        receipt?.kind === 'queued-draft' ? ctx.journal.queuedMessages.get(messageId) : null
-      const submissionId = card ? card.consumedAs : operationId
-      const submission = submissionId === null ? undefined : submissionFor(ctx, submissionId)
+      const submission =
+        receipt?.kind === 'journal-row' && receipt.epoch === ctx.journal.epoch
+          ? ctx.journal.submissions().find((entry) => entry.submittedSequence === receipt.sequence)
+          : undefined
       return submission?.queuedMessageId === messageId
         ? { clientMessageId: submission.clientMessageId, submission }
         : null

@@ -8,6 +8,7 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
 } from '../../../shared/agent-session-journal-types'
+import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
@@ -32,10 +33,6 @@ const CONFLICT = {
   refusal: { code: 'agent_session_operation_conflict', details: { reason: 'operationIdReused' } }
 }
 const UNKNOWN = { ok: false, refusal: { code: 'agent_session_operation_unknown' } }
-const SPENT = {
-  ok: false,
-  refusal: { code: 'agent_session_operation_unknown', details: { reason: 'resultLost' } }
-}
 /** The provider identity `seedApproval` raises its prompt under. */
 const PROMPT = { provider: 'codex' as const, threadId: THREAD, turnId: 'turn-1', ordinal: 99 }
 
@@ -146,7 +143,7 @@ describe('a prompt answer', () => {
     })
     expect(receipt(id)).toMatchObject({
       verdict: 'readable',
-      receipt: { method: 'agentSession.respondTo:approval', result: { kind: 'journal-row' } }
+      receipt: { method: 'agentSession.respondTo:approval', result: { kind: 'prompt-answer' } }
     })
     expect(answerPrompt).toHaveBeenCalledOnce()
   })
@@ -193,7 +190,12 @@ describe('a prompt answer', () => {
     })
     expect(receipt(alias, other.callerKey)).toMatchObject({
       receipt: {
-        result: { kind: 'item-revision', itemId: prompt.itemId, revision: prompt.revision + 1 }
+        result: {
+          kind: 'prompt-answer',
+          itemId: prompt.itemId,
+          revision: prompt.revision + 1,
+          resolution: { state: 'resolved', selectedOptionId: 'allow' }
+        }
       }
     })
     expect(await host.respondToPrompt(other, answer(prompt, alias))).toMatchObject({
@@ -275,36 +277,87 @@ describe('a prompt answer', () => {
     ['its own answer', CALLER],
     ['the answer another id acknowledged', { callerKey: 'client-2' }]
   ])(
-    'answers a retry after a rewind as spent, never answering again: %s',
+    'replays the accepted answer after a rewind, never answering again: %s',
     async (_case, caller) => {
       const prompt = await seeded()
       const params = answer(prompt, opId())
       if (caller !== CALLER) {
         await host.respondToPrompt(CALLER, answer(prompt, opId()))
       }
-      expect(await host.respondToPrompt(caller, params)).toMatchObject({ ok: true })
+      const first = await host.respondToPrompt(caller, params)
+      expect(first).toMatchObject({ ok: true, replayed: false })
       await rewindKeepingPrompt(prompt.itemId)
-      expect(await host.respondToPrompt(caller, params)).toMatchObject(SPENT)
+      expect(journal().item(prompt.itemId)?.revision).not.toBe(prompt.revision + 1)
+      expect(await host.respondToPrompt(caller, params)).toEqual({
+        ...first,
+        replayed: true,
+        cursor: expect.anything()
+      })
       expect(answerPrompt).toHaveBeenCalledOnce()
     }
   )
 
-  it('answers unknown, never success, when the revision it points at cannot be recorded', async () => {
+  it('replays a grouped answer whole after a rewind, free text included', async () => {
+    await attach()
+    const question = { ...PROMPT, ordinal: 100 }
+    acquire.mock.calls.at(-1)?.[0].events?.appendItem(
+      question,
+      {
+        kind: 'question',
+        question: '2 grouped questions',
+        options: [],
+        questions: [
+          {
+            id: 'q1',
+            question: 'Targets',
+            multiSelect: true,
+            options: [
+              { id: 'web', label: 'Web' },
+              { id: 'mobile', label: 'Mobile' }
+            ]
+          },
+          { id: 'q2', question: 'Host', multiSelect: false, options: [], freeTextQuestionId: 'q2' }
+        ],
+        resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+      },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    await host.flushStreamedEvents(SESSION)
+    const itemId = agentJournalItemKey(question)
+    const answers = [
+      { questionId: 'q1', optionIds: ['web', 'mobile'] },
+      { questionId: 'q2', optionIds: [], other: 'SSH host' }
+    ]
+    const fields = { itemId, expectedRevision: journal().item(itemId)!.revision, answers }
+    const params = {
+      envelope: envelope('agentSession.respondTo:question', fields, { clientOperationId: opId() }),
+      kind: 'question' as const,
+      ...fields
+    }
+    const first = await host.respondToPrompt(CALLER, params)
+    expect(first).toMatchObject({ ok: true, value: { resolution: { answers } } })
+    await journal().replaceEpochItems(
+      'handle_forked',
+      store.getRecord(SESSION)!.lease.runtimeFence,
+      []
+    )
+    expect(await host.respondToPrompt(CALLER, params)).toEqual({
+      ...first,
+      replayed: true,
+      cursor: expect.anything()
+    })
+    expect(answerPrompt).toHaveBeenCalledOnce()
+  })
+
+  it('answers unknown, never success, when acknowledging an answer cannot be recorded', async () => {
     const prompt = await seeded()
     await host.respondToPrompt(CALLER, answer(prompt, opId()))
     const other = { callerKey: 'client-2' }
-    const params = answer(prompt, opId())
+    const id = opId()
     const restore = failReceiptWrites()
-    expect(await host.respondToPrompt(other, params)).toMatchObject(UNKNOWN)
-    expect(await host.respondToPrompt(other, params)).toMatchObject(UNKNOWN)
+    expect(await host.respondToPrompt(other, answer(prompt, id))).toMatchObject(UNKNOWN)
     restore()
-    await reviseFromProvider(prompt.itemId)
-    // The retry acknowledges the revision the first attempt saw, not the provider's later one.
-    expect(await host.respondToPrompt(other, params)).toMatchObject({
-      ok: true,
-      replayed: true,
-      value: { revision: prompt.revision + 1 }
-    })
+    expect(receipt(id, other.callerKey)).toEqual({ verdict: 'absent' })
     expect(answerPrompt).toHaveBeenCalledOnce()
   })
 

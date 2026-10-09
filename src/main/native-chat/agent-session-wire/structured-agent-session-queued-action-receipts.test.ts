@@ -4,7 +4,6 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../shared/agent-session-host-authority'
-import { agentSessionMessagePayload } from '../../../shared/structured-agent-session-send-mutation'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import {
   createQueuedMessageTestRig,
@@ -13,8 +12,7 @@ import {
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import {
   HOST_TEST_NOW as NOW,
-  HOST_TEST_SESSION as SESSION,
-  hostTestMessage
+  HOST_TEST_SESSION as SESSION
 } from './structured-agent-session-host-test-data'
 
 const CALLER_SCOPE = { kind: 'caller', callerKey: CALLER.callerKey } as const
@@ -141,14 +139,56 @@ describe('Send now', () => {
       replayed: false,
       value: { clientMessageId: first }
     })
-    expect(receipt(alias)).toMatchObject({
-      receipt: { result: { kind: 'queued-draft', messageId: draftId } }
-    })
+    expect(receipt(alias)).toMatchObject({ receipt: { result: { kind: 'journal-row' } } })
     expect(await rig.sendNow(draftId, alias)).toMatchObject({
       ok: true,
       replayed: true,
       value: { clientMessageId: first }
     })
+  })
+
+  it('replays the hand-off it acknowledged, not a later one that took the card after it came back', async () => {
+    await rig.workingSend()
+    const draftId = await queuedDraft('card')
+    const first = opId()
+    expect(await rig.sendNow(draftId, first)).toMatchObject({ value: { clientMessageId: first } })
+    const ack = opId()
+    expect(await rig.sendNow(draftId, ack)).toMatchObject({
+      ok: true,
+      replayed: false,
+      value: { clientMessageId: first }
+    })
+    // The provider refuses the first hand-off: the card comes back, and another Send takes it.
+    await rig.settleRejected(first, 'nope')
+    const later = opId()
+    expect(await rig.sendNow(draftId, later)).toMatchObject({
+      ok: true,
+      value: { clientMessageId: later }
+    })
+    expect(await rig.sendNow(draftId, ack)).toMatchObject({
+      ok: true,
+      replayed: true,
+      value: { clientMessageId: first }
+    })
+  })
+
+  it('replays its hand-off once the dispatched card is pruned', async () => {
+    await rig.workingSend()
+    const draftId = await queuedDraft('pruned card')
+    const first = opId()
+    await rig.sendNow(draftId, first)
+    const ack = opId()
+    await rig.sendNow(draftId, ack)
+    openTestJournalHostDatabase(rig.root)
+      .db.prepare('DELETE FROM queued_messages WHERE session_id = ? AND message_id = ?')
+      .run(SESSION, draftId)
+    for (const id of [first, ack]) {
+      expect(await rig.sendNow(draftId, id)).toMatchObject({
+        ok: true,
+        replayed: true,
+        value: { clientMessageId: first }
+      })
+    }
   })
 
   it('refuses the same id naming another card', async () => {
@@ -191,7 +231,7 @@ describe('Send now', () => {
     expect(ledgerRow(id)).toBeUndefined()
   })
 
-  it('answers unknown, never success, when the hand-off it points at cannot be recorded', async () => {
+  it('answers unknown, never success, when acknowledging a hand-off cannot be recorded', async () => {
     await rig.workingSend()
     const draftId = await queuedDraft('sent by another')
     const first = opId()
@@ -199,16 +239,13 @@ describe('Send now', () => {
     const alias = opId()
     const restore = failReceiptWrites()
     expect(await rig.sendNow(draftId, alias)).toMatchObject(UNKNOWN)
-    expect(await rig.sendNow(draftId, alias)).toMatchObject(UNKNOWN)
     restore()
-    expect(await rig.sendNow(draftId, alias)).toMatchObject({
-      ok: true,
-      replayed: true,
-      value: { clientMessageId: first }
-    })
-    expect(receipt(alias)).toMatchObject({
-      receipt: { result: { kind: 'queued-draft', messageId: draftId } }
-    })
+    expect(receipt(alias)).toEqual({ verdict: 'absent' })
+    expect(ledgerRow(alias)).toBeUndefined()
+    const handoffs = (await rig.host.journalSnapshot(SESSION)).submissions.filter(
+      (entry) => entry.queuedMessageId === draftId
+    )
+    expect(handoffs).toHaveLength(1)
   })
 
   it('answers an unreadable receipt as unknown and hands nothing off', async () => {
@@ -337,32 +374,14 @@ describe('Delete', () => {
     )
   })
 
-  it('answers unknown when a no-op cannot be recorded, and its retry never withdraws a card that arrived since', async () => {
+  it('answers unknown, never success, when a no-op cannot be recorded, and records nothing', async () => {
     await rig.workingSend()
-    const lateCard = opId()
     const id = opId()
     const restore = failReceiptWrites()
-    expect(await rig.deleteQueued(lateCard, id)).toMatchObject(UNKNOWN)
+    expect(await rig.deleteQueued('no-such-card', id)).toMatchObject(UNKNOWN)
     restore()
-    // The card the Delete named lands after it: a send whose id is that card's.
-    const body = hostTestMessage('arrives late')
-    const fields = { body: agentSessionMessagePayload(body), delivery: 'queue-if-active' as const }
-    expect(
-      await rig.host.send(CALLER, {
-        envelope: rig.envelope(fields, 'agentSession.send', lateCard),
-        ...fields,
-        body,
-        userSend: true
-      })
-    ).toMatchObject({ ok: true, value: { queued: { messageId: lateCard } } })
-    expect(await rig.deleteQueued(lateCard, id)).toMatchObject({
-      ok: true,
-      replayed: true,
-      value: { deleted: false, messageId: lateCard, disposition: 'missing' }
-    })
-    expect(await rig.drafts()).toContainEqual(
-      expect.objectContaining({ messageId: lateCard, state: 'waiting' })
-    )
+    expect(receipt(id)).toEqual({ verdict: 'absent' })
+    expect(ledgerRow(id)).toBeUndefined()
   })
 
   it('answers a retry after a rewind from its receipt, withdrawing nothing again', async () => {
@@ -438,27 +457,23 @@ describe('Resume', () => {
     expect(await rig.queuePause()).toBeNull()
   })
 
-  it('answers unknown when a no-op cannot be recorded, and its retry never lifts a later pause', async () => {
+  it('answers unknown, never success, when a no-op cannot be recorded, and records nothing', async () => {
     const id = opId()
-    let restore = failReceiptWrites()
+    const restore = failReceiptWrites()
     expect(await rig.resume(id)).toMatchObject(UNKNOWN)
+    restore()
     expect(receipt(id)).toEqual({ verdict: 'absent' })
-    restore()
-    await pausedQueue()
-    // Still unrecordable: still unknown, and the Stop's pause stands.
-    restore = failReceiptWrites()
-    expect(await rig.resume(id)).toMatchObject(UNKNOWN)
-    expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
-    restore()
+    expect(ledgerRow(id)).toBeUndefined()
+  })
+
+  it("answers a no-op on a newer Orca's records with that refusal, not unknown", async () => {
+    await rig.workingSend()
+    const id = opId()
+    Object.defineProperty(openTestJournalHostDatabase(rig.root), 'readOnly', { value: true })
     expect(await rig.resume(id)).toMatchObject({
-      ok: true,
-      replayed: true,
-      value: { resumed: false }
+      ok: false,
+      refusal: { code: 'agent_session_journal_unreadable' }
     })
-    expect(receipt(id)).toMatchObject({
-      receipt: { result: { kind: 'no-op', outcome: { kind: 'queue-resume', resumed: false } } }
-    })
-    expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
   })
 
   it('answers an unreadable receipt as unknown and lifts nothing', async () => {
