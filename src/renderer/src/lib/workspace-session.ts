@@ -199,6 +199,7 @@ export function buildEditorSessionData(
   }
 }
 
+/** Strips mount-scoped tab fields (activation, recovery, restored provenance) before the session is persisted. */
 export function buildSanitizedTabsByWorktree(
   tabsByWorktree: WorkspaceSessionSnapshot['tabsByWorktree']
 ): WorkspaceSessionState['tabsByWorktree'] {
@@ -208,9 +209,15 @@ export function buildSanitizedTabsByWorktree(
     Object.entries(tabsByWorktree).map(([worktreeId, tabs]) => [
       worktreeId,
       tabs.map((tab) => {
-        const { pendingActivationSpawn: _unused, recovery: _recovery, ...rest } = tab
+        const {
+          pendingActivationSpawn: _unused,
+          recovery: _recovery,
+          restoredFromPersistence: _restored,
+          ...rest
+        } = tab
         void _unused
         void _recovery
+        void _restored
         return rest
       })
     ])

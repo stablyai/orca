@@ -16,6 +16,7 @@ export type StoreState = {
       shellOverride?: string
       forceHostRuntime?: boolean
       generation?: number
+      restoredFromPersistence?: boolean
     }[]
   >
   ptyIdsByTabId?: Record<string, string[]>

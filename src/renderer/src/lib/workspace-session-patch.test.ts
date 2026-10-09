@@ -197,9 +197,14 @@ describe('buildWorkspaceSessionPatch', () => {
             {
               id: 'tab-local',
               title: 'shell',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1,
               ptyId: 'pty-1',
               worktreeId: localWorktreeId,
               pendingActivationSpawn: true,
+              restoredFromPersistence: true,
               recovery: {
                 attemptedAt: [1],
                 generation: 1,
@@ -208,7 +213,7 @@ describe('buildWorkspaceSessionPatch', () => {
                 reason: 'reattach-unverifiable',
                 tabGeneration: 1
               }
-            } as never
+            }
           ]
         },
         ptyIdsByTabId: {
@@ -243,6 +248,7 @@ describe('buildWorkspaceSessionPatch', () => {
       ].sort()
     )
     expect('pendingActivationSpawn' in patch.tabsByWorktree![localWorktreeId][0]).toBe(false)
+    expect('restoredFromPersistence' in patch.tabsByWorktree![localWorktreeId][0]).toBe(false)
     // Why: the recovery ledger describes a mounted pane's in-flight heal; a
     // persisted one would refuse the first legitimate recovery after restart.
     expect('recovery' in patch.tabsByWorktree![localWorktreeId][0]).toBe(false)

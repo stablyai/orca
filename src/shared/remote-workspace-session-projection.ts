@@ -31,6 +31,7 @@ function worktreePathFromId(worktreeId: string): string | null {
   return splitWorktreeId(worktreeId)?.worktreePath ?? null
 }
 
+/** Projects a tab onto the wire shape, dropping local-only ids and mount-scoped state. */
 function tabToRemote(tab: TerminalTab, worktreePath: string): RemoteWorkspaceTerminalTab {
   // `recovery` joins the transient set for the same reason as
   // pendingActivationSpawn: it describes THIS client's in-flight heal, and its
@@ -41,11 +42,13 @@ function tabToRemote(tab: TerminalTab, worktreePath: string): RemoteWorkspaceTer
     worktreeId: _worktreeId,
     pendingActivationSpawn: _pendingActivationSpawn,
     recovery: _recovery,
+    restoredFromPersistence: _restoredFromPersistence,
     ...rest
   } = tab
   void _worktreeId
   void _pendingActivationSpawn
   void _recovery
+  void _restoredFromPersistence
   return { ...rest, worktreePath }
 }
 

@@ -12,11 +12,13 @@ import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { omitDisownedPtyIds } from './terminal-disowned-pty-sources'
 
+/** Builds the store action that records which PTY now backs a terminal tab or split pane. */
 export function createTerminalPtyBindingActions(
   set: TerminalStoreSet,
   get: TerminalStoreGet
 ): Pick<TerminalSlice, 'updateTabPtyId'> {
   return {
+    /** Binds a pane's PTY to its tab, consuming one activation suppression and ending restored provenance. */
     updateTabPtyId: (tabId, ptyId, replacedPtyId, directSshRetryAttemptId) => {
       // Why: final guard preventing a late caller from recreating retired tab maps (async spawn owners still do their own provider teardown).
       if (!isTerminalTabPresent(get(), tabId)) {
@@ -99,16 +101,25 @@ export function createTerminalPtyBindingActions(
           if (getPendingActivationSpawnCount(tab.pendingActivationSpawn) > 0) {
             wasActivationSpawn = true
           }
-          // Why: consume one suppression per split-pane activation callback.
-          const { pendingActivationSpawn: _unused, ...rest } = tab
+          // Why: consume one suppression per split-pane activation callback; a bound PTY also ends restored provenance.
+          const {
+            pendingActivationSpawn: _unused,
+            restoredFromPersistence: _restored,
+            ...rest
+          } = tab
           void _unused
+          void _restored
           // Why: tab.ptyId is the single-pane fallback for legacy attach; later split-pane spawns must not steal it or remount/close reattaches the tab to the wrong PTY.
           const currentTabPtyId = tab.ptyId === replacementPtyId ? ptyId : tab.ptyId
           const nextTabPtyId = currentTabPtyId ?? nextPtyIds[0] ?? null
           const nextPendingActivationSpawn = consumePendingActivationSpawn(
             tab.pendingActivationSpawn
           )
-          if (tab.pendingActivationSpawn || tab.ptyId !== nextTabPtyId) {
+          if (
+            tab.pendingActivationSpawn ||
+            tab.restoredFromPersistence ||
+            tab.ptyId !== nextTabPtyId
+          ) {
             const nextTabs = [...tabs]
             nextTabs[index] = {
               ...rest,

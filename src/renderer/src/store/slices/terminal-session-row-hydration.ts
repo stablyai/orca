@@ -195,6 +195,7 @@ function resolveCanonicalPtyClaim(
   }
 }
 
+/** Rebuilds a hydrated row as a pending, restored placeholder with its canonical labels reattached. */
 function restoreCanonicalMetadata(
   row: TerminalTab,
   index: number,
@@ -209,7 +210,8 @@ function restoreCanonicalMetadata(
     ...(aiVaultTitle ? { aiVaultTitle } : {}),
     sortOrder: index,
     // Why: suppress restored mounts so only real activity updates Recent.
-    pendingActivationSpawn: true
+    pendingActivationSpawn: true,
+    restoredFromPersistence: true
   }
 }
 

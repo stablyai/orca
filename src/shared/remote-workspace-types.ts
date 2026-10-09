@@ -5,7 +5,7 @@ import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
 // must not let a future producer put one on the wire.
 export type RemoteWorkspaceTerminalTab = Omit<
   TerminalTab,
-  'worktreeId' | 'pendingActivationSpawn' | 'recovery'
+  'worktreeId' | 'pendingActivationSpawn' | 'recovery' | 'restoredFromPersistence'
 > & {
   worktreePath: string
 }

@@ -16,7 +16,8 @@ const TERMINAL_TAB_LIVE_TITLE_KEYS = new Set<keyof TerminalTab>(['title'])
 // alone should not rebuild and rewrite the durable session payload.
 const TERMINAL_TAB_TRANSIENT_SESSION_KEYS = new Set<keyof TerminalTab>([
   'pendingActivationSpawn',
-  'recovery'
+  'recovery',
+  'restoredFromPersistence'
 ])
 
 function terminalTabChangedForSession(prev: TerminalTab, next: TerminalTab): boolean {

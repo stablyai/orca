@@ -28,6 +28,7 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
     }
     setRendererPtyVisibilityClaim(session.transport, ptyId, visible)
   }
+  /** Binds this pane to a concrete PTY and publishes it to the tab and layout; false when stale. */
   session.bindActivePanePty = (
     ptyId: string,
     options: {
@@ -46,9 +47,10 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
     const existingPtyId = leafId
       ? state.terminalLayoutsByTabId[session.deps.tabId]?.ptyIdsByLeafId?.[leafId]
       : undefined
-    const tabPtyId = Object.values(state.tabsByWorktree)
+    const tab = Object.values(state.tabsByWorktree)
       .flat()
-      .find((tab) => tab.id === session.deps.tabId)?.ptyId
+      .find((candidate) => candidate.id === session.deps.tabId)
+    const tabPtyId = tab?.ptyId
     // A remounted mirrored pane can report a fresh spawn while its tab still
     // carries the previous host handle. Treat that as an in-place replacement
     // so the old identity cannot remain beside the new one in the tab PTY map.
@@ -110,8 +112,10 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
         session.deps.updateTabPtyId(session.deps.tabId, ptyId)
       }
     }
+    // Why: updateTabPtyId is what clears restored provenance, so a restored tab must not skip it.
     const shouldUpdateTabPtyId =
       directSshRetryAttemptId ||
+      tab?.restoredFromPersistence === true ||
       options.updateTabPtyId !== 'if-missing' ||
       !tabPtyIds.includes(ptyId)
     if (replacementPtyId) {

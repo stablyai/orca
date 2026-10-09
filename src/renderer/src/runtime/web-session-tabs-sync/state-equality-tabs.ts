@@ -8,6 +8,7 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { sameRuntimeBrowserPlacement } from '../../../../shared/runtime-browser-placement'
 import { sameStringArray } from './state-equality-core'
 
+/** Field-wise equality so a snapshot that changes nothing keeps the existing tab reference. */
 export function terminalTabEqual(a: TerminalTab, b: TerminalTab): boolean {
   return (
     a.id === b.id &&
@@ -28,7 +29,8 @@ export function terminalTabEqual(a: TerminalTab, b: TerminalTab): boolean {
     a.generation === b.generation &&
     a.shellOverride === b.shellOverride &&
     a.launchAgent === b.launchAgent &&
-    a.pendingActivationSpawn === b.pendingActivationSpawn
+    a.pendingActivationSpawn === b.pendingActivationSpawn &&
+    a.restoredFromPersistence === b.restoredFromPersistence
   )
 }
 

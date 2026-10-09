@@ -119,6 +119,10 @@ export type TerminalTab = {
    *  legitimate recovery after restart. Stripped exactly like
    *  `pendingActivationSpawn` (buildSanitizedTabsByWorktree). */
   recovery?: TerminalTabRecoveryLedger
+  /** Why: hydrated rows share the null-PTY pending shape of a fresh placeholder, so the
+   *  identity-free host takeover would retire them. Set by session hydration, cleared once
+   *  the pane binds a PTY. Never persisted or sent over the wire. */
+  restoredFromPersistence?: true
 }
 
 export type TerminalPaneSplitDirection = 'vertical' | 'horizontal'
