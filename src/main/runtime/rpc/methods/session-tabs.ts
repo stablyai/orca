@@ -161,6 +161,7 @@ export const SESSION_TAB_METHODS = [
           }
         }
         const subscribedWorktree = initial.worktree
+        const subscribedOwner = initial.worktreeIdentity
         const withProofDelta = createSessionTabsRetirementProofDelta(clientCapabilities)
         emit({
           type: 'snapshot',
@@ -170,7 +171,10 @@ export const SESSION_TAB_METHODS = [
           return
         }
         stopListening = runtime.onMobileSessionTabsChanged((snapshot) => {
-          if (snapshot.worktree === subscribedWorktree) {
+          if (
+            snapshot.worktree === subscribedWorktree &&
+            snapshot.worktreeIdentity?.key === subscribedOwner?.key
+          ) {
             emit({
               type: 'updated',
               ...withProofDelta(

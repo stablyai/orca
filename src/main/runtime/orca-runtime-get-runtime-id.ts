@@ -16,6 +16,7 @@ import type { RuntimeTerminalSummary } from '../../shared/runtime-types'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorktreeIdentity } from '../../shared/worktree/identity'
 
 export class OrcaRuntimeWithGetRuntimeId extends OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity {
   getRuntimeId(): string {
@@ -68,8 +69,11 @@ export class OrcaRuntimeWithGetRuntimeId extends OrcaRuntimeWithHasExactPersiste
     return this.startedAt
   }
 
-  protected tryGetWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId | null {
-    return this.workspaceSessions.tryGetHostId(worktreeId)
+  protected tryGetWorkspaceSessionHostIdForWorktree(
+    worktreeId: string,
+    owner?: WorktreeIdentity
+  ): ExecutionHostId | null {
+    return this.workspaceSessions.tryGetHostId(worktreeId, owner)
   }
 
   protected listKnownExecutionHostIds(
@@ -172,23 +176,33 @@ export class OrcaRuntimeWithGetRuntimeId extends OrcaRuntimeWithHasExactPersiste
     }
   }
 
-  protected getWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId {
-    return this.workspaceSessions.getHostId(worktreeId)
+  protected getWorkspaceSessionHostIdForWorktree(
+    worktreeId: string,
+    owner?: WorktreeIdentity
+  ): ExecutionHostId {
+    return this.workspaceSessions.getHostId(worktreeId, owner)
   }
 
-  protected getWorkspaceSessionForWorktree(worktreeId: string): WorkspaceSessionState | null {
-    return this.workspaceSessions.get(worktreeId)
+  protected getWorkspaceSessionForWorktree(
+    worktreeId: string,
+    owner?: WorktreeIdentity
+  ): WorkspaceSessionState | null {
+    return this.workspaceSessions.get(worktreeId, owner)
   }
 
-  protected getOwnWorkspaceSessionForWorktree(worktreeId: string): WorkspaceSessionState | null {
-    return this.workspaceSessions.getOwnPartition(worktreeId)
+  protected getOwnWorkspaceSessionForWorktree(
+    worktreeId: string,
+    owner?: WorktreeIdentity
+  ): WorkspaceSessionState | null {
+    return this.workspaceSessions.getOwnPartition(worktreeId, owner)
   }
 
   protected setWorkspaceSessionForWorktree(
     worktreeId: string,
-    session: WorkspaceSessionState
+    session: WorkspaceSessionState,
+    owner?: WorktreeIdentity
   ): void {
-    this.workspaceSessions.setForWorktree(worktreeId, session)
+    this.workspaceSessions.setForWorktree(worktreeId, session, owner)
   }
 
   protected getKnownWorkspaceSessionWorktreeIds(): Set<string> {

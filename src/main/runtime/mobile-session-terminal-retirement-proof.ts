@@ -7,6 +7,7 @@ import {
   dropRetirementProofsForLiveSurfaces,
   retirementProofKey
 } from '../../shared/terminal-retirement-proof-ledger'
+import { runtimeSessionSnapshotsShareOwner } from './runtime-workspace-session-owner'
 
 export {
   appendRetiredTerminalSurfaceProofs,
@@ -24,7 +25,7 @@ export function preserveTerminalRetirementProofs(
   snapshot: RuntimeMobileSessionTabsSnapshot,
   existing: RuntimeMobileSessionTabsSnapshot | undefined
 ): RuntimeMobileSessionTabsSnapshot {
-  if (!existing || existing.worktree !== snapshot.worktree) {
+  if (!existing || !runtimeSessionSnapshotsShareOwner(existing, snapshot)) {
     return snapshot
   }
   if (

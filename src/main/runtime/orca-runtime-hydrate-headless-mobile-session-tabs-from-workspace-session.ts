@@ -27,6 +27,11 @@ import {
   collectBrowserGroupAssignment
 } from './mobile-session-browser-group-projection'
 import { headlessMobileSnapshotContentUnchanged } from './mobile-session-snapshot-equality'
+import type { WorktreeIdentity } from '../../shared/worktree/identity'
+import {
+  resolveRuntimeWorkspaceSessionOwner,
+  runtimeSessionSnapshotsShareOwner
+} from './runtime-workspace-session-owner'
 
 export class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession extends OrcaRuntimeWithWaitForSessionTabsInventoryPublication {
   protected hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
@@ -37,6 +42,7 @@ export class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession
       onlyRuntimeOwnedTerminals?: boolean
       runtimeOwnedTerminalCandidateKnown?: boolean
       workspaceSession?: WorkspaceSessionState
+      worktreeIdentity?: WorktreeIdentity
     } = {}
   ): Set<string> {
     // Why: report which worktrees were reconciled in place so callers don't
@@ -49,7 +55,7 @@ export class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession
     const session =
       options.workspaceSession ??
       (worktreeId
-        ? this.getWorkspaceSessionForWorktree(worktreeId)
+        ? this.getWorkspaceSessionForWorktree(worktreeId, options.worktreeIdentity)
         : this.store?.getWorkspaceSession?.())
     if (!session) {
       return reconciledWorktreeIds
@@ -104,7 +110,24 @@ export class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession
           continue
         }
       }
-      const existing = this.mobileSessionTabsByWorktree.get(entryWorktreeId)
+      const owner = resolveRuntimeWorkspaceSessionOwner(
+        this.store,
+        entryWorktreeId,
+        options.worktreeIdentity
+      )
+      if (owner === null) {
+        continue
+      }
+      const ownerStamp = {
+        worktree: entryWorktreeId,
+        ...(owner ? { worktreeIdentity: owner, worktreeInstanceId: owner.instanceId } : {})
+      }
+      const cached = this.mobileSessionTabsByWorktree.get(entryWorktreeId)
+      if (!owner && cached?.worktreeIdentity) {
+        continue
+      }
+      const existing =
+        cached && runtimeSessionSnapshotsShareOwner(cached, ownerStamp) ? cached : undefined
       if (
         existing &&
         existing.tabs.length > 0 &&
@@ -232,6 +255,7 @@ export class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession
         existing !== undefined &&
         !this.isHeadlessBuiltMobileSessionPublicationBase(existing.publicationEpoch)
       const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
+        ...ownerStamp,
         worktree: existing?.worktree ?? entryWorktreeId,
         publicationEpoch: mergedIntoRendererPublication
           ? this.getMergedMobileSessionPublicationEpoch(existing, tabs)
