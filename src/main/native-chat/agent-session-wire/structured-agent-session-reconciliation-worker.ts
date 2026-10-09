@@ -85,8 +85,8 @@ type ChatWorker = StructuredAgentSessionReconciliationSlotWaiter & {
 
 export class StructuredAgentSessionReconciliation {
   private readonly workers = new Map<string, ChatWorker>()
-  /** Where this host first opened each chat's journal: every send at or before it was accepted
-   *  by an earlier host process, and every one after it by this one. */
+  /** Process-scoped, never persisted: where this host process first opened each chat's journal.
+   *  Every send at or before it was accepted by an earlier host process, every one after by this. */
   private readonly firstOpened = new Map<string, AgentJournalCursor>()
   private disposed = false
   private readonly slots = new StructuredAgentSessionReconciliationSlots(() => this.disposed)
