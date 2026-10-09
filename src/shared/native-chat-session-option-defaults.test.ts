@@ -103,13 +103,13 @@ describe('resolveStructuredLaunchSeedOptions', () => {
     ).toEqual({ model: 'gpt-5.6-sol', effort: 'high', fastMode: 'true' })
   })
 
-  it('seeds a saved speed', () => {
+  it('seeds a saved service tier', () => {
     expect(
       resolveStructuredLaunchSeedOptions(
-        persistedCodex({ 'gpt-5.6-sol': { speed: 'ultrafast' } }),
+        persistedCodex({ 'gpt-5.6-sol': { serviceTier: 'ultrafast' } }),
         'codex'
       )
-    ).toEqual({ model: 'gpt-5.6-sol', speed: 'ultrafast' })
+    ).toEqual({ model: 'gpt-5.6-sol', serviceTier: 'ultrafast' })
   })
 
   it('drops a seeded id whose persisted value is not a usable string', () => {

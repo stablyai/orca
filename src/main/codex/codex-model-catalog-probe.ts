@@ -99,7 +99,6 @@ export function createCodexModelCatalogProbe(
     }
     return {
       models: listing.models,
-      speedTiersByModel: listing.speedTiersByModel,
       origin: 'probe',
       ...(unavailable ? { unavailable } : {})
     }

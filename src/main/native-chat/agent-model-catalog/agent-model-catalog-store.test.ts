@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -33,7 +33,6 @@ function models(...ids: string[]): AgentSessionModelOption[] {
 function success(...ids: string[]): AgentModelCatalogSuccess {
   return {
     models: models(...ids),
-    speedTiersByModel: new Map([[ids[0]!, { fast: 'fast-tier' }]]),
     origin: 'live-session'
   }
 }
@@ -65,7 +64,6 @@ describe('agent model catalog store', () => {
         'codex',
         {
           models: [],
-          speedTiersByModel: new Map(),
           origin: 'live-session'
         },
         'discovery'
@@ -360,7 +358,6 @@ describe('agent model catalog store', () => {
           ...(defaultEffort ? { defaultEffort } : {})
         }
       ],
-      speedTiersByModel: new Map(),
       origin: 'live-session'
     })
     store.recordSuccess('fp', 'claude', listing('medium'), 'live')
@@ -442,59 +439,31 @@ describe('agent model catalog store', () => {
     await restarted.attachPersistence(createAgentModelCatalogFilePersistence(directory))
     const entry = restarted.get('fp-1')!
     expect(entry.models.map((model) => model.id)).toEqual(['gpt-a'])
-    expect(entry.speedTiersByModel).toEqual({ 'gpt-a': { fast: 'fast-tier' } })
     // The failure died with the process: doubt is never a durable fact.
     expect(restarted.hasActiveFailure('fp-2')).toBe(false)
     expect(restarted.get('fp-2')).toBeNull()
   })
 
-  it('keeps speeds across a restart and reads a Fast tier saved before speeds existed', async () => {
+  it('keeps a model’s service tiers across a restart', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'agent-model-catalog-'))
     const store = new AgentModelCatalogStore()
     await store.attachPersistence(createAgentModelCatalogFilePersistence(directory))
-    const speeds = [
-      { value: 'fast', label: 'Fast' },
+    const serviceTiers = [
+      { value: 'priority', label: 'Fast', description: '2x speed' },
       { value: 'ultrafast', label: 'Ultrafast' }
     ]
     store.recordSuccess(
-      'fp-speeds',
+      'fp-tiers',
       'codex',
       {
-        models: [{ id: 'gpt-a', label: 'A', isDefault: true, efforts: [], speeds }],
-        speedTiersByModel: new Map([['gpt-a', { fast: 'priority', ultrafast: 'ultrafast' }]]),
+        models: [{ id: 'gpt-a', label: 'A', isDefault: true, efforts: [], serviceTiers }],
         origin: 'probe'
       },
       'discovery'
     )
     await store.flushPersistence()
     const [saved] = await createAgentModelCatalogFilePersistence(directory).load()
-    expect(saved?.models[0]?.speeds).toEqual(speeds)
-    expect(saved?.speedTiersByModel).toEqual({
-      'gpt-a': { fast: 'priority', ultrafast: 'ultrafast' }
-    })
-
-    const legacyDirectory = mkdtempSync(join(tmpdir(), 'agent-model-catalog-'))
-    writeFileSync(
-      join(legacyDirectory, 'agent-model-catalog.json'),
-      JSON.stringify({
-        version: 2,
-        entries: [
-          {
-            agent: 'codex',
-            fingerprint: 'fp-legacy',
-            discovered: {
-              models: [{ id: 'gpt-a', label: 'A', isDefault: true, efforts: [] }],
-              fastModeTierByModel: { 'gpt-a': 'priority' },
-              origin: 'probe',
-              at: 1
-            },
-            live: null
-          }
-        ]
-      })
-    )
-    const [legacy] = await createAgentModelCatalogFilePersistence(legacyDirectory).load()
-    expect(legacy?.speedTiersByModel).toEqual({ 'gpt-a': { fast: 'priority' } })
+    expect(saved?.models[0]?.serviceTiers).toEqual(serviceTiers)
   })
 
   it('writes a coalesced save at once when flushed', async () => {

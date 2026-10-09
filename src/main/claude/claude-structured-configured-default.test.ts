@@ -192,7 +192,6 @@ describe('Claude configured default', () => {
           isDefault: row.value === 'default',
           efforts: EFFORTS.map((value) => ({ value, label: value }))
         })),
-        speedTiersByModel: new Map(),
         origin: 'probe'
       },
       'discovery'

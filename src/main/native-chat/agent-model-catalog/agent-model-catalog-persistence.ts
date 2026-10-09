@@ -42,32 +42,6 @@ function parseChoice(value: unknown): AgentSessionOptionChoice | null {
   return { value: choice, label, ...(description ? { description } : {}) }
 }
 
-function parseTiers(value: unknown): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(asRecord(value) ?? {}).filter(
-      (pair): pair is [string, string] => typeof pair[1] === 'string'
-    )
-  )
-}
-
-/** Tier ids per model and speed; a file saved before speeds holds only Fast's. */
-function parseSpeedTiersByModel(
-  row: Record<string, unknown>
-): Record<string, Record<string, string>> {
-  const saved = asRecord(row.speedTiersByModel)
-  if (saved) {
-    return Object.fromEntries(
-      Object.entries(saved).map(([model, tiers]) => [model, parseTiers(tiers)])
-    )
-  }
-  return Object.fromEntries(
-    Object.entries(parseTiers(row.fastModeTierByModel)).map(([model, tier]) => [
-      model,
-      { fast: tier }
-    ])
-  )
-}
-
 function parseModel(value: unknown): AgentSessionModelOption | null {
   const row = asRecord(value)
   const id = text(row?.id)
@@ -79,10 +53,10 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
   if (efforts.some((effort) => effort === null)) {
     return null
   }
-  const speeds = Array.isArray(row.speeds)
-    ? row.speeds
+  const serviceTiers = Array.isArray(row.serviceTiers)
+    ? row.serviceTiers
         .map(parseChoice)
-        .filter((speed): speed is AgentSessionOptionChoice => speed !== null)
+        .filter((tier): tier is AgentSessionOptionChoice => tier !== null)
     : undefined
   const description = text(row.description)
   const defaultEffort = text(row.defaultEffort)
@@ -96,7 +70,7 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
     ...(typeof row.supportsFastMode === 'boolean'
       ? { supportsFastMode: row.supportsFastMode }
       : {}),
-    ...(speeds ? { speeds } : {})
+    ...(serviceTiers ? { serviceTiers } : {})
   }
 }
 
@@ -128,7 +102,6 @@ function parseListing(value: unknown): AgentModelCatalogListing | null {
           }
         }
       : {}),
-    speedTiersByModel: parseSpeedTiersByModel(row),
     origin: row.origin,
     at: row.at
   }

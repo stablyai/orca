@@ -31,15 +31,8 @@ import {
 } from './codex-structured-session-close'
 import { restoredCodexSessionOptions } from './codex-structured-session-options'
 import { startBackgroundCodexCatalogRefresh } from './codex-structured-background-catalog'
-import {
-  codexAcquireCatalogAccess,
-  codexAcquireSpeedCatalog
-} from './codex-structured-acquire-catalog'
-import {
-  codexSpeedNeedsTier,
-  reconcileCodexSpeedOption,
-  reportedCodexThreadOptions
-} from './codex-structured-speed'
+import { codexAcquireCatalogAccess } from './codex-structured-acquire-catalog'
+import { reportedCodexThreadOptions } from './codex-structured-service-tier'
 import {
   assertCodexConnectionOpen,
   codexSessionLifecycle,
@@ -223,11 +216,6 @@ export async function acquireCodexStructuredSession(input: {
     acquisitions.assertCurrent(sessionId, attempt)
     const options = restoredCodexSessionOptions(acquireInput.options)
     const catalogAccess = codexAcquireCatalogAccess(deps, launch)
-    const speedCatalog = codexAcquireSpeedCatalog({
-      catalogAccess,
-      opened,
-      restoreNeedsCatalog: codexSpeedNeedsTier(options)
-    })
     acquisitions.assertCurrent(sessionId, attempt)
     assertCodexConnectionOpen(connection, sessionId)
     acquisitions.deleteIfCurrent(sessionId, attempt)
@@ -256,16 +244,6 @@ export async function acquireCodexStructuredSession(input: {
           reason
         ),
       ...(unbindReadingControl ? { unbindReadingControl } : {})
-    }
-    if (speedCatalog) {
-      // The model the next turn sends, as turn/start and the background refresh resolve it.
-      const model = options.get('model') ?? opened.model ?? speedCatalog.result.current.model
-      reconcileCodexSpeedOption(session, {
-        speedTiersByModel: speedCatalog.speedTiersByModel,
-        currentSpeed: undefined,
-        model,
-        modelSpeeds: speedCatalog.result.models.find((entry) => entry.id === model)?.speeds
-      })
     }
     sessions.set(sessionId, session)
     for (const event of acquisition.drain()) {

@@ -200,27 +200,27 @@ describe('structured agent session options', () => {
             isDefault: true,
             efforts: [],
             supportsFastMode: true,
-            speeds: [
-              { value: 'fast', label: 'Fast' },
+            serviceTiers: [
+              { value: 'priority', label: 'Fast' },
               { value: 'ultrafast', label: 'Ultrafast' }
             ]
           }
         ],
         fastModeSupport: { supported: true },
-        current: { model: 'gpt-6.1-sol', speed: 'ultrafast', confirmed: ['speed'] }
+        current: { model: 'gpt-6.1-sol', serviceTier: 'ultrafast', confirmed: ['serviceTier'] }
       }
     )
     const snapshot = structuredAgentSessionOptionSnapshot(state)
-    expect(snapshot.map(({ id }) => id)).toEqual(['model', 'speed'])
+    expect(snapshot.map(({ id }) => id)).toEqual(['model', 'serviceTier'])
     expect(snapshot).toContainEqual(
       expect.objectContaining({
-        id: 'speed',
+        id: 'serviceTier',
         kind: {
           type: 'select',
           currentValue: 'ultrafast',
           choices: [
-            { value: 'standard', label: 'Standard' },
-            { value: 'fast', label: 'Fast' },
+            { value: 'default', label: 'Standard' },
+            { value: 'priority', label: 'Fast' },
             { value: 'ultrafast', label: 'Ultrafast' }
           ]
         },

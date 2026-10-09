@@ -83,7 +83,6 @@ function seedEntry(store: AgentModelCatalogStore, ...ids: string[]): void {
         efforts: [{ value: 'high', label: 'High' }],
         defaultEffort: 'high'
       })),
-      speedTiersByModel: new Map(),
       origin: 'live-session'
     },
     'discovery'

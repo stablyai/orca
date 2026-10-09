@@ -18032,9 +18032,7 @@
           "high": "높음",
           "xhigh": "매우 높음",
           "max": "최대",
-          "ultra": "울트라",
-          "standard": "표준",
-          "ultrafast": "초고속"
+          "ultra": "울트라"
         },
         "noCommandsOrSkills": "일치하는 명령어 또는 스킬이 없습니다",
         "commands": "명령어",

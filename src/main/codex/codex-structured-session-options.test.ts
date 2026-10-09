@@ -9,7 +9,7 @@ import {
   readLiveCodexSessionOptions,
   restoredCodexSessionOptions
 } from './codex-structured-session-options'
-import { reportedCodexThreadOptions } from './codex-structured-speed'
+import { reportedCodexThreadOptions } from './codex-structured-service-tier'
 import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import type { CodexSession } from './codex-structured-session-state'
 import { startCodexTurn } from './codex-structured-turn-start'
@@ -20,10 +20,7 @@ import {
   fakeCodex,
   identityFor
 } from './codex-structured-session-adapter-fixture'
-import {
-  AGENT_MODEL_CATALOG_FRESH_MS,
-  AgentModelCatalogStore
-} from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 
 function optionSession(request: CodexAppServerConnection['request']): CodexSession {
   return {
@@ -63,16 +60,14 @@ describe('structured Codex session options', () => {
   it.each([
     ['model', 'gpt-next'],
     ['effort', 'high'],
-    ['speed', 'ultrafast']
+    ['serviceTier', 'ultrafast']
   ])('keeps a cold %s pick as intent without starting a model request', async (key, value) => {
     const request = vi.fn(async () => ({ data: [] }))
     const session = optionSession(request)
-    session.options.set('serviceTier', 'priority-old')
 
     await expect(applyCodexStructuredSessionOption(session, key, value)).resolves.toMatchObject({
       [key]: value
     })
-    expect(session.options.has('serviceTier')).toBe(key !== 'speed')
     expect(request).not.toHaveBeenCalled()
   })
 
@@ -96,23 +91,18 @@ describe('structured Codex session options', () => {
     session.options.set('serviceTier', 'priority-old')
 
     await expect(applyCodexStructuredSessionOption(session, 'fastMode', 'false')).resolves.toEqual({
-      speed: 'standard'
+      serviceTier: 'default'
     })
     expect(request).not.toHaveBeenCalled()
   })
 
-  it('takes an older client Fast toggle as a speed and refuses an unknown speed', async () => {
+  it('refuses an older client Fast on while nothing names the Fast tier', async () => {
     const session = optionSession(vi.fn(async () => ({ data: [] })))
 
-    await expect(applyCodexStructuredSessionOption(session, 'fastMode', 'true')).resolves.toEqual({
-      speed: 'fast'
-    })
-    await expect(applyCodexStructuredSessionOption(session, 'speed', 'warp')).rejects.toThrow(
-      'no speed warp'
+    await expect(applyCodexStructuredSessionOption(session, 'fastMode', 'true')).rejects.toThrow(
+      'does not support Fast mode'
     )
-    await expect(applyCodexStructuredSessionOption(session, 'fastMode', 'yes')).rejects.toThrow(
-      'no speed yes'
-    )
+    expect(session.options.has('serviceTier')).toBe(false)
   })
 
   it('filters restored records to recognized turn options', () => {
@@ -127,19 +117,11 @@ describe('structured Codex session options', () => {
         })
       )
     ).toEqual({ model: 'gpt-live', effort: 'high' })
-    expect(Object.fromEntries(restoredCodexSessionOptions({ serviceTier: 'default' }))).toEqual({
-      speed: 'standard'
+    expect(Object.fromEntries(restoredCodexSessionOptions({ serviceTier: 'priority' }))).toEqual({
+      serviceTier: 'priority'
     })
-    expect(Object.fromEntries(restoredCodexSessionOptions({ speed: 'warp' }))).toEqual({})
-  })
-
-  it('restores a Fast pick saved before speeds, unless a speed was saved too', () => {
-    expect(Object.fromEntries(restoredCodexSessionOptions({ fastMode: 'true' }))).toEqual({
-      speed: 'fast'
-    })
-    expect(
-      Object.fromEntries(restoredCodexSessionOptions({ fastMode: 'true', speed: 'ultrafast' }))
-    ).toEqual({ speed: 'ultrafast' })
+    // Fast on/off saved before tiers is not carried over.
+    expect(Object.fromEntries(restoredCodexSessionOptions({ fastMode: 'true' }))).toEqual({})
   })
 
   it('hydrates paged provider models and their supported efforts', async () => {
@@ -292,7 +274,7 @@ describe('structured Codex session options', () => {
 
     await expect(
       applyCodexStructuredSessionOption(session, 'fastMode', 'true')
-    ).resolves.toMatchObject({ speed: 'fast' })
+    ).resolves.toMatchObject({ serviceTier: 'rush-v7' })
     await startCodexTurn(session, {
       clientMessageId: 'message-on',
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'on' }] }
@@ -333,7 +315,11 @@ describe('structured Codex session options', () => {
         reportedServiceTierKnown: true
       })
     ).resolves.toMatchObject({
-      current: { speed: 'fast', fastMode: true, confirmed: ['speed', 'fastMode'] }
+      current: {
+        serviceTier: 'priority-current',
+        fastMode: true,
+        confirmed: ['serviceTier', 'fastMode']
+      }
     })
     const unknown = await readCodexStructuredSessionOptions({
       connection,
@@ -341,7 +327,11 @@ describe('structured Codex session options', () => {
       reportedServiceTier: 'unrecognized-tier',
       reportedServiceTierKnown: true
     })
-    expect(unknown.current).toEqual({ model: 'gpt-live' })
+    expect(unknown.current).toEqual({
+      model: 'gpt-live',
+      serviceTier: 'unrecognized-tier',
+      confirmed: ['serviceTier']
+    })
   })
 
   it('hides and rejects Fast mode when the running catalog does not advertise it', async () => {
@@ -364,11 +354,11 @@ describe('structured Codex session options', () => {
       fastModeSupport: { supported: false }
     })
     await expect(applyCodexStructuredSessionOption(session, 'fastMode', 'true')).rejects.toThrow(
-      'does not support the fast speed'
+      'does not support Fast mode'
     )
   })
 
-  it('reconciles restored Fast on to explicit Standard when the selected model lost support', async () => {
+  it('drops a restored tier to Standard when the selected model no longer lists it', async () => {
     const requests: { method: string; params?: Record<string, unknown> }[] = []
     const session = optionSession(
       vi.fn(async (method: string, params?: Record<string, unknown>) => {
@@ -387,12 +377,12 @@ describe('structured Codex session options', () => {
           : { turn: { id: 'turn-standard' } }
       })
     )
-    session.options.set('speed', 'fast')
+    session.options.set('serviceTier', 'priority')
 
     await expect(readLiveCodexSessionOptions(session, undefined)).resolves.toMatchObject({
-      current: { speed: 'standard', fastMode: false }
+      current: { serviceTier: 'default', fastMode: false }
     })
-    expect(Object.fromEntries(session.options)).toEqual({ speed: 'standard' })
+    expect(Object.fromEntries(session.options)).toEqual({ serviceTier: 'default' })
 
     await startCodexTurn(session, {
       clientMessageId: 'message-standard',
@@ -403,70 +393,28 @@ describe('structured Codex session options', () => {
     })
   })
 
-  it('uses Standard until a missing Fast catalog recovers without losing restored intent', async () => {
+  it('sends a restored tier before any listing names it', async () => {
     const requests: { method: string; params?: Record<string, unknown> }[] = []
-    let catalogRecovered = false
-    const request = vi.fn(async (method: string, params?: Record<string, unknown>) => {
-      requests.push({ method, params })
-      if (method === 'turn/start') {
-        return { turn: { id: `turn-${requests.length}` } }
-      }
-      return {
-        data: [
-          {
-            model: 'gpt-live',
-            supportedReasoningEfforts: [],
-            ...(catalogRecovered
-              ? { serviceTiers: [{ id: 'priority-recovered', name: 'Fast' }] }
-              : {})
-          }
-        ],
-        nextCursor: null
-      }
-    })
-    const session = optionSession(request)
-    let now = 1_000
-    const store = new AgentModelCatalogStore({ now: () => now })
-    session.catalogAccess = { store, fingerprint: 'codex-test-account', accountHomePath: '/test' }
-    session.options.set('speed', 'fast')
+    const session = optionSession(
+      vi.fn(async (method: string, params?: Record<string, unknown>) => {
+        requests.push({ method, params })
+        return method === 'turn/start'
+          ? { turn: { id: 'turn-unlisted' } }
+          : { data: [{ model: 'gpt-live', supportedReasoningEfforts: [] }], nextCursor: null }
+      })
+    )
+    session.options.set('serviceTier', 'priority-saved')
 
-    const unknown = await readLiveCodexSessionOptions(session, undefined)
-    expect(unknown).toMatchObject({
-      current: { speed: 'fast', fastMode: true }
-    })
-    expect(unknown.fastModeSupport).toBeUndefined()
-    expect(unknown.models[0]?.supportsFastMode).toBeUndefined()
-    expect(unknown.models[0]?.speeds).toBeUndefined()
-    expect(session.options.get('speed')).toBe('fast')
+    const options = await readLiveCodexSessionOptions(session, undefined)
+    expect(options.current).toMatchObject({ serviceTier: 'priority-saved' })
+    expect(options.current).not.toHaveProperty('fastMode')
+    expect(options.models[0]?.serviceTiers).toBeUndefined()
     await startCodexTurn(session, {
-      clientMessageId: 'message-unverified',
-      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'unverified' }] }
+      clientMessageId: 'message-unlisted',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'unlisted' }] }
     })
     expect(requests.find((entry) => entry.method === 'turn/start')?.params).toMatchObject({
-      serviceTier: 'default'
-    })
-    expect(session.options.get('speed')).toBe('fast')
-
-    catalogRecovered = true
-    now += AGENT_MODEL_CATALOG_FRESH_MS
-    // Served from the aged entry; the refresh behind it names the tier.
-    await readLiveCodexSessionOptions(session, undefined)
-    await vi.waitFor(() =>
-      expect(store.get('codex-test-account')?.speedTiersByModel['gpt-live']?.fast).toBe(
-        'priority-recovered'
-      )
-    )
-    await expect(readLiveCodexSessionOptions(session, undefined)).resolves.toMatchObject({
-      models: [expect.objectContaining({ supportsFastMode: true })],
-      fastModeSupport: { supported: true },
-      current: { speed: 'fast', fastMode: true }
-    })
-    await startCodexTurn(session, {
-      clientMessageId: 'message-recovered',
-      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'recovered' }] }
-    })
-    expect(requests.filter((entry) => entry.method === 'turn/start')[1]?.params).toMatchObject({
-      serviceTier: 'priority-recovered'
+      serviceTier: 'priority-saved'
     })
   })
 
@@ -486,7 +434,7 @@ describe('structured Codex session options', () => {
 
     await expect(
       applyCodexStructuredSessionOption(session, 'fastMode', 'false')
-    ).resolves.toMatchObject({ speed: 'standard' })
+    ).resolves.toMatchObject({ serviceTier: 'default' })
     await startCodexTurn(session, {
       clientMessageId: 'message-standard',
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'standard' }] }
@@ -512,37 +460,14 @@ describe('structured Codex session options', () => {
       },
       current: { model: 'gpt-live' }
     })
-    expect(result.models[0]).toMatchObject({ supportsFastMode: true })
+    expect(result.models[0]).toMatchObject({
+      supportsFastMode: true,
+      serviceTiers: [{ value: 'fast', label: 'Fast' }]
+    })
     expect(result.fastModeSupport).toEqual({ supported: true })
   })
 
-  it('normalizes a legacy durable tier while preserving a canonical explicit choice', async () => {
-    const request = vi.fn(async () => ({
-      data: [
-        {
-          model: 'gpt-live',
-          supportedReasoningEfforts: [],
-          serviceTiers: [{ id: 'priority-migrated', name: 'Fast' }]
-        }
-      ],
-      nextCursor: null
-    }))
-    const migrated = optionSession(request)
-    migrated.options.set('serviceTier', 'priority-migrated')
-
-    await expect(readLiveCodexSessionOptions(migrated, undefined)).resolves.toMatchObject({
-      current: { speed: 'fast', fastMode: true }
-    })
-    expect(Object.fromEntries(migrated.options)).toEqual({ speed: 'fast' })
-
-    const canonical = optionSession(request)
-    canonical.options.set('speed', 'standard')
-    canonical.options.set('serviceTier', 'priority-migrated')
-    await readLiveCodexSessionOptions(canonical, undefined)
-    expect(Object.fromEntries(canonical.options)).toEqual({ speed: 'standard' })
-  })
-
-  it('reconciles Fast off when switching to an unsupported model', async () => {
+  it('drops to Standard when switching to a model without the picked tier', async () => {
     const session = optionSession(
       vi.fn(async () => ({
         data: [
@@ -556,25 +481,24 @@ describe('structured Codex session options', () => {
         nextCursor: null
       }))
     )
-    session.options.set('speed', 'fast')
+    session.options.set('serviceTier', 'priority-x')
     await primePicker(session)
 
     await expect(
       applyCodexStructuredSessionOption(session, 'model', 'gpt-standard')
-    ).resolves.toMatchObject({ model: 'gpt-standard', speed: 'standard' })
+    ).resolves.toMatchObject({ model: 'gpt-standard', serviceTier: 'default' })
   })
 })
 
-describe('Codex Ultrafast speed', () => {
-  const ultrafastListing = {
+describe('Codex service tiers', () => {
+  const tierListing = {
     data: [
       {
         model: 'gpt-6.1-sol',
         supportedReasoningEfforts: [],
         serviceTiers: [
           { id: 'priority', name: 'Fast', description: '2x speed, increased usage' },
-          { id: 'ultrafast', name: 'Ultrafast', description: '3x speed' },
-          { id: 'flex', name: 'Flex' }
+          { id: 'ultrafast', name: 'Ultrafast', description: '3x speed' }
         ]
       },
       {
@@ -586,37 +510,37 @@ describe('Codex Ultrafast speed', () => {
     nextCursor: null
   }
 
-  it('lists only the Fast and Ultrafast speeds the model advertises, in speed order', async () => {
+  it('lists every tier a model advertises, valued by its id', async () => {
     const result = await readCodexStructuredSessionOptions({
-      connection: { request: vi.fn(async () => ultrafastListing) },
+      connection: { request: vi.fn(async () => tierListing) },
       current: { model: 'gpt-6.1-sol' }
     })
     expect(result.models[0]).toMatchObject({
       supportsFastMode: true,
-      speeds: [
-        { value: 'fast', label: 'Fast', description: '2x speed, increased usage' },
+      serviceTiers: [
+        { value: 'priority', label: 'Fast', description: '2x speed, increased usage' },
         { value: 'ultrafast', label: 'Ultrafast', description: '3x speed' }
       ]
     })
-    expect(result.models[1]?.speeds).toEqual([{ value: 'fast', label: 'Fast' }])
+    expect(result.models[1]?.serviceTiers).toEqual([{ value: 'priority', label: 'Fast' }])
   })
 
-  it('routes Ultrafast to its advertised tier and reports it to older clients as neither on nor off', async () => {
+  it('sends Ultrafast as its id and reports it to older clients as neither on nor off', async () => {
     const requests: { method: string; params?: Record<string, unknown> }[] = []
     const session = optionSession(
       vi.fn(async (method: string, params?: Record<string, unknown>) => {
         requests.push({ method, params })
-        return method === 'model/list' ? ultrafastListing : { turn: { id: 'turn-ultrafast' } }
+        return method === 'model/list' ? tierListing : { turn: { id: 'turn-ultrafast' } }
       })
     )
     session.reportedOptions = { model: 'gpt-6.1-sol' }
     await primePicker(session)
 
     await expect(
-      applyCodexStructuredSessionOption(session, 'speed', 'ultrafast')
-    ).resolves.toMatchObject({ speed: 'ultrafast' })
+      applyCodexStructuredSessionOption(session, 'serviceTier', 'ultrafast')
+    ).resolves.toMatchObject({ serviceTier: 'ultrafast' })
     const options = await readLiveCodexSessionOptions(session, undefined)
-    expect(options.current).toMatchObject({ speed: 'ultrafast' })
+    expect(options.current).toMatchObject({ serviceTier: 'ultrafast' })
     expect(options.current).not.toHaveProperty('fastMode')
     await startCodexTurn(session, {
       clientMessageId: 'message-ultrafast',
@@ -627,53 +551,24 @@ describe('Codex Ultrafast speed', () => {
     })
   })
 
-  it('refuses Ultrafast on a model without it and drops to Standard when switching to one', async () => {
-    const session = optionSession(vi.fn(async () => ultrafastListing))
+  it('refuses a tier the model does not list and drops to Standard on a switch to one', async () => {
+    const session = optionSession(vi.fn(async () => tierListing))
     session.reportedOptions = { model: 'gpt-6-luna' }
     await primePicker(session)
 
-    await expect(applyCodexStructuredSessionOption(session, 'speed', 'ultrafast')).rejects.toThrow(
-      'does not support the ultrafast speed'
-    )
+    await expect(
+      applyCodexStructuredSessionOption(session, 'serviceTier', 'ultrafast')
+    ).rejects.toThrow('does not offer the ultrafast tier')
     await applyCodexStructuredSessionOption(session, 'model', 'gpt-6.1-sol')
-    await applyCodexStructuredSessionOption(session, 'speed', 'ultrafast')
+    await applyCodexStructuredSessionOption(session, 'serviceTier', 'ultrafast')
     await expect(
       applyCodexStructuredSessionOption(session, 'model', 'gpt-6-luna')
-    ).resolves.toMatchObject({ model: 'gpt-6-luna', speed: 'standard' })
-  })
-
-  it('reads a thread already running Ultrafast as that speed', async () => {
-    await expect(
-      readCodexStructuredSessionOptions({
-        connection: { request: vi.fn(async () => ultrafastListing) },
-        current: { model: 'gpt-6.1-sol' },
-        reportedServiceTier: 'ultrafast',
-        reportedServiceTierKnown: true
-      })
-    ).resolves.toMatchObject({ current: { speed: 'ultrafast', confirmed: ['speed'] } })
-  })
-})
-
-describe('Codex service tier is not a settable option', () => {
-  /** The turn derives the tier from `speed`, so accepting a direct write would
-   *  report success for a value the next turn discards. Restore still reads the key
-   *  so a session persisted before Fast existed migrates. */
-  it('refuses a direct serviceTier write while still restoring a legacy one', async () => {
-    const session = optionSession(async () => ({ data: [] }))
-
-    await expect(
-      applyCodexStructuredSessionOption(session, 'serviceTier', 'priority')
-    ).rejects.toThrow('cannot be set directly')
-    expect(session.options.has('serviceTier')).toBe(false)
-
-    expect(Object.fromEntries(restoredCodexSessionOptions({ serviceTier: 'default' }))).toEqual({
-      speed: 'standard'
-    })
+    ).resolves.toMatchObject({ model: 'gpt-6-luna', serviceTier: 'default' })
   })
 })
 
 describe('Codex option picks before the model list arrives', () => {
-  it('accepts launch-held model, effort and Fast picks while its own listing is held', async () => {
+  it('accepts launch-held model, effort and tier picks while its own listing is held', async () => {
     const pending = Promise.withResolvers<unknown>()
     const codex = fakeCodex({ 'model/list': () => pending.promise })
     codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-1')
@@ -689,15 +584,15 @@ describe('Codex option picks before the model list arrives', () => {
 
     await expect(pick('model', 'gpt-next')).resolves.toMatchObject({ model: 'gpt-next' })
     await expect(pick('effort', 'low')).resolves.toMatchObject({ model: 'gpt-next', effort: 'low' })
-    await expect(pick('speed', 'fast')).resolves.toEqual({
+    await expect(pick('serviceTier', 'priority')).resolves.toEqual({
       model: 'gpt-next',
       effort: 'low',
-      speed: 'fast'
+      serviceTier: 'priority'
     })
     expect(adapter.readAcquisitionOptions({ sessionId: 'session-1', fence: 7 })).toEqual({
       model: 'gpt-next',
       effort: 'low',
-      speed: 'fast'
+      serviceTier: 'priority'
     })
     await adapter.dispatch({
       sessionId: 'session-1',
@@ -707,7 +602,7 @@ describe('Codex option picks before the model list arrives', () => {
     })
     expect(
       codex.connections[0].calls.find((call) => call.method === 'turn/start')?.params
-    ).toMatchObject({ model: 'gpt-next', effort: 'low', serviceTier: 'default' })
+    ).toMatchObject({ model: 'gpt-next', effort: 'low', serviceTier: 'priority' })
     expect(codex.connections[0].calls.filter((call) => call.method === 'model/list')).toHaveLength(
       1
     )

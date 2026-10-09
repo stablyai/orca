@@ -6,13 +6,12 @@ import type {
 import type { CodexAppServerConnection } from './codex-app-server-connection'
 import { structuredAgentSessionOptionModels } from '../native-chat/agent-session-wire/structured-agent-session-option-models'
 import {
-  codexFastModeOfSpeed,
+  CODEX_DEFAULT_SERVICE_TIER,
+  codexFastModeOfServiceTier,
   codexFastModeSupport,
-  codexSpeedOfTier,
-  readCodexSpeedTiers,
-  type CodexSpeed,
-  type CodexSpeedTiers
-} from './codex-structured-speed'
+  codexFastServiceTier,
+  readCodexServiceTiers
+} from './codex-structured-service-tier'
 import {
   applyCodexConfiguredLaunchDefaults,
   readCodexConfiguredLaunchDefaults
@@ -51,12 +50,7 @@ function effortChoice(value: unknown): AgentSessionOptionChoice | null {
   }
 }
 
-type ParsedCodexModelOption = {
-  option: AgentSessionModelOption
-  speedTiers: CodexSpeedTiers
-}
-
-function modelOption(value: unknown): ParsedCodexModelOption | null {
+function modelOption(value: unknown): AgentSessionModelOption | null {
   const row = record(value)
   if (!row) {
     return null
@@ -73,31 +67,26 @@ function modelOption(value: unknown): ParsedCodexModelOption | null {
         .map(effortChoice)
         .filter((choice): choice is AgentSessionOptionChoice => choice !== null)
     : []
-  const speed = readCodexSpeedTiers(row)
+  const serviceTiers = readCodexServiceTiers(row)
   return {
-    option: {
-      id,
-      label,
-      ...(description ? { description } : {}),
-      isDefault: row.isDefault === true,
-      ...(defaultEffort ? { defaultEffort } : {}),
-      efforts,
-      ...(speed.supportKnown
-        ? { supportsFastMode: Object.hasOwn(speed.tiers, 'fast'), speeds: speed.speeds }
-        : {})
-    },
-    speedTiers: speed.tiers
+    id,
+    label,
+    ...(description ? { description } : {}),
+    isDefault: row.isDefault === true,
+    ...(defaultEffort ? { defaultEffort } : {}),
+    efforts,
+    ...(serviceTiers
+      ? { serviceTiers, supportsFastMode: codexFastServiceTier({ serviceTiers }) !== undefined }
+      : {})
   }
 }
 
 export type CodexSessionOptionCatalog = {
   result: AgentSessionOptionsResult & { current: { model: string } }
-  speedTiersByModel: Map<string, CodexSpeedTiers>
 }
 
 export type CodexModelCatalogListing = {
   models: AgentSessionModelOption[]
-  speedTiersByModel: Map<string, CodexSpeedTiers>
 }
 
 /** One paginated `model/list` pass. The provider fetch and the shaping of a
@@ -118,7 +107,7 @@ export async function fetchCodexModelCatalogListing(input: {
     }
     return Math.min(remaining, input.timeoutMs ?? remaining)
   }
-  const parsedModels: ParsedCodexModelOption[] = []
+  const parsedModels: AgentSessionModelOption[] = []
   let cursor: string | null = null
   for (let page = 0; page < MAX_MODEL_PAGES; page += 1) {
     const response = record(
@@ -131,7 +120,7 @@ export async function fetchCodexModelCatalogListing(input: {
     const rows = Array.isArray(response?.data) ? response.data : []
     for (const row of rows) {
       const parsed = modelOption(row)
-      if (parsed && !parsedModels.some((model) => model.option.id === parsed.option.id)) {
+      if (parsed && !parsedModels.some((model) => model.id === parsed.id)) {
         parsedModels.push(parsed)
       }
     }
@@ -142,17 +131,7 @@ export async function fetchCodexModelCatalogListing(input: {
   }
   const configured = await readCodexConfiguredLaunchDefaults(input.connection, remainingTimeout())
   return {
-    models: applyCodexConfiguredLaunchDefaults(
-      parsedModels.map((entry) => entry.option),
-      configured
-    ),
-    speedTiersByModel: new Map(
-      parsedModels.flatMap((entry) =>
-        Object.keys(entry.speedTiers).length > 0
-          ? [[entry.option.id, entry.speedTiers] as const]
-          : []
-      )
-    )
+    models: applyCodexConfiguredLaunchDefaults(parsedModels, configured)
   }
 }
 
@@ -160,7 +139,7 @@ export async function fetchCodexModelCatalogListing(input: {
 export function composeCodexSessionOptionCatalog(
   listing: CodexModelCatalogListing,
   input: {
-    current: { model?: string; effort?: string; speed?: CodexSpeed }
+    current: { model?: string; effort?: string; serviceTier?: string }
     reportedServiceTier?: string | null
     reportedServiceTierKnown?: boolean
   }
@@ -174,13 +153,15 @@ export function composeCodexSessionOptionCatalog(
   if (!model) {
     throw new Error('codex app-server returned no available models')
   }
-  const speedTiersByModel = new Map(listing.speedTiersByModel)
-  const reportedSpeed = input.reportedServiceTierKnown
-    ? codexSpeedOfTier(input.reportedServiceTier ?? null, speedTiersByModel.get(model))
+  const reportedTier = input.reportedServiceTierKnown
+    ? (input.reportedServiceTier ?? CODEX_DEFAULT_SERVICE_TIER)
     : undefined
-  const speed = input.current.speed ?? reportedSpeed
-  // Older clients only read Fast; Ultrafast leaves their toggle unset.
-  const fastMode = codexFastModeOfSpeed(speed)
+  const serviceTier = input.current.serviceTier ?? reportedTier
+  // Older clients only read Fast; any other tier leaves their toggle unset.
+  const fastMode = codexFastModeOfServiceTier(
+    serviceTier,
+    models.find((entry) => entry.id === model)
+  )
   const support = codexFastModeSupport(models)
   return {
     result: {
@@ -189,20 +170,19 @@ export function composeCodexSessionOptionCatalog(
       current: {
         model,
         ...(input.current.effort ? { effort: input.current.effort } : {}),
-        ...(speed !== undefined ? { speed } : {}),
+        ...(serviceTier ? { serviceTier } : {}),
         ...(fastMode !== undefined ? { fastMode } : {}),
-        ...(reportedSpeed !== undefined && input.current.speed === undefined
-          ? { confirmed: fastMode === undefined ? ['speed'] : ['speed', 'fastMode'] }
+        ...(reportedTier !== undefined && input.current.serviceTier === undefined
+          ? { confirmed: fastMode === undefined ? ['serviceTier'] : ['serviceTier', 'fastMode'] }
           : {})
       }
-    },
-    speedTiersByModel
+    }
   }
 }
 
 export async function readCodexStructuredSessionOptionCatalog(input: {
   connection: Pick<CodexAppServerConnection, 'request'>
-  current: { model?: string; effort?: string; speed?: CodexSpeed }
+  current: { model?: string; effort?: string; serviceTier?: string }
   reportedServiceTier?: string | null
   reportedServiceTierKnown?: boolean
   timeoutMs?: number

@@ -20,8 +20,8 @@ export async function readNativeSessionOptions(input: {
   })
 }
 
-/** The record's options once the provider has reported: its model, effort, Fast and speed replace
- *  the saved ones, other saved options stay, and any the child could not take are dropped. */
+/** The record's options once the provider has reported: its model, effort, Fast and service tier
+ *  replace the saved ones, other saved options stay, and any the child could not take are dropped. */
 export function nativeSessionOptionsFromReport(input: {
   reported: AgentSessionOptionsResult['current']
   restoreSkipped: readonly string[]
@@ -34,7 +34,7 @@ export function nativeSessionOptionsFromReport(input: {
   delete restored.model
   delete restored.effort
   delete restored.fastMode
-  delete restored.speed
+  delete restored.serviceTier
   for (const key of input.restoreSkipped) {
     delete restored[key]
   }
@@ -47,7 +47,7 @@ export function nativeSessionOptionsFromReport(input: {
     ...(reported.model ? { model: reported.model } : {}),
     ...(reported.effort ? { effort: reported.effort } : {}),
     ...(fastMode !== undefined && fastMode !== null ? { fastMode } : {}),
-    ...(reported.speed ? { speed: reported.speed } : {})
+    ...(reported.serviceTier ? { serviceTier: reported.serviceTier } : {})
   }
   for (const [key, value] of Object.entries(input.retired ?? {})) {
     if (options[key] === value) {

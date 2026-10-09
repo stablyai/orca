@@ -122,8 +122,8 @@ export function applyStructuredAgentSessionOptions(
   if (result.current.fastMode === undefined) {
     clearTrackedSessionOption(state.record, result.current.model ?? null, 'fastMode')
   }
-  if (result.current.speed === undefined) {
-    clearTrackedSessionOption(state.record, result.current.model ?? null, 'speed')
+  if (result.current.serviceTier === undefined) {
+    clearTrackedSessionOption(state.record, result.current.model ?? null, 'serviceTier')
   }
   applyNativeChatReportedSessionOptions(
     state.record,
@@ -131,7 +131,7 @@ export function applyStructuredAgentSessionOptions(
       ...(result.current.model ? { model: result.current.model } : {}),
       ...(result.current.effort ? { effort: result.current.effort } : {}),
       ...(result.current.fastMode !== undefined ? { fastMode: result.current.fastMode } : {}),
-      ...(result.current.speed ? { speed: result.current.speed } : {})
+      ...(result.current.serviceTier ? { serviceTier: result.current.serviceTier } : {})
     },
     result.current.confirmed ?? []
   )

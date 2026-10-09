@@ -66,7 +66,7 @@ describe('nativeChatSessionChoiceLabel', () => {
 describe('nativeChatOptionsPillLabel', () => {
   function speedDescriptor(currentValue: string): SessionOptionDescriptor {
     return {
-      id: 'speed',
+      id: 'serviceTier',
       label: 'Speed',
       valueSource: 'reported',
       transport: 'agent-session',
@@ -75,16 +75,16 @@ describe('nativeChatOptionsPillLabel', () => {
         type: 'select',
         currentValue,
         choices: [
-          { value: 'standard', label: 'Standard' },
-          { value: 'fast', label: 'Fast' },
+          { value: 'default', label: 'Standard' },
+          { value: 'priority', label: 'Fast' },
           { value: 'ultrafast', label: 'Ultrafast' }
         ]
       }
     }
   }
 
-  it('names a faster speed and leaves Standard out, as Fast off was', () => {
+  it('names a faster tier and leaves Standard out, as Fast off was', () => {
     expect(nativeChatOptionsPillLabel([speedDescriptor('ultrafast')])).toBe('Ultrafast')
-    expect(nativeChatOptionsPillLabel([speedDescriptor('standard')])).toBe('Options')
+    expect(nativeChatOptionsPillLabel([speedDescriptor('default')])).toBe('Options')
   })
 })

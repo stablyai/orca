@@ -31,16 +31,16 @@ function fastModeOption(): CatalogOption {
   }
 }
 
-/** Standard plus the faster speeds the model lists; one choice in place of the Fast toggle. */
-function speedOption(speeds: readonly AgentSessionOptionChoice[]): CatalogOption {
+/** Standard plus the tiers the model lists, valued by tier id; one choice in place of Fast. */
+function serviceTierOption(tiers: readonly AgentSessionOptionChoice[]): CatalogOption {
   return {
-    id: 'speed',
+    id: 'serviceTier',
     label: 'Speed',
     category: 'mode',
     kind: {
       type: 'select',
-      choices: [{ value: 'standard', label: 'Standard' }, ...speeds],
-      defaultValue: 'standard'
+      choices: [{ value: 'default', label: 'Standard' }, ...tiers],
+      defaultValue: 'default'
     },
     apply: {}
   }
@@ -51,7 +51,7 @@ export function discoveredModel(
   sessionSupportsFastMode: boolean
 ): CatalogModel {
   const effort = effortOption(model)
-  const speed = model.speeds?.length ? speedOption(model.speeds) : null
+  const serviceTier = model.serviceTiers?.length ? serviceTierOption(model.serviceTiers) : null
   return {
     id: model.id,
     label: model.label,
@@ -59,8 +59,8 @@ export function discoveredModel(
     ...(model.isDefault ? { isDefault: true } : {}),
     options: [
       ...(effort ? [effort] : []),
-      ...(speed
-        ? [speed]
+      ...(serviceTier
+        ? [serviceTier]
         : sessionSupportsFastMode && model.supportsFastMode === true
           ? [fastModeOption()]
           : [])

@@ -272,8 +272,7 @@ describe('Claude effort default at rest', () => {
             { value: 'high', label: 'High' }
           ]
         }
-      ],
-      speedTiersByModel: new Map()
+      ]
     }
     store.recordSuccess(
       agentModelCatalogFingerprintForRecord(record),
@@ -374,7 +373,6 @@ describe('Claude effort default at rest', () => {
             ]
           }
         ],
-        speedTiersByModel: new Map(),
         origin: 'live-session'
       },
       'discovery'

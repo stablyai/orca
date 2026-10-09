@@ -85,12 +85,14 @@ export function sessionOptionValueMarker(
   return descriptor.valueSource === 'unknown' ? 'unreported' : null
 }
 
-/** Like Fast off, the usual speed adds nothing to a summary pill. */
-export function isStandardSpeed(descriptor: Pick<SessionOptionDescriptor, 'id' | 'kind'>): boolean {
+/** Like Fast off, the standard tier adds nothing to a summary pill. */
+export function isDefaultServiceTier(
+  descriptor: Pick<SessionOptionDescriptor, 'id' | 'kind'>
+): boolean {
   return (
-    descriptor.id === 'speed' &&
+    descriptor.id === 'serviceTier' &&
     descriptor.kind.type === 'select' &&
-    descriptor.kind.currentValue === 'standard'
+    descriptor.kind.currentValue === 'default'
   )
 }
 

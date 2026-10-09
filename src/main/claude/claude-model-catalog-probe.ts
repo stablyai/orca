@@ -75,7 +75,6 @@ export function createClaudeModelCatalogProbe(
           ? { supportsFastMode: model.supportsFastMode }
           : {})
       })),
-      speedTiersByModel: new Map(),
       origin: 'probe'
     }
   }
