@@ -8,7 +8,7 @@ vi.mock('./ssh-remote-runtime-telemetry', () => ({ trackSshRemoteRuntimeResolved
 
 import {
   RelayRuntimeLadderRun,
-  remoteRuntimeUnavailableError,
+  RemoteRuntimeUnavailableError,
   type RelayRuntimeDecisionStore
 } from './ssh-relay-runtime-resolution'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
@@ -93,7 +93,9 @@ describe('RelayRuntimeLadderRun', () => {
     run.settle('D')
     expect(store.value?.rung).toBe('D')
     expect(store.value).not.toHaveProperty('pinnedRefusal')
-    expect(remoteRuntimeUnavailableError(run)).toMatchObject({ data: { reason: 'home_noexec' } })
+    expect(new RemoteRuntimeUnavailableError(run)).toMatchObject({
+      data: { reason: 'home_noexec' }
+    })
   })
 
   it('reports a remembered noexec at rung D without advising a host Node install', () => {
@@ -103,7 +105,7 @@ describe('RelayRuntimeLadderRun', () => {
     run.refused('A', 'noexec', true)
     run.refused('B', 'runtime_unavailable')
     run.refused('C', 'host_node_missing')
-    const error = remoteRuntimeUnavailableError(run)
+    const error = new RemoteRuntimeUnavailableError(run)
     expect(error.message).toContain('earlier connect found the home directory mounted noexec')
     expect(error.message).not.toContain('Install Node.js')
     expect(error).toMatchObject({ data: { reason: 'home_noexec' } })
@@ -114,13 +116,13 @@ describe('RelayRuntimeLadderRun', () => {
     run.refused('A', 'noexec', true)
     run.refused('legacy', 'noexec')
     expect(run.noexec).toBe('remembered')
-    expect(remoteRuntimeUnavailableError(run).message).toContain('earlier connect found')
+    expect(new RemoteRuntimeUnavailableError(run).message).toContain('earlier connect found')
   })
 
   it('still advises a host Node when rung A refused for another reason', () => {
     const run = new RelayRuntimeLadderRun('ssh-1', null, true)
     run.refused('A', 'libc_floor')
     run.refused('C', 'host_node_missing')
-    expect(remoteRuntimeUnavailableError(run).message).toContain('Install Node.js 18+')
+    expect(new RemoteRuntimeUnavailableError(run).message).toContain('Install Node.js 18+')
   })
 })
