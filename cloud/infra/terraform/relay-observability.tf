@@ -1408,6 +1408,7 @@ locals {
     wrong_cell    = { field = "classes.wrongCell", description = "Host hellos whose echoed lease named another cell; expected during drains." }
     epoch_behind  = { field = "classes.epochBehind", description = "Host hellos whose echoed lease was older than the hello's assignment epoch." }
     epoch_ahead   = { field = "classes.epochAhead", description = "Host hellos whose echoed lease was newer than the hello's assignment epoch." }
+    db_refused    = { field = "dbRefused", description = "Host hellos the database refused, whatever the echoed lease said." }
     db_read_ms    = { field = "dbReadMs.p99", description = "p99 of the hello's assignment database read, the read a lease-admitted hello would skip." }
   }
 }
