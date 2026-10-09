@@ -1,0 +1,785 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ship vs Hold — Unreadable `orca` Command Symlink (macOS)</title>
+    <style>
+      :root {
+        --bg: #0b0f17;
+        --panel: #111827;
+        --panel2: #0f172a;
+        --border: #243044;
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+        --faint: #6b7280;
+        --red: #f87171;
+        --red-bg: rgba(248, 113, 113, 0.08);
+        --green: #34d399;
+        --green-bg: rgba(52, 211, 153, 0.08);
+        --amber: #fbbf24;
+        --amber-bg: rgba(251, 191, 36, 0.08);
+        --blue: #60a5fa;
+        --blue-bg: rgba(96, 165, 250, 0.08);
+        --violet: #a78bfa;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, Helvetica, Arial, sans-serif;
+        line-height: 1.55;
+      }
+      .wrap {
+        max-width: 1020px;
+        margin: 0 auto;
+        padding: 32px 20px 64px;
+      }
+      .badge-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 14px;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12.5px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        padding: 7px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: #0e1626;
+        color: var(--muted);
+      }
+      .pill.skim {
+        color: #0b0f17;
+        background: var(--green);
+        border-color: var(--green);
+      }
+      .pill.ship {
+        background: var(--green-bg);
+        border-color: var(--green);
+        color: var(--green);
+        font-size: 15px;
+        padding: 10px 18px;
+      }
+      .pill.src {
+        color: var(--blue);
+        border-color: var(--blue);
+      }
+      h1 {
+        font-size: 32px;
+        line-height: 1.2;
+        margin: 8px 0 8px;
+      }
+      .sub {
+        color: var(--muted);
+        font-size: 15.5px;
+        max-width: 78ch;
+      }
+      .grid2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        margin-top: 18px;
+      }
+      @media (max-width: 760px) {
+        .grid2 {
+          grid-template-columns: 1fr;
+        }
+      }
+      .box {
+        border-radius: 14px;
+        padding: 16px 18px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+      }
+      .box.red {
+        border: 1.5px solid var(--red);
+        background: var(--red-bg);
+      }
+      .box.green {
+        border: 1.5px solid var(--green);
+        background: var(--green-bg);
+      }
+      .box h3 {
+        margin: 0 0 6px;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .box.red h3 {
+        color: var(--red);
+      }
+      .box.green h3 {
+        color: var(--green);
+      }
+      .box p {
+        margin: 0;
+        font-size: 15px;
+      }
+      section {
+        margin-top: 30px;
+      }
+      section h2 {
+        font-size: 20px;
+        margin: 0 0 4px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      section h2 .num {
+        display: inline-flex;
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: #1b2740;
+        color: var(--blue);
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        font-weight: 800;
+      }
+      .desc {
+        color: var(--muted);
+        font-size: 14px;
+        margin: 0 0 14px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+        font-size: 14px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+      th {
+        background: #0e1626;
+        font-size: 12.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+      }
+      tr:last-child td {
+        border-bottom: none;
+      }
+      .yes {
+        color: var(--green);
+        font-weight: 700;
+      }
+      .no {
+        color: var(--red);
+        font-weight: 700;
+      }
+      .cards3 {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 14px;
+      }
+      @media (max-width: 820px) {
+        .cards3 {
+          grid-template-columns: 1fr;
+        }
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 16px;
+      }
+      .card h4 {
+        margin: 0 0 8px;
+        font-size: 14.5px;
+      }
+      .myth {
+        color: var(--amber);
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .real {
+        color: var(--green);
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-top: 10px;
+      }
+      .story {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 18px;
+        margin-top: 12px;
+      }
+      .beat-tag {
+        display: inline-block;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--blue);
+        margin-bottom: 6px;
+      }
+      .mock {
+        background: #070b13;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px;
+        font-size: 13.5px;
+        margin-top: 8px;
+      }
+      .mock .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: #0e1626;
+        margin-bottom: 8px;
+      }
+      .mock .row:last-child {
+        margin-bottom: 0;
+      }
+      .switch {
+        width: 44px;
+        height: 24px;
+        border-radius: 999px;
+        background: #26334d;
+        position: relative;
+        flex: none;
+      }
+      .switch.on {
+        background: var(--green);
+      }
+      .switch.off {
+        background: #3a4356;
+      }
+      .switch::after {
+        content: '';
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #fff;
+      }
+      .switch.on::after {
+        left: 23px;
+      }
+      .err {
+        color: var(--red);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12.5px;
+      }
+      .ok {
+        color: var(--green);
+        font-weight: 700;
+      }
+      .clarify {
+        margin-top: 12px;
+        border: 1px dashed var(--violet);
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-size: 13.5px;
+        color: #d6cfff;
+        background: rgba(167, 139, 250, 0.07);
+      }
+      .vs {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 8px;
+      }
+      @media (max-width: 700px) {
+        .vs {
+          grid-template-columns: 1fr;
+        }
+      }
+      .vs .col {
+        border-radius: 10px;
+        padding: 12px;
+        border: 1px solid var(--border);
+      }
+      .vs .wrong {
+        border-color: var(--red);
+        background: var(--red-bg);
+      }
+      .vs .right {
+        border-color: var(--green);
+        background: var(--green-bg);
+      }
+      .trade {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+      @media (max-width: 700px) {
+        .trade {
+          grid-template-columns: 1fr;
+        }
+      }
+      .verdict {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 14px;
+        margin-top: 14px;
+      }
+      @media (max-width: 820px) {
+        .verdict {
+          grid-template-columns: 1fr;
+        }
+      }
+      .verdict .card.hl {
+        border: 2px solid var(--green);
+      }
+      code {
+        background: #0e1626;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 1px 6px;
+        font-size: 12.8px;
+      }
+      .foot {
+        margin-top: 28px;
+        color: var(--faint);
+        font-size: 12.5px;
+      }
+      svg {
+        flex: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="badge-row">
+        <span class="pill skim">45-second skim</span>
+        <span class="pill src"
+          >Source: docs/cli-unreadable-command-symlink-design.md (ignored scratch doc, not yet
+          code)</span
+        >
+        <span class="pill"
+          >Branch: recover-from-remote-setting-errors · clean tree · no code diff yet</span
+        >
+      </div>
+
+      <h1>macOS users see a Settings error and lose the <code>orca</code> terminal command</h1>
+      <p class="sub">
+        <strong>Decision summary:</strong> approve this small, well-bounded fix design — it stops
+        creating unreadable command links, turns a crash-style error into a one-click repair, and
+        changes nothing about which commands Orca is allowed to replace.
+      </p>
+
+      <div class="badge-row" style="margin-top: 14px">
+        <span class="pill ship">✔ Recommendation: SHIP — approve the design</span>
+      </div>
+
+      <div class="grid2">
+        <div class="box red">
+          <h3>One-line problem</h3>
+          <p>
+            On some Macs, opening Settings shows <em>"permission denied"</em> and the
+            <code>orca</code> command in Terminal is dead — and the app's own Register / Remove
+            buttons fail the same way.
+          </p>
+        </div>
+        <div class="box green">
+          <h3>One-line fix</h3>
+          <p>
+            Create future links readable by everyone, recognize an unreadable-but-proven-Ours link
+            as "needs re-registering," and let the existing one-prompt repair flow replace it.
+          </p>
+        </div>
+      </div>
+
+      <section>
+        <h2><span class="num">1</span> Scope boundaries</h2>
+        <p class="desc">What a user gets, and what stays untouched.</p>
+        <table>
+          <tr>
+            <th style="width: 50%">✅ This change DOES (user-facing protections)</th>
+            <th>🚫 Does NOT touch (non-regression boundaries)</th>
+          </tr>
+          <tr>
+            <td>
+              <span class="yes">New installs</span> create a link anyone can read, even on
+              locked-down Macs.
+            </td>
+            <td>
+              <span class="no">Ownership rule</span> — Orca still never replaces a command it cannot
+              prove is its own.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <span class="yes">Broken installs</span> show as "needs re-registering" (switch off)
+              instead of an error popup.
+            </td>
+            <td>
+              <span class="no">Unknown links</span> — a link that may belong to another app still
+              refuses repair and shows a manual fix.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <span class="yes">One-click repair</span> from Settings, onboarding, and setup panels
+              (single admin prompt).
+            </td>
+            <td>
+              <span class="no">Already-locked folders</span> — system folders the old script already
+              locked down are left alone (message names the path).
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <span class="yes">Terminal fixed too</span> — repaired link makes
+              <code>orca</code> work again in the shell.
+            </td>
+            <td>
+              <span class="no">Linux / Windows</span> — Linux ignores link permissions; Windows uses
+              a wrapper file. No behavior change there.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <span class="yes">Moved-app case stays safe</span> — a link to an Orca app in another
+              location is not auto-replaced.
+            </td>
+            <td>
+              <span class="no">No new privileged code path</span> — repair reuses the existing
+              guarded replacement flow.
+            </td>
+          </tr>
+        </table>
+      </section>
+
+      <section>
+        <h2><span class="num">2</span> Scale &amp; downscoping</h2>
+        <p class="desc">
+          Design-only stage: no product code changed yet. Branch tree is clean; the design doc
+          itself is git-ignored scratch (not shipped).
+        </p>
+        <table>
+          <tr>
+            <th>Area</th>
+            <th>Expected footprint</th>
+            <th>Files named in design</th>
+          </tr>
+          <tr>
+            <td>Setup script builder</td>
+            <td>Small — explicit readable modes instead of inherited privacy mask</td>
+            <td><code>cli-command-filesystem-transaction.ts</code></td>
+          </tr>
+          <tr>
+            <td>Status check</td>
+            <td>Small — one new permission-error branch + follow-the-link comparison</td>
+            <td>
+              <code>inspectSymlink</code>, <code>inspectStableCommand</code>,
+              <code>cli-install-errors.ts</code>
+            </td>
+          </tr>
+          <tr>
+            <td>Install / remove flows</td>
+            <td>~Zero — existing flows do the repair unchanged</td>
+            <td><code>installSymlink</code>, <code>removeSymlink</code> (no logic change)</td>
+          </tr>
+          <tr>
+            <td>Tests</td>
+            <td>Medium — 8 new cases across existing macOS suites</td>
+            <td>
+              privileged-transaction, command-conflicts (+ races, installer suites as regression
+              cover)
+            </td>
+          </tr>
+        </table>
+        <div
+          class="box"
+          style="margin-top: 12px; border-color: var(--amber); background: var(--amber-bg)"
+        >
+          <h3 style="color: var(--amber)">Downscoping assessment</h3>
+          <p>
+            Already minimal: no UI changes, no new states, no new privileged path. Do
+            <strong>not</strong> cut the hardened-mode test (managed Macs would reintroduce the bug)
+            or the unknown-link refusal tests (that is the safety guarantee). The only deferrable
+            item — auto-repairing links to a moved Orca app — is already deferred by the design.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h2><span class="num">3</span> Concrete storyboard — the same Settings window</h2>
+        <p class="desc">
+          Who is hurt, what they click, what they see. Plain product terms throughout.
+        </p>
+
+        <div class="story">
+          <span class="beat-tag">Beat 1 — Starting state (before the trigger)</span>
+          <p>
+            A Mac user installed Orca, approved the admin prompt to put <code>orca</code> on the
+            Terminal path, and uses Settings normally. The command-line toggle in Settings shows
+            <strong>ON</strong>.
+          </p>
+          <div class="mock">
+            <div class="row">
+              <span>⚙️ Settings → Command line <span class="ok">● toggle ON</span></span
+              ><span class="switch on"></span>
+            </div>
+            <div class="row">
+              <span>Terminal: <code>orca --help</code></span
+              ><span class="ok">works</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="story">
+          <span class="beat-tag">Beat 2 — The action / seam (bug triggers)</span>
+          <p>
+            The user opens <strong>Settings</strong> (or onboarding, or an agent-skills /
+            browser-use setup panel — every surface that checks the command status). Because the
+            installed link is readable only by the system administrator, the status check throws
+            instead of answering.
+          </p>
+          <div class="mock">
+            <div class="row">
+              <span>⚙️ Settings → Command line</span
+              ><span class="err"
+                >Error: EACCES: permission denied, readlink '/usr/local/bin/orca'</span
+              >
+            </div>
+            <div class="row">
+              <span>Register / Remove buttons</span
+              ><span class="err">same error — no repair possible</span>
+            </div>
+            <div class="row">
+              <span>Terminal: <code>orca</code></span
+              ><span class="err">dead (exits 1)</span>
+            </div>
+          </div>
+          <p style="color: var(--muted); font-size: 13.5px">
+            Feel: <strong>loud failure, dead end.</strong> Not silent — an error on every visit, and
+            every repair button fails the same way.
+          </p>
+        </div>
+
+        <div class="story">
+          <span class="beat-tag"
+            >Beat 3 — Side-by-side: wrong ending vs. right ending (this change)</span
+          >
+          <div class="vs">
+            <div class="col wrong">
+              <strong>❌ Wrong ending (unfixed)</strong>
+              <div class="mock">
+                <div class="row">
+                  <span>Settings → Command line</span><span class="err">error popup</span>
+                </div>
+                <div class="row">
+                  <span>Terminal <code>orca</code></span
+                  ><span class="err">still dead</span>
+                </div>
+              </div>
+              <p style="font-size: 13.5px">
+                Correct outcome in one visual: this error state must never appear for Orca's own
+                link.
+              </p>
+            </div>
+            <div class="col right">
+              <strong>✅ Right ending (this change)</strong>
+              <div class="mock">
+                <div class="row">
+                  <span
+                    >Settings → Command line
+                    <span style="color: var(--amber); font-weight: 700"
+                      >● toggle OFF, "needs re-registering"</span
+                    ></span
+                  ><span class="switch off"></span>
+                </div>
+                <div class="row">
+                  <span>User flips toggle ON → one admin prompt</span
+                  ><span class="ok">toggle ON, link readable</span>
+                </div>
+                <div class="row">
+                  <span>Terminal: <code>orca</code></span
+                  ><span class="ok">works again</span>
+                </div>
+              </div>
+              <p style="font-size: 13.5px">
+                Unknown links instead show a conflict with a one-line manual fix — never
+                auto-replaced.
+              </p>
+            </div>
+          </div>
+          <div class="clarify">
+            🔎 Plain term: a <strong>"command link"</strong> below is the tiny pointer in
+            <code>/usr/local/bin/orca</code> that lets you type <code>orca</code> in Terminal to
+            open this app.
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2><span class="num">4</span> Why the old check failed</h2>
+        <p class="desc">
+          One plain-sentence root cause: the setup script created the link readable only by the
+          administrator, but the status check only expected "link missing," so a "link present but
+          unreadable" crashed through as an error.
+        </p>
+        <table>
+          <tr>
+            <th>Question the old code asked</th>
+            <th>What it concluded (superficial pass)</th>
+            <th>Missing question this change adds</th>
+          </tr>
+          <tr>
+            <td>"Is there a link here?" (list folder)</td>
+            <td class="ok">Yes — looks registered ✔</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>"Where does the link point?" (read the link text)</td>
+            <td>
+              <span class="err">✘ Throws "permission denied"</span> — only "link missing" was
+              handled
+            </td>
+            <td>
+              <strong>"Can I read the link text?"</strong> → if denied by permissions, follow the
+              link through to its destination and compare it with this app.
+            </td>
+          </tr>
+          <tr>
+            <td>"Did the link change while I looked?" (retry check)</td>
+            <td>
+              Misreported as <span class="err">"changed while inspecting"</span> after 3 retries
+            </td>
+            <td>
+              <strong>"Is this a permissions failure, not a race?"</strong> → keep the identity
+              snapshot, skip the retry, classify honestly.
+            </td>
+          </tr>
+          <tr>
+            <td>"May I replace it?" (ownership proof)</td>
+            <td>Never reached — the error escaped first</td>
+            <td>
+              <strong>"Does the link resolve to this app's own launcher?"</strong> → stricter proof
+              than the old path-text match; only then allow the existing guarded replacement.
+            </td>
+          </tr>
+        </table>
+      </section>
+
+      <section>
+        <h2><span class="num">5</span> Decision traps — myth vs. reality</h2>
+        <div class="cards3">
+          <div class="card">
+            <div class="myth">Myth — Severity: "just a settings cosmetic"</div>
+            <h4>It looks like a dialog glitch.</h4>
+            <p style="color: var(--muted); font-size: 14px">
+              The same defect kills the <code>orca</code> Terminal command entirely, and blocks
+              Register / Remove — the user has no in-app way out.
+            </p>
+            <div class="real">
+              Reality: loud + self-locking — error on every visit, repair buttons fail identically.
+            </div>
+          </div>
+          <div class="card">
+            <div class="myth">Myth — Blast radius: "one user, one mac"</div>
+            <h4>Rare local permissions quirk?</h4>
+            <p style="color: var(--muted); font-size: 14px">
+              Every macOS admin-prompt registration since v1.4.197 is affected, plus all five
+              status-check surfaces (Settings, onboarding, agent-skill, browser-use, computer-use,
+              orchestration panels).
+            </p>
+            <div class="real">Reality: systematic for the admin-prompt path — not a one-off.</div>
+          </div>
+          <div class="card">
+            <div class="myth">Myth — Hold risk: "safer to wait"</div>
+            <h4>Holding avoids a privileged-change risk.</h4>
+            <p style="color: var(--muted); font-size: 14px">
+              There is no new privileged path; the replacement flow and its guards are unchanged.
+              Waiting leaves affected users with a dead command and a dead-end error, plus a manual
+              <code>sudo chmod</code> workaround as the only exit.
+            </p>
+            <div class="real">
+              Reality: holding is the risky option — the harm is happening now, the fix reuses
+              proven flows.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2><span class="num">6</span> Risk analysis &amp; final recommendation</h2>
+        <div class="trade">
+          <div class="box green">
+            <h3>Who benefits</h3>
+            <p>
+              Affected Mac users regain Settings + Terminal with one familiar admin prompt; support
+              gets a displayable status ("needs re-registering" / conflict with fix line) instead of
+              an error string; future installs stop creating the defect, including on managed Macs.
+            </p>
+          </div>
+          <div class="box red">
+            <h3>Who pays</h3>
+            <p>
+              Users with a genuinely foreign unreadable link see a conflict and a one-line manual
+              command; users whose Orca app moved location are not auto-repaired (documented, rare);
+              auto-register flows (onboarding, setup panels) will surface the legitimate repair
+              prompt once.
+            </p>
+          </div>
+        </div>
+        <div class="verdict">
+          <div class="card hl">
+            <h4>✅ SHIP — approve the design (recommended)</h4>
+            <p style="color: var(--muted); font-size: 14px">
+              Tiny, bounded, reuses existing guarded flows; refusal guarantee intact; tests
+              enumerated for all four link shapes.
+            </p>
+          </div>
+          <div class="card">
+            <h4>⏸ HOLD — only if…</h4>
+            <p style="color: var(--muted); font-size: 14px">
+              …you also want the locked-folder (<code>lstat</code>-denied) case mapped to a
+              displayable status — ask for that as a named follow-up, not a blocker.
+            </p>
+          </div>
+          <div class="card">
+            <h4>🧰 WRONG TOOL — if…</h4>
+            <p style="color: var(--muted); font-size: 14px">
+              …you expected a hotfix for already-locked system folders or silent auto-repair of
+              moved-app links — those are explicitly out of scope by design.
+            </p>
+          </div>
+        </div>
+        <p class="foot">
+          Verified in worktree: <code>git rev-parse --show-toplevel</code> →
+          recover-from-remote-setting-errors · <code>git branch --show-current</code> →
+          recover-from-remote-setting-errors · <code>git status -s</code> → clean ·
+          <code>origin/main...HEAD</code> → no code diff. All product facts above come strictly from
+          <code>docs/cli-unreadable-command-symlink-design.md</code>; no stale worktree content
+          referenced. Forbidden-jargon check: hero + storyboard use only user-facing terms
+          (Settings, toggle, Terminal, admin prompt).
+        </p>
+      </section>
+    </div>
+  </body>
+</html>

@@ -24,8 +24,13 @@ vi.mock('electron', () => ({
   }
 }))
 
+import type { CliInstallStatus } from '../../shared/cli-install-types'
 import { CliInstaller } from './cli-installer'
 import { buildUnixDevLauncher } from './cli-dev-launcher'
+import {
+  buildMacPrivilegedSymlinkTransaction,
+  inspectStableCommand
+} from './cli-command-filesystem-transaction'
 
 const createdRoots: string[] = []
 const protectedDirectories: string[] = []
@@ -60,6 +65,16 @@ async function executePrivilegedShell(command: string): Promise<void> {
     Object.assign(error, { code: result.code, stderr: result.stderr })
     throw error
   }
+}
+
+// Why: Node's lchmod opens the link, so it can't restore a mode-000 link; chmod -h works on the link itself.
+async function chmodLink(path: string, mode: string): Promise<void> {
+  const result = await runProcess({ program: '/bin/chmod', args: ['-h', mode, path] })
+  expect(result.code, result.stderr).toBe(0)
+}
+
+async function linkMode(path: string): Promise<number> {
+  return (await lstat(path)).mode & 0o777
 }
 
 function fixtureInstallerOptions(fixture: Awaited<ReturnType<typeof createPrivilegedFixture>>) {
@@ -135,6 +150,27 @@ describe.skipIf(process.platform !== 'darwin' || process.getuid?.() === 0)(
       ).toBe(false)
     })
 
+    it('replaces a managed launcher file through the privileged transaction', async () => {
+      const fixture = await createPrivilegedFixture()
+      const oldCliPath = join(fixture.root, 'old', 'out', 'cli', 'index.js')
+      await writeFile(
+        fixture.commandPath,
+        buildUnixDevLauncher('/Applications/Old.app/Contents/MacOS/Orca', oldCliPath, 'user-data')
+      )
+      const installer = new CliInstaller({
+        ...fixtureInstallerOptions(fixture),
+        privilegedRunner: async (command) => {
+          await chmod(fixture.protectedDirectory, 0o700)
+          await executePrivilegedShell(command)
+        }
+      })
+
+      await chmod(fixture.protectedDirectory, 0o500)
+      const installed = await installer.install()
+      expect(installed.state).toBe('installed')
+      await expect(readlink(fixture.commandPath)).resolves.toBe(installed.launcherPath)
+    })
+
     it('restores a managed file changed in place after privileged inspection', async () => {
       const fixture = await createPrivilegedFixture()
       const oldCliPath = join(fixture.root, 'old', 'out', 'cli', 'index.js')
@@ -172,7 +208,10 @@ describe.skipIf(process.platform !== 'darwin' || process.getuid?.() === 0)(
         ...fixtureInstallerOptions(fixture),
         privilegedRunner: async (command) => {
           await chmod(fixture.protectedDirectory, 0o700)
-          const sabotaged = command.replace(/\/bin\/mkdir ('[^']*\/publish')/, '/usr/bin/false')
+          const sabotaged = command.replace(
+            /\/bin\/mkdir -m 700 ('[^']*\/publish')/,
+            '/usr/bin/false'
+          )
           expect(sabotaged).not.toBe(command)
           await executePrivilegedShell(sabotaged)
         }
@@ -184,6 +223,175 @@ describe.skipIf(process.platform !== 'darwin' || process.getuid?.() === 0)(
       expect(
         (await readdir(fixture.protectedDirectory)).some((name) => name.startsWith('.orca-cli-'))
       ).toBe(false)
+    })
+  }
+)
+
+describe.skipIf(process.platform !== 'darwin' || process.getuid?.() === 0)(
+  'macOS unreadable CLI command symlink',
+  () => {
+    async function createUnreadableLinkFixture(target: 'launcher' | 'foreign' | 'dangling') {
+      const fixture = await createPrivilegedFixture()
+      const commands: string[] = []
+      const installer = new CliInstaller({
+        ...fixtureInstallerOptions(fixture),
+        privilegedRunner: async (command) => {
+          commands.push(command)
+          await chmod(fixture.protectedDirectory, 0o700)
+          // Why: the test shell is not actually root, so grant it root-equivalent read access temporarily.
+          await chmodLink(fixture.commandPath, '755')
+          try {
+            await executePrivilegedShell(command)
+          } catch (error) {
+            await chmodLink(fixture.commandPath, '000').catch(() => undefined)
+            throw error
+          }
+        }
+      })
+      const { launcherPath } = await installer.getStatus()
+      if (!launcherPath) {
+        throw new Error('The fixture launcher was not created.')
+      }
+      const foreignPath = join(fixture.root, 'foreign')
+      await writeFile(foreignPath, '#!/bin/sh\n')
+      const linkTarget =
+        target === 'launcher'
+          ? launcherPath
+          : target === 'foreign'
+            ? foreignPath
+            : join(fixture.root, 'missing')
+      await symlink(linkTarget, fixture.commandPath)
+      await chmodLink(fixture.commandPath, '000')
+      await expect(readlink(fixture.commandPath)).rejects.toMatchObject({ code: 'EACCES' })
+      return { fixture, installer, commands, linkTarget }
+    }
+
+    it('builds a transaction that publishes a readable link under any umask', () => {
+      const command = buildMacPrivilegedSymlinkTransaction({
+        action: 'install',
+        commandPath: '/usr/local/bin/orca',
+        launcherPath: '/Applications/Orca.app/Contents/Resources/bin/orca',
+        expected: null,
+        expectedFileSha256: null,
+        expectedRawSymlinkTarget: null
+      })
+      expect(command.startsWith('umask 077;')).toBe(true)
+      expect(command).toMatch(/\/bin\/chmod -h 755 '[^']*\/publish\/orca'/)
+    })
+
+    it('publishes a world-readable link when root has a hardened umask', async () => {
+      const fixture = await createPrivilegedFixture()
+      const installer = new CliInstaller({
+        ...fixtureInstallerOptions(fixture),
+        privilegedRunner: async (command) => {
+          await chmod(fixture.protectedDirectory, 0o700)
+          await executePrivilegedShell(`umask 077; ${command}`)
+        }
+      })
+
+      await chmod(fixture.protectedDirectory, 0o500)
+      await expect(installer.install()).resolves.toMatchObject({ state: 'installed' })
+      expect(await linkMode(fixture.commandPath)).toBe(0o755)
+    })
+
+    it('reports an unreadable link to this launcher as stale', async () => {
+      const { fixture, installer } = await createUnreadableLinkFixture('launcher')
+
+      await expect(installer.getStatus()).resolves.toMatchObject({
+        state: 'stale',
+        currentTarget: null,
+        detail: `Orca can't read ${fixture.commandPath} (permission denied). Register again to repair it.`
+      })
+    })
+
+    it.each(['foreign', 'dangling'] as const)(
+      'reports an unreadable %s link as a conflict',
+      async (target) => {
+        const { installer } = await createUnreadableLinkFixture(target)
+
+        const status = await installer.getStatus()
+        expect(status).toMatchObject({ state: 'conflict', currentTarget: null })
+        expect(status.detail).toContain('Repair its permissions and refresh')
+      }
+    )
+
+    it('repairs and removes an unreadable link through one privileged transaction each', async () => {
+      const { fixture, installer, commands } = await createUnreadableLinkFixture('launcher')
+
+      await chmod(fixture.protectedDirectory, 0o500)
+      await expect(installer.install()).resolves.toMatchObject({ state: 'installed' })
+      expect(commands).toHaveLength(1)
+      expect(await linkMode(fixture.commandPath)).toBe(0o755)
+
+      await chmodLink(fixture.commandPath, '000')
+      await chmod(fixture.protectedDirectory, 0o500)
+      await expect(installer.remove()).resolves.toMatchObject({ state: 'not_installed' })
+      expect(commands).toHaveLength(2)
+      await expect(lstat(fixture.commandPath)).rejects.toMatchObject({ code: 'ENOENT' })
+    })
+
+    it('uses privileged verification for an unreadable link in a user-writable folder', async () => {
+      const { fixture, installer, commands } = await createUnreadableLinkFixture('launcher')
+
+      await expect(installer.install()).resolves.toMatchObject({ state: 'installed' })
+      expect(commands).toHaveLength(1)
+      expect(await linkMode(fixture.commandPath)).toBe(0o755)
+    })
+
+    it('refuses an unreadable indirect link to the launcher', async () => {
+      const { fixture, installer, commands, linkTarget } =
+        await createUnreadableLinkFixture('launcher')
+      const aliasPath = join(fixture.root, 'launcher-alias')
+      await chmodLink(fixture.commandPath, '755')
+      await unlink(fixture.commandPath)
+      await symlink(linkTarget, aliasPath)
+      await symlink(aliasPath, fixture.commandPath)
+      await chmodLink(fixture.commandPath, '000')
+
+      await expect(installer.install()).rejects.toThrow()
+      expect(commands).toHaveLength(1)
+      await chmodLink(fixture.commandPath, '755')
+      await expect(readlink(fixture.commandPath)).resolves.toBe(aliasPath)
+    })
+
+    it('refuses to replace an unreadable link it cannot prove is Orca', async () => {
+      const { fixture, installer, commands, linkTarget } =
+        await createUnreadableLinkFixture('foreign')
+      const before = await lstat(fixture.commandPath, { bigint: true })
+
+      await chmod(fixture.protectedDirectory, 0o500)
+      await expect(installer.install()).rejects.toThrow('Refusing to replace non-Orca command')
+      expect(commands).toHaveLength(0)
+      const after = await lstat(fixture.commandPath, { bigint: true })
+      expect([after.dev, after.ino]).toEqual([before.dev, before.ino])
+      await chmodLink(fixture.commandPath, '755')
+      await expect(readlink(fixture.commandPath)).resolves.toBe(linkTarget)
+    })
+
+    it('keeps the identity snapshot when the evidence readlink is denied', async () => {
+      const { fixture } = await createUnreadableLinkFixture('launcher')
+      const status: CliInstallStatus = {
+        platform: 'darwin',
+        commandName: 'orca',
+        commandPath: fixture.commandPath,
+        pathDirectory: fixture.protectedDirectory,
+        pathConfigured: true,
+        launcherPath: null,
+        installMethod: 'symlink',
+        supported: true,
+        state: 'stale',
+        currentTarget: null,
+        unsupportedReason: null,
+        detail: null
+      }
+
+      const inspected = await inspectStableCommand(fixture.commandPath, async () => status)
+      const expected = await lstat(fixture.commandPath, { bigint: true })
+      expect(inspected.rawSymlinkTarget).toBeNull()
+      expect(inspected.snapshot).toMatchObject({
+        isSymbolicLink: true,
+        identity: { dev: expected.dev, ino: expected.ino }
+      })
     })
   }
 )

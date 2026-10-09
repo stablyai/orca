@@ -10,6 +10,8 @@ import { CliCommandInspection } from './cli-command-inspection'
 import {
   buildMacPrivilegedSymlinkTransaction,
   capturedExpectedEntry,
+  expectedPrivilegedSymlinkTarget,
+  isUnreadableSymlinkInspection,
   hasSameIdentity,
   hasSameSnapshot,
   inspectStableCommand,
@@ -38,6 +40,10 @@ export class CliCommandInstallation extends CliCommandInspection {
       )
     }
     if (inspected.status.state === 'installed') {
+      return
+    }
+    if (this.platform === 'darwin' && isUnreadableSymlinkInspection(inspected)) {
+      await this.installSymlinkWithPrivileges(commandPath, launcherPath, inspected)
       return
     }
 
@@ -80,6 +86,10 @@ export class CliCommandInstallation extends CliCommandInspection {
     if (inspected.status.state === 'conflict') {
       throw new Error(`Refusing to remove non-Orca command at ${commandPath}.`)
     }
+    if (this.platform === 'darwin' && isUnreadableSymlinkInspection(inspected)) {
+      await this.removeSymlinkWithPrivileges(commandPath, launcherPath, inspected)
+      return
+    }
 
     let quarantine: CommandQuarantine
     try {
@@ -88,7 +98,7 @@ export class CliCommandInstallation extends CliCommandInspection {
       if (this.platform !== 'darwin' || !isPermissionError(error)) {
         throw error
       }
-      await this.removeSymlinkWithPrivileges(commandPath, inspected)
+      await this.removeSymlinkWithPrivileges(commandPath, launcherPath, inspected)
       return
     }
     if (!(await capturedExpectedEntry(quarantine, inspected))) {
@@ -289,7 +299,7 @@ export class CliCommandInstallation extends CliCommandInspection {
         launcherPath,
         expected: inspected.snapshot?.identity ?? null,
         expectedFileSha256: inspected.fileSha256,
-        expectedRawSymlinkTarget: inspected.rawSymlinkTarget
+        expectedRawSymlinkTarget: expectedPrivilegedSymlinkTarget(inspected, launcherPath)
       })
     )
     const installed = await this.inspectStableSymlink(commandPath, launcherPath)
@@ -300,6 +310,7 @@ export class CliCommandInstallation extends CliCommandInspection {
 
   private async removeSymlinkWithPrivileges(
     commandPath: string,
+    launcherPath: string,
     inspected: StableCommandInspection
   ): Promise<void> {
     await this.privilegedRunner(
@@ -308,7 +319,7 @@ export class CliCommandInstallation extends CliCommandInspection {
         commandPath,
         expected: inspected.snapshot?.identity ?? null,
         expectedFileSha256: inspected.fileSha256,
-        expectedRawSymlinkTarget: inspected.rawSymlinkTarget
+        expectedRawSymlinkTarget: expectedPrivilegedSymlinkTarget(inspected, launcherPath)
       })
     )
   }
