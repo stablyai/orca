@@ -5,6 +5,7 @@ import {
   fakeSpawnReturning
 } from '../../shared/child-process/__fixtures__/fake-spawned-child'
 import type * as WslModule from '../wsl'
+import { windowsSystem32Binary } from '../../shared/child-process/windows-system-binary'
 
 const { execFileSyncMock, spawnMock, getDefaultWslDistroMock } = vi.hoisted(() => ({
   execFileSyncMock: vi.fn(),
@@ -23,7 +24,12 @@ vi.mock('../wsl', async (importOriginal) => ({
   getDefaultWslDistro: getDefaultWslDistroMock
 }))
 
-import { ghExecFileAsync, glabExecFileAsync, setDefaultWslDistroOverride } from './runner'
+import {
+  ghExecFileAsync,
+  ghExecFileWithScopeAsync,
+  glabExecFileAsync,
+  setDefaultWslDistroOverride
+} from './runner'
 import { _resetGhRateLimitBreaker } from './gh-rate-limit-breaker'
 
 const PRIMARY_RATE_LIMIT_STDERR =
@@ -286,6 +292,39 @@ describe('ghExecFileAsync WSL fallback', () => {
     )
   })
 
+  it('returns the WSL scope after a missing native gh falls back', async () => {
+    getDefaultWslDistroMock.mockReturnValue('Ubuntu')
+    spawnMock
+      .mockImplementationOnce(fakeSpawnReturning(spawnEnoent('gh')))
+      .mockImplementationOnce(fakeSpawnReturning({ stdout: 'gho_wsl' }))
+
+    await expect(
+      ghExecFileWithScopeAsync(['auth', 'token', '--hostname', 'github.com'])
+    ).resolves.toEqual({
+      stdout: 'gho_wsl',
+      stderr: '',
+      rateLimitScope: 'wsl:ubuntu:github.com'
+    })
+    expect(spawnMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('returns the native scope after a missing WSL gh falls back', async () => {
+    spawnMock
+      .mockImplementationOnce(fakeSpawnReturning({ stderr: WSL_GH_MISSING, code: 127 }))
+      .mockImplementationOnce(fakeSpawnReturning({ stdout: 'gho_native' }))
+
+    await expect(
+      ghExecFileWithScopeAsync(['auth', 'token', '--hostname', 'github.com'], {
+        wslDistro: 'Ubuntu'
+      })
+    ).resolves.toEqual({
+      stdout: 'gho_native',
+      stderr: '',
+      rateLimitScope: 'native:github.com'
+    })
+    expect(spawnMock).toHaveBeenCalledTimes(2)
+  })
+
   it('checks a blocked WSL scope before repeating a native-to-WSL fallback', async () => {
     getDefaultWslDistroMock.mockReturnValue('Ubuntu')
     spawnMock.mockImplementation(
@@ -396,7 +435,7 @@ describe('ghExecFileAsync WSL fallback', () => {
     expect(spawnMock).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(1)
     expect(spawnMock).toHaveBeenCalledWith(
-      'taskkill',
+      windowsSystem32Binary('taskkill.exe'),
       ['/pid', '2400', '/t', '/f'],
       expect.objectContaining({ stdio: 'ignore', windowsHide: true })
     )
@@ -430,7 +469,7 @@ describe('ghExecFileAsync WSL fallback', () => {
       expect.not.objectContaining({ signal: controller.signal })
     )
     expect(spawnMock).toHaveBeenCalledWith(
-      'taskkill',
+      windowsSystem32Binary('taskkill.exe'),
       ['/pid', '2400', '/t', '/f'],
       expect.objectContaining({ stdio: 'ignore', windowsHide: true })
     )

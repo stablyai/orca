@@ -306,6 +306,39 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     })
   })
 
+  it('preserves tmux evidence age and unavailable across the real notification adapter', async () => {
+    relay = createFakeRelay()
+    vi.mocked(deployAndLaunchRelay).mockResolvedValue({
+      transport: relay.transport,
+      serverBuildId: 'test-relay-build',
+      platform: 'linux-x64'
+    })
+    const events: CapturedStatus[] = []
+    captureAgentStatuses(events)
+    session = createSession('conn-tmux')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Mocked deployment never reads the connection.
+    await session.establish({} as SshConnection)
+    const envelope = makeEnvelope({
+      source: 'opencode',
+      evidenceAgeMs: 60_000,
+      payload: { state: 'done', prompt: 'older inner turn', agentType: 'opencode' }
+    })
+    const before = Date.now()
+    relay.notifyAgentHook(envelope)
+    await waitForStatusCount(events, 1)
+    const row = agentHookServer
+      .getStatusSnapshot()
+      .find((entry) => entry.paneKey === envelope.paneKey)
+    expect(row?.evidenceObservedAt).toBeGreaterThanOrEqual(before - 60_000)
+    expect(row?.evidenceObservedAt).toBeLessThanOrEqual(Date.now() - 60_000)
+    relay.notifyAgentHook({ ...envelope, statusUnavailable: true, payload: null })
+    await vi.waitFor(() =>
+      expect(
+        agentHookServer.getStatusSnapshot().find((entry) => entry.paneKey === envelope.paneKey)
+      ).toBeUndefined()
+    )
+  })
+
   it('preserves Claude monitoring mode across the SSH relay boundary', async () => {
     relay = createFakeRelay()
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({
@@ -412,7 +445,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     expect(events).toHaveLength(2)
   })
 
-  it('clears stamped status on reconnect loss but not final shutdown', async () => {
+  it('keeps stamped status unverifiable across reconnect loss and final shutdown', async () => {
     const initialRelay = createFakeRelay()
     relay = createFakeRelay()
     vi.mocked(deployAndLaunchRelay)
@@ -436,16 +469,13 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     await session.reconnect({} as SshConnection)
     initialRelay.dispose()
 
-    expect(agentHookServer.getStatusSnapshot()).toEqual([])
-    expect(clearListener).toHaveBeenCalledOnce()
-    expect(clearListener).toHaveBeenCalledWith({
-      transient: true,
-      connectionId: 'conn-clear',
-      clearedAt: expect.any(Number)
-    })
+    expect(agentHookServer.getStatusSnapshot()).toEqual([
+      expect.objectContaining({ connectionId: 'conn-clear', state: 'working' })
+    ])
+    expect(clearListener).not.toHaveBeenCalled()
     session.dispose()
     session = null
-    expect(clearListener).toHaveBeenCalledOnce()
+    expect(clearListener).not.toHaveBeenCalled()
   })
 
   it('asks the fake relay for cached hook replay after the session wires its listener', async () => {
@@ -686,6 +716,31 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     await new Promise((resolve) => setImmediate(resolve))
     expect(trackMock).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
   })
+
+  it.each([{ isReplay: 'true' }, { isReplay: null }, { launchToken: 42 }])(
+    'rejects malformed OMP authority metadata before forwarding: %j',
+    async (invalid) => {
+      relay = createFakeRelay()
+      vi.mocked(deployAndLaunchRelay).mockResolvedValue({
+        transport: relay.transport,
+        serverBuildId: 'test-relay-build',
+        platform: 'linux-x64'
+      })
+      session = createSession('conn-omp-invalid')
+      await session.establish({} as SshConnection)
+      const ingestSpy = vi.spyOn(agentHookServer, 'ingestRemote')
+      const envelope = makeEnvelope({
+        source: 'omp',
+        hookEventName: 'before_agent_start',
+        payload: { agentType: 'omp', state: 'working', prompt: 'new turn' }
+      })
+      relay.notifyAgentHook(JSON.parse(JSON.stringify({ ...envelope, ...invalid })))
+      await new Promise((resolve) => setImmediate(resolve))
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(ingestSpy).not.toHaveBeenCalled()
+      ingestSpy.mockRestore()
+    }
+  )
 
   it('preserves replay metadata from remote hook notifications', async () => {
     relay = createFakeRelay()

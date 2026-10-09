@@ -1,0 +1,98 @@
+{
+  "refs": {
+    "audit": "4a09b1d108cfd8b57ffcc5d727b3a3bd71ae71fb",
+    "main": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+    "v1.4.198": "e0826956fcfc532f5a1e55b5e081f2e57e553c43"
+  },
+  "canonicalLineEndings": "LF",
+  "sources": [
+    {
+      "path": "src/main/browser/browser-manager-viewport.ts",
+      "sha256": {
+        "audit": "701f9ea1a4310e509f409e08ee4ea0539f820bd209ff68f41001b8c91e5470e4",
+        "main": "701f9ea1a4310e509f409e08ee4ea0539f820bd209ff68f41001b8c91e5470e4",
+        "v1.4.198": "701f9ea1a4310e509f409e08ee4ea0539f820bd209ff68f41001b8c91e5470e4"
+      }
+    },
+    {
+      "path": "src/main/browser/browser-manager-registration.ts",
+      "sha256": {
+        "audit": "12c149b1fb87b67b4192b6c2f23bd7f45b7df2d0c60368182f33b5a47b56f96f",
+        "main": "12c149b1fb87b67b4192b6c2f23bd7f45b7df2d0c60368182f33b5a47b56f96f",
+        "v1.4.198": "12c149b1fb87b67b4192b6c2f23bd7f45b7df2d0c60368182f33b5a47b56f96f"
+      }
+    },
+    {
+      "path": "src/main/browser/browser-manager-navigation.ts",
+      "sha256": {
+        "audit": "a4c0e169ac35725b02d050c95843721e4274775a5bcb9ef2a5b7c835c4d8c234",
+        "main": "a4c0e169ac35725b02d050c95843721e4274775a5bcb9ef2a5b7c835c4d8c234",
+        "v1.4.198": "c93c060896351b4bc23db628a732ef4db4acd5b26760e4565e6bf029d5cf7531"
+      }
+    },
+    {
+      "path": "src/main/browser/browser-manager-guest-policy.ts",
+      "sha256": {
+        "audit": "6d567b0c675091ec0a59d39ffe701fd36098ec2730b61ef0b80ab53962da6144",
+        "main": "6d567b0c675091ec0a59d39ffe701fd36098ec2730b61ef0b80ab53962da6144",
+        "v1.4.198": "6d567b0c675091ec0a59d39ffe701fd36098ec2730b61ef0b80ab53962da6144"
+      }
+    },
+    {
+      "path": "src/main/browser/browser-manager-state.ts",
+      "sha256": {
+        "audit": "ea6e847afe227b9acbf432d68a6f21f0d15247748fc8b4f769ab73498d6a13c5",
+        "main": "ea6e847afe227b9acbf432d68a6f21f0d15247748fc8b4f769ab73498d6a13c5",
+        "v1.4.198": "ea6e847afe227b9acbf432d68a6f21f0d15247748fc8b4f769ab73498d6a13c5"
+      }
+    },
+    {
+      "path": "src/main/browser/browser-manager-types.ts",
+      "sha256": {
+        "audit": "4d28f7c397aa82b067971ff769a44fff74adadceaac66774345a615f799bb64f",
+        "main": "4d28f7c397aa82b067971ff769a44fff74adadceaac66774345a615f799bb64f",
+        "v1.4.198": "4d28f7c397aa82b067971ff769a44fff74adadceaac66774345a615f799bb64f"
+      }
+    },
+    {
+      "path": "src/main/browser/browser-manager-viewport-test-fixtures.ts",
+      "sha256": {
+        "audit": "0ef61054ae131db056b5268c6ed4f417b4486784d58d2c0d7d2285ad785666ee",
+        "main": "0ef61054ae131db056b5268c6ed4f417b4486784d58d2c0d7d2285ad785666ee",
+        "v1.4.198": "36d29f1d78bd559af3b235acc9be8dafe763e3dfb9ea4367272db04449eca707"
+      }
+    },
+    {
+      "path": "src/main/browser/browser-manager-test-harness.ts",
+      "sha256": {
+        "audit": "66de235be9285ec2cd2a6d783c8e8a046d6106d4171aaf808b5d263c08a72038",
+        "main": "66de235be9285ec2cd2a6d783c8e8a046d6106d4171aaf808b5d263c08a72038",
+        "v1.4.198": "66de235be9285ec2cd2a6d783c8e8a046d6106d4171aaf808b5d263c08a72038"
+      }
+    },
+    {
+      "path": "src/main/ipc/browser-guest-view-ipc.ts",
+      "sha256": {
+        "audit": "da4a441ce5f0851f1a1c6ec38c872c187ec191a9acad340f05ac557534731959",
+        "main": "da4a441ce5f0851f1a1c6ec38c872c187ec191a9acad340f05ac557534731959",
+        "v1.4.198": "da4a441ce5f0851f1a1c6ec38c872c187ec191a9acad340f05ac557534731959"
+      }
+    },
+    {
+      "path": "src/renderer/src/components/browser-pane/host-guest/browser-page-webview-guest-session.ts",
+      "sha256": {
+        "audit": "a78cc98873e93834bf07b47bbf5d92da888dfbccef06551aa6ac3c8f6e9f29f8",
+        "main": "2fe17f0fe4f8ef6ca7cff7ca5731d9d725dbf4b5e7944264e30f12241317fc6d",
+        "v1.4.198": "6c089c0c8285b21b3f3c0b3e06bd297a25d941cfa8a4849d03fbd08a6c89c139"
+      }
+    },
+    {
+      "path": "src/renderer/src/components/browser-pane/assemble-chrome/BrowserToolbarMenu.tsx",
+      "sha256": {
+        "audit": "e05e7d8d532d2f43f13a8dc1035540638ab513c9f3d6bdbd1531cf3e0e9462e1",
+        "main": "e05e7d8d532d2f43f13a8dc1035540638ab513c9f3d6bdbd1531cf3e0e9462e1",
+        "v1.4.198": "e05e7d8d532d2f43f13a8dc1035540638ab513c9f3d6bdbd1531cf3e0e9462e1"
+      }
+    }
+  ]
+}

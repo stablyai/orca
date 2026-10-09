@@ -39,17 +39,13 @@ export type ComposerTargetStoreModel = {
   onRepoIdOverrideChange: ((value: string) => void) | undefined
   telemetrySource: WorkspaceCreateTelemetrySource | undefined
   enableIssueAutomation: boolean
-  createGateMode: 'full' | 'quick'
   initialProjectGroupId: string | undefined
   decisions: ComposerDecisions
   actions: ComposerStoreActions
   setNewWorkspaceDraft: ComposerStoreActions['setNewWorkspaceDraft']
   clearNewWorkspaceDraft: ComposerStoreActions['clearNewWorkspaceDraft']
-  createWorktree: ComposerStoreActions['createWorktree']
   updateRepo: ComposerStoreActions['updateRepo']
-  updateWorktreeMeta: ComposerStoreActions['updateWorktreeMeta']
   createFolderWorkspace: ComposerStoreActions['createFolderWorkspace']
-  setSidebarOpen: ComposerStoreActions['setSidebarOpen']
   closeModal: ComposerStoreActions['closeModal']
   openSettingsPage: ComposerStoreActions['openSettingsPage']
   openSettingsTarget: ComposerStoreActions['openSettingsTarget']

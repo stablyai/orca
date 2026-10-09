@@ -2,11 +2,31 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatToolRun } from './NativeChatToolRun'
-import type { NativeChatToolCallBlock } from '../../../../shared/native-chat-types'
+import type {
+  NativeChatBlock,
+  NativeChatToolCallBlock,
+  NativeChatToolResultBlock
+} from '../../../../shared/native-chat-types'
+import {
+  NativeChatDisclosureContext,
+  useNativeChatDisclosures
+} from './native-chat-disclosure-store'
+import { openToolRunMembers } from './native-chat-tool-run-members-test-support'
 
 vi.mock('./NativeChatDiffCard', () => ({ NativeChatDiffCard: () => null }))
 vi.mock('./NativeChatDiffView', () => ({ NativeChatDiffView: () => null }))
-afterEach(cleanup)
+
+const disclosureWrite = vi.fn()
+const capturedDisclosures = {
+  read: (_key: string) => undefined,
+  write: (key: string, open: boolean) => disclosureWrite(key, open),
+  runScroll: new Map()
+}
+
+afterEach(() => {
+  cleanup()
+  disclosureWrite.mockReset()
+})
 
 const shell: NativeChatToolCallBlock = {
   type: 'tool-call',
@@ -17,15 +37,115 @@ const shell: NativeChatToolCallBlock = {
   durationMs: 400
 }
 
-describe('inline tool annotations', () => {
-  it('keeps command completion annotations on the collapsed tool line', () => {
-    render(
+const shellResult: NativeChatToolResultBlock = {
+  type: 'tool-result',
+  output: 'command not found',
+  isError: true
+}
+
+function ToolRunDisclosureHarness({ expandSignal }: { expandSignal: boolean }) {
+  const disclosures = useNativeChatDisclosures()
+  return (
+    <NativeChatDisclosureContext.Provider value={disclosures}>
       <NativeChatToolRun
         blocks={[shell]}
-        expandSignal={false}
-        expandOverride
+        expandSignal={expandSignal}
         activeTurnIsWorking={false}
+        disclosureId="message-1"
       />
+    </NativeChatDisclosureContext.Provider>
+  )
+}
+
+describe('inline tool annotations', () => {
+  it('restores a per-run deviation when its turn returns to the same disclosure state', () => {
+    const { rerender } = render(<ToolRunDisclosureHarness expandSignal />)
+    const run = screen.getByRole('button', { expanded: true })
+
+    fireEvent.click(run)
+    expect(run.getAttribute('aria-expanded')).toBe('false')
+
+    rerender(<ToolRunDisclosureHarness expandSignal={false} />)
+    fireEvent.click(screen.getByRole('button', { name: /missing-command/ }))
+
+    rerender(<ToolRunDisclosureHarness expandSignal />)
+    expect(
+      screen.getByRole('button', { name: /missing-command/ }).getAttribute('aria-expanded')
+    ).toBe('false')
+  })
+
+  it('resynchronizes a standalone run when the toolbar signal flips', () => {
+    const { rerender } = render(
+      <NativeChatToolRun blocks={[shell]} expandSignal={false} activeTurnIsWorking={false} />
+    )
+    expect(screen.getByRole('button').getAttribute('aria-expanded')).toBe('false')
+
+    rerender(<NativeChatToolRun blocks={[shell]} expandSignal activeTurnIsWorking={false} />)
+
+    expect(
+      screen.getAllByRole('button', { name: /missing-command/ })[0].getAttribute('aria-expanded')
+    ).toBe('true')
+  })
+
+  it('uses provider call identities for byte-identical line disclosure keys', () => {
+    const blocks: NativeChatBlock[] = [
+      { ...shell, callId: 'call-a' },
+      shellResult,
+      { ...shell, callId: 'call-b' },
+      shellResult
+    ]
+    render(
+      <NativeChatDisclosureContext.Provider value={capturedDisclosures}>
+        <NativeChatToolRun blocks={blocks} expandSignal disclosureId="message-1" />
+      </NativeChatDisclosureContext.Provider>
+    )
+
+    fireEvent.click(screen.getAllByRole('button')[2]!)
+
+    expect(disclosureWrite).toHaveBeenCalledExactlyOnceWith('line:message-1:call:call-b', true)
+  })
+
+  it('keeps occurrence identity as the fallback for calls without provider IDs', () => {
+    render(
+      <NativeChatDisclosureContext.Provider value={capturedDisclosures}>
+        <NativeChatToolRun
+          blocks={[shell, shellResult, shell, shellResult]}
+          expandSignal
+          disclosureId="message-1"
+        />
+      </NativeChatDisclosureContext.Provider>
+    )
+
+    fireEvent.click(screen.getAllByRole('button')[2]!)
+
+    expect(disclosureWrite).toHaveBeenCalledExactlyOnceWith(
+      'line:message-1:tool-call:shell:{"command":"missing-command"}:1',
+      true
+    )
+  })
+
+  it('keeps occurrence identity for whitespace-only provider IDs', () => {
+    render(
+      <NativeChatDisclosureContext.Provider value={capturedDisclosures}>
+        <NativeChatToolRun
+          blocks={[{ ...shell, callId: ' ' }, shellResult, { ...shell, callId: '\t' }, shellResult]}
+          expandSignal
+          disclosureId="message-1"
+        />
+      </NativeChatDisclosureContext.Provider>
+    )
+
+    fireEvent.click(screen.getAllByRole('button')[2]!)
+
+    expect(disclosureWrite).toHaveBeenCalledExactlyOnceWith(
+      'line:message-1:tool-call:shell:{"command":"missing-command"}:1',
+      true
+    )
+  })
+
+  it('keeps command completion annotations on the collapsed tool line', () => {
+    render(
+      <NativeChatToolRun blocks={[shell, shellResult]} expandSignal activeTurnIsWorking={false} />
     )
     expect(screen.getByText('exit 127').closest('button')).toBe(
       screen.getByText('400ms').closest('button')
@@ -61,16 +181,9 @@ describe('inline tool annotations', () => {
       state: 'completed',
       webSearchResults: [{ title: 'Reference docs', url: 'https://example.com/docs' }]
     }
-    render(
-      <NativeChatToolRun
-        blocks={[block]}
-        expandSignal={false}
-        expandOverride
-        onLinkClick={onLinkClick}
-      />
-    )
+    render(<NativeChatToolRun blocks={[block]} expandSignal onLinkClick={onLinkClick} />)
     expect(screen.queryByRole('link')).toBeNull()
-    fireEvent.click(screen.getByText('web_search', { selector: 'code' }).closest('button')!)
+    fireEvent.click(screen.getByText('Searched the web').closest('button')!)
     const link = screen.getByRole('link', { name: /Reference docs/ })
     expect(link.getAttribute('href')).toBe('https://example.com/docs')
     expect(link.closest('button')).toBeNull()
@@ -85,7 +198,7 @@ it.each(['tools/read', 'browser.open', 'package.lock', 'linear/list_issues'])(
   'keeps an ordinary tool name %s intact',
   (name) => {
     render(<NativeChatToolRun blocks={[{ type: 'tool-call', name, input: null }]} expandSignal />)
-    expect(screen.getByText(name, { selector: 'code' })).toBeTruthy()
+    expect(screen.getByText(name)).toBeTruthy()
     expect(document.querySelector('.lucide-plug')).toBeNull()
   }
 )
@@ -112,10 +225,10 @@ it.each(['running', 'completed'] as const)(
     expect(screen.getByText('My server')).toBeTruthy()
     expect(screen.getByText('ns.tool')).toBeTruthy()
     expect(screen.getByTitle(name)).toBeTruthy()
-    // Header glyph plus the row's. A settled header also names each member in a
-    // pill, which carries that member's own glyph — so three, all plug: the
-    // identity holds wherever it is drawn.
-    expect(document.querySelectorAll('.lucide-plug')).toHaveLength(state === 'completed' ? 3 : 2)
+    // The run header's glyph plus the row's, both plug: the identity holds
+    // wherever it is drawn. The header names no individual call, so it carries
+    // one glyph for the run rather than one per member.
+    expect(document.querySelectorAll('.lucide-plug')).toHaveLength(2)
   }
 )
 
@@ -156,6 +269,7 @@ it('filters untrusted persisted result URLs at the renderer boundary', () => {
       onLinkClick={onLinkClick}
     />
   )
+  openToolRunMembers()
   const links = screen.getAllByRole('link')
   expect(links).toHaveLength(1)
   fireEvent.click(links[0]!)

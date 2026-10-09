@@ -24,6 +24,7 @@ export { getLocalFileManagerLabel } from '@/lib/local-file-manager-label'
 type WorktreeOpenInMenuItemsProps = {
   worktreePath: string
   connectionId?: string | null
+  runtimeEnvironmentId?: string | null
   disabled?: boolean
   labelPrefix?: string
 }
@@ -53,10 +54,11 @@ export function getWorktreeOpenInEntries(
 export function getOpenInEntryAvailability(
   entry: OpenInMenuEntry,
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
-  connectionId?: string | null
+  connectionId?: string | null,
+  runtimeEnvironmentId?: string | null
 ): { disabled: boolean; metadata?: string } {
   if (entry.target === 'file-manager') {
-    const disabled = isLocalPathOpenBlocked(settings, { connectionId })
+    const disabled = isLocalPathOpenBlocked(settings, { connectionId, runtimeEnvironmentId })
     return disabled
       ? {
           disabled: true,
@@ -66,7 +68,8 @@ export function getOpenInEntryAvailability(
   }
   const capability = getExternalEditorOpenCapability(settings, {
     connectionId,
-    command: entry.command
+    command: entry.command,
+    runtimeEnvironmentId
   })
   if (!capability.allowed) {
     return {
@@ -246,18 +249,25 @@ export async function openWorktreePath(args: {
   target: 'file-manager' | 'external-editor'
   worktreePath: string
   connectionId?: string | null
+  runtimeEnvironmentId?: string | null
   command?: string
 }): Promise<void> {
   const settings = useAppStore.getState().settings
   if (args.target === 'file-manager') {
-    if (isLocalPathOpenBlocked(settings, { connectionId: args.connectionId ?? null })) {
+    if (
+      isLocalPathOpenBlocked(settings, {
+        connectionId: args.connectionId ?? null,
+        runtimeEnvironmentId: args.runtimeEnvironmentId
+      })
+    ) {
       showLocalPathOpenBlockedToast()
       return
     }
   } else {
     const capability = getExternalEditorOpenCapability(settings, {
       connectionId: args.connectionId,
-      command: args.command
+      command: args.command,
+      runtimeEnvironmentId: args.runtimeEnvironmentId
     })
     if (!capability.allowed) {
       if (capability.reason === 'remote-runtime') {
@@ -284,26 +294,32 @@ export async function openWorktreePath(args: {
 
 function useOpenInWorktreePath({
   worktreePath,
-  connectionId
+  connectionId,
+  runtimeEnvironmentId
 }: WorktreeOpenInMenuItemsProps): (
   target: 'file-manager' | 'external-editor',
   command?: string
 ) => Promise<void> {
   return useCallback(
     async (target, command) => {
-      await openWorktreePath({ target, worktreePath, connectionId, command })
+      await openWorktreePath({ target, worktreePath, connectionId, runtimeEnvironmentId, command })
     },
-    [connectionId, worktreePath]
+    [connectionId, runtimeEnvironmentId, worktreePath]
   )
 }
 
 export function WorktreeOpenInMenuItems({
   worktreePath,
   connectionId,
+  runtimeEnvironmentId,
   disabled,
   labelPrefix = ''
 }: WorktreeOpenInMenuItemsProps): React.JSX.Element {
-  const openInWorktreePath = useOpenInWorktreePath({ worktreePath, connectionId })
+  const openInWorktreePath = useOpenInWorktreePath({
+    worktreePath,
+    connectionId,
+    runtimeEnvironmentId
+  })
   const openInApplications = useAppStore(
     (s) => s.settings?.openInApplications ?? NO_OPEN_IN_APPLICATIONS
   )
@@ -314,7 +330,12 @@ export function WorktreeOpenInMenuItems({
   return (
     <>
       {entries.map((entry) => {
-        const availability = getOpenInEntryAvailability(entry, settings, connectionId)
+        const availability = getOpenInEntryAvailability(
+          entry,
+          settings,
+          connectionId,
+          runtimeEnvironmentId
+        )
         return (
           <DropdownMenuItem
             key={entry.id}
@@ -350,6 +371,7 @@ export function WorktreeOpenInMenuItems({
 export function WorktreeOpenInSubMenu({
   worktreePath,
   connectionId,
+  runtimeEnvironmentId,
   disabled
 }: WorktreeOpenInMenuItemsProps): React.JSX.Element {
   return (
@@ -366,6 +388,7 @@ export function WorktreeOpenInSubMenu({
         <WorktreeOpenInMenuItems
           worktreePath={worktreePath}
           connectionId={connectionId}
+          runtimeEnvironmentId={runtimeEnvironmentId}
           disabled={disabled}
         />
         <DropdownMenuSeparator />

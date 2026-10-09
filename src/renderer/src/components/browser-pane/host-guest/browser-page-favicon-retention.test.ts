@@ -27,6 +27,7 @@ function createHarness(startUrl: string) {
     webview,
     browserTabId: TAB_ID,
     browserTabUrl: startUrl,
+    invalidateBrowserAnnotationDocumentRef: ref(vi.fn()),
     recoveryNavigationValidationRef: ref(null),
     activeLoadFailureRef: ref(null),
     // Why the destination, not the current document: Orca-driven navigations set this ref before
@@ -53,10 +54,9 @@ function createHarness(startUrl: string) {
     trackNextLoadingEventRef: ref(true),
     keepAddressBarFocusRef: ref(false),
     recoveryNavigationValidationRef: ref(null),
-    clearBrowserPageAnnotationsRef: ref(vi.fn()),
+    invalidateBrowserAnnotationDocumentRef: ref(vi.fn()),
     onUpdatePageStateRef,
     onSetUrlRef: ref(vi.fn()),
-    setPendingAnnotationPayload: vi.fn(),
     setBrowserOverlayViewport: vi.fn(),
     setAddressBarValue: vi.fn(),
     focusAddressBarNow: () => false

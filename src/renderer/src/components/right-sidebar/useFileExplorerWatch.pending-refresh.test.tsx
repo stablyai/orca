@@ -68,24 +68,38 @@ describe('useFileExplorerWatch pending refreshes', () => {
     vi.useRealTimers()
   })
 
-  function renderWatch(worktreePath: string | null = '/repo') {
+  function renderWatch(
+    worktreePath: string | null = '/repo',
+    interaction: 'rename' | 'drag' | 'native' | null = null
+  ) {
+    const setDirCache = vi.fn()
+    const setSelectedPath = vi.fn()
     return renderHook(
-      ({ visiblePath }: { visiblePath: string | null }) =>
+      ({
+        visiblePath,
+        activeInteraction
+      }: {
+        visiblePath: string | null
+        activeInteraction: typeof interaction
+      }) =>
         useFileExplorerWatch({
           worktreePath: visiblePath,
           activeWorktreeId: 'wt-1',
           dirCache: { '/repo': { children: [] } },
-          setDirCache: vi.fn(),
+          setDirCache,
           expanded: new Set(),
-          setSelectedPath: vi.fn(),
+          setSelectedPath,
           refreshDir,
           refreshTree,
-          inlineInput: null,
-          dragSourcePath: null,
-          isNativeDragOver: false,
+          inlineInput:
+            activeInteraction === 'rename'
+              ? { parentPath: '/repo', type: 'rename', depth: 0 }
+              : null,
+          dragSourcePath: activeInteraction === 'drag' ? '/repo/example.ts' : null,
+          isNativeDragOver: activeInteraction === 'native',
           operationOwner: ownerRef.current
         }),
-      { initialProps: { visiblePath: worktreePath } }
+      { initialProps: { visiblePath: worktreePath, activeInteraction: interaction } }
     )
   }
 
@@ -102,8 +116,8 @@ describe('useFileExplorerWatch pending refreshes', () => {
     expect(mainWatchHandler).not.toBeNull()
 
     act(() => emit(mainWatchHandler!))
-    hook.rerender({ visiblePath: null })
-    hook.rerender({ visiblePath: '/repo' })
+    hook.rerender({ visiblePath: null, activeInteraction: null })
+    hook.rerender({ visiblePath: '/repo', activeInteraction: null })
     await act(async () => vi.advanceTimersByTimeAsync(0))
 
     expect(refreshTree).toHaveBeenCalledOnce()
@@ -157,8 +171,8 @@ describe('useFileExplorerWatch pending refreshes', () => {
     const hook = renderWatch()
     const disposedHandler = runtimeWatch.handler!
 
-    hook.rerender({ visiblePath: null })
-    hook.rerender({ visiblePath: '/repo' })
+    hook.rerender({ visiblePath: null, activeInteraction: null })
+    hook.rerender({ visiblePath: '/repo', activeInteraction: null })
     act(() => emit(disposedHandler))
     await act(async () => vi.advanceTimersByTimeAsync(0))
 
@@ -170,4 +184,47 @@ describe('useFileExplorerWatch pending refreshes', () => {
       await subscriptionReady
     })
   })
+  it.each(['rename', 'drag', 'native'] as const)(
+    'does not refresh the current root on reopen after foreign events during %s',
+    async (interaction) => {
+      const hook = renderWatch('/repo', interaction)
+      const handler = mainWatchHandler
+      if (!handler) {
+        throw new Error('Filesystem listener was not registered')
+      }
+      act(() => {
+        for (const worktreePath of ['/other-repo', '/repo-sibling']) {
+          handler({
+            worktreePath,
+            events: [{ kind: 'overflow', absolutePath: worktreePath }]
+          })
+        }
+      })
+      hook.rerender({ visiblePath: null, activeInteraction: null })
+      hook.rerender({ visiblePath: '/repo', activeInteraction: null })
+      await act(async () => vi.advanceTimersByTimeAsync(0))
+
+      expect(refreshTree).not.toHaveBeenCalled()
+      expect(refreshDir).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each(['rename', 'drag', 'native'] as const)(
+    'preserves current-root refreshes deferred during %s',
+    async (interaction) => {
+      const hook = renderWatch('/repo', interaction)
+      const handler = mainWatchHandler
+      if (!handler) {
+        throw new Error('Filesystem listener was not registered')
+      }
+      act(() => emit(handler))
+      await act(async () => vi.advanceTimersByTimeAsync(0))
+      expect(refreshDir).not.toHaveBeenCalled()
+
+      hook.rerender({ visiblePath: '/repo', activeInteraction: null })
+      await act(async () => vi.advanceTimersByTimeAsync(0))
+      expect(refreshDir).toHaveBeenCalledExactlyOnceWith('/repo')
+      expect(refreshTree).not.toHaveBeenCalled()
+    }
+  )
 })

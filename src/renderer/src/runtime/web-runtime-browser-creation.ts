@@ -16,6 +16,7 @@ import {
   completeWebRuntimeBrowserCreation,
   createWebRuntimeBrowserCreationContext,
   rehomeWebRuntimeBrowserCreation,
+  resolveWebRuntimeBrowserClientTargetGroupId,
   restageWebRuntimeBrowserCreation,
   stageWebRuntimeBrowserCreation,
   type CreateWebRuntimeSessionBrowserTabArgs
@@ -30,6 +31,7 @@ import {
 } from './web-runtime-browser-creation-e2e-fault'
 import { isWebRuntimeSessionActive } from './web-runtime-session-environment'
 import { refreshWebRuntimeSessionTabsSnapshot } from './web-runtime-session-snapshot'
+import { registerPairedBrowserTabCreator } from '../store/slices/browser/paired-browser-tab-creator'
 
 export async function createWebRuntimeSessionBrowserTab(
   args: CreateWebRuntimeSessionBrowserTabArgs
@@ -131,6 +133,11 @@ export async function createWebRuntimeSessionBrowserTab(
     if (created.browserPageId !== context.provisionalPageId) {
       rehomeWebRuntimeBrowserCreation(context, created.browserPageId)
     }
+    // Why: a staged row the user moved is judged where it renders now, not where it was requested.
+    const resolveExpectedGroupId = (): string | undefined =>
+      (context.staged
+        ? resolveStagedWebRuntimeBrowserTabGroupId(context.staged, args.worktreeId)
+        : undefined) ?? resolveWebRuntimeBrowserClientTargetGroupId(args)
     try {
       await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId, {
         expectedEnvironmentPairingRevision: context.intentOwner.pairingRevision,
@@ -145,18 +152,13 @@ export async function createWebRuntimeSessionBrowserTab(
           environmentId,
           args.worktreeId,
           created.browserPageId,
-          args.clientTargetGroupId ?? args.targetGroupId
+          resolveExpectedGroupId()
         )
       ) {
         throw error
       }
     }
-    const expectedGroupId =
-      (context.staged
-        ? resolveStagedWebRuntimeBrowserTabGroupId(context.staged, args.worktreeId)
-        : undefined) ??
-      args.clientTargetGroupId ??
-      args.targetGroupId
+    const expectedGroupId = resolveExpectedGroupId()
     let materialized = hasMaterializedWebRuntimeBrowserPage(
       useAppStore.getState(),
       environmentId,
@@ -253,3 +255,5 @@ export async function createWebRuntimeSessionBrowserTab(
     return finishWebRuntimeBrowserCreationFailure(context, failure, error)
   }
 }
+
+registerPairedBrowserTabCreator(createWebRuntimeSessionBrowserTab)

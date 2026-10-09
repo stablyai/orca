@@ -1,4 +1,5 @@
 import { ClaudeRuntimeAuthFileStorage } from './runtime-auth-file-storage'
+import { stripSharedClaudeCredentialFields } from '../shared-credential-fields'
 import type {
   ClaudeAuthIdentity,
   ClaudeReadBackMatch,
@@ -6,6 +7,26 @@ import type {
 } from './runtime-auth-types'
 
 export class ClaudeRuntimeAuthCredentialIdentity extends ClaudeRuntimeAuthFileStorage {
+  protected accountCredentialFieldsEqual(left: string | null, right: string | null): boolean {
+    if (left === right) {
+      return true
+    }
+    if (left === null || right === null) {
+      return false
+    }
+    try {
+      const leftAccount = this.asRecord(JSON.parse(stripSharedClaudeCredentialFields(left)))
+      const rightAccount = this.asRecord(JSON.parse(stripSharedClaudeCredentialFields(right)))
+      return (
+        leftAccount !== null &&
+        rightAccount !== null &&
+        this.jsonValuesEqual(leftAccount, rightAccount)
+      )
+    } catch {
+      return false
+    }
+  }
+
   protected readIdentityFromCredentials(credentialsJson: string): ClaudeAuthIdentity | null {
     let parsed: Record<string, unknown>
     try {

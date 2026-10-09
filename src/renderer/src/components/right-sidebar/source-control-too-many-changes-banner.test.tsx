@@ -2,7 +2,7 @@
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { TooManyChangesBanner } from './SourceControl'
+import { TooManyChangesBanner } from './source-control/listing/too-many-changes-banner'
 
 const { toastErrorMock } = vi.hoisted(() => ({ toastErrorMock: vi.fn() }))
 

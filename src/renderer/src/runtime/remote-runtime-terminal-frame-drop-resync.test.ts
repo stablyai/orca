@@ -243,7 +243,7 @@ describe('remote terminal frame-drop resync', () => {
     expect(data).toEqual(['aaa'])
     expect(server.droppedFrames).toBe(1)
     // Instead, a fresh authoritative snapshot recovers the terminal.
-    expect(snapshots).toEqual(['INITIAL', '\x1b[2J\x1b[3J\x1b[HRECOVERED'])
+    expect(snapshots).toEqual(['INITIAL', '\x1b[?2026l\x1b[2J\x1b[HRECOVERED'])
 
     server.replaySnapshotCoveredOutput('ccc')
     server.output('ddd')
@@ -270,7 +270,7 @@ describe('remote terminal frame-drop resync', () => {
       expect(server.snapshotRequests).toEqual([undefined, undefined])
 
       server.output('eee')
-      expect(snapshots).toEqual(['INITIAL', '\x1b[2J\x1b[3J\x1b[HRECOVERED'])
+      expect(snapshots).toEqual(['INITIAL', '\x1b[?2026l\x1b[2J\x1b[HRECOVERED'])
       expect(data).toEqual(['aaa', 'eee'])
     } finally {
       vi.useRealTimers()
@@ -298,7 +298,7 @@ describe('remote terminal frame-drop resync', () => {
     server.output('eee')
 
     expect(server.snapshotRequests).toEqual([undefined, undefined])
-    expect(snapshots).toEqual(['INITIAL', '\x1b[2J\x1b[3J\x1b[HRECOVERED'])
+    expect(snapshots).toEqual(['INITIAL', '\x1b[?2026l\x1b[2J\x1b[HRECOVERED'])
     expect(data).toEqual(['aaa', 'eee'])
   })
 
@@ -321,7 +321,7 @@ describe('remote terminal frame-drop resync', () => {
     await expect(manualSnapshot).rejects.toThrow('stream failed')
 
     expect(server.snapshotRequests).toEqual([expect.any(Number), undefined])
-    expect(snapshots).toEqual(['INITIAL', '\x1b[2J\x1b[3J\x1b[HRECOVERED'])
+    expect(snapshots).toEqual(['INITIAL', '\x1b[?2026l\x1b[2J\x1b[HRECOVERED'])
 
     server.output('ddd')
     expect(data).toEqual(['aaa', 'ddd'])
@@ -342,7 +342,7 @@ describe('remote terminal frame-drop resync', () => {
       server.output('eee')
 
       expect(server.snapshotRequests).toEqual([undefined, undefined])
-      expect(snapshots).toEqual(['INITIAL', '\x1b[2J\x1b[3J\x1b[HRECOVERED'])
+      expect(snapshots).toEqual(['INITIAL', '\x1b[?2026l\x1b[2J\x1b[HRECOVERED'])
       expect(data).toEqual(['aaa', 'eee'])
     } finally {
       vi.useRealTimers()
@@ -452,7 +452,7 @@ describe('remote terminal frame-drop resync', () => {
     await Promise.resolve()
 
     expect(data).toEqual([])
-    expect(snapshots).toEqual(['INITIAL', '\x1b[2J\x1b[3J\x1b[HRECOVERED'])
+    expect(snapshots).toEqual(['INITIAL', '\x1b[?2026l\x1b[2J\x1b[HRECOVERED'])
   })
 
   it('uses UTF-16 sequence units when detecting gaps in multibyte output', async () => {
@@ -466,7 +466,7 @@ describe('remote terminal frame-drop resync', () => {
     await Promise.resolve()
 
     expect(data).toEqual(['é'])
-    expect(snapshots).toEqual(['INITIAL', '\x1b[2J\x1b[3J\x1b[HRECOVERED'])
+    expect(snapshots).toEqual(['INITIAL', '\x1b[?2026l\x1b[2J\x1b[HRECOVERED'])
   })
 
   it('defers recovery until an in-flight manual snapshot finishes', async () => {
@@ -489,7 +489,7 @@ describe('remote terminal frame-drop resync', () => {
 
     await expect(manualSnapshot).resolves.toMatchObject({ data: 'MANUAL' })
     expect(server.snapshotRequests).toHaveLength(2)
-    expect(snapshots).toEqual(['INITIAL', '\x1b[2J\x1b[3J\x1b[HRECOVERED'])
+    expect(snapshots).toEqual(['INITIAL', '\x1b[?2026l\x1b[2J\x1b[HRECOVERED'])
 
     server.output('ddd')
     expect(data).toEqual(['aaa', 'ddd'])

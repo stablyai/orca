@@ -26,6 +26,7 @@ import { translate } from '@/i18n/i18n'
 import { resolveSkillShareForInstall } from './skill-warning-preview-gate'
 import { useSkillInstallRisk } from './use-skill-install-risk'
 import { SkillInstallDialogFooter } from './SkillInstallDialogFooter'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export function SkillInstallDialog({
   open,
@@ -193,7 +194,7 @@ export function SkillInstallDialog({
           return
         }
       }
-      const operationId = crypto.randomUUID()
+      const operationId = createBrowserUuid()
       installProgress.begin(operationId)
       const operation = await window.api.skills.installShare({
         shareId: preview.shareId,

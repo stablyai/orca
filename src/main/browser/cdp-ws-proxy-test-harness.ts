@@ -25,6 +25,7 @@ export type MockWebContents = {
   webContents: {
     debugger: MockDebugger
     isDestroyed: () => boolean
+    isCrashed: () => boolean
     focus: Mock<() => void>
     printToPDF: Mock<() => Promise<Buffer>>
     reload: Mock<() => void>
@@ -51,7 +52,8 @@ export function createMockWebContents(): MockWebContents {
       debuggerAttached = false
     }),
     sendCommand: vi.fn(
-      async (_method?: string, _params?: Record<string, unknown>, _sessionId?: string) => ({})
+      async (method?: string, _params?: Record<string, unknown>, _sessionId?: string) =>
+        method === 'Page.captureScreenshot' ? { data: 'png' } : {}
     ),
     on: vi.fn((event: string, handler: DebuggerListener) => {
       const arr = listeners.get(event) ?? []
@@ -71,6 +73,7 @@ export function createMockWebContents(): MockWebContents {
     webContents: {
       debugger: debuggerObj,
       isDestroyed: () => destroyed,
+      isCrashed: () => false,
       focus: vi.fn(),
       printToPDF: vi.fn(async () => Buffer.from('%PDF-test')),
       reload: vi.fn(),

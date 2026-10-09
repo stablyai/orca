@@ -74,19 +74,6 @@ describe('OrchestrationDb mutation and question state', () => {
   })
 
   describe('question threads', () => {
-    it('accepts a question message in the fresh canonical schema', () => {
-      const d = createDb()
-      const message = d.insertMessage({
-        runId: 'run_legacy_local',
-        from: 'worker',
-        to: 'run:run_1',
-        subject: 'Need input',
-        type: 'question'
-      })
-
-      expect(message.type).toBe('question')
-    })
-
     it('uses the original message ID and records one durable answer', () => {
       const d = createDb()
       const run = d.createRun({

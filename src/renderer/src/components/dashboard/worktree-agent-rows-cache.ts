@@ -17,8 +17,10 @@ import {
 } from '../sidebar/worktree-agent-row-selectors'
 import {
   selectLivePtyIdsForWorktree,
+  selectPaneForegroundAgentsForWorktree,
   selectRuntimePaneTitlesForWorktree
 } from '../sidebar/worktree-card-status-inputs'
+import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 
 type WorktreeAgentRowsCacheEntry = {
   /** Caller-provided invalidation token for time-based freshness (agentStatusEpoch). */
@@ -31,6 +33,7 @@ type WorktreeAgentRowsCacheEntry = {
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot | undefined>
   paneTitlesByTabId: Record<string, Record<number, string>>
   ptyIdsByTabId: Record<string, string[]>
+  paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry>
   rows: DashboardAgentRowWithLineage[]
 }
 
@@ -88,7 +91,7 @@ export type WorktreeAgentRowsState = Pick<
   | 'ptyIdsByTabId'
   | 'runtimePaneTitlesByTabId'
 > &
-  Partial<Pick<AppState, 'unifiedTabsByWorktree'>>
+  Partial<Pick<AppState, 'unifiedTabsByWorktree' | 'paneForegroundAgentByPaneKey'>>
 
 // Why not identity: the per-worktree layout/title/ptyId selectors build a fresh top-level
 // record per call while preserving per-tab value references, so shallow equality is the
@@ -122,6 +125,7 @@ export function selectWorktreeAgentRowsCached(args: {
   const terminalLayoutsByTabId = selectTerminalLayoutsForWorktree(state, worktreeId)
   const paneTitlesByTabId = selectRuntimePaneTitlesForWorktree(state, worktreeId)
   const ptyIdsByTabId = selectLivePtyIdsForWorktree(state, worktreeId)
+  const paneForegroundAgentByPaneKey = selectPaneForegroundAgentsForWorktree(state, worktreeId)
 
   const cached = cache?.byWorktree.get(worktreeId)
   if (
@@ -134,7 +138,8 @@ export function selectWorktreeAgentRowsCached(args: {
     cached.orchestration === orchestration &&
     shallowRecordEqual(cached.terminalLayoutsByTabId, terminalLayoutsByTabId) &&
     shallowRecordEqual(cached.paneTitlesByTabId, paneTitlesByTabId) &&
-    shallowRecordEqual(cached.ptyIdsByTabId, ptyIdsByTabId)
+    shallowRecordEqual(cached.ptyIdsByTabId, ptyIdsByTabId) &&
+    shallowRecordEqual(cached.paneForegroundAgentByPaneKey, paneForegroundAgentByPaneKey)
   ) {
     return cached.rows
   }
@@ -158,6 +163,7 @@ export function selectWorktreeAgentRowsCached(args: {
       ptyIdsByTabId,
       terminalLayoutsByTabId,
       runtimeAgentOrchestrationByPaneKey: orchestration,
+      paneForegroundAgentByPaneKey,
       now
     })
   )
@@ -174,6 +180,7 @@ export function selectWorktreeAgentRowsCached(args: {
       terminalLayoutsByTabId,
       paneTitlesByTabId,
       ptyIdsByTabId,
+      paneForegroundAgentByPaneKey,
       rows
     })
   }

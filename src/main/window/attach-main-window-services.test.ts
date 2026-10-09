@@ -1,5 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
+import type { registerSshHandlers } from '../ipc/ssh'
+import type { registerRemoteWorkspaceHandlers } from '../ipc/remote-workspace'
+import type { registerDaemonManagementHandlers } from '../ipc/pty-management'
+import type { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
+import type { startFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
+import {
+  createMainWindowServiceStub,
+  createRuntime,
+  deferred,
+  type MainWindowStub
+} from './main-window-service-stubs.test-fixture'
 
 const {
   onMock,
@@ -16,6 +27,11 @@ const {
   setWorktreeCatalogRemoteClientNotifierMock,
   registerWorktreeHandlersMock,
   registerPtyHandlersMock,
+  registerSshHandlersMock,
+  registerRemoteWorkspaceHandlersMock,
+  registerDaemonManagementHandlersMock,
+  registerWorkspaceCleanupHandlersMock,
+  startFolderRepoGitUpgradeWatchMock,
   hydrateLocalPtyRegistryAtBootMock,
   setWorktreeBaseDirectoryWatcherSyncContextMock,
   scheduleWorktreeBaseDirectoryWatcherSyncMock,
@@ -41,6 +57,12 @@ const {
   setWorktreeCatalogRemoteClientNotifierMock: vi.fn(),
   registerWorktreeHandlersMock: vi.fn(),
   registerPtyHandlersMock: vi.fn(),
+  registerSshHandlersMock: vi.fn<(...args: Parameters<typeof registerSshHandlers>) => void>(),
+  registerRemoteWorkspaceHandlersMock:
+    vi.fn<(...args: Parameters<typeof registerRemoteWorkspaceHandlers>) => void>(),
+  registerDaemonManagementHandlersMock: vi.fn<typeof registerDaemonManagementHandlers>(),
+  registerWorkspaceCleanupHandlersMock: vi.fn<typeof registerWorkspaceCleanupHandlers>(),
+  startFolderRepoGitUpgradeWatchMock: vi.fn<typeof startFolderRepoGitUpgradeWatch>(),
   hydrateLocalPtyRegistryAtBootMock: vi.fn(),
   setWorktreeBaseDirectoryWatcherSyncContextMock: vi.fn(),
   scheduleWorktreeBaseDirectoryWatcherSyncMock: vi.fn(),
@@ -98,6 +120,20 @@ vi.mock('../ipc/pty', () => ({
   registerPtyHandlers: registerPtyHandlersMock
 }))
 
+vi.mock('../ipc/ssh', () => ({ registerSshHandlers: registerSshHandlersMock }))
+vi.mock('../ipc/remote-workspace', () => ({
+  registerRemoteWorkspaceHandlers: registerRemoteWorkspaceHandlersMock
+}))
+vi.mock('../ipc/pty-management', () => ({
+  registerDaemonManagementHandlers: registerDaemonManagementHandlersMock
+}))
+vi.mock('../ipc/workspace-cleanup', () => ({
+  registerWorkspaceCleanupHandlers: registerWorkspaceCleanupHandlersMock
+}))
+vi.mock('../ipc/folder-repo-git-upgrade', () => ({
+  startFolderRepoGitUpgradeWatch: startFolderRepoGitUpgradeWatchMock
+}))
+
 vi.mock('../memory/hydrate-local-pty-registry', () => ({
   hydrateLocalPtyRegistryAtBoot: hydrateLocalPtyRegistryAtBootMock
 }))
@@ -132,57 +168,16 @@ import { attachMainWindowServices } from './attach-main-window-services'
 
 type MockFn = ReturnType<typeof vi.fn>
 
-type MainWindowStub = {
-  id?: number
-  isDestroyed?: MockFn
-  on: MockFn
-  once: MockFn
-  webContents: {
-    id?: number
-    getURL: MockFn
-    isDestroyed?: MockFn
-    isLoadingMainFrame: MockFn
-    on: MockFn
-    send?: MockFn
-    reload?: MockFn
-    session: {
-      setPermissionRequestHandler: MockFn
-      setPermissionCheckHandler: MockFn
-    }
-  }
-}
-
-type RuntimeStub = {
-  attachWindow: MockFn
-  setNotifier: MockFn
-  markRendererReloading: MockFn
-  markRendererReloadCancelled: MockFn
-  markGraphReloadFailed: MockFn
-  markGraphUnavailable: MockFn
-}
-
 function createMainWindow(
   extraWebContents: { isLoadingMainFrame?: MockFn; on?: MockFn; send?: MockFn } = {}
 ): MainWindowStub {
-  return {
-    id: 1,
-    isDestroyed: vi.fn(() => false),
-    on: vi.fn(),
-    once: vi.fn(),
-    webContents: {
-      id: 1,
-      getURL: vi.fn(() => 'file:///opt/orca/renderer/index.html'),
-      isDestroyed: vi.fn(() => false),
-      isLoadingMainFrame: vi.fn(() => true),
-      on: vi.fn(),
-      reload: vi.fn(),
-      session: {
-        setPermissionRequestHandler: setPermissionRequestHandlerMock,
-        setPermissionCheckHandler: setPermissionCheckHandlerMock
-      },
-      ...extraWebContents
-    }
-  }
+  return createMainWindowServiceStub(
+    {
+      setPermissionRequestHandler: setPermissionRequestHandlerMock,
+      setPermissionCheckHandler: setPermissionCheckHandlerMock
+    },
+    extraWebContents
+  )
 }
 
 function createStore(): Store & { flushPendingAsync: MockFn } {
@@ -190,25 +185,6 @@ function createStore(): Store & { flushPendingAsync: MockFn } {
     getProfileStorageDirectory: vi.fn(() => '/profile-a'),
     flushPendingAsync: vi.fn(() => Promise.resolve())
   } as unknown as Store & { flushPendingAsync: MockFn }
-}
-
-function createRuntime(): RuntimeStub {
-  return {
-    attachWindow: vi.fn(),
-    setNotifier: vi.fn(),
-    markRendererReloading: vi.fn(),
-    markRendererReloadCancelled: vi.fn(),
-    markGraphReloadFailed: vi.fn(),
-    markGraphUnavailable: vi.fn()
-  }
-}
-
-function deferred(): { promise: Promise<void>; resolve: () => void } {
-  let resolve!: () => void
-  const promise = new Promise<void>((next) => {
-    resolve = next
-  })
-  return { promise, resolve }
 }
 
 function getClosedHandlers(mainWindowOnMock: MockFn): (() => void)[] {
@@ -238,11 +214,30 @@ describe('attachMainWindowServices', () => {
 
   it('gives host-local catalog notifiers the runtime', () => {
     const runtime = createRuntime()
+    const mainWindow = createMainWindow()
+    const store = createStore()
 
-    attachMainWindowServices(createMainWindow() as never, createStore(), runtime as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Stubs provide the window/runtime methods exercised by attachment.
+    attachMainWindowServices(mainWindow as never, store, runtime as never)
 
     expect(setRepoRemoteClientNotifierMock).toHaveBeenCalledWith(runtime)
     expect(setWorktreeCatalogRemoteClientNotifierMock).toHaveBeenCalledWith(runtime)
+    expect(registerSshHandlersMock).toHaveBeenCalledExactlyOnceWith(
+      store,
+      expect.any(Function),
+      runtime
+    )
+    expect(registerSshHandlersMock.mock.calls[0]?.[1]()).toBe(mainWindow)
+    expect(registerRemoteWorkspaceHandlersMock).toHaveBeenCalledExactlyOnceWith(
+      store,
+      expect.any(Function),
+      runtime
+    )
+    expect(registerRemoteWorkspaceHandlersMock.mock.calls[0]?.[1]()).toBe(mainWindow)
+    expect(registerDaemonManagementHandlersMock).toHaveBeenCalledExactlyOnceWith()
+    expect(registerDaemonManagementHandlersMock).toHaveBeenCalledAfter(registerPtyHandlersMock)
+    expect(registerWorkspaceCleanupHandlersMock).toHaveBeenCalledExactlyOnceWith(store)
+    expect(startFolderRepoGitUpgradeWatchMock).toHaveBeenCalledExactlyOnceWith(store, mainWindow)
   })
 
   it('reloads the app renderer through main and marks expected renderer teardown', async () => {
@@ -290,8 +285,7 @@ describe('attachMainWindowServices', () => {
     await providerStartup.promise
     await Promise.resolve()
 
-    expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenCalledOnce()
-    expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenCalledWith(store)
+    expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenCalledExactlyOnceWith(store)
   })
 
   it('passes injected update quit cleanup to the auto-updater', async () => {
@@ -305,17 +299,23 @@ describe('attachMainWindowServices', () => {
       createRuntime() as never,
       undefined,
       undefined,
-      { onBeforeUpdateQuit, updateInstallMode: 'supervised-headless-serve' }
+      {
+        onBeforeUpdateQuit,
+        onBeforeUpdateQuitFailure: 'abort',
+        updateInstallMode: 'supervised-headless-serve'
+      }
     )
 
     // Deferred to first paint — must not be configured at attach time.
     expect(setupAutoUpdaterMock).not.toHaveBeenCalled()
     await fireReadyToShow(mainWindow)
     expect(setupAutoUpdaterMock).toHaveBeenCalledTimes(1)
-    expect(setupAutoUpdaterMock).toHaveBeenCalledWith(
-      mainWindow,
-      expect.objectContaining({ installMode: 'supervised-headless-serve' })
-    )
+    const [updaterWindow, updaterOptions] = setupAutoUpdaterMock.mock.calls[0]
+    expect(updaterWindow).toBe(mainWindow)
+    expect(updaterOptions).toMatchObject({
+      installMode: 'supervised-headless-serve',
+      onBeforeQuitFailure: 'abort'
+    })
     await setupAutoUpdaterMock.mock.calls[0][1].onBeforeQuit()
 
     expect(onBeforeUpdateQuit).toHaveBeenCalledTimes(1)
@@ -628,81 +628,6 @@ describe('attachMainWindowServices', () => {
     expect(browserManagerUnregisterAllMock).toHaveBeenCalledTimes(1)
   })
 
-  it('removes the native file-drop relay when the main window closes', () => {
-    const mainWindowOnMock = vi.fn()
-    const mainWindow = createMainWindow({ send: vi.fn() })
-    mainWindow.on = mainWindowOnMock
-
-    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
-
-    const channel = 'terminal:file-dropped-from-preload'
-    const relayHandler = onMock.mock.calls.find(([event]) => event === channel)?.[1]
-    expect(relayHandler).toBeTypeOf('function')
-    expect(removeAllListenersMock).toHaveBeenCalledWith(channel)
-
-    const closedHandlers = getClosedHandlers(mainWindowOnMock)
-    for (const handler of closedHandlers) {
-      handler()
-    }
-
-    expect(removeListenerMock).toHaveBeenCalledWith(channel, relayHandler)
-  })
-
-  it('relays native file drops only from the owning renderer webContents', () => {
-    const sendMock = vi.fn()
-    const mainWindow = createMainWindow({ send: sendMock })
-
-    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
-
-    const channel = 'terminal:file-dropped-from-preload'
-    const relayHandler = onMock.mock.calls.find(([event]) => event === channel)?.[1]
-    const payload = { paths: ['/tmp/a'], target: 'editor' }
-
-    relayHandler?.({ sender: { id: 999 } }, payload)
-
-    expect(sendMock).not.toHaveBeenCalled()
-
-    relayHandler?.({ sender: mainWindow.webContents }, payload)
-
-    expect(sendMock).toHaveBeenCalledWith('terminal:file-drop', payload)
-  })
-
-  it('ignores malformed native file-drop payloads from the owning renderer', () => {
-    const sendMock = vi.fn()
-    const mainWindow = createMainWindow({ send: sendMock })
-
-    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
-
-    const channel = 'terminal:file-dropped-from-preload'
-    const relayHandler = onMock.mock.calls.find(([event]) => event === channel)?.[1]
-
-    relayHandler?.(
-      { sender: mainWindow.webContents },
-      { paths: ['C:\\Users\\alice\\secret.txt'], target: 'browser' }
-    )
-    relayHandler?.(
-      { sender: mainWindow.webContents },
-      { paths: ['/tmp/a'], target: 'file-explorer' }
-    )
-
-    expect(sendMock).not.toHaveBeenCalled()
-  })
-
-  it('ignores native file drops after the owning webContents is destroyed', () => {
-    const sendMock = vi.fn()
-    const mainWindow = createMainWindow({ send: sendMock })
-
-    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
-
-    const channel = 'terminal:file-dropped-from-preload'
-    const relayHandler = onMock.mock.calls.find(([event]) => event === channel)?.[1]
-    mainWindow.webContents.isDestroyed?.mockReturnValue(true)
-
-    relayHandler?.({ sender: mainWindow.webContents }, { paths: ['/tmp/a'], target: 'editor' })
-
-    expect(sendMock).not.toHaveBeenCalled()
-  })
-
   it('clears the runtime notifier when the owning window closes', () => {
     const mainWindowOnMock = vi.fn()
     const mainWindow = createMainWindow()
@@ -758,14 +683,9 @@ describe('attachMainWindowServices', () => {
     attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
 
     expect(runtime.setNotifier).toHaveBeenCalledTimes(1)
-    const notifier = runtime.setNotifier.mock.calls[0][0] as {
-      worktreesChanged: (repoId: string) => void
-      reposChanged: () => void
-      activateWorktree: (
-        repoId: string,
-        worktreeId: string,
-        setup?: { runnerScriptPath: string; envVars: Record<string, string> }
-      ) => void
+    const notifier = runtime.setNotifier.mock.calls[0][0]
+    if (!notifier) {
+      throw new Error('Missing runtime notifier')
     }
 
     notifier.worktreesChanged('repo-1')

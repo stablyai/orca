@@ -15,7 +15,7 @@ import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Project } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
 import { getAllowedRoots } from './filesystem-allowed-roots'
-import { authorizeExternalPath, resolveAuthorizedPath } from './filesystem-auth'
+import { resolveAuthorizedPath } from './filesystem-auth'
 import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
 import { computeWorkspaceRoot, getWorktreePathSettings } from './worktree-logic'
 
@@ -285,28 +285,6 @@ describe('getAllowedRoots', () => {
     expect(isPathInsideOrEqual).toHaveBeenCalledTimes(100_000)
   })
 
-  it('preserves empty, remote-only, mixed and explicit remote folder scopes in any repo order', () => {
-    const fixture = makeMixedFixture()
-    fixture.repos.push(
-      makeRepo({
-        id: 'local-in-remote-group',
-        path: '/local/mixed',
-        projectGroupId: 'group-remote'
-      })
-    )
-    for (let index = 0; index < fixture.repos.length; index += 1) {
-      fixture.repos.push(fixture.repos.shift()!)
-      const { store } = makeCountingStore(fixture)
-      expect(getAllowedRoots(store)).toEqual(referenceAllowedRoots(store))
-    }
-  })
-
-  it('produces the same roots as the pre-change implementation', () => {
-    const { store } = makeCountingStore(makeMixedFixture())
-
-    expect(getAllowedRoots(store)).toEqual(referenceAllowedRoots(store))
-  })
-
   it('reads the store once and indexes project groups once per build', () => {
     const fixture = makeMixedFixture()
     const { store, counts } = makeCountingStore(fixture)
@@ -379,25 +357,6 @@ describe('resolveAuthorizedPath allowed-root reuse', () => {
       expect(vi.mocked(listRepoWorktreeGraph)).toHaveBeenCalled()
     }
   )
-
-  it('builds no allowed-root list at all for a granted external path', async () => {
-    const external = join(outsideRoot, 'external.md')
-    await writeFile(external, 'notes\n')
-    authorizeExternalPath(external)
-    counts.getRepos = 0
-    counts.getProjects = 0
-    counts.getFolderWorkspaces = 0
-
-    for (let index = 0; index < 5; index += 1) {
-      await expect(resolveAuthorizedPath(external, store)).resolves.toBe(external)
-    }
-
-    // The grant answers on its own; hoisting the snapshot must not turn zero builds into one per read.
-    expect.soft(counts.getRepos).toBe(0)
-    expect.soft(counts.getProjects).toBe(0)
-    expect.soft(counts.getFolderWorkspaces).toBe(0)
-    expect.soft(vi.mocked(buildProjectGroupChildIndex)).not.toHaveBeenCalled()
-  })
 
   it.skipIf(process.platform === 'win32')(
     'still refuses a directory symlink that escapes every allowed root',

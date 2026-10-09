@@ -4,6 +4,7 @@ import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import {
   getWorktreeRemovalConnectionId,
+  resolveWorktreeRemovalHome,
   type WorktreeRemovalRoute
 } from '../worktree-removal-execution-host-route'
 import {
@@ -51,6 +52,7 @@ export async function removeRuntimeUnregisteredWorktree(args: {
   finishRemoval: () => void
 }): Promise<{}> {
   const { repo, target, registeredWorktrees, removedMeta, route } = args
+  const removalHome = resolveWorktreeRemovalHome(route)
   let canCleanOrphanedDirectory = false
   if (canCleanupUnregisteredOrcaWorktreeDirectory({ meta: removedMeta })) {
     if (route.kind === 'ssh') {
@@ -65,16 +67,18 @@ export async function removeRuntimeUnregisteredWorktree(args: {
       canCleanOrphanedDirectory = await canSafelyRemoveOrphanedWorktreeDirectory(
         target.path,
         repo.path,
+        removalHome,
         (path) => lstat(path),
         (path) => fsProvider.readFile(path)
       )
     } else {
       const access = getLocalWorktreePathAccess(args.localOptions)
       canCleanOrphanedDirectory =
-        !isDangerousWorktreeRemovalPath(target.path, repo.path) &&
+        !isDangerousWorktreeRemovalPath(target.path, repo.path, removalHome) &&
         (await canSafelyRemoveOrphanedWorktreeDirectory(
           toLocalWorktreeRuntimePath(target.path, args.localOptions),
           toLocalWorktreeRuntimePath(repo.path, args.localOptions),
+          removalHome,
           access.statPath,
           access.readPath
         ))
@@ -101,6 +105,7 @@ export async function removeRuntimeUnregisteredWorktree(args: {
         runtimeRepoPath: toLocalWorktreeRuntimePath(repo.path, args.localOptions),
         registeredWorktrees,
         statPath: access.statPath,
+        home: removalHome,
         isGitRepository: (path) => isLocalRuntimeGitRepository(path, args.localOptions)
       })
     ) {

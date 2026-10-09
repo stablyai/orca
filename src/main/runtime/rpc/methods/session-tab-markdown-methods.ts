@@ -1,15 +1,17 @@
-import { defineMethod, type RpcAnyMethod } from '../core'
+import { defineMethod } from '../core'
 import { ActivateTab, SaveMarkdownTab } from './session-tabs-schemas'
 
-export const SESSION_TAB_MARKDOWN_METHODS: RpcAnyMethod[] = [
+export const SESSION_TAB_MARKDOWN_METHODS = [
   defineMethod({
     name: 'markdown.readTab',
+    permission: 'workspace',
     params: ActivateTab,
     handler: async (params, { runtime }) =>
       runtime.readMobileMarkdownTab(params.worktree, params.tabId)
   }),
   defineMethod({
     name: 'markdown.saveTab',
+    permission: 'workspace',
     params: SaveMarkdownTab,
     handler: async (params, { runtime }) =>
       runtime.saveMobileMarkdownTab(

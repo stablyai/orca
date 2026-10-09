@@ -1,7 +1,7 @@
 /**
  * The same repo id is allowed on two execution hosts (persistence.ts `removeProjectForHost`).
- * `repo.rm` resolves a *row*, so the deletion it performs must be scoped to that row's host:
- * `Store.removeProject` is id-only and would take the sibling host's registration with it.
+ * `repo.rm` resolves a *row*, so the deletion it performs must be scoped to that row's host,
+ * never the sibling host's registration.
  * A `path:`/`name:` selector resolves unambiguously even when the id is duplicated, so this
  * is reachable — and since #11994 every paired device now learns about it immediately.
  */
@@ -32,13 +32,6 @@ function makeRepos(): Repo[] {
 
 function createRuntime() {
   const repos = makeRepos()
-  const removeProject = vi.fn((id: string) => {
-    for (let index = repos.length - 1; index >= 0; index -= 1) {
-      if (repos[index].id === id) {
-        repos.splice(index, 1)
-      }
-    }
-  })
   const removeProjectForHost = vi.fn((id: string, hostId: string) => {
     for (let index = repos.length - 1; index >= 0; index -= 1) {
       const repo = repos[index]
@@ -57,10 +50,9 @@ function createRuntime() {
     setWorktreeMeta: vi.fn(),
     removeWorktreeMeta: vi.fn(),
     getGitHubCache: () => null,
-    removeProject,
     removeProjectForHost
   } as never)
-  return { runtime, repos, removeProject, removeProjectForHost }
+  return { runtime, repos, removeProjectForHost }
 }
 
 describe('repo.rm with the same repo id on two execution hosts', () => {
@@ -81,10 +73,9 @@ describe('repo.rm with the same repo id on two execution hosts', () => {
   })
 
   it('refuses a bare duplicated id rather than guessing a host', async () => {
-    const { runtime, repos, removeProject, removeProjectForHost } = createRuntime()
+    const { runtime, repos, removeProjectForHost } = createRuntime()
 
     await expect(runtime.removeProject('dup')).rejects.toThrow('selector_ambiguous')
-    expect(removeProject).not.toHaveBeenCalled()
     expect(removeProjectForHost).not.toHaveBeenCalled()
     expect(repos).toHaveLength(2)
   })

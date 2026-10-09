@@ -52,6 +52,23 @@ describe('rich markdown list tokenizers', () => {
     )
   })
 
+  it.each(['a. first\nb. second\n', 'I. first\nII. second\n', '  3. indented\n'])(
+    'preserves upstream ordered marker support for %j',
+    (source) => {
+      expect(getTokenizer(RichMarkdownOrderedList).tokenize(source, [], lexer)).toEqual(
+        getTokenizer(OrderedList).tokenize(source, [], lexer)
+      )
+    }
+  )
+
+  it('does not advertise mid-paragraph numbers as list starts', () => {
+    const start = getTokenizer(RichMarkdownOrderedList).start
+    expect(typeof start).toBe('function')
+    if (typeof start === 'function') {
+      expect(start('(216) 555-1234')).toBe(-1)
+    }
+  })
+
   it('preserves nested task-list tokens', () => {
     const source = '- [ ] parent\n  - [x] child\n- [x] sibling\n'
 

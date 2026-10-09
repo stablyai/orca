@@ -80,6 +80,12 @@ describe('link-opened Orca tabs', () => {
           }
         ]
       },
+      unifiedTabsByWorktree: {
+        'worktree-1': [
+          { id: 'unified-1', entityId: 'workspace-1', contentType: 'browser', groupId: 'group-1' }
+        ]
+      },
+      groupsByWorktree: { 'worktree-1': [{ id: 'group-1', tabOrder: ['unified-1'] }] },
       createBrowserTab: createBrowserTabMock
     }
 
@@ -89,6 +95,7 @@ describe('link-opened Orca tabs', () => {
       'worktree-1',
       'https://docs.example.com/guide',
       expect.objectContaining({
+        afterTabId: 'unified-1',
         sessionProfileId: 'profile-client-a',
         sessionPartition: 'persist:orca-browser-session-client-a'
       })

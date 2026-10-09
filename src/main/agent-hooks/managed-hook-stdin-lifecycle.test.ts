@@ -3,6 +3,7 @@
 // Exception (#11549): Windows batch hooks give up stdin ownership on the
 // missing-Orca-env path, so their writer may break there.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as CodexHookHashLookup from '../codex/codex-hook-hash-lookup'
 import { spawn } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -32,6 +33,13 @@ afterEach(() => {
 
 const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
+}))
+
+// Why: stands in for asking a real Codex for its hook hashes, as the grant stub once did.
+vi.mock('../codex/codex-hook-hash-lookup', async (importOriginal) => ({
+  ...(await importOriginal<typeof CodexHookHashLookup>()),
+  resolveCodexHookAnswerForLaunch: async () =>
+    (await import('../codex/hook-service-test-harness')).codexHookAnswerForTests()
 }))
 
 vi.mock('electron', () => ({
@@ -64,6 +72,8 @@ import { KimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { wrapPosixHookCommand, wrapWindowsHookCommand } from './installer-utils'
 import {
+  POSIX_HOOK_JSON_STDIN_PRELUDE,
+  POSIX_HOOK_JSON_STDIN_READER,
   POSIX_HOOK_STDIN_READER,
   WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD
 } from './hook-stdin-contract'
@@ -240,9 +250,8 @@ async function generatePosixScripts(): Promise<Map<string, string>> {
   return scripts
 }
 
-// Why: the Codex installer awaits an app-server trust-grant session, so the
-// override has to stay pinned across the await instead of being restored by a
-// synchronous `finally` while the install is still running.
+// Why: the Codex installer is async, so the override has to stay pinned across
+// the await instead of being restored by a synchronous `finally` while it runs.
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => T | Promise<T>): Promise<T> {
   const original = Object.getOwnPropertyDescriptor(process, 'platform')
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
@@ -294,7 +303,12 @@ describe('Windows managed hook stdin structure', () => {
         expect(script, `${fileName} no ORCA_* guard may route to the more.com drain`).not.toMatch(
           /ORCA_[A-Z_]+.*goto :?orca_agent_hook_drain_stdin/
         )
-        // Why: the epilogue stays shared — claude-hook.cmd still jumps to it from the
+        if (fileName === 'antigravity-hook.cmd') {
+          expect(script).not.toContain('more.com')
+          expect(script).toContain('antigravity-hook-post.cjs')
+          continue
+        }
+        // Why: the epilogue stays shared — claude-hook-impl.cmd still jumps to it from the
         // Devin-imports-.claude skip, which now sits below these guards.
         expect(script, `${fileName} drain epilogue`).toContain(
           [
@@ -308,7 +322,7 @@ describe('Windows managed hook stdin structure', () => {
       // Why (#11549): the Devin skip is the only remaining in-script jump to more.com, so it
       // must sit below the env guards — otherwise a Devin session outside an Orca pane still
       // parks there and strands the hook exactly like the pre-fix guards did.
-      const claude = readFileSync(join(hooksDir, 'claude-hook.cmd'), 'utf8')
+      const claude = readFileSync(join(hooksDir, 'claude-hook-impl.cmd'), 'utf8')
       expect(claude, 'claude devin guard present').toContain(
         'if not "%DEVIN_PROJECT_DIR%"=="" goto :orca_agent_hook_drain_stdin'
       )
@@ -522,7 +536,7 @@ describe('Windows managed hook stdin structure', () => {
             // Why: the encoded launcher resolves %USERPROFILE% at run time, so redirecting it is
             // what makes the script vanish for that shape. The direct launcher (#18875) carries
             // an absolute path, so here it asserts only that a bogus profile changes nothing; its
-            // missing-script fallback is covered live in windows-direct-cmd-hook-command.test.ts.
+            // missing-entry failure (never exit 2) is covered live in windows-direct-cmd-hook-command.test.ts.
             name: 'missing managed script',
             env: hookEnvironment({ USERPROFILE: absentProfile })
           }
@@ -561,10 +575,22 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
   it('captures stdin before every possible whole-script success exit', async () => {
     const scripts = await generatePosixScripts()
     for (const [agent, script] of scripts) {
-      const captureIndex = script.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`)
+      const captureIndex = Math.max(
+        script.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`),
+        script.indexOf(`payload=$(${POSIX_HOOK_JSON_STDIN_READER})`)
+      )
       const firstExitIndex = script.indexOf('exit 0')
       expect(captureIndex, `${agent} payload capture`).toBeGreaterThanOrEqual(0)
       expect(firstExitIndex, `${agent} first success exit`).toBeGreaterThan(captureIndex)
+      // Why: the JSON reader dereferences a variable the prelude sets, so a script
+      // that carries the reader must carry its prelude above the capture line.
+      if (script.includes(POSIX_HOOK_JSON_STDIN_READER)) {
+        const prelude = POSIX_HOOK_JSON_STDIN_PRELUDE.join('\n')
+        expect(script.indexOf(prelude), `${agent} JSON reader prelude`).toBeGreaterThanOrEqual(0)
+        expect(script.indexOf(prelude), `${agent} prelude before capture`).toBeLessThan(
+          captureIndex
+        )
+      }
     }
   })
 

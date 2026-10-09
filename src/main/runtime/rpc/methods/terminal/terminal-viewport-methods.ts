@@ -1,5 +1,4 @@
-import { z } from 'zod'
-import { defineMethod, type RpcAnyMethod } from '../../core'
+import { defineMethod } from '../../core'
 import { TerminalHandle } from './unary-schemas'
 import {
   TerminalSetAutoRestoreFit,
@@ -8,10 +7,12 @@ import {
   TerminalUpdateViewport
 } from './viewport-schemas'
 import { updateViewportForClient } from './terminal-viewport-update'
+import { TerminalGetAutoRestoreFitParams } from '../../../../../shared/rpc-contract/terminal-viewport-methods-params'
 
-export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS: RpcAnyMethod[] = [
+export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS = [
   defineMethod({
     name: 'terminal.setDisplayMode',
+    permission: 'workspace',
     params: TerminalSetDisplayMode,
     handler: async (params, { runtime }) => {
       // Why: a stale handle must fail with terminal_handle_stale, not mutate the wrong PTY's display mode/viewport (#7718).
@@ -33,6 +34,7 @@ export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS: RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'terminal.restoreFit',
+    permission: 'workspace',
     params: TerminalHandle,
     handler: async (params, { runtime }) => {
       // Why: a stale handle must fail with terminal_handle_stale, not reclaim the wrong PTY to desktop dims (#7718).
@@ -45,6 +47,7 @@ export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS: RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'terminal.getDisplayMode',
+    permission: 'workspace',
     params: TerminalHandle,
     handler: async (params, { runtime }) => {
       const leaf = runtime.resolveLeafForHandle(params.terminal)
@@ -55,6 +58,7 @@ export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS: RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'terminal.updateViewport',
+    permission: 'workspace',
     params: TerminalUpdateViewport,
     handler: async (params, { runtime }) => {
       // Why: a stale handle must fail with terminal_handle_stale, not write viewport state to the wrong PTY (#7718).
@@ -78,16 +82,23 @@ export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS: RpcAnyMethod[] = [
   })
 ]
 
-export const TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS: RpcAnyMethod[] = [
+export const TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS = [
   defineMethod({
     name: 'terminal.unsubscribe',
+    permission: 'workspace',
     params: TerminalUnsubscribe,
-    handler: async (params, { runtime, connectionId }) => {
-      // Why: only the connection that owns the subscription may retire it — a stale
-      // unsubscribe from the pre-reconnect socket names an id the replacement now owns.
+    handler: async (params, { runtime, connectionId, subscriptionRegistrationVersion }) => {
+      if (params.requestId !== undefined) {
+        // Why: an unknown request already ended or never registered; falling back to the slot could end a newer stream.
+        runtime.releaseSubscriptionByRequest(connectionId, params.requestId)
+        return { unsubscribed: true }
+      }
+      // COMPAT(terminal request-addressed unsubscribe): slot path for phones that predate `requestId`.
+      // Fence both socket replacement and a newer subscription on the same socket.
       let unsubscribed = runtime.cleanupSubscriptionIfOwnedByConnection(
         params.subscriptionId,
-        connectionId
+        connectionId,
+        subscriptionRegistrationVersion
       )
       // Why: older builds send a bare-handle subscriptionId, so also try the reconstructed `${terminal}:${clientId}` composite key.
       // Why AND over the calls that ran: a clientless stream registers under the bare id
@@ -97,7 +108,8 @@ export const TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS: RpcAnyMethod[] = [
         unsubscribed =
           runtime.cleanupSubscriptionIfOwnedByConnection(
             `${params.subscriptionId}:${params.client.id}`,
-            connectionId
+            connectionId,
+            subscriptionRegistrationVersion
           ) && unsubscribed
       }
       return { unsubscribed }
@@ -105,13 +117,15 @@ export const TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS: RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'terminal.getAutoRestoreFit',
-    params: z.object({}),
+    permission: 'workspace',
+    params: TerminalGetAutoRestoreFitParams,
     handler: async (_params, { runtime }) => ({
       ms: runtime.getMobileAutoRestoreFitMs()
     })
   }),
   defineMethod({
     name: 'terminal.setAutoRestoreFit',
+    permission: 'workspace',
     params: TerminalSetAutoRestoreFit,
     handler: async (params, { runtime }) => ({
       ms: runtime.setMobileAutoRestoreFitMs(params.ms)

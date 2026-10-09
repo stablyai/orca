@@ -1,4 +1,37 @@
 import { describe, expect, it, vi } from 'vitest'
+
+// Every way Orca reads or kills processes, never settling: a Stop that reaches for one hangs.
+const processWork = vi.hoisted(() => {
+  const never = (): Promise<never> => new Promise(() => {})
+  return {
+    captureDescendantSnapshot: vi.fn(async () => ({
+      rootPgid: null,
+      descendants: [],
+      capturedAtMs: 0
+    })),
+    terminateDescendantSnapshotAndWait: vi.fn(never),
+    terminateDescendantSnapshotWithVerdict: vi.fn(never),
+    queryWindowsProcessDescendants: vi.fn(never),
+    terminateWindowsProcessTree: vi.fn(never)
+  }
+})
+vi.mock('../pty-descendant-termination', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  captureDescendantSnapshot: processWork.captureDescendantSnapshot
+}))
+vi.mock('../pty-descendant-exit-verification', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  terminateDescendantSnapshotAndWait: processWork.terminateDescendantSnapshotAndWait,
+  terminateDescendantSnapshotWithVerdict: processWork.terminateDescendantSnapshotWithVerdict
+}))
+vi.mock('../providers/windows-foreground-process-rows', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  queryWindowsProcessDescendants: processWork.queryWindowsProcessDescendants
+}))
+vi.mock('../windows-process-tree-kill', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  terminateWindowsProcessTree: processWork.terminateWindowsProcessTree
+}))
 import type {
   AgentJournalMessageItem,
   AgentSessionJournalIdentity
@@ -16,6 +49,7 @@ import {
   type CodexStructuredSessionAdapterDeps,
   type CodexStructuredSessionEvent
 } from './codex-structured-session-adapter'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const THREAD_ID = 'thread-abc'
 const USER_MESSAGE: AgentJournalMessageItem = {
@@ -38,7 +72,7 @@ function identity(): AgentSessionJournalIdentity {
     workspaceId: 'ws-1',
     hostId: 'host-1',
     agent: 'codex',
-    providerHandle: { kind: 'codex', threadId: THREAD_ID }
+    providerHandle: codexProviderHandle(THREAD_ID)
   }
 }
 
@@ -79,9 +113,7 @@ function fakeCodex(): {
 async function acquired(
   codex: ReturnType<typeof fakeCodex>,
   events: CodexStructuredSessionEvent[] = [],
-  processControl: Partial<
-    Pick<CodexStructuredSessionAdapterDeps, 'captureTurnProcesses' | 'terminateTurnProcesses'>
-  > = {}
+  overrides: Partial<Pick<CodexStructuredSessionAdapterDeps, 'now'>> = {}
 ): Promise<CodexStructuredSessionAdapter> {
   const adapter = new CodexStructuredSessionAdapter({
     resolveLaunch: async () => ({
@@ -94,9 +126,7 @@ async function acquired(
     onEvent: (event) => events.push(event),
     openConnection: codex.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
-    captureTurnProcesses: async () => ({ platform: 'win32', identities: new Map() }),
-    terminateTurnProcesses: async () => true,
-    ...processControl
+    ...overrides
   })
   await adapter.acquire({ identity: identity(), fence: 7, spawnToken: 'spawn-9' })
   return adapter
@@ -116,7 +146,7 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
 
     await expect(
       adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-1', fence: 7 })
-    ).resolves.toEqual({ cancelled: true })
+    ).resolves.toEqual({ cancelled: true, turnId: 'turn-1' })
     expect(codex.connections[0].calls.at(-1)).toEqual({
       method: 'turn/interrupt',
       params: { threadId: THREAD_ID, turnId: 'turn-1' }
@@ -139,14 +169,14 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
         turnId: 'turn-1',
         fence: 7
       })
-    ).resolves.toEqual({ cancelled: false })
+    ).resolves.toEqual({ cancelled: false, refusal: {} })
     await expect(
       (await acquired(absent)).cancelTurn({
         sessionId: 'session-1',
         turnId: 'turn-1',
         fence: 7
       })
-    ).resolves.toEqual({ cancelled: false })
+    ).resolves.toEqual({ cancelled: false, refusal: {} })
   })
 
   it('rethrows an unsettled interrupt so the turn is not shown as cancelled', async () => {
@@ -164,75 +194,18 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
     ).rejects.toThrow('exceeded 30000ms')
   })
 
-  it('publishes terminal state only after streaming interruption is physically settled', async () => {
-    const events: CodexStructuredSessionEvent[] = []
-    let finishTermination!: (terminated: boolean) => void
-    const termination = new Promise<boolean>((resolve) => {
-      finishTermination = resolve
-    })
-    const codex = fakeCodex()
-    codex.routes['turn/interrupt'] = () => {
-      completeTurn(codex)
-      return {}
-    }
-    const adapter = await acquired(codex, events, {
-      terminateTurnProcesses: async () => termination
-    })
-    codex.connections[0].handlers.onNotification?.('item/agentMessage/delta', {
-      threadId: THREAD_ID,
-      turnId: 'turn-1',
-      itemId: 'item-1',
-      delta: 'still streaming'
-    })
-
-    const pending = adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-1', fence: 7 })
-    await vi.waitFor(() => expect(codex.connections[0].calls.at(-1)?.method).toBe('turn/interrupt'))
-    expect(events).toContainEqual(expect.objectContaining({ method: 'item/agentMessage/delta' }))
-    expect(events).not.toContainEqual(expect.objectContaining({ method: 'turn/completed' }))
-
-    finishTermination(true)
-    await expect(pending).resolves.toEqual({ cancelled: true })
-    expect(events.at(-1)).toMatchObject({ method: 'turn/completed' })
-  })
-
-  it('starts physical termination without waiting for the interrupt receipt', async () => {
-    let finishInterrupt!: () => void
-    const interruptReceipt = new Promise<void>((resolve) => {
-      finishInterrupt = resolve
-    })
-    const terminateTurnProcesses = vi.fn(async () => true)
-    const codex = fakeCodex()
-    codex.routes['turn/interrupt'] = () => interruptReceipt
-    const adapter = await acquired(codex, [], { terminateTurnProcesses })
-
-    const pending = adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-1', fence: 7 })
-    await vi.waitFor(() => expect(terminateTurnProcesses).toHaveBeenCalledOnce())
-    finishInterrupt()
-
-    await expect(pending).resolves.toEqual({ cancelled: true })
-  })
-
-  it('keeps the turn live when process termination cannot be verified', async () => {
-    const events: CodexStructuredSessionEvent[] = []
-    const codex = fakeCodex()
-    codex.routes['turn/interrupt'] = () => {
-      completeTurn(codex)
-      return {}
-    }
-    const adapter = await acquired(codex, events, {
-      terminateTurnProcesses: async () => false
-    })
-
-    await expect(
-      adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-1', fence: 7 })
-    ).resolves.toEqual({ cancelled: false })
-    expect(events).toContainEqual(expect.objectContaining({ method: 'turn/completed' }))
-  })
-
   it('accepts an immediate resend after verified interruption', async () => {
     let nextTurn = 0
     const codex = fakeCodex()
-    codex.routes['turn/start'] = () => ({ turn: { id: `turn-${++nextTurn}` } })
+    codex.routes['turn/start'] = () => {
+      // Codex opens each turn it answers; a send's dispatch waits for that.
+      const turnId = `turn-${++nextTurn}`
+      codex.connections[0].handlers.onNotification?.('turn/started', {
+        threadId: THREAD_ID,
+        turn: { id: turnId }
+      })
+      return { turn: { id: turnId } }
+    }
     codex.routes['turn/interrupt'] = () => {
       completeTurn(codex)
       return {}
@@ -254,26 +227,84 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
         body: USER_MESSAGE,
         fence: 7
       })
-    ).resolves.toMatchObject({
-      state: 'accepted',
-      providerIdentity: { turnId: 'turn-2' }
+    ).resolves.toEqual({
+      state: 'admitted'
     })
   })
 
-  it('does not strand a deferred completion when the interrupt receipt fails', async () => {
+  it("publishes the turn's end when the interrupt receipt fails", async () => {
     const events: CodexStructuredSessionEvent[] = []
     const codex = fakeCodex()
     codex.routes['turn/interrupt'] = () => {
       completeTurn(codex)
       throw new Error('interrupt receipt lost')
     }
-    const adapter = await acquired(codex, events, {
-      terminateTurnProcesses: async () => true
-    })
+    const adapter = await acquired(codex, events)
 
     await expect(
       adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-1', fence: 7 })
     ).rejects.toThrow('interrupt receipt lost')
     expect(events).toContainEqual(expect.objectContaining({ method: 'turn/completed' }))
+  })
+})
+
+// Codex keeps a turn's background terminals alive across an interrupt and kills its one-shot
+// commands itself, so a Stop is the interrupt alone.
+describe('a Codex Stop is the interrupt alone', () => {
+  async function stopAfterASend() {
+    const events: CodexStructuredSessionEvent[] = []
+    const answer = Promise.withResolvers<unknown>()
+    const codex = fakeCodex()
+    codex.routes['turn/start'] = () => {
+      codex.connections[0].handlers.onNotification?.('turn/started', {
+        threadId: THREAD_ID,
+        turn: { id: 'turn-1' }
+      })
+      return { turn: { id: 'turn-1' } }
+    }
+    codex.routes['turn/interrupt'] = () => answer.promise
+    const adapter = await acquired(codex, events)
+    await adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'client-1',
+      body: USER_MESSAGE,
+      fence: 7
+    })
+    const stopped = adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-1', fence: 7 })
+    await vi.waitFor(() => expect(codex.connections[0].calls.at(-1)?.method).toBe('turn/interrupt'))
+    // Codex answers the interrupt, then sends the turn's end; one read can carry both.
+    const answerThenEnd = (): void => {
+      answer.resolve({})
+      completeTurn(codex)
+    }
+    return { events, stopped, answerThenEnd }
+  }
+
+  it('publishes the interrupted end the moment Codex sends it', async () => {
+    const { events, stopped, answerThenEnd } = await stopAfterASend()
+
+    answerThenEnd()
+
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        method: 'turn/completed',
+        params: expect.objectContaining({ turn: { id: 'turn-1', status: 'interrupted' } })
+      })
+    )
+    await expect(stopped).resolves.toEqual({ cancelled: true, turnId: 'turn-1' })
+  })
+
+  it('reads and kills no processes, from the send through the Stop', async () => {
+    const { stopped, answerThenEnd } = await stopAfterASend()
+
+    answerThenEnd()
+
+    for (const work of Object.values(processWork)) {
+      expect(work).not.toHaveBeenCalled()
+    }
+    await expect(stopped).resolves.toEqual({ cancelled: true, turnId: 'turn-1' })
+    for (const work of Object.values(processWork)) {
+      expect(work).not.toHaveBeenCalled()
+    }
   })
 })

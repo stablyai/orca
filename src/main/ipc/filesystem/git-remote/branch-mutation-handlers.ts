@@ -8,7 +8,7 @@ import {
 } from '../../../providers/ssh-git-dispatch'
 import { resolveRegisteredWorktreePath } from '../../registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
-import { assertGitPushTargetShape } from '../../../../shared/git-push-target-validation'
+import { assertValidGitPushTarget } from '../../../../shared/git-push-target-validation'
 import {
   materializeWorktreePushTargetRemote,
   materializeWorktreePushTargetRemoteSsh
@@ -35,7 +35,7 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
       const publish = args.publish === true
       if (args.connectionId) {
         if (args.pushTarget) {
-          assertGitPushTargetShape(args.pushTarget)
+          assertValidGitPushTarget(args.pushTarget)
         }
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
@@ -99,7 +99,7 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
     ): Promise<void> => {
       if (args.connectionId) {
         if (args.pushTarget) {
-          assertGitPushTargetShape(args.pushTarget)
+          assertValidGitPushTarget(args.pushTarget)
         }
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
@@ -159,7 +159,7 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
     ): Promise<void> => {
       if (args.connectionId) {
         if (args.pushTarget) {
-          assertGitPushTargetShape(args.pushTarget)
+          assertValidGitPushTarget(args.pushTarget)
         }
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {

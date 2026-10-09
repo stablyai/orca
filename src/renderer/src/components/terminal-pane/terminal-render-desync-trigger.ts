@@ -118,3 +118,12 @@ function removeClickListener(): void {
     clickListener = null
   }
 }
+
+if (import.meta !== undefined && import.meta.hot) {
+  // Vite can replace this module without a full renderer reload. Remove the
+  // opt-in gesture hook so dev sessions do not retain stale pane closures.
+  import.meta.hot.dispose(() => {
+    removeClickListener()
+    stopRenderDesyncSampleBurst()
+  })
+}

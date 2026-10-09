@@ -3,18 +3,28 @@
 // of re-reading the whole transcript corpus (issue #9210: 6.7 GB / 109 s cold
 // scans). Disabled unless the composition root calls init; every failure mode
 // degrades to today's cold-scan behavior.
-import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
+import { readStreamedSessionDocument } from './session-document-stream'
+import { MAX_CACHE_ENTRIES } from './session-parse-cache-store'
+import {
+  assertSessionParseCacheJsonWithinLimitsCooperatively,
+  serializeSessionParseCacheSnapshotPiecesCooperatively,
+  SESSION_PARSE_CACHE_SCHEMA_VERSION,
+  SESSION_PARSE_CACHE_MAX_BYTES
+} from './session-parse-cache-snapshot-serialization'
 import {
   seedSessionParseCache,
   snapshotSessionParseCacheForPersistence,
   type PersistedSessionParseCacheEntry,
   type SessionParseStats
 } from './session-scanner-parse-cache'
+import type { SessionSidecarObservation } from './session-sidecar-stat'
 
 // Bump when the persisted entry layout or cached session semantics change; a
 // mismatched file is discarded whole.
-const SCHEMA_VERSION = 2
+const SCHEMA_VERSION = SESSION_PARSE_CACHE_SCHEMA_VERSION
 // Debounce so back-to-back scans (desktop IPC + runtime RPC) collapse into one write.
 const SAVE_DEBOUNCE_MS = 1_500
 // The payload contains transcript-derived preview text; keep it user-only
@@ -107,8 +117,12 @@ export const flushSessionParseCachePersistForTests = flushSessionParseCachePersi
 async function loadPersistedEntries(current: SessionParseCachePersistenceOptions): Promise<void> {
   await sweepOrphanedTempFiles(current.filePath)
   try {
-    const raw = await readFile(current.filePath, 'utf-8')
-    const entries = parsePersistedFile(JSON.parse(raw))
+    const { buffer } = await readNodeFileWithinLimit(
+      current.filePath,
+      SESSION_PARSE_CACHE_MAX_BYTES
+    )
+    await assertSessionParseCacheJsonWithinLimitsCooperatively(buffer)
+    const entries = await parsePersistedFile(buffer)
     if (entries) {
       seedSessionParseCache(entries)
     }
@@ -135,29 +149,44 @@ async function sweepOrphanedTempFiles(filePath: string): Promise<void> {
   }
 }
 
-function parsePersistedFile(parsed: unknown): [string, PersistedSessionParseCacheEntry][] | null {
-  if (typeof parsed !== 'object' || parsed === null) {
-    return null
-  }
-  const file = parsed as Record<string, unknown>
+async function parsePersistedFile(
+  buffer: Buffer
+): Promise<[string, PersistedSessionParseCacheEntry][] | null> {
+  const parsed = await readStreamedSessionDocument({
+    bytes: cacheFileChunks(buffer),
+    arrayKey: 'entries',
+    fields: ['schemaVersion', 'appVersion'],
+    create: () => new Map<string, PersistedSessionParseCacheEntry>(),
+    consume(entries, item) {
+      const entry = parsePersistedEntry(item)
+      if (entry === null) {
+        throw new Error('Malformed session parse cache row')
+      }
+      entries.delete(entry[0])
+      entries.set(entry[0], entry[1])
+      if (entries.size > MAX_CACHE_ENTRIES) {
+        const oldest = entries.keys().next()
+        if (!oldest.done) {
+          entries.delete(oldest.value)
+        }
+      }
+    }
+  })
   // Why: application releases that keep this schema promise compatible cached
   // session semantics, so an update does not force a multi-gigabyte cold scan.
-  if (file.schemaVersion !== SCHEMA_VERSION || typeof file.appVersion !== 'string') {
+  if (
+    parsed?.record.schemaVersion !== SCHEMA_VERSION ||
+    typeof parsed.record.appVersion !== 'string'
+  ) {
     return null
   }
-  if (!Array.isArray(file.entries)) {
-    return null
+  return [...parsed.state]
+}
+
+async function* cacheFileChunks(buffer: Buffer): AsyncGenerator<Buffer> {
+  for (let start = 0; start < buffer.length; start += 64 * 1024) {
+    yield buffer.subarray(start, start + 64 * 1024)
   }
-  const entries: [string, PersistedSessionParseCacheEntry][] = []
-  for (const item of file.entries) {
-    const entry = parsePersistedEntry(item)
-    if (entry === null) {
-      // One malformed entry means the file can't be trusted; discard it whole.
-      return null
-    }
-    entries.push(entry)
-  }
-  return entries
 }
 
 function parsePersistedEntry(item: unknown): [string, PersistedSessionParseCacheEntry] | null {
@@ -181,28 +210,50 @@ function parsePersistedEntry(item: unknown): [string, PersistedSessionParseCache
   if (entry.session !== null && typeof entry.session !== 'object') {
     return null
   }
+  const sidecar = parsePersistedSidecar(entry.sidecar)
   return [
     path,
     {
       mtimeMs: entry.mtimeMs,
       sizeBytes: entry.sizeBytes,
       platform: entry.platform as NodeJS.Platform,
-      session: entry.session as PersistedSessionParseCacheEntry['session']
+      session: entry.session as PersistedSessionParseCacheEntry['session'],
+      ...(sidecar === undefined ? {} : { sidecar })
     }
   ]
+}
+
+// Why: added after SCHEMA_VERSION 2 shipped, so a file an older build wrote has
+// no such field. Absent (or unreadable) means unknown, which costs one re-parse
+// of the rows that have a sibling and nothing at all for the rest.
+function parsePersistedSidecar(value: unknown): SessionSidecarObservation | undefined {
+  if (value === 'none' || value === 'unknown') {
+    return value
+  }
+  if (typeof value !== 'object' || value === null) {
+    return undefined
+  }
+  const record = value as Record<string, unknown>
+  return typeof record.path === 'string' &&
+    typeof record.mtimeMs === 'number' &&
+    typeof record.sizeBytes === 'number'
+    ? { path: record.path, mtimeMs: record.mtimeMs, sizeBytes: record.sizeBytes }
+    : undefined
 }
 
 async function persistSnapshot(current: SessionParseCachePersistenceOptions): Promise<void> {
   const directory = dirname(current.filePath)
   const tempPath = join(directory, `session-parse-cache-${process.pid}-${Date.now()}.tmp`)
   try {
-    const payload = JSON.stringify({
-      schemaVersion: SCHEMA_VERSION,
-      appVersion: current.appVersion,
-      entries: snapshotSessionParseCacheForPersistence()
-    })
+    const payload = await serializeSessionParseCacheSnapshotPiecesCooperatively(
+      snapshotSessionParseCacheForPersistence(),
+      current.appVersion
+    )
+    if (payload === null) {
+      return
+    }
     await mkdir(directory, { recursive: true, mode: PRIVATE_DIRECTORY_MODE })
-    await writeFile(tempPath, payload, { mode: PRIVATE_FILE_MODE })
+    await writeFile(tempPath, payload.pieces, { mode: PRIVATE_FILE_MODE })
     // Atomic on POSIX; on Windows a rename racing an open handle fails and is
     // caught below (save lost, never a torn file).
     await rename(tempPath, current.filePath)

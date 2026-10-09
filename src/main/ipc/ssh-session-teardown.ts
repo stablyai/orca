@@ -1,8 +1,16 @@
+import type { DirectSshAuthority } from '../../shared/ssh-types'
 import type { SshConnection } from '../ssh/ssh-connection'
 import type { SshRelaySession } from '../ssh/ssh-relay-session'
 import { getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
+import { clearSshHostServerStatus } from '../ssh/ssh-host-server-status'
+import { recordSshRelayRuntimeStep } from '../ssh/ssh-host-node-runtime-mode'
+import { isSshConnectionSolelyOwnedBy } from '../ssh/ssh-connection-attribution'
 import { activeSessions } from './ssh-active-relay-sessions'
-import { invalidateConnectAttempt } from './ssh-connect-attempt-registry'
+import {
+  connectInFlight,
+  invalidateConnectAttempt,
+  isCurrentConnectAttempt
+} from './ssh-connect-attempt-registry'
 import { connectionManager, persistedStore, portForwardManager } from './ssh-ipc-context'
 import { clearRelayLostBackoff } from './ssh-relay-lost-backoff'
 import { clearRelayStateOverride } from './ssh-renderer-broadcast'
@@ -10,6 +18,7 @@ import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
 
 export async function disconnectRegisteredSshTarget(targetId: string): Promise<void> {
   invalidateConnectAttempt(targetId)
+  clearSshHostServerStatus(targetId)
   await runTargetLifecycle(targetId, () =>
     teardownSshTargetTransport(targetId, (session) => session.detachAndPersist())
   )
@@ -21,6 +30,8 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
     return
   }
   invalidateConnectAttempt(targetId)
+  clearSshHostServerStatus(targetId)
+  recordSshRelayRuntimeStep(targetId, false)
   await runTargetLifecycle(targetId, async () => {
     try {
       // Why: removal is destructive; dispose so remote PTYs cannot reattach to a deleted target.
@@ -162,6 +173,39 @@ export async function abandonCancelledConnectAttempt(
     // Why: the caller is about to throw the cancellation; a teardown throw must not replace it.
     console.warn(
       `[ssh] Failed to disconnect cancelled connect transport for ${targetId}: ${error instanceof Error ? error.message : String(error)}`
+    )
+  }
+}
+
+/**
+ * A cancelled connect, or one whose server decision failed, closes the transport its own decision
+ * opened (a census, deploy or conversion), and only while nothing newer took it over: a completed
+ * replacement connect or a managed tunnel adopts it, and a pending replacement may be about to.
+ */
+export async function abandonDecisionTransport(
+  targetId: string,
+  owner: symbol,
+  authority: DirectSshAuthority
+): Promise<void> {
+  const opened = connectionManager!.getConnection(targetId)
+  const newer = connectInFlight.get(targetId)
+  // A pending replacement may be about to reuse it, though it has not adopted it yet. While this
+  // attempt is still current the in-flight entry is its own, so nothing newer can exist.
+  if (
+    !opened ||
+    !isSshConnectionSolelyOwnedBy(opened, owner) ||
+    (newer &&
+      isCurrentConnectAttempt(targetId, newer.authority) &&
+      !isCurrentConnectAttempt(targetId, authority))
+  ) {
+    return
+  }
+  try {
+    await connectionManager!.disconnectConnection(targetId, opened)
+  } catch (error) {
+    // Why: the caller is about to throw the cancellation; a teardown throw must not replace it.
+    console.warn(
+      `[ssh] Failed to close the transport a cancelled decision opened for ${targetId}: ${error instanceof Error ? error.message : String(error)}`
     )
   }
 }

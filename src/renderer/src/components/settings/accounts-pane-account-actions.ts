@@ -25,7 +25,8 @@ import type {
 import {
   getClaudeAccountErrorDescription,
   getCodexAccountErrorDescription,
-  isClaudeAccountCancellation
+  isClaudeAccountCancellation,
+  isCodexAccountCancellation
 } from './accounts-pane-action-errors'
 import { getClaudeAccountLabel } from './accounts-pane-runtime'
 
@@ -117,6 +118,11 @@ export function createCodexAccountActionRunner(
         })
       }
     } catch (error) {
+      // Why: cancelling — from the Cancel button, or by asking for a new login
+      // that supersedes this one — is the user's own doing, not a failure.
+      if (isCodexAccountCancellation(error)) {
+        return
+      }
       toast.error(
         translate(
           'auto.components.settings.AccountsPane.5bf8764953',

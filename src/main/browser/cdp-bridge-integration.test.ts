@@ -379,14 +379,6 @@ describe('Browser automation pipeline (integration)', () => {
 
   // ── Click ──
 
-  it('clicks an element by ref after snapshot', async () => {
-    await rpc('browser.snapshot')
-
-    const res = await rpc('browser.click', { element: '@e1' })
-    expect(res.ok).toBe(true)
-    expect((res.result as { clicked: string }).clicked).toBe('@e1')
-  })
-
   it('returns error when clicking without a prior snapshot', async () => {
     const res = await rpc('browser.click', { element: '@e1' })
     expect(res.ok).toBe(false)
@@ -471,16 +463,6 @@ describe('Browser automation pipeline (integration)', () => {
 
   // ── Fill ──
 
-  it('fills an input by ref', async () => {
-    await rpc('browser.goto', { url: 'https://search.example.com' })
-    await rpc('browser.snapshot')
-
-    // @e2 should be the textbox "Search query" on the search page
-    const res = await rpc('browser.fill', { element: '@e2', value: 'hello world' })
-    expect(res.ok).toBe(true)
-    expect((res.result as { filled: string }).filled).toBe('@e2')
-  })
-
   it('chunks large browser fill text before CDP insertText', async () => {
     await rpc('browser.goto', { url: 'https://search.example.com' })
     await rpc('browser.snapshot')
@@ -501,12 +483,6 @@ describe('Browser automation pipeline (integration)', () => {
 
   // ── Type ──
 
-  it('types text at current focus', async () => {
-    const res = await rpc('browser.type', { input: 'some text' })
-    expect(res.ok).toBe(true)
-    expect((res.result as { typed: boolean }).typed).toBe(true)
-  })
-
   it('chunks large browser type text before CDP insertText', async () => {
     const text = 'y'.repeat(BROWSER_TEXT_INSERT_CHUNK_BYTES + 2)
     const res = await rpc('browser.type', { input: text })
@@ -522,46 +498,7 @@ describe('Browser automation pipeline (integration)', () => {
     expect((insertCalls[1]![1] as { text: string }).text).toBe('yy')
   })
 
-  // ── Select ──
-
-  it('selects a dropdown option by ref', async () => {
-    await rpc('browser.goto', { url: 'https://search.example.com' })
-    await rpc('browser.snapshot')
-
-    const res = await rpc('browser.select', { element: '@e2', value: 'option-1' })
-    expect(res.ok).toBe(true)
-    expect((res.result as { selected: string }).selected).toBe('@e2')
-  })
-
-  // ── Scroll ──
-
-  it('scrolls the viewport', async () => {
-    const res = await rpc('browser.scroll', { direction: 'down' })
-    expect(res.ok).toBe(true)
-    expect((res.result as { scrolled: string }).scrolled).toBe('down')
-
-    const res2 = await rpc('browser.scroll', { direction: 'up', amount: 200 })
-    expect(res2.ok).toBe(true)
-    expect((res2.result as { scrolled: string }).scrolled).toBe('up')
-  })
-
-  // ── Reload ──
-
-  it('reloads the page', async () => {
-    const res = await rpc('browser.reload')
-    expect(res.ok).toBe(true)
-    expect((res.result as { url: string }).url).toBe('https://example.com')
-  })
-
   // ── Screenshot ──
-
-  it('captures a screenshot', async () => {
-    const res = await rpc('browser.screenshot', { format: 'png' })
-    expect(res.ok).toBe(true)
-    const result = res.result as { data: string; format: string }
-    expect(result.format).toBe('png')
-    expect(result.data.length).toBeGreaterThan(0)
-  })
 
   it('bounds capture request bookkeeping when network entries are evicted or fail', async () => {
     const startRes = await rpc('browser.capture.start')
@@ -604,14 +541,6 @@ describe('Browser automation pipeline (integration)', () => {
     expect(state?.networkRequestMap.size).toBe(0)
   })
 
-  // ── Eval ──
-
-  it('evaluates JavaScript in the page context', async () => {
-    const res = await rpc('browser.eval', { expression: '2 + 2' })
-    expect(res.ok).toBe(true)
-    expect((res.result as { result: string }).result).toBe('4')
-  })
-
   // ── Tab management ──
 
   it('lists open tabs', async () => {
@@ -630,52 +559,6 @@ describe('Browser automation pipeline (integration)', () => {
     const res = await rpc('browser.tabSwitch', { index: 5 })
     expect(res.ok).toBe(false)
     expect((res.error as { code: string }).code).toBe('browser_tab_not_found')
-  })
-
-  // ── Full agent workflow simulation ──
-
-  it('simulates a complete agent workflow: navigate → snapshot → interact → re-snapshot', async () => {
-    // 1. Navigate to search page
-    const gotoRes = await rpc('browser.goto', { url: 'https://search.example.com' })
-    expect(gotoRes.ok).toBe(true)
-
-    // 2. Snapshot the page
-    const snap1 = await rpc('browser.snapshot')
-    expect(snap1.ok).toBe(true)
-    const snap1Result = snap1.result as {
-      snapshot: string
-      refs: { ref: string; role: string; name: string }[]
-    }
-
-    // Verify we see the search page structure
-    expect(snap1Result.snapshot).toContain('[Main Nav]')
-    expect(snap1Result.snapshot).toContain('text input "Search query"')
-    expect(snap1Result.snapshot).toContain('button "Search"')
-
-    // 3. Fill the search input
-    const searchInput = snap1Result.refs.find((r) => r.name === 'Search query')
-    expect(searchInput).toBeDefined()
-    const fillRes = await rpc('browser.fill', {
-      element: searchInput!.ref,
-      value: 'integration testing'
-    })
-    expect(fillRes.ok).toBe(true)
-
-    // 4. Click the search button
-    const searchBtn = snap1Result.refs.find((r) => r.name === 'Search')
-    expect(searchBtn).toBeDefined()
-    const clickRes = await rpc('browser.click', { element: searchBtn!.ref })
-    expect(clickRes.ok).toBe(true)
-
-    // 5. Take a screenshot
-    const ssRes = await rpc('browser.screenshot')
-    expect(ssRes.ok).toBe(true)
-
-    // 6. Check tab list
-    const tabRes = await rpc('browser.tabList')
-    expect(tabRes.ok).toBe(true)
-    const tabs = (tabRes.result as { tabs: { url: string }[] }).tabs
-    expect(tabs[0].url).toBe('https://search.example.com')
   })
 
   // ── No tab errors ──

@@ -34,6 +34,8 @@ export function setupGrabShortcutForwarding(args: {
     }
 
     if (
+      // Why: the renderer toggles the picker per message, so a held chord would flicker it.
+      input.isAutoRepeat ||
       !keybindingMatchesAction('browser.grabElement', input, process.platform, getKeybindings?.())
     ) {
       return
@@ -66,7 +68,7 @@ export function setupGrabShortcutForwarding(args: {
         if (!renderer) {
           return
         }
-        renderer.send('browser:grabModeToggle', browserTabId)
+        renderer.send('browser:grabModeToggle', browserTabId, 'copy')
       })
       .catch(() => {
         // Why: shortcut forwarding is best-effort — guest teardown or a transient executeJavaScript failure must not break normal copy.

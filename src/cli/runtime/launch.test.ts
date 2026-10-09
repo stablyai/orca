@@ -70,6 +70,8 @@ const SSH_RECIPE_JSON = JSON.stringify({
 })
 const INVALID_SSH_RECIPE_JSON = SSH_RECIPE_JSON.replace('/workspace/repo', 'relative/repo')
 const IGNORED_NON_RECIPE_STDOUT = '[serve] ignored non-recipe stdout'
+const PROFILE = resolve('/profiles/serve')
+const PIN_PROFILE = `--user-data-dir=${PROFILE}`
 
 function startRecipeJsonServer() {
   const child = new FakeChildProcess()
@@ -90,10 +92,14 @@ describe('serveOrcaApp', () => {
     spawnMock.mockReset()
     spawnSyncMock.mockReset()
     process.env.ORCA_APP_EXECUTABLE = '/Applications/Orca.app/Contents/MacOS/Orca'
+    // These cover Electron serve itself; the orcad default is in launch-serve-runtime.test.ts.
+    process.env.ORCA_SERVE_RUNTIME = 'electron'
+    process.env.ORCA_USER_DATA_PATH = PROFILE
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
+    delete process.env.ORCA_SERVE_RUNTIME
     delete process.env.ORCA_APP_EXECUTABLE
     delete process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT
     delete process.env.ORCA_USER_DATA_PATH
@@ -346,7 +352,7 @@ describe('serveOrcaApp', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       '/Applications/Orca.app/Contents/MacOS/Orca',
-      ['--serve', '--serve-json'],
+      [PIN_PROFILE, '--serve', '--serve-json'],
       expect.objectContaining({
         cwd: resolve(__dirname, '../../..')
       })
@@ -379,6 +385,7 @@ describe('serveOrcaApp', () => {
     expect(spawnMock).toHaveBeenCalledWith(
       '/Applications/Orca.app/Contents/MacOS/Orca',
       [
+        PIN_PROFILE,
         '--serve',
         '--serve-json',
         '--serve-port',
@@ -413,7 +420,14 @@ describe('serveOrcaApp', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       '/repo/node_modules/.bin/electron',
-      [resolve(__dirname, '../../..'), '--serve', '--serve-json', '--serve-port', '6768'],
+      [
+        resolve(__dirname, '../../..'),
+        PIN_PROFILE,
+        '--serve',
+        '--serve-json',
+        '--serve-port',
+        '6768'
+      ],
       expect.objectContaining({
         cwd: resolve(__dirname, '../../..')
       })
@@ -463,7 +477,7 @@ describe('serveOrcaApp', () => {
         )
         expect(spawnMock).toHaveBeenCalledWith(
           executable,
-          [...expectedPrefix, '--serve', '--serve-json'],
+          [...expectedPrefix, PIN_PROFILE, '--serve', '--serve-json'],
           // Foreground serve must share POSIX job-control signals with its CLI supervisor.
           expect.objectContaining({ detached: false })
         )
@@ -499,6 +513,7 @@ describe('serveOrcaApp', () => {
     expect(spawnMock).toHaveBeenCalledWith(
       '/Applications/Orca.app/Contents/MacOS/Orca',
       [
+        PIN_PROFILE,
         '--serve',
         '--serve-pairing-address',
         'wss://sandbox.example.com',
@@ -619,7 +634,7 @@ describe('serveOrcaApp', () => {
       await expect(serveOrcaApp({ json: true })).resolves.toBe(0)
       expect(spawnMock).toHaveBeenCalledWith(
         'C:\\repo\\node_modules\\.bin\\electron.cmd',
-        ['--serve', '--serve-json'],
+        [PIN_PROFILE, '--serve', '--serve-json'],
         expect.objectContaining({
           shell: true
         })
@@ -636,9 +651,11 @@ describe('launchOrcaApp', () => {
   beforeEach(() => {
     spawnMock.mockReset()
     spawnSyncMock.mockReset()
+    process.env.ORCA_USER_DATA_PATH = PROFILE
   })
 
   afterEach(() => {
+    delete process.env.ORCA_USER_DATA_PATH
     delete process.env.ORCA_OPEN_COMMAND
     delete process.env.ORCA_APP_EXECUTABLE
     delete process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT
@@ -681,7 +698,7 @@ describe('launchOrcaApp', () => {
       )
       expect(spawnMock).toHaveBeenCalledWith(
         executable,
-        ['--no-sandbox'],
+        ['--no-sandbox', PIN_PROFILE],
         expect.objectContaining({
           detached: true,
           stdio: 'ignore',

@@ -8,7 +8,6 @@ const { handleMock, randomUUIDMock, mockStore } = vi.hoisted(() => ({
   mockStore: {
     getRepos: vi.fn().mockReturnValue([]),
     addRepo: vi.fn(),
-    removeProject: vi.fn(),
     getRepo: vi.fn(),
     updateRepo: vi.fn(),
     getSparsePresets: vi.fn(),
@@ -43,7 +42,8 @@ vi.mock('../git/repo', () => ({
 }))
 
 vi.mock('./registered-worktree-roots-cache', () => ({
-  invalidateAuthorizedRootsCache: vi.fn()
+  invalidateAuthorizedRootsCache: vi.fn(),
+  invalidateAuthorizedRootsCacheForRepo: vi.fn()
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({

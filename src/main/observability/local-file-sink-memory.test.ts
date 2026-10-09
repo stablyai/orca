@@ -2,11 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  createLocalFileSink,
-  DROPPED_RECORD_TYPE,
-  type LocalFileSink
-} from './local-file-sink'
+import { createLocalFileSink, DROPPED_RECORD_TYPE, type LocalFileSink } from './local-file-sink'
 
 function parseLine(raw: string): Record<string, unknown> {
   return JSON.parse(raw) as Record<string, unknown>

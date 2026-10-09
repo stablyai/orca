@@ -1,3 +1,4 @@
+import { validatePathExistenceBatch } from '../../shared/path-existence-batch'
 import { ipcMain, shell, dialog } from 'electron'
 import { constants, copyFile, readFile, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute, normalize, posix, win32 } from 'node:path'
@@ -204,6 +205,11 @@ export function registerShellHandlers(store: Store): void {
     await openWithSystemDefault(target.path)
   })
 
+  ipcMain.handle('shell:pathsExist', async (_event, paths: string[]): Promise<boolean[]> => {
+    validatePathExistenceBatch(paths)
+    return Promise.all(paths.map(pathExists))
+  })
+
   ipcMain.handle('shell:pathExists', async (_event, filePath: string): Promise<boolean> => {
     return pathExists(filePath)
   })
@@ -234,6 +240,15 @@ export function registerShellHandlers(store: Store): void {
       return null
     }
     return result.filePaths[0]
+  })
+
+  // Why: a separate plural handler, like repos:pickFolder/pickFolders — callers that
+  // must take exactly one file (the notebook interpreter picker) keep pickAttachment.
+  ipcMain.handle('shell:pickAttachments', async (): Promise<string[]> => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile', 'multiSelections']
+    })
+    return result.canceled ? [] : result.filePaths
   })
 
   // Why: window.prompt() and <input type="file"> are unreliable in Electron,

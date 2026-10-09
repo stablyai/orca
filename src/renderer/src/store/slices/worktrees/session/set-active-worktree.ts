@@ -24,6 +24,7 @@ import {
 } from '../listing/detected-worktree-meta'
 import { persistPassiveWorktreeMetaForOwner } from '../listing/worktree-owner-settings'
 import { resolveActivatedWorktreeSurface } from './active-worktree-surface'
+import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import {
   pendingActivationTerminalPrepCancels,
   shouldDeferActivationTerminalPrep
@@ -35,6 +36,9 @@ export function createSetActiveWorktree(
 ): WorktreeSlice['setActiveWorktree'] {
   return (worktreeId, executionHostId, options) => {
     const stateTransition = options?.stateTransition?.(get())
+    const createdTabIds = new Set(options?.createdTabIds)
+    // A tab its caller just created is not asleep: its first bind is new work, not a wake.
+    const isWakeable = (tab: { id: string }): boolean => !createdTabIds.has(tab.id)
     if (stateTransition && !stateTransition.activate) {
       if (Object.keys(stateTransition.patch).length > 0) {
         set(stateTransition.patch)
@@ -101,15 +105,16 @@ export function createSetActiveWorktree(
       // Tag every tab on FIRST activation so reattach/fresh-spawn updateTabPtyId suppresses activity + sortEpoch bumps.
       // Generation is only bumped when no tab has a live PTY — a live remount would kill the user's shell.
       const tabs = s.tabsByWorktree[worktreeId ?? ''] ?? []
+      const wakeable = tabs.filter(isWakeable)
       const allDead =
         worktreeId != null &&
-        tabs.length > 0 &&
-        tabs.every((tab) => !tabHasLivePty(s.ptyIdsByTabId, tab.id))
+        wakeable.length > 0 &&
+        wakeable.every((tab) => !tabHasLivePty(s.ptyIdsByTabId, tab.id))
       const isFirstActivation = worktreeId != null && !s.everActivatedWorktreeIds.has(worktreeId)
-      const shouldTagTabs = worktreeId != null && tabs.length > 0 && isFirstActivation
+      const shouldTagTabs = worktreeId != null && wakeable.length > 0 && isFirstActivation
       // Why: bump generation in the same set() as activation so a dead-transport pane can't go visible-but-dead before remount.
       shouldPrepareTerminalTabs = Boolean(
-        worktreeId && tabs.length > 0 && shouldTagTabs && !allDead
+        worktreeId && wakeable.length > 0 && shouldTagTabs && !allDead
       )
       shouldTagTerminalTabs = shouldTagTabs
       const nextEverActivated = isFirstActivation
@@ -140,13 +145,17 @@ export function createSetActiveWorktree(
           ? {
               tabsByWorktree: {
                 ...s.tabsByWorktree,
-                [worktreeId]: tabs.map((tab) => ({
-                  ...tab,
-                  generation: (tab.generation ?? 0) + 1,
-                  pendingActivationSpawn: getTerminalActivationSpawnSuppression(
-                    s.terminalLayoutsByTabId[tab.id]
-                  )
-                }))
+                [worktreeId]: tabs.map((tab) =>
+                  !isWakeable(tab)
+                    ? tab
+                    : {
+                        ...tab,
+                        generation: (tab.generation ?? 0) + 1,
+                        pendingActivationSpawn: getTerminalActivationSpawnSuppression(
+                          s.terminalLayoutsByTabId[tab.id]
+                        )
+                      }
+                )
               }
             }
           : {}
@@ -206,32 +215,42 @@ export function createSetActiveWorktree(
       }
     })
 
+    // Why: any activation is an explicit wake (null is the sleep flow clearing selection).
+    // Cleared after the set() above so a pane still waiting on the marker connects once,
+    // in the remounted generation, instead of connecting and then being remounted.
+    clearWorktreeSleepIntent(worktreeId)
+
     if (worktreeId && shouldPrepareTerminalTabs) {
       const prepareTerminalTabs = (): void => {
         pendingActivationTerminalPrepCancels.delete(worktreeId)
         set((s) => {
           if (s.activeWorktreeId !== worktreeId) {
-            return {}
+            return s
           }
           const tabs = s.tabsByWorktree[worktreeId] ?? []
-          if (tabs.length === 0) {
-            return {}
+          const wakeable = tabs.filter(isWakeable)
+          if (wakeable.length === 0) {
+            return s
           }
-          const allDead = tabs.every((tab) => !tabHasLivePty(s.ptyIdsByTabId, tab.id))
+          const allDead = wakeable.every((tab) => !tabHasLivePty(s.ptyIdsByTabId, tab.id))
           if (!allDead && !shouldTagTerminalTabs) {
-            return {}
+            return s
           }
           return {
             tabsByWorktree: {
               ...s.tabsByWorktree,
-              [worktreeId]: tabs.map((tab) => ({
-                ...tab,
-                ...(allDead ? { generation: (tab.generation ?? 0) + 1 } : {}),
-                // Why: slept terminal remount/spawn is click-driven wake work; tag its PTY updates so they don't reshuffle Recent.
-                pendingActivationSpawn: getTerminalActivationSpawnSuppression(
-                  s.terminalLayoutsByTabId[tab.id]
-                )
-              }))
+              [worktreeId]: tabs.map((tab) =>
+                !isWakeable(tab)
+                  ? tab
+                  : {
+                      ...tab,
+                      ...(allDead ? { generation: (tab.generation ?? 0) + 1 } : {}),
+                      // Why: slept terminal remount/spawn is click-driven wake work; tag its PTY updates so they don't reshuffle Recent.
+                      pendingActivationSpawn: getTerminalActivationSpawnSuppression(
+                        s.terminalLayoutsByTabId[tab.id]
+                      )
+                    }
+              )
             }
           }
         })

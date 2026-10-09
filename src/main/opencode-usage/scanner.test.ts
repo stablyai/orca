@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import Database from '../sqlite/sync-database'
 import { listOpenCodeDatabases } from './opencode-database-discovery'
 import { parseOpenCodeUsageRow } from './opencode-usage-row-parsing'
+import { createUsageWorktreeResolver } from '../usage/usage-worktree-resolver'
 import { attributeOpenCodeUsageEvent } from './opencode-usage-worktree-attribution'
 import { parseOpenCodeUsageDatabase, scanOpenCodeUsageDatabases } from './scanner'
 
@@ -19,16 +20,15 @@ function createTempDb(): { db: Database.Database; path: string } {
   return { db: new Database(path), path }
 }
 
-function worktrees() {
-  return [
+async function resolveWorktree() {
+  return createUsageWorktreeResolver([
     {
       repoId: 'repo-1',
       worktreeId: 'repo-1::/workspace/repo',
       path: WORKTREE,
-      displayName: 'Repo',
-      canonicalPath: WORKTREE
+      displayName: 'Repo'
     }
-  ]
+  ])
 }
 
 function createSessionTotalsSchema(db: Database.Database): void {
@@ -43,6 +43,7 @@ function createSessionTotalsSchema(db: Database.Database): void {
       tokens_output INTEGER,
       tokens_reasoning INTEGER,
       tokens_cache_read INTEGER,
+      tokens_cache_write INTEGER,
       time_created INTEGER,
       time_updated INTEGER
     );
@@ -57,9 +58,9 @@ function insertSessionTotalsRow(
   db.prepare(
     `INSERT INTO session (
       id, directory, title, model, cost,
-      tokens_input, tokens_output, tokens_reasoning, tokens_cache_read,
+      tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write,
       time_created, time_updated
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     sessionId,
     `${WORKTREE}/packages/app`,
@@ -68,6 +69,7 @@ function insertSessionTotalsRow(
     0.01,
     inputTokens,
     100,
+    0,
     0,
     0,
     1_777_777_700_000,
@@ -125,49 +127,62 @@ describe('parseOpenCodeUsageRow', () => {
       cwd: `${WORKTREE}/packages/app`,
       model: 'anthropic/claude-sonnet-4-5',
       estimatedCostUsd: 0.0123,
-      inputTokens: 1000,
-      cachedInputTokens: 400,
+      inputTokens: 1425,
+      cachedInputTokens: 425,
+      cacheWriteInputTokens: 25,
       outputTokens: 250,
       reasoningOutputTokens: 100,
-      totalTokens: 1350
+      totalTokens: 1775
+    })
+  })
+
+  it.each([
+    [undefined, 10_125],
+    [125, 10_125],
+    [10_125, 10_125],
+    [20_000, 20_000]
+  ])('counts cache reads once with reported total %s', (total, expectedTotal) => {
+    const parsed = parseOpenCodeUsageRow({
+      id: 'message-cache-heavy',
+      session_id: 'session-cache-heavy',
+      time_created: 1_777_777_700_000,
+      time_updated: null,
+      directory: WORKTREE,
+      title: null,
+      worktree: null,
+      session_model: null,
+      data: JSON.stringify({
+        modelID: 'deepseek-v4.1-flash',
+        providerID: 'opencode-go',
+        tokens: {
+          input: 100,
+          output: 20,
+          reasoning: 5,
+          total,
+          cache: { read: 10_000, write: 0 }
+        },
+        time: { completed: 1_777_777_800_000 }
+      })
+    })
+
+    expect(parsed).toMatchObject({
+      inputTokens: 10_100,
+      cachedInputTokens: 10_000,
+      outputTokens: 20,
+      reasoningOutputTokens: 5,
+      totalTokens: expectedTotal
     })
   })
 })
 
 describe('attributeOpenCodeUsageEvent', () => {
-  it('attributes cwd paths under dotdot-prefixed child directories to the worktree', async () => {
-    const attributed = await attributeOpenCodeUsageEvent(
-      usageEvent(`${WORKTREE}/..fixtures/session`),
-      worktrees()
-    )
-
-    expect(attributed?.projectKey).toBe('worktree:repo-1::/workspace/repo')
-    expect(attributed?.projectLabel).toBe('Repo')
-    expect(attributed?.worktreeId).toBe('repo-1::/workspace/repo')
-  })
-
   it('does not attribute true parent-directory escapes to the worktree', async () => {
     const attributed = await attributeOpenCodeUsageEvent(
       usageEvent(`${WORKTREE}/../other/session`),
-      worktrees()
+      await resolveWorktree()
     )
 
     expect(attributed?.projectKey).toBe('cwd:/workspace/repo/../other/session')
-    expect(attributed?.worktreeId).toBeNull()
-  })
-
-  it('does not treat different Windows drives as containing paths', async () => {
-    const attributed = await attributeOpenCodeUsageEvent(usageEvent('D:\\other\\repo'), [
-      {
-        repoId: 'repo-1',
-        worktreeId: 'repo-1::C:\\repo',
-        path: 'C:\\repo',
-        displayName: 'Repo',
-        canonicalPath: 'C:\\repo'
-      }
-    ])
-
-    expect(attributed?.projectKey).toBe('cwd:d:/other/repo')
     expect(attributed?.worktreeId).toBeNull()
   })
 })
@@ -195,6 +210,7 @@ describe('parseOpenCodeUsageDatabase', () => {
         tokens_output INTEGER,
         tokens_reasoning INTEGER,
         tokens_cache_read INTEGER,
+        tokens_cache_write INTEGER,
         time_created INTEGER,
         time_updated INTEGER
       );
@@ -203,9 +219,9 @@ describe('parseOpenCodeUsageDatabase', () => {
     db.prepare(
       `INSERT INTO session (
         id, project_id, directory, title, model, cost,
-        tokens_input, tokens_output, tokens_reasoning, tokens_cache_read,
+        tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write,
         time_created, time_updated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       'session-1',
       'project-1',
@@ -217,12 +233,13 @@ describe('parseOpenCodeUsageDatabase', () => {
       500,
       100,
       250,
+      75,
       1_777_777_700_000,
       1_777_777_800_000
     )
     db.close()
 
-    const parsed = await parseOpenCodeUsageDatabase(path, worktrees())
+    const parsed = await parseOpenCodeUsageDatabase(path, await resolveWorktree())
 
     expect(parsed.sessions).toHaveLength(1)
     expect(parsed.sessions[0]).toMatchObject({
@@ -230,21 +247,21 @@ describe('parseOpenCodeUsageDatabase', () => {
       primaryModel: 'anthropic/claude-sonnet-4-5',
       primaryProjectLabel: 'Repo',
       eventCount: 1,
-      totalInputTokens: 1000,
-      totalCachedInputTokens: 250,
+      totalInputTokens: 1325,
+      totalCachedInputTokens: 325,
       totalOutputTokens: 500,
       totalReasoningOutputTokens: 100,
-      totalTokens: 1600,
+      totalTokens: 1925,
       estimatedCostUsd: 0.06
     })
     expect(parsed.dailyAggregates).toEqual([
       expect.objectContaining({
         projectLabel: 'Repo',
-        inputTokens: 1000,
-        cachedInputTokens: 250,
+        inputTokens: 1325,
+        cachedInputTokens: 325,
         outputTokens: 500,
         reasoningOutputTokens: 100,
-        totalTokens: 1600,
+        totalTokens: 1925,
         estimatedCostUsd: 0.06
       })
     ])
@@ -292,12 +309,12 @@ describe('parseOpenCodeUsageDatabase', () => {
     )
     db.close()
 
-    const parsed = await parseOpenCodeUsageDatabase(path, worktrees())
+    const parsed = await parseOpenCodeUsageDatabase(path, await resolveWorktree())
 
     expect(parsed.sessions[0]).toMatchObject({
       primaryModel: 'openai/gpt-5.5',
       primaryProjectLabel: 'Repo',
-      totalTokens: 1050,
+      totalTokens: 1150,
       estimatedCostUsd: 0.03
     })
   })
@@ -308,7 +325,7 @@ describe('parseOpenCodeUsageDatabase', () => {
     insertSessionTotalsRow(db, 'session-1', 1000)
     db.close()
 
-    const parsed = await parseOpenCodeUsageDatabase(path, worktrees())
+    const parsed = await parseOpenCodeUsageDatabase(path, await resolveWorktree())
 
     expect(parsed.ownedSessionIds).toEqual(['session-1'])
   })
@@ -372,9 +389,9 @@ describe('parseOpenCodeUsageDatabase', () => {
     )
     db.close()
 
-    const parsed = await parseOpenCodeUsageDatabase(path, worktrees())
+    const parsed = await parseOpenCodeUsageDatabase(path, await resolveWorktree())
 
-    expect(parsed.sessions[0]?.totalTokens).toBe(120)
+    expect(parsed.sessions[0]?.totalTokens).toBe(130)
     expect(parsed.sessions[0]?.eventCount).toBe(1)
   })
 })

@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import { createIpcPtyTransport } from '../pty-transport'
 import { createRemoteRuntimePtyTransport } from '../remote-runtime-pty-transport'
-import { toAgentLaunchPreferences } from '@/runtime/agent-session-create-operation'
+import { toAgentLaunchPreferences } from '../../../../../shared/agent-launch-preferences'
 import { createUnresolvedOwnerPtyTransport } from '../unresolved-owner-pty-transport'
 import { recordTerminalTabParkedOnUnresolvedHost } from '@/lib/parked-terminal-host-hydration'
 import { getFitOverrideForPty, onOverrideChange } from '@/lib/pane-manager/mobile-fit-overrides'
@@ -12,6 +12,7 @@ import { requestTerminalPaneRecovery } from '../terminal-pane-recovery'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import { resolveTerminalColorSchemeMode } from '../../../../../shared/terminal-color-scheme-protocol'
 import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import { terminalRendersInlineImages } from '@/lib/pane-manager/pane-inline-images'
 import {
   CONPTY_DA1_RESPONSE,
   createTerminalPixelSizeQueryResponder,
@@ -20,8 +21,11 @@ import {
 
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { TRANSPORT_CONNECT_SETTLE_GRACE_MS } from './pty-connect-limits'
+import { buildPaneTransportOptions } from './pane-transport-options'
+import { buffersInputOnlyForSshReattach } from './ssh-reattach-input-buffering'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+import { resolveTerminalInlineImagesEnabled } from '../../../../../shared/terminal-inline-images-settings'
 
 /** Transport creation, terminal capability replies, viewport claims, and undeliverable-input recovery. */
 export function installPtyInputRecovery(session: ConnectPanePtySession): void {
@@ -34,97 +38,8 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     ? { foreground: session.terminalTheme.foreground, background: session.terminalTheme.background }
     : undefined
   session.agentLaunchPreferences = toAgentLaunchPreferences(session.paneStartup?.sessionOptions)
-  session.transportOptions = {
-    cwd: session.deps.cwd,
-    ...(session.deps.cwdPromise || session.deps.preconnectInput?.length
-      ? { bufferInputUntilConnect: true }
-      : {}),
-    ...(session.deps.preconnectInput?.length
-      ? { preconnectInput: session.deps.preconnectInput }
-      : {}),
-    ...(session.deps.onPreconnectInput
-      ? { onPreconnectInput: session.deps.onPreconnectInput }
-      : {}),
-    // Why: only fresh local IPC spawns may recover from a saved startup cwd
-    // whose directory was deleted (#7239); remote-runtime and SSH spawns
-    // resolve cwd on another host and must keep exact cwd semantics.
-    ...(session.runtimeEnvironmentId === null && !session.connectionId
-      ? { cwdFallback: 'worktree' as const }
-      : {}),
-    env: session.paneEnv,
-    ...(session.paneStartup?.envToDelete ? { envToDelete: session.paneStartup.envToDelete } : {}),
-    command: session.shouldDeliverStartupViaTerminalPaste
-      ? undefined
-      : session.paneStartup?.command,
-    ...(session.shouldUseProviderSshStartupDelivery
-      ? { commandDelivery: 'provider' as const }
-      : {}),
-    startupCommandDelivery: session.shouldDeliverStartupViaTerminalPaste
-      ? undefined
-      : session.connectionId && session.paneStartup?.command
-        ? 'shell-ready'
-        : session.paneStartup?.startupCommandDelivery,
-    connectionId: session.connectionId,
-    executionHostId: session.executionHostId,
-    worktreeId: session.deps.worktreeId,
-    // Why: closes the SIGKILL race documented in INVESTIGATION.md by letting
-    // main sync-flush the (worktreeId, tabId, leafId → ptyId) binding before
-    // pty:spawn returns. Daemon-host-only: SSH path leaves these undefined
-    // and the main-side guard short-circuits.
-    tabId: session.deps.tabId,
-    leafId: session.pane.leafId,
-    activate: session.deps.isActiveRef.current && session.deps.isVisibleRef.current,
-    ...(session.shellOverride ? { shellOverride: session.shellOverride } : {}),
-    ...(session.projectRuntime ? { projectRuntime: session.projectRuntime } : {}),
-    ...(session.terminalColorQueryReplies
-      ? { terminalColorQueryReplies: session.terminalColorQueryReplies }
-      : {}),
-    ...(session.paneStartup?.launchConfig
-      ? { launchConfig: session.paneStartup.launchConfig }
-      : {}),
-    ...(session.paneStartup?.resumeProviderSession
-      ? { resumeProviderSession: session.paneStartup.resumeProviderSession }
-      : {}),
-    ...((session.paneStartup?.initialAgentStatus?.prompt ?? session.paneStartup?.draftPrompt)
-      ? {
-          agentPrompt:
-            session.paneStartup?.initialAgentStatus?.prompt ?? session.paneStartup?.draftPrompt
-        }
-      : {}),
-    ...(session.paneStartup?.initialAgentStatus?.prompt
-      ? { agentPromptDelivery: 'auto-submit' as const }
-      : session.paneStartup?.draftPrompt
-        ? { agentPromptDelivery: 'draft' as const }
-        : {}),
-    ...(session.paneStartup?.agentArgsOverride !== undefined
-      ? { agentArgsOverride: session.paneStartup.agentArgsOverride }
-      : {}),
-    ...(session.agentLaunchPreferences
-      ? { agentLaunchPreferences: session.agentLaunchPreferences }
-      : {}),
-    ...(session.launchToken ? { launchToken: session.launchToken } : {}),
-    ...(session.paneStartup?.launchAgent ? { launchAgent: session.paneStartup.launchAgent } : {}),
-    ...(session.paneStartup?.telemetry ? { telemetry: session.paneStartup.telemetry } : {}),
-    onPtyExit: session.onExit,
-    onPtySpawn: session.onPtySpawn,
-    onPtyRebind: session.onPtyRebind,
-    ...(session.mainSideEffectAuthority
-      ? {}
-      : {
-          onTitleChange: session.onTitleChange,
-          onBell: session.onBell,
-          onAgentBecameIdle: session.onAgentBecameIdle,
-          onAgentBecameWorking: session.onAgentBecameWorking,
-          onAgentExited: session.onAgentExited
-        }),
-    // Why: local IPC terminals are now model-owned in main: OrcaRuntimeService
-    // parses OSC 9999 before renderer delivery and forwards through the hook
-    // server with local/SSH identity. Remote-runtime streams do not pass through
-    // local main, so the renderer remains their status owner for now.
-    ...(session.shouldOwnAgentStatusInRenderer
-      ? { onAgentStatus: session.handleRendererOwnedAgentStatus }
-      : {})
-  }
+  session.buffersInputOnlyForReattach = buffersInputOnlyForSshReattach(session)
+  session.transportOptions = buildPaneTransportOptions(session)
   if (session.connectionOwnerHydrating) {
     // Why: this pane holds an inert transport until its host resolves; register it so
     // the repos:changed handler remounts it instead of leaving the terminal blank.
@@ -192,6 +107,13 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     // (#7329), so send immediately.
     sendInput: session.sendDesktopQueryReplyImmediate,
     isReplaying: () => isPaneReplaying(session.deps.replayingPanesRef, session.pane.id),
+    // Advertise Sixel in DA1 only when the decoder is actually attached: the setting
+    // can be on while the lazy chunk is still loading or after it failed to load, and
+    // a false positive makes a feature-detecting tool emit DCS that nothing renders.
+    sixelSupported: () =>
+      resolveTerminalInlineImagesEnabled(useAppStore.getState().settings?.terminalInlineImages) &&
+      terminalRendersInlineImages(session.pane.terminal),
+    skipOscColorQueryReplies: () => !session.shouldAnswerPaneOscColorQueries(),
     ...(session.isNativeWindowsConpty ? { da1Response: CONPTY_DA1_RESPONSE } : {})
   })
   session.respondToTerminalPixelSizeQueries = createTerminalPixelSizeQueryResponder(
@@ -292,7 +214,9 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     const connectStillSettling =
       session.transportConnectInFlightSince !== null &&
       Date.now() - session.transportConnectInFlightSince < TRANSPORT_CONNECT_SETTLE_GRACE_MS
-    if (connectStillSettling || session.disposed) {
+    // Why: a transport that is retrying its own binding owns recovery; a remount would race it.
+    const transportOwnsRecovery = !providerRejected && session.transport.ownsRecovery?.() === true
+    if (connectStillSettling || transportOwnsRecovery || session.disposed) {
       return
     }
     const storePtyId = useAppStore.getState().ptyIdsByTabId?.[session.deps.tabId]?.[0] ?? null

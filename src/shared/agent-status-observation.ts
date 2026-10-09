@@ -7,6 +7,8 @@
 //
 // NOTHING READS IT YET. It is stamped so consumers can be migrated one at a time.
 
+import { createNonSecureContextUuid } from './non-secure-context-uuid'
+
 /** Where the evidence for a status row came from — the ingress, not the transport.
  *  A hook event relayed over SSH is still `hook`; the relay is a carrier. */
 export const AGENT_STATUS_OBSERVATION_ORIGINS = [
@@ -21,7 +23,9 @@ export const AGENT_STATUS_OBSERVATION_ORIGINS = [
   /** Seeded when Orca launched the agent itself, before any provider signal. */
   'launch',
   /** Stamped by orchestration dispatch rather than by the agent. */
-  'orchestration'
+  'orchestration',
+  /** Projected by the structured session host from a session's journal; no PTY, no hook. */
+  'structured'
 ] as const
 export type AgentStatusObservationOrigin = (typeof AGENT_STATUS_OBSERVATION_ORIGINS)[number]
 
@@ -193,5 +197,5 @@ export class AgentStatusObservationSequencer {
  *  authority's revision counter starts over, so its observations must not be comparable
  *  with the ones it emitted before (including any rehydrated from disk). */
 export function createAgentStatusAuthorityId(role: string): string {
-  return `${role}:${globalThis.crypto.randomUUID()}`
+  return `${role}:${createNonSecureContextUuid()}`
 }

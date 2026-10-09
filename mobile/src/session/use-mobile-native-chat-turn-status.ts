@@ -1,16 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
-  nativeChatTurnHasResponse,
+  NATIVE_CHAT_UNANCHORED_TURN_KEY,
   reduceNativeChatTurnTiming,
   selectNativeChatTurnStatuses,
+  type NativeChatSettledTurns,
   type NativeChatTurnStatus,
   type NativeChatTurnTimingByTurn
 } from '../../../src/shared/native-chat-turn-status'
 
 export type { NativeChatTurnStatus }
 
-export const MOBILE_UNANCHORED_TURN_KEY = '__unanchored__'
 const EMPTY_TURN_TIMING_BY_TURN: NativeChatTurnTimingByTurn = Object.freeze({})
 
 type ScopedTurnTiming = {
@@ -21,16 +20,26 @@ type ScopedTurnTiming = {
 /** Per-turn "Thinking / Working for N / Worked for N" timing, on the same shared
  *  state machine the desktop renderer uses so the two surfaces stamp turns alike. */
 export function useMobileNativeChatTurnStatus({
-  messages,
+  turnKeys,
+  liveTurnKey,
   enabled,
   isWorking,
   workingStartedAt,
+  settledTurns,
+  thinking = false,
   scopeKey
 }: {
-  messages: readonly NativeChatMessage[]
+  /** Each row's turn, as `nativeChatTurnMembership` places it. */
+  turnKeys: readonly (string | undefined)[]
+  /** The live turn, whose bar carries the running clock (`nativeChatTurnMembership`). */
+  liveTurnKey: string | undefined
   enabled: boolean
   isWorking: boolean
   workingStartedAt?: number | null
+  /** Host-recorded durations; they outrank whatever this client observed. */
+  settledTurns?: NativeChatSettledTurns | null
+  /** Whether the turn is reasoning right now, derived from its journal content. */
+  thinking?: boolean
   /** Host/worktree/tab identity. Timings never carry across chat surfaces. */
   scopeKey: string
 }): {
@@ -38,12 +47,7 @@ export function useMobileNativeChatTurnStatus({
   completedByTurn: Readonly<Record<string, NativeChatTurnStatus>>
   activeTurnKey: string
 } {
-  const latestUserIndex = enabled
-    ? messages.findLastIndex((message) => message.role === 'user')
-    : -1
-  const hasCurrentTurnResponse = enabled && nativeChatTurnHasResponse(messages, latestUserIndex)
-  const latestUserId = latestUserIndex !== -1 ? (messages[latestUserIndex]?.id ?? null) : null
-  const activeTurnKey = latestUserId ?? MOBILE_UNANCHORED_TURN_KEY
+  const activeTurnKey = (enabled ? liveTurnKey : undefined) ?? NATIVE_CHAT_UNANCHORED_TURN_KEY
   const [scopedTiming, setScopedTiming] = useState<ScopedTurnTiming>(() => ({
     scopeKey,
     timingByTurn: {}
@@ -62,9 +66,7 @@ export function useMobileNativeChatTurnStatus({
     if (!enabled) {
       return
     }
-    const validTurnKeys = new Set(
-      messages.filter((message) => message.role === 'user').map((message) => message.id)
-    )
+    const validTurnKeys = new Set(turnKeys.filter((turnKey) => turnKey !== undefined))
     const previousActiveTurnKey =
       previousActiveTurn.current?.scopeKey === scopeKey
         ? previousActiveTurn.current.turnKey
@@ -85,21 +87,24 @@ export function useMobileNativeChatTurnStatus({
         ? current
         : { scopeKey, timingByTurn: nextTiming }
     })
-  }, [activeTurnKey, enabled, isWorking, messages, scopeKey, workingStartedAt])
+  }, [activeTurnKey, enabled, isWorking, scopeKey, turnKeys, workingStartedAt])
 
   // Why: the selection rebuilds its status objects on every call, and a streaming
   // turn re-renders ~20x/s. Without this, every settled turn's row gets fresh
   // props each tick and the memoized message rows all re-render.
   const turnIsWorking = enabled && isWorking
+  const turnIsThinking = enabled && thinking
+  const settledByTurn = enabled ? (settledTurns ?? undefined) : undefined
   const statuses = useMemo(
     () =>
       selectNativeChatTurnStatuses(timingByTurn, {
         activeTurnKey,
         isWorking: turnIsWorking,
         workingStartedAt,
-        hasCurrentTurnResponse
+        thinking: turnIsThinking,
+        settledByTurn
       }),
-    [timingByTurn, activeTurnKey, turnIsWorking, workingStartedAt, hasCurrentTurnResponse]
+    [timingByTurn, activeTurnKey, turnIsWorking, workingStartedAt, turnIsThinking, settledByTurn]
   )
   return { ...statuses, activeTurnKey }
 }

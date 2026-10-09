@@ -1,5 +1,6 @@
-import { spawn } from 'node:child_process'
-import { lstat, readdir } from 'node:fs/promises'
+import { DirectoryTransferBudget } from './ssh-directory-transfer-budget'
+import { spawn, type ChildProcess } from 'node:child_process'
+import { lstat, opendir } from 'node:fs/promises'
 import { join as pathJoin } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import type { SshTarget } from '../../shared/ssh-types'
@@ -19,6 +20,7 @@ import {
   throwIfAborted,
   waitForChannelClose,
   waitForProcess,
+  isHostAnsweredSystemSshExit,
   type ProcessResult
 } from './system-ssh-operation-lifecycle'
 import {
@@ -79,11 +81,12 @@ export async function uploadDirectoryViaSystemSsh(
         killProcess(tarCreate)
         killProcess(sshExtract)
       },
-      Promise.all([
+      settleUploadPipeline(
+        tarCreate,
         waitForProcess(tarCreate, 'local tar relay upload'),
-        waitForProcess(sshExtract, 'system ssh relay upload'),
+        waitForProcess(sshExtract, 'system ssh relay upload', 'remote'),
         pipeline(tarCreate.stdout!, sshExtract.stdin!)
-      ]).then(([tar, ssh]) => [tar, ssh] as const)
+      )
     )
   } catch (err) {
     killProcess(tarCreate)
@@ -97,6 +100,49 @@ export async function uploadDirectoryViaSystemSsh(
   if (sshResult?.stderr.trim()) {
     console.warn(`[ssh-system] ${sshResult.label} stderr: ${sshResult.stderr.trim()}`)
   }
+}
+
+/** What local tar says when its output, not its input, failed: the far end went away. */
+const DOWNSTREAM_WRITE_FAILURE = /write error|cannot write|broken pipe|EPIPE/i
+
+/**
+ * Waits for all three, then names the cause; a failed ssh wins over a tar that succeeded. A remote
+ * exit the host answered wins over a local tar failure that only followed it: tar was signalled,
+ * failed after ssh closed, or reported a write/pipe error (BSD tar exits 1 with "Write error", no
+ * signal). A local tar that failed on its own input first (missing directory, unreadable file) is
+ * the client's fault.
+ */
+async function settleUploadPipeline(
+  tarProcess: ChildProcess,
+  local: Promise<ProcessResult>,
+  remote: Promise<ProcessResult>,
+  pipe: Promise<void>
+): Promise<readonly [ProcessResult, ProcessResult]> {
+  let settled = 0
+  let localAt = 0
+  let remoteAt = 0
+  const stamp = <T>(promise: Promise<T>, record: (at: number) => void): Promise<T> =>
+    promise.finally(() => record(++settled))
+  const [tar, ssh, piped] = await Promise.allSettled([
+    stamp(local, (at) => (localAt = at)),
+    stamp(remote, (at) => (remoteAt = at)),
+    pipe
+  ])
+  const remoteAnswered = ssh.status === 'rejected' && isHostAnsweredSystemSshExit(ssh.reason)
+  if (tar.status === 'rejected') {
+    const localFollowedRemote =
+      tarProcess.signalCode !== null ||
+      remoteAt < localAt ||
+      (tar.reason instanceof Error && DOWNSTREAM_WRITE_FAILURE.test(tar.reason.message))
+    throw remoteAnswered && localFollowedRemote ? ssh.reason : tar.reason
+  }
+  if (ssh.status === 'rejected') {
+    throw ssh.reason
+  }
+  if (piped.status === 'rejected') {
+    throw piped.reason
+  }
+  return [tar.value, ssh.value]
 }
 
 export async function writeFileViaSystemSsh(
@@ -119,7 +165,7 @@ async function uploadDirectoryViaSystemSshWindows(
   if (!hostPlatform) {
     throw new Error('Windows system SSH upload requires a remote host platform')
   }
-  const plan = await collectWindowsUploadPlan(localDir, remoteDir, hostPlatform, options.signal)
+  const plan = await collectLocalUploadPlan(localDir, remoteDir, hostPlatform, options.signal)
   await createWindowsUploadDirectories(target, plan.directories, options)
   for (const file of plan.files) {
     throwIfAborted(options.signal)
@@ -129,7 +175,7 @@ async function uploadDirectoryViaSystemSshWindows(
   }
 }
 
-type WindowsUploadPlan = {
+export type LocalUploadPlan = {
   directories: string[]
   files: { localPath: string; remotePath: string }[]
 }
@@ -141,16 +187,19 @@ type WindowsUploadPlan = {
  * about a directory upload requires one frame: the plan carries paths only, and the bytes go per
  * file, in writes bounded by WINDOWS_STDIN_WRITE_CHUNK_BYTES.
  */
-async function collectWindowsUploadPlan(
+export async function collectLocalUploadPlan(
   localDir: string,
   remoteDir: string,
   hostPlatform: RemoteHostPlatform,
   signal: AbortSignal | undefined,
-  plan: WindowsUploadPlan = { directories: [], files: [] }
-): Promise<WindowsUploadPlan> {
+  plan: LocalUploadPlan = { directories: [], files: [] },
+  budget = new DirectoryTransferBudget(),
+  depth = 0
+): Promise<LocalUploadPlan> {
+  throwIfAborted(signal)
+  budget.record([localDir, remoteDir], depth)
   plan.directories.push(remoteDir)
-  const dirEntries = await readdir(localDir, { withFileTypes: true })
-  for (const entry of dirEntries) {
+  for await (const entry of await opendir(localDir)) {
     throwIfAborted(signal)
     const localPath = pathJoin(localDir, entry.name)
     const remotePath = joinRemotePath(hostPlatform, remoteDir, entry.name)
@@ -159,9 +208,18 @@ async function collectWindowsUploadPlan(
       continue
     }
     if (statResult.isDirectory()) {
-      await collectWindowsUploadPlan(localPath, remotePath, hostPlatform, signal, plan)
+      await collectLocalUploadPlan(
+        localPath,
+        remotePath,
+        hostPlatform,
+        signal,
+        plan,
+        budget,
+        depth + 1
+      )
       continue
     }
+    budget.record([localPath, remotePath], depth + 1)
     plan.files.push({ localPath, remotePath })
   }
   return plan

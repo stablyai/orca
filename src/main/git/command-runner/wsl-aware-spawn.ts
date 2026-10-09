@@ -9,11 +9,20 @@ import { resolveCommand } from './wsl-command-resolution'
 export function wslAwareSpawn(
   command: string,
   args: string[],
-  options: SpawnOptions & { cwd?: string; wslDistro?: string; useWslLoginShell?: boolean }
+  options: SpawnOptions & {
+    cwd?: string
+    wslDistro?: string
+    useWslLoginShell?: boolean
+    wslShellCommand?: string
+    cwdFailureExitCode?: number
+  }
 ): ChildProcess {
-  const { wslDistro, useWslLoginShell, ...spawnOptions } = options
+  const { wslDistro, useWslLoginShell, wslShellCommand, cwdFailureExitCode, ...spawnOptions } =
+    options
   const resolved = resolveCommand(command, args, options.cwd, wslDistro, {
-    useWslLoginShell
+    useWslLoginShell,
+    wslShellCommand,
+    ...(cwdFailureExitCode === undefined ? {} : { cwdFailureExitCode })
   })
   const spawnStartedAt = performance.now()
   const child = spawn(resolved.binary, resolved.args, {

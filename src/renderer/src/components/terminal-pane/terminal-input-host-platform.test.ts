@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
 import type { AppState } from '@/store/types'
 import { resolveTerminalInputHostPlatform } from './terminal-input-host-platform'
 
@@ -16,6 +18,32 @@ function state(overrides: Partial<AppState> = {}): AppState {
     restoredRuntimeHostIdByWorkspaceSessionKey: {},
     ...overrides
   } as AppState
+}
+
+/** A Windows host that answered once and whose latest probe came back unverifiable. */
+function unverifiableWindowsHost(): RuntimeEnvironmentStatus {
+  const answered: RuntimeStatus = {
+    runtimeId: 'rt-win',
+    rendererGraphEpoch: 0,
+    graphStatus: 'ready',
+    authoritativeWindowId: null,
+    liveTabCount: 0,
+    liveLeafCount: 0,
+    hostPlatform: 'win32'
+  }
+  return {
+    status: null,
+    checkedAt: 2,
+    snapshot: {
+      environmentId: 'windows-box',
+      pairingRevision: 1,
+      sequence: 2,
+      checkedAt: 2,
+      status: answered,
+      verification: 'unavailable',
+      transport: 'ready'
+    }
+  }
 }
 
 describe('resolveTerminalInputHostPlatform', () => {
@@ -276,6 +304,33 @@ describe('resolveTerminalInputHostPlatform', () => {
         }),
         worktreeId,
         transport: { getConnectionId: () => null }
+      })
+    ).toBe('win32')
+  })
+
+  // A probe that did not come back says nothing about which OS the host runs. Falling through to
+  // the client's platform re-points every keystroke and every path at the wrong conventions --
+  // a Windows host driven from a Mac silently starts speaking POSIX mid-session.
+  it('keeps the Windows host platform while its probe is unverifiable', () => {
+    const worktreeId = 'repo::C:\\repo'
+    expect(
+      resolveTerminalInputHostPlatform({
+        clientPlatform: 'darwin',
+        state: state({
+          repos: [
+            {
+              id: 'repo',
+              path: 'C:\\repo',
+              displayName: 'repo',
+              badgeColor: '#000',
+              addedAt: 0,
+              executionHostId: 'runtime:windows-box'
+            }
+          ],
+          runtimeStatusByEnvironmentId: new Map([['windows-box', unverifiableWindowsHost()]])
+        }),
+        worktreeId,
+        transport: null
       })
     ).toBe('win32')
   })

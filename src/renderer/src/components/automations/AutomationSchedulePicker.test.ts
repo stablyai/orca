@@ -22,6 +22,7 @@ const BASE_DRAFT: AutomationDraft = {
   name: '',
   prompt: '',
   agentId: 'codex',
+  extraAgentArgs: '',
   projectId: '',
   workspaceMode: 'existing',
   workspaceId: '',
@@ -34,6 +35,7 @@ const BASE_DRAFT: AutomationDraft = {
   dayOfWeek: '1',
   customSchedule: '',
   missedRunGraceMinutes: '720',
+  savedSchedule: null,
   scheduleWarning: null
 }
 

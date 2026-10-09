@@ -5,7 +5,7 @@ import {
   PLUGIN_LANGUAGE_CATALOG_MAX_DEPTH,
   PLUGIN_LANGUAGE_CATALOG_MAX_ENTRIES,
   validatePluginLanguagePackCatalog,
-  validatePluginLanguagePackCatalogShape,
+  checkPluginLanguagePackCatalog,
   pluginLanguageResourceId
 } from './plugin-language-pack-artifact'
 
@@ -205,7 +205,7 @@ describe('plugin language-pack artifacts', () => {
       }
     })
 
-    expect(validatePluginLanguagePackCatalogShape(catalog)).toEqual({
+    expect(checkPluginLanguagePackCatalog(catalog)).toEqual({
       ok: true,
       entries: PLUGIN_LANGUAGE_CATALOG_MAX_ENTRIES
     })

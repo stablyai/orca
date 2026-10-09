@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
 import { MobileEmulatorAgentSetupGuideSteps } from './MobileEmulatorAgentSetupGuideSteps'
@@ -59,8 +58,8 @@ export function MobileEmulatorAgentSetupGuide({
                 )}{' '}
               </span>
               {translate(
-                'auto.components.emulator.pane.MobileEmulatorAgentSetupGuide.72736b051f',
-                'Set up Orca CLI + skill when you want agents to drive this simulator.'
+                'auto.components.emulator.pane.MobileEmulatorAgentSetupGuide.installSkillPrompt',
+                'Install the Orca CLI skill when you want agents to drive this simulator.'
               )}
             </>
           )}
@@ -120,18 +119,6 @@ export function MobileEmulatorAgentSetupGuide({
 
       {expanded && !setup.setupComplete ? (
         <div className="scrollbar-sleek max-h-[min(36vh,16rem)] overflow-y-auto border-t border-border/60 px-3 pb-2">
-          <div className="flex items-center justify-end py-1.5">
-            <span
-              className={cn(
-                'rounded-full px-2 py-0.5 text-[10px] font-medium',
-                setup.setupComplete
-                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
-                  : 'bg-muted text-muted-foreground'
-              )}
-            >
-              {setup.completedCount}/2
-            </span>
-          </div>
           <MobileEmulatorAgentSetupGuideSteps setup={setup} worktreeId={worktreeId} />
           <div className="pb-1 pt-1">
             <button

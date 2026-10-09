@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'

@@ -58,6 +58,7 @@ export function createFolderWorkspace(
       : {}),
     ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
     ...(args.linkedWorkItem !== undefined ? { linkedWorkItem: args.linkedWorkItem } : {}),
+    ...(args.linkedItems !== undefined ? { linkedItems: args.linkedItems } : {}),
     ...(args.linkedTaskSourceContext !== undefined
       ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
       : {})

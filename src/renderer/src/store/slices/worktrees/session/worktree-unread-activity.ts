@@ -2,8 +2,6 @@ import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { applyWorktreeUpdates, getRepoIdFromWorktreeId } from '../../worktree-helpers'
-import { branchName } from '@/lib/git-utils'
-import { refreshHostedReviewCard } from '../../hosted-review-card-refresh'
 import {
   applyDetectedWorktreeUpdates,
   findKnownWorktreeById
@@ -16,7 +14,6 @@ import {
 } from '../listing/worktree-owner-settings'
 import { persistWorktreeMeta } from '../metadata/worktree-meta-persist'
 import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-errors'
-import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
 
 export function createMarkWorktreeUnread(
   set: WorktreeSliceSet,
@@ -59,7 +56,7 @@ export function createMarkWorktreeUnread(
     set((s) => {
       const worktree = findKnownWorktreeById(s, worktreeId)
       if (!worktree || worktree.isUnread) {
-        return {}
+        return s
       }
       shouldPersist = true
       const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, {
@@ -94,78 +91,6 @@ export function createMarkWorktreeUnread(
       { isUnread: true, lastActivityAt: now },
       'persist unread worktree state'
     )
-  }
-}
-
-export function createObserveTerminalGitHubPullRequestLink(
-  _set: WorktreeSliceSet,
-  get: WorktreeSliceGet
-): WorktreeSlice['observeTerminalGitHubPullRequestLink'] {
-  return (worktreeId, link) => {
-    const state = get()
-    const worktree = findKnownWorktreeById(state, worktreeId)
-    if (!worktree || worktree.isBare || worktree.isArchived) {
-      return
-    }
-    const repo = state.repos.find((candidate) => candidate.id === worktree.repoId)
-    if (!repo || (repo.kind && repo.kind !== 'git')) {
-      return
-    }
-    if (
-      isGitHubPRSuppressed(worktree, link.number) ||
-      (typeof worktree.linkedPR === 'number' && worktree.linkedPR !== link.number)
-    ) {
-      return
-    }
-
-    const branch = branchName(worktree.branch)
-    const alreadyLinked = worktree.linkedPR === link.number
-
-    const fetchPRForBranch = get().fetchPRForBranch
-    if (typeof fetchPRForBranch === 'function') {
-      void fetchPRForBranch(repo.path, branch, {
-        force: true,
-        repoId: repo.id,
-        worktreeId,
-        linkedPRNumber: alreadyLinked ? link.number : null,
-        fallbackPRNumber: null,
-        fallbackPRSource: alreadyLinked ? null : 'explicit',
-        reason: 'active'
-      }).then((pr) => {
-        if (!alreadyLinked && pr?.number === link.number) {
-          // Why: terminal output can carry arbitrary PR URLs (docs/agents/logs).
-          // Persist only after branch lookup confirms it and the user hasn't picked another PR mid-flight.
-          void get().updateWorktreeMeta(
-            worktreeId,
-            { linkedPR: link.number },
-            {
-              shouldApply: (currentWorktree) =>
-                Boolean(
-                  currentWorktree &&
-                  !currentWorktree.isBare &&
-                  !currentWorktree.isArchived &&
-                  !isGitHubPRSuppressed(currentWorktree, link.number) &&
-                  (currentWorktree.linkedPR == null || currentWorktree.linkedPR === link.number)
-                )
-            }
-          )
-        }
-      })
-      return
-    }
-
-    const fetchHostedReviewForBranch = get().fetchHostedReviewForBranch
-    if (typeof fetchHostedReviewForBranch === 'function') {
-      // Why: full app stores have fetchPRForBranch (syncs the hosted-review cache); this is only a slice-test fallback.
-      void refreshHostedReviewCard(fetchHostedReviewForBranch, {
-        repoPath: repo.path,
-        repoId: repo.id,
-        branch,
-        linkedGitHubPR: alreadyLinked ? link.number : null,
-        fallbackGitHubPR: null,
-        linkedGitLabMR: worktree.linkedGitLabMR ?? null
-      })
-    }
   }
 }
 
@@ -266,7 +191,7 @@ export function createBumpWorktreeActivity(
     set((s) => {
       const worktree = findKnownWorktreeById(s, worktreeId)
       if (!worktree) {
-        return {}
+        return s
       }
       shouldPersist = true
       // Why: skip sortEpoch bump for the active worktree — its PTY events are click side-effects (reorder-on-click bug, PR #209).

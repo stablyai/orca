@@ -18,9 +18,9 @@ export function NativeChatSkillPill({ node, selected }: NodeViewProps): React.JS
       <Badge
         variant="secondary"
         data-native-chat-skill={token}
-        className={`gap-1 border-border px-1.5 py-0 text-sm font-medium text-muted-foreground align-baseline ${selected ? 'ring-1 ring-ring' : ''}`}
+        className={`border-border px-1.5 py-0 text-muted-foreground align-baseline ${selected ? 'ring-1 ring-ring' : ''}`}
       >
-        <Package className="size-4" aria-hidden="true" />
+        <Package aria-hidden="true" />
         {skillLabel(token)}
       </Badge>
     </NodeViewWrapper>

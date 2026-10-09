@@ -9,7 +9,7 @@ export function capActivityEvents(events: ActivityEvent[]): ActivityEvent[] {
   const working = events.filter((event) => event.state === 'working')
   const sorted = events
     .filter((event) => event.state !== 'working')
-    .sort((a, b) => b.timestamp - a.timestamp)
+    .sort((a, b) => b.observedAt - a.observedAt)
   const perPaneCount = new Map<string, number>()
   const includedEventIds = new Set<string>()
   const capped: ActivityEvent[] = []
@@ -42,5 +42,5 @@ export function capActivityEvents(events: ActivityEvent[]): ActivityEvent[] {
     includedEventIds.add(event.id)
     capped.push(event)
   }
-  return [...capped, ...working].sort((a, b) => b.timestamp - a.timestamp)
+  return [...capped, ...working].sort((a, b) => b.observedAt - a.observedAt)
 }

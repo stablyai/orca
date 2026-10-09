@@ -1,5 +1,6 @@
 import type { ParsedAgentStatusPayload } from './agent-status-types'
 import { parseAgentStatusPayload } from './agent-status-types'
+import { ownRetainedString } from './own-retained-string'
 
 const OSC_AGENT_STATUS_PREFIX = '\x1b]9999;'
 
@@ -56,6 +57,9 @@ function findAgentStatusTerminator(
 export function createAgentStatusOscProcessor(): (data: string) => ProcessedAgentStatusChunk {
   const MAX_PENDING = 64 * 1024
   let pending = ''
+  // How much of `pending` already failed a terminator search, so a frame split across
+  // many chunks re-scans only the new bytes instead of the whole accumulation.
+  let pendingSearched = 0
 
   return (data: string): ProcessedAgentStatusChunk => {
     // Ordinary terminal output is by far the common case. Keep it on the
@@ -75,7 +79,9 @@ export function createAgentStatusOscProcessor(): (data: string) => ProcessedAgen
     }
 
     const combined = pending + data
+    const resumeFrom = pendingSearched
     pending = ''
+    pendingSearched = 0
 
     const payloads: ParsedAgentStatusPayload[] = []
     let lastPayloadCleanOffset: number | null = null
@@ -99,11 +105,16 @@ export function createAgentStatusOscProcessor(): (data: string) => ProcessedAgen
 
       cleanData += combined.slice(cursor, start)
       const payloadStart = start + OSC_AGENT_STATUS_PREFIX.length
-      const terminator = findAgentStatusTerminator(combined, payloadStart, nextTerminator)
+      // Minus one so a `\x1b\\` straddling the previous chunk boundary is still found.
+      const searchFrom =
+        start === 0 && resumeFrom > 0 ? Math.max(payloadStart, resumeFrom - 1) : payloadStart
+      const terminator = findAgentStatusTerminator(combined, searchFrom, nextTerminator)
 
       if (terminator === null) {
         const candidate = combined.slice(start)
-        pending = candidate.length > MAX_PENDING ? '' : candidate
+        // Own the frame so it stops pinning the consumed chunk it was sliced from.
+        pending = candidate.length > MAX_PENDING ? '' : ownRetainedString(candidate)
+        pendingSearched = pending.length
         break
       }
 

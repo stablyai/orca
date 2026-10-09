@@ -12,6 +12,7 @@ import {
   type PendingPtySideEffect
 } from './pty-output-side-effect-queue'
 import { createPtyOutputTitleObserver } from './pty-output-title-observer'
+import { advancePartialEscapeTail } from '../../../../shared/terminal-partial-escape-tail'
 import type { IpcPtyTransportOptions, PtyTransport } from './pty-transport-types'
 
 type PtyOutputCallbacks = Parameters<PtyTransport['connect']>[0]['callbacks']
@@ -39,6 +40,8 @@ export type ProcessPtyOutputOptions = {
   terminalOwner?: 'shell'
   snapshotCols?: number
   snapshotRows?: number
+  carriesNormalBuffer?: boolean
+  keepsLocalScrollback?: boolean
 }
 
 function removeSuppressedCursorNativeTitles(
@@ -71,6 +74,7 @@ export function createPtyOutputProcessor({
 }: PtyOutputProcessorOptions) {
   const bellDetector = createBellDetector()
   let processAgentStatusChunk = createAgentStatusOscProcessor()
+  let partialEscapeTail = ''
   const titleObserver = createPtyOutputTitleObserver({
     onTitleChange,
     onAgentBecameIdle,
@@ -204,6 +208,10 @@ export function createPtyOutputProcessor({
   ): void {
     const rawLength = meta?.rawLength ?? data.length
     const suppressAttentionEvents = options.suppressAttentionEvents === true
+    partialEscapeTail = advancePartialEscapeTail(partialEscapeTail, data)
+    if (options.pendingEscapeTailAnsi) {
+      partialEscapeTail = options.pendingEscapeTailAnsi
+    }
     const processed = processAgentStatusChunk(data)
     data = processed.cleanData
     if (options.replayingBufferedData && callbacks.onReplayData) {
@@ -222,7 +230,9 @@ export function createPtyOutputProcessor({
         ...(options.terminalOwner ? { terminalOwner: options.terminalOwner } : {}),
         ...(options.snapshotCols !== undefined && options.snapshotRows !== undefined
           ? { snapshotCols: options.snapshotCols, snapshotRows: options.snapshotRows }
-          : {})
+          : {}),
+        ...(options.carriesNormalBuffer ? { carriesNormalBuffer: true } : {}),
+        ...(options.keepsLocalScrollback ? { keepsLocalScrollback: true } : {})
       }
       if (Object.keys(replayMeta).length > 0) {
         callbacks.onReplayData(data, replayMeta)
@@ -243,6 +253,7 @@ export function createPtyOutputProcessor({
       sideEffects.clear()
       titleObserver.reset()
       bellDetector.reset()
+      partialEscapeTail = ''
     },
     pausePendingSideEffects: () => {
       sideEffects.pause()
@@ -254,6 +265,7 @@ export function createPtyOutputProcessor({
     resetAgentStatusCarry: () => {
       processAgentStatusChunk = createAgentStatusOscProcessor()
     },
+    getPendingEscapeTailAnsi: () => partialEscapeTail,
     disposePendingSideEffectGauge: sideEffects.disposeGauge
   }
 }

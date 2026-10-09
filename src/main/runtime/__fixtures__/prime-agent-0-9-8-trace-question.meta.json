@@ -1,0 +1,15 @@
+{
+  "capturedAt": "2026-09-30T19:18:01.693Z",
+  "platform": "darwin",
+  "command": [
+    "prime-agent",
+    "--provider",
+    "openrouter",
+    "--model",
+    "inclusionai/ling-3.0-flash-sante:free"
+  ],
+  "cols": 120,
+  "rows": 40,
+  "note": "prime-agent 0.9.8, macOS, OpenRouter inclusionai/ling-3.0-flash-sante:free, isolated HOME, first launch: trace-sharing question left unanswered. Truncated 804501 -> 19763 bytes, after the first frame with the whole trace question painted.",
+  "exitCode": 129
+}

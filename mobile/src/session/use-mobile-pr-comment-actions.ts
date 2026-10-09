@@ -3,6 +3,7 @@ import type { PRComment } from '../../../src/shared/github/comment-types'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { GitHubPrRepoSlug } from './github-pr-rpc'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import {
   fetchAddIssueComment,
   fetchAddPRReviewCommentReply,
@@ -69,10 +70,7 @@ export type PrCommentActionsInput = {
   mutations?: PrCommentMutations
 }
 
-function realMutations(
-  client: Pick<RpcClient, 'sendRequest'>,
-  worktreeId: string
-): PrCommentMutations {
+function realMutations(client: RpcOperationSender, worktreeId: string): PrCommentMutations {
   return {
     reply: (args) => fetchAddPRReviewCommentReply(client, worktreeId, args),
     resolveThread: (args) => fetchResolveReviewThread(client, worktreeId, args),

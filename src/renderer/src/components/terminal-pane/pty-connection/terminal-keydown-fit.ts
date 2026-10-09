@@ -1,3 +1,4 @@
+import { makePaneKey } from '../../../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { bindPanePtyId, getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
@@ -6,7 +7,6 @@ import { isFreshNonDoneAgentStatus } from '../../../../../shared/agent-status-ty
 import { isCtrlCKeyEvent, isPlainEscapeKeyEvent } from '../agent-interrupt-inference'
 import { createAgentCompletionCoordinator } from '../agent-completion-coordinator'
 import { dispatchAgentHookTerminalLifecycle } from '../agent-hook-terminal-lifecycle'
-import { createCodexAutoApprovalHookCompletionSuppressor } from '../codex-auto-approval-notification-suppression'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-title-owner'
 import { registerTerminalSideEffectFactConsumer } from '../terminal-side-effect-facts-handler'
 
@@ -134,7 +134,12 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
         onPrLink: (link) =>
           useAppStore
             .getState()
-            .observeTerminalGitHubPullRequestLink(session.deps.worktreeId, link),
+            .observeTerminalGitHubPullRequestLink(session.deps.worktreeId, link, {
+              tabId: session.deps.tabId,
+              paneKey: makePaneKey(session.deps.tabId, session.pane.leafId),
+              ptyId: session.transport.getPtyId(),
+              executionHostId: session.transport.getExecutionHostId?.() ?? undefined
+            }),
         // Why: the Command Code settle policy stays here — the done settle
         // timer must consult the live store row (which hook events and
         // renderer seeds also write), so main only emits scrape facts.
@@ -208,6 +213,9 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
         currentAgentForExited !== exited.agent
       )
     },
+    // Why: the pane's only re-derivation of a process read where the shell emits no command marks.
+    onForegroundAgentExited: (exited) =>
+      session.paneForegroundAgentTracker?.onProcessExitConfirmed(exited),
     dispatchCompletion: (title, meta) => {
       if (meta?.source === 'process-exit') {
         session.clearSuppressedTitleSideEffects()
@@ -252,13 +260,6 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
         return true
       }
       return (useAppStore.getState().ptyIdsByTabId[session.deps.tabId] ?? []).length > 0
-    },
-    shouldSuppressHookCompletion: createCodexAutoApprovalHookCompletionSuppressor(
-      session.cacheKey,
-      () => ({
-        tabId: session.deps.tabId,
-        ...(session.launchToken ? { launchToken: session.launchToken } : {})
-      })
-    )
+    }
   })
 }

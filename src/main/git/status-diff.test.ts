@@ -130,7 +130,12 @@ describe('getDiff', () => {
 
   it('falls back to HEAD for unstaged diffs when the file is not in the index', async () => {
     gitExecFileAsyncBufferMock
-      .mockRejectedValueOnce(new Error('missing index'))
+      .mockRejectedValueOnce(
+        Object.assign(new Error("fatal: path 'src/file.ts' exists on disk, but not in the index"), {
+          code: 128,
+          stderr: "fatal: path 'src/file.ts' exists on disk, but not in the index"
+        })
+      )
       .mockResolvedValueOnce({ stdout: Buffer.from('head-content\n') })
     readFileMock.mockResolvedValue(Buffer.from('working-tree-content'))
 

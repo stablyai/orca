@@ -80,6 +80,13 @@ export function remoteBrowserStreamUnreachableNotice(): string {
   )
 }
 
+export function remoteBrowserServiceUnavailableNotice(): string {
+  return translate(
+    'auto.components.BrowserPane.streamBrowserUnavailable',
+    'The remote browser is unavailable. Check its setup on the server.'
+  )
+}
+
 export function remoteBrowserStreamRestartFailedNotice(): string {
   return translate(
     'auto.components.BrowserPane.streamRestartFailed',

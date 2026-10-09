@@ -7,6 +7,8 @@ import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../shared/workspace-statuses'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { WORKTREE_META_PERSISTED_DEFAULTS } from '../../../shared/worktree/meta-persisted-defaults'
 import { normalizeGitHubPRSuppressionUpdate } from '../../../shared/worktree/github-pr-suppression'
+import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachment-mutation'
+import { normalizeWorkspaceAttachmentUpdate } from '../../../shared/workspace-attachments'
 
 type WorktreeMetaIdentity = {
   instanceId: string
@@ -31,12 +33,13 @@ function createDefaultWorktreeMeta(): WorktreeMeta {
 /** Merge and normalize the metadata shape shared by legacy and identity-keyed writes. */
 export function mergeWorktreeMetaForWrite(
   existing: WorktreeMeta | undefined,
-  updates: Partial<WorktreeMeta>,
+  updates: Partial<WorktreeMeta> & WorkspaceAttachmentMutation,
   identity?: WorktreeMetaIdentity
 ): WorktreeMeta {
+  const normalizedUpdates = normalizeWorkspaceAttachmentUpdate(existing, updates)
   const updated = {
     ...(existing ?? createDefaultWorktreeMeta()),
-    ...normalizeGitHubPRSuppressionUpdate(updates),
+    ...normalizeGitHubPRSuppressionUpdate(normalizedUpdates),
     ...identity
   }
   updated.linkedWorkItem = normalizeWorkspaceLinkedItem(updated.linkedWorkItem)

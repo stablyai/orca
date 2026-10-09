@@ -2,9 +2,11 @@
 // short of its own Content-Length. The listener fails open on every request error, so the only
 // way this stays diagnosable is if the truncation is classified before it is swallowed.
 import { connect } from 'node:net'
+import { ServerResponse } from 'node:http'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HookTransportInterferenceReport } from '../../shared/agent-hook-transport-interference'
 import { AgentHookServer } from './server'
+import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../shared/opencode-startup-prompt'
 
 async function postTruncatedHook(
   port: number,
@@ -40,11 +42,15 @@ async function postTruncatedHook(
 }
 
 /** Opens a POST that announces a body and then never sends it, so Orca's own slowloris cap ends it. */
-async function postStalledHook(port: number, token: string): Promise<void> {
+async function postStalledHook(
+  port: number,
+  token: string,
+  pathname = '/hook/claude'
+): Promise<void> {
   const socket = connect({ port, host: '127.0.0.1' })
   await new Promise<void>((resolve) => socket.on('connect', () => resolve()))
   socket.write(
-    `POST /hook/claude HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/x-www-form-urlencoded\r\nX-Orca-Agent-Hook-Token: ${token}\r\nContent-Length: 100000\r\n\r\n`
+    `POST ${pathname} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/x-www-form-urlencoded\r\nX-Orca-Agent-Hook-Token: ${token}\r\nContent-Length: 100000\r\n\r\n`
   )
   await new Promise<void>((resolve) => {
     socket.on('close', () => resolve())
@@ -117,6 +123,41 @@ describe('AgentHookServer transport interference', () => {
     await postTruncatedHook(port, token)
     expect(reports).toHaveLength(1)
   }, 20_000)
+
+  it('classifies an interrupted startup claim as retryable without consuming it', async () => {
+    const { server, port, token, reports } = await startServer()
+    const claim = vi.fn(() => true)
+    server.setStartupPromptClaimListener(claim, () => {})
+    const writeHead = vi.spyOn(ServerResponse.prototype, 'writeHead')
+    try {
+      await postTruncatedHook(port, token, {
+        pathname: OPENCODE_STARTUP_PROMPT_CLAIM_PATH,
+        sentBytes: '{"nonce":',
+        announcedLength: 1000
+      })
+      // The reset peer cannot receive this response; observe the real handler's classification.
+      expect(writeHead.mock.calls).toEqual([[503]])
+      expect(claim).not.toHaveBeenCalled()
+      expect(reports).toEqual([])
+    } finally {
+      writeHead.mockRestore()
+    }
+  })
+
+  it('keeps a startup claim stopped by its own slowloris cap as a denial', async () => {
+    const { server, port, token, reports } = await startServer()
+    const claim = vi.fn(() => true)
+    server.setStartupPromptClaimListener(claim, () => {})
+    const writeHead = vi.spyOn(ServerResponse.prototype, 'writeHead')
+    try {
+      await postStalledHook(port, token, OPENCODE_STARTUP_PROMPT_CLAIM_PATH)
+      expect(writeHead.mock.calls).toEqual([[200, { 'content-type': 'application/json' }]])
+      expect(claim).not.toHaveBeenCalled()
+      expect(reports).toEqual([])
+    } finally {
+      writeHead.mockRestore()
+    }
+  }, 30_000)
 
   it('never reports for POSTs that deliver their whole body', async () => {
     const { port, token, reports } = await startServer()

@@ -16,6 +16,15 @@ export class ClaudeControlRequestError extends Error {
 
 export const CLAUDE_DEFAULT_REQUEST_TIMEOUT_MS = 30_000
 
+/** The deadline fired before the CLI answered. The request may still land, so this proves
+ *  nothing about it either way; it is neither the CLI refusing nor the transport closing. */
+export class ClaudeControlRequestTimeoutError extends Error {
+  constructor(readonly subtype: string) {
+    super(`claude ${subtype} request timed out`)
+    this.name = 'ClaudeControlRequestTimeoutError'
+  }
+}
+
 /** The SDK closes a query out from under an in-flight control request with this exact message. */
 const QUERY_CLOSED_MESSAGE = 'Query closed before response received'
 
@@ -46,33 +55,34 @@ export type ClaudeControlOptions = { timeoutMs?: number }
 /**
  * Run one native Query control method under Orca's deadline and error classification.
  *
- * The SDK owns correlation but applies no deadline, so the timeout stays here — and its
- * message is load-bearing: the init proof matches on `claude initialize request timed out`.
+ * The SDK owns correlation but applies no deadline, so the timeout stays here. `null` means
+ * none: the request then settles only on the CLI's answer or on the query closing under it.
  * A closed query is a transport failure, not the CLI rejecting the request, so only the
  * latter is re-thrown as a `ClaudeControlRequestError` a caller may surface as a rejection.
  */
 export function runClaudeControl<T>(
   subtype: string,
   run: () => Promise<T>,
-  timeoutMs: number = CLAUDE_DEFAULT_REQUEST_TIMEOUT_MS
+  timeoutMs: number | null = CLAUDE_DEFAULT_REQUEST_TIMEOUT_MS
 ): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | null = null
+  const request = Promise.resolve()
+    .then(run)
+    .catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error)
+      if (error instanceof ClaudeControlRequestError || message === QUERY_CLOSED_MESSAGE) {
+        throw error
+      }
+      throw new ClaudeControlRequestError(subtype, message)
+    })
+  if (timeoutMs === null) {
+    return request
+  }
   const deadline = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => reject(new Error(`claude ${subtype} request timed out`)), timeoutMs)
+    timer = setTimeout(() => reject(new ClaudeControlRequestTimeoutError(subtype)), timeoutMs)
     timer.unref?.()
   })
-  return Promise.race([
-    Promise.resolve()
-      .then(run)
-      .catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : String(error)
-        if (error instanceof ClaudeControlRequestError || message === QUERY_CLOSED_MESSAGE) {
-          throw error
-        }
-        throw new ClaudeControlRequestError(subtype, message)
-      }),
-    deadline
-  ]).finally(() => {
+  return Promise.race([request, deadline]).finally(() => {
     if (timer) {
       clearTimeout(timer)
     }
@@ -84,7 +94,8 @@ export type ClaudeControlSurface = {
   interrupt: (
     options?: ClaudeControlOptions & { cancelQueued?: boolean }
   ) => Promise<SDKControlInterruptResponse | undefined>
-  cancelAsyncMessage: (uuid: string, options?: ClaudeControlOptions) => Promise<void>
+  /** True only when the CLI confirms it withdrew that message before it ran. */
+  cancelAsyncMessage: (uuid: string, options?: ClaudeControlOptions) => Promise<boolean>
   setModel: (model: string | undefined, options?: ClaudeControlOptions) => Promise<void>
   setPermissionMode: (mode: PermissionMode, options?: ClaudeControlOptions) => Promise<void>
   applyFlagSettings: (
@@ -93,8 +104,11 @@ export type ClaudeControlSurface = {
   ) => Promise<void>
   stopTask: (taskId: string, options?: ClaudeControlOptions) => Promise<void>
   supportedModels: (options?: ClaudeControlOptions) => Promise<unknown[]>
-  initializationResult: (options?: ClaudeControlOptions) => Promise<unknown>
+  /** Untimed: a slow start is still a start, and the child's exit closes the query under it. */
+  initializationResult: () => Promise<unknown>
   getSettings: (options?: ClaudeControlOptions) => Promise<unknown>
+  /** The `/context` breakdown; older CLIs reject the request and the caller shows nothing. */
+  getContextUsage: (options?: ClaudeControlOptions) => Promise<unknown>
 }
 
 type InterruptingQuery = {
@@ -118,9 +132,9 @@ export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
       const cancel = claudeQueryAsyncCanceller(query)
       return cancel
         ? runClaudeControl('cancel_async_message', () => cancel(uuid), options?.timeoutMs).then(
-            () => {}
+            (cancelled) => cancelled === true
           )
-        : Promise.resolve()
+        : Promise.resolve(false)
     },
     setModel: (model, options) =>
       runClaudeControl('set_model', () => query.setModel(model), options?.timeoutMs).then(() => {}),
@@ -142,8 +156,10 @@ export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
       ),
     supportedModels: (options) =>
       runClaudeControl('list_models', () => query.supportedModels(), options?.timeoutMs),
-    initializationResult: (options) =>
-      runClaudeControl('initialize', () => query.initializationResult(), options?.timeoutMs),
+    initializationResult: () =>
+      runClaudeControl('initialize', () => query.initializationResult(), null),
+    getContextUsage: (options) =>
+      runClaudeControl('get_context_usage', () => query.getContextUsage(), options?.timeoutMs),
     getSettings: (options) => {
       const read = claudeQuerySettingsReader(query)
       return read

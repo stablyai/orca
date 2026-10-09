@@ -1,3 +1,4 @@
+import type { RuntimeEnvironmentStatus } from './runtime-host-status'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getLocalExecutionHostLabel,
@@ -16,6 +17,7 @@ import type { SshConnectionState, SshConnectionStatus } from './ssh-types'
 import type { RuntimeEnvironmentSource } from './runtime-environments'
 import type { GlobalSettings } from './global-settings-types'
 import type { Repo } from './repo-types'
+import { annotateManagedOrcadExecutionHosts } from './managed-orcad-execution-host'
 
 export type ExecutionHostHealth =
   | 'local'
@@ -40,21 +42,19 @@ export type ExecutionHostRegistryEntry = {
   platform?: NodeJS.Platform | null
   remoteControlState?: RuntimeStatus['remoteControl']
   source?: RuntimeEnvironmentSource
+  /** See managed-orcad-execution-host: pairs an SSH host with its managed server. */
+  aliasHostIds?: readonly ExecutionHostId[]
+  mergedIntoHostId?: ExecutionHostId
 }
 
 type RuntimeEnvironmentSummary = {
   id: string
   name?: string | null
   source?: RuntimeEnvironmentSource
+  orcadDeployment?: { sshTargetId: string } | null
 }
 
-type RuntimeHostStatus = {
-  status?: RuntimeStatus | null
-  remoteControl?: RuntimeStatus['remoteControl'] | null
-  appVersion?: string | null
-}
-
-type RuntimeStatusByEnvironmentId = ReadonlyMap<string, RuntimeHostStatus>
+type RuntimeStatusByEnvironmentId = ReadonlyMap<string, RuntimeEnvironmentStatus>
 
 export type ExecutionHostSource = 'configured-only' | 'include-references'
 
@@ -158,9 +158,24 @@ function addRuntimeHost(
   const hostId = toRuntimeExecutionHostId(environmentId)
   const runtimeStatus = statusByEnvironmentId?.get(environmentId)
   const status = runtimeStatus?.status
-  const compatibility = runtimeCompatibility(status)
+  const snapshot = runtimeStatus?.snapshot
+  const metadata = status ?? snapshot?.status
+  const compatibility = runtimeCompatibility(metadata)
   const remoteControl = runtimeStatus?.remoteControl ?? status?.remoteControl
-  const controlHealth = runtimeControlHealth(remoteControl)
+  const controlHealth = snapshot?.retired
+    ? 'disconnected'
+    : snapshot?.verification === 'blocked'
+      ? 'blocked'
+      : !runtimeStatus ||
+          snapshot?.verification === 'checking' ||
+          snapshot?.transport === 'disconnected' ||
+          snapshot?.transport === 'connecting'
+        ? 'connecting'
+        : snapshot?.transport === 'ready'
+          ? compatibility?.kind === 'blocked'
+            ? 'blocked'
+            : 'available'
+          : runtimeControlHealth(remoteControl)
   setHost(hosts, {
     id: hostId,
     kind: 'runtime',
@@ -168,12 +183,12 @@ function addRuntimeHost(
     detail: 'Orca server',
     health: controlHealth ?? runtimeHealth(status, compatibility, remoteControl),
     compatibility: compatibility ?? undefined,
-    capabilities: status?.capabilities,
-    appVersion: runtimeStatus?.appVersion ?? status?.appVersion ?? null,
-    protocolVersion: status?.runtimeProtocolVersion ?? status?.protocolVersion ?? null,
+    capabilities: metadata?.capabilities,
+    appVersion: runtimeStatus?.appVersion ?? metadata?.appVersion ?? null,
+    protocolVersion: metadata?.runtimeProtocolVersion ?? metadata?.protocolVersion ?? null,
     minCompatibleClientVersion:
-      status?.minCompatibleRuntimeClientVersion ?? status?.minCompatibleMobileVersion ?? null,
-    platform: status?.hostPlatform ?? null,
+      metadata?.minCompatibleRuntimeClientVersion ?? metadata?.minCompatibleMobileVersion ?? null,
+    platform: metadata?.hostPlatform ?? null,
     remoteControlState: remoteControl ?? null,
     ...(source ? { source } : {})
   })
@@ -282,12 +297,21 @@ export function buildExecutionHostRegistry(args: {
     })
   }
 
+  annotateManagedOrcadExecutionHosts({
+    hosts,
+    runtimeEnvironments: args.runtimeEnvironments ?? [],
+    sshConnectionStates: args.sshConnectionStates
+  })
+
   const overrides = args.hostLabelOverrides
   if (!overrides || overrides.size === 0) {
     return [...hosts.values()]
   }
   return [...hosts.values()].map((host) => {
-    const label = overrides.get(host.id)
+    // Why the alias fallback: a rename saved on the merged-away id still names the merged row.
+    const label =
+      overrides.get(host.id) ??
+      host.aliasHostIds?.map((aliasHostId) => overrides.get(aliasHostId)).find(Boolean)
     return label ? { ...host, label } : host
   })
 }

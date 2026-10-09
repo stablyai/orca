@@ -11,6 +11,8 @@ type SshTestConnectionOptions = {
   remotePath: string
   displayName: string
   seedInitialTab?: boolean
+  /** A target already in the profile (a seeded one): connect it instead of adding `target`. */
+  existingTargetId?: string
 }
 
 export async function connectSshTestTarget(
@@ -19,20 +21,30 @@ export async function connectSshTestTarget(
   options: SshTestConnectionOptions
 ): Promise<ConnectedSshTestTarget> {
   return page.evaluate(
-    async ({ target, remotePath, displayName, seedInitialTab }) => {
+    async ({ target, remotePath, displayName, seedInitialTab, existingTargetId }) => {
       const store = window.__store
       if (!store) {
         throw new Error('Store unavailable')
       }
       const credentialUnsub = window.api.ssh.onCredentialRequest((request) => {
-        void window.api.ssh.submitCredential({ requestId: request.requestId, value: null })
+        void window.api.ssh.submitCredential({
+          requestId: request.requestId,
+          value: null
+        })
       })
       try {
-        const { target: createdTarget, repoReadoptions } = await window.api.ssh.addTarget({
-          target
+        const createdTarget = existingTargetId
+          ? (await window.api.ssh.listTargets()).find((entry) => entry.id === existingTargetId)
+          : await window.api.ssh.addTarget({ target }).then((added) => {
+              store.getState().recordSshRepoReadoptions(added.repoReadoptions)
+              return added.target
+            })
+        if (!createdTarget) {
+          throw new Error(`No SSH target ${existingTargetId} in the profile`)
+        }
+        const state = await window.api.ssh.connect({
+          targetId: createdTarget.id
         })
-        store.getState().recordSshRepoReadoptions(repoReadoptions)
-        const state = await window.api.ssh.connect({ targetId: createdTarget.id })
         if (!state || state.status !== 'connected') {
           throw new Error(`SSH target did not connect: ${JSON.stringify(state)}`)
         }
@@ -135,7 +147,7 @@ export async function connectSshTestTarget(
         if (seedInitialTab && (store.getState().tabsByWorktree[worktree.id] ?? []).length === 0) {
           store.getState().createTab(worktree.id)
         }
-        store.getState().setActiveTabType('terminal')
+        store.getState().setActiveTabType('terminal', store.getState().activeWorktreeId)
         return {
           targetId: createdTarget.id,
           repoId: result.repo.id,
@@ -149,7 +161,8 @@ export async function connectSshTestTarget(
       target,
       remotePath: options.remotePath,
       displayName: options.displayName,
-      seedInitialTab: options.seedInitialTab ?? true
+      seedInitialTab: options.seedInitialTab ?? true,
+      existingTargetId: options.existingTargetId
     }
   )
 }

@@ -38,7 +38,7 @@ export function sendModelRestoreNeededMarker(
   reason: PtyModelRestoreReason,
   markerSeq: number | undefined
 ): boolean {
-  if (session.mainWindow.isDestroyed()) {
+  if (!session.mainWindow || session.mainWindow.isDestroyed()) {
     return false
   }
   try {
@@ -61,6 +61,12 @@ export function sendPtyDataToRenderer(
   payload: PtyDataPayload,
   projectionAdmissionIds?: readonly string[]
 ): { sent: boolean; projectionsTransferred: boolean } {
+  if (!session.mainWindow) {
+    if (projectionAdmissionIds) {
+      session.sshOutputIntake?.transferProjections(projectionAdmissionIds, 'renderer-destroyed')
+    }
+    return { sent: false, projectionsTransferred: projectionAdmissionIds !== undefined }
+  }
   const charCount = getPtyPayloadCharCount(payload)
   const accounting = session.rendererDeliveryAccountingByPty.get(id)
   const hadAccounting = accounting !== undefined

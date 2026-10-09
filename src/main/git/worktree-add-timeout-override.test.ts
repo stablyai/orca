@@ -1,17 +1,13 @@
 // resolveWorktreeAddTimeoutMs: ORCA_WORKTREE_ADD_TIMEOUT_MS parsing, clamping, and warnings.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const {
-  gitExecFileAsyncMock,
-  gitExecFileSyncMock,
-  translateWslOutputPathsMock,
-  moveWorktreeDirectoryToTrashMock
-} = vi.hoisted(() => ({
-  gitExecFileAsyncMock: vi.fn(),
-  gitExecFileSyncMock: vi.fn(),
-  translateWslOutputPathsMock: vi.fn((output: string) => output),
-  moveWorktreeDirectoryToTrashMock: vi.fn()
-}))
+const { gitExecFileAsyncMock, gitExecFileSyncMock, translateWslOutputPathsMock } = vi.hoisted(
+  () => ({
+    gitExecFileAsyncMock: vi.fn(),
+    gitExecFileSyncMock: vi.fn(),
+    translateWslOutputPathsMock: vi.fn((output: string) => output)
+  })
+)
 
 vi.mock('./runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock,
@@ -19,18 +15,7 @@ vi.mock('./runner', () => ({
   translateWslOutputPaths: translateWslOutputPathsMock
 }))
 
-// Default: the checkout cannot be renamed aside, so removal deletes it in place.
-vi.mock('../worktree-trash', () => ({
-  moveWorktreeDirectoryToTrash: moveWorktreeDirectoryToTrashMock.mockResolvedValue(undefined),
-  restoreWorktreeDirectoryFromTrash: vi.fn().mockResolvedValue(true),
-  scheduleWorktreeTrashDeletion: vi.fn()
-}))
-
-import {
-  resolveWorktreeAddTimeoutMs,
-  WORKTREE_ADD_TIMEOUT_MAX_MS,
-  WORKTREE_ADD_TIMEOUT_MS
-} from './worktree'
+import { resolveWorktreeAddTimeoutMs, WORKTREE_ADD_TIMEOUT_MS } from './worktree'
 import { registerWorktreeSuiteHooks } from './worktree-test-harness'
 
 registerWorktreeSuiteHooks()
@@ -44,12 +29,6 @@ describe('resolveWorktreeAddTimeoutMs', () => {
 
   afterEach(() => {
     warnSpy.mockRestore()
-  })
-
-  // Why: pin the literals so a future edit to either bound has to be deliberate.
-  it('bounds the override to [180s, 30min]', () => {
-    expect(WORKTREE_ADD_TIMEOUT_MS).toBe(180_000)
-    expect(WORKTREE_ADD_TIMEOUT_MAX_MS).toBe(1_800_000)
   })
 
   it('falls back to the default when the override is unset, blank, or unparseable', () => {

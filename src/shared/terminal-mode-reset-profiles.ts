@@ -6,6 +6,16 @@
 // Why: SerializeAddon replays mode bits assuming reattach to a live TUI, but Orca restores against a fresh shell with none, so stale bits (e.g. focus reporting rings the bell on click) must be reset.
 export const RESET_TERMINAL_CURSOR_STYLE = '\x1b[0 q'
 export const RESET_KITTY_KEYBOARD_PROTOCOL = '\x1b[<99u\x1b[=0u'
+
+/**
+ * Re-asserts replayed Kitty flags. Pop-all first, so a push a replay
+ * redelivered into xterm's stack cannot resurface on the app's next pop.
+ * Unproven flags only pop, which lands on 0 without proving it.
+ */
+export function buildKittyKeyboardRestore(provenFlags: number | undefined): string {
+  return provenFlags === undefined ? '\x1b[<99u' : `\x1b[<99u\x1b[=${provenFlags}u`
+}
+
 // Why: abandoned byte-gap replay drains live chunks, so a dropped intensity reset must not style them (STA-4042).
 export const RESET_GRAPHIC_RENDITION = '\x1b[0m'
 // Last so a dead process cannot leave stale attributes in the DECSC register.
@@ -17,11 +27,15 @@ export const RESET_MOUSE_REPORTING =
 // Why: serialized panes can end with a live pen, but the following shell assumes default attributes.
 export const POST_REPLAY_MODE_RESET = `${RESET_GRAPHIC_RENDITION}${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h${RESET_MOUSE_REPORTING}\x1b[?1004l\x1b[?2004l${SAVE_GROUNDED_CURSOR}`
 
-// Why: same-session live replay; keep cursor/focus cleanup but preserve Kitty flags the running TUI relies on.
+// Why: same-session live replay; keep cursor/focus cleanup (the replay epilogue re-asserts Kitty flags).
 export const POST_REPLAY_LIVE_SNAPSHOT_RESET = `${RESET_TERMINAL_CURSOR_STYLE}\x1b[?25h\x1b[?1004l`
 
 // Why: the normal-buffer fallback can follow a dead TUI, so its stale pen and saved pen must not reach the surviving shell.
-export const POST_REPLAY_REATTACH_RESET = `${RESET_GRAPHIC_RENDITION}${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h${RESET_MOUSE_REPORTING}\x1b[?1004l${SAVE_GROUNDED_CURSOR}`
+// No Kitty reset in any reattach profile: the replay epilogue restores the host's flags instead.
+export const POST_REPLAY_REATTACH_RESET = `${RESET_GRAPHIC_RENDITION}${RESET_TERMINAL_CURSOR_STYLE}\x1b[?25h${RESET_MOUSE_REPORTING}\x1b[?1004l${SAVE_GROUNDED_CURSOR}`
+
+// Why: a foreground proof says the app is gone, so its Kitty flags go with its other modes.
+export const CONFIRMED_SHELL_MODE_RESET = `${POST_REPLAY_REATTACH_RESET}${RESET_KITTY_KEYBOARD_PROTOCOL}`
 
 // Why: a foreground shell proves an alternate-screen owner died without its
 // ?1049l cleanup; leave the renderer on the shell's normal buffer as well.
@@ -30,16 +44,13 @@ export const POST_REPLAY_DEAD_TUI_RESET = `\x1b[?1049l${POST_REPLAY_REATTACH_RES
 // Why: an alt-screen reattach replays the daemon's rehydrateSequences, which re-arm the live TUI's
 // mouse modes; wiping them one write later hands drags back to xterm's row selection (#8291).
 // Normal-buffer panes keep RESET_MOUSE_REPORTING so a dead TUI's stale modes never reach a shell (#7893).
-export const POST_REPLAY_REATTACH_RESET_KEEP_MOUSE = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h\x1b[?1004l`
+export const POST_REPLAY_REATTACH_RESET_KEEP_MOUSE = `${RESET_TERMINAL_CURSOR_STYLE}\x1b[?25h\x1b[?1004l`
 
 // Why: a live agent owns focus reporting; resetting ?1004h suppresses the focus-in it needs to re-anchor its cursor (IME).
-export const POST_REPLAY_LIVE_AGENT_REATTACH_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h`
+export const POST_REPLAY_LIVE_AGENT_REATTACH_RESET = `${RESET_TERMINAL_CURSOR_STYLE}\x1b[?25h`
 
 // Why: a live agent owns cursor/focus here; forcing ?25h/?1004l breaks a parked agent that only arms ?1004h at startup.
 export const POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET = RESET_TERMINAL_CURSOR_STYLE
-
-/** Dead-TUI bytes feed a fresh shell; clear their pen and mouse modes before re-serialization. */
-export const COLD_RESTORE_SEED_MODE_RESET = `${RESET_GRAPHIC_RENDITION}${RESET_MOUSE_REPORTING}`
 
 // CAN, not a bare ESC: xterm dispatches OSC/DCS/APC with
 // `success = code !== 0x18 && code !== 0x1a`, so ESC grounds the parser but
@@ -47,11 +58,53 @@ export const COLD_RESTORE_SEED_MODE_RESET = `${RESET_GRAPHIC_RENDITION}${RESET_M
 // writes the clipboard.
 export const ABORT_TRUNCATED_CONTROL_STRING = '\x18'
 
+// Trade-off, stated because it is not free: the pane was FROZEN on its last
+// coherent frame, not blank (bufferRows records a row range and clears nothing).
+// Releasing the latch where no repaint follows in the same write — RESET_AFTER_BYTE_GAP
+// is written alone — can flash a partial frame in place of that coherent one. A byte
+// gap already means the stream is damaged and a restore follows, so a stale frame that
+// outlives the damage is the worse option.
+// Why this is grounded everywhere a byte gap or a repaint happens: xterm renders
+// NOTHING while DEC 2026 is open and only force-flushes after 1000ms, so a gap
+// that swallowed a TUI's closing \x1b[?2026l leaves the pane blank for a full
+// second per frame — and Orca is otherwise incapable of closing a latch it
+// opened. Unlike the modes deliberately left ungrounded below, a snapshot never
+// re-asserts 2026, and closing a frame early costs one premature repaint against
+// a second of frozen, increasingly stale output.
+export const RELEASE_SYNCHRONIZED_OUTPUT = '\x1b[?2026l'
+
+// Why the DECSC first: xterm's `?1049l` runs restoreCursor() even on the normal
+// buffer, so saving in place keeps the cursor put there; on the alt buffer the
+// save lands in the alt register and `?1049l` restores the shell's position.
+const LEAVE_ALTERNATE_SCREEN_KEEPING_NORMAL_CURSOR = `${SAVE_GROUNDED_CURSOR}\x1b[?1049l`
+// UTF-8 and urxvt encodings RESET_MOUSE_REPORTING leaves out; xterm ignores them, other hosts may not.
+const RESET_LEGACY_MOUSE_ENCODINGS = '\x1b[?1005l\x1b[?1015l'
+const RESET_FOCUS_REPORTING = '\x1b[?1004l'
+const RESET_BRACKETED_PASTE = '\x1b[?2004l'
+const RESET_APPLICATION_CURSOR_AND_KEYPAD = '\x1b[?1l\x1b[?66l'
+const SHOW_CURSOR = '\x1b[?25h'
+
+/**
+ * The one "the process that armed these modes is gone" reset, for every boundary
+ * the daemon or main knows (cold-restore seed) or proves (recovery barrier). It must stay
+ * inert for ownership: no OSC 133 and no enables the lifecycle scanner treats as a new owner.
+ * Kitty is reset on both sides of `?1049l` because kitty stacks are per screen.
+ * `keepFocusReporting`: the terminal host (ConPTY) armed `?1004h` for the pane's life.
+ */
+export function buildProcessBoundaryGround(opts: { keepFocusReporting: boolean }): string {
+  const focus = opts.keepFocusReporting ? '' : RESET_FOCUS_REPORTING
+  // RELEASE_SYNCHRONIZED_OUTPUT first: the process that opened a 2026 frame is
+  // gone, so nothing will ever close it, and xterm stops repainting until it does.
+  return `${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_KITTY_KEYBOARD_PROTOCOL}${LEAVE_ALTERNATE_SCREEN_KEEPING_NORMAL_CURSOR}${RESET_MOUSE_REPORTING}${RESET_LEGACY_MOUSE_ENCODINGS}${focus}${RESET_BRACKETED_PASTE}${RESET_APPLICATION_CURSOR_AND_KEYPAD}${SHOW_CURSOR}${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}${RESET_GRAPHIC_RENDITION}${SAVE_GROUNDED_CURSOR}`
+}
+
+export const PROCESS_BOUNDARY_GROUND = buildProcessBoundaryGround({ keepFocusReporting: false })
+
 // Live-stream grounding: the drop marker and the abandon paths, which drain
 // queued chunks instead of repainting. Parser + pen only — a live TUI keeps
 // writing here and owns its charset and margins. Not DECSTR: xterm's soft reset
 // wipes the kitty flags agents negotiate only at startup.
-export const RESET_AFTER_BYTE_GAP = `${ABORT_TRUNCATED_CONTROL_STRING}${RESET_GRAPHIC_RENDITION}`
+export const RESET_AFTER_BYTE_GAP = `${ABORT_TRUNCATED_CONTROL_STRING}${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_GRAPHIC_RENDITION}`
 
 // The baseline a serialized snapshot assumes it lands on: SerializeAddon diffs
 // cells against DEFAULT attributes and emits no charset at all.
@@ -64,7 +117,7 @@ export const RESET_AFTER_BYTE_GAP = `${ABORT_TRUNCATED_CONTROL_STRING}${RESET_GR
 // resetting is unilateral. `enacs=\E(B\E)0` (screen/tmux/vt100 terminfo)
 // designates G1 once at init and then uses bare SO/SI, so grounding G1 would
 // render a live app's box drawing as letters.
-const REPLAY_BASELINE_TERMINAL_RESET = `${RESET_GRAPHIC_RENDITION}\x0f\x1b(B\x1b[?6l\x1b[?7h\x1b[?45l\x1b[4l`
+const REPLAY_BASELINE_TERMINAL_RESET = `${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_GRAPHIC_RENDITION}\x0f\x1b(B\x1b[?6l\x1b[?7h\x1b[?45l\x1b[4l`
 
 // Buffer-scoped: margins live on the xterm buffer, and `?1049` neither carries
 // them across nor clears them unless it actually swaps.
@@ -90,11 +143,16 @@ const REPLAY_BASELINE_BUFFER_RESET = '\x1b[r'
 export function buildSnapshotReplayPrologue(args: {
   targetAlternateScreen: boolean
   paneOnAlternateScreen: boolean
+  /** The payload carries no history, so the pane's own must survive. */
+  keepScrollback?: boolean
 }): string {
   // Why explicit: `?1049h` does not clear the alt buffer (xterm's own
   // `1049 should clear altbuffer` FIXME); `\x1b[3J` is safe only for a
-  // normal-buffer payload, which carries its own history.
-  const clear = args.targetAlternateScreen ? '\x1b[2J\x1b[H' : '\x1b[2J\x1b[3J\x1b[H'
+  // normal-buffer payload that carries its own history.
+  const clear =
+    args.targetAlternateScreen || args.keepScrollback === true
+      ? '\x1b[2J\x1b[H'
+      : '\x1b[2J\x1b[3J\x1b[H'
   const ground = `${REPLAY_BASELINE_TERMINAL_RESET}${REPLAY_BASELINE_BUFFER_RESET}`
   if (args.paneOnAlternateScreen === args.targetAlternateScreen) {
     return `${ground}${clear}${SAVE_GROUNDED_CURSOR}`
@@ -112,6 +170,6 @@ export function replayPayloadEndsWithCursorHidden(payload: string): boolean {
 // Why: some agents hide the real cursor and draw their own, so preserve the payload's final visibility (pty-connection re-shows it if the agent was actually a dead TUI).
 export function buildPostReplayLiveAgentReattachReset(payload: string): string {
   return replayPayloadEndsWithCursorHidden(payload)
-    ? `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`
+    ? RESET_TERMINAL_CURSOR_STYLE
     : POST_REPLAY_LIVE_AGENT_REATTACH_RESET
 }

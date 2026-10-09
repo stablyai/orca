@@ -35,7 +35,6 @@ import {
   waitForPaneIdentitySnapshot
 } from './helpers/terminal'
 import { RuntimeClient, type RuntimeRpcSuccess } from '../../src/cli/runtime-client'
-import { RuntimeRpcFailureError } from '../../src/cli/runtime/types'
 import type { RuntimeTerminalListResult } from '../../src/shared/runtime-types'
 import {
   CODEX_IDLE_TITLE,
@@ -251,7 +250,7 @@ async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
       throw new Error('activateTerminalTab: window.__store is unavailable')
     }
     const state = store.getState()
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', state.activeWorktreeId)
     state.setActiveTab(targetTabId)
   }, tabId)
   await expect.poll(() => getActiveTabId(page), { timeout: 5_000 }).toBe(tabId)
@@ -354,7 +353,7 @@ test.describe('orchestration push-on-idle mail delivery', () => {
   // #19542 deleted the legacy-Run write fallback, so a sender in no Run has
   // nowhere to file mail to a bare handle: the send is refused outright, which
   // is what keeps an unsafe pointer out of the pane on the next idle frame.
-  test('refuses unbound direct mail from a sender in no Run instead of pushing it', async ({
+  test('keeps unbound direct mail durable without pointing to an unsafe check', async ({
     orcaPage,
     electronApp
   }) => {
@@ -363,40 +362,22 @@ test.describe('orchestration push-on-idle mail delivery', () => {
     const pane = await openAgentPane()
     await driveToLiveIdle(client, pane)
 
+    // Two plain terminals, neither in a Run: `send --to <handle>` must still land durably. It
+    // files under the unbound Run, so a reopen never reads it as pre-Runs state (#19542 regression).
     const stdinBeforeScan = pane.agent.readStdin()
-    const refusal = await sendMail(client, pane.handle, { subject: 'Unbound direct mail' }).then(
-      () => undefined,
-      (error: unknown) => error
-    )
-    // Why runtime_error and not run_required: insertMessage throws a plain
-    // Error, which the dispatcher passes through with its message and no
-    // recovery data — the sibling no-recipient path is the one that adds it.
-    // The request-id suffix and stamp are the client's durable-mutation bookkeeping.
-    expect(refusal).toBeInstanceOf(RuntimeRpcFailureError)
-    expect(refusal).toMatchObject({
-      code: 'runtime_error',
-      message: expect.stringContaining('Run is required')
-    })
-    // Pins that the SERVER attached no orchestrationSkillRecoveryData, without
-    // freezing whatever else the client may stamp alongside its request id.
-    const refusalData = (refusal as RuntimeRpcFailureError).data
-    expect(refusalData).toMatchObject({ orchestrationRequestId: expect.any(String) })
-    expect(refusalData).not.toHaveProperty('effectsApplied')
-    expect(refusalData).not.toHaveProperty('guide')
-    expect(refusalData).not.toHaveProperty('nextCommandArgs')
-    expect(refusalData).not.toHaveProperty('nextSteps')
-    expect(readMailbox(userDataDir, pane.handle)).toEqual([])
-
-    // A busy→idle edge is the push trigger. Walking one proves the refusal left
-    // nothing behind for the scan to point at, not merely that the push was slow.
+    const messageId = await sendMail(client, pane.handle, { subject: 'Unbound direct mail' })
     pane.agent.setTitle(CODEX_WORKING_TITLE)
     await waitForObservedTitle(client, pane.handle, CODEX_WORKING_TITLE)
     pane.agent.setTitle(CODEX_IDLE_TITLE)
     await waitForObservedTitle(client, pane.handle, CODEX_IDLE_TITLE)
 
-    // The ledger only proves anything once the push window has fully elapsed.
     await orcaPage.waitForTimeout(NO_DELIVERY_SETTLE_MS)
-    expect(readMailbox(userDataDir, pane.handle)).toEqual([])
+    expect(readMailRow(userDataDir, messageId)).toMatchObject({
+      to_handle: pane.handle,
+      run_id: 'run_unbound',
+      read: 0,
+      delivered_at: null
+    })
     expect(pane.agent.readStdin()).toBe(stdinBeforeScan)
   })
 
@@ -672,7 +653,12 @@ test.describe('orchestration delivery to a cold-parked agent', () => {
   const parkingDelayMs = 500
 
   test.use({
-    orcaAppExtraEnv: { ORCA_E2E_TERMINAL_PARKING_DELAY_MS: String(parkingDelayMs) }
+    orcaAppExtraEnv: {
+      ORCA_E2E_TERMINAL_PARKING_DELAY_MS: String(parkingDelayMs),
+      // The working-title round trip (PTY -> daemon -> main) must beat the Enter
+      // timer; 500ms is a production heuristic, not a budget CI can honour.
+      ORCA_E2E_ORCHESTRATION_POINTER_ENTER_DELAY_MS: '5000'
+    }
   })
 
   test('keeps one pointer and one idempotent prompt on the same parked PTY', async ({

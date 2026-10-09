@@ -14,6 +14,7 @@ import {
   writeManagedClaudeKeychainCredentials
 } from '../keychain'
 import { ClaudeRuntimeAuthCredentialIdentity } from './runtime-auth-credential-identity'
+import { stripSharedClaudeCredentialFields } from '../shared-credential-fields'
 
 const OWNERSHIP_PROBE_TIMEOUT = 'orca-wsl-ownership-probe-timeout'
 
@@ -28,9 +29,13 @@ export class ClaudeRuntimeAuthManagedCredentials extends ClaudeRuntimeAuthCreden
       return null
     }
     if (process.platform === 'darwin') {
-      return readManagedClaudeKeychainCredentials(account.id)
+      const credentials = await readManagedClaudeKeychainCredentials(account.id)
+      return credentials === null ? null : stripSharedClaudeCredentialFields(credentials)
     }
-    return readClaudeManagedAuthFile(managedAuthPath, '.credentials.json')
+    const credentials = readClaudeManagedAuthFile(managedAuthPath, '.credentials.json')
+    return credentials === null || account.managedAuthRuntime === 'wsl'
+      ? credentials
+      : stripSharedClaudeCredentialFields(credentials)
   }
 
   protected async writeManagedCredentials(
@@ -40,6 +45,9 @@ export class ClaudeRuntimeAuthManagedCredentials extends ClaudeRuntimeAuthCreden
     const managedAuthPath = await this.getOwnedManagedAuthPath(account)
     if (!managedAuthPath) {
       throw new Error('Managed Claude auth storage is not owned by Orca.')
+    }
+    if (account.managedAuthRuntime !== 'wsl') {
+      credentialsJson = stripSharedClaudeCredentialFields(credentialsJson)
     }
     if (process.platform === 'darwin') {
       await writeManagedClaudeKeychainCredentials(account.id, credentialsJson)

@@ -1,4 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('./ssh-relay-opencode-runtime', () => ({
+  ensureRemoteOpenCodeRuntime: vi.fn().mockResolvedValue('ready')
+}))
+vi.mock('./ssh-relay-ripgrep-install', () => ({
+  remoteRipgrepLayout: vi.fn().mockReturnValue(null),
+  recordRemoteRipgrepReference: vi.fn().mockResolvedValue(false),
+  ensureRemoteBundledRipgrep: vi.fn().mockResolvedValue(undefined)
+}))
 
 vi.mock('electron', () => ({
   app: { getAppPath: () => '/mock/app' }
@@ -160,8 +169,11 @@ describe('remote unix socket path limit', () => {
 })
 
 describe('relay launch with a long remote $HOME', () => {
+  afterEach(() => vi.unstubAllEnvs())
   beforeEach(() => {
     vi.clearAllMocks()
+    // The host-npm path is opt-in; these cases cover it.
+    vi.stubEnv('ORCA_SSH_REMOTE_RUNTIME', 'legacy')
   })
 
   it('keeps the launched socket path inside the remote sun_path limit', async () => {

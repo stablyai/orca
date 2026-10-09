@@ -96,10 +96,7 @@ export async function removeSshPtyConsumerOwnerRecovery(
   clientInstanceId: string,
   store: Store
 ): Promise<void> {
-  const persisted = store.getSshPtyConsumerRecovery(targetId)
-  if (persisted?.clientInstanceId === clientInstanceId) {
-    await store.removeSshPtyConsumerRecovery(targetId)
-  }
+  await store.removeSshPtyConsumerRecovery(targetId, clientInstanceId)
 }
 
 export function detachSshPtyConsumerRecovery(targetId: string, clientInstanceId: string): void {

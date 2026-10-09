@@ -626,8 +626,8 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     expect(statCalls.filter((path) => path === worktreesDir)).toHaveLength(1)
     await vi.waitFor(() => {
       expect(subscribeMock).toHaveBeenCalledTimes(2)
+      expect(received.flat()).toContainEqual({ type: 'create', path: worktreesDir })
     })
-    expect(received.flat()).toContainEqual({ type: 'create', path: worktreesDir })
   })
 
   it('resumes polling when the dir is still absent on show', async () => {

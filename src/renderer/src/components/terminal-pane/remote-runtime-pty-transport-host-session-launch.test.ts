@@ -191,7 +191,10 @@ describe('createRemoteRuntimePtyTransport', () => {
       })
     )
 
-    expect(onReplayData).toHaveBeenCalledWith('hello')
+    expect(onReplayData).toHaveBeenCalledWith('hello', {
+      carriesNormalBuffer: true,
+      keepsLocalScrollback: true
+    })
     expect(onConnect).toHaveBeenCalled()
     expect(onData).toHaveBeenCalledWith(' world', expect.objectContaining({ seq: 4 }))
   })
@@ -523,7 +526,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       }
       send.mockClear()
 
-      expect(transport.sendInput('ls\r')).toBe(true)
+      expect(transport.sendInput('ls\r', 'driving')).toBe(true)
       await vi.runOnlyPendingTimersAsync()
       expect(runtimeCall).not.toHaveBeenCalled()
       const inputFrame = decodeTerminalStreamFrame(send.mock.calls[0][0])

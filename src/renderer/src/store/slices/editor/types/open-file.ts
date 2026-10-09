@@ -142,6 +142,8 @@ export type OpenFile = {
   mirroredFromRuntimeSession?: boolean
   /** Why: orthogonal to `mode` — an edit-mode tab that must never accept edits/autosave/rename (AI Vault View Log). Persisted only when true. */
   readOnly?: boolean
+  /** Transient: paged CSV data must never become an editable buffer. */
+  csvPreviewOnly?: boolean
   /** Why: explicit live tail, only meaningful for a read-only local log. */
   liveTail?: boolean
   mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details'
@@ -165,6 +167,12 @@ export type ClosedEditorTabSnapshot = Omit<
 }
 
 export const MAX_RECENT_CLOSED_EDITOR_TABS = 10
+
+/**
+ * How an editor open selects its tab. 'focus' (default) selects it as a user action; 'background'
+ * selects it inside its own worktree without stamping its focus time; 'none' only adds it.
+ */
+export type EditorTabSelection = 'focus' | 'background' | 'none'
 
 export type EditorOpenTargetOptions = {
   targetGroupId?: string

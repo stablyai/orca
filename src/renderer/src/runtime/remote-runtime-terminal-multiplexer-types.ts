@@ -45,6 +45,8 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
        *  it, which must read as unknown so replay keeps the pane's own grid. */
       cols?: number
       rows?: number
+      /** The image carries no history, so replay must keep the pane's own scrollback. */
+      keepsLocalScrollback?: boolean
     }
   ) => void
   onSubscribed?: () => void
@@ -76,6 +78,8 @@ export type RemoteRuntimeSnapshotImage = {
   kittyKeyboardFlags?: number
   alternateScreen?: boolean
   terminalOwner?: 'shell'
+  /** `data` starts on the normal buffer and enters alt itself. */
+  carriesNormalBuffer?: boolean
 }
 
 /** Transient causes the host itself reported: a request reached it and it declined to serialize now. */
@@ -133,13 +137,9 @@ export type RemoteRuntimeMultiplexedTerminal = {
   resize: (cols: number, rows: number) => boolean
   claimViewport: (cols: number, rows: number) => boolean
   setOutputPaused: (paused: boolean) => boolean
-  serializeBuffer: (opts?: { scrollbackRows?: number }) => Promise<{
-    data: string
-    cols: number
-    rows: number
-    seq?: number
-    source?: 'headless' | 'renderer'
-  } | null>
+  serializeBuffer: (opts?: {
+    scrollbackRows?: number
+  }) => Promise<RemoteRuntimeSnapshotImage | null>
   // Why: same request as serializeBuffer, but keeps the host's reason for an absent buffer instead of collapsing it to null.
   serializeBufferOutcome: (opts?: {
     scrollbackRows?: number
@@ -195,6 +195,8 @@ export type RemoteRuntimeSnapshotInfo = {
   requestId?: number
   truncated?: boolean
   unavailable?: TerminalSnapshotUnavailableReason
+  /** History rows above the screen; absent from hosts that predate the field. */
+  scrollbackRows?: number
   // Why: a mid-escape tail the emulator could not serialize; the transport
   // must write it AFTER the replay reset so the next live chunk completes it
   // instead of rendering literally (#7329).

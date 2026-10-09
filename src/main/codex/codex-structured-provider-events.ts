@@ -1,36 +1,63 @@
 import type { CodexAppServerServerRequest } from './codex-app-server-connection'
 import { disposeCodexServerRequest } from './codex-server-request-disposition'
 import type { CodexJournalTranslationAdmission } from './codex-structured-journal-translation'
+import * as codexRewind from './codex-structured-rewind'
 import type { CodexSession, CodexStructuredSessionEvent } from './codex-structured-session-state'
-import { readCodexThreadId, readCodexTurnId } from './codex-structured-thread-facts'
+import { readCodexThreadId } from './codex-structured-thread-facts'
 
 type EmitCodexEvent = (
   session: CodexSession,
   event: CodexStructuredSessionEvent
 ) => CodexJournalTranslationAdmission
 
+/** One live notification's journal entry: rewind bookkeeping, delivery. */
+export function translateCodexNotification(input: {
+  sessionId: string
+  session: CodexSession
+  method: string
+  params: unknown
+  observedAt?: number
+  dispatchSequenceAtReceipt?: number
+  emit: EmitCodexEvent
+}): CodexJournalTranslationAdmission {
+  const { sessionId, session, method, params, observedAt, dispatchSequenceAtReceipt } = input
+  codexRewind.observeCodexRewindActivity(session, method, params)
+  session.turnOpenWaits.observe(session.threadId, method, params)
+  return deliverCodexNotification(
+    sessionId,
+    session,
+    method,
+    params,
+    input.emit,
+    observedAt,
+    dispatchSequenceAtReceipt
+  )
+}
+
 export function deliverCodexNotification(
   sessionId: string,
   session: CodexSession | undefined,
   method: string,
   params: unknown,
-  emit: EmitCodexEvent
+  emit: EmitCodexEvent,
+  observedAt?: number,
+  dispatchSequenceAtReceipt?: number
 ): CodexJournalTranslationAdmission {
   if (!session) {
     return { accepted: true }
   }
   const threadId = readCodexThreadId(params) ?? session.threadId
-  const turnId =
-    method === 'turn/started' && threadId === session.threadId ? readCodexTurnId(params) : null
-  const turnWaiter = turnId ? session.turnIdWaiters[0] : undefined
-  const admission = emit(session, { type: 'notification', sessionId, threadId, method, params })
-  if (method === 'turn/started' && threadId === session.threadId) {
-    if (admission.accepted && turnId && session.turnIdWaiters[0] === turnWaiter) {
-      session.turnIdWaiters.shift()
-      turnWaiter?.(turnId)
-    }
-  }
-  return admission
+  // Dispatch identity settles on the user-message echo inside the translator,
+  // which is where the ordinal a replay will compute is minted.
+  return emit(session, {
+    type: 'notification',
+    sessionId,
+    threadId,
+    method,
+    params,
+    ...(observedAt !== undefined ? { observedAt } : {}),
+    ...(dispatchSequenceAtReceipt !== undefined ? { dispatchSequenceAtReceipt } : {})
+  })
 }
 
 export function deliverCodexServerRequest(

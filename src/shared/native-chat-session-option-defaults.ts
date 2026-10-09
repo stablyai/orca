@@ -5,6 +5,10 @@ import type {
   PersistedNativeChatSessionOptions,
   SessionOptionValue
 } from './native-chat-session-options'
+import {
+  decodeStructuredAgentSessionOptionValue,
+  encodeStructuredAgentSessionOptionValue
+} from './structured-agent-session-option-codec'
 
 export function resolveNativeChatSessionOptionDefaults(
   persisted: PersistedNativeChatSessionOptions | null | undefined,
@@ -29,15 +33,12 @@ export function resolveNativeChatSessionOptionDefaults(
   return values
 }
 
-/** Why only these two: they are the only ids the picker persists into
- *  `nativeChatSessionOptions` that both structured providers also accept as
- *  strings. Claude's `fastMode` is a boolean the durable `Record<string, string>`
- *  record cannot carry, and the providers' remaining keys are settable only
- *  mid-session, never seeded at launch. */
-export const STRUCTURED_LAUNCH_SEED_OPTION_IDS = ['model', 'effort'] as const
+/** Canonical values seed through the existing durable string record; the codec
+ *  is the only boundary that represents the boolean Fast preference as text. */
+export const STRUCTURED_LAUNCH_SEED_OPTION_IDS = ['model', 'effort', 'fastMode'] as const
 
 /** Any chosen option set narrowed to what a structured create may seed: the seedable ids only,
- *  each a non-empty string. An empty result is `undefined` rather than `{}` — an empty map fails
+ *  each encoded as a bounded string. An empty result is `undefined` rather than `{}` — an empty map fails
  *  the durable record's bounded-string guard, and `agent_session_options_invalid` is not a wire
  *  refusal code, so the throw strands the launch with no fallback.
  *
@@ -49,15 +50,43 @@ export function narrowStructuredLaunchSeedOptions(
   const seeded: Record<string, string> = {}
   for (const id of STRUCTURED_LAUNCH_SEED_OPTION_IDS) {
     const value = values?.[id]
-    if (typeof value === 'string' && value.trim()) {
-      seeded[id] = value
+    if ((id === 'model' || id === 'effort') && !(typeof value === 'string' && value.trim())) {
+      continue
+    }
+    if (typeof value === 'string' || typeof value === 'boolean') {
+      const encoded = encodeStructuredAgentSessionOptionValue(id, value)
+      if (encoded !== null) {
+        seeded[id] = encoded
+      }
     }
   }
   return Object.keys(seeded).length > 0 ? seeded : undefined
 }
 
-/** The saved selection a structured create seeds into its reservation, narrowed
- *  to the wire-safe string subset the durable record and both providers accept. */
+/** An already-encoded seed read from another host or from storage: the seedable ids whose value
+ *  decodes, or `undefined` when nothing usable remains. */
+export function parseStructuredLaunchSeedOptions(
+  value: unknown
+): Record<string, string> | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined
+  }
+  const entries = new Map<string, unknown>(Object.entries(value))
+  const parsed: Record<string, string> = {}
+  for (const id of STRUCTURED_LAUNCH_SEED_OPTION_IDS) {
+    const encoded = entries.get(id)
+    if (
+      typeof encoded === 'string' &&
+      encoded.trim() &&
+      decodeStructuredAgentSessionOptionValue(id, encoded) !== null
+    ) {
+      parsed[id] = encoded
+    }
+  }
+  return Object.keys(parsed).length > 0 ? parsed : undefined
+}
+
+/** The saved selection a structured create seeds into its string-valued reservation. */
 export function resolveStructuredLaunchSeedOptions(
   persisted: PersistedNativeChatSessionOptions | null | undefined,
   agent: AgentType

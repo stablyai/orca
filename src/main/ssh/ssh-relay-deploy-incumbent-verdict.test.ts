@@ -1,4 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('./ssh-relay-opencode-runtime', () => ({
+  ensureRemoteOpenCodeRuntime: vi.fn().mockResolvedValue('ready')
+}))
+vi.mock('./ssh-relay-ripgrep-install', () => ({
+  remoteRipgrepLayout: vi.fn().mockReturnValue(null),
+  recordRemoteRipgrepReference: vi.fn().mockResolvedValue(false),
+  ensureRemoteBundledRipgrep: vi.fn().mockResolvedValue(undefined)
+}))
 
 vi.mock('electron', () => ({
   app: { getAppPath: () => '/mock/app' }
@@ -54,10 +63,17 @@ vi.mock('./ssh-connection-utils', () => ({
     Object.assign(new Error('SSH operation was cancelled'), { name: 'AbortError' })
 }))
 
+vi.mock('./ssh-relay-superseded-endpoints', () => ({
+  sweepSupersededRelayEndpoints: vi.fn().mockResolvedValue([])
+}))
+import { sweepSupersededRelayEndpoints } from './ssh-relay-superseded-endpoints'
+import { ensureRemoteOpenCodeRuntime } from './ssh-relay-opencode-runtime'
+import { gcOldRelayVersions } from './ssh-relay-versioned-install'
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import { execCommand, waitForSentinel } from './ssh-relay-deploy-helpers'
 import { RelayCredentialMismatchError } from './ssh-relay-credential-mismatch-error'
 import {
+  RelayProbeCleanupUnconfirmedError,
   isRelayEndpointHeldError,
   isRelayEndpointUnresponsiveError
 } from './ssh-relay-endpoint-incumbent'
@@ -87,14 +103,14 @@ const LIVE_UNENUMERABLE_PROBE = [
   'ORCA-INCUMBENT-END'
 ].join('\n')
 
-function queueAliveSocketThenProbe(): void {
+function queueAliveSocketThenProbe(output = LIVE_UNENUMERABLE_PROBE): void {
   vi.mocked(execCommand)
     .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
     .mockResolvedValueOnce('/home/user')
     .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK')
     .mockResolvedValueOnce('') // launch namespace marker
     .mockResolvedValueOnce('ALIVE')
-    .mockResolvedValueOnce(LIVE_UNENUMERABLE_PROBE)
+    .mockResolvedValueOnce(output)
 }
 
 function launchedDaemon(conn: SshConnection): boolean {
@@ -107,8 +123,12 @@ function launchedDaemon(conn: SshConnection): boolean {
  * probe exists to prevent: the fresh daemon loses the bind by luck, not by design.
  */
 describe('deployAndLaunchRelay honours the incumbent verdict', () => {
+  afterEach(() => vi.unstubAllEnvs())
   beforeEach(() => {
     vi.clearAllMocks()
+    // The host-npm path is opt-in; these cases cover it.
+    vi.stubEnv('ORCA_SSH_REMOTE_RUNTIME', 'legacy')
+    vi.mocked(sweepSupersededRelayEndpoints).mockReset().mockResolvedValue([])
     vi.mocked(execCommand).mockReset().mockResolvedValue('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
     vi.mocked(waitForSentinel).mockReset()
     vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -133,6 +153,21 @@ describe('deployAndLaunchRelay honours the incumbent verdict', () => {
     expect(launchedDaemon(conn)).toBe(false)
   })
 
+  it('does not launch while the incumbent probe cleanup is unconfirmed', async () => {
+    const conn = makeMockConnection()
+    vi.mocked(waitForSentinel).mockRejectedValueOnce(new Error('Relay handshake timed out'))
+    queueAliveSocketThenProbe(
+      LIVE_UNENUMERABLE_PROBE.replace(
+        'HOLDERS_SOURCE=unavailable',
+        'HOLDERS_SOURCE=unavailable\nPROBE_CLEANUP=unconfirmed'
+      )
+    )
+    await expect(deployAndLaunchRelay(conn)).rejects.toBeInstanceOf(
+      RelayProbeCleanupUnconfirmedError
+    )
+    expect(launchedDaemon(conn)).toBe(false)
+  })
+
   it('still launches fresh when the socket probe itself fails', async () => {
     const conn = makeMockConnection()
     vi.mocked(execCommand)
@@ -151,4 +186,37 @@ describe('deployAndLaunchRelay honours the incumbent verdict', () => {
     await deployAndLaunchRelay(conn)
     expect(launchedDaemon(conn)).toBe(true)
   })
+  it.each([
+    { error: new Error('completed sweep read failure'), expectedGcCalls: 1 },
+    { error: new RelayProbeCleanupUnconfirmedError(), expectedGcCalls: 0 }
+  ])(
+    'runs background GC only after probe cleanup is settled: $error.name',
+    async ({ error, expectedGcCalls }) => {
+      vi.mocked(execCommand)
+        .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+        .mockResolvedValueOnce('/home/user')
+        .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK')
+        .mockResolvedValueOnce('')
+        .mockResolvedValueOnce('DEAD')
+        .mockResolvedValueOnce('READY')
+      vi.mocked(waitForSentinel).mockResolvedValueOnce({
+        write: vi.fn(),
+        onData: vi.fn(),
+        onClose: vi.fn()
+      })
+      vi.mocked(sweepSupersededRelayEndpoints).mockRejectedValueOnce(error)
+      vi.mocked(ensureRemoteOpenCodeRuntime).mockResolvedValueOnce('not-needed')
+      const result = await deployAndLaunchRelay(makeMockConnection())
+      await vi.waitFor(() => expect(sweepSupersededRelayEndpoints).toHaveBeenCalledOnce())
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(gcOldRelayVersions).toHaveBeenCalledTimes(expectedGcCalls)
+      const now = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 120_000)
+      try {
+        await result.prepareOpenCodeRuntime?.(new AbortController().signal)
+        expect(ensureRemoteOpenCodeRuntime).toHaveBeenCalledTimes(expectedGcCalls + 1)
+      } finally {
+        now.mockRestore()
+      }
+    }
+  )
 })

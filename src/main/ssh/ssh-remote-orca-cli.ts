@@ -104,7 +104,11 @@ async function runLegacyRemoteOrcaCli(
   json: boolean,
   passthroughFailure: HostCliUnavailableError
 ): Promise<RemoteOrcaCliResult> {
-  const dispatcher = new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS })
+  const dispatcher = new RpcDispatcher({
+    runtime,
+    methods: ALL_RPC_METHODS,
+    callerScope: request.callerScope
+  })
   const help = getRemoteLinearHelp(parsed)
   if (help) {
     return { stdout: `${help}\n`, stderr: '', exitCode: 0 }
@@ -185,7 +189,10 @@ async function dispatchRemoteCli(
           state: status.graphStatus === 'ready' ? 'ready' : 'graph_not_ready',
           reachable: true,
           connectionState: runtimeHostConnectionState({ hasStatusEntry: true, status }),
-          runtimeId: status.runtimeId
+          runtimeId: status.runtimeId,
+          // Why: `status.get` ran in-process on the execution host, so these ARE that host's
+          // capabilities; dropping them made `--shell` report an outdated host instead of SSH.
+          ...(status.capabilities ? { capabilities: status.capabilities } : {})
         },
         graph: { state: status.graphStatus }
       }
@@ -217,10 +224,7 @@ async function dispatchRemoteCli(
           // authority as the full host CLI passthrough.
           senderPaneKey: env.ORCA_PANE_KEY || undefined
         },
-        {
-          ...compatibilityEnvelope,
-          orchestrationCapability: optionalRemoteCliString(parsed.flags, 'dispatch-capability')
-        }
+        compatibilityEnvelope
       )
     }
     case 'orchestration check':
@@ -260,10 +264,7 @@ async function dispatchRemoteCli(
           run: optionalRemoteCliString(parsed.flags, 'run'),
           compatibilityCliCommand: 'orca'
         },
-        {
-          ...compatibilityEnvelope,
-          orchestrationCapability: optionalRemoteCliString(parsed.flags, 'dispatch-capability')
-        }
+        compatibilityEnvelope
       )
     case 'orchestration reply':
       return await call(
@@ -307,7 +308,6 @@ async function call(
     authToken: 'remote-cli',
     method,
     params,
-    orchestrationCapability: envelope?.orchestrationCapability,
     orchestrationContractVersion: method.startsWith('orchestration.')
       ? ORCHESTRATION_CONTRACT_VERSION
       : undefined,

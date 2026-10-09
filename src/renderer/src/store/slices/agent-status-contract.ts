@@ -65,17 +65,6 @@ export type AgentLaunchConfigRegistrationMetadata = {
   providerSession?: AgentProviderSessionMetadata
 }
 
-export type AgentLaunchConfigStatusMetadata = {
-  paneKey: string
-  agentType?: AgentType
-  tabId?: string
-  terminalHandle?: string
-  launchToken?: string
-  providerSession?: AgentProviderSessionMetadata
-  existingProviderSession?: AgentProviderSessionMetadata
-  providerSessionChanged?: boolean
-}
-
 export type AgentLaunchConfigRegistryEntry = {
   launchConfig: SleepingAgentLaunchConfig
   registeredAt: number
@@ -83,6 +72,9 @@ export type AgentLaunchConfigRegistryEntry = {
 }
 
 export type AgentStatusPayload = ParsedAgentStatusPayload & {
+  subagentObservation?: AgentStatusEntry['subagentObservation']
+  /** The host's child views for a structured session; see `AgentStatusEntry.children`. */
+  children?: AgentStatusEntry['children']
   orchestration?: AgentStatusOrchestrationContext
   promptInteractionKey?: string
   restoredUnconfirmed?: boolean
@@ -98,6 +90,8 @@ export type AgentStatusTiming = {
   /** Observation clock for staleness; see `AgentStatusEntry.evidenceObservedAt`. */
   evidenceObservedAt?: number
   stateStartedAt?: number
+  /** The host's turn start; see `AgentStatusEntry.turnStartedAt`. */
+  turnStartedAt?: number
 }
 
 export type AgentStatusRouting = {
@@ -108,6 +102,7 @@ export type AgentStatusRouting = {
 }
 
 export type AgentStatusMetadata = {
+  authorityRestartId?: string
   /** Structured status rows remain fresh while the host owns the session; cleared on feed loss. */
   structuredHostOwned?: true
   providerSession?: AgentProviderSessionMetadata

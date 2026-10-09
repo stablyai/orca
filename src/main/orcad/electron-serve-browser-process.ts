@@ -52,9 +52,12 @@ async function reserveLoopbackPort(): Promise<number> {
   })
   return address.port
 }
-function electronServeEnvironment(): NodeJS.ProcessEnv {
+function electronServeEnvironment(userDataPath: string): NodeJS.ProcessEnv {
   const environment = { ...process.env }
   for (const key of [
+    'ORCA_E2E_USER_DATA_DIR',
+    'ORCA_USER_DATA',
+    'ORCA_USER_DATA_PATH',
     'AGENT_BROWSER_ARGS',
     'AGENT_BROWSER_AUTO_CONNECT',
     'AGENT_BROWSER_CDP',
@@ -68,6 +71,10 @@ function electronServeEnvironment(): NodeJS.ProcessEnv {
     'AGENT_BROWSER_STATE'
   ]) {
     delete environment[key]
+  }
+  // Keep Electron's native home override active in isolated sidecars.
+  if (process.env.ORCA_E2E_USER_DATA_DIR || process.env.ORCA_E2E_HOME_DIR) {
+    environment.ORCA_E2E_USER_DATA_DIR = userDataPath
   }
   return environment
 }
@@ -97,11 +104,13 @@ export class ElectronServeBrowserProcess {
 
   constructor(private readonly executablePath: string) {}
 
-  async start(): Promise<void> {
+  async start(signal?: AbortSignal): Promise<void> {
+    signal?.throwIfAborted()
     const temporaryRoot = process.platform === 'win32' ? tmpdir() : '/tmp'
     const userDataPath = await mkdtemp(join(temporaryRoot, 'orcad-browser-'))
     this.sidecarDataPath = userDataPath
     const port = await reserveLoopbackPort()
+    signal?.throwIfAborted()
     const child = spawnProcess({
       program: this.executablePath,
       args: [
@@ -110,9 +119,12 @@ export class ElectronServeBrowserProcess {
         String(port),
         '--serve-json',
         '--serve-no-pairing',
+        ...(process.env.ORCA_E2E_USER_DATA_DIR || process.env.ORCA_E2E_HOME_DIR
+          ? ['--password-store=basic', '--use-mock-keychain']
+          : []),
         `--user-data-dir=${userDataPath}`
       ],
-      env: electronServeEnvironment()
+      env: electronServeEnvironment(userDataPath)
     })
     this.child = child
     for (const stream of [child.stdout, child.stderr]) {
@@ -122,12 +134,14 @@ export class ElectronServeBrowserProcess {
     const deadline = Date.now() + START_TIMEOUT_MS
     let lastError: unknown = null
     while (Date.now() < deadline) {
+      signal?.throwIfAborted()
       const metadata = readRuntimeMetadata(userDataPath)
       if (metadata) {
         try {
           const status = RuntimeStatusResult.parse(
             await sendOrcadSidecarRequest(metadata, 'status.get', undefined, 5_000)
           )
+          signal?.throwIfAborted()
           if (status.capabilities?.includes('browser.headless.v1')) {
             this.metadata = metadata
             return
@@ -140,7 +154,7 @@ export class ElectronServeBrowserProcess {
       if (child.exitCode !== null || child.signalCode !== null) {
         break
       }
-      await delay(100)
+      await delay(100, undefined, { signal })
     }
     throw new Error(
       `Installed Electron browser provider did not become ready: ${

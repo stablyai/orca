@@ -4,9 +4,13 @@ import { translate } from '@/i18n/i18n'
 
 export function isLocalPathOpenBlocked(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
-  context?: { connectionId?: string | null }
+  context?: { connectionId?: string | null; runtimeEnvironmentId?: string | null }
 ): boolean {
-  return Boolean(settings?.activeRuntimeEnvironmentId?.trim() || context?.connectionId?.trim())
+  return Boolean(
+    settings?.activeRuntimeEnvironmentId?.trim() ||
+    context?.connectionId?.trim() ||
+    context?.runtimeEnvironmentId?.trim()
+  )
 }
 
 export function showLocalPathOpenBlockedToast(): void {

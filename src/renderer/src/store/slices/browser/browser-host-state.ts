@@ -153,7 +153,7 @@ export function browserImportStateForHostUpdate(
   hostId: ExecutionHostId,
   browserSessionImportState: BrowserSlice['browserSessionImportState']
 ): Partial<BrowserSlice> {
-  return getBrowserSettingsHostId(state) === hostId ? { browserSessionImportState } : {}
+  return getBrowserSettingsHostId(state) === hostId ? { browserSessionImportState } : state
 }
 
 export function getFallbackTabTypeForWorktree(

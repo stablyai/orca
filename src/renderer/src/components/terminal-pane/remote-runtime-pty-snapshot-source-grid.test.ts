@@ -124,8 +124,8 @@ describe('remote transport snapshot source-grid threading', () => {
     deliverSnapshot({ cols: 154, rows: 68, seq: 9, source: 'headless' }, 'recovered')
     await expect.poll(() => onReplayData.mock.calls.length, { timeout: 5000 }).toBe(2)
     expect(onReplayData).toHaveBeenLastCalledWith(
-      '\x1b[2J\x1b[3J\x1b[Hrecovered',
-      expect.objectContaining({ snapshotCols: 154, snapshotRows: 68 })
+      '\x1b[?2026l\x1b[2J\x1b[Hrecovered',
+      expect.objectContaining({ snapshotCols: 154, snapshotRows: 68, keepsLocalScrollback: true })
     )
 
     // A host that publishes no dimensions must read as unknown, not as a grid.
