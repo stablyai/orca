@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => {
       (args: StatArgs) => Promise<{ isDirectory: boolean; size: number; mtime: number }>
     >(),
     openFilePath: vi.fn(),
+    pathsExist: vi.fn(),
     activateAndRevealWorktree: vi.fn()
   }
 })
@@ -23,6 +24,8 @@ vi.mock('@/lib/worktree-activation', () => ({
 
 import { buildFileLinkActions } from './terminal-file-link-actions'
 import { getTerminalFileContext, openDetectedFilePath } from './terminal-file-open-routing'
+import { createNativeChatFileLinkExistence } from '../native-chat/native-chat-file-link-existence'
+import { extractTerminalFileLinks } from '@/lib/terminal-links'
 
 const id = 'repo::/home/u/proj'
 const deps = { worktreeId: id, worktreePath: '/home/u/proj', runtimeEnvironmentId: null }
@@ -71,9 +74,13 @@ beforeEach(() => {
   mocks.state.value = sameIdState('ssh:box')
   mocks.stat.mockResolvedValue({ isDirectory: true, size: 0, mtime: 0 })
   mocks.openFilePath.mockResolvedValue(true)
+  mocks.pathsExist.mockImplementation(async (paths: string[]) => paths.map(() => true))
   vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
   vi.stubGlobal('window', {
-    api: { fs: { stat: mocks.stat }, shell: { openFilePath: mocks.openFilePath } }
+    api: {
+      fs: { stat: mocks.stat },
+      shell: { openFilePath: mocks.openFilePath, pathsExist: mocks.pathsExist }
+    }
   })
 })
 
@@ -157,5 +164,42 @@ describe('same-id SSH terminal file links', () => {
     expect(mocks.stat).not.toHaveBeenCalled()
     expect(mocks.openFilePath).not.toHaveBeenCalled()
     expect(onOpenFailure).toHaveBeenCalledWith(expect.objectContaining({ verdict: 'unverifiable' }))
+  })
+
+  it('stops a held native-chat link from rechecking the desktop once the owner turns ambiguous', async () => {
+    const registeredLocal = {
+      ...sameIdState('local'),
+      activeWorktreeId: 'other',
+      worktreesByRepo: { repo: [{ id, repoId: 'repo', path: '/home/u/proj', hostId: 'local' }] },
+      detectedWorktreesByRepo: {}
+    }
+    mocks.state.value = registeredLocal
+    const existence = createNativeChatFileLinkExistence({
+      cwd: '/home/u/proj',
+      worktreeId: id,
+      worktreePath: '/home/u/proj',
+      runtimeEnvironmentId: null,
+      connectionId: getConnectionId(id)
+    })
+    const watcher = existence.watch()
+    const unsubscribe = watcher.subscribe(() => {})
+    watcher.getSnapshot().check(extractTerminalFileLinks('src/App.tsx')[0])
+    await settle()
+    expect(mocks.pathsExist).toHaveBeenCalledOnce()
+    mocks.pathsExist.mockClear()
+
+    // The same id is then detected on the SSH host; the chat's own context is unchanged.
+    mocks.state.value = {
+      ...registeredLocal,
+      detectedWorktreesByRepo: {
+        repo: { worktrees: [{ id, repoId: 'repo', path: '/home/u/proj', hostId: 'ssh:box' }] }
+      }
+    }
+    expect(getConnectionId(id)).toBeNull()
+    existence.recheck()
+    await settle()
+    unsubscribe()
+
+    expect(mocks.pathsExist).not.toHaveBeenCalled()
   })
 })

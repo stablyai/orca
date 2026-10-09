@@ -2,12 +2,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ParsedTerminalFileLink } from '@/lib/terminal-links'
 import type * as FileLinkTargetModule from '@/components/terminal-pane/terminal-file-link-target'
 import type { FileLinkPathExistence } from '@/components/terminal-pane/terminal-file-link-target'
+import type * as FilePathMappingModule from '@/components/terminal-pane/terminal-file-path-mapping'
 import {
   createNativeChatFileLinkExistence,
   UNVERIFIABLE_RETRY_DELAYS_MS
 } from './native-chat-file-link-existence'
 
-const connection = vi.hoisted(() => ({ resolved: true, sourceHostResolved: true }))
+const connection = vi.hoisted(() => ({
+  resolved: true,
+  sourceHostResolved: true,
+  currentOwnerResolved: true
+}))
 
 vi.mock('@/lib/connection-context', () => ({
   isWorktreeConnectionResolved: () => connection.resolved
@@ -24,6 +29,11 @@ vi.mock('@/components/terminal-pane/terminal-file-link-target', async (importOri
     cacheKey: link.pathText,
     isKnownWorktreeRoot: link.pathText === 'ROOT'
   })
+}))
+
+vi.mock('@/components/terminal-pane/terminal-file-path-mapping', async (importOriginal) => ({
+  ...(await importOriginal<typeof FilePathMappingModule>()),
+  getTerminalFileContext: () => ({ sourceHostResolved: connection.currentOwnerResolved })
 }))
 
 const host = { cwd: '/repo', worktreeId: 'wt-1', worktreePath: '/repo', connectionId: null }
@@ -70,6 +80,7 @@ describe('createNativeChatFileLinkExistence', () => {
     vi.useRealTimers()
     connection.resolved = true
     connection.sourceHostResolved = true
+    connection.currentOwnerResolved = true
   })
 
   it('underlines a path only after the host confirms it, asking once', async () => {
@@ -95,6 +106,22 @@ describe('createNativeChatFileLinkExistence', () => {
     expect(onChange).not.toHaveBeenCalled()
     expect(watcher.getSnapshot().check(link('src/app.ts'))).toBe(false)
     expect(pathExists).toHaveBeenCalledOnce()
+  })
+
+  it('does not recheck a held path once its workspace owner can no longer be placed', async () => {
+    const { asked, pathExists } = hostWith(() => true)
+    const existence = createNativeChatFileLinkExistence(host, pathExists)
+    const { watcher } = watching(existence)
+    watcher.getSnapshot().check(link('src/app.ts'))
+    await settle()
+    expect(asked).toEqual(['/repo/src/app.ts'])
+
+    // A detected row on another host lands after the target was held, making the owner ambiguous.
+    connection.currentOwnerResolved = false
+    existence.recheck()
+    await settle()
+
+    expect(asked).toEqual(['/repo/src/app.ts'])
   })
 
   it('links a path the turn created once the turn ends, without re-rendering first', async () => {
