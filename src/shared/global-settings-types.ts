@@ -8,6 +8,7 @@ import type { GitLabProjectSettings } from './gitlab-types'
 import type { TaskProvider } from './task-providers'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
 import type { AppIconId } from './app-icon'
+import type { ProviderRateLimits } from './rate-limit-types'
 import type { SourceControlAiSettings } from './source-control-ai-types'
 import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
 import type { TerminalCustomTheme } from './terminal-custom-themes'
@@ -472,6 +473,10 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   experimentalPet: boolean
   /** Legacy persisted key from before the sidekick -> pet rename; read only during migration, new writes use experimentalPet. */
   experimentalSidekick?: boolean
+  /** Tint each status-bar usage chip with its provider's color; absent = off. */
+  statusBarProviderColorsEnabled?: boolean
+  /** Per-provider CSS colors for those tints; missing providers use built-in defaults. */
+  statusBarProviderColors?: Partial<Record<ProviderRateLimits['provider'], string>>
   /** Experimental: left-sidebar Agents view — threaded feed of agent completions, blocking/unread state, worktree creation. */
   experimentalActivity: boolean
   /** Experimental: pop-out Kanban dashboard for monitoring and opening agent terminals across worktrees. */
