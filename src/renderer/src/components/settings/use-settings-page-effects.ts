@@ -176,7 +176,8 @@ export function useSettingsPageEffects(
         ? getSettingsTargetHostSelection(
             settingsProjectList,
             targetRepoId,
-            settingsNavigationTarget.hostId
+            settingsNavigationTarget.hostId,
+            settingsNavigationTarget.setupId
           )
         : repoIdToHostSelection.get(targetRepoId)
       if (hostSelection) {

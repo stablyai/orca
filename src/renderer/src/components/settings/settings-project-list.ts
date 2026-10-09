@@ -236,17 +236,24 @@ export function buildRepoIdToHostSelection(
 export function getSettingsTargetHostSelection(
   projects: readonly SettingsProject[],
   repoId: string,
-  hostId: ExecutionHostId
+  hostId: ExecutionHostId,
+  setupId?: string
 ): { selectionKey: string; hostId: ExecutionHostId; setupId: string } | null {
-  for (const settingsProject of projects) {
-    const setup = settingsProject.setups.find(
-      (candidate) => candidate.repoId === repoId && candidate.hostId === hostId
-    )
-    if (setup) {
-      return { selectionKey: settingsProject.selectionKey, hostId, setupId: setup.id }
-    }
-  }
-  return null
+  const matches = projects.flatMap((settingsProject) =>
+    settingsProject.setups
+      .filter(
+        (setup) =>
+          setup.repoId === repoId &&
+          setup.hostId === hostId &&
+          (!setupId || setup.id === setupId || getProjectHostSetupOwnerKey(setup) === setupId)
+      )
+      .map((setup) => ({
+        selectionKey: settingsProject.selectionKey,
+        hostId,
+        setupId: setupId ? getProjectHostSetupOwnerKey(setup) : setup.id
+      }))
+  )
+  return matches.length === 1 ? matches[0] : null
 }
 
 /**
