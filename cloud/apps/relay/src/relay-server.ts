@@ -17,6 +17,7 @@ import { WebSocketServer } from 'ws'
 import type WebSocket from 'ws'
 import type { RawData } from 'ws'
 import { createRelayApp } from './app.js'
+import type { CellFlags } from './cell-flags.js'
 import { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayConfig } from './config.js'
 import { RelayCredentialStore } from './credential-store.js'
@@ -30,6 +31,7 @@ import { observeRelayDatabase } from './observed-relay-database.js'
 import { RelayObservability } from './relay-observability.js'
 import { combineRegionalRehomeSafety } from './regional-rehome-safety.js'
 import { RelayConnectionLedger, type RelayConnectionUpgrade } from './relay-connection-ledger.js'
+import type { AppliedControlFlags } from './relay-control-flag-channel.js'
 import { createRelayReadiness } from './relay-readiness.js'
 import { createRelayTokenVerifier, readBearer } from './relay-token-verifier.js'
 import { closeRelayWebSocket } from './relay-websocket-close.js'
@@ -110,6 +112,7 @@ export function createRelayServer(
     random?: () => number
     connectionLedgerLimits?: { hardCap: number; controlReserve: number }
     cellIncarnation?: string
+    cellFlags?: () => AppliedControlFlags<CellFlags>
   } = {}
 ) {
   const cellIncarnation = options.cellIncarnation ?? randomUUID()
@@ -176,6 +179,7 @@ export function createRelayServer(
     regionalRehomeTrustProbeHostExists: (input) => sessions.get(input) !== null,
     cellIncarnation,
     cellSeatFeed: (sinceSeq) => sessions.seatFeed(sinceSeq),
+    cellFlags: options.cellFlags,
     isDraining: () => sessions.isDraining(),
     runtimeCounts: () => runtimeCounts(),
     regionalRehomeSafetySnapshot: () => ({

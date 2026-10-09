@@ -1,7 +1,9 @@
 import type { Hono } from 'hono'
+import type { CellFlags } from './cell-flags.js'
 import type { CellSeatFeedPage } from './cell-seat-log.js'
 import { parseCellSeatCursor } from './cell-seat-log.js'
 import type { RelayConfig } from './config.js'
+import type { AppliedControlFlags } from './relay-control-flag-channel.js'
 import type { RelayRuntimeCounts } from './relay-observability.js'
 import { readBearer } from './relay-token-verifier.js'
 
@@ -16,6 +18,7 @@ export function registerCellSeatFeedRoute(
     seatFeed?: (sinceSeq: number | null) => CellSeatFeedPage
     isDraining?: () => boolean
     runtimeCounts?: () => RelayRuntimeCounts
+    cellFlags?: () => AppliedControlFlags<CellFlags>
     now?: () => number
   }
 ): void {
@@ -48,6 +51,8 @@ export function registerCellSeatFeedRoute(
         // `controls` drops when a socket starts closing, `seats` when its close lands.
         seats
       },
+      // Applied, never desired: generation 0 means no object has been read since boot.
+      ...(input.cellFlags ? { flagsApplied: input.cellFlags() } : {}),
       ...page
     })
   })
