@@ -134,7 +134,7 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
       return
     }
     const receipt = this.restoredOrchestrationAuthorityByPtyId.get(ptyId)
-    if (!pty.launchToken && !receipt && !pty.launchAgent) {
+    if (!pty.launchToken && !receipt && !pty.launchAgent && !pty.launchCommandLine) {
       return
     }
     // Why: collect before the delete below, which drops the restored-authority receipt a
@@ -144,6 +144,7 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
     pty.launchToken = null
     pty.launchIncarnationId = null
     pty.launchAgent = null
+    pty.launchCommandLine = null
     for (const paneKey of paneKeys) {
       this.retireAgentHookCompatibilityAuthorityFn?.(paneKey)
     }

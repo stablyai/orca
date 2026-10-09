@@ -8,6 +8,7 @@ import { parsePaneKey } from '../../shared/stable-pane-id'
 import { ptyHoldsRecordedSurface, type PtySurfaceTopology } from './pty-recorded-surface-topology'
 import type { TerminalHandleRecord } from './runtime-terminal-contracts'
 import { readTerminalTail } from './terminal-tail-read'
+import { resolveLaunchCommandPaneAgent } from './runtime-agent-launch-resolution'
 import { structuredWorkerTerminalRefusal } from './structured-worker-terminal-refusal'
 import { randomUUID } from 'node:crypto'
 
@@ -57,7 +58,7 @@ export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPt
       ...(pty.lastExitCause ? { exitCause: pty.lastExitCause } : {}),
       ...this.terminalExecutionHostField(pty.ptyId, pty.worktreeId),
       ...this.resolvePaneAgentIdentityField(
-        pty.launchAgent,
+        pty.launchAgent ?? resolveLaunchCommandPaneAgent(pty.launchCommandLine),
         pty.foregroundAgent,
         title,
         pty.paneKey ?? null

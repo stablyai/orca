@@ -10,6 +10,7 @@ import type { TerminalAgent } from '../../shared/terminal-agent'
 import { selectRuntimeHookAgentRowForPane } from './runtime-mobile-agent-status-projection'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { resolvePublishedPaneAgentIdentity } from '../../shared/published-pane-agent-identity'
+import { resolveLaunchCommandPaneAgent } from './runtime-agent-launch-resolution'
 import type { RuntimeTerminalSummary, RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import type { RuntimeWorktreeSummaryPathIndex } from './runtime-worktree-summary-paths'
 import { parseRuntimeWorktreeId } from './runtime-worktree-path-identity'
@@ -183,7 +184,7 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
       ...(leaf.lastExitCause ? { exitCause: leaf.lastExitCause } : {}),
       ...this.terminalExecutionHostField(leaf.ptyId, leaf.worktreeId),
       ...this.resolvePaneAgentIdentityField(
-        pty?.launchAgent,
+        pty?.launchAgent ?? resolveLaunchCommandPaneAgent(pty?.launchCommandLine),
         pty?.foregroundAgent,
         title,
         isTerminalLeafId(leaf.leafId) ? makePaneKey(leaf.tabId, leaf.leafId) : null

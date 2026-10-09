@@ -72,6 +72,7 @@ export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepo
         launchToken: null,
         launchIncarnationId: null,
         launchAgent: null,
+        launchCommandLine: null,
         agentSessionOwners: (state.agentSessionOwners ?? []).map(cloneAgentSessionOwnerBinding),
         foregroundAgent: null,
         connected: state.connected ?? true,

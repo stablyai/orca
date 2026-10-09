@@ -230,6 +230,60 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).not.toHaveBeenCalled()
   })
 
+  it('knows the agent a flagged launch command names before any process read', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-omp-flags' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
+    const terminal = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'omp --model x'
+    })
+
+    // Why identity-only: the command stays user-authored shell, so the spawn carries no
+    // launchAgent — but tui-idle ranking and the published identity must still see omp.
+    expect(spawn).toHaveBeenCalledWith(
+      expect.not.objectContaining({ launchAgent: expect.anything() })
+    )
+    const internals = runtime as unknown as {
+      getPaneAgentForTuiIdle(ptyId: string): string | null
+    }
+    expect(internals.getPaneAgentForTuiIdle(terminal.ptyId!)).toBe('omp')
+    expect((await runtime.listTerminals()).terminals).toEqual([
+      expect.objectContaining({ handle: terminal.handle, agentIdentity: 'omp' })
+    ])
+  })
+
+  it('retires a flagged command pane identity when the command exits', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-omp-flags-exit' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
+    const terminal = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'omp --model x'
+    })
+    runtime.onPtyData('pty-omp-flags-exit', '\x1b]133;D;0\x07', 100)
+
+    // Why: the shell prompt left behind is not the agent — command-line identity ends with it.
+    expect((await runtime.listTerminals()).terminals).toEqual([
+      expect.not.objectContaining({ agentIdentity: expect.anything() })
+    ])
+    expect(terminal.handle).toMatch(/^term_/)
+  })
+
   it('retires inherited launch authority when the agent command exits', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-authority', incarnationId: 'process-1' })
     const retireAuthority = vi.fn()
