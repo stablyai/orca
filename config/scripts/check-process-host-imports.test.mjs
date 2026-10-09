@@ -57,7 +57,7 @@ describe('process-host import boundary', () => {
         `
       )
     ).toEqual([
-      '@orca/process-host',
+      '@orca/process-host/process-spec',
       '@orca/process-host/fork-process',
       'child_process',
       'legacy-package',
