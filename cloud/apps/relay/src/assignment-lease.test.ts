@@ -125,7 +125,6 @@ describe('assignment lease shadow', () => {
       event: ASSIGNMENT_LEASE_SHADOW_EVENT,
       cellId: CELL_ID,
       windowMs: 60_000,
-      counts: { 'agree:db-valid': 2, 'disagree:db-refused': 1, 'absent:db-valid': 1 },
       classes: {
         agree: 2,
         disagree: 1,
@@ -137,6 +136,7 @@ describe('assignment lease shadow', () => {
         epochBehind: 0,
         epochAhead: 0
       },
+      dbRefused: 1,
       dbReadMs: { samples: 4, p50: 4, p99: 8, max: 8 }
     })
   })
