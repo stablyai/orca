@@ -29,6 +29,7 @@ function pointerDeps(db: OrchestrationDb, writePty: () => WriteSettlement) {
     getLiveLeafForHandle: () => LEAF,
     // These cases exercise staging and Enter phases, not the idle gate; the pane is settled.
     isAgentSettledForDelivery: () => true,
+    isAwaitingInteractivePrompt: () => false,
     getMessageWaiters: () => undefined,
     getTabTitle: () => null,
     getCliCommand: () => 'orca' as const,

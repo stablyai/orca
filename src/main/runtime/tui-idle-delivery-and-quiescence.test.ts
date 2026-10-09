@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeTuiIdleRuntime } from './tui-idle-wait-test-harness'
+import { makePaneKey } from '../../shared/stable-pane-id'
 import type { RuntimeSyncWindowGraph } from '../../shared/runtime-types'
 import type { OrcaRuntimeService } from './orca-runtime'
 import type { TuiAgent } from '../../shared/tui-agent'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusIpcPayload
+} from '../../shared/agent-status-types'
 
 // Follow-ons to #6011. The evidence ranking that fixed the wait path did not reach two
 // other consumers of the same signal: mailbox delivery, which TYPES INTO the pane, and
@@ -11,6 +16,7 @@ import type { TuiAgent } from '../../shared/tui-agent'
 const WORKTREE_ID = 'repo-1::/tmp/followups'
 const TAB_ID = 'c1c1c1c1-c1c1-4c1c-8c1c-c1c1c1c1c1c1'
 const LEAF_ID = 'c2c2c2c2-c2c2-4c2c-8c2c-c2c2c2c2c2c2'
+const MOVED_LEAF_ID = 'c3c3c3c3-c3c3-4c3c-8c3c-c3c3c3c3c3c3'
 const PTY_ID = 'pty-followups'
 const ESC = String.fromCharCode(27)
 const BEL = String.fromCharCode(7)
@@ -35,10 +41,15 @@ const GRAPH: RuntimeSyncWindowGraph = {
   ]
 }
 
-async function makeRuntime(launchAgent: TuiAgent | null, foreground = 'codex') {
+async function makeRuntime(
+  launchAgent: TuiAgent | null,
+  foreground = 'codex',
+  hookRows?: () => AgentStatusIpcPayload[]
+) {
   const runtime = makeTuiIdleRuntime({
     repoPath: '/tmp/followups',
-    getForegroundProcess: async () => foreground
+    getForegroundProcess: async () => foreground,
+    getAgentStatusSnapshot: hookRows
   })
   runtime.attachWindow(1)
   runtime.syncWindowGraph(1, GRAPH)
@@ -170,6 +181,77 @@ describe('mailbox delivery honours the tui-idle evidence ranking', () => {
     runtime.onPtyData(PTY_ID, `${osc('⠋ Grok')}working\n`, Date.now())
     runtime.onPtyData(PTY_ID, `${osc('grok')}banner\n`, Date.now())
     expect(deliver).toHaveBeenCalled()
+  })
+
+  it('does not deliver into a pane when Claude is waiting on an interactive question', async () => {
+    // Why older than the staleness bound: an unanswered question posts no further hooks.
+    const askedAt = Date.now() - AGENT_STATUS_STALE_AFTER_MS - 60_000
+    let hookRows: AgentStatusIpcPayload[] = [
+      {
+        paneKey: makePaneKey(TAB_ID, LEAF_ID),
+        connectionId: null,
+        state: 'waiting',
+        agentType: 'claude',
+        toolName: 'AskUserQuestion',
+        interactivePrompt: JSON.stringify({
+          questions: [{ question: 'Which branch to use?', options: ['main', 'develop'] }]
+        }),
+        prompt: 'Which branch to use?',
+        receivedAt: askedAt,
+        stateStartedAt: askedAt
+      }
+    ]
+    const { runtime } = await makeRuntime('claude', 'claude', () => hookRows)
+    const deliver = watchDelivery(runtime)
+
+    // Claude repaints its title to name or ready while rendering the prompt question.
+    runtime.onPtyData(PTY_ID, `${osc('Claude')}\n`, Date.now())
+    expect(deliver).not.toHaveBeenCalled()
+
+    // Even after long quiescence, delivery remains parked while the question is pending.
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(deliver).not.toHaveBeenCalled()
+
+    // Once user answers the question, hook reports done and delivery unblocks.
+    hookRows = [
+      {
+        ...hookRows[0],
+        state: 'done',
+        toolName: undefined,
+        interactivePrompt: undefined,
+        receivedAt: Date.now()
+      }
+    ]
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(deliver).toHaveBeenCalled()
+  })
+  it('finds the question by terminal handle after the layout rebinds its pane', async () => {
+    let hookRows: AgentStatusIpcPayload[] = []
+    const { runtime, handle } = await makeRuntime('claude', 'claude', () => hookRows)
+    hookRows = [
+      {
+        paneKey: makePaneKey(TAB_ID, LEAF_ID),
+        terminalHandle: handle,
+        connectionId: null,
+        state: 'waiting',
+        agentType: 'claude',
+        toolName: 'AskUserQuestion',
+        prompt: 'Which branch to use?',
+        receivedAt: Date.now(),
+        stateStartedAt: Date.now()
+      }
+    ]
+    // The layout rebinds the same PTY to a new leaf; the hook row keeps the original key.
+    runtime.syncWindowGraph(1, {
+      ...GRAPH,
+      tabs: [{ ...GRAPH.tabs[0], activeLeafId: MOVED_LEAF_ID }],
+      leaves: [{ ...GRAPH.leaves[0], leafId: MOVED_LEAF_ID }]
+    })
+    const deliver = watchDelivery(runtime)
+
+    runtime.onPtyData(PTY_ID, `${osc('Claude')}\n`, Date.now())
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(deliver).not.toHaveBeenCalled()
   })
 })
 

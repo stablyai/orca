@@ -24,6 +24,7 @@ type PointerSubmitDependencies<TWaiter extends OrchestrationMessageWaiter> = {
   ) => OrchestrationMailboxPointerSubmitTarget | null
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
+  isAwaitingInteractivePrompt: (leaf: OrchestrationMailboxLeaf) => boolean
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
   settle: (ptyId: string, flight: OrchestrationMailboxDeliveryFlight) => void
   redrive: (mailboxHandle: string, force?: boolean) => void
@@ -85,7 +86,10 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
       const queueSafe =
         exactTarget?.leaf.lastAgentStatusObservedLive === true &&
         (exactTarget.leaf.lastAgentStatus === 'idle' ||
-          exactTarget.leaf.lastAgentStatus === 'working')
+          exactTarget.leaf.lastAgentStatus === 'working') &&
+        // Why not the full idle gate: working stays queue-safe, and a name-only title needs a quiet
+        // stream the pointer's echo just broke. A question opened since would take Enter as its answer.
+        !deps.isAwaitingInteractivePrompt(exactTarget.leaf)
       if (!exactTarget?.leaf.writable || !sameMailbox) {
         clearAndRedrive = true
       } else if (

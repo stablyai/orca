@@ -14,6 +14,9 @@ import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import { evaluateTuiIdle, isTuiIdleReadyVerdict, type TuiIdleVerdict } from './tui-idle-evidence'
 import { leafTuiIdleEvidence, ptyTuiIdleEvidence } from './tui-idle-evidence-source'
 import { TUI_IDLE_QUIESCENCE_MS } from './orca-runtime-postlude'
+import { makePaneKey } from '../../shared/stable-pane-id'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import { isAskUserQuestionTool } from '../../shared/agent-question-answered-intent'
 
 export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyIncarnationHandle {
   protected resolveExitWaiters(leaf: RuntimeLeafRecord): void {
@@ -161,8 +164,10 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
     // Why this delay: the only refusal that time alone can lift is tier 3 waiting on the
     // stream to go quiet, so wake just after the window could have elapsed. A pane that is
     // still producing output re-arms from its own fresher timestamp rather than spinning.
+    // A pane parked on a question waits for a hook instead, so it polls at a slow fixed pace.
     const elapsed = live?.lastOutputAt ? Date.now() - live.lastOutputAt : 0
-    const delay = Math.max(TUI_IDLE_QUIESCENCE_MS - elapsed, 0) + 50
+    const isWaitingPrompt = live ? this.isPaneWaitingOnInteractivePrompt(live) : false
+    const delay = isWaitingPrompt ? 1000 : Math.max(TUI_IDLE_QUIESCENCE_MS - elapsed, 0) + 50
     const timer = setTimeout(() => {
       this.deliveryRecheckTimersByLeafKey.delete(leafKey)
       const current = this.leaves.get(leafKey)
@@ -199,8 +204,48 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
     )
     // Why no blocked reader: a refusal here re-arms a recheck that a lingering tail prompt
     // would spin, so delivery keeps its own, blocked-blind, reading of the same ranking.
-    return isTuiIdleReadyVerdict(
-      evaluateTuiIdle({ ...evidence, readTailBlockedReason: () => null })
+    if (
+      !isTuiIdleReadyVerdict(evaluateTuiIdle({ ...evidence, readTailBlockedReason: () => null }))
+    ) {
+      return false
+    }
+    // Why: Claude's question menu repaints a ready title, and the pointer's Enter would answer it (#21745).
+    return !this.isPaneWaitingOnInteractivePrompt(live)
+  }
+
+  protected isPaneWaitingOnInteractivePrompt(leaf: {
+    tabId: string
+    leafId: string
+    ptyId: string | null
+  }): boolean {
+    // Why handles too: a rebound layout leaves the question's row under its spawn-time pane key.
+    const paneKeys = leaf.ptyId ? this.collectPaneKeysForPty(leaf.ptyId) : new Set<string>()
+    paneKeys.add(makePaneKey(leaf.tabId, leaf.leafId))
+    const handles = new Set(leaf.ptyId ? this.getExistingTerminalHandlesForPtyId(leaf.ptyId) : [])
+    const rows = (this.getAgentStatusSnapshotFn?.() ?? []).filter(
+      (s) => paneKeys.has(s.paneKey) || (s.terminalHandle != null && handles.has(s.terminalHandle))
+    )
+    // Why no staleness bound: an unanswered question posts no further hooks, so only a newer row
+    // or a respawn retires it; a 30-minute cutoff would let mail answer it.
+    const floor =
+      (leaf.ptyId ? this.agentPromptExplicitStatusFloorByPtyId.get(leaf.ptyId) : null) ?? -1
+    let row: AgentStatusIpcPayload | null = null
+    for (const entry of rows) {
+      if (
+        entry.providerSessionOnly !== true &&
+        entry.restoredUnconfirmed !== true &&
+        entry.receivedAt >= floor &&
+        (!row || entry.receivedAt > row.receivedAt)
+      ) {
+        row = entry
+      }
+    }
+    return (
+      row !== null &&
+      (row.interactivePrompt != null ||
+        isAskUserQuestionTool(row.toolName) ||
+        row.state === 'waiting' ||
+        row.state === 'blocked')
     )
   }
 

@@ -56,6 +56,7 @@ describe('orchestration mailbox pointer submit', () => {
         resolveSubmitTarget: () => expectedTarget,
         getMessageWaiters: () => undefined,
         isLeafPtyProvenAbsent: async () => false,
+        isAwaitingInteractivePrompt: () => false,
         writePty,
         settle,
         redrive: vi.fn()
@@ -161,6 +162,7 @@ describe('orchestration mailbox pointer submit', () => {
         resolveSubmitTarget: () => target,
         getMessageWaiters: () => undefined,
         isLeafPtyProvenAbsent: async () => false,
+        isAwaitingInteractivePrompt: () => false,
         writePty,
         settle,
         redrive: vi.fn()
@@ -235,6 +237,7 @@ describe('orchestration mailbox pointer submit', () => {
         resolveSubmitTarget: () => currentTarget,
         getMessageWaiters: () => undefined,
         isLeafPtyProvenAbsent: async () => false,
+        isAwaitingInteractivePrompt: () => false,
         writePty,
         settle,
         redrive
@@ -365,6 +368,7 @@ describe('orchestration mailbox pointer submit', () => {
         resolveSubmitTarget: () => ({ ...expectedTarget, processIncarnation: 'inc-replaced' }),
         getMessageWaiters: () => undefined,
         isLeafPtyProvenAbsent: async () => false,
+        isAwaitingInteractivePrompt: () => false,
         writePty,
         settle,
         redrive: vi.fn()
@@ -426,6 +430,7 @@ describe('orchestration mailbox pointer submit', () => {
         resolveSubmitTarget: () => null,
         getMessageWaiters: () => undefined,
         isLeafPtyProvenAbsent: async () => false,
+        isAwaitingInteractivePrompt: () => false,
         writePty: vi.fn(settledWriteStub()),
         settle,
         redrive
@@ -502,5 +507,75 @@ describe('orchestration mailbox pointer submit', () => {
     )
     expect(releaseMailboxPointerEnter).not.toHaveBeenCalled()
     expect(writePty).not.toHaveBeenCalled()
+  })
+
+  it('settles the written pointer without Enter or redrive when a prompt opened before Enter', async () => {
+    const db = new OrchestrationDb(':memory:')
+    const message = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'a',
+      to: 'run:run-1',
+      subject: 'staged'
+    })
+    const ptyId = 'pty-1'
+    const reservation = { ptyId, processIncarnation: 'inc-1' }
+    const leaf = {
+      tabId: 'tab-1',
+      leafId: 'leaf-1',
+      ptyId,
+      writable: true,
+      lastAgentStatus: 'idle' as const,
+      lastAgentStatusObservedLive: true,
+      lastOscTitle: 'Claude ready'
+    }
+    const target = {
+      leaf,
+      terminalHandle: 'term-1',
+      processIncarnation: reservation.processIncarnation
+    }
+    const state = new OrchestrationMailboxPointerState()
+    const flight = state.beginFlight(ptyId)
+    state.setWatermark('run:run-1', 1, ptyId, 'tab-1:leaf-1')
+    expect(db.stageMailboxPointerEnter([message.id], reservation)).toBe(true)
+    expect(db.markMailboxPointerWriteAttempted([message.id], reservation)).toBe(true)
+
+    const writePty = vi.fn()
+    const redrive = vi.fn()
+    const isAwaitingInteractivePrompt = vi.fn(() => true)
+    const settleEnterSpy = vi.spyOn(db, 'settleMailboxPointerEnter')
+
+    submitOrchestrationMailboxPointer(
+      {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test stub
+        mailboxOwner: { resolve: () => 'run:run-1' } as never,
+        state,
+        getDb: () => db,
+        resolveSubmitTarget: () => target,
+        getMessageWaiters: () => undefined,
+        isLeafPtyProvenAbsent: async () => false,
+        isAwaitingInteractivePrompt,
+        writePty,
+        settle: vi.fn(),
+        redrive
+      },
+      {
+        leaf,
+        mailboxHandle: 'run:run-1',
+        messages: [{ id: message.id, type: 'status' }],
+        newestSequence: 1,
+        ptyId,
+        flight,
+        expectedTarget: target
+      }
+    )
+
+    await vi.waitFor(() => expect(isAwaitingInteractivePrompt).toHaveBeenCalledWith(leaf))
+    expect(writePty).not.toHaveBeenCalled()
+    expect(redrive).not.toHaveBeenCalled()
+    expect(settleEnterSpy).toHaveBeenCalledWith(
+      [message.id],
+      { ptyId, processIncarnation: target.processIncarnation },
+      [MAILBOX_POINTER_WRITE_ATTEMPTED]
+    )
   })
 })
