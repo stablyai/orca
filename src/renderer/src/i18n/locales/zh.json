@@ -8536,6 +8536,12 @@
           "4808966c41": "删除 SSH 目标"
         },
         "SshTargetForm": {
+          "httpProxyUrl": "HTTP 代理",
+          "httpProxyUrlPlaceholder": "http://proxy.example.com:8080",
+          "httpProxyUrlHelp": "将作为 HTTP_PROXY/HTTPS_PROXY 应用于此主机上的终端。必须可从该主机自身访问，而非本机。支持 http、https、socks、socks4、socks5 URL。",
+          "httpProxyBypassRules": "代理例外规则",
+          "httpProxyBypassRulesPlaceholder": "localhost, 127.0.0.1, *.internal",
+          "httpProxyBypassRulesHelp": "可选。多个主机用逗号、分号或换行分隔。",
           "fea9cb402e": "取消",
           "1b19b00e93": "有限超时时间必须介于 60 秒到 7 天之间。",
           "137e88ce8d": "Orca 与此主机断开连接后，远程终端会继续运行。",

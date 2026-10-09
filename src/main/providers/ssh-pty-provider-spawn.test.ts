@@ -285,6 +285,57 @@ describe('spawn', () => {
     })
   })
 
+  it('overrides the forwarded pane env with the per-host proxy env', async () => {
+    const proxyProvider = new SshPtyProvider('conn-1', mux as never, undefined, 1, () => ({
+      HTTP_PROXY: 'http://proxy.lan:3128',
+      HTTPS_PROXY: 'http://proxy.lan:3128',
+      NO_PROXY: 'localhost'
+    }))
+    mux.request.mockResolvedValue({ id: 'pty-proxy' })
+
+    await proxyProvider.spawn({
+      cols: 80,
+      rows: 24,
+      env: { HTTP_PROXY: 'http://stale:1', HOME: '/home/user' }
+    })
+
+    expectRequest(
+      mux.request,
+      'pty.spawn',
+      expect.objectContaining({
+        env: expect.objectContaining({
+          HOME: '/home/user',
+          HTTP_PROXY: 'http://proxy.lan:3128',
+          HTTPS_PROXY: 'http://proxy.lan:3128',
+          NO_PROXY: 'localhost'
+        })
+      })
+    )
+  })
+
+  it('lets an explicit envToDelete remove the per-host proxy for a pane', async () => {
+    const proxyProvider = new SshPtyProvider('conn-1', mux as never, undefined, 1, () => ({
+      HTTP_PROXY: 'http://proxy.lan:3128',
+      ALL_PROXY: 'http://proxy.lan:3128'
+    }))
+    mux.request.mockResolvedValue({ id: 'pty-proxy-delete' })
+
+    await proxyProvider.spawn({
+      cols: 80,
+      rows: 24,
+      env: {},
+      envToDelete: ['HTTP_PROXY']
+    })
+
+    expectRequest(
+      mux.request,
+      'pty.spawn',
+      expect.objectContaining({
+        env: expect.not.objectContaining({ HTTP_PROXY: expect.anything() })
+      })
+    )
+  })
+
   it('forwards trusted agent identity for wrapped remote commands', async () => {
     mux.request.mockResolvedValue({ id: 'pty-agent' })
 

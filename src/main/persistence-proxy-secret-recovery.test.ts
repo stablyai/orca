@@ -16,6 +16,7 @@ import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
+import type { SshTarget } from '../shared/ssh-types'
 
 const testState = { dir: '' }
 
@@ -199,5 +200,144 @@ describe('httpProxyUrl secret recovery (STA-3442)', () => {
     const reloaded = await createStore()
     expect(reloaded.getSettings().httpProxyUrl).toBe('')
     expect(reloaded.getSettings().httpProxyBypassRules).toBe(BYPASS_RULES)
+  })
+})
+
+describe('ssh target httpProxyUrl secret recovery', () => {
+  beforeEach(() => {
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+    cipherState.encryptionAvailable = true
+    cipherState.availabilityThrows = false
+    cipherState.decryptAlwaysThrows = false
+    vi.useFakeTimers()
+  })
+
+  afterEach(async () => {
+    await closeTestStores()
+    vi.useRealTimers()
+    rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  function sshTargetFixture(): SshTarget {
+    return {
+      id: 'ssh-1',
+      label: 'Lab',
+      host: 'lab.example.com',
+      port: 22,
+      username: 'deploy',
+      httpProxyUrl: 'http://user:secret@proxy.lan:3128'
+    }
+  }
+
+  async function seedTargetProxy() {
+    const store = await createStore()
+    store.addSshTarget(sshTargetFixture())
+    vi.advanceTimersByTime(1000)
+    await store.waitForPendingWrite()
+    return store
+  }
+
+  it('persists a per-host proxy URL as ciphertext and decrypts it on reload', async () => {
+    await seedTargetProxy()
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
+    const persisted = JSON.parse(readPersistedStateJson(dataFile())) as {
+      sshTargets: { id: string; httpProxyUrl: string }[]
+    }
+    const stored = persisted.sshTargets.find((target) => target.id === 'ssh-1')
+    expect(stored?.httpProxyUrl).toBeDefined()
+    // On disk the URL is ciphertext (base64 of the mock's enc: payload), never plaintext.
+    expect(stored?.httpProxyUrl).not.toContain('user:secret')
+    expect(Buffer.from(stored?.httpProxyUrl ?? '', 'base64').toString('utf-8')).toMatch(/^enc:/)
+
+    const reloaded = await createStore()
+    expect(reloaded.getSshTarget('ssh-1')?.httpProxyUrl).toBe('http://user:secret@proxy.lan:3128')
+  })
+
+  it.each([
+    [
+      'the keychain is unavailable',
+      (): void => {
+        cipherState.encryptionAvailable = false
+      }
+    ],
+    [
+      'decryption fails',
+      (): void => {
+        cipherState.decryptAlwaysThrows = true
+      }
+    ]
+  ])(
+    'seals a per-host proxy without destroying its ciphertext when %s',
+    async (_mode, breakKeychain) => {
+      await seedTargetProxy()
+      const originalCiphertext = (
+        JSON.parse(readPersistedStateJson(dataFile())) as {
+          sshTargets: { id: string; httpProxyUrl: string }[]
+        }
+      ).sshTargets.find((target) => target.id === 'ssh-1')?.httpProxyUrl
+
+      breakKeychain()
+      const sealed = await createStore()
+
+      expect(sealed.getSshTarget('ssh-1')?.httpProxyUrl).toBe('')
+      // Unrelated fields survive.
+      expect(sealed.getSshTarget('ssh-1')?.host).toBe('lab.example.com')
+
+      // An unrelated save must not overwrite the retained ciphertext with the sealed empty.
+      sealed.updateSshTarget('ssh-1', { label: 'Renamed while sealed' })
+      vi.advanceTimersByTime(2000)
+      await sealed.waitForPendingWrite()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
+      const persisted = JSON.parse(readPersistedStateJson(dataFile())) as {
+        sshTargets: { id: string; httpProxyUrl: string }[]
+      }
+      expect(persisted.sshTargets.find((target) => target.id === 'ssh-1')?.httpProxyUrl).toBe(
+        originalCiphertext
+      )
+
+      // Keychain restored: the original credentials come back.
+      cipherState.encryptionAvailable = true
+      cipherState.decryptAlwaysThrows = false
+      const recovered = await createStore()
+      expect(recovered.getSshTarget('ssh-1')?.httpProxyUrl).toBe(
+        'http://user:secret@proxy.lan:3128'
+      )
+    }
+  )
+
+  it('releases a sealed per-host proxy when the user explicitly clears it', async () => {
+    await seedTargetProxy()
+
+    cipherState.encryptionAvailable = false
+    const sealed = await createStore()
+    expect(sealed.getSshTarget('ssh-1')?.httpProxyUrl).toBe('')
+
+    // Why: the clear must carry the key with an empty value, which is what the save
+    // payload sends — an unrelated edit omits it and must keep the sealed proxy.
+    cipherState.encryptionAvailable = true
+    sealed.updateSshTarget('ssh-1', { httpProxyUrl: '' })
+    vi.advanceTimersByTime(2000)
+    await sealed.waitForPendingWrite()
+
+    const recovered = await createStore()
+    expect(recovered.getSshTarget('ssh-1')?.httpProxyUrl).toBe('')
+  })
+
+  it('persists an empty per-host proxy for targets that never had one', async () => {
+    const store = await createStore()
+    const target = sshTargetFixture()
+    delete target.httpProxyUrl
+    store.addSshTarget(target)
+    vi.advanceTimersByTime(1000)
+    await store.waitForPendingWrite()
+
+    // Why '' not absent: the proxy always routes through the protected-secret machinery,
+    // mirroring how the local settings.httpProxyUrl persists its empty state.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
+    const persisted = JSON.parse(readPersistedStateJson(dataFile())) as {
+      sshTargets: { id: string; httpProxyUrl?: string }[]
+    }
+    expect(persisted.sshTargets.find((entry) => entry.id === 'ssh-1')?.httpProxyUrl).toBe('')
   })
 })

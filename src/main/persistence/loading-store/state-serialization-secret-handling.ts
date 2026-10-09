@@ -9,6 +9,7 @@ import { collectFolderWorkspaceDiffComments } from '../../folder-workspace-diff-
 import {
   PROTECTED_SECRET_SLOT,
   sshPtyOwnerLeaseSecretSlot,
+  sshTargetHttpProxySecretSlot,
   type ProtectedSecretRetentionUpdate
 } from '../../protected-secret-persistence'
 import { stripRetiredGlobalSettings } from '../applying-settings/terminal-settings-migrations'
@@ -215,6 +216,19 @@ export class StateSerializationSecretHandlingOperations {
           )
         })
       ),
+      // Why: per-host proxy URLs can carry basic-auth credentials, so they seal through the
+      // same per-record safeStorage slots as the owner lease, never plaintext on disk.
+      // Every value — including the sealed-empty in-memory state an unavailable keychain
+      // leaves at load — routes through encryptToSentinel, exactly like the local
+      // settings.httpProxyUrl, so the retained ciphertext survives unrelated saves and an
+      // explicit user clear still releases it.
+      sshTargets: (this.runtime.state.sshTargets ?? []).map((target) => ({
+        ...target,
+        httpProxyUrl: encryptToSentinel(
+          sshTargetHttpProxySecretSlot(target.id),
+          target.httpProxyUrl ?? ''
+        )
+      })),
       settings: this.buildSettingsToSave(encryptToSentinel),
       ui: {
         ...this.runtime.state.ui,

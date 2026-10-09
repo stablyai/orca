@@ -1,4 +1,6 @@
 import { ChevronDown } from 'lucide-react'
+import { useState } from 'react'
+import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../../../shared/network-proxy'
 import {
   DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
@@ -8,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -36,6 +39,22 @@ export function SshHostAdvancedFields({
   disabled: boolean
   onFormChange: (updater: (prev: EditingTarget) => EditingTarget) => void
 }): React.JSX.Element {
+  // Why mirror the local Advanced section: inline blur validation catches malformed
+  // proxy URLs before save, with the same normalized-commit behavior for bypass rules.
+  const [proxyUrlError, setProxyUrlError] = useState<string | null>(null)
+
+  const validateProxyUrlDraft = (): void => {
+    const normalized = normalizeProxyUrl(form.httpProxyUrl)
+    setProxyUrlError(normalized.ok ? null : normalized.message)
+  }
+
+  const commitProxyBypassRules = (): void => {
+    const normalized = normalizeProxyBypassRules(form.httpProxyBypassRules)
+    if (normalized !== form.httpProxyBypassRules) {
+      onFormChange((f) => ({ ...f, httpProxyBypassRules: normalized }))
+    }
+  }
+
   return (
     <Collapsible open={open} onOpenChange={onOpenChange} className="col-span-2 sm:col-span-2">
       <CollapsibleTrigger asChild>
@@ -212,6 +231,79 @@ export function SshHostAdvancedFields({
               {translate(
                 'auto.components.settings.SshTargetForm.1b19b00e93',
                 'Bounded timeouts must be between 60 seconds and 7 days.'
+              )}
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="add-ssh-http-proxy-url">
+              {translate('auto.components.settings.SshTargetForm.httpProxyUrl', 'HTTP Proxy')}
+            </Label>
+            <Input
+              id="add-ssh-http-proxy-url"
+              value={form.httpProxyUrl}
+              disabled={disabled}
+              onChange={(e) => {
+                setProxyUrlError(null)
+                onFormChange((f) => ({ ...f, httpProxyUrl: e.target.value }))
+              }}
+              onBlur={validateProxyUrlDraft}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.currentTarget.blur()
+                }
+              }}
+              placeholder={translate(
+                'auto.components.settings.SshTargetForm.httpProxyUrlPlaceholder',
+                'http://proxy.example.com:8080'
+              )}
+              autoCapitalize="none"
+              autoCorrect="off"
+              autoComplete="off"
+              spellCheck={false}
+              aria-invalid={proxyUrlError ? true : undefined}
+              className="font-mono text-xs"
+            />
+            {proxyUrlError ? (
+              <p className="text-xs text-destructive">{proxyUrlError}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.SshTargetForm.httpProxyUrlHelp',
+                  'Applied as HTTP_PROXY/HTTPS_PROXY to terminals on this host. Must be reachable from the host itself, not this machine. Supports http, https, socks, socks4, and socks5 URLs.'
+                )}
+              </p>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="add-ssh-http-proxy-bypass">
+              {translate(
+                'auto.components.settings.SshTargetForm.httpProxyBypassRules',
+                'Proxy Bypass Rules'
+              )}
+            </Label>
+            <Textarea
+              id="add-ssh-http-proxy-bypass"
+              value={form.httpProxyBypassRules}
+              disabled={disabled}
+              onChange={(e) =>
+                onFormChange((f) => ({ ...f, httpProxyBypassRules: e.target.value }))
+              }
+              onBlur={commitProxyBypassRules}
+              placeholder={translate(
+                'auto.components.settings.SshTargetForm.httpProxyBypassRulesPlaceholder',
+                'localhost, 127.0.0.1, *.internal'
+              )}
+              autoCapitalize="none"
+              autoCorrect="off"
+              autoComplete="off"
+              spellCheck={false}
+              rows={3}
+              className="font-mono text-xs"
+            />
+            <p className="text-xs text-muted-foreground">
+              {translate(
+                'auto.components.settings.SshTargetForm.httpProxyBypassRulesHelp',
+                'Optional. Separate hosts with commas, semicolons, or new lines.'
               )}
             </p>
           </div>
