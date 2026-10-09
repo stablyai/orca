@@ -23,6 +23,7 @@ import { jitteredSweepIntervalMs } from './relay-sweep-schedule.js'
 import { observedRelayRequests } from './relay-observability.js'
 import { startRegionalRehomeWorker } from './regional-rehome-worker.js'
 import { createRelayServer } from './relay-server.js'
+import { readSeatFeedCells, startShadowSeatPoller } from './shadow-seat-directory.js'
 import {
   formatRegisteredMigrationInventory,
   readRegisteredMigrationInventory
@@ -37,6 +38,9 @@ const database = await openRelayDatabaseAtBoot({
   appliesPostgresSchema: config.role !== 'cell'
 })
 await reconcileCellAdmissionAtStartup(config, new RelayAssignmentStore(database))
+const shadowSeatPoller = startShadowSeatPoller(config, {
+  listCells: () => readSeatFeedCells(database, Date.now())
+})
 const {
   server,
   sessions,
@@ -47,7 +51,9 @@ const {
   connectionSnapshot,
   ready,
   cellIncarnation
-} = createRelayServer(config, database)
+} = createRelayServer(config, database, {
+  shadowSeats: shadowSeatPoller?.directory
+})
 // Same owner as the assignment sweep: the cleanup only expires credentials that every reader
 // already re-checks at read time, so running it in all 23 cells multiplied one table scan by 23
 // without changing any answer.
@@ -158,6 +164,7 @@ const shutdown = (): void => {
   observability.stop()
   heartbeat?.stop()
   regionalRehomeWorker?.stop()
+  shadowSeatPoller?.stop()
   sessions.drain(0)
   server.close(() => void database.close().catch(() => undefined))
 }
