@@ -1,6 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { randomUUID } from 'node:crypto'
 import { preserveTerminalRetirementProofs } from './mobile-session-terminal-retirement-proof'
+import { admitRuntimeWorkspaceSessionSnapshot } from './runtime-workspace-session-owner'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -106,6 +107,14 @@ export class OrcaRuntimeWithRuntimeId {
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsSnapshot {
     const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
+    const admitted = admitRuntimeWorkspaceSessionSnapshot(this.store, snapshot, existing)
+    if (!admitted) {
+      if (existing) {
+        return existing
+      }
+      throw new Error('selector_not_found')
+    }
+    snapshot = admitted
     snapshot = preserveTerminalRetirementProofs(snapshot, existing)
     const snapshotVersion = existing
       ? Math.max(snapshot.snapshotVersion, existing.snapshotVersion + 1)
@@ -145,6 +154,8 @@ export class OrcaRuntimeWithRuntimeId {
       rendererVersion: number
       rendererTabCount: number
       rendererTabIdentityKeys: ReadonlySet<string>
+      worktreeIdentity?: RuntimeMobileSessionTabsSnapshot['worktreeIdentity']
+      worktreeInstanceId?: string
     }
   >()
 

@@ -15,6 +15,7 @@ import type {
   RuntimeMobileSessionTerminalClientTab
 } from './runtime-mobile-session-tab-contracts'
 import type { CliStatusCaller } from './orchestration-caller-status'
+import type { WorktreeIdentity } from './worktree/identity'
 
 export type * from './runtime-mobile-session-tab-contracts'
 
@@ -228,6 +229,7 @@ export const CLIENT_NAVIGATION_PUBLICATION_EPOCH_SUFFIX = ':client-navigation'
 
 export type RuntimeMobileSessionTabsSnapshot = {
   worktree: string
+  worktreeIdentity?: WorktreeIdentity
   /** Immutable catalog identity used to fence snapshots across path reuse. */
   worktreeInstanceId?: string
   publicationEpoch: string
@@ -251,6 +253,7 @@ export type RuntimeMobileSessionRetiredTerminalSurface = {
 
 export type RuntimeMobileSessionTabsResult = {
   worktree: string
+  worktreeIdentity?: WorktreeIdentity
   publicationEpoch: string
   snapshotVersion: number
   navigationIntent?: 'follow'

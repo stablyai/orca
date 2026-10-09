@@ -16,21 +16,28 @@ import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { navigationTargetsHost } from '../../shared/runtime-navigation'
 import { isAutomaticTabActivation } from '../../shared/tab-activation-intent'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
+import { requireRuntimeWorkspaceSessionOwner } from './runtime-workspace-session-owner'
 
 export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs {
   protected async performMobileSessionPtyRecordsRefresh(
-    targetWorktreeId: string | null
+    targetWorktreeId: string | null,
+    targetWorktree?: ResolvedWorktree
   ): Promise<PtyControllerInventory | null> {
     if (!this.ptyController?.listProcesses && !this.ptyController?.hasPty) {
       return null
     }
     // Why: floating PTY identity is explicit, so polling must not resolve every Git/SSH worktree.
     const isFloatingWorkspace = targetWorktreeId === FLOATING_TERMINAL_WORKTREE_ID
+    if (targetWorktree) {
+      requireRuntimeWorkspaceSessionOwner(this.store, targetWorktree.id, targetWorktree.identity)
+    }
     const resolvedWorktrees = isFloatingWorkspace
       ? []
-      : targetWorktreeId
-        ? this.listResolvedWorktreesForExplicitTarget(targetWorktreeId)
-        : await this.listResolvedWorktrees()
+      : targetWorktree
+        ? [targetWorktree]
+        : targetWorktreeId
+          ? this.listResolvedWorktreesForExplicitTarget(targetWorktreeId)
+          : await this.listResolvedWorktrees()
     // An explicit mobile worktree belongs to one execution host. Query only
     // that provider; aggregate inventory would wait on unrelated SSH hosts.
     const targetExecutionHost = targetWorktreeId
@@ -106,10 +113,16 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
     const navigation = opts.navigation ?? (opts.notifyClients === false ? 'caller' : 'all')
     const targetsHost = navigationTargetsHost(navigation)
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
-    const worktreeId =
-      explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
-    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
-    await this.refreshMobileSessionPtyRecords(worktreeId)
+    const worktree = explicitWorktreeId
+      ? undefined
+      : await this.resolveWorktreeSelector(worktreeSelector)
+    const worktreeId = explicitWorktreeId ?? worktree.id
+    const owner = requireRuntimeWorkspaceSessionOwner(this.store, worktreeId, worktree?.identity)
+    const context = owner ? { worktreeIdentity: owner } : {}
+    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, context)
+    await this.refreshMobileSessionPtyRecords(worktreeId, worktree)
+    requireRuntimeWorkspaceSessionOwner(this.store, worktreeId, owner)
+    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, context)
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const directTab = snapshot?.tabs.find((candidate) => candidate.id === tabId)
     const tab = leafId

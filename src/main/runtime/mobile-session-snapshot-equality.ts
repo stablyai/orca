@@ -1,4 +1,5 @@
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
+import { runtimeSessionSnapshotsShareOwner } from './runtime-workspace-session-owner'
 
 // Why: content equality for the hydrate's idempotence check — compares every
 // client-visible field EXCEPT publicationEpoch/snapshotVersion (both are
@@ -9,7 +10,7 @@ export function headlessMobileSnapshotContentUnchanged(
   next: RuntimeMobileSessionTabsSnapshot
 ): boolean {
   if (
-    existing.worktree !== next.worktree ||
+    !runtimeSessionSnapshotsShareOwner(existing, next) ||
     existing.activeGroupId !== next.activeGroupId ||
     existing.activeTabId !== next.activeTabId ||
     existing.activeTabType !== next.activeTabType

@@ -9,6 +9,11 @@ import type {
 } from '../../shared/runtime-types'
 import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../shared/runtime-types'
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
+import type { WorktreeIdentity } from '../../shared/worktree/identity'
+import {
+  requireRuntimeWorkspaceSessionOwner,
+  resolveRuntimeWorkspaceSessionOwner
+} from './runtime-workspace-session-owner'
 
 export class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab {
   protected scheduleMobileSessionTabsChanged(worktreeId: string): void {
@@ -69,16 +74,24 @@ export class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntime
 
   protected getMobileSessionTabsForWorktree(
     worktreeId: string,
-    clientNavigationId?: string
+    clientNavigationId?: string,
+    owner?: WorktreeIdentity
   ): RuntimeMobileSessionTabsResult {
-    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    if (owner) {
+      requireRuntimeWorkspaceSessionOwner(this.store, worktreeId, owner)
+    }
+    const cached = this.mobileSessionTabsByWorktree.get(worktreeId)
+    const snapshot = !owner || cached?.worktreeIdentity?.key === owner.key ? cached : undefined
     if (!snapshot) {
       const publishedEpoch = this.getAuthoritativeSessionTabsInventoryEpoch()
       if (publishedEpoch === null) {
-        this.notifyEmptyWorktreeOnPublication(worktreeId)
+        this.notifyEmptyWorktreeOnPublication(worktreeId, owner)
       }
       return this.projectMobileSessionTabsForClient(
-        this.emptyMobileSessionTabsResult(worktreeId, publishedEpoch),
+        {
+          ...this.emptyMobileSessionTabsResult(worktreeId, publishedEpoch),
+          ...(owner ? { worktreeIdentity: owner } : {})
+        },
         clientNavigationId
       )
     }
@@ -110,19 +123,28 @@ export class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntime
 
   // Why: a publication only notifies worktrees it has entries for, so a client told "ask me later"
   // about an empty worktree would otherwise never hear the answer.
-  protected notifyEmptyWorktreeOnPublication(worktreeId: string): void {
-    if (this.worktreesAwaitingSessionTabsPublication.has(worktreeId)) {
+  protected notifyEmptyWorktreeOnPublication(worktreeId: string, owner?: WorktreeIdentity): void {
+    const waiterKey = owner ? JSON.stringify([worktreeId, owner.key]) : worktreeId
+    if (this.worktreesAwaitingSessionTabsPublication.has(waiterKey)) {
       return
     }
-    this.worktreesAwaitingSessionTabsPublication.add(worktreeId)
+    this.worktreesAwaitingSessionTabsPublication.add(waiterKey)
     const onPublished = (): void => {
       this.sessionTabsInventoryWaiters.delete(onPublished)
-      this.worktreesAwaitingSessionTabsPublication.delete(worktreeId)
+      this.worktreesAwaitingSessionTabsPublication.delete(waiterKey)
       const publishedEpoch = this.getAuthoritativeSessionTabsInventoryEpoch()
-      if (publishedEpoch === null || this.mobileSessionTabsByWorktree.has(worktreeId)) {
+      const cached = this.mobileSessionTabsByWorktree.get(worktreeId)
+      if (
+        publishedEpoch === null ||
+        (cached && (!owner || cached.worktreeIdentity?.key === owner.key)) ||
+        (owner && resolveRuntimeWorkspaceSessionOwner(this.store, worktreeId, owner) === null)
+      ) {
         return
       }
-      const result = this.emptyMobileSessionTabsResult(worktreeId, publishedEpoch)
+      const result = {
+        ...this.emptyMobileSessionTabsResult(worktreeId, publishedEpoch),
+        ...(owner ? { worktreeIdentity: owner } : {})
+      }
       const changeSequence = ++this.mobileSessionTabsChangeSequence
       for (const subscription of this.mobileSessionTabListeners) {
         subscription.listener(

@@ -26,6 +26,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { captureAcknowledgedTerminalTabRetirement } from './workspace-session-terminal-tab-retirement-identity'
 import { closeLeafOrTab } from '../persistence/terminal-topology/terminal-topology-commit'
 import { markAgentLaunchesClosedByUser } from '../agent-launch/agent-launch-pane-attachment'
+import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 
 export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithPersistTerminalSurfaceRetirements {
   // Why: headless serve backs browser panes with offscreen WebContents that live
@@ -316,19 +317,23 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
   }
 
   protected async refreshMobileSessionPtyRecords(
-    targetWorktreeId: string | null = null
+    targetWorktreeId: string | null = null,
+    targetWorktree?: ResolvedWorktree
   ): Promise<Set<string> | null> {
-    const inventory = await this.refreshMobileSessionPtyInventory(targetWorktreeId)
+    const inventory = await this.refreshMobileSessionPtyInventory(targetWorktreeId, targetWorktree)
     return inventory ? new Set(inventory.livePtyIds) : null
   }
 
   protected async refreshMobileSessionPtyInventory(
-    targetWorktreeId: string | null = null
+    targetWorktreeId: string | null = null,
+    targetWorktree?: ResolvedWorktree
   ): Promise<PtyControllerInventory | null> {
     // Targeted mobile polls must not queue behind an aggregate census that may
     // be waiting on an unrelated SSH provider.
     if (targetWorktreeId !== null && targetWorktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
-      return this.performMobileSessionPtyRecordsRefresh(targetWorktreeId)
+      return targetWorktree
+        ? this.performMobileSessionPtyRecordsRefresh(targetWorktreeId, targetWorktree)
+        : this.performMobileSessionPtyRecordsRefresh(targetWorktreeId)
     }
     if (targetWorktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
       // Fleet-wide refreshes share one aggregate controller inventory.

@@ -7,6 +7,8 @@ import {
   resolveRuntimeNavigationTarget
 } from '../../shared/runtime-navigation'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
+import { resolveWorktreeLaunchHost } from './worktree-launch-host-repo'
+import { requireRuntimeWorkspaceSessionOwner } from './runtime-workspace-session-owner'
 import type { Repo } from '../../shared/repo-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { RuntimeTerminalWait } from '../../shared/runtime-terminal-contracts'
@@ -62,7 +64,12 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
   }> {
     this.assertGraphReady()
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
-    const repo = this.store?.getRepo(worktree.repoId)
+    const owner = requireRuntimeWorkspaceSessionOwner(this.store, worktree.id, worktree.identity)
+    const host = resolveWorktreeLaunchHost(this.store?.getRepos() ?? [], {
+      repoId: worktree.repoId,
+      hostId: owner?.executionHostId ?? worktree.hostId
+    })
+    const repo = host.kind === 'resolved' ? host.repo : null
     if (!repo) {
       throw new Error('repo_not_found')
     }
@@ -70,10 +77,15 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
     const targetsHost = navigationTargetsHost(navigation)
     const targetsClients = navigationTargetsClients(navigation)
 
-    if (!targetsHost && this.store?.getWorktreeMeta(worktree.id)?.isUnread) {
+    const meta = owner
+      ? this.store?.getWorktreeMetaForHost?.(worktree.id, owner.executionHostId)
+      : this.store?.getWorktreeMeta(worktree.id)
+    if (!targetsHost && meta?.isUnread) {
       // Why: mobile/web session activation intentionally bypasses renderer
       // selection, so the runtime must acknowledge the unread state itself.
-      this.store.setWorktreeMeta(worktree.id, { isUnread: false })
+      if (!this.store.updateExistingWorktreeMeta?.(worktree.id, { isUnread: false }, owner)) {
+        throw new Error('selector_not_found')
+      }
       this.notifyWorktreesChanged(repo.id)
     }
 
@@ -100,9 +112,15 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
       // Why: mobile/web selection needs fresh session surfaces without forcing
       // every attached desktop renderer to navigate to the phone's workspace.
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktree.id, {
-        allowAttachedWindow: true
+        allowAttachedWindow: true,
+        ...(owner ? { worktreeIdentity: owner } : {})
       })
-      await this.refreshMobileSessionPtyRecords()
+      await this.refreshMobileSessionPtyRecords(worktree.id, worktree)
+      requireRuntimeWorkspaceSessionOwner(this.store, worktree.id, owner)
+      this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktree.id, {
+        allowAttachedWindow: true,
+        ...(owner ? { worktreeIdentity: owner } : {})
+      })
       this.notifyMobileSessionTabsChanged(worktree.id)
       // Why: a phone open must also wake the worktree's slept agents (experimental
       // agent sleep). Only the host renderer holds the sleeping records + wake

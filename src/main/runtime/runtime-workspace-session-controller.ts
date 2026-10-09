@@ -11,6 +11,8 @@ import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { workspaceSessionPartitionHostId } from '../../shared/workspace-session-partition-owner'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import type { RuntimeStore } from './runtime-store-contract'
+import type { WorktreeIdentity } from '../../shared/worktree/identity'
+import { resolveRuntimeWorkspaceSessionOwner } from './runtime-workspace-session-owner'
 
 type RuntimeWorkspaceSessionDependencies = {
   getStore: () => RuntimeStore | null
@@ -25,7 +27,11 @@ type RuntimeWorkspaceSessionDependencies = {
 export class RuntimeWorkspaceSessionController {
   constructor(private readonly deps: RuntimeWorkspaceSessionDependencies) {}
 
-  private getPreferredHostId(worktreeId: string, store: RuntimeStore): ExecutionHostId | null {
+  private getPreferredHostId(
+    worktreeId: string,
+    store: RuntimeStore,
+    owner?: WorktreeIdentity
+  ): ExecutionHostId | null {
     const scope = parseWorkspaceKey(worktreeId)
     if (scope?.type === 'folder') {
       const workspace = store
@@ -46,6 +52,13 @@ export class RuntimeWorkspaceSessionController {
       return getConnectionExecutionHostId(this.deps.resolveFolderConnectionId(workspace))
     }
     const resolvedWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
+    const admitted = resolveRuntimeWorkspaceSessionOwner(store, resolvedWorktreeId, owner)
+    if (admitted === null) {
+      return null
+    }
+    if (admitted) {
+      return workspaceSessionPartitionHostId(admitted.executionHostId)
+    }
     const repo = store?.getRepo?.(getRepoIdFromWorktreeId(resolvedWorktreeId))
     return repo
       ? workspaceSessionPartitionHostId(getRepoExecutionHostId(repo))
@@ -75,17 +88,17 @@ export class RuntimeWorkspaceSessionController {
     return persistedOwners.length === 1 ? persistedOwners[0]! : preferredHostId
   }
 
-  tryGetHostId(worktreeId: string): ExecutionHostId | null {
+  tryGetHostId(worktreeId: string, owner?: WorktreeIdentity): ExecutionHostId | null {
     const store = this.deps.getStore()
     if (!store) {
       return null
     }
-    const preferredHostId = this.getPreferredHostId(worktreeId, store)
+    const preferredHostId = this.getPreferredHostId(worktreeId, store, owner)
     if (!preferredHostId) {
       return null
     }
     const persistedHostIds = store?.getWorkspaceSessionHostIds?.()
-    if (!store.getWorkspaceSession || !persistedHostIds) {
+    if (owner || !store.getWorkspaceSession || !persistedHostIds) {
       return preferredHostId
     }
     return this.resolveHostId(worktreeId, preferredHostId, persistedHostIds, (hostId) =>
@@ -93,30 +106,34 @@ export class RuntimeWorkspaceSessionController {
     )
   }
 
-  getHostId(worktreeId: string): ExecutionHostId {
-    const hostId = this.tryGetHostId(worktreeId)
+  getHostId(worktreeId: string, owner?: WorktreeIdentity): ExecutionHostId {
+    const hostId = this.tryGetHostId(worktreeId, owner)
     if (!hostId) {
-      throw new Error('folder_workspace_not_found')
+      throw new Error(owner ? 'selector_not_found' : 'folder_workspace_not_found')
     }
     return hostId
   }
 
-  get(worktreeId: string): WorkspaceSessionState | null {
-    const hostId = this.tryGetHostId(worktreeId)
+  get(worktreeId: string, owner?: WorktreeIdentity): WorkspaceSessionState | null {
+    const hostId = this.tryGetHostId(worktreeId, owner)
     return hostId ? (this.deps.getStore()?.getWorkspaceSession?.(hostId) ?? null) : null
   }
 
   /** The session only when the worktree's own host partition owns it, not a rotated-owner fallback. */
-  getOwnPartition(worktreeId: string): WorkspaceSessionState | null {
+  getOwnPartition(worktreeId: string, owner?: WorktreeIdentity): WorkspaceSessionState | null {
     const store = this.deps.getStore()
-    const hostId = store ? this.getPreferredHostId(worktreeId, store) : null
-    return hostId && hostId === this.tryGetHostId(worktreeId)
+    const hostId = store ? this.getPreferredHostId(worktreeId, store, owner) : null
+    return hostId && hostId === this.tryGetHostId(worktreeId, owner)
       ? (store?.getWorkspaceSession?.(hostId) ?? null)
       : null
   }
 
-  setForWorktree(worktreeId: string, session: WorkspaceSessionState): void {
-    this.deps.getStore()?.setWorkspaceSession?.(session, this.getHostId(worktreeId))
+  setForWorktree(
+    worktreeId: string,
+    session: WorkspaceSessionState,
+    owner?: WorktreeIdentity
+  ): void {
+    this.deps.getStore()?.setWorkspaceSession?.(session, this.getHostId(worktreeId, owner))
   }
 
   getKnownWorktreeIds(): Set<string> {
@@ -145,9 +162,13 @@ export class RuntimeWorkspaceSessionController {
       return new Map()
     }
     const repos = store?.getRepos?.() ?? []
-    const repoHostIdByRepoId = new Map(
-      repos.map((repo) => [repo.id, getRepoExecutionHostId(repo)] as const)
-    )
+    const repoHostIdByRepoId = new Map<string, ExecutionHostId | null>()
+    for (const repo of repos) {
+      repoHostIdByRepoId.set(
+        repo.id,
+        repoHostIdByRepoId.has(repo.id) ? null : getRepoExecutionHostId(repo)
+      )
+    }
     const folderHostIdByWorkspaceId = new Map(
       (store?.getFolderWorkspaces?.() ?? []).map((workspace) => {
         const explicitHostId =
@@ -181,16 +202,25 @@ export class RuntimeWorkspaceSessionController {
         const catalogOwnerHostId =
           scope?.type === 'folder'
             ? (folderHostIdByWorkspaceId.get(scope.folderWorkspaceId) ?? null)
-            : (repoHostIdByRepoId.get(
+            : repoHostIdByRepoId.get(
                 getRepoIdFromWorktreeId(scope?.type === 'worktree' ? scope.worktreeId : worktreeId)
-              ) ?? LOCAL_EXECUTION_HOST_ID)
-        const ownerHostId = this.resolveHostId(
-          worktreeId,
-          catalogOwnerHostId ?? LOCAL_EXECUTION_HOST_ID,
-          [...sessionsByHostId.keys()],
-          (candidateHostId) =>
-            sessionsByHostId.get(candidateHostId) ?? store.getWorkspaceSession!(candidateHostId)
-        )
+              )
+        if (catalogOwnerHostId === null) {
+          continue
+        }
+        const owner = resolveRuntimeWorkspaceSessionOwner(store, worktreeId)
+        if (owner === null) {
+          continue
+        }
+        const ownerHostId = owner
+          ? workspaceSessionPartitionHostId(owner.executionHostId)
+          : this.resolveHostId(
+              worktreeId,
+              catalogOwnerHostId ?? LOCAL_EXECUTION_HOST_ID,
+              [...sessionsByHostId.keys()],
+              (candidateHostId) =>
+                sessionsByHostId.get(candidateHostId) ?? store.getWorkspaceSession!(candidateHostId)
+            )
         if (
           ownerHostId === hostId &&
           (includeAllPersistedWorktrees ||

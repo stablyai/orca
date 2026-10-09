@@ -4,11 +4,20 @@ import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../shared/runtime-types'
+import {
+  resolveRuntimeWorkspaceSessionOwner,
+  runtimeSessionSnapshotsShareOwner
+} from './runtime-workspace-session-owner'
+import type { WorktreeIdentity } from '../../shared/worktree/identity'
 
 export class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals extends OrcaRuntimeWithWaitForMobileTerminalSurface {
   protected restoreLivePairedRendererSessionOwnedMobileTerminals(
     worktreeId: string | null,
-    options: { missingSnapshotOnly?: boolean; notify?: boolean } = {}
+    options: {
+      missingSnapshotOnly?: boolean
+      notify?: boolean
+      worktreeIdentity?: WorktreeIdentity
+    } = {}
   ): void {
     for (const ptyId of this.pairedRendererSessionOwnedPtyIds) {
       const pty = this.ptysById.get(ptyId)
@@ -20,11 +29,32 @@ export class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals
         continue
       }
       const targetWorktreeId = worktreeId ?? pty.worktreeId
+      const owner = resolveRuntimeWorkspaceSessionOwner(
+        this.store,
+        targetWorktreeId,
+        options.worktreeIdentity
+      )
+      if (
+        owner === null ||
+        (owner &&
+          owner.executionHostId !== (pty.connectionId ? `ssh:${pty.connectionId}` : 'local'))
+      ) {
+        continue
+      }
       const pane = parsePaneKey(pty.paneKey ?? '')
       if (!pane || pane.tabId !== pty.tabId) {
         continue
       }
-      const existing = this.mobileSessionTabsByWorktree.get(targetWorktreeId)
+      const cached = this.mobileSessionTabsByWorktree.get(targetWorktreeId)
+      if (!owner && cached?.worktreeIdentity) {
+        continue
+      }
+      const ownerStamp = {
+        worktree: targetWorktreeId,
+        ...(owner ? { worktreeIdentity: owner, worktreeInstanceId: owner.instanceId } : {})
+      }
+      const existing =
+        cached && runtimeSessionSnapshotsShareOwner(cached, ownerStamp) ? cached : undefined
       if (existing && options.missingSnapshotOnly) {
         continue
       }
@@ -40,7 +70,7 @@ export class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals
       }
       if (!existing) {
         this.storeMobileSessionSnapshot(targetWorktreeId, {
-          worktree: targetWorktreeId,
+          ...ownerStamp,
           publicationEpoch: `renderer-rescue:${Date.now().toString(36)}`,
           snapshotVersion: 0,
           activeGroupId: null,

@@ -33,6 +33,7 @@ export function finalizeRuntimeMobileSessionTabsResult(
         null)
   return {
     worktree: snapshot.worktree,
+    ...(snapshot.worktreeIdentity ? { worktreeIdentity: snapshot.worktreeIdentity } : {}),
     publicationEpoch: snapshot.publicationEpoch,
     snapshotVersion: snapshot.snapshotVersion,
     activeGroupId,

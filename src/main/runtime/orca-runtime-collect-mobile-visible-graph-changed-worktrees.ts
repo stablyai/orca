@@ -4,6 +4,7 @@ import type { RuntimeMobileSessionTabsResult, RuntimeSyncedTab } from '../../sha
 import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
 import type { PtyControllerInventory } from './runtime-pty-controller-contract'
 import { parseExecutionHostId } from '../../shared/execution-host'
+import { requireRuntimeWorkspaceSessionOwner } from './runtime-workspace-session-owner'
 
 export class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees extends OrcaRuntimeWithSyncWindowGraph {
   // Why: toMobileSessionTabsResult resolves handles/titles from this.tabs and
@@ -52,24 +53,37 @@ export class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees extends Or
   ): Promise<RuntimeMobileSessionTabsResult> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
     if (explicitWorktreeId) {
+      const owner = requireRuntimeWorkspaceSessionOwner(this.store, explicitWorktreeId)
+      if (!owner && this.mobileSessionTabsByWorktree.get(explicitWorktreeId)?.worktreeIdentity) {
+        throw new Error('selector_not_found')
+      }
+      const context = owner ? { worktreeIdentity: owner } : {}
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(explicitWorktreeId, {
         allowAttachedWindow: true,
-        onlyRuntimeOwnedTerminals: true
+        onlyRuntimeOwnedTerminals: true,
+        ...context
       })
-      this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(explicitWorktreeId)
+      this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(explicitWorktreeId, context)
       await this.refreshMobileSessionPtyRecords(explicitWorktreeId)
-      this.restoreLivePairedRendererSessionOwnedMobileTerminals(explicitWorktreeId)
-      return this.getMobileSessionTabsForWorktree(explicitWorktreeId, clientNavigationId)
+      requireRuntimeWorkspaceSessionOwner(this.store, explicitWorktreeId, owner)
+      this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(explicitWorktreeId, context)
+      this.restoreLivePairedRendererSessionOwnedMobileTerminals(explicitWorktreeId, context)
+      return this.getMobileSessionTabsForWorktree(explicitWorktreeId, clientNavigationId, owner)
     }
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    const owner = requireRuntimeWorkspaceSessionOwner(this.store, worktree.id, worktree.identity)
+    const context = owner ? { worktreeIdentity: owner } : {}
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktree.id, {
       allowAttachedWindow: true,
-      onlyRuntimeOwnedTerminals: true
+      onlyRuntimeOwnedTerminals: true,
+      ...context
     })
-    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktree.id)
-    await this.refreshMobileSessionPtyRecords()
-    this.restoreLivePairedRendererSessionOwnedMobileTerminals(worktree.id)
-    return this.getMobileSessionTabsForWorktree(worktree.id, clientNavigationId)
+    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktree.id, context)
+    await this.refreshMobileSessionPtyRecords(worktree.id, worktree)
+    requireRuntimeWorkspaceSessionOwner(this.store, worktree.id, owner)
+    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktree.id, context)
+    this.restoreLivePairedRendererSessionOwnedMobileTerminals(worktree.id, context)
+    return this.getMobileSessionTabsForWorktree(worktree.id, clientNavigationId, owner)
   }
 
   async listAllMobileSessionTabs(
