@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { isValidElement } from 'react'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 
 const reactHookRuntime = vi.hoisted(() => ({
@@ -173,7 +174,7 @@ function baseBrowserTab(overrides: Partial<BrowserTabState> = {}): BrowserTabSta
   }
 }
 
-async function renderBrowserTab(tab: BrowserTabState): Promise<unknown> {
+async function renderBrowserTab(tab: BrowserTabState, unifiedTabId = tab.id): Promise<unknown> {
   reactHookRuntime.index = 0
   const module = await import('./BrowserTab')
   return module.default({
@@ -194,7 +195,7 @@ async function renderBrowserTab(tab: BrowserTabState): Promise<unknown> {
       kind: 'tab',
       worktreeId: tab.worktreeId,
       groupId: 'group-1',
-      unifiedTabId: tab.id,
+      unifiedTabId,
       visibleTabId: tab.id,
       tabType: 'browser',
       label: tab.title
@@ -254,6 +255,24 @@ describe('BrowserTab favicon', { timeout: 30_000 }, () => {
     reactHookRuntime.states = []
     reactHookRuntime.index = 0
     vi.clearAllMocks()
+  })
+
+  it('passes the workspace ID to Copy Tab ID instead of the browser content ID', async () => {
+    const { CopyTabIdMenuItem } = await import('./CopyTabIdMenuItem')
+    const tree = await renderBrowserTab(baseBrowserTab(), 'workspace-browser-1')
+    const visit = (node: unknown): ReactElementLike | undefined => {
+      if (Array.isArray(node)) {
+        return node.map(visit).find(Boolean)
+      }
+      if (!isValidElement<{ children?: unknown; unifiedTabId?: string }>(node)) {
+        return undefined
+      }
+      if (node.type === CopyTabIdMenuItem) {
+        return { type: node.type, props: node.props }
+      }
+      return visit(node.props.children)
+    }
+    expect(visit(tree)?.props.unifiedTabId).toBe('workspace-browser-1')
   })
 
   it('renders the favicon image when faviconUrl is present', async () => {

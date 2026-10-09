@@ -31,6 +31,8 @@ import {
 } from '@/lib/reveal-in-file-manager'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
+import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
+import { CopyTabDetailsMenuItem } from './CopyTabDetailsMenuItem'
 
 type EditorFileTabContextMenuProps = {
   open: boolean
@@ -154,6 +156,8 @@ export function EditorFileTabContextMenu({
             ? translate('auto.components.tab.bar.EditorFileTabContextMenu.8e9d603a09', 'Unpin Tab')
             : translate('auto.components.tab.bar.EditorFileTabContextMenu.fdd29eb669', 'Pin Tab')}
         </DropdownMenuItem>
+        <CopyTabIdMenuItem unifiedTabId={unifiedTabId} />
+        <CopyTabDetailsMenuItem unifiedTabId={unifiedTabId} groupId={groupId} />
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
           <X className="size-3.5" />
