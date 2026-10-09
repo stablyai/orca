@@ -3,7 +3,8 @@
 
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 import type { DiskTable } from './workspace-layout-disk-fields'
-import { tabIdOfPaneKey } from './workspace-layout-model'
+import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
+import { paneKeyOf } from './workspace-layout-model'
 
 export type LayoutLoadChange = {
   /** A disk-field table name (workspace-layout-disk-fields.ts). */
@@ -35,6 +36,7 @@ export function diskRecords(session: WorkspaceSessionState): DiskRecords {
     file: table(),
     browser: table(),
     sleeping: table(),
+    incarnation: table(),
     closedTab: table(),
     session: table()
   }
@@ -82,19 +84,29 @@ export function diskRecords(session: WorkspaceSessionState): DiskRecords {
   }
   // Records the Loader cannot place in a workspace are carried whole, as one session field.
   const unowned: Record<string, unknown> = {}
+  const paneKeys = new Set<string>()
   for (const [tabId, layout] of Object.entries(session.terminalLayoutsByTabId ?? {})) {
     if (rowIds.has(tabId)) {
       records.layout.set(tabId, layout)
+      collectLayoutLeafIdsInOrder(layout.root).forEach((id) => paneKeys.add(paneKeyOf(tabId, id)))
     } else {
       unowned[tabId] = layout
     }
   }
   const unplacedSleeping: Record<string, unknown> = {}
   for (const [paneKey, record] of Object.entries(session.sleepingAgentSessionsByPaneKey ?? {})) {
-    if (rowIds.has(tabIdOfPaneKey(paneKey)) || worktreeIds.has(record.worktreeId)) {
+    if (paneKeys.has(paneKey)) {
       records.sleeping.set(paneKey, record)
     } else {
       unplacedSleeping[paneKey] = record
+    }
+  }
+  const unplacedIncarnations: Record<string, unknown> = {}
+  for (const [paneKey, id] of Object.entries(session.terminalPtyIncarnationsByPaneKey ?? {})) {
+    if (paneKeys.has(paneKey)) {
+      records.incarnation.set(paneKey, { incarnationId: id })
+    } else {
+      unplacedIncarnations[paneKey] = id
     }
   }
   const unplacedClosed: Record<string, unknown> = {}
@@ -114,6 +126,7 @@ export function diskRecords(session: WorkspaceSessionState): DiskRecords {
     browserTabsByWorktree: sortedKeys(session.browserTabsByWorktree),
     terminalLayoutsByTabId: unowned,
     sleepingAgentSessionsByPaneKey: unplacedSleeping,
+    terminalPtyIncarnationsByPaneKey: unplacedIncarnations,
     closedTerminalTabTombstonesByTabId: unplacedClosed
   })
   return records

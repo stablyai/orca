@@ -80,7 +80,7 @@ describe('workspace layout Loader and Serializer', () => {
       const stored = build()
       const { loaded } = roundTrip(hostId, stored)
       expect(checkWorkspaceLayoutRules([{ hostId, session: stored }])).toEqual([])
-      expect(checkWorkspaceLayoutModelRules([loaded])).toEqual([])
+      expect(checkWorkspaceLayoutModelRules([loaded.layout])).toEqual([])
     }
   )
 
@@ -107,6 +107,12 @@ describe('workspace layout Loader and Serializer', () => {
       ['agent-session-1', 'agent-session'],
       ['tab-unbound', 'terminal']
     ])
+    // tab-agent's terminal id is term-agent: its pane's data is keyed by leaf alone, and the
+    // round trip above saved its pane records under the terminal id.
+    expect(workspace.leaves?.[leaf(3)]).toMatchObject({
+      incarnationId: 'inc-3',
+      sleeping: { agent: 'claude' }
+    })
     expect(workspace.groups.map((group) => group.tabOrder)).toEqual([
       ['tab-shell', 'tab-agent', 'editor:src/app.ts'],
       ['browser-1', 'agent-session-1', 'tab-unbound']

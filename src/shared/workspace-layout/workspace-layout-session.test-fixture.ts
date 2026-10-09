@@ -21,7 +21,9 @@ export const leaf = (n: number): string =>
   `${String(n).repeat(8)}-${String(n).repeat(4)}-4${String(n).repeat(3)}-8${String(n).repeat(3)}-${String(n).repeat(12)}`
 
 type TerminalSpec = {
+  /** Tab-bar id; the row, pane layout and pane keys use `entityId` (this id when absent). */
   id: string
+  entityId?: string
   leaves: [string, string?][]
   title?: string
   split?: 'vertical' | 'horizontal'
@@ -89,8 +91,9 @@ export function addWorkspace(
         return
       }
       const title = spec.title ?? `Terminal ${rows.length + 1}`
+      const entityId = spec.entityId ?? spec.id
       rows.push({
-        id: spec.id,
+        id: entityId,
         ptyId: spec.leaves.find(([, ptyId]) => ptyId)?.[1] ?? null,
         worktreeId: key,
         title,
@@ -103,21 +106,21 @@ export function addWorkspace(
       })
       entries.push({
         id: spec.id,
-        entityId: spec.id,
+        entityId,
         contentType: 'terminal',
         label: title,
         ...common,
         ...spec.entry
       })
       const bindings = spec.leaves.flatMap(([leafId, ptyId]) => (ptyId ? [[leafId, ptyId]] : []))
-      session.terminalLayoutsByTabId[spec.id] = {
+      session.terminalLayoutsByTabId[entityId] = {
         root: paneTree(
           spec.leaves.map(([leafId]) => leafId),
           spec.split ?? 'vertical'
         ),
         activeLeafId: spec.leaves[0]![0],
         expandedLeafId: null,
-        ...(bindings.length > 0 ? { ptyIdsByLeafId: Object.fromEntries(bindings) } : {}),
+        ptyIdsByLeafId: Object.fromEntries(bindings),
         ...spec.layout
       }
     })

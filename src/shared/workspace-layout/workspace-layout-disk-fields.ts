@@ -24,10 +24,12 @@ import type {
   LayoutContentTab,
   LayoutEditorFile,
   LayoutGroup,
+  LayoutLeaf,
   LayoutSleepingRecord,
   LayoutTerminalCreation,
   LayoutTerminalPanes,
   LayoutTerminalTab,
+  LegacyLayoutPersistence,
   WorkspaceLayout,
   WorkspaceLayoutModel,
   WorkspaceLayoutRecords
@@ -39,18 +41,14 @@ type Inner<Map> = Map extends Record<string, Record<string, infer Value>> ? Valu
 /** Each part of a loaded layout, as `holder.field`; a list or map field is its own holder. */
 type PartSources = {
   layout:
-    | Prefixed<'model', Exclude<keyof WorkspaceLayoutModel, 'workspaces' | 'records'>>
+    | Prefixed<'model', Exclude<keyof WorkspaceLayoutModel, 'workspaces' | 'records' | 'legacy'>>
     | Prefixed<'records', keyof WorkspaceLayoutRecords>
+    | Prefixed<'legacy', keyof LegacyLayoutPersistence>
     | Prefixed<
         'workspace',
         Exclude<
           keyof WorkspaceLayout,
-          | 'tabs'
-          | 'groups'
-          | 'editorFiles'
-          | 'browserTabs'
-          | 'sleepingByPaneKey'
-          | 'closedTerminalTabs'
+          'tabs' | 'groups' | 'editorFiles' | 'browserTabs' | 'leaves' | 'closedTerminalTabs'
         >
       >
     | Prefixed<
@@ -63,7 +61,8 @@ type PartSources = {
     | Prefixed<'file', keyof LayoutEditorFile>
     | Prefixed<'browserTab', keyof LayoutBrowserTab>
     // `$key`: the map key the entry is stored under.
-    | Prefixed<'sleeping', keyof LayoutSleepingRecord | '$key'>
+    | Prefixed<'leaf', Exclude<keyof LayoutLeaf, 'sleeping'> | '$key'>
+    | Prefixed<'leaf.sleeping', keyof LayoutSleepingRecord>
     | Prefixed<'closedTab', keyof LayoutClosedTab>
   desktopView:
     | Prefixed<'view', Exclude<keyof DesktopLayoutView, 'groups' | 'panes' | 'editorDrafts'>>
@@ -111,7 +110,7 @@ const SHARED_TAB_FIELDS = {
 const ROW = {
   ...SHARED_TAB_FIELDS,
   id: tab('entityId'),
-  ptyId: { from: 'tab.panes.ptyIdsByLeafId', via: ['tab.panes.root', 'viewPane.activeLeafId'] },
+  ptyId: { from: 'leaf.ptyId', via: ['tab.panes.root', 'viewPane.activeLeafId'] },
   worktreeId: WORKTREE,
   title: own('terminalRow', 'title'),
   defaultTitle: own('tab.terminal', 'defaultTitle'),
@@ -172,10 +171,10 @@ const LAYOUT = {
   activeLeafId: { from: 'viewPane.activeLeafId', via: ['tab.panes.root'] },
   expandedLeafId: { from: 'viewPane.expandedLeafId', via: ['tab.panes.root'] },
   chatLeafId: own('tab.panes', 'chatLeafId'),
-  ptyIdsByLeafId: own('tab.panes', 'ptyIdsByLeafId'),
-  buffersByLeafId: own('scrollback', 'buffersByLeafId'),
-  scrollbackRefsByLeafId: own('scrollback', 'scrollbackRefsByLeafId'),
-  titlesByLeafId: own('tab.panes', 'titlesByLeafId')
+  ptyIdsByLeafId: { from: 'leaf.ptyId', via: ['tab.panes.root'] },
+  buffersByLeafId: { from: 'scrollback.buffer', via: ['tab.panes.root'] },
+  scrollbackRefsByLeafId: { from: 'scrollback.scrollbackRef', via: ['tab.panes.root'] },
+  titlesByLeafId: { from: 'leaf.title', via: ['tab.panes.root'] }
 } as const satisfies Record<keyof TerminalLayoutSnapshot, DiskFieldWritten>
 
 const FILE = {
@@ -211,25 +210,36 @@ const BROWSER = {
   docLocation: own('browserLive', 'docLocation')
 } as const satisfies Record<keyof BrowserWorkspace, DiskFieldWritten>
 
+// A pane's records are written for the panes its tab's tree holds, under a key derived from
+// where it sits: its tab's id and its leaf id.
+const PANE_KEY = { from: 'leaf.$key', via: ['tab.entityId', 'tab.panes.root'] } as const
+const paneRecord = <Source extends `leaf.${string}`>(from: Source) =>
+  ({ from, via: ['tab.panes.root'] }) as const
+
 const SLEEPING = {
-  paneKey: own('sleeping', '$key'),
-  tabId: own('sleeping', '$key'),
-  worktreeId: WORKTREE,
-  agent: own('sleeping', 'agent'),
-  providerSession: own('sleeping', 'providerSession'),
-  prompt: own('sleeping', 'prompt'),
-  state: own('sleeping', 'state'),
-  capturedAt: own('sleeping', 'capturedAt'),
-  updatedAt: own('sleeping', 'updatedAt'),
-  terminalTitle: own('sleeping', 'terminalTitle'),
-  lastAssistantMessage: own('sleeping', 'lastAssistantMessage'),
-  interrupted: own('sleeping', 'interrupted'),
-  mainAgent: own('sleeping', 'mainAgent'),
-  connectionId: own('sleeping', 'connectionId'),
-  launchConfig: own('sleeping', 'launchConfig'),
-  origin: own('sleeping', 'origin'),
-  restoreOnTabOpenOnly: own('sleeping', 'restoreOnTabOpenOnly')
+  paneKey: PANE_KEY,
+  tabId: PANE_KEY,
+  worktreeId: { from: 'workspace.worktreeId', via: ['tab.panes.root'] },
+  agent: paneRecord('leaf.sleeping.agent'),
+  providerSession: paneRecord('leaf.sleeping.providerSession'),
+  prompt: paneRecord('leaf.sleeping.prompt'),
+  state: paneRecord('leaf.sleeping.state'),
+  capturedAt: paneRecord('leaf.sleeping.capturedAt'),
+  updatedAt: paneRecord('leaf.sleeping.updatedAt'),
+  terminalTitle: paneRecord('leaf.sleeping.terminalTitle'),
+  lastAssistantMessage: paneRecord('leaf.sleeping.lastAssistantMessage'),
+  interrupted: paneRecord('leaf.sleeping.interrupted'),
+  mainAgent: paneRecord('leaf.sleeping.mainAgent'),
+  connectionId: paneRecord('leaf.sleeping.connectionId'),
+  launchConfig: paneRecord('leaf.sleeping.launchConfig'),
+  origin: paneRecord('leaf.sleeping.origin'),
+  restoreOnTabOpenOnly: paneRecord('leaf.sleeping.restoreOnTabOpenOnly')
 } as const satisfies Record<keyof SleepingAgentSessionRecord, DiskFieldWritten>
+
+/** One entry of today's incarnation map, by pane key. */
+const INCARNATION = {
+  incarnationId: paneRecord('leaf.incarnationId')
+} as const satisfies Record<'incarnationId', DiskFieldWritten>
 
 const CLOSED_TAB = {
   closedAt: own('closedTab', 'closedAt'),
@@ -249,14 +259,14 @@ type LayoutOwnedSessionField = {
 const LAYOUT_SESSION = {
   clientHostedBrowserPagesByWorktree: own('records', 'clientHostedBrowserPagesByWorkspace'),
   defaultTerminalTabsAppliedByWorktreeId: own('records', 'defaultTabsAppliedByWorkspace'),
-  terminalPtyIncarnationsByPaneKey: own('records', 'incarnationsByPaneKey'),
-  terminalTopologyRevisionByRepoId: own('records', 'topologyRevisionByRepoId'),
+  terminalTopologyRevisionByRepoId: own('legacy', 'topologyRevisionByRepoId'),
   tabGroupLayouts: { from: 'workspace.groupLayout', via: ['group.id'] },
   // Which workspaces keep a (possibly empty) terminal row list.
-  tabsByWorktree: own('workspace', 'keepsEmptyTerminalRows'),
-  // Entries no terminal tab or workspace owns, carried as stored; the rest are their own tables.
+  tabsByWorktree: own('legacy', 'terminalRowOwners'),
+  // Entries no terminal tab, pane or workspace owns, carried as stored; the rest are own tables.
   terminalLayoutsByTabId: own('carried', 'unownedTerminalLayouts'),
   sleepingAgentSessionsByPaneKey: own('carried', 'unplacedSleepingRecords'),
+  terminalPtyIncarnationsByPaneKey: own('carried', 'unplacedIncarnations'),
   closedTerminalTabTombstonesByTabId: own('carried', 'unplacedClosedTabs'),
   unifiedTabs: 'container',
   tabGroups: 'container',
@@ -288,6 +298,7 @@ export const DISK_TABLES = {
   file: FILE,
   browser: BROWSER,
   sleeping: SLEEPING,
+  incarnation: INCARNATION,
   closedTab: CLOSED_TAB,
   session: sessionFields()
 } as const

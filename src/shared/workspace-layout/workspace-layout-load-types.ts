@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from '../execution-host'
+import type { TerminalLayoutSnapshot } from '../terminal-tab-types'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 import type {
   CarriedSessionFields,
@@ -37,4 +38,6 @@ export type WorkspaceLoadArgs = {
   context: WorkspaceLayoutLoadContext
   view: DesktopLayoutView
   facts: LayoutContentFacts
+  /** Terminal tab id → its stored pane layout (a legacy row's built one). */
+  layouts: Map<string, TerminalLayoutSnapshot>
 }

@@ -135,10 +135,10 @@ describe('Loader precedence for stored data that disagrees with itself, and its 
     expect(changed(loaded)).toEqual(
       expect.arrayContaining(['row.*', 'terminalEntry.*', 'group.*', 'group.tabOrder', 'row.ptyId'])
     )
-    // tab-b's pane layout outlived its row: carried as stored, so the rules still report it.
-    expect(checkWorkspaceLayoutModelRules([loaded]).map((violation) => violation.rule)).toEqual([
-      'pane_without_tab'
-    ])
+    // tab-b's pane layout outlived its row: carried as stored, outside the model, so the disk
+    // rules still report it.
+    expect(checkWorkspaceLayoutModelRules([loaded.layout])).toEqual([])
+    expect(rules(saveWorkspaceLayout(loaded))).toEqual(['pane_without_tab'])
   })
 
   it('keeps a row stored in two workspaces where the tab bar names it, not by key order', () => {
@@ -202,6 +202,24 @@ describe('Loader precedence for stored data that disagrees with itself, and its 
     expect(saved.sleepingAgentSessionsByPaneKey![`tab-b:${fresh}`]!.paneKey).toBe(`tab-b:${fresh}`)
     expect(saved.terminalPtyIncarnationsByPaneKey).toEqual({ [`tab-b:${fresh}`]: 'inc-b' })
     expect(saved.terminalLayoutsByTabId['tab-a']!.ptyIdsByLeafId).toEqual({ [leaf(1)]: 'pty-a' })
+    expect(rules(saved)).toEqual([])
+  })
+
+  it('gives the second of one leaf id twice in a tab a new id; the pane key names the first', () => {
+    const stored = twoTabs()
+    stored.terminalLayoutsByTabId['tab-b']!.root = {
+      type: 'split',
+      direction: 'vertical',
+      first: { type: 'leaf', leafId: leaf(2) },
+      second: { type: 'leaf', leafId: leaf(2) }
+    }
+    stored.terminalPtyIncarnationsByPaneKey = { [`tab-b:${leaf(2)}`]: 'inc-b' }
+    expect(rules(stored)).toEqual(['pane_twice_in_one_tab'])
+    const loaded = load(stored)
+    expect(changed(loaded)).toEqual(['layout.root'])
+    const saved = saveWorkspaceLayout(loaded)
+    expect(saved.terminalLayoutsByTabId['tab-b']!.ptyIdsByLeafId).toEqual({ [leaf(2)]: 'pty-b' })
+    expect(saved.terminalPtyIncarnationsByPaneKey).toEqual({ [`tab-b:${leaf(2)}`]: 'inc-b' })
     expect(rules(saved)).toEqual([])
   })
 
@@ -321,7 +339,7 @@ describe('Loader precedence for stored data that disagrees with itself, and its 
     ]
     const loaded = load(stored)
     expect(changed(loaded)).toContain('terminalEntry.*')
-    expect(checkWorkspaceLayoutModelRules([loaded])).toEqual([])
+    expect(checkWorkspaceLayoutModelRules([loaded.layout])).toEqual([])
   })
 
   it('applies a legacy surface tombstone once: the pane closes, the tombstone is cleared, authority stays', () => {

@@ -16,7 +16,8 @@ import {
   VIEW_SESSION_FIELDS
 } from './workspace-layout-beside'
 import type { LoadedWorkspaceLayout } from './workspace-layout-load-types'
-import { tabIdOfPaneKey, tabsInOrder, type WorkspaceLayout } from './workspace-layout-model'
+import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
+import { paneKeyOf, tabsInOrder, type WorkspaceLayout } from './workspace-layout-model'
 import { saveTabBarEntry, saveTerminalLayout, saveTerminalRow } from './workspace-layout-save-tabs'
 
 type WorkspaceMaps = {
@@ -42,6 +43,7 @@ function saveWorkspace(
     worktreeId,
     hostId: loaded.layout.hostId,
     editorFiles: workspace.editorFiles,
+    leaves: workspace.leaves ?? {},
     facts,
     view
   }
@@ -59,13 +61,13 @@ function saveWorkspace(
   for (const tab of tabs) {
     const place = placement.get(tab.id)
     if (tab.kind === 'terminal') {
-      session.terminalLayoutsByTabId[tab.entityId] = saveTerminalLayout(tab, facts, view)
+      session.terminalLayoutsByTabId[tab.entityId] = saveTerminalLayout(tab, scope)
     }
     if (place) {
       entries.push(saveTabBarEntry(tab, { groupId: place.groupId, sortOrder: place.index }, scope))
     }
   }
-  if (rows.length > 0 || workspace.keepsEmptyTerminalRows) {
+  if (rows.length > 0 || loaded.layout.legacy.terminalRowOwners[key]) {
     session.tabsByWorktree[key] = rows
   }
   const groups: TabGroup[] = workspace.groups
@@ -118,7 +120,7 @@ function saveWorkspace(
   }
 }
 
-/** Sleeping and closed-tab records, their pane key, tab and workspace filled from where they sit. */
+/** Records keyed by pane key, each tab and workspace filled from where its pane sits. */
 function saveWorkspaceRecords({
   layout,
   carried
@@ -126,12 +128,22 @@ function saveWorkspaceRecords({
   const sleeping: Record<string, SleepingAgentSessionRecord> = {
     ...carried.unplacedSleepingRecords
   }
+  const incarnations: Record<string, string> = { ...carried.unplacedIncarnations }
   const closed: ClosedTerminalTabTombstonesByTabId = { ...carried.unplacedClosedTabs }
-  for (const { worktreeId, sleepingByPaneKey, closedTerminalTabs } of Object.values(
-    layout.workspaces
-  )) {
-    for (const [paneKey, entry] of Object.entries(sleepingByPaneKey ?? {})) {
-      sleeping[paneKey] = { paneKey, tabId: tabIdOfPaneKey(paneKey), worktreeId, ...entry }
+  for (const { worktreeId, tabs, leaves, closedTerminalTabs } of Object.values(layout.workspaces)) {
+    for (const tab of tabs) {
+      for (const leafId of tab.kind === 'terminal'
+        ? collectLayoutLeafIdsInOrder(tab.panes.root)
+        : []) {
+        const leaf = leaves?.[leafId]
+        const paneKey = paneKeyOf(tab.entityId, leafId)
+        if (leaf?.incarnationId !== undefined) {
+          incarnations[paneKey] = leaf.incarnationId
+        }
+        if (leaf?.sleeping) {
+          sleeping[paneKey] = { paneKey, tabId: tab.entityId, worktreeId, ...leaf.sleeping }
+        }
+      }
     }
     for (const [tabId, entry] of Object.entries(closedTerminalTabs ?? {})) {
       closed[tabId] = { ...entry, worktreeId }
@@ -139,13 +151,16 @@ function saveWorkspaceRecords({
   }
   return {
     ...(Object.keys(sleeping).length > 0 ? { sleepingAgentSessionsByPaneKey: sleeping } : {}),
+    ...(Object.keys(incarnations).length > 0
+      ? { terminalPtyIncarnationsByPaneKey: incarnations }
+      : {}),
     ...(Object.keys(closed).length > 0 ? { closedTerminalTabTombstonesByTabId: closed } : {})
   }
 }
 
 export function saveWorkspaceLayout(loaded: LoadedWorkspaceLayout): WorkspaceSessionState {
   const { layout, desktopView: view, facts, carried } = loaded
-  const { records } = layout
+  const { records, legacy } = layout
   const maps: WorkspaceMaps = {
     tabsByWorktree: {},
     terminalLayoutsByTabId: { ...carried.unownedTerminalLayouts },
@@ -167,17 +182,14 @@ export function saveWorkspaceLayout(loaded: LoadedWorkspaceLayout): WorkspaceSes
     ...pickStoredFields(carried, CARRIED_SESSION_FIELDS),
     ...maps,
     ...saveWorkspaceRecords(loaded),
-    ...(records.incarnationsByPaneKey
-      ? { terminalPtyIncarnationsByPaneKey: records.incarnationsByPaneKey }
-      : {}),
     ...(records.defaultTabsAppliedByWorkspace
       ? { defaultTerminalTabsAppliedByWorktreeId: records.defaultTabsAppliedByWorkspace }
       : {}),
     ...(records.clientHostedBrowserPagesByWorkspace
       ? { clientHostedBrowserPagesByWorktree: records.clientHostedBrowserPagesByWorkspace }
       : {}),
-    ...(records.topologyRevisionByRepoId
-      ? { terminalTopologyRevisionByRepoId: records.topologyRevisionByRepoId }
+    ...(legacy.topologyRevisionByRepoId
+      ? { terminalTopologyRevisionByRepoId: legacy.topologyRevisionByRepoId }
       : {})
   }
 }
