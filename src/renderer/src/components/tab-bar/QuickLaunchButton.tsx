@@ -148,7 +148,8 @@ function QuickLaunchAgentMenuItemsInner({
         ...(launchSource !== undefined ? { launchSource } : {}),
         ...(onPromptDelivered !== undefined ? { onPromptDelivered } : {}),
         // Notes keep their text until it goes out, so the new chat's composer never gets a copy.
-        ...(onPromptHandedOff ? { promptKeptByCaller: true as const } : {})
+        ...(onPromptHandedOff ? { promptKeptByCaller: true as const } : {}),
+        freshNewTab: true
       })
       if (!result) {
         toast.error(
