@@ -139,6 +139,9 @@ export function setPlatform(platform: NodeJS.Platform): void {
 
 /** Shared `beforeEach` body: fresh platform, module registry, and temp homes. */
 export function resetRuntimeAuthTestState(): void {
+  // Why: the path resolver prefers CLAUDE_CONFIG_DIR over the mocked homedir, and the global vitest
+  // guard leaves it set when ORCA_REAL_CLAUDE_CLI_TEST=1.
+  vi.stubEnv('CLAUDE_CONFIG_DIR', undefined)
   setPlatform('darwin')
   vi.resetModules()
   vi.clearAllMocks()
@@ -159,6 +162,7 @@ export function resetRuntimeAuthTestState(): void {
 
 /** Shared `afterEach` body. */
 export function cleanupRuntimeAuthTestState(): void {
+  vi.unstubAllEnvs()
   if (originalPlatform) {
     Object.defineProperty(process, 'platform', originalPlatform)
   }
