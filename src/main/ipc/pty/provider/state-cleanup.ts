@@ -12,7 +12,7 @@ import {
 } from '../../pty-hidden-delivery-gate'
 import { agentSessionOwners } from '../pane/agent-session-owners'
 import { paneKeyPtyId, paneKeyTeardownListeners, ptyPaneKey } from '../pane/key-state'
-import { ptyIncarnationById, ptyOwnership } from './ownership-state'
+import { getPtyIdsForConnection, ptyIncarnationById, ptyOwnership } from './ownership-state'
 import { clearBackgroundedDeliverySyncForPty } from './listener-lifecycle'
 import {
   activeRendererPtys,
@@ -106,12 +106,10 @@ export function clearProviderPtyState(
 }
 
 export function clearPtyOwnershipForConnection(connectionId: string): void {
-  for (const [ptyId, connId] of ptyOwnership) {
-    if (connId === connectionId) {
-      // Why: pane-scoped caches cannot route while disconnected, but claimed
-      // ownership must survive until reconnect makes absence authoritative.
-      clearProviderPtyState(ptyId, { preserveAgentSessionOwners: true })
-      ptyOwnership.delete(ptyId)
-    }
+  for (const ptyId of getPtyIdsForConnection(connectionId)) {
+    // Why: pane-scoped caches cannot route while disconnected, but claimed
+    // ownership must survive until reconnect makes absence authoritative.
+    clearProviderPtyState(ptyId, { preserveAgentSessionOwners: true })
+    ptyOwnership.delete(ptyId)
   }
 }

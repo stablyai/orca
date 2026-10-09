@@ -218,8 +218,8 @@ describe('PTY provider dispatch', () => {
     const providerB = createMockProvider('ssh:conn-b@@pty-1')
     registerSshPtyProvider('conn-a', providerA)
     registerSshPtyProvider('conn-b', providerB)
-    setPtyOwnership('ssh:conn-a@@pty-1', 'conn-a')
-    setPtyOwnership('ssh:conn-b@@pty-1', 'conn-b')
+    setPtyOwnership('ssh:conn-a@@pty-1', 'ssh:conn-a')
+    setPtyOwnership('ssh:conn-b@@pty-1', 'ssh:conn-b')
 
     try {
       const write = handlers.get('pty:write') as (event: unknown, args: unknown) => void

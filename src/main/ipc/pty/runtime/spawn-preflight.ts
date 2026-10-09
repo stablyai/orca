@@ -38,6 +38,7 @@ import { ensureCodexStateDbBackfillRecoveryStarted } from '../../../codex/codex-
 import { clearProviderPtyState } from '../provider/state-cleanup'
 import { awaitExplicitPiOmpGuestReadiness } from '../../../agent-hooks/wsl-pi-omp-guest-readiness'
 import type { RuntimePtySpawnState } from './spawn-state'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 
 export async function prepareRuntimePtySpawn(
   ctx: RuntimePtySpawnState
@@ -50,7 +51,7 @@ export async function prepareRuntimePtySpawn(
     }
   }
   ctx.cwd = ctx.deps.resolvePtySpawnStartupCwd(args.worktreeId, args.cwd)
-  ctx.provider = getProvider(args.connectionId)
+  ctx.provider = getProvider(getConnectionExecutionHostId(args.connectionId))
   const freshSpawnRecovery = ctx.preAdoptedStablePane
     ? undefined
     : recoverFreshSpawnProviderRouting(

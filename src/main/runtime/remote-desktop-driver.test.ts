@@ -331,7 +331,7 @@ describe('remote desktop viewer width driver', () => {
     await runtime.updateRemoteDesktopViewer('pty-1', 'multiplex:old:1', 'pane-A', 80, 24)
     await runtime.unregisterRemoteDesktopViewers('pty-1', ['multiplex:old:1'])
     expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 150, rows: 40 })
-    ptyOwnership.set('pty-1', null)
+    ptyOwnership.set('pty-1', 'local')
     try {
       const input = createPtyWriteInput({ runtime })
       // A query reply is not the host driving; only the typed command revokes the resume.
@@ -353,7 +353,7 @@ describe('remote desktop viewer width driver', () => {
     const { runtime } = createRuntime()
     await runtime.updateRemoteDesktopViewer('pty-1', 'multiplex:old:1', 'pane-A', 80, 24)
     await runtime.unregisterRemoteDesktopViewers('pty-1', ['multiplex:old:1'])
-    ptyOwnership.set('pty-1', null)
+    ptyOwnership.set('pty-1', 'local')
     try {
       const input = createPtyWriteInput({ runtime })
       await input.writePtyInput({ id: 'pty-1', data: '\x1b[?1;2c', inputKind: 'query-reply' })

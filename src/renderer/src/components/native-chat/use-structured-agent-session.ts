@@ -3,6 +3,7 @@ import { useStructuredAgentSessionSends } from './use-structured-agent-session-s
 import { useStructuredAgentSessionCommandWrite } from './use-structured-agent-session-command-write'
 import { structuredAgentSessionNewSendsQueue } from './structured-agent-session-queue-request'
 import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentSessionCancelResult } from '../../../../shared/agent-session-wire'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 import { useStructuredLegacyLaunchStop } from '@/lib/structured-agent-session-legacy-launch-stop'
@@ -299,7 +300,7 @@ export function useStructuredAgentSession(args: {
       })
     },
     stopBackgroundTask: (taskId?: string) =>
-      mutate('agentSession.cancel', 'agentSession.cancel', {
+      mutate<AgentSessionCancelResult>('agentSession.cancel', 'agentSession.cancel', {
         turnId: 'background-tasks',
         scope: 'background-tasks',
         ...(taskId ? { taskId } : {})

@@ -17,7 +17,7 @@ import {
   type RelayRegion
 } from '@orca-cloud/relay-contract'
 import { Hono, type Context } from 'hono'
-import { SignJWT } from 'jose'
+import { SignJWT, type createRemoteJWKSet } from 'jose'
 import { z } from 'zod'
 import {
   createAdminTokenVerifier,
@@ -35,8 +35,13 @@ import {
   type RelayAssignmentStore,
   type ResolvedRelayAssignment
 } from './assignment-store.js'
+import { ASSIGNMENT_LEASE_AUDIENCE, assignmentLeaseKeyId } from './assignment-lease.js'
 import { AssignmentRejectionLogWindow } from './assignment-rejection-log-window.js'
 import { CELL_ADMISSION_STATES } from './cell-admission-selector.js'
+import { registerCellSeatFeedRoute } from './cell-seat-feed-route.js'
+import type { CellSeatFeedPage } from './cell-seat-log.js'
+import type { CellFlags } from './cell-flags.js'
+import type { AppliedControlFlags } from './relay-control-flag-channel.js'
 import { RELAY_MAX_CELL_CAPACITY_REQUESTS, type RelayConfig } from './config.js'
 import type { RelayCredentialStore } from './credential-store.js'
 import { isRelayDatabaseTransientError } from './database.js'
@@ -50,6 +55,11 @@ import {
   type AssignmentAdmissionRejection
 } from './public-assignment-admission.js'
 import { relayHostLogDigest } from './relay-host-log-digest.js'
+import type { RelayLocalReadinessVerdict } from './relay-local-readiness.js'
+import type {
+  ShadowCompareDatabaseAnswer,
+  ShadowCompareRoute
+} from './shadow-directory-compare.js'
 import type { RelayReadinessDependency } from './relay-readiness.js'
 import type {
   AssignmentAdmissionLane,
@@ -112,11 +122,17 @@ export function createRelayApp(
     regionalRehomeFetch?: typeof fetch
     regionalRehomeTrustProbeHostExists?: (input: { userId: string; relayHostId: string }) => boolean
     cellIncarnation?: string
+    cellSeatFeed?: (sinceSeq: number | null) => CellSeatFeedPage
+    cellFlags?: () => AppliedControlFlags<CellFlags>
     isDraining?: () => boolean
     regionalRehomeSafetySnapshot?: () => RegionalRehomeSafetySnapshot
     runtimeCounts?: () => RelayRuntimeCounts
     ready: () => Promise<boolean>
     readinessDegradation?: () => RelayReadinessDependency[]
+    // Both only on cells; the switch is the per-cell `readinessLocal` flag, off by default.
+    readinessLocal?: () => boolean
+    localReadiness?: () => RelayLocalReadinessVerdict
+    relayJwks?: ReturnType<typeof createRemoteJWKSet>
     recordAssignmentAdmission?: (outcome: AssignmentAdmissionOutcome) => void
     recordAssignmentRejectionReason?: (
       lane: AssignmentAdmissionLane,
@@ -126,6 +142,12 @@ export function createRelayApp(
     recordAdmissionServiceMs?: (lane: 'sticky' | 'drain-return', durationMs: number) => void
     recordAssignmentUnavailable?: (cause: AssignmentUnavailableCause) => void
     recordRegionRequest?: (region: RelayRegion | undefined) => void
+    // Step 3 shadow directory; absent unless the director polls seat feeds.
+    compareShadowSeats?: (
+      route: ShadowCompareRoute,
+      identity: { userId: string; relayHostId: string },
+      answer: ShadowCompareDatabaseAnswer
+    ) => void
     recordRegionSelection?: (input: {
       targetRegion: RelayRegion
       selectedRegion?: RelayRegion
@@ -155,7 +177,9 @@ export function createRelayApp(
       regionCatalogRefresh = undefined
     }
   }
-  const verifyRelayToken = createRelayTokenVerifier(config)
+  // Shared with the host-control upgrade and local readiness: one cached key set per process.
+  const verifyRelayToken = createRelayTokenVerifier(config, operations.relayJwks)
+  const assignmentLeaseKid = assignmentLeaseKeyId(config.assignmentSigningKey)
   const verifyAdminToken = createAdminTokenVerifier(config)
   const verifyReadOnlyAdminToken = createReadOnlyAdminTokenVerifier(config)
   const verifyRegionalRehomeControlApplyToken =
@@ -187,6 +211,24 @@ export function createRelayApp(
     minIntervalMs: config.publicAssignmentRetryAfterSeconds * 1_000,
     onRejected: (reason) => operations.recordAssignmentRejectionReason?.('placement', reason)
   })
+  // Runs after the database answer and never changes or fails the response.
+  const compareShadowSeats: NonNullable<typeof operations.compareShadowSeats> = (
+    route,
+    identity,
+    answer
+  ) => {
+    try {
+      operations.compareShadowSeats?.(route, identity, answer)
+    } catch (error) {
+      console.warn(
+        JSON.stringify({
+          event: 'orca_relay_shadow_compare_failed',
+          route,
+          reason: error instanceof Error ? error.message : 'unknown'
+        })
+      )
+    }
+  }
   const rejectPublicAssignment = (context: Context): Response => {
     context.header('Retry-After', String(config.publicAssignmentRetryAfterSeconds))
     return context.json({ error: 'assignments_temporarily_unavailable' }, 503)
@@ -268,7 +310,9 @@ export function createRelayApp(
   app.use('/v1/admin/*', async (context, next) => {
     if (
       context.req.path === '/v1/admin/cell-heartbeat' ||
-      context.req.path === '/v1/admin/cell-rehome-status'
+      context.req.path === '/v1/admin/cell-rehome-status' ||
+      // Its own route checks the rehome identity; an admin check first would verify each poll twice.
+      context.req.path === '/v1/admin/cell-seats'
     ) {
       return await next()
     }
@@ -278,6 +322,15 @@ export function createRelayApp(
       return context.json({ error: 'invalid_token' }, 401)
     }
     return await next()
+  })
+
+  registerCellSeatFeedRoute(app, config, {
+    verifyRegionalRehomeToken,
+    cellIncarnation: operations.cellIncarnation,
+    seatFeed: operations.cellSeatFeed,
+    isDraining: operations.isDraining,
+    runtimeCounts: operations.runtimeCounts,
+    cellFlags: operations.cellFlags
   })
 
   // Not /healthz: Google Front End reserves that path before the container.
@@ -291,7 +344,15 @@ export function createRelayApp(
     })
   )
   app.get('/ready', async (context) => {
-    if (!(await operations.ready())) return context.json({ error: 'dependency_unavailable' }, 503)
+    const ready = await operations.ready()
+    if (operations.localReadiness && operations.readinessLocal?.()) {
+      // The probes still ran above, so their failures are still reported, but never decide.
+      const local = operations.localReadiness()
+      if (!local.ready) return context.json({ error: local.reason }, 503)
+      if (local.failing.length === 0) return context.json({ ok: true })
+      return context.json({ ok: true, degraded: true, dependency: local.failing })
+    }
+    if (!ready) return context.json({ error: 'dependency_unavailable' }, 503)
     const dependency = operations.readinessDegradation?.() ?? []
     // Still the 200 the load balancer needs, with the marker that says the answer is remembered.
     if (dependency.length === 0) return context.json({ ok: true })
@@ -376,6 +437,7 @@ export function createRelayApp(
         }
         throw error
       }
+      compareShadowSeats('sticky-verify', identity, verified)
       if (verified?.homeCellRollIsolated && drainReturnConcurrency > 0) {
         // The sticky slot covered only the verification read; the re-placement
         // that follows is the drain lane's work, not the sticky lane's.
@@ -515,9 +577,9 @@ export function createRelayApp(
       assignmentEpoch: assignment.assignmentEpoch,
       relayHostId: claims.relayHostId
     })
-      .setProtectedHeader({ alg: 'HS256' })
+      .setProtectedHeader({ alg: 'HS256', kid: assignmentLeaseKid })
       .setIssuer(config.publicUrl)
-      .setAudience('orca-relay-cell')
+      .setAudience(ASSIGNMENT_LEASE_AUDIENCE)
       .setSubject(claims.sub)
       .setIssuedAt()
       .setExpirationTime('5m')
@@ -568,9 +630,9 @@ export function createRelayApp(
         relayHostId: body.data.relayHostId
       }
       // This also migrates credentials created by the staging-only combined service.
-      const assignment =
-        (await operations.assignments.resolve(identity)) ??
-        (await operations.assignments.assign(identity))
+      const resolvedAssignment = await operations.assignments.resolve(identity)
+      compareShadowSeats('resolve', identity, resolvedAssignment)
+      const assignment = resolvedAssignment ?? (await operations.assignments.assign(identity))
       return context.json({
         v: 1,
         cellUrl: assignment.cellUrl,
@@ -717,6 +779,8 @@ export function createRelayApp(
       imageDigest: config.imageDigest ?? null,
       draining: operations.isDraining?.() ?? false,
       regionalRehomeProtocol: config.rehomeAudience && config.rehomeDirectorServiceAccount ? 3 : 0,
+      // The flag workflow's read-back: applied switches, never the desired object.
+      ...(operations.cellFlags ? { flagsApplied: operations.cellFlags() } : {}),
       connectionCapacity:
         config.connectionHardCap === undefined
           ? null

@@ -7,6 +7,7 @@ import type { WorkspaceSessionState } from '../workspace-session-state-types'
 import { loadWorkspaceLayout } from './workspace-layout-load'
 import { checkWorkspaceLayoutModelRules } from './workspace-layout-model-rules'
 import { checkWorkspaceLayoutRules } from './workspace-layout-rules'
+import { checkLayoutRoundTrip } from './workspace-layout-round-trip-check'
 import { saveWorkspaceLayout } from './workspace-layout-save'
 import {
   addWorkspace,
@@ -21,6 +22,8 @@ const onDisk = (session: WorkspaceSessionState): WorkspaceSessionState =>
   JSON.parse(JSON.stringify(session))
 
 function load(session: WorkspaceSessionState) {
+  // Each rule's changes are kinds the shadow self-check knows, and its output is a fixed point.
+  expect(checkLayoutRoundTrip(LOCAL_EXECUTION_HOST_ID, session).findings).toEqual([])
   let next = 0
   return loadWorkspaceLayout(LOCAL_EXECUTION_HOST_ID, session, {
     mintId: () => `minted-${++next}`,
@@ -419,6 +422,16 @@ describe('Loader precedence for stored data that disagrees with itself, and its 
     expect(saveWorkspaceLayout(loaded).tabsByWorktree[GIT_KEY]!.map((row) => row.id)).toEqual([
       'tab-a'
     ])
+  })
+
+  it('drops the transient spawn handoff main’s minimal row mint stores, and reports it', () => {
+    const stored = twoTabs()
+    stored.tabsByWorktree[GIT_KEY]![0]!.pendingActivationSpawn = true
+    const loaded = load(stored)
+    expect(changed(loaded)).toEqual(['row.pendingActivationSpawn'])
+    expect(saveWorkspaceLayout(loaded).tabsByWorktree[GIT_KEY]![0]).not.toHaveProperty(
+      'pendingActivationSpawn'
+    )
   })
 
   it('carries a pane layout with no terminal tab through unchanged', () => {

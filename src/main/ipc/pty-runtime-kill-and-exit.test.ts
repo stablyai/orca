@@ -64,7 +64,7 @@ describe('registerPtyHandlers', () => {
   it('routes runtime foreground confirmation to the provider owning the captured PTY', async () => {
     const confirmForegroundProcess = vi.fn(async () => 'codex')
     registerSshPtyProvider('ssh-1', { confirmForegroundProcess } as never)
-    setPtyOwnership('remote-pty', 'ssh-1')
+    setPtyOwnership('remote-pty', 'ssh:ssh-1')
     const runtime = { setPtyController: vi.fn() }
     handlers.clear()
     registerPtyHandlers(mainWindow as never, runtime as never)
@@ -103,7 +103,7 @@ describe('registerPtyHandlers', () => {
     })
     registerSshPtyProvider('ssh-a', { listProcesses: sshAList } as never)
     registerSshPtyProvider('ssh-b', { listProcesses: sshBList } as never)
-    setPtyOwnership('ssh-b-pty', 'ssh-b')
+    setPtyOwnership('ssh-b-pty', 'ssh:ssh-b')
     const runtime = {
       setPtyController: vi.fn(),
       markPtyLivenessUnverifiable: vi.fn()
@@ -148,8 +148,8 @@ describe('registerPtyHandlers', () => {
   })
   it('returns unavailable runtime confirmation for unsupported or missing providers', async () => {
     registerSshPtyProvider('ssh-1', {} as never)
-    setPtyOwnership('unsupported-pty', 'ssh-1')
-    setPtyOwnership('missing-pty', 'missing-connection')
+    setPtyOwnership('unsupported-pty', 'ssh:ssh-1')
+    setPtyOwnership('missing-pty', 'ssh:missing-connection')
     const runtime = { setPtyController: vi.fn() }
     handlers.clear()
     registerPtyHandlers(mainWindow as never, runtime as never)

@@ -19062,6 +19062,9 @@
     "nativeChatUpgrade": {
       "eyebrow": "Nouveau",
       "title": "Le chat natif évolue",
+      "chatModeNote": "Les nouveaux onglets d'agent s'ouvrent toujours dans le terminal, comme avant.",
+      "chatModeLabel": "Activer le mode chat",
+      "chatModeHint": "Les nouveaux onglets d'agent s'ouvrent en chat.",
       "intro": "Les nouveaux chats des agents compatibles utilisent la vue améliorée. Pour alterner entre chat et CLI, ouvrez {{panel}} (barre latérale droite) :",
       "resumeInNativeChat": "{{action}} ouvre une conversation CLI compatible dans le chat natif.",
       "resumeInCli": "{{action}} copie un chat Claude/Codex dans une CLI neuve ; l'original reste intact.",

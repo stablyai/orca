@@ -19114,6 +19114,9 @@
     "nativeChatUpgrade": {
       "eyebrow": "新功能",
       "title": "本机聊天已升级",
+      "chatModeNote": "新的智能体标签页仍像以前一样在终端中打开。",
+      "chatModeLabel": "开启聊天模式",
+      "chatModeHint": "新的智能体标签页改为以聊天方式打开。",
       "intro": "受支持智能体的新聊天现在会在升级后的聊天视图中打开。要在聊天和 CLI 之间切换，请打开右侧边栏中的{{panel}}：",
       "resumeInNativeChat": "{{action}}：在本机聊天中打开受支持的 CLI 对话。",
       "resumeInCli": "{{action}}：将 Claude 或 Codex 聊天复制到新的 CLI 会话中。原始聊天保持不变。",

@@ -329,7 +329,7 @@ describe('tool sentence rows', () => {
     ['PowerShell', 'Get-ChildItem', true],
     ['execute', 'Get-ChildItem', false]
   ])('colors the full %s command only when its shell is known', async (name, verb, colored) => {
-    const command = `${verb} -Path ${'C:\\repo\\deep\\'.repeat(40)} | Where-Object { $_.Length -gt 10 }`
+    const command = `${verb} -Path 'C:\\repo\\src\\renderer' -Recurse -File | Where-Object { $_.Length -gt 10 }`
     const { container } = render(
       <NativeChatToolLine
         block={{ type: 'tool-call', name, input: { command }, state: 'completed' }}
