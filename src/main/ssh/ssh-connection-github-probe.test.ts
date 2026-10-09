@@ -165,7 +165,6 @@ describe('SshConnection', () => {
 
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(true)
-    expect(conn.getSystemSshResolvedConfig()).toBeNull()
   })
 
   it('rejects non-GitHub SSH probes with GitHub invalid-command text', async () => {

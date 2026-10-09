@@ -12,6 +12,7 @@ import {
 import { track } from '../telemetry/client'
 import type { OrcadDeploymentTargetFacts } from './orcad-deployment-target'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
+import { sshHostLibc } from './ssh-host-platform-memo'
 import type { HostNodeVersion } from './ssh-remote-node-toolchain-probe'
 
 type Props = EventProps<'ssh_remote_runtime_resolved'>
@@ -39,7 +40,7 @@ const RUNG_VALUES: Record<SshRemoteRuntimeRung, Props['rung']> = {
   legacy: 'legacy'
 }
 
-function pick<T extends string>(values: readonly T[], value: string, fallback: T): T {
+export function pick<T extends string>(values: readonly T[], value: string, fallback: T): T {
   return values.find((candidate) => candidate === value) ?? fallback
 }
 
@@ -64,19 +65,6 @@ export function durationBucket(durationMs: number): Props['duration_bucket'] {
   return durationMs < 60_000 ? '15s_60s' : 'gte_60s'
 }
 
-function hostLibc(
-  facts: OrcadDeploymentTargetFacts | null,
-  host: RemoteHostPlatform
-): Props['host_libc'] {
-  if (host.os !== 'linux') {
-    return 'none'
-  }
-  if (!facts) {
-    return 'unknown'
-  }
-  return facts.target.endsWith('-musl') ? 'musl' : 'glibc'
-}
-
 export function sshRemoteRuntimeResolvedProps(input: SshRemoteRuntimeResolvedFacts): Props {
   const hostNodeMajor = input.hostNode
     ? pick(SSH_RUNTIME_HOST_NODE_MAJOR_VALUES, String(input.hostNode.major), 'above_30')
@@ -85,7 +73,7 @@ export function sshRemoteRuntimeResolvedProps(input: SshRemoteRuntimeResolvedFac
     rung: RUNG_VALUES[input.rung],
     host_os: input.host.os,
     host_arch: input.host.arch,
-    host_libc: hostLibc(input.facts, input.host),
+    host_libc: sshHostLibc(input.host.os, input.facts?.target ?? null),
     glibc_minor: glibcMinorBucket(input.facts),
     first_refusal: pick(SSH_RUNTIME_REFUSAL_VALUES, input.firstRefusal ?? 'none', 'none'),
     self_test: input.selfTest,
