@@ -130,17 +130,18 @@ export function MobileNativeChatQueuedMessages({
                 ) : null}
                 <MobileQueuedCardText text={card.text} />
                 {card.caption ? (
-                  // A returned card's reason only reads whole, often at its end; a hold is one line.
+                  // A returned card's reason and a waiting /clear's next step only read whole, often
+                  // at their end; a hold is one line.
                   <Text
                     style={[styles.caption, returned && styles.captionReturned]}
-                    numberOfLines={returned ? undefined : 1}
+                    numberOfLines={returned || card.runsOnItsOwn ? undefined : 1}
                   >
                     {card.caption}
                   </Text>
                 ) : null}
               </View>
               {/* A command never steers: its Send shows only while the agent is idle. */}
-              {card.waitsForAgent ? null : (
+              {card.waitsForAgent || card.runsOnItsOwn ? null : (
                 <Pressable
                   accessibilityRole="button"
                   accessibilityState={{ disabled: busy || steerHeld }}

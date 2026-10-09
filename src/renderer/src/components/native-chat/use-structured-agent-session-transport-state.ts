@@ -34,6 +34,9 @@ export function useStructuredAgentSessionTransportState(
   // The host names the card its queue sends next. That send lands in a later update than a turn's
   // end or a Resume, so until then the chat still reads as working and nothing flips in between.
   const queueSendsNext = nextQueuedMessageId !== null && !isWorking
+  // The host's next card waits instead (a /clear behind background tasks): the chat is idle, but a
+  // send now still joins the queue behind it.
+  const nextQueuedMessageWait = (enabled ? state.nextQueuedMessageWait : null) ?? null
   const turnActivity = useMemo(
     () => selectStructuredAgentTurnActivity(journalItems, turnId, enabled ? state.activity : null),
     [enabled, journalItems, state.activity, turnId]
@@ -70,6 +73,10 @@ export function useStructuredAgentSessionTransportState(
     queuePause: (enabled ? state.queuePause : null) ?? null,
     /** Working only because the queue is about to send: nothing is in flight to stop yet. */
     queueSendsNext,
+    nextQueuedMessageId,
+    nextQueuedMessageWait,
+    /** A queue-if-active send now becomes a card, never a transcript bubble. */
+    sendsJoinQueue: isWorking || queueSendsNext || nextQueuedMessageWait !== null,
     backgroundTasks,
     conversationBusy: Boolean(turnId || backgroundTasks.isMonitoring)
   }

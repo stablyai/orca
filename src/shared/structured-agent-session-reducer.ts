@@ -10,6 +10,7 @@ import type {
   AgentSessionLatestTurn,
   AgentSessionQueuedMessage,
   AgentSessionQueuePause,
+  AgentSessionQueueWait,
   AgentSessionSubscribeEvent,
   AgentSessionTurnActivity
 } from './agent-session-wire'
@@ -65,6 +66,8 @@ export type StructuredAgentSessionState = {
   queuePause?: AgentSessionQueuePause | null
   /** Published with the list: the card the queue sends next once nothing runs, else null. */
   nextQueuedMessageId?: string | null
+  /** Published with the list: the /clear next in line while it waits, else null. */
+  nextQueuedMessageWait?: AgentSessionQueueWait | null
   commands?: AgentSessionSlashCommand[] | null
   activity?: AgentSessionTurnActivity | null
   /** Absent until a frame from a host that stamps `hostNow` has been applied. */
@@ -274,6 +277,8 @@ export function reduceStructuredAgentSession(
     (event.queuePause === undefined || event.queuePause === state.queuePause) &&
     (event.nextQueuedMessageId === undefined ||
       event.nextQueuedMessageId === state.nextQueuedMessageId) &&
+    (event.nextQueuedMessageWait === undefined ||
+      event.nextQueuedMessageWait === state.nextQueuedMessageWait) &&
     backgroundTaskStatesEqual(backgroundTasks, state.backgroundTasks) &&
     activity?.turnId === state.activity?.turnId &&
     activity?.text === state.activity?.text &&

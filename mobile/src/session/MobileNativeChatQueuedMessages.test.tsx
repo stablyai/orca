@@ -166,6 +166,26 @@ describe('MobileNativeChatQueuedMessages', () => {
     expect(flatStyle(caption.props.style).color).not.toBe('#ef4444')
   })
 
+  it("lets a waiting /clear's caption wrap whole, so its next step is never cut off", async () => {
+    const waits = 'Waiting for background tasks to finish. Stop them to clear now.'
+    const mounted = await mount({
+      cards: [
+        card({
+          messageId: 'clear',
+          text: '/clear',
+          command: true,
+          runsOnItsOwn: true,
+          caption: waits
+        })
+      ]
+    })
+    const caption = mounted.root.find(
+      (node) => String(node.type) === 'Text' && node.props.children === waits
+    )
+    expect(caption.props.numberOfLines).toBeUndefined()
+    expect(flatStyle(caption.props.style).color).not.toBe('#ef4444')
+  })
+
   it("lets a returned card's reason wrap whole, in the destructive color, beside an alert", async () => {
     const reason =
       'The provider did not accept this message: Claude does not support the image type .bmp in a steering message.'

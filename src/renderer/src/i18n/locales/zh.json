@@ -18386,6 +18386,8 @@
         "editAlreadySent": "已发送 — 你的文本仍在输入框中。",
         "listLabel": "排队的消息",
         "behindReturnedHold": "等待中 — 前面有一条消息需要处理",
+        "waitingForBackgroundTasks": "正在等待后台任务完成",
+        "waitingForBackgroundTasksStop": "正在等待后台任务完成。停止它们即可立即清除。",
         "awaitingAnswerHold": "等待你的回答",
         "steer": "立即发送",
         "send": "发送",

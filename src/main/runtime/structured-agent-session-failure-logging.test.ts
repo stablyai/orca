@@ -20,7 +20,7 @@ import {
 import {
   StructuredAgentSessionQueuedMessageDrain,
   type QueuedMessageDrainDeps
-} from '../native-chat/agent-session-wire/structured-agent-session-queued-messages'
+} from '../native-chat/agent-session-wire/structured-agent-session-queued-drain'
 import {
   createStructuredAgentSessionLogger,
   neverThrowingStructuredAgentSessionLogger

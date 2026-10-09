@@ -18421,6 +18421,8 @@
         "editAlreadySent": "이미 전송되었습니다 — 텍스트는 입력창에 남아 있습니다.",
         "listLabel": "대기 중인 메시지",
         "behindReturnedHold": "대기 중 — 앞의 메시지에 확인이 필요합니다",
+        "waitingForBackgroundTasks": "백그라운드 작업이 끝나기를 기다리는 중",
+        "waitingForBackgroundTasksStop": "백그라운드 작업이 끝나기를 기다리는 중입니다. 지금 지우려면 작업을 중지하세요.",
         "awaitingAnswerHold": "답변을 기다리는 중",
         "steer": "지금 보내기",
         "send": "보내기",

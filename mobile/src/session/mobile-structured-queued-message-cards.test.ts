@@ -102,6 +102,54 @@ describe('mobileQueuedMessageCards', () => {
     ).toMatchObject({ command: true, waitsForAgent: true })
   })
 
+  const clearDraft = (overrides: Partial<AgentSessionQueuedMessage> = {}) =>
+    draft({
+      messageId: 'c',
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: '/clear' }],
+        command: { name: 'clear' }
+      },
+      ...overrides
+    })
+
+  it('a /clear the host names as next offers no Send: the queue is about to run it', () => {
+    const idle = { pendingPrompt: false }
+    expect(
+      mobileQueuedMessageCards([clearDraft()], [], { ...idle, nextQueuedMessageId: 'c' })[0]
+    ).toMatchObject({ runsOnItsOwn: true })
+    // Held with nothing published (a reopen holds it until the next turn): Send stays, as on /compact.
+    expect(mobileQueuedMessageCards([clearDraft()], [], idle)[0]?.runsOnItsOwn).toBeUndefined()
+  })
+
+  it("a /clear the host holds on background tasks says so; the strip's Stop is named when offered", () => {
+    const wait = { messageId: 'c', reason: 'background-tasks' as const }
+    const facts = { pendingPrompt: false, nextQueuedMessageWait: wait }
+    const [first, second] = mobileQueuedMessageCards(
+      [clearDraft(), draft({ messageId: 'm', position: 2 })],
+      [],
+      facts
+    )
+    expect(first).toMatchObject({
+      caption: 'Waiting for background tasks to finish',
+      runsOnItsOwn: true
+    })
+    expect(second?.caption).toBeNull()
+    expect(second?.runsOnItsOwn).toBeUndefined()
+    expect(
+      mobileQueuedMessageCards([clearDraft()], [], { ...facts, backgroundTasksStoppable: true })[0]
+        ?.caption
+    ).toBe('Waiting for background tasks to finish. Stop them to clear now.')
+    // A handoff wait offers no Send either, with nothing more to say.
+    expect(
+      mobileQueuedMessageCards([clearDraft()], [], {
+        pendingPrompt: false,
+        nextQueuedMessageWait: { messageId: 'c', reason: 'handoff' }
+      })[0]
+    ).toMatchObject({ caption: null, runsOnItsOwn: true })
+  })
+
   it("a send-failed command card's caption names Send only when Send is there", () => {
     const failed = draft({
       messageId: 'c',

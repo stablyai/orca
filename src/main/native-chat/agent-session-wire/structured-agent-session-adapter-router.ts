@@ -121,6 +121,9 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     sessionId
   ) => this.liveOwnerOrNull(sessionId)?.backgroundTaskStops?.(sessionId)
 
+  stoppedTaskEndingOwed = (sessionId: string): boolean =>
+    this.liveOwnerOrNull(sessionId)?.stoppedTaskEndingOwed?.(sessionId) ?? false
+
   holdsDispatch = (sessionId: string): boolean =>
     this.liveOwnerOrNull(sessionId)?.holdsDispatch?.(sessionId) ?? false
 

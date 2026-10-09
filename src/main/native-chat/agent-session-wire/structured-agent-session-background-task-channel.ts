@@ -54,7 +54,12 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     const backgroundTasks = this.read(request.sessionId)
     const queue = tryReadQueuePublication(
       journal,
-      structuredQueueSendGate(this.deps.store, request.sessionId)
+      structuredQueueSendGate(
+        this.deps.store,
+        request.sessionId,
+        this.readChildWork,
+        this.deps.adapter
+      )
     )
     const hostNow = this.deps.now?.() ?? Date.now()
     return {
@@ -68,7 +73,8 @@ export class StructuredAgentSessionBackgroundTaskChannel {
           ? {
               queuedMessages: queue.queuedMessages,
               queuePause: queue.queuePause,
-              nextQueuedMessageId: queue.nextQueuedMessageId
+              nextQueuedMessageId: queue.nextQueuedMessageId,
+              nextQueuedMessageWait: queue.nextQueuedMessageWait
             }
           : {}),
         backgroundTasks

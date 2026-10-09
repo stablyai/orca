@@ -8,6 +8,7 @@ import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-labe
 import {
   sendStructuredConversationCommand,
   structuredConversationCommandHold,
+  structuredConversationCommandRunner,
   type StructuredConversationCommandCauses
 } from './structured-conversation-command-send'
 
@@ -378,5 +379,78 @@ describe('a refusal names what it waits on only while the chat shows it', () => 
     expect(
       await hostAnswers(hostResult('compact', COMPACTION_FAILED), shown('working'))
     ).not.toHaveProperty('refusedWhile')
+  })
+})
+
+describe('a /clear the host runs from the queue', () => {
+  const idleWithTasks = {
+    turnId: null,
+    isWorking: false,
+    backgroundTasks: { isMonitoring: true, show: true }
+  }
+  function runner(
+    clearWaits: boolean,
+    chat: Partial<{
+      turnId: string | null
+      isWorking: boolean
+      backgroundTasks: { isMonitoring: boolean; show: boolean }
+    }> = {},
+    rewindInFlight = false
+  ) {
+    const send = vi.fn(async () => ({
+      kind: 'done' as const,
+      value: {
+        command: 'clear' as const,
+        state: 'completed' as const,
+        queued: { messageId: 'op-1', position: 1, state: 'waiting' as const }
+      }
+    }))
+    const { runConversationCommand } = structuredConversationCommandRunner({
+      agentName: 'Claude',
+      pending: { current: false },
+      commandsWait: true,
+      clearWaits,
+      chat: {
+        turnId: 'turn-1',
+        isWorking: true,
+        queueSendsNext: false,
+        backgroundTasks: { isMonitoring: false, show: false },
+        submissions: [],
+        ...chat
+      },
+      prompts: [],
+      rewindInFlight: { current: rewindInFlight },
+      sends: [],
+      items: () => [],
+      send
+    })
+    return { run: () => runConversationCommand('clear'), send }
+  }
+
+  it('asks to wait while the agent works, and its card is the answer', async () => {
+    const { run, send } = runner(true)
+    expect(await run()).toEqual({ accepted: true, error: null })
+    expect(send).toHaveBeenCalledWith('clear', 'queue-if-active')
+  })
+
+  it('asks to wait past background tasks with the agent idle: the host holds the card until they end', async () => {
+    const { run, send } = runner(true, idleWithTasks)
+    expect(await run()).toEqual({ accepted: true, error: null })
+    expect(send).toHaveBeenCalledWith('clear', 'queue-if-active')
+  })
+
+  it('is still held here by a rewind on its way, in the background-work words', async () => {
+    const { run, send } = runner(true, { turnId: null, isWorking: false }, true)
+    expect(await run()).toMatchObject({ accepted: false })
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('against a host that cannot hold it, is refused here as before and nothing is sent', async () => {
+    const { run, send } = runner(false)
+    expect(await run()).toMatchObject({ accepted: false, refusedWhile: 'working' })
+    expect(send).not.toHaveBeenCalled()
+    const idle = runner(false, idleWithTasks)
+    expect(await idle.run()).toMatchObject({ accepted: false, refusedWhile: 'background' })
+    expect(idle.send).not.toHaveBeenCalled()
   })
 })

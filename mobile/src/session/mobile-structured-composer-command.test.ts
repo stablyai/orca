@@ -139,9 +139,31 @@ describe('mobile structured conversation commands', () => {
     const fields = requestFields(sendRequest.mock.calls[0])
     expect(fields).toMatchObject({ command: 'compact', delivery: 'queue-if-active' })
     expect(input.onError).not.toHaveBeenCalled()
-    // A /clear never waits: the busy check still answers it.
+    // A host that holds only /compact: the busy check still answers a /clear.
     expect(await dispatchMobileStructuredCommand({ ...input, text: '/clear' })).toBe('rejected')
     expect(sendRequest).toHaveBeenCalledOnce()
+  })
+  it('a /clear the host holds in line asks to wait the same way, and its card is the answer', async () => {
+    const { input, sendRequest } = setup()
+    sendRequest.mockResolvedValueOnce({
+      ok: true,
+      result: {
+        ok: true,
+        value: {
+          command: 'clear',
+          state: 'completed',
+          queued: { messageId: 'op', position: 1, state: 'waiting' }
+        }
+      }
+    })
+    input.busy = () => 'working'
+    input.waitsInLine = () => true
+    expect(await dispatchMobileStructuredCommand({ ...input, text: '/clear' })).toBe('accepted')
+    expect(requestFields(sendRequest.mock.calls[0])).toMatchObject({
+      command: 'clear',
+      delivery: 'queue-if-active'
+    })
+    expect(input.onError).not.toHaveBeenCalled()
   })
   it('a /clear while the agent works says so in plain words', async () => {
     const { input, sendRequest } = setup()

@@ -289,10 +289,10 @@ export const ConversationCommandParams = z
   .object({
     envelope: MutationEnvelope,
     command: z.enum(['clear', 'compact']),
-    /** A /compact while the agent is working waits as a host-held card, like a queued send.
-     *  Strict object, so an older host refuses it: clients send it only when
-     *  `agent-session.queued-commands.v1` is advertised. A /clear never waits: its operation
-     *  fingerprints no `delivery`, so one sent with it is refused as a conflict. */
+    /** A /compact or /clear while the agent is working waits as a host-held card, like a queued
+     *  send. Strict object, so an older host refuses it: clients send it for /compact only when
+     *  `agent-session.queued-commands.v1` is advertised, and for /clear only with
+     *  `agent-session.queued-clear.v1`. */
     delivery: z.literal('queue-if-active').optional()
   })
   .strict()

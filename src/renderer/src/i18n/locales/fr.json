@@ -18487,6 +18487,8 @@
         "editAlreadySent": "Déjà envoyé — votre texte reste dans la zone de saisie.",
         "listLabel": "Messages en file d'attente",
         "behindReturnedHold": "En attente — un message précédent nécessite votre attention",
+        "waitingForBackgroundTasks": "En attente de la fin des tâches en arrière-plan",
+        "waitingForBackgroundTasksStop": "En attente de la fin des tâches en arrière-plan. Arrêtez-les pour effacer maintenant.",
         "awaitingAnswerHold": "En attente de votre réponse",
         "steer": "Envoyer maintenant",
         "send": "Envoyer",

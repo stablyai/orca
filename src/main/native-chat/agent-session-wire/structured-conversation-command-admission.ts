@@ -1,7 +1,4 @@
-import {
-  agentChildWorkViewOffersStop,
-  type AgentSessionBackgroundTaskStops
-} from '../../../shared/agent-child-work-stop-targets'
+import { agentChildWorkStripOffersStop } from '../../../shared/agent-child-work-stop-targets'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import { agentChildWorkLiveness } from '../../../shared/agent-status-child-work-liveness'
@@ -25,7 +22,7 @@ export type ConversationCommandAdmissionContext = {
     snapshot(): Pick<ReturnType<AgentSessionJournal['snapshot']>, 'items'>
     submissions: AgentSessionJournal['submissions']
   }
-  adapter: Pick<StructuredAgentSessionAdapter, 'backgroundTaskStops'>
+  adapter: Pick<StructuredAgentSessionAdapter, 'backgroundTaskStops' | 'stoppedTaskEndingOwed'>
 }
 
 function blocked(
@@ -83,7 +80,10 @@ export function conversationCommandBlocked(
   if (agentChildWorkLiveness(childWork) !== null) {
     return blocked(
       'backgroundTasksRunning',
-      stripOffersStop(childWork ?? [], ctx.adapter.backgroundTaskStops?.(ctx.sessionId))
+      agentChildWorkStripOffersStop(
+        childWork ?? [],
+        ctx.adapter.backgroundTaskStops?.(ctx.sessionId)
+      )
         ? 'Stop background tasks before using this command.'
         : 'Wait for background tasks to finish before using this command.'
     )
@@ -103,18 +103,4 @@ export function conversationCommandBlocked(
     )
   }
   return null
-}
-
-/** The strip's own stop controls: a per-row stop where the provider can target one, else its
- *  single untargeted stop. Asking for a stop it does not render names a control nobody can use. */
-function stripOffersStop(
-  childWork: readonly AgentChildWorkView[],
-  stops: AgentSessionBackgroundTaskStops | undefined
-): boolean {
-  if (!stops) {
-    return false
-  }
-  return stops.supportsTaskStop
-    ? childWork.some(agentChildWorkViewOffersStop)
-    : stops.supportsStopAll
 }

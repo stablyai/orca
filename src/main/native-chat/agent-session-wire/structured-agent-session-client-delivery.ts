@@ -64,7 +64,12 @@ export class StructuredAgentSessionClientDelivery {
       readQueuePublication: (sessionId) =>
         tryReadQueuePublication(
           sessions.get(sessionId)?.journal,
-          structuredQueueSendGate(this.deps().store, sessionId)
+          structuredQueueSendGate(
+            this.deps().store,
+            sessionId,
+            (id) => this.readChildWork(id),
+            this.deps().adapter
+          )
         ),
       readBackgroundTasks,
       onJournalPublished: (sessionId, journal) => this.publishJournal(sessionId, journal)

@@ -32,3 +32,17 @@ export function agentChildWorkStopTargets(
       : []
   )
 }
+
+/** The strip's own stop controls: a per-row stop where the provider can target one, else its
+ *  single untargeted stop. Asking for a stop it does not render names a control nobody can use. */
+export function agentChildWorkStripOffersStop(
+  childWork: readonly AgentChildWorkView[],
+  stops: AgentSessionBackgroundTaskStops | undefined
+): boolean {
+  if (!stops) {
+    return false
+  }
+  return stops.supportsTaskStop
+    ? childWork.some(agentChildWorkViewOffersStop)
+    : stops.supportsStopAll
+}

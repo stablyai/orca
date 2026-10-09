@@ -89,6 +89,7 @@ const HOST_SUPPORT = {
   questionAnswers: true,
   queuedMessages: true,
   queuedCommands: false,
+  queuedClear: false,
   statusFeed: true,
   quietRepeatedStop: true
 }

@@ -39,6 +39,7 @@ import {
 import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
 import { useMobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
 import { useMobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
+import { structuredSessionBackgroundTasksOfferStop } from '../../../src/shared/structured-session-background-tasks-view'
 
 export function useMobileStructuredAgentSession(args: {
   client: RpcClient | null
@@ -71,8 +72,9 @@ export function useMobileStructuredAgentSession(args: {
   } = args
   // Only a host that queues sends gets the delivery field; any host's published cards show.
   const queueCapable = hostSupport?.queuedMessages === true
-  // A /compact waits in line only where its card renders.
+  // A command waits in line only where its card renders.
   const commandsWait = queueCapable && hostSupport?.queuedCommands === true
+  const clearWaits = queueCapable && hostSupport?.queuedClear === true
   const promptCancelSupported = hostSupport?.promptCancel ?? null
   const hostAnswersRepeatedStops = hostSupport?.quietRepeatedStop ?? null
   const sessionKey = encodeNativeChatTranscriptIdentity([sourceIdentity, agent, sessionId])
@@ -119,6 +121,7 @@ export function useMobileStructuredAgentSession(args: {
     enabled,
     queueCapable,
     commandsWait,
+    clearWaits,
     stateRef,
     commandPending: commandPendingRef,
     controller: sendController,
@@ -221,6 +224,9 @@ export function useMobileStructuredAgentSession(args: {
     submissions: state.submissions,
     pendingPrompt: approvalPrompt !== null || questionPrompt !== null,
     agentWorking: isStructuredAgentSessionMainAgentWorking(turnId, state.submissions, state.fence),
+    nextQueuedMessageId: state.nextQueuedMessageId ?? null,
+    nextQueuedMessageWait: state.nextQueuedMessageWait ?? null,
+    backgroundTasksStoppable: structuredSessionBackgroundTasksOfferStop(backgroundTasks.view),
     mutate,
     appendComposerText,
     onSendError,

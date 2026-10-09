@@ -15,6 +15,7 @@ import { agentSessionVisibleFailureFacts } from '../../../src/shared/agent-sessi
 import type {
   AgentSessionQueuedMessageDeleteResult,
   AgentSessionQueuedMessagesResumeResult,
+  AgentSessionQueueWait,
   AgentSessionSendResult
 } from '../../../src/shared/agent-session-wire'
 import {
@@ -58,6 +59,11 @@ export function useMobileStructuredQueuedMessageControls(args: {
   pendingPrompt: boolean
   /** The chat shows the agent working: a command card offers no send then. */
   agentWorking?: boolean
+  /** The host's next card, and the /clear it holds while a wait ends. */
+  nextQueuedMessageId?: string | null
+  nextQueuedMessageWait?: AgentSessionQueueWait | null
+  /** The strip offers a Stop for the background tasks that /clear waits on. */
+  backgroundTasksStoppable?: boolean
   mutate: MobileStructuredAgentMutate
   /** The active pane's live composer, Edit's copy target; absent = Edit refuses. False when
    *  nothing was copied. */
@@ -78,11 +84,17 @@ export function useMobileStructuredQueuedMessageControls(args: {
     submissions
   } = args
   const agentWorking = args.agentWorking === true
+  const backgroundTasksStoppable = args.backgroundTasksStoppable === true
+  const nextQueuedMessageId = args.nextQueuedMessageId ?? null
+  const nextQueuedMessageWait = args.nextQueuedMessageWait ?? null
   const cards = useMemo(
     () =>
       mobileQueuedMessageCards(queuedMessages, submissions, {
         pendingPrompt,
         agentWorking,
+        nextQueuedMessageId,
+        nextQueuedMessageWait,
+        backgroundTasksStoppable,
         agentName: args.agentName,
         statedFailures: queuedMessages?.some((draft) => draft.state === 'returned')
           ? agentSessionVisibleFailureFacts(args.journalItems ?? [])
@@ -91,6 +103,9 @@ export function useMobileStructuredQueuedMessageControls(args: {
       }),
     [
       agentWorking,
+      nextQueuedMessageId,
+      nextQueuedMessageWait,
+      backgroundTasksStoppable,
       args.agentName,
       args.journalItems,
       pendingPrompt,

@@ -8,6 +8,7 @@ import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-labe
 import { useStructuredLegacyLaunchStop } from '@/lib/structured-agent-session-legacy-launch-stop'
 import { supportsStructuredAgentSessionPromptCancel } from '@/runtime/structured-agent-session-client'
 import {
+  useStructuredAgentSessionHostQueuesClear,
   useStructuredAgentSessionHostQueuesCommands,
   useStructuredAgentSessionHostQueuesMessagesState
 } from '@/runtime/structured-agent-session-host-capability'
@@ -36,6 +37,7 @@ import {
 import { hostStatesTurnScopes } from '../../../../shared/native-chat-turn-membership'
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session-approval-subject'
 import { withNativeChatCutTurnNotices } from '../../../../shared/native-chat-cut-turn-notice'
+import { structuredSessionBackgroundTasksOfferStop } from '../../../../shared/structured-session-background-tasks-view'
 import { useStructuredAgentSessionRewind } from './use-structured-agent-session-rewind'
 import type { NativeChatRewindHost } from './use-native-chat-rewind'
 
@@ -191,11 +193,12 @@ export function useStructuredAgentSession(args: {
     blocked: conversationBusy || commandPending.current || queuedMessageIds.length > 0,
     write
   })
-  // A queued send is a card, never a transcript bubble.
   const isWorking = transportState.isWorking || transportState.queueSendsNext
+  // A queued send is a card, never a transcript bubble.
+  const { sendsJoinQueue } = transportState
   const transcriptPending = useMemo(
-    () => pendingSendsOutsideQueuedCards(pending, queuedMessageIds, isWorking),
-    [isWorking, pending, queuedMessageIds]
+    () => pendingSendsOutsideQueuedCards(pending, queuedMessageIds, sendsJoinQueue),
+    [sendsJoinQueue, pending, queuedMessageIds]
   )
   // What the transcript reads: the journal plus the one notice a cut turn with no row gets.
   const transcriptItems = useMemo(
@@ -211,11 +214,13 @@ export function useStructuredAgentSession(args: {
     transportState.submissions
   )
   const queuedController = useStructuredAgentSessionQueuedMessages({
-    // Its published list, pause and submissions; the rest is named below.
+    // Its published list, pause, submissions and working facts; the rest is named below.
     ...transportState,
     enabled: queueCapability === 'supported' && transportState.fence !== null,
     hasPendingPrompt: prompts.length > 0,
-    isWorking,
+    backgroundTasksStoppable: structuredSessionBackgroundTasksOfferStop(
+      transportState.backgroundTasks
+    ),
     // Hidden from the transcript, a queue send on its way reads as sending among the cards.
     sending: pending,
     composerScopeKey,
@@ -228,9 +233,11 @@ export function useStructuredAgentSession(args: {
     ...structuredConversationCommandRunner({
       agentName: structuredAgentLabel(agent),
       pending: commandPending,
-      // A /compact waits in line only where its card renders.
+      // A command waits in line only where its card renders.
       commandsWait:
         useStructuredAgentSessionHostQueuesCommands(target) && queueCapability === 'supported',
+      clearWaits:
+        useStructuredAgentSessionHostQueuesClear(target) && queueCapability === 'supported',
       chat: transportState,
       prompts,
       rewindInFlight: rewind.blockedRef,

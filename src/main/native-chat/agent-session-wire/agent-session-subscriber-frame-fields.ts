@@ -69,7 +69,8 @@ export function buildSubscriberFrame(
         ? {
             queuedMessages: queued.queuedMessages,
             queuePause: queued.queuePause,
-            nextQueuedMessageId: queued.nextQueuedMessageId
+            nextQueuedMessageId: queued.nextQueuedMessageId,
+            nextQueuedMessageWait: queued.nextQueuedMessageWait
           }
         : {}),
       ...(backgroundTasks !== undefined ? { backgroundTasks } : {})

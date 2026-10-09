@@ -42,7 +42,7 @@ export type StructuredConversationCommandHold =
 /** A command that waits in line is held only by a message the host doesn't have yet, which must
  *  stay ahead of it; any other command, by anything the agent still has in flight. */
 export function structuredConversationCommandHold(input: {
-  /** A /compact the host can hold as a card behind the turn or prompt. */
+  /** A command the host can hold as a card behind the turn or prompt. */
   waitsInLine: boolean
   /** A turn runs, or the chat shows the agent working on a message it has not answered. */
   agentWorking: boolean
@@ -176,6 +176,8 @@ export function structuredConversationCommandRunner(args: {
   pending: { current: boolean }
   /** The host holds a /compact as a card, and this client renders the queue. */
   commandsWait: boolean
+  /** The same for a /clear, which the host runs itself when its card's turn comes. */
+  clearWaits: boolean
   /** What the chat shows: a turn, the Working rule, its background work, its sends. */
   chat: {
     turnId: string | null
@@ -213,10 +215,9 @@ export function structuredConversationCommandRunner(args: {
     retry: false
   }
   const run = (command: AgentSessionConversationCommand) => {
+    const hostHoldsIt = command === 'clear' ? args.clearWaits : args.commandsWait
     const waitsInLine =
-      command === 'compact' &&
-      args.commandsWait &&
-      !(promptPending && pendingPromptsAllUnanswerableHere(args.prompts))
+      hostHoldsIt && !(promptPending && pendingPromptsAllUnanswerableHere(args.prompts))
     return sendStructuredConversationCommand({
       command,
       agentName: args.agentName,
@@ -225,18 +226,16 @@ export function structuredConversationCommandRunner(args: {
         waitsInLine,
         agentWorking,
         promptPending,
-        // A rewind on its way holds a command as background work does, in the same words.
+        // A /clear that waits in line waits out background tasks as a card on the host. A rewind on
+        // its way holds any command as background work does, in the same words.
         backgroundTasksRunning:
-          args.chat.backgroundTasks.isMonitoring || args.rewindInFlight.current,
+          (args.chat.backgroundTasks.isMonitoring && !(command === 'clear' && waitsInLine)) ||
+          args.rewindInFlight.current,
         sendPending
       }),
       causes,
       startFailures: () => structuredAgentSessionStartFailureFacts(args.items()),
-      send: (command) =>
-        args.send(
-          command,
-          command === 'compact' && args.commandsWait ? 'queue-if-active' : undefined
-        )
+      send: (command) => args.send(command, hostHoldsIt ? 'queue-if-active' : undefined)
     })
   }
   return { runConversationCommand: run, commandRefusalCauses: causes }

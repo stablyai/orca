@@ -539,19 +539,11 @@ describe('a /compact that waits in line', () => {
   })
 })
 
-it('only a /compact may ask to wait; a /clear sent asking to is refused, never queued', async () => {
+it('either command may ask to wait, only with the one delivery the host knows', () => {
   const base = { envelope: rig.envelope({}, 'agentSession.conversationCommand', 'op-schema') }
   const parse = (fields: Record<string, unknown>) =>
     ConversationCommandParams.safeParse({ ...base, ...fields }).success
   expect(parse({ command: 'compact', delivery: 'queue-if-active' })).toBe(true)
+  expect(parse({ command: 'clear', delivery: 'queue-if-active' })).toBe(true)
   expect(parse({ command: 'compact', delivery: 'now' })).toBe(false)
-  await rig.workingSend()
-  const fields = { command: 'clear' as const, delivery: 'queue-if-active' as const }
-  expect(
-    await rig.host.conversationCommand(CALLER, {
-      envelope: rig.envelope(fields, 'agentSession.conversationCommand', hostTestOperationId()),
-      ...fields
-    })
-  ).toMatchObject({ ok: false })
-  expect(await rig.drafts()).toEqual([])
 })

@@ -17,7 +17,8 @@ import { structuredAgentSessionAttemptFailureParts } from '../../../src/shared/s
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
   type AgentSessionQueuedMessage,
-  type AgentSessionQueuePause
+  type AgentSessionQueuePause,
+  type AgentSessionQueueWait
 } from '../../../src/shared/agent-session-wire'
 import { readAgentMessageSource } from '../../../src/shared/agent-session-message-source'
 import { agentMessageAttribution } from './mobile-agent-message-attribution'
@@ -38,6 +39,9 @@ export type MobileQueuedMessageCard = {
   command?: true
   /** A command card while the agent works: it offers no send until the agent is idle. */
   waitsForAgent?: true
+  /** A /clear the host names as next, or holds until a wait ends: it runs without a press, so it
+   *  offers no Send. */
+  runsOnItsOwn?: true
 }
 
 function queuedMessageBodyText(body: AgentSessionQueuedMessage['body']): string {
@@ -115,6 +119,11 @@ export function mobileQueuedMessageCards(
     pendingPrompt: boolean
     queuePaused?: boolean
     agentWorking?: boolean
+    /** The host's next card, and the /clear it holds while a wait ends; read, never re-picked. */
+    nextQueuedMessageId?: string | null
+    nextQueuedMessageWait?: AgentSessionQueueWait | null
+    /** The strip offers a Stop for the background tasks that /clear waits on. */
+    backgroundTasksStoppable?: boolean
     agentName?: string
     statedFailures?: readonly AgentSessionFailureFact[]
   }
@@ -129,13 +138,15 @@ export function mobileQueuedMessageCards(
         : []
     )
   )
+  const shown = queuedMessages.filter(
+    (draft) => draft.state === 'returned' || !handedOff.has(draft.messageId)
+  )
+  const wait = facts.nextQueuedMessageWait ?? null
   let behindReturned = false
   const cards: MobileQueuedMessageCard[] = []
-  for (const draft of queuedMessages) {
-    if (draft.state !== 'returned' && handedOff.has(draft.messageId)) {
-      continue
-    }
+  for (const draft of shown) {
     const paused = draft.paused === true
+    const held = wait?.messageId === draft.messageId
     const caption =
       draft.state === 'returned'
         ? returnedCaption(draft, facts.agentName, facts.statedFailures)
@@ -151,7 +162,14 @@ export function mobileQueuedMessageCards(
                 null
               : facts.pendingPrompt
                 ? 'Waiting for your answer'
-                : null
+                : held && wait.reason === 'background-tasks'
+                  ? facts.backgroundTasksStoppable
+                    ? 'Waiting for background tasks to finish. Stop them to clear now.'
+                    : 'Waiting for background tasks to finish'
+                  : null
+    const runsOnItsOwn =
+      draft.body.command?.name === 'clear' &&
+      (held || draft.messageId === facts.nextQueuedMessageId)
     cards.push({
       messageId: draft.messageId,
       text: queuedMessageBodyText(draft.body),
@@ -165,7 +183,8 @@ export function mobileQueuedMessageCards(
       ...(draft.body.command !== undefined
         ? {
             command: true as const,
-            ...(facts.agentWorking ? { waitsForAgent: true as const } : {})
+            ...(facts.agentWorking ? { waitsForAgent: true as const } : {}),
+            ...(runsOnItsOwn ? { runsOnItsOwn: true as const } : {})
           }
         : {})
     })

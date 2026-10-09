@@ -2,13 +2,15 @@
 
 import type {
   AgentSessionQueuedMessage,
-  AgentSessionQueuePause
+  AgentSessionQueuePause,
+  AgentSessionQueueWait
 } from './agent-session-queued-message-wire'
 
 export type StructuredAgentSessionQueuePublication = {
   queuedMessages?: AgentSessionQueuedMessage[] | null
   queuePause?: AgentSessionQueuePause | null
   nextQueuedMessageId?: string | null
+  nextQueuedMessageWait?: AgentSessionQueueWait | null
 }
 
 /** First claim with a list wins, and what rides with it comes from that claim; no claim at all
@@ -21,7 +23,8 @@ export function queuePublicationField(
       return {
         queuedMessages: claim.queuedMessages,
         queuePause: claim.queuePause ?? null,
-        nextQueuedMessageId: claim.nextQueuedMessageId ?? null
+        nextQueuedMessageId: claim.nextQueuedMessageId ?? null,
+        nextQueuedMessageWait: claim.nextQueuedMessageWait ?? null
       }
     }
   }

@@ -259,6 +259,11 @@ export const AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY =
 // the card is the only place the waiting command shows.
 export const AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY =
   'agent-session.queued-commands.v1' as const
+// Why: a host with only queued-commands.v1 refuses `delivery` on a /clear. A host advertising this
+// holds a /clear sent while the agent works as a card and runs it itself when its turn comes.
+// Clients ask only when queued-messages.v1 is advertised too, as for /compact.
+export const AGENT_SESSION_QUEUED_CLEAR_RUNTIME_CAPABILITY =
+  'agent-session.queued-clear.v1' as const
 // Why: paired clients advertise Claude-structured support so the host can gate its agent-specific
 // journal and lifecycle surfaces independently from Codex support.
 export const CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY =
@@ -392,6 +397,7 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_ANSWERS_PROOF_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUED_CLEAR_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY,
   ...STRUCTURED_AGENT_SESSION_SURFACE_RUNTIME_CAPABILITIES,
   ...AGENT_SESSION_ATTENTION_RUNTIME_CAPABILITIES,

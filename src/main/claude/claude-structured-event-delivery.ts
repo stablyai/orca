@@ -26,7 +26,7 @@ export function emitClaudeStructuredSessionEvent({
   deps,
   publishChildWork
 }: ClaudeEventDelivery): void {
-  // Host evidence follows the journal; the tracker's roster remains available to contract tests.
+  // Host evidence follows the journal; the tracker also tells whether a Stop's ending is owed.
   if (event.type === 'ended') {
     session?.childWork.clear()
     session?.backgroundTasks.clear()

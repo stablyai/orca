@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUED_CLEAR_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RECOVERY_CAPABILITY,
@@ -125,5 +126,13 @@ export function useStructuredAgentSessionHostQueuesCommands(target: RuntimeClien
   return useStructuredAgentSessionHostCapability(
     target,
     AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY
+  )
+}
+
+/** The same for a /clear, which the host then runs itself when its card's turn comes. */
+export function useStructuredAgentSessionHostQueuesClear(target: RuntimeClientTarget): boolean {
+  return useStructuredAgentSessionHostCapability(
+    target,
+    AGENT_SESSION_QUEUED_CLEAR_RUNTIME_CAPABILITY
   )
 }

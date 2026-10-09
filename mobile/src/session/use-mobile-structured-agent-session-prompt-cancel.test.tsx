@@ -123,6 +123,7 @@ function Harness({
       questionAnswers: questionAnswersSupported,
       queuedMessages: false,
       queuedCommands: false,
+      queuedClear: false,
       statusFeed: false,
       quietRepeatedStop: false
     },

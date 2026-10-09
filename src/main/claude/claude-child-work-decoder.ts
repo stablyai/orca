@@ -87,6 +87,8 @@ export class ClaudeChildWorkDecoder {
   private readonly live = new Map<string, DecodedClaudeTask>()
   /** Ended task ids, with the spawn call each ended under. */
   private readonly ended = new Map<string, string | undefined>()
+  /** Tasks ended on a Stop's acknowledgement whose own ending has not landed yet. */
+  private readonly stopEndingsOwed = new Set<string>()
   /** The children a pending permission request blocks, as the caller last derived them. */
   private waiting: ReadonlySet<string> = new Set()
   private pending: PendingEdge[] = []
@@ -126,7 +128,15 @@ export class ClaudeChildWorkDecoder {
   stopAcknowledged(id: string): void {
     if (this.live.has(id)) {
       this.end(id, 'stopped', { basis: 'stop-acknowledged' })
+      this.stopEndingsOwed.add(id)
     }
+  }
+
+  /** A task ended on a Stop's acknowledgement that the CLI still lists running (`running`): its
+   *  own ending, and the agent's turn answering it, are still to come. One the CLI no longer lists
+   *  was acknowledged with no frame, and owes none. */
+  stopEndingOwed(running: readonly string[]): boolean {
+    return running.some((id) => this.stopEndingsOwed.has(id))
   }
 
   /** Which children a pending request blocks, re-derived by the caller before every drain. A
@@ -154,6 +164,7 @@ export class ClaudeChildWorkDecoder {
   clear(): void {
     this.live.clear()
     this.ended.clear()
+    this.stopEndingsOwed.clear()
     this.waiting = new Set()
     this.pending.push((observedAt) => ({ type: 'session-ended', observedAt }))
   }
@@ -255,6 +266,7 @@ export class ClaudeChildWorkDecoder {
       return
     }
     this.ended.delete(id)
+    this.stopEndingsOwed.delete(id)
     this.live.set(id, task)
     this.report(id, task, facts, restart)
   }
@@ -288,6 +300,9 @@ export class ClaudeChildWorkDecoder {
       if (oldest !== undefined) {
         this.ended.delete(oldest)
       }
+    }
+    if (reported.basis === undefined) {
+      this.stopEndingsOwed.delete(id)
     }
     const outcome = claudeChildWorkOutcome(status)
     this.pending.push((observedAt) => ({

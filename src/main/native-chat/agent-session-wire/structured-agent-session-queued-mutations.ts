@@ -37,6 +37,7 @@ import {
   structuredAgentSessionSendBlock
 } from './structured-agent-session-send-preparation'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
+import { isQueuedClearCard, runQueuedConversationClear } from './structured-conversation-clear'
 
 function invalid(message: string): {
   ok: false
@@ -106,7 +107,8 @@ async function refusingNewerOrcaJournal<TValue>(
  * wait — through the same send block and pending-prompt gates as any send;
  * supersession, Stop and prepared commands are never overridden. The card goes
  * out under this operation's id, never its own, and the submission names it by
- * `queuedMessageId`; one id still means one delivery.
+ * `queuedMessageId`; one id still means one delivery. A /clear card is run by
+ * the host instead, spent in its clear's own transaction, so it runs once.
  */
 export function sendQueuedStructuredAgentMessage(
   context: StructuredAgentSessionMutationContext,
@@ -115,6 +117,8 @@ export function sendQueuedStructuredAgentMessage(
 ): Promise<AgentSessionMutationResult<AgentSessionSendResult>> {
   const { messageId } = params
   const operationId = params.envelope.clientOperationId
+  const settledByOp = (ctx: AgentSessionTurnContext) =>
+    agentSessionOperationKey(ctx.resolvedBy, operationId)
   const plan: MutationPlan<AgentSessionSendResult> = {
     method: 'agentSession.queuedMessageSend',
     fields: { messageId },
@@ -155,6 +159,15 @@ export function sendQueuedStructuredAgentMessage(
       if (hold === 'working' && row.body.command) {
         return invalid("A command can't be sent while the agent is working.")
       }
+      if (isQueuedClearCard(row)) {
+        // Run by the host, as the drain runs it: never a submission. A failure lands on the card
+        // itself, so this answers with the card rather than saying it twice; a wait (background
+        // tasks, a handoff) changes nothing on the card, so this Send says it.
+        const ran = await runQueuedConversationClear(context, ctx, row, settledByOp(ctx))
+        return ran.kind === 'waiting'
+          ? { ok: false, refusal: ran.refusal }
+          : { ok: true, value: queuedClearSendAnswer(ctx, operationId, row) }
+      }
       const submissionId = operationId
       try {
         await ctx.journal.appendSubmission(
@@ -170,7 +183,7 @@ export function sendQueuedStructuredAgentMessage(
           {
             messageId,
             expect: row.state,
-            settledByOp: agentSessionOperationKey(ctx.resolvedBy, operationId),
+            settledByOp: settledByOp(ctx),
             hostInstance: structuredAgentSessionHostInstance()
           }
         )
@@ -188,9 +201,12 @@ export function sendQueuedStructuredAgentMessage(
       return { ok: true, value: { clientMessageId: submissionId, submission } }
     },
     replay: (ctx) => {
-      const opKey = agentSessionOperationKey(ctx.resolvedBy, operationId)
+      const card = ctx.journal.queuedMessages.get(messageId)
+      if (card && isQueuedClearCard(card)) {
+        return queuedClearSendAnswer(ctx, operationId, card)
+      }
       const row = ctx.journal.queuedMessages
-        .receipts(opKey)
+        .receipts(settledByOp(ctx))
         .find((receipt) => receipt.messageId === messageId)
       if (!row || row.state !== 'dispatched') {
         return null
@@ -200,6 +216,20 @@ export function sendQueuedStructuredAgentMessage(
     }
   }
   return mutateQueued(context, caller, params.envelope, plan)
+}
+
+/** A /clear card's Send answers with the card as it now stands: withdrawn once its clear ran,
+ *  returned with why when it could not. */
+function queuedClearSendAnswer(
+  ctx: AgentSessionTurnContext,
+  operationId: string,
+  card: QueuedMessageRow
+): AgentSessionSendResult {
+  const { state } = ctx.journal.queuedMessages.get(card.messageId) ?? card
+  return {
+    clientMessageId: operationId,
+    queued: { messageId: card.messageId, position: card.position, state }
+  }
 }
 
 /** Delete = discard, with no body in the answer: the card leaving the published

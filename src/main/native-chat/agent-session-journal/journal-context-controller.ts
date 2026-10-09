@@ -26,9 +26,16 @@ export class JournalContextController {
   clear(
     boundary: AgentSessionProviderContextBoundary,
     receipt: JournalOperationReceipt,
-    settledByOp: string
+    settledByOp: string,
+    ranFrom?: string
   ) {
-    return appendJournalContextClear({ ...this.deps, boundary, receipt, settledByOp })
+    return appendJournalContextClear({
+      ...this.deps,
+      boundary,
+      receipt,
+      settledByOp,
+      ...(ranFrom === undefined ? {} : { ranFrom })
+    })
   }
 
   rewind(

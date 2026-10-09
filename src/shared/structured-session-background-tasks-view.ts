@@ -7,6 +7,7 @@ import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
 } from './agent-session-wire'
+import { agentChildWorkStripOffersStop } from './agent-child-work-stop-targets'
 import { agentChildWorkLiveness } from './agent-status-child-work-liveness'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
 
@@ -75,4 +76,14 @@ export function structuredSessionBackgroundTasksView(
     // stop; only a host that says `false` has none to offer.
     supportsStopAll: backgroundTasks?.supportsStopAll !== false
   }
+}
+
+/** Whether the strip draws a Stop for the work it lists: the rule a command refused on it asks by. */
+export function structuredSessionBackgroundTasksOfferStop(
+  view: Pick<StructuredSessionBackgroundTasksView, 'children' | 'supportsStop' | 'supportsStopAll'>
+): boolean {
+  return agentChildWorkStripOffersStop(view.children ?? [], {
+    supportsTaskStop: view.supportsStop,
+    supportsStopAll: view.supportsStopAll
+  })
 }

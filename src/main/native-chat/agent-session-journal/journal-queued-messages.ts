@@ -243,20 +243,20 @@ export class JournalQueuedMessages {
   withdrawInTransaction(
     db: Database.Database,
     input: { messageIds: readonly string[]; settledByOp: string }
-  ): void {
+  ): string[] {
     if (this.deps.database().db !== db) {
       throw new AgentSessionJournalError('journal_closed', 'withdraw crossed database handles')
     }
-    this.changeRevision += withdrawQueuedMessages(db, {
-      ...input,
-      sessionId: this.deps.sessionId,
-      now: this.deps.now()
-    }).length
+    const { sessionId, now } = this.deps
+    const withdrawn = withdrawQueuedMessages(db, { ...input, sessionId, now: now() })
+    this.changeRevision += withdrawn.length
+    return withdrawn.map((row) => row.messageId)
   }
 
   /** One standalone draft-table transaction on the journal's queue; one that
-   *  changed rows bumps the revision and notifies after COMMIT, `adopted` first. */
-  private transact<T>(
+   *  changed rows bumps the revision and notifies after COMMIT, `adopted` first. Open to the
+   *  draft-table writers outside this file (`queued-message-return.ts`), which take no other path. */
+  transact<T>(
     run: (db: Database.Database) => JournalWriteResult<T>,
     changed: (result: T) => boolean,
     adopted?: () => void

@@ -17,6 +17,7 @@ export const CAPABLE: StructuredAgentSessionHostSupport = {
   questionAnswers: false,
   queuedMessages: true,
   queuedCommands: false,
+  queuedClear: false,
   statusFeed: false,
   quietRepeatedStop: false
 }

@@ -259,4 +259,30 @@ describe('Claude children waiting on a permission request', () => {
     expect(edges.at(-1)).toBe('session-ended')
     expect(edges).not.toContain('agent-bg waiting')
   })
+
+  it('owes a stopped task its own ending while the CLI still lists it, until that ending lands', () => {
+    const running = ['agent-bg']
+    const stopped = decoderWith(backgroundAgent)
+    expect(stopped.stopEndingOwed(running)).toBe(false)
+    stopped.stopAcknowledged('agent-bg')
+    expect(stopped.stopEndingOwed(running)).toBe(true)
+    // Acknowledged with no frame: the CLI no longer lists it, so no ending is coming.
+    expect(stopped.stopEndingOwed([])).toBe(false)
+    stopped.observe(system('task_notification', { task_id: 'agent-bg', status: 'stopped' }))
+    expect(stopped.stopEndingOwed(running)).toBe(false)
+
+    const restarted = decoderWith(backgroundAgent)
+    restarted.stopAcknowledged('agent-bg')
+    restarted.observe({ ...backgroundAgent, tool_use_id: 'toolu_bg_2' })
+    expect(restarted.stopEndingOwed(running)).toBe(false)
+
+    const closed = decoderWith(backgroundAgent)
+    closed.stopAcknowledged('agent-bg')
+    closed.clear()
+    expect(closed.stopEndingOwed(running)).toBe(false)
+    // Orca's own close ends what is live, and owes nothing: the session is gone.
+    const proven = decoderWith(backgroundAgent)
+    proven.stopLive()
+    expect(proven.stopEndingOwed(running)).toBe(false)
+  })
 })

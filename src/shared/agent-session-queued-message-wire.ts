@@ -17,6 +17,11 @@ export type AgentSessionQueuedMessagePausedReason = typeof QUEUED_MESSAGE_PAUSED
  *  newer host can add one. */
 export type AgentSessionQueuePause = { reason: 'stopped' }
 
+/** The queue's next card is a /clear the host runs itself once this ends: background tasks the
+ *  agent left running, or the agent moving between processes. Nothing else holds it, so it runs
+ *  without a press. A client treats an unknown reason as a plain wait, so a newer host can add one. */
+export type AgentSessionQueueWait = { messageId: string; reason: 'background-tasks' | 'handoff' }
+
 /** What rides beside a frame's `queuedMessages`, published together with the list. */
 export type AgentSessionQueuePublicationFields = {
   /** Null when the queue sends on its own. */
@@ -24,6 +29,9 @@ export type AgentSessionQueuePublicationFields = {
   /** The card the queue sends next once nothing runs, null while anything holds the queue.
    *  Absent from an older host, read as null. */
   nextQueuedMessageId?: string | null
+  /** Set instead of `nextQueuedMessageId` while that card waits (`AgentSessionQueueWait`). Absent
+   *  from an older host, read as null. */
+  nextQueuedMessageWait?: AgentSessionQueueWait | null
 }
 
 export type AgentSessionQueuedMessagesResumeResult = {

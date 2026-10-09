@@ -9,7 +9,8 @@ import type { AgentChildWorkView } from './agent-status-child-work-view'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuePause,
-  AgentSessionQueuePublicationFields
+  AgentSessionQueuePublicationFields,
+  AgentSessionQueueWait
 } from './agent-session-queued-message-wire'
 
 export * from './agent-session-wire-refusals'
@@ -140,6 +141,8 @@ export type AgentSessionHistoryPage = {
   /** Rides with `queuedMessages`: the card the queue sends next as soon as nothing runs, null
    *  while anything holds the queue. Absent from an older host, read as null. */
   nextQueuedMessageId?: string | null
+  /** Rides with `queuedMessages`: the /clear next in line while it waits (`AgentSessionQueueWait`). */
+  nextQueuedMessageWait?: AgentSessionQueueWait | null
   /** Host wall clock (ms epoch) when the page was read, so a client attaching mid-turn
    *  can anchor a live counter on the real start. Absent from older hosts. */
   hostNow?: number

@@ -200,9 +200,11 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       timeoutMs: this.deps.requestTimeoutMs,
       publishChildWork: (session) => this.publishChildWork(input.sessionId, session)
     })
-  /** The tracker's own roster, for the tests that compare it with the host's child records. No
-   *  production code reads it: what runs, what a Stop reaches and what blocks a command are all
-   *  read from the host's child records. */
+  stoppedTaskEndingOwed = (sessionId: string): boolean => {
+    const session = this.sessions.get(sessionId)
+    return session?.childWork.stopEndingOwed(session.backgroundTasks.stoppableTaskIds) ?? false
+  }
+  /** For tests; production reads the tracker only to tell whether a Stop's own ending is owed. */
   backgroundTaskState = (sessionId: string): AgentSessionBackgroundTaskState | null | undefined => {
     const session = this.sessions.get(sessionId)
     return session ? backgroundTaskState(session) : undefined

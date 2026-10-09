@@ -26,6 +26,10 @@ export function createAgentSessionConversationReceipts(
           }
         })
       }),
+    /** A clear the queue ran from a card: no operation of its own to settle, as the card's own
+     *  withdrawal in the same transaction is what answers for it. */
+    queuedClear: (clear: () => AgentSessionConversationClear) =>
+      transactions.receipt((draft) => commitConversationClearRecord(draft, clear())),
     rewind: (
       ...args: Parameters<typeof commitAgentSessionRewindCompletion> extends [unknown, ...infer A]
         ? A

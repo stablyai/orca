@@ -64,6 +64,40 @@ describe('a background Stop acts on the host child records', () => {
     // The CLI acknowledges a task it no longer runs with no frame: the acknowledgement ends it.
     expect(records()).toMatchObject([{ membership: 'settled', outcome: 'cancelled' }])
     expect(blocked()).toBeNull()
+    // Nor does it owe an ending of its own, so nothing waits for one.
+    expect(run.adapter.stoppedTaskEndingOwed('session-1')).toBe(false)
+  })
+
+  it('owes the ending of a task it still reports running until that ending lands', async () => {
+    const host = hostWithParent()
+    const run = await producer(host)
+    run.replay(RESUMED_BY_MESSAGE.filter((captured) => captured.at < 5_077))
+    const records = () => host.getStructuredChildWorkViews(parent)
+    expect(run.adapter.stoppedTaskEndingOwed('session-1')).toBe(false)
+
+    await run.adapter.stopBackgroundTasks({
+      sessionId: 'session-1',
+      fence: 7,
+      taskIds: agentChildWorkStopTargets(records(), 'agent-1')
+    })
+    // Settled on the acknowledgement, while the CLI still lists the task as running.
+    expect(records()).toMatchObject([{ membership: 'settled', outcome: 'cancelled' }])
+    expect(run.adapter.stoppedTaskEndingOwed('session-1')).toBe(true)
+
+    run.replay([
+      {
+        at: 7_000,
+        frame: {
+          type: 'system',
+          subtype: 'task_notification',
+          task_id: 'agent-1',
+          status: 'stopped',
+          summary: 'Stopped'
+        }
+      }
+    ])
+    expect(run.adapter.stoppedTaskEndingOwed('session-1')).toBe(false)
+    expect(records()).toMatchObject([{ membership: 'settled', outcome: 'cancelled' }])
   })
 
   it('stops every task the strip offers a stop when none is named', async () => {

@@ -12,11 +12,11 @@ import {
 } from './structured-agent-session-host-test-data'
 import type { QueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
 
-/** Opens the turn `id` started; called again with `interrupted` to end it. */
+/** Opens the turn `id` started; called again with `interrupted` or `completed` to end it. */
 export async function openRigTurnFor(
   rig: QueuedMessageTestRig,
   id: string,
-  state: 'running' | 'interrupted' = 'running'
+  state: 'running' | 'interrupted' | 'completed' = 'running'
 ): Promise<void> {
   const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal
   if (!journal) {

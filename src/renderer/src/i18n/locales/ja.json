@@ -18421,6 +18421,8 @@
         "editAlreadySent": "すでに送信されています — テキストは入力欄に残っています。",
         "listLabel": "キュー内のメッセージ",
         "behindReturnedHold": "待機中 — 前のメッセージの対応が必要です",
+        "waitingForBackgroundTasks": "バックグラウンドタスクの完了を待っています",
+        "waitingForBackgroundTasksStop": "バックグラウンドタスクの完了を待っています。今すぐクリアするには停止してください。",
         "awaitingAnswerHold": "回答を待っています",
         "steer": "今すぐ送信",
         "send": "送信",

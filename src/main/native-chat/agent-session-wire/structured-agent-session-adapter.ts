@@ -390,6 +390,9 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   /** The stops this provider honours for a live session's background work; undefined when the
    *  adapter holds no live session for it. */
   backgroundTaskStops?(sessionId: string): AgentSessionBackgroundTaskStops | undefined
+  /** The provider acknowledged a background Stop ahead of the task's own ending, which it still
+   *  owes: the host's record already reads the task settled. False with no live session. */
+  stoppedTaskEndingOwed?(sessionId: string): boolean
   /** The provider reported taking a send it has neither answered nor ended, as a queued follow-up
    *  or a silent retry does. Derived from the live child; false with none. */
   holdsDispatch?(sessionId: string): boolean
