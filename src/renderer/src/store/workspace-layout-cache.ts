@@ -1,59 +1,45 @@
 // The window's read-only copy of each workspace's layout, exactly as the runtime published it
-// (design 3.3). `applyFromRuntime` is its only writer; nothing edits, merges or saves it.
-// Not wired to the store yet: the switch makes it a slice and derives today's fields from it.
+// (design 3.3). Not wired to the store yet: the switch makes it a slice and derives today's fields
+// from it.
 
 import { stableJson } from '../../../shared/workspace-layout/workspace-layout-load-report'
 import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-published'
-import type { WorkspaceLayoutStreamFrame } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
+import type { WorkspaceLayoutChangeFrame } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
 
 export type WorkspaceLayoutCache = Readonly<Record<string, PublishedWorkspaceLayout>>
 
 export const EMPTY_WORKSPACE_LAYOUT_CACHE: WorkspaceLayoutCache = {}
 
-/** Replaces one workspace's layout with the runtime's, or drops it for null. An equal layout keeps
- *  the cached object, so a reconnect snapshot with unchanged data re-renders nothing. */
-export function applyFromRuntime(
-  cache: WorkspaceLayoutCache,
-  key: string,
-  layout: PublishedWorkspaceLayout | null
-): WorkspaceLayoutCache {
-  if (layout) {
-    const cached = cache[key]
-    return cached && (cached === layout || stableJson(cached) === stableJson(layout))
-      ? cache
-      : { ...cache, [key]: layout }
-  }
-  if (!(key in cache)) {
-    return cache
-  }
-  const { [key]: _removed, ...rest } = cache
-  return rest
-}
-
-/** What the cache takes from the stream: a snapshot replaces every workspace; nothing is merged. */
-export type WorkspaceLayoutCacheFrame = Exclude<WorkspaceLayoutStreamFrame, { type: 'end' }>
-
+/**
+ * The cache's only writer (design 3.3's `applyFromRuntime`): replaces from the runtime's frame;
+ * nothing edits, merges or saves it. Returns the same cache when nothing changed.
+ */
 export function applyLayoutFrame(
   cache: WorkspaceLayoutCache,
-  frame: WorkspaceLayoutCacheFrame
+  frame: WorkspaceLayoutChangeFrame
 ): WorkspaceLayoutCache {
   switch (frame.type) {
     case 'workspace':
-      return applyFromRuntime(cache, frame.key, frame.layout)
-    case 'removed':
-      return applyFromRuntime(cache, frame.key, null)
+      // The runtime publishes a workspace only when it changed.
+      return { ...cache, [frame.key]: frame.layout }
+    case 'removed': {
+      if (!(frame.key in cache)) {
+        return cache
+      }
+      const { [frame.key]: _removed, ...rest } = cache
+      return rest
+    }
     case 'snapshot': {
-      const present = new Set(frame.workspaces.map((entry) => entry.key))
-      let next = cache
-      for (const key of Object.keys(cache)) {
-        if (!present.has(key)) {
-          next = applyFromRuntime(next, key, null)
-        }
-      }
+      // Keeps each equal entry, so a reconnect with unchanged data re-renders nothing.
+      const next: Record<string, PublishedWorkspaceLayout> = {}
+      let changed = false
       for (const { key, layout } of frame.workspaces) {
-        next = applyFromRuntime(next, key, layout)
+        const cached = cache[key]
+        const keep = cached !== undefined && stableJson(cached) === stableJson(layout)
+        next[key] = keep ? cached : layout
+        changed ||= !keep
       }
-      return next
+      return changed || Object.keys(next).length !== Object.keys(cache).length ? next : cache
     }
   }
 }

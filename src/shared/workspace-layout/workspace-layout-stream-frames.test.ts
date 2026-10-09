@@ -20,7 +20,6 @@ describe('readWorkspaceLayoutStreamFrame', () => {
   it('reads every frame the runtime sends, through the wire encoding', () => {
     const layout = JSON.parse(JSON.stringify(publishedLayout()))
     const frames = [
-      { type: 'snapshot', subscriptionId: 'layout-1', workspaces: [{ key: GIT_KEY, layout }] },
       { type: 'workspace', key: GIT_KEY, layout },
       { type: 'snapshot', workspaces: [{ key: GIT_KEY, layout }] },
       { type: 'removed', key: GIT_KEY },
@@ -29,20 +28,27 @@ describe('readWorkspaceLayoutStreamFrame', () => {
     for (const frame of frames) {
       expect(readWorkspaceLayoutStreamFrame(frame)).toEqual(frame)
     }
-  })
-
-  it('returns null for a newer host’s frame type and for malformed frames', () => {
-    const layout = publishedLayout()
-    expect(readWorkspaceLayoutStreamFrame({ type: 'navigate', request: {} })).toBeNull()
-    expect(readWorkspaceLayoutStreamFrame(null)).toBeNull()
-    expect(readWorkspaceLayoutStreamFrame({ type: 'workspace', key: '', layout })).toBeNull()
-    expect(readWorkspaceLayoutStreamFrame({ type: 'workspace', key: 'a', layout: {} })).toBeNull()
     expect(
       readWorkspaceLayoutStreamFrame({
         type: 'snapshot',
         subscriptionId: 'layout-1',
-        workspaces: [{ key: 'a', layout: { worktreeId: 'a' } }]
+        workspaces: [{ key: GIT_KEY, layout }]
       })
-    ).toBeNull()
+    ).toEqual({ type: 'snapshot', workspaces: [{ key: GIT_KEY, layout }] })
+  })
+
+  it('tells a newer host’s frame type apart from a malformed known frame', () => {
+    const layout = publishedLayout()
+    expect(readWorkspaceLayoutStreamFrame({ type: 'navigate', request: {} })).toBe('unknown')
+    for (const malformed of [
+      null,
+      { key: 'a' },
+      { type: 'workspace', key: '', layout },
+      { type: 'workspace', key: 'a', layout: {} },
+      { type: 'removed' },
+      { type: 'snapshot', workspaces: [{ key: 'a', layout: { worktreeId: 'a' } }] }
+    ]) {
+      expect(readWorkspaceLayoutStreamFrame(malformed)).toBe('malformed')
+    }
   })
 })

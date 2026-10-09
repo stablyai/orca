@@ -13,8 +13,6 @@ import { nameBasedLoadContext } from '../../shared/workspace-layout/workspace-la
 import type { WorkspaceLayoutEvent } from '../../shared/workspace-layout/workspace-layout-stream-frames'
 import type { RuntimeStore } from './runtime-store-contract'
 
-export type { WorkspaceLayoutEvent }
-
 type LayoutListener = (event: WorkspaceLayoutEvent) => void
 
 type Published = { layout: PublishedWorkspaceLayout; json: string }

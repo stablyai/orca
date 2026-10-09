@@ -10,10 +10,13 @@ export type WorkspaceLayoutEvent =
 export type WorkspaceLayoutSnapshotEntry = { key: string; layout: PublishedWorkspaceLayout }
 
 export type WorkspaceLayoutStreamFrame =
-  // subscriptionId names the stream for `layout.unsubscribe`; a reader must not need it.
+  // subscriptionId names the stream for `layout.unsubscribe`; a reader does not need it.
   | { type: 'snapshot'; subscriptionId?: string; workspaces: WorkspaceLayoutSnapshotEntry[] }
   | WorkspaceLayoutEvent
   | { type: 'end' }
+
+/** What a reader's cache takes from the stream. */
+export type WorkspaceLayoutChangeFrame = Exclude<WorkspaceLayoutStreamFrame, { type: 'end' }>
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -39,28 +42,30 @@ function isSnapshotEntry(value: unknown): value is WorkspaceLayoutSnapshotEntry 
   return isRecord(value) && isKey(value.key) && isPublishedWorkspaceLayout(value.layout)
 }
 
-/** Null for a malformed frame or a frame type this build does not know (a newer host's). */
-export function readWorkspaceLayoutStreamFrame(value: unknown): WorkspaceLayoutStreamFrame | null {
-  if (!isRecord(value)) {
-    return null
+/**
+ * `unknown`: a frame type this build does not know (a newer host's), safe to skip.
+ * `malformed`: a known type with the wrong shape, so the stream can no longer be trusted.
+ */
+export function readWorkspaceLayoutStreamFrame(
+  value: unknown
+): WorkspaceLayoutStreamFrame | 'unknown' | 'malformed' {
+  if (!isRecord(value) || typeof value.type !== 'string') {
+    return 'malformed'
   }
   switch (value.type) {
     case 'snapshot':
-      if (!Array.isArray(value.workspaces) || !value.workspaces.every(isSnapshotEntry)) {
-        return null
-      }
-      return isKey(value.subscriptionId)
-        ? { type: 'snapshot', subscriptionId: value.subscriptionId, workspaces: value.workspaces }
-        : { type: 'snapshot', workspaces: value.workspaces }
+      return Array.isArray(value.workspaces) && value.workspaces.every(isSnapshotEntry)
+        ? { type: 'snapshot', workspaces: value.workspaces }
+        : 'malformed'
     case 'workspace':
       return isKey(value.key) && isPublishedWorkspaceLayout(value.layout)
         ? { type: 'workspace', key: value.key, layout: value.layout }
-        : null
+        : 'malformed'
     case 'removed':
-      return isKey(value.key) ? { type: 'removed', key: value.key } : null
+      return isKey(value.key) ? { type: 'removed', key: value.key } : 'malformed'
     case 'end':
       return { type: 'end' }
     default:
-      return null
+      return 'unknown'
   }
 }
