@@ -3,6 +3,7 @@ import {
   hasAdmissionCapacity,
   HostDataAuthSchema,
   parseRelayHostCapabilities,
+  RELAY_ASSIGNMENT_LEASE_HEADER,
   RELAY_ADMISSION_BUDGETS,
   RELAY_HOST_CAPABILITIES_HEADER,
   RELAY_CLOSE_CODE,
@@ -19,6 +20,7 @@ import type WebSocket from 'ws'
 import type { RawData } from 'ws'
 import { createRelayApp } from './app.js'
 import type { CellFlags } from './cell-flags.js'
+import { AssignmentLeaseShadow } from './assignment-lease-shadow.js'
 import { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayConfig } from './config.js'
 import { RelayCredentialStore } from './credential-store.js'
@@ -84,6 +86,10 @@ function guardSocketErrors(socket: WebSocket, kind: string): void {
   socket.on('error', (error) => {
     console.warn(`[orca-relay] ${kind} socket error: ${error.message}`)
   })
+}
+
+function firstHeader(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value
 }
 
 function admissionSource(request: IncomingMessage): string {
@@ -165,7 +171,12 @@ export function createRelayServer(
     observability,
     options.now,
     options.random,
-    cellIncarnation
+    cellIncarnation,
+    new AssignmentLeaseShadow({
+      enabled: () => options.cellFlags?.().flags.ticketCheck === 'shadow',
+      key: config.assignmentSigningKey,
+      cellId: config.cellId
+    })
   )
   const app = createRelayApp(config, {
     store,
@@ -588,7 +599,8 @@ export function createRelayServer(
             webSocket,
             identity,
             controlUpgrade?.inclusionWatermark,
-            parseRelayHostCapabilities(request.headers[RELAY_HOST_CAPABILITIES_HEADER])
+            parseRelayHostCapabilities(request.headers[RELAY_HOST_CAPABILITIES_HEADER]),
+            firstHeader(request.headers[RELAY_ASSIGNMENT_LEASE_HEADER])
           )
         })
       } catch {
