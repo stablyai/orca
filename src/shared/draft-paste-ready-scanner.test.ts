@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { createDraftPasteReadyScanner, resolvePasteReadySignal } from './draft-paste-ready-scanner'
 import { OPENCODE_AGENT_ROW_GRACE_MS } from './opencode-agent-row-scanner'
@@ -455,6 +457,61 @@ describe('createDraftPasteReadyScanner', () => {
         ready: false,
         armQuietTimer: false
       })
+    })
+  })
+
+  describe('bob-composer-prompt', () => {
+    const POWERLEVEL10K_PROMPT = '░▒▓    ~/Workspace/orca-bob  on   bob-integration \r\n❯ '
+    const BOB_COMPOSER_PREFIX = 'Build Anything, @ for context'
+
+    it('resolves on the composer prefix without a terminal-mode anchor', () => {
+      const scanner = createDraftPasteReadyScanner('bob-composer-prompt')
+      expect(scanner.observe('Bob startup output without a composer')).toEqual({
+        ready: false,
+        armQuietTimer: false
+      })
+      expect(scanner.observe(BOB_COMPOSER_PREFIX)).toEqual({
+        ready: true,
+        armQuietTimer: false
+      })
+    })
+
+    it('does not treat a Powerlevel10k prompt as Bob readiness', () => {
+      const scanner = createDraftPasteReadyScanner('bob-composer-prompt')
+      expect(scanner.observe(POWERLEVEL10K_PROMPT)).toEqual({
+        ready: false,
+        armQuietTimer: false
+      })
+    })
+
+    it('replays both committed Bob captures without generic readiness anchors', () => {
+      for (const fixture of ['bob-approval-command.txt', 'bob-approval-subagent.txt']) {
+        const capture = readFileSync(
+          join(__dirname, '../main/runtime/__fixtures__', fixture),
+          'utf8'
+        )
+        expect(capture).toContain(BOB_COMPOSER_PREFIX)
+        expect(capture).not.toContain(DECSET_BRACKETED_PASTE)
+        expect(capture).not.toContain(ALT_SCREEN_ENTER)
+        expect(createDraftPasteReadyScanner('bob-composer-prompt').observe(capture)).toEqual({
+          ready: true,
+          armQuietTimer: false
+        })
+      }
+    })
+
+    it('detects the composer prefix split across PTY chunks', () => {
+      for (let split = 1; split < BOB_COMPOSER_PREFIX.length; split += 1) {
+        const scanner = createDraftPasteReadyScanner('bob-composer-prompt')
+        expect(scanner.observe(BOB_COMPOSER_PREFIX.slice(0, split))).toEqual({
+          ready: false,
+          armQuietTimer: false
+        })
+        expect(scanner.observe(BOB_COMPOSER_PREFIX.slice(split))).toEqual({
+          ready: true,
+          armQuietTimer: false
+        })
+      }
     })
   })
 

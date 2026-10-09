@@ -1,3 +1,4 @@
+import { BOB_COMPOSER_PLACEHOLDER_PREFIX } from './bob-composer-placeholder'
 import { stripTerminalControl } from './terminal-control-stripping'
 
 /**
@@ -29,9 +30,8 @@ const BOB_APPROVAL_RES = [
 // Why: the composer placeholder is Bob-only chrome (captured on 2.0.2), so seeing it once proves
 // the pane is really running Bob before the approval regexes — which say nothing about identity
 // on their own — are allowed to fire. Mirrors command-code's own banner self-arm.
-const BOB_COMPOSER_PLACEHOLDER = 'Build Anything, @ for context'
 const BOB_BANNER_RE = new RegExp(
-  `(?:^|[\\r\\n])[^\\S\\r\\n]*❯[^\\S\\r\\n]*${BOB_COMPOSER_PLACEHOLDER}`
+  `(?:^|[\\r\\n])[^\\S\\r\\n]*❯[^\\S\\r\\n]*${BOB_COMPOSER_PLACEHOLDER_PREFIX}`
 )
 
 // Why: a modal line (or the banner) can straddle several PTY writes, so each write is judged
