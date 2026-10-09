@@ -234,7 +234,7 @@ function preservesEmbeddedHtml(contentWithoutCode: string, roundTripOutput: stri
   return forEachEmbeddedHtmlFragment(contentWithoutCode, (fragment) => {
     const normalized = normalizeDetailsOpeningTag(fragment)
     const exactIndex = roundTripOutput.indexOf(fragment, searchIndex)
-    // Details serialization adds Orca's class and canonicalizes supported attributes.
+    // Details serialization canonicalizes supported attributes.
     const normalizedIndex =
       normalized === fragment ? -1 : roundTripOutput.indexOf(normalized, searchIndex)
     const useNormalized =

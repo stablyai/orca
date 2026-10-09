@@ -55,6 +55,10 @@ export function escapeDetailsHtml(value: string): string {
     .replaceAll('"', '&quot;')
 }
 
+// Only validated source classes reach this parser; other attributes stay passthrough HTML.
+const LEGACY_STYLING_CLASS_PATTERN =
+  /\sclass\s*=\s*(?:"orca-details"|'orca-details'|orca-details)(?=\s|$)/i
+
 export function parseDetailsAttributes(rawAttributes: string): Record<string, unknown> {
   // Why: validation accepts normal HTML whitespace around `=`, so parsing
   // must accept it too or an editable toggle loses its heading variant.
@@ -65,7 +69,8 @@ export function parseDetailsAttributes(rawAttributes: string): Record<string, un
     open: /\sopen(?:\s|=|$)/i.test(rawAttributes),
     variant: parseToggleHeadingVariant(
       (variantMatch?.[1] ?? variantMatch?.[2] ?? variantMatch?.[3])?.toLowerCase()
-    )
+    ),
+    hasLegacyStylingClass: LEGACY_STYLING_CLASS_PATTERN.test(rawAttributes)
   }
 }
 
@@ -77,8 +82,13 @@ export function detailsBodyHtmlToMarkdown(body: string): string {
     .trim()
 }
 
+// Preserve a source-authored class without copying the rendered styling hook into new blocks.
 export function renderDetailsAttributes(attrs: Record<string, unknown> | undefined): string {
-  const attributes = ['class="orca-details"']
+  const attributes: string[] = []
+
+  if (attrs?.hasLegacyStylingClass === true) {
+    attributes.push('class="orca-details"')
+  }
 
   const variant = parseToggleHeadingVariant(attrs?.variant)
   if (variant) {
@@ -168,7 +178,8 @@ export function normalizeDetailsOpeningTag(fragment: string): string {
   if (!match || !hasOnlySupportedDetailsAttributes(attributes)) {
     return fragment
   }
-  return `<details ${renderDetailsAttributes(parseDetailsAttributes(attributes))}>`
+  const rendered = renderDetailsAttributes(parseDetailsAttributes(attributes))
+  return rendered ? `<details ${rendered}>` : '<details>'
 }
 
 function hasOnlyPlainParagraphAndBreakTags(content: string): boolean {

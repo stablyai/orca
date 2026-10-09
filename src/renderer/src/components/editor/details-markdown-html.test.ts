@@ -28,8 +28,10 @@ afterEach(() => {
 
 describe('details markdown html', () => {
   it.each([
-    ['<details>', '<details class="orca-details">'],
-    ['<details open="open">', '<details class="orca-details" open>'],
+    ['<details>', '<details>'],
+    ['<details  >', '<details>'],
+    ['<details open="open">', '<details open>'],
+    ['<details data-orca-toggle = "heading-2">', '<details data-orca-toggle="heading-2">'],
     ['<details CLASS="orca-details">', '<details class="orca-details">'],
     ["<details Class='orca-details'>", '<details class="orca-details">'],
     ['<details cLaSs=orca-details>', '<details class="orca-details">'],

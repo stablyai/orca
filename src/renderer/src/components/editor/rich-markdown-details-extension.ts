@@ -215,6 +215,12 @@ const OrcaDetails = Details.extend({
           const parsed = parseToggleHeadingVariant(variant)
           return parsed ? { 'data-orca-toggle': parsed } : {}
         }
+      },
+      // Source provenance must not inherit the class present on every rendered node.
+      hasLegacyStylingClass: {
+        default: false,
+        parseHTML: () => false,
+        renderHTML: () => ({})
       }
     }
   },
@@ -283,8 +289,9 @@ const OrcaDetails = Details.extend({
     )
     const body = helpers.renderChildren(content?.content ?? [], '\n\n').trim()
     const attrs = renderDetailsAttributes(node.attrs)
+    const openingTag = attrs ? `<details ${attrs}>` : '<details>'
 
-    return `<details ${attrs}>\n<summary>${summaryText}</summary>\n\n${body}\n\n</details>`
+    return `${openingTag}\n<summary>${summaryText}</summary>\n\n${body}\n\n</details>`
   }
 })
 
