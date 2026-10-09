@@ -9,10 +9,9 @@ import {
 } from '../../../../shared/new-workspace/workspace-source'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import {
+  getConnectionExecutionHostId,
   getRepoExecutionHostId,
-  LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
@@ -33,9 +32,7 @@ function getProjectGroupExecutionHostId(projectGroup: ProjectGroup): ExecutionHo
   if (executionHostId) {
     return executionHostId
   }
-  return projectGroup.connectionId
-    ? toSshExecutionHostId(projectGroup.connectionId)
-    : LOCAL_EXECUTION_HOST_ID
+  return getConnectionExecutionHostId(projectGroup.connectionId)
 }
 
 export function getFolderSourceRepos(

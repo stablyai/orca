@@ -1,53 +1,18 @@
-import { isTuiAgent } from '../../../shared/tui-agent-config'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
+import {
+  validRecord,
+  type StructuredAgentLaunchPersistedRecord
+} from './structured-agent-session-launch-record'
+export {
+  structuredAgentLaunchRecordFor,
+  type StructuredAgentLaunchPersistedRecord,
+  type StructuredAgentLaunchPersistedLifecycle
+} from './structured-agent-session-launch-record'
 import { parseStructuredLaunchSeedOptions } from '../../../shared/native-chat-session-option-defaults'
-import type { StructuredAgentSessionLaunchIntent } from './launch-structured-agent-session'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-
-export type StructuredAgentLaunchPersistedLifecycle = 'pending' | 'visibility-unknown' | 'failed'
-
-export type StructuredAgentLaunchPersistedRecord = {
-  sessionId: string
-  /** The host the chat was created on. Records written before paired hosts could hold a chat lack
-   *  it and load as local, the only host a chat could then be launched on. */
-  executionHostId: ExecutionHostId
-  agent: TuiAgent
-  lifecycle: StructuredAgentLaunchPersistedLifecycle
-  clientOperationId: string
-  payloadFingerprint: string
-  expectedRuntimeFence: number | null
-  resumeFrom?: StructuredAgentSessionResumeSource
-  /** A paired server's reported seed, which this machine cannot re-derive after a reload. */
-  seedOptions?: Readonly<Record<string, string>>
-  /** When a failed launch failed; records written by older builds lack it. */
-  failedAt?: number
-}
-
-/** What survives a reload of an unpublished launch. */
-export function structuredAgentLaunchRecordFor(
-  intent: StructuredAgentSessionLaunchIntent,
-  lifecycle: StructuredAgentLaunchPersistedLifecycle
-): StructuredAgentLaunchPersistedRecord {
-  const { envelope, resumeFrom } = intent.params
-  // A local launch re-reads this machine's settings on reload; only a paired server's seed is kept.
-  const pairedSeed = intent.target.kind === 'local' ? undefined : intent.seedOptions
-  return {
-    sessionId: intent.sessionId,
-    executionHostId: intent.executionHostId,
-    agent: intent.agent,
-    lifecycle,
-    clientOperationId: envelope.clientOperationId,
-    payloadFingerprint: envelope.payloadFingerprint,
-    expectedRuntimeFence: envelope.expectedRuntimeFence,
-    ...(resumeFrom ? { resumeFrom } : {}),
-    ...(pairedSeed ? { seedOptions: pairedSeed } : {})
-  }
-}
 
 const LAUNCH_STORAGE_KEY = 'orca:structuredAgentLaunches:v1'
 const TOMBSTONE_STORAGE_KEY = 'orca:structuredAgentLaunchCancelledSessions:v1'
@@ -58,55 +23,6 @@ const tombstones = new Map<string, ExecutionHostId>()
 const remoteTombstoneCancelledAt = new Map<string, number>()
 const REMOTE_TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000
 let loaded = false
-
-function validRecord(value: unknown): value is Omit<
-  StructuredAgentLaunchPersistedRecord,
-  'executionHostId'
-> & {
-  executionHostId?: string
-} {
-  if (!value || typeof value !== 'object') {
-    return false
-  }
-  if (
-    !('sessionId' in value) ||
-    !('agent' in value) ||
-    !('lifecycle' in value) ||
-    !('clientOperationId' in value) ||
-    !('payloadFingerprint' in value) ||
-    !('expectedRuntimeFence' in value)
-  ) {
-    return false
-  }
-  const {
-    sessionId,
-    agent,
-    lifecycle,
-    clientOperationId,
-    payloadFingerprint,
-    expectedRuntimeFence
-  } = value
-  const resumeFrom = 'resumeFrom' in value ? value.resumeFrom : undefined
-  const executionHostId = 'executionHostId' in value ? value.executionHostId : undefined
-  const failedAt = 'failedAt' in value ? value.failedAt : undefined
-  return (
-    (executionHostId === undefined ||
-      (typeof executionHostId === 'string' && parseExecutionHostId(executionHostId) !== null)) &&
-    typeof sessionId === 'string' &&
-    sessionId.length > 0 &&
-    isTuiAgent(agent) &&
-    (lifecycle === 'pending' || lifecycle === 'visibility-unknown' || lifecycle === 'failed') &&
-    typeof clientOperationId === 'string' &&
-    typeof payloadFingerprint === 'string' &&
-    (expectedRuntimeFence === null || typeof expectedRuntimeFence === 'number') &&
-    (failedAt === undefined || Number.isFinite(failedAt)) &&
-    (resumeFrom === undefined ||
-      (typeof resumeFrom === 'object' &&
-        resumeFrom !== null &&
-        'providerSessionId' in resumeFrom &&
-        typeof resumeFrom.providerSessionId === 'string'))
-  )
-}
 
 function load(): void {
   if (loaded) {

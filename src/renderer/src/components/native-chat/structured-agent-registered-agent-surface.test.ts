@@ -8,7 +8,7 @@ vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}), subscribe: () =
 
 import { structuredAgentAcceptsImages } from '@/runtime/use-host-structured-agent'
 import { isStructuredTab } from './structured-agent-session-tabs'
-import { structuredAgentSessionSeedCatalog } from './structured-agent-session-seed-catalog'
+import { structuredAgentSessionSeedCatalog } from '../../../../shared/structured-agent-session-seed-catalog'
 
 const chatTab = (agentSessionAgent: unknown) => ({
   id: 'agent-session:grok_1',
@@ -47,7 +47,7 @@ describe('a host-registered agent on the structured chat surface', () => {
     expect(isStructuredTab(reloadedTab('not an agent!'))).toBe(false)
   })
 
-  it("starts an unshipped agent's picker empty and fills it only from the session", () => {
+  it("starts an unshipped agent's picker from no built-in list, so the host catalog or session fills it", () => {
     expect(structuredAgentSessionSeedCatalog('grok').models).toEqual([])
     expect(structuredAgentSessionSeedCatalog('claude')).toBe(getAgentSessionOptionCatalog('claude'))
     expect(structuredAgentSessionSeedCatalog('codex')).toBe(getAgentSessionOptionCatalog('codex'))

@@ -239,8 +239,6 @@ function NativeChatSessionOptionPickersInner({
   if (!surface || !model) {
     return null
   }
-  // Still listed by the host: the pill shows its value and does not open, even on request.
-  const modelChoicesPending = model.choicesPending === true
   const requestedModelSequence = pickerRequest?.id === model.id ? pickerRequest.sequence : null
   const requestedOptionsSequence = options.some((descriptor) => descriptor.id === pickerRequest?.id)
     ? (pickerRequest?.sequence ?? null)
@@ -255,12 +253,12 @@ function NativeChatSessionOptionPickersInner({
 
   const modelReason = nativeChatSessionOptionDisabledReason(model.disabledReason)
   const modelPickerKey = `model:${requestedModelSequence ?? 'idle'}`
-  // Read only when a request remounts the picker: one made while pending is spent shut.
-  const modelPickerDefaultOpen = requestedModelSequence !== null && !modelChoicesPending
+  // Read only when a request remounts the picker.
+  const modelPickerDefaultOpen = requestedModelSequence !== null
   const modelTrigger = {
     label: nativeChatModelPillLabel(model),
     tooltipLabel: translate('components.native-chat.composer.model', 'Model'),
-    disabled: isWorking || pendingId !== null || modelChoicesPending,
+    disabled: isWorking || pendingId !== null,
     disabledReason: modelReason,
     dispatched: sessionOptionDispatchUnconfirmed(model)
   }

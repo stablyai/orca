@@ -1,5 +1,5 @@
 import { defineMethod } from '../core'
-import { SlugRepo } from './github-repo-target-schemas'
+import { SlugRepo } from '../../../../shared/rpc-contract/github-repo-target-params'
 import {
   ClearProjectItemField,
   GithubProjectListAccessibleParams,

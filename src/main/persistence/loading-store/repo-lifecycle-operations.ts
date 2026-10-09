@@ -273,12 +273,3 @@ export function updateIndependentProjectHostSetup(
 export function hydrateRepo(owner: RepoLifecycleOperations, repo: Repo): Repo {
   return hydrateRepoOperation(repo, owner[repoLifecycleOperationsContext].runtime.gitUsernameCache)
 }
-
-export function installRepoLifecycleOperationsContext(
-  target: RepoLifecycleOperations,
-  source: RepoLifecycleOperations
-): void {
-  Object.defineProperty(target, repoLifecycleOperationsContext, {
-    value: source[repoLifecycleOperationsContext]
-  })
-}

@@ -28,4 +28,7 @@ export function registerOrcadRuntimeMaintenanceHandlers(options: ManagedOrcadAct
     async (_event, args: { selector: string }) =>
       actions.cancelStop(requiredString(args?.selector, 'Server'))
   )
+  ipcMain.handle('runtimeEnvironments:forgetOrcad', async (_event, args: { selector: string }) =>
+    actions.forget(requiredString(args?.selector, 'Server'))
+  )
 }

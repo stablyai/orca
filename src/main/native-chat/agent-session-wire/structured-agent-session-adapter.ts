@@ -52,6 +52,14 @@ import type { AgentSessionPromptResponse } from '../../../shared/agent-session-q
 import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
 import type { StructuredAgentSessionStartupAttempt } from './structured-agent-session-startup-attempt-contract'
 import type { AgentSessionCreatePhaseRecorder } from '../../observability/agent-session-instrumentation'
+import type { AgentModelCatalogLiveListing } from '../agent-model-catalog/agent-model-catalog-entry'
+
+/** A live options read, plus what the child listed for its account's saved catalog. The host
+ *  saves that listing and strips it before answering; an adapter whose listing reaches the
+ *  catalog another way omits it. */
+export type StructuredAgentSessionLiveOptions = AgentSessionOptionsResult & {
+  catalogListing?: AgentModelCatalogLiveListing
+}
 
 export class AgentSessionAcquisitionRefusal extends Error {
   readonly code = 'agent_session_operation_invalid'
@@ -141,6 +149,8 @@ export type AgentSessionPreSpawnReason = Extract<
   | 'managedAccountUnsupported'
   | 'launchFolderMissing'
   | 'historyInOtherAccount'
+  | 'claudeAccountFolderMissing'
+  | 'claudeAccountSetupFailed'
   | 'agentCommandNotRunnable'
 >
 
@@ -232,6 +242,8 @@ export type StructuredAgentSessionStartedEvent = {
   restoreSkippedOptions: readonly string[]
   /** Values the child showed it cannot run: a report naming the same value is not persisted. */
   retiredOptions?: Readonly<Record<string, string>>
+  /** What the child listed at startup, saved as its account's catalog even if no view reads it. */
+  catalogListing?: AgentModelCatalogLiveListing
   /** The attempt's `optionRevision()` as the read behind this report began: a pick the host took
    *  since makes it out of date. An earlier report never does, whenever the host took it. */
   optionRevision: number
@@ -416,7 +428,10 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     sessionId: string
     fence: number
   }): Promise<() => AgentSessionOptionsResult> | undefined
-  readOptions?(input: { sessionId: string; fence: number }): Promise<AgentSessionOptionsResult>
+  readOptions?(input: {
+    sessionId: string
+    fence: number
+  }): Promise<StructuredAgentSessionLiveOptions>
   /** Effective options already known after acquisition, without discovering picker choices. */
   readAcquisitionOptions?(input: {
     sessionId: string

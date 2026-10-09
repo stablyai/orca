@@ -207,6 +207,7 @@ export function createPtyWriteInput(deps: {
     lastInputAtByPty.set(args.id, performance.now())
     interactiveOutputCharsByPty.set(args.id, 0)
     runtime?.terminalRunFacts?.recordInput(args.id, args.inputKind, args.data)
+    runtime?.noteRemoteDesktopHostInput(args.id, args.inputKind, args.data)
   }
 
   const writeAndObserveInput = (

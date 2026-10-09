@@ -43,7 +43,7 @@ export function nativeSessionOptionsFromReport(input: {
       : encodeStructuredAgentSessionOptionValue('fastMode', reported.fastMode)
   const options: Record<string, string> = {
     ...restored,
-    model: reported.model,
+    ...(reported.model ? { model: reported.model } : {}),
     ...(reported.effort ? { effort: reported.effort } : {}),
     ...(fastMode !== undefined && fastMode !== null ? { fastMode } : {})
   }

@@ -20,7 +20,7 @@ import {
   localTerminalArtifactRoots,
   readFileHandleBufferBounded
 } from './runtime-file-commands-terminal-artifact-access'
-import { isBinaryBuffer } from './runtime-file-command-host'
+import { isBinaryBuffer } from '../../shared/binary-buffer'
 import type { RuntimeFilePreviewResult } from '../../shared/runtime-types'
 import {
   isPathInsideOrEqual,

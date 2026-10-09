@@ -329,4 +329,27 @@ describe('WorktreeOpenInMenu', () => {
       metadata: 'Local only'
     })
   })
+
+  it('marks an unresolved owner local-only and never launches the desktop copy', async () => {
+    const editor = { id: 'zed', label: 'Zed', target: 'external-editor', command: 'zed' } as const
+    const fileManager = { id: 'file-manager', label: 'Finder', target: 'file-manager' } as const
+    for (const entry of [editor, fileManager]) {
+      expect(getOpenInEntryAvailability(entry, mockState.settings, null, null, true)).toEqual({
+        disabled: true,
+        metadata: 'Local only'
+      })
+    }
+    for (const target of ['external-editor', 'file-manager'] as const) {
+      await openWorktreePath({
+        target,
+        worktreePath: '/srv/worktree',
+        connectionId: 'ssh-1',
+        runtimeEnvironmentId: null,
+        ownerUnresolved: true,
+        command: 'code'
+      })
+    }
+    expect(openInExternalEditorMock).not.toHaveBeenCalled()
+    expect(openInFileManagerMock).not.toHaveBeenCalled()
+  })
 })

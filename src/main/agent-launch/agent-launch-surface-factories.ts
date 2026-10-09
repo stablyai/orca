@@ -123,8 +123,9 @@ export type AgentLaunchWorkspaceFactory = {
     options?: Readonly<Record<string, unknown>>
   }): Promise<{
     worktreeId: string
-    /** The new workspace's SSH connection; `null` is local. Decides what its agent tab can show. */
-    connectionId: string | null
+    /** The new workspace's SSH connection; `null` is local. The executor carries it but nothing
+     *  reads it yet; absent when the factory did not resolve it. */
+    connectionId?: string | null
     startupTerminalHandle: string | undefined
     /** The pane minted with the startup terminal, when the runtime reported one. */
     startupTerminalPaneKey?: string
@@ -133,4 +134,9 @@ export type AgentLaunchWorkspaceFactory = {
     /** Reported by the create that built the startup command's typed line. */
     promptRodeLaunchCommand?: boolean
   }>
+  /** A folder workspace has no startup terminal: the launch starts its agent there afterwards.
+   *  Only `agent.launch` creates folders; callers that only create worktrees omit it. */
+  createFolderWorkspace?(args: {
+    create: Readonly<Record<string, unknown>>
+  }): Promise<{ worktreeId: string; connectionId: string | null }>
 }

@@ -1,5 +1,6 @@
 import { vi } from 'vitest'
 import type { SshIpcMockModules, SshIpcMockState, SshIpcMocks } from './ssh-ipc-mock-shapes'
+import { errorMessage } from '../../shared/error-message'
 
 export type { SshIpcMocks }
 
@@ -192,8 +193,7 @@ export function createSshIpcMocks(): SshIpcMocks {
       }
     },
     sshPtyProvider: {
-      isSshPtyNotFoundError: (err: unknown) =>
-        (err instanceof Error ? err.message : String(err)).includes('not found'),
+      isSshPtyNotFoundError: (err: unknown) => errorMessage(err).includes('not found'),
       SshPtyProvider: class MockSshPtyProvider {
         constructor(_targetId: unknown, _mux: unknown, _env: unknown, providerGeneration: number) {
           mockPtyProvider.providerGeneration = providerGeneration

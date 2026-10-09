@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type {
   ClaudeRateLimitAccountsState,
@@ -159,6 +160,51 @@ describe('status bar runtime switch groups', () => {
     ).toEqual([
       { key: 'host', label: hostLabel },
       { key: 'wsl:Ubuntu', label: 'WSL Ubuntu' }
+    ])
+  })
+
+  it("labels Claude rows with their folder's login and keeps one needing sign-in unselectable", () => {
+    const summary = (
+      id: string,
+      email: string,
+      extra: Partial<ClaudeRateLimitAccountsState['accounts'][number]> = {}
+    ) => ({
+      id,
+      email,
+      managedAuthRuntime: 'host' as const,
+      wslDistro: null,
+      authMethod: 'subscription-oauth' as const,
+      createdAt: 1,
+      updatedAt: 1,
+      lastAuthenticatedAt: 1,
+      ...extra
+    })
+    const runtimeState: ClaudeRateLimitAccountsState = {
+      accounts: [
+        summary('legacy', 'old@example.test', { needsSignIn: true }),
+        summary('relabelled', 'now@example.test')
+      ],
+      activeAccountId: null,
+      activeAccountIdsByRuntime: { host: null, wsl: {} }
+    }
+    // Local settings carry neither; the switcher must learn both from the host.
+    const settings: GlobalSettings = {
+      ...getDefaultSettings('/tmp'),
+      claudeManagedAccounts: [
+        { ...summary('legacy', 'old@example.test'), managedAuthPath: '' },
+        { ...summary('relabelled', 'added-as@example.test'), managedAuthPath: '' }
+      ],
+      activeClaudeManagedAccountId: null,
+      activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: {} }
+    }
+    const state = resolveClaudeStatusAccountState(settings, runtimeState)
+    const [host] = buildClaudeStatusSwitchGroups(state, { runtime: 'host', wslDistro: null })
+    expect(
+      host.targets.map((target) => [target.label, target.disabled ?? false, target.hint ?? null])
+    ).toEqual([
+      ['System default', false, null],
+      ['old@example.test', true, 'Sign in again to use this account'],
+      ['now@example.test', false, null]
     ])
   })
 

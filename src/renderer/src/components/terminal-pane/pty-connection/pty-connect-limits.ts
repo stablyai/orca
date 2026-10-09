@@ -24,7 +24,6 @@ export function isSshSessionGoneError(error: unknown): boolean {
 }
 // Why: relay requests expire at 30s; leave one second for their fallback before re-arming locally.
 export const DIRECT_SSH_PANE_RETRY_SETTLEMENT_TIMEOUT_MS = 31_000
-export const REMOTE_PTY_ID_PREFIX = 'remote:'
 export const PTY_CONNECT_DIAG_LIMIT = 200
 export const MANUAL_AGENT_COMMAND_MAX_CHARS = 4096
 export const STARTUP_DRAFT_PASTE_QUIET_MS = 1500

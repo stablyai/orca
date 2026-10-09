@@ -133,6 +133,68 @@ async function titlesOf(run: Run, tabId: string, views: View[]): Promise<string[
   return titles
 }
 
+type GroupView = { id: string; activeTabId: string | null; tabOrder: string[] }
+
+/** The groups paired client A is told about: order, membership and each group's selected tab. */
+async function groupsOf(run: Run): Promise<GroupView[]> {
+  const tabs = await run.a.call<RuntimeMobileSessionTabsResult>('session.tabs.list', {
+    worktree: run.worktree
+  })
+  return (tabs.result.tabGroups ?? []).map(({ id, activeTabId, tabOrder }) => ({
+    id,
+    activeTabId,
+    tabOrder
+  }))
+}
+
+/**
+ * Moves a tab through the phone/CLI path, then checks the groups' tab orders and selection: the
+ * moved tab is selected where it lands; any other group keeps its selection while that tab stays,
+ * else falls back to its first tab.
+ */
+async function moveTab(
+  run: Run,
+  step: string,
+  move: Record<string, unknown> & { tabId: string },
+  expectedOrders: string[][]
+): Promise<GroupView[]> {
+  const before = await groupsOf(run)
+  await attempt(run, step, () =>
+    run.a.call('session.tabs.move', { worktree: run.worktree, ...move })
+  )
+  let after: GroupView[] = []
+  await expect
+    .poll(
+      async () => {
+        after = await groupsOf(run)
+        return JSON.stringify(after.map((group) => group.tabOrder))
+      },
+      { timeout: 15_000 }
+    )
+    .toBe(JSON.stringify(expectedOrders))
+    .catch(() => undefined)
+  const orders = JSON.stringify(after.map((group) => group.tabOrder))
+  run.expectNone(
+    `${step}: group tab orders`,
+    orders === JSON.stringify(expectedOrders)
+      ? []
+      : [`groups ${orders}, expected ${JSON.stringify(expectedOrders)}`]
+  )
+  const selection = after.flatMap((group) => {
+    const kept = before.find((candidate) => candidate.id === group.id)?.activeTabId
+    const expected = group.tabOrder.includes(move.tabId)
+      ? move.tabId
+      : kept && group.tabOrder.includes(kept)
+        ? kept
+        : (group.tabOrder[0] ?? null)
+    return group.activeTabId === expected
+      ? []
+      : [`group ${group.id} selects ${group.activeTabId}, expected ${expected}`]
+  })
+  run.expectNone(`${step}: selection`, selection)
+  return after
+}
+
 const SCENARIOS: Scenario[] = [
   {
     // #23429: a client-created and a CLI-created tab in one worktree must both stay listed.
@@ -222,6 +284,63 @@ const SCENARIOS: Scenario[] = [
         run.b.call('session.tabs.close', { worktree: run.worktree, tabId: first, reason: 'user' })
       )
       await run.check('B closes one', [1], views, 1)
+    }
+  },
+  {
+    // A tab split off into a new group keeps its terminal; the group it left selects its first tab.
+    id: 'split-tab-into-new-group',
+    journey: async (run) => {
+      const first = await createTab(run, run.a)
+      const second = await createTab(run, run.a)
+      await run.check('two tabs', [1, 1])
+      const [group] = await groupsOf(run)
+      await moveTab(
+        run,
+        'split second tab right',
+        { kind: 'split', tabId: second, targetGroupId: group!.id, splitDirection: 'right' },
+        [[first], [second]]
+      )
+      await run.check('split into new group', [1, 1])
+      await run.restart('warm restart', [1, 1])
+    }
+  },
+  {
+    // Moves between groups and a reorder; a group emptied by a move closes.
+    id: 'move-tab-between-groups',
+    journey: async (run) => {
+      const first = await createTab(run, run.a)
+      const second = await createTab(run, run.a)
+      const third = await createTab(run, run.a)
+      await run.check('three tabs', [1, 1, 1])
+      const [source] = await groupsOf(run)
+      const [, target] = await moveTab(
+        run,
+        'split third tab right',
+        { kind: 'split', tabId: third, targetGroupId: source!.id, splitDirection: 'right' },
+        [[first, second], [third]]
+      )
+      await moveTab(
+        run,
+        'move second tab into the new group',
+        { kind: 'move-to-group', tabId: second, targetGroupId: target!.id, index: 0 },
+        [[first], [second, third]]
+      )
+      await run.check('move to group', [1, 1, 1])
+      await moveTab(
+        run,
+        'reorder the new group',
+        { kind: 'reorder', tabId: third, targetGroupId: target!.id, tabOrder: [third, second] },
+        [[first], [third, second]]
+      )
+      await run.check('reorder', [1, 1, 1])
+      await moveTab(
+        run,
+        'move the last tab out of the first group',
+        { kind: 'move-to-group', tabId: first, targetGroupId: target!.id, index: 2 },
+        [[third, second, first]]
+      )
+      await run.check('emptied group closes', [1, 1, 1])
+      await run.restart('warm restart', [1, 1, 1])
     }
   },
   {

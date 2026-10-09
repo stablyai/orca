@@ -24,7 +24,7 @@ function positiveTiming(value: string | undefined, fallback: number): number {
 export function installMainThreadHangWatchdog(options: {
   userDataPath: string
 }): MainThreadHangWatchdogHandle | null {
-  if (process.platform !== 'darwin' && process.platform !== 'win32') {
+  if (process.platform !== 'darwin') {
     return null
   }
   if (!resolveObservabilityConsent().localFileEnabled) {

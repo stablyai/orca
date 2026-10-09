@@ -11,7 +11,7 @@ import type {
   AgentLaunchTarget
 } from '../../shared/agent-launch-intent'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { AgentLaunchModeVocabulary } from './agent-launch-mode'
+import type { AgentLaunchModeReceipt, AgentLaunchModeVocabulary } from './agent-launch-mode'
 import type {
   AgentLaunchSurfaceFactory,
   AgentLaunchWorkspaceFactory
@@ -46,7 +46,19 @@ export type AgentLaunchSurfaceExecution = AgentLaunchExecutionBase & {
   terminalOnly?: boolean
   /** The launch's own delivery: argv only when the typed line carries it, else a paste. */
   promptPolicy?: undefined
-}
+} & (
+    | { decidedMode?: undefined }
+    | {
+        /** Host-internal: the pre-flight a caller decided itself because it records the receipt
+         *  before the launch runs (an orchestration dispatch). For an existing workspace it must
+         *  already carry that host's answer; the executor asks the host only about a workspace it
+         *  creates. It replaces the pre-flight, so `terminalOnly` and `callerRendersStructured` are
+         *  refused. Temporary until one planner settles every launch. */
+        decidedMode: AgentLaunchModeReceipt
+        terminalOnly?: never
+        callerRendersStructured?: never
+      }
+  )
 
 /**
  * Host-internal, never on the wire. `legacy-host` is `worktree.create`'s own delivery, kept for the
@@ -64,6 +76,7 @@ export type AgentLaunchLegacyHostExecution = AgentLaunchExecutionBase & {
   terminalOnly: true
   workspaces: AgentLaunchWorkspaceFactory
   surfaces?: never
+  decidedMode?: never
 }
 
 export type AgentLaunchExecution = AgentLaunchSurfaceExecution | AgentLaunchLegacyHostExecution

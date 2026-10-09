@@ -31,7 +31,8 @@ function createWriteInput(
   const runtime = {
     getDriver: () => ({ kind: 'desktop' }),
     terminalRunFacts: facts,
-    observeClaudeTerminalEvidence
+    observeClaudeTerminalEvidence,
+    noteRemoteDesktopHostInput: vi.fn()
   }
   const mainWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stubs implement every runtime and window member this writer reads.
