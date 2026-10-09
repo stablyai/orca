@@ -16,6 +16,7 @@ import { POSTGRES_STATEMENT_STATS_MIGRATION } from './postgres-statement-stats.j
 import { reportPostgresQueryFailure } from './postgres-query-failure.js'
 import {
   isPostgresReadTimeout,
+  isRelayDatabaseLayerError,
   markRelayDatabaseError
 } from './relay-database-rejection-fence.js'
 import {
@@ -1095,11 +1096,25 @@ export function isRelayDatabaseTransientError(error: unknown): boolean {
       '57014',
       '53300',
       '57P03',
+      '08000',
       '08001',
+      '08003',
       '08006',
+      // The server ended the session: pg_terminate_backend or a fast/immediate shutdown.
+      '57P01',
+      '57P02',
       // The server ended a session idle in a transaction past its limit (a database stall).
       '25P03'
     ].includes(code)
+  ) {
+    return true
+  }
+  // The connection dropped mid-statement: pg's own message, or the socket's reset. Only from
+  // the database layer, since any other socket can raise the same errno.
+  if (
+    isRelayDatabaseLayerError(error) &&
+    (code === 'ECONNRESET' ||
+      String((error as { message?: unknown }).message).startsWith('Connection terminated'))
   ) {
     return true
   }

@@ -27,6 +27,11 @@ export function isPostgresReadTimeout(error: unknown): error is Error {
   return error instanceof Error && error.message === POSTGRES_READ_TIMEOUT_MESSAGE
 }
 
+// The database layer threw or rethrew this; an errno or message alone could be any socket's.
+export function isRelayDatabaseLayerError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && databaseLayerErrors.has(error)
+}
+
 export function markRelayDatabaseError(error: unknown): void {
   if (typeof error === 'object' && error !== null) databaseLayerErrors.add(error)
 }
