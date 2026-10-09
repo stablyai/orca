@@ -193,8 +193,8 @@ function defaultAiVaultResumeCommandBase(agent: AiVaultAgent): string {
   if (agent === 'hermes') {
     return 'hermes'
   }
-  if (agent === 'rovo') {
-    return TUI_AGENT_CONFIG.rovo.launchCmd
+  if (agent === 'rovo' || agent === 'opencode2') {
+    return TUI_AGENT_CONFIG[agent].launchCmd
   }
   return TUI_AGENT_CONFIG[agent].detectCmd
 }
@@ -211,7 +211,6 @@ function buildAgentResumeInvocation(
       // Why: the base is the full launch command, as a settings override is.
       return `${baseCommand} --restore ${sessionArg}`
     case 'opencode2':
-      return `${baseCommand} --standalone --session ${sessionArg}`
     case 'opencode':
     case 'pi':
     // Why: Kimi Code resumes with `kimi --session <id>` (alias `-S`). Sessions

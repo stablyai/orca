@@ -1,5 +1,5 @@
 import { evaluateOrcadActivation, type OrcadActivationVerdict } from './orcad-activation-gate'
-import { orcadActivationTransactionRoot } from './orcad-activation-lock'
+import { orcadActivationTransactionRoot } from './orcad-activation-transaction'
 import type { OrcadReadinessParse } from './orcad-remote-launch'
 import {
   launchOrcadAndAwaitReadiness,

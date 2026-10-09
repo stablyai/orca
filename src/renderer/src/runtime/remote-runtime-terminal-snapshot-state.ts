@@ -82,6 +82,17 @@ export function rejectPendingSnapshotRequest(
   request.reject(new Error(message))
 }
 
+export function disposeRemoteTerminalStreamState(
+  stream: RemoteRuntimeMultiplexedTerminalState,
+  message: string
+): void {
+  discardOutputAcknowledgements(stream)
+  stream.watchdog.dispose()
+  clearSnapshot(stream)
+  clearResyncTimer(stream)
+  rejectPendingSnapshotRequest(stream, message)
+}
+
 export function decodeSnapshotInfo(
   payload: Uint8Array<ArrayBufferLike>
 ): RemoteRuntimeSnapshotInfo | null {
@@ -126,16 +137,6 @@ export function decodeSnapshotInfo(
     pendingEscapeTailAnsi:
       typeof raw.pendingEscapeTailAnsi === 'string' ? raw.pendingEscapeTailAnsi : undefined
   }
-}
-
-/**
- * Whether a pushed (initial or recovery) image leaves the pane's history alone.
- * Absent counts as none: hosts that predate the field pushed desktop images screen-only (#14593).
- */
-export function pushedSnapshotKeepsLocalScrollback(
-  info: RemoteRuntimeSnapshotInfo | null
-): boolean {
-  return (info?.scrollbackRows ?? 0) === 0
 }
 
 export function retryWorthySnapshotOutcome(

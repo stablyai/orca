@@ -12,7 +12,7 @@ import { releaseUndeployedMigrationFence } from './orcad-migration-source-fence'
 import { closeOrcadManagedTunnel } from './orcad-managed-tunnel'
 import type { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
 import { withOrcadActivationLock } from './orcad-activation-lock'
-import { withDeactivatedVersion } from './orcad-activation-record'
+import { withDeactivatedVersionCommitted } from './orcad-activation-record'
 import {
   readOrcadActivationRecord,
   writeOrcadActivationRecord
@@ -81,7 +81,7 @@ async function stopStrandedOrcad(targetId: string, signal?: AbortSignal): Promis
       }
       const stopped = await stopOrcadSlot(slot, orcadSlotDir(slot, record.active), false)
       if (orcadStopFreedTheHost(stopped)) {
-        await writeOrcadActivationRecord(slot, withDeactivatedVersion(record))
+        await writeOrcadActivationRecord(slot, withDeactivatedVersionCommitted(record))
       }
     },
     () => undefined

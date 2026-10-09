@@ -1,9 +1,8 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 type RouteDependencies = {
-  storage: Map<string, string>
   mounted: string[]
   /** The pathname each mount was told to open, which is the only thing the page can route on. */
   pathnames: string[]
@@ -11,23 +10,16 @@ type RouteDependencies = {
 }
 
 const dependencies = vi.hoisted((): RouteDependencies => ({
-  storage: new Map(),
   mounted: [],
   pathnames: [],
   hostId: 'host-1'
 }))
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
-  default: {
-    getItem: async (key: string) => dependencies.storage.get(key) ?? null,
-    setItem: async (key: string, value: string) => {
-      dependencies.storage.set(key, value)
-    }
-  }
+  default: { getItem: async () => null, setItem: async () => {} }
 }))
 
 vi.mock('react-native', () => ({
-  ActivityIndicator: 'ActivityIndicator',
   StyleSheet: { create: (styles: unknown) => styles },
   View: 'View'
 }))
@@ -65,47 +57,32 @@ async function renderRoute(): Promise<ReactTestRenderer> {
   return rendered.tree
 }
 
-/** `__DEV__` is a React Native global, absent outside that runtime; assigned rather than cast so
- *  the test says which build kind it is running as without asserting a type on `globalThis`. */
-function setDevelopmentBuild(isDevelopmentBuild: boolean | undefined): void {
-  if (isDevelopmentBuild === undefined) {
-    Reflect.deleteProperty(globalThis, '__DEV__')
-    return
-  }
-  Object.assign(globalThis, { __DEV__: isDevelopmentBuild })
-}
-
 describe('the hybrid shell route', () => {
   beforeEach(() => {
-    dependencies.storage.clear()
     dependencies.mounted.length = 0
     dependencies.pathnames.length = 0
     dependencies.hostId = 'host-1'
-    setDevelopmentBuild(true)
+    vi.stubEnv('EXPO_PUBLIC_MOBILE_SHELL', 'ota')
   })
 
-  it('redirects to the host screen with the flag unset, and mounts nothing', async () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('redirects to the host screen in a native build, and mounts nothing', async () => {
+    vi.stubEnv('EXPO_PUBLIC_MOBILE_SHELL', undefined)
     const tree = await renderRoute()
     expect(byName(tree, 'Redirect').map((node) => node.props.href)).toEqual(['/h/host-1'])
     expect(dependencies.mounted).toEqual([])
   })
 
-  it('redirects with the flag explicitly off', async () => {
-    dependencies.storage.set('orca:mobileWebShellEnabled', 'false')
-    const tree = await renderRoute()
-    expect(byName(tree, 'Redirect')).toHaveLength(1)
-    expect(dependencies.mounted).toEqual([])
-  })
-
-  it('mounts the shell screen for this host with the flag on', async () => {
-    dependencies.storage.set('orca:mobileWebShellEnabled', 'true')
+  it('mounts the shell screen for this host in an OTA build', async () => {
     const tree = await renderRoute()
     expect(byName(tree, 'Redirect')).toEqual([])
     expect(dependencies.mounted).toEqual(['host-1'])
   })
 
   it('encodes the host id into the pathname, so no host id can bend the route', async () => {
-    dependencies.storage.set('orca:mobileWebShellEnabled', 'true')
     // Every shape the bridge's pathname rule refuses, reached through a host id the app will
     // happily route to: a query, a fragment, whitespace, a separator and a backslash.
     for (const hostId of ['a?b', 'a#b', 'a b', 'a/b', 'a\\b']) {
@@ -121,7 +98,6 @@ describe('the hybrid shell route', () => {
   })
 
   it('cannot encode a dot-segment host id away, and does not pretend to', async () => {
-    dependencies.storage.set('orca:mobileWebShellEnabled', 'true')
     dependencies.hostId = '..'
     await renderRoute()
     // `encodeURIComponent` leaves a dot alone, and percent-escaping one would not help either: the
@@ -130,29 +106,5 @@ describe('the hybrid shell route', () => {
     // WebView. Deep links are the way in, which is why it is worth having a verdict for.
     expect(dependencies.pathnames).toEqual(['/h/..'])
     expect(BRIDGE_ROUTE_PATHNAME_PATTERN.test('/h/..')).toBe(false)
-  })
-
-  it('redirects a store build whose container kept a flag a development build set', async () => {
-    setDevelopmentBuild(undefined)
-    dependencies.storage.set('orca:mobileWebShellEnabled', 'true')
-    const tree = await renderRoute()
-    expect(byName(tree, 'Redirect')).toHaveLength(1)
-    expect(dependencies.mounted).toEqual([])
-  })
-
-  it('neither redirects nor mounts until the flag has been read', async () => {
-    dependencies.storage.set('orca:mobileWebShellEnabled', 'true')
-    const rendered: { tree: ReactTestRenderer | null } = { tree: null }
-    // No `await` inside act: the effect's promise is deliberately left unsettled.
-    act(() => {
-      rendered.tree = create(createElement(MobileWebShellRoute))
-    })
-    const tree = rendered.tree
-    expect(tree === null ? [] : byName(tree, 'Redirect')).toEqual([])
-    expect(dependencies.mounted).toEqual([])
-    // The neutral state itself, rendered for real here: `shell-switch-null-flag.test.tsx` mocks it
-    // to count mounts across all nine switches, so this is where its shape stays pinned.
-    expect(tree === null ? [] : byName(tree, 'ActivityIndicator')).toHaveLength(1)
-    await act(async () => {})
   })
 })

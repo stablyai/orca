@@ -3,6 +3,8 @@ import { SQLITE_DATABASE_RUNTIME_INCLUDE } from './vitest-sqlite-database-runtim
 // Real SQLite fixtures keep Node publication and close semantics.
 export const SQLITE_RUNTIME_INCLUDE = [
   ...SQLITE_DATABASE_RUNTIME_INCLUDE,
+  'src/main/acp/acp-structured-host-live-listing.test.ts',
+  'src/main/acp/acp-structured-host-configured-default.test.ts',
   'src/main/acp/acp-structured-omp-recordings.test.ts',
   'src/main/acp/acp-text-stream-identity.test.ts',
   'src/main/acp/acp-text-message-ownership.test.ts',
@@ -199,6 +201,7 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/runtime/orchestration/orchestration-party-location.test.ts',
   'src/main/runtime/orchestration/structured-worker-journal-page.test.ts',
   'src/main/runtime/rpc/methods/agent-launch-caller-selection.test.ts',
+  'src/main/runtime/rpc/methods/agent-launch-folder-workspace-create.test.ts',
   'src/main/runtime/rpc/methods/agent-launch-instant-tab.test.ts',
   'src/main/runtime/rpc/methods/agent-launch-pane-reservation.test.ts',
   'src/main/runtime/rpc/methods/agent-launch-prestart-failure.test.ts',

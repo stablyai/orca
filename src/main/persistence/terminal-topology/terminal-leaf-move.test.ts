@@ -165,7 +165,16 @@ describe('moving a pane to a new tab', () => {
   })
 
   it('records a persistence.terminal-topology span without pane keys or PTY ids', async () => {
-    const records: { name: string; attributes: Record<string, unknown> }[] = []
+    const records: {
+      name: string
+      attributes: Record<string, unknown>
+      traceId: string
+      spanId: string
+      parentSpanId?: string
+      startTimeUnixNano: string
+      endTimeUnixNano: string
+      durationMs: number
+    }[] = []
     setActiveSink({
       push: (record) => {
         records.push(JSON.parse(JSON.stringify(record)))
@@ -198,7 +207,30 @@ describe('moving a pane to a new tab', () => {
           'topology.refusal': 'leaf_in_other_tab'
         }
       ])
-      expect(JSON.stringify(spans)).not.toMatch(/pty-|tab-source|tab-target|2222/)
+      const transportFields = new Set([
+        'traceId',
+        'spanId',
+        'parentSpanId',
+        'startTimeUnixNano',
+        'endTimeUnixNano',
+        'durationMs'
+      ])
+      for (const span of spans) {
+        expect(span.traceId).toMatch(/^[a-f0-9]{32}$/)
+        expect(span.spanId).toMatch(/^[a-f0-9]{16}$/)
+        if (span.parentSpanId !== undefined) {
+          expect(span.parentSpanId).toMatch(/^[a-f0-9]{16}$/)
+        }
+        expect(span.startTimeUnixNano).toMatch(/^\d+$/)
+        expect(span.endTimeUnixNano).toMatch(/^\d+$/)
+        expect(Number.isFinite(span.durationMs)).toBe(true)
+        expect(span.durationMs).toBeGreaterThanOrEqual(0)
+      }
+      // Random IDs and clocks can coincidentally contain the leaf's numeric prefix.
+      const payloads = spans.map((span) =>
+        Object.fromEntries(Object.entries(span).filter(([key]) => !transportFields.has(key)))
+      )
+      expect(JSON.stringify(payloads)).not.toMatch(/pty-|tab-source|tab-target|2222/)
     } finally {
       _resetTracerForTests()
     }

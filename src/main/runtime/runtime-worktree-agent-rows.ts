@@ -1,7 +1,7 @@
 import { isFreshNonDoneAgentStatus } from '../../shared/agent-status-types'
 import type { RuntimeWorktreeAgentRow, RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import { mergeWorktreeSummaryStatus } from './runtime-worktree-status-projection'
-import type { RuntimeWorktreeSummaryPathIndex } from './runtime-worktree-summary-paths'
+import type { RuntimeWorktreePsSummaryLookup } from './runtime-worktree-summary-paths'
 import type { RuntimeWorkingTerminalEvidence } from './runtime-worktree-ps-activity'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
 export type { RuntimeAgentRowSnapshot } from './runtime-hook-agent-row-selection'
@@ -14,20 +14,13 @@ type OrchestrationDisplay = {
 
 export function attachRuntimeWorktreeAgentRows(args: {
   summaries: Map<string, RuntimeWorktreePsSummary>
-  pathIndex: RuntimeWorktreeSummaryPathIndex
-  missingWorktreeIds: Set<string>
   rowSources: ReadonlyMap<string, RuntimeWorktreeAgentSource>
   workingTerminalEvidenceByWorktreeId: ReadonlyMap<
     string,
     readonly RuntimeWorkingTerminalEvidence[]
   >
   orchestrationByPaneKey: Record<string, OrchestrationDisplay> | null | undefined
-  getSummary: (
-    summaries: Map<string, RuntimeWorktreePsSummary>,
-    pathIndex: RuntimeWorktreeSummaryPathIndex,
-    missingWorktreeIds: Set<string>,
-    worktreeId: string
-  ) => RuntimeWorktreePsSummary | null
+  getSummary: RuntimeWorktreePsSummaryLookup
 }): void {
   const { rowSources } = args
   const now = Date.now()
@@ -37,12 +30,7 @@ export function attachRuntimeWorktreeAgentRows(args: {
     if (!worktreeId) {
       continue
     }
-    const summary = args.getSummary(
-      args.summaries,
-      args.pathIndex,
-      args.missingWorktreeIds,
-      worktreeId
-    )
+    const summary = args.getSummary(worktreeId)
     if (!summary) {
       continue
     }

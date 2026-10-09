@@ -22,7 +22,7 @@ import {
   createOutOfProcessLauncher,
   type DaemonLaunchPolicy
 } from './daemon-out-of-process-launcher'
-import type { DaemonProvider } from './daemon-provider-routing'
+import { listEveryDaemonGeneration, type DaemonProvider } from './daemon-provider-routing'
 import { installDaemonProvider } from './daemon-provider-state'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
 import { trackDaemonAdopted } from './daemon-adoption-telemetry-event'
@@ -197,20 +197,14 @@ async function reconcileSeededClaudeLivePtys(provider: DaemonProvider): Promise<
     return
   }
   try {
-    const adapters =
-      provider instanceof DaemonPtyRouter || provider instanceof DegradedDaemonPtyProvider
-        ? provider.getAllAdapters()
-        : [provider]
-    const results = await Promise.allSettled(adapters.map((entry) => entry.listSessions()))
-    if (results.some((result) => result.status === 'rejected')) {
+    const ids = await listEveryDaemonGeneration(provider, async (a) =>
+      (await a.listSessions()).map((s) => s.sessionId)
+    )
+    if (!ids) {
       console.warn('[daemon] Keeping seeded Claude live-PTY gate — session listing failed')
       return
     }
-    confirmSeededClaudeLivePtys(
-      results.flatMap((result) =>
-        result.status === 'fulfilled' ? result.value.map((session) => session.sessionId) : []
-      )
-    )
+    confirmSeededClaudeLivePtys(ids)
   } catch (error) {
     // Why: gate bookkeeping must never fail daemon init; stale seeds only defer a usage refresh until next restart.
     console.warn('[daemon] Failed to reconcile seeded Claude live-PTY gate:', error)

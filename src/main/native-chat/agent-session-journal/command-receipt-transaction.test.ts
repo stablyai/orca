@@ -114,6 +114,7 @@ describe('command receipt transaction hook', () => {
       buildCommandReceiptTransaction(scope, () => ({ ...receipt, result }))
     )
     expect(committed).toHaveLength(1)
+    expect(committed[0]).toEqual(epochRow(7, 1000))
     expect(storedRows()).toEqual([{ seq: 7 }])
     expect(readReceipt()).toEqual({
       verdict: 'readable',

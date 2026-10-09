@@ -54,8 +54,24 @@ import { resetStructuredAgentLaunchPersistenceForTests } from '@/lib/structured-
 import { resetStructuredAgentLaunchRegistryForTests } from '@/lib/structured-agent-session-launch-registry'
 import { useNativeChatProvisionalLaunch } from './use-native-chat-provisional-launch'
 import { useStructuredAgentSession } from './use-structured-agent-session'
+import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
 
 const LOCAL_TARGET = { kind: 'local' } as const
+// The account's saved list: the picker names a saved pick only from a list the host gave.
+const SAVED_LIST = {
+  origin: 'probe',
+  models: [
+    { id: 'gpt-5.5', label: 'GPT-5.5', efforts: [] },
+    { id: 'gpt-5.6-luna', label: 'GPT-5.6 Luna', efforts: [] }
+  ],
+  fetchedAt: 1_000
+}
+
+function answerCatalog(method: string): Promise<unknown> {
+  return method === 'agentSession.modelCatalog'
+    ? Promise.resolve(SAVED_LIST)
+    : new Promise(() => {})
+}
 
 function saveSelection(model: string): void {
   useAppStore.setState({
@@ -122,15 +138,16 @@ describe('a chat pane over its own launch', () => {
     readState = sessionState(null)
     publishedTabs = []
     mocks.launch.mockReturnValue(new Promise(() => {}))
-    mocks.call.mockImplementation(() => new Promise(() => {}))
+    mocks.call.mockImplementation((_target, method) => answerCatalog(method))
+    resetHostModelCatalogSnapshotsForTests()
   })
 
-  it('keeps the selection its create seeded when a pick in another chat saves a new one', () => {
+  it('keeps the selection its create seeded when a pick in another chat saves a new one', async () => {
     saveSelection('gpt-5.5')
     startStructuredAgentLaunch('wt-first', 'codex', { requestId: 'request-1' })
     const second = startStructuredAgentLaunch('wt-second', 'codex', { requestId: 'request-2' })
     const { result, rerender } = renderLaunchedChat('wt-second', second.sessionId)
-    expect(currentModel(result.current.optionSnapshot)).toBe('gpt-5.5')
+    await waitFor(() => expect(currentModel(result.current.optionSnapshot)).toBe('gpt-5.5'))
 
     // The first chat's pick lands in settings while the second is still launching.
     act(() => saveSelection('gpt-5.6-luna'))
@@ -154,11 +171,12 @@ describe('a chat pane over its own launch', () => {
             ok: false,
             refusal: { code: 'invalid_option', message: 'GPT-5.6 Luna is not available' }
           })
-        : new Promise(() => {})
+        : answerCatalog(method)
     )
     const launch = startStructuredAgentLaunch('wt-refused', 'codex', { requestId: 'request-3' })
     const { sessionId } = launch
     const { result, rerender } = renderLaunchedChat('wt-refused', sessionId)
+    await waitFor(() => expect(currentModel(result.current.optionSnapshot)).toBe('gpt-5.5'))
     await act(async () => {
       expect(await result.current.setStructuredOption('model', 'gpt-5.6-luna')).toBe(true)
     })

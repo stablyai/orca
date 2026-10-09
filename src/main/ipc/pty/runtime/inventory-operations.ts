@@ -1,8 +1,7 @@
 import { ptyOwnership } from '../provider/ownership-state'
 import { getProvider, localProvider, registeredPtyProviders } from '../provider/registry'
 import {
-  LOCAL_EXECUTION_HOST_ID,
-  toSshExecutionHostId,
+  getConnectionExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import type { PtyProcessInfo } from '../../../providers/pty-process-info'
@@ -27,9 +26,7 @@ export async function listProcessesWithHostScopeFromRuntimeController(
 ): Promise<{ processes: PtyProcessInfo[]; hostIds: ExecutionHostId[] }> {
   const providerSessions = await Promise.all(
     registeredPtyProviders().map(async ({ provider, connectionId }) => {
-      const hostId: ExecutionHostId = connectionId
-        ? toSshExecutionHostId(connectionId)
-        : LOCAL_EXECUTION_HOST_ID
+      const hostId = getConnectionExecutionHostId(connectionId)
       try {
         return {
           processes: await (connectionId ? provider.listProcesses(opts) : provider.listProcesses()),

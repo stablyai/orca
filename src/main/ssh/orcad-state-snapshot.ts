@@ -55,15 +55,12 @@ function assertPlainMemberName(member: string): string {
 /** The Windows host-script op, or null on POSIX; `baseDir` is `~/.orca-remote`. */
 function windowsStateCommand(
   host: RemoteHostPlatform,
-  baseDir: string | undefined,
+  baseDir: string,
   op: OrcadWindowsHostStateOp,
   args: string[]
 ): string | null {
   if (!isWindowsRemoteHost(host)) {
     return null
-  }
-  if (!baseDir) {
-    throw new Error('Windows orcad state commands need the ~/.orca-remote directory')
   }
   return orcadWindowsHostOpCommand(host, baseDir, op, args)
 }
@@ -210,7 +207,7 @@ export function parseOrcadSnapshotCapture(output: string): OrcadSnapshotCapture 
 export function probeOrcadStateSnapshotCommand(
   host: RemoteHostPlatform,
   snapshotDir: string,
-  baseDir?: string
+  baseDir: string
 ): string {
   const windows = windowsStateCommand(host, baseDir, 'snapshot-probe', [snapshotDir])
   if (windows) {
@@ -318,7 +315,7 @@ export function compareOrcadStateSnapshotCommand(
   host: RemoteHostPlatform,
   userDataDir: string,
   snapshotDir: string,
-  baseDir?: string
+  baseDir: string
 ): string {
   const windows = windowsStateCommand(host, baseDir, 'snapshot-compare', [userDataDir, snapshotDir])
   if (windows) {
@@ -363,7 +360,7 @@ export function orcadSnapshotIsUnchanged(output: string): boolean {
 export function newestStateMtimeCommand(
   host: RemoteHostPlatform,
   userDataDir: string,
-  baseDir?: string
+  baseDir: string
 ): string {
   const windows = windowsStateCommand(host, baseDir, 'state-newest-mtime', [userDataDir])
   if (windows) {

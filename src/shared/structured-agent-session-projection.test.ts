@@ -555,6 +555,7 @@ describe('structured agent session status projection', () => {
 describe('notice projection for desktop and mobile consumers', () => {
   it.each([
     { presentation: 'compaction' },
+    { presentation: 'compaction-skipped', tone: 'warning' },
     { presentation: 'plan-document' },
     { tone: 'warning' },
     { tone: 'error' },

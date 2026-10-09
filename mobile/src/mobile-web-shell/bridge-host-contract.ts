@@ -108,6 +108,8 @@ export type BridgeHostOptions = {
    * navigation does not get the clipboard because some other route needs it.
    */
   routeGrants: readonly string[]
+  /** Set only for the wide host-area session: tells the page it draws the host sidebar. */
+  ownsHostArea?: boolean
   /**
    * Whether this session already completed a handshake before this host existed.
    *

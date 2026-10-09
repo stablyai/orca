@@ -20,6 +20,7 @@ import { piRpcProviderLink, type PiRpcResolvedLaunch } from './rpc-launch-resolu
 import { PiRpcSession, type PiRpcSessionDeps, type PiRpcConnection } from './rpc-session'
 import { PiRpcPromptError, preparePiRpcPrompt } from './rpc-prompt'
 import { applyPiRpcSessionOption, readPiRpcSessionOptions } from './rpc-options'
+import { withLiveCatalogListing } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { supportsSupervisedProviderChildLocation } from '../provider-process/supervised-provider-child-location'
 import { ClaudeDispatchContentError } from '../claude/claude-structured-dispatch-content'
 
@@ -225,8 +226,10 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
     const session = this.session(input.sessionId, input.fence)
     return applyPiRpcSessionOption(session.connection, session.selected, input.key, input.value)
   }
-  readOptions: NonNullable<StructuredAgentSessionAdapter['readOptions']> = (input) =>
-    readPiRpcSessionOptions(this.session(input.sessionId, input.fence).connection)
+  readOptions: NonNullable<StructuredAgentSessionAdapter['readOptions']> = async (input) =>
+    withLiveCatalogListing(
+      await readPiRpcSessionOptions(this.session(input.sessionId, input.fence).connection)
+    )
   readCommands = (id: string) => this.sessions.get(id)?.commands
   readOptionRestoreFailures(id: string): readonly string[] {
     return this.sessions.get(id)?.skipped ?? []

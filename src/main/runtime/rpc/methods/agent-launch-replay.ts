@@ -30,7 +30,7 @@ import type {
 import { resolveAgentSessionReplayOutcome } from '../../../native-chat/agent-session-wire/structured-agent-session-replay-outcome'
 import type { RpcContext } from '../core'
 import { rpcCallerOperationKey } from '../rpc-caller-identity'
-import type { AgentLaunchParams } from './agent-launch-schemas'
+import type { AgentLaunchParams } from '../../../../shared/rpc-contract/agent-launch-params'
 
 /**
  * The ledger namespace of whoever the transport says is calling. A transport that could not name its
