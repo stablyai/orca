@@ -28,6 +28,7 @@ import nacl from 'tweetnacl'
 import type WebSocket from 'ws'
 import type { RawData } from 'ws'
 import type { RelayConfig } from './config.js'
+import type { AssignmentLeaseShadow } from './assignment-lease-shadow.js'
 import type { RelayAssignmentStore } from './assignment-store.js'
 import { CellSeatLog, type CellSeatChange, type CellSeatFeedPage } from './cell-seat-log.js'
 import { ControlRenewalBatch } from './control-renewal-batch.js'
@@ -343,7 +344,8 @@ export class HostSessionRegistry {
     private readonly observer: RelayRuntimeObserver,
     private readonly now: () => number = Date.now,
     private readonly random: () => number = Math.random,
-    private readonly cellIncarnation?: string
+    private readonly cellIncarnation?: string,
+    private readonly assignmentLeaseShadow?: AssignmentLeaseShadow
   ) {}
 
   // Renewals leave the heartbeat as an enqueue: one statement per cell per
@@ -813,7 +815,8 @@ export class HostSessionRegistry {
     socket: WebSocket,
     identity: RelayTokenClaims,
     connectionInclusionWatermark?: number,
-    hostCapabilities?: ReadonlySet<string>
+    hostCapabilities?: ReadonlySet<string>,
+    assignmentLease?: string
   ): void {
     if (this.idleAttempts.has(identity.relayHostId)) {
       socket.close(RELAY_CLOSE_CODE.WRONG_CELL, 'idle cutover in progress')
@@ -837,7 +840,8 @@ export class HostSessionRegistry {
             socket,
             identity,
             payload(raw, 'host-hello'),
-            connectionInclusionWatermark
+            connectionInclusionWatermark,
+            assignmentLease
           ),
         socket,
         'host hello proof'
@@ -979,7 +983,8 @@ export class HostSessionRegistry {
     socket: WebSocket,
     identity: RelayTokenClaims,
     candidate: unknown,
-    connectionInclusionWatermark?: number
+    connectionInclusionWatermark?: number,
+    assignmentLease?: string
   ): Promise<void> {
     const hello = HostHelloSchema.safeParse(candidate)
     const hostPublicKey = hello.success
@@ -1003,6 +1008,15 @@ export class HostSessionRegistry {
       socket.close(RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'host key binding mismatch')
       return
     }
+    const leaseShadow = this.config.role === 'cell' ? this.assignmentLeaseShadow : undefined
+    const leaseCheck =
+      leaseShadow?.check({
+        lease: assignmentLease,
+        userId: identity.sub,
+        relayHostId: identity.relayHostId,
+        helloEpoch: hello.data.assignmentEpoch
+      }) ?? null
+    const assignmentReadStartedAt = performance.now()
     // Combined is staging-only compatibility; stamped cells require the durable director epoch.
     const assignmentValid =
       this.config.role === 'combined'
@@ -1013,6 +1027,14 @@ export class HostSessionRegistry {
             cellId: this.config.cellId,
             assignmentEpoch: hello.data.assignmentEpoch
           })
+    // The database answer decides; the lease is only compared with it.
+    if (leaseShadow && leaseCheck) {
+      leaseShadow.record(
+        leaseCheck,
+        assignmentValid,
+        performance.now() - assignmentReadStartedAt
+      )
+    }
     if (!assignmentValid) {
       this.observer.recordAuth(false)
       socket.close(RELAY_CLOSE_CODE.WRONG_CELL, 'wrong assignment epoch')
