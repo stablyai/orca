@@ -39,6 +39,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       grokResultPromise,
       cursorResultPromise,
       zcodeResultPromise,
+      museResultPromise,
       antigravityResultPromise
     } = prepared
     if (signal.aborted) {
@@ -191,12 +192,14 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : this.state.minimax
     })
 
-    const [grokSettled, cursorSettled, zcodeSettled, antigravitySettled] = await Promise.all([
-      grokResultPromise,
-      cursorResultPromise,
-      zcodeResultPromise,
-      antigravityResultPromise
-    ])
+    const [grokSettled, cursorSettled, zcodeSettled, museSettled, antigravitySettled] =
+      await Promise.all([
+        grokResultPromise,
+        cursorResultPromise,
+        zcodeResultPromise,
+        museResultPromise,
+        antigravityResultPromise
+      ])
     if (signal.aborted) {
       return
     }
@@ -204,6 +207,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     const cursor = settleSiblingProviderResult('cursor', cursorSettled)
     const zcode = settleSiblingProviderResult('zcode', zcodeSettled)
     const shouldApplyZcode = zcodeGeneration === this.zcodeFetchGeneration
+    const muse = settleSiblingProviderResult('muse', museSettled)
     const antigravity = settleSiblingProviderResult('antigravity', antigravitySettled)
     // Why: the stale policy keeps a recent snapshot through a failed refresh, but
     // a snapshot belonging to a different Cursor account must not survive the
@@ -227,6 +231,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     if (shouldApplyZcode) {
       this.trackActiveFailureStreak('zcode', zcode)
     }
+    this.trackActiveFailureStreak('muse', muse)
     this.trackActiveFailureStreak('antigravity', antigravity)
     this.updateState({
       ...this.state,
@@ -239,6 +244,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           : zcode.status === 'error' && !sameZcodeAccount
             ? zcode
             : this.applyStalePolicy(zcode, previousState.zcode),
+      muse: this.applyStalePolicy(muse, previousState.muse),
       antigravity: this.applyStalePolicy(antigravity, previousState.antigravity)
     })
   }

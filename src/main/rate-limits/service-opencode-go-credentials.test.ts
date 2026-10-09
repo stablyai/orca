@@ -36,6 +36,10 @@ vi.mock('./cursor-auth', () => ({ readCursorAuthSession: vi.fn() }))
 vi.mock('./zcode-usage-fetcher', () => ({ fetchZcodeRateLimits: vi.fn() }))
 vi.mock('./antigravity-usage-fetcher', () => ({ fetchAntigravityRateLimits: vi.fn() }))
 
+vi.mock('./muse-usage-fetcher', () => ({
+  fetchMuseRateLimits: vi.fn()
+}))
+
 vi.mock('./opencode-go-usage-source-selection', () => ({
   fetchOpenCodeGoUsage: vi.fn()
 }))

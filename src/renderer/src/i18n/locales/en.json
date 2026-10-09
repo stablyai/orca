@@ -225,7 +225,8 @@
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
         "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
         "cursorToggleDescription": "Show Cursor plan usage when signed in through cursor-agent or Cursor IDE.",
-        "zcodeToggleDescription": "Show ZCode Coding Plan quota usage."
+        "zcodeToggleDescription": "Show ZCode Coding Plan quota usage.",
+        "museToggleDescription": "Show Muse Code subscription usage. Each refresh spends one minimal Muse request."
       },
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
@@ -3990,7 +3991,8 @@
             "codexSignInError": "Codex sign-in failed. Please try again.",
             "cursorUsageMenu": "Cursor Usage",
             "hiddenUsageProviders": "Also: {{value0}}",
-            "zcodeUsageMenu": "ZCode Usage"
+            "zcodeUsageMenu": "ZCode Usage",
+            "museUsageMenu": "Muse Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -9599,6 +9601,10 @@
             "usagePercentageDisplayTitle": "Usage percentages",
             "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining.",
             "zcodeUsageTitle": "ZCode Usage",
+            "museUsageTitle": "Muse Usage",
+            "museUsageDescription": "Show Muse Code subscription usage in the status bar.",
+            "muse": "muse",
+            "meta": "meta",
             "zcodeUsageDescription": "Show ZCode Coding Plan quota usage in the status bar.",
             "zcode": "zcode",
             "zai": "zai",

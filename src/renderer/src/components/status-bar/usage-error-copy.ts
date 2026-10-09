@@ -29,6 +29,9 @@ export function getProviderDisplayName(provider: ProviderRateLimits['provider'])
   if (provider === 'zcode') {
     return 'ZCode'
   }
+  if (provider === 'muse') {
+    return 'Muse'
+  }
   if (provider === 'cursor') {
     return 'Cursor'
   }
