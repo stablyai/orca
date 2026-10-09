@@ -1497,21 +1497,10 @@ resource "google_monitoring_alert_policy" "relay_database_rejection_fenced" {
   conditions {
     display_name = "Fenced database rejections, fleet-wide"
 
-    condition_threshold {
-      filter          = "(resource.type=\"cloud_run_revision\" OR resource.type=\"gce_instance\") AND metric.type=\"logging.googleapis.com/user/orca_relay_database_rejection_fenced\""
-      comparison      = "COMPARISON_GT"
-      threshold_value = 0
-      duration        = "0s"
-
-      aggregations {
-        alignment_period     = "300s"
-        per_series_aligner   = "ALIGN_SUM"
-        cross_series_reducer = "REDUCE_SUM"
-      }
-
-      trigger {
-        count = 1
-      }
+    # One series across directors and cells, which a single threshold filter cannot span.
+    condition_prometheus_query_language {
+      query    = "sum(increase(logging_googleapis_com:user_orca_relay_database_rejection_fenced[5m])) > 0"
+      duration = "0s"
     }
   }
 

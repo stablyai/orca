@@ -35,10 +35,11 @@ test('the fence metrics count the exact events on directors and cells', () => {
 
 test('the fenced alert is one fleet-wide series, and the fatal alert leaves cells to the exit alert', () => {
   const fenced = block('google_monitoring_alert_policy', 'relay_database_rejection_fenced')
-  assert.ok(fenced.includes('logging.googleapis.com/user/orca_relay_database_rejection_fenced\\"'))
-  assert.ok(fenced.includes('resource.type=\\"gce_instance\\"'))
-  assert.doesNotMatch(fenced, /group_by_fields/)
-  assert.match(fenced, /threshold_value = 0\n/)
+  assert.ok(
+    fenced.includes(
+      'query    = "sum(increase(logging_googleapis_com:user_orca_relay_database_rejection_fenced[5m])) > 0"'
+    )
+  )
   const fatal = block('google_monitoring_alert_policy', 'relay_process_fatal')
   assert.ok(fatal.includes('resource.type=\\"cloud_run_revision\\" AND metric.type=\\"logging.googleapis.com/user/orca_relay_process_fatal\\"'))
   assert.doesNotMatch(fatal, /gce_instance/)
