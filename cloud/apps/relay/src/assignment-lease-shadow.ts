@@ -23,7 +23,8 @@ const CLASS_FIELDS: ReadonlyArray<readonly [AssignmentLeaseShadowClass, string]>
 const MAX_DB_READ_SAMPLES = 2_000
 
 export class AssignmentLeaseShadow {
-  private counts = new Map<string, number>()
+  // Hellos the database refused, whatever the lease said; `disagree` is the valid-lease part.
+  private dbRefused = 0
   private classes = new Map<AssignmentLeaseShadowClass, number>()
   private dbReadMs: number[] = []
   private windowStartedAt: number
@@ -56,8 +57,7 @@ export class AssignmentLeaseShadow {
       .then((leaseClass) => {
         const shadowClass: AssignmentLeaseShadowClass =
           leaseClass === 'valid' ? (dbValid ? 'agree' : 'disagree') : leaseClass
-        const key = `${shadowClass}:${dbValid ? 'db-valid' : 'db-refused'}`
-        this.counts.set(key, (this.counts.get(key) ?? 0) + 1)
+        if (!dbValid) this.dbRefused += 1
         this.classes.set(shadowClass, (this.classes.get(shadowClass) ?? 0) + 1)
         if (this.dbReadMs.length < MAX_DB_READ_SAMPLES) this.dbReadMs.push(dbReadMs)
         this.flushIfDue()
@@ -74,10 +74,10 @@ export class AssignmentLeaseShadow {
         event: ASSIGNMENT_LEASE_SHADOW_EVENT,
         cellId: this.input.cellId,
         windowMs: now - this.windowStartedAt,
-        counts: Object.fromEntries(this.counts),
         classes: Object.fromEntries(
           CLASS_FIELDS.map(([shadowClass, field]) => [field, this.classes.get(shadowClass) ?? 0])
         ),
+        dbRefused: this.dbRefused,
         // The hello's database read, which a lease-admitted hello would skip (E-pre).
         dbReadMs: {
           samples: this.dbReadMs.length,
@@ -87,7 +87,7 @@ export class AssignmentLeaseShadow {
         }
       })
     )
-    this.counts = new Map()
+    this.dbRefused = 0
     this.classes = new Map()
     this.dbReadMs = []
     this.windowStartedAt = now
