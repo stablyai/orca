@@ -1,13 +1,11 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { ProcessResult } from '../shared/child-process/run-process'
 import {
   ensureMacPressAndHoldDefault,
   interpretDefaultsRead,
-  isOrcaPreferencesDomain,
-  readBundleIdentifierFromExecutablePath,
+  isOwnPreferencesDomain,
   type PressAndHoldDecision,
   type PressAndHoldHost,
   type PressAndHoldRecord
@@ -140,12 +138,13 @@ describe('ensureMacPressAndHoldDefault', () => {
       expect(writes).toEqual([])
     })
 
-    it('accepts Orca and its channel-scoped bundles, and nothing else', () => {
-      expect(isOrcaPreferencesDomain('com.stablyai.orca')).toBe(true)
-      expect(isOrcaPreferencesDomain('com.stablyai.orca.dev')).toBe(true)
-      expect(isOrcaPreferencesDomain('com.github.Electron')).toBe(false)
-      // Why: a prefix test without the dot would accept a lookalike bundle id.
-      expect(isOrcaPreferencesDomain('com.stablyai.orcafake')).toBe(false)
+    it('accepts any bundle-supplied domain and rejects the shared unpackaged one', () => {
+      expect(isOwnPreferencesDomain('com.stablyai.orca')).toBe(true)
+      expect(isOwnPreferencesDomain('com.stablyai.orca.dev')).toBe(true)
+      // Why: a renamed build signs its own Info.plist, so the domain is its own to write.
+      expect(isOwnPreferencesDomain('com.example.fork')).toBe(true)
+      expect(isOwnPreferencesDomain('com.github.Electron')).toBe(false)
+      expect(isOwnPreferencesDomain('')).toBe(false)
     })
   })
 
@@ -222,47 +221,6 @@ describe('interpretDefaultsRead', () => {
         expect(interpretDefaultsRead(failing)).toBe('unknown')
       })
     }
-  })
-})
-
-describe('readBundleIdentifierFromExecutablePath', () => {
-  const roots: string[] = []
-
-  afterEach(() => {
-    for (const root of roots.splice(0)) {
-      rmSync(root, { recursive: true, force: true })
-    }
-  })
-
-  function bundleWithPlist(body: string): string {
-    const root = mkdtempSync(join(tmpdir(), 'orca-press-hold-'))
-    roots.push(root)
-    mkdirSync(join(root, 'Orca.app', 'Contents', 'MacOS'), { recursive: true })
-    writeFileSync(join(root, 'Orca.app', 'Contents', 'Info.plist'), body)
-    return join(root, 'Orca.app', 'Contents', 'MacOS', 'Orca')
-  }
-
-  it('reads CFBundleIdentifier from the plist beside the executable', () => {
-    const exe = bundleWithPlist(
-      '<plist><dict>\n<key>CFBundleName</key>\n<string>Orca</string>\n' +
-        '<key>CFBundleIdentifier</key>\n\t<string>com.stablyai.orca</string>\n</dict></plist>'
-    )
-
-    expect(readBundleIdentifierFromExecutablePath(exe)).toBe('com.stablyai.orca')
-  })
-
-  it('returns null when the plist is missing or carries no identifier', () => {
-    expect(readBundleIdentifierFromExecutablePath('/nonexistent/App.app/Contents/MacOS/App')).toBe(
-      null
-    )
-    expect(readBundleIdentifierFromExecutablePath(bundleWithPlist('<plist><dict/></plist>'))).toBe(
-      null
-    )
-    expect(
-      readBundleIdentifierFromExecutablePath(
-        bundleWithPlist('<key>CFBundleIdentifier</key><string></string>')
-      )
-    ).toBe(null)
   })
 })
 
