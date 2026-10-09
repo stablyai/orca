@@ -2,7 +2,9 @@
 import { existsSync } from 'node:fs'
 import { app } from 'electron'
 import { relayBundleCandidates } from './relay-bundle-paths'
-import { PinnedRelayFallbackError, resolveConnectRemoteRuntime } from './ssh-relay-pinned-node'
+import { PinnedRelayFallbackError, resolveSshRemoteRuntime } from './ssh-relay-pinned-node'
+import { recordSshRelayRuntimeStep } from './ssh-host-node-runtime-mode'
+import { isAnsweredHostFailure } from './ssh-relay-host-answered-failure'
 import {
   ensurePinnedRelayRuntime,
   prebuiltRelayNodePath,
@@ -10,7 +12,7 @@ import {
 } from './ssh-relay-pinned-node-install'
 import type { PrebuiltRelayPlan } from './ssh-relay-host-node-addons'
 import {
-  nextRelayRuntimeStep,
+  relayRuntimeStepAfterRefusal,
   relayRuntimeLadder,
   relayRuntimeStorePins,
   type RelayRuntimeStep
@@ -429,21 +431,24 @@ async function deployAndLaunchRelayInner(
 ): Promise<RelayDeployResult> {
   const target = typeof conn.getTarget === 'function' ? conn.getTarget() : undefined
   const registry = getSshTargetRegistryStore()
-  const ladder = relayRuntimeLadder(
-    resolveConnectRemoteRuntime(target, target && registry?.getTarget(target.id))
-  )
+  const ladder = relayRuntimeLadder(resolveSshRemoteRuntime(target))
   const run = new RelayRuntimeLadderRun(
     target?.id ?? relayInstanceId ?? '',
-    target && registry ? sshTargetRelayRuntimeDecisionStore(registry) : null
+    target && registry ? sshTargetRelayRuntimeDecisionStore(registry) : null,
+    ladder.length > 1
   )
   let step = ladder[0] ?? 'legacy'
   while (true) {
     deploySignal?.throwIfAborted()
     try {
       if (step === 'D') {
+        if (target) {
+          recordSshRelayRuntimeStep(target.id, false)
+        }
         run.settle('D')
         throw remoteRuntimeUnavailableError(run)
       }
+      run.launchStarted = false
       const result = await deployAndLaunchRelayAttempt(
         conn,
         onProgress,
@@ -453,22 +458,26 @@ async function deployAndLaunchRelayInner(
         { step, run }
       )
       // Why only a laddered pass: a plain host-npm connect has no rung decision to record.
-      if (ladder.length > 1) {
+      if (run.laddered) {
         run.settle(step)
+      }
+      if (target) {
+        recordSshRelayRuntimeStep(target.id, step === 'legacy')
       }
       return result
     } catch (err) {
-      if (err instanceof PinnedRelayFallbackError && step !== 'legacy' && step !== 'D') {
+      const refusal = ladderRefusal(err, step, run)
+      if (refusal) {
         console.warn(
-          `[ssh-relay] Relay runtime rung ${step} unavailable (${err.reason}): ${err.detail}`
+          `[ssh-relay] Relay runtime rung ${step} unavailable (${refusal.reason}): ${refusal.detail}`
         )
-        run.refused(step, err.reason, err.remembered)
-        step = nextRelayRuntimeStep(ladder, step, err.reason, err.remembered)
+        run.refused(step, refusal.reason, refusal.remembered)
+        step = relayRuntimeStepAfterRefusal(ladder, step, refusal.reason, refusal.remembered)
         run.enter(step)
         continue
       }
       if (!(err instanceof RelayDirectoryGcConflictError)) {
-        if (ladder.length > 1 && !deploySignal?.aborted) {
+        if (run.laddered && !deploySignal?.aborted) {
           run.unresolved(step)
         }
         throw err
@@ -477,6 +486,32 @@ async function deployAndLaunchRelayInner(
       await waitForRelayGcClaimRelease(conn, err.remoteRelayDir, err.hostPlatform, deploySignal)
     }
   }
+}
+
+/**
+ * The refusal a failed ladder step steps past, or null when it must propagate. Any failure the
+ * host answered steps down, classified or not; opt-in legacy is the user's choice, with no D below.
+ */
+function ladderRefusal(
+  err: unknown,
+  step: RelayRuntimeStep,
+  run: RelayRuntimeLadderRun
+): PinnedRelayFallbackError | null {
+  if (step === 'D' || (step === 'legacy' && !run.laddered)) {
+    return null
+  }
+  if (err instanceof PinnedRelayFallbackError) {
+    return err
+  }
+  // Why not after launch: a relay may be running, and a second rung would launch beside it.
+  if (
+    run.launchStarted ||
+    err instanceof RelayDirectoryGcConflictError ||
+    !isAnsweredHostFailure(err)
+  ) {
+    return null
+  }
+  return new PinnedRelayFallbackError('install_failed', err instanceof Error ? err.message : '')
 }
 
 type RelayRuntimeRequest = { step: RelayRuntimeStep; run: RelayRuntimeLadderRun }
@@ -489,7 +524,7 @@ async function deployAndLaunchRelayAttempt(
   deploySignal?: AbortSignal,
   runtimeRequest: RelayRuntimeRequest = {
     step: 'legacy',
-    run: new RelayRuntimeLadderRun(relayInstanceId ?? '', null)
+    run: new RelayRuntimeLadderRun(relayInstanceId ?? '', null, false)
   }
 ): Promise<RelayDeployResult> {
   onProgress?.('Detecting remote platform...')
@@ -577,7 +612,15 @@ async function deployAndLaunchRelayOnRuntime({
         prebuilt,
         deploySignal
       )
-    : await resolveRelayBootstrapState(conn, hostPlatform, fullVersion, deploySignal)
+    : run.hostNodePath
+      ? // Why: the fallback's strict probe already found this Node; don't resolve it twice.
+        {
+          ...(await resolveRemoteInstallState(conn, hostPlatform, fullVersion, {
+            signal: deploySignal
+          })),
+          nodePath: run.hostNodePath
+        }
+      : await resolveRelayBootstrapState(conn, hostPlatform, fullVersion, deploySignal)
   console.log(`[ssh-relay] Remote dir: ${remoteRelayDir}`)
   console.log(`[ssh-relay] Already installed at ${fullVersion}: ${alreadyInstalled}`)
   const pinnedContext = prebuilt
@@ -791,6 +834,7 @@ async function deployAndLaunchRelayOnRuntime({
   onProgress?.('Starting relay...')
   console.log('[ssh-relay] Launching relay...')
   // A failed launch retains its fences until stale recovery can establish liveness.
+  run.launchStarted = true
   const launched = await launchRelay(
     conn,
     remoteRelayDir,

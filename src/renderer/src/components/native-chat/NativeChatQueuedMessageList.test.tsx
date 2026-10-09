@@ -5,13 +5,12 @@
 // captions derived client-side per state.
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   updateSettings: vi.fn()
 }))
 
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('../../store', () => {
   const state = { updateSettings: mocks.updateSettings }
@@ -31,12 +30,21 @@ import {
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
 import type { AgentSessionQueuePause } from '../../../../shared/agent-session-queued-message-wire'
+import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 
-function renderList(owner: StructuredAgentSessionQueuedMessagesController) {
+function renderList(
+  owner: StructuredAgentSessionQueuedMessagesController,
+  agentName?: string,
+  statedFailures?: readonly AgentSessionFailureFact[]
+) {
   // The app root mounts the provider; tests supply the same context.
   return render(
     <TooltipProvider delayDuration={0}>
-      <NativeChatQueuedMessageList controller={owner} />
+      <NativeChatQueuedMessageList
+        controller={owner}
+        agentName={agentName}
+        statedFailures={statedFailures}
+      />
     </TooltipProvider>
   )
 }
@@ -126,6 +134,60 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('NativeChatQueuedMessageList', () => {
+  it.each([
+    [
+      'Claude',
+      "Claude isn't signed in. Run `claude auth login`, or choose an account in Claude Accounts settings."
+    ],
+    ['Codex', "Codex isn't signed in. Run `codex login`."],
+    ['Grok', 'Sign in to Grok with `grok login` on the computer running this chat.'],
+    [
+      'OpenCode',
+      'Sign in to OpenCode with `opencode auth login` on the computer running this chat.'
+    ],
+    ['Pi', 'Sign in to Pi by running `pi` and using `/login` on the computer running this chat.'],
+    ['OMP', 'Sign in to OMP.']
+  ])(
+    'threads %s identity to returned cards and keeps their Send control',
+    (agentName, sentence) => {
+      renderList(
+        controller([
+          card({
+            messageId: 'auth',
+            state: 'returned',
+            hold: 'returned',
+            returnedReason: 'Host English',
+            returnedRejection: { kind: 'notSignedIn' }
+          })
+        ]),
+        agentName
+      )
+      expect(screen.getByText(sentence)).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy()
+      expect(screen.queryByText(/send your message again/)).toBeNull()
+    }
+  )
+
+  it.each(['Claude', 'Codex'])(
+    'keeps %s managed guidance and shows only delivery when the row explains auth',
+    (agentName) => {
+      const fact: AgentSessionFailureFact = { kind: 'notSignedIn', account: 'managed' }
+      const owner = controller([
+        card({ messageId: 'auth', state: 'returned', hold: 'returned', returnedRejection: fact })
+      ])
+      const rendered = renderList(owner, agentName)
+      expect(
+        screen.getByText(
+          `This ${agentName} account isn't signed in. Sign in again in ${agentName} Accounts settings.`
+        )
+      ).toBeTruthy()
+      rendered.unmount()
+      renderList(owner, agentName, [fact])
+      expect(screen.getByText('Your message was not sent.')).toBeTruthy()
+      expect(screen.queryByText(/account isn't signed in/)).toBeNull()
+      expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy()
+    }
+  )
   it('renders only an empty live region when the host holds no drafts', () => {
     const { container } = renderList(controller([]))
     expect(screen.queryByRole('list')).toBeNull()
@@ -168,6 +230,65 @@ describe('NativeChatQueuedMessageList', () => {
     expect(owner.steer).toHaveBeenCalledWith('draft-1')
     fireEvent.click(screen.getAllByRole('button', { name: 'Delete' })[1]!)
     expect(owner.remove).toHaveBeenCalledWith('draft-2')
+  })
+
+  it('a command card never steers: Send only while the agent is idle', () => {
+    const owner = controller([
+      card({ messageId: 'compact-1', text: '/compact', command: true, waitsForAgent: true }),
+      card({ messageId: 'compact-2', text: '/compact', command: true, hold: 'paused' })
+    ])
+    renderList(owner)
+    expect(screen.getAllByText('/compact')).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: 'Steer' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    expect(owner.steer).toHaveBeenCalledWith('compact-2')
+    expect(screen.getAllByRole('button', { name: 'Delete' })).toHaveLength(2)
+  })
+
+  it('a send on its way reads Sending and offers nothing until the host holds it', () => {
+    renderList(controller([card({ messageId: 'sending-1', text: 'on its way', hold: 'sending' })]))
+    expect(screen.getByText('Sending…')).toBeTruthy()
+    expect(screen.queryAllByRole('button')).toHaveLength(0)
+  })
+
+  it("a send-failed command card's caption names Send only when Send is there", () => {
+    const failed = { command: true as const, hold: 'paused' as const, pausedReason: 'send_failed' }
+    renderList(
+      controller([
+        card({ messageId: 'working', text: '/compact', ...failed, waitsForAgent: true }),
+        card({ messageId: 'idle', text: '/compact', ...failed })
+      ])
+    )
+    expect(
+      screen.getByText("Couldn't send — press Send to retry once the agent finishes.")
+    ).toBeTruthy()
+    expect(screen.getByText("Couldn't send — press Send to retry.")).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: 'Send' })).toHaveLength(1)
+  })
+
+  it('an idle command card waiting its turn reads Send, not Steer', () => {
+    renderList(controller([card({ messageId: 'compact-1', text: '/compact', command: true })]))
+    expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Steer' })).toBeNull()
+  })
+
+  it('a command card offers no Edit: its text is not a draft', async () => {
+    renderList(controller([card({ messageId: 'compact-1', text: '/compact', command: true })]))
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions' }))
+    expect(await screen.findByRole('menuitem', { name: 'Turn off queueing' })).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: 'Edit message' })).toBeNull()
+  })
+
+  it("a paused command card's ways out are Delete and the queue's Resume", () => {
+    const owner = controller(
+      [card({ messageId: 'compact-1', text: '/compact', command: true, hold: 'queue-paused' })],
+      { reason: 'stopped' }
+    )
+    renderList(owner)
+    fireEvent.click(screen.getByRole('button', { name: 'Resume' }))
+    expect(owner.resume).toHaveBeenCalledOnce()
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    expect(owner.remove).toHaveBeenCalledWith('compact-1')
   })
 
   it("holds every card's Steer while a person's Stop ends the turn; Delete still works", () => {
@@ -579,4 +700,49 @@ describe('NativeChatQueuedMessageList', () => {
       expect(owner.steer).toHaveBeenCalledWith('kept')
     }
   )
+
+  // A long queue scrolls inside its own bounded box; a card the person queues is scrolled to,
+  // while another agent's card leaves the view on the next card to send.
+  it("scrolls only to a card the person just queued, inside the list's own bound", () => {
+    const from = { kind: 'agent' as const, senders: [], orchestration: null }
+    const first = [card({ messageId: 'a', position: 1 }), card({ messageId: 'b', position: 2 })]
+    const view = renderList(controller(first))
+    const list = screen.getByRole('list', { name: 'Queued messages' })
+    expect(list.className).toMatch(/\bmax-h-40\b/)
+    expect(list.className).toMatch(/\boverflow-y-auto\b/)
+    Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 500 })
+    const rerender = (cards: QueuedMessageCard[]): void =>
+      view.rerender(
+        <TooltipProvider delayDuration={0}>
+          <NativeChatQueuedMessageList controller={controller(cards)} />
+        </TooltipProvider>
+      )
+    rerender([...first, card({ messageId: 'mail', position: 3, from })])
+    expect(list.scrollTop).toBe(0)
+    rerender([
+      ...first,
+      card({ messageId: 'mail', position: 3, from }),
+      card({ messageId: 'mine', position: 4 })
+    ])
+    expect(list.scrollTop).toBe(500)
+  })
+
+  // The queue a chat opens with arrives after the list mounts; it opens on the next card to send.
+  it('does not scroll for cards that load after the list mounts', () => {
+    // The list mounts with the cards, so its height is stubbed where it will be read.
+    const height = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(500)
+    onTestFinished(() => height.mockRestore())
+    const view = renderList(controller([]))
+    view.rerender(
+      <TooltipProvider delayDuration={0}>
+        <NativeChatQueuedMessageList
+          controller={controller([
+            card({ messageId: 'a', position: 1 }),
+            card({ messageId: 'b', position: 2 })
+          ])}
+        />
+      </TooltipProvider>
+    )
+    expect(screen.getByRole('list', { name: 'Queued messages' }).scrollTop).toBe(0)
+  })
 })

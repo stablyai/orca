@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { isWindowVisible } from '@/lib/window-visibility-interval'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { createVisibleHostedReviewRefreshScheduler } from '@/store/github/visible-hosted-review-refresh-scheduler'
+import { getWorkspaceReferenceRefreshTargets } from '@/components/sidebar/workspace-reference-refresh-targets'
 import {
   getVisibleHostedReviewRefreshTargets,
   visibleHostedReviewRefreshInputsChanged
@@ -14,13 +15,19 @@ export function useVisibleHostedReviewRefresh({ enabled }: { enabled: boolean })
       return
     }
     const scheduler = createVisibleHostedReviewRefreshScheduler()
-    const update = (): void =>
-      scheduler.update(
-        getVisibleHostedReviewRefreshTargets(useAppStore.getState(), useAppStore.getState, {
-          selectedOnly: isWebClientLocation()
-        })
-      )
-    const visibilityChanged = (): void => scheduler.setVisible(isWindowVisible())
+    const update = (): void => {
+      const state = useAppStore.getState()
+      const selectedOnly = isWebClientLocation()
+      scheduler.update([
+        ...getVisibleHostedReviewRefreshTargets(state, useAppStore.getState, { selectedOnly }),
+        ...getWorkspaceReferenceRefreshTargets(state, { selectedOnly })
+      ])
+    }
+    const visibilityChanged = (): void => {
+      scheduler.setVisible(false)
+      update()
+      scheduler.setVisible(isWindowVisible())
+    }
     const unsubscribe = useAppStore.subscribe((state, previous) => {
       if (visibleHostedReviewRefreshInputsChanged(state, previous)) {
         update()

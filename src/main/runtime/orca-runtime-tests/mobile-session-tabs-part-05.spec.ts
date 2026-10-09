@@ -352,7 +352,8 @@ describe('OrcaRuntimeService', () => {
       isDestroyed: () => false,
       webContents: {
         isDestroyed: () => false,
-        setBackgroundThrottling
+        setBackgroundThrottling,
+        capturePage: vi.fn(async () => null)
       }
     })
 
@@ -434,7 +435,8 @@ describe('OrcaRuntimeService', () => {
       isDestroyed: () => false,
       webContents: {
         isDestroyed: () => false,
-        setBackgroundThrottling: vi.fn()
+        setBackgroundThrottling: vi.fn(),
+        capturePage: vi.fn(async () => null)
       }
     })
 

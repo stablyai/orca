@@ -27,7 +27,7 @@ import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from '../../shar
  * capability the host uses as an authorization gate has to be named here or the method is refused.
  * That is why this stays a curated set rather than the remote list: several remote-only entries
  * would change local behaviour if adopted (`SESSION_TAB_CLOSE_INTENT` alone would start refusing
- * an unattributed desktop tab close), and the divergence is pinned in this module's test.
+ * an unattributed desktop tab close), the lists remain curated for those reasons.
  *
  * One constant, not one list per dispatch path: the unary and streaming handlers held separate
  * copies, and a capability added to one and missed on the other is invisible until a user hits it.

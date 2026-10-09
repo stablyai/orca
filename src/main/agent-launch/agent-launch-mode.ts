@@ -26,7 +26,7 @@ import type {
 import { RUNTIME_CAPABILITIES } from '../../shared/protocol-version'
 import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from '../runtime/structured-agent-runtime-registrations'
 import {
-  prefersStructuredNativeChatByDefault,
+  isNativeChatEnabled,
   resolveStructuredNativeChatSupport,
   type NativeChatDefaultSettings,
   type StructuredNativeChatBlocker
@@ -137,7 +137,7 @@ export function decideAgentLaunchMode(args: {
 }): AgentLaunchModeReceipt {
   const { placement, settings } = args
   const vocabulary = args.vocabulary ?? DEFAULT_LAUNCH_VOCABULARY
-  if (!prefersStructuredNativeChatByDefault(settings)) {
+  if (!isNativeChatEnabled(settings)) {
     return {
       mode: 'terminal',
       preferred: 'terminal',

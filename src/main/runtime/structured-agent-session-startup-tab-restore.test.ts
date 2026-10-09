@@ -272,7 +272,11 @@ describe('restoring the chat tabs open at quit', () => {
         `agent-session:${CHAT_A}`,
         `agent-session:${CHAT_B}`
       ])
-      expect(published()[0]).toMatchObject({ replacesSessionId: CLEARED })
+      expect(
+        published().every(
+          (tab) => tab.type !== 'agent-session' || tab.replacesSessionId === undefined
+        )
+      ).toBe(true)
       // A newer Orca's leases are adjudicated in memory, so nothing fails there; its chats do not open.
       if (newer) {
         for (const sessionId of [CHAT_A, CHAT_B]) {

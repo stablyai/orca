@@ -131,8 +131,6 @@ function restingRecord(options: Record<string, string>): AgentSessionRecord {
     provider: 'claude',
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: ACCOUNT_HOME },
     location: { wslDistro: null },
-    // Why released: a chat at rest has no live claim, so its next start reads the current account.
-    lease: { claimStatus: 'released' },
     options
   } as unknown as AgentSessionRecord
 }
@@ -153,7 +151,7 @@ function readAtRest(store: AgentModelCatalogStore, record: AgentSessionRecord) {
   const resting = {
     child: null,
     params: { provider: 'claude' },
-    journal: { threadGoal: () => null, contextUsage: () => null }
+    journal: { threadGoal: () => null, contextUsage: () => null, context: { floor: () => null } }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resting read touches only these members.
   const context = {

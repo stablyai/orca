@@ -6,7 +6,6 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
-  symlinkSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -38,12 +37,10 @@ vi.mock('../wsl/wsl-runner', () => ({
 
 import {
   CLAUDE_PROFILE_MISSING_MESSAGE,
-  CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
-} from '../../shared/claude-profile-routing'
-import type { ClaudeProfileRouterSettings } from './claude-profile-router'
-import { prepareClaudeProfileDirectory } from './claude-profile-paths'
+  CLAUDE_PROFILE_SETUP_FAILED_MESSAGE,
+  type ClaudeProfileRouterSettings
+} from './claude-profile-router'
 import { ClaudeWslProfileRouter } from './claude-profile-wsl-router'
-import { wslClaudeProfile } from './claude-profile-wsl-paths'
 
 // Why skipped on Windows: the guest is Linux; these run its scripts and Node bundle as the guest.
 const posixHost = process.platform !== 'win32'
@@ -78,14 +75,12 @@ function fixture() {
   const router = new ClaudeWslProfileRouter({
     getSettings: () => settings,
     dataRoot: join(root, 'orca-dev'),
-    // Like the guest helper, marks the folder only once it finishes.
     runSetup: async () => {
       setup.calls += 1
       await setup.gate
       if (setup.fail) {
         throw new Error('refused')
       }
-      mkdirSync(profileHome, { recursive: true })
       writeFileSync(join(profileHome, '..', 'profile.json'), '{}')
     }
   })
@@ -95,10 +90,14 @@ function fixture() {
 }
 
 describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
-  it('writes the guest pointer per build, sets up even a missing folder, and removes it with the last account', async () => {
+  it('writes the guest pointer per build, sets up only a signed-in folder, and removes it with the last account', async () => {
     const f = fixture()
     await f.router.publish('Ubuntu')
     expect(readFileSync(f.pointer, 'utf8')).toBe(f.profileHome)
+    expect(f.setup.calls).toBe(0)
+
+    mkdirSync(f.profileHome, { recursive: true })
+    await f.router.publish('Ubuntu')
     await vi.waitFor(() => expect(f.setup.calls).toBe(1))
 
     f.wsl.Ubuntu = null
@@ -110,21 +109,15 @@ describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
     expect(existsSync(f.pointer)).toBe(false)
   })
 
-  it('sets up a missing folder, waits for a first setup never run or still running, then launches at once', async () => {
+  it('refuses a missing folder, waits for a never-set-up one, then launches at once', async () => {
     const f = fixture()
-    await expect(f.router.preparation('Ubuntu')).rejects.toThrow(CLAUDE_PROFILE_MISSING_MESSAGE)
-    f.setup.fail = true
-    let release = () => {}
-    f.setup.gate = new Promise((resolve) => (release = resolve))
-    const launch = f.router.prepareLaunch('Ubuntu')
-    await vi.waitFor(() => expect(f.setup.calls).toBe(1))
-    const second = f.router.prepareLaunch('Ubuntu')
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    release()
-    await expect(launch).rejects.toThrow(CLAUDE_PROFILE_SETUP_FAILED_MESSAGE)
-    await expect(second).rejects.toThrow(CLAUDE_PROFILE_SETUP_FAILED_MESSAGE)
-    expect(f.setup.calls).toBe(1)
+    await expect(f.router.prepareLaunch('Ubuntu')).rejects.toThrow(CLAUDE_PROFILE_MISSING_MESSAGE)
 
+    mkdirSync(f.profileHome, { recursive: true })
+    f.setup.fail = true
+    await expect(f.router.prepareLaunch('Ubuntu')).rejects.toThrow(
+      CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
+    )
     f.setup.fail = false
     const prepared = await f.router.prepareLaunch('Ubuntu')
     expect(prepared).toMatchObject({
@@ -138,92 +131,8 @@ describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
         ORCA_CLAUDE_INJECTED_CONFIG_DIR: f.profileHome
       }
     })
-    // The failed first setup left no marker, so this launch ran setup again; the next does not.
-    expect(f.setup.calls).toBe(2)
     await f.router.prepareLaunch('Ubuntu')
     expect(f.setup.calls).toBe(2)
-  })
-
-  it('makes a launch redo a first setup that was cut off after its ownership gate', async () => {
-    const f = fixture()
-    mkdirSync(f.profileHome, { recursive: true })
-    // The guest helper failed, or timed out, after the gate ran.
-    const cutOff = new ClaudeWslProfileRouter({
-      getSettings: () => f.settings,
-      dataRoot: join(guest.home, '..', 'orca-dev'),
-      runSetup: async (distro, home, accountId) => {
-        const { dataRoot, profile } = wslClaudeProfile(home, distro, accountId)
-        prepareClaudeProfileDirectory(dataRoot, profile, home)
-        throw new Error('timed out')
-      }
-    })
-    await expect(cutOff.prepareLaunch('Ubuntu')).rejects.toThrow(
-      CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
-    )
-    expect(existsSync(join(f.profileHome, '..', 'profile.json'))).toBe(false)
-
-    await f.router.prepareLaunch('Ubuntu')
-    expect(f.setup.calls).toBe(1)
-  })
-
-  it('never makes a launch wait on, or fail with, a re-run of a set-up folder', async () => {
-    const f = fixture()
-    mkdirSync(f.profileHome, { recursive: true })
-    writeFileSync(join(f.profileHome, '..', 'profile.json'), '{}')
-    f.setup.fail = true
-    let release = () => {}
-    f.setup.gate = new Promise((resolve) => (release = resolve))
-    await f.router.publish('Ubuntu')
-    await vi.waitFor(() => expect(f.setup.calls).toBe(1))
-    await expect(f.router.prepareLaunch('Ubuntu')).resolves.toMatchObject({
-      configDir: f.profileHome
-    })
-    release()
-    await new Promise((resolve) => setTimeout(resolve, 10))
-    await expect(f.router.prepareLaunch('Ubuntu')).resolves.toMatchObject({
-      configDir: f.profileHome
-    })
-    expect(f.setup.calls).toBe(1)
-  })
-
-  it('sets up a new account folder for sign-in and deletes it without following its links', async () => {
-    const f = fixture()
-    const sharedHistory = join(guest.home, '.claude', 'projects')
-    mkdirSync(sharedHistory)
-    writeFileSync(join(sharedHistory, 'chat.jsonl'), '{}')
-    // The stub setup marks account a's folder.
-    mkdirSync(f.profileHome, { recursive: true })
-    const home = await f.router.prepareAccount('Ubuntu', 'b')
-    expect(home).toBe(join(guest.home, '.local/share/orca/claude-profiles/b/home'))
-    expect(f.setup.calls).toBe(1)
-    mkdirSync(home, { recursive: true })
-    symlinkSync(sharedHistory, join(home, 'projects'))
-
-    await f.router.removeAccount('Ubuntu', 'b')
-    expect(existsSync(join(home, '..'))).toBe(false)
-    expect(existsSync(join(sharedHistory, 'chat.jsonl'))).toBe(true)
-
-    f.setup.fail = true
-    await expect(f.router.prepareAccount('Ubuntu', 'c')).rejects.toThrow(
-      CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
-    )
-  })
-
-  it('removes a guest folder only after its running setup, so the setup cannot bring it back', async () => {
-    const f = fixture()
-    mkdirSync(f.profileHome, { recursive: true })
-    let release = () => {}
-    // Like the guest helper, setup recreates the folder it writes into.
-    f.setup.gate = new Promise<void>((resolve) => (release = resolve)).then(() => {
-      mkdirSync(f.profileHome, { recursive: true })
-    })
-    await f.router.publish('Ubuntu')
-    await vi.waitFor(() => expect(f.setup.calls).toBe(1))
-    const removal = f.router.removeAccount('Ubuntu', 'a')
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    release()
-    await removal
-    expect(existsSync(join(f.profileHome, '..'))).toBe(false)
   })
 
   it('writes a missing guest pointer before a launch returns', async () => {

@@ -33,7 +33,8 @@ export const DOCKER_SSH_E2E_SPECS = [
   'tests/e2e/ssh-terminal-parking.spec.ts',
   'tests/e2e/terminal-retention-budget.spec.ts',
   'tests/e2e/ssh-startup-exec-readiness.spec.ts',
-  'tests/e2e/paired-startup-exec-readiness.spec.ts'
+  'tests/e2e/paired-startup-exec-readiness.spec.ts',
+  'tests/e2e/workspace-layout-oracle-ssh.spec.ts'
 ]
 
 export const NODE_NETWORK_E2E_SPEC =
@@ -46,6 +47,8 @@ export const ORCAD_SERVE_MODE_SWITCH_E2E_SPEC = 'tests/e2e/orcad-serve-mode-swit
 export const ORCAD_AUTO_CONVERT_E2E_SPEC = 'tests/e2e/ssh-orcad-auto-convert.spec.ts'
 // Windows-only; its own job runs it on a Windows runner.
 export const WINDOWS_MISSING_APPDATA_E2E_SPEC = 'tests/e2e/windows-missing-appdata-startup.spec.ts'
+// Needs out/orcad, which only the mode-switch job builds; it runs there beside that spec.
+export const LAYOUT_ORACLE_HEADLESS_E2E_SPEC = 'tests/e2e/workspace-layout-oracle-headless.spec.ts'
 // Runs in the auto-convert job, which builds the template it needs.
 export const ORCAD_IDLE_EXIT_E2E_SPEC = 'tests/e2e/ssh-orcad-idle-exit.spec.ts'
 export const DEDICATED_E2E_SPECS = [
@@ -54,6 +57,7 @@ export const DEDICATED_E2E_SPECS = [
   LOCALHOST_SSH_E2E_SPEC,
   NATIVE_IME_E2E_SPEC,
   ORCAD_SERVE_MODE_SWITCH_E2E_SPEC,
+  LAYOUT_ORACLE_HEADLESS_E2E_SPEC,
   ORCAD_AUTO_CONVERT_E2E_SPEC,
   WINDOWS_MISSING_APPDATA_E2E_SPEC,
   ORCAD_IDLE_EXIT_E2E_SPEC
@@ -96,6 +100,7 @@ export function classifyE2eJobs(input, sshSourceChanged = 'false') {
           dockerSpecs.has(spec) ||
           spec === LOCALHOST_SSH_E2E_SPEC ||
           spec === ORCAD_SERVE_MODE_SWITCH_E2E_SPEC ||
+          spec === LAYOUT_ORACLE_HEADLESS_E2E_SPEC ||
           spec === ORCAD_AUTO_CONVERT_E2E_SPEC ||
           spec === ORCAD_IDLE_EXIT_E2E_SPEC
       )

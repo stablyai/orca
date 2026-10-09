@@ -10,6 +10,7 @@ import {
 export const HOSTED_REVIEW_METHODS = [
   defineMethod({
     name: 'hostedReview.forBranch',
+    permission: 'workspace',
     params: HostedReviewForBranch,
     handler: async (params, { runtime }) => {
       const fallbackGitHubPR =
@@ -32,6 +33,7 @@ export const HOSTED_REVIEW_METHODS = [
   }),
   defineMethod({
     name: 'hostedReview.getCreationEligibility',
+    permission: 'workspace',
     params: HostedReviewCreationEligibility,
     handler: async (params, { runtime }) => {
       const fallbackGitHubPR =
@@ -56,6 +58,7 @@ export const HOSTED_REVIEW_METHODS = [
   }),
   defineMethod({
     name: 'hostedReview.create',
+    permission: 'workspace',
     params: HostedReviewCreate,
     handler: async (params, { runtime }) => {
       // The wire carries the host's own provider token, so this is where an arm this build does
@@ -78,6 +81,7 @@ export const HOSTED_REVIEW_METHODS = [
   }),
   defineMethod({
     name: 'hostedReview.createStacked',
+    permission: 'workspace',
     params: HostedReviewCreate,
     handler: async (params, { runtime }) => {
       if (!supportsHostedReviewCreation(params.provider)) {

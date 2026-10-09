@@ -35,6 +35,8 @@ type StartupEnvironment = {
   getLaunchPlatform: () => NodeJS.Platform
   /** Replaces the configured arguments for this launch; `null` means none. */
   agentArgs?: string | null
+  /** An automation's saved extras, merged over the launch's arguments. */
+  extraAgentArgs?: string
   /** Caller-supplied telemetry attribution, validated leniently at the host boundary. */
   launchSource?: string
 }
@@ -152,6 +154,7 @@ export function buildWorktreeStartupForAgent(
     platform: environment.getLaunchPlatform(),
     isRemote: repoIsRemote(repo),
     ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {}),
+    ...(environment.extraAgentArgs ? { extraAgentArgs: environment.extraAgentArgs } : {}),
     sessionOptions: environment.toSessionOptions(environment.launchPreferences)
   })
   const prompt = environment.prompt ?? ''
@@ -209,6 +212,7 @@ export function resolveWorktreeCreateAgentStartup(
     preferences: AgentLaunchPreferences | undefined,
     inputs: {
       agentArgs?: string | null
+      extraAgentArgs?: string
       launchSource?: string
       onPromptCarry?: (carried: boolean) => void
     }
@@ -219,6 +223,7 @@ export function resolveWorktreeCreateAgentStartup(
   }
   return build(args.startupAgent, args.startupPrompt, args.startupLaunchPreferences, {
     ...(args.startupAgentArgs !== undefined ? { agentArgs: args.startupAgentArgs } : {}),
+    ...(args.startupExtraAgentArgs ? { extraAgentArgs: args.startupExtraAgentArgs } : {}),
     ...(args.startupLaunchSource ? { launchSource: args.startupLaunchSource } : {}),
     ...(args.onStartupPromptCarry ? { onPromptCarry: args.onStartupPromptCarry } : {})
   })

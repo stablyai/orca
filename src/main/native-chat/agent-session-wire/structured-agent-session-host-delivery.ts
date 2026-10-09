@@ -22,6 +22,7 @@ import type {
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 import { recoverStructuredRewind } from './structured-rewind-recovery'
+import { retireSignedOutStructuredAgentSessionChild } from './structured-agent-session-signed-out-child'
 
 export type StructuredAgentSessionConversationDelivery = {
   loop: StructuredAgentSessionDeliveryLoop
@@ -56,6 +57,8 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     sessionId: string,
     startedFor: string
   ) => Promise<StructuredAgentSessionResumeOutcome>
+  /** Stops a child that reported it is not signed in, so the start after it reads a new login. */
+  stopSignedOutAgent: (sessionId: string) => Promise<void>
   clientDelivery: Pick<
     StructuredAgentSessionClientDelivery,
     'publishRestored' | 'readChildWork' | 'readStopping' | 'publishStatus'
@@ -68,7 +71,25 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     agents: deps.agents,
     serialize: input.serialize,
     trackStart: input.trackStart,
-    ensureProviderChild: input.ensureProviderChild,
+    ensureProviderChild: async (sessionId, startedFor) => {
+      // A send waiting on a person's Stop is not handed over yet; the step after the Stop decides.
+      const session = input.clientDelivery.readStopping(sessionId)
+        ? undefined
+        : sessions.get(sessionId)
+      await retireSignedOutStructuredAgentSessionChild(sessionId, session, {
+        work: {
+          childWork: () => input.clientDelivery.readChildWork(sessionId),
+          hasOpenDispatch: () => {
+            const record = deps.store.getRecord(sessionId)
+            return record !== null && deps.hasOpenDispatch?.(record) === true
+          },
+          providerHoldsDispatch: () => deps.adapter.holdsDispatch?.(sessionId) === true
+        },
+        stopAgent: input.stopSignedOutAgent,
+        logger: deps.logger
+      })
+      return input.ensureProviderChild(sessionId, startedFor)
+    },
     conversationFence: (sessionId) =>
       structuredAgentSessionConversationFence(deps.store, sessionId),
     holdClosed: async (sessionId, which) => {

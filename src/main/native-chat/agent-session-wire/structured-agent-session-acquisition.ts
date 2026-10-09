@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from 'node:util'
+import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import type {
   AgentSessionProcessIdentity,
   AgentSessionRecord
@@ -13,6 +14,7 @@ import { journalIdentityFor } from './structured-agent-session-attach'
 import type { AttachFlowInput } from './structured-agent-session-attach-flow'
 import { readNativeSessionOptions } from './structured-agent-session-option-restoration'
 import { withAgentSessionCreatePhase } from '../../observability/agent-session-instrumentation'
+import { mintStructuredAgentSessionStartupAttempt } from './structured-agent-session-startup-attempt'
 
 /** The same process, whatever Orca runtime the store stamped on its record (`runtime`): that stamp
  *  is about who holds the process, not which process it is. */
@@ -48,16 +50,22 @@ export async function acquireOwner(
     } catch (error) {
       throw new AgentSessionPreSpawnError(error)
     }
-    const acquired = await input.adapter.acquire({
+    const attempt = mintStructuredAgentSessionStartupAttempt({
+      record,
       identity: journalIdentityFor(record, input.params),
-      fence,
       // Retries must recover the original reservation, not mint a second child.
       spawnToken,
-      ...(record.options ? { options: record.options } : {}),
       ...(input.eventSink ? { events: input.eventSink } : {}),
-      ...(input.recordPhase ? { recordPhase: input.recordPhase } : {}),
       ...(input.acquireSignal ? { signal: input.acquireSignal } : {}),
+      optionRevision: input.optionRevision
+    })
+    const progress = input.onStartupAttempt?.(attempt)
+    const acquired = await input.adapter.acquire({
+      ...attempt,
+      ...(progress ? { onOutput: progress.output } : {}),
+      ...(input.recordPhase ? { recordPhase: input.recordPhase } : {}),
       onSpawned: async (process) => {
+        progress?.spawned()
         record = await input.store.commitProcessIdentity({
           sessionId: record.sessionId,
           fence,
@@ -72,20 +80,22 @@ export async function acquireOwner(
     const options =
       providerChildPhase === 'starting'
         ? undefined
-        : await withAgentSessionCreatePhase('restore_options', input.recordPhase, async () =>
-            input.adapter.readAcquisitionOptions
-              ? input.adapter.readAcquisitionOptions({
-                  sessionId: record.sessionId,
-                  fence,
-                  ...(record.options ? { priorOptions: record.options } : {})
-                })
-              : readNativeSessionOptions({
-                  adapter: input.adapter,
-                  sessionId: record.sessionId,
-                  fence,
-                  ...(record.options ? { priorOptions: record.options } : {})
-                })
-          )
+        : await withAgentSessionCreatePhase('restore_options', input.recordPhase, async () => {
+            const read = {
+              sessionId: record.sessionId,
+              fence,
+              ...(record.options ? { priorOptions: record.options } : {})
+            }
+            // Still inside the start, so the limit or a Stop ends a read the provider never answers.
+            return waitForPromiseWithSignal(
+              Promise.resolve(
+                input.adapter.readAcquisitionOptions
+                  ? input.adapter.readAcquisitionOptions(read)
+                  : readNativeSessionOptions({ adapter: input.adapter, ...read })
+              ),
+              input.acquireSignal
+            )
+          })
     if (record.lease.ownerProcess === null) {
       await input.store.commitProcessIdentity({
         sessionId: record.sessionId,

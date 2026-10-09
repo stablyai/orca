@@ -2,21 +2,21 @@ import { existsSync } from 'node:fs'
 import { lstat, readFile } from 'node:fs/promises'
 import { join, posix } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
-import {
-  CLAUDE_INJECTED_CONFIG_DIR_ENV,
-  CLAUDE_PROFILE_POINTER_ENV,
-  CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
-} from '../../shared/claude-profile-routing'
+import { CLAUDE_PROFILE_POINTER_ENV } from '../../shared/claude-profile-routing'
 import { WSL_CLAUDE_PROFILE_HELPER_FILENAME } from '../../shared/relay-artifacts'
 import { parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import { getWslHomeAsync, listRunningWslDistrosAsync } from '../wsl'
 import { ensureWslPinnedRuntime } from '../wsl/wsl-pinned-runtime'
 import { relayBundleCandidates } from '../ssh/relay-bundle-paths'
 import { runWslProcess, type WslSpec } from '../wsl/wsl-runner'
-import { claudeProfileMarkerPath, type ClaudeProfileDescriptor } from './claude-profile-paths'
 import {
-  claudeProfileMissing,
-  claudeProfileSetupFailed,
+  CLAUDE_INJECTED_CONFIG_DIR_ENV,
+  claudeProfileMarkerPath,
+  type ClaudeProfileDescriptor
+} from './claude-profile-paths'
+import {
+  CLAUDE_PROFILE_MISSING_MESSAGE,
+  CLAUDE_PROFILE_SETUP_FAILED_MESSAGE,
   type ClaudeProfileRouterSettings
 } from './claude-profile-router'
 import { wslClaudeProfile, wslClaudeProfilePointer } from './claude-profile-wsl-paths'
@@ -90,23 +90,22 @@ export class ClaudeWslProfileRouter {
       return
     }
     await writePointer(distro, this.pointerIn(home), profile?.home ?? '')
-    // Why even a missing folder: setup creates it without a login, for Claude's own first run.
-    if (profile) {
+    // Why the existence check: setup creates the folder, and only sign-in may create an account.
+    if (profile && (await guestStat(distro, profile.home))?.isDirectory()) {
       this.setUp(distro, home, profile.accountId).catch((error: unknown) => {
         console.warn('[claude-profile] WSL account setup failed:', error)
       })
     }
   }
 
-  /** Waits for a first setup that never finished, running or not; otherwise launches at once. */
+  /** Waits for setup only for a folder that was never set up; otherwise launches at once. */
   async prepareLaunch(distro: string): Promise<ClaudeRuntimeAuthPreparation> {
     const { home, profile } = await this.resolve(distro)
-    // Why the marker: setup writes it last, so a missing folder is set up too. A re-run of a
-    // set-up folder never blocks.
-    if (profile && !(await hasMarker(distro, profile))) {
+    await this.assertPresent(distro, profile)
+    if (profile && !(await guestStat(distro, claudeProfileMarkerPath(profile)))?.isFile()) {
       await this.setUp(distro, home, profile.accountId).catch((error: unknown) => {
         console.warn('[claude-profile] WSL account setup failed:', error)
-        throw claudeProfileSetupFailed()
+        throw new Error(CLAUDE_PROFILE_SETUP_FAILED_MESSAGE)
       })
     }
     // Why: a missing or stale guest pointer would run the pane's `claude` under another account.
@@ -124,32 +123,10 @@ export class ClaudeWslProfileRouter {
     return this.preparationFor(distro, home, profile)
   }
 
-  /** Creates and sets up an account's guest folder for sign-in; the login itself is Claude's. */
-  async prepareAccount(distro: string, accountId: string): Promise<string> {
-    const { home } = await this.resolve(distro)
-    const { profile } = wslClaudeProfile(home, distro, accountId)
-    await this.setUp(distro, home, accountId).catch((error: unknown) => {
-      console.warn('[claude-profile] WSL account setup failed:', error)
-      throw new Error(CLAUDE_PROFILE_SETUP_FAILED_MESSAGE)
-    })
-    return profile.home
-  }
-
-  /**
-   * Deletes an account's guest folder after any setup running for it, which would otherwise
-   * recreate it. Linux `rm -r` never follows the history links.
-   */
-  async removeAccount(distro: string, accountId: string): Promise<void> {
-    await this.setups.get(accountId)?.catch(() => {})
-    const { home } = await this.resolve(distro)
-    const folder = posix.dirname(wslClaudeProfile(home, distro, accountId).profile.home)
-    await runGuest(distro, { script: 'rm -rf -- "$1"', args: [folder], loginPath: 'none' })
-  }
-
   /** Falling back would run the wrong account. */
   private async assertPresent(distro: string, profile: ClaudeProfileDescriptor | null) {
     if (profile && !(await guestStat(distro, profile.home))?.isDirectory()) {
-      throw claudeProfileMissing()
+      throw new Error(CLAUDE_PROFILE_MISSING_MESSAGE)
     }
   }
 
@@ -193,10 +170,6 @@ export class ClaudeWslProfileRouter {
 // Why over the distro's share: a launch must not wait on a guest process for two stats.
 async function guestStat(distro: string, linuxPath: string) {
   return lstat(toWindowsWslPath(linuxPath, distro)).catch(() => null)
-}
-
-async function hasMarker(distro: string, profile: ClaudeProfileDescriptor): Promise<boolean> {
-  return (await guestStat(distro, claudeProfileMarkerPath(profile)))?.isFile() ?? false
 }
 
 /** Writes in the guest only when the file differs, so a launch reads it over the share instead. */

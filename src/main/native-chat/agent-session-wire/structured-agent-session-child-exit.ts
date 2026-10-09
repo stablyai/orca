@@ -30,6 +30,7 @@ import {
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { evictStructuredAgentSession } from './structured-agent-session-eviction'
 import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
+import type { StructuredAgentSessionStartupAttempts } from './structured-agent-session-startup-attempt'
 
 /** How the child's root went: the close this host asked for, or a death of its own. */
 export type StructuredAgentSessionChildExit = {
@@ -58,6 +59,8 @@ export type StructuredAgentSessionChildExitContext<
   publishStatus?: (sessionId: string) => void
   /** The delivery loop hands over whatever is queued once the child is off the record. */
   wakeDelivery?: (sessionId: string) => void
+  /** An ended child's start, if still open, has nothing left to time. */
+  startupAttempts?: Pick<StructuredAgentSessionStartupAttempts, 'childEnded'>
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   now: () => number
   logger: StructuredAgentSessionLogger
@@ -136,12 +139,14 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     expected &&
     exit.startupUnanswered &&
     close?.cause !== 'host-stop' &&
-    close?.cause !== 'user-stop'
+    close?.cause !== 'user-stop' &&
+    close?.cause !== 'context-clear'
       ? close?.quit
         ? ('hostRestarted' as const)
         : ('chatClosed' as const)
       : undefined
   const endChild = (): void => {
+    context.startupAttempts?.childEnded(sessionId, child)
     endProviderChild(session, {
       generation: child.generation,
       fence: child.fence,

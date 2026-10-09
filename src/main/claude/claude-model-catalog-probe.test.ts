@@ -1,3 +1,6 @@
+import { createMockDiscoveryChild } from '../text-generation/commit-message-text-generation-test-harness'
+import { CLAUDE_MODEL_LIST_STDIN } from '../../shared/claude-model-list-probe'
+import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -184,4 +187,76 @@ process.stdin.on('end', () => setTimeout(() => {
       }
     }
   )
+})
+
+describe('Claude catalog availability', () => {
+  it('does not turn a generic discovery failure into unavailable', async () => {
+    const probe = createClaudeModelCatalogProbe({
+      ...probeDeps(),
+      discover: async () => ({ success: false, error: 'timeout' })
+    })
+    await expect(probe('/homes/a')).rejects.not.toBeInstanceOf(AgentModelCatalogUnavailableError)
+  })
+})
+
+describe('Claude catalog fake-child contract', () => {
+  // Claude has no pre-send sign-in verdict: its real start refusal is the only one.
+  it.each([false, true])(
+    'lists in one process with no sign-in verdict, managed=%s',
+    async (managed) => {
+      const child = createMockDiscoveryChild()
+      const spawnAgent = vi.fn<SpawnSourceControlAgent>(() => {
+        queueMicrotask(() => {
+          child.stdout.emit(
+            'data',
+            Buffer.from(
+              `${JSON.stringify({
+                type: 'control_response',
+                response: {
+                  request_id: 'orca-model-discovery',
+                  subtype: 'success',
+                  response: { models: [{ value: 'sonnet', displayName: 'Sonnet' }] }
+                }
+              })}\n`
+            )
+          )
+          child.emit('close', 0)
+        })
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: discovery reads only the fake child's EventEmitter streams, pid, kill and stdin.end.
+        return child as unknown as SpawnedSourceControlAgentProcess
+      })
+      const probe = createClaudeModelCatalogProbe({
+        ...probeDeps(),
+        resolveEnv: () => ({}),
+        resolveAuthPolicy: () => ({ stripAuthEnv: managed }),
+        spawnAgent
+      })
+      const result = await probe('/homes/a')
+      expect(result).toMatchObject({ models: [{ id: 'sonnet' }] })
+      expect(result).not.toHaveProperty('unavailable')
+      expect(spawnAgent).toHaveBeenCalledTimes(1)
+      expect(child.stdin.end).toHaveBeenCalledWith(CLAUDE_MODEL_LIST_STDIN)
+    }
+  )
+  it('preserves the resolved executable missing error from a child', async () => {
+    const child = createMockDiscoveryChild()
+    const probe = createClaudeModelCatalogProbe({
+      ...probeDeps(),
+      resolveCommand: () => '/resolved/claude with spaces/claude',
+      spawnAgent: () => {
+        queueMicrotask(() =>
+          child.emit(
+            'error',
+            Object.assign(new Error('missing'), {
+              code: 'ENOENT',
+              path: '/resolved/claude with spaces/claude'
+            })
+          )
+        )
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: discovery reads only the fake child's EventEmitter streams, pid, kill and stdin.end.
+        return child as unknown as SpawnedSourceControlAgentProcess
+      }
+    })
+    await expect(probe('/homes/a')).rejects.toMatchObject({ unavailable: { reason: 'cliMissing' } })
+  })
 })

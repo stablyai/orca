@@ -1,20 +1,29 @@
 import React from 'react'
+import {
+  CommentMarkdownMermaidContext,
+  CommentMarkdownMermaidSourceContext
+} from './comment-markdown-mermaid-policy'
 import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from 'rehype-sanitize'
+import remend from 'remend'
 import { cn } from '@/lib/utils'
 import {
-  compactCommentMarkdownComponents,
-  createCompactCommentMarkdownComponents,
-  createDocumentCommentMarkdownComponents,
-  documentCommentMarkdownComponents,
+  selectCommentMarkdownComponents,
   isTrustedCompactImageSrc,
   type CommentMarkdownLinkClickHandler,
   type DocumentCodeBlockRenderer
 } from './comment-markdown-element-renderers'
 import { remarkNativeChatFileLinks } from './comment-markdown-native-chat-file-links'
+import { rehypeWordFade } from './comment-markdown-word-fade'
+import { CommentMarkdownWords } from './CommentMarkdownWords'
+import {
+  splitMarkdownTopLevelBlocks,
+  type MarkdownBlock,
+  type MarkdownBlockSplit
+} from './markdown-top-level-blocks'
 import {
   GITHUB_CALLOUT_SANITIZE_ATTRIBUTE,
   remarkGitHubCallouts
@@ -220,7 +229,33 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   linkifyFilePaths?: boolean
   expandImages?: boolean
   renderCodeBlock?: DocumentCodeBlockRenderer
+  renderMermaid?: boolean
+  keepMermaidSourceWhilePending?: boolean
+  /** The content is still being appended to: render it block by block, so each
+   *  append re-renders only the last block, and close markup its end leaves open.
+   *  The block-by-block render stays on once seen. */
+  growing?: boolean
+  /** Give each word its own `data-word` element, for a stylesheet to animate as words arrive. */
+  fadeWords?: boolean
   extension?: CommentMarkdownExtension
+}
+
+/** One render of the pipeline; memoized so an unchanged block is not parsed again. */
+const MemoizedMarkdown = React.memo(Markdown)
+
+/** The content as the blocks to render. Cut into blocks from the first time it is growing, and
+ *  from then on, so the stream ending does not redraw what is already there. */
+function useMarkdownBlocks(content: string, growing: boolean): readonly MarkdownBlock[] {
+  const [previous, setPrevious] = React.useState<MarkdownBlockSplit | null>(null)
+  if (!growing && previous === null) {
+    return [{ start: 0, text: content }]
+  }
+  if (previous?.source === content) {
+    return previous.blocks
+  }
+  const next = splitMarkdownTopLevelBlocks(content, previous)
+  setPrevious(next)
+  return next.blocks
 }
 
 // Why forwardRef + rest props: Radix's HoverCardTrigger asChild merges a ref
@@ -238,28 +273,32 @@ const CommentMarkdown = React.memo(
       linkifyFilePaths = false,
       expandImages = false,
       renderCodeBlock,
+      renderMermaid = true,
+      keepMermaidSourceWhilePending = false,
+      growing = false,
+      fadeWords = false,
       extension,
       ...rest
     },
     ref
   ) {
-    const baseComponents = React.useMemo(() => {
-      if (!onLinkClick) {
-        return variant === 'document'
-          ? renderCodeBlock
-            ? createDocumentCommentMarkdownComponents(undefined, renderCodeBlock)
-            : documentCommentMarkdownComponents
-          : expandImages
-            ? createCompactCommentMarkdownComponents(undefined, true)
-            : compactCommentMarkdownComponents
-      }
-      return variant === 'document'
-        ? createDocumentCommentMarkdownComponents(onLinkClick, renderCodeBlock)
-        : createCompactCommentMarkdownComponents(onLinkClick, expandImages)
-    }, [expandImages, renderCodeBlock, variant, onLinkClick])
+    const baseComponents = React.useMemo(
+      () =>
+        selectCommentMarkdownComponents({
+          variant,
+          onLinkClick,
+          renderCodeBlock,
+          expandImages
+        }),
+      [expandImages, renderCodeBlock, variant, onLinkClick]
+    )
     const components = React.useMemo(
       () => (extension ? { ...baseComponents, ...extension.components } : baseComponents),
       [baseComponents, extension]
+    )
+    const fadingComponents = React.useMemo(
+      () => ({ ...components, span: CommentMarkdownWords }),
+      [components]
     )
     const activeRehypePlugins = React.useMemo(
       () => (extension ? extensionRehypePlugins(extension) : rehypePlugins),
@@ -272,31 +311,52 @@ const CommentMarkdown = React.memo(
       const withExtension = extension ? [...plugins, ...extension.remarkPlugins] : plugins
       return githubRepo ? [...withExtension, remarkGitHubReferences(githubRepo)] : withExtension
     }, [extension, githubRepo, linkifyFilePaths])
+    const blocks = useMarkdownBlocks(content, growing)
+    const [hadWordFade, setHadWordFade] = React.useState(fadeWords)
+    if (fadeWords && !hadWordFade) {
+      setHadWordFade(true)
+    }
+    const wrapsWords = fadeWords || hadWordFade
+    const fadingRehypePlugins = React.useMemo(
+      () => [...activeRehypePlugins, rehypeWordFade],
+      [activeRehypePlugins]
+    )
 
     return (
-      <div
-        ref={ref}
-        className={cn(
-          // Reset inline-code pill styles when <code> is inside a <pre> block.
-          // The descendant selector (pre code) has higher specificity than the
-          // direct utility classes on <code>, so these overrides win reliably.
-          '[&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:rounded-none',
-          'min-w-0 max-w-full [overflow-wrap:anywhere]',
-          className
-        )}
-        {...rest}
-      >
-        <Markdown
-          remarkPlugins={activeRemarkPlugins}
-          rehypePlugins={activeRehypePlugins}
-          components={components}
-          urlTransform={
-            allowFileUriLinks ? commentMarkdownFileUriUrlTransform : commentMarkdownUrlTransform
-          }
-        >
-          {content}
-        </Markdown>
-      </div>
+      <CommentMarkdownMermaidContext.Provider value={renderMermaid}>
+        <CommentMarkdownMermaidSourceContext.Provider value={keepMermaidSourceWhilePending}>
+          <div
+            ref={ref}
+            className={cn(
+              // Reset inline-code pill styles when <code> is inside a <pre> block.
+              // The descendant selector (pre code) has higher specificity than the
+              // direct utility classes on <code>, so these overrides win reliably.
+              '[&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:rounded-none',
+              'min-w-0 max-w-full [overflow-wrap:anywhere]',
+              className
+            )}
+            {...rest}
+          >
+            {blocks.map((block, index) => (
+              <MemoizedMarkdown
+                key={block.start}
+                remarkPlugins={activeRemarkPlugins}
+                rehypePlugins={wrapsWords ? fadingRehypePlugins : activeRehypePlugins}
+                components={wrapsWords ? fadingComponents : components}
+                urlTransform={
+                  allowFileUriLinks
+                    ? commentMarkdownFileUriUrlTransform
+                    : commentMarkdownUrlTransform
+                }
+              >
+                {growing && index === blocks.length - 1
+                  ? remend(block.text, { linkMode: 'text-only' })
+                  : block.text}
+              </MemoizedMarkdown>
+            ))}
+          </div>
+        </CommentMarkdownMermaidSourceContext.Provider>
+      </CommentMarkdownMermaidContext.Provider>
     )
   })
 )

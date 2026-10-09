@@ -62,6 +62,11 @@ vi.mock('react', async () => {
   }
 })
 
+// The menu's session lookup is covered by its own tests; this file only drives rename.
+vi.mock('./TabSessionSurfaceSwitchMenuItems', () => ({
+  TabSessionSurfaceSwitchMenuItems: () => null
+}))
+
 vi.mock('./use-tab-strip-slot-props', () => ({
   useTabStripSlotProps: () => ({ className: '', 'data-tab-strip-slot': '' })
 }))

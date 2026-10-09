@@ -160,6 +160,7 @@ function WorkspaceNode({
               onCheckedChange={chat.onCheckedChange}
               failure={chat.failure}
               onFailureAction={tree.onFailureAction}
+              renderStatus={chat.renderStatus}
             />
           )
         })}
@@ -343,7 +344,9 @@ export function ResumeOnRestartGroups({
   selected,
   onToggle,
   failureFor,
-  onFailureAction
+  onFailureAction,
+  renderStatus,
+  selectableIds
 }: {
   candidates: readonly ResumeCandidate[]
   listedAt: number
@@ -377,7 +380,9 @@ export function ResumeOnRestartGroups({
     repoIdOf,
     ancestorsOf,
     failureFor,
-    onFailureAction
+    onFailureAction,
+    renderStatus,
+    selectableIds
   }
   // Why: the machine is worth a level only when it is not obvious.
   const showMachines =

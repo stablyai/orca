@@ -10,12 +10,27 @@ import { cn } from '@/lib/utils'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 import { useImeTextFieldProps } from '@/lib/ime-text-field'
 
-function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
+const commandSurfaceVariants = cva('', {
+  variants: {
+    surface: {
+      default: 'bg-popover text-popover-foreground',
+      inline: 'bg-transparent text-foreground'
+    }
+  },
+  defaultVariants: { surface: 'default' }
+})
+
+function Command({
+  className,
+  surface,
+  ...props
+}: React.ComponentProps<typeof CommandPrimitive> & VariantProps<typeof commandSurfaceVariants>) {
   return (
     <CommandPrimitive
       data-slot="command"
       className={cn(
-        'flex h-full w-full flex-col overflow-hidden rounded-md bg-popover text-popover-foreground',
+        'flex h-full w-full flex-col overflow-hidden rounded-md',
+        commandSurfaceVariants({ surface }),
         className
       )}
       {...props}
@@ -92,26 +107,35 @@ function CommandDialog({
   )
 }
 
+const commandInputVariants = cva('flex items-center bg-muted/30 px-3 py-1', {
+  variants: {
+    variant: {
+      default: 'border-b border-border',
+      framed: 'rounded-md border border-input'
+    }
+  },
+  defaultVariants: { variant: 'default' }
+})
+
 function CommandInput({
   className,
+  variant,
   wrapperClassName,
   iconClassName,
   trailing,
   ref,
   ...props
-}: React.ComponentProps<typeof CommandPrimitive.Input> & {
-  wrapperClassName?: string
-  iconClassName?: string
-  /** Rendered after the field, inside the input frame (e.g. a filter control). */
-  trailing?: React.ReactNode
-}) {
+}: React.ComponentProps<typeof CommandPrimitive.Input> &
+  VariantProps<typeof commandInputVariants> & {
+    wrapperClassName?: string
+    iconClassName?: string
+    /** Rendered after the field, inside the input frame (e.g. a filter control). */
+    trailing?: React.ReactNode
+  }) {
   const imeProps = useImeTextFieldProps<HTMLInputElement>(props)
   return (
     <div
-      className={cn(
-        'flex items-center border-b border-border bg-muted/30 px-3 py-1',
-        wrapperClassName
-      )}
+      className={cn(commandInputVariants({ variant }), wrapperClassName)}
       data-cmdk-input-wrapper=""
     >
       <SearchIcon className={cn('mr-2 h-4 w-4 shrink-0 opacity-50', iconClassName)} />

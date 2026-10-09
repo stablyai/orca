@@ -3,6 +3,7 @@
 // loaded later, or replayed from the journal after a crash.
 
 import { appendReturnedDraftText } from '../../../../shared/returned-draft-text'
+import { appendPromptDocumentText } from './native-chat-prompt-document-text'
 import { basename } from '@/lib/path'
 import type {
   NativeChatComposerDraft,
@@ -25,7 +26,7 @@ export function withNativeChatComposerDraftAddition(
   draft: NativeChatComposerDraft,
   addition: NativeChatComposerDraftAddition,
   options: { once?: boolean } = {}
-): Pick<NativeChatComposerDraft, 'text' | 'images'> {
+): Pick<NativeChatComposerDraft, 'text' | 'images' | 'document'> {
   const text = appendReturnedDraftText(draft.text, addition.text ?? '')
   const images = [...draft.images]
   for (const { id, path, connectionId } of addition.images ?? []) {
@@ -42,5 +43,5 @@ export function withNativeChatComposerDraftAddition(
       images[placeholder] = image
     }
   }
-  return { text, images }
+  return { text, images, document: appendPromptDocumentText(draft.document, draft.text, text) }
 }

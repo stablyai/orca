@@ -9,6 +9,7 @@ import { projectSessionTabsForClient } from './session-tabs-inventory'
 export const SESSION_TAB_CLOSE_METHODS = [
   defineMethod({
     name: 'session.tabs.close',
+    permission: 'workspace',
     params: CloseTab,
     handler: async (params, context) => {
       if (context.clientKind) {
@@ -85,6 +86,7 @@ export const SESSION_TAB_CLOSE_METHODS = [
   }),
   defineMethod({
     name: 'session.tabs.closeLifecycle',
+    permission: 'workspace',
     params: CloseLifecycleTab,
     handler: async (params, context) => {
       if (context.clientKind) {

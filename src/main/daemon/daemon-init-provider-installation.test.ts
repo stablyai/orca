@@ -125,6 +125,26 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(setLocalPtyProviderMock).not.toHaveBeenCalled()
   })
 
+  it('prunes seeded Claude live-PTY ids against daemon sessions after init', async () => {
+    const mod = await importFresh()
+    // Why: live-pty-gate is intentionally unmocked — import from the same fresh registry so gate state matches daemon-init's.
+    const gate = await import('../claude-accounts/live-pty-gate')
+    defaultListSessionsSessions.push({ sessionId: 'claude-alive' })
+    gate.seedLiveClaudePtysFromPersistence(['claude-alive', 'claude-dead'])
+    try {
+      await mod.initDaemonPtyProvider()
+
+      expect(gate.hasLiveClaudePtys()).toBe(true)
+
+      gate.markClaudePtyExited('claude-alive')
+      // Why: proves 'claude-dead' was released by the daemon reconcile — the surviving session held the gate alone.
+      expect(gate.hasLiveClaudePtys()).toBe(false)
+    } finally {
+      gate.markClaudePtyExited('claude-alive')
+      gate.markClaudePtyExited('claude-dead')
+    }
+  })
+
   it('does not install a late daemon provider after startup fallback aborts the init attempt', async () => {
     const mod = await importFresh()
     let resolveEnsureRunning!: (value: { socketPath: string; tokenPath: string }) => void

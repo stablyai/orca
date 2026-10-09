@@ -3,12 +3,77 @@ import {
   getHostedReviewCacheKey,
   linkedReviewHintKey
 } from '../slices/hosted-review-cache-identity'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  getSettingsFocusedExecutionHostId
+} from '../../../../shared/execution-host'
 import { reviewRefreshIntervalMs } from '../../../../shared/review-refresh-policy'
-import { buildPRRefreshCandidate, findWorktreeById } from './worktree-refresh'
+import {
+  buildPRRefreshCandidate,
+  getWorktreeLookupIndex,
+  findWorktreeById
+} from './worktree-refresh'
+import { findIndexedDetectedWorktrees } from '@/lib/worktree-runtime-owner-index'
+import { findKnownWorktreeById } from '../slices/worktrees/listing/detected-worktree-meta'
+import { findRepoForHost } from '../slices/repo-host-identity'
+import { getGitHubRepoLookupIndex } from '../slices/github-repo-lookup-index'
 import { getPRRefreshRuntimeRepoTarget } from './repository-routing'
 import type { VisibleHostedReviewRefreshTarget } from './visible-hosted-review-refresh-scheduler'
 import { shouldCoordinateVisibleGitHubReview } from './visible-hosted-review-refresh-ownership'
+
+export function* getVisibleHostedReviewWorkspaces(
+  state: AppState,
+  options?: { selectedOnly?: boolean }
+) {
+  const visibleHosts =
+    state.visibleWorkspaceHostIds ??
+    (state.workspaceHostScope && state.workspaceHostScope !== 'all'
+      ? [state.workspaceHostScope]
+      : null)
+  for (const id of state.visibleReviewWorktreeIds) {
+    const owners = new Set(getWorktreeLookupIndex(state).byId.get(id)?.owners)
+    for (const detected of findIndexedDetectedWorktrees(state.detectedWorktreesByRepo, id)) {
+      const workspace = findKnownWorktreeById(state, id, detected.hostId ?? 'local')
+      if (workspace) {
+        owners.add(workspace)
+      }
+    }
+    for (const worktree of owners) {
+      if (worktree.isArchived || worktree.isBare) {
+        continue
+      }
+      const repo = findRepoForHost(state.repos, worktree.repoId, {
+        hostId: worktree.hostId,
+        settings: state.settings
+      })
+      if (!repo) {
+        continue
+      }
+      const candidate = buildPRRefreshCandidate(state, worktree, undefined, repo)
+      if (
+        !candidate ||
+        candidate.repoKind !== 'git' ||
+        (candidate.connectionId && candidate.connectionState !== 'connected')
+      ) {
+        continue
+      }
+      const hostId = getRepoExecutionHostId(repo)
+      const activeHost = state.activeWorkspaceExecutionHostId
+      const selected =
+        id === state.activeWorktreeId &&
+        (activeHost
+          ? hostId === activeHost
+          : owners.size === 1 || hostId === getSettingsFocusedExecutionHostId(state.settings))
+      if (
+        (options?.selectedOnly && !selected) ||
+        (!selected && visibleHosts && !visibleHosts.includes(hostId))
+      ) {
+        continue
+      }
+      yield { worktree, repo, candidate, selected }
+    }
+  }
+}
 
 export function getVisibleHostedReviewRefreshTargets(
   state: AppState,
@@ -17,24 +82,12 @@ export function getVisibleHostedReviewRefreshTargets(
 ): VisibleHostedReviewRefreshTarget[] {
   const targets = new Map<string, VisibleHostedReviewRefreshTarget>()
   const revisions = new Map<string, Map<string, string>>()
-  for (const id of state.visibleReviewWorktreeIds) {
-    if (options?.selectedOnly && id !== state.activeWorktreeId) {
-      continue
-    }
-    const worktree = findWorktreeById(state, id)
-    if (!worktree || worktree.isArchived || worktree.isBare || !worktree.branch) {
-      continue
-    }
-    const candidate = buildPRRefreshCandidate(state, worktree)
-    if (
-      !candidate ||
-      candidate.repoKind !== 'git' ||
-      !candidate.branch ||
-      candidate.branch === 'HEAD'
-    ) {
-      continue
-    }
-    if (candidate.connectionId && candidate.connectionState !== 'connected') {
+  for (const { worktree, repo, candidate, selected } of getVisibleHostedReviewWorkspaces(
+    state,
+    options
+  )) {
+    const id = worktree.id
+    if (!candidate.branch || candidate.branch === 'HEAD') {
       continue
     }
     const key = getHostedReviewCacheKey(
@@ -61,12 +114,18 @@ export function getVisibleHostedReviewRefreshTargets(
       hints.linkedAzureDevOpsPR != null ||
       hints.linkedGiteaPR != null ||
       (hostedEntry?.data != null && hostedEntry.data.provider !== 'github')
+    // The legacy GitHub action still resolves bare IDs; never pass it another owner's candidate.
+    if (
+      getGitHubRepoLookupIndex(state.repos).findById(repo.id) !== repo ||
+      findWorktreeById(state, worktree.id) !== worktree
+    ) {
+      continue
+    }
     const knownGitHub = shouldCoordinateVisibleGitHubReview(state, worktree, candidate)
     const runtime = knownGitHub ? getPRRefreshRuntimeRepoTarget(state, candidate) : null
     if (knownGitHub && !runtime) {
       continue
     }
-    const selected = id === state.activeWorktreeId
     const usePR =
       knownGitHub &&
       prEntry !== undefined &&
@@ -147,11 +206,21 @@ export function visibleHostedReviewRefreshInputsChanged(
   return (
     state.visibleReviewWorktreeIds !== previous.visibleReviewWorktreeIds ||
     state.activeWorktreeId !== previous.activeWorktreeId ||
+    state.activeWorkspaceExecutionHostId !== previous.activeWorkspaceExecutionHostId ||
+    state.visibleWorkspaceHostIds !== previous.visibleWorkspaceHostIds ||
+    state.workspaceHostScope !== previous.workspaceHostScope ||
     state.worktreesByRepo !== previous.worktreesByRepo ||
+    state.detectedWorktreesByRepo !== previous.detectedWorktreesByRepo ||
     state.repos !== previous.repos ||
     state.settings !== previous.settings ||
     state.sshConnectionStates !== previous.sshConnectionStates ||
     state.prCache !== previous.prCache ||
-    state.hostedReviewCache !== previous.hostedReviewCache
+    state.hostedReviewCache !== previous.hostedReviewCache ||
+    state.tabsByWorktree !== previous.tabsByWorktree ||
+    state.ptyIdsByTabId !== previous.ptyIdsByTabId ||
+    state.browserTabsByWorktree !== previous.browserTabsByWorktree ||
+    state.unifiedTabsByWorktree !== previous.unifiedTabsByWorktree ||
+    state.agentStatusByPaneKey !== previous.agentStatusByPaneKey ||
+    state.agentStatusEpoch !== previous.agentStatusEpoch
   )
 }

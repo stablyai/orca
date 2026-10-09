@@ -5,6 +5,7 @@ import {
   resolveNativeChatTabDirectoryResolution,
   type NativeChatTabDirectoryState
 } from './native-chat-tab-directory'
+import { worktreeFixture } from './native-chat-workspace-test-fixtures'
 
 const FLOATING_TAB = {
   id: 'floating-chat-1',
@@ -20,13 +21,15 @@ const FLOATING_TERMINAL_TAB = {
 const WORKTREE_TAB = { id: 'worktree-chat-1', entityId: 'session-2' }
 const SSH_HOST = 'ssh:box-1'
 
+// The shape skill discovery passes: no detected rows.
 function state(overrides: Partial<NativeChatTabDirectoryState> = {}): NativeChatTabDirectoryState {
   return {
     floatingWorkspacePath: '/home/me/changed-setting',
+    folderWorkspaces: [],
     worktreesByRepo: {
       repo: [
-        { id: 'wt-1', path: '/repo/worktree', hostId: 'local' },
-        { id: 'wt-ssh', path: '/srv/remote/worktree', hostId: SSH_HOST }
+        worktreeFixture('wt-1', '/repo/worktree', { hostId: 'local' }),
+        worktreeFixture('wt-ssh', '/srv/remote/worktree', { hostId: SSH_HOST })
       ]
     },
     unifiedTabsByWorktree: {

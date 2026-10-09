@@ -189,7 +189,10 @@ export class AcpStructuredTurns {
           const detail = providerDiagnostic(refusal, 'person')
           this.reject(
             send.clientMessageId,
-            agentSessionFailureFact('providerRejected', detail ? { detail } : {})
+            agentSessionFailureFact(
+              lane.translator.authenticationRequired(error) ? 'notSignedIn' : 'providerRejected',
+              detail ? { detail } : {}
+            )
           )
         } else {
           lane.apply(lane.translator.promptFailed(send.clientMessageId, error, this.deps.now()))

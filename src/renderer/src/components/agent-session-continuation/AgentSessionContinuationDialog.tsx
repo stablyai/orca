@@ -164,7 +164,7 @@ export function AgentSessionContinuationDialog({
             <MessageSquarePlus className="size-4" />
             {translate(
               'components.agentSessionContinuation.dialogTitle',
-              'Continue in New Session'
+              'Hand Off to Another Agent'
             )}
           </DialogTitle>
           <DialogDescription className="text-xs">

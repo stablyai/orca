@@ -251,8 +251,8 @@ export function useNativeChatContextMenu({
                 <DropdownMenuItem onSelect={actions.onContinueAgentSessionInNewSession}>
                   <MessageSquarePlus />
                   {translate(
-                    'components.agentSessionContinuation.continueInNewSession',
-                    'Continue in New Session…'
+                    'components.agentSessionContinuation.handOffToAnotherAgent',
+                    'Hand Off to Another Agent'
                   )}
                 </DropdownMenuItem>
               ) : null}

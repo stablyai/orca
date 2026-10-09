@@ -2,11 +2,8 @@
  *  journal database. */
 
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
-import {
-  commitConversationClearRecord,
-  commitConversationCommandRecord,
-  type AgentSessionConversationClear
-} from './agent-session-conversation-command-record'
+import { createAgentSessionConversationReceipts } from './agent-session-conversation-receipts'
+import { commitConversationCommandRecord } from './agent-session-conversation-command-record'
 import { pinAgentSessionRecordLaunchDirectory } from './agent-session-record-launch-directory'
 import {
   agentSessionOperationKey,
@@ -90,11 +87,14 @@ export const AGENT_SESSION_LEASE_TTL_MS = 30_000,
 export class AgentSessionRecordStore {
   private readonly deathEvidenceListeners = new Set<(sessionId: string) => void>()
   private readonly firstRecordListeners = new Set<() => void>()
+  readonly conversationReceipts: ReturnType<typeof createAgentSessionConversationReceipts>
 
   private constructor(
     private readonly transactions: AgentSessionStoreTransactions,
     readonly hostId: string
-  ) {}
+  ) {
+    this.conversationReceipts = createAgentSessionConversationReceipts(transactions)
+  }
 
   /** Reads every structurally valid row, independently of which agents this host can start. */
   static open(args: {
@@ -163,10 +163,6 @@ export class AgentSessionRecordStore {
       commitConversationCommandRecord(draft, sessionId, fence, command)
     )
   }
-
-  /** A committed /clear and the at-rest conversation it continues in, in one write. */
-  commitConversationClear = (clear: AgentSessionConversationClear): Promise<void> =>
-    this.transact((draft) => commitConversationClearRecord(draft, clear))
 
   /** Unfenced on purpose: the name is a durable note, so writing it never contends with the
    *  writer lease. `null` clears it. */

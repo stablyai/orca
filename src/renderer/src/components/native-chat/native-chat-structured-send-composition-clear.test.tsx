@@ -240,7 +240,7 @@ describe('structured send racing the next IME composition', () => {
     changePrompt(input, '/model')
     await act(async () => pressEnter(input))
 
-    expect(structured.onError).toHaveBeenCalledWith('nope')
+    expect(structured.onError).toHaveBeenCalledWith('nope', undefined)
     expect(structured.send).not.toHaveBeenCalled()
     expect(promptValue(input)).toBe('/model')
   })

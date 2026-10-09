@@ -29,6 +29,11 @@ export const styles = StyleSheet.create({
     lineHeight: TEXT_SIZE + 6,
     fontWeight: '500'
   },
+  contextBoundary: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
+    paddingTop: spacing.sm
+  },
   hostNotice: {
     color: colors.textMuted,
     fontSize: TEXT_SIZE,

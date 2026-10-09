@@ -104,8 +104,11 @@ export class StructuredAgentSessionHost {
       (sessionId) => this.lifetime.conversation(sessionId),
       this.clientDelivery.readChildWork
     )
-    this.runtimeState = new StructuredAgentSessionHostRuntimeState(deps, this.sessions, (id, e) =>
-      this.eventRecovery.recoverAfterSinkFailure(id, e)
+    this.runtimeState = new StructuredAgentSessionHostRuntimeState(
+      deps,
+      this.sessions,
+      (id, e) => this.eventRecovery.recoverAfterSinkFailure(id, e),
+      (expired) => this.lifetime.expireStartup(expired)
     )
     this.reconcileLeases = createRestartReconciler({
       store: deps.store,
@@ -121,6 +124,8 @@ export class StructuredAgentSessionHost {
       trackStart: (start) => this.tasks.trackAttach(start),
       ensureProviderChild: (sessionId, startedFor) =>
         agentStart.ensureStructuredAgentSessionAgent(this.attachContext(), sessionId, startedFor),
+      // Put to rest like an idle agent: the stop writes nothing, and the next start is new.
+      stopSignedOutAgent: (id) => this.lifetime.stopAgent(id, { cause: 'evict', resting: true }),
       clientDelivery: this.clientDelivery
     })
     this.restore = reveal.createStructuredAgentSessionHostRestore(deps, {
@@ -152,7 +157,8 @@ export class StructuredAgentSessionHost {
     })
     this.restartResume = createStructuredAgentSessionRestartResume(deps, this.sessions, {
       ...structuredAgentSessionRestartResumeSurfaces(this, this.now),
-      readChildWork: this.clientDelivery.readChildWork
+      readChildWork: this.clientDelivery.readChildWork,
+      publishStatus: this.clientDelivery.publishStatusAndSettlement
     })
     this.lifetime = createStructuredAgentSessionConversationLifetime({
       context: () => this.lifetimeContext(),
@@ -210,13 +216,7 @@ export class StructuredAgentSessionHost {
   /** Every agent this runtime registered: what `agentSession.agents` publishes. */
   agentDefinitions = () => this.deps.agents.definitions()
 
-  /** Saved chats can outlive their registration; both vocabularies bound a client's audience. */
-  knownAgentIds = (): readonly string[] => [
-    ...new Set([
-      ...this.deps.agents.definitions().map(({ agent }) => agent),
-      ...this.deps.store.listRecords().map(({ provider }) => provider)
-    ])
-  ]
+  knownAgentIds = (): readonly string[] => providerSupport.knownAgentIds(this.deps)
 
   private readonly tabs = sessionTabs.createStructuredAgentSessionTabSurface(
     this,
@@ -291,6 +291,7 @@ export class StructuredAgentSessionHost {
       stopAgent: (sessionId, ending) => this.lifetime.stopAgent(sessionId, ending),
       wakeQueuedDrain: (sessionId) => this.queued.drain.schedule(sessionId),
       acquireAborts: this.runtimeState.acquireAborts,
+      optionRevisions: this.runtimeState.optionRevisions,
       now: () => this.now()
     }
   }
@@ -315,7 +316,6 @@ export class StructuredAgentSessionHost {
 
   conversationCommand = (...args: Parameters<StructuredConversationCommandController['run']>) =>
     this.conversationCommands.run(...args)
-  conversationReplacements = () => this.conversationCommands.replacements()
   /** Undefined means unavailable; an empty array is an authoritative catalog. */
   readCommands = (sessionId: string) => ({ commands: this.clientDelivery.readCommands(sessionId) })
 

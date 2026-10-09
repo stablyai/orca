@@ -23,6 +23,11 @@ import {
   TRANSCRIPT_LENGTH
 } from './native-chat-windowing-test-harness'
 
+// Pacing is not this test's subject.
+vi.mock('./use-native-chat-paced-text', async (importOriginal) =>
+  (await import('./native-chat-unpaced-text-fixture')).unpacedTextModule(importOriginal)
+)
+
 afterEach(cleanup)
 
 function scrollRoot(container: HTMLElement): HTMLElement {
@@ -33,10 +38,13 @@ function scrollRoot(container: HTMLElement): HTMLElement {
   return scroller
 }
 
+const paintedScrollTops = new WeakMap<HTMLElement, number>()
+
 /** Deliver resize and scroll events to a fixed point, as a painted frame would. */
 function paint(container: HTMLElement): void {
   const scroller = scrollRoot(container)
-  let lastScrollTop = scroller.scrollTop
+  // Commit-time writes also dispatch their browser scroll event before the next paint.
+  let lastScrollTop = paintedScrollTops.get(scroller) ?? 0
   for (let pass = 0; pass < 12; pass += 1) {
     let changed = false
     act(() => {
@@ -49,6 +57,7 @@ function paint(container: HTMLElement): void {
       changed = true
     }
     if (!changed && pass >= 2) {
+      paintedScrollTops.set(scroller, lastScrollTop)
       return
     }
   }

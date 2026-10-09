@@ -48,7 +48,7 @@ beforeEach(() => {
   consumeNativeChatResumeOnRestartDialogRequest()
   useAppStore.setState(useAppStore.getInitialState(), true)
   useAppStore.setState({
-    settings: { ...getDefaultSettings(''), experimentalStructuredNativeChat: true }
+    settings: { ...getDefaultSettings(''), experimentalNativeChat: true }
   })
   container = document.createElement('div')
   document.body.append(container)
@@ -148,7 +148,7 @@ it('keeps initial focus inside the dialog when reopened during resume', async ()
     </>
   )
   await act(async () => button('Resume 2 chats').click())
-  const opener = button('Resuming 2 chats')
+  const opener = button('Resuming chats 0/2')
   await act(async () => {
     opener.focus()
     opener.click()
@@ -214,10 +214,10 @@ it('disables Select all and the workspace checkbox while a resume runs', async (
     </>
   )
   await act(async () => button('Resume 2 chats').click())
-  await act(async () => button('Resuming 2 chats').click())
+  await act(async () => button('Resuming chats 0/2').click())
   const list = document.querySelector('[aria-label="Chats that would be resumed"]')!
   const boxes = [...list.querySelectorAll('[role="checkbox"]')]
-  expect(boxes).toHaveLength(4)
+  expect(boxes).toHaveLength(2)
   for (const box of boxes) {
     expect(box.hasAttribute('disabled')).toBe(true)
   }

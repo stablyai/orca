@@ -17,7 +17,7 @@ import {
   type AgentLaunchRoute,
   type AgentLaunchRoutingInput
 } from '@/lib/agent-launch-routing'
-import type { NativeChatLaunchPromptDelivery } from '@/lib/native-chat-initial-view-mode'
+import type { NativeChatLaunchPromptDelivery } from '@/lib/native-chat-launch-prompt-delivery'
 import {
   beginStructuredAgentLaunchSettlement,
   type StructuredAgentLaunchHandle,

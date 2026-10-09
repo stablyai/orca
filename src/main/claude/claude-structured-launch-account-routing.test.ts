@@ -4,8 +4,8 @@ import { join, resolve as resolvePath } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
-import { CLAUDE_PROFILE_SETUP_FAILED_MESSAGE } from '../../shared/claude-profile-routing'
 import {
+  CLAUDE_PROFILE_MISSING_MESSAGE,
   ClaudeProfileRouter,
   type ClaudeProfileRouterSettings
 } from '../claude-accounts/claude-profile-router'
@@ -32,10 +32,7 @@ it('launches each acquisition under the current selection, not the account it wa
     getSettings: () => settings,
     dataRoot: root,
     userHome: join(root, 'personal'),
-    env: { CLAUDE_CONFIG_DIR: resolvePath('/user/own') },
-    runSetup: async () => {
-      throw new Error('setup refused')
-    }
+    env: { CLAUDE_CONFIG_DIR: resolvePath('/user/own') }
   })
   installClaudeProfileRouter(router)
   const record = {
@@ -59,12 +56,7 @@ it('launches each acquisition under the current selection, not the account it wa
     providerHandle: claudeProviderHandle('unused', null)
   }
 
-  // A missing folder is set up first; typed when that fails, so the chat names the situation.
-  await expect(resolve({ identity })).rejects.toMatchObject({
-    name: 'AgentSessionPreSpawnError',
-    reason: 'claudeAccountSetupFailed',
-    message: CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
-  })
+  await expect(resolve({ identity })).rejects.toThrow(CLAUDE_PROFILE_MISSING_MESSAGE)
 
   const home = join(root, 'claude-profiles', 'a', 'home')
   mkdirSync(home, { recursive: true })

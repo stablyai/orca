@@ -12,7 +12,6 @@
 // Codex children outlive the turn that spawned them, so only a child's own turn, or the session,
 // ends it.
 
-import type { AgentSessionBackgroundTask } from '../../shared/agent-session-wire'
 import type {
   AgentChildWorkEvidence,
   AgentChildWorkLiveObservation
@@ -65,15 +64,18 @@ function ofTurn<T extends { turnId: string | null }>(fact: T | undefined, turnId
   return fact?.turnId === turnId ? fact : undefined
 }
 
-function commandLive(task: AgentSessionBackgroundTask, ownerId: string | null) {
+function commandLive(
+  command: Extract<CodexBackgroundCommandChange, { type: 'started' }>,
+  ownerId: string | null
+) {
+  const { task } = command
   return (observedAt: number): AgentChildWorkEvidence => ({
     type: 'live',
     observedAt,
     child: {
       handle: { idKind: 'task_id', id: task.id },
       kind: 'command',
-      // Its own process, not a turn's: no turn ending may settle it.
-      residency: 'background',
+      residency: command.backgrounded ? 'background' : 'foreground',
       state: 'working',
       ...(task.description ? { description: task.description } : {}),
       ...(ownerId !== null ? { ownerId } : {}),
@@ -89,7 +91,7 @@ export class CodexChildWorkEvidence {
   constructor(
     private readonly primaryThreadId: string,
     private readonly executions: CodexSubagentExecutions,
-    private readonly liveCommands: (threadId: string) => readonly AgentSessionBackgroundTask[]
+    private readonly liveCommands: (threadId: string) => readonly CodexBackgroundCommandChange[]
   ) {}
 
   /** After the tracker applied the frame: which command processes it saw start or stop, and the
@@ -142,7 +144,7 @@ export class CodexChildWorkEvidence {
     for (const command of commands) {
       if (command.type === 'started') {
         const ownerId = command.threadId === this.primaryThreadId ? null : command.threadId
-        this.pending.push(commandLive(command.task, ownerId))
+        this.pending.push(commandLive(command, ownerId))
         continue
       }
       const { taskId } = command
@@ -277,9 +279,7 @@ export class CodexChildWorkEvidence {
   /** Work a child launched before the host held its record was admitted with no owner; now that
    *  the owner is recorded, say again whose it is. */
   private requeueOwnedBy(threadId: string): void {
-    for (const task of this.liveCommands(threadId)) {
-      this.pending.push(commandLive(task, threadId))
-    }
+    this.queueCommands(this.liveCommands(threadId))
     for (const spawned of this.executions.workingChildren()) {
       const facts = this.facts.get(spawned.agentThreadId)
       if (spawned.spawnerThreadId === threadId && facts?.published !== undefined) {

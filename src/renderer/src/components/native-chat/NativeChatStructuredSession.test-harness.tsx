@@ -5,11 +5,15 @@ import type { AgentJournalRenderItem } from '../../../../shared/agent-session-jo
 import type { QueuedMessageCard } from './structured-agent-session-queued-cards'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
 import type { AgentSessionWriteRefusal } from '../../../../shared/agent-session-write-failure'
+import type { AgentSessionUnavailable } from '../../../../shared/agent-session-availability'
 import type { AgentSessionRefusalReference } from '../../../../shared/agent-session-wire-refusals'
 import type { NativeChatApprovalCardProps } from './NativeChatApprovalCard'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import type { NativeChatQuestionCardProps } from './NativeChatQuestionCard'
-import type { NativeChatLaunchSeed } from './native-chat-composer-types'
+import type {
+  NativeChatLaunchSeed,
+  NativeChatStructuredComposerTransport
+} from './native-chat-composer-types'
 import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 import type { NativeChatFileLinkContext } from './native-chat-file-link'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
@@ -21,23 +25,11 @@ import type {
   SessionOptionSetResult,
   SessionOptionValue
 } from '../../../../shared/native-chat-session-options'
+import { absent, nullable, widened } from './native-chat-mock-slot-types.test-support'
 
 type StopBackgroundTaskSpy = (sessionId: string, taskId?: string) => unknown
 
-function nullable<T>(): T | null {
-  return null
-}
-
-function widened<T>(value: T): T {
-  return value
-}
-
-function absent<T>(): T | undefined {
-  return undefined
-}
-
-/** Stands in for the transcript: renders only each message's delivery notice, or the row's quiet
- *  "Sending…" while nothing has confirmed it. */
+/** Stands in for the transcript: renders each message's delivery notice or quiet "Sending…". */
 export function DeliveryNoticesMock({
   notices
 }: {
@@ -141,7 +133,7 @@ export function createStructuredSessionMocks() {
       launchSeed?: NativeChatLaunchSeed
       structuredTransport?: Record<string, unknown> & {
         queueResume?: QueueResumeMock
-        onError?: (text: string | null, errorText?: string) => void
+        onError?: NativeChatStructuredComposerTransport['onError']
       }
       isWorking?: boolean
       isStopping?: boolean
@@ -185,6 +177,7 @@ export function createStructuredSessionMocks() {
     queuedSteerNewest: vi.fn<() => boolean>(() => false),
     queuedResumable: false,
     queueSendsNext: false,
+    unavailable: nullable<AgentSessionUnavailable>(),
     queuedResume: vi.fn<() => Promise<boolean>>(async () => true),
     revealLatest: vi.fn<() => void>()
   }
@@ -240,10 +233,18 @@ export function createStructuredSessionMocks() {
               supportsStopAll: mocks.supportsBackgroundTaskStopAll
             },
             turnId: mocks.turnId,
+            commandRefusalCauses: {
+              working: mocks.turnId !== null || mocks.isWorking,
+              prompt: mocks.promptItems.length > 0,
+              background: mocks.showBackgroundTasks || mocks.monitoringBackgroundTasks,
+              sending: false,
+              retry: false
+            },
             epoch: 'epoch-1',
             rewind: { surface: undefined },
             canStop: mocks.canStop ?? mocks.turnId !== null,
             queueSendsNext: mocks.queueSendsNext,
+            unavailable: mocks.unavailable,
             stopPressed: mocks.stopPressed,
             sendsQueue: mocks.sendsQueue,
             stop: mocks.stop,
@@ -398,7 +399,7 @@ export function createStructuredSessionMocks() {
     mocks.loadingOlder = false
     mocks.olderHistoryGeneration = 0
     mocks.loadOlder.mockReset()
-    Object.assign(mocks, { queuedResumable: false, queueSendsNext: false })
+    Object.assign(mocks, { queuedResumable: false, queueSendsNext: false, unavailable: null })
     mocks.queuedResume.mockReset()
     mocks.revealLatest.mockReset()
     mocks.queuedSteerNewest.mockReset()

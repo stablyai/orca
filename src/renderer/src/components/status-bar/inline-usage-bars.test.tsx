@@ -71,22 +71,6 @@ describe('InlineUsageBars', () => {
     expect(markup).toContain('42% used Fable')
   })
 
-  it('asks for a sign-in when another provider has no usage to show', async () => {
-    const { InlineUsageBars } = await import('./StatusBar')
-    const limits: ProviderRateLimits = {
-      provider: 'codex',
-      session: null,
-      weekly: null,
-      updatedAt: Date.now(),
-      error: 'Not signed in',
-      status: 'error'
-    }
-
-    const markup = renderToStaticMarkup(<InlineUsageBars limits={limits} isFetching={false} />)
-
-    expect(markup).toContain('Sign in to see usage')
-  })
-
   it('derives the collapsed session label from resetsAt (#5399)', async () => {
     const { InlineUsageBars } = await import('./StatusBar')
 

@@ -5,6 +5,9 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
+import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { claudeStructuredAuthPolicyForSettings } from '../claude-accounts/claude-structured-auth-policy'
+import type { ClaudeManagedAccountGateSettings } from '../native-chat/claude-structured-managed-account-support'
 import {
   CLAUDE_DEFAULT_SETTING_SOURCES,
   CLAUDE_SESSION_STATE_EVENTS_ENV,
@@ -15,6 +18,7 @@ import {
 } from './claude-structured-launch-resolution'
 import { claudeStructuredPermissionModeForSettings } from './claude-structured-permission-mode'
 import { CLAUDE_THINKING_DISPLAY_FLAG, type ClaudeCliFlag } from './claude-cli-flag-support'
+import { beginClaudeAuthSwitch, endClaudeAuthSwitch } from '../claude-accounts/live-pty-gate'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION_ID = 'orca-session-1'
@@ -76,6 +80,33 @@ function resolverFor(
   })
 }
 
+function managedAccount(id: string, managedAuthRuntime: 'host' | 'wsl') {
+  return {
+    id,
+    email: `${id}@example.com`,
+    managedAuthPath: `/managed/${id}`,
+    managedAuthRuntime,
+    authMethod: 'subscription-oauth' as const,
+    createdAt: 0,
+    updatedAt: 0,
+    lastAuthenticatedAt: 0
+  }
+}
+
+const HOST_SELECTED: ClaudeManagedAccountGateSettings = {
+  claudeManagedAccounts: [managedAccount('host-1', 'host')],
+  activeClaudeManagedAccountId: 'host-1',
+  activeClaudeManagedAccountIdsByRuntime: { host: 'host-1', wsl: {} }
+}
+
+/** The normalized steady state of a Windows user whose only Claude account is WSL-managed: the
+ *  prune drops the WSL account out of the host slot and persists that. */
+const WSL_ONLY_NORMALIZED: ClaudeManagedAccountGateSettings = {
+  claudeManagedAccounts: [managedAccount('wsl-1', 'wsl')],
+  activeClaudeManagedAccountId: null,
+  activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: { Ubuntu: 'wsl-1' } }
+}
+
 const RESUMABLE = record({
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only each link's handle, so the link's other fields stay unset.
   providerHandleChain: [
@@ -123,6 +154,51 @@ describe('claude structured launch resolution', () => {
     expect(CLAUDE_STRUCTURED_BASE_OPTIONS.includePartialMessages).toBe(true)
     expect(first.env).toMatchObject({ [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1' })
   })
+
+  it.each([false, true])(
+    'starts only the clear context, recovering its saved transcript: %s',
+    async (saved) => {
+      const boundary = { operationId: 'clear-one', afterFence: 2, clearedAt: 100 }
+      const value = record({
+        providerContextBoundary: boundary,
+        providerHandleChain: []
+      })
+      const hasTranscript = vi.fn(async () => saved)
+      const launch = await resolverFor(
+        value,
+        undefined,
+        false,
+        undefined,
+        hasTranscript
+      )({ identity: identityAt('old-leaf') })
+      const expected = claudeSessionIdForOrcaSession(SESSION_ID, boundary.operationId)
+      expect(launch.providerSessionId).toBe(expected)
+      expect(expected).not.toBe(claudeSessionIdForOrcaSession(SESSION_ID))
+      expect(launch.continuesChain).toBe(false)
+      expect(launch.resumeLeafUuid).toBeNull()
+      expect(launch.resumesTranscript).toBe(saved)
+      expect(launch.options).toMatchObject(saved ? { resume: expected } : { sessionId: expected })
+      expect(hasTranscript).toHaveBeenCalledWith(
+        expect.objectContaining({ providerSessionId: expected })
+      )
+      const retry = await resolverFor(
+        value,
+        undefined,
+        false,
+        undefined,
+        hasTranscript
+      )({ identity: IDENTITY })
+      expect(retry.providerSessionId).toBe(expected)
+      const next = await resolverFor(
+        { ...value, providerContextBoundary: { ...boundary, operationId: 'clear-two' } },
+        undefined,
+        false,
+        undefined,
+        async () => false
+      )({ identity: IDENTITY })
+      expect(next.providerSessionId).not.toBe(expected)
+    }
+  )
 
   it('resumes the durable chain head by session id and carries its leaf as bookkeeping', async () => {
     const launch = await resolverFor(
@@ -550,11 +626,66 @@ describe('claude structured launch resolution', () => {
       })
     ).rejects.toThrow(/CLAUDE_CONFIG_DIR/)
   })
+
+  /** The account state can change while a session lives, and a reacquire after an unexpected child
+   *  exit re-resolves the launch. Without the gate here, that reacquire spawns under whatever the
+   *  account state has become. */
+  describe('managed-account gate on every acquisition', () => {
+    function resolverWithGate(read: () => ClaudeManagedAccountGateSettings | null) {
+      return createClaudeStructuredLaunchResolver({
+        resolveLaunchArgs: () => [],
+        store: { getRecord: () => RESUMABLE, pinLaunchDirectory: vi.fn() },
+        resolveWorkspacePath: async (id) => `/repos/${id}`,
+        resolveCommand: () => '/usr/local/bin/claude',
+        // Derived, not a literal: the gate and the policy must read the SAME account state, so a
+        // hardcoded value could assert a pairing production cannot produce.
+        resolveAuthPolicy: () => {
+          const settings = read()
+          if (!settings) {
+            throw new Error('the gate refuses before the auth policy is computed')
+          }
+          return claudeStructuredAuthPolicyForSettings(settings)
+        },
+        readManagedAccountGate: read
+      })
+    }
+
+    it('refuses a reacquire once the account state becomes the refused shape', async () => {
+      let gate: ClaudeManagedAccountGateSettings | null = HOST_SELECTED
+      const resolve = resolverWithGate(() => gate)
+
+      // Created while supported: the launch resolves and would spawn.
+      await expect(resolve({ identity: identityAt('leaf-current') })).resolves.toMatchObject({
+        providerSessionId: 'provider-current'
+      })
+
+      gate = WSL_ONLY_NORMALIZED
+
+      // Reacquire after the account state changed: refused before anything spawns, naming the
+      // account shape a person can change.
+      const refused = resolve({ identity: identityAt('leaf-current') })
+      await expect(refused).rejects.toBeInstanceOf(AgentSessionPreSpawnError)
+      await expect(refused).rejects.toMatchObject({ reason: 'managedAccountUnsupported' })
+    })
+
+    it('fails closed when the account state cannot be read, naming no situation', async () => {
+      const refused = resolverWithGate(() => null)({ identity: identityAt('leaf-current') })
+      await expect(refused).rejects.toBeInstanceOf(AgentSessionPreSpawnError)
+      await expect(refused).rejects.toMatchObject({ reason: undefined })
+    })
+
+    it('keeps resolving when no gate is wired, so other embedders are unaffected', async () => {
+      await expect(
+        resolverFor(RESUMABLE)({ identity: identityAt('leaf-current') })
+      ).resolves.toMatchObject({ providerSessionId: 'provider-current' })
+    })
+  })
 })
 
 describe('readable Claude thinking', () => {
   const launchWith = (
     cliFlags?: ClaudeStructuredLaunchResolverDeps['cliFlags'],
+    authSwitchSettleTimeoutMs?: number,
     command = '/usr/local/bin/claude',
     launchArgs: string[] = []
   ) =>
@@ -566,7 +697,8 @@ describe('readable Claude thinking', () => {
       resolveAuthPolicy: () => ({ stripAuthEnv: false }),
       resolveEnv: () => ({ PROJECT_SHIM: '1', ANTHROPIC_API_KEY: 'sk-user' }),
       hasTranscript: async () => false,
-      ...(cliFlags ? { cliFlags } : {})
+      ...(cliFlags ? { cliFlags } : {}),
+      ...(authSwitchSettleTimeoutMs === undefined ? {} : { authSwitchSettleTimeoutMs })
     })({ identity: IDENTITY })
 
   // Whether the CLI's directory holds a `node` decides if the runtime pairing puts that directory
@@ -589,7 +721,7 @@ describe('readable Claude thinking', () => {
       if (sibling) {
         makeExecutable(join(binDir, process.platform === 'win32' ? 'node.cmd' : 'node'))
       }
-      const launch = await launchWith({ supports }, command)
+      const launch = await launchWith({ supports }, undefined, command)
       const asked = supports.mock.calls[0]?.[1]
       expect(asked).toMatchObject({ command, cwd: '/repos/workspace-1' })
       const segments = (env: Record<string, string> | undefined) =>
@@ -621,6 +753,7 @@ describe('readable Claude thinking', () => {
     const launch = await launchWith(
       { supports: async (flag) => flag === CLAUDE_THINKING_DISPLAY_FLAG },
       undefined,
+      undefined,
       ['--effort', 'high', '--thinking-display', 'omitted']
     )
     expect(launch.options.extraArgs).toEqual({
@@ -628,5 +761,22 @@ describe('readable Claude thinking', () => {
       'replay-user-messages': null,
       'thinking-display': 'summarized'
     })
+  })
+
+  it('still rechecks an account switch that began while the probe ran', async () => {
+    try {
+      const launch = launchWith(
+        {
+          supports: async () => {
+            beginClaudeAuthSwitch()
+            return false
+          }
+        },
+        10
+      )
+      await expect(launch).rejects.toMatchObject({ reason: 'accountSwitchInProgress' })
+    } finally {
+      endClaudeAuthSwitch()
+    }
   })
 })

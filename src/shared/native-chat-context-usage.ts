@@ -4,6 +4,7 @@
 
 import { contextTokensFromUsage } from './agent-session-context-usage'
 import type { NativeChatMessage } from './native-chat-types'
+import { isNativeChatContextClear } from './agent-session-context-clear'
 
 export type NativeChatContextUsage = {
   usedTokens: number
@@ -32,7 +33,7 @@ export function deriveNativeChatContextUsage(
 ): NativeChatContextUsage | null {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index]!
-    if (isNativeChatCompactionBoundary(message)) {
+    if (isNativeChatCompactionBoundary(message) || isNativeChatContextClear(message)) {
       return null
     }
     if (message.role !== 'assistant' || !message.usage) {

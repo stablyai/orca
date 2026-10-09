@@ -137,7 +137,8 @@ describe('reports the sends that bring the latest into view', () => {
     send('/permissions', [])
     await vi.waitFor(() =>
       expect(structuredTransport.onError).toHaveBeenCalledWith(
-        expect.stringContaining('not available in chat sessions')
+        expect.stringContaining('not available in chat sessions'),
+        undefined
       )
     )
     expect(onSubmitted).not.toHaveBeenCalled()
@@ -154,10 +155,9 @@ describe("says a failed send in Orca's words, with the error it hit apart", () =
     })
     send('hello', [])
     await vi.waitFor(() =>
-      expect(structuredTransport.onError).toHaveBeenCalledWith(
-        'Your message was not sent.',
-        'connect ECONNREFUSED /tmp/a.sock'
-      )
+      expect(structuredTransport.onError).toHaveBeenCalledWith('Your message was not sent.', {
+        errorText: 'connect ECONNREFUSED /tmp/a.sock'
+      })
     )
   })
 })

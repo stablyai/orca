@@ -18,13 +18,21 @@ import { openCodeStoredUserMessagesReader } from '../opencode/opencode-acp-store
 import type { AcpStoredUserMessagesReader } from './acp-recovery-history'
 import { isStableCliVersionFrom, isStableCliVersionOnLine } from '../agent-cli-version-probe'
 import type { TuiAgent } from '../../shared/tui-agent'
+import { agentSessionSignInFor } from '../../shared/agent-session-sign-in'
+import {
+  loadGrokVisualsSkill,
+  loadOmpVisualsSkill,
+  loadOpenCodeVisualsSkill,
+  type AcpVisualsSkillLoader
+} from './acp-visuals-skill'
 
 export type AcpLaunchSpec = {
   /** The Orca agent id, which names the agent's records, its catalog label and its settings. */
   agent: TuiAgent
   command: string
-  /** Built per launch: `fullAccess` is the Agent Permissions setting's bypass posture. */
-  args(input: { fullAccess: boolean }): string[]
+  /** Built per launch: `fullAccess` is the Agent Permissions setting's bypass posture;
+   *  `pluginDir` is a plugin folder `visualsSkill` asked the agent to load. */
+  args(input: { fullAccess: boolean; pluginDir: string | null }): string[]
   /** Laid over the child's environment last, after the account and the user's own variables. */
   env: Readonly<Record<string, string>>
   /** Rewrites what the child would inherit from Orca's own plumbing; returns the keys it must not
@@ -50,16 +58,23 @@ export type AcpLaunchSpec = {
   imagePrompts?: true
   /** The agent's own store of a session's user messages, read for restart recovery only. */
   readStoredUserMessages?: AcpStoredUserMessagesReader
+  /** How a launch loads the inline-visuals skill; absent, the agent's chats have no visuals. */
+  visualsSkill?: AcpVisualsSkillLoader
 }
 
 const GROK_LAUNCH_SPEC: AcpLaunchSpec = {
   agent: 'grok',
   command: 'grok',
   // `--always-approve` only for full access, as the user's setting chooses.
-  args: ({ fullAccess }) => ['agent', ...(fullAccess ? ['--always-approve'] : []), 'stdio'],
+  args: ({ fullAccess, pluginDir }) => [
+    'agent',
+    ...(fullAccess ? ['--always-approve'] : []),
+    ...(pluginDir ? ['--plugin-dir', pluginDir] : []),
+    'stdio'
+  ],
   env: {},
   dialect: GROK_ACP_DIALECT,
-  loginCommand: ['grok', 'login'],
+  loginCommand: agentSessionSignInFor('grok')?.loginCommand ?? [],
   // An API key in Grok's own environment, else the sign-in Grok already cached; never interactive.
   authMethod: ({ advertised, env }) =>
     env.XAI_API_KEY?.trim() && advertised.includes('xai.api_key')
@@ -68,7 +83,8 @@ const GROK_LAUNCH_SPEC: AcpLaunchSpec = {
         ? 'cached_token'
         : undefined,
   account: directoryAccountBinding('GROK_HOME', (homePath) => join(homePath, '.grok')),
-  installDirectories: ({ env }) => (env.GROK_HOME ? [join(env.GROK_HOME, 'bin')] : [])
+  installDirectories: ({ env }) => (env.GROK_HOME ? [join(env.GROK_HOME, 'bin')] : []),
+  visualsSkill: loadGrokVisualsSkill
 }
 
 // `opencode acp` on 1.x serves in-process; on 2.x it starts a private `opencode serve --stdio` child
@@ -90,25 +106,25 @@ const OPENCODE_LAUNCH_SPEC: AcpLaunchSpec = {
   env: { OPENCODE_CLIENT: 'acp', OPENCODE_ENABLE_QUESTION_TOOL: 'false' },
   scrubEnvironment: scrubOpenCodeAcpEnvironment,
   dialect: OPENCODE_ACP_DIALECT,
-  loginCommand: ['opencode', 'auth', 'login'],
+  loginCommand: agentSessionSignInFor('opencode')?.loginCommand ?? [],
   account: openCodeAcpAccountBinding(),
   installDirectories: ({ homePath }) => [join(homePath, '.opencode', 'bin')],
   supportsVersion: (version) =>
     OPENCODE_ACP_RELEASE_LINES.some((line) => isStableCliVersionOnLine(version, line)),
   imagePrompts: true,
-  readStoredUserMessages: openCodeStoredUserMessagesReader()
+  readStoredUserMessages: openCodeStoredUserMessagesReader(),
+  visualsSkill: loadOpenCodeVisualsSkill
 }
 
 // OMP serves ACP through `omp acp`; its environment reaches it as the user set it.
 const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
   agent: 'omp',
   command: 'omp',
-  // `omp acp` takes no flags: full access answers each permission request yes.
-  args: () => ['acp'],
+  // Full access answers each permission request yes.
+  args: ({ pluginDir }) => ['acp', ...(pluginDir ? ['--plugin-dir', pluginDir] : [])],
   env: {},
   dialect: OMP_ACP_DIALECT,
-  // OMP signs in from its own `/login`.
-  loginCommand: ['omp'],
+  loginCommand: agentSessionSignInFor('omp')?.loginCommand ?? [],
   // The directory OMP's terminal chats read too; its default is OMP's own.
   account: directoryAccountBinding('PI_CODING_AGENT_DIR', (homePath) =>
     join(homePath, '.omp', 'agent')
@@ -116,7 +132,8 @@ const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
   // OMP's installers use directories the shared resolver already searches after PATH.
   installDirectories: () => [],
   // Stable releases from 17.0.5, the release verified to serve `omp acp`.
-  supportsVersion: (version) => isStableCliVersionFrom(version, '17.0.5')
+  supportsVersion: (version) => isStableCliVersionFrom(version, '17.0.5'),
+  visualsSkill: loadOmpVisualsSkill
 }
 
 export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [

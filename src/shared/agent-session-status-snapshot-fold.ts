@@ -35,7 +35,7 @@ export function revokeAgentSessionStatusLive(
 ): AgentSessionStatusSnapshot {
   let next: Map<string, AgentSessionStatusSummary> | null = null
   for (const [sessionId, summary] of snapshot) {
-    if (!summary.hostExecutionOwned && !summary.stopping) {
+    if (!summary.hostExecutionOwned && !summary.stopping && !summary.restartResume) {
       continue
     }
     next ??= new Map(snapshot)
@@ -43,6 +43,7 @@ export function revokeAgentSessionStatusLive(
       hostExecutionOwned: _owned,
       hostExecutionPhase: _phase,
       stopping: _stopping,
+      restartResume: _restartResume,
       ...retained
     } = summary
     next.set(sessionId, retained)

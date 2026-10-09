@@ -11,7 +11,6 @@ import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-
 import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/tui-agent-display-names'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import {
-  AgentSessionAcquisitionRefusal,
   AgentSessionPreSpawnError,
   type AgentSessionAcquisition,
   type StructuredAgentSessionAcquireInput
@@ -22,7 +21,8 @@ import {
   PROVIDER_SPAWN_TOKEN_ENV
 } from '../provider-process/provider-spawned-process-identity'
 import { structuredSessionChildIdentityEnv } from '../runtime/structured-session-child-identity-env'
-import { AcpAuthRequiredError } from './acp-errors'
+import { AcpAgentError } from './acp-errors'
+import { acpAuthenticationRequired, acpSignInRequiredRefusal } from './acp-turn-failures'
 import { ACP_CHILD_ENV_TO_DELETE } from './acp-launch-specs'
 import {
   ACP_REOPEN_FAILED,
@@ -128,6 +128,7 @@ export async function acquireAcpStructuredSession(input: {
     },
     {
       clientInfo: { name: 'orca', version: '1' },
+      ...(acquire.onOutput ? { onOutput: acquire.onOutput } : {}),
       onPermission: (request, context) => {
         if (!session?.turns.acceptsRequests) {
           // No prompt of Orca's runs (a turn the agent began itself included), or a Stop or steer
@@ -319,11 +320,8 @@ export async function acquireAcpStructuredSession(input: {
   } catch (error) {
     session = null
     slot.lane?.dispose()
-    if (error instanceof AcpAuthRequiredError) {
-      throw new AgentSessionAcquisitionRefusal(
-        `${spec.agent} reported that it is not signed in: ${error.message}`,
-        'notSignedIn'
-      )
+    if (error instanceof AcpAgentError && acpAuthenticationRequired(spec.dialect, error)) {
+      throw acpSignInRequiredRefusal(spec.agent, spec.dialect, error)
     }
     throw error
   }

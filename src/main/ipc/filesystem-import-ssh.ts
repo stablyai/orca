@@ -1,7 +1,7 @@
 import { lstat } from 'node:fs/promises'
 import { basename, posix, resolve } from 'node:path'
 import { isENOENT } from './filesystem-path-containment'
-import { getSshConnectionManager } from './ssh'
+import { getSshConnectionManager } from '../ssh/ssh-target-registry'
 import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import type { FileUploadSession, IFilesystemProvider } from '../providers/types'
 import type { ImportItemResult } from '../../shared/filesystem-import-result-types'

@@ -101,6 +101,9 @@ export type JournalTombstoneRow = JournalRowBase & {
   /** On a reopen mark written after the chat stopped: where it stopped, so a send accepted since
    *  lifts it. Absent: the mark's own row. */
   queueReopenSince?: number
+  queueClear?: { operationId: string; messageIds: string[]; lifted?: true }
+  /** A rewind retires the removed send's echo claimant as well as its visible item. */
+  retireSubmission?: true
 }
 
 /** One Stop that took effect. Temporary carrier: a tombstone's extra key, which every host ignores,
@@ -124,6 +127,7 @@ export type JournalStopOrResumeRow = JournalTombstoneRow &
     | { stopEvent: NonNullable<JournalTombstoneRow['stopEvent']> }
     | { queueResume: NonNullable<JournalTombstoneRow['queueResume']> }
     | { queueReopen: NonNullable<JournalTombstoneRow['queueReopen']> }
+    | { queueClear: NonNullable<JournalTombstoneRow['queueClear']> }
   )
 
 /** A Stop's event, a Resume or a reopen mark. Any value counts, so a newer build's mark never
@@ -131,7 +135,10 @@ export type JournalStopOrResumeRow = JournalTombstoneRow &
 export function isJournalStopOrResumeRow(row: JournalRow): row is JournalStopOrResumeRow {
   return (
     row.kind === 'tombstone' &&
-    (row.stopEvent !== undefined || row.queueResume !== undefined || row.queueReopen !== undefined)
+    (row.stopEvent !== undefined ||
+      row.queueResume !== undefined ||
+      row.queueReopen !== undefined ||
+      row.queueClear !== undefined)
   )
 }
 

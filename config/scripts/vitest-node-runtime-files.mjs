@@ -35,6 +35,8 @@ export const NODE_RUNTIME_INCLUDE = [
   'src/**/*expiry*.test.ts',
   'src/renderer/src/lib/flatten-retained-slice.test.ts',
   'src/shared/own-retained-string.test.ts',
+  // Times V8 string flattening, which is what Electron main runs.
+  'src/main/runtime/terminal-tail-redraw-wall-time.test.ts',
   'src/main/agent-hooks/server-transport-interference.test.ts',
   'src/main/plugins/plugin-worker-supervision.integration.test.ts',
   'src/main/usage/usage-scan-worker-event-loop.test.ts',
@@ -71,6 +73,8 @@ export const NODE_RUNTIME_INCLUDE = [
   'src/main/runtime/agent-session-conversation-name-store.test.ts',
   'src/main/runtime/structured-session-mail-redrive-wiring.test.ts',
   'src/main/runtime/rpc/ws-transport.test.ts',
+  // Bun resolves 'ws' to its built-in client, which bypasses the patched package.
+  'src/main/runtime/rpc/ws-empty-payload-frame-write.test.ts',
   'src/shared/remote-runtime-client.test.ts',
   'src/shared/remote-runtime-connect-bound.test.ts',
   'src/shared/remote-runtime-subscription-connect-bound.test.ts',

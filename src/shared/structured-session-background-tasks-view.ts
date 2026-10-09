@@ -1,13 +1,7 @@
 // The background-tasks strip's view of one session's wire state.
 //
-// The strip reports work that is IN FLIGHT, whether or not it outlived a turn:
-// a fan-out's children keep reporting long after the parent settles, and a
-// foreground fan-out is running work while the turn is still open. It stays
-// mounted through a running turn — turn state is not a filter on the rows,
-// because the producers publish only tasks they still have live evidence for.
-// A host that publishes its child records sends the running ones only, and no
-// roster once none runs, so the strip hides. Only an idle session with live
-// work lets the strip animate or speak for itself.
+// Hosts select background work; newer clients also exclude their current turn's commands
+// from an older host's roster. Child agents and earlier commands stay visible mid-turn.
 
 import type {
   AgentSessionBackgroundTask,
@@ -17,7 +11,7 @@ import { agentChildWorkLiveness } from './agent-status-child-work-liveness'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
 
 export type StructuredSessionBackgroundTasksView = {
-  /** The strip renders whenever the host reports rows — mid-turn included. */
+  /** Background rows remain visible during a foreground turn. */
   show: boolean
   /** Idle-only: gates the animated monitoring indicator and conversation
    *  commands, never the strip itself. A running turn owns the voice. */
@@ -32,24 +26,47 @@ export type StructuredSessionBackgroundTasksView = {
 
 /** One shared empty list: a roster with no rows of a kind keeps the strip's memo on every render. */
 const NO_TASKS: AgentSessionBackgroundTask[] = []
+const NO_FOREGROUND_COMMANDS: ReadonlySet<string> = new Set()
+
+function withoutForeground<T>(
+  rows: T[],
+  foreground: ReadonlySet<string>,
+  id: (row: T) => string | undefined
+): T[] {
+  const visible = (row: T) => !foreground.has(id(row) ?? '')
+  return rows.every(visible) ? rows : rows.filter(visible)
+}
 
 export function structuredSessionBackgroundTasksView(
   backgroundTasks: AgentSessionBackgroundTaskState | null | undefined,
-  turnId: string | null
+  turnId: string | null,
+  foregroundCommands: ReadonlySet<string> = NO_FOREGROUND_COMMANDS
 ): StructuredSessionBackgroundTasksView {
   const monitoring = backgroundTasks?.state === 'monitoring'
   // Decoded once where the frame entered the client's state, so its identity holds between frames.
-  const children = monitoring ? backgroundTasks.children : undefined
+  const children =
+    monitoring && backgroundTasks.children
+      ? withoutForeground(backgroundTasks.children, foregroundCommands, (child) => child.providerId)
+      : undefined
+  const tasks = withoutForeground(
+    backgroundTasks?.tasks ?? NO_TASKS,
+    foregroundCommands,
+    (task) => task.id
+  )
   // Only running children arrive; a roster with none holds nothing open either way.
   // An older host's roster whose listed rows have all finished shows nothing that runs.
-  const onlyFinished =
-    !children && !backgroundTasks?.tasks?.length && Boolean(backgroundTasks?.settledTasks?.length)
-  const show = monitoring && !onlyFinished
+  const onlyFinished = !children && !tasks.length && Boolean(backgroundTasks?.settledTasks?.length)
+  const onlyForeground =
+    foregroundCommands.size > 0 &&
+    !children?.length &&
+    !tasks.length &&
+    Boolean(backgroundTasks?.children?.length || backgroundTasks?.tasks?.length)
+  const show = monitoring && !onlyFinished && !onlyForeground
   const liveWork = children ? agentChildWorkLiveness(children) !== null : show
   return {
     show,
     isMonitoring: turnId === null && liveWork,
-    tasks: backgroundTasks?.tasks ?? NO_TASKS,
+    tasks,
     // Running work only, from any host: an older host's finished rows are not shown either.
     settledTasks: NO_TASKS,
     ...(children ? { children } : {}),

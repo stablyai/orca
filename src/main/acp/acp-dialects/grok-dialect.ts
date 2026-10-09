@@ -177,7 +177,10 @@ export const GROK_ACP_DIALECT: AcpDialect = {
   toolBackgroundTasks: grokToolBackgroundTasks,
   notification,
   contextWindow,
-  promptErrorDetail: (error) => promptErrorDataSchema.safeParse(error.data).data?.message,
+  promptErrorDetail: (error) =>
+    typeof error.data === 'string'
+      ? error.data
+      : promptErrorDataSchema.safeParse(error.data).data?.message,
   failedTurnText: (stopReason) =>
     stopReason === 'rate_limit'
       ? 'Grok usage limit reached.'

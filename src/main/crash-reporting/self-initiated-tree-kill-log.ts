@@ -38,12 +38,6 @@ import { recordCoalescedDurableCrashBreadcrumb } from './durable-crash-breadcrum
  *   taskkill (neither runs in main); and the browser-route Electron probes,
  *   which are reached only from `*.electron.test.ts`.
  *
- * `main-process-tree-kill-gate.test.ts` is the ratchet that keeps that list
- * closed: it counts `/pid` call sites against gate admissions per file, so a new
- * pid-addressed kill fails it whether it lands in a new file or inside a family
- * that already asks the gate. It does not see a `/pid` argument built from a
- * variable.
- *
  * A daemon or relay kill missing from the count is a diagnostics gap, not a
  * missed suspect: those hosts cannot reach a Chromium pid in the first place
  * (see `orca-chromium-process-pids.ts`), and a group or Job-Object kill can

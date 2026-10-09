@@ -16,6 +16,7 @@ import {
   NativeChatToolName
 } from './NativeChatToolAnnotations'
 import { NativeChatToolIcon } from './NativeChatToolIcon'
+import { NativeChatToolFileTarget } from './NativeChatToolFileTarget'
 import { NativeChatDiffView } from './NativeChatDiffView'
 import { nativeChatToolLineLabel } from './native-chat-tool-line-label'
 import { diffFromText, diffFromToolCall } from './native-chat-diff'
@@ -24,6 +25,8 @@ import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { truncateToolDetail } from './native-chat-tool-summary'
 
 const NO_SEARCH_RESULTS: NonNullable<NativeChatToolCallBlock['webSearchResults']> = []
+const TARGET_CLASS =
+  'min-w-0 truncate text-chat-foreground transition-colors group-hover/tool-line:text-chat-foreground-strong'
 
 /** What an opened row shows. Its own component so a row diffs only while it is open. */
 function ToolLineDetail({
@@ -156,16 +159,18 @@ export function NativeChatToolLine({
               (isCall ? <NativeChatToolName name={name} mcpIdentity={block.mcpIdentity} /> : name)}
           </span>
         )}
-        {(label?.target ?? resultPreview) ? (
-          <span
-            className="min-w-0 truncate text-chat-foreground transition-colors group-hover/tool-line:text-chat-foreground-strong"
-            title={label?.title ?? resultPreview}
-            aria-hidden={label?.filePath ? true : undefined}
-          >
+        {label?.filePath ? (
+          <NativeChatToolFileTarget
+            path={label.filePath}
+            label={label.target}
+            className={TARGET_CLASS}
+            onLinkClick={onLinkClick}
+          />
+        ) : (label?.target ?? resultPreview) ? (
+          <span className={TARGET_CLASS} title={label?.title ?? resultPreview}>
             {label?.target ?? resultPreview}
           </span>
         ) : null}
-        {label?.filePath ? <span className="sr-only">{label.filePath}</span> : null}
         {/* Held at the row's right edge, so the carets of a run line up in one column. */}
         <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-2">
           {isCall ? <NativeChatCommandMetadata block={block} /> : null}

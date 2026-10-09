@@ -431,7 +431,8 @@ describe('connectPanePty', () => {
         url: 'https://github.com/acme/orca/pull/42',
         slug: { owner: 'acme', repo: 'orca', host: 'github.com' },
         number: 42
-      })
+      }),
+      expect.objectContaining({ tabId: 'tab-1' })
     )
   })
 

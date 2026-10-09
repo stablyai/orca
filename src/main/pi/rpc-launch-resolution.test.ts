@@ -117,6 +117,26 @@ describe('Pi host launch resolution', () => {
     })
   })
 
+  it('starts a fresh session after clear without reading the previous file', async () => {
+    const h = await setup()
+    const old = join(root, 'old-malformed.jsonl')
+    await writeFile(old, 'not a Pi session header')
+    vi.spyOn(h.store, 'getRecord').mockReturnValue({
+      ...h.record,
+      providerHandleChain: [],
+      providerContextBoundary: { operationId: 'clear', afterFence: 2, clearedAt: 100 }
+    })
+    const launch = await h.resolver({ ...identity, providerHandle: h.prior(old).handle })
+    expect(launch.previous).toBeNull()
+    expect(launch.sessionFile).toBeUndefined()
+    expect(launch.forkFile).toBeUndefined()
+    expect(launch.replacement).toBeUndefined()
+    expect(buildPiRpcLaunch(launch).args).toEqual(['--mode', 'rpc'])
+    expect(piRpcProviderLink(launch, join(root, 'fresh.jsonl'), 3, 'fresh', 101).origin).toBe(
+      'created'
+    )
+  })
+
   it('spawns the binary the Command setting names, and refuses one that is not runnable', async () => {
     const h = await setup()
     h.settings.agentCmdOverrides = { pi: `"${process.execPath}"` }

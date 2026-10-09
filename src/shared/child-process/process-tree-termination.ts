@@ -1,5 +1,6 @@
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process'
 import { admitProcessTreeKill } from './process-tree-kill-gate'
+import { windowsSystem32Binary } from './windows-system-binary'
 
 const PROBE_INTERVAL_MS = 25
 const SUBPROCESS_TIMEOUT_MS = 2_000
@@ -99,11 +100,15 @@ function taskkillTree(
   return new Promise((resolve) => {
     let killer: ChildProcess
     try {
-      killer = nodeSpawn('taskkill', ['/pid', String(rootPid), '/t', '/f'], {
-        stdio: 'ignore',
-        windowsHide: true,
-        shell: false
-      })
+      killer = nodeSpawn(
+        windowsSystem32Binary('taskkill.exe'),
+        ['/pid', String(rootPid), '/t', '/f'],
+        {
+          stdio: 'ignore',
+          windowsHide: true,
+          shell: false
+        }
+      )
     } catch {
       killRoot(child, signal)
       resolve(false)

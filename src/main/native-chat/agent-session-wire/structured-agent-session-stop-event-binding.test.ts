@@ -108,7 +108,7 @@ async function queuedDraft(text: string): Promise<string> {
  *  behind the start, which the Stop holds. */
 async function stopOfStart(options: { held?: true } = {}): Promise<string | undefined> {
   rig = await createQueuedMessageTestRig({ starting: true, restartable: true })
-  // Handed over at once to a child that never proves its start; nothing echoes it.
+  // Held for a child that never proves its start, so it is never handed over.
   rig.send('work on this')
   await eventually(() => expect(childPhase()).toBe('starting'))
   const held = options.held ? await queuedDraft('queued behind the start') : undefined
@@ -124,6 +124,7 @@ async function mailTurn(): Promise<void> {
   const handedOver = rig.dispatch.mock.calls.length
   const mail = rig.send('mail for the worker')
   await mail.result
+  await rig.proveStart()
   await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(handedOver + 1))
   await turnOpenedBy(mail.id)
 }

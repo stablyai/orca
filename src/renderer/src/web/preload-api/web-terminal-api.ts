@@ -44,7 +44,6 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     isCodexOnSharedServer: () => Promise.resolve({ joined: false }),
     disableCodexSharedServerAutoStart: () => Promise.resolve(false),
     stopCodexSharedServer: () => Promise.resolve(false),
-    openedBeforeClaudeAccounts: () => Promise.resolve(false),
     getCwd: () => Promise.resolve('~'),
     getSize: () => Promise.resolve(null),
     listSessions: () => Promise.resolve([]),

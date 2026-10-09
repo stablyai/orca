@@ -51,21 +51,16 @@ export async function provisionClaudeAccountProfile(args: {
   userConfigDir?: string
   /** Null when Orca's Claude hooks are turned off. Runs after the settings merge so its entries survive it. */
   installHooks: ((target: { configDir: string }) => AgentHookInstallStatus) | null
+  trustKeys?: readonly string[]
   platform?: NodeJS.Platform
 }): Promise<ClaudeProfileSetupReport> {
   const platform = args.platform ?? process.platform
   const report = createClaudeProfileReport()
-  let markSetUp: () => void
   try {
     if (args.profile.target.runtime === 'wsl' && platform === 'win32') {
       throw new ClaudeProfileSurfaceError('invalid-profile', 'WSL profiles are set up in the guest')
     }
-    markSetUp = prepareClaudeProfileDirectory(
-      args.dataRoot,
-      args.profile,
-      args.userHome,
-      args.userConfigDir
-    )
+    prepareClaudeProfileDirectory(args.dataRoot, args.profile, args.userHome, args.userConfigDir)
   } catch (error) {
     report.surfaces.profile = 'failed'
     warnClaudeProfile(report, 'profile', error)
@@ -75,7 +70,7 @@ export async function provisionClaudeAccountProfile(args: {
   const shared = { profileHome: home, userHome: args.userHome, userConfigDir: args.userConfigDir }
   for (const step of [
     () => shareClaudeProfileHistory({ ...shared, platform }),
-    () => provisionClaudeProfile({ ...shared, platform })
+    () => provisionClaudeProfile({ ...shared, platform, trustKeys: args.trustKeys })
   ]) {
     try {
       const part = await step()
@@ -97,7 +92,5 @@ export async function provisionClaudeAccountProfile(args: {
     recordInstalledHooks(home)
     return 'merged'
   })
-  // Last: a setup cut off before here leaves no marker, so the next launch waits for a full one.
-  markSetUp()
   return { outcome: 'prepared', ...report }
 }

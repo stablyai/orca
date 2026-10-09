@@ -26,7 +26,7 @@ import {
 } from '@/runtime/restored-client-hosted-browser-host-attach'
 import { applyRuntimeHostStatusSnapshot } from './runtime-status-snapshot'
 import {
-  peerReplacedEnvironmentIds,
+  classifyPeerReplacements,
   replacedRuntimeEnvironmentIds
 } from './runtime-environment-peer-replacement'
 
@@ -61,7 +61,14 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
   setRuntimeEnvironments: (environments) => {
     const previousEnvironments = get().runtimeEnvironments
     const replacedEnvironmentIds = replacedRuntimeEnvironmentIds(previousEnvironments, environments)
-    replaceRuntimeEnvironmentRevisions(environments)
+    const peerReplacement = classifyPeerReplacements(
+      previousEnvironments,
+      environments,
+      replacedEnvironmentIds
+    )
+    // Why classified first: transports may follow only a same-host rotation; a replaced peer's
+    // transports are fenced before its new revision is published.
+    replaceRuntimeEnvironmentRevisions(environments, peerReplacement)
     // Why: diff against the accumulated in-memory saved list (not a second disk
     // read) so a main-initiated removal that never calls setRuntimeEnvironments
     // still enters the diff on the next list read. #8881.
@@ -140,12 +147,7 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
       get().markEnvironmentSshStateStale?.(id)
     }
     // Why: a same-id re-pair to another peer retires it as surely as a removal.
-    const retiredEnvironmentIds = [
-      ...new Set([
-        ...removedIds,
-        ...peerReplacedEnvironmentIds(previousEnvironments, environments, replacedEnvironmentIds)
-      ])
-    ]
+    const retiredEnvironmentIds = [...new Set([...removedIds, ...peerReplacement.retired])]
     if (retiredEnvironmentIds.length > 0) {
       evictInstalledAgentSkillDiscoveryForRuntimeEnvironments(retiredEnvironmentIds)
       get().purgeStaleRuntimeHostState?.(retiredEnvironmentIds)

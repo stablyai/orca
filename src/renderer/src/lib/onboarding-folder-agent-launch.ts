@@ -28,13 +28,11 @@ export function resolveDismissedOnboardingFolderAgentLaunch(args: {
   onboarding: OnboardingState | null
   hasExistingProject: boolean
   executionHostId: string
-  nativeChatTranscriptIsLocalReadable?: boolean
 }): OnboardingFolderAgentLaunch {
   const startup = buildDismissedOnboardingFolderAgentStartup(
     args.store.settings ?? null,
     args.onboarding,
-    args.hasExistingProject,
-    args.nativeChatTranscriptIsLocalReadable
+    args.hasExistingProject
   )
   const agent = startup?.launchAgent ?? null
   if (!startup || !agent) {
@@ -44,8 +42,7 @@ export function resolveDismissedOnboardingFolderAgentLaunch(args: {
   const plan = planAgentSessionLaunch(args.store, {
     requestId: newAgentLaunchRequestId(),
     agent,
-    workspace: { kind: 'folder', executionHostId: args.executionHostId },
-    initialSessionOptions: startup.sessionOptions
+    workspace: { kind: 'folder', executionHostId: args.executionHostId }
   })
   return {
     agent,

@@ -325,24 +325,10 @@
         "terminal automation completion",
         "local and relayed cancellation"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "ssh",
-        "wsl",
-        "remote-runtime"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
-      "coveredProviders": [
-        "local",
-        "remote-runtime"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "remote-runtime"],
       "coverageNotes": "Real HTTP hook ingress and relay forwarding, production runtime automation observer, and captured Claude native ready bytes run locally on macOS. SSH/WSL transport ownership is simulated; physical remote hosts and native Windows/Linux are not verified.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/24878",
@@ -1456,7 +1442,7 @@
     },
     {
       "id": "agent-session.structured-send-at-most-once",
-      "title": "Ambiguous structured sends never become a second provider delivery",
+      "title": "One structured-send attempt dispatches once; a later Send is a new message",
       "maturity": "experimental",
       "protection": "partial",
       "owner": "agent-session-runtime",
@@ -1466,13 +1452,13 @@
       "providers": ["local", "ssh", "remote-runtime", "mobile"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "mobile"],
-      "coverageNotes": "Deterministic host, direct/Relay transport, and mobile hook tests cover durable identity, caller changes, journal loss, acknowledgement loss, expiry, and mobile remount; renderer tests cover the desktop's single request per send, its 30 s bound and the hand-back. The host code is execution-location neutral, but live SSH/remote runtimes and physical iOS/Android lifecycle are not exercised.",
+      "coverageNotes": "Deterministic host and direct/Relay transport tests cover per-operation duplicate protection, caller changes, missing host journal rows, acknowledgement loss, and expiry. Mobile tests cover new-action identity, remount, storage refusal, current attachment paths, and capability changes; renderer tests cover one request per send and the bounded hand-back. Live SSH/remote runtimes and physical iOS/Android lifecycle are not exercised.",
       "motivatingLinks": ["https://github.com/stablyai/orca/pull/20133"],
-      "invariant": "One structured-send operation id causes at most one provider dispatch. On the phone a transport-ambiguous send reuses that id for every resend and caller reconnect, across remount and journal recovery. The desktop never resends: each send makes one request, and an ambiguous or unanswered one, or one still out after 30 s, hands the text back to check; a send unsettled at a reload or crash is not resent. Only a terminal rejection may rotate to a first delivery.",
-      "oracle": "Inject adapter acknowledgement loss, RPC response loss, caller replacement, logical-client close after response, auth recovery with a written request, missing journal submissions, legacy pending rows, stale fences, operation expiry, mobile remount, and durable-journal capacity. Assert one provider dispatch or one operation id for every ambiguous retry, fresh identity only after rejection, and no eviction of ambiguous mobile ids.",
+      "invariant": "One structured-send operation id causes at most one provider dispatch. Each user Send on phone or desktop is a new action with a fresh id and one request; neither automatically resends an ambiguous action. The host retains the original action's outcome, and a later phone Send remains possible with equal text, after remount, or when phone storage fails. Repeated transmission of the same operation remains protected by host deduplication.",
+      "oracle": "Inject adapter/RPC acknowledgement loss, caller replacement, logical-client close after response, auth recovery with a written request, missing host submissions, legacy pending rows, stale fences, expiry, mobile remount, and phone storage refusal. Assert at most one dispatch for repeated transmission of one operation. For a later phone Send, assert a fresh id and second delivery while the original host entry remains unknown; equal images use current uploaded paths and delivery fields follow current host capabilities.",
       "commands": [
         "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session-operation-ledger.test.ts src/shared/structured-agent-session-send-evidence.test.ts src/main/runtime/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-refusal-retry.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/main/runtime/orchestration/structured-pointer-operation-id.test.ts src/renderer/src/components/native-chat/structured-agent-session-message-sender.test.ts src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx src/renderer/src/lib/launch-structured-agent-session.test.ts",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test ../mobile/src/session/mobile-native-chat-image-attachment.test.ts ../mobile/src/session/use-mobile-native-chat-image-attachments.test.ts ../mobile/src/session/mobile-structured-send-operation-journal.test.ts ../mobile/src/session/mobile-structured-send-delivery.test.ts ../mobile/src/session/use-mobile-structured-agent-session-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session.test.tsx ../mobile/src/transport/mobile-relay-rpc-session.test.ts ../mobile/src/transport/rpc-client-delivery-ambiguity.test.ts ../mobile/src/transport/stable-logical-rpc-client.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test ../mobile/src/session/mobile-structured-send-new-action.test.ts ../mobile/src/session/use-mobile-structured-agent-session-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-queued.test.tsx ../mobile/src/session/mobile-structured-send-delivery.test.ts ../mobile/src/session/use-mobile-structured-agent-session-background-tasks.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-newer-approval-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-read-failure.test.tsx ../mobile/src/session/use-mobile-structured-agent-session.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-prompt-cancel.test.tsx ../mobile/src/session/mobile-native-chat-image-attachment.test.ts ../mobile/src/session/use-mobile-native-chat-image-attachments.test.ts ../mobile/src/session/use-mobile-structured-native-chat-send-bridge.test.ts ../mobile/src/mobile-web-shell/page-storage-keys.test.ts ../mobile/src/mobile-web-shell/bridge/page-async-storage.test.ts ../mobile/src/mobile-web-shell/use-page-host-snapshot.test.tsx ../mobile/src/mobile-web-shell/bridge-host-init.test.ts ../mobile/src/transport/mobile-relay-rpc-session.test.ts ../mobile/src/transport/rpc-client-delivery-ambiguity.test.ts ../mobile/src/transport/stable-logical-rpc-client.test.ts --maxWorkers=2"
       ],
       "testFiles": [
         "src/shared/agent-session-operation-ledger.test.ts",
@@ -1488,13 +1474,23 @@
         "src/renderer/src/lib/launch-structured-agent-session.test.ts",
         "mobile/src/session/mobile-native-chat-image-attachment.test.ts",
         "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
-        "mobile/src/session/mobile-structured-send-operation-journal.test.ts",
+        "mobile/src/session/mobile-structured-send-new-action.test.ts",
         "mobile/src/session/mobile-structured-send-delivery.test.ts",
         "mobile/src/session/use-mobile-structured-agent-session-send.test.tsx",
         "mobile/src/session/use-mobile-structured-agent-session.test.tsx",
         "mobile/src/transport/mobile-relay-rpc-session.test.ts",
         "mobile/src/transport/rpc-client-delivery-ambiguity.test.ts",
-        "mobile/src/transport/stable-logical-rpc-client.test.ts"
+        "mobile/src/transport/stable-logical-rpc-client.test.ts",
+        "mobile/src/session/use-mobile-structured-agent-session-queued.test.tsx",
+        "mobile/src/session/use-mobile-structured-agent-session-background-tasks.test.tsx",
+        "mobile/src/session/use-mobile-structured-agent-session-newer-approval-send.test.tsx",
+        "mobile/src/session/use-mobile-structured-agent-session-read-failure.test.tsx",
+        "mobile/src/session/use-mobile-structured-agent-session-prompt-cancel.test.tsx",
+        "mobile/src/session/use-mobile-structured-native-chat-send-bridge.test.ts",
+        "mobile/src/mobile-web-shell/page-storage-keys.test.ts",
+        "mobile/src/mobile-web-shell/bridge/page-async-storage.test.ts",
+        "mobile/src/mobile-web-shell/use-page-host-snapshot.test.tsx",
+        "mobile/src/mobile-web-shell/bridge-host-init.test.ts"
       ],
       "assertionRefs": [
         {
@@ -1514,12 +1510,11 @@
         {
           "file": "mobile/src/session/use-mobile-structured-agent-session-send.test.tsx",
           "assertions": [
-            "keeps one id across acknowledgement loss and host unknown replays",
-            "reuses an ambiguous id after the session hook remounts",
-            "keeps an ambiguous id after the host replay window expires",
-            "reuses the original uploaded attachment identity after acknowledgement loss",
-            "keeps the send id after a pending-admission refusal",
-            "rotates after a %s pre-handler RPC refusal that proves the send did not run"
+            "a later Send owns a new id even when the earlier host answer was %s",
+            "keeps the original unknown host row while allowing another Send",
+            "does not replay an old action after remount",
+            "uses newly uploaded attachment paths for a new action with the same image",
+            "never reads an old phone journal, even when storage is full or unreadable"
           ]
         },
         {
@@ -1557,6 +1552,15 @@
       ],
       "evidenceRuns": [
         {
+          "date": "2026-10-07",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test ../mobile/src/session/mobile-structured-send-new-action.test.ts ../mobile/src/session/use-mobile-structured-agent-session-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-queued.test.tsx ../mobile/src/session/mobile-structured-send-delivery.test.ts ../mobile/src/session/use-mobile-structured-agent-session-background-tasks.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-newer-approval-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-read-failure.test.tsx ../mobile/src/session/use-mobile-structured-agent-session.test.tsx ../mobile/src/session/use-mobile-structured-agent-session-prompt-cancel.test.tsx ../mobile/src/session/mobile-native-chat-image-attachment.test.ts ../mobile/src/session/use-mobile-native-chat-image-attachments.test.ts ../mobile/src/session/use-mobile-structured-native-chat-send-bridge.test.ts ../mobile/src/mobile-web-shell/page-storage-keys.test.ts ../mobile/src/mobile-web-shell/bridge/page-async-storage.test.ts ../mobile/src/mobile-web-shell/use-page-host-snapshot.test.tsx ../mobile/src/mobile-web-shell/bridge-host-init.test.ts ../mobile/src/transport/mobile-relay-rpc-session.test.ts ../mobile/src/transport/rpc-client-delivery-ambiguity.test.ts ../mobile/src/transport/stable-logical-rpc-client.test.ts --maxWorkers=2",
+          "result": "passed",
+          "durationSeconds": 5.42,
+          "summary": "Nineteen focused mobile files passed 241 tests for fresh Send identity, remount, attachment paths, storage refusal, mixed host capabilities, queued cards, and written-request ambiguity."
+        },
+        {
           "date": "2026-10-06",
           "runner": "local",
           "platform": "macos",
@@ -1564,15 +1568,6 @@
           "result": "passed",
           "durationSeconds": 14,
           "summary": "Eleven focused host, shared, renderer, and orchestration files passed 173 tests after the desktop outbox gave way to the in-memory sender, which makes one request per send and never resends."
-        },
-        {
-          "date": "2026-09-12",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test ../mobile/src/session/mobile-native-chat-image-attachment.test.ts ../mobile/src/session/use-mobile-native-chat-image-attachments.test.ts ../mobile/src/session/mobile-structured-send-operation-journal.test.ts ../mobile/src/session/mobile-structured-send-delivery.test.ts ../mobile/src/session/use-mobile-structured-agent-session-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session.test.tsx ../mobile/src/transport/mobile-relay-rpc-session.test.ts ../mobile/src/transport/rpc-client-delivery-ambiguity.test.ts ../mobile/src/transport/stable-logical-rpc-client.test.ts",
-          "result": "passed",
-          "durationSeconds": 2.37,
-          "summary": "Ten focused mobile session, attachment, and transport files passed 113 tests."
         }
       ],
       "runtimeBudget": {
@@ -1585,27 +1580,24 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "Four targeted failures were observed: spending the mobile id after acknowledgement loss made three retries use two ids; settling cross-caller recovery under the new caller left the original ledger row pending; returning no synthetic result for a legacy or crash-left pending row dispatched it as a new accepted send; and a8d3de8d20's blanket settlement rotated a stale-fence option id and failed the renderer invariant. The focused tests pass with the production fixes restored; a byte-identical old-production run is not recorded."
+        "evidence": "The exact phone acknowledgement-loss/later-equal-Send test fails twice with the original sender and classifier restored byte-for-byte: the second Send returns unknown under the earlier id. It passes with per-action identity. Existing host tests also pin cross-caller recovery, missing submissions, and legacy pending rows against repeat dispatch; those host paths were not changed."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "No polling, timers, subprocesses, or provider fanout were added. Each mobile journal mutation parses the bounded journal and performs at most one full AsyncStorage rewrite; entries retain hashes, ids, and original attachment paths, cap at 4,096, and fail closed at capacity. A first host send performs three serialized whole-store durable transactions: admission, the pre-effect unknown tombstone, and final settlement. Lease and fence admission now share one transaction with the operation row, so a transient pre-effect refusal leaves no row and, absent pruning, performs no store write. No capacity-scale host fsync or mobile AsyncStorage latency benchmark is recorded."
+        "evidence": "No polling, timers, subprocesses, or provider fanout were added. The phone send path no longer reads or writes AsyncStorage or hashes image contents. The existing host admission, pre-effect unknown record, and settlement transactions are unchanged. No capacity-scale host fsync benchmark is recorded."
       },
       "promotionCriteria": [
         "Soak both commands in CI with zero unexplained flakes.",
         "Add live physical-mobile and remote-runtime interruption evidence before claiming full provider coverage."
       ],
       "knownGaps": [
-        "A payload-keyed mobile ambiguity cannot distinguish retrying the original send from an intentional later send with identical content. It fails closed until authoritative settlement, so the claim that retention costs no liveness is false without a durable composer-action identity.",
-        "Clearing or externally corrupting desktop localStorage or mobile AsyncStorage can erase a client-owned ambiguous identity.",
-        "An ambiguous id retained past host tombstone expiry remains safely blocked rather than becoming live again.",
-        "A host crash after premarking the operation unknown but before journal append or provider dispatch can conservatively suppress a message that never reached the provider.",
-        "A replay synthesized from an operation row whose journal submission is missing is not republished into the journal; desktop stops automatic polling but remains safely blocked on that FIFO head.",
-        "The changed send guarantee is not capability-negotiated. New mobile clients fail closed across caller-identity change, but old clients can rotate an ambiguous id against a new host, and an old mobile client can interpret an ok response carrying unknown as accepted.",
-        "An ambiguous attachment retry depends on the original host temp path remaining usable when the first request never reached the host; if it is gone, the retry rejects rather than rotating.",
+        "Phone composer drafts remain in memory: killing the app between Send and host recording loses that text, as before.",
+        "A later intentional Send can deliver another copy of text from an earlier unknown action; the original action stays unresolved until the host can establish its outcome.",
+        "A host crash after recording the operation unknown but before journal append or provider dispatch can conservatively suppress an attempt that never reached the provider.",
+        "Older phone bundles retain their payload journal behavior until upgraded; legacy embedded-page storage access remains permitted.",
         "No live SSH, remote-runtime, physical iOS/Android, Linux, or Windows interruption run is recorded."
       ],
-      "demotionRule": "Keep experimental or demote if any ambiguous retry changes operation id, provider dispatch count exceeds one, durable identity is evicted by age or capacity, or the focused commands flake without a diagnosed harness defect."
+      "demotionRule": "Keep experimental or demote if one operation dispatches twice, uncertainty is reported as definite rejection, a later phone Send reuses the earlier action or is blocked by phone storage, or the focused commands flake without a diagnosed harness defect."
     },
     {
       "id": "agent-session.completed-turn-duration",
@@ -3788,9 +3780,7 @@
         },
         {
           "file": "src/main/system-resume-broadcast.test.ts",
-          "assertions": [
-            "publishes suspend and resume to main-process lifecycle consumers"
-          ]
+          "assertions": ["publishes suspend and resume to main-process lifecycle consumers"]
         },
         {
           "file": "src/main/system-power-lifecycle.test.ts",
@@ -5067,9 +5057,7 @@
         },
         {
           "file": "src/cli/runtime/serve-signal-exit-diagnostic.test.ts",
-          "assertions": [
-            "late update handoff failure cannot rearm termination after child exit"
-          ]
+          "assertions": ["late update handoff failure cannot rearm termination after child exit"]
         },
         {
           "file": "src/main/serve-update-handoff.test.ts",
@@ -5485,9 +5473,7 @@
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["remote-runtime"],
       "coverageNotes": "Deterministic main-IPC contract tests cover disconnect-driven close delivery, exactly-once close, per-subscription teardown isolation against a failing socket close and a throwing liveness probe, containment of a throwing renderer send on the unguarded host-close path, and continued suppression of stale payloads from a retired transport. A headed paired-server journey (real Orca host plus a separate paired Orca desktop client) covers hidden-but-mounted reveal, cold-parked reveal, and cold-parked reveal across a disconnect/reconnect. Live Linux and Windows paired-server evidence and real sleep/wake transport loss remain uncollected.",
-      "motivatingLinks": [
-        "tests/e2e/paired-remote-terminal-parked-reveal-interactivity.spec.ts"
-      ],
+      "motivatingLinks": ["tests/e2e/paired-remote-terminal-parked-reveal-interactivity.spec.ts"],
       "invariant": "Every renderer-held runtime subscription receives exactly one terminal close event when its transport is retired, including when the retirement advanced the transport generation first, and a single failing teardown never abandons that environment's remaining subscriptions nor escapes into the transport that reported the close. Payload frames from a retired transport stay suppressed. A revealed remote terminal therefore reattaches over a live multiplex connection: its buffer restores, typed input reaches the host PTY, the echo paints without a tab flip, and the PTY converges on the revealed pane grid.",
       "oracle": "The main IPC contract test subscribes terminal.multiplex through the real handler, disconnects the environment, and asserts the renderer received exactly one {type: close} subscription event. Two isolation tests subscribe a second stream to the same environment and make the first one fail -- in its socket close, and in the liveness probe inside notifyClosed -- then assert the disconnect does not throw, both transports closed, and every close the renderer could still receive was delivered. A third drives a host-initiated close through the transport callback, which is the one notifyClosed call site with no surrounding guard, with a renderer send that throws, and asserts it cannot escape into the WebSocket close handler. A fourth test asserts that after retirement a late response frame is not forwarded and a late transport close does not re-send. The paired-server journey runs three reveal scenarios against one real host and one real paired desktop client, and for each records buffer restore, host-side receipt of the typed marker through an out-of-band host sink file, live paint without a tab flip, and PTY-versus-pane grid convergence.",
       "commands": [
@@ -6542,7 +6528,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-reconciliation-protocol.test.ts src/main/browser/paired-runtime-browser-host-reconciliation-negotiation.test.ts src/main/runtime/rpc/methods/browser-client-host-reconciliation.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-page-command-executor.test.ts src/main/browser/browser-client-page-command-integration.test.ts src/main/browser/browser-client-page-inventory.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/browser-host-page-reconciliation-plan.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-client-host-reconciliation-command-order.test.ts src/main/browser/browser-client-page-reconciliation-adapters.test.ts src/main/browser/browser-route-prepared-page-rekey.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-network-capabilities.test.ts src/shared/browser-network-tunnel-protocol.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-network-tunnel-protocol.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/runtime-binary-message-router.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-network-tunnel-outbound-memory-budget.test.ts src/main/browser/browser-network-tunnel-client-memory-budget.test.ts src/main/browser/browser-network-tunnel-session-aggregate-memory.test.ts src/shared/ws-outbound-backpressure-queue.test.ts src/shared/remote-runtime-client.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/shared/ws-outbound-backpressure-queue.test.ts src/shared/remote-runtime-client.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-client-memory-budget.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/browser-network-tunnel-session-aggregate-memory.test.ts src/main/browser/browser-network-tunnel-outbound-memory-budget.test.ts src/main/browser/remote-browser-socks-server.test.ts",
@@ -6558,7 +6544,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-network-route-registry.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts src/main/browser/browser-host-lease-reconnect-delay.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-host-command-ledger.test.ts src/main/runtime/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host-lease-placement-retirement.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-client-network-route-registry.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host-registry.test.ts src/main/browser/paired-runtime-browser-client-host-runtime.test.ts src/main/browser/browser-client-page-command-executor.test.ts src/main/browser/browser-session-startup.test.ts src/main/ipc/runtime-environments-subscription-teardown.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-command-ledger.test.ts src/main/runtime/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/browser/browser-network-deferred-socket.test.ts src/main/browser/browser-network-execution-route.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/ssh-browser-network-execution-route.test.ts src/main/browser/system-ssh-socks-client-socket.test.ts src/main/ssh/system-ssh-dynamic-forward-process.test.ts src/shared/browser-client-host-protocol.test.ts src/shared/browser-network-capabilities.test.ts src/main/ssh/system-ssh-forward-process.test.ts src/main/ssh/ssh-system-fallback.test.ts src/main/ssh/ssh-port-forward.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/browser/browser-network-deferred-socket.test.ts src/main/browser/browser-network-execution-route.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/ssh-browser-network-execution-route.test.ts src/main/browser/system-ssh-socks-client-socket.test.ts src/main/ssh/system-ssh-dynamic-forward-process.test.ts src/shared/browser-client-host-protocol.test.ts src/main/ssh/system-ssh-forward-process.test.ts src/main/ssh/ssh-system-fallback.test.ts src/main/ssh/ssh-port-forward.test.ts",
         "ORCA_RUN_DOCKER_SSH_BROWSER_E2E=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts",
         "ORCA_RUN_DOCKER_SSH_BROWSER_E2E=1 node_modules/.bin/vitest run --config config/vitest.config.ts tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts"
       ],
@@ -6568,7 +6554,6 @@
         "src/main/runtime/runtime-browser-client-page-recovery.test.ts",
         "src/main/runtime/rpc/methods/session-tab-browser-placement-mutations.test.ts",
         "src/main/runtime/rpc/methods/session-tab-browser-placement-projection.test.ts",
-        "src/shared/browser-network-capabilities.test.ts",
         "src/shared/browser-client-host-protocol.test.ts",
         "src/shared/browser-client-host-reconciliation-protocol.test.ts",
         "src/shared/browser-network-tunnel-protocol.test.ts",
@@ -7269,15 +7254,6 @@
           "date": "2026-08-14",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/browser/browser-network-deferred-socket.test.ts src/main/browser/browser-network-execution-route.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/ssh-browser-network-execution-route.test.ts src/main/browser/system-ssh-socks-client-socket.test.ts src/main/ssh/system-ssh-dynamic-forward-process.test.ts src/shared/browser-client-host-protocol.test.ts src/shared/browser-network-capabilities.test.ts src/main/ssh/system-ssh-forward-process.test.ts src/main/ssh/ssh-system-fallback.test.ts src/main/ssh/ssh-port-forward.test.ts",
-          "result": "passed",
-          "durationSeconds": 2.6,
-          "summary": "Thirteen files passed 142 structural route-key, native-shape, live lease-bound SSH grant, startup cancellation, diagnostic redaction, deferred-socket release, capability negotiation, exact SSH authority and client, ssh2 forwarding, standalone system-SSH dynamic-forward, active-probe cleanup, static-forward option reuse, internal SOCKS domain, and exact release tests."
-        },
-        {
-          "date": "2026-08-14",
-          "runner": "local",
-          "platform": "macos",
           "command": "ORCA_RUN_DOCKER_SSH_BROWSER_E2E=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts",
           "result": "passed",
           "durationSeconds": 1.3,
@@ -7309,15 +7285,6 @@
           "result": "passed",
           "durationSeconds": 3.4,
           "summary": "Eleven files passed 67 lease, reserved long-poll and host admission, token-safe placement retirement, authority, capability, route-generation, adversarial-revocation, lifecycle, flow-control, SOCKS, and real paired E2EE tests."
-        },
-        {
-          "date": "2026-08-13",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-network-capabilities.test.ts src/shared/browser-network-tunnel-protocol.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
-          "result": "passed",
-          "durationSeconds": 0.4,
-          "summary": "Four files passed 25 deterministic capability, codec, credit, generation, half-close, SOCKS routing, remote-DNS, and fail-closed tests."
         },
         {
           "date": "2026-08-14",
@@ -12625,9 +12592,7 @@
         },
         {
           "file": "src/main/ipc/pty-startup-barrier-and-listing.test.ts",
-          "assertions": [
-            "global inventory starts local and SSH provider listings concurrently"
-          ]
+          "assertions": ["global inventory starts local and SSH provider listings concurrently"]
         },
         {
           "file": "src/renderer/src/components/status-bar/resource-session-inventory.test.ts",
@@ -13760,7 +13725,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/remote-workspace-snapshot-arrival-coordinator.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/app-shell/remote-workspace-unplaced-upload-suppression.test.tsx --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/remote-workspace-cache.test.ts src/main/ipc/remote-workspace.test.ts src/main/ipc/remote-workspace-patch-queue.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/repos-remote.test.ts src/main/ipc/ssh.test.ts src/main/ipc/worktrees-ssh-repo-owner-resolution.test.ts src/main/ipc/worktrees-lineage-hydration.test.ts src/main/runtime/public-ssh-state.test.ts src/main/ssh/ssh-connection-manager.test.ts src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-provider-authority.test.ts src/preload/ssh-authority-forwarding.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/runtime/runtime-environment-ssh-state.test.ts src/shared/ssh-retained-payload-admission.test.ts src/shared/ssh-types.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/repos-remote.test.ts src/main/ipc/ssh.test.ts src/main/ipc/worktrees-ssh-repo-owner-resolution.test.ts src/main/ipc/worktrees-lineage-hydration.test.ts src/main/runtime/public-ssh-state.test.ts src/main/ssh/ssh-connection-manager.test.ts src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-provider-authority.test.ts src/preload/ssh-authority-forwarding.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/runtime/runtime-environment-ssh-state.test.ts src/shared/ssh-retained-payload-admission.test.ts --reporter=dot",
         "pnpm exec electron-vite build --mode e2e",
         "pnpm run build:web-from-renderer",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-materialization-reconnect.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
@@ -13830,7 +13795,6 @@
         "src/renderer/src/runtime/runtime-client-events.test.ts",
         "src/renderer/src/runtime/runtime-environment-ssh-state.test.ts",
         "src/shared/ssh-retained-payload-admission.test.ts",
-        "src/shared/ssh-types.test.ts",
         "tests/e2e/terminal-cold-activation-deferral.spec.ts",
         "tests/e2e/ssh-cold-activation-restore.spec.ts",
         "tests/e2e/ssh-docker-relay-perf.spec.ts"
@@ -14100,12 +14064,6 @@
           ]
         },
         {
-          "file": "src/shared/ssh-types.test.ts",
-          "assertions": [
-            "SSH connection state carries the provider epoch and connection generation authority pair"
-          ]
-        },
-        {
           "file": "src/renderer/src/store/slices/terminals-hydration.test.ts",
           "assertions": [
             "target-scoped hydration and reconnect preserve sibling SSH and runtime tabs, PTY indexes, runtime ownership, and active selection",
@@ -14327,15 +14285,6 @@
           "result": "passed",
           "durationSeconds": 1.48,
           "summary": "All 90 transport tests passed, including pre-publication admission rejection, handler-complete non-destructive detach for obsolete SSH reattach transports, settled retirement of rejected or destroyed fresh fallbacks, and reported shutdown refusal."
-        },
-        {
-          "date": "2026-07-28",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/repos-remote.test.ts src/main/ipc/ssh.test.ts src/main/ipc/worktrees-ssh-repo-owner-resolution.test.ts src/main/ipc/worktrees-lineage-hydration.test.ts src/main/runtime/public-ssh-state.test.ts src/main/ssh/ssh-connection-manager.test.ts src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-provider-authority.test.ts src/preload/ssh-authority-forwarding.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/runtime/runtime-environment-ssh-state.test.ts src/shared/ssh-retained-payload-admission.test.ts src/shared/ssh-types.test.ts --reporter=dot",
-          "result": "passed",
-          "durationSeconds": 2.55,
-          "summary": "Twelve main, preload, runtime, and shared authority files and 513 tests passed, including fail-closed pre/post-await repo ownership provenance, production retained-payload admission, fenced stale-transport replacement, failure-safe target lifecycle barriers, and real ssh2 late-ready/error rejection."
         },
         {
           "date": "2026-07-28",
@@ -21094,9 +21043,7 @@
         },
         {
           "file": "src/main/browser/agent-browser-bridge-tab-routing.test.ts",
-          "assertions": [
-            "closing a tab retires the exact named agent-browser session"
-          ]
+          "assertions": ["closing a tab retires the exact named agent-browser session"]
         },
         {
           "file": "src/main/startup/serve-signal-handlers.test.ts",
@@ -21535,9 +21482,7 @@
         },
         {
           "file": "config/scripts/verify-packaged-browser-participation.test.mjs",
-          "assertions": [
-            "reject missing, substituted, skipped and retried scenarios"
-          ]
+          "assertions": ["reject missing, substituted, skipped and retried scenarios"]
         }
       ],
       "evidenceRuns": [
@@ -21599,15 +21544,11 @@
         "gh run view 34074017928 --log",
         "pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/terminal-hangul-terminating-digit-native.spec.ts --project=electron-headful --workers=1 --repeat-each=3 --retries=0 --reporter=list,json"
       ],
-      "testFiles": [
-        "tests/e2e/terminal-hangul-terminating-digit-native.spec.ts"
-      ],
+      "testFiles": ["tests/e2e/terminal-hangul-terminating-digit-native.spec.ts"],
       "assertionRefs": [
         {
           "file": "tests/e2e/terminal-hangul-terminating-digit-native.spec.ts",
-          "assertions": [
-            "a digit typed right after a Hangul syllable reaches the pty"
-          ]
+          "assertions": ["a digit typed right after a Hangul syllable reaches the pty"]
         }
       ],
       "evidenceRuns": [

@@ -117,6 +117,7 @@ export class PiRpcSession {
     this.connection = (
       deps.openConnection ?? ((spec, handlers) => new JsonlRpcAgentConnection(spec, handlers))
     )(launch, {
+      ...(input.onOutput ? { onOutput: input.onOutput } : {}),
       onRecord: (frame) =>
         frame.type === 'extension_ui_request'
           ? this.dialogs.receive(frame)

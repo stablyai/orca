@@ -123,3 +123,31 @@ describe('Pi pending prompt delivery bounds and ownership', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 })
+
+it('retains Pi provider detail with sign-in guidance after bounded authentication retries', async () => {
+  vi.useFakeTimers()
+  const h = rig()
+  await h.delivery.submit('signed-out', 1, { type: 'prompt', message: 'hello' })
+  for (let attempt = 0; attempt < 9; attempt += 1) {
+    h.delivery.reply({
+      type: 'response',
+      command: 'prompt',
+      success: false,
+      error: 'No API key found for anthropic'
+    })
+    await vi.advanceTimersByTimeAsync(250)
+  }
+  expect(h.settled).toHaveBeenCalledExactlyOnceWith(
+    'signed-out',
+    expect.objectContaining({
+      state: 'rejected',
+      rejection: {
+        kind: 'notSignedIn',
+        detail: { text: 'No API key found for anthropic', audience: 'person' }
+      }
+    })
+  )
+  expect(h.settled.mock.calls[0]?.[1].reason).toContain('No API key found for anthropic')
+  expect(h.settled.mock.calls[0]?.[1].reason).toContain('`pi`')
+  expect(h.settled.mock.calls[0]?.[1].reason).toContain('`/login`')
+})

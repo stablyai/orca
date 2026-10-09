@@ -3,7 +3,7 @@ import { setLocalPtyProvider } from '../ipc/pty'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
 import { getDaemonRuntimeDir as getRuntimeDir } from './daemon-launch-paths'
 import { parseDaemonPidFile, type ParsedDaemonPid } from './daemon-pid-file-parse'
-import { getLegacyDaemonAdapters, type DaemonProvider } from './daemon-provider-routing'
+import type { DaemonProvider } from './daemon-provider-routing'
 import { DaemonPtyRouter } from './daemon-pty-router'
 import { getDaemonPidPath, getDaemonSocketPath, getDaemonTokenPath } from './daemon-spawner'
 import type { DaemonSpawner } from './daemon-spawner'
@@ -86,18 +86,6 @@ export function readDaemonPidRecord(): ParsedDaemonPid | null {
 
 export function getDaemonProvider(): DaemonProvider | null {
   return adapter
-}
-
-/** True for a terminal on a daemon kept alive from before `protocolVersion`; never for an SSH pane. */
-export function isTerminalFromBeforeDaemonProtocol(
-  ptyId: string,
-  protocolVersion: number
-): boolean {
-  return adapter
-    ? getLegacyDaemonAdapters(adapter).some(
-        (legacy) => legacy.protocolVersion < protocolVersion && legacy.hasPty(ptyId)
-      )
-    : false
 }
 
 // Why: computed from the pid record on demand (not cached at adoption) so the Settings

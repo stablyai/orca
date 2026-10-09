@@ -103,7 +103,10 @@ export abstract class RemoteRuntimeTerminalResponseController extends RemoteRunt
           event.mode !== 'remote-desktop-fit' &&
           event.mode !== 'desktop-fit') ||
         typeof event.cols !== 'number' ||
-        typeof event.rows !== 'number'
+        typeof event.rows !== 'number' ||
+        // Why: a restarted host that has not learned the grid yet publishes a 0x0 hold; parking
+        // xterm there shrinks the pane to one cell, so keys typed into it never reach the shell.
+        (event.mode !== 'desktop-fit' && (event.cols <= 0 || event.rows <= 0))
       ) {
         return
       }

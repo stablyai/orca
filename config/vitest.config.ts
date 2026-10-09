@@ -42,10 +42,8 @@ const testOptions = {
   testTimeout: 30_000
 }
 const nodeProject = {
-  extends: false,
-  ...transforms,
+  extends: true,
   test: {
-    ...testOptions,
     name: process.versions.bun ? 'node-runtime' : 'node',
     env: { ORCA_VITEST_RUNTIME: process.versions.bun ? 'node-runtime' : 'node' },
     include: process.versions.bun ? NODE_RUNTIME_INCLUDE : UNIT_INCLUDE,
@@ -60,13 +58,12 @@ const projects = [
   ...(process.versions.bun
     ? [
         {
-          extends: false,
-          ...transforms,
+          extends: true,
           test: {
-            ...testOptions,
             name: 'bun',
             env: { ORCA_VITEST_RUNTIME: 'bun' },
             pool: 'forks',
+            include: UNIT_INCLUDE,
             exclude: [...testOptions.exclude, ...NODE_RUNTIME_INCLUDE, measurementFile],
             sequence: { groupOrder: 1 }
           }
@@ -90,8 +87,32 @@ const projects = [
 
 export default defineConfig({
   ...transforms,
+  plugins: [
+    {
+      name: 'orca-test-container-selectors',
+      enforce: 'post',
+      config: {
+        order: 'post',
+        handler(config) {
+          if (!config.test?.projects) {
+            return
+          }
+          // Keep root coverage exclusions without inheriting duplicate project selectors.
+          if (config.test.include?.length === 0) {
+            config.test.include = testOptions.include
+          }
+          if (config.test.exclude?.length === 0) {
+            config.test.exclude = testOptions.exclude
+          }
+        }
+      }
+    }
+  ],
   test: {
     ...testOptions,
+    // Inline projects own their selectors; empty root arrays avoid concatenating them.
+    include: [],
+    exclude: [],
     sequence: { sequencer: balancedShards ? TimingSequencer : RuntimeSequencer },
     ...(balancedShards
       ? {

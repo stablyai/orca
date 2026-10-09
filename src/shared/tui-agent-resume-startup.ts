@@ -1,4 +1,5 @@
 import {
+  getAgentForkArgv,
   getAgentResumeArgv,
   type AgentProviderSessionMetadata,
   type ResumableTuiAgent
@@ -27,8 +28,12 @@ export function buildAgentResumeStartupPlan(args: {
   isRemote?: boolean
   /** The caller chose the terminal folder on purpose, so Codex must not ask for the recorded one. */
   resumeInLaunchCwd?: boolean
+  /** Open a copy of the conversation instead of re-entering it; null for agents that cannot. */
+  fork?: boolean
 }): AgentStartupPlan | null {
-  const resumeArgv = getAgentResumeArgv(args.agent, args.providerSession, args.ompResumeFilePath)
+  const resumeArgv = args.fork
+    ? getAgentForkArgv(args.agent, args.providerSession)
+    : getAgentResumeArgv(args.agent, args.providerSession, args.ompResumeFilePath)
   if (!resumeArgv) {
     return null
   }

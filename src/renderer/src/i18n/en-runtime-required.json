@@ -1704,7 +1704,10 @@
             "d23ae13990": "worktree",
             "f082788cfe": "links",
             "fa72e71f05": "agents",
-            "fe5688b761": "sidebar"
+            "fe5688b761": "sidebar",
+            "nativeChat": {
+              "description": "Open supported new agents in Chat UI."
+            }
           }
         },
         "general": {
@@ -1995,6 +1998,22 @@
           "34f733dda2": "Go to Worktree",
           "3e5f66564e": "Workspace unavailable"
         },
+        "WorktreeIssueLinkField": {
+          "0a7a2c6efd": "Not a GitHub issue number or issue URL.",
+          "161b2d053a": "Open linked issue",
+          "25852bfc59": "Linear",
+          "269198eeda": "Couldn't open that issue. Check the number and your GitHub connection.",
+          "2c245ac134": "Saving unlinks {{link}} — a workspace tracks one issue.",
+          "5b440069e6": "GitHub",
+          "662ae142f8": "Issue #, or a GitHub or Linear URL",
+          "72486800ff": "Saving unlinks {{first}} and {{second}} — a workspace tracks one issue.",
+          "929c98d05a": "Issue provider",
+          "964d9bc00a": "Not a Linear issue key or linear.app issue URL.",
+          "ad78f9bee2": "Issue",
+          "d4785f9954": "Issue links are set when a folder workspace is created and can't be changed here yet.",
+          "d8c8a30d1f": "Couldn't open that issue. Check the identifier and your Linear connection.",
+          "f047887705": "Paste a GitHub or Linear URL, or enter a number. Leave blank to remove the link."
+        },
         "WorktreeList": {
           "2ca6e29a3c": "repo",
           "45fbfe0335": "rename",
@@ -2005,10 +2024,23 @@
         },
         "WorktreeMetaDialog": {
           "029ea5ec57": "Open GitHub issue",
+          "077a4f7b5c": "PR # or GitHub URL",
+          "1b91db7e14": "GH PR",
+          "382fd11a3e": "Edit Worktree Details",
+          "459ad7f650": "Only changes the name shown in the sidebar — the folder on disk stays the same. Leave blank to use the branch or folder name.",
+          "5ae06f40fd": "Paste a pull request URL, or enter a number. Leave blank to remove the link.",
           "645fa4a0fd": "GH Issue",
           "65770ad0f0": "Edit GitHub links and notes for this workspace.",
           "741279e7b7": "Issue # or GitHub URL",
-          "7c454be4c5": "Paste an issue URL, or enter a number. Leave blank to remove the link."
+          "7c454be4c5": "Paste an issue URL, or enter a number. Leave blank to remove the link.",
+          "7f0be5e9a6": "Supports **markdown** — bold, lists, `code`, links. Press Enter or",
+          "9c1d1e9b71": "Comment",
+          "a0d191b7a7": "Edit issue links, pull request links, and notes for this workspace.",
+          "b48c271d39": "to save, Shift+Enter for a new line.",
+          "gitlabDescription": "Edit issue links, merge request links, and notes for this workspace.",
+          "gitlabHelp": "Paste a merge request URL, or enter a number. Leave blank to remove the link.",
+          "gitlabMR": "GitLab MR",
+          "gitlabPlaceholder": "MR ! or GitLab URL"
         },
         "WorktreeOpenInMenu": {
           "3ec372b664": "file-manager"
@@ -2061,6 +2093,10 @@
               }
             }
           }
+        },
+        "worktreeIssueDisplacement": {
+          "3f61c0a8d2": "Linear {{value}}",
+          "9c4b7e1f60": "GitHub #{{value}}"
         }
       },
       "skills": {
@@ -2820,6 +2856,8 @@
       "failureWords": {
         "accountSwitchInProgress": "A Claude account switch is in progress. Try again after it finishes.",
         "agentCommandNotRunnable": "{{agent}}'s Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it.",
+        "agentCommandNotSignedIn": "Sign in to {{agent}} with `{{loginCommand}}` on the computer running this chat.",
+        "agentNotSignedIn": "Sign in to {{agent}}.",
         "answerUnconfirmed": "Your answer was recorded but the agent did not confirm it.",
         "argumentsMissingValue": "Saved Arguments need a value for {{option}}.",
         "argumentsMultipleValues": "Saved Arguments give {{option}} more than one value.",
@@ -2843,8 +2881,12 @@
         "chooseClaudeAccount": "Choose or add one in Claude Accounts settings.",
         "chooseClaudeAccountThenRunCommand": "Choose or add one in Claude Accounts settings, then run /{{command}} again.",
         "chooseClaudeAccountThenSend": "Choose or add one in Claude Accounts settings, then send your message again.",
-        "claudeAccountFolderMissing": "The selected Claude account's folder is missing. Sign in to it again or choose another account.",
-        "claudeAccountSetupFailed": "The selected Claude account could not be set up. Try again or choose another account.",
+        "commandAfterAnswer": "Answer the agent's question or approval, then run /{{command}}.",
+        "claudeManagedNotSignedIn": "This Claude account isn't signed in. Sign in again in Claude Accounts settings.",
+        "claudeSystemNotSignedIn": "Claude isn't signed in. Run `{{loginCommand}}`, or choose an account in Claude Accounts settings.",
+        "cliMissing": "{{agent}} wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents.",
+        "codexManagedNotSignedIn": "This Codex account isn't signed in. Sign in again in Codex Accounts settings.",
+        "codexSystemNotSignedIn": "Codex isn't signed in. Run `{{loginCommand}}`.",
         "commandRefused": "This command didn't run.",
         "commandRefusedTryAgain": "This command didn't run. Try it again.",
         "compactionFailed": "Compaction failed.",
@@ -2860,13 +2902,14 @@
         "hostFaultTryAgain": "Orca ran into a problem, so this didn't go through. Try again.",
         "hostRestarted": "Orca restarted before this message was sent.",
         "hostStopped": "{{agent}} never finished starting, so Orca stopped it.",
+        "interactiveAgentNotSignedIn": "Sign in to {{agent}} by running `{{loginCommand}}` and using `{{slashCommand}}` on the computer running this chat.",
         "launchFolderMissing": "The folder this chat ran in no longer exists. Restore it to continue this chat.",
         "managedAccountEnvOverride": "This Claude launch sets its own Anthropic sign-in variables. Remove them to use a managed Claude account.",
         "managedAccountUnsupported": "While a Claude account is added in WSL, Claude chats need a Windows Claude account.",
         "noTurnToStop": "{{agent}} had no turn running to stop.",
         "notDelivered": "This message was not delivered.",
         "notDeliveredSendAgain": "This message was not delivered. Send it again to continue.",
-        "notSignedIn": "{{agent}} is not signed in for the selected account.",
+        "notSignedIn": "{{agent}} is not signed in.",
         "previousExitUnverifiable": "Couldn't stop {{agent}} from before.",
         "providerExitedRejection": "{{agent}} stopped before this message was sent.",
         "providerExitedRow": "{{agent}} stopped while this response was in progress. You can continue in this conversation.",
@@ -2881,6 +2924,7 @@
         "providerStartFailed": "{{agent}} stopped before it finished starting.",
         "queueFull": "Too many messages were waiting for the agent, so this one was not sent.",
         "runCommandAgain": "Run /{{command}} again.",
+        "runCommandWhenDone": "Run /{{command}} when it's done.",
         "sendAgainToTryOnceMore": "Send your message again to try once more.",
         "sendToTryAgain": "Send your message to try again.",
         "sessionNotRestored": "{{agent}} couldn't reopen its earlier session, so this chat continues in a new one. {{agent}} doesn't remember the earlier messages.",
@@ -2890,6 +2934,7 @@
         "stopRefused": "{{agent}} didn't stop.",
         "stopRefusedQuoted": "{{agent}} didn't stop: {{detail}}.",
         "theAgent": "The agent",
+        "thenSendAgain": "Then send your message again.",
         "writeFailed": "Orca couldn't hand this message to the agent, so it was not sent."
       },
       "notices": {
@@ -2974,15 +3019,22 @@
       "writeNotice": {
         "agentRefused": "The agent turned this down.",
         "agentStarting": "The agent is still starting.",
+        "agentStillWorking": "The agent is still working.",
         "answerFirst": "Answer the question or approval first.",
         "attachmentExpired": "This attachment expired.",
         "backgroundTasksRunning": "Background tasks are still running.",
         "cannotRunHere": "Orca can't run this agent in a chat here.",
-        "capacity": "Orca has received too many requests in the last day.",
+        "capacity": "Orca on the computer running this chat has hit a request limit. Update Orca there, then try again.",
         "chatNotFound": "Orca can't find this chat.",
         "chatSavedByNewerOrca": "This chat was saved by a newer Orca.",
+        "clearAfterAnswer": "Answer the agent's question or approval, then run /clear.",
+        "clearAfterRetry": "Retry your earlier message, then run /clear.",
+        "clearAfterSending": "Your earlier message is still being sent. Run /clear once it has gone.",
         "clearUnfinished": "The last /clear didn't finish.",
         "commandRunning": "A /compact or /clear is still running.",
+        "compactAfterAnswer": "Answer the agent's question or approval, then run /compact.",
+        "compactAfterRetry": "Retry your earlier message, then run /compact.",
+        "compactAfterSending": "Your earlier message is still being sent. Run /compact once it has gone.",
         "conversationCleared": "This conversation has been cleared.",
         "goalsUnsupported": "This agent doesn't support goals.",
         "historyUnavailable": "Orca couldn't open this chat's history right now.",
@@ -3007,15 +3059,19 @@
         "ownerUnproven": "The previous agent in this chat may still be running.",
         "promptPending": "The agent is waiting for an answer to a question or approval.",
         "questionChanged": "This question was already answered or has changed.",
+        "queueTooLarge": "Too much text is waiting in the queue.",
         "quitTerminalAgent": "Quit that agent to continue the chat here.",
         "reattachFile": "Remove it and attach it again.",
         "recordFailed": "Orca couldn't save this to the chat's history.",
         "recordUnreadable": "Orca couldn't read this chat's saved state.",
         "reopenChat": "Reopen the chat to check again.",
         "restartFailed": "The agent couldn't restart.",
+        "runClearWhenDone": "Run /clear when it's done.",
+        "runCompactWhenDone": "Run /compact when it's done.",
         "savedByNewerOrca": "Chats were saved by a newer Orca.",
         "sendOutcomeLost": "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed.",
         "settleEarlierMessage": "Wait for your earlier message to go through, or retry it.",
+        "shrinkQueue": "Delete a queued message, or wait for one to go through, then try again.",
         "startNewChat": "Start a new chat to continue.",
         "terminalAgentHoldsChat": "This chat is still open in a terminal agent.",
         "tryAgain": "Try again.",
@@ -3096,6 +3152,9 @@
       "viewing": "Viewing: {{path}}"
     }
   },
+  "menu": {
+    "quitApp": "Quit {{appName}}"
+  },
   "runtimeRpc": {
     "startupFailure": {
       "guidance": {
@@ -3127,76 +3186,6 @@
     "findPath": "Find a folder…",
     "finishEditing": "Save or cancel the preset to continue creating your workspace.",
     "pathHelp": "One repository-relative directory per line. Spaces within a path are preserved."
-  },
-  "workspace": {
-    "links": {
-      "addItem": "Add {{label}}",
-      "addNotes": "Add notes",
-      "addReference": "Add reference",
-      "allReviewChecks": "Reviews: {{count}} · Checks: {{status}}",
-      "checksFailed": "Failed",
-      "checksNeutral": "Neutral",
-      "checksPassing": "Passing",
-      "checksPending": "Pending",
-      "checksUnknown": "Unknown",
-      "clearSearch": "Clear search",
-      "commentHelp": "Markdown supported. Enter or {{shortcut}} to save · Shift+Enter for a new line.",
-      "count": "{{count}} linked",
-      "description": "Attach reviews and tasks, and keep notes for this workspace.",
-      "details": "Workspace details",
-      "duplicate": "This link is already attached.",
-      "empty": "Keep every review and task for this workspace together.",
-      "foreignIssue": "This issue belongs to another repository. Add issues from this workspace’s repository.",
-      "foreignReview": "This review belongs to another repository. Add reviews from this workspace’s repository.",
-      "inlineSearchHint": "Select a result to attach it.",
-      "issueReference": "Issue #{{number}}",
-      "jiraModeRequired": "Select Smart or Jira to load this issue.",
-      "kind": {
-        "azure_devops_pr": "Azure DevOps PR",
-        "bitbucket_pr": "Bitbucket PR",
-        "gitea_pr": "Gitea PR",
-        "github_issue": "GitHub issue",
-        "github_pr": "GitHub PR",
-        "gitlab_issue": "GitLab issue",
-        "gitlab_mr": "GitLab MR",
-        "jira_task_url": "Jira task (URL)",
-        "linear_task": "Linear task"
-      },
-      "lastKnownStatus": "Last known status",
-      "linearConnectRequired": "Connect Linear in Settings to link this issue.",
-      "linearModeRequired": "Select Smart or Linear to load this issue.",
-      "linearReadFailed": "Couldn’t load this Linear issue. Check the URL and connected workspace.",
-      "loadingLinear": "Loading Linear issue…",
-      "manage": "Manage links…",
-      "mrReference": "MR !{{number}}",
-      "nameHelp": "Shown in the sidebar. The folder name stays the same.",
-      "noReferences": "No matching references. Try a title, number, or URL.",
-      "notes": "Notes",
-      "notesOptional": "Optional · Markdown",
-      "open": "Open link",
-      "openItem": "Open {{label}}",
-      "prReference": "PR #{{number}}",
-      "referenceType": "Reference type",
-      "repositoryLoading": "Repository identity is still loading. Try again once it is available.",
-      "retrySource": "Retry",
-      "reviewTarget": "Target: {{branch}}",
-      "reviewUrlRequired": "Paste the review URL to verify its repository and provider.",
-      "reviews": "Reviews",
-      "saveHint": "Changes apply when you save",
-      "searchLabel": "Search references",
-      "searchReferences": "Search reviews and tasks, or paste a link",
-      "seenIn": "Seen in {{label}}",
-      "sessions": "Sessions & terminals",
-      "sessionsForItem": "Sessions & terminals for {{label}} · {{count}}",
-      "show": "Show {{count}} linked reviews and tasks",
-      "stackSummary": "{{count}} linked: {{references}}",
-      "tasks": "Issues & tasks",
-      "terminal": "Terminal",
-      "title": "Linked work",
-      "unavailableTab": "Tab unavailable",
-      "unlink": "Unlink from workspace",
-      "unlinkItem": "Unlink {{label}}"
-    }
   },
   "worktreeJumpPalette": {
     "filter": {

@@ -28,11 +28,15 @@ export type PrepareNativeChatVisuals = (
 export function createNativeChatVisualsDelivery(deps: {
   stateDirectory: string
   logger: StructuredAgentSessionLogger
+  isEnabled?: () => boolean
   resolveSkill?: () => Promise<NativeChatVisualsSkillLocation | null>
 }): PrepareNativeChatVisuals {
   const resolveSkill = deps.resolveSkill ?? (() => resolveNativeChatVisualsSkillLocation())
   return async (sessionId) => {
     try {
+      if (deps.isEnabled?.() === false) {
+        return null
+      }
       const skill = await resolveSkill()
       if (!skill) {
         deps.logger.warn('native-chat visuals skill is missing from this install', {

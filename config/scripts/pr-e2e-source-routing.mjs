@@ -1,7 +1,8 @@
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
+import { isUnitTestSupportSource } from './pr-code-change-scope.mjs'
 
-const isProductSource = (file) => !/\.test\.tsx?$/.test(file)
+const isProductSource = (file) => !/\.test\.tsx?$/.test(file) && !isUnitTestSupportSource(file)
 
 // Why config/patches: the xterm fork owns the helper textarea an input method attaches to, so a
 // patch edit can break composition without touching a file named "ime".

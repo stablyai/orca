@@ -52,7 +52,11 @@ describe('headless automation dispatch', () => {
     const dispatcher = captured.dispatcher as HeadlessAutomationDispatcher
     const launch = await dispatcher({
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a reuse-workspace automation; only these fields are read.
-      automation: { workspaceMode: 'existing', workspaceId: 'wt-1', agentId: 'goose' } as never,
+      automation: {
+        workspaceMode: 'existing',
+        workspaceId: 'wt-1',
+        agentId: 'goose'
+      } as never,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the title is read.
       run: { title: 'Nightly' } as never,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: unused for an existing workspace.
@@ -61,6 +65,11 @@ describe('headless automation dispatch', () => {
 
     expect(launch.completion).toBeUndefined()
     expect(launch.terminalPaneKey).toBe('tab-1:pane-1')
+    expect(runtime.launchAgentTerminal).toHaveBeenCalledWith('id:wt-1', {
+      agent: 'goose',
+      prompt: undefined,
+      title: 'Nightly'
+    })
     expect(runtime.waitForTerminal).not.toHaveBeenCalled()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: captured from the mocked constructor above.
     const observer = captured.observer as AutomationRunTerminalObserver
@@ -68,5 +77,55 @@ describe('headless automation dispatch', () => {
     expect(observer.resolveRunTerminal({ terminalPaneKey: 'tab-1:pane-1' } as never)).toBe(
       'terminal-1'
     )
+  })
+})
+
+describe('headless automation dispatch with extra agent args', () => {
+  it('passes saved extras to an existing-workspace launch', async () => {
+    const runtime = {
+      setAutomationService: vi.fn(),
+      notifyAutomationsChanged: vi.fn(),
+      launchAgentTerminal: vi.fn(async () => ({
+        handle: 'terminal-1',
+        tabId: 'tab-1',
+        paneKey: 'tab-1:pane-1',
+        ptyId: 'pty-1',
+        worktreeId: 'wt-1'
+      })),
+      showManagedWorktree: vi.fn(async () => ({ displayName: 'repo' })),
+      getTerminalHandleForPaneKey: vi.fn(() => null),
+      getAgentStatusRowsForPane: vi.fn(() => [])
+    }
+    createRuntimeAutomationService({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked service never reads the store.
+      store: {} as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher reads only the members faked above.
+      runtime: runtime as never,
+      headless: true
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: captured from the mocked constructor above.
+    const dispatcher = captured.dispatcher as HeadlessAutomationDispatcher
+    const automation = {
+      workspaceMode: 'existing',
+      workspaceId: 'wt-1',
+      agentId: 'claude',
+      prompt: 'go',
+      extraAgentArgs: '--model opus'
+    }
+    await dispatcher({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only these fields are read.
+      automation: automation as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the title is read.
+      run: { title: 'Nightly' } as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: unused for an existing workspace.
+      target: {} as never
+    })
+
+    expect(runtime.launchAgentTerminal).toHaveBeenCalledWith('id:wt-1', {
+      agent: 'claude',
+      prompt: 'go',
+      title: 'Nightly',
+      extraAgentArgs: '--model opus'
+    })
   })
 })

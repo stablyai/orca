@@ -61,7 +61,7 @@ beforeEach(() => {
   })
   vi.stubGlobal('window', {
     api: {
-      repos: { remove: vi.fn() },
+      repos: {},
       projectGroups: { update: projectGroupsUpdate, delete: projectGroupsDelete },
       runtimeEnvironments: { call: runtimeEnvironmentTransportCall }
     }
@@ -280,11 +280,10 @@ describe('project group state cascades stay scoped to the owner host', () => {
 
   it('removes contained projects only from the owner host', async () => {
     projectGroupsDelete.mockResolvedValue(true)
-    const reposRemove = vi.fn().mockResolvedValue(undefined)
     const reposRemoveForHost = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('window', {
       api: {
-        repos: { remove: reposRemove, removeForHost: reposRemoveForHost },
+        repos: { removeForHost: reposRemoveForHost },
         projectGroups: { update: projectGroupsUpdate, delete: projectGroupsDelete },
         runtimeEnvironments: { call: runtimeEnvironmentTransportCall }
       }

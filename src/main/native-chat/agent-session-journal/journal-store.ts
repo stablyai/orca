@@ -74,6 +74,7 @@ import type { JournalItemAppender } from './journal-item-appender'
 import type { JournalLifecycleBatchAppender } from './journal-lifecycle-batch-appender'
 import type { JournalStepWriter } from './journal-step-writer'
 import type { JournalStopMarks } from './journal-stop-marks'
+import { JournalContextController } from './journal-context-controller'
 
 export { AgentSessionJournalError } from './journal-write-guards'
 
@@ -98,6 +99,7 @@ export class AgentSessionJournal {
   /** Draft rows queued while the agent works; never reducer input or owed work. */
   readonly queuedMessages: JournalQueuedMessages
   readonly stopMarks: JournalStopMarks
+  readonly context: JournalContextController
 
   constructor(options: AgentSessionJournalOptions) {
     this.identity = options.identity
@@ -138,6 +140,11 @@ export class AgentSessionJournal {
     this.queuedMessages = collaborators.queuedMessages
     this.stopMarks = collaborators.stopMarks
     this.restore = collaborators.restore
+    this.context = new JournalContextController({
+      state: () => this.state,
+      writer: this.rowWriter,
+      cards: this.queuedMessages
+    })
   }
 
   get epoch(): string {

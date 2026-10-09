@@ -3340,3 +3340,58 @@ html.native-shell .app-layout {
     inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 5%, transparent),
     0 10px 24px rgba(0, 0, 0, 0.18);
 }
+
+.workspace-reference-stack {
+  isolation: isolate;
+  position: relative;
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+.workspace-reference-stack-front,
+.workspace-reference-stack-ghost {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.workspace-reference-stack-front {
+  z-index: 2;
+}
+
+.workspace-reference-stack-ghost[data-depth='1'] {
+  transform: translate(-1.5px, 2px);
+  opacity: 0.45;
+  z-index: 1;
+}
+
+.workspace-reference-stack-ghost[data-depth='2'] {
+  transform: translate(-3px, 4px);
+  opacity: 0.25;
+}
+
+.workspace-reference-stack svg {
+  width: 14px;
+  height: 14px;
+}
+
+.workspace-reference-stack-count {
+  position: absolute;
+  top: -8px;
+  right: -5px;
+  z-index: 3;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 11px;
+  color: var(--worktree-sidebar-foreground);
+  text-shadow: 0px 1px 1px var(--background);
+}
+
+.workspace-reference-stack-count[data-multiple-digits='true'] {
+  letter-spacing: -0.02em;
+}

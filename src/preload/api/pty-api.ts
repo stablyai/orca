@@ -145,8 +145,6 @@ export type PtyApi = {
   /** Runs the fix with the pane's own Codex; true only once verified. Local panes only. */
   disableCodexSharedServerAutoStart: (id: string) => Promise<boolean>
   stopCodexSharedServer: (id: string) => Promise<boolean>
-  /** A local pane whose daemon predates per-account Claude folders; false for any other pane. */
-  openedBeforeClaudeAccounts: (id: string) => Promise<boolean>
   getCwd: (id: string) => Promise<string>
   getSize: (id: string) => Promise<{ cols: number; rows: number } | null>
   listSessions: (scope?: PtySessionListScope) => Promise<PtyListedSession[]>

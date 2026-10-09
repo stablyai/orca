@@ -1,5 +1,9 @@
 {
   "app": {
+    "saving": {
+      "delayedTitle": "配置存储操作耗时比平时更长",
+      "delayedDescription": "在此操作完成前，后续保存可能会延迟。"
+    },
     "recoverableError": {
       "rootTitle": "Orca 遇到渲染器错误。",
       "rootDescription": "应用 shell 无法完成渲染。重试以重新挂载，如果错误仍然存在，请重新启动 Orca。",
@@ -164,6 +168,7 @@
     "reportCrash": "发送崩溃报告...",
     "file": "文件",
     "exit": "退出",
+    "quitApp": "退出 {{appName}}",
     "edit": "编辑",
     "appearance": "外观",
     "toggleLeftSidebar": "显示/隐藏左侧边栏",
@@ -3737,6 +3742,7 @@
             "54e8d6bb2d": "Fable",
             "d79c3362c4": "5小时",
             "a79c64f87e": "Fable",
+            "8295903d17": "切换后继续旧对话之前，请重新启动实时 Claude 终端。",
             "c98ea88392": "没有其他账户",
             "9332ba8684": "切换到",
             "d450654fa2": "Claude 账户",
@@ -4072,11 +4078,9 @@
             "checkAriaOne": "恢复后有 1 个待检查的聊天。点击查看详情。",
             "checkAria": "恢复后有 {{value0}} 个待检查的聊天。点击查看详情。",
             "checkTooltip": "重启后 Orca 未能恢复或未能确认已恢复的聊天。点击查看详情。",
-            "resumingLabelOne": "正在恢复 1 个聊天",
-            "resumingLabel": "正在恢复 {{value0}} 个聊天",
-            "resumingAriaOne": "正在恢复 1 个聊天。点击查看详情。",
-            "resumingAria": "正在恢复 {{value0}} 个聊天。点击查看详情。",
-            "resumingTooltip": "正在恢复中断的聊天并请它们继续…"
+            "resumingTooltip": "正在恢复中断的聊天并请它们继续…",
+            "resumingProgressLabel": "正在恢复聊天 {{value0}}/{{value1}}",
+            "resumingProgressAria": "正在恢复聊天，已完成 {{value0}}/{{value1}}。点击查看详情。"
           },
           "provider": {
             "extra": {
@@ -6489,6 +6493,7 @@
         "AccountsPane": {
           "c2d2751587": "删除账户",
           "dbb9626ed1": "取消",
+          "854ebbcc45": "Orca 将删除此已保存账户的托管 Claude 身份验证。如果当前处于活动状态，Orca 将回退到系统默认的 Claude 登录名。",
           "63843e37e2": "删除 Claude 账户？",
           "380a7736cc": "移除此账户会永久删除其托管的 Codex 主目录，包括其中存储的所有 Codex 会话历史记录和 MCP 登录信息。此操作无法撤销。如果该账户当前处于活动状态，Orca 将回退到系统默认的 Codex 登录。",
           "0d47394635": "删除 Codex 账户？",
@@ -6536,10 +6541,12 @@
           "3fe7862418": "{{value0}} 没有受管理的 Claude 账户。Orca 将使用该环境的系统默认 Claude 登录，直到您在此处添加一个。",
           "3455cf43fa": "Claude 登录。",
           "fcc4093fc1": "使用您当前 {{value0}} Codex 登录名。",
+          "79e484c3b2": "用于共享 Claude 身份验证文件的可选账户切换器。",
           "8bbfd74556": "Claude 账户",
           "72b36ea174": "可选。Orca 可使用系统默认 Claude 登录；仅当你需要快速切换且不想迁移聊天会话时才添加账户。",
           "26ef4b55be": "Claude",
           "2743cdc0af": "Claude 账户更新失败。",
+          "b15ce90870": "{{value0}} -> {{value1}}。在继续旧会话之前重新启动实时 Claude 终端。",
           "f921d32606": "Claude 账户已更新。",
           "5bf8764953": "Codex 账户更新失败。",
           "9baf45d071": "当前设备",
@@ -7175,14 +7182,7 @@
           },
           "nativeChat": {
             "title": "Chat UI",
-            "description": "预览受支持的智能体终端会话的桌面聊天界面。",
-            "copy": "添加可从受支持的智能体终端窗格切换的 Chat UI 视图。在我们调整记录保真度、流式传输和终端一致性期间，此功能仍处于实验阶段。",
             "toggleLabel": "切换 Chat UI",
-            "defaultTitle": "默认视图",
-            "defaultCopy": "选择如何打开受支持智能体的新终端标签页。",
-            "defaultViewLabel": "默认 Chat UI 视图",
-            "defaultViewTerminal": "终端聊天",
-            "defaultViewNative": "Chat UI",
             "shellEnvNamesLabel": "从 shell 传递的变量",
             "shellEnvNamePlaceholder": "变量名",
             "shellEnvNameAdd": "添加",
@@ -7192,10 +7192,6 @@
             "shellEnvTitle": "使用 shell 环境",
             "shellEnvCopy": "Codex 和 Claude 聊天启动时会带上登录 shell 导出的所有变量，与终端一致。关闭后可选择传递哪些变量。",
             "shellEnvToggleLabel": "切换使用 shell 环境",
-            "structuredTitle": "使用更新的结构化本机聊天",
-            "structuredCopy": "在支持的情况下，将新的智能体作为结构化聊天打开。关闭时会在基于终端的聊天中打开。已有的聊天保持不变。",
-            "structuredScope": "在本机和运行支持该功能版本的已配对 Orca 服务器上运行；较旧的服务器保留终端聊天。WSL 和 SSH 主机继续使用终端聊天。",
-            "structuredToggleLabel": "切换更新的结构化本机聊天",
             "resumeTitle": "重启后自动恢复工作聊天",
             "resumeCopy": "当 Orca 退出或安装更新时，重新打开 Orca 后，正在工作的聊天会自动恢复。",
             "resumeToggleLabel": "重启后切换自动恢复"
@@ -9644,7 +9640,6 @@
             },
             "nativeChat": {
               "title": "Chat UI",
-              "description": "预览受支持的智能体终端会话的桌面聊天界面。",
               "grok": "grok",
               "native": "原生",
               "chat": "聊天",
@@ -13653,7 +13648,9 @@
             "sessionDeleteFailed": "无法删除会话",
             "resumeInChatConflict": "另一个聊天室已经在进行此对话。",
             "resumeInChatTranscriptMissing": "无法加载此对话的历史记录，因此无法在聊天中恢复。",
-            "resumeInChatFailed": "无法在新聊天中恢复此会话。"
+            "resumeInChatFailed": "无法在新聊天中恢复此会话。",
+            "resumeInNewCliUnavailable": "无法在 CLI 中打开此会话。",
+            "resumeInNewCliHostTooOld": "请更新运行此聊天的主机上的 Orca，才能在新的 CLI 中恢复它。"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "正在扫描会话",
@@ -13789,7 +13786,10 @@
             "deleteReasonNonLocalHost": "只能删除此设备上的会话。",
             "deleteReasonSyntheticPath": "此会话无法在 Orca 中删除。",
             "deleteReasonUnsupportedAgent": "{{value0}} 会话无法在 Orca 中删除。",
-            "resumeInNewChat": "在新聊天中继续"
+            "resumeInNewNativeChat": "在新的本机聊天中恢复",
+            "resumeInNewCli": "在新的 CLI 中恢复",
+            "resumeInNewCliTooltipFork": "将此对话派生到新的 CLI 会话中。",
+            "resumeInNewCliTooltipChat": "本机聊天保持不变。"
           },
           "AiVaultSessionDeleteDialog": {
             "title": "要删除此会话吗？",
@@ -14892,6 +14892,7 @@
                 "d90d2e1f6d": "跟踪会话和每周使用情况。",
                 "8919321417": "Codex 登录失败。",
                 "c7b90c140b": "添加了 Codex 账户。",
+                "4e71d72912": "Claude 登录失败。",
                 "9ddeb558f9": "已添加 Claude 账户。",
                 "29d0653961": "登入",
                 "945865332e": "登录",
@@ -16149,7 +16150,6 @@
             "deb5293610": "浏览器注释在远程运行时不可用",
             "90d021f2ad": "添加",
             "0cb3bd6221": "注释意图",
-            "8f87e6c2e5": "意图",
             "532bac48c5": "描述智能体应该在这里改变什么......",
             "d2a7092e6e": "注释评论",
             "b472c5fe03": "添加浏览器注释",
@@ -16848,6 +16848,16 @@
         "runHistory": {
           "occurrencesWithLatest": "{{times}} 次，最近一次 {{date}}",
           "occurrences": "{{times}} 次"
+        },
+        "extraAgentArgs": {
+          "advanced": "高级",
+          "clear": "清除参数",
+          "unsupported": "此智能体暂不支持额外参数。",
+          "label": "额外的智能体参数",
+          "needsFreshSession": "额外参数要求每次运行都使用新会话。",
+          "useFreshSessions": "使用新会话",
+          "helper": "每次新会话时附加到此主机的默认参数之后。",
+          "detailLabel": "额外参数"
         }
       },
       "agent": {
@@ -17548,7 +17558,8 @@
         "collapseNode": "折叠 {{value0}}",
         "expandNode": "展开 {{value0}}",
         "selectMachine": "选择 {{value0}} 上的全部聊天",
-        "sshHost": "SSH"
+        "sshHost": "SSH",
+        "done": "完成"
       },
       "linear-issue-attribute-filter-coverage-notice": {
         "statusPartialTeamCoverage": "过滤 {{value1}} 团队状态中的 {{value0}} — 不包括其余团队的问题。",
@@ -17644,6 +17655,32 @@
             "hostOnly": "Cursor 登录详情仅可在运行 Orca 的电脑上读取。"
           }
         }
+      },
+      "NativeChatResumeRunPanel": {
+        "resumedTitle": "已恢复 {{value0}}/{{value1}} 个聊天",
+        "resumedTitleOne": "已恢复 {{value0}}/1 个聊天",
+        "resumingTitleOne": "正在恢复 1 个聊天",
+        "resumingTitle": "正在恢复 {{value0}} 个聊天",
+        "description": "每个聊天都会带着完整上下文恢复，并被要求检查它停在了哪里。你可以关闭此窗口，状态栏会继续显示进度。"
+      },
+      "NativeChatResumeRunStatusIcon": {
+        "waitingForReply": "等待回复",
+        "starting": "正在启动",
+        "waitingToStart": "等待启动",
+        "inFlight": "{{value0}} · {{value1}}",
+        "resumed": "已恢复"
+      },
+      "NativeChatResumeRunSummary": {
+        "done": "已完成 {{value0}}/{{value1}}",
+        "starting": "{{value0}} 个正在启动",
+        "waitingForReply": "{{value0}} 个等待回复",
+        "waitingToStart": "{{value0}} 个等待启动",
+        "all": "全部",
+        "inProgress": "进行中",
+        "resumed": "已恢复",
+        "attention": "需要处理",
+        "running": "已运行 {{value0}}",
+        "filter": "显示聊天"
       }
     },
     "i18n": {
@@ -17750,7 +17787,12 @@
         "couldNotStart": "{{agent}} 无法启动。",
         "editSavedArguments": "请在设置 > 智能体 > 参数中编辑。",
         "couldNotRestart": "{{agent}} 无法重新启动。",
-        "notSignedIn": "{{agent}} 未使用所选账户登录。",
+        "notSignedIn": "{{agent}} 尚未登录。",
+        "claudeSystemNotSignedIn": "Claude 尚未登录。请运行 `{{loginCommand}}`，或在 Claude 账户设置中选择账户。",
+        "claudeManagedNotSignedIn": "此 Claude 账户尚未登录。请在 Claude 账户设置中重新登录。",
+        "codexSystemNotSignedIn": "Codex 尚未登录。请运行 `{{loginCommand}}`。",
+        "codexManagedNotSignedIn": "此 Codex 账户尚未登录。请在 Codex 账户设置中重新登录。",
+        "cliMissing": "在运行此聊天的计算机上找不到 {{agent}}。请安装它，或检查设置 → 智能体中的命令。",
         "signInFirst": "请先登录。",
         "signInThenRunCommand": "请登录，然后重新运行 /{{command}}。",
         "signInThenSend": "请登录，然后重新发送您的消息。",
@@ -17760,8 +17802,6 @@
         "managedAccountUnsupported": "当 WSL 中添加了 Claude 账户时，Claude 聊天需要 Windows Claude 账户。",
         "launchFolderMissing": "此聊天运行所在的文件夹已不存在。请恢复该文件夹以继续此聊天。",
         "historyInOtherAccount": "此聊天的历史记录位于另一个 Claude 账户中。请切换回该账户以继续此聊天。",
-        "claudeAccountFolderMissing": "所选 Claude 账户的文件夹不存在。请重新登录该账户或选择其他账户。",
-        "claudeAccountSetupFailed": "无法设置所选 Claude 账户。请重试或选择其他账户。",
         "agentCommandNotRunnable": "{{agent}} 在设置 → 智能体中的命令必须是 Orca 能找到的程序路径或名称，且不能包含参数或变量。请修改或重置。",
         "chooseClaudeAccount": "请在 Claude 账户设置中选择或添加一个。",
         "chooseClaudeAccountThenRunCommand": "请在 Claude 账户设置中选择或添加一个，然后重新运行 /{{command}}。",
@@ -17814,6 +17854,13 @@
         "providerRetryNumberOf": "第 {{attempt}} 次重试，共 {{maxRetries}} 次。",
         "providerRetryLastError": "上次错误：{{detail}}。",
         "previousExitUnverifiable": "无法停止之前的 {{agent}}。",
+        "sessionNotRestored": "{{agent}} 无法重新打开之前的会话，因此此聊天将在新会话中继续。{{agent}} 不记得之前的消息。",
+        "agentCommandNotSignedIn": "请在运行此聊天的电脑上使用 `{{loginCommand}}` 登录 {{agent}}。",
+        "interactiveAgentNotSignedIn": "请在运行此聊天的电脑上启动 `{{loginCommand}}` 并使用 `{{slashCommand}}` 登录 {{agent}}。",
+        "agentNotSignedIn": "请登录 {{agent}}。",
+        "thenSendAgain": "然后再次发送消息。",
+        "runCommandWhenDone": "完成后再运行 /{{command}}。",
+        "commandAfterAnswer": "请先回答智能体的问题或审批，然后再运行 /{{command}}。",
         "sessionNotRestored": "{{agent}} 无法重新打开之前的会话，因此此聊天将在新会话中继续。{{agent}} 不记得之前的消息。"
       },
       "writeNotice": {
@@ -17829,7 +17876,7 @@
         "notDoneCommand": "命令未运行。",
         "notDoneGoal": "目标未更改。",
         "restartFailed": "智能体无法重新启动。",
-        "capacity": "Orca 在过去一天内收到的请求过多。",
+        "capacity": "运行此聊天的计算机上的 Orca 已达到请求上限。请在那台计算机上更新 Orca，然后重试。",
         "outcomeUnknown": "Orca 无法确认发生了什么。请查看聊天。",
         "sendOutcomeLost": "Orca 无法确认你的消息已送达智能体。请查看聊天，如有需要请重新发送。",
         "questionChanged": "此问题已被回答或已更改。",
@@ -17862,6 +17909,8 @@
         "waitForBackgroundTasks": "请等待后台任务完成。",
         "messagesUnsettled": "您之前发送的一条消息尚未确认。",
         "settleEarlierMessage": "请等待之前的消息送达，或重试该消息。",
+        "queueTooLarge": "队列中等待的文本过多。",
+        "shrinkQueue": "请删除一条排队的消息，或等待其送达，然后重试。",
         "optionRejected": "智能体未接受此设置。",
         "goalsUnsupported": "此智能体不支持目标。",
         "agentRefused": "智能体拒绝了此请求。",
@@ -17874,7 +17923,16 @@
         "recordUnreadable": "Orca 无法读取此聊天的已保存状态。",
         "chatNotFound": "Orca 找不到此聊天。",
         "startNewChat": "请开始新的聊天以继续。",
-        "tryAgain": "请重试。"
+        "tryAgain": "请重试。",
+        "agentStillWorking": "智能体仍在工作。",
+        "runClearWhenDone": "完成后再运行 /clear。",
+        "clearAfterAnswer": "请先回答智能体的问题或审批，然后再运行 /clear。",
+        "runCompactWhenDone": "完成后再运行 /compact。",
+        "compactAfterAnswer": "请先回答智能体的问题或审批，然后再运行 /compact。",
+        "clearAfterRetry": "请先重试您之前的消息，然后再运行 /clear。",
+        "compactAfterRetry": "请先重试您之前的消息，然后再运行 /compact。",
+        "clearAfterSending": "您之前的消息仍在发送中。发送完成后再运行 /clear。",
+        "compactAfterSending": "您之前的消息仍在发送中。发送完成后再运行 /compact。"
       },
       "composer": {
         "imageUnsupported": "此智能体不支持粘贴图片。",
@@ -17935,6 +17993,7 @@
         "commands": "命令",
         "skills": "技能",
         "loadingSkills": "正在加载技能…",
+        "clearDescription": "清除对话上下文",
         "skillsUnavailableHost": "SSH 聊天中无法列出技能",
         "skillsLoadFailed": "无法加载技能",
         "retrySkills": "重试",
@@ -18162,6 +18221,7 @@
         "cancelledBy": "于 {{device}} 取消"
       },
       "notices": {
+        "contextCleared": "上下文已清除",
         "compaction": "上下文压缩",
         "details": "细节",
         "plan": "计划",
@@ -18333,7 +18393,8 @@
         "sendConfirmBody_other": "你即将发送一条消息。是否清除之前排队的 {{count}} 条消息？",
         "sendConfirmClear": "清空队列",
         "sendConfirmSend": "发送消息",
-        "from": "来自 {{names}}"
+        "from": "来自 {{names}}",
+        "pausedSendFailedWaiting": "无法发送。智能体完成后，点按发送以重试。"
       },
       "thought": "已思考",
       "thoughtForDuration": "思考了 {{duration}}",
@@ -18648,8 +18709,8 @@
       }
     },
     "agentSessionContinuation": {
-      "continueInNewSession": "在新会话中继续…",
-      "dialogTitle": "在新会话中继续",
+      "handOffToAnotherAgent": "移交给另一个智能体",
+      "dialogTitle": "移交给另一个智能体",
       "dialogDescription": "从当前进度启动一个新的智能体会话，原会话保持不变。",
       "untitledSession": "当前会话",
       "originalAgent": "原智能体：{{agent}}",
@@ -19035,6 +19096,16 @@
     }
   },
   "featureTips": {
+    "nativeChatUpgrade": {
+      "eyebrow": "新功能",
+      "title": "本机聊天已升级",
+      "intro": "受支持智能体的新聊天现在会在升级后的聊天视图中打开。要在聊天和 CLI 之间切换，请打开右侧边栏中的{{panel}}：",
+      "resumeInNativeChat": "{{action}}：在本机聊天中打开受支持的 CLI 对话。",
+      "resumeInCli": "{{action}}：将 Claude 或 Codex 聊天复制到新的 CLI 会话中。原始聊天保持不变。",
+      "settingsInstruction": "可在以下位置管理 Chat UI：",
+      "settingsLink": "设置 → 实验性",
+      "gotIt": "知道了"
+    },
     "voice": {
       "demoPrompt": "查看此差异以了解边缘情况，并为您发现的任何内容添加测试。",
       "startDictation": "开始听写",
@@ -19354,6 +19425,9 @@
       "oldTerminalDialogRisk": "共享服务器的 Codex 会话可能会一起结束，并且智能体状态可能会错误。",
       "oldTerminalDialogCause": "较旧的终端仍然共享 Codex 服务器。打开一个新终端以在单独的服务器上运行 Codex。",
       "fix": "使固定",
+      "openNewTerminal": "打开新终端",
+      "dontShowAgain": "不再显示",
+      "dismiss": "关闭",
       "dialogTitle": "为每个 Codex 选项卡提供自己的服务器",
       "dialogDescription": "Codex 会话直接在共享一台后台服务器的终端中启动。 Orca 将其启动的 Codex 会话分开保存。当会话共享一台服务器时，关闭一个服务器可能会结束其他服务器，并且智能体状态可能会错误。",
       "copy": "复制",
@@ -19364,6 +19438,7 @@
       "step2Title": "停止正在运行的共享服务器",
       "undo": "要撤消，请运行 codex features enable daemon_auto_start。",
       "step2Warning": "关闭共享服务器的所有打开的 Codex 会话",
+      "learnMore": "了解更多",
       "turnOff": "关",
       "turningOff": "正在关闭…",
       "turnedOff": "已关闭",
@@ -19379,12 +19454,6 @@
     },
     "paneMove": {
       "failed": "无法将窗格移动到新选项卡。"
-    },
-    "paneTopBanner": {
-      "openNewTerminal": "打开新终端",
-      "learnMore": "了解更多",
-      "dontShowAgain": "不再显示",
-      "dismiss": "关闭"
     }
   },
   "fileSearch": {

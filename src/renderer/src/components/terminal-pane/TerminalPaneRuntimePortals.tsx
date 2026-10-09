@@ -2,7 +2,6 @@ import { createPortal } from 'react-dom'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import CodexRestartChip from '../CodexRestartChip'
 import { CodexSharedServerBanner } from './CodexSharedServerBanner'
-import { ClaudeOldTerminalBanner } from './ClaudeOldTerminalBanner'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
 import { TerminalRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
 import { TerminalProcessExitOverlay } from './TerminalProcessExitOverlay'
@@ -52,12 +51,6 @@ export function TerminalPaneCodexRestartPortals({
             />
             <CodexSharedServerBanner
               key={`codex-shared-server-${pane.id}-${ptyId}`}
-              ptyId={ptyId}
-              tabId={tabId}
-              leafId={pane.leafId}
-            />
-            <ClaudeOldTerminalBanner
-              key={`claude-old-terminal-${pane.id}-${ptyId}`}
               ptyId={ptyId}
               tabId={tabId}
               leafId={pane.leafId}

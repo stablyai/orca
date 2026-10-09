@@ -35,7 +35,11 @@ describe('options at rest', () => {
       resolveAccountHome: async () => ({ variable: 'CODEX_HOME', path: '/homes/a' }),
       probes: { codex: probe }
     })
-    const resting = { child: null, params: { provider: 'codex' } }
+    const resting = {
+      child: null,
+      params: { provider: 'codex' },
+      journal: { context: { floor: () => null } }
+    }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resting read touches only these members.
     const context = {
       deps: {
@@ -71,7 +75,7 @@ describe('live Codex option reads', () => {
     const live = {
       child,
       params: { provider: 'codex' },
-      journal: { threadGoal: () => null, contextUsage: () => null }
+      journal: { threadGoal: () => null, contextUsage: () => null, context: { floor: () => null } }
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this read touches only the declared context fields.
     const context = {
@@ -101,7 +105,11 @@ describe('live Codex option reads', () => {
 
   it('keeps a listing failure visible to the picker', async () => {
     const queue = new StructuredAgentSessionTaskQueue()
-    const live = { child: { fence: 7 }, params: { provider: 'codex' } }
+    const live = {
+      child: { fence: 7 },
+      params: { provider: 'codex' },
+      journal: { context: { floor: () => null } }
+    }
     const failure = new Error('model/list unavailable')
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the failed read ends before touching the remaining context fields.
     const context = {
@@ -133,7 +141,11 @@ describe('live Codex option reads', () => {
       await listing.promise
       return apply
     })
-    const live = { child: { fence: 7 }, params: { provider: 'codex' } }
+    const live = {
+      child: { fence: 7 },
+      params: { provider: 'codex' },
+      journal: { context: { floor: () => null } }
+    }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this read touches only the declared context fields.
     const context = {
       deps: {

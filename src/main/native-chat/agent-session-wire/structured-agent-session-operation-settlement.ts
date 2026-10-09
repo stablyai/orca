@@ -28,10 +28,11 @@ export async function runSettledAgentSessionMutation<TValue>(input: {
   ) => input.store.recordOperationOutcome({ ...operation, outcome })
   const receipt = input.plan.settlesWithWrite
     ? observedReceipt(
-        input.store.operationOutcomeReceipt({
-          ...operation,
-          outcome: { status: 'succeeded', sessionId: input.envelope.sessionId }
-        })
+        input.plan.successReceipt?.() ??
+          input.store.operationOutcomeReceipt({
+            ...operation,
+            outcome: { status: 'succeeded', sessionId: input.envelope.sessionId }
+          })
       )
     : undefined
   const context = receipt ? { ...input.context, operationReceipt: receipt } : input.context
@@ -57,6 +58,7 @@ export async function runSettledAgentSessionMutation<TValue>(input: {
         : {
             status: 'failed',
             code: outcome.refusal.code,
+            message: outcome.refusal.message,
             ...(outcome.refusal.details ? { details: outcome.refusal.details } : {}),
             // The row's own field, which builds before details read; copied from the legacy mirror.
             ...(outcome.refusal.rewindReason ? { rewindReason: outcome.refusal.rewindReason } : {})

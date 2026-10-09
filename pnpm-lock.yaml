@@ -175,7 +175,9 @@ patchedDependencies:
   '@xterm/xterm@6.1.0-beta.303': dd0ccc59cd1ccf99f4d76e5aa2456da165fa0804dce19a833d7638bd07ffa393
   i18next-cli@1.74.2: 7955b89d3aa229f477408608d331f78c85148a85a85913729f89fac65ad8b207
   lint-staged@16.4.0: 7333b3837f80a7fbd045964db6d76ba4fc118e49134bdbabb00585b6b7b60673
-  node-pty@1.1.0: 92c95cffab383d86b3b13a460c75a08074468ebf1f3911db8e874e083201f192
+  node-pty@1.1.0: 64f39642b03aeb629d562c834bf0e2fdaf1ccba5cf90b1a3e2f4c63654bb7d74
+  vitest@5.0.3: 3d512e2cb30542921690d9fa925edf503d92dd7d58a4c4dd2aa2fa69e9a243f9
+  ws@8.22.0: 9393e04dd9a90b01eb7aa35fcd5b1431b5038ce999fbbd82651136193ba51f14
 
 importers:
 
@@ -216,7 +218,7 @@ importers:
         version: 3.3.1
       node-pty:
         specifier: ^1.1.0
-        version: 1.1.0(patch_hash=92c95cffab383d86b3b13a460c75a08074468ebf1f3911db8e874e083201f192)
+        version: 1.1.0(patch_hash=64f39642b03aeb629d562c834bf0e2fdaf1ccba5cf90b1a3e2f4c63654bb7d74)
       posthog-node:
         specifier: ^5.52.5
         version: 5.52.5
@@ -255,7 +257,7 @@ importers:
         version: 1.0.3
       ws:
         specifier: ^8.22.0
-        version: 8.22.0
+        version: 8.22.0(patch_hash=9393e04dd9a90b01eb7aa35fcd5b1431b5038ce999fbbd82651136193ba51f14)
       yaml:
         specifier: ^2.9.1
         version: 2.9.1
@@ -575,6 +577,9 @@ importers:
       remark-rehype:
         specifier: 11.1.2
         version: 11.1.2
+      remend:
+        specifier: 1.4.0
+        version: 1.4.0
       shadcn:
         specifier: ^4.13.1
         version: 4.13.1(supports-color@7.2.0)(typescript@7.0.2)
@@ -607,7 +612,7 @@ importers:
         version: rolldown-vite@7.3.1(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@25.9.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
       vitest:
         specifier: 5.0.3
-        version: 5.0.3(@opentelemetry/api@1.9.1)(@types/node@25.9.5)(happy-dom@20.14.5)(msw@2.14.3(@types/node@25.9.5)(typescript@7.0.2))(rolldown-vite@7.3.1(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@25.9.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        version: 5.0.3(patch_hash=3d512e2cb30542921690d9fa925edf503d92dd7d58a4c4dd2aa2fa69e9a243f9)(@opentelemetry/api@1.9.1)(@types/node@25.9.5)(happy-dom@20.14.5)(msw@2.14.3(@types/node@25.9.5)(typescript@7.0.2))(rolldown-vite@7.3.1(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@25.9.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       vscode-oniguruma:
         specifier: ^2.0.1
         version: 2.0.1
@@ -7007,6 +7012,9 @@ packages:
 
   remark-stringify@11.0.0:
     resolution: {integrity: sha512-1OSmLd3awB/t8qdoEOMazZkNsfVTeY4fTsgzcQFdXNq8ToTN4ZGwrMnlda4K6smTFKD+GRV6O48i6Z4iKgPPpw==}
+
+  remend@1.4.0:
+    resolution: {integrity: sha512-mHiYhhwphs1IgIZmkToKLwJn0U99IjPXuutkA2acrNcG0vlEq2G4TGnd2eT0saIHwh2KjaCpvleHcsd5SAz96A==}
 
   require-directory@2.1.1:
     resolution: {integrity: sha512-fGxEI7+wsG9xrvdjsrlmL22OMTTiHRwAMroiEeMgq8gzoLC/PQr7RsRDSTLUg/bZAZtF+TVIkHc6/4RIKrui+Q==}
@@ -13792,7 +13800,7 @@ snapshots:
 
   node-int64@0.4.0: {}
 
-  node-pty@1.1.0(patch_hash=92c95cffab383d86b3b13a460c75a08074468ebf1f3911db8e874e083201f192):
+  node-pty@1.1.0(patch_hash=64f39642b03aeb629d562c834bf0e2fdaf1ccba5cf90b1a3e2f4c63654bb7d74):
     dependencies:
       node-addon-api: 7.1.1
 
@@ -14588,6 +14596,8 @@ snapshots:
       mdast-util-to-markdown: 2.1.2
       unified: 11.0.5
 
+  remend@1.4.0: {}
+
   require-directory@2.1.1: {}
 
   require-from-string@2.0.2: {}
@@ -14757,7 +14767,7 @@ snapshots:
     dependencies:
       inspect-webkit: 0.0.5(typescript@7.0.2)
       sonner: 2.0.8(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      ws: 8.22.0
+      ws: 8.22.0(patch_hash=9393e04dd9a90b01eb7aa35fcd5b1431b5038ce999fbbd82651136193ba51f14)
     transitivePeerDependencies:
       - '@types/react'
       - bufferutil
@@ -15318,7 +15328,7 @@ snapshots:
       '@types/unist': 3.0.3
       vfile-message: 4.0.3
 
-  vitest@5.0.3(@opentelemetry/api@1.9.1)(@types/node@25.9.5)(happy-dom@20.14.5)(msw@2.14.3(@types/node@25.9.5)(typescript@7.0.2))(rolldown-vite@7.3.1(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@25.9.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)):
+  vitest@5.0.3(patch_hash=3d512e2cb30542921690d9fa925edf503d92dd7d58a4c4dd2aa2fa69e9a243f9)(@opentelemetry/api@1.9.1)(@types/node@25.9.5)(happy-dom@20.14.5)(msw@2.14.3(@types/node@25.9.5)(typescript@7.0.2))(rolldown-vite@7.3.1(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@25.9.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)):
     dependencies:
       '@types/chai': 5.2.3
       '@vitest/mocker': 5.0.3(msw@2.14.3(@types/node@25.9.5)(typescript@7.0.2))(rolldown-vite@7.3.1(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@25.9.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
@@ -15406,7 +15416,7 @@ snapshots:
 
   ws@8.21.3: {}
 
-  ws@8.22.0: {}
+  ws@8.22.0(patch_hash=9393e04dd9a90b01eb7aa35fcd5b1431b5038ce999fbbd82651136193ba51f14): {}
 
   wsl-utils@0.3.1:
     dependencies:

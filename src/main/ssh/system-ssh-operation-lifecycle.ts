@@ -3,6 +3,9 @@ import type { SystemSshCommandChannel } from './system-ssh-command'
 
 export type ProcessResult = { label: string; stderr: string }
 
+/** OpenSSH's own exit status for a connection-level failure, never the remote command's. */
+const SYSTEM_SSH_TRANSPORT_EXIT_CODE = 255
+
 export class SystemSshCommandExitError extends Error {
   constructor(
     label: string,
@@ -13,6 +16,15 @@ export class SystemSshCommandExitError extends Error {
     const detail = exitCode === null ? `signal ${signal ?? 'unknown'}` : `exit ${exitCode}`
     super(`${label} failed (${detail}): ${stderr.trim()}`)
   }
+}
+
+/** The remote command, not OpenSSH, produced this exit. */
+export function isHostAnsweredSystemSshExit(err: unknown): err is SystemSshCommandExitError {
+  return (
+    err instanceof SystemSshCommandExitError &&
+    err.exitCode !== null &&
+    err.exitCode !== SYSTEM_SSH_TRANSPORT_EXIT_CODE
+  )
 }
 
 /**
@@ -76,7 +88,12 @@ export function waitForChannelClose(
   })
 }
 
-export function waitForProcess(proc: ChildProcess, label: string): Promise<ProcessResult> {
+/** `remote`: the process is ssh running a host command, so its exit status is the host's answer. */
+export function waitForProcess(
+  proc: ChildProcess,
+  label: string,
+  origin: 'local' | 'remote' = 'local'
+): Promise<ProcessResult> {
   return new Promise((resolve, reject) => {
     let stderr = ''
     const cleanup = (): void => {
@@ -94,9 +111,14 @@ export function waitForProcess(proc: ChildProcess, label: string): Promise<Proce
     const onError = (err: Error): void => {
       settle(reject, err)
     }
-    const onClose = (code: number | null): void => {
+    const onClose = (code: number | null, signal?: NodeJS.Signals | null): void => {
       if (code !== 0) {
-        settle(reject, new Error(`${label} failed (exit ${code}): ${stderr.trim()}`))
+        settle(
+          reject,
+          origin === 'remote'
+            ? new SystemSshCommandExitError(label, code, stderr, signal)
+            : new Error(`${label} failed (exit ${code}): ${stderr.trim()}`)
+        )
         return
       }
       settle(resolve, { label, stderr })

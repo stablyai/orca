@@ -321,8 +321,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       })
       subscriptionSendBinary.mockClear()
 
-      // Why: replacement input stays disabled until terminal.resolvePane proves the new handle belongs to this pane.
-      expect(transport.sendInput('x', 'driving')).toBe(false)
+      // Why: replacement input is held for the new handle until terminal.resolvePane proves it belongs to this pane.
+      expect(transport.sendInput('x', 'driving')).toBe(true)
       vi.advanceTimersByTime(8)
 
       const inputFrames = subscriptionSendBinary.mock.calls

@@ -68,10 +68,10 @@ export function WorktreeDisplayNameField({
         portalContainer={portalContainer}
         side="bottom"
       />
-      <p className="text-[10px] text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         {translate(
-          'auto.components.sidebar.WorktreeMetaDialog.459ad7f650',
-          'Only changes the name shown in the sidebar — the folder on disk stays the same. Leave blank to use the branch or folder name.'
+          'workspace.links.nameHelp',
+          'Shown in the sidebar. The folder name stays the same.'
         )}
       </p>
     </div>

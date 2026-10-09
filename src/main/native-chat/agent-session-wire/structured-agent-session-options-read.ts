@@ -148,6 +148,8 @@ export async function readStructuredAgentSessionOptions(
   const phase = store.getRecord(sessionId)?.rewind?.phase
   const agent = session.params.provider
   const capabilities = agents.capabilities(agent)
+  const floor = session.journal.context.floor()
+  const contextFloor = floor ? { contextFloor: floor } : {}
   return {
     ...options,
     rewind:
@@ -158,9 +160,11 @@ export async function readStructuredAgentSessionOptions(
             reason: 'unsupported'
           }),
     conversationCommands: capabilities?.compact ? ['clear', 'compact'] : ['clear'],
-    ...(capabilities?.threadGoal ? { threadGoal: { current: session.journal.threadGoal() } } : {}),
+    ...(capabilities?.threadGoal
+      ? { threadGoal: { current: session.journal.threadGoal(), ...contextFloor } }
+      : {}),
     ...(capabilities?.contextUsage
-      ? { contextUsage: { current: session.journal.contextUsage() } }
+      ? { contextUsage: { current: session.journal.contextUsage(), ...contextFloor } }
       : {})
   }
 }

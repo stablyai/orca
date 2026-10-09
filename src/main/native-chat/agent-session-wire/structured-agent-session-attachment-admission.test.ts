@@ -86,7 +86,7 @@ describe('attachments at send admission', () => {
     expect(await rig.drafts()).toHaveLength(0)
   })
 
-  it('claims a stored upload, and the /clear carry claims it for the replacement chat', async () => {
+  it('keeps a stored upload claimed by the same conversation after clear', async () => {
     const working = await rig.workingSend()
     const path = await storeUpload('notes.txt')
     expect(await clientSend(textWith(path), 'queue-if-active')).toMatchObject({
@@ -101,9 +101,8 @@ describe('attachments at send admission', () => {
       envelope: rig.envelope(fields, 'agentSession.conversationCommand', hostTestOperationId()),
       ...fields
     })
-    const replacementId = cleared.ok ? cleared.value.replacementSessionId : undefined
-    expect(replacementId).toBeTruthy()
-    expect(claimedSessions()).toEqual([SESSION, replacementId].sort())
+    expect(cleared).toMatchObject({ ok: true })
+    expect(claimedSessions()).toEqual([SESSION])
   })
 
   it('sends text that only mentions another store path, claiming nothing', async () => {

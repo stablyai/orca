@@ -10,6 +10,7 @@ import {
 import { Popover, PopoverContent } from '@/components/ui/popover'
 import { translate } from '@/i18n/i18n'
 import type { SessionOptionSelectChoice } from '../../../../shared/native-chat-session-options'
+import { useNativeChatPickerFocusReturn } from './native-chat-picker-focus-return'
 import { nativeChatSessionChoiceLabel } from './native-chat-session-option-labels'
 import { NativeChatSessionOptionChoiceBody } from './NativeChatSessionOptionChoiceBody'
 
@@ -22,6 +23,7 @@ type NativeChatModelComboboxProps = {
   readOnly: boolean
   readOnlyReason: string | null
   onSelect: (value: string) => void
+  focusComposer?: () => void
   /** Renders the `PopoverTrigger` pill, which must take the key handler. */
   renderTrigger: (onKeyDown: React.KeyboardEventHandler<HTMLButtonElement>) => React.ReactNode
 }
@@ -40,9 +42,11 @@ export function NativeChatModelCombobox({
   readOnly,
   readOnlyReason,
   onSelect,
+  focusComposer,
   renderTrigger
 }: NativeChatModelComboboxProps): React.JSX.Element {
   const [open, setOpen] = useState(defaultOpen)
+  const focusReturn = useNativeChatPickerFocusReturn(focusComposer)
   const searchLabel = translate('components.native-chat.composer.searchModels', 'Search models…')
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -58,6 +62,7 @@ export function NativeChatModelCombobox({
         side="top"
         collisionPadding={8}
         className="w-64"
+        onCloseAutoFocus={focusReturn.onCloseAutoFocus}
         // Why: the popover loops Tab inside itself, which would trap focus in the search field.
         onKeyDown={(event) => {
           if (event.key === 'Tab') {
@@ -88,6 +93,7 @@ export function NativeChatModelCombobox({
                   disabled={readOnly}
                   aria-current={current || undefined}
                   onSelect={() => {
+                    focusReturn.notePick()
                     setOpen(false)
                     onSelect(choice.value)
                   }}

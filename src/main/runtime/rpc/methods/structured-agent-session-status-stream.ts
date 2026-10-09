@@ -45,6 +45,7 @@ export function bindStructuredAgentSessionStream(
 export const STRUCTURED_AGENT_SESSION_STATUS_METHODS = [
   defineStreamingMethod({
     name: 'agentSession.subscribeStatus',
+    permission: 'workspace',
     params: null,
     handler: async (_params, ctx, emit) => {
       const host = requireHost(ctx)

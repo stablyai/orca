@@ -2,10 +2,10 @@ import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import {
+  applyClaudeFolderTrust,
   resolveClaudeGlobalConfigFile,
   updateClaudeGlobalConfig
 } from '../claude/claude-folder-trust-file'
-import { claudeStateLogin } from './claude-account-folder'
 import { readClaudeProfileObject, resolveClaudeDefaultHome } from './claude-profile-paths'
 import { lstatIfPresent } from './claude-profile-prompt-history'
 import {
@@ -39,7 +39,7 @@ export const CLAUDE_PROFILE_RESOURCE_DIRS = [
 ] as const
 // Copied, not linked: a rename-replace save (Claude's own, or an editor's) would cut a link.
 export const CLAUDE_PROFILE_RESOURCE_FILES = ['CLAUDE.md', 'keybindings.json'] as const
-const CLAUDE_PROFILE_MEMORY_IMPORT = '@~/.claude/CLAUDE.md\n'
+export const CLAUDE_PROFILE_MEMORY_IMPORT = '@~/.claude/CLAUDE.md\n'
 const PRIVATE_KEYS = new Set([
   'apiKeyHelper',
   'awsAuthRefresh',
@@ -103,6 +103,7 @@ async function mergeState(args: {
   source: string
   target: string
   ledger: ClaudeProfileLedger
+  trustKeys: readonly string[]
   report: ClaudeProfileReport
 }): Promise<ClaudeProfileSurfaceOutcome> {
   if (lstatIfPresent(args.target)?.isSymbolicLink()) {
@@ -110,7 +111,7 @@ async function mergeState(args: {
   }
   const input = readClaudeProfileObject(args.source)
   if (input.kind === 'unavailable') {
-    // Why: onboarding doesn't depend on the personal state; only its shared keys wait.
+    // Why: onboarding and trust don't depend on the personal state; only its shared keys wait.
     const error = new ClaudeProfileSurfaceError('unreadable', 'Personal Claude state is unreadable')
     warnClaudeProfile(args.report, '.claude.json', error)
   }
@@ -119,15 +120,7 @@ async function mergeState(args: {
     SHARED_STATE_KEYS.filter((key) => key in source).map((key) => [key, source[key]])
   )
   let written: Record<string, string> = {}
-  let signedOut = false
   const outcome = await updateClaudeGlobalConfig(args.target, (current) => {
-    // Why oauthAccount: Claude writes it only on a finished sign-in, while it writes this file
-    // earlier in onboarding (theme pick). It's read under Claude's own lock, on every platform;
-    // credentials sit in the Keychain on macOS. A flag set before then skips Claude's sign-in.
-    signedOut = !claudeStateLogin(current)
-    if (signedOut) {
-      return { kind: 'unchanged' }
-    }
     const config = { ...current }
     written = { ...args.ledger.keys['.claude.json'] }
     let changed = mergeClaudeProfileKeys(config, desired, written).length > 0
@@ -142,10 +135,15 @@ async function mergeState(args: {
       config.hasCompletedOnboarding = true
       changed = true
     }
+    // Why: a malformed `projects` refuses only trust; onboarding and shared keys still apply.
+    const trust = args.trustKeys.length > 0 ? applyClaudeFolderTrust(config, args.trustKeys) : null
+    if (trust?.kind === 'changed') {
+      return trust
+    }
     return changed ? { kind: 'changed', config } : { kind: 'unchanged' }
   })
-  if (outcome === 'missing-config' || (outcome === 'unchanged' && signedOut)) {
-    // Why: no completed login yet; writing would fabricate an account or skip Claude's sign-in.
+  if (outcome === 'missing-config') {
+    // Why: no state file means no completed login; writing one would fabricate an account.
     return 'absent'
   }
   if (outcome === 'locked' || outcome === 'unreadable') {
@@ -165,6 +163,7 @@ export async function provisionClaudeProfile(args: {
   /** The user's own CLAUDE_CONFIG_DIR; `~/.claude` when unset. */
   userConfigDir?: string
   platform?: NodeJS.Platform
+  trustKeys?: readonly string[]
 }): Promise<ClaudeProfileReport> {
   const platform = args.platform ?? process.platform
   const defaultHome = resolveClaudeDefaultHome(args.userHome, args.userConfigDir)
@@ -211,6 +210,7 @@ export async function provisionClaudeProfile(args: {
       source: statePath(args.userConfigDir),
       target: statePath(args.profileHome),
       ledger,
+      trustKeys: args.trustKeys ?? [],
       report
     })
   )

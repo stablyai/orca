@@ -110,7 +110,7 @@ export function MobileNativeChatQueuedMessages({
           const returned = card.state === 'returned'
           // "Steer" submits beside the running turn, the paused queue's cards too; a card whose
           // own send failed, or a returned one, is sent again.
-          const steers = !returned && !card.paused
+          const steers = !returned && !card.paused && !card.command
           return (
             <View
               key={card.messageId}
@@ -142,31 +142,34 @@ export function MobileNativeChatQueuedMessages({
                   </Text>
                 ) : null}
               </View>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ disabled: busy || steerHeld }}
-                accessibilityLabel={
-                  returned
-                    ? 'Send this message again'
-                    : card.paused
-                      ? 'Send this message'
-                      : 'Submit without interrupting the model'
-                }
-                style={({ pressed }) => [
-                  styles.textAction,
-                  pressed && styles.pressed,
-                  (busy || steerHeld) && styles.disabled
-                ]}
-                disabled={busy || steerHeld}
-                onPress={() => void run(card.messageId, onSend)}
-              >
-                {steers ? (
-                  <CornerDownRight size={12} color={colors.textPrimary} strokeWidth={2} />
-                ) : (
-                  <Send size={12} color={colors.textPrimary} strokeWidth={2} />
-                )}
-                <Text style={styles.actionLabel}>{steers ? 'Steer' : 'Send'}</Text>
-              </Pressable>
+              {/* A command never steers: its Send shows only while the agent is idle. */}
+              {card.waitsForAgent ? null : (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: busy || steerHeld }}
+                  accessibilityLabel={
+                    returned
+                      ? 'Send this message again'
+                      : steers
+                        ? 'Submit without interrupting the model'
+                        : 'Send this message'
+                  }
+                  style={({ pressed }) => [
+                    styles.textAction,
+                    pressed && styles.pressed,
+                    (busy || steerHeld) && styles.disabled
+                  ]}
+                  disabled={busy || steerHeld}
+                  onPress={() => void run(card.messageId, onSend)}
+                >
+                  {steers ? (
+                    <CornerDownRight size={12} color={colors.textPrimary} strokeWidth={2} />
+                  ) : (
+                    <Send size={12} color={colors.textPrimary} strokeWidth={2} />
+                  )}
+                  <Text style={styles.actionLabel}>{steers ? 'Steer' : 'Send'}</Text>
+                </Pressable>
+              )}
               <Pressable
                 accessibilityRole="button"
                 accessibilityState={{ disabled: busy }}
@@ -181,20 +184,23 @@ export function MobileNativeChatQueuedMessages({
               >
                 <Trash2 size={14} color={colors.textPrimary} strokeWidth={2} />
               </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ disabled: busy }}
-                accessibilityLabel="More actions"
-                style={({ pressed }) => [
-                  styles.iconAction,
-                  pressed && styles.pressed,
-                  busy && styles.disabled
-                ]}
-                disabled={busy}
-                onPress={() => setMenuFor(card.messageId)}
-              >
-                <MoreHorizontal size={14} color={colors.textPrimary} strokeWidth={2} />
-              </Pressable>
+              {/* The menu holds only Edit, which a command does not take. */}
+              {card.command ? null : (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: busy }}
+                  accessibilityLabel="More actions"
+                  style={({ pressed }) => [
+                    styles.iconAction,
+                    pressed && styles.pressed,
+                    busy && styles.disabled
+                  ]}
+                  disabled={busy}
+                  onPress={() => setMenuFor(card.messageId)}
+                >
+                  <MoreHorizontal size={14} color={colors.textPrimary} strokeWidth={2} />
+                </Pressable>
+              )}
             </View>
           )
         })}

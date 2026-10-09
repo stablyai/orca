@@ -30,16 +30,21 @@ import {
   readCodexTurnStatus
 } from './codex-structured-thread-facts'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/tui-agent-display-names'
+import { codexAuthenticationFailure } from './codex-authentication-failure'
 
 /** A message Codex rejected, in the words that name Codex and its legacy markers. */
 export function codexDispatchRejection(
-  failure: SubmissionRejectionFact
+  failure: SubmissionRejectionFact,
+  account?: CodexSession['account']
 ): AgentJournalDispatchRejection {
-  return agentSessionFailureWords(failure, {
-    surface: 'rejection',
-    agentName: TUI_AGENT_DISPLAY_NAMES.codex,
-    provider: 'codex'
-  })
+  return agentSessionFailureWords(
+    { ...failure, ...(account ? { account } : {}) },
+    {
+      surface: 'rejection',
+      agentName: TUI_AGENT_DISPLAY_NAMES.codex,
+      provider: 'codex'
+    }
+  )
 }
 
 export type CodexTurnEndSettlement = {
@@ -72,7 +77,11 @@ function unopenedTurnFailure(
   const message = readCodexJournalRecord(readCodexJournalRecord(params).error).message
   const detail =
     typeof message === 'string' && message ? providerDiagnostic(message, 'person') : undefined
-  return { status: 'failed', ...(detail ? { detail } : {}) }
+  const auth = codexAuthenticationFailure(params)
+  return {
+    status: 'failed',
+    ...(auth ? { notSignedIn: true, detail: auth.detail } : detail ? { detail } : {})
+  }
 }
 
 /** The end a primary-thread notification reports for its turn, or null for any other frame. */
@@ -85,20 +94,32 @@ export function readCodexTurnEnd(method: string, params: unknown): CodexTurnEnd 
     return { status: 'interrupted' }
   }
   if (status === 'failed') {
+    const auth = codexAuthenticationFailure({
+      error: readCodexJournalRecord(readCodexJournalRecord(params).turn).error
+    })
     const detail = errorDetail(params)
-    return { status: 'failed', ...(detail ? { detail } : {}) }
+    return {
+      status: 'failed',
+      ...(auth ? { notSignedIn: true, detail: auth.detail } : detail ? { detail } : {})
+    }
   }
   return { status: 'completed' }
 }
 
 /** How an ended turn settles a send it never echoed; null leaves the send to its echo. */
-export function codexTurnEndRejection(end: CodexTurnEnd): AgentJournalDispatchRejection | null {
+export function codexTurnEndRejection(
+  end: CodexTurnEnd,
+  account?: CodexSession['account']
+): AgentJournalDispatchRejection | null {
   if (end.status === 'interrupted') {
     return agentSessionFailureWords(agentSessionFailureFact('cancelled'), { surface: 'rejection' })
   }
   if (end.status === 'failed') {
     return codexDispatchRejection(
-      agentSessionFailureFact('providerRejected', end.detail ? { detail: end.detail } : {})
+      agentSessionFailureFact(end.notSignedIn ? 'notSignedIn' : 'providerRejected', {
+        ...(end.detail ? { detail: end.detail } : {}),
+        ...(account ? { account } : {})
+      })
     )
   }
   return null
@@ -118,7 +139,7 @@ export function noteCodexTurnOpened(
 
 /** Settles the sends bound to the turn this admitted notification ended. */
 export function settleCodexSendsInEndedTurn(
-  session: Pick<CodexSession, 'threadId' | 'dispatchEchoes'>,
+  session: Pick<CodexSession, 'threadId' | 'dispatchEchoes' | 'account'>,
   frame: { sessionId: string; method: string; params: unknown },
   settle: (settlement: CodexTurnEndSettlement) => void
 ): void {
@@ -134,7 +155,7 @@ export function settleCodexSendsInEndedTurn(
   ) {
     return
   }
-  const rejection = codexTurnEndRejection(end)
+  const rejection = codexTurnEndRejection(end, session.account)
   for (const { clientMessageId, via } of session.dispatchEchoes.endTurn(
     session.threadId,
     turnId,

@@ -58,6 +58,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
   onStartupPromptCarry?: (carried: boolean) => void
   /** Per-launch inputs used when `startupAgent` is the created terminal surface. */
   startupAgentArgs?: string | null
+  /** Main-internal: an automation's saved extras, merged over the startup agent's arguments. */
+  startupExtraAgentArgs?: string
   startupCwd?: string
   /** The surface behind a host-built startup agent (`startupAgent` or `startupDraft`). */
   startupLaunchSource?: string

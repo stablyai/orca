@@ -45,6 +45,8 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
        *  it, which must read as unknown so replay keeps the pane's own grid. */
       cols?: number
       rows?: number
+      /** The image carries no history, so replay must keep the pane's own scrollback. */
+      keepsLocalScrollback?: boolean
     }
   ) => void
   onSubscribed?: () => void
@@ -193,6 +195,8 @@ export type RemoteRuntimeSnapshotInfo = {
   requestId?: number
   truncated?: boolean
   unavailable?: TerminalSnapshotUnavailableReason
+  /** History rows above the screen; absent from hosts that predate the field. */
+  scrollbackRows?: number
   // Why: a mid-escape tail the emulator could not serialize; the transport
   // must write it AFTER the replay reset so the next live chunk completes it
   // instead of rendering literally (#7329).

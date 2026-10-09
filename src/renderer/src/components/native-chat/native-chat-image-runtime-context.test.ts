@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { shallow } from 'zustand/shallow'
 import type { AppState } from '@/store/types'
+import { useAppStore } from '@/store'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Tab } from '../../../../shared/tab-types'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
@@ -8,8 +9,9 @@ import {
   resolveNativeChatImageRuntimeContext,
   selectNativeChatImageOwnerState
 } from './native-chat-image-runtime-context'
+import { repoFixture, worktreeFixture } from './native-chat-workspace-test-fixtures'
 
-function state(): AppState {
+function state(overrides: Partial<AppState> = {}): AppState {
   const tab: TerminalTab = {
     id: 'tab-1',
     ptyId: null,
@@ -20,13 +22,9 @@ function state(): AppState {
     sortOrder: 0,
     createdAt: 0
   }
-  const worktree = {
-    id: 'wt-1',
-    repoId: 'repo',
-    path: '/repo/worktree',
-    hostId: 'local'
-  }
+  const worktree = worktreeFixture('wt-1', '/repo/worktree', { hostId: 'local' })
   return {
+    ...useAppStore.getInitialState(),
     activeWorkspaceExecutionHostId: 'local',
     activeWorktreeId: 'wt-1',
     detectedWorktreesByRepo: {},
@@ -34,17 +32,18 @@ function state(): AppState {
     getKnownWorktreeById: () => worktree,
     projectGroups: [],
     removedRuntimeEnvironmentIds: new Set(),
-    repos: [{ id: 'repo', path: '/repo' }],
+    repos: [repoFixture()],
     restoredRuntimeHostIdByWorkspaceSessionKey: {},
     runtimeEnvironmentCatalogHydrated: true,
     runtimeEnvironments: [],
-    settings: { activeRuntimeEnvironmentId: null },
-    sshConnectionStates: {},
-    sshStateByEnvironment: {},
+    settings: { ...getDefaultSettings('/home/me'), activeRuntimeEnvironmentId: null },
+    sshConnectionStates: new Map(),
+    sshStateByEnvironment: new Map(),
     tabsByWorktree: { 'wt-1': [tab] },
     unifiedTabsByWorktree: {},
-    worktreesByRepo: { repo: [worktree] }
-  } as unknown as AppState
+    worktreesByRepo: { repo: [worktree] },
+    ...overrides
+  }
 }
 
 describe('resolveNativeChatImageRuntimeContext', () => {

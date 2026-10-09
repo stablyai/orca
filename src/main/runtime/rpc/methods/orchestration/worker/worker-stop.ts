@@ -15,6 +15,7 @@ import { WorkerDispatchParams } from '../../../../../../shared/rpc-contract/orch
 export const ORCHESTRATION_WORKER_STOP_METHODS = [
   defineMethod({
     name: 'orchestration.workerStop',
+    permission: 'workspace',
     params: WorkerDispatchParams,
     handler: (params, { runtime, orchestrationMutation }) =>
       dedupeWorkerStop(runtime, params.dispatch, async () => {

@@ -33,6 +33,7 @@ import type { ClaudeProvisionalRowCorrections } from './claude-provisional-row-c
 import type { ClaudeSubagentRoster } from './claude-subagent-roster'
 import { claudeTurnOpenedBySendEcho, type ClaudeTurnSource } from './claude-turn-opening'
 import type { ClaudeOpenTurn } from './claude-open-turn'
+import type { ClaudeAuthenticationFailures } from './claude-authentication-failures'
 
 export type ClaudeMessageJournalContext = {
   sink: StructuredAgentSessionEventSink
@@ -50,6 +51,7 @@ export type ClaudeMessageJournalContext = {
   /** The session's open turn. Sole owner of turn identity and of the reopen
    *  latch; this module asks it rather than tracking a copy. */
   turn: ClaudeOpenTurn
+  authenticationFailures: ClaudeAuthenticationFailures
 }
 
 export function journalClaudeMessage(
@@ -90,7 +92,7 @@ export function journalClaudeMessage(
       : envelope.parentToolUseId
   const stamp = ctx.corrections.stampFor(producerRef)
   const outputEnvelope = claudeOutputEnvelope(envelope)
-  const body = claudeMessageBody(outputEnvelope)
+  const body = ctx.authenticationFailures.assistant(message) ?? claudeMessageBody(outputEnvelope)
   const identity =
     (body && envelope.role === 'assistant'
       ? ctx.streamedBlocks.reconcile(envelope)?.identity
