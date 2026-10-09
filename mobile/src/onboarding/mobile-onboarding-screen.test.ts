@@ -20,9 +20,12 @@ vi.mock('react-native', () => ({
     isReduceMotionEnabled: vi.fn(() => Promise.resolve(mocks.reducedMotionEnabled))
   },
   Animated: {
-    Value: class {},
+    Value: class {
+      constructor(public current: number) {}
+    },
     View: 'AnimatedView',
-    multiply: vi.fn((_value: unknown, factor: number) => factor),
+    // Lazy like a real Animated node, so translateX tracks later timing updates.
+    multiply: (value: { current: number }, factor: number) => ({ value, factor }),
     timing: mocks.animatedTiming
   },
   BackHandler: {
@@ -61,9 +64,14 @@ describe('MobileOnboardingScreen', () => {
     mocks.replace.mockReset()
     mocks.windowWidth = 390
     mocks.reducedMotionEnabled = false
-    mocks.animatedTiming.mockReset().mockReturnValue({
-      start: (callback: (result: { finished: boolean }) => void) => callback({ finished: true })
-    })
+    mocks.animatedTiming
+      .mockReset()
+      .mockImplementation((value: { current: number }, config: { toValue: number }) => ({
+        start: (callback: (result: { finished: boolean }) => void) => {
+          value.current = config.toValue
+          callback({ finished: true })
+        }
+      }))
     mocks.ensureNotificationPermissions.mockReset().mockResolvedValue(true)
     mocks.saveDefaultSessionView.mockReset().mockResolvedValue(undefined)
     mocks.setRemotePushEnabled.mockReset().mockResolvedValue(undefined)
@@ -91,6 +99,20 @@ describe('MobileOnboardingScreen', () => {
   async function layoutViewport(width: number) {
     const viewport = renderer!.root.findAll((node) => node.props.onLayout !== undefined)[0]
     await act(async () => viewport?.props.onLayout({ nativeEvent: { layout: { width } } }))
+  }
+
+  function trackStyle() {
+    return renderer!.root.findByType('AnimatedView').props.style[1]
+  }
+
+  function trackWidth(): number {
+    return trackStyle().width
+  }
+
+  function translateX(): number {
+    const { value, factor } = trackStyle().transform[0].translateX
+    // + 0 normalises -0 on the first slide.
+    return value.current * factor + 0
   }
 
   function pages() {
@@ -202,12 +224,16 @@ describe('MobileOnboardingScreen', () => {
     await renderScreen(540)
 
     expect(pages().map((page) => page.props.width)).toEqual([540, 540])
-    const track = renderer!.root.findByType('AnimatedView')
-    expect(track.props.style[1]).toEqual({ width: 1080, transform: [{ translateX: -540 }] })
+    expect(trackWidth()).toBe(1080)
+    expect(translateX()).toBe(0)
+
+    await act(async () => pages()[0].props.onSessionChoice('chat'))
+    expect(translateX()).toBe(-540)
 
     await layoutViewport(700)
     expect(pages().map((page) => page.props.width)).toEqual([700, 700])
-    expect(track.props.style[1]).toEqual({ width: 1400, transform: [{ translateX: -700 }] })
+    expect(trackWidth()).toBe(1400)
+    expect(translateX()).toBe(-700)
   })
 
   it('keeps the pager unrendered until the viewport reports a real width', async () => {
