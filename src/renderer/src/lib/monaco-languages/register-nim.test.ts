@@ -41,17 +41,13 @@ describe('registerNimLanguage', () => {
 })
 
 describe('loadNimTextMateGrammar', () => {
-  it('loads the vendored Nim TextMate grammar for the Nim scope', async () => {
-    const grammar = await loadNimTextMateGrammar(NIM_TEXTMATE_SCOPE)
+  it('loads the vendored Nim TextMate grammar under the Nim language id', async () => {
+    const grammar = await loadNimTextMateGrammar()
 
     expect(grammar).toMatchObject({
-      name: 'Nim',
+      name: NIM_LANGUAGE_ID,
       scopeName: NIM_TEXTMATE_SCOPE,
       fileTypes: ['nim', 'nims', 'nimble']
     })
-  })
-
-  it('ignores unrelated TextMate scopes', async () => {
-    await expect(loadNimTextMateGrammar('source.python')).resolves.toBeNull()
   })
 })

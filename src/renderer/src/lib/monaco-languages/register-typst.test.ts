@@ -61,16 +61,12 @@ describe('registerTypstLanguage', () => {
 })
 
 describe('loadTypstTextMateGrammar', () => {
-  it('lazily loads the vendored Typst grammar for the Typst scope', async () => {
-    const grammar = await loadTypstTextMateGrammar(TYPST_TEXTMATE_SCOPE)
+  it('lazily loads the vendored Typst grammar under the Typst language id', async () => {
+    const grammar = await loadTypstTextMateGrammar()
 
     expect(grammar).toMatchObject({
-      name: 'typst',
+      name: TYPST_LANGUAGE_ID,
       scopeName: TYPST_TEXTMATE_SCOPE
     })
-  })
-
-  it('ignores unrelated TextMate scopes', async () => {
-    await expect(loadTypstTextMateGrammar('source.python')).resolves.toBeNull()
   })
 })
