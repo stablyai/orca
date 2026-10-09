@@ -9,6 +9,7 @@ import {
   recordReceivedWebSessionTabsSnapshot,
   shouldApplyRecoveredWebSessionTabsSnapshot
 } from './tracking'
+import { forgetWebRetiredEpochRepairsOutside } from './retired-epoch-repair'
 import {
   decideWebSessionTabsSnapshot,
   WEB_SESSION_TABS_FRAME_OUTRANKED
@@ -53,6 +54,11 @@ export function handleGlobalSessionInventoryEvent({
 }: GlobalSessionInventoryEventArgs): void {
   const skipUnchangedResumeWork = awaitingVisibilityResumeInventory.value && !replayed
   awaitingVisibilityResumeInventory.value = false
+  // Mirror local apply-time prune: repair state tracks worktrees this inventory still publishes.
+  forgetWebRetiredEpochRepairsOutside(
+    environmentId,
+    new Set(event.snapshots.map((snapshot) => snapshot.worktree))
+  )
   const unchanged = event.snapshots.map((snapshot) => {
     const key = `${environmentId}:${snapshot.worktree}`
     const freshness = latestSessionTabsSnapshotByWorktree.get(key)
@@ -68,7 +74,9 @@ export function handleGlobalSessionInventoryEvent({
       environmentId,
       snapshot,
       undefined,
-      runtimeId
+      runtimeId,
+      'stream',
+      { authoritative: event.authoritative === true }
     )
     coordinator.recordSnapshotReceipt(environmentId, snapshot, frame, runtimeId)
     return frame
@@ -109,7 +117,8 @@ export function handleGlobalSessionInventoryEvent({
           environmentId,
           snapshot,
           receivedFrames[index]!,
-          runtimeId
+          runtimeId,
+          { authoritative: event.authoritative === true }
         ) &&
         coordinator.shouldApplySnapshot(environmentId, snapshot, receivedFrames[index]!, runtimeId)
           ? [{ index, snapshot }]
@@ -125,7 +134,9 @@ export function handleGlobalSessionInventoryEvent({
       const decisions = applicable.map(({ index, snapshot }) =>
         unchanged[index]
           ? WEB_SESSION_TABS_FRAME_OUTRANKED
-          : decideWebSessionTabsSnapshot(snapshot, environmentId, runtimeId)
+          : decideWebSessionTabsSnapshot(snapshot, environmentId, runtimeId, {
+              authoritative: event.authoritative === true
+            })
       )
       const freshSnapshots = applicable.flatMap(({ snapshot }, index) =>
         decisions[index]!.apply ? [snapshot] : []

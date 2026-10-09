@@ -48,6 +48,11 @@ import {
   untrackWebSessionTabsWorktree,
   removeWebSessionTabsEnvironment
 } from './tracking'
+import {
+  forgetWebRetiredEpochRepairsForWorktree,
+  forgetWebRetiredEpochRepairsOutside,
+  resetWebRetiredEpochRepairsForTests
+} from './retired-epoch-repair'
 
 const MAX_SESSION_TABS_TRACKING_GENERATIONS = 512
 let sessionTabsTrackingGenerationSequence = 0
@@ -102,6 +107,7 @@ export function acceptReplayedWebSessionTabsSnapshot(
   }
 }
 export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
+  resetWebRetiredEpochRepairsForTests()
   latestSessionTabsSnapshotByWorktree.clear()
   replayableSessionTabsSnapshotByWorktree.clear()
   latestReceivedSessionTabsSnapshotByWorktree.clear()
@@ -155,6 +161,7 @@ export function clearWebSessionTabsTrackingForWorktree(
   environmentId: string,
   worktreeId: string
 ): void {
+  forgetWebRetiredEpochRepairsForWorktree(environmentId, worktreeId)
   const key = sessionTabsFreshnessKey(environmentId, worktreeId)
   latestSessionTabsSnapshotByWorktree.delete(key)
   replayableSessionTabsSnapshotByWorktree.delete(key)
@@ -182,6 +189,9 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
   }
   const keyPrefix = `${trimmedEnvironmentId}:`
   advanceSessionTabsTrackingGeneration(trimmedEnvironmentId)
+  // Generation bump cancels pending timers; also drop RepairState so a replacement connection with
+  // the same IDs does not inherit an exhausted attempt budget through the decay window.
+  forgetWebRetiredEpochRepairsOutside(trimmedEnvironmentId, new Set())
   for (const key of latestSessionTabsSnapshotByWorktree.keys()) {
     if (key.startsWith(keyPrefix)) {
       latestSessionTabsSnapshotByWorktree.delete(key)
