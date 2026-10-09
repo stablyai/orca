@@ -16,9 +16,8 @@ import {
   type TerminalFileContext
 } from './terminal-file-path-mapping'
 import {
-  LOCAL_EXECUTION_HOST_ID,
+  getConnectionExecutionHostId,
   toRuntimeExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
@@ -231,9 +230,7 @@ export function openDetectedFilePath(
       const runtimeOwnerId = fileContext.settings?.activeRuntimeEnvironmentId?.trim()
       const executionHostId = runtimeOwnerId
         ? toRuntimeExecutionHostId(runtimeOwnerId)
-        : fileContext.connectionId
-          ? toSshExecutionHostId(fileContext.connectionId)
-          : LOCAL_EXECUTION_HOST_ID
+        : getConnectionExecutionHostId(fileContext.connectionId)
       const siblingRoute = findWorkspaceFileRoute(store, executionHostId, mappedFilePath)
       if (siblingRoute) {
         targetWorktreeId = siblingRoute.worktreeId

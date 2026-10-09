@@ -31,6 +31,10 @@ import { useShellPageBack } from './use-shell-page-back'
 import { useShellStackPop } from './use-shell-stack-pop'
 import { useMobileWebShellSession } from './use-mobile-web-shell-session'
 import { usePageHostSnapshot } from './use-page-host-snapshot'
+import { useReportedHostAreaServing } from './host-area-serving'
+import { isHostRouteOf } from './page-route-policy'
+import { useResponsiveLayout } from '../layout/responsive-layout'
+import { storageReadParamsSchema, type BridgeNativeVerb } from './bridge/bridge-native-verbs'
 import { SHELL_OPENING_LABEL, ShellPageCover, ShellWaitingFrame } from './ShellWaitingFrame'
 import { pageSafeAreaInsets, usePublishedSafeAreaInsets } from './page-safe-area-insets'
 
@@ -172,6 +176,7 @@ export function MobileWebShellScreen({
   const router = useRouter()
   const navigation = useNavigation()
   const popShellStack = useShellStackPop()
+  const { isWideLayout } = useResponsiveLayout()
   const { droppedBinaryFrames, reportDroppedBinaryFrames } = useMobileWebShellDroppedFrames()
   const {
     state,
@@ -188,8 +193,16 @@ export function MobileWebShellScreen({
     reportPageBackClaim,
     pageReady,
     pageFrame,
-    backClaimed
-  } = useMobileWebShellSession({ hostId, routePathname: route.pathname, runtime })
+    backClaimed,
+    ownsHostArea
+  } = useMobileWebShellSession({
+    hostId,
+    routePathname: route.pathname,
+    wide: isWideLayout,
+    runtime
+  })
+  // Full screen from the download on, as on a phone; while checking, nobody knows the page owns it.
+  useReportedHostAreaServing(ownsHostArea && state.kind !== 'checking')
   // Which mount the notice was dismissed on, not whether it was: a later refusal opens its own
   // generation under a new session id, so it is not silenced by a tap on the one before it.
   const [noticeDismissedFor, setNoticeDismissedFor] = useState<string | null>(null)
@@ -200,13 +213,16 @@ export function MobileWebShellScreen({
   // native screen, and the page lifts by the height native screens read.
   const keyboardInset = Math.max(0, useKeyboardOcclusion())
   const pageInsets = pageSafeAreaInsets({ insets, topCovered: noticeShown })
-  const { snapshot, unreadable, readStorage, refreshStorage, writeStorage } = usePageHostSnapshot(
-    hostId,
-    route.pathname
-  )
+  const { snapshot, unreadable, readStorage, refreshStorage, writeStorage, readWorkspaceKey } =
+    usePageHostSnapshot(hostId, route.pathname, ownsHostArea)
   // Declared before the bridge so the handler it is handed already belongs to this session: the
   // media verbs hold staged files, and a registry born after the host would outlive the page.
-  const serveNativeVerb = useNativeDeviceVerbs(state.kind === 'ready' ? state.sessionId : null)
+  const serveDeviceVerb = useNativeDeviceVerbs(state.kind === 'ready' ? state.sessionId : null)
+  // The storage read is the shell's own store rather than the device's, scoped to this host.
+  const serveNativeVerb = (verb: BridgeNativeVerb, params: unknown): Promise<unknown> =>
+    verb === 'native.storage.read'
+      ? readWorkspaceKey(storageReadParamsSchema.parse(params).key).then((value) => ({ value }))
+      : serveDeviceVerb(verb, params)
   // Straight to the system handler, and the one opener the shell has: the page's `externalLink`
   // notify and a cancelled top-frame navigation both arrive here already filtered. The only failure
   // left is a device with nothing registered for the scheme -- a `mailto:` on a phone with no mail
@@ -226,6 +242,7 @@ export function MobileWebShellScreen({
     pageRoutes,
     pageRouteGrants,
     routeGrants,
+    ownsHostArea,
     session: state,
     sessionEstablished: pageReady,
     snapshot,
@@ -267,6 +284,12 @@ export function MobileWebShellScreen({
     // Pushed, never replaced: the page stays mounted underneath, so Back reveals it with no
     // download and no second `init`.
     onNavigate: (href: string) => {
+      // Wide, this host's route is the area-owning session below: back to it, or in place of this
+      // one from a cold deep link, never a second on top. `dismissTo` takes the href's params.
+      if (isWideLayout && isHostRouteOf(href, hostId)) {
+        router.dismissTo(href)
+        return
+      }
       router.push(href)
     },
     // Answered on this device and never forwarded; the host holds it to the verb table first.

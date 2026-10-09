@@ -12,9 +12,7 @@ import {
   REMOTE_TERMINAL_SNAPSHOT_REQUEST_TIMEOUT_MS,
   clearPendingSnapshotRequest,
   clearResyncTimer,
-  clearSnapshot,
-  discardOutputAcknowledgements,
-  rejectPendingSnapshotRequest,
+  disposeRemoteTerminalStreamState,
   retryWorthySnapshotOutcome
 } from './remote-runtime-terminal-snapshot-state'
 import type {
@@ -254,11 +252,7 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
     if (this.streams.get(stream.streamId) !== stream) {
       return
     }
-    stream.watchdog.dispose()
-    discardOutputAcknowledgements(stream)
-    clearSnapshot(stream)
-    clearResyncTimer(stream)
-    rejectPendingSnapshotRequest(stream, 'Remote terminal stream stopped responding.')
+    disposeRemoteTerminalStreamState(stream, 'Remote terminal stream stopped responding.')
     this.streams.delete(stream.streamId)
     this.sendFrame(stream.streamId, TerminalStreamOpcode.Unsubscribe)
     if (stream.callbacks.onTransportClose) {

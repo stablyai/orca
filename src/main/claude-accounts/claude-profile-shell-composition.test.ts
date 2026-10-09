@@ -1,21 +1,13 @@
-import type * as ProfileRouting from '../../shared/claude-profile-routing'
 import { spawnSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it, vi } from 'vitest'
-const gate = vi.hoisted(() => ({ enabled: true }))
-vi.mock('../../shared/claude-profile-routing', async (original) => ({
-  ...(await original<typeof ProfileRouting>()),
-  claudeProfileRoutingEnabled: () => gate.enabled
-}))
+import { afterEach, expect, it } from 'vitest'
 const FISH =
   ['/opt/homebrew/bin/fish', '/usr/local/bin/fish', '/usr/bin/fish'].find(existsSync) ??
   '/usr/bin/fish'
 const roots: string[] = []
 afterEach(() => {
-  gate.enabled = true
-  vi.resetModules()
   roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true }))
 })
 function fishInit({ args }: { args: string[] | null }): string {
@@ -25,9 +17,7 @@ function fishInit({ args }: { args: string[] | null }): string {
   }
   return init
 }
-async function composed(enabled: boolean) {
-  gate.enabled = enabled
-  vi.resetModules()
+async function composed() {
   const local = await import('../providers/local-pty-shell-ready')
   const daemon = await import('../daemon/shell-ready')
   const powershell = await import('../powershell-osc133-bootstrap')
@@ -53,35 +43,19 @@ async function composed(enabled: boolean) {
   }
 }
 
-it('keeps the composed bash, zsh, fish and PowerShell startup text dormant with the gate off', async () => {
-  const off = await composed(false)
-  for (const text of [...off.fish, off.powershell]) {
-    expect(text).not.toContain('claude')
-  }
-  for (const text of [...off.bash, ...off.zsh]) {
-    expect(text).not.toContain('ORCA_CLAUDE')
-  }
-  const on = await composed(true)
+it('gives every composed shell startup and the plain fish vendor snippet the claude function', async () => {
+  const on = await composed()
   for (const text of [...on.bash, ...on.zsh]) {
     expect(text).toContain('ORCA_CLAUDE_INJECTED_CONFIG_DIR')
   }
-})
-
-it('gives a plain fish tab the claude function through the vendor snippet only with the gate on', async () => {
-  gate.enabled = false
-  vi.resetModules()
-  const off = await import('../fish-xdg-data-dirs-handoff')
-  expect(off.getFishVendorConfSnippet()).not.toContain('claude')
-  gate.enabled = true
-  vi.resetModules()
-  const on = await import('../fish-xdg-data-dirs-handoff')
+  const { getFishVendorConfSnippet } = await import('../fish-xdg-data-dirs-handoff')
   const { getFishClaudeShellFunction } = await import('../../shared/claude-shell-function')
   expect(getFishClaudeShellFunction()).toContain('function claude')
-  expect(on.getFishVendorConfSnippet()).toContain(getFishClaudeShellFunction())
+  expect(getFishVendorConfSnippet()).toContain(getFishClaudeShellFunction())
 })
 
 it('starts the PowerShell claude function on its own line after the codex fragment', async () => {
-  const on = await composed(true)
+  const on = await composed()
   expect(on.powershell).toContain(
     'Remove-Variable orcaCodexCommand -ErrorAction SilentlyContinue\n$orcaClaudeCommand'
   )
@@ -95,7 +69,7 @@ it.skipIf(!existsSync(FISH))(
     mkdirSync(join(root, 'bin'))
     writeFileSync(join(root, 'bin', 'claude'), '#!/bin/sh\nexit 0\n')
     chmodSync(join(root, 'bin', 'claude'), 0o700)
-    const on = await composed(true)
+    const on = await composed()
     for (const init of on.fish) {
       const result = spawnSync(
         '/usr/bin/env',

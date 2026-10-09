@@ -200,7 +200,7 @@ export class ClaudeHookService {
     } else {
       writeManagedScript(scriptPath, payload)
     }
-    // Why: a profile's statusLine arrives with the settings merge from the default home.
+    // Why: a profile's statusLine arrives with the settings copy from the default home.
     if (options.configDir === undefined && plan.statusLine === 'install') {
       nextConfig = this.installManagedStatusLine(nextConfig)
     } else if (options.configDir === undefined && plan.statusLine === 'retire') {

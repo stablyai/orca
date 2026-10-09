@@ -5,7 +5,7 @@ import type { MessageRowProps } from './NativeChatMessageRow'
 import { NativeChatPacedMarkdown } from './NativeChatPacedMarkdown'
 import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from './native-chat-quote-selection'
 import { NativeChatToolRun } from './NativeChatToolRun'
-import { NativeChatCodeBlock } from './NativeChatCodeBlock'
+import { NativeChatCodeBlock, NativeChatPlainCodeBlock } from './NativeChatCodeBlock'
 import { NativeChatAgentControls, NativeChatImageAttachments } from './NativeChatTranscriptChrome'
 import type { useNativeChatWorkRun } from './use-native-chat-work-run'
 
@@ -74,7 +74,7 @@ export function NativeChatAssistantMessageRow({
           content={words}
           variant="document"
           className="text-sm native-chat-message-text"
-          renderCodeBlock={NativeChatCodeBlock}
+          renderCodeBlock={isSystem ? NativeChatPlainCodeBlock : NativeChatCodeBlock}
           onLinkClick={onLinkClick}
           allowFileUriLinks={allowFileUriLinks}
           linkifyFilePaths={onLinkClick !== undefined}

@@ -1,3 +1,4 @@
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { captureTerminalWorktreeMetadataOwner } from './terminal-worktree-metadata-owner'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { parseRemoteRuntimePtyId, toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
@@ -6,8 +7,7 @@ import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './termin
 import {
   consumePendingActivationSpawn,
   getPendingActivationSpawnCount,
-  isCurrentDirectSshAuthority,
-  isRemoteRuntimePtyId
+  isCurrentDirectSshAuthority
 } from './terminal-pty-identities'
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'

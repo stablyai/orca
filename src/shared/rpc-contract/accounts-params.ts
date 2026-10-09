@@ -93,3 +93,16 @@ export const AccountsUnsubscribeParams = z.object({
     .transform((value) => (typeof value === 'string' && value.length > 0 ? value : ''))
     .pipe(z.string().min(1, 'Missing subscriptionId'))
 })
+
+const ClaudeSignInTarget = {
+  runtime: z.enum(['host', 'wsl']).optional(),
+  wslDistro: z.string().nullish()
+}
+
+export const BeginClaudeSignInParams = z
+  .object({ accountId: z.string().min(1).optional(), ...ClaudeSignInTarget })
+  .strict()
+
+export const FinishClaudeSignInParams = z
+  .object({ accountId: z.string().min(1), ...ClaudeSignInTarget })
+  .strict()

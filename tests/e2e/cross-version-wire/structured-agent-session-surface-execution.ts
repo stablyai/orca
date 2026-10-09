@@ -1,5 +1,6 @@
 import { expect, vi } from 'vitest'
 import { RuntimeSubscriptionRegistry } from '../../../src/main/runtime/runtime-subscription-registry'
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session-create-capabilities'
 import {
   attachParams,
   ATTENTION_READ,
@@ -73,9 +74,17 @@ export async function expectDeclaredSurfaceExecutes(
   const retirement = vi.fn()
   const runtime = runtimeStub({ retireStructuredAttention: retirement })
   for (const { method, hostMethod, result } of STRUCTURED_CALLS) {
+    const atRestCreate =
+      method === 'agentSession.create' &&
+      build.capabilities.includes(AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY) &&
+      clientCapabilities.includes(AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY)
+    const expectedHostMethod = atRestCreate ? 'create' : hostMethod
+    const otherCreateMethod =
+      method === 'agentSession.create' ? (atRestCreate ? 'attach' : 'create') : null
     // Two methods share one host method, so "has been called" would already be
     // true from the earlier one: only this call's own delta pins the pairing.
-    const before = hostMethod ? hostCalls[hostMethod].mock.calls.length : 0
+    const before = expectedHostMethod ? hostCalls[expectedHostMethod].mock.calls.length : 0
+    const otherBefore = otherCreateMethod ? hostCalls[otherCreateMethod].mock.calls.length : 0
     const replies = await callBuild(
       build,
       method,
@@ -83,11 +92,14 @@ export async function expectDeclaredSurfaceExecutes(
       { clientKind: 'runtime', clientCapabilities },
       runtime
     )
-    if (hostMethod) {
+    if (expectedHostMethod) {
       expect(
-        hostCalls[hostMethod].mock.calls.length - before,
-        `${build.label}: ${method} did not reach the host`
+        hostCalls[expectedHostMethod].mock.calls.length - before,
+        `${build.label}: ${method} did not reach the host: ${JSON.stringify(replies)}`
       ).toBe(1)
+    }
+    if (otherCreateMethod) {
+      expect(hostCalls[otherCreateMethod].mock.calls.length - otherBefore).toBe(0)
     }
     if (method === 'agentSession.acknowledgeAttention') {
       expect(retirement).toHaveBeenCalledExactlyOnceWith(ATTENTION_READ)

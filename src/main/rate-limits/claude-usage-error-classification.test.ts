@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  classifyClaudeCredentialAbsence,
-  classifyClaudeOAuthUsageError
-} from './claude-usage-error-classification'
+import { classifyClaudeOAuthUsageError } from './claude-usage-error-classification'
 import { OAuthUsageError } from './claude-oauth-usage-error'
 
 describe('classifyClaudeOAuthUsageError', () => {
@@ -44,41 +41,6 @@ describe('classifyClaudeOAuthUsageError', () => {
       failureKind: 'network',
       shouldAttemptCliFallback: true,
       shouldAttemptDelegatedRefresh: false
-    })
-  })
-})
-
-describe('classifyClaudeCredentialAbsence', () => {
-  it('classifies refresh-only credentials as repairable', () => {
-    expect(classifyClaudeCredentialAbsence({ hasRefreshableCredentials: true })).toMatchObject({
-      failureKind: 'refreshable-credentials-without-token',
-      shouldAttemptDelegatedRefresh: true,
-      shouldAttemptCliFallback: true
-    })
-  })
-
-  it('classifies Keychain read failures separately from missing credentials', () => {
-    expect(
-      classifyClaudeCredentialAbsence({
-        hasRefreshableCredentials: false,
-        keychainUnavailable: true
-      })
-    ).toMatchObject({
-      failureKind: 'keychain-unavailable',
-      shouldAttemptCliFallback: true,
-      shouldAttemptDelegatedRefresh: false
-    })
-  })
-
-  it('classifies live Claude ownership as a deferred state', () => {
-    expect(
-      classifyClaudeCredentialAbsence({
-        hasRefreshableCredentials: true,
-        managedRefreshDeferredByLivePty: true
-      })
-    ).toMatchObject({
-      failureKind: 'deferred-by-live-session',
-      terminal: true
     })
   })
 })

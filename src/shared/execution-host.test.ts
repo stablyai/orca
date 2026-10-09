@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   LOCAL_EXECUTION_HOST_ID,
+  getConnectionExecutionHostId,
   getExecutionHostLabel,
   getLocalExecutionHostLabel,
   getRepoExecutionHostId,
@@ -95,6 +96,12 @@ describe('execution host identity', () => {
     expect(normalizeExecutionHostOrder(['ssh:win%20vm', 'bogus', 'local', 'ssh:win%20vm'])).toEqual(
       ['ssh:win%20vm', 'local']
     )
+  })
+
+  it('maps a legacy connection id to its host without trimming it', () => {
+    expect(getConnectionExecutionHostId(null)).toBe('local')
+    expect(getConnectionExecutionHostId('')).toBe('local')
+    expect(getConnectionExecutionHostId('a b')).toBe('ssh:a%20b')
   })
 
   it('derives repo ownership from SSH connection ids', () => {
