@@ -31,8 +31,7 @@ import type { JournalHostDatabase } from './journal-host-database'
 import { journalRowsAfterReader, type JournalLoad } from './journal-open'
 import {
   markJournalPendingSubmissionsUnknown,
-  rejectJournalPendingSubmissions,
-  rejectJournalQueuedSubmissions
+  rejectJournalPendingSubmissions
 } from './journal-pending-submission-recovery'
 import {
   applyJournalRow,
@@ -75,6 +74,7 @@ import type { JournalLifecycleBatchAppender } from './journal-lifecycle-batch-ap
 import type { JournalStepWriter } from './journal-step-writer'
 import type { JournalStopMarks } from './journal-stop-marks'
 import { JournalContextController } from './journal-context-controller'
+import type { JournalStopAcceptor } from './journal-stop-acceptance'
 
 export { AgentSessionJournalError } from './journal-write-guards'
 
@@ -99,6 +99,8 @@ export class AgentSessionJournal {
   /** Draft rows queued while the agent works; never reducer input or owed work. */
   readonly queuedMessages: JournalQueuedMessages
   readonly stopMarks: JournalStopMarks
+  /** A person's Stop accepted, and a receipt committed alone (`journal-stop-acceptance.ts`). */
+  readonly stops: JournalStopAcceptor
   readonly context: JournalContextController
 
   constructor(options: AgentSessionJournalOptions) {
@@ -139,6 +141,7 @@ export class AgentSessionJournal {
     this.stepWriter = collaborators.stepWriter
     this.queuedMessages = collaborators.queuedMessages
     this.stopMarks = collaborators.stopMarks
+    this.stops = collaborators.stops
     this.restore = collaborators.restore
     this.context = new JournalContextController({
       state: () => this.state,
@@ -364,15 +367,6 @@ export class AgentSessionJournal {
     rejection: AgentJournalDispatchRejection
   ): Promise<string[]> {
     return rejectJournalPendingSubmissions(this, fence, rejection)
-  }
-
-  /** Reject sends accepted but never handed over, optionally only those `which` names. */
-  async rejectQueuedSubmissions(
-    fence: number,
-    rejection: AgentJournalDispatchRejection,
-    which?: (submission: AgentJournalSubmission) => boolean
-  ): Promise<string[]> {
-    return rejectJournalQueuedSubmissions(this, fence, rejection, which)
   }
 
   /** The escape hatch for a forked handle and an unreadable schema. It invalidates every cursor;

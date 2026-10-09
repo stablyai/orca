@@ -320,7 +320,8 @@ describe("a card's own Cancel, as its provider answers it", () => {
         outcome: { ok: true as const, value: { cancelled: endsSession } },
         endsSession
       })),
-      interrupt: vi.fn(async () => ({ ok: true as const, value: { cancelled: true } }))
+      interrupt: vi.fn(async () => ({ ok: true as const, value: { cancelled: true } })),
+      accept: vi.fn(async () => ({ ok: true as const, value: null }))
     }
     const result = await cancelStructuredAgentSessionPrompt(
       ctx,
@@ -420,7 +421,11 @@ describe("a card's own Cancel, as its provider answers it", () => {
       cancelStructuredAgentSessionPrompt(
         ctx,
         { turnId: 'turn-1', prompt: { itemId, expectedRevision: 1 } },
-        { stop: vi.fn(), interrupt: vi.fn() }
+        {
+          stop: vi.fn(),
+          interrupt: vi.fn(),
+          accept: vi.fn(async () => ({ ok: true as const, value: null }))
+        }
       )
     ).resolves.toMatchObject({ ok: true })
     expect(journal.snapshot().items.find((item) => item.itemId === itemId)?.body).toMatchObject({

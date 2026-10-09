@@ -22,6 +22,7 @@ import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { rejectJournalQueuedSubmissions } from '../native-chat/agent-session-journal/journal-pending-submission-recovery'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({
@@ -140,7 +141,8 @@ describe('a request that failed reads as failed through the feed, the ingest and
       fence: 1,
       handoverRecorded: true
     })
-    await journal.rejectQueuedSubmissions(
+    await rejectJournalQueuedSubmissions(
+      journal,
       1,
       agentSessionFailureWords(agentSessionFailureFact('notSignedIn'), {
         surface: 'rejection',
@@ -231,7 +233,8 @@ describe('a request that failed reads as failed through the feed, the ingest and
       fence: 1,
       handoverRecorded: true
     })
-    await journal.rejectQueuedSubmissions(
+    await rejectJournalQueuedSubmissions(
+      journal,
       1,
       agentSessionFailureWords(agentSessionFailureFact('cancelled'), { surface: 'rejection' })
     )

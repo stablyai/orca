@@ -237,33 +237,48 @@ describe('attach', () => {
 })
 
 describe('cancel', () => {
-  it('records the request acknowledgement as a status item keyed by the operation id', async () => {
+  /** The provider's turn row: a Stop naming a turn the journal never showed is late, a no-op. */
+  async function runningTurn(): Promise<void> {
     await attach()
+    acquire.mock.calls
+      .at(-1)![0]
+      .events!.appendItem(
+        { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 900 },
+        { kind: 'turn', turnId: 'turn-1', state: 'running' },
+        { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+    await host.flushStreamedEvents(SESSION)
+  }
+
+  it('records the request acknowledgement as a status item keyed by the operation id', async () => {
+    await runningTurn()
     const result = await host.cancel(CALLER, {
       envelope: envelope('agentSession.cancel', { turnId: 'turn-1' }),
       turnId: 'turn-1'
     })
     expect(result).toMatchObject({ ok: true, value: { cancelled: true } })
     const page = await host.history({ sessionId: SESSION, direction: 'tail' })
-    expect(page.ok && page.page.items[0]?.body).toMatchObject({
+    const note = page.ok ? page.page.items.find((item) => item.body.kind === 'status') : undefined
+    expect(note?.body).toMatchObject({
       kind: 'status',
       text: 'Cancellation requested.'
     })
-    expect(JSON.stringify(page.ok && page.page.items[0]?.body)).not.toContain('turn-1')
+    expect(JSON.stringify(note?.body)).not.toContain('turn-1')
   })
 
   it('reports an unconfirmed cancellation rather than failing the call', async () => {
-    await attach()
+    await runningTurn()
     cancelTurn.mockRejectedValueOnce(new Error('no answer'))
     const result = await host.cancel(CALLER, {
       envelope: envelope('agentSession.cancel', { turnId: 'turn-1' }),
       turnId: 'turn-1'
     })
-    expect(result).toMatchObject({ ok: true, value: { cancelled: false } })
+    // The turn runs on after the unanswered interrupt, so the Stop ends the child instead.
+    expect(result).toMatchObject({ ok: true, value: { cancelled: true } })
   })
 
   it('never interrupts twice on a replay', async () => {
-    await attach()
+    await runningTurn()
     const params = {
       envelope: envelope('agentSession.cancel', { turnId: 'turn-1' }),
       turnId: 'turn-1'
@@ -328,7 +343,7 @@ describe('cancel', () => {
     expect(cancelTurn).not.toHaveBeenCalled()
   })
 
-  it('records an unknown outcome when strict prompt interruption throws and never retries it', async () => {
+  it('answers a strict prompt interruption that throws from its receipt and never retries it', async () => {
     await attach()
     const prompt = await seedApproval()
     cancelTurn.mockRejectedValueOnce(new Error('interrupt receipt lost'))
@@ -341,11 +356,11 @@ describe('cancel', () => {
       ...fields
     }
 
-    await expect(host.cancel(CALLER, params)).rejects.toThrow('interrupt receipt lost')
-    expect(await host.cancel(CALLER, params)).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_unknown' }
-    })
+    // Accepted before the interrupt, so the throw after it is answered from the receipt, and so is
+    // the retry: neither reaches the provider again.
+    const replayed = { ok: true, replayed: true, value: { turnId: 'turn-1', cancelled: false } }
+    expect(await host.cancel(CALLER, params)).toMatchObject(replayed)
+    expect(await host.cancel(CALLER, params)).toMatchObject(replayed)
     expect(cancelTurn).toHaveBeenCalledTimes(1)
     expect(await host.history({ sessionId: SESSION, direction: 'tail' })).toMatchObject({
       ok: true,

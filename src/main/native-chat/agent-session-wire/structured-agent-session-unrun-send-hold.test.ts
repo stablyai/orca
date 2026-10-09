@@ -15,7 +15,7 @@ import {
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
 
-const words = (kind: 'hostRestarted' | 'chatClosed' | 'cancelled') =>
+const words = (kind: 'hostRestarted' | 'chatClosed' | 'returnedToQueue') =>
   agentSessionFailureWords(agentSessionFailureFact(kind), { surface: 'rejection' })
 /** A kept send: an ordinary waiting card, with no hold of its own. */
 const KEPT = { state: 'waiting' }
@@ -118,7 +118,7 @@ describe('a message held behind a start that never answered, then the chat ends'
     }
   )
 
-  it("is withdrawn by a person's Stop, as a queued one is, and kept as no card", async () => {
+  it("is held by a person's Stop, as a queued one is, as a card the Stop pauses", async () => {
     const id = await heldBehindHungStart('stopped')
 
     expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
@@ -126,9 +126,11 @@ describe('a message held behind a start that never answered, then the chat ends'
     await eventually(async () =>
       expect(await rig.submission(id)).toMatchObject({
         dispatchState: 'rejected',
-        ...words('cancelled')
+        ...words('returnedToQueue'),
+        keptAsQueuedMessageId: id
       })
     )
-    expect(await rig.drafts()).toEqual([])
+    expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }])
+    expect(derivedPauses()).toEqual(['stopped'])
   })
 })

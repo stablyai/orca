@@ -1,6 +1,7 @@
 // A Stop the host admits aborts the start the queue is waiting on, for any agent: the host checks
 // the start's signal before it asks the adapter. A message sent after that Stop is no part of the
-// aborted start, so it gets a start of its own rather than that start's refusal.
+// aborted start, so it gets a start of its own rather than that start's refusal; the message the
+// Stop found waiting for that start is held as a card.
 
 import { afterEach, expect, it } from 'vitest'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
@@ -38,7 +39,12 @@ it('starts a Codex chat afresh for a message sent right after a Stop reached its
   await eventually(async () =>
     expect((await rig.submission(second!.id))?.handedOverAt).toBeDefined()
   )
-  expect((await rig.submission(first.id))?.rejection).toMatchObject({ kind: 'cancelled' })
+  // The Stop held the first message as a card; the one sent after it is not held and runs.
+  expect(await rig.submission(first.id)).toMatchObject({
+    rejection: { kind: 'returnedToQueue' },
+    keptAsQueuedMessageId: first.id
+  })
+  expect(await rig.drafts()).toEqual([{ messageId: first.id, state: 'waiting' }])
   expect((await rig.submission(second!.id))?.rejection).toBeUndefined()
   expect(rig.dispatch).toHaveBeenCalledTimes(1)
 })

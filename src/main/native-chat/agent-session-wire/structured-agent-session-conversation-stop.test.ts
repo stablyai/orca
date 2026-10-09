@@ -761,6 +761,15 @@ describe('a Stop that names no turn', () => {
     expect(await statusRows()).toContain('Cancellation requested.')
   })
 
+  it('is a quiet no-op, reaching no agent, when the turn it names is already over', async () => {
+    expect(await stop('turn-1')).toMatchObject({
+      ok: true,
+      value: { turnId: 'turn-1', cancelled: false }
+    })
+    expect(cancelTurn).not.toHaveBeenCalled()
+    expect(await statusRows()).toEqual([])
+  })
+
   it('is a quiet no-op with nothing in flight', async () => {
     expect(await stop()).toMatchObject({ ok: true, value: { cancelled: false } })
     expect(cancelTurn).not.toHaveBeenCalled()
@@ -770,6 +779,12 @@ describe('a Stop that names no turn', () => {
 
 describe('a Stop that names its turn, as an older client sends it', () => {
   it('reaches the provider with that turn, and writes no row when it stopped nothing', async () => {
+    // Only a turn the journal shows running: one already over is a late Stop, a no-op.
+    events!.appendItem(
+      { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 900 },
+      { kind: 'turn', turnId: 'turn-1', state: 'running' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
     cancelTurn.mockResolvedValueOnce({ cancelled: false })
 
     expect(await stop('turn-1')).toMatchObject({

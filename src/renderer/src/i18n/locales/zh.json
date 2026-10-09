@@ -17828,6 +17828,7 @@
         "cancelled": "此消息在智能体开始处理前已撤回。",
         "chatClosed": "此消息发送前聊天已关闭。",
         "hostRestarted": "此消息发送前 Orca 已重新启动。",
+        "returnedToQueue": "你在代理读取此消息之前按下了停止，因此它已回到队列。",
         "notDelivered": "此消息未送达。",
         "notDeliveredSendAgain": "此消息未送达。请重新发送以继续。",
         "commandRefused": "此命令未运行。",

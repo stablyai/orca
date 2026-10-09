@@ -17828,6 +17828,7 @@
         "cancelled": "Este mensaje se retiró antes de que el agente empezara a procesarlo.",
         "chatClosed": "El chat se cerró antes de que se enviara este mensaje.",
         "hostRestarted": "Orca se reinició antes de que se enviara este mensaje.",
+        "returnedToQueue": "Pulsaste Detener antes de que el agente leyera este mensaje, así que volvió a la cola.",
         "notDelivered": "Este mensaje no se entregó.",
         "notDeliveredSendAgain": "Este mensaje no se entregó. Vuelva a enviarlo para continuar.",
         "commandRefused": "Este comando no se ejecutó.",

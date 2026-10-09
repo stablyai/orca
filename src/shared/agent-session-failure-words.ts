@@ -248,6 +248,7 @@ const FAILURE_SENTENCES = {
   cancelled: (_context, _fact, _surface, say) => say('cancelled'),
   chatClosed: (_context, _fact, _surface, say) => say('chatClosed'),
   hostRestarted: (_context, _fact, _surface, say) => say('hostRestarted'),
+  returnedToQueue: (_context, _fact, _surface, say) => say('returnedToQueue'),
   notDelivered: ({ retryControl }, _fact, _surface, say) =>
     say(retryControl ? 'notDelivered' : 'notDeliveredSendAgain'),
   commandRefused: (context, fact, _surface, say) =>

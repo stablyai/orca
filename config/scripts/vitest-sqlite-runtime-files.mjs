@@ -153,6 +153,8 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/native-chat/agent-session-wire/structured-agent-session-status-reentry.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-stop-note-opened-turn.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-stop-note-withdrawn-send.test.ts',
+  'src/main/native-chat/agent-session-wire/structured-agent-session-stop-receipts.test.ts',
+  'src/main/native-chat/agent-session-wire/structured-agent-session-stop-saves-first.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-stopping-journal.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-subagent-recency.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-subscriber-background-tasks.test.ts',

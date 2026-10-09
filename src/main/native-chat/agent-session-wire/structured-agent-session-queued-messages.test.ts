@@ -15,6 +15,7 @@ import { ConversationCommandParams } from '../../../shared/rpc-contract/structur
 import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
 import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { JournalStopAcceptor } from '../agent-session-journal/journal-stop-acceptance'
 import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
 import {
   rotateStructuredAgentSessionHostInstanceForTests,
@@ -519,21 +520,24 @@ describe('Stop and Delete', () => {
     })
   })
 
-  it('a Stop whose event fails to write still interrupts; only the pause is lost, and it is reported', async () => {
+  it('a Stop whose acceptance fails to write interrupts nothing and pauses nothing', async () => {
     await workingSend()
     const queued = await send('kept by the stop', 'queue-if-active').result
     if (!queued.ok || !('queued' in queued.value)) {
       throw new Error('expected a queued receipt')
     }
     const record = vi
-      .spyOn(AgentSessionJournal.prototype, 'appendStopEvent')
+      .spyOn(JournalStopAcceptor.prototype, 'accept')
       .mockRejectedValueOnce(new Error('disk full'))
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     try {
-      expect(await stop()).toMatchObject({ ok: true, value: { cancelled: true } })
-      expect(rig.cancelTurn).toHaveBeenCalledTimes(1)
+      expect(await stop()).toMatchObject({
+        ok: false,
+        refusal: { details: { reason: 'journalWriteFailed' } }
+      })
+      expect(rig.cancelTurn).not.toHaveBeenCalled()
       expect(warned).toHaveBeenCalledWith(
-        expect.stringContaining("Stop's event row"),
+        expect.stringContaining('saving a Stop failed'),
         expect.anything()
       )
     } finally {
@@ -541,7 +545,7 @@ describe('Stop and Delete', () => {
       warned.mockRestore()
     }
     expect(await rig.queuePause()).toBeNull()
-    // The draft is intact (never withdrawn), merely unpaused.
+    // The draft is intact (never withdrawn), and nothing paused it.
     expect(await drafts()).toEqual([{ messageId: queued.value.queued.messageId, state: 'waiting' }])
   })
 

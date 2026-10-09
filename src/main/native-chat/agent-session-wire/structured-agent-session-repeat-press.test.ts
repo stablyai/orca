@@ -6,9 +6,11 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { agentSessionRefusalOperationState } from '../../../shared/agent-session-refusal-retry'
 import type { AgentSessionThreadGoalChange } from '../../../shared/agent-session-wire'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
@@ -35,6 +37,7 @@ let setOption: Mock<StructuredAgentSessionAdapter['setOption']>
 let changeThreadGoal: Mock<NonNullable<StructuredAgentSessionAdapter['changeThreadGoal']>>
 let stopBackgroundTasks: Mock<NonNullable<StructuredAgentSessionAdapter['stopBackgroundTasks']>>
 let cancelTurn: Mock<StructuredAgentSessionAdapter['cancelTurn']>
+let providerEvents: Parameters<StructuredAgentSessionAdapter['acquire']>[0]['events']
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-repeat-press-'))
@@ -45,17 +48,20 @@ beforeEach(async () => {
   cancelTurn = vi.fn(async () => ({ cancelled: true }))
   store = await openTestAgentSessionRecordStore(root)
   const adapter: StructuredAgentSessionAdapter = {
-    acquire: async ({ fence, spawnToken }) => ({
-      process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
-      acquisitionGeneration: 'generation-1',
-      link: {
-        linkId: `link-${fence}`,
-        handle: codexProviderHandle(THREAD),
-        origin: fence > 1 ? ('resumed' as const) : ('created' as const),
-        mintedAtFence: fence,
-        observedAt: NOW
+    acquire: async ({ fence, spawnToken, events }) => {
+      providerEvents = events
+      return {
+        process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
+        acquisitionGeneration: 'generation-1',
+        link: {
+          linkId: `link-${fence}`,
+          handle: codexProviderHandle(THREAD),
+          origin: fence > 1 ? ('resumed' as const) : ('created' as const),
+          mintedAtFence: fence,
+          observedAt: NOW
+        }
       }
-    }),
+    },
     dispatch: vi.fn(async () => ({ state: 'admitted' as const })),
     closeSession: vi.fn(async () => true),
     releaseAcquisition: vi.fn(async () => true),
@@ -75,8 +81,32 @@ beforeEach(async () => {
     mintSpawnToken: () => 'spawn-1',
     now: () => NOW
   })
+  // One live task a background Stop reaches.
+  host.deps.statusSink = { publish: () => {}, forget: () => {}, readChildWork: () => [TASK] }
   expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
 })
+
+const TASK: AgentChildWorkView = {
+  id: 'child-task-1',
+  providerId: 'task-1',
+  kind: 'agent',
+  state: 'working',
+  membership: 'live',
+  firstObservedAt: 1,
+  observedAt: 1,
+  stoppable: true,
+  invocation: { invocationId: 'spawn-task-1', generation: 1 }
+}
+
+/** The provider's running turn, which a Stop naming it reaches. */
+async function runningTurn(): Promise<void> {
+  providerEvents?.appendItem(
+    { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 900 },
+    { kind: 'turn', turnId: 'turn-1', state: 'running' },
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  )
+  await host.flushStreamedEvents(SESSION)
+}
 
 afterEach(async () => {
   await host.flushAllStreamedEvents()
@@ -171,6 +201,7 @@ describe('a press sent again', () => {
         envelope: envelope('agentSession.cancel', { turnId: 'turn-1' }, id, null),
         turnId: 'turn-1'
       })
+    await runningTurn()
     cancelTurn.mockResolvedValueOnce({ cancelled: false })
     const first = hostTestOperationId()
     await stop(first)

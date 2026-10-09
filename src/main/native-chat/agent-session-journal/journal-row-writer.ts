@@ -43,6 +43,12 @@ export function writeReceiptIfChanged<T>(
   }
 }
 
+/** One row of a multi-row write; `hook` runs in the transaction right after its insert. */
+export type JournalPlannedRow = {
+  build: (seq: number, ts: number) => JournalRow
+  hook?: JournalRowTransactionHook
+}
+
 export type JournalRowWriterDeps = {
   sessionId: string
   now: () => number
@@ -104,15 +110,34 @@ export class JournalRowWriter {
     return this.deps.serialize(() => this.writeRows(plan, receipt))
   }
 
+  /** `enqueueRows` whose rows may carry their own hooks, with `receipt` written beside the row
+   *  `receiptRow` picks, so the receipt can name it. */
+  enqueuePlannedRows(
+    plan: () => readonly JournalPlannedRow[],
+    receipt?: JournalOperationReceipt,
+    receiptRow?: (rows: readonly JournalRow[]) => JournalRow | undefined
+  ): Promise<JournalRow[]> {
+    return this.deps.serialize(() => this.writePlanned(plan, receipt, receiptRow))
+  }
+
   /** `enqueueRows`' write, for a caller already running at its own turn in the queue. */
   writeRows(
     plan: () => readonly ((seq: number, ts: number) => JournalRow)[],
     receipt?: JournalOperationReceipt
   ): JournalRow[] {
+    return this.writePlanned(() => plan().map((build) => ({ build })), receipt)
+  }
+
+  private writePlanned(
+    plan: () => readonly JournalPlannedRow[],
+    receipt?: JournalOperationReceipt,
+    receiptRow?: (rows: readonly JournalRow[]) => JournalRow | undefined
+  ): JournalRow[] {
     assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
     const first = this.deps.nextSequence()
     const ts = this.deps.now()
-    const rows = plan().map((build, index) => build(first + index, ts))
+    const planned = plan()
+    const rows = planned.map((entry, index) => entry.build(first + index, ts))
     if (rows.length === 0) {
       return rows
     }
@@ -121,11 +146,12 @@ export class JournalRowWriter {
     }
     try {
       this.deps.database().transaction((db) => {
-        for (const row of rows) {
+        for (const [index, row] of rows.entries()) {
           insertJournalRow(db, this.deps.sessionId, row)
+          planned[index]?.hook?.(db, row)
           this.runBookkeeping(db, row)
         }
-        receipt?.write(db)
+        receipt?.write(db, receiptRow?.(rows))
       })
     } catch (error) {
       this.deps.rolledBack?.()

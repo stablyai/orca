@@ -17,8 +17,10 @@ import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session-message-sourc
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
+import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import type { AgentSessionJournal } from './journal-store'
 import type { JournalRowTransactionHook } from './journal-row-writer'
+import type { ResolveDispatchInput } from './journal-store-contracts'
 import type { QueuedMessagePositionMove } from './queued-message-positions'
 
 /** Why the host can no longer hand a send over, which also says which sends it is. */
@@ -100,12 +102,68 @@ export async function holdUnsentSends(
             ? journal.wroteBeforeOpen(entry.acceptedSequence)
             : (hold.which?.(entry) ?? true))
     )
-    .sort((a, b) => (a.acceptedSequence ?? 0) - (b.acceptedSequence ?? 0))
   if (unsent.length === 0) {
     return null
   }
+  const rejection = agentSessionFailureWords(agentSessionFailureFact(hold.cause), {
+    surface: 'rejection'
+  })
+  const settlements = planUnsentSendSettlements(journal, unsent, {
+    ...input,
+    rejection: () => rejection
+  })
+  const failures: unknown[] = []
+  for (const { reject, kept, keep } of settlements) {
+    try {
+      // The send names its card in the same row, so no surface draws it once the card is gone.
+      await journal.resolveDispatch(kept ?? reject, keep)
+    } catch (error) {
+      if (!keep) {
+        failures.push(error)
+        continue
+      }
+      // Keeping it failed: rejected as before. That loses the message, as every build before this
+      // one did; it is never left queued for a handover nothing will make.
+      console.warn('[journal-hold] keeping an unsent send failed:', {
+        sessionId: journal.queuedMessages.sessionId,
+        clientMessageId: reject.clientMessageId,
+        cause: hold.cause,
+        error: error instanceof Error ? error.message : String(error)
+      })
+      await journal.resolveDispatch(reject).catch((fallback: unknown) => failures.push(fallback))
+    }
+  }
+  if (failures.length > 0) {
+    throw new AggregateError(failures, 'settling unsent sends failed')
+  }
+  return Math.max(...unsent.map((entry) => entry.acceptedSequence ?? 0))
+}
+
+type RejectedDispatch = Extract<ResolveDispatchInput, { state: 'rejected' }>
+
+/** One unsent send's settlement: its rejection, the same rejection naming the card it is kept as
+ *  (null when it is not kept), and what runs in that row's transaction to keep it. */
+export type UnsentSendSettlement = {
+  reject: RejectedDispatch
+  kept: RejectedDispatch | null
+  keep?: JournalRowTransactionHook
+}
+
+/** How each of `unsent` settles, in the order they were accepted, read from the journal as it
+ *  stands: a caller writing them all in one transaction plans them at its own turn in the queue.
+ *  `rejection` words each by whether it is kept as a card. */
+export function planUnsentSendSettlements(
+  journal: AgentSessionJournal,
+  unsent: readonly AgentJournalSubmission[],
+  input: {
+    fence: number
+    hostInstance: string
+    rejection: (kept: boolean) => AgentJournalDispatchRejection
+  }
+): UnsentSendSettlement[] {
+  const ordered = [...unsent].sort((a, b) => (a.acceptedSequence ?? 0) - (b.acceptedSequence ?? 0))
   const { epoch } = journal.cursor()
-  const kept = unsent.map((submission) => ({
+  const kept = ordered.map((submission) => ({
     submission,
     body: unsentSendKeptAsCard(
       submission,
@@ -113,11 +171,7 @@ export async function holdUnsentSends(
     )
   }))
   const positions = headOfQueuePositions(journal, kept)
-  const rejection = agentSessionFailureWords(agentSessionFailureFact(hold.cause), {
-    surface: 'rejection'
-  })
-  const failures: unknown[] = []
-  for (const [index, { submission, body }] of kept.entries()) {
+  return kept.map(({ submission, body }, index) => {
     const { clientMessageId } = submission
     const moves = [
       // The cards an earlier settlement kept move with the first row.
@@ -153,39 +207,19 @@ export async function holdUnsentSends(
             })
           }
         : undefined
-    const reject = {
+    const reject = (isKept: boolean): RejectedDispatch => ({
       clientMessageId,
-      state: 'rejected' as const,
-      ...rejection,
+      state: 'rejected',
+      ...input.rejection(isKept),
       fence: input.fence,
-      recovered: true as const
+      recovered: true
+    })
+    return {
+      reject: reject(false),
+      kept: card ? { ...reject(true), keptAsQueuedMessageId: clientMessageId } : null,
+      ...(keep ? { keep } : {})
     }
-    try {
-      // The send names its card in the same row, so no surface draws it once the card is gone.
-      await journal.resolveDispatch(
-        card ? { ...reject, keptAsQueuedMessageId: clientMessageId } : reject,
-        keep
-      )
-    } catch (error) {
-      if (!keep) {
-        failures.push(error)
-        continue
-      }
-      // Keeping it failed: rejected as before. That loses the message, as every build before this
-      // one did; it is never left queued for a handover nothing will make.
-      console.warn('[journal-hold] keeping an unsent send failed:', {
-        sessionId: journal.queuedMessages.sessionId,
-        clientMessageId,
-        cause: hold.cause,
-        error: error instanceof Error ? error.message : String(error)
-      })
-      await journal.resolveDispatch(reject).catch((fallback: unknown) => failures.push(fallback))
-    }
-  }
-  if (failures.length > 0) {
-    throw new AggregateError(failures, 'settling unsent sends failed')
-  }
-  return unsent.at(-1)?.acceptedSequence ?? 0
+  })
 }
 
 /** Where each card of the batch goes: right before every other card, the cards an earlier

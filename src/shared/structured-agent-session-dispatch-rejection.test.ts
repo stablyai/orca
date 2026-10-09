@@ -40,8 +40,14 @@ describe('classifyDispatchRejection', () => {
     })
   })
 
-  it('fails the send for every kind but a withdrawal, a restart, a close, or a lost send', () => {
-    const noOneFailed = ['cancelled', 'hostRestarted', 'chatClosed', 'notDelivered']
+  it('fails the send for every kind but a withdrawal, a restart, a close, a Stop that kept it, or a lost send', () => {
+    const noOneFailed = [
+      'cancelled',
+      'hostRestarted',
+      'returnedToQueue',
+      'chatClosed',
+      'notDelivered'
+    ]
     for (const kind of AGENT_SESSION_FAILURE_KINDS.filter(isSubmissionRejectionKind)) {
       const verdict = classifyDispatchRejection({ reason: 'x', rejection: { kind } }).verdict
       expect([kind, verdict]).toEqual([kind, noOneFailed.includes(kind) ? null : 'failure'])
@@ -52,6 +58,8 @@ describe('classifyDispatchRejection', () => {
     ['cancelled', 'withdrawn', null],
     ['hostRestarted', 'undelivered', null],
     ['chatClosed', 'undelivered', null],
+    // A Stop kept it as a held card: never a failure, and never drawn as a stopped send.
+    ['returnedToQueue', 'undelivered', null],
     ['notDelivered', 'undelivered', null],
     // Orca stopped a start that hung: the agent failed, and the message never reached it.
     ['hostStopped', 'undelivered', 'failure'],

@@ -140,11 +140,12 @@ type PerformCancelInput = {
   /** Hands the child's end to the Stop's next serialized step, for a provider whose Stop ends
    *  its session. */
   endSession?: (windDown: StructuredAgentSessionStopWindDown) => void
-  /** Whether the host's withdrawal of queued messages for this Stop withdrew any; awaited only
-   *  after the interrupt. */
+  /** Whether this Stop held any queued message; awaited only after the interrupt. */
   withdrewQueued?: Promise<boolean>
   /** The session's child records: a background Stop reaches the tasks they offer a stop. */
   childWork?: () => readonly AgentChildWorkView[] | undefined
+  /** The tasks a background Stop captured as it was accepted, in place of `childWork`'s. */
+  taskIds?: readonly string[]
   /** The latest Stop event is this press's own, or the in-force one it repeats: its settle binds. */
   opensSettle?: true
 }
@@ -203,7 +204,8 @@ async function cancelAndNote(
                 await ctx.adapter.stopBackgroundTasks?.({
                   sessionId: ctx.sessionId,
                   fence: ctx.fence,
-                  taskIds: agentChildWorkStopTargets(input.childWork?.(), input.taskId)
+                  taskIds:
+                    input.taskIds ?? agentChildWorkStopTargets(input.childWork?.(), input.taskId)
                 })
               )?.cancelled === true
           }

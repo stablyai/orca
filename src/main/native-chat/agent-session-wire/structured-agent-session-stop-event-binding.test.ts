@@ -104,19 +104,27 @@ async function queuedDraft(text: string): Promise<string> {
   return queued.value.queued.messageId
 }
 
-/** A person's Stop of a start that never landed, whose send opens no turn. `held`: a card queued
- *  behind the start, which the Stop holds. */
+/** A person's Stop of a start that never landed, whose send opens no turn; that send, never handed
+ *  over, the Stop holds as a card. `held`: a card queued behind the start, which it holds too. */
 async function stopOfStart(options: { held?: true } = {}): Promise<string | undefined> {
   rig = await createQueuedMessageTestRig({ starting: true, restartable: true })
   // Held for a child that never proves its start, so it is never handed over.
-  rig.send('work on this')
+  const started = rig.send('work on this')
   await eventually(() => expect(childPhase()).toBe('starting'))
   const held = options.held ? await queuedDraft('queued behind the start') : undefined
   expect(await rig.stop()).toMatchObject({ ok: true })
   expect(stopEvents()).toEqual([expect.objectContaining({ reason: 'user-stop' })])
   expect(stopEvents()[0]).not.toHaveProperty('turnId')
   await eventually(() => expect(childPhase()).toBeUndefined())
-  return held
+  expect(await rig.submission(started.id)).toMatchObject({ keptAsQueuedMessageId: started.id })
+  // The kept send stands at the head of the queue, ahead of the card queued behind its start.
+  // Read off the journal, not a client page: a later Resume races the start this test evicts.
+  expect(
+    journal()
+      .queuedMessages.list()
+      .map((card) => card.messageId)
+  ).toEqual(held ? [started.id, held] : [started.id])
+  return held ? started.id : undefined
 }
 
 /** Orchestration mail after the Stop starts a new child and its turn runs. */
@@ -300,38 +308,36 @@ describe('a press that writes no Stop event of its own', () => {
     return sent
   }
 
-  it('reopens no earlier Stop: a late Stop naming a turn already over binds no turn', async () => {
-    const sent = await laterTurnAfterAnEarlierStop()
+  // A late Stop is an accepted no-op: it never reaches the provider, so it cannot stop a newer turn.
+  it('reopens no earlier Stop: a late Stop naming a turn already over interrupts nothing', async () => {
+    await laterTurnAfterAnEarlierStop()
     const earlier = journal().stopMarks.latest()
-    rig.cancelTurn.mockImplementationOnce(async () => {
-      await turnOpenedBy(sent, 'interrupted')
-      return { cancelled: false }
-    })
+    const interrupts = rig.cancelTurn.mock.calls.length
 
     const late = await rig.host.cancel(QUEUED_RIG_CALLER, {
       envelope: rig.envelope({ turnId: 'turn-gone' }, 'agentSession.cancel', hostTestOperationId()),
       turnId: 'turn-gone'
     })
 
-    expect(late).toMatchObject({ ok: true })
+    expect(late).toMatchObject({ ok: true, value: { turnId: 'turn-gone', cancelled: false } })
+    expect(rig.cancelTurn).toHaveBeenCalledTimes(interrupts)
     expect(journal().stopMarks.latest()).toBe(earlier)
-    await expectNews()
+    expect(await laterTurn()).toMatchObject({ state: 'running' })
   })
 
-  // The event is in the fold by its write's return, so one that failed leaves the earlier Stop latest.
-  it('reopens no earlier Stop: a press whose event row failed binds no turn', async () => {
-    const sent = await laterTurnAfterAnEarlierStop()
+  // Saved first: a press whose acceptance failed wrote nothing and reached nothing.
+  it('reopens no earlier Stop: a press whose acceptance failed interrupts nothing', async () => {
+    await laterTurnAfterAnEarlierStop()
     const earlier = journal().stopMarks.latest()
-    vi.spyOn(journal(), 'appendStopEvent').mockRejectedValueOnce(new Error('disk full'))
-    rig.cancelTurn.mockImplementationOnce(async () => {
-      await turnOpenedBy(sent, 'interrupted')
-      return { cancelled: false }
-    })
+    const interrupts = rig.cancelTurn.mock.calls.length
+    vi.spyOn(journal().stops, 'accept').mockRejectedValueOnce(new Error('disk full'))
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
-    expect(await rig.stop()).toMatchObject({ ok: true })
+    expect(await rig.stop()).toMatchObject({ ok: false })
 
+    expect(rig.cancelTurn).toHaveBeenCalledTimes(interrupts)
     expect(journal().stopMarks.latest()).toBe(earlier)
-    await expectNews()
+    expect(await laterTurn()).toMatchObject({ state: 'running' })
   })
 })
 

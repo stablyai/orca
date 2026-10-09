@@ -24,6 +24,8 @@ export async function cancelStructuredAgentSessionPrompt(
   routes: {
     stop: () => Promise<StructuredAgentSessionChatStopRun>
     interrupt: () => Promise<CancelOutcome>
+    /** Saves the Cancel before it changes anything; a no-op once the Stop saved it. */
+    accept: () => Promise<TurnOutcome<null>>
   }
 ): Promise<CancelOutcome> {
   const validated = validatePendingPrompt(ctx, input.prompt)
@@ -41,21 +43,25 @@ export async function cancelStructuredAgentSessionPrompt(
     ok: true,
     value: { ...(input.turnId ? { turnId: input.turnId } : {}), cancelled: true }
   }
-  if (route.kind === 'dismiss') {
-    const dismissed = await dismissPrompt(ctx, validated, true)
-    return dismissed.ok ? cancelled : dismissed
-  }
   // Judged on the fold as it stands: the provider's own cancel of the card, or the end of the turn
-  // that raised it, landed when it was handed over.
-  if (!raisedByLiveTurn(ctx, validated)) {
-    // A request that outlived its turn, such as a background agent's: the turn running now is not
-    // the one the user is cancelling, so nothing stops and the request is declined.
+  // that raised it, landed when it was handed over. A request that outlived its turn, such as a
+  // background agent's, is not the running turn's: nothing stops and the request is declined.
+  if (route.kind === 'dismiss' || !raisedByLiveTurn(ctx, validated)) {
+    const accepted = await routes.accept()
+    if (!accepted.ok) {
+      return accepted
+    }
     const dismissed = await dismissPrompt(ctx, validated, true)
     return dismissed.ok ? cancelled : dismissed
   }
   const stopped = await routes.stop()
   if (!stopped.outcome.ok) {
     return stopped.outcome
+  }
+  // A Stop that found nothing to stop saved nothing: the dismissal is saved first.
+  const accepted = await routes.accept()
+  if (!accepted.ok) {
+    return accepted
   }
   // Settled in the Stop's own step, so the card is not answerable while the child ends. That end
   // takes the provider's request with it; a Stop that ends nothing must answer the request itself.

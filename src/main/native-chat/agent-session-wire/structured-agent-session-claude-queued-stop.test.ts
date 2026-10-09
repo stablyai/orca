@@ -282,7 +282,9 @@ it('withdraws a follow-up still queued on the host when the turn the Stop names 
   expect(rows).not.toContain('The provider had already finished this turn.')
 }, 15_000)
 
-it('withdraws a host-queued follow-up but leaves a newer turn running when the Stop names an older one', async () => {
+// A late Stop is an accepted no-op: it holds nothing and interrupts nothing, so the follow-up sent
+// after the turn it names runs as sent.
+it('leaves a host-queued follow-up and a newer turn running when the Stop names an older one', async () => {
   const connection = claude.connections[0]!
   const olderTurnId = await openFirstTurn(connection)
   await endFirstTurn(connection)
@@ -303,12 +305,7 @@ it('withdraws a host-queued follow-up but leaves a newer turn running when the S
   const stopped = stop(olderTurnId)
   release()
   expect(await stopped).toMatchObject({ ok: true, value: { cancelled: false } })
-  await eventually(async () =>
-    expect(await dispatch(followUp)).toEqual({
-      state: 'rejected',
-      reason: DISPATCH_REJECTED_CANCELLED
-    })
-  )
+  await eventually(async () => expect((await dispatch(followUp)).state).not.toBe('rejected'))
   expect(connection.calls.some((call) => call.subtype === 'interrupt')).toBe(false)
   expect(await liveTurnId()).toBe(newerTurnId)
   const rows = (await host.journalSnapshot(SESSION)).items.flatMap((item) =>

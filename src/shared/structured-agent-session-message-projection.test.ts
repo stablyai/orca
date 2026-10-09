@@ -56,6 +56,19 @@ describe('a send kept as a card', () => {
     ).toEqual([expect.objectContaining({ id: agentJournalSubmissionKey(KEPT_ID), unsent: true })])
   })
 
+  // A Stop's hold reads like a restart's keep: drawn only as the card, never as a stopped send.
+  it('shows nothing of a send a Stop returned to the queue', () => {
+    const kept = rejected({
+      reason: 'You pressed Stop before the agent read this message, so it went back to the queue.',
+      rejection: { kind: 'returnedToQueue' },
+      keptAsQueuedMessageId: KEPT_ID
+    })
+    const items = [userItem(KEPT_ID, 'the kept words', 1)]
+    expect(projectStructuredAgentSessionMessages(items, [lingeringCopy], [kept], DESKTOP)).toEqual(
+      []
+    )
+  })
+
   // Edit is the card's text in the composer, then the card's Delete, then a new send.
   it('after an Edit sent again, shows exactly the new send', () => {
     const kept = rejected({ keptAsQueuedMessageId: KEPT_ID })

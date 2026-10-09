@@ -18,6 +18,7 @@ import {
   closeTestJournalHostDatabases,
   createTrackedJournalOpener
 } from './journal-host-database-test-support'
+import { rejectJournalQueuedSubmissions } from './journal-pending-submission-recovery'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-start',
@@ -119,7 +120,7 @@ it('writes nothing when a Stop withdrew every queued message first', async () =>
   })
 
   await Promise.all([
-    journal.rejectQueuedSubmissions(0, withdrawal),
+    rejectJournalQueuedSubmissions(journal, 0, withdrawal),
     journal.appendLifecycleBatch(startFailureBatch())
   ])
 

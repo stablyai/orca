@@ -378,6 +378,10 @@ describe('a prompt answer', () => {
     expect(await host.respondToPrompt(CALLER, answer(second, stopped, 'approve'))).toMatchObject(
       CONFLICT
     )
-    expect(receipt(stopped)).toEqual({ verdict: 'absent' })
+    // The Stop's own receipt stands; the refused answer committed nothing over it.
+    expect(receipt(stopped)).toMatchObject({
+      verdict: 'readable',
+      receipt: { method: 'agentSession.cancel' }
+    })
   })
 })

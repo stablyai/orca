@@ -518,7 +518,7 @@ describe.each([
 describe('an id reused across commands', () => {
   const conflict = CONFLICT
 
-  it('refuses a Stop reusing a Delete id, through the compatibility ledger row', async () => {
+  it('refuses a Stop reusing a Delete id', async () => {
     await rig.workingSend()
     const draftId = await queuedDraft('delete then stop')
     const id = opId()
@@ -534,7 +534,11 @@ describe('an id reused across commands', () => {
     expect(await rig.deleteQueued(draftId, id)).toMatchObject(conflict)
     expect(await rig.resume(id)).toMatchObject(conflict)
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
-    expect(receipt(id)).toEqual({ verdict: 'absent' })
+    // Only the Stop's own receipt: neither refused action committed anything over it.
+    expect(receipt(id)).toMatchObject({
+      verdict: 'readable',
+      receipt: { method: 'agentSession.cancel', result: { kind: 'journal-row' } }
+    })
   })
 
   it('refuses a Send now reusing a Delete id, and the reverse', async () => {

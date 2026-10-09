@@ -17863,6 +17863,7 @@
         "cancelled": "이 메시지는 에이전트가 처리를 시작하기 전에 철회되었습니다.",
         "chatClosed": "이 메시지가 전송되기 전에 채팅이 닫혔습니다.",
         "hostRestarted": "이 메시지가 전송되기 전에 Orca가 다시 시작되었습니다.",
+        "returnedToQueue": "에이전트가 이 메시지를 읽기 전에 중지를 눌러 메시지가 대기열로 돌아갔습니다.",
         "notDelivered": "이 메시지는 전달되지 않았습니다.",
         "notDeliveredSendAgain": "이 메시지는 전달되지 않았습니다. 계속하려면 다시 보내세요.",
         "commandRefused": "이 명령이 실행되지 않았습니다.",
