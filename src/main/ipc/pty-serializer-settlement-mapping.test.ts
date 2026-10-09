@@ -131,6 +131,7 @@ describe('registerPtyHandlers', () => {
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
+      noteRemoteDesktopHostInput: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()

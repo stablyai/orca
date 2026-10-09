@@ -38,7 +38,8 @@ export type FileExplorerOwnerState = Pick<
   | 'folderWorkspaces'
   | 'projectGroups'
   | 'restoredRuntimeHostIdByWorkspaceSessionKey'
->
+> &
+  Partial<Pick<AppState, 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'>>
 
 export function getFileExplorerOperationOwnerFromState(
   state: FileExplorerOwnerState,

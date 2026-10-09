@@ -80,7 +80,9 @@ describe('Cursor compact usage headline', () => {
       expect(getUsageTone(p)).toBe('urgent')
       expect(getTightestUsageSection(p)?.label).toBe(bucket)
       expect(getUsageHeadlineSection(p)?.label).toBe('Cursor Models')
-      const overflow = renderToStaticMarkup(<UsageOverflowChip hidden={[p]} display="used" />)
+      const overflow = renderToStaticMarkup(
+        <UsageOverflowChip hidden={[p]} providerCount={1} display="used" />
+      )
       expect(overflow).toContain('data-tone="urgent"')
       expect(
         pickCollapsedUsageChips(

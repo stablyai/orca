@@ -275,6 +275,7 @@ describe('registerPtyHandlers', () => {
       registerPty: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
+      noteRemoteDesktopHostInput: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -391,6 +392,7 @@ describe('registerPtyHandlers', () => {
       registerPty: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
+      noteRemoteDesktopHostInput: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -491,6 +493,7 @@ describe('registerPtyHandlers', () => {
       registerPty: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
+      noteRemoteDesktopHostInput: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -598,6 +601,7 @@ describe('registerPtyHandlers', () => {
       registerPty: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
+      noteRemoteDesktopHostInput: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()

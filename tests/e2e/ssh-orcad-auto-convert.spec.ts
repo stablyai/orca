@@ -473,8 +473,9 @@ function connectOnce(page: Page, targetId: string): Promise<string> {
   }, targetId)
 }
 
-test('reconnect restores the managed host name after its conversion catalog fails', async (// oxlint-disable-next-line no-empty-pattern -- This persistent-profile test owns its Electron launches.
-{}, testInfo) => {
+test('reconnect restores the managed host name after its conversion catalog fails', async ({
+  testRepoPath
+}, testInfo) => {
   test.skip(HOST !== 'docker', 'Catalog fault injection uses the isolated Linux Docker host')
   test.setTimeout(180_000)
   const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-catalog-retry-'))
@@ -486,6 +487,8 @@ test('reconnect restores the managed host name after its conversion catalog fail
     const first = await session.launch()
     app = first.app
     await waitForSessionReady(first.page)
+    // A local project keeps a second host section, so the managed host header renders.
+    await first.page.evaluate((repoPath) => window.api.repos.add({ path: repoPath }), testRepoPath)
     await session.close(app)
     app = null
     const seeded = seedRelayEraProfile(session.userDataDir, host.input, {

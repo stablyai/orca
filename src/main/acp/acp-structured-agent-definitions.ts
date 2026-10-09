@@ -24,9 +24,9 @@ export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAge
     handleTransport: ACP_HANDLE_TRANSPORT,
     ...spec.account.pin,
     capabilities: {
-      // ACP has no stable rewind, compact or goal method; a command arrives through `/` instead.
+      // ACP has no stable rewind or goal method; a command arrives through `/` instead.
       rewind: false,
-      compact: false,
+      compact: spec.compaction === true,
       threadGoal: false,
       contextUsage: true,
       // An agent that does not also advertise images at its start has a message with one refused.

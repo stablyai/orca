@@ -9,7 +9,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
-import { encodeWorkspaceFilePaths, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
+import {
+  encodeWorkspaceFilePaths,
+  WORKSPACE_FILE_PATHS_MIME,
+  WORKSPACE_FILE_DRAG_SOURCE_MIME,
+  writeWorkspaceFileDragSource
+} from '@/lib/workspace-file-drag'
 
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children?: ReactNode }) => children,
@@ -302,13 +307,20 @@ describe('TerminalPaneHeaderOverlay', () => {
 })
 
 function dispatchFileDrag(target: Element, type: 'dragover' | 'drop', internal: boolean): void {
+  const payload = new Map([
+    [WORKSPACE_FILE_PATHS_MIME, encodeWorkspaceFilePaths(['/repo/file.txt'])]
+  ])
+  writeWorkspaceFileDragSource(
+    { setData: (mime, value) => payload.set(mime, value) },
+    { executionHostId: 'local', workspaceId: 'wt-1' }
+  )
   const event = new Event(type, { bubbles: true, cancelable: true })
   Object.defineProperty(event, 'isTrusted', { value: true })
   Object.defineProperty(event, 'dataTransfer', {
     value: {
-      types: internal ? [WORKSPACE_FILE_PATHS_MIME] : ['Files'],
+      types: internal ? [WORKSPACE_FILE_PATHS_MIME, WORKSPACE_FILE_DRAG_SOURCE_MIME] : ['Files'],
       files: [new File([], 'file.txt')],
-      getData: () => encodeWorkspaceFilePaths(['/repo/file.txt']),
+      getData: (mime: string) => (internal ? (payload.get(mime) ?? '') : ''),
       dropEffect: 'none'
     }
   })

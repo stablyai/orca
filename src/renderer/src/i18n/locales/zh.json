@@ -3263,6 +3263,7 @@
                 "ce8248b835": "工作树路径不可用。",
                 "internalTooManyPaths": "拖放的路径过多，无法安全粘贴到终端。",
                 "internalPathsTooLarge": "拖放的路径列表过大，无法安全粘贴到终端。",
+                "internalHostMismatch": "请拖放与此终端位于同一主机的文件。",
                 "b4cf68e889": "已跳过 {{value0}} {{value1}}。",
                 "writeTimeout": "文件拖放已取消：终端在安全超时前未接受路径。",
                 "writeRejected": "文件拖放已取消：终端无法接受路径。"
@@ -12307,7 +12308,11 @@
             "confirmRestore": "恢复快照并重新启动",
             "keepState": "保留状态",
             "statusUnknown": "状态未知",
-            "checking": "正在检查…"
+            "checking": "正在检查…",
+            "forget": "忘记…",
+            "confirmForget": "在此桌面上忘记",
+            "keepLinked": "保持关联",
+            "forgetDescription": "在此处取消关联此服务器，而不联系其主机。如果主机恢复，服务器可能仍在那里运行。"
           },
           "title": "受管服务器",
           "description": "Orca 会在空的 SSH 主机上安装并运行服务器，并使其保持最新。",

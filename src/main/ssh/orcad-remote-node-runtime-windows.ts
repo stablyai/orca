@@ -23,9 +23,6 @@ import {
 } from './orcad-remote-node-runtime-report'
 import { powerShellCommand, powerShellLiteral } from './ssh-remote-powershell'
 
-/** Promotion may fall back to Expand-Archive, which unpacks the whole ~30 MiB zip. */
-export const WINDOWS_NODE_RUNTIME_PROMOTE_TIMEOUT_MS = 300_000
-
 function windowsPath(...segments: string[]): string {
   return segments
     .map((segment, index) => (index === 0 ? segment.replace(/\/+$/, '') : segment))

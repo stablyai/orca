@@ -2,6 +2,7 @@ import {
   TerminalStreamOpcode,
   encodeTerminalStreamJson
 } from '../../../shared/terminal-stream-protocol'
+import { TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS } from '../../../shared/terminal-multiplex-flow-control'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { RemoteRuntimeTerminalMultiplexerBase } from './remote-runtime-terminal-multiplexer-base'
 import {
@@ -73,7 +74,8 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
     const sent = this.sendFrame(
       stream.streamId,
       TerminalStreamOpcode.SnapshotRequest,
-      encodeTerminalStreamJson({ scrollbackRows: undefined })
+      // Why history: the gap lost output, so a screen-only answer would leave the pane no history to show.
+      encodeTerminalStreamJson({ scrollbackRows: TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS })
     )
     if (!sent) {
       // Transport is down; the reconnect path re-subscribes from scratch.

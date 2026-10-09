@@ -23,9 +23,8 @@ import {
 } from '../../shared/windows-breakaway-launch'
 import { joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
 import {
-  orcadWindowsBaseDir,
-  orcadWindowsHostOpCommand,
   orcadWindowsNodeCommandLine,
+  orcadWindowsSlotOpCommand,
   readOrcadWindowsEncodedAnswer
 } from './orcad-remote-windows-node'
 import {
@@ -38,9 +37,10 @@ import {
   ORCAD_WINDOWS_PROCESS_FILENAME
 } from './orcad-remote-host-support'
 import { orcadManagedLaunchEnv, type OrcadLaunchSpec } from './orcad-remote-launch'
+import { ORCAD_WINDOWS_LAUNCH_REFUSED_CODE } from './orcad-host-unavailable'
 
 export class OrcadWindowsLaunchRefusedError extends Error {
-  readonly code = 'orcad_windows_launch_refused'
+  readonly code = ORCAD_WINDOWS_LAUNCH_REFUSED_CODE
   constructor(reason: string) {
     super(
       `The Windows host refused to start orcad outside the SSH session (${reason}). orcad needs ` +
@@ -56,10 +56,7 @@ export function windowsOrcadLaunchRuntimeCommand(
   host: RemoteHostPlatform,
   slotDir: string
 ): string {
-  return orcadWindowsHostOpCommand(host, orcadWindowsBaseDir(host, slotDir), 'slot-runtime', [
-    slotDir,
-    'clear-stop-request'
-  ])
+  return orcadWindowsSlotOpCommand(host, slotDir, 'slot-runtime', [slotDir, 'clear-stop-request'])
 }
 
 export function readWindowsOrcadSlotRuntime(output: string): string {

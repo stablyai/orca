@@ -2,7 +2,7 @@
 import { ORCAD_LAUNCHER_FILENAME } from '../../shared/orcad-artifacts'
 import { shellEscape } from './ssh-connection-utils'
 import { execOrcadRemote, type OrcadRemoteExecTarget } from './orcad-remote-runtime-control'
-import { orcadWindowsBaseDir, orcadWindowsHostOpCommand } from './orcad-remote-windows-node'
+import { orcadWindowsSlotOpCommand } from './orcad-remote-windows-node'
 import { ORCAD_BUILD_HASH_MARKER as BUILD_HASH_MARKER } from './orcad-windows-host-script'
 import { isWindowsRemoteHost, joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
 
@@ -14,7 +14,7 @@ export async function readRemoteOrcadBuildHash(
     target,
     remoteOrcadBuildHashCommand(target.host, remoteInstallDir)
   )
-  const match = output.match(/__ORCAD_BUILD_HASH__\s+([a-fA-F0-9]{16})/u)
+  const match = output.match(new RegExp(`${BUILD_HASH_MARKER}\\s+([a-fA-F0-9]{16})`, 'u'))
   if (!match?.[1]) {
     throw new Error('Could not verify the installed orcad build hash.')
   }
@@ -26,12 +26,9 @@ export function remoteOrcadBuildHashCommand(
   remoteInstallDir: string
 ): string {
   if (isWindowsRemoteHost(host)) {
-    return orcadWindowsHostOpCommand(
-      host,
-      orcadWindowsBaseDir(host, remoteInstallDir),
-      'build-hash',
-      [joinRemotePath(host, remoteInstallDir, ORCAD_LAUNCHER_FILENAME)]
-    )
+    return orcadWindowsSlotOpCommand(host, remoteInstallDir, 'build-hash', [
+      joinRemotePath(host, remoteInstallDir, ORCAD_LAUNCHER_FILENAME)
+    ])
   }
   const path = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_LAUNCHER_FILENAME))
   // Why both tools: GNU/busybox ship sha256sum, macOS ships shasum; either prints the digest first.

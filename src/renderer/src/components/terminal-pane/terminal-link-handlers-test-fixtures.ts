@@ -1,4 +1,5 @@
 import { vi, type Mock } from 'vitest'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export type TerminalLinkStoreSettings = {
   openLinksInApp?: boolean
@@ -15,7 +16,16 @@ export type TerminalLinkStoreState = {
   setMarkdownViewMode: Mock
   activeFileIdByWorktree: Record<string, string | null>
   openFiles: { filePath: string; worktreeId: string }[]
-  worktreesByRepo: Record<string, { id: string; path: string }[]>
+  worktreesByRepo: Record<
+    string,
+    {
+      id: string
+      path: string
+      repoId?: string
+      hostId?: ExecutionHostId
+      runtimeOwnerEnvironmentId?: string
+    }[]
+  >
   folderWorkspaces: []
 }
 
@@ -52,7 +62,7 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
   const setMarkdownViewModeMock = vi.fn()
 
   const deps = { worktreeId: 'wt-1', worktreePath: '/tmp' }
-  const storeState = {
+  const storeState: TerminalLinkStoreState = {
     settings: undefined as TerminalLinkStoreSettings | undefined,
     setActiveWorktree: setActiveWorktreeMock,
     createBrowserTab: createBrowserTabMock,
@@ -61,7 +71,7 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
     setMarkdownViewMode: setMarkdownViewModeMock,
     activeFileIdByWorktree: {} as Record<string, string | null>,
     openFiles: [] as { filePath: string; worktreeId: string }[],
-    worktreesByRepo: {} as Record<string, { id: string; path: string }[]>,
+    worktreesByRepo: {},
     folderWorkspaces: [] as []
   }
 

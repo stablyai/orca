@@ -4,20 +4,16 @@ import { firstParam } from '../../../src/navigation/route-param-reader'
 import { HostScreen } from '../../../src/host-screen/HostScreen'
 import { useResponsiveLayout } from '../../../src/layout/responsive-layout'
 import { MobileWebShellScreen } from '../../../src/mobile-web-shell/MobileWebShellScreen'
-import { ShellSwitchPendingScreen } from '../../../src/mobile-web-shell/ShellSwitchPendingScreen'
 import { shellScreenRoute } from '../../../src/mobile-web-shell/shell-screen-route'
-import { useShellSwitchDecision } from '../../../src/mobile-web-shell/shell-switch-decision'
+import { shellSwitchDecision } from '../../../src/mobile-web-shell/shell-switch-decision'
 
 /**
  * The worktree list, from the desktop's bundle or from this app.
  *
  * The shell decides, not this switch: it renders the page only for a route the bundle lists with
  * grants this app implements, and answers `native-route` otherwise, which is what `fallback` is.
- * So the two ways to stay native are a flag that is off and a negotiation that said no, and the
- * second one covers every host whose desktop is older than the page.
- *
- * The flag read settling is a third answer, not a fourth spelling of native: see
- * `shell-switch-decision.ts`.
+ * So the two ways to stay native are a build without the shell and a negotiation that said no, and
+ * the second one covers every host whose desktop is older than the page.
  *
  * Encoded, not interpolated raw, for the reason `web.tsx` states: a deep-linked host id carrying
  * `?`, `#` or whitespace would build a pathname the page refuses, and a refusal here is a failure
@@ -36,11 +32,8 @@ function HostListScreen() {
   // the bridge's segment rule, and handing that over paints the page's failure screen over the
   // native list this route already has.
   const route = shellScreenRoute({ pathname: `/h/${encodeURIComponent(hostId)}` })
-  const decision = useShellSwitchDecision(hostId === '' ? null : route)
+  const decision = shellSwitchDecision(hostId === '' ? null : route)
 
-  if (decision.kind === 'pending') {
-    return <ShellSwitchPendingScreen />
-  }
   if (decision.kind === 'native') {
     return <HostScreen />
   }

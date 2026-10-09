@@ -14,6 +14,7 @@ import {
   type FileLinkPathExistence,
   type FileLinkTarget
 } from '@/components/terminal-pane/terminal-file-link-target'
+import { getTerminalFileContext } from '@/components/terminal-pane/terminal-file-path-mapping'
 
 // Why: a host that could not answer is retried a few times, then waits for the next recheck.
 export const UNVERIFIABLE_RETRY_DELAYS_MS = [2_000, 10_000, 30_000] as const
@@ -119,8 +120,24 @@ export function createNativeChatFileLinkExistence(
     }
     const sentIn = generation
     inFlight.set(key, sentIn)
-    const ask = async (): Promise<boolean> =>
-      pathExists(target.fileContext, target.absolutePath, target.isRemoteRuntimePath)
+    const ask = async (): Promise<boolean> => {
+      // Why: rechecks and retries reuse a held target, whose owner may since have turned
+      // ambiguous or moved hosts; ask only while the current owner still names the same host.
+      const current = getTerminalFileContext(
+        host.worktreeId,
+        host.worktreePath,
+        host.runtimeEnvironmentId
+      )
+      if (
+        !current.sourceHostResolved ||
+        current.connectionId !== target.fileContext.connectionId ||
+        current.settings?.activeRuntimeEnvironmentId !==
+          target.fileContext.settings?.activeRuntimeEnvironmentId
+      ) {
+        throw new Error('The workspace host changed or could not be determined')
+      }
+      return pathExists(target.fileContext, target.absolutePath, target.isRemoteRuntimePath)
+    }
     void ask().then(
       (exists) => settle(key, sentIn, exists),
       () => fail(key, sentIn)
@@ -163,7 +180,8 @@ export function createNativeChatFileLinkExistence(
   const hostUnresolved =
     host.connectionId === undefined && !isWorktreeConnectionResolved(host.worktreeId)
   const isHostUnresolved = (target: FileLinkTarget): boolean =>
-    hostUnresolved && !target.fileContext.connectionId && !target.isRemoteRuntimePath
+    !target.fileContext.sourceHostResolved ||
+    (hostUnresolved && !target.fileContext.connectionId && !target.isRemoteRuntimePath)
 
   const lookup = (
     link: ParsedTerminalFileLink,

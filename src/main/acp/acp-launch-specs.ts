@@ -85,6 +85,8 @@ export type AcpLaunchSpec = {
   installDirectories(input: { env: Readonly<Record<string, string>>; homePath: string }): string[]
   /** Images go to the agent when it also advertises them; off sends text prompts only. */
   imagePrompts?: true
+  /** The agent compacts its conversation when sent `/compact` as a prompt; off hides `/compact`. */
+  compaction?: true
   /** The agent's own store of a session's user messages, read for restart recovery only. */
   readStoredUserMessages?: AcpStoredUserMessagesReader
   modelDiscovery: AcpModelDiscovery
@@ -121,7 +123,8 @@ const GROK_LAUNCH_SPEC: AcpLaunchSpec = {
     read: readGrokModelCatalog,
     listingNamesConfiguredModel: false
   },
-  visualsSkill: loadGrokVisualsSkill
+  visualsSkill: loadGrokVisualsSkill,
+  compaction: true
 }
 
 // `opencode acp` on 1.x serves in-process; on 2.x it starts a private `opencode serve --stdio` child
@@ -158,7 +161,8 @@ const OPENCODE_LAUNCH_SPEC: AcpLaunchSpec = {
     // The listing marks no default; a chat started with no pick names it.
     listingNamesConfiguredModel: false
   },
-  visualsSkill: loadOpenCodeVisualsSkill
+  visualsSkill: loadOpenCodeVisualsSkill,
+  compaction: true
 }
 
 // OMP serves ACP through `omp acp`; its environment reaches it as the user set it.
@@ -184,7 +188,8 @@ const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
     kind: 'unavailable',
     reason: 'omp has no session-free listing that matches what its chats offer'
   },
-  visualsSkill: loadOmpVisualsSkill
+  visualsSkill: loadOmpVisualsSkill,
+  compaction: true
 }
 
 export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [

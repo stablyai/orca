@@ -3263,6 +3263,7 @@
                 "ce8248b835": "작업 트리 경로를 사용할 수 없습니다.",
                 "internalTooManyPaths": "터미널에 안전하게 붙여넣기에는 드롭된 경로가 너무 많습니다.",
                 "internalPathsTooLarge": "터미널에 안전하게 붙여넣기에는 경로 목록이 너무 큽니다.",
+                "internalHostMismatch": "이 터미널과 같은 호스트의 파일을 드롭하세요.",
                 "b4cf68e889": "{{value0}} {{value1}}을(를) 건너뛰었습니다.",
                 "writeTimeout": "파일 드롭이 취소되었습니다. 안전 시간 제한 전에 터미널이 경로를 받지 않았습니다.",
                 "writeRejected": "파일 드롭이 취소되었습니다. 터미널이 경로를 받을 수 없습니다."
@@ -12307,7 +12308,11 @@
             "confirmRestore": "스냅샷 복원 및 다시 시작",
             "keepState": "상태 유지",
             "statusUnknown": "상태 알 수 없음",
-            "checking": "확인 중…"
+            "checking": "확인 중…",
+            "forget": "잊기…",
+            "confirmForget": "이 데스크톱에서 잊기",
+            "keepLinked": "연결 유지",
+            "forgetDescription": "호스트에 연결하지 않고 여기서 이 서버의 연결을 해제합니다. 호스트가 다시 살아나면 서버가 그곳에서 계속 실행 중일 수 있습니다."
           },
           "title": "관리형 서버",
           "description": "Orca는 빈 SSH 호스트에 서버를 설치하고 실행하며 최신 상태로 유지합니다.",

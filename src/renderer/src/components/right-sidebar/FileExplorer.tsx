@@ -31,6 +31,7 @@ import {
 } from './file-explorer-name-filter-projection'
 import { useFileExplorerManualRefresh } from './useFileExplorerManualRefresh'
 import { useFileExplorerTree } from './useFileExplorerTree'
+import { getFileExplorerOperationOwnerFromState } from './file-explorer-operation-owner'
 import { useFileExplorerSelection } from './useFileExplorerSelection'
 import { useFileExplorerVisibleRowProjection } from './useFileExplorerVisibleRowProjection'
 import { useFileExplorerBackgroundMenu } from './use-file-explorer-background-menu'
@@ -381,7 +382,11 @@ function FileExplorerFiles(): React.JSX.Element {
 const FileExplorerFilesMemo = React.memo(FileExplorerFiles)
 
 function FileExplorer(): React.JSX.Element {
-  return <FileExplorerFilesMemo />
+  const ownerKey = useAppStore((state) =>
+    JSON.stringify(getFileExplorerOperationOwnerFromState(state, state.activeWorktreeId))
+  )
+  // Different hosts can expose the same path; their explorer caches must have separate lifetimes.
+  return <FileExplorerFilesMemo key={ownerKey} />
 }
 
 export default React.memo(FileExplorer)
