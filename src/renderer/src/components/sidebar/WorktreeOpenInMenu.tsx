@@ -138,7 +138,7 @@ function showOpenFailureToast(
     toast.error(
       translate(
         'auto.components.sidebar.WorktreeOpenInMenu.sshAliasRequired',
-        'VS Code needs an SSH config alias for this host.'
+        'Your editor needs an SSH config alias for this host.'
       ),
       {
         description: translate(
@@ -159,7 +159,7 @@ function showOpenFailureToast(
       {
         description: translate(
           'auto.components.sidebar.WorktreeOpenInMenu.remoteEditorUnsupportedDetail',
-          'Choose VS Code or use the app locally.'
+          'Choose VS Code or Cursor, or use the app locally.'
         )
       }
     )
@@ -206,12 +206,12 @@ function showOpenFailureToast(
     toast.error(
       translate(
         'auto.components.sidebar.WorktreeOpenInMenu.remoteLaunchFailed',
-        'Could not open the path in VS Code.'
+        'Could not open the path in your editor.'
       ),
       {
         description: translate(
           'auto.components.sidebar.WorktreeOpenInMenu.remoteLaunchFailedDetail',
-          'Check the VS Code command configured on this machine.'
+          'Check the editor command configured on this machine.'
         )
       }
     )

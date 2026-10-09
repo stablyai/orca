@@ -440,18 +440,21 @@ describe('resolveVsCodeRemoteSshLaunchSpec', () => {
     resolveCliCommandMock.mockImplementation((command: string) => command)
   })
 
-  it.each(['code', 'code-insiders'])('builds exact Remote-SSH arguments for %s', (command) => {
-    expect(
-      resolveVsCodeRemoteSshLaunchSpec(command, '/home/Ada Lovelace/project', 'builder', {
-        platform: 'linux'
+  it.each(['code', 'code-insiders', 'cursor', 'cursor-insiders'])(
+    'builds exact Remote-SSH arguments for %s',
+    (command) => {
+      expect(
+        resolveVsCodeRemoteSshLaunchSpec(command, '/home/Ada Lovelace/project', 'builder', {
+          platform: 'linux'
+        })
+      ).toEqual({
+        kind: 'executable',
+        hideWindowsConsole: true,
+        spawnCmd: command,
+        spawnArgs: ['--remote', 'ssh-remote+builder', '/home/Ada Lovelace/project']
       })
-    ).toEqual({
-      kind: 'executable',
-      hideWindowsConsole: true,
-      spawnCmd: command,
-      spawnArgs: ['--remote', 'ssh-remote+builder', '/home/Ada Lovelace/project']
-    })
-  })
+    }
+  )
 
   it.each([
     'C:\\Program Files\\Microsoft VS Code\\Code.exe',
@@ -489,7 +492,7 @@ describe('resolveVsCodeRemoteSshLaunchSpec', () => {
     ).toMatchObject({ spawnCmd: 'C:\\Tools\\Code.CMD' })
   })
 
-  it.each(['cursor', 'zed', 'code --reuse-window', 'open -a "Visual Studio Code"'])(
+  it.each(['zed', 'subl', 'code --reuse-window', 'open -a "Visual Studio Code"'])(
     'rejects unsupported and compound SSH commands: %s',
     (command) => {
       expect(
