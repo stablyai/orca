@@ -23,6 +23,7 @@ import {
   type TerminalPanePasteExecution
 } from './terminal-pane-paste-execution'
 
+/** Registers clipboard and app-menu paste listeners on a terminal pane container. */
 export function registerTerminalPanePasteListeners({
   container,
   controller,
@@ -188,6 +189,7 @@ export function registerTerminalPanePasteListeners({
       connectionId,
       runtimeEnvironmentId,
       forceBracketedMultilineTextPaste,
+      protectedMultilineTextPasteOptions: execution.resolvePaneProtectedMultilinePasteOptions(pane),
       pasteText: (text, options) =>
         executePanePasteText(pane, 'app-menu', activeElementAtDispatch, text, options),
       onTextPasteError: () =>
