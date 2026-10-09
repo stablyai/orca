@@ -69,12 +69,14 @@ function mountDock({ canSend = true, liveInputEnabled = true } = {}) {
     handleSend,
     keyboardLift: 0
   }
+  const controllerForRender =
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this render only reads the supplied live input, focus, and submission fields.
+    controller as unknown as MobileSessionController
   let renderer: ReactTestRenderer | null = null
   act(() => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies every render-time field; tests invoke only the live input, focus, and submit callbacks defined above.
     renderer = create(
       createElement(MobileSessionCommandDock, {
-        controller: controller as unknown as MobileSessionController
+        controller: controllerForRender
       })
     )
   })

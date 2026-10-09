@@ -1,9 +1,11 @@
 import { createElement, type RefObject } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import type { TextInput } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useTerminalLiveHardwareKeyboard } from './use-terminal-live-hardware-keyboard'
-import type { TerminalLiveInputFocusTimerRef } from './terminal-live-input'
+import type {
+  TerminalLiveInputFocusTarget,
+  TerminalLiveInputFocusTimerRef
+} from './terminal-live-input'
 
 function suppressReactTestRendererDeprecationWarning(): () => void {
   const originalConsoleError = console.error
@@ -27,8 +29,8 @@ describe('useTerminalLiveHardwareKeyboard soft focus latch', () => {
     const focus = vi.fn()
     const blur = vi.fn()
     const isFocused = vi.fn(() => false)
-    const liveInputRef: RefObject<TextInput | null> = {
-      current: { focus, blur, isFocused } as unknown as TextInput
+    const liveInputRef: RefObject<TerminalLiveInputFocusTarget | null> = {
+      current: { focus, blur, isFocused }
     }
     const liveInputFocusTimerRef: TerminalLiveInputFocusTimerRef = { current: null }
     let api: ReturnType<typeof useTerminalLiveHardwareKeyboard> | null = null
@@ -88,12 +90,12 @@ describe('useTerminalLiveHardwareKeyboard soft focus latch', () => {
   it('Given a modal blurred input When it closes Then only a terminal switch restores silent focus', async () => {
     vi.useFakeTimers()
     const focus = vi.fn()
-    const liveInputRef: RefObject<TextInput | null> = {
+    const liveInputRef: RefObject<TerminalLiveInputFocusTarget | null> = {
       current: {
         focus,
         blur: vi.fn(),
         isFocused: vi.fn(() => false)
-      } as unknown as TextInput
+      }
     }
     const liveInputFocusTimerRef: TerminalLiveInputFocusTimerRef = { current: null }
     let modalOpen = true
@@ -141,12 +143,12 @@ describe('useTerminalLiveHardwareKeyboard soft focus latch', () => {
 
   it('Given native events race a modal or disabled state When received Then JS rejects stale capture', () => {
     const handleLiveInputHardwareKey = vi.fn()
-    const liveInputRef: RefObject<TextInput | null> = {
+    const liveInputRef: RefObject<TerminalLiveInputFocusTarget | null> = {
       current: {
         focus: vi.fn(),
         blur: vi.fn(),
         isFocused: vi.fn(() => true)
-      } as unknown as TextInput
+      }
     }
     const liveInputFocusTimerRef: TerminalLiveInputFocusTimerRef = { current: null }
     let modalOpen = true

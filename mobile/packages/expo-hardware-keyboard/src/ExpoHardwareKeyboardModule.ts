@@ -7,9 +7,8 @@ type NativeCaptureView = ComponentType<HardwareKeyboardCaptureViewProps>
 // Why: requireNativeViewManager throws when the native module is absent (web/tests).
 let NativeHardwareKeyboardCaptureView: NativeCaptureView | null = null
 try {
-  NativeHardwareKeyboardCaptureView = requireNativeViewManager(
-    'ExpoHardwareKeyboard'
-  ) as NativeCaptureView
+  NativeHardwareKeyboardCaptureView =
+    requireNativeViewManager<HardwareKeyboardCaptureViewProps>('ExpoHardwareKeyboard')
 } catch {
   NativeHardwareKeyboardCaptureView = null
 }

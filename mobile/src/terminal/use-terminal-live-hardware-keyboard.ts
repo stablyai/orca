@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
-import type { TextInput } from 'react-native'
 import {
   clearTerminalLiveInputFocusTimer,
   scheduleTerminalLiveInputFocus,
+  type TerminalLiveInputFocusTarget,
   type TerminalLiveInputFocusTimerRef
 } from './terminal-live-input'
 import {
@@ -16,7 +16,7 @@ type UseTerminalLiveHardwareKeyboardOptions = {
   readonly focusScopeKey: string | null
   readonly liveInputEnabled: boolean
   readonly canSend: boolean
-  readonly liveInputRef: RefObject<TextInput | null>
+  readonly liveInputRef: RefObject<TerminalLiveInputFocusTarget | null>
   readonly liveInputFocusTimerRef: TerminalLiveInputFocusTimerRef
   readonly modalOpen: boolean
   readonly handleLiveInputHardwareKey: (event: TerminalLiveHardwareKeyEvent) => void
@@ -38,6 +38,9 @@ export function useTerminalLiveHardwareKeyboard({
   readonly onHardwareKey: (event: { nativeEvent: TerminalLiveHardwareKeyEvent }) => void
 } {
   const [wantSoftKeyboard, setWantSoftKeyboard] = useState(false)
+  if (modalOpen && wantSoftKeyboard) {
+    setWantSoftKeyboard(false)
+  }
   // Why: explicit soft focus must run after React applies showSoftInputOnFocus=true.
   const [pendingSoftFocusSeq, setPendingSoftFocusSeq] = useState(0)
   const pendingSoftFocusNeedsBlurRef = useRef(false)
@@ -122,14 +125,12 @@ export function useTerminalLiveHardwareKeyboard({
     wantSoftKeyboard
   ])
 
-  // Modal/action-sheet open: cancel pending focus and clear soft latch; do not
-  // re-trigger silent focus when the modal later closes.
+  // Cancel focus on modal open without restoring it on close.
   useEffect(() => {
     if (!modalOpen) {
       return
     }
     clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
-    setWantSoftKeyboard(false)
   }, [liveInputFocusTimerRef, modalOpen])
 
   const onHardwareKey = useCallback(

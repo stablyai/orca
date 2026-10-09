@@ -42,10 +42,10 @@ function mountLiveSend(agent = true) {
   let renderer: ReactTestRenderer | null = null
 
   function Harness(): null {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only live submission is invoked; its fields and dismissal refs are provided above, while unrelated send paths are never called.
-    actions = useMobileSessionTerminalSendActions(
+    const model =
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the supplied live submission and keyboard dismissal fields are used.
       scope as unknown as MobileSessionTerminalWebviewModel
-    )
+    actions = useMobileSessionTerminalSendActions(model)
     return null
   }
 
