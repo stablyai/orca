@@ -54,6 +54,7 @@ import {
   type AssignmentAdmissionRejection
 } from './public-assignment-admission.js'
 import { relayHostLogDigest } from './relay-host-log-digest.js'
+import type { RelayLocalReadinessVerdict } from './relay-local-readiness.js'
 import type { RelayReadinessDependency } from './relay-readiness.js'
 import type {
   AssignmentAdmissionLane,
@@ -123,6 +124,9 @@ export function createRelayApp(
     runtimeCounts?: () => RelayRuntimeCounts
     ready: () => Promise<boolean>
     readinessDegradation?: () => RelayReadinessDependency[]
+    // Both only on cells; the switch is the per-cell `readinessLocal` flag, off by default.
+    readinessLocal?: () => boolean
+    localReadiness?: () => RelayLocalReadinessVerdict
     recordAssignmentAdmission?: (outcome: AssignmentAdmissionOutcome) => void
     recordAssignmentRejectionReason?: (
       lane: AssignmentAdmissionLane,
@@ -308,7 +312,15 @@ export function createRelayApp(
     })
   )
   app.get('/ready', async (context) => {
-    if (!(await operations.ready())) return context.json({ error: 'dependency_unavailable' }, 503)
+    const ready = await operations.ready()
+    if (operations.localReadiness && operations.readinessLocal?.()) {
+      // The probes still ran above, so their failures are still reported, but never decide.
+      const local = operations.localReadiness()
+      if (!local.ready) return context.json({ error: local.reason }, 503)
+      if (local.failing.length === 0) return context.json({ ok: true })
+      return context.json({ ok: true, degraded: true, dependency: local.failing })
+    }
+    if (!ready) return context.json({ error: 'dependency_unavailable' }, 503)
     const dependency = operations.readinessDegradation?.() ?? []
     // Still the 200 the load balancer needs, with the marker that says the answer is remembered.
     if (dependency.length === 0) return context.json({ ok: true })
