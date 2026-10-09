@@ -272,7 +272,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       promptDeliveryResult: launched.promptDeliveryResult
     }
   }
-  if (args.freshNewTab && !hasPrompt && freshNewTabLaunchesThroughHost(worktreeId, agent)) {
+  if (args.freshNewTab && freshNewTabLaunchesThroughHost(args, resolvedLaunchPlatform)) {
     const tabId = launchFreshNewTabThroughHost({
       agent,
       worktreeId,

@@ -11,7 +11,8 @@ import { pasteAgentLaunchPromptOnceReady } from '@/lib/launch-agent-tab-prompt-p
 import { useAppStore } from '@/store'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import type { LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab'
 
 /**
  * Whether a new agent tab starts through the host's `agent.launch`: an AI button's launch, whose
@@ -31,16 +32,23 @@ export function newTabPromptLaunchesThroughHost(args: {
 /**
  * Whether a plain new-tab launch with no prompt ("+", Quick Launch, the floating panel, the
  * dashboard) starts through the host. Only where the host's launch is main's own: the window
- * decides the terminal, the agent is enabled (main's window never read the disabled list), and the
- * workspace is not on SSH (main's pane connects first and waits for the remote shell). Temporary:
- * the rest keeps main's launch until the host matches it.
+ * decides the terminal, the agent is enabled (main's window never read the disabled list), the
+ * workspace is not on SSH (main's pane connects first and waits for the remote shell), and the
+ * window launches it on this machine's own platform (a WSL path launches as Linux here, which the
+ * host does not infer). Temporary: the rest keeps main's launch until the host matches it.
  */
-export function freshNewTabLaunchesThroughHost(worktreeId: string, agent: TuiAgent): boolean {
+export function freshNewTabLaunchesThroughHost(
+  args: Pick<LaunchAgentInNewTabArgs, 'freshNewTab' | 'prompt' | 'worktreeId' | 'agent'>,
+  launchPlatform: NodeJS.Platform
+): boolean {
   const state = useAppStore.getState()
   return (
+    args.freshNewTab === true &&
+    !args.prompt?.trim() &&
+    launchPlatform === CLIENT_PLATFORM &&
     windowMakesHostLaunchTab() &&
-    isTuiAgentEnabled(agent, state.settings?.disabledTuiAgents) &&
-    getConnectionIdFromState(state, worktreeId) === null
+    isTuiAgentEnabled(args.agent, state.settings?.disabledTuiAgents) &&
+    getConnectionIdFromState(state, args.worktreeId) === null
   )
 }
 

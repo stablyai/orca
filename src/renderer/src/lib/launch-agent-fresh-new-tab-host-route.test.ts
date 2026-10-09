@@ -20,6 +20,7 @@ vi.mock('@/store', () => ({ useAppStore: { getState: () => ({ settings: state.se
 vi.mock('@/lib/connection-context', () => ({
   getConnectionIdFromState: () => state.connectionId
 }))
+vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'win32' }))
 const toast = vi.hoisted(() => ({ error: vi.fn() }))
 vi.mock('sonner', () => ({ toast }))
 
@@ -34,25 +35,45 @@ beforeEach(() => {
 })
 
 describe('which plain new-tab launches start through the host', () => {
-  it('a local workspace with an enabled agent and the chat default off', () => {
-    expect(freshNewTabLaunchesThroughHost('wt-1', 'claude')).toBe(true)
+  function startsThroughHost(
+    overrides: { prompt?: string; freshNewTab?: true } = {},
+    launchPlatform: NodeJS.Platform = 'win32'
+  ): boolean {
+    return freshNewTabLaunchesThroughHost(
+      { freshNewTab: true, worktreeId: 'wt-1', agent: 'claude', ...overrides },
+      launchPlatform
+    )
+  }
+
+  it('a local workspace with an enabled agent, no prompt and the chat default off', () => {
+    expect(startsThroughHost()).toBe(true)
+  })
+
+  it('only for the plain new-tab callers, and only with no prompt', () => {
+    expect(startsThroughHost({ freshNewTab: undefined })).toBe(false)
+    expect(startsThroughHost({ prompt: 'fix it' })).toBe(false)
   })
 
   it('keeps main launch where the host could open a chat', () => {
     host.windowMakesHostLaunchTab.mockReturnValue(false)
-    expect(freshNewTabLaunchesThroughHost('wt-1', 'claude')).toBe(false)
+    expect(startsThroughHost()).toBe(false)
   })
 
   // Why: the host refuses a disabled agent; main's window never read the disabled list here.
   it('keeps main launch for a disabled agent', () => {
     state.settings = { disabledTuiAgents: ['claude'] }
-    expect(freshNewTabLaunchesThroughHost('wt-1', 'claude')).toBe(false)
+    expect(startsThroughHost()).toBe(false)
   })
 
   // Why: main's pane connects an SSH target first and waits for the remote shell before typing.
   it.each([['ssh-1'], [undefined]])('keeps main launch on SSH or an unknown host (%s)', (id) => {
     state.connectionId = id
-    expect(freshNewTabLaunchesThroughHost('wt-1', 'claude')).toBe(false)
+    expect(startsThroughHost()).toBe(false)
+  })
+
+  // Why: the window launches a WSL path as Linux; the host would quote it for Windows.
+  it('keeps main launch where the window launches on another platform', () => {
+    expect(startsThroughHost({}, 'linux')).toBe(false)
   })
 })
 
