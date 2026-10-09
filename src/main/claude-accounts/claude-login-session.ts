@@ -33,7 +33,7 @@ export async function runClaudeLoginSession(
     return true
   })
   try {
-    // Why throw without one: Claude would open the default browser the user asked to avoid.
+    // Why: if setup fails this throws; falling back would let Claude open the browser the user avoided.
     const browser = onLink ? await prepareClaudeSignInBrowser(folder) : null
     void browser?.nextLink(watch.signal).then((signInLink) => {
       if (signInLink) {

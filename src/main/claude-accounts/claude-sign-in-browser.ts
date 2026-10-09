@@ -62,6 +62,7 @@ export async function prepareClaudeSignInBrowser(
     await writeFile(helperPath, HELPER_SCRIPT, { mode: 0o700 })
   } catch (error) {
     console.warn('[claude-accounts] Could not prepare the Claude sign-in browser:', error)
+    await dispose().catch(() => {})
     throw new Error(CLAUDE_SIGN_IN_FAILED_MESSAGE)
   }
   return {
