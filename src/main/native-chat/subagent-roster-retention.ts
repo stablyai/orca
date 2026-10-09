@@ -4,7 +4,6 @@ import type { NativeChatSubagentEntry } from '../../shared/native-chat-types'
 
 type RetainedRosterGroup = {
   groupId: string
-  entries: Map<string, NativeChatSubagentEntry>
   lastSerialized: string | null
 }
 
@@ -18,6 +17,7 @@ export class SubagentRosterRetention<Group extends RetainedRosterGroup> {
     private readonly options: {
       maxGroups: number
       maxSettledIdentities: number
+      entries: (group: Group) => Iterable<NativeChatSubagentEntry>
       identities: (group: Group) => Iterable<string>
       onEvict?: (group: Group) => void
     }
@@ -34,11 +34,11 @@ export class SubagentRosterRetention<Group extends RetainedRosterGroup> {
     this.settledIdentities.set(identity, true)
   }
 
-  trim(changed: Iterable<Group>): void {
+  trim(changed: Iterable<Group>, retainedGroupId?: string): void {
     for (const group of changed) {
       if (
         group.lastSerialized !== null &&
-        [...group.entries.values()].every((entry) => isTerminalSubagentState(entry.state))
+        [...this.options.entries(group)].every((entry) => isTerminalSubagentState(entry.state))
       ) {
         this.settledGroups.add(group.groupId)
       } else {
@@ -48,6 +48,9 @@ export class SubagentRosterRetention<Group extends RetainedRosterGroup> {
     for (const groupId of this.settledGroups) {
       if (this.groups.size <= this.options.maxGroups) {
         break
+      }
+      if (groupId === retainedGroupId) {
+        continue
       }
       const group = this.groups.get(groupId)
       if (group) {

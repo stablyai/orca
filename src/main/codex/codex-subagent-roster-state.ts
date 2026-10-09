@@ -55,6 +55,7 @@ export function createCodexSubagentRosterRetention(groups: Map<string, RosterGro
   return new SubagentRosterRetention(groups, {
     maxGroups: MAX_CODEX_SUBAGENT_GROUPS,
     maxSettledIdentities: MAX_CODEX_SUBAGENT_GROUPS * MAX_CODEX_SUBAGENTS_PER_GROUP,
+    entries: (group) => group.entries.values(),
     identities: (group) =>
       [...group.executionTurns].flatMap(([threadId, turnId]) =>
         turnId === null ? [] : [codexSubagentExecutionIdentity(threadId, turnId)]

@@ -30,6 +30,7 @@ describe('host subagent roster settled retention', () => {
     const retention = new SubagentRosterRetention(groups, {
       maxGroups: 1,
       maxSettledIdentities: 2048,
+      entries: (group) => group.entries.values(),
       identities: (roster) => roster.entries.keys()
     })
     const live = group('live', 'working', 1)
@@ -53,6 +54,7 @@ describe('host subagent roster settled retention', () => {
     const retention = new SubagentRosterRetention(groups, {
       maxGroups: 32,
       maxSettledIdentities: 32 * 64,
+      entries: (group) => group.entries.values(),
       identities: (roster) => roster.entries.keys()
     })
     for (let index = 0; index < 35; index++) {
@@ -89,6 +91,7 @@ describe('host subagent roster settled retention', () => {
     const retention = new SubagentRosterRetention(groups, {
       maxGroups: 1,
       maxSettledIdentities: 64,
+      entries: (group) => group.entries.values(),
       identities: (roster) => roster.entries.keys()
     })
     const old = group('old', 'completed', 1)
@@ -112,4 +115,36 @@ describe('host subagent roster settled retention', () => {
     retention.clear()
     expect(retention.sizes()).toEqual({ groups: 0, settledIdentities: 0 })
   })
+})
+
+it('keeps only the accessed inherited row during a trim and re-derives it on the next event', () => {
+  const groups = new Map<string, Group>()
+  const retention = new SubagentRosterRetention(groups, {
+    maxGroups: 32,
+    maxSettledIdentities: 2048,
+    entries: (roster) => roster.entries.values(),
+    identities: (roster) => roster.entries.keys()
+  })
+  for (let index = 0; index < 32; index++) {
+    const live = group(`live-${index}`, 'working', 1)
+    groups.set(live.groupId, live)
+    retention.trim([live])
+  }
+  for (let index = 0; index < 70; index++) {
+    const inherited = group(`inherited-${index}`, 'completed', 1)
+    groups.set(inherited.groupId, inherited)
+    retention.trim([inherited], inherited.groupId)
+    expect(groups.size).toBe(33)
+    expect(groups.has(inherited.groupId)).toBe(true)
+  }
+  retention.trim([])
+  expect(groups.size).toBe(32)
+  expect(retention.hasSettled('inherited-69:0')).toBe(true)
+  const resumed = group('resumed', 'completed', 1)
+  groups.set(resumed.groupId, resumed)
+  retention.trim([resumed], resumed.groupId)
+  resumed.entries.set('resumed:0', { id: 'resumed:0', label: 'resumed', state: 'working' })
+  retention.trim([resumed])
+  expect(groups.has(resumed.groupId)).toBe(true)
+  expect(groups.size).toBe(33)
 })

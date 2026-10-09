@@ -39,6 +39,7 @@ export class AcpSubagentTimeline {
   private readonly retention = new SubagentRosterRetention(this.groups, {
     maxGroups: MAX_GROUPS,
     maxSettledIdentities: MAX_GROUPS * MAX_SUBAGENTS_PER_GROUP,
+    entries: (group) => group.entries.values(),
     identities: (group) => group.entries.keys(),
     onEvict: (group) => {
       for (const id of group.entries.keys()) {
