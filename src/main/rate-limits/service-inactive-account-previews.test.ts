@@ -136,6 +136,8 @@ describe('RateLimitService', () => {
 
   it('passes WSL Codex managed homes into inactive account rate-limit fetches', async () => {
     const service = new RateLimitService()
+    const networkProxySettings = { httpProxyUrl: 'http://proxy.fixture.invalid:8080' }
+    service.setNetworkProxySettingsResolver(() => networkProxySettings)
     const wslCodexHome =
       '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
     service.setInactiveCodexAccountsResolver(() => [
@@ -148,6 +150,7 @@ describe('RateLimitService', () => {
     expect(fetchCodexRateLimits).toHaveBeenCalledWith(
       expect.objectContaining({
         codexHomePath: wslCodexHome,
+        networkProxySettings,
         signal: expect.any(AbortSignal)
       })
     )

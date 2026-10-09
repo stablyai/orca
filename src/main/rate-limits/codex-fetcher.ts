@@ -14,6 +14,9 @@ import {
 import { isCodexStateDbBackfillPending } from '../codex/codex-state-db'
 import { startCodexStateDbBackfillRecoveryInBackground } from '../codex/codex-state-db-backfill-recovery'
 import { spawnProcess } from '../../shared/child-process/run-process'
+import { buildConfiguredProxyEnv } from '../../shared/network-proxy'
+import { getMainHttpClient } from '../network/http-client'
+import { addWslEnvKeys } from '../../shared/wsl-env'
 import { probeCodexAuthPresence } from './codex-auth-presence'
 import {
   fetchCodexRateLimitsViaBackend,
@@ -43,9 +46,12 @@ const WSL_RPC_INIT_TIMEOUT_MS = 40_000
 
 export type FetchCodexRateLimitsOptions = CodexRateLimitFetchOptions
 
+type CodexWslProxyEnvEntry = { key: string; value: string; variable: string }
+
 function buildWslCodexCommand(
   codexHomePath: string,
-  args: string[]
+  args: string[],
+  proxyEnv: CodexWslProxyEnvEntry[]
 ): { command: string; args: string[] } | null {
   const wslInfo = parseWslUncPath(codexHomePath)
   if (process.platform !== 'win32' || !wslInfo) {
@@ -53,7 +59,10 @@ function buildWslCodexCommand(
   }
   const setupCommands = [
     ...getHiddenRateLimitWslCwdSetupCommands(),
-    `export CODEX_HOME=${quoteHiddenRateLimitShellValue(wslInfo.linuxPath)}`
+    `export CODEX_HOME=${quoteHiddenRateLimitShellValue(wslInfo.linuxPath)}`,
+    // Restore explicit settings after login without putting proxy credentials in argv.
+    ...proxyEnv.map(({ key, variable }) => `export ${key}="$${variable}"`),
+    ...(proxyEnv.length ? [`unset ${proxyEnv.map(({ variable }) => variable).join(' ')}`] : [])
   ].join(' && ')
   const execSuffix = `${args.map(quoteHiddenRateLimitShellValue).join(' ')} <&3 >&4 3<&- 4>&-`
   const loginShellCommand = buildWslLoginShellCommand(
@@ -78,16 +87,9 @@ function processEnvWithoutCodexHome(): NodeJS.ProcessEnv {
   return env
 }
 
-function fetchCodexUsage(url: string, init: RequestInit): Promise<Response> {
-  return fetch(url, init)
-}
-
-function fetchCodexResetCredits(url: string, init: RequestInit): Promise<Response> {
-  return fetch(url, init)
-}
-
-function consumeCodexResetCredit(url: string, init: RequestInit): Promise<Response> {
-  return fetch(url, init)
+function requestCodexBackend(url: string, init: RequestInit): Promise<Response> {
+  // Keep account authentication explicit; the desktop session may hold unrelated cookies.
+  return getMainHttpClient().fetch(url, { ...init, credentials: 'omit' })
 }
 
 async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<ProviderRateLimits> {
@@ -95,20 +97,37 @@ async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<Provid
     return abortedCodexRateLimitResult()
   }
   const codexArgs = [...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS]
+  const proxyEnv = buildConfiguredProxyEnv(options?.networkProxySettings)
+  const wslProxyEnv = Object.entries(proxyEnv).map(([key, value], index) => ({
+    key,
+    value,
+    variable: `ORCA_CODEX_USAGE_ENV_${index}`
+  }))
   const wslCodex = options?.codexHomePath
-    ? buildWslCodexCommand(options.codexHomePath, codexArgs)
+    ? buildWslCodexCommand(options.codexHomePath, codexArgs, wslProxyEnv)
     : null
   const codexCommand = wslCodex ? 'codex' : resolveCodexCommand()
+  const env = withCliRuntimeOnPath(codexCommand, {
+    ...(wslCodex ? processEnvWithoutCodexHome() : process.env),
+    ...proxyEnv,
+    ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {})
+  })
+  if (wslCodex && wslProxyEnv.length) {
+    for (const { variable, value } of wslProxyEnv) {
+      env[variable] = value
+    }
+    addWslEnvKeys(
+      env,
+      wslProxyEnv.map(({ variable }) => variable)
+    )
+  }
   // Why the bare CLI: spawnProcess resolves an npm `codex.cmd` shim past cmd.exe itself.
   const child = spawnProcess({
     program: wslCodex ? wslCodex.command : codexCommand,
     args: wslCodex ? wslCodex.args : codexArgs,
     stdio: ['pipe', 'pipe', 'pipe'],
     cwd: resolveHiddenRateLimitPtyCwd(),
-    env: withCliRuntimeOnPath(codexCommand, {
-      ...(wslCodex ? processEnvWithoutCodexHome() : process.env),
-      ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {})
-    })
+    env
   })
   return readCodexRateLimitsViaRpc({
     child: child as CodexRpcRateLimitChild,
@@ -124,15 +143,15 @@ export function consumeCodexRateLimitResetCredit(options: {
   codexHomePath?: string | null
   idempotencyKey: string
 }): Promise<CodexRateLimitResetOutcome> {
-  return consumeCodexRateLimitResetCreditFromBackend(options, consumeCodexResetCredit)
+  return consumeCodexRateLimitResetCreditFromBackend(options, requestCodexBackend)
 }
 
 async function supplementBackendMetadata(
   limits: ProviderRateLimits,
   options?: CodexRateLimitFetchOptions
 ): Promise<ProviderRateLimits> {
-  const withSession = await supplementCodexSessionWindow(limits, fetchCodexUsage, options)
-  return supplementCodexRateLimitResetCredits(withSession, fetchCodexResetCredits, options)
+  const withSession = await supplementCodexSessionWindow(limits, requestCodexBackend, options)
+  return supplementCodexRateLimitResetCredits(withSession, requestCodexBackend, options)
 }
 
 function codexUnavailable(error: string, status: 'error' | 'unavailable'): ProviderRateLimits {
@@ -150,12 +169,12 @@ async function fetchBackendUsage(
   options: CodexRateLimitFetchOptions | undefined
 ): Promise<ProviderRateLimits | null> {
   try {
-    const result = await fetchCodexRateLimitsViaBackend(fetchCodexUsage, options)
+    const result = await fetchCodexRateLimitsViaBackend(requestCodexBackend, options)
     if (options?.signal?.aborted) {
       return abortedCodexRateLimitResult()
     }
     return result
-      ? supplementCodexRateLimitResetCredits(result, fetchCodexResetCredits, options)
+      ? supplementCodexRateLimitResetCredits(result, requestCodexBackend, options)
       : null
   } catch {
     return options?.signal?.aborted ? abortedCodexRateLimitResult() : null
