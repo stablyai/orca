@@ -207,6 +207,7 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/runtime/rpc/methods/agent-launch-prestart-failure.test.ts',
   'src/main/runtime/rpc/methods/agent-launch-replay.test.ts',
   'src/main/runtime/rpc/methods/agent-launch-session-reservation.test.ts',
+  'src/main/runtime/rpc/methods/repo-update-owner-dispatch.test.ts',
   'src/main/runtime/rpc/methods/structured-agent-session-adoption-replay.test.ts',
   'src/main/runtime/rpc/methods/structured-agent-session-at-rest.test.ts',
   'src/main/runtime/rpc/methods/structured-agent-session-hold.test.ts',

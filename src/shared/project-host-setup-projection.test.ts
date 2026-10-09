@@ -19,6 +19,51 @@ function repo(overrides: Partial<Repo> & Pick<Repo, 'id' | 'path' | 'displayName
 }
 
 describe('project host setup projection', () => {
+  it.each(['local', 'ssh:private-b', 'runtime:private'] as const)(
+    'keeps raw %s execution separate from its publishing route',
+    (rawHost) => {
+      const { setups } = projectHostSetupProjectionFromRepos([
+        repo({
+          id: 'shared',
+          path: '/receiver/b',
+          displayName: 'Private B',
+          executionHostId: 'runtime:publisher',
+          catalogOwnerHostId: 'runtime:publisher',
+          authoritativeExecutionHostId: rawHost
+        })
+      ])
+      expect(setups[0]).toMatchObject({
+        hostId: 'runtime:publisher',
+        executionHostId: rawHost,
+        authoritativeExecutionHostId: rawHost,
+        catalogOwnerHostId: 'runtime:publisher',
+        runtimeOwnerEnvironmentId: 'publisher'
+      })
+      expect(setups[0]).not.toHaveProperty('connectionId')
+    }
+  )
+
+  it('retains unknown legacy ownership and existing local, SSH and runtime execution stamps', () => {
+    const { setups } = projectHostSetupProjectionFromRepos([
+      repo({ id: 'legacy', path: '/legacy', displayName: 'Legacy' }),
+      repo({ id: 'local', path: '/local', displayName: 'Local', executionHostId: 'local' }),
+      repo({ id: 'ssh', path: '/ssh', displayName: 'SSH', executionHostId: 'ssh:direct' }),
+      repo({
+        id: 'remote',
+        path: '/remote',
+        displayName: 'Remote',
+        executionHostId: 'runtime:direct'
+      })
+    ])
+    expect(setups[0]).not.toHaveProperty('executionHostId')
+    expect(setups.slice(1).map((setup) => setup.executionHostId)).toEqual([
+      'local',
+      'ssh:direct',
+      'runtime:direct'
+    ])
+    expect(setups.every((setup) => setup.authoritativeExecutionHostId === undefined)).toBe(true)
+  })
+
   it('keeps timestamps stable when addedAt is 0 across different now values', () => {
     const target = repo({
       id: 'repo-1',

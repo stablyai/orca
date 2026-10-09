@@ -119,7 +119,12 @@ describe('repo slice host identity routing', () => {
 
     expect(store.getState().repos).toEqual([
       localDuplicate,
-      { ...remoteDuplicate, displayName: 'Remote Renamed' }
+      {
+        ...remoteDuplicate,
+        displayName: 'Remote Renamed',
+        authoritativeExecutionHostId: 'runtime:env-1',
+        catalogOwnerHostId: 'runtime:env-1'
+      }
     ])
     expect(reposUpdate).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
@@ -176,7 +181,12 @@ describe('repo slice host identity routing', () => {
     expect(reposUpdate).not.toHaveBeenCalled()
     expect(store.getState().repos).toEqual([
       localDuplicate,
-      { ...remoteDuplicate, displayName: 'Remote via host' }
+      {
+        ...remoteDuplicate,
+        displayName: 'Remote via host',
+        authoritativeExecutionHostId: 'runtime:env-1',
+        catalogOwnerHostId: 'runtime:env-1'
+      }
     ])
   })
 
@@ -297,7 +307,12 @@ describe('repo slice host identity routing', () => {
     )
     expect(store.getState().repos).toEqual([
       localDuplicate,
-      { ...remoteDuplicate, displayName: 'Remote queued' }
+      {
+        ...remoteDuplicate,
+        displayName: 'Remote queued',
+        authoritativeExecutionHostId: 'runtime:env-1',
+        catalogOwnerHostId: 'runtime:env-1'
+      }
     ])
   })
 

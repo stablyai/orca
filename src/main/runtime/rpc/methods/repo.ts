@@ -165,15 +165,14 @@ export const REPO_METHODS = [
     name: 'repo.update',
     permission: 'workspace',
     params: RepoUpdate,
-    handler: async (params, context) => ({
-      repo: projectRepoVisibilityForClient(
-        await context.runtime.updateRepo(
-          params.repo,
-          params.updates as Parameters<typeof context.runtime.updateRepo>[1]
-        ),
-        context
-      )
-    })
+    handler: async (params, context) => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The existing update schema and controller patch shape are unchanged; host validation is separate.
+      const updates = params.updates as Parameters<typeof context.runtime.updateRepo>[1]
+      const repo = await (params.executionHostId === undefined
+        ? context.runtime.updateRepo(params.repo, updates)
+        : context.runtime.updateRepo(params.repo, updates, params.executionHostId))
+      return { repo: projectRepoVisibilityForClient(repo, context) }
+    }
   }),
   defineMethod({
     name: 'repo.rm',

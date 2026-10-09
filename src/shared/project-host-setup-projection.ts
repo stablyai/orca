@@ -283,6 +283,7 @@ function mergeProjectRepo(accumulator: ProjectAccumulator, repo: Repo): void {
 
 function createSetupFromRepo(repo: Repo, projectId: string): ProjectHostSetup {
   const hostId = getRepoExecutionHostId(repo)
+  const executionHostId = repo.authoritativeExecutionHostId ?? repo.executionHostId
   const catalogOwner = parseExecutionHostId(repo.catalogOwnerHostId)
   const createdAt = catalogTimestampFromAddedAt(repo.addedAt)
   const setupMethod = repo.projectHostSetupMethod ?? 'legacy-repo'
@@ -295,7 +296,7 @@ function createSetupFromRepo(repo: Repo, projectId: string): ProjectHostSetup {
     displayName: repo.displayName,
     ...(repo.kind ? { kind: repo.kind } : {}),
     ...(repo.connectionId !== undefined ? { connectionId: repo.connectionId } : {}),
-    ...(repo.executionHostId !== undefined ? { executionHostId: repo.executionHostId } : {}),
+    ...(executionHostId !== undefined ? { executionHostId } : {}),
     ...(repo.authoritativeExecutionHostId
       ? { authoritativeExecutionHostId: repo.authoritativeExecutionHostId }
       : {}),
