@@ -3,17 +3,19 @@ import type * as React from 'react'
 import { ORCA_TERMINAL_COMMAND_FINISHED_EVENT } from '@/hooks/terminal-command-finished-event'
 
 type WorktreesChangedCallback = (data: { repoId: string }) => void
-type GitStatusMetadataChangedCallback = (data: { repoId: string }) => void
+type GitStatusMetadataChangedCallback = (data: { repoId: string; worktreePaths?: string[] }) => void
 type HookParams = {
   activeRepoId: string | null
   activeWorktreeId: string | null
+  activeWorktreePath?: string | null
   enabled: boolean
   fetchStatus: () => void
+  getRepoWorktreePaths?: (repoId: string) => readonly string[]
 }
 
 async function renderHookOnce(params: HookParams): Promise<{
   emitWorktreesChanged: (repoId: string) => void
-  emitGitStatusMetadataChanged: (repoId: string) => void
+  emitGitStatusMetadataChanged: (repoId: string, worktreePaths?: string[]) => void
   emitCommandFinished: (worktreeId: string) => void
   onChangedSubscribe: ReturnType<typeof vi.fn>
   onGitStatusMetadataChangedSubscribe: ReturnType<typeof vi.fn>
@@ -76,16 +78,20 @@ async function renderHookOnce(params: HookParams): Promise<{
   })
 
   const { useGitStatusPushSignalRefresh } = await import('./git-status-push-signal-refresh')
-  function PushSignalRefreshHarness(props: HookParams): null {
+  function PushSignalRefreshHarness(props: Required<HookParams>): null {
     useGitStatusPushSignalRefresh(props)
     return null
   }
-  PushSignalRefreshHarness(params)
+  PushSignalRefreshHarness({
+    activeWorktreePath: '/repo/wt-1',
+    getRepoWorktreePaths: () => ['/repo', '/repo/wt-1', '/repo/wt-2'],
+    ...params
+  })
 
   return {
     emitWorktreesChanged: (repoId: string) => worktreesChangedCallback?.({ repoId }),
-    emitGitStatusMetadataChanged: (repoId: string) =>
-      gitStatusMetadataChangedCallback?.({ repoId }),
+    emitGitStatusMetadataChanged: (repoId: string, worktreePaths?: string[]) =>
+      gitStatusMetadataChangedCallback?.(worktreePaths ? { repoId, worktreePaths } : { repoId }),
     emitCommandFinished: (worktreeId: string) => {
       const listener = windowListeners.get(ORCA_TERMINAL_COMMAND_FINISHED_EVENT)
       listener?.({ detail: { worktreeId } } as unknown as Event)
@@ -135,6 +141,42 @@ describe('useGitStatusPushSignalRefresh', () => {
 
     harness.emitGitStatusMetadataChanged('repo-other')
     expect(fetchStatus).toHaveBeenCalledTimes(1)
+  })
+
+  it('skips metadata signals attributed only to sibling worktrees', async () => {
+    const fetchStatus = vi.fn()
+    const harness = await renderHookOnce({
+      activeRepoId: 'repo-1',
+      activeWorktreeId: 'wt-1',
+      enabled: true,
+      fetchStatus
+    })
+
+    harness.emitGitStatusMetadataChanged('repo-1', ['/repo/wt-2'])
+    harness.emitGitStatusMetadataChanged('repo-1', ['/repo'])
+    expect(fetchStatus).not.toHaveBeenCalled()
+
+    harness.emitGitStatusMetadataChanged('repo-1', ['/repo/wt-2', '/repo/wt-1'])
+    expect(fetchStatus).toHaveBeenCalledTimes(1)
+  })
+
+  it('refreshes when attribution is missing or names no known worktree', async () => {
+    const fetchStatus = vi.fn()
+    const harness = await renderHookOnce({
+      activeRepoId: 'repo-1',
+      activeWorktreeId: 'wt-1',
+      enabled: true,
+      fetchStatus
+    })
+
+    // Older main process / SSH watch: no attribution.
+    harness.emitGitStatusMetadataChanged('repo-1')
+    expect(fetchStatus).toHaveBeenCalledTimes(1)
+    harness.emitGitStatusMetadataChanged('repo-1', [])
+    expect(fetchStatus).toHaveBeenCalledTimes(2)
+    // A differently spelled path (symlinked root) may be the active checkout.
+    harness.emitGitStatusMetadataChanged('repo-1', ['/private/repo/wt-1'])
+    expect(fetchStatus).toHaveBeenCalledTimes(3)
   })
 
   it('nudges status when a terminal command finishes in the active worktree', async () => {

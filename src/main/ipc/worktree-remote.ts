@@ -26,6 +26,7 @@ import type {
   AutomationWorkspaceProvenance,
   CliWorkspaceProvenance,
   GitPushTarget,
+  GitStatusMetadataChangedEvent,
   Worktree,
   WorktreeHeadIdentity
 } from '../../shared/worktree/types'
@@ -1691,11 +1692,15 @@ export function notifyWorktreesChanged(mainWindow: BrowserWindow, repoId: string
 
 export function notifyWorktreeGitStatusMetadataChanged(
   mainWindow: BrowserWindow,
-  repoId: string
+  repoId: string,
+  worktreePaths: readonly string[] | null = null
 ): void {
   // Why: index churn is a Source Control freshness hint, not a graph mutation; leave structural caches and runtime/mobile events untouched.
   if (!mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('worktrees:gitStatusMetadataChanged', { repoId })
+    const payload: GitStatusMetadataChangedEvent = worktreePaths
+      ? { repoId, worktreePaths: [...worktreePaths] }
+      : { repoId }
+    mainWindow.webContents.send('worktrees:gitStatusMetadataChanged', payload)
   }
 }
 
