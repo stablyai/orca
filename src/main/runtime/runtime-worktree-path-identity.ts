@@ -80,6 +80,7 @@ export function resolveTerminalSessionWorktreeId(
     ...Object.keys(session.tabsByWorktree),
     ...Object.keys(session.tabGroups ?? {}),
     ...Object.keys(session.tabGroupLayouts ?? {}),
+    ...Object.keys(session.tabFolderGroups ?? {}),
     ...Object.keys(session.activeTabIdByWorktree ?? {}),
     ...Object.keys(session.activeGroupIdByWorktree ?? {})
   ])

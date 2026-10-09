@@ -56,6 +56,9 @@ vi.mock('lucide-react', () => ({
   ArrowUp: () => null,
   Columns2: () => null,
   Copy: () => null,
+  FolderMinus: () => null,
+  FolderPlus: () => null,
+  FolderSymlink: () => null,
   ListX: () => null,
   MessageSquare: () => null,
   PanelBottomClose: () => null,
@@ -183,6 +186,11 @@ beforeEach(() => {
   storeMock.state = {
     keybindings: {},
     dropUnifiedTab: storeMock.dropUnifiedTab,
+    tabFolderGroupsByWorktree: {},
+    createTabFolderGroup: vi.fn(),
+    addTabsToFolderGroup: vi.fn(),
+    moveTabOutOfFolderGroup: vi.fn(),
+    setRenamingFolderGroupId: vi.fn(),
     groupsByWorktree: {
       'wt-1': [
         {

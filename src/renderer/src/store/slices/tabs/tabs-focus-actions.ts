@@ -5,6 +5,7 @@ import {
   pushRecentTabId,
   sanitizeRecentTabIds
 } from '../tab-group-state'
+import { expandFolderGroupIfCollapsed } from './tabs-folder-sync'
 
 export function createTabsFocusActions(
   _set: TabsSliceSet,
@@ -105,6 +106,13 @@ export function createTabsFocusActions(
           // Why: skip writing unreadTerminalTabs when the reference is unchanged, avoiding a no-op alloc that re-runs full-state selectors.
           ...(nextUnreadTerminalTabs !== state.unreadTerminalTabs
             ? { unreadTerminalTabs: nextUnreadTerminalTabs }
+            : {}),
+          ...(tab.folderGroupId
+            ? expandFolderGroupIfCollapsed(
+                state.tabFolderGroupsByWorktree,
+                worktreeId,
+                tab.folderGroupId
+              )
             : {})
         }
       })

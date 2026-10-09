@@ -34,9 +34,12 @@ export type TabBarItemSurfaceRuntime = Pick<
   | 'managedBrowserCreationEnabled'
   | 'statusByRelativePath'
 >
+import { TabFolderChip } from './TabFolderChip'
+import type { TabStripEntry } from './tab-folder-strip-entries'
 
 export function renderTabBarItems({
   items,
+  stripEntries,
   props,
   runtime,
   actions,
@@ -45,6 +48,7 @@ export function renderTabBarItems({
   activeClientHostedBrowserRowId
 }: {
   items: TabBarItem[]
+  stripEntries: TabStripEntry[]
   props: TabBarItemSurfaceProps
   runtime: TabBarItemSurfaceRuntime
   actions: TabBarItemActions
@@ -97,7 +101,7 @@ export function renderTabBarItems({
     return (activeTabType === 'editor' || activeTabType === 'simulator') && activeFileId === item.id
   }
 
-  return items.map((item, index) => {
+  const renderItem = (item: TabBarItem, index: number): React.ReactNode => {
     let canToggleViewMode = false
     let isChatView = false
     let viewModeTabId: string | undefined
@@ -147,6 +151,24 @@ export function renderTabBarItems({
             : null
         }
       />
+    )
+  };
+
+  return stripEntries.map((entry) => {
+    if (entry.type === 'folder') {
+      return (
+        <TabFolderChip
+          key={`folder:${entry.folder.id}`}
+          folder={entry.folder}
+          memberCount={entry.members.length}
+        />
+      )
+    }
+    const index = items.findIndex((item) => item.id === entry.item.id)
+    return (
+      <React.Fragment key={entry.item.id}>
+        {renderItem(entry.item, index === -1 ? 0 : index)}
+      </React.Fragment>
     )
   })
 }

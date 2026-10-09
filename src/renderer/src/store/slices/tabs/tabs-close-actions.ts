@@ -20,6 +20,7 @@ import {
   structuredAgentSessionFocusOwner,
   structuredAgentSessionTargetForTab
 } from '@/runtime/structured-agent-session-owner'
+import { applyFolderMembershipAfterTabChange } from '../../../../../shared/tab-folder-group-state'
 
 export function createTabsCloseActions(
   set: TabsSliceSet,
@@ -132,8 +133,19 @@ export function createTabsCloseActions(
           (current.tabsByWorktree[worktreeId] ?? []).length === 0 &&
           (current.browserTabsByWorktree[worktreeId] ?? []).length === 0 &&
           !current.openFiles.some((file) => file.worktreeId === worktreeId)
+        const folderState = applyFolderMembershipAfterTabChange(
+          nextTabs,
+          current.tabFolderGroupsByWorktree?.[worktreeId] ?? []
+        )
         return {
-          unifiedTabsByWorktree: { ...current.unifiedTabsByWorktree, [worktreeId]: nextTabs },
+          unifiedTabsByWorktree: {
+            ...current.unifiedTabsByWorktree,
+            [worktreeId]: folderState.tabs
+          },
+          tabFolderGroupsByWorktree: {
+            ...current.tabFolderGroupsByWorktree,
+            [worktreeId]: folderState.folders
+          },
           groupsByWorktree: {
             ...current.groupsByWorktree,
             [worktreeId]: nextGroups
@@ -178,7 +190,7 @@ export function createTabsCloseActions(
                   ...current,
                   unifiedTabsByWorktree: {
                     ...current.unifiedTabsByWorktree,
-                    [worktreeId]: nextTabs
+                    [worktreeId]: folderState.tabs
                   },
                   groupsByWorktree: {
                     ...current.groupsByWorktree,

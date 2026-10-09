@@ -25,6 +25,7 @@ import { buildAgentRowLineageTree } from '@/components/dashboard/agent-row-linea
 import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constants'
 import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
 import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion-state'
+import { WorktreeAgentFolderList } from './WorktreeAgentFolderList'
 import { translate } from '@/i18n/i18n'
 import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
 import { selectAcknowledgedAgentTimes } from './worktree-card-agent-ack-inputs'
@@ -386,13 +387,23 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
               }}
             />
             <CompactAgentExpansion expanded={compactRootListExpanded}>
-              {rootAgents.map((rootAgent) =>
-                renderCompactAgentBranch(rootAgent, new Set(), compactRootListExpanded)
-              )}
+              <WorktreeAgentFolderList
+                worktreeId={worktreeId}
+                rootAgents={rootAgents}
+                compact
+                renderAgent={(rootAgent) =>
+                  renderCompactAgentBranch(rootAgent, new Set(), compactRootListExpanded)
+                }
+              />
             </CompactAgentExpansion>
           </div>
         ) : (
-          rootAgents.map((rootAgent) => renderCompactAgentBranch(rootAgent))
+          <WorktreeAgentFolderList
+            worktreeId={worktreeId}
+            rootAgents={rootAgents}
+            compact
+            renderAgent={(rootAgent) => renderCompactAgentBranch(rootAgent)}
+          />
         )}
       </div>
     )
@@ -409,7 +420,11 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       role={hasLineage ? 'tree' : 'group'}
       aria-label={translate('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents')}
     >
-      {rootAgents.map((rootAgent) => renderAgentBranch(rootAgent))}
+      <WorktreeAgentFolderList
+        worktreeId={worktreeId}
+        rootAgents={rootAgents}
+        renderAgent={(rootAgent) => renderAgentBranch(rootAgent)}
+      />
     </div>
   )
 })

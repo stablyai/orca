@@ -50,6 +50,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     props,
     resolvedGroupId: runtime.resolvedGroupId,
     unifiedTabs: runtime.unifiedTabs,
+    folderGroups: runtime.folderGroups,
     unifiedTabByVisibleId: runtime.unifiedTabByVisibleId,
     generatedTabTitlesEnabled: runtime.generatedTabTitlesEnabled,
     statusByRelativePath: runtime.statusByRelativePath

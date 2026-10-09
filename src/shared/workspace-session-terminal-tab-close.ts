@@ -1,3 +1,4 @@
+import { applyFolderMembershipAfterTabChange } from './tab-folder-group-state'
 import type { Tab, TabGroup, TabGroupLayoutNode, WorkspaceVisibleTabType } from './tab-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
 
@@ -191,9 +192,14 @@ export function closeTerminalTabInWorkspaceSession(
   const ptyIdsToKill = [...closingPtyIds].filter((ptyId) => !otherPtyIds.has(ptyId))
   const closedVisibleIds = new Set(unifiedTerminalTabs.map((tab) => tab.id))
   closedVisibleIds.add(tabId)
-  const nextTabs = (session.unifiedTabs?.[worktreeId] ?? []).filter(
+  const remainingTabs = (session.unifiedTabs?.[worktreeId] ?? []).filter(
     (tab) => !closedVisibleIds.has(tab.id)
   )
+  const folderState = applyFolderMembershipAfterTabChange(
+    remainingTabs,
+    session.tabFolderGroups?.[worktreeId] ?? []
+  )
+  const nextTabs = folderState.tabs
   const nextGroups = (session.tabGroups?.[worktreeId] ?? [])
     .map((group) => {
       const tabOrder = group.tabOrder.filter((id) => !closedVisibleIds.has(id))
@@ -230,6 +236,7 @@ export function closeTerminalTabInWorkspaceSession(
       : {}),
     unifiedTabs: { ...session.unifiedTabs, [worktreeId]: nextTabs },
     tabGroups: { ...session.tabGroups, [worktreeId]: nextGroups },
+    tabFolderGroups: { ...session.tabFolderGroups, [worktreeId]: folderState.folders },
     tabGroupLayouts: { ...session.tabGroupLayouts },
     activeGroupIdByWorktree: { ...session.activeGroupIdByWorktree },
     remoteSessionIdsByTabId: { ...session.remoteSessionIdsByTabId },

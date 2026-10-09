@@ -29,6 +29,14 @@ export function canonicalizeTerminalSessionWorktreeId(
       worktreeId: targetWorktreeId
     }))
   }
+  const folders = session.tabFolderGroups?.[sourceWorktreeId]
+  if (folders) {
+    delete session.tabFolderGroups![sourceWorktreeId]
+    session.tabFolderGroups![targetWorktreeId] = folders.map((folder) => ({
+      ...folder,
+      worktreeId: targetWorktreeId
+    }))
+  }
   for (const keyedState of [
     session.tabGroupLayouts,
     session.activeTabIdByWorktree,

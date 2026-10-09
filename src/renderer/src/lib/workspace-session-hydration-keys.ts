@@ -18,7 +18,8 @@ const WORKSPACE_CHROME_SESSION_FIELDS = [
   'browserTabsByWorktree',
   'unifiedTabs',
   'tabGroups',
-  'tabGroupLayouts'
+  'tabGroupLayouts',
+  'tabFolderGroups'
 ] as const satisfies readonly (keyof WorkspaceSessionState)[]
 
 // Why: unbounded per-worktree history — one entry per worktree ever focused / given default tabs.

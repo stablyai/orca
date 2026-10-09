@@ -10,6 +10,7 @@ import {
   pushRecentTabId,
   sanitizeRecentTabIds
 } from '../tab-group-state'
+import { applyFolderMembershipAfterTabChange } from '../../../../../shared/tab-folder-group-state'
 
 export function createTabsMoveActions(
   set: TabsSliceSet,
@@ -97,14 +98,23 @@ export function createTabsMoveActions(
           ...state.groupsByWorktree,
           [worktreeId]: filteredGroups
         }
+        const movedTabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
+          candidate.id === tabId ? { ...candidate, groupId: targetGroupId } : candidate
+        )
+        const folderState = applyFolderMembershipAfterTabChange(
+          movedTabs,
+          state.tabFolderGroupsByWorktree?.[worktreeId] ?? []
+        )
         const nextUnifiedTabsByWorktree = {
           ...state.unifiedTabsByWorktree,
-          [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
-            candidate.id === tabId ? { ...candidate, groupId: targetGroupId } : candidate
-          )
+          [worktreeId]: folderState.tabs
         }
         return {
           unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
+          tabFolderGroupsByWorktree: {
+            ...state.tabFolderGroupsByWorktree,
+            [worktreeId]: folderState.folders
+          },
           groupsByWorktree: nextGroupsByWorktree,
           layoutByWorktree: nextLayoutByWorktree,
           activeGroupIdByWorktree: nextActiveGroupIdByWorktreeResolved,

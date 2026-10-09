@@ -111,6 +111,11 @@ export function createTabsSessionActions(
           current.layoutByWorktree,
           hydrated.layoutByWorktree,
           replaceWorkspaceKeys
+        ),
+        tabFolderGroupsByWorktree: replaceWorkspaceRecordKeys(
+          current.tabFolderGroupsByWorktree,
+          hydrated.tabFolderGroupsByWorktree,
+          replaceWorkspaceKeys
         )
       }))
     }

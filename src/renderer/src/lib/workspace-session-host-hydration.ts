@@ -50,6 +50,7 @@ const WORKSPACE_SESSION_KEYED_FIELDS = [
   'unifiedTabs',
   'tabGroups',
   'tabGroupLayouts',
+  'tabFolderGroups',
   'activeGroupIdByWorktree',
   'lastVisitedAtByWorktreeId',
   'defaultTerminalTabsAppliedByWorktreeId'

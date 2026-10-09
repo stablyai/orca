@@ -3,7 +3,7 @@ import {
   describeWorkspaceSessionError,
   safeParseWorkspaceSession,
   WORKSPACE_SESSION_UNVALIDATABLE
-} from './workspace-session-schema'
+} from './workspace-session-parse'
 import { collectSalvageDrops } from './zod-salvage'
 
 export type SalvagedWorkspaceSession =

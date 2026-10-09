@@ -3,6 +3,7 @@ import type { TuiAgent } from '../../../../../shared/tui-agent'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { findTabAndWorktree, patchTab, updateGroup, dedupeTabOrder } from '../tab-group-state'
 import { applyTabOrderSortValues, partitionPinnedTabOrder } from './tabs-tab-order'
+import { syncWorktreeFolderTabOrders } from './tabs-folder-sync'
 import {
   mirrorTabPinnedToHost,
   mirrorTabViewModeToHost,
@@ -47,7 +48,13 @@ export function createTabsLabelActions(
                 const sortOrder = orderMap.get(tab.id)
                 return sortOrder === undefined ? tab : { ...tab, sortOrder }
               })
-            }
+            },
+            ...syncWorktreeFolderTabOrders(
+              state.tabFolderGroupsByWorktree,
+              worktreeId,
+              groupId,
+              nextTabOrder
+            )
           }
         }
         return state
@@ -161,7 +168,13 @@ export function createTabsLabelActions(
           groupsByWorktree: {
             ...state.groupsByWorktree,
             [worktreeId]: updateGroup(groups, { ...group, tabOrder })
-          }
+          },
+          ...syncWorktreeFolderTabOrders(
+            state.tabFolderGroupsByWorktree,
+            worktreeId,
+            group.id,
+            tabOrder
+          )
         }
       })
       mirrorTabPinnedToHost(get(), tabId, true)
@@ -198,7 +211,13 @@ export function createTabsLabelActions(
           groupsByWorktree: {
             ...state.groupsByWorktree,
             [worktreeId]: updateGroup(groups, { ...group, tabOrder })
-          }
+          },
+          ...syncWorktreeFolderTabOrders(
+            state.tabFolderGroupsByWorktree,
+            worktreeId,
+            group.id,
+            tabOrder
+          )
         }
       })
       mirrorTabPinnedToHost(get(), tabId, false)

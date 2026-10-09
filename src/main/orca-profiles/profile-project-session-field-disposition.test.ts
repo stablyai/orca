@@ -258,6 +258,7 @@ describe('workspace session field disposition census', () => {
       'unifiedTabs',
       'tabGroups',
       'tabGroupLayouts',
+      'tabFolderGroups',
       'activeGroupIdByWorktree',
       'lastVisitedAtByWorktreeId',
       'defaultTerminalTabsAppliedByWorktreeId',

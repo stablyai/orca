@@ -188,6 +188,9 @@ export function migrateWorktreeIdentity(
     sessionChanged =
       moveSessionKey(session.tabGroups, (groups) => groups.map(withNewWorktreeId)) || sessionChanged
     sessionChanged = moveSessionKey(session.tabGroupLayouts) || sessionChanged
+    sessionChanged =
+      moveSessionKey(session.tabFolderGroups, (folders) => folders.map(withNewWorktreeId)) ||
+      sessionChanged
     sessionChanged = moveSessionKey(session.activeGroupIdByWorktree) || sessionChanged
     if (session.lastVisitedAtByWorktreeId) {
       const nextRecency = { ...session.lastVisitedAtByWorktreeId }

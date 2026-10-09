@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseWorkspaceSession } from './workspace-session-schema'
+import { parseWorkspaceSession } from './workspace-session-parse'
 
 describe('parseWorkspaceSession terminal fields', () => {
   it('preserves the native chat owner leaf in a terminal layout', () => {

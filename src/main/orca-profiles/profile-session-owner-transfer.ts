@@ -3,6 +3,7 @@ import type { SleepingAgentSessionRecord } from '../../shared/agent-session-resu
 import type { BrowserPage, BrowserWorkspace } from '../../shared/browser-workspace-types'
 import { remapBrowserPageDocLocation } from '../../shared/browser-page-doc-location'
 import type { Tab, TabGroup } from '../../shared/tab-types'
+import type { TabFolderGroup } from '../../shared/tab-folder-types'
 import type { TerminalTab } from '../../shared/terminal-tab-types'
 import type {
   PersistedOpenFile,
@@ -103,6 +104,9 @@ export function extractSessionOwnersForTransfer(
   )
   transferred.tabGroups = mapOwnerRecord(source.tabGroups, (groups) =>
     groups.map((group) => mapTabGroup(group, projection))
+  )
+  transferred.tabFolderGroups = mapOwnerRecord(source.tabFolderGroups, (folders) =>
+    folders.map((folder) => mapTabFolderGroup(folder, projection))
   )
   transferred.terminalLayoutsByTabId = Object.fromEntries(
     [...terminalTabIds].flatMap((tabId) => {
@@ -267,4 +271,11 @@ function mapUnifiedTab(tab: Tab, projection: SessionOwnerProjection): Tab {
 
 function mapTabGroup(group: TabGroup, projection: SessionOwnerProjection): TabGroup {
   return { ...structuredClone(group), worktreeId: projection.mapWorktreeId(group.worktreeId) }
+}
+
+function mapTabFolderGroup(
+  folder: TabFolderGroup,
+  projection: SessionOwnerProjection
+): TabFolderGroup {
+  return { ...structuredClone(folder), worktreeId: projection.mapWorktreeId(folder.worktreeId) }
 }
