@@ -1,0 +1,378 @@
+{
+  "schema": "orca-wsl-v3-private-audit-bindings-v1",
+  "sourceCommit": "8f1e26a669889049695bb7265bd7f87e0f34d872",
+  "sourceTree": "3e6e205518749ec56ea9028ed3af1e514c1570a2",
+  "safeLocalReceipt": {
+    "relativePath": "notes/codex-proxy/native-hosts/wsl-v3-local-execution.safe.json",
+    "bytes": 20516,
+    "sha256": "6d2ff7cf2f2755797fd5dc7fb4aa3a4f0616d4faae1b067ad68a6f9ca764624a"
+  },
+  "transportRelative": ".codex/platform-validation-10-09/wsl-v3-transport-27da6bf69f11ace4b1185d625cdfe282",
+  "configurationName": "configuration-v3-local.private.json",
+  "configuration": {
+    "bytes": 529,
+    "sha256": "442dcb323f9fe26a8a5ea5e1356b03dddf0f3b955cd0606a834d52c399de7780"
+  },
+  "nonce": "1ddfebf63a6b5e7cae9abe6052b1be52",
+  "distro": "Ubuntu-24.04",
+  "configurationDigest": "3f9bc2945095881f2147cbd3e9dc59ad560af6d97f3496d921f4c46b7dc53601",
+  "executionManifestSha256": "712b0145bb07ad4f0fc37934313e7f875c8eaf0de0e86f4b6b9d088282ff4de0",
+  "staticManifestSha256": "3dd879aa0e3e06e80d9737d75d3ad44637e7d2a0bab302085c7bd9bbc0e2550a",
+  "fixtureBundle": {
+    "bytes": 657191,
+    "sha256": "c48e47540aacee3e7e758f24f808150bb5d17f33baa0e4881ed4cb7f201334e5"
+  },
+  "contractBundle": {
+    "bytes": 7165,
+    "sha256": "0815804562cd61817a215724caff0524a1878f6b07595bcc6395efa660855e21"
+  },
+  "contractProductionInputs": {
+    "src/main/codex-cli/codex-read-only-app-server-args.ts": {
+      "bytes": 766,
+      "sha256": "9babbad19b38743be3bde603c8d710f7a864eb33a6d8c3d589d04e33293402c9"
+    },
+    "src/main/providers/pty-path-safety.ts": {
+      "bytes": 901,
+      "sha256": "c6b67c9756ea26efea2641ec578ad92fdaad3d5f3f4b668aca6133f0f2ec5aa0"
+    },
+    "src/main/rate-limits/codex-fetcher-wsl-proxy.test.ts": {
+      "bytes": 7415,
+      "sha256": "7cb7e26760560af16bf5d8ff51469f7be17e10e2abd726ec98062825846bce73"
+    },
+    "src/main/rate-limits/codex-fetcher.ts": {
+      "bytes": 9493,
+      "sha256": "da7748039df7fc01f5108f2b1262b00a4c5166eaf4d0c9570c55a4159181a812"
+    },
+    "src/main/rate-limits/hidden-rate-limit-pty-cwd.ts": {
+      "bytes": 1489,
+      "sha256": "a91077ffe1b5d1ae7c95f0b22c43feb2e3f01cfa169bac909347c1a54d51bdda"
+    },
+    "src/main/rate-limits/hidden-rate-limit-shell.ts": {
+      "bytes": 119,
+      "sha256": "da30ef09aa5831b188eb4a6fc16f5397a8974dd450a97db86e5d9c3efde11a5e"
+    },
+    "src/shared/network-proxy.ts": {
+      "bytes": 3672,
+      "sha256": "571b552e900ea306fe00eb6a4683bf5b77f260316d9ac3b3a3895fc1d02ea14a"
+    },
+    "src/shared/posix-stdout-fence.ts": {
+      "bytes": 4044,
+      "sha256": "872f19fa6f9ba7a11970b0ead87fb7825e663c7a06524d8cb98ae0b29ad8e2e6"
+    },
+    "src/shared/wsl-env.ts": {
+      "bytes": 449,
+      "sha256": "9f9a6bc39f8a3e4b245338652bf30721d8e3888734a40d7cab602dc792dccc88"
+    },
+    "src/shared/wsl-login-shell-command.ts": {
+      "bytes": 4154,
+      "sha256": "b5bdcda4403bc42db691b7ab0862e8a51c3bd7cb48412b3aeb674f053e8e9121"
+    },
+    "src/shared/wsl-paths.ts": {
+      "bytes": 8412,
+      "sha256": "8271d75fb65b85b6bfd279f2a12636f79ddeb3ffe4d9d409dd77f5cce2a46219"
+    }
+  },
+  "transportRuntime": [
+    {
+      "name": "decode-frozen-static.mjs",
+      "bytes": 6279,
+      "sha256": "84444c4e6fb693d953e23bd09264f56ee3027f72f937b098409d184e85c474a3"
+    },
+    {
+      "name": "frozen-transfer-identities.mjs",
+      "bytes": 11489,
+      "sha256": "f73c205f63bf5d85a35d284b7b9614f3486eb84e9161385b6840628c7894ae98"
+    },
+    {
+      "name": "verify-static-inputs.mjs",
+      "bytes": 2887,
+      "sha256": "f38fc9244da0776a931bc954ef2b67fb6354b4063527cdbffb4f24512910f490"
+    }
+  ],
+  "capturedFiles": [
+    {
+      "name": "configuration.private.json",
+      "bytes": 528,
+      "sha256": "3570832573db53dbf98c5249c4626e09eb78ae76849305d014e4eb4558cb4174"
+    },
+    {
+      "name": "constructor-capture.test.ts",
+      "bytes": 5565,
+      "sha256": "8ec8f234bb0d228a05d2cdb2ec8a84297c92ff969407a6ffd7dd06021af78c8c"
+    },
+    {
+      "name": "capture.vitest.config.mjs",
+      "bytes": 1181,
+      "sha256": "0cc41539d6745b253b0230d0bcd4aa4a5672d0abf68cfd0824d504340f21adad"
+    },
+    {
+      "name": "source-manifest.json",
+      "bytes": 709,
+      "sha256": "cddbcd2c79691850d7637ddf954700293cbaa81e563943c1d486f44775a2f30e"
+    },
+    {
+      "name": "populated.private.json",
+      "bytes": 7297,
+      "sha256": "a7224ae3186fbba070b929688648ec50c33f8d31e398f7e5a62b92a829c922fa"
+    },
+    {
+      "name": "empty.private.json",
+      "bytes": 7158,
+      "sha256": "9be01b11ac51dadc94e3ce019641294503bb50823d5c1fdf2b7bae816a60b202"
+    },
+    {
+      "name": "literal.private.json",
+      "bytes": 7360,
+      "sha256": "d2ea738b0c6a63cc0c82ab56cbcdd45a32f344af5f1a379889c500dc33b7f84d"
+    },
+    {
+      "name": "execution-manifest.safe.json",
+      "bytes": 969,
+      "sha256": "712b0145bb07ad4f0fc37934313e7f875c8eaf0de0e86f4b6b9d088282ff4de0"
+    }
+  ],
+  "sourceGuards": [
+    {
+      "name": "head",
+      "args": [
+        "rev-parse",
+        "HEAD"
+      ],
+      "expected": "8f1e26a669889049695bb7265bd7f87e0f34d872"
+    },
+    {
+      "name": "tree",
+      "args": [
+        "rev-parse",
+        "HEAD^{tree}"
+      ],
+      "expected": "3e6e205518749ec56ea9028ed3af1e514c1570a2"
+    },
+    {
+      "name": "packageBlob",
+      "args": [
+        "rev-parse",
+        "HEAD:package.json"
+      ],
+      "expected": "18ff04a8082304218c7276e7abca47de99f08322"
+    },
+    {
+      "name": "lockBlob",
+      "args": [
+        "rev-parse",
+        "HEAD:pnpm-lock.yaml"
+      ],
+      "expected": "544ad1f899e96a1c077ecbd8bbff4bb086ad93e2"
+    },
+    {
+      "name": "trackedClean",
+      "args": [
+        "diff",
+        "--quiet",
+        "HEAD",
+        "--"
+      ],
+      "expected": ""
+    }
+  ],
+  "cases": [
+    {
+      "caseId": "populated",
+      "commandDigest": "30207db521185b4a5ff44d8cef3634a3bd77d255d31b787fc57b0be1c088473c",
+      "argc": 6,
+      "omittedFrameworkKeys": [
+        "BASE_URL",
+        "DEV",
+        "FORCE_TTY",
+        "MODE",
+        "NODE_ENV",
+        "PROD",
+        "SSR",
+        "TEST",
+        "VITEST",
+        "VITEST_MODE",
+        "VITEST_POOL_ID",
+        "VITEST_WORKER_ID"
+      ],
+      "omittedFixtureKeys": [
+        "ORCA_FIXTURE_CAPTURE_HOST_PLATFORM",
+        "ORCA_FIXTURE_CONFIG"
+      ],
+      "retainedRawEnvironmentKeyNames": [
+        "HOME",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        "KEEP",
+        "LANG",
+        "LOGONSERVER",
+        "NO_PROXY",
+        "ORCA_BACKGROUND_LAUNCH",
+        "ORCA_FIXTURE_GUEST_HOME",
+        "ORCA_FIXTURE_GUEST_PATH",
+        "ORCA_FIXTURE_GUEST_ROOT",
+        "ORCA_FIXTURE_NONCE",
+        "ORCA_USER_DATA_PATH",
+        "PATH",
+        "SHELL",
+        "SYSTEMDRIVE",
+        "SYSTEMROOT",
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+        "USERDOMAIN",
+        "USERNAME",
+        "USERPROFILE",
+        "WINDIR",
+        "WSLENV",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "no_proxy",
+        "ORCA_CODEX_USAGE_ENV_0",
+        "ORCA_CODEX_USAGE_ENV_1",
+        "ORCA_CODEX_USAGE_ENV_2",
+        "ORCA_CODEX_USAGE_ENV_3",
+        "ORCA_CODEX_USAGE_ENV_4",
+        "ORCA_CODEX_USAGE_ENV_5",
+        "ORCA_CODEX_USAGE_ENV_6",
+        "ORCA_CODEX_USAGE_ENV_7"
+      ],
+      "rawNameCount": 54
+    },
+    {
+      "caseId": "empty",
+      "commandDigest": "30207db521185b4a5ff44d8cef3634a3bd77d255d31b787fc57b0be1c088473c",
+      "argc": 6,
+      "omittedFrameworkKeys": [
+        "BASE_URL",
+        "DEV",
+        "FORCE_TTY",
+        "MODE",
+        "NODE_ENV",
+        "PROD",
+        "SSR",
+        "TEST",
+        "VITEST",
+        "VITEST_MODE",
+        "VITEST_POOL_ID",
+        "VITEST_WORKER_ID"
+      ],
+      "omittedFixtureKeys": [
+        "ORCA_FIXTURE_CAPTURE_HOST_PLATFORM",
+        "ORCA_FIXTURE_CONFIG"
+      ],
+      "retainedRawEnvironmentKeyNames": [
+        "HOME",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        "KEEP",
+        "LANG",
+        "LOGONSERVER",
+        "NO_PROXY",
+        "ORCA_BACKGROUND_LAUNCH",
+        "ORCA_FIXTURE_GUEST_HOME",
+        "ORCA_FIXTURE_GUEST_PATH",
+        "ORCA_FIXTURE_GUEST_ROOT",
+        "ORCA_FIXTURE_NONCE",
+        "ORCA_USER_DATA_PATH",
+        "PATH",
+        "SHELL",
+        "SYSTEMDRIVE",
+        "SYSTEMROOT",
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+        "USERDOMAIN",
+        "USERNAME",
+        "USERPROFILE",
+        "WINDIR",
+        "WSLENV",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "no_proxy",
+        "ORCA_CODEX_USAGE_ENV_0",
+        "ORCA_CODEX_USAGE_ENV_1",
+        "ORCA_CODEX_USAGE_ENV_2",
+        "ORCA_CODEX_USAGE_ENV_3",
+        "ORCA_CODEX_USAGE_ENV_4",
+        "ORCA_CODEX_USAGE_ENV_5",
+        "ORCA_CODEX_USAGE_ENV_6",
+        "ORCA_CODEX_USAGE_ENV_7"
+      ],
+      "rawNameCount": 54
+    },
+    {
+      "caseId": "literal",
+      "commandDigest": "30207db521185b4a5ff44d8cef3634a3bd77d255d31b787fc57b0be1c088473c",
+      "argc": 6,
+      "omittedFrameworkKeys": [
+        "BASE_URL",
+        "DEV",
+        "FORCE_TTY",
+        "MODE",
+        "NODE_ENV",
+        "PROD",
+        "SSR",
+        "TEST",
+        "VITEST",
+        "VITEST_MODE",
+        "VITEST_POOL_ID",
+        "VITEST_WORKER_ID"
+      ],
+      "omittedFixtureKeys": [
+        "ORCA_FIXTURE_CAPTURE_HOST_PLATFORM",
+        "ORCA_FIXTURE_CONFIG"
+      ],
+      "retainedRawEnvironmentKeyNames": [
+        "HOME",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        "KEEP",
+        "LANG",
+        "LOGONSERVER",
+        "NO_PROXY",
+        "ORCA_BACKGROUND_LAUNCH",
+        "ORCA_FIXTURE_GUEST_HOME",
+        "ORCA_FIXTURE_GUEST_PATH",
+        "ORCA_FIXTURE_GUEST_ROOT",
+        "ORCA_FIXTURE_NONCE",
+        "ORCA_USER_DATA_PATH",
+        "PATH",
+        "SHELL",
+        "SYSTEMDRIVE",
+        "SYSTEMROOT",
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+        "USERDOMAIN",
+        "USERNAME",
+        "USERPROFILE",
+        "WINDIR",
+        "WSLENV",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "no_proxy",
+        "ORCA_CODEX_USAGE_ENV_0",
+        "ORCA_CODEX_USAGE_ENV_1",
+        "ORCA_CODEX_USAGE_ENV_2",
+        "ORCA_CODEX_USAGE_ENV_3",
+        "ORCA_CODEX_USAGE_ENV_4",
+        "ORCA_CODEX_USAGE_ENV_5",
+        "ORCA_CODEX_USAGE_ENV_6",
+        "ORCA_CODEX_USAGE_ENV_7"
+      ],
+      "rawNameCount": 54
+    }
+  ]
+}

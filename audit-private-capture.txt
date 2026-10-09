@@ -1,0 +1,232 @@
+import { createHash } from 'node:crypto'
+import { closeSync, fstatSync, lstatSync, openSync, readSync, realpathSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import path from 'node:path'
+import { pathToFileURL } from 'node:url'
+
+const require = createRequire(import.meta.url)
+const bindingIdentity = {"bytes": 10539, "sha256": "836abe3c8464a661e4da02de42f57fd85110352b95ebb6d10008249f0b1e8233"}
+const hash = (bytes) => createHash('sha256').update(bytes).digest('hex')
+let stage = 'invocation'
+
+const refuse = (condition) => {
+  if (!condition) throw new Error('Private capture audit refused')
+}
+
+function readPinned(file, identity) {
+  const initial = lstatSync(file)
+  refuse(initial.isFile() && !initial.isSymbolicLink() && initial.size === identity.bytes)
+  const descriptor = openSync(file, 'r')
+  try {
+    const current = fstatSync(descriptor)
+    refuse(current.isFile() && current.size === initial.size && current.dev === initial.dev && current.ino === initial.ino)
+    const raw = Buffer.alloc(identity.bytes)
+    let offset = 0
+    while (offset < raw.length) {
+      const count = readSync(descriptor, raw, offset, raw.length - offset, null)
+      refuse(count > 0)
+      offset += count
+    }
+    refuse(readSync(descriptor, Buffer.alloc(1), 0, 1, null) === 0 && hash(raw) === identity.sha256)
+    const after = lstatSync(file)
+    refuse(after.isFile() && !after.isSymbolicLink() && after.size === initial.size && after.dev === initial.dev && after.ino === initial.ino)
+    return raw
+  } finally {
+    closeSync(descriptor)
+  }
+}
+
+function equalArray(actual, expected) {
+  return JSON.stringify(actual) === JSON.stringify(expected)
+}
+
+function assertRealDirectoryTree(directory) {
+  let parent = directory
+  for (;;) {
+    const stat = lstatSync(parent)
+    if (!stat.isDirectory() || stat.isSymbolicLink()) {
+      throw new Error('Owned directory ancestor is not a real directory')
+    }
+    const next = path.dirname(parent)
+    if (next === parent) {
+      break
+    }
+    parent = next
+  }
+}
+
+function compareEveryValue(ports, actual, expected) {
+  ports.assertWindowsRequiredEnvironment(actual)
+  ports.assertWindowsRequiredEnvironment(expected)
+  const actualNames = Object.keys(actual)
+  const expectedNames = Object.keys(expected)
+  refuse(actualNames.length === expectedNames.length)
+  for (const key of actualNames) {
+    refuse(typeof actual[key] === 'string' && ports.ownedEnvironmentHasKey(key, expected, 'win32'))
+  }
+  for (const [key, value] of Object.entries(expected)) {
+    refuse(typeof value === 'string' && ports.ownedEnvironmentValue(actual, key, 'win32') === value)
+  }
+  return actualNames
+}
+
+async function audit() {
+  refuse(process.platform === 'win32' && process.argv.length === 2)
+  const source = realpathSync(process.cwd())
+  const directory = import.meta.dirname
+  assertRealDirectoryTree(directory)
+  const bindings = JSON.parse(readPinned(path.join(directory, 'audit-bindings.safe.json'), bindingIdentity).toString('utf8'))
+  refuse(directory === path.join(source, 'notes/codex-proxy/wsl-fixture-v3-private-audit'))
+  const transport = path.join(source, ...bindings.transportRelative.split('/'))
+  const staticRoot = path.join(source, 'notes/codex-proxy/wsl-fixture-v3')
+  const runtimeFiles = bindings.transportRuntime
+  stage = 'runtime-identities'
+  for (const root of [source, directory, transport, staticRoot, path.join(directory, 'build')]) {
+    assertRealDirectoryTree(root)
+  }
+  for (const identity of runtimeFiles) readPinned(path.join(transport, identity.name), identity)
+  const decoder = await import(pathToFileURL(path.join(transport, 'decode-frozen-static.mjs')).href)
+  const verifier = await import(pathToFileURL(path.join(transport, 'verify-static-inputs.mjs')).href)
+  const staticReceipt = verifier.verifyStaticInputs(source, staticRoot)
+  refuse(staticReceipt.allIdentitiesVerified && staticReceipt.staticManifestSha256 === bindings.staticManifestSha256)
+  const verifyContractSource = () => {
+    for (const [name, identity] of Object.entries(bindings.contractProductionInputs)) {
+      decoder.assertRealDirectoryTree(path.dirname(path.join(source, name)))
+      const bytes = decoder.readExactRegularFile(path.join(source, name), identity.bytes)
+      refuse(hash(bytes) === identity.sha256)
+    }
+  }
+  verifyContractSource()
+  readPinned(path.join(staticRoot, 'build/fixture-launcher.cjs'), bindings.fixtureBundle)
+  readPinned(path.join(directory, 'build/expected-contract.cjs'), bindings.contractBundle)
+  const ports = require(path.join(staticRoot, 'build/fixture-launcher.cjs'))
+  const { expectedConstructorContract } = require(path.join(directory, 'build/expected-contract.cjs'))
+  refuse(ports.getRealCaptureHostPlatform() === 'win32')
+  stage = 'configuration-and-seal'
+  const configPath = path.join(transport, bindings.configurationName)
+  const configRaw = decoder.readExactRegularFile(configPath, bindings.configuration.bytes)
+  refuse(hash(configRaw) === bindings.configuration.sha256)
+  const config = ports.readConfiguration(configPath)
+  refuse(
+    config.sourceRoot === source && config.captureHostPlatform === 'win32' &&
+    config.nonce === bindings.nonce && config.distro === bindings.distro &&
+    config.guestRoot === `/tmp/orca-codex-proxy-${bindings.nonce}` &&
+    path.basename(config.hostRoot) === `orca-codex-proxy-${bindings.nonce}` &&
+    realpathSync(config.nodeExecutable) === realpathSync(process.execPath)
+  )
+  decoder.assertRealDirectoryTree(config.hostRoot)
+  const ownerRaw = Buffer.from(JSON.stringify({
+    nonce: bindings.nonce,
+    sourceCommit: bindings.sourceCommit,
+    configurationDigest: bindings.configurationDigest
+  }, null, 2))
+  const ownerIdentity = { bytes: ownerRaw.length, sha256: hash(ownerRaw) }
+  const snapshots = () => Object.fromEntries([
+    ...bindings.capturedFiles.map((identity) => [identity.name,
+      decoder.readExactRegularFile(path.join(config.hostRoot, identity.name), identity.bytes)]),
+    ['owner.json', decoder.readExactRegularFile(path.join(config.hostRoot, 'owner.json'), ownerIdentity.bytes)]
+  ])
+  const before = snapshots()
+  for (const identity of [...bindings.capturedFiles, { name: 'owner.json', ...ownerIdentity }]) {
+    refuse(hash(before[identity.name]) === identity.sha256)
+  }
+  ports.verifyReviewedExecution(config, bindings.executionManifestSha256)
+  const sourceGuard = async () => {
+    const values = {}
+    for (const { name, args, expected } of bindings.sourceGuards) {
+      const result = await ports.runProcess({
+        program: config.gitExecutable, args, cwd: source, env: ports.localEnvironment(config),
+        timeoutMs: 10000, maxOutputBytes: 2048, killOnOutputLimit: true
+      })
+      refuse(result.code === 0 && !result.timedOut && !result.outputTruncated && result.stderr === '')
+      refuse(result.stdout.trim() === expected)
+      values[name] = name === 'trackedClean' ? true : expected
+    }
+    return values
+  }
+  const sourceBefore = await sourceGuard()
+  stage = 'all-values-and-full-argv'
+  const envelopes = ports.readEnvelopes(config)
+  refuse(envelopes.length === bindings.cases.length)
+  const reports = []
+  for (let index = 0; index < envelopes.length; index++) {
+    const envelope = envelopes[index]
+    const approved = bindings.cases[index]
+    refuse(envelope.caseId === approved.caseId && envelope.captureHostPlatform === 'win32')
+    const raw = JSON.parse(before[`${approved.caseId}.private.json`].toString('utf8'))
+    refuse(equalArray(Object.keys(raw.env), Object.keys(envelope.env)) && equalArray(raw.args, envelope.args))
+    const serializationBefore = JSON.stringify(envelope)
+    const expected = expectedConstructorContract(config, ports.guestEnvironment(config), approved.caseId)
+    const rawNames = compareEveryValue(ports, envelope.env, expected.env)
+    refuse(equalArray(envelope.args, expected.args) && ports.commandDigest(expected.args) === approved.commandDigest)
+    refuse(envelope.commandDigest === approved.commandDigest && envelope.args.length === approved.argc)
+    refuse(equalArray(envelope.omittedFrameworkKeys, approved.omittedFrameworkKeys))
+    refuse(equalArray(envelope.omittedFixtureKeys, approved.omittedFixtureKeys))
+    const generated = new Set(['ORCA_FIXTURE_EXPECTED_PROXY', 'ORCA_FIXTURE_EXPECTED_BYPASS'])
+    const retainedRawNames = rawNames.filter((key) => !generated.has(key))
+    refuse(equalArray(retainedRawNames, approved.retainedRawEnvironmentKeyNames))
+    const reconstructed = [...retainedRawNames, ...envelope.omittedFrameworkKeys, ...envelope.omittedFixtureKeys]
+    refuse(new Set(reconstructed).size === reconstructed.length && reconstructed.length === approved.rawNameCount)
+    refuse(JSON.stringify(envelope) === serializationBefore)
+    reports.push({
+      caseId: approved.caseId,
+      retainedEnvironmentNames: rawNames,
+      retainedRawEnvironmentNameCount: retainedRawNames.length,
+      generatedCheckValueCount: generated.size,
+      everyRetainedNameAndValueCompared: true,
+      windowsComparisonRestrictedToKnown11: true,
+      unknownUndefinedDuplicateAndMismatchedValuesRefused: true,
+      exactProductionArgvCompared: true,
+      argc: envelope.args.length,
+      commandDigest: envelope.commandDigest,
+      rawCasingAndOrderPreserved: true,
+      retainedRawNameOrderMatchesSafeLocalReceipt: true,
+      retainedRawNameOrderDigest: hash(Buffer.from(JSON.stringify(retainedRawNames))),
+      omittedFrameworkKeys: envelope.omittedFrameworkKeys,
+      omittedFixtureKeys: envelope.omittedFixtureKeys,
+      omittedValueInspectionScope: 'Absent from envelopes; only exact frozen recorder checked their original values',
+      rawOriginalNameSetCompared: false,
+      reconstructedRawNameCount: reconstructed.length,
+      privateValuesPrintedOrExported: false
+    })
+  }
+  stage = 'post-read-identities'
+  const after = snapshots()
+  for (const [name, bytes] of Object.entries(before)) refuse(bytes.equals(after[name]))
+  refuse(configRaw.equals(decoder.readExactRegularFile(configPath, bindings.configuration.bytes)))
+  ports.verifyReviewedExecution(config, bindings.executionManifestSha256)
+  verifier.verifyStaticInputs(source, staticRoot)
+  verifyContractSource()
+  const sourceAfter = await sourceGuard()
+  refuse(JSON.stringify(sourceBefore) === JSON.stringify(sourceAfter))
+  for (const identity of runtimeFiles) readPinned(path.join(transport, identity.name), identity)
+  readPinned(path.join(directory, 'build/expected-contract.cjs'), bindings.contractBundle)
+  return {
+    schema: 'orca-wsl-v3-private-capture-audit-v1', passed: true,
+    nativePlatform: process.platform, sourceBefore, sourceAfter,
+    sourceInputsVerified: staticReceipt.productionInputCount,
+    additionalContractSourceInputsVerified: Object.keys(bindings.contractProductionInputs).length,
+    staticManifestSha256: bindings.staticManifestSha256,
+    executionManifestSha256: bindings.executionManifestSha256,
+    configurationFileSha256: bindings.configuration.sha256,
+    capturedFileIdentities: bindings.capturedFiles,
+    ownershipMarkerComparedToExactConfigDigest: true,
+    allPrivateFilesUnchangedAcrossAudit: true,
+    cases: reports,
+    boundedReadScope: {
+      privateConfigurationCount: 2, privateEnvelopeCount: 3,
+      safeExecutionSealCount: 1, generatedOwnedSupportFileCount: 3, ownershipMarkerCount: 1,
+      userProfileOrAccountFilesRead: false
+    },
+    onlyProcessCalls: 'Five bounded read-only Git identity checks before and after; existing runProcess with closed owned environment',
+    privateValuesPrintedOrExported: false, filesWritten: false,
+    fixtureStagesInvoked: false, guestExecuted: false, backendInvoked: false
+  }
+}
+
+if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
+  audit().then((result) => process.stdout.write(JSON.stringify(result, null, 2) + '\n')).catch(() => {
+    process.stderr.write(JSON.stringify({ stage, passed: false, privateOutputWithheld: true, guestExecuted: false }) + '\n')
+    process.exitCode = 1
+  })
+}
