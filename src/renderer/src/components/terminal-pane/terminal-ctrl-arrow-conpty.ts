@@ -43,6 +43,15 @@ function isRemoteRuntimePtyId(ptyId: string): boolean {
   return ptyId.startsWith(REMOTE_RUNTIME_PTY_ID_PREFIX)
 }
 
+// Why: the Ctrl+Arrow ConPTY gate exists to defer to PSReadLine (PowerShell/
+// cmd), which binds Ctrl+←/→ natively. A local Git Bash / bash shell on Windows
+// ConPTY runs readline instead, which does NOT bind \e[1;5D / \e[1;5C — so it
+// still needs the \eb / \ef translation, just like Linux/WSL. Matches the
+// 'git-bash' shortcut literal and any bash(.exe) shell path.
+function isBashReadlineShellOverride(shellOverride: string | null | undefined): boolean {
+  return /(?:^|[/\\])(?:git-)?bash(?:\.exe)?$/i.test(shellOverride ?? '')
+}
+
 export function isLocalWindowsConptyPaneForCtrlArrow({
   isWindows,
   userAgent,
@@ -75,6 +84,13 @@ export function isLocalWindowsConptyPaneForCtrlArrow({
   const tabShellOverride = state.tabsByWorktree[worktreeId]?.find(
     (candidate) => candidate.id === tabId
   )?.shellOverride
+  const shellOverride = sessionMetadata?.shellOverride ?? tabShellOverride
+  // Why: a local Git Bash / bash pane is a native Windows ConPTY but runs
+  // readline, not PSReadLine — it needs the \eb / \ef translation, so it must
+  // NOT be gated out of it. Only PowerShell/cmd (PSReadLine) should pass through.
+  if (isBashReadlineShellOverride(shellOverride)) {
+    return false
+  }
   const executionHostId: ExecutionHostId = hasLiveLocalSession
     ? LOCAL_EXECUTION_HOST_ID
     : getExecutionHostIdForWorktree(state, worktreeId)
@@ -83,7 +99,7 @@ export function isLocalWindowsConptyPaneForCtrlArrow({
     userAgent,
     connectionId,
     cwd: sessionMetadata?.cwd ?? paneCwd.get(paneId)?.cwd ?? fallbackCwd,
-    shellOverride: sessionMetadata?.shellOverride ?? tabShellOverride,
+    shellOverride,
     executionHostId
   })
 }
