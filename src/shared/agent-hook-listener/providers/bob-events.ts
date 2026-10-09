@@ -42,10 +42,10 @@ export function normalizeBobEvent(
   } else if (eventName === 'Stop') {
     stateName = 'done'
   } else if (eventName === 'SessionStart') {
-    // Why: a resumed Bob session emits SessionStart before its first prompt, so land an idle
-    // 'done' row rather than nothing; 'working' would paint a spinner over an idle TUI. Bob
-    // only ever sends source 'startup' or 'resume' (store.getMessageCount === 0 ? ... : ...),
-    // so anything else is unknown and must not flip a live turn idle.
+    // Why: Bob fires SessionStart lazily on a session's first turn input (never at boot, so it
+    // is no readiness signal), just before UserPromptSubmit; land it as a session-boundary row.
+    // Only 'startup'/'resume' open a session: 2.0.5 also sends source 'compact' mid-turn after
+    // a compaction, which must not flip a live turn idle.
     const source = readString(hookPayload, 'source')
     if (source !== 'startup' && source !== 'resume') {
       return null
