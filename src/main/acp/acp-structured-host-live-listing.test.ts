@@ -34,4 +34,20 @@ describe('a live Grok listing', () => {
     expect(listing.models.every((model) => !model.isDefault)).toBe(true)
     expect(listing).not.toHaveProperty('configuredDefault')
   })
+
+  it('starts the chat even when saving its start listing throws', async () => {
+    const modelCatalog: AgentModelCatalogService = {
+      read: vi.fn(async () => ({ origin: 'unknown' as const })),
+      recordLiveListing: vi.fn(() => {
+        throw new Error('catalog unavailable')
+      }),
+      prewarm: vi.fn(async () => {}),
+      stop: vi.fn(),
+      providerStarted: vi.fn()
+    }
+    // The rig's attach must succeed: bookkeeping never fails a proven start.
+    const { store } = await openAttachedHostRig({}, undefined, modelCatalog)
+    expect(modelCatalog.recordLiveListing).toHaveBeenCalledTimes(1)
+    expect(store.getRecord(SESSION)?.lease.ownerProcess).not.toBeNull()
+  })
 })

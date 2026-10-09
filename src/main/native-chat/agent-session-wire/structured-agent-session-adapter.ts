@@ -115,7 +115,8 @@ export type AgentSessionAcquisition = {
    *  publishes at spawn. Either way the host holds input until the child is `ready`. */
   providerChildPhase?: StructuredAgentSessionProviderChildPhase
   /** What a `ready` child listed at its start, with the configured default its start resolved;
-   *  the host saves it once. A `starting` child hands it on its `started` event instead. */
+   *  the host saves it once. A `starting` child (Claude) hands its listing on `started` and its
+   *  resolved default on the settings readback's `options-reported`. */
   catalogListing?: AgentModelCatalogLiveListing
 }
 

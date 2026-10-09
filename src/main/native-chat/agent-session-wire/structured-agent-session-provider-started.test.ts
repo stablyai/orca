@@ -232,4 +232,22 @@ describe('a publish-first Claude create whose init is slow', () => {
     await host.readOptions(SESSION)
     expect(savedListings.at(-1)?.listing).not.toHaveProperty('configuredDefault')
   })
+
+  it('saves the configured default when the settings readback beats the attach', async () => {
+    // The attach is slow to prove the owner, so the child's readback lands before the host indexes it.
+    const proveOwner = store.proveOwner.bind(store)
+    store.proveOwner = async (input) => {
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      return proveOwner(input)
+    }
+    await expect(host.attach(CALLER, claudeParams())).resolves.toMatchObject({ ok: true })
+    await claudeStartupSettled(adapter, SESSION)
+    await Promise.all(lifecycle)
+
+    await vi.waitFor(() =>
+      expect(savedListings.at(-1)?.listing).toMatchObject({
+        configuredDefault: expect.objectContaining({ modelId: 'claude-opus-9' })
+      })
+    )
+  })
 })
