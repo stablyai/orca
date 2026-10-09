@@ -31,8 +31,11 @@ export function getAutomationSourceDisplay(
   return { label, title }
 }
 
+/** Supplies provider brand names for saved-source labels, independent of connection state. */
 function getProviderLabel(provider: TaskSourceContext['provider']): string {
   switch (provider) {
+    case 'backlog':
+      return 'Backlog.md'
     case 'github':
       return 'GitHub'
     case 'gitlab':
@@ -44,10 +47,13 @@ function getProviderLabel(provider: TaskSourceContext['provider']): string {
   }
 }
 
+/** Prefers provider identity (checkout path for Backlog), then account or repo labels when identity is absent. */
 function getSourceIdentityLabel(sourceContext: TaskSourceContext): string | null {
   const identity = sourceContext.providerIdentity
   if (identity) {
     switch (identity.provider) {
+      case 'backlog':
+        return identity.projectPath
       case 'github':
         return `${identity.owner}/${identity.repo}`
       case 'gitlab':

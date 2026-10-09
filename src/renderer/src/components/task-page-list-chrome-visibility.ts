@@ -10,6 +10,7 @@ export type TaskPageListChromeVisibilityState = {
   hasLinearViewContext: boolean
 }
 
+/** Considers only the active provider's detail state; Backlog keeps its own list controls visible. */
 export function shouldHideTaskPageListChrome({
   taskSource,
   hasGitHubDetail,
@@ -22,6 +23,8 @@ export function shouldHideTaskPageListChrome({
   // Why: provider-specific selection can intentionally survive source switches;
   // stale detail state from another provider must not hide the active list chrome.
   switch (taskSource) {
+    case 'backlog':
+      return false
     case 'github':
       return hasGitHubDetail
     case 'gitlab':

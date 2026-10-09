@@ -6,6 +6,8 @@ import { TaskPageGitHubList } from './github/List'
 import { TaskPageGitLabTodoList } from './gitlab/TodoList'
 import { TaskPageGitLabItemList } from './gitlab/ItemList'
 import { TaskPageJiraContent } from './jira/Content'
+import { BacklogTasks } from './backlog/BacklogTasks'
+/** Selects provider content; Backlog owns its project selection rather than reusing GitHub detail state. */
 export function TaskPageContent({
   model
 }: {
@@ -25,7 +27,9 @@ export function TaskPageContent({
     closeTaskDetailPage,
     handleUseWorkItem
   } = model
-  return taskSource === 'github' && dialogWorkItem ? (
+  return taskSource === 'backlog' ? (
+    <BacklogTasks />
+  ) : taskSource === 'github' && dialogWorkItem ? (
     dialogWorkItem.type === 'pr' ? (
       <PullRequestPage
         workItem={dialogWorkItem}

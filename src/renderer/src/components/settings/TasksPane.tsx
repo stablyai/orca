@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Github, Gitlab } from 'lucide-react'
+import { Github, Gitlab, ListTodo } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TaskProvider } from '../../../../shared/task-providers'
 import {
@@ -16,6 +16,7 @@ import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { CodeHostSetupSteps, JiraSetupSteps } from './TaskSourceSimpleSetup'
 import { TaskSourceLinearSetup } from './TaskSourceLinearSetup'
 import { TaskSourceProviderCard } from './TaskSourceProviderCard'
+import { TaskSourceShowInTasksStep } from './TaskSourceShowInTasksStep'
 import {
   getStalledVisibleTaskProviders,
   resolveStickyAutoExpandedTaskProvider
@@ -42,6 +43,20 @@ const PROVIDER_META: Record<
     Icon: (props: { className?: string }) => React.JSX.Element
   }
 > = {
+  backlog: {
+    /** Resolves the label at access time so locale changes do not retain import-time text. */
+    get label() {
+      return translate('backlog.providerName', 'Backlog.md')
+    },
+    /** Resolves the account-free browsing and CLI-editing explanation in the active locale. */
+    get description() {
+      return translate(
+        'backlog.providerDescription',
+        'Browse project tasks without an account. Create and edit with the project Backlog CLI.'
+      )
+    },
+    Icon: ({ className }) => <ListTodo className={className} />
+  },
   github: {
     get label() {
       return translate('auto.components.settings.TasksPane.e14063e727', 'GitHub')
@@ -92,6 +107,7 @@ const PROVIDER_META: Record<
   }
 }
 
+/** Configures visible task sources without hiding the last source; Backlog setup requires no account. */
 export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.JSX.Element {
   const visibleProviders = normalizeVisibleTaskProviders(settings.visibleTaskProviders)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
@@ -208,7 +224,19 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
                 defaultExpanded={autoExpandedProvider === provider}
                 onToggleVisible={() => toggleProvider(provider)}
               >
-                {provider === 'linear' ? (
+                {provider === 'backlog' ? (
+                  <TaskSourceShowInTasksStep
+                    index={1}
+                    providerLabel={meta.label}
+                    visible={visible}
+                    canHide={canHide}
+                    onToggleVisible={() => toggleProvider(provider)}
+                    description={translate(
+                      'backlog.setupDescription',
+                      'Select a project in Tasks → Backlog.md. Its configuration and CLI are checked on the execution host.'
+                    )}
+                  />
+                ) : provider === 'linear' ? (
                   <TaskSourceLinearSetup
                     connected={readiness.connected}
                     checking={readiness.checking}

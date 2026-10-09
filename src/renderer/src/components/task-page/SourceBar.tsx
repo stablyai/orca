@@ -5,6 +5,7 @@ import { translate } from '@/i18n/i18n'
 import { X, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { supportsBacklog } from '@/lib/backlog-task-source'
 import { LinearScopeSelector } from '@/components/linear-scope-selector'
 import {
   Select,
@@ -13,12 +14,15 @@ import {
   SelectContent,
   SelectItem
 } from '@/components/ui/select'
+/** Shows eligible sources; Backlog needs a supported project and renders its source summary in its own panel. */
 export function TaskPageSourceBar({
   model
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
   const {
+    repos,
+    hostRegistryById,
     openTaskPage,
     closeTaskPage,
     updateSettings,
@@ -48,6 +52,10 @@ export function TaskPageSourceBar({
     handleLinearTeamSelectionChange,
     handleLinearScopeOpen
   } = model
+  const availableSourceOptions = visibleSourceOptions.filter(
+    (source) =>
+      source.id !== 'backlog' || repos.some((repo) => supportsBacklog(repo, hostRegistryById))
+  )
   return (
     <div className="flex items-center justify-between gap-2">
       <div
@@ -72,7 +80,7 @@ export function TaskPageSourceBar({
           </TooltipContent>
         </Tooltip>
         <div className="mx-1 h-5 w-px bg-border/50" aria-hidden />
-        {visibleSourceOptions.map((source) => {
+        {availableSourceOptions.map((source) => {
           const active = taskSource === source.id
           const sourceAvailabilityNotice = taskSourceAvailabilityNoticeByProvider[source.id] ?? null
           const sourceDisabled = source.disabled || sourceAvailabilityNotice?.blocking
@@ -126,12 +134,14 @@ export function TaskPageSourceBar({
             </Tooltip>
           )
         })}
-        <div
-          className="hidden min-w-0 max-w-[min(420px,40vw)] items-center rounded-md border border-border/50 bg-muted/35 px-2 py-1 text-xs text-muted-foreground sm:flex"
-          title={taskSourceContextSummary.title}
-        >
-          <span className="truncate">{taskSourceContextSummary.label}</span>
-        </div>
+        {taskSource !== 'backlog' ? (
+          <div
+            className="hidden min-w-0 max-w-[min(420px,40vw)] items-center rounded-md border border-border/50 bg-muted/35 px-2 py-1 text-xs text-muted-foreground sm:flex"
+            title={taskSourceContextSummary.title}
+          >
+            <span className="truncate">{taskSourceContextSummary.label}</span>
+          </div>
+        ) : null}
       </div>
       {taskSource === 'linear' && linearConnected ? (
         <div className="flex items-center gap-2">

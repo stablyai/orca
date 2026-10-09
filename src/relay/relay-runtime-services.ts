@@ -24,6 +24,7 @@ import { RelayPtySourcePublication } from './relay-pty-source-publication'
 import { SkillInstallHandler } from './skill-install-handler'
 import { relayLogLine } from './relay-diagnostic-log'
 import { remoteCliRequestTimeoutMs } from './remote-cli-timeout'
+import { registerBacklogHandler } from './backlog-handler'
 
 export class RelayRuntimeServices {
   readonly ptyHandler: PtyHandler
@@ -120,6 +121,7 @@ export class RelayRuntimeServices {
       () => ({ grantedCapabilities: null, services: null })
     )
     this.registerRemoteCliRoutes()
+    registerBacklogHandler(dispatcher)
   }
 
   // Why: answering a stream's request does not prove its detached pumps, descriptors or children

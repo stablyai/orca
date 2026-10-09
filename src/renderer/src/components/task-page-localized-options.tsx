@@ -1,5 +1,5 @@
 import React from 'react'
-import { Github, Gitlab, LayoutGrid, List } from 'lucide-react'
+import { Github, Gitlab, LayoutGrid, List, ListTodo } from 'lucide-react'
 
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
@@ -111,7 +111,13 @@ export function getGitHubTaskKindPresets(kind: GitHubTaskKind): TaskQueryPreset[
   return kind === 'prs' ? getPRTaskQueryPresets() : getIssueTaskQueryPresets()
 }
 
+/** Supplies locale-aware source options before caller-side visibility and host-capability filtering. */
 export const getSourceOptions = createLocalizedCatalog((): SourceOption[] => [
+  {
+    id: 'backlog',
+    label: translate('backlog.providerName', 'Backlog.md'),
+    Icon: ({ className }) => <ListTodo className={className} />
+  },
   {
     id: 'github',
     label: translate('auto.components.TaskPage.acef77f7ca', 'GitHub'),

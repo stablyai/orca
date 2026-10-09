@@ -14,10 +14,12 @@ import {
 
 const ORDER: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira']
 
+/** Starts with ready providers and applies hosted-provider overrides; Backlog remains account-free. */
 function buildReadiness(
   overrides: Partial<Record<TaskProvider, Partial<TaskProviderReadiness>>> = {}
 ): Record<TaskProvider, TaskProviderReadiness> {
   const base: Record<TaskProvider, TaskProviderReadiness> = {
+    backlog: { connected: true, checking: false, visible: true },
     github: { connected: true, checking: false, visible: true },
     gitlab: { connected: true, checking: false, visible: true },
     linear: {

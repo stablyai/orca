@@ -12,6 +12,7 @@ import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { useAppStore } from '@/store'
 import type { TaskProviderReadiness } from './task-source-setup-state'
 
+/** Derives setup readiness from current status snapshots; Backlog's account-free readiness is not a project probe. */
 export function useTaskSourceProviderReadiness(
   visibleProviders: readonly TaskProvider[]
 ): Record<TaskProvider, TaskProviderReadiness> {
@@ -67,6 +68,7 @@ export function useTaskSourceProviderReadiness(
   return useMemo(() => {
     const visible = new Set(visibleProvidersKey.split(',') as TaskProvider[])
     return {
+      backlog: { connected: true, checking: false, visible: visible.has('backlog') },
       github: {
         connected: githubConnected,
         checking: reviewChecking,

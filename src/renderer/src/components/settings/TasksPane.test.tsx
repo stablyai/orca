@@ -127,6 +127,7 @@ describe('TasksPane', () => {
     mocks.openSettingsPage.mockClear()
     mocks.openSettingsTarget.mockClear()
     mocks.readiness = {
+      backlog: { connected: true, checking: false, visible: true },
       github: { connected: true, checking: false, visible: true },
       gitlab: { connected: true, checking: false, visible: true },
       // Started-then-stalled: a Linear key is stored but agents have no skill.

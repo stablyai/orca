@@ -5,7 +5,7 @@ import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../..
 import type { LaunchSource } from '../../../shared/telemetry-events'
 
 export type LaunchableWorkItem = {
-  provider?: TaskProvider
+  provider?: Exclude<TaskProvider, 'backlog'>
   title: string
   url: string
   type: 'issue' | 'pr' | 'mr'

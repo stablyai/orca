@@ -63,9 +63,10 @@ export function getJiraIssueWorkspaceSeed(issue: JiraIssue): string {
     })?.seedName ?? getLinkedWorkItemSuggestedName(issue)
   )
 }
+/** Binds a repo or folder source to its project and host, retaining Backlog's source checkout path. */
 export function getTaskPageRepoSourceContext(
   repo: Repo | null | undefined,
-  provider: 'github' | 'gitlab',
+  provider: 'github' | 'gitlab' | 'backlog',
   gitlabProjectRef?: GitLabProjectRef | null
 ): TaskSourceContext | null {
   if (!repo) {
@@ -86,7 +87,8 @@ export function getTaskPageRepoSourceContext(
     hostId: setup?.hostId ?? getRepoExecutionHostId(repo),
     projectHostSetupId: setup?.id,
     repoId: repo.id,
-    providerIdentity
+    providerIdentity:
+      provider === 'backlog' ? { provider: 'backlog', projectPath: repo.path } : providerIdentity
   })
 }
 export function buildGitLabProviderIdentity(projectRef: GitLabProjectRef) {

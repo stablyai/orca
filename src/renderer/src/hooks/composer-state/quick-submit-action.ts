@@ -37,8 +37,10 @@ type QuickSubmitActionInput = Pick<
   | 'sourceIntentBlocksCreate'
   | 'sparseError'
   | 'submitFolderTarget'
+  | 'taskSourceContext'
 >
 
+/** Exposes guarded quick submission with pending-creation reuse and UI error/creating state settlement. */
 export function useQuickSubmitAction(input: QuickSubmitActionInput) {
   const {
     effectiveLinkedPR,
@@ -62,11 +64,21 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
     showProjectRequiredError,
     sourceIntentBlocksCreate,
     sparseError,
-    submitFolderTarget
+    submitFolderTarget,
+    taskSourceContext
   } = input
 
+  /** Rejects project-group Backlog launches and checks source/setup readiness before requesting creation. */
   const submitQuick = useCallback(
     async (requestedAgent: TuiAgent | null): Promise<void> => {
+      if (isProjectGroupTarget && taskSourceContext?.provider === 'backlog') {
+        setCreateError(
+          formatWorkspaceCreateError(
+            new Error('Select the Backlog task’s original project before launching.')
+          )
+        )
+        return
+      }
       if (isProjectGroupTarget) {
         await submitFolderTarget(requestedAgent)
         return
@@ -178,7 +190,8 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
       showProjectRequiredError,
       sourceIntentBlocksCreate,
       sparseError,
-      submitFolderTarget
+      submitFolderTarget,
+      taskSourceContext
     ]
   )
 

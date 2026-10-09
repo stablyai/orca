@@ -204,12 +204,14 @@ function getRepoHostId(repo: Pick<Repo, 'connectionId' | 'executionHostId'>): Ex
   return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
 }
 
+/** Accepts only known persisted provider identifiers, returning null rather than choosing a fallback. */
 function normalizeTaskProvider(value: unknown): TaskProvider | null {
   switch (value) {
     case 'github':
     case 'gitlab':
     case 'linear':
     case 'jira':
+    case 'backlog':
       return value
     default:
       return null

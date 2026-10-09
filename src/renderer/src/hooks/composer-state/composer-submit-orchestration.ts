@@ -9,6 +9,7 @@ import { useQuickSubmitPreparation } from './quick-submit-preparation'
 import { useQuickCreationExecution } from './quick-creation-execution'
 import { useQuickSubmitAction } from './quick-submit-action'
 
+/** Wires source-aware preparation and submission, preserving task context and draft prompts through quick creation. */
 export function useComposerSubmitOrchestration(
   target: ComposerTargetState,
   external: ComposerExternalSyncState,
@@ -91,6 +92,7 @@ export function useComposerSubmitOrchestration(
     smartNameMode: target.workspaceIdentityState.smartNameMode
   })
   const quickCreationExecution = useQuickCreationExecution({
+    agentPrompt: target.sourceContextState.agentPrompt,
     clearNewWorkspaceDraft: target.composerTargetStore.clearNewWorkspaceDraft,
     createMultiple: target.asyncComposerState.createMultiple,
     effectivePresetId: target.derivedComposerState.effectivePresetId,
@@ -121,6 +123,7 @@ export function useComposerSubmitOrchestration(
     telemetrySource: target.composerTargetStore.telemetrySource
   })
   const quickSubmitAction = useQuickSubmitAction({
+    taskSourceContext: target.sourceContextState.taskSourceContext,
     effectiveLinkedPR: target.derivedComposerState.effectiveLinkedPR,
     executeQuickCreation: quickCreationExecution.executeQuickCreation,
     fallbackCreatureName: target.derivedComposerState.fallbackCreatureName,

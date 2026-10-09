@@ -249,8 +249,11 @@ function getAutomationSourceAvailability(
   return null
 }
 
+/** Names the saved provider in host-availability notices without requiring a live provider connection. */
 function getAutomationSourceProviderLabel(provider: TaskSourceContext['provider']): string {
   switch (provider) {
+    case 'backlog':
+      return 'Backlog.md'
     case 'github':
       return 'GitHub'
     case 'gitlab':

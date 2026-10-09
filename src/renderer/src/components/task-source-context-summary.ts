@@ -35,6 +35,7 @@ function getHostLabel(hostId: ExecutionHostScope, hostLabelById: HostLabelLookup
   return hostLabelById?.get(hostId) ?? getExecutionHostLabel(hostId)
 }
 
+/** Summarizes repo-backed or account-backed source scope and host availability without probing the host. */
 export function getTaskSourceContextSummary(args: {
   provider: TaskProvider
   providerLabel: string
@@ -49,6 +50,7 @@ export function getTaskSourceContextSummary(args: {
   switch (args.provider) {
     case 'github':
     case 'gitlab':
+    case 'backlog':
       return getRepoBackedTaskSourceSummary(args)
     case 'linear':
       return getAccountBackedTaskSourceSummary(args.providerLabel, {
@@ -181,13 +183,14 @@ function getAccountBackedTaskSourceSummary(
   }
 }
 
-function getProviderIdentityLabel(
-  identity: TaskProviderIdentity | null | undefined
-): string | null {
+/** Uses a human-readable provider identity when present, including the source checkout path for Backlog. */
+function getProviderIdentityLabel(identity: TaskProviderIdentity | null | undefined) {
   if (!identity) {
     return null
   }
   switch (identity.provider) {
+    case 'backlog':
+      return identity.projectPath
     case 'github':
       return `${identity.owner}/${identity.repo}`
     case 'gitlab':
