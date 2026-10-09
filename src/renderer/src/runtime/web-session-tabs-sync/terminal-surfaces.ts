@@ -22,6 +22,7 @@ import type {
 } from './state'
 import type { Tab } from '../../../../shared/tab-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { executionHostIdForSessionTabsOwner } from '../local-structured-session-owner'
 import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
 import { hasStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/structured-agent-session-launch-registry'
 
@@ -230,8 +231,12 @@ export function shouldReplaceTerminalTab(
   environmentId: string,
   nextRemotePtyIds: ReadonlySet<string>,
   nextMirroredTerminalIds: ReadonlySet<string>,
-  exactProvisionalHandoffs: ReadonlySet<string>
+  exactProvisionalHandoffs: ReadonlySet<string>,
+  executionHostId?: ExecutionHostId | null
 ): boolean {
+  if (isTerminalTabOwnedByAnotherHost(tab, environmentId, executionHostId)) {
+    return false
+  }
   if (exactProvisionalHandoffs.has(tab.id)) {
     // Why: agent kind is not session identity; retire only the provisional tab
     // whose request or structured response identifies this exact host surface.
@@ -252,5 +257,18 @@ export function shouldReplaceTerminalTab(
     tab.ptyId !== null &&
     (nextRemotePtyIds.has(tab.ptyId) ||
       nextMirroredTerminalIds.has(toWebTerminalSurfaceTabId(tab.id)))
+  )
+}
+
+export function isTerminalTabOwnedByAnotherHost(
+  tab: Pick<TerminalTab, 'ptyId'>,
+  environmentId: string,
+  executionHostId?: ExecutionHostId | null
+): boolean {
+  const ptyEnvironmentId = tab.ptyId ? getRemoteRuntimePtyEnvironmentId(tab.ptyId) : null
+  return Boolean(
+    executionHostId === null ||
+    (executionHostId && executionHostId !== executionHostIdForSessionTabsOwner(environmentId)) ||
+    (ptyEnvironmentId && ptyEnvironmentId !== environmentId)
   )
 }

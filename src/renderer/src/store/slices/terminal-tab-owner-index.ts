@@ -1,22 +1,30 @@
-type TerminalTabOwnerBuckets = Readonly<Record<string, readonly { id: string }[]>>
+type TerminalTabOwnerBuckets<T extends { id: string } = { id: string }> = Readonly<
+  Record<string, readonly T[]>
+>
 
 type IndexedBucket = {
   source: readonly { id: string }[]
   tabIds: ReadonlySet<string>
 }
 
-export type TerminalTabOwnerIndex = {
-  getOwners(tabsByWorktree: TerminalTabOwnerBuckets): ReadonlyMap<string, string>
-  getOwner(tabsByWorktree: TerminalTabOwnerBuckets, tabId: string): string | null
+export type TerminalTabOwnerIndex<T extends { id: string } = { id: string }> = {
+  getOwners(tabsByWorktree: TerminalTabOwnerBuckets<T>): ReadonlyMap<string, string>
+  getOwner(tabsByWorktree: TerminalTabOwnerBuckets<T>, tabId: string): string | null
+  getOwnerWorktreeIds(
+    tabsByWorktree: TerminalTabOwnerBuckets<T>,
+    tabId: string
+  ): ReadonlySet<string> | undefined
   adoptMetadataOnlyBucketReplacements(
-    previousTabsByWorktree: TerminalTabOwnerBuckets,
-    nextTabsByWorktree: TerminalTabOwnerBuckets,
+    previousTabsByWorktree: TerminalTabOwnerBuckets<T>,
+    nextTabsByWorktree: TerminalTabOwnerBuckets<T>,
     replacedWorktreeIds: Iterable<string>
   ): void
 }
 
-export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
-  let source: TerminalTabOwnerBuckets | null = null
+export function createTerminalTabOwnerIndex<T extends { id: string } = { id: string }>(
+  tabIdsForRow: (tab: T) => readonly string[] = (tab) => [tab.id]
+): TerminalTabOwnerIndex<T> {
+  let source: TerminalTabOwnerBuckets<T> | null = null
   let orderedKeys: string[] = []
   const bucketByWorktreeId = new Map<string, IndexedBucket>()
   const worktreeIdsByTabId = new Map<string, Set<string>>()
@@ -46,7 +54,7 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
     }
   }
 
-  const update = (tabsByWorktree: TerminalTabOwnerBuckets): ReadonlyMap<string, string> => {
+  const update = (tabsByWorktree: TerminalTabOwnerBuckets<T>): ReadonlyMap<string, string> => {
     if (source === tabsByWorktree) {
       return ownerByTabId
     }
@@ -85,7 +93,7 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
 
       // Why: tab arrays are the immutable topology buckets. Reading ids only for a
       // replaced bucket keeps a one-worktree title update independent of fleet size.
-      const tabIds = new Set(tabs.map((tab) => tab.id))
+      const tabIds = new Set(tabs.flatMap(tabIdsForRow))
       for (const tabId of tabIds) {
         affectedTabIds.add(tabId)
       }
@@ -126,8 +134,8 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
   }
 
   const adoptMetadataOnlyBucketReplacements = (
-    previousTabsByWorktree: TerminalTabOwnerBuckets,
-    nextTabsByWorktree: TerminalTabOwnerBuckets,
+    previousTabsByWorktree: TerminalTabOwnerBuckets<T>,
+    nextTabsByWorktree: TerminalTabOwnerBuckets<T>,
     replacedWorktreeIds: Iterable<string>
   ): void => {
     if (source !== previousTabsByWorktree) {
@@ -153,6 +161,10 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
   return {
     getOwners: update,
     getOwner: (tabsByWorktree, tabId) => update(tabsByWorktree).get(tabId) ?? null,
+    getOwnerWorktreeIds: (tabsByWorktree, tabId) => {
+      update(tabsByWorktree)
+      return worktreeIdsByTabId.get(tabId)
+    },
     adoptMetadataOnlyBucketReplacements
   }
 }
@@ -170,6 +182,13 @@ export function getTerminalTabOwnerWorktreeId(
   tabId: string
 ): string | null {
   return sharedTerminalTabOwnerIndex.getOwner(tabsByWorktree, tabId)
+}
+
+export function getTerminalTabOwnerWorktreeIds(
+  tabsByWorktree: TerminalTabOwnerBuckets,
+  tabId: string
+): ReadonlySet<string> | undefined {
+  return sharedTerminalTabOwnerIndex.getOwnerWorktreeIds(tabsByWorktree, tabId)
 }
 
 export function adoptTerminalTabOwnerMetadataOnlyBuckets(

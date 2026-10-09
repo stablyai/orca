@@ -113,7 +113,15 @@ it.each(
       ...next,
       ...applyWebSessionTabsSnapshot(next, snapshot('folder:same', LEAF_ID, 3), 'host-a', NOW + 3)
     }
-    expect(reopened.agentStatusByPaneKey[ownPane]).toBeDefined()
+    expect(Object.values(reopened.agentStatusByPaneKey)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          connectionId: 'host-a',
+          worktreeId: 'folder:same',
+          state: 'working'
+        })
+      ])
+    )
     expect(reopened.agentStatusByPaneKey[sibling]).toBeDefined()
   }
 )

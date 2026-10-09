@@ -72,7 +72,8 @@ export function buildWebSessionTabsFinalPatch(
     worktreeId,
     new Set(isWebSessionTabsWorktreeRemovalFrame(snapshot) ? [] : removedTerminalResourceIds),
     now,
-    batchContext
+    batchContext,
+    context.terminalLocalIdByHostId
   )
   // A tombstone clears all environments' view of a worktree; it is not a terminal retraction.
   const retractedTabSweepPatch = isWebSessionTabsWorktreeRemovalFrame(snapshot)

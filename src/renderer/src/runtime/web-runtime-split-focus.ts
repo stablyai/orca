@@ -9,6 +9,7 @@ import {
   resolveWebSessionVisibleTabId
 } from './web-session-focus-intent'
 import { toHostSessionTabId, toWebTerminalSurfaceTabId } from './web-terminal-surface-id'
+import { resolveLocalTabIdForHostSessionTab } from './web-session-tabs-sync/tracking-mappings'
 import type { RuntimeTerminalSplit } from '../../../shared/runtime-types'
 
 export type WebRuntimeSplitSource = { worktreeId: string; tabId: string; leafId: string }
@@ -159,5 +160,11 @@ export async function focusSplitWebRuntimeTerminalPane(
     }
     return
   }
-  activateTabAndFocusPane(toWebTerminalSurfaceTabId(hostTabId), leafId)
+  const localTabId =
+    resolveLocalTabIdForHostSessionTab({
+      environmentId: owner.environmentId,
+      worktreeId: target.worktreeId,
+      hostTabId
+    }) ?? toWebTerminalSurfaceTabId(hostTabId)
+  activateTabAndFocusPane(localTabId, leafId)
 }

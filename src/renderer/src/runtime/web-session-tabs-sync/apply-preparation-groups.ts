@@ -21,6 +21,7 @@ export function prepareWebSessionTabsSnapshotGroups(
     now,
     options,
     terminalSurfaceTabs,
+    terminalLocalIdByHostId,
     mirroredBrowserTabs,
     mirroredEditorTabs,
     mirroredUnifiedIds,
@@ -58,7 +59,8 @@ export function prepareWebSessionTabsSnapshotGroups(
     // editor → host editor tab) is a rename — its position and focus must carry over.
     const rekeyedTabIds = new Map<string, string>()
     for (const [provisionalTabId, hostTabId] of provisionalHandoffHostTabIds) {
-      const mirroredId = toWebTerminalSurfaceTabId(hostTabId)
+      const mirroredId =
+        terminalLocalIdByHostId.get(hostTabId) ?? toWebTerminalSurfaceTabId(hostTabId)
       if (mirroredId !== provisionalTabId) {
         rekeyedTabIds.set(provisionalTabId, mirroredId)
       }
@@ -97,7 +99,7 @@ export function prepareWebSessionTabsSnapshotGroups(
       })
       if (recordedGroupId) {
         placementMoves.push({
-          tabId: toWebTerminalSurfaceTabId(parentTabId),
+          tabId: terminalLocalIdByHostId.get(parentTabId) ?? toWebTerminalSurfaceTabId(parentTabId),
           groupId: recordedGroupId
         })
       }

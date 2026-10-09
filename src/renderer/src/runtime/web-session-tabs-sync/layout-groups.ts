@@ -17,12 +17,14 @@ import { pushRecentTabId, sanitizeRecentTabIds } from './state-equality-core'
 export function buildHostToLocalTabIdMap({
   terminalSurfaces,
   terminalTabs,
+  terminalLocalIdByHostId,
   browserTabs,
   editorTabs,
   agentTabs
 }: {
   terminalSurfaces: readonly TerminalSurface[]
   terminalTabs: readonly TerminalTab[]
+  terminalLocalIdByHostId: ReadonlyMap<string, string>
   browserTabs: readonly MirroredBrowserTab[]
   editorTabs: readonly MirroredEditorTab[]
   agentTabs: readonly MirroredAgentTab[]
@@ -30,7 +32,9 @@ export function buildHostToLocalTabIdMap({
   const hostToLocal = new Map<string, string>()
   const terminalIds = new Set(terminalTabs.map((tab) => tab.id))
   for (const surface of terminalSurfaces) {
-    const localId = toWebTerminalSurfaceTabId(surface.parentTabId)
+    const localId =
+      terminalLocalIdByHostId.get(surface.parentTabId) ??
+      toWebTerminalSurfaceTabId(surface.parentTabId)
     if (terminalIds.has(localId)) {
       hostToLocal.set(surface.parentTabId, localId)
       hostToLocal.set(surface.id, localId)
@@ -54,6 +58,7 @@ export function updateHostSessionTabIdMappings(args: {
   worktreeId: string
   terminalSurfaces: readonly TerminalSurface[]
   terminalTabs: readonly TerminalTab[]
+  terminalLocalIdByHostId: ReadonlyMap<string, string>
   browserTabs: readonly MirroredBrowserTab[]
   editorTabs: readonly MirroredEditorTab[]
   agentTabs: readonly MirroredAgentTab[]
@@ -62,7 +67,9 @@ export function updateHostSessionTabIdMappings(args: {
 
   const mirroredTerminalIds = new Set(args.terminalTabs.map((tab) => tab.id))
   for (const surface of args.terminalSurfaces) {
-    const localId = toWebTerminalSurfaceTabId(surface.parentTabId)
+    const localId =
+      args.terminalLocalIdByHostId.get(surface.parentTabId) ??
+      toWebTerminalSurfaceTabId(surface.parentTabId)
     if (mirroredTerminalIds.has(localId)) {
       setHostSessionTabIdMapping({ ...args, tabId: localId }, surface.parentTabId)
     }

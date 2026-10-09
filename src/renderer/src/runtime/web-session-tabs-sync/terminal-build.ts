@@ -60,7 +60,8 @@ export function buildMirroredTerminalTabs(
   sortOffset: number,
   now: number,
   focusTarget?: { parentTabId: string; leafId: string },
-  terminalPtyMode: 'local' | 'remote' = 'remote'
+  terminalPtyMode: 'local' | 'remote' = 'remote',
+  localIdByHostId?: ReadonlyMap<string, string>
 ): MirroredTerminalTab[] {
   const groups = new Map<string, TerminalSurface[]>()
   for (const tab of snapshot.tabs.filter(isTerminalSurfaceTab)) {
@@ -70,7 +71,7 @@ export function buildMirroredTerminalTabs(
   }
 
   return [...groups.entries()].map(([parentTabId, surfaces], index) => {
-    const localTabId = toWebTerminalSurfaceTabId(parentTabId)
+    const localTabId = localIdByHostId?.get(parentTabId) ?? toWebTerminalSurfaceTabId(parentTabId)
     const existingLayout = existingLayoutsByTabId[localTabId]
     const requestedActiveLeafId =
       focusTarget?.parentTabId === parentTabId ? focusTarget.leafId : undefined
@@ -129,10 +130,14 @@ export function buildMirroredTerminalTabs(
     })
     const existing =
       existingById.get(localTabId) ??
-      existingById.get(parentTabId) ??
-      surfaces
-        .map((surface) => existingById.get(toWebTerminalSurfaceTabId(surface.id)))
-        .find((tab): tab is TerminalTab => Boolean(tab))
+      (localTabId === toWebTerminalSurfaceTabId(parentTabId)
+        ? existingById.get(parentTabId)
+        : undefined) ??
+      (localTabId === toWebTerminalSurfaceTabId(parentTabId)
+        ? surfaces
+            .map((surface) => existingById.get(toWebTerminalSurfaceTabId(surface.id)))
+            .find((tab): tab is TerminalTab => Boolean(tab))
+        : undefined)
     // Why: a headless host publishes the literal "Terminal" while an idle pane
     // has no live PTY. Keep the client's known title until a ready surface reports one.
     const hostTitle = activeSurface.title.trim() || surfaces[0]?.title.trim() || ''

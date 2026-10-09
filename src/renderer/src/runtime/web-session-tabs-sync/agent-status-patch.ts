@@ -66,7 +66,8 @@ export function buildMirroredAgentStatusPatch(
   worktreeId: string,
   retractedTabIds: ReadonlySet<string>,
   now: number,
-  batchContext?: WebSessionTabsBatchContext
+  batchContext?: WebSessionTabsBatchContext,
+  localIdByHostId?: ReadonlyMap<string, string>
 ): Pick<WebSessionTabsSyncState, 'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'> | null {
   const mirroredTabIds = new Set<string>()
   for (const tab of currentTerminalTabs) {
@@ -75,7 +76,9 @@ export function buildMirroredAgentStatusPatch(
     }
   }
   for (const surface of terminalSurfaceTabs) {
-    mirroredTabIds.add(toWebTerminalSurfaceTabId(surface.parentTabId))
+    mirroredTabIds.add(
+      localIdByHostId?.get(surface.parentTabId) ?? toWebTerminalSurfaceTabId(surface.parentTabId)
+    )
   }
 
   if (mirroredTabIds.size === 0) {
@@ -99,7 +102,11 @@ export function buildMirroredAgentStatusPatch(
     const retainedSurface = retainedSurfaceByHostTabAndPrunedLeafId
       ?.get(surface.parentTabId)
       ?.get(surface.leafId)
-    const hostEntry = remapHostAgentStatus(surface, retainedSurface)
+    const hostEntry = remapHostAgentStatus(
+      surface,
+      retainedSurface,
+      localIdByHostId?.get(surface.parentTabId)
+    )
     if (!hostEntry) {
       continue
     }

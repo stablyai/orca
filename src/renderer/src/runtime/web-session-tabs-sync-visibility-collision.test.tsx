@@ -441,7 +441,10 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
       authoritative: true
     })
     const tabId = toWebTerminalSurfaceTabId('host-tab-b')
-    expect(useAppStore.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([tabId])
+    expect(useAppStore.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([
+      toWebTerminalSurfaceTabId('host-tab-a'),
+      tabId
+    ])
     expect(_getWebSessionTabsTrackingCountsForTest().freshness).toBe(2)
 
     newerRecovery.resolve(makeTerminalSnapshot('-b', 2))
@@ -490,15 +493,23 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
       authoritative: true
     })
     const hostBTabId = toWebTerminalSurfaceTabId('host-tab-b')
+    const hostATabId = toWebTerminalSurfaceTabId('host-tab-a')
     expect(useAppStore.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([
+      hostATabId,
       hostBTabId
     ])
 
-    staleRecovery.resolve(makeTerminalSnapshot('-a', 2))
+    const staleSnapshot = makeTerminalSnapshot('-a', 2)
+    staleSnapshot.tabs[0]!.title = 'Stale owner frame'
+    staleRecovery.resolve(staleSnapshot)
     await act(settle)
     expect(useAppStore.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([
+      hostATabId,
       hostBTabId
     ])
+    expect(
+      useAppStore.getState().tabsByWorktree[WORKTREE]?.find((tab) => tab.id === hostATabId)?.title
+    ).toBe('Terminal -a')
 
     slowInventoryRecovery.resolve(unrelatedSnapshot)
     await act(settle)
@@ -507,7 +518,8 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
       ...makeTerminalSnapshot('-a', 3)
     })
     expect(useAppStore.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([
-      toWebTerminalSurfaceTabId('host-tab-a')
+      hostBTabId,
+      hostATabId
     ])
     hook.unmount()
   })

@@ -15,6 +15,10 @@ import { applyBrowserRecordUpdates } from './apply-browser-records'
 import { applyWorktreeRecordUpdates } from './apply-worktree-records'
 import { applyActiveStateUpdates } from './apply-active-state'
 import { buildWebSessionTabsFinalPatch } from './apply-final-patch'
+import {
+  resolveTerminalSnapshotLocalIds,
+  indexTerminalSnapshotHosts
+} from './terminal-snapshot-host-ownership'
 
 /** Reconcile one host frame through the staged terminal/browser/layout pipeline. */
 export function applyWebSessionTabsSnapshotWithContext(
@@ -32,6 +36,13 @@ export function applyWebSessionTabsSnapshotWithContext(
     return state
   }
   const worktreeId = rawSnapshot.worktree
+  const terminalHostById = indexTerminalSnapshotHosts(state, worktreeId)
+  const terminalLocalIdByHostId = resolveTerminalSnapshotLocalIds(
+    state,
+    rawSnapshot,
+    environmentId,
+    terminalHostById
+  )
   const base = prepareWebSessionTabsSnapshotBase(
     state,
     rawSnapshot,
@@ -39,7 +50,9 @@ export function applyWebSessionTabsSnapshotWithContext(
     worktreeId,
     now,
     batchContext,
-    options
+    options,
+    terminalHostById,
+    terminalLocalIdByHostId
   )
   const browser = prepareWebSessionTabsSnapshotBrowser(base)
   const unified = prepareWebSessionTabsSnapshotUnified(browser)

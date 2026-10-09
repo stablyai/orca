@@ -13,6 +13,15 @@ function trackedTab(id: string, onRead: () => void): { id: string } {
 }
 
 describe('terminal tab owner index', () => {
+  it('returns every claimant of a repeated tab ID and removes retired claimants', () => {
+    const index = createTerminalTabOwnerIndex()
+    const first = { local: [{ id: 'shared' }], remote: [{ id: 'shared' }] }
+    expect(index.getOwnerWorktreeIds(first, 'shared')).toEqual(new Set(['local', 'remote']))
+    const next = { ...first, local: [] }
+    expect(index.getOwnerWorktreeIds(next, 'shared')).toEqual(new Set(['remote']))
+    expect(index.getOwnerWorktreeIds(next, 'absent')).toBeUndefined()
+  })
+
   it('updates added, removed, and moved buckets without inspecting an unchanged bucket', () => {
     const reads = { stable: 0, moving: 0, added: 0, removed: 0 }
     const stableBucket = [

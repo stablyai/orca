@@ -23,23 +23,25 @@ export function isMirroredAgentStatusOwnedBy(
 
 export function toMirroredPaneKey(
   surface: TerminalSurface,
-  leafId = surface.leafId
+  leafId = surface.leafId,
+  localTabId = toWebTerminalSurfaceTabId(surface.parentTabId)
 ): string | null {
   if (!isTerminalLeafId(leafId)) {
     return null
   }
-  return makePaneKey(toWebTerminalSurfaceTabId(surface.parentTabId), leafId)
+  return makePaneKey(localTabId, leafId)
 }
 
 /** Normalises and mirrors agent status updates from the host payload, preserving ownership metadata. */
 export function remapHostAgentStatus(
   surface: TerminalSurface,
-  retainedSurface?: TerminalSurface
+  retainedSurface?: TerminalSurface,
+  localTabId = toWebTerminalSurfaceTabId(surface.parentTabId)
 ): AgentStatusEntry | null {
   if (!surface.agentStatus) {
     return null
   }
-  const paneKey = toMirroredPaneKey(surface, retainedSurface?.leafId)
+  const paneKey = toMirroredPaneKey(surface, retainedSurface?.leafId, localTabId)
   if (!paneKey) {
     return null
   }
@@ -52,7 +54,7 @@ export function remapHostAgentStatus(
       ownerIsLaunch: ownerRecord?.ownerIsLaunch === true
     }),
     paneKey,
-    tabId: toWebTerminalSurfaceTabId(surface.parentTabId)
+    tabId: localTabId
   }
 }
 

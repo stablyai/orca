@@ -20,6 +20,7 @@ export function prepareWebSessionTabsSnapshotUnified(
     navigationIntentTab,
     honorSnapshotActiveFocus,
     terminalSurfaceTabs,
+    terminalLocalIdByHostId,
     mirroredTerminalTabs,
     mirroredTerminalTabEntries,
     nextTerminalTabs,
@@ -66,7 +67,8 @@ export function prepareWebSessionTabsSnapshotUnified(
     terminalSurfaceTabs.find((tab) => tab.isActive)?.parentTabId ??
     null
   const activeMirroredTerminalId = activeHostTerminalId
-    ? toWebTerminalSurfaceTabId(activeHostTerminalParentId ?? activeHostTerminalId)
+    ? (terminalLocalIdByHostId.get(activeHostTerminalParentId ?? activeHostTerminalId) ??
+      toWebTerminalSurfaceTabId(activeHostTerminalParentId ?? activeHostTerminalId))
     : null
   const activeHostBrowser =
     readyBrowserTabs.find((tab) => tab.id === snapshot.activeTabId) ??
@@ -98,7 +100,8 @@ export function prepareWebSessionTabsSnapshotUnified(
     : null
   const intentMirroredTerminalId =
     navigationIntentTab?.type === 'terminal'
-      ? toWebTerminalSurfaceTabId(navigationIntentTab.parentTabId)
+      ? (terminalLocalIdByHostId.get(navigationIntentTab.parentTabId) ??
+        toWebTerminalSurfaceTabId(navigationIntentTab.parentTabId))
       : null
   const intentMirroredBrowser =
     navigationIntentTab?.type === 'browser'
@@ -219,6 +222,7 @@ export function prepareWebSessionTabsSnapshotUnified(
   const hostToLocalTabId = buildHostToLocalTabIdMap({
     terminalSurfaces: terminalSurfaceTabs,
     terminalTabs: mirroredTerminalTabEntries,
+    terminalLocalIdByHostId,
     browserTabs: mirroredBrowserTabs,
     editorTabs: mirroredEditorTabs,
     agentTabs: mirroredAgentTabs
@@ -228,6 +232,7 @@ export function prepareWebSessionTabsSnapshotUnified(
     worktreeId,
     terminalSurfaces: terminalSurfaceTabs,
     terminalTabs: mirroredTerminalTabEntries,
+    terminalLocalIdByHostId,
     browserTabs: mirroredBrowserTabs,
     editorTabs: mirroredEditorTabs,
     agentTabs: mirroredAgentTabs
