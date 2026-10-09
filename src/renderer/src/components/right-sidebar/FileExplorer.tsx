@@ -20,7 +20,6 @@ import { FileExplorerBackgroundMenu } from './FileExplorerBackgroundMenu'
 import { FileExplorerFilesTreePane } from './FileExplorerFilesTreePane'
 import { FileExplorerNameFilter } from './FileExplorerNameFilter'
 import { FileExplorerQueryStrip } from './FileExplorerQueryStrip'
-import { FileExplorerToolbar } from './FileExplorerToolbar'
 import { SearchFilters } from './SearchFilters'
 import { SearchQueryRow } from './SearchQueryRow'
 import { SearchResultsPane } from './SearchResultsPane'
@@ -37,6 +36,14 @@ import { useFileExplorerVisibleRowProjection } from './useFileExplorerVisibleRow
 import { useFileExplorerBackgroundMenu } from './use-file-explorer-background-menu'
 import { useFileExplorerNameFilter } from './use-file-explorer-name-filter'
 import { useFileExplorerTreePaneState } from './use-file-explorer-tree-pane-state'
+import {
+  FileExplorerHostAwareToolbar,
+  FileExplorerHostInertBoundary,
+  FileExplorerHostModeProvider,
+  FileExplorerHostOverlay,
+  FileExplorerProjectOnly
+} from './file-explorer-host-mode-context'
+import { FileExplorerHostQueryRow } from './FileExplorerHostQueryRow'
 import { translate } from '@/i18n/i18n'
 import type { RightSidebarExplorerView } from '../../../../shared/ui-chrome-types'
 
@@ -241,7 +248,7 @@ function FileExplorerFiles(): React.JSX.Element {
   }
 
   return (
-    <>
+    <FileExplorerHostModeProvider activeWorktreeId={activeWorktreeId} worktreePath={worktreePath}>
       <div
         ref={rowScrolling.setExplorerShellRef}
         data-orca-explorer-shell
@@ -250,7 +257,7 @@ function FileExplorerFiles(): React.JSX.Element {
         }
         className="flex min-h-0 flex-1 flex-col"
       >
-        <FileExplorerToolbar
+        <FileExplorerHostAwareToolbar
           repoName={repoName}
           worktreePath={worktreePath}
           connectionId={activeRepo?.connectionId ?? null}
@@ -266,104 +273,118 @@ function FileExplorerFiles(): React.JSX.Element {
           onToggleDotfiles={handleToggleDotfiles}
         />
         {activeWorktree?.isSparse && (
-          <FileExplorerScopeNotice
-            rootSelect={
-              isFilesViewActive && rootOptions
-                ? {
-                    options: rootOptions,
-                    value: rootChoice,
-                    onValueChange: rootNavigation.selectRoot,
-                    disabled:
-                      Boolean(paneState.dragDrop.dragSourcePath) ||
-                      paneState.dragDrop.isNativeDragOver
-                  }
-                : null
-            }
-            returnRoot={rootNavigation.returnRoot}
-            onSelectRoot={rootNavigation.selectRoot}
-            disabled={
-              Boolean(paneState.dragDrop.dragSourcePath) || paneState.dragDrop.isNativeDragOver
-            }
-            searching={!isFilesViewActive}
-            sparse={!!activeWorktree?.isSparse}
-          />
+          <FileExplorerProjectOnly>
+            <FileExplorerScopeNotice
+              rootSelect={
+                isFilesViewActive && rootOptions
+                  ? {
+                      options: rootOptions,
+                      value: rootChoice,
+                      onValueChange: rootNavigation.selectRoot,
+                      disabled:
+                        Boolean(paneState.dragDrop.dragSourcePath) ||
+                        paneState.dragDrop.isNativeDragOver
+                    }
+                  : null
+              }
+              returnRoot={rootNavigation.returnRoot}
+              onSelectRoot={rootNavigation.selectRoot}
+              disabled={
+                Boolean(paneState.dragDrop.dragSourcePath) || paneState.dragDrop.isNativeDragOver
+              }
+              searching={!isFilesViewActive}
+              sparse={!!activeWorktree?.isSparse}
+            />
+          </FileExplorerProjectOnly>
         )}
         <FileExplorerQueryStrip view={explorerView} onSelectView={handleSelectExplorerView}>
           {/* Why: keep both query rows mounted and cross-fade so the Names/Contents
              switch does not remount or shift when changing modes. */}
           <div className="relative min-h-7">
-            <div
-              className={cn(
-                explorerView !== 'files' && 'pointer-events-none invisible absolute inset-x-0 top-0'
-              )}
-            >
-              <FileExplorerNameFilter
-                query={nameFilterQuery}
-                scopeLabel={rootOptions?.find((option) => option.value === rootChoice)?.label}
-                loading={nameFilterFiles.loading}
-                onQueryChange={setNameFilterQuery}
-                onClear={handleClearNameFilter}
-              />
-            </div>
-            <div
-              className={cn(
-                explorerView !== 'search' &&
-                  'pointer-events-none invisible absolute inset-x-0 top-0'
-              )}
-            >
-              <SearchQueryRow {...searchPanel.queryRowProps} />
-            </div>
+            <FileExplorerHostQueryRow view={explorerView} />
+            <FileExplorerHostInertBoundary className="contents">
+              <div
+                className={cn(
+                  explorerView !== 'files' &&
+                    'pointer-events-none invisible absolute inset-x-0 top-0'
+                )}
+              >
+                <FileExplorerNameFilter
+                  query={nameFilterQuery}
+                  scopeLabel={rootOptions?.find((option) => option.value === rootChoice)?.label}
+                  loading={nameFilterFiles.loading}
+                  onQueryChange={setNameFilterQuery}
+                  onClear={handleClearNameFilter}
+                />
+              </div>
+              <div
+                className={cn(
+                  explorerView !== 'search' &&
+                    'pointer-events-none invisible absolute inset-x-0 top-0'
+                )}
+              >
+                <SearchQueryRow {...searchPanel.queryRowProps} />
+              </div>
+            </FileExplorerHostInertBoundary>
           </div>
         </FileExplorerQueryStrip>
-        <div
-          className={cn(
-            'border-b border-border px-2 pb-1.5',
-            explorerView !== 'search' &&
-              'pointer-events-none invisible h-0 overflow-hidden border-b-0 p-0'
-          )}
-        >
-          <SearchFilters {...searchPanel.filtersProps} />
-        </div>
+        <FileExplorerProjectOnly>
+          <div
+            className={cn(
+              'border-b border-border px-2 pb-1.5',
+              explorerView !== 'search' &&
+                'pointer-events-none invisible h-0 overflow-hidden border-b-0 p-0'
+            )}
+          >
+            <SearchFilters {...searchPanel.filtersProps} />
+          </div>
+        </FileExplorerProjectOnly>
         {/* Why: the Files and Contents views share one body slot; layering them
            avoids remounting heavy virtualized panes while preserving full height. */}
         <div className="relative min-h-0 flex-1 overflow-hidden">
-          <FileExplorerFilesTreePane
-            displayRootPath={displayRootPath}
-            activeRepo={activeRepo}
-            worktreePath={worktreePath}
-            explorerView={explorerView}
-            activeFileId={activeFileId}
-            hasNameFilter={hasNameFilter}
-            nameFilterSource={nameFilterSource}
-            nameFilterFiles={nameFilterFiles}
-            handleExpandNameFilterDir={handleExpandNameFilterDir}
-            tree={tree}
-            selection={selection}
-            paneState={paneState}
-            rowProjection={rowProjection}
-            ignoredByRelativePath={ignoredByRelativePath}
-            rowExpandedPaths={rowExpandedPaths}
-            visibleRowCount={visibleRowCount}
-            handleExplorerBackgroundContextMenuCapture={handleExplorerBackgroundContextMenuCapture}
-            handleExplorerBackgroundDoubleClick={handleExplorerBackgroundDoubleClick}
-          />
-          <div
-            className={cn(
-              'absolute inset-0 flex min-h-0 flex-col',
-              explorerView !== 'search' && 'pointer-events-none invisible'
-            )}
-          >
-            {searchPanel.activeWorktreeId ? (
-              <SearchResultsPane {...searchPanel.resultsProps} />
-            ) : (
-              <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.right.sidebar.Search.98c8435e36',
-                  'Select a workspace to search'
-                )}
-              </div>
-            )}
-          </div>
+          <FileExplorerHostOverlay showDotfiles={showDotfiles} />
+          {/* Why: Host mode overlays instead of unmounting so tree caches and listeners survive. */}
+          <FileExplorerHostInertBoundary>
+            <FileExplorerFilesTreePane
+              displayRootPath={displayRootPath}
+              activeRepo={activeRepo}
+              worktreePath={worktreePath}
+              explorerView={explorerView}
+              activeFileId={activeFileId}
+              hasNameFilter={hasNameFilter}
+              nameFilterSource={nameFilterSource}
+              nameFilterFiles={nameFilterFiles}
+              handleExpandNameFilterDir={handleExpandNameFilterDir}
+              tree={tree}
+              selection={selection}
+              paneState={paneState}
+              rowProjection={rowProjection}
+              ignoredByRelativePath={ignoredByRelativePath}
+              rowExpandedPaths={rowExpandedPaths}
+              visibleRowCount={visibleRowCount}
+              handleExplorerBackgroundContextMenuCapture={
+                handleExplorerBackgroundContextMenuCapture
+              }
+              handleExplorerBackgroundDoubleClick={handleExplorerBackgroundDoubleClick}
+            />
+            <div
+              className={cn(
+                'absolute inset-0 flex min-h-0 flex-col',
+                explorerView !== 'search' && 'pointer-events-none invisible'
+              )}
+            >
+              {searchPanel.activeWorktreeId ? (
+                <SearchResultsPane {...searchPanel.resultsProps} />
+              ) : (
+                <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+                  {translate(
+                    'auto.components.right.sidebar.Search.98c8435e36',
+                    'Select a workspace to search'
+                  )}
+                </div>
+              )}
+            </div>
+          </FileExplorerHostInertBoundary>
         </div>
       </div>
 
@@ -375,7 +396,7 @@ function FileExplorerFiles(): React.JSX.Element {
         displayDepth={displayDepth}
         onStartNew={inlineInputState.startNew}
       />
-    </>
+    </FileExplorerHostModeProvider>
   )
 }
 

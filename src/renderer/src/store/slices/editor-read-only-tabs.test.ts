@@ -168,4 +168,116 @@ describe('read-only editor tabs (AI Vault View Log)', () => {
       expect.objectContaining({ externalSshTargetId: 'ssh-1' })
     )
   })
+
+  describe('Explorer Host mode tabs', () => {
+    const HOST_PATH = '/home/user/.bashrc'
+    const openHostTab = (store: StoreApi<AppState>): void => {
+      store.getState().openFile(
+        {
+          filePath: HOST_PATH,
+          relativePath: HOST_PATH,
+          worktreeId: 'wt-1',
+          language: 'shell',
+          mode: 'edit',
+          readOnly: true,
+          hostBrowse: true,
+          runtimeEnvironmentId: null
+        },
+        { preview: true, forceContentReload: true, suppressActiveRuntimeFallback: true }
+      )
+    }
+    const openWritable = (store: StoreApi<AppState>): void => {
+      store.getState().openFile({
+        filePath: HOST_PATH,
+        relativePath: HOST_PATH,
+        worktreeId: 'wt-1',
+        language: 'shell',
+        mode: 'edit',
+        runtimeEnvironmentId: null
+      })
+    }
+
+    it('opens a read-only tab that refuses edits', () => {
+      const store = createEditorStore()
+      openHostTab(store)
+
+      expect(store.getState().openFiles[0]).toEqual(
+        expect.objectContaining({ readOnly: true, hostBrowse: true })
+      )
+      store.getState().markFileDirty(HOST_PATH, true)
+      store.getState().setEditorDraft(HOST_PATH, 'stray edit')
+      expect(store.getState().openFiles[0]?.isDirty).toBe(false)
+      expect(store.getState().editorDrafts[HOST_PATH]).toBeUndefined()
+    })
+
+    it('never downgrades an existing writable tab', () => {
+      const store = createEditorStore()
+      openWritable(store)
+
+      openHostTab(store)
+
+      expect(store.getState().openFiles).toHaveLength(1)
+      expect(store.getState().openFiles[0]?.readOnly).toBeUndefined()
+      expect(store.getState().openFiles[0]?.hostBrowse).toBeUndefined()
+    })
+
+    it('only focuses an existing View Log tab without ending its live tail', () => {
+      const store = createEditorStore()
+      store.getState().openFile(
+        {
+          filePath: HOST_PATH,
+          relativePath: HOST_PATH,
+          worktreeId: 'wt-1',
+          language: 'shell',
+          mode: 'edit',
+          readOnly: true,
+          liveTail: true,
+          runtimeEnvironmentId: null
+        },
+        { preview: false, forceContentReload: true, suppressActiveRuntimeFallback: true }
+      )
+
+      openHostTab(store)
+
+      expect(store.getState().openFiles).toHaveLength(1)
+      expect(store.getState().openFiles[0]).toEqual(
+        expect.objectContaining({ readOnly: true, liveTail: true })
+      )
+      expect(store.getState().openFiles[0]?.hostBrowse).toBeUndefined()
+    })
+
+    it('drops the Host marker and captures owner provenance once opened writable', () => {
+      const store = createEditorStore()
+      openHostTab(store)
+      expect(
+        store.getState().openFiles[0]?.operationProvenance,
+        'read-only Host tab carries no provenance'
+      ).toBeUndefined()
+
+      openWritable(store)
+
+      const tab = store.getState().openFiles[0]
+      expect(tab?.readOnly, 'tab is writable once reopened for edit').toBeUndefined()
+      expect(tab?.hostBrowse, 'Host marker is dropped once opened writable').toBeUndefined()
+      expect(
+        tab?.operationProvenance,
+        'provenance captured on the read-only -> writable transition'
+      ).toBeDefined()
+    })
+
+    it('keeps restored writable tabs resolving their owner lazily when reopened', () => {
+      const store = createEditorStore()
+      openWritable(store)
+      // Why: hydrated tabs carry no provenance; simulate one.
+      store.setState({
+        openFiles: store
+          .getState()
+          .openFiles.map((file) => ({ ...file, operationProvenance: undefined }))
+      })
+
+      openWritable(store)
+
+      expect(store.getState().openFiles[0]?.operationProvenance).toBeUndefined()
+    })
+  })
 })

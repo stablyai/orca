@@ -2,6 +2,7 @@ import React, { useCallback } from 'react'
 import { ChevronRight, ArrowUp, Home } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { driveBreadcrumbPath, splitBrowsePath } from './remote-file-browser-drive-paths'
+import { parentPath } from './remote-file-browser-helpers'
 import type { FilesystemPathFlavor } from '../../../../shared/filesystem-entry-types'
 
 type RemoteFileBrowserBreadcrumbsProps = {
@@ -23,12 +24,18 @@ export function RemoteFileBrowserBreadcrumbs({
   // Preserve the separator shape when rebuilding drive breadcrumbs.
   const browseParts = splitBrowsePath(resolvedPath, pathFlavor)
   const pathSegments = browseParts.segments
+  const anchorRoot =
+    browseParts.kind === 'drive'
+      ? browseParts.driveRoot
+      : browseParts.kind === 'unc'
+        ? browseParts.uncRoot
+        : null
   const breadcrumbPathTo = useCallback(
     (segmentIndex: number): string =>
-      browseParts.kind === 'drive'
-        ? driveBreadcrumbPath(browseParts.driveRoot, browseParts.segments, segmentIndex)
+      anchorRoot !== null
+        ? driveBreadcrumbPath(anchorRoot, browseParts.segments, segmentIndex)
         : `/${browseParts.segments.slice(0, segmentIndex + 1).join('/')}`,
-    [browseParts]
+    [anchorRoot, browseParts]
   )
 
   return (
@@ -36,7 +43,7 @@ export function RemoteFileBrowserBreadcrumbs({
       <button
         type="button"
         onClick={navigateUp}
-        disabled={resolvedPath === '/' || loading}
+        disabled={parentPath(resolvedPath, pathFlavor) === resolvedPath || loading}
         className="shrink-0 p-1 rounded hover:bg-accent disabled:opacity-30 transition-colors cursor-pointer disabled:cursor-default"
       >
         <ArrowUp className="size-3.5" />
@@ -50,25 +57,29 @@ export function RemoteFileBrowserBreadcrumbs({
         <Home className="size-3.5" />
       </button>
       <div className="flex items-center gap-0 text-[11px] text-muted-foreground ml-1 min-w-0">
-        <button
-          type="button"
-          onClick={() => navigate('/')}
-          className="shrink-0 hover:text-foreground transition-colors cursor-pointer px-0.5"
-        >
-          /
-        </button>
-        {browseParts.kind === 'drive' && (
+        {browseParts.kind !== 'unc' && (
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="shrink-0 hover:text-foreground transition-colors cursor-pointer px-0.5"
+          >
+            /
+          </button>
+        )}
+        {anchorRoot !== null && (
           <>
-            <ChevronRight className="size-2.5 shrink-0 text-muted-foreground/50" />
+            {browseParts.kind === 'drive' && (
+              <ChevronRight className="size-2.5 shrink-0 text-muted-foreground/50" />
+            )}
             <button
               type="button"
-              onClick={() => navigate(browseParts.driveRoot)}
+              onClick={() => navigate(anchorRoot)}
               className={cn(
                 'truncate max-w-[120px] hover:text-foreground transition-colors cursor-pointer px-0.5',
                 pathSegments.length === 0 && 'text-foreground font-medium'
               )}
             >
-              {browseParts.driveRoot.slice(0, 2)}
+              {browseParts.kind === 'drive' ? anchorRoot.slice(0, 2) : anchorRoot.slice(0, -1)}
             </button>
           </>
         )}

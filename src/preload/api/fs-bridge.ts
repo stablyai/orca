@@ -12,7 +12,11 @@ import type {
   AgentSessionAttachmentUploadTarget
 } from '../../shared/agent-session-attachments'
 import type { SearchResult } from '../../shared/code-search-types'
-import type { FsChangedPayload } from '../../shared/filesystem-entry-types'
+import type {
+  FsChangedPayload,
+  HostBrowseEntryResolution,
+  HostDirectoryListing
+} from '../../shared/filesystem-entry-types'
 import type {
   ImportItemResult,
   ResolveDroppedPathsResult,
@@ -147,6 +151,13 @@ export const fsApi = {
       recursive?: boolean
     } & SshMutationExpectation
   ): Promise<void> => ipcRenderer.invoke('fs:deletePath', args),
+  browseHostDir: (args: { dirPath: string }): Promise<HostDirectoryListing> =>
+    ipcRenderer.invoke('fs:browseHostDir', args),
+  resolveHostBrowseEntry: (args: {
+    targetPath: string
+    connectionId?: string
+    workspaceRoot?: string
+  }): Promise<HostBrowseEntryResolution> => ipcRenderer.invoke('fs:resolveHostBrowseEntry', args),
   stat: (args: {
     filePath: string
     connectionId?: string

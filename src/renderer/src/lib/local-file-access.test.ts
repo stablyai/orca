@@ -232,6 +232,7 @@ const USER_NAMED_TAB_OPENERS = [
   'components/floating-terminal/use-floating-terminal-create-actions.ts',
   'components/quick-open-file-navigation.ts',
   'components/right-sidebar/ai-vault-session-log-open.ts',
+  'components/right-sidebar/file-explorer-host-open.ts',
   'components/right-sidebar/source-control/notes/use-note-opening.ts',
   'components/right-sidebar/useFileExplorerHandlers.ts',
   'components/settings/KeybindingsFileActions.tsx',

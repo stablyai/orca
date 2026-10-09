@@ -19331,6 +19331,20 @@
       "findInFolder": "Rechercher dans {{path}}",
       "folderLoadError": "Impossible de charger ce dossier :",
       "emptyFolder": "Aucun fichier dans ce dossier"
+    },
+    "host": {
+      "returnToProject": "Revenir à la racine de l’espace de travail",
+      "refresh": "Actualiser le dossier",
+      "browsing": "Hôte : {{host}}",
+      "parentDirectory": "Dossier parent",
+      "contentsUnavailable": "La recherche de contenu porte sur l’espace de travail. Revenez à la racine de l’espace de travail pour l’utiliser.",
+      "thisFolder": "ce dossier",
+      "enter": "Parcourir le système de fichiers de l’hôte",
+      "folderOpenFailed": "Impossible d’ouvrir ce dossier : {{error}}",
+      "unsupportedEntry": "Cet élément ne peut pas être ouvert.",
+      "entryMissing": "Cet élément n’existe plus.",
+      "entryUnverifiable": "Impossible d’accéder à cet élément : {{error}}",
+      "unavailable": "La navigation sur l’hôte n’est pas disponible pour cet espace de travail"
     }
   },
   "sparsePreset": {
