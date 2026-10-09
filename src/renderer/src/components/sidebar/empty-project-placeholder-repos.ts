@@ -23,7 +23,9 @@ export function getEmptyProjectPlaceholderRepoIds(args: {
     const hasNoWorktrees = (args.worktreesByRepo[repo.id]?.length ?? 0) === 0
     // Why: workspace filters hide cards, but must not rewrite the visible
     // membership of a persisted Project Group. #8865
-    const isFilteredProjectGroupMember = repo.projectGroupId != null && !visibleRepoIds.has(repo.id)
+    // Hide-when-idle repos opt out: an empty header for every idle clone is the clutter they remove.
+    const isFilteredProjectGroupMember =
+      repo.projectGroupId != null && !repo.hideWhenIdle && !visibleRepoIds.has(repo.id)
     if (hasNoWorktrees || isFilteredProjectGroupMember) {
       placeholderRepoIds.add(repo.id)
     }

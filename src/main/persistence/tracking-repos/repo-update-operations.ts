@@ -92,6 +92,7 @@ export class RepoUpdatePersistenceOperations {
         | 'symlinkPaths'
         | 'issueSourcePreference'
         | 'forkSyncMode'
+        | 'hideWhenIdle'
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'externalWorktreeInboxBaselinePaths'
         | 'importedExternalWorktreePaths'

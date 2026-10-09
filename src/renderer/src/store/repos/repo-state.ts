@@ -44,6 +44,7 @@ export type RepoUpdate = Partial<
     | 'symlinkPaths'
     | 'issueSourcePreference'
     | 'forkSyncMode'
+    | 'hideWhenIdle'
     | 'externalWorktreeVisibilityPromptDismissedAt'
     | 'externalWorktreeInboxBaselinePaths'
     | 'importedExternalWorktreePaths'

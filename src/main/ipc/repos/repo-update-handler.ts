@@ -39,6 +39,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
             | 'symlinkPaths'
             | 'issueSourcePreference'
             | 'forkSyncMode'
+            | 'hideWhenIdle'
             | 'externalWorktreeVisibilityPromptDismissedAt'
             | 'externalWorktreeInboxBaselinePaths'
             | 'importedExternalWorktreePaths'
@@ -121,6 +122,9 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
         } else {
           updates.badgeColor = badgeColor
         }
+      }
+      if ('hideWhenIdle' in updates && typeof updates.hideWhenIdle !== 'boolean') {
+        delete updates.hideWhenIdle
       }
       if ('externalWorktreeVisibility' in updates && updates.externalWorktreeVisibility === null) {
         updates.externalWorktreeVisibility = undefined

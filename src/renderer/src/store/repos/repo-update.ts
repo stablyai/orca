@@ -51,6 +51,9 @@ export function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
   ) {
     delete sanitized.forkSyncMode
   }
+  if ('hideWhenIdle' in sanitized && typeof sanitized.hideWhenIdle !== 'boolean') {
+    delete sanitized.hideWhenIdle
+  }
   if ('ghAccount' in sanitized && sanitized.ghAccount != null) {
     const normalized = normalizeGhAccountBinding(sanitized.ghAccount)
     if (!normalized) {

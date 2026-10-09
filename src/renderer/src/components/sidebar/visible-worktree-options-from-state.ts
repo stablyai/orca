@@ -49,6 +49,7 @@ export function buildVisibleWorktreeOptionsFromState(
     visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,
     defaultHostId: getSettingsFocusedExecutionHostId(state.settings),
     worktreeLineageById: state.worktreeLineageById,
-    preserveLineageParentOrder: state.sortBy === 'manual'
+    preserveLineageParentOrder: state.sortBy === 'manual',
+    activeWorktreeId: state.activeWorktreeId
   }
 }
