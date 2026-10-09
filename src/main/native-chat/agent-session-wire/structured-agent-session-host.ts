@@ -152,7 +152,8 @@ export class StructuredAgentSessionHost {
       serialize: (sessionId, task) => this.tasks.trackAttach(this.serialize(sessionId, task)),
       now: () => this.now(),
       runtimeState: this.runtimeState,
-      wakeDelivery: (sessionId) => this.conversationDelivery.loop.wake(sessionId)
+      wakeDelivery: (sessionId) => this.conversationDelivery.loop.wake(sessionId),
+      stopStartingChild: (...args) => this.lifetime.stopStartingChild(...args)
     })
     this.restartResume = createStructuredAgentSessionRestartResume(deps, this.sessions, {
       ...structuredAgentSessionRestartResumeSurfaces(this, this.now),
@@ -254,8 +255,7 @@ export class StructuredAgentSessionHost {
   // type, and this file has no line budget left for the import.
   /** Quit: no exit or recovery settled after this starts a child or hands a message over, and the
    *  queue hands no card over. */
-  stopDelivery = (): void =>
-    [this.conversationDelivery, this.queued.drain].forEach((d) => d.dispose())
+  stopDelivery = () => [this.conversationDelivery, this.queued.drain].forEach((d) => d.dispose())
 
   async flushAllStreamedEvents(options?: { trigger?: 'quit' | 'update' }): Promise<void> {
     this.stopDelivery()

@@ -46,7 +46,6 @@ let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
 let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
 let closeSession: Mock<NonNullable<StructuredAgentSessionAdapter['closeSession']>>
 let setOption: Mock<StructuredAgentSessionAdapter['setOption']>
-let readAcquisitionOptions: StructuredAgentSessionAdapter['readAcquisitionOptions']
 let startupLimits: Partial<StructuredAgentSessionStartupLimits> | undefined
 const providerStarted = vi.fn()
 
@@ -69,11 +68,8 @@ function acquisition(input: StructuredAgentSessionAcquireInput): AgentSessionAcq
   }
 }
 
-/** An acquire that publishes at spawn: the child proves its start later, with `started`. */
-const publishFirst: StructuredAgentSessionAdapter['acquire'] = async (input) => ({
-  ...acquisition(input),
-  providerChildPhase: 'starting'
-})
+/** An acquire that publishes at spawn, as every one does: the child proves its start later. */
+const publishFirst: StructuredAgentSessionAdapter['acquire'] = async (input) => acquisition(input)
 
 async function startHost(): Promise<void> {
   host = new StructuredAgentSessionHost({
@@ -87,8 +83,7 @@ async function startHost(): Promise<void> {
       releaseAcquisition: vi.fn(async () => true),
       cancelTurn: vi.fn(async () => ({ cancelled: false })),
       answerPrompt: vi.fn(async () => undefined),
-      setOption,
-      ...(readAcquisitionOptions ? { readAcquisitionOptions } : {})
+      setOption
     },
     modelCatalog: {
       read: vi.fn(),
@@ -132,7 +127,6 @@ beforeEach(async () => {
   }))
   closeSession = vi.fn(async () => true)
   setOption = vi.fn(async () => undefined)
-  readAcquisitionOptions = undefined
   store = await openTestAgentSessionRecordStore(root)
   await startHost()
   expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
@@ -371,7 +365,7 @@ describe('a start that ends before it proves itself', () => {
     await restartWith(async (input) => {
       await input.onSpawned?.(acquisition(input).process)
       chatter.push(setInterval(() => input.onOutput?.(), 10))
-      return { ...acquisition(input), providerChildPhase: 'starting' }
+      return acquisition(input)
     })
     try {
       const id = await heldBehindStart('hello')
@@ -404,22 +398,7 @@ describe('a start that ends before it proves itself', () => {
     await eventually(() => expect(startupAttemptOpen()).toBe(false))
   })
 
-  it('ends a ready child’s option read that never answers, and fails what it held', async () => {
-    startupLimits = { silenceMs: 50 }
-    readAcquisitionOptions = () => new Promise(() => {})
-    await restartWith(async (input) => {
-      await input.onSpawned?.(acquisition(input).process)
-      return acquisition(input)
-    })
-    const id = await accept('hello')
-
-    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('rejected'))
-    expect(await submission(id)).toMatchObject(HOST_STOPPED)
-    expect(dispatch).not.toHaveBeenCalled()
-    await eventually(() => expect(startupAttemptOpen()).toBe(false))
-  })
-
-  it('ends a ready child inside its start when the chat closes before its options are read', async () => {
+  it('ends a start whose acquire is still running when the chat closes', async () => {
     let land = (): void => {}
     const landed = new Promise<void>((resolve) => {
       land = resolve

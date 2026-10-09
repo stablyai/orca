@@ -123,6 +123,7 @@ async function stop(turnId?: string): Promise<void> {
   if (!stopped.ok) {
     throw new Error(JSON.stringify(stopped.refusal))
   }
+  await host.collaboratorsForTests().serialize(SESSION, async () => {})
 }
 
 /** `/compact` as the chat surface runs it; refused while the chat still owes work. */

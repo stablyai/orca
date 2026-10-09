@@ -1,9 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { providerDiagnosticOf } from '../../shared/agent-session-failure'
-import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import { agentSessionFailureSentence } from '../../shared/agent-session-failure-words'
-import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { ACP_LAUNCH_SPECS } from './acp-launch-specs'
 import {
@@ -84,12 +81,17 @@ it.each(ACP_LAUNCH_SPECS)(
       spec,
       script: (agent) => agent.on('session/new', (frame) => agent.fail(frame, -32000, detail))
     })
-    const error = await rig.acquire().catch((failure: unknown) => failure)
-    expect(error).toBeInstanceOf(AgentSessionAcquisitionRefusal)
-    expect(error).toMatchObject({ reason: 'notSignedIn' })
-    expect(providerDiagnosticOf(error)).toEqual({ text: detail, audience: 'person' })
-    const fact = providerStartupFailureFact(error)
-    expect(fact.detail?.text).toBe(detail)
+    // The chat opens at spawn, so a refused start ends the child with the reason.
+    await rig.acquire()
+    const [ended] = rig.ended
+    expect(ended).toMatchObject({
+      startupUnproven: true,
+      failure: { kind: 'notSignedIn', detail: { text: detail, audience: 'person' } }
+    })
+    const fact = ended?.failure
+    if (!fact) {
+      throw new Error('a refused start reports its failure')
+    }
     expect(agentSessionFailureSentence(fact, 'row', { agentName: spec.agent })).toContain(detail)
   }
 )

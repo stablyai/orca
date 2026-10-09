@@ -30,6 +30,7 @@ import {
   openAcpAdapterRig,
   PROVIDER_SESSION,
   replyChunk,
+  waitFor,
   type FakeAcpChild
 } from './acp-structured-adapter.test-support'
 import {
@@ -126,12 +127,17 @@ export async function openHostRig(
   hosted.host = host
   replaceHostTestState({ store, host })
   const fence = () => store.getRecord(SESSION)?.lease.runtimeFence ?? 1
+  const ready = () =>
+    waitFor(() =>
+      expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('ready')
+    )
   const messages = async () =>
     (await host.history({ sessionId: SESSION, direction: 'tail' })).page.items
       .filter((row) => row.body.kind === 'message')
       .map((row) => messageText(row.body))
   /** Orca's send of `hello` as `m1`, and Grok's reply `text`, ended or left running. */
   const exchange = async (text: string, end: boolean) => {
+    await ready()
     const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
     await journal.appendItem({ provider: 'orca', clientMessageId: 'm1' }, hello, {
       fence: fence(),
@@ -151,7 +157,7 @@ export async function openHostRig(
     await rig.settle()
     await host.flushStreamedEvents(SESSION)
   }
-  return { rig, host, store, journalDatabase, fence, messages, exchange }
+  return { rig, host, store, journalDatabase, fence, messages, exchange, ready }
 }
 
 /** Grok's capabilities: it loads and resumes sessions; Orca reopens with `session/load`. */
@@ -205,6 +211,7 @@ export async function openAttachedHostRig(
     deps: { resolveLaunch: launch(() => resumed), ...deps }
   })
   expect(await rig.host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
+  await rig.ready()
   resumed = true
   const rows = async () => {
     await rig.host.flushStreamedEvents(SESSION)

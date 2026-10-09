@@ -730,9 +730,10 @@ describe('claim keys and unreadable rows', () => {
         Object.assign(record.lease, { journalCheckpoint: { epoch: 'bad', sequence: 1 } })
     ],
     [
-      'missing live proof',
+      // No proof yet is a live owner whose provider has not answered; a proof naming no link is not.
+      'live proof naming no handle',
       (record: PersistedAgentSessionRecord) =>
-        Object.assign(record.lease, { provenHandleLinkId: null })
+        Object.assign(record.lease, { provenHandleLinkId: 'link-never-minted' })
     ]
   ])('quarantines a record with %s', async (_name, corrupt) => {
     const first = await open()

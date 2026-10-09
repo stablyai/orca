@@ -27,6 +27,7 @@ import {
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -79,15 +80,18 @@ beforeEach(async () => {
       error: (_message, fields) => hostErrors.push(fields.error)
     },
     store,
-    adapter: {
-      acquire,
-      dispatch,
-      closeSession: vi.fn(async () => true),
-      releaseAcquisition: vi.fn(async () => true),
-      cancelTurn: vi.fn(async () => ({ cancelled: false })),
-      answerPrompt: vi.fn(async () => undefined),
-      setOption: vi.fn(async () => undefined)
-    },
+    adapter: startsWhenPublished(
+      {
+        acquire,
+        dispatch,
+        closeSession: vi.fn(async () => true),
+        releaseAcquisition: vi.fn(async () => true),
+        cancelTurn: vi.fn(async () => ({ cancelled: false })),
+        answerPrompt: vi.fn(async () => undefined),
+        setOption: vi.fn(async () => undefined)
+      },
+      () => host
+    ),
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${acquire.mock.calls.length}`,
@@ -688,7 +692,8 @@ describe('a write fenced to an owner the pane has not seen replaced', () => {
     expect(await submission(firstParams.envelope.clientOperationId)).toMatchObject({
       dispatchState: 'rejected'
     })
-    expect(acquire).toHaveBeenCalledOnce()
+    // The Stop ended the child still proving its start, so the late send started another.
+    expect(acquire).toHaveBeenCalledTimes(2)
     expect(dispatch).toHaveBeenCalledTimes(1)
   })
 })

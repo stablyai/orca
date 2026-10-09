@@ -1,6 +1,6 @@
 // A Stop pressed before its send's turn showed binds the turn that send opens only by stopping it:
-// a Codex turn that did not open in time ends with the child the Stop ends, and a Claude turn that
-// opens before the Stop's child end is proven ends as the Stop's. Nothing reads as running after.
+// the Stop's next step ends the child, and a turn that opens before that end is proven ends as the
+// Stop's, whether or not the agent took the interrupt. Nothing reads as running after.
 
 import { afterEach, describe, expect, it } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
@@ -89,6 +89,7 @@ describe('a Codex Stop whose answered turn did not open in time', () => {
     await stopOfAnsweredSend()
 
     expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
+    await windDown()
 
     expect(rig.closeSession).toHaveBeenCalled()
     expect(openedTurn()).toBeUndefined()
@@ -103,6 +104,7 @@ describe('a Codex Stop whose answered turn did not open in time', () => {
     })
 
     expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
+    await windDown()
 
     expect(openedTurn()).toMatchObject({ state: 'interrupted', outcome: 'cancellation' })
     expect(nothingRuns()).toBe(true)
@@ -116,8 +118,11 @@ describe('a Codex Stop that could not reach a turn still able to open, whose kil
     rig.cancelTurn.mockResolvedValueOnce({ cancelled: false, refusal: { turnMayOpen: true } })
     rig.closeSession.mockRejectedValueOnce(new Error('the kill timed out'))
 
-    expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: false } })
+    // The Stop answers before its next step tries the child's end; that end's failure revises the note.
+    expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
+    await windDown()
 
+    expect(rig.closeSession).toHaveBeenCalled()
     const rows = journal()
       .snapshot()
       .items.flatMap((item) => (item.body.kind === 'status' ? [item.body.failure?.kind] : []))
@@ -125,9 +130,9 @@ describe('a Codex Stop that could not reach a turn still able to open, whose kil
   })
 })
 
-describe('a Claude Stop pressed before its send echoed', () => {
+describe('a Stop the agent took, pressed before its send echoed', () => {
   it('reads the turn that opens before its child end is proven as interrupted by the Stop', async () => {
-    rig = await createQueuedMessageTestRig({ stopEndsSession: true })
+    rig = await createQueuedMessageTestRig()
     const sent = await rig.workingSend()
     rig.closeSession.mockImplementationOnce(async () => {
       await turnOpens(sent)

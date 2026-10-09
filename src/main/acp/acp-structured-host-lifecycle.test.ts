@@ -57,18 +57,20 @@ describe('reopening a Grok chat through the host', () => {
   it('loads a chat the journal holds and writes its exchange once', async () => {
     const count = { loads: 0 }
     let resumed = false
-    const { host, fence, messages, exchange } = await openHostRig({
+    const { host, fence, messages, exchange, ready } = await openHostRig({
       initialize: RESUMES,
       script: loads('hi', count),
       deps: { resolveLaunch: launch(() => resumed) }
     })
     expect(await host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
+    await ready()
     resumed = true
     await exchange('hi', true)
     expect(await messages()).toEqual(['hello', 'hi'])
     const before = (await host.history({ sessionId: SESSION, direction: 'tail' })).page.items
     await host.close(SESSION, 'user-close')
     expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
+    await ready()
     await host.flushStreamedEvents(SESSION)
     expect(count.loads).toBe(1)
     expect(await messages()).toEqual(['hello', 'hi'])
@@ -82,12 +84,13 @@ describe('reopening a Grok chat through the host', () => {
 
   it('shows a reply a crash cut off with the existing notice, never completed from what Grok saved', async () => {
     let resumed = false
-    const { rig, host, fence, messages, exchange } = await openHostRig({
+    const { rig, host, fence, messages, exchange, ready } = await openHostRig({
       initialize: RESUMES,
       script: loads('complete saved reply', { loads: 0 }),
       deps: { resolveLaunch: launch(() => resumed) }
     })
     expect(await host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
+    await ready()
     resumed = true
     await exchange('complete', false)
     // Grok dies mid-reply; the host ends its record, which moves the chat's fence.
@@ -95,6 +98,7 @@ describe('reopening a Grok chat through the host', () => {
     rig.child().exit()
     await waitFor(() => expect(fence()).toBeGreaterThan(cutAt))
     expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
+    await ready()
     await host.flushStreamedEvents(SESSION)
     expect(await messages()).toEqual(['hello', 'complete'])
     const rows = (await host.history({ sessionId: SESSION, direction: 'tail' })).page.items
@@ -169,29 +173,28 @@ describe('a Grok crash whose exit is not proven yet', () => {
 })
 
 describe('closing or stopping a Grok chat while it starts', () => {
-  it('keeps a failed start whose child is not proven gone; a close leaves it, the next start asks it again', async () => {
-    const { rig, host } = await openHostRig({
-      script: (agent) => agent.on('initialize', () => {})
-    })
-    const attaching = host.attach(CALLER, attachParams()).catch((error: unknown) => error)
+  it('retains a published startup child whose close is unproven and retries before another spawn', async () => {
+    const { rig, host } = await openHostRig({ script: (agent) => agent.on('initialize', () => {}) })
+    expect(await host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
     await rig.frame('initialize')
     const child = rig.child()
     child.proveClose = vi.fn(async () => false)
-    await host.close(SESSION, 'user-close')
-    expect(await attaching).toMatchObject({ name: 'AgentSessionAcquisitionExitUnprovenError' })
-    child.proveClose = vi.fn(async () => {
-      child.exit()
-      return true
-    })
-    await host.close(SESSION, 'user-close')
-    expect(child.proveClose).not.toHaveBeenCalled()
-    expect(child.exited).toBe(false)
-    // As Claude's: the next start asks the child again before it spawns another.
+    try {
+      await expect(host.close(SESSION, 'user-close')).rejects.toThrow('eviction failed')
+      expect(child.exited).toBe(false)
+      expect(rig.spawned.filter((step) => step === 'spawn')).toHaveLength(1)
+    } finally {
+      child.proveClose = vi.fn(async () => {
+        child.exit()
+        return true
+      })
+      await host.close(SESSION, 'user-close')
+    }
+    expect(child.exited).toBe(true)
     await host.send(CALLER, {
       envelope: envelope('agentSession.send', { body: hello }),
       body: hello
     })
-    await waitFor(() => expect(child.exited).toBe(true))
     await waitFor(() => expect(rig.child()).not.toBe(child))
     await host.close(SESSION, 'user-close')
   })
@@ -205,7 +208,7 @@ describe('closing or stopping a Grok chat while it starts', () => {
     const stopping = host.cancel(CALLER, { envelope: envelope('agentSession.cancel', {}) })
     // With no close behind it.
     await waitFor(() => expect(rig.child().exited).toBe(true))
-    expect((await attaching).ok).toBe(false)
+    expect((await attaching).ok).toBe(true)
     expect(await stopping).toMatchObject({ ok: true })
     expect(rig.spawned.filter((step) => step === 'spawn')).toHaveLength(1)
   })
@@ -244,7 +247,7 @@ describe('closing or stopping a Grok chat while it starts', () => {
     await host.close(SESSION, 'user-close')
   })
 
-  it('leaves a start alone for a Stop that names a turn of a child already gone', async () => {
+  it('stops a starting child even when Stop names an earlier turn', async () => {
     const { rig, host } = await openHostRig({
       script: (agent) => agent.on('initialize', () => {})
     })
@@ -255,7 +258,7 @@ describe('closing or stopping a Grok chat while it starts', () => {
       turnId: 'turn-of-an-old-child'
     })
     await rig.settle()
-    expect(rig.child().closes).toBe(0)
+    expect(rig.child().closes).toBeGreaterThan(0)
     await host.close(SESSION, 'user-close')
     await attaching
     await stopping

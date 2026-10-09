@@ -211,6 +211,9 @@ export function createCodexJournalTranslator(
       if (event.type === 'provider-frame') {
         return genericFrames.appendUnhandled(event.kind, event.payload, event.threadId)
       }
+      if (event.type !== 'notification') {
+        return CODEX_JOURNAL_ADMITTED
+      }
       if (event.method === 'turn/started' || event.method === 'turn/completed') {
         const childAdmission = subagents.handleTurnEvent(event)
         if (!childAdmission.accepted) {

@@ -167,7 +167,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
 
         // Init/SessionStart UUIDs are protocol frames, not resumable
         // main-transcript leaves; no cursor exists before the first user turn.
-        expect(acquisition.link.handle).toEqual(claudeProviderHandle(providerSessionId, null))
+        expect(acquisition.link?.handle).toEqual(claudeProviderHandle(providerSessionId, null))
         expect(observedSubtypes).toContain('hook_started')
         expect(adapter.readCommands('real-cli-handshake')).toContainEqual(
           expect.objectContaining({

@@ -1,5 +1,6 @@
-import { describe, expect, it, vi, type Mock } from 'vitest'
 import {
+  codexStartReport,
+  acquireReadyCodexForTest,
   THREAD_ID,
   USER_MESSAGE,
   adapterFor,
@@ -8,6 +9,7 @@ import {
   identityFor,
   type Route
 } from './codex-structured-session-adapter-fixture'
+import { describe, expect, it, vi, type Mock } from 'vitest'
 import {
   AGENT_MODEL_CATALOG_FAILURE_TTL_MS,
   AgentModelCatalogStore
@@ -30,7 +32,7 @@ function listing(tier = 'priority-live-v2') {
 }
 
 async function acquire(adapter: CodexStructuredSessionAdapter, sessionId = 'session-1') {
-  return adapter.acquire({
+  return acquireReadyCodexForTest(adapter, {
     identity: identityFor(sessionId),
     fence: 7,
     spawnToken: `spawn-${sessionId}`,
@@ -60,8 +62,8 @@ describe('Codex structured Fast mode without send-path catalog waits', () => {
     const adapter = adapterFor(codex)
 
     await acquire(adapter)
-    expect(adapter.readAcquisitionOptions({ sessionId: 'session-1', fence: 7 })).toMatchObject({
-      fastMode: 'true'
+    expect(codexStartReport(adapter).reportedOptions).toMatchObject({
+      fastMode: true
     })
     await send(adapter, 'first')
     expect(
@@ -309,7 +311,7 @@ describe('Codex structured Fast mode without send-path catalog waits', () => {
     const adapter = adapterFor(codex, { codexHome: '/codex/home' }, [], {
       modelCatalog: new AgentModelCatalogStore()
     })
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-legacy',
@@ -322,8 +324,8 @@ describe('Codex structured Fast mode without send-path catalog waits', () => {
     finishTurn(codex, 'first-turn')
     pending.resolve(listing())
     await vi.waitFor(() =>
-      expect(adapter.readAcquisitionOptions({ sessionId: 'session-1', fence: 7 })).toMatchObject({
-        fastMode: 'true'
+      expect(codexStartReport(adapter).reportedOptions).toMatchObject({
+        fastMode: true
       })
     )
     codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'second-turn')
@@ -408,7 +410,7 @@ describe('Codex structured Fast mode without send-path catalog waits', () => {
     const adapter = adapterFor(codex, { codexHome: '/codex/home', resumeThreadId: THREAD_ID }, [], {
       modelCatalog
     })
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-resume',
@@ -416,9 +418,9 @@ describe('Codex structured Fast mode without send-path catalog waits', () => {
     })
 
     expect(codex.connections[0].calls.some((call) => call.method === 'thread/resume')).toBe(true)
-    expect(adapter.readAcquisitionOptions({ sessionId: 'session-1', fence: 7 })).toEqual({
+    expect(codexStartReport(adapter).reportedOptions).toEqual({
       model: 'gpt-next',
-      fastMode: 'true'
+      fastMode: true
     })
     await send(adapter, 'first')
     const turn = codex.connections[0].calls.find((call) => call.method === 'turn/start')?.params

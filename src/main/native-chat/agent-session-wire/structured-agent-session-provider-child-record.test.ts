@@ -44,6 +44,7 @@ import { openTestJournalHostDatabase } from '../agent-session-journal/journal-ho
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { structuredAgentSessionHeldStarts } from './structured-agent-session-held-start.test-support'
 
 const CALLER = { callerKey: 'client-1' }
 const CHAT_CLOSED = agentSessionFailureWords(agentSessionFailureFact('chatClosed'), {
@@ -79,27 +80,26 @@ const spawnChild: StructuredAgentSessionAdapter['acquire'] = async ({ fence, spa
   }
 })
 
-/** A Claude-shaped child: published at spawn, so it is `starting` until `started`. */
-const spawnStartingChild: StructuredAgentSessionAdapter['acquire'] = async (input) => ({
-  ...(await spawnChild(input)),
-  providerChildPhase: 'starting' as const
-})
+const starts = structuredAgentSessionHeldStarts(() => host)
+
+/** A child whose handshake is still running: `starting` until the test's `prove()`. */
+const spawnStartingChild = starts.held(spawnChild)
 
 function startHost(): void {
   host = new StructuredAgentSessionHost({
     agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
     store,
-    adapter: {
-      acquire,
+    adapter: starts.wrap({
       dispatch,
       closeSession: vi.fn(async () => true),
       releaseAcquisition: vi.fn(async () => true),
       cancelTurn: vi.fn(async () => ({ cancelled: false })),
       answerPrompt: vi.fn(async () => undefined),
       setOption: vi.fn(async () => undefined),
-      ...adapterExtras
-    },
+      ...adapterExtras,
+      acquire
+    }),
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${acquire.mock.calls.length}`,
@@ -116,6 +116,7 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-child-record-'))
   resetHostTestOperationIds()
   adapterExtras = {}
+  starts.clear()
   acquire = vi.fn(spawnChild)
   dispatch = vi.fn(async (input) => ({
     state: 'accepted' as const,
@@ -530,14 +531,15 @@ describe('a start another operation made that dies while a sent message waits on
 describe('a child that ends before its message is handed over', () => {
   it('starts one child for the message, then rejects it and stops (R2)', async () => {
     await restartHost()
-    // The child the loop starts exits as its start step returns: that exit, asked for on the lane
-    // then, lands before the handover step.
+    // The child the loop starts proves its start, then exits as its start step returns: that exit,
+    // asked for on the lane then, lands before the handover step.
     acquire.mockImplementation(async (input) => {
-      const child = await spawnChild(input)
+      const child = await spawnStartingChild(input)
       const { acquisitionGeneration } = child
       if (acquisitionGeneration === undefined) {
         throw new Error('spawnChild always names a generation')
       }
+      void starts.prove({ sessionId: SESSION, fence: input.fence, acquisitionGeneration })
       void host.handleAdapterEvent({
         type: 'ended',
         sessionId: SESSION,

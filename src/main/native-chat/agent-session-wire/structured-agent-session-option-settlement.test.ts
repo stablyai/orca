@@ -56,10 +56,24 @@ function envelope(method: string, fields: Record<string, unknown>): AgentSession
 }
 
 function adapter(): StructuredAgentSessionAdapter {
-  acquire = vi.fn(async ({ fence, spawnToken, options }) => {
+  acquire = vi.fn(async ({ fence, spawnToken, options, identity }) => {
     activeModel = options?.model ?? DEFAULT_MODEL
     activeEffort = options?.effort ?? null
+    const acquisitionGeneration = `generation-${acquire.mock.calls.length}`
+    // The handshake answers at once, reporting the options the child runs with.
+    void host.handleAdapterEvent({
+      type: 'started',
+      sessionId: identity.sessionId,
+      fence,
+      acquisitionGeneration,
+      reportedOptions: { model: activeModel, ...(activeEffort ? { effort: activeEffort } : {}) },
+      restoreSkippedOptions: [],
+      optionRevision: host
+        .collaboratorsForTests()
+        .runtimeState.optionRevisions.current(identity.sessionId)
+    })
     return {
+      acquisitionGeneration,
       process: {
         hostId: 'local',
         pid: 4200 + acquire.mock.calls.length,

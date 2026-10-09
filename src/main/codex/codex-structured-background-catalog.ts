@@ -3,7 +3,11 @@ import {
   fetchCodexModelCatalogListing,
   type CodexModelCatalogListing
 } from './codex-structured-model-catalog'
-import type { CodexSession } from './codex-structured-session-state'
+import { reportedCodexSessionOptions } from './codex-structured-session-options'
+import type {
+  CodexStructuredSessionAdapterDeps,
+  CodexSession
+} from './codex-structured-session-state'
 import { reconcileCodexFastModeOption } from './codex-structured-fast-mode'
 
 type BackgroundCatalogInput = {
@@ -12,6 +16,8 @@ type BackgroundCatalogInput = {
   sessions: ReadonlyMap<string, CodexSession>
   timeoutMs: number | undefined
   logger: StructuredAgentSessionLogger | undefined
+  optionRevision?: () => number
+  onEvent?: CodexStructuredSessionAdapterDeps['onEvent']
 }
 
 /** Turns read tiers from the store; only a legacy saved tier needs migrating here. */
@@ -51,6 +57,18 @@ async function refresh(input: BackgroundCatalogInput): Promise<void> {
     return
   }
   const isCurrent = (): boolean => sessions.get(sessionId) === session && !session.ended
+  const optionRevision = input.optionRevision?.() ?? 0
+  const report = (): void => {
+    input.onEvent?.({
+      type: 'options-reported',
+      sessionId,
+      fence: session.fence,
+      acquisitionGeneration: session.acquisitionGeneration,
+      reportedOptions: reportedCodexSessionOptions(session),
+      restoreSkippedOptions: [],
+      optionRevision
+    })
+  }
   try {
     const listing = await fetchCodexModelCatalogListing({
       connection: session.connection,
@@ -69,6 +87,7 @@ async function refresh(input: BackgroundCatalogInput): Promise<void> {
         models: latest.models,
         fastModeTierByModel: new Map(Object.entries(latest.fastModeTierByModel))
       })
+      report()
       return
     }
     if (fingerprint && store) {
@@ -85,6 +104,7 @@ async function refresh(input: BackgroundCatalogInput): Promise<void> {
       )
     }
     applyListing(session, listing)
+    report()
   } catch (error) {
     if (!isCurrent()) {
       return

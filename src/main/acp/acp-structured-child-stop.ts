@@ -1,14 +1,18 @@
 import type { AcpStructuredSession } from './acp-structured-session'
+import type { AcpStructuredChild } from './acp-structured-child'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
 import { AcpAgentError } from './acp-errors'
 import type { AgentSessionBackgroundTaskStops } from '../../shared/agent-child-work-stop-targets'
 
 export function acpChildStopCapabilities(
-  session?: AcpStructuredSession
+  session?: AcpStructuredChild
 ): AgentSessionBackgroundTaskStops | undefined {
   return session?.journalClosed === null
-    ? { supportsTaskStop: session.subagentStopSupported === true, supportsStopAll: false }
+    ? {
+        supportsTaskStop: session.phase === 'ready' && session.subagentStopSupported === true,
+        supportsStopAll: false
+      }
     : undefined
 }
 

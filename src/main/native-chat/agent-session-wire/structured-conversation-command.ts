@@ -10,6 +10,7 @@ import { admitAndRunAgentSessionMutation } from './structured-agent-session-muta
 import { agentSessionOperationKey } from '../../../shared/agent-session-operation-ledger'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import { sendPreparation } from './structured-agent-session-send-preparation'
+import { runAfterProviderStart } from './structured-agent-session-provider-start-hold'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import { conversationCommandBlocked } from './structured-conversation-command-admission'
 import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
@@ -44,6 +45,17 @@ export type ConversationCommandParams = {
 }
 /** Stop the provider and record a fresh-context boundary in the same conversation. */
 export function runStructuredConversationCommand(
+  context: StructuredAgentSessionMutationContext,
+  caller: StructuredAgentSessionCaller,
+  params: ConversationCommandParams
+): Promise<AgentSessionMutationResult<AgentSessionConversationCommandResult>> {
+  // A rewind in doubt is recovered by a proven start, which the clear waits out.
+  return runAfterProviderStart(context, params.envelope.sessionId, () =>
+    clearUnderSerialize(context, caller, params)
+  )
+}
+
+function clearUnderSerialize(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
   params: ConversationCommandParams

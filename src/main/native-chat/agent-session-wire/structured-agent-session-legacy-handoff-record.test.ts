@@ -27,6 +27,7 @@ import { openTestJournalHostDatabase } from '../agent-session-journal/journal-ho
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -48,15 +49,18 @@ function openHost(): void {
     agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
     store,
-    adapter: {
-      acquire,
-      closeSession: vi.fn(async () => true),
-      releaseAcquisition: vi.fn(async () => true),
-      dispatch,
-      cancelTurn: vi.fn(async () => ({ cancelled: false })),
-      answerPrompt: vi.fn(async () => undefined),
-      setOption: vi.fn(async () => undefined)
-    },
+    adapter: startsWhenPublished(
+      {
+        acquire,
+        closeSession: vi.fn(async () => true),
+        releaseAcquisition: vi.fn(async () => true),
+        dispatch,
+        cancelTurn: vi.fn(async () => ({ cancelled: false })),
+        answerPrompt: vi.fn(async () => undefined),
+        setOption: vi.fn(async () => undefined)
+      },
+      () => host
+    ),
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${acquire.mock.calls.length}`,

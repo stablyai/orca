@@ -25,8 +25,8 @@ export async function joinStructuredAgentSessionChildClose(
   sessionId: string,
   child: StructuredAgentSessionProviderChild
 ): Promise<StructuredAgentSessionChildCloseVerdict> {
-  // Read before the close: once the child is gone the provider can no longer say.
-  const unanswered = context.deps.adapter.startAnswered?.(sessionId) === false
+  // The host hands a starting child nothing, so its close ran nothing it was handed.
+  const unanswered = child.phase === 'starting'
   if (!(await closeProviderRoot(context, sessionId))) {
     return 'unverifiable'
   }

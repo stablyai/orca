@@ -296,7 +296,7 @@ export async function acquireClaudeSession({
       )
     }
     // The start reads its facts only after publish, so the child is `starting` until `started`.
-    return { ...publication.acquisition, providerChildPhase: 'starting' }
+    return publication.acquisition
   } catch (error) {
     unbindReadingControl?.()
     const acquisitionError = await resolveClaudeAcquisitionError({

@@ -172,6 +172,7 @@ async function piHost() {
       }
     } as AgentSessionRecord)
     const rig = await openProviderTimelineRig({ agent: 'pi', sessionId })
+    const onLifecycle = vi.fn()
     const adapter = new PiRpcSessionAdapter({
       resolveLaunch: async () => ({
         command: '/opt/pi/bin/pi',
@@ -186,7 +187,7 @@ async function piHost() {
         child = piChild(opts.available ?? AVAILABLE, opts.thinking ?? 'high')
         return child.connection
       },
-      onLifecycle: vi.fn(),
+      onLifecycle,
       onSettled: vi.fn(),
       onIdle: vi.fn(),
       logger: { warn: vi.fn(), error: vi.fn() }
@@ -205,6 +206,10 @@ async function piHost() {
       options: opts.saved ?? {},
       events: rig.eventSink
     })
+    // The acquire answers at spawn; the chat is the pane's once its start is proven.
+    await vi.waitFor(() =>
+      expect(onLifecycle).toHaveBeenCalledWith(expect.objectContaining({ type: 'started' }))
+    )
     if (opts.afterStart && child) {
       await opts.afterStart({ child, adapter, sessionId })
     }

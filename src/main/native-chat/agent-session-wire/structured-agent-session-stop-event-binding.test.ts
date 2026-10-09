@@ -20,10 +20,7 @@ import {
   QUEUED_RIG_CALLER,
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
-import {
-  openRigTurnFor,
-  withdrawnByStop
-} from './structured-agent-session-queued-rig-turn.test-fixture'
+import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
 
 let rig: QueuedMessageTestRig
 
@@ -62,6 +59,11 @@ function fence(): number {
   return rig.store.getRecord(HOST_TEST_SESSION)?.lease.runtimeFence ?? 1
 }
 
+/** A Stop's second step, which ends the child, runs next on the session's lane. */
+function laneDrained(): Promise<void> {
+  return rig.host['tasks'].serialize(HOST_TEST_SESSION, async () => {})
+}
+
 async function laterTurn() {
   const { items } = await rig.host.journalSnapshot(HOST_TEST_SESSION)
   return items
@@ -69,15 +71,24 @@ async function laterTurn() {
     .find((turn) => turn?.turnId === 'turn-later')
 }
 
-/** Every end row written for the later turn, in order: a relabel would show as two. */
+/** Every end row written for the later turn, in order, a child end's batch included: a relabel
+ *  would show as two. */
 function laterTurnEndRows() {
   const since = journal().readSince({ epoch: journal().epoch, sequence: 0 })
   if (!since.ok) {
     throw new Error(`expected rows, got reset ${since.reset}`)
   }
   return since.rows.flatMap((row) => {
-    const turn = row.kind === 'item' ? readAgentJournalTurn(row.body) : undefined
-    return turn?.turnId === 'turn-later' && turn.state !== 'running' ? [turn] : []
+    const bodies =
+      row.kind === 'item'
+        ? [row.body]
+        : row.kind === 'lifecycle-batch'
+          ? row.mutations.flatMap((mutation) => (mutation.kind === 'item' ? [mutation.body] : []))
+          : []
+    return bodies.flatMap((body) => {
+      const turn = readAgentJournalTurn(body)
+      return turn?.turnId === 'turn-later' && turn.state !== 'running' ? [turn] : []
+    })
   })
 }
 
@@ -215,7 +226,7 @@ describe('a Stop pressed before its send opened a turn binds only the turn it st
   async function stopBeforeTheTurnShowed(
     answer: Awaited<ReturnType<QueuedMessageTestRig['cancelTurn']>> = { cancelled: true }
   ): Promise<{ stopped: string; held: string }> {
-    rig = await createQueuedMessageTestRig()
+    rig = await createQueuedMessageTestRig({ restartable: true })
     const stopped = await rig.workingSend()
     const held = await queuedDraft('queued behind the turn')
     rig.cancelTurn.mockResolvedValueOnce(answer)
@@ -251,21 +262,26 @@ describe('a Stop pressed before its send opened a turn binds only the turn it st
     expect(journal().activeTurnId()).toBeNull()
   })
 
-  it('binds no turn that opens after a Stop that stopped nothing', async () => {
+  // The provider's answer does not decide the Stop: the child's end does, taking back the send.
+  it('binds no turn the next send opens after a Stop the provider said stopped nothing', async () => {
     const { stopped } = await stopBeforeTheTurnShowed({ cancelled: false })
-    await rig.settleAccepted(stopped, 'stopped')
+    await laneDrained()
+    expect(rig.closeSession).toHaveBeenCalledTimes(1)
+    expect(await rig.submission(stopped)).toMatchObject({ dispatchState: 'rejected' })
+    const next = await rig.workingSend()
 
-    await turnOpenedBy(stopped)
-    await turnOpenedBy(stopped, 'interrupted')
+    await turnOpenedBy(next)
+    await turnOpenedBy(next, 'interrupted')
 
     await expectNews()
   })
 
   it("writes the host's event when it evicts the turn of the card Resume sent", async () => {
-    const { stopped, held } = await stopBeforeTheTurnShowed()
-    await rig.settleAccepted(stopped, 'stopped')
+    const { held } = await stopBeforeTheTurnShowed()
+    // The child's end took the unopened send back; Resume sends the card to the next child.
+    await laneDrained()
     expect(await rig.resume()).toMatchObject({ ok: true })
-    await eventually(async () => expect(await rig.handoff(held)).toBeDefined())
+    await eventually(async () => expect((await rig.handoff(held))?.handedOverAt).toBeDefined())
     await turnOpenedBy(await rig.handoffId(held))
 
     expect(await evictedAt()).toEqual(['user-stop', 'evict'])
@@ -288,12 +304,13 @@ describe('a Stop pressed before its send opened a turn binds only the turn it st
 describe('a press that writes no Stop event of its own', () => {
   // A turnless Stop long since settled, then a later turn the person's own send opened.
   async function laterTurnAfterAnEarlierStop(): Promise<string> {
-    rig = await createQueuedMessageTestRig()
+    rig = await createQueuedMessageTestRig({ restartable: true })
     const stopped = await rig.workingSend()
     expect(await rig.stop()).toMatchObject({ ok: true })
     expect(journal().stopMarks.latest()?.event).not.toHaveProperty('turnId')
-    // Its turn never opened, so the Stop took it back, as the provider's Stop settles one.
-    await withdrawnByStop(rig, stopped)
+    // Its turn never opened, so the child's end took it back; the next send starts a new child.
+    await laneDrained()
+    expect(await rig.submission(stopped)).toMatchObject({ dispatchState: 'rejected' })
     const sent = await rig.workingSend()
     await rig.settleAccepted(sent, 'sent')
     await turnOpenedBy(sent)
@@ -344,13 +361,18 @@ describe("a Stop's settle that ends the turn its interrupt took", () => {
     rig.cancelTurn.mockResolvedValueOnce({ cancelled: true, turnId: 'turn-later' })
 
     expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
+    await laneDrained()
 
-    expect(await laterTurn()).toMatchObject({ state: 'interrupted', outcome: 'cancellation' })
+    expect(rig.closeSession).toHaveBeenCalledTimes(1)
+    expect(laterTurnEndRows()).toEqual([
+      expect.objectContaining({ state: 'interrupted', outcome: 'cancellation' })
+    ])
     expect(journal().activeTurnId()).toBeNull()
   })
 })
 
 describe('a host stop with no turn running after a Stop that named none', () => {
+  // The Stop settles until its next step has ended the child.
   it('defers to that Stop while it settles, and not after', async () => {
     rig = await createQueuedMessageTestRig()
     await rig.workingSend()
@@ -361,6 +383,8 @@ describe('a host stop with no turn running after a Stop that named none', () => 
     })
 
     expect(await rig.stop()).toMatchObject({ ok: true })
+    expect(journal().stopMarks.personStopDecides(null)).toBe(true)
+    await laneDrained()
 
     expect(whileSettling).toBe(true)
     expect(journal().stopMarks.personStopDecides(null)).toBe(false)
@@ -392,7 +416,10 @@ describe('a host stop with no turn running after a Stop that named none', () => 
     const card = await queuedDraft('queued behind the send')
     rig.cancelTurn.mockResolvedValueOnce({ cancelled: false, refusal: { turnMayOpen: true } })
     rig.closeSession.mockRejectedValueOnce(new Error('the kill timed out'))
-    expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: false } })
+    // The Stop answers before its next step tries to end the child.
+    expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
+    await laneDrained()
+    expect(rig.closeSession).toHaveBeenCalledTimes(1)
 
     expect(await evictedAt()).toEqual(['user-stop'])
     expect(await stillStopped()).toBe(true)
@@ -400,12 +427,15 @@ describe('a host stop with no turn running after a Stop that named none', () => 
   })
 
   it("writes the host's event when a send after the Stop is unanswered beside the stopped one", async () => {
-    rig = await createQueuedMessageTestRig()
+    rig = await createQueuedMessageTestRig({ restartable: true, windsDown: true })
     const stopped = await rig.workingSend()
     expect(await rig.stop()).toMatchObject({ ok: true })
-    // The stopped send's turn opens after that turnless Stop, and ends interrupted, unanswered.
+    // The stopped send's turn opens after that turnless Stop, and ends interrupted, unanswered,
+    // while the child winds down; the mail then reaches the next child.
     await openRigTurnFor(rig, stopped)
     await openRigTurnFor(rig, stopped, 'interrupted')
+    await laneDrained()
+    expect(rig.closeSession).toHaveBeenCalledTimes(1)
     const mail = rig.send('mail for the lead')
     await mail.result
     await eventually(async () =>

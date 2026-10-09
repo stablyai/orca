@@ -39,7 +39,8 @@ let store: QueuedMessageTestRig['store']
 let dispatch: QueuedMessageTestRig['dispatch']
 
 beforeEach(async () => {
-  rig = await createQueuedMessageTestRig()
+  // A Stop ends the agent's session, so the next send starts a child that resumes the thread.
+  rig = await createQueuedMessageTestRig({ restartable: true })
   ;({ host, store, dispatch } = rig)
 })
 

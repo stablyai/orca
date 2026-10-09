@@ -252,14 +252,19 @@ describe('cancel', () => {
     expect(JSON.stringify(page.ok && page.page.items[0]?.body)).not.toContain('turn-1')
   })
 
-  it('reports an unconfirmed cancellation rather than failing the call', async () => {
+  it('ends the child when its interrupt goes unanswered, rather than failing the call', async () => {
     await attach()
     cancelTurn.mockRejectedValueOnce(new Error('no answer'))
     const result = await host.cancel(CALLER, {
       envelope: envelope('agentSession.cancel', { turnId: 'turn-1' }),
       turnId: 'turn-1'
     })
-    expect(result).toMatchObject({ ok: true, value: { cancelled: false } })
+    // Every Stop ends the session, so the child's end confirms it whatever the interrupt answered.
+    expect(result).toMatchObject({ ok: true, value: { cancelled: true } })
+    await host['tasks'].serialize(SESSION, async () => {})
+    expect(host['sessions'].get(SESSION)?.child).toBeNull()
+    const page = await host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(page.ok && page.page.items[0]?.body).toMatchObject({ text: 'Cancellation requested.' })
   })
 
   it('never interrupts twice on a replay', async () => {

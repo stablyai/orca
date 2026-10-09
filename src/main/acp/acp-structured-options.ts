@@ -248,8 +248,10 @@ export async function restoreAcpSessionOptions(
   saved: Readonly<Record<string, string>> | undefined
 ): Promise<string[]> {
   const skipped: string[] = []
-  for (const [key, value] of Object.entries(saved ?? {})) {
-    if (!isAcpStructuredOptionKey(key)) {
+  // Model before effort: an effort menu belongs to the model it is set on.
+  for (const key of ['model', 'effort']) {
+    const value = saved?.[key]
+    if (value === undefined || !isAcpStructuredOptionKey(key)) {
       continue
     }
     options.notePick(key)

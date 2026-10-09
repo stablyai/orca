@@ -1,3 +1,4 @@
+import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
@@ -99,7 +100,7 @@ async function adapterWithSession(
     onChildWorkEvidence: (sessionId, evidence) =>
       published.push({ sessionId, evidence: evidence.map((edge) => edge.type) })
   })
-  await adapter.acquire({
+  await acquireReadyCodexForTest(adapter, {
     identity: identity('session-1'),
     fence: 7,
     spawnToken: 'spawn-9',
@@ -157,7 +158,11 @@ describe("codex background tasks reach the host's child records", () => {
     const published: Published[] = []
     const { adapter, codex } = await adapterWithSession(published)
     const oldExit = codex.handlers().onExit
-    await adapter.acquire({ identity: identity('session-1'), fence: 8, spawnToken: 'spawn-10' })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identity('session-1'),
+      fence: 8,
+      spawnToken: 'spawn-10'
+    })
     codex.handlers().onNotification?.('turn/started', {
       threadId: CHILD_ID,
       turn: { id: 'replacement-child-turn' }

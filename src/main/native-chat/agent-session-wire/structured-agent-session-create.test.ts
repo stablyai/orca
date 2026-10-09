@@ -194,10 +194,11 @@ it('holds the created first message until the child proves its start, then hands
   const first = firstMessage()
   const spawn = rig.adapter.acquire.getMockImplementation()!
   let generation = ''
+  const holdStart = rig.heldStart(spawn)
   rig.adapter.acquire.mockImplementationOnce(async (input) => {
-    const child = await spawn(input)
+    const child = await holdStart(input)
     generation = child.acquisitionGeneration ?? ''
-    return { ...child, providerChildPhase: 'starting' as const }
+    return child
   })
   expect(
     await rig.host.create(CALLER, createTestParams(first), { firstMessage: first })
@@ -229,10 +230,7 @@ it('holds the created first message until the child proves its start, then hands
 it('Stop while the child proves its start withdraws the created first message once, unsent', async () => {
   const first = firstMessage()
   const spawn = rig.adapter.acquire.getMockImplementation()!
-  rig.adapter.acquire.mockImplementationOnce(async (input) => ({
-    ...(await spawn(input)),
-    providerChildPhase: 'starting' as const
-  }))
+  rig.adapter.acquire.mockImplementationOnce(rig.heldStart(spawn))
   expect(
     await rig.host.create(CALLER, createTestParams(first), { firstMessage: first })
   ).toMatchObject({ ok: true })

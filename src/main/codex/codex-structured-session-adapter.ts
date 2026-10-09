@@ -39,6 +39,7 @@ import {
 } from './codex-structured-turn-end-settlement'
 import { createCodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import { acquireCodexStructuredSession } from './codex-structured-session-acquire'
+import { codexStoppedRequestEndWait, settleCodexRequestEndWaiters } from './codex-request-end-wait'
 import { changeCodexThreadGoal } from './codex-structured-thread-goal'
 import {
   answerCodexStructuredPrompt,
@@ -143,6 +144,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       // After the journal and the parent's republished row, never ahead of either.
       session.backgroundTasks.publishChildWork()
     }
+    settleCodexRequestEndWaiters(session)
     this.deps.onEvent?.(event)
     return admission
   }
@@ -174,6 +176,14 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   // `ended` is set in the same turn as the connection's own exit report.
   holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean => {
     const session = this.sessions.get(sessionId)
+    const starting = this.acquisitions.get(sessionId)
+    if (starting?.startingChild?.acquisitionGeneration === acquisitionGeneration) {
+      return (
+        !starting.startingChild.ended &&
+        !starting.exitProven &&
+        starting.window.connection?.pid !== undefined
+      )
+    }
     return (
       session?.acquisitionGeneration === acquisitionGeneration &&
       session.connection.pid !== undefined &&
@@ -219,6 +229,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       return await dispatchCodexTurn(session, input, this.deps.requestTimeoutMs)
     } finally {
       session.dispatchPending = false
+      settleCodexRequestEndWaiters(session)
     }
   }
 
@@ -228,6 +239,8 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       sessions: this.sessions,
       requestTimeoutMs: this.deps.requestTimeoutMs
     })
+
+  awaitStoppedRequestEnd = codexStoppedRequestEndWait(this.sessions)
 
   rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = (sessionId) =>
     this.sessions.get(sessionId)?.historyMode === 'legacy'
@@ -291,33 +304,6 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
 
   prepareReadOptions = (input: { sessionId: string; fence: number }) =>
     prepareLiveCodexSessionOptions(this.session(input.sessionId), this.deps.requestTimeoutMs)
-
-  readAcquisitionOptions = (input: {
-    sessionId: string
-    fence: number
-    priorOptions?: Readonly<Record<string, string>>
-  }) => {
-    const session = this.session(input.sessionId)
-    const options = {
-      ...Object.fromEntries(
-        Object.entries(input.priorOptions ?? {}).filter(([key]) => !isCodexTurnOptionKey(key))
-      ),
-      ...Object.fromEntries(session.options)
-    }
-    const reported = session.reportedOptions
-    // The thread's effort belongs to the thread's model, not to a different saved one.
-    if (
-      options.effort === undefined &&
-      reported.effort &&
-      (options.model === undefined || options.model === reported.model)
-    ) {
-      options.effort = reported.effort
-    }
-    if (options.model === undefined && reported.model) {
-      options.model = reported.model
-    }
-    return Object.keys(options).length > 0 ? options : undefined
-  }
 
   closeSession = (sessionId: string): Promise<boolean> => this.teardown.close(sessionId)
   forceCloseSession = (sessionId: string): Promise<boolean> => this.teardown.forceClose(sessionId)

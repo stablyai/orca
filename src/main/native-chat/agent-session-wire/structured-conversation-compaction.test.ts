@@ -460,32 +460,12 @@ function stop(turnId: string) {
   })
 }
 
-it('leaves the command to the provider when it takes the Stop, and ends it as cancelled (B4)', async () => {
-  await attach()
-  const params = compactParams()
-  const cmid = params.envelope.clientOperationId
-  await state.host.conversationCommand(CALLER, params)
-  await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce(), { interval: 1 })
-  const { turnId } = structuredAgentSessionCommandTurn(cmid)
+/** The Stop's second step, which ends the child, runs next on the session's lane. */
+function laneDrained(): Promise<void> {
+  return state.host['tasks'].serialize(SESSION, async () => {})
+}
 
-  await expect(stop(turnId)).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
-
-  // The interrupt was taken, not answered: the command runs until the provider ends it.
-  expect(state.cancelTurn).toHaveBeenCalledWith(expect.objectContaining({ turnId }))
-  expect(closeSession).not.toHaveBeenCalled()
-  expect(readAgentJournalTurn((await commandTurn(cmid))?.body)?.state).toBe('running')
-  finish({ outcome: 'cancellation' })
-  await vi.waitFor(async () =>
-    expect(readAgentJournalTurn((await commandTurn(cmid))?.body)).toMatchObject({
-      state: 'interrupted',
-      outcome: 'cancellation'
-    })
-  )
-  // A cancellation writes no result row.
-  expect((await journal()).items.some((item) => item.itemId.includes('command-result'))).toBe(false)
-})
-
-it('ends the command by stopping the child at a second Stop the provider never answered (B4)', async () => {
+it('ends the command with the child after a Stop the provider took (B4)', async () => {
   await attach()
   const statuses: AgentSessionStatusEvent[] = []
   state.host.subscribeStatus({ id: 'list', emit: (event) => statuses.push(event) })
@@ -495,17 +475,18 @@ it('ends the command by stopping the child at a second Stop the provider never a
   await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce(), { interval: 1 })
   const { turnId } = structuredAgentSessionCommandTurn(cmid)
 
-  // The provider takes the interrupt and then never answers it.
   await expect(stop(turnId)).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
-  expect(closeSession).not.toHaveBeenCalled()
-  // The chat reads Stopping, yet only the next Stop ends the command: clients keep Stop enabled.
-  expect(latestSummary(statuses)).toMatchObject({ status: 'working', stopping: true })
-  await expect(stop(turnId)).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
+  await laneDrained()
 
-  expect(state.cancelTurn).toHaveBeenCalledOnce()
+  // Every Stop ends the session: the provider took the interrupt, and the child's end ends the command.
+  expect(state.cancelTurn).toHaveBeenCalledWith(expect.objectContaining({ turnId }))
   expect(closeSession).toHaveBeenCalledOnce()
-  expect(readAgentJournalTurn((await commandTurn(cmid))?.body)?.state).toBe('interrupted')
+  await vi.waitFor(async () =>
+    expect(readAgentJournalTurn((await commandTurn(cmid))?.body)?.state).toBe('interrupted')
+  )
   expect(latestSummary(statuses)).not.toHaveProperty('stopping')
+  // A stopped command writes no result row.
+  expect((await journal()).items.some((item) => item.itemId.includes('command-result'))).toBe(false)
 })
 
 /** The session's newest summary in what a session list received. */
@@ -530,9 +511,12 @@ it('ends the command by stopping the child when the provider cannot take the Sto
     ok: true,
     value: { cancelled: true }
   })
+  await laneDrained()
 
   expect(closeSession).toHaveBeenCalledOnce()
-  expect(readAgentJournalTurn((await commandTurn(cmid))?.body)?.state).toBe('interrupted')
+  await vi.waitFor(async () =>
+    expect(readAgentJournalTurn((await commandTurn(cmid))?.body)?.state).toBe('interrupted')
+  )
   const notes = (await journal()).items.filter((item) => item.body.kind === 'status')
   expect(notes.map((item) => item.body.kind === 'status' && item.body.text)).toEqual([
     'Cancellation requested.'

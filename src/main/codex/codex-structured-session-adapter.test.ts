@@ -1,3 +1,15 @@
+import {
+  codexStartReport,
+  codexStartedLink,
+  acquireReadyCodexForTest,
+  THREAD_ID,
+  USER_MESSAGE,
+  acquired,
+  adapterFor,
+  answerWithOpenedTurn,
+  fakeCodex,
+  identityFor
+} from './codex-structured-session-adapter-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
   CodexAppServerRequestError,
@@ -10,15 +22,6 @@ import {
   type CodexStructuredLaunch,
   type CodexStructuredSessionEvent
 } from './codex-structured-session-adapter'
-import {
-  THREAD_ID,
-  USER_MESSAGE,
-  acquired,
-  adapterFor,
-  answerWithOpenedTurn,
-  fakeCodex,
-  identityFor
-} from './codex-structured-session-adapter-fixture'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 
@@ -27,19 +30,20 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     const codex = fakeCodex({ 'model/list': () => new Promise<never>(() => {}) })
     const adapter = adapterFor(codex)
 
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9',
       options: { model: 'gpt-saved', effort: 'low', fastMode: 'true' }
     })
 
-    expect(adapter.readAcquisitionOptions({ sessionId: 'session-1', fence: 7 })).toEqual({
+    expect(codexStartReport(adapter).reportedOptions).toEqual({
       model: 'gpt-saved',
       effort: 'low',
-      fastMode: 'true'
+      fastMode: true
     })
     expect(codex.connections[0].calls.map((call) => call.method)).toEqual([
+      'initialize',
       'thread/start',
       'model/list'
     ])
@@ -48,34 +52,28 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
   it('persists saved model and effort as the next turn uses them', async () => {
     const codex = fakeCodex()
     const adapter = adapterFor(codex)
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9',
       options: { model: 'gpt-saved', effort: 'low', personality: 'concise' }
     })
 
-    expect(
-      adapter.readAcquisitionOptions({
-        sessionId: 'session-1',
-        fence: 7,
-        priorOptions: { model: 'gpt-saved', effort: 'low', personality: 'concise' }
-      })
-    ).toEqual({ model: 'gpt-saved', effort: 'low', personality: 'concise' })
+    expect(codexStartReport(adapter).reportedOptions).toEqual({ model: 'gpt-saved', effort: 'low' })
   })
 
   it('keeps a saved next-turn pick when resuming a thread that reports its previous pick', async () => {
     const codex = fakeCodex()
     codex.routes['turn/start'] = () => ({ turn: { id: 'turn-1' } })
     const adapter = adapterFor(codex, { resumeThreadId: THREAD_ID })
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9',
       options: { model: 'gpt-next', effort: 'low' }
     })
 
-    const saved = adapter.readAcquisitionOptions({ sessionId: 'session-1', fence: 7 })
+    const saved = codexStartReport(adapter).reportedOptions
     expect(saved).toMatchObject({ model: 'gpt-next', effort: 'low' })
     await adapter.dispatch({
       sessionId: 'session-1',
@@ -90,13 +88,16 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       effort: 'low'
     })
     await adapter.closeSession('session-1')
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 8,
       spawnToken: 'spawn-10',
-      options: saved
+      options: {
+        ...(saved.model ? { model: saved.model } : {}),
+        ...(saved.effort ? { effort: saved.effort } : {})
+      }
     })
-    expect(adapter.readAcquisitionOptions({ sessionId: 'session-1', fence: 8 })).toMatchObject({
+    expect(codexStartReport(adapter).reportedOptions).toMatchObject({
       model: 'gpt-next',
       effort: 'low'
     })
@@ -110,9 +111,13 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     })
     const adapter = adapterFor(codex)
 
-    await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-9' })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor('session-1'),
+      fence: 7,
+      spawnToken: 'spawn-9'
+    })
 
-    expect(adapter.readAcquisitionOptions({ sessionId: 'session-1', fence: 7 })).toEqual({
+    expect(codexStartReport(adapter).reportedOptions).toEqual({
       model: 'gpt-live',
       effort: 'medium'
     })
@@ -126,7 +131,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     const codex = fakeCodex()
     const adapter = adapterFor(codex, { codexHome: '/codex/home' })
 
-    const acquisition = await adapter.acquire({
+    const acquisition = await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9'
@@ -146,7 +151,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       PATH: expect.stringMatching(/^[^:;]*[\\/]cli[\\/]bin[:;]/)
     })
     expect(codex.connections[0].launch.cwd).toBe('/work/repo')
-    expect(codex.connections[0].calls[0]).toEqual({
+    expect(codex.connections[0].calls[1]).toEqual({
       method: 'thread/start',
       params: { cwd: '/work/repo' }
     })
@@ -156,7 +161,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       processStartTimeMs: 1_700_000_000_000,
       spawnToken: 'spawn-9'
     })
-    expect(acquisition.link).toEqual({
+    expect(codexStartedLink(adapter)).toEqual({
       linkId: `codex-7-${THREAD_ID}`,
       handle: codexProviderHandle(THREAD_ID),
       origin: 'created',
@@ -172,9 +177,13 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     const codex = fakeCodex()
     const adapter = adapterFor(codex, { model: 'gpt-chosen' })
 
-    await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-9' })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor('session-1'),
+      fence: 7,
+      spawnToken: 'spawn-9'
+    })
 
-    expect(codex.connections[0].calls[0]).toEqual({
+    expect(codex.connections[0].calls[1]).toEqual({
       method: 'thread/start',
       params: { cwd: '/work/repo', model: 'gpt-chosen' }
     })
@@ -187,13 +196,13 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       resumePath: '/rollouts/thread-proven.jsonl'
     })
 
-    const acquisition = await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 9,
       spawnToken: 'spawn-9'
     })
 
-    expect(codex.connections[0].calls[0]).toEqual({
+    expect(codex.connections[0].calls[1]).toEqual({
       method: 'thread/resume',
       params: expect.objectContaining({
         threadId: 'thread-proven',
@@ -201,8 +210,8 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
         path: '/rollouts/thread-proven.jsonl'
       })
     })
-    expect(acquisition.link.origin).toBe('resumed')
-    expect(acquisition.link.handle).toEqual(codexProviderHandle('thread-proven'))
+    expect(codexStartedLink(adapter)?.origin).toBe('resumed')
+    expect(codexStartedLink(adapter)?.handle).toEqual(codexProviderHandle('thread-proven'))
   })
 
   it('starts a thread in place of a creation Codex never saved, and says which it replaced', async () => {
@@ -220,17 +229,17 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       supersedeIfUnsaved: true
     })
 
-    const acquisition = await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 9,
       spawnToken: 'spawn-9'
     })
 
-    expect(codex.connections[0].calls.slice(0, 2).map((call) => call.method)).toEqual([
+    expect(codex.connections[0].calls.slice(1, 3).map((call) => call.method)).toEqual([
       'thread/resume',
       'thread/start'
     ])
-    expect(acquisition.link).toEqual({
+    expect(codexStartedLink(adapter)).toEqual({
       linkId: `codex-9-${THREAD_ID}`,
       handle: codexProviderHandle(THREAD_ID),
       origin: 'created',
@@ -243,21 +252,39 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
 
   it('refuses a resume that lands on a different thread and reaps the child', async () => {
     const codex = fakeCodex({ 'thread/resume': () => ({ thread: { id: 'thread-other' } }) })
-    const adapter = adapterFor(codex, { resumeThreadId: 'thread-proven' })
-
-    await expect(
-      adapter.acquire({ identity: identityFor('session-1'), fence: 9, spawnToken: 'spawn-9' })
-    ).rejects.toThrow('resumed thread-other instead of thread-proven')
+    const events: CodexStructuredSessionEvent[] = []
+    const unsubscribe = vi.fn((event: CodexStructuredSessionEvent) => events.push(event))
+    const failing = adapterFor(codex, { resumeThreadId: 'thread-proven' }, [], {
+      onEvent: unsubscribe
+    })
+    await failing.acquire({ identity: identityFor('session-1'), fence: 9, spawnToken: 'spawn-9' })
+    await vi.waitFor(() =>
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: 'ended',
+          startupUnproven: true,
+          reason: expect.stringContaining('resumed thread-other instead of thread-proven')
+        })
+      )
+    )
     expect(codex.connections[0].closeCount).toBe(1)
   })
 
   it('refuses a thread Codex never named', async () => {
     const codex = fakeCodex({ 'thread/start': () => ({}) })
-    const adapter = adapterFor(codex)
-
-    await expect(
-      adapter.acquire({ identity: identityFor('session-1'), fence: 1, spawnToken: 'spawn-9' })
-    ).rejects.toThrow('did not name the thread')
+    const events: CodexStructuredSessionEvent[] = []
+    const unsubscribe = vi.fn((event: CodexStructuredSessionEvent) => events.push(event))
+    const failing = adapterFor(codex, { resumeThreadId: null }, [], { onEvent: unsubscribe })
+    await failing.acquire({ identity: identityFor('session-1'), fence: 1, spawnToken: 'spawn-9' })
+    await vi.waitFor(() =>
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: 'ended',
+          startupUnproven: true,
+          reason: expect.stringContaining('did not name the thread')
+        })
+      )
+    )
     expect(codex.connections[0].closeCount).toBe(1)
   })
 
@@ -265,7 +292,11 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     const codex = fakeCodex()
     const adapter = await acquired(codex)
 
-    await adapter.acquire({ identity: identityFor('session-1'), fence: 8, spawnToken: 'spawn-10' })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor('session-1'),
+      fence: 8,
+      spawnToken: 'spawn-10'
+    })
 
     expect(codex.connections).toHaveLength(2)
     expect(codex.connections[0].closeCount).toBe(1)
@@ -321,7 +352,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       })
     }
     const adapter = adapterFor(codex, {}, events)
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9',
@@ -613,7 +644,11 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
     const adapter = adapterFor(codex, { codexHome: '/codex/home' }, [], {
       modelCatalog: new AgentModelCatalogStore()
     })
-    await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-9' })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor('session-1'),
+      fence: 7,
+      spawnToken: 'spawn-9'
+    })
     await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
 
     await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'gpt-5', fence: 7 })

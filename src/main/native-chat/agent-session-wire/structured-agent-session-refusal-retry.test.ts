@@ -31,6 +31,7 @@ import { openTestJournalHostDatabase } from '../agent-session-journal/journal-ho
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 const CALLER = { callerKey: 'client-1' }
@@ -64,32 +65,35 @@ async function createHarness(options: { attached?: boolean } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'orca-refusal-oracle-'))
   const store = await openTestAgentSessionRecordStore(root)
   const setOption = vi.fn<StructuredAgentSessionAdapter['setOption']>(async () => undefined)
-  const adapter: StructuredAgentSessionAdapter = {
-    acquire: async ({ fence }) => ({
-      process: {
-        hostId: 'local',
-        pid: 4242,
-        processStartTimeMs: NOW - 1_000,
-        spawnToken: store.getRecord(SESSION)?.lease.reservedSpawnToken ?? 'spawn-a'
-      },
-      link: {
-        linkId: `link-${fence}`,
-        handle: codexProviderHandle(THREAD),
-        origin: 'created',
-        mintedAtFence: fence,
-        observedAt: NOW
-      }
-    }),
-    dispatch: async () => ({
-      state: 'accepted',
-      providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 1 }
-    }),
-    cancelTurn: async () => ({ cancelled: true }),
-    answerPrompt: async () => undefined,
-    // A failed acquisition is proven gone, as the real adapters prove it.
-    releaseAcquisition: async () => true,
-    setOption
-  }
+  const adapter: StructuredAgentSessionAdapter = startsWhenPublished(
+    {
+      acquire: async ({ fence }) => ({
+        process: {
+          hostId: 'local',
+          pid: 4242,
+          processStartTimeMs: NOW - 1_000,
+          spawnToken: store.getRecord(SESSION)?.lease.reservedSpawnToken ?? 'spawn-a'
+        },
+        link: {
+          linkId: `link-${fence}`,
+          handle: codexProviderHandle(THREAD),
+          origin: 'created',
+          mintedAtFence: fence,
+          observedAt: NOW
+        }
+      }),
+      dispatch: async () => ({
+        state: 'accepted',
+        providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 1 }
+      }),
+      cancelTurn: async () => ({ cancelled: true }),
+      answerPrompt: async () => undefined,
+      // A failed acquisition is proven gone, as the real adapters prove it.
+      releaseAcquisition: async () => true,
+      setOption
+    },
+    () => host
+  )
   const host = new StructuredAgentSessionHost({
     agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),

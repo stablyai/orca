@@ -49,13 +49,12 @@ async function runningTurn(): Promise<AgentSessionJournal> {
   return journal
 }
 
-/** A child the adapter published before proving its startup, so a Stop ends the start. */
+/** A child whose handshake never answers, so a Stop ends the start. */
 async function startingChild(): Promise<{ journal: AgentSessionJournal; closeSession: Mock }> {
-  const acquired = acquire.getMockImplementation()!
-  acquire.mockImplementationOnce(async (input) => ({
-    ...(await acquired(input)),
-    providerChildPhase: 'starting' as const
-  }))
+  const handle = host.handleAdapterEvent.bind(host)
+  vi.spyOn(host, 'handleAdapterEvent').mockImplementation(async (event) =>
+    event.type === 'started' ? undefined : handle(event)
+  )
   const closeSession = vi.fn(async () => true)
   Object.assign(host.deps.adapter, { closeSession })
   await attach()
@@ -176,13 +175,13 @@ describe.each([
     }
   )
 
-  // A provider whose Stop ends its session: the child's end, in the Stop's next step, goes out
-  // before the write settles too; that step holds the lane for the Stop event instead.
+  // The Stop ends the session: the child's end, in the Stop's next step, goes out before the write
+  // settles too; that step holds the lane for the Stop event instead.
   it.each([
     ['withdrawing the queued sends', 'withdrawal'],
     ['writing its Stop event', 'event row']
   ] as const)(
-    "ends a session-ending provider's child before %s settles, then reports its failure",
+    'ends a running child before %s settles, then reports its failure',
     async (step, failed) => {
       const journal = await runningTurn()
       const order: string[] = []
@@ -190,7 +189,7 @@ describe.each([
         order.push('kill')
         return true
       })
-      Object.assign(host.deps.adapter, { stopEndsSession: () => true, closeSession })
+      Object.assign(host.deps.adapter, { closeSession })
       const held = Promise.withResolvers<never>()
       if (step === 'withdrawing the queued sends') {
         vi.spyOn(journal, 'rejectQueuedSubmissions').mockImplementation(() => held.promise)

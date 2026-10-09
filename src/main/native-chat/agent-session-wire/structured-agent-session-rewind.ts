@@ -20,12 +20,25 @@ import type { StructuredAgentSessionAttachContext } from './structured-agent-ses
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import { admitAndRunAgentSessionMutation } from './structured-agent-session-mutation-admission'
 import { conversationCommandBlocked } from './structured-conversation-command-admission'
-import { rewindRefusal } from './structured-rewind-refusal'
+import { rewindRefusal, rewindRefusalBehindClear } from './structured-rewind-refusal'
 import { renameRewindTurnOpener } from './structured-rewind-journal-body'
 import { persistRewindRecord, recoverStructuredRewind } from './structured-rewind-recovery'
 import { mergeRetainedHostLifecycleRows } from './structured-rewind-retained-host-rows'
+import { runAfterProviderStart } from './structured-agent-session-provider-start-hold'
 
-export async function rewindStructuredAgentSession(
+export function rewindStructuredAgentSession(
+  context: StructuredAgentSessionMutationContext,
+  attachContext: StructuredAgentSessionAttachContext,
+  caller: StructuredAgentSessionCaller,
+  params: AgentSessionRewindParams
+): Promise<AgentSessionMutationResult<AgentSessionRewindResult>> {
+  // Only a proven child has the protocol session a rewind reads and changes.
+  return runAfterProviderStart(context, params.envelope.sessionId, () =>
+    rewindUnderSerialize(context, attachContext, caller, params)
+  )
+}
+
+function rewindUnderSerialize(
   context: StructuredAgentSessionMutationContext,
   attachContext: StructuredAgentSessionAttachContext,
   caller: StructuredAgentSessionCaller,
@@ -43,20 +56,9 @@ export async function rewindStructuredAgentSession(
       callerKey: caller.callerKey,
       envelope: params.envelope,
       // Only the provider can do this, so an agent at rest is started first.
-      prepareSession: openWithAgent(context, params.envelope, () => {
-        const journal = context.sessions.get(sessionId)?.journal
-        const floor = journal?.context.floor()
-        if (!journal || !floor) {
-          return { ok: true }
-        }
-        if (journal.cursor().epoch !== params.expectedEpoch) {
-          return rewindRefusal('stale-epoch')
-        }
-        const target = journal.snapshot().items.find((item) => item.itemId === params.itemId)
-        return !target || target.sequence <= floor.sequence
-          ? rewindRefusal('invalid-target')
-          : { ok: true }
-      }),
+      prepareSession: openWithAgent(context, params.envelope, () =>
+        rewindRefusalBehindClear(context.sessions.get(sessionId)?.journal, params)
+      ),
       journal: () => context.sessions.get(sessionId)?.journal,
       publish: (journal) => context.publish(sessionId, journal),
       now: context.now,

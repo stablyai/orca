@@ -8,9 +8,11 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody,
   type AgentJournalItemIdentity,
+  type AgentJournalStatusItem,
+  type AgentJournalSubmission,
   type AgentJournalTurnScope
 } from '../../../shared/agent-session-journal-types'
-import { isMainAgentWorking } from './structured-agent-session-turns-cancel'
+import { isMainAgentWorking, tookBackEverySend } from './structured-agent-session-turns-cancel'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 import type { JournalStopFailedOn } from '../agent-session-journal/queued-message-pause'
 import { structuredAgentSessionFailedStopMark } from './structured-agent-session-stopping'
@@ -25,6 +27,13 @@ export type StructuredAgentSessionStopWindDown = {
   stoppedAt: number
   /** The note the Stop wrote, which a failed wind-down revises. */
   stopNote: AgentJournalItemIdentity
+  /** A note the Stop left to its end: written under `stopNote` unless the child's end took back
+   *  every one of these sends, whose own rows then say they never started. */
+  deferredNote?: {
+    body: AgentJournalStatusItem
+    turnScope: AgentJournalTurnScope
+    unlessTakenBack: readonly AgentJournalSubmission[]
+  }
   /** Closes the Stop's settle once the wind-down finishes, whether or not the child's exit was
    *  proven, marking the turn running on after an end that failed (`JournalStopSettle.failedOn`):
    *  until then, what ends is the Stop's. */
@@ -49,12 +58,30 @@ export async function endStoppedStructuredAgentSession(
       await ctx.adapter.awaitStoppedRequestEnd?.(ctx.sessionId, windDown.stoppedAt)
     }
     await stopChild()
+    await writeDeferredStopNote(ctx, windDown, (taken) => !tookBackEverySend(ctx, taken)).catch(
+      onError
+    )
   } catch (error) {
     onError(error)
     failedOn = structuredAgentSessionFailedStopMark(ctx.journal)
+    await writeDeferredStopNote(ctx, windDown, () => true).catch(onError)
     await reviseStopNoteUnconfirmed(ctx, windDown.stopNote).catch(onError)
   } finally {
     windDown.settled?.(failedOn)
+  }
+}
+
+async function writeDeferredStopNote(
+  ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence'>,
+  windDown: StructuredAgentSessionStopWindDown,
+  stillOwed: (taken: readonly AgentJournalSubmission[]) => boolean
+): Promise<void> {
+  const deferred = windDown.deferredNote
+  if (deferred && stillOwed(deferred.unlessTakenBack)) {
+    await ctx.journal.appendItem(windDown.stopNote, deferred.body, {
+      fence: ctx.fence,
+      turnScope: deferred.turnScope
+    })
   }
 }
 

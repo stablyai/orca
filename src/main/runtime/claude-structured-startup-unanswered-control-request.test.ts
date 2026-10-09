@@ -125,7 +125,6 @@ describe('a Claude start whose CLI answers initialize but not a control request'
     await vi.waitFor(() => expect(record(host)?.options).toEqual({ ...saved, effort: 'high' }), {
       timeout: DEADLINE_MS * 40
     })
-    expect(host.deps.adapter.readOptionRestoreFailures?.(SESSION)).toEqual([])
     expect(await statusRows(host)).toEqual([])
     expect(claude.children(SESSION)).toHaveLength(1)
     expect(claude.child(SESSION).calls).not.toContain('set_model')

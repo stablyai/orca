@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { isPersistedAgentSessionRecord } from '../../shared/agent-session-record'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
-import { readNativeSessionOptions } from '../native-chat/agent-session-wire/structured-agent-session-option-restoration'
+import { nativeSessionOptionsFromReport } from '../native-chat/agent-session-wire/structured-agent-session-option-restoration'
 import { replaceAgentSessionRecordOptions } from '../runtime/agent-session-record-options'
 import { agentSessionStoreDraftRowWrites } from '../runtime/agent-session-store-draft'
 import type { AgentSessionStoreState } from '../runtime/agent-session-store-state'
@@ -27,7 +27,7 @@ const modelOption: SessionConfigOption = {
   options: [{ value: 'reported-model', name: 'Reported Model' }]
 }
 
-async function writtenOptions(provider: string, reader: AcpStructuredOptions) {
+function writtenOptions(provider: string, reader: AcpStructuredOptions) {
   const fixture = agentSessionRecordFixture()
   const record = {
     ...fixture,
@@ -45,14 +45,11 @@ async function writtenOptions(provider: string, reader: AcpStructuredOptions) {
     unreadableRecords: new Map(),
     sessionTabs: null
   }
-  const options = await readNativeSessionOptions({
-    adapter: { readOptions: async () => reader.read() },
-    sessionId: record.sessionId,
-    fence: record.lease.runtimeFence
+  // What the host writes from the report a started child sends.
+  const options = nativeSessionOptionsFromReport({
+    reported: reader.read().current,
+    restoreSkipped: []
   })
-  if (!options) {
-    throw new Error('The live reader must report its options')
-  }
   const changed = replaceAgentSessionRecordOptions(record, {
     sessionId: record.sessionId,
     fence: record.lease.runtimeFence,
@@ -79,14 +76,14 @@ describe('ACP sessions without a reported model', () => {
       current: { effort: 'off', confirmed: ['effort'] }
     })
     expect(reader.reported()).toEqual({ effort: 'off' })
-    expect(await writtenOptions('omp', reader)).toEqual({ effort: 'off' })
+    expect(writtenOptions('omp', reader)).toEqual({ effort: 'off' })
   })
 
   it.each(['grok', 'opencode'])('writes missing-model options for %s', async (provider) => {
     const reader = new AcpStructuredOptions()
     reader.adoptSession({})
     expect(reader.read().current).not.toHaveProperty('model')
-    expect(await writtenOptions(provider, reader)).toEqual({})
+    expect(writtenOptions(provider, reader)).toEqual({})
   })
 
   it.each(['config', 'legacy'] as const)('does not expose an empty %s model value', (source) => {
@@ -103,13 +100,13 @@ describe('ACP sessions without a reported model', () => {
   it('records a model reported after a startup with no model', async () => {
     const reader = new AcpStructuredOptions()
     reader.adoptSession(response)
-    expect(await writtenOptions('omp', reader)).toEqual({ effort: 'off' })
+    expect(writtenOptions('omp', reader)).toEqual({ effort: 'off' })
     reader.adoptConfigOptions([...(response.configOptions ?? []), modelOption])
     expect(reader.read().current).toEqual({
       model: 'reported-model',
       effort: 'off',
       confirmed: ['model', 'effort']
     })
-    expect(await writtenOptions('omp', reader)).toEqual({ model: 'reported-model', effort: 'off' })
+    expect(writtenOptions('omp', reader)).toEqual({ model: 'reported-model', effort: 'off' })
   })
 })

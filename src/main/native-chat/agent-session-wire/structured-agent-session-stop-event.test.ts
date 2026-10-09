@@ -52,8 +52,16 @@ async function turnRow(turnId: string, state: 'running' | 'interrupted') {
   return journal().appendItem(
     { provider: 'codex', threadId: 'thread-1', turnId, ordinal: 999 },
     { kind: 'turn', turnId, state, startedAt: 1 },
-    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    {
+      fence: rig.store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    }
   )
+}
+
+/** A Stop's second step, which ends the child, runs next on the session's lane. */
+function laneDrained(): Promise<void> {
+  return rig.host['tasks'].serialize(HOST_TEST_SESSION, async () => {})
 }
 
 function withdraw(clientMessageId: string) {
@@ -69,12 +77,13 @@ describe("a Stop's event", () => {
   it('reaches the journal before the interrupt, naming the turn it stopped and who asked', async () => {
     rig = await createQueuedMessageTestRig()
     await rig.workingSend()
+    await turnRow('turn-1', 'running')
     let atInterrupt: JournalStopEvent[] = []
     rig.cancelTurn.mockImplementationOnce(async () => {
       atInterrupt = stopEvents()
       return { cancelled: true }
     })
-    const fields = { turnId: 'turn-named' }
+    const fields = { turnId: 'turn-1' }
     const stopped = await rig.host.cancel(QUEUED_RIG_CALLER, {
       envelope: rig.envelope(fields, 'agentSession.cancel', hostTestOperationId()),
       ...fields
@@ -84,7 +93,7 @@ describe("a Stop's event", () => {
     expect(atInterrupt).toEqual([
       {
         reason: 'user-stop',
-        turnId: 'turn-named',
+        turnId: 'turn-1',
         caller: QUEUED_RIG_CALLER.callerKey,
         at: expect.any(Number)
       }
@@ -169,36 +178,60 @@ describe("a Stop's event", () => {
     ])
   })
 
-  it('a second press while the first interrupt lands writes nothing: a card queued between them sends normally', async () => {
-    rig = await createQueuedMessageTestRig()
+  // The second press and a send made meanwhile wait behind the first Stop's end of the child.
+  it('a second press while the first winds down writes nothing: a send made meanwhile reaches the next child', async () => {
+    rig = await createQueuedMessageTestRig({ restartable: true, windsDown: true })
     const working = await rig.workingSend()
     expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
-    const between = await queuedDraft('queued between the presses')
-    expect(await rig.stop()).toMatchObject({ ok: true })
-    expect(stopEvents()).toHaveLength(1)
+    const again = rig.stop()
+    const between = rig.send('sent between the presses', 'queue-if-active')
     await rig.settleAccepted(working, 'stopped')
-    await eventually(async () => expect(await rig.handoff(between)).toBeDefined())
+    expect(await again).toMatchObject({ ok: true, value: { cancelled: false } })
+    expect(rig.closeSession).toHaveBeenCalledTimes(1)
+    expect(await between.result).toMatchObject({ ok: true })
+    expect(stopEvents()).toHaveLength(1)
+    await eventually(async () =>
+      expect((await rig.submission(between.id))?.handedOverAt).toBeDefined()
+    )
+    expect(rig.dispatch).toHaveBeenLastCalledWith(
+      expect.objectContaining({ clientMessageId: between.id })
+    )
   })
 
-  it('a second press once the turn shows, after a first before it did, writes nothing: a card queued between sends', async () => {
-    rig = await createQueuedMessageTestRig()
+  it('a second press once the turn shows, after a first before it did, writes nothing: a send made meanwhile reaches the next child', async () => {
+    rig = await createQueuedMessageTestRig({ restartable: true, windsDown: true })
     const working = await rig.workingSend()
-    await rig.stop()
-    const between = await queuedDraft('queued between the presses')
+    expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
+    // The echo of the interrupted send opens its turn while the Stop winds down.
     await turnRow('turn-1', 'running')
-    await rig.stop()
-    expect(stopEvents()).toHaveLength(1)
+    const again = rig.stop()
+    const between = rig.send('sent between the presses', 'queue-if-active')
     await rig.settleAccepted(working, 'stopped')
     await turnRow('turn-1', 'interrupted')
-    await eventually(async () => expect(await rig.handoff(between)).toBeDefined())
+    expect(await again).toMatchObject({ ok: true, value: { cancelled: false } })
+    expect(await between.result).toMatchObject({ ok: true })
+    expect(stopEvents()).toHaveLength(1)
+    await eventually(async () =>
+      expect((await rig.submission(between.id))?.handedOverAt).toBeDefined()
+    )
   })
 
-  it('a second press after a card sent into the turn settled unknown writes again', async () => {
-    rig = await createQueuedMessageTestRig()
-    await rig.workingSend()
+  /** After a turnless Stop ended the first child: the next send's turn runs on a new one. */
+  async function turnAfterAnEndedChat(options: { windsDown?: true } = {}): Promise<string> {
+    rig = await createQueuedMessageTestRig({ restartable: true, ...options })
+    const first = await rig.workingSend()
     await rig.stop()
-    // The turn the working send started opens after that turnless Stop; the card goes into it.
-    await turnRow('turn-1', 'running')
+    // Its turn never opened, so the provider takes it back as the interrupt lands.
+    await withdraw(first)
+    await laneDrained()
+    expect(rig.closeSession).toHaveBeenCalledTimes(1)
+    const working = await rig.workingSend()
+    await turnRow('turn-2', 'running')
+    return working
+  }
+
+  it('a second press after a card sent into the next turn settled unknown writes again', async () => {
+    await turnAfterAnEndedChat()
     const steered = await queuedDraft('sent into the turn between the presses')
     await rig.sendNow(steered)
     await eventually(async () => expect((await rig.handoff(steered))?.handedOverAt).toBeDefined())
@@ -212,19 +245,19 @@ describe("a Stop's event", () => {
     expect(stopEvents()).toHaveLength(2)
   })
 
-  it('a second press after a card was sent into the turn writes again, and holds that card', async () => {
-    rig = await createQueuedMessageTestRig()
-    const working = await rig.workingSend()
-    await rig.stop()
-    // The turn the working send started opens after that turnless Stop; the card goes into it.
-    await turnRow('turn-1', 'running')
+  it('a second press after a card was sent into the next turn writes again, and holds that card', async () => {
+    const working = await turnAfterAnEndedChat({ windsDown: true })
     const steered = await queuedDraft('sent into the turn between the presses')
     await rig.sendNow(steered)
     await eventually(async () => expect((await rig.handoff(steered))?.handedOverAt).toBeDefined())
     await rig.stop()
     expect(stopEvents()).toHaveLength(2)
+    // As the child winds down, the provider takes the card back and the stopped turn ends.
     await withdraw(await rig.handoffId(steered))
     await rig.settleAccepted(working, 'stopped')
+    await turnRow('turn-2', 'interrupted')
+    await laneDrained()
+    expect(rig.closeSession).toHaveBeenCalledTimes(2)
     await new Promise((resolve) => setTimeout(resolve, 250))
     expect(await rig.drafts()).toEqual([{ messageId: steered, state: 'waiting' }])
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })

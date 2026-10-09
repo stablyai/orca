@@ -51,7 +51,13 @@ describe('deriving what was working at teardown', () => {
   it('marks a session this host was running a turn for', () => {
     const markers = markersAtTeardown({
       sessions: new Map([
-        [SESSION, { journal: journal([turnItem('turn-1', 'running')]), child: { fence: 1 } }]
+        [
+          SESSION,
+          {
+            journal: journal([turnItem('turn-1', 'running')]),
+            child: { fence: 1, phase: 'ready' as const }
+          }
+        ]
       ]),
       getRecord: () => record(),
       childWork: () => undefined,
@@ -78,7 +84,13 @@ describe('deriving what was working at teardown', () => {
   it('carries the update trigger so the surface can say the restart was not the user choice', () => {
     const [recorded] = markersAtTeardown({
       sessions: new Map([
-        [SESSION, { journal: journal([turnItem('turn-1', 'running')]), child: { fence: 1 } }]
+        [
+          SESSION,
+          {
+            journal: journal([turnItem('turn-1', 'running')]),
+            child: { fence: 1, phase: 'ready' as const }
+          }
+        ]
       ]),
       getRecord: () => record(),
       childWork: () => undefined,
@@ -93,7 +105,9 @@ describe('deriving what was working at teardown', () => {
   it('marks nothing for an idle session', () => {
     expect(
       markersAtTeardown({
-        sessions: new Map([[SESSION, { journal: journal([]), child: { fence: 1 } }]]),
+        sessions: new Map([
+          [SESSION, { journal: journal([]), child: { fence: 1, phase: 'ready' as const } }]
+        ]),
         getRecord: () => record(),
         childWork: () => undefined,
         trigger: 'quit',
@@ -107,7 +121,13 @@ describe('deriving what was working at teardown', () => {
     expect(
       markersAtTeardown({
         sessions: new Map([
-          [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), child: { fence: 1 } }]
+          [
+            SESSION,
+            {
+              journal: journal([turnItem('turn-1', 'completed')]),
+              child: { fence: 1, phase: 'ready' as const }
+            }
+          ]
         ]),
         getRecord: () => record(),
         childWork: () => undefined,
@@ -145,7 +165,7 @@ describe('deriving what was working at teardown', () => {
           SESSION,
           {
             journal: journal([turnItem('turn-1', 'running'), pendingApproval()]),
-            child: { fence: 1 }
+            child: { fence: 1, phase: 'ready' as const }
           }
         ]
       ]),
@@ -169,7 +189,13 @@ describe('deriving what was working at teardown', () => {
   it('marks a settled lead whose subagent was still running, anchored on its last turn', () => {
     const markers = markersAtTeardown({
       sessions: new Map([
-        [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), child: { fence: 1 } }]
+        [
+          SESSION,
+          {
+            journal: journal([turnItem('turn-1', 'completed')]),
+            child: { fence: 1, phase: 'ready' as const }
+          }
+        ]
       ]),
       getRecord: () => record(),
       childWork: () => [childRecord({ id: 'task-a', kind: 'agent', description: 'Review loop 4' })],
@@ -190,7 +216,13 @@ describe('deriving what was working at teardown', () => {
   it('records only the live rows of the roster, bounded', () => {
     const [recorded] = markersAtTeardown({
       sessions: new Map([
-        [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), child: { fence: 1 } }]
+        [
+          SESSION,
+          {
+            journal: journal([turnItem('turn-1', 'completed')]),
+            child: { fence: 1, phase: 'ready' as const }
+          }
+        ]
       ]),
       getRecord: () => record(),
       childWork: () => [
@@ -216,7 +248,13 @@ describe('deriving what was working at teardown', () => {
   it('marks a settled lead whose only live work is a monitor', () => {
     const markers = markersAtTeardown({
       sessions: new Map([
-        [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), child: { fence: 1 } }]
+        [
+          SESSION,
+          {
+            journal: journal([turnItem('turn-1', 'completed')]),
+            child: { fence: 1, phase: 'ready' as const }
+          }
+        ]
       ]),
       getRecord: () => record(),
       childWork: () => [
@@ -235,7 +273,13 @@ describe('deriving what was working at teardown', () => {
     expect(
       markersAtTeardown({
         sessions: new Map([
-          [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), child: { fence: 1 } }]
+          [
+            SESSION,
+            {
+              journal: journal([turnItem('turn-1', 'completed')]),
+              child: { fence: 1, phase: 'ready' as const }
+            }
+          ]
         ]),
         getRecord: () => record(),
         childWork: () => [
@@ -253,7 +297,13 @@ describe('deriving what was working at teardown', () => {
   it('records the identity root so an advancing Claude leaf cannot invalidate the marker', () => {
     const [recorded] = markersAtTeardown({
       sessions: new Map([
-        [SESSION, { journal: journal([turnItem('turn-1', 'running')]), child: { fence: 1 } }]
+        [
+          SESSION,
+          {
+            journal: journal([turnItem('turn-1', 'running')]),
+            child: { fence: 1, phase: 'ready' as const }
+          }
+        ]
       ]),
       getRecord: () => claudeRecord(null),
       childWork: () => undefined,
@@ -269,7 +319,13 @@ describe('deriving what was working at teardown', () => {
     expect(
       markersAtTeardown({
         sessions: new Map([
-          [SESSION, { journal: journal([turnItem('turn-1', 'running')]), child: { fence: 1 } }]
+          [
+            SESSION,
+            {
+              journal: journal([turnItem('turn-1', 'running')]),
+              child: { fence: 1, phase: 'ready' as const }
+            }
+          ]
         ]),
         getRecord: () => record({ chain: [] }),
         childWork: () => undefined,
@@ -290,7 +346,7 @@ describe('deriving what was working at teardown', () => {
           SESSION,
           {
             journal: journal([], [submission('msg-1', 'pending')]),
-            child: { fence: 1 }
+            child: { fence: 1, phase: 'ready' as const }
           }
         ]
       ]),
@@ -313,7 +369,7 @@ describe('deriving what was working at teardown', () => {
           SESSION,
           {
             journal: journal([turnItem('turn-0', 'completed')], [submission('msg-1', 'pending')]),
-            child: { fence: 1 }
+            child: { fence: 1, phase: 'ready' as const }
           }
         ]
       ]),
@@ -338,7 +394,7 @@ describe('deriving what was working at teardown', () => {
             SESSION,
             {
               journal: journal([turnItem('turn-0', 'completed')], [queued]),
-              child: { fence: 1 }
+              child: { fence: 1, phase: 'ready' as const }
             }
           ]
         ]),
@@ -364,14 +420,14 @@ describe('deriving what was working at teardown', () => {
           SESSION,
           {
             journal: journal([turnItem('turn-0', 'completed')], [handedOver, queued]),
-            child: { fence: 1 }
+            child: { fence: 1, phase: 'ready' as const }
           }
         ],
         [
           'session-running',
           {
             journal: journal([turnItem('turn-1', 'running')], [queued]),
-            child: { fence: 1 }
+            child: { fence: 1, phase: 'ready' as const }
           }
         ]
       ]),
@@ -397,7 +453,7 @@ describe('deriving what was working at teardown', () => {
           SESSION,
           {
             journal: journal([turnItem('turn-1', 'running')], [submission('msg-1', 'accepted')]),
-            child: { fence: 1 }
+            child: { fence: 1, phase: 'ready' as const }
           }
         ]
       ]),

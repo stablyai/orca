@@ -26,7 +26,8 @@ import {
 let rig: QueuedMessageTestRig
 
 beforeEach(async () => {
-  rig = await createQueuedMessageTestRig()
+  // A Stop ends the agent, so the card's run resumes the conversation in a new one.
+  rig = await createQueuedMessageTestRig({ restartable: true })
 })
 
 afterEach(() => rig.dispose())

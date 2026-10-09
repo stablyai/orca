@@ -85,6 +85,11 @@ function derivedPauses(): string[] {
   return structuredQueuePauses(journal).map((pause) => pause.reason)
 }
 
+/** The Stop's next step on the session's lane, which ends the child, has run. */
+function laneDrained(): Promise<void> {
+  return rig.host.collaboratorsForTests().serialize(HOST_TEST_SESSION, async () => {})
+}
+
 /** Lets the drain run its steps; none may hand a card off. */
 async function expectNothingSent(...draftIds: string[]): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 250))
@@ -187,15 +192,18 @@ function expectOneWorkingRun(views: readonly ClientView[]): void {
 }
 
 describe('a Stop holds the queue, in order', () => {
-  it('a card typed while the Stop lands waits behind the held one; Resume sends both in order, with no Resume or Send between them', async () => {
+  it('while the stopped turn winds down the paused row shows without Resume; Resume then sends the held cards in order, with no Resume or Send between them', async () => {
+    await rig.dispose()
+    rig = await createQueuedMessageTestRig({ restartable: true, windsDown: true })
     const working = await rig.workingSend()
     const held = await queuedDraft('held by the stop')
+    const typed = await queuedDraft('queued behind it')
     await rig.stop()
-    const typed = await queuedDraft('typed while the stop lands')
     const views = await watchClient()
     // Still winding down: the paused row shows, but neither Resume nor "Send message?" while it runs.
     expect(views.at(-1)).toMatchObject({ working: true, header: true, dialog: false })
     await rig.settleAccepted(working, 'stopped')
+    await laneDrained()
     await eventually(() => expect(views.at(-1)).toMatchObject({ header: true, dialog: true }))
     expect(views.at(-1)?.button).toBe('resume')
     await expectNothingSent(held, typed)
@@ -215,6 +223,7 @@ describe('a Stop holds the queue, in order', () => {
     await queuedDraft('second')
     await rig.stop()
     await rig.settleAccepted(working, 'stopped')
+    await laneDrained()
     const views = await watchClient()
     const before = views.length
     expect(views.at(-1)).toMatchObject({ working: false, button: 'resume' })
@@ -435,6 +444,7 @@ describe("a message sent over a held queue (the confirmation's Send message)", (
     const second = await queuedDraft('second')
     await rig.stop()
     await rig.settleAccepted(working, 'stopped')
+    await laneDrained()
     const views = await watchClient()
     expect(views.at(-1)).toMatchObject({ header: true, button: 'resume', dialog: true, cards: 2 })
     return { first, second, views }

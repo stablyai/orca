@@ -1,10 +1,15 @@
+import {
+  acquireReadyCodexForTest,
+  adapterFor,
+  fakeCodex,
+  identityFor
+} from './codex-structured-session-adapter-fixture'
 // Only the Codex app-server child's own exit says Codex stopped; a close Orca made — a journal
 // sink that could not take a frame, a forced close — is Orca's.
 
 import { describe, expect, it, vi } from 'vitest'
 import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { adapterFor, fakeCodex, identityFor } from './codex-structured-session-adapter-fixture'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
 
 function sink(overrides: Partial<StructuredAgentSessionEventSink> = {}) {
@@ -15,7 +20,12 @@ async function startedCodex(events: StructuredAgentSessionEventSink) {
   const codex = fakeCodex()
   const emitted: CodexStructuredSessionEvent[] = []
   const adapter = adapterFor(codex, {}, emitted)
-  await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 's', events })
+  await acquireReadyCodexForTest(adapter, {
+    identity: identityFor('session-1'),
+    fence: 7,
+    spawnToken: 's',
+    events
+  })
   const ended = async () => {
     await vi.waitFor(() => expect(emitted.some((event) => event.type === 'ended')).toBe(true))
     return emitted.filter((event) => event.type === 'ended')

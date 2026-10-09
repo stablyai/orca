@@ -133,7 +133,8 @@ export async function readStructuredAgentSessionOptions(
       throw journalOpenReadRefusal(error, context.deps.logger, sessionId)
     })
     const child = session?.child
-    if (!child) {
+    // A starting child is asked nothing: the answer is the saved intent and the catalog.
+    if (!child || child.phase === 'starting') {
       return { kind: 'rest' as const }
     }
     const prepared = adapter.prepareReadOptions?.({ sessionId, fence: child.fence })

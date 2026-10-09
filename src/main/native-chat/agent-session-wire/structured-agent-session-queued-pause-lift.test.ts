@@ -25,7 +25,7 @@ import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 let rig: QueuedMessageTestRig
 
 beforeEach(async () => {
-  rig = await createQueuedMessageTestRig()
+  rig = await createQueuedMessageTestRig({ restartable: true })
 })
 
 afterEach(() => rig.dispose())
@@ -63,6 +63,11 @@ async function stoppedDraft(): Promise<string> {
   await rig.stop()
   await rig.settleAccepted(working, 'stopped')
   return draftId
+}
+
+/** The Stop's next step on the session's lane, which ends the child, has run. */
+function laneDrained(): Promise<void> {
+  return rig.host.collaboratorsForTests().serialize(HOST_TEST_SESSION, async () => {})
 }
 
 /** A queued draft handed off and handed over, found by its hand-off link. */
@@ -119,12 +124,15 @@ describe("a Stop's queue pause", () => {
     await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
   })
 
-  it("a draft typed while the stopped turn winds down waits with the rest: the pause is the queue's", async () => {
-    const working = await rig.workingSend()
+  it("a draft typed after the Stop waits with the rest: the pause is the queue's", async () => {
+    await rig.workingSend()
     const olderId = await queuedDraft('paused by the stop')
     await rig.stop()
-    const typedId = await queuedDraft('typed while stopping')
-    await rig.settleAccepted(working, 'stopped')
+    await laneDrained()
+    // Queued behind a send made after the Stop, which the agent then refuses: no turn started.
+    const refused = await handedOverUserSend('sent after the stop')
+    const typedId = await queuedDraft('typed while that send waits')
+    await rig.settleRejected(refused, 'turn/start refused')
     await expectPaused(olderId, typedId)
     expect(await rig.drafts()).toEqual([
       { messageId: olderId, state: 'waiting' },
@@ -225,12 +233,14 @@ describe('the pause read', () => {
 })
 
 describe('a card queued after a Stop is a new instruction', () => {
-  it('a correction typed after a Stop over an empty queue sends when the stopped turn ends', async () => {
-    const working = await rig.workingSend()
+  it('a correction typed after a Stop over an empty queue goes straight to the next agent', async () => {
+    await rig.workingSend()
     await rig.stop()
-    const correction = await queuedDraft('typed right after the stop')
-    await rig.settleAccepted(working, 'stopped')
-    await eventually(async () => expect(await rig.handoff(correction)).toBeDefined())
+    // Sent behind the Stop's end of the child, so nothing is left running to queue it behind.
+    const correction = await rig.send('typed right after the stop', 'queue-if-active').result
+    expect(correction).toMatchObject({ ok: true, value: { submission: { fence: 2 } } })
+    expect(await rig.drafts()).toEqual([])
+    expect(await rig.queuePause()).toBeNull()
   })
 
   it('a card sent now before the Stop and taken anyway lifts nothing, and holds nothing typed later', async () => {
@@ -431,19 +441,26 @@ describe('Resume', () => {
   })
 
   it('is idempotent: a replay of the same Resume answers without lifting a later pause', async () => {
-    const working = await rig.workingSend()
+    await rig.workingSend()
     const draftId = await queuedDraft('paused twice')
     await rig.stop()
     const operationId = hostTestOperationId()
     expect(await rig.resume(operationId)).toMatchObject({ ok: true, value: { resumed: true } })
+    await handedOver(draftId)
+    // The second Stop takes the card's unanswered send back, and it waits again under that Stop.
     await rig.stop()
+    await eventually(async () =>
+      expect(await rig.drafts()).toEqual([{ messageId: draftId, state: 'waiting' }])
+    )
+    const withdrawn = await rig.handoffId(draftId)
     expect(await rig.resume(operationId)).toMatchObject({
       ok: true,
       replayed: true,
       value: { resumed: false }
     })
-    await rig.settleAccepted(working, 'stopped')
-    await expectPaused(draftId)
+    await new Promise((resolve) => setTimeout(resolve, 250))
+    expect(await rig.handoffId(draftId)).toBe(withdrawn)
+    expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
   })
 
   it("of a Stop from before a restart, which no client offers there, also lifts the restart's pause", async () => {
@@ -486,7 +503,8 @@ describe('a failed Stop', () => {
   })
 
   it('keeps its pause when it fails after the interrupt reached the agent', async () => {
-    await rig.workingSend()
+    // A running turn, so the Stop writes its note in its own step rather than at the child's end.
+    await openRigTurnFor(rig, await rig.workingSend())
     const draftId = await queuedDraft('paused by stop')
     const append = AgentSessionJournal.prototype.appendItem
     const failing = vi

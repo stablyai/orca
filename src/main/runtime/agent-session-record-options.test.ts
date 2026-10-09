@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { readNativeSessionOptions } from '../native-chat/agent-session-wire/structured-agent-session-option-restoration'
+import { nativeSessionOptionsFromReport } from '../native-chat/agent-session-wire/structured-agent-session-option-restoration'
+import { recordAgentSessionProviderHandle } from './agent-session-provider-handle-transition'
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
@@ -25,43 +26,24 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 
-it('fails option hydration before ownership can be proved', async () => {
-  await expect(
-    readNativeSessionOptions({
-      adapter: {
-        readOptions: async () => {
-          throw new Error('model list unavailable')
-        }
-      },
-      sessionId: SESSION,
-      fence: 2
-    })
-  ).rejects.toThrow('model list unavailable')
-})
-
-it('drops provider-rejected persisted options before the next owner proof', async () => {
-  await expect(
-    readNativeSessionOptions({
-      adapter: {
-        readOptions: async () => ({ models: [], current: { model: 'provider-model' } }),
-        readOptionRestoreFailures: () => ['permissionMode']
-      },
-      sessionId: SESSION,
-      fence: 2,
+it('drops provider-rejected persisted options from what a started child reports', () => {
+  expect(
+    nativeSessionOptionsFromReport({
+      reported: { model: 'provider-model' },
+      restoreSkipped: ['permissionMode'],
       priorOptions: { permissionMode: 'retired-mode', other: 'keep' }
     })
-  ).resolves.toEqual({ model: 'provider-model', other: 'keep' })
+  ).toEqual({ model: 'provider-model', other: 'keep' })
 })
 
-it('omits empty model values from other option producers', async () => {
-  await expect(
-    readNativeSessionOptions({
-      adapter: { readOptions: async () => ({ models: [], current: { model: '', effort: 'off' } }) },
-      sessionId: SESSION,
-      fence: 2,
+it('omits empty model values from other option producers', () => {
+  expect(
+    nativeSessionOptionsFromReport({
+      reported: { model: '', effort: 'off' },
+      restoreSkipped: [],
       priorOptions: { model: 'old-model', other: 'keep' }
     })
-  ).resolves.toEqual({ effort: 'off', other: 'keep' })
+  ).toEqual({ effort: 'off', other: 'keep' })
 })
 
 it('durably replaces model-less ACP options when a later report reaches the option writer', async () => {
@@ -100,15 +82,12 @@ it('durably replaces model-less ACP options when a later report reaches the opti
       options: [{ value: 'reported-model', name: 'Reported Model' }]
     }
   ])
-  const options = await readNativeSessionOptions({
-    adapter: { readOptions: async () => reader.read() },
-    sessionId: record.sessionId,
-    fence: record.lease.runtimeFence,
-    priorOptions: store.getRecord(record.sessionId)?.options
+  const prior = store.getRecord(record.sessionId)?.options
+  const options = nativeSessionOptionsFromReport({
+    reported: reader.read().current,
+    restoreSkipped: [],
+    ...(prior ? { priorOptions: prior } : {})
   })
-  if (!options) {
-    throw new Error('The later ACP report must provide options')
-  }
   await store.replaceSessionOptions({
     sessionId: record.sessionId,
     fence: record.lease.runtimeFence,
@@ -122,7 +101,7 @@ it('durably replaces model-less ACP options when a later report reaches the opti
   })
 })
 
-it('persists resumed provider options atomically with owner proof', async () => {
+it('makes the process the owner before its provider answers with a handle, and records it after', async () => {
   const store = await openTestAgentSessionRecordStore(directory)
   const reserved = await store.reserveOwner({
     sessionId: SESSION,
@@ -158,30 +137,34 @@ it('persists resumed provider options atomically with owner proof', async () => 
     },
     now: NOW
   })
-  const options = await readNativeSessionOptions({
-    adapter: {
-      readOptions: async () => ({
-        models: [],
-        current: { model: 'gpt-tui', effort: 'low' }
-      })
-    },
-    sessionId: SESSION,
-    fence
-  })
-  await store.proveOwner({
+  await store.proveOwner({ sessionId: SESSION, fence, now: NOW })
+  await store.replaceSessionOptions({
     sessionId: SESSION,
     fence,
-    link: {
-      linkId: 'codex-options-1',
-      handle: codexProviderHandle('thread-options'),
-      origin: 'created',
-      mintedAtFence: fence,
-      observedAt: NOW
-    },
-    now: NOW,
-    ...(options ? { options } : {})
+    options: { model: 'gpt-tui' },
+    now: NOW
   })
+  // A crash here leaves a record the next run reads back: live, its handle still owed.
+  const starting = (await openTestAgentSessionRecordStore(directory)).getRecord(SESSION)
+  expect(starting?.lease).toMatchObject({ claimStatus: 'live', provenHandleLinkId: null })
+  expect(starting?.providerHandleChain).toEqual([])
+  expect(starting?.options).toEqual({ model: 'gpt-tui' })
 
-  const reopened = await openTestAgentSessionRecordStore(directory)
-  expect(reopened.getRecord(SESSION)?.options).toEqual({ model: 'gpt-tui', effort: 'low' })
+  await store.transitionHandoff(SESSION, (record) =>
+    recordAgentSessionProviderHandle({
+      record,
+      fence,
+      link: {
+        linkId: 'codex-options-1',
+        handle: codexProviderHandle('thread-options'),
+        origin: 'created',
+        mintedAtFence: fence,
+        observedAt: NOW
+      },
+      now: NOW
+    })
+  )
+  const started = (await openTestAgentSessionRecordStore(directory)).getRecord(SESSION)
+  expect(started?.lease.provenHandleLinkId).toBe('codex-options-1')
+  expect(started?.providerHandleChain.map((link) => link.linkId)).toEqual(['codex-options-1'])
 })

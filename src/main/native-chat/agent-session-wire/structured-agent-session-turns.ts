@@ -151,7 +151,7 @@ export async function performSend(
   if (existing) {
     return {
       ok: true,
-      value: { clientMessageId: input.clientMessageId, submission: existing }
+      value: { clientMessageId: input.clientMessageId, submission: { ...existing } }
     }
   }
   try {
@@ -276,5 +276,6 @@ function requireSubmission(
   if (!submission) {
     throw new Error('agent_session_submission_lost')
   }
-  return submission
+  // The answer as of this step: the journal settles its own row in place afterwards.
+  return { ...submission }
 }

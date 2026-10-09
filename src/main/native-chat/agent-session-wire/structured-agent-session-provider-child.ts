@@ -29,12 +29,79 @@ export function structuredAgentSessionConversationFence(
   return store.getRecord(sessionId)?.lease.runtimeFence ?? 0
 }
 
+/** How a start someone waited on ended: proven, or the child is gone. */
+export type StructuredAgentSessionChildStartOutcome = 'ready' | 'ended'
+
+const startWaits = new WeakMap<
+  StructuredAgentSessionProviderChild,
+  PromiseWithResolvers<StructuredAgentSessionChildStartOutcome>
+>()
+
+function settleStartWait(
+  child: StructuredAgentSessionProviderChild,
+  outcome: StructuredAgentSessionChildStartOutcome
+): void {
+  startWaits.get(child)?.resolve(outcome)
+  startWaits.delete(child)
+}
+
+/** Settles when the session's child leaves `starting`; at once when it has none starting. Every
+ *  move out of `starting` is made in this file, so none can leave a waiter behind. */
+export function providerChildStartSettled(
+  session: Pick<ChildBearer, 'child'> | undefined
+): Promise<StructuredAgentSessionChildStartOutcome> {
+  const child = session?.child
+  if (!child) {
+    return Promise.resolve('ended')
+  }
+  if (child.phase !== 'starting') {
+    return Promise.resolve('ready')
+  }
+  let wait = startWaits.get(child)
+  if (!wait) {
+    wait = Promise.withResolvers()
+    startWaits.set(child, wait)
+  }
+  return wait.promise
+}
+
 /** For the end of a successful attach only: a failed one never wrote a child to take back. */
 export function indexProviderChild(
   session: ChildBearer,
   child: StructuredAgentSessionProviderChild
 ): void {
+  const previous = session.child
+  if (previous && previous !== child) {
+    if (sameProviderChild(previous, child)) {
+      carryStartWait(previous, child)
+    } else {
+      settleStartWait(previous, 'ended')
+    }
+  }
   session.child = child
+}
+
+/** A re-attach rebuilds the same child (a second window, a phone, a reconnect): its start is still
+ *  the one waited on. */
+function carryStartWait(
+  from: StructuredAgentSessionProviderChild,
+  to: StructuredAgentSessionProviderChild
+): void {
+  const wait = startWaits.get(from)
+  startWaits.delete(from)
+  if (!wait) {
+    return
+  }
+  if (to.phase !== 'starting') {
+    wait.resolve('ready')
+    return
+  }
+  const existing = startWaits.get(to)
+  if (existing) {
+    void existing.promise.then(wait.resolve)
+  } else {
+    startWaits.set(to, wait)
+  }
 }
 
 export function markProviderChildStarted(
@@ -44,6 +111,7 @@ export function markProviderChildStarted(
   const child = matchingChild(session, identity)
   if (child) {
     child.phase = 'ready'
+    settleStartWait(child, 'ready')
   }
   return child !== null
 }
@@ -91,6 +159,7 @@ export function endProviderChild(
     return false
   }
   session.child = null
+  settleStartWait(child, 'ended')
   session.lastEndedChild = {
     ...ended,
     ...(child.startedFor === undefined ? {} : { startedFor: child.startedFor }),

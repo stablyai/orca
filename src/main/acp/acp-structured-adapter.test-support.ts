@@ -1,29 +1,27 @@
+import { FakeAcpChild } from './acp-scripted-connection.test-fixture'
+export { FakeAcpChild, PID } from './acp-scripted-connection.test-fixture'
 // A scripted ACP agent behind the real adapter: a fake connection over in-memory stdio, the real
 // protocol runtime, translator and assembler, and a real on-disk journal to read back.
 
 import { vi } from 'vitest'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
-import type { ProviderProcessExit } from '../provider-process/managed-provider-process'
-import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
-import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type {
+  StructuredAgentSessionLifecycleEvent,
+  StructuredAgentSessionStartedEvent
+} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import {
   openProviderTimelineRig,
   SESSION,
   type ProviderTimelineRig
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { acpLaunchSpecFor, type AcpLaunchSpec } from './acp-launch-specs'
-import { AcpScriptedAgent, tick, type FakeFrame } from './acp-scripted-agent.test-support'
-import type { AcpAgentConnectionOptions } from './acp-agent-connection'
-import { AcpConnectionClosedError } from './acp-errors'
-import { AcpSessionRuntime } from './acp-session-runtime'
-import type { AcpStructuredConnection } from './acp-structured-connection'
+import { type AcpScriptedAgent, tick, type FakeFrame } from './acp-scripted-agent.test-support'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
 import { AcpStructuredSessionAdapter } from './acp-structured-session-adapter'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 
 export const GROK = acpLaunchSpecFor('grok')!
 export const PROVIDER_SESSION = 'acp-session-1'
-export const PID = 4242
 
 export const GROK_CONFIG_OPTIONS = [
   {
@@ -50,102 +48,22 @@ export const GROK_CONFIG_OPTIONS = [
   }
 ]
 
-/** A scripted agent behind the connection surface: the real protocol runtime over in-memory stdio,
- *  with the process lifecycle `AcpAgentConnection` gives it (stdout EOF is not exit; the exit closes
- *  the protocol with the agent's last words; a protocol failure while it runs is `onClose`). */
-export class FakeAcpChild extends AcpSessionRuntime implements AcpStructuredConnection {
-  readonly agent: AcpScriptedAgent
-  readonly pid: number | undefined = PID
-  readonly spawned = Promise.resolve()
-  stderr = ''
-  processTreeUnproven = false
-  private exitListeners: ((exit: ProviderProcessExit) => void)[] = []
-  private gone = false
-  private closing = false
-  private lostWith: Error | undefined
-  closes = 0
-
-  constructor(
-    readonly launch: ProviderProcessLaunch,
-    private readonly connectionOptions: AcpAgentConnectionOptions,
-    agent = new AcpScriptedAgent()
-  ) {
-    const lifecycle: { child: FakeAcpChild | null } = { child: null }
-    super(agent.stdout, agent.stdin, {
-      ...connectionOptions,
-      peer: { ...connectionOptions.peer, closeOnInputEnd: false },
-      onClose: (error) => lifecycle.child?.lost(error)
-    })
-    lifecycle.child = this
-    this.agent = agent
-  }
-
-  get exited() {
-    return this.gone
-  }
-  onExit(listener: (exit: ProviderProcessExit) => void): void {
-    if (this.gone) {
-      listener(FAKE_EXIT)
-    } else {
-      this.exitListeners.push(listener)
-    }
-  }
-  stderrTail(): string {
-    return this.stderr
-  }
-  pauseReading(): void {
-    this.agent.stdout.pause()
-  }
-  resumeReading(): void {
-    this.agent.stdout.resume()
-  }
-  /** What a close proves once the protocol is closed; replace it to leave the exit unproven. */
-  proveClose = async (): Promise<boolean> => {
-    this.exit()
-    return true
-  }
-  override close(error?: Error): Promise<boolean> {
-    this.closes += 1
-    this.closing ||= !this.gone
-    this.drainNotifications(error)
-    return this.proveClose().finally(() => super.close(error))
-  }
-  /** The agent process ends on its own (or Orca's close landed). */
-  exit(): void {
-    if (this.gone) {
-      return
-    }
-    this.gone = true
-    const error =
-      this.lostWith ?? new AcpConnectionClosedError(this.stderr || `${this.launch.command} exited`)
-    super.close(error)
-    this.connectionOptions.onExit?.(error, { expected: this.closing, exit: FAKE_EXIT })
-    for (const listener of this.exitListeners.splice(0)) {
-      listener(FAKE_EXIT)
-    }
-  }
-  private lost(error: Error): void {
-    this.lostWith ??= error
-    if (this.closing || this.gone) {
-      return
-    }
-    this.connectionOptions.onClose?.(error)
-  }
-}
-
-const FAKE_EXIT: ProviderProcessExit = { code: 0, signal: null, processless: false }
-
 export type AcpAdapterRig = {
   rig: ProviderTimelineRig
   adapter: AcpStructuredSessionAdapter
   child: () => FakeAcpChild
   spawned: string[]
   lifecycle: StructuredAgentSessionLifecycleEvent[]
+  readonly ended: Extract<StructuredAgentSessionLifecycleEvent, { type: 'ended' }>[]
+  started(): StructuredAgentSessionStartedEvent
   settled: Parameters<NonNullable<AcpStructuredSessionAdapterDeps['onDispatchSettledLate']>>[0][]
   acquire(options?: {
     fence?: number
     onSpawned?: () => Promise<void>
     signal?: AbortSignal
+    waitForStart?: boolean
+    options?: Readonly<Record<string, string>>
+    optionRevision?: () => number
   }): ReturnType<AcpStructuredSessionAdapter['acquire']>
   /** Frames Orca wrote to the agent with this method. */
   sent(method: string): FakeFrame[]
@@ -169,6 +87,7 @@ export async function openAcpAdapterRig(
   const spawned: string[] = []
   const lifecycle: StructuredAgentSessionLifecycleEvent[] = []
   const settled: AcpAdapterRig['settled'] = []
+  const startListeners = new Set<() => void>()
   const spec = options.spec ?? GROK
   const adapter = new AcpStructuredSessionAdapter({
     spec,
@@ -208,11 +127,17 @@ export async function openAcpAdapterRig(
       return child
     },
     readProcessStartTime: async () => 1_700_000_000_000,
-    onEvent: (event) => lifecycle.push(event),
     onDispatchSettledLate: (settlement) => settled.push(settlement),
     mintGeneration: () => 'gen-acp',
     now: () => 5_000,
-    ...options.deps
+    ...options.deps,
+    onEvent: (event) => {
+      lifecycle.push(event)
+      for (const listener of startListeners) {
+        listener()
+      }
+      options.deps?.onEvent?.(event)
+    }
   })
   const frames = () => current?.agent.frames ?? []
   return {
@@ -226,9 +151,20 @@ export async function openAcpAdapterRig(
     },
     spawned,
     lifecycle,
+    get ended() {
+      return lifecycle.filter((event) => event.type === 'ended')
+    },
+    started: () => {
+      const event = lifecycle.findLast((entry) => entry.type === 'started')
+      if (event?.type !== 'started') {
+        throw new Error('ACP session has not started')
+      }
+      return event
+    },
     settled,
-    acquire: (acquireOptions = {}) =>
-      adapter.acquire({
+    acquire: async (acquireOptions = {}) => {
+      const beginning = lifecycle.length
+      const acquisition = await adapter.acquire({
         identity: {
           sessionId: SESSION,
           workspaceId: 'workspace-1',
@@ -239,12 +175,36 @@ export async function openAcpAdapterRig(
         fence: acquireOptions.fence ?? 1,
         spawnToken: 'spawn-1',
         events: rig.eventSink,
+        ...(acquireOptions.options ? { options: acquireOptions.options } : {}),
+        ...(acquireOptions.optionRevision ? { optionRevision: acquireOptions.optionRevision } : {}),
         ...(acquireOptions.signal ? { signal: acquireOptions.signal } : {}),
         onSpawned: async () => {
           spawned.push('onSpawned')
           await acquireOptions.onSpawned?.()
         }
-      }),
+      })
+      if (acquireOptions.waitForStart !== false) {
+        await new Promise<void>((resolve) => {
+          const inspect = () => {
+            if (
+              lifecycle
+                .slice(beginning)
+                .some(
+                  (event) =>
+                    event.type !== 'options-reported' &&
+                    event.acquisitionGeneration === acquisition.acquisitionGeneration
+                )
+            ) {
+              startListeners.delete(inspect)
+              resolve()
+            }
+          }
+          startListeners.add(inspect)
+          inspect()
+        })
+      }
+      return acquisition
+    },
     sent: (method) => frames().filter((frame) => frame.method === method),
     frame: (method, index = 0) =>
       waitFor(() => {

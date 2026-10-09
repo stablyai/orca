@@ -34,6 +34,22 @@ export function restoredCodexSessionOptions(
   return restored
 }
 
+/** Startup reports the thread's defaults together with the saved next-turn intent. */
+export function reportedCodexSessionOptions(
+  session: CodexSession
+): AgentSessionOptionsResult['current'] {
+  const model = session.options.get('model') ?? session.reportedOptions.model ?? ''
+  const effort =
+    session.options.get('effort') ??
+    (model === session.reportedOptions.model ? session.reportedOptions.effort : undefined)
+  const fastMode = decodeCodexFastMode(session.options)
+  return {
+    model,
+    ...(effort ? { effort } : {}),
+    ...(fastMode !== undefined ? { fastMode } : {})
+  }
+}
+
 export type { CodexSessionOptionCatalog } from './codex-structured-model-catalog'
 
 export { readCodexStructuredSessionOptionCatalog } from './codex-structured-model-catalog'

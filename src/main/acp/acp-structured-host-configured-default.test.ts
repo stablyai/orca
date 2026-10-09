@@ -135,6 +135,10 @@ async function openGrokHost(runs: string, create?: StructuredAgentSessionFirstMe
     ? rig.host.create(CALLER, createTestParams(create, attachParams()), { firstMessage: create })
     : rig.host.attach(CALLER, attachParams())
   expect(await opening).toMatchObject({ ok: true })
+  if (!create) {
+    // The attach answers at spawn; what the chat runs is known once its start is proven.
+    await rig.ready()
+  }
   return { ...rig, catalog }
 }
 

@@ -126,8 +126,7 @@ beforeEach(async () => {
       mintedAtFence: fence,
       observedAt: NOW
     },
-    acquisitionGeneration: `generation-${++generation}`,
-    providerChildPhase: 'starting' as const
+    acquisitionGeneration: `generation-${++generation}`
   }))
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({

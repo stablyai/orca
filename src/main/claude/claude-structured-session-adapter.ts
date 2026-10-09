@@ -13,8 +13,6 @@ import { acquireClaudeSession } from './claude-structured-session-acquisition'
 import { supportsClaudeStructuredLocation } from './claude-structured-location-support'
 import { setClaudeStructuredSessionOption } from './claude-structured-options'
 import { readClaudeStructuredSessionOptions } from './claude-structured-session-options'
-import { claudeStartupSettledWithin } from './claude-structured-session-startup-state'
-import { CLAUDE_DEFAULT_REQUEST_TIMEOUT_MS } from './claude-agent-sdk-control-requests'
 import {
   ClaudeAcquisitionRegistry,
   type ClaudeAcquisitionAttempt,
@@ -177,9 +175,6 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
         this.deps.onDispatchSettledLate?.({ sessionId: request.sessionId, ...settlement }),
       ...(this.deps.requestTimeoutMs === undefined ? {} : { timeoutMs: this.deps.requestTimeoutMs })
     })
-  // Stop is a session boundary for Claude: an interrupt can answer while background work keeps the
-  // CLI running, and a refused one leaves the turn running.
-  stopEndsSession = (): boolean => true
   awaitStoppedRequestEnd = claudeStoppedRequestEndWait(this.sessions)
   routePromptCancel = claudePromptCancelRoute
   dismissPrompt: NonNullable<StructuredAgentSessionAdapter['dismissPrompt']> = (request) =>
@@ -234,18 +229,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       input,
       this.deps.requestTimeoutMs
     )
-  startAnswered = (sessionId: string): boolean | undefined =>
-    this.sessions.get(sessionId)?.startup.answered
-  awaitOptionWritable = (sessionId: string): Promise<void> =>
-    claudeStartupSettledWithin(
-      this.sessions.get(sessionId),
-      this.deps.requestTimeoutMs ?? CLAUDE_DEFAULT_REQUEST_TIMEOUT_MS
-    )
   readOptions = (input: { sessionId: string; fence: number }) =>
     readClaudeStructuredSessionOptions(this.session(input.sessionId), this.deps.requestTimeoutMs)
-  readOptionRestoreFailures = (sessionId: string): readonly string[] => [
-    ...(this.sessions.get(sessionId)?.restoreSkippedOptions ?? [])
-  ]
 
   releaseAcquisition = (input: { sessionId: string }): Promise<boolean> =>
     this.afterClose(input.sessionId, () => this.releaseProviderSession(input.sessionId))

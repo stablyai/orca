@@ -69,10 +69,9 @@ export function mutateWithChatStop<TValue>(
       ctx,
       {
         reason: 'user-stop',
-        caller: caller.callerKey,
-        // A Stop that ends the provider's session ends whatever is in flight, so its event names
-        // the live turn, or none (the turn opened next), never a named turn that already ended.
-        ...(ctx.adapter.stopEndsSession?.(ctx.sessionId) === true ? {} : named)
+        // Every Stop ends the provider's session, so whatever is in flight: its event names the
+        // live turn, or none (the turn opened next), never a named turn that already ended.
+        caller: caller.callerKey
       },
       async (tookEffect) => {
         // Read before the withdrawal it decides on is issued.

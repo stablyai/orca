@@ -155,19 +155,15 @@ export class StructuredAgentSessionStartupAttempts {
     }
   }
 
-  /** The acquire returned: a `starting` child stays on the clock until it proves its start, and
+  /** The acquire returned: its `starting` child stays on the clock until it proves its start, and
    *  one published after the limit passed is expired now. */
   published(
     sessionId: string,
     attemptId: string,
-    child: StructuredAgentSessionProviderChildIdentity & { phase: 'starting' | 'ready' }
+    child: StructuredAgentSessionProviderChildIdentity
   ): void {
     const tracked = this.open.get(sessionId)
     if (tracked?.attempt.attemptId !== attemptId) {
-      return
-    }
-    if (child.phase === 'ready') {
-      this.settle(sessionId, tracked, 'ready')
       return
     }
     tracked.child = { generation: child.generation, fence: child.fence }
@@ -179,6 +175,18 @@ export class StructuredAgentSessionStartupAttempts {
     if (tracked.spawnedAt === null && !this.disposed) {
       this.startClock(sessionId, tracked)
     }
+  }
+
+  /** Whether `child`'s start is still on its clock: false once its limit passed, so a `started`
+   *  that lost the race to the limit is never accepted. */
+  onClock(sessionId: string, child: StructuredAgentSessionProviderChildIdentity): boolean {
+    const tracked = this.open.get(sessionId)
+    return (
+      !this.disposed &&
+      !!tracked?.child &&
+      !tracked.expired &&
+      sameProviderChild(tracked.child, child)
+    )
   }
 
   /** The child proved its start: its attempt is over. A stale child's proof ends nothing. */

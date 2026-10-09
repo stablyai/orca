@@ -21,7 +21,7 @@ import {
 } from '../../shared/node-bounded-file-reader'
 import type { AcpLaunchSpec } from './acp-launch-specs'
 import { resolveAcpPeerOptions } from './acp-peer-limits'
-import { acpAgentName } from './acp-structured-acquire'
+import { acpAgentName } from './acp-structured-agent-definitions'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import type { ContentBlock } from './generated/acp-protocol.generated'
 
