@@ -1,5 +1,14 @@
 import type { FileWithMtime } from '../ai-vault/session-scanner-types'
 
+export function sessionSearchSidecarKey(file: FileWithMtime): string | null {
+  const sidecar = file.sidecar
+  return typeof sidecar === 'object'
+    ? JSON.stringify([sidecar.path, sidecar.mtimeMs, sidecar.sizeBytes])
+    : sidecar === 'unknown'
+      ? 'unknown'
+      : null
+}
+
 // Why the index keeps its own cursor: the parse cache's cursor answers "what
 // does the session list already show", which is a different question from "what
 // bytes of this file are already rows". They diverge the moment either side

@@ -49,6 +49,18 @@ function schemaVersion(db: SyncDatabase): string | undefined {
 }
 
 describe('openSessionSearchDatabase', () => {
+  it('adds sibling freshness to a current index without discarding its rows', async () => {
+    const path = await tempDatabasePath()
+    const first = openSessionSearchDatabase(path)
+    first.prepare("INSERT INTO files(path,byte_offset,mtime_ms) VALUES ('retained',1,1)").run()
+    first.exec('ALTER TABLE files DROP COLUMN sidecar_key')
+    first.close()
+    const reopened = openSessionSearchDatabase(path)
+    expect(reopened.prepare('SELECT path, sidecar_key FROM files').all()).toEqual([
+      { path: 'retained', sidecar_key: null }
+    ])
+    reopened.close()
+  })
   it('keeps a current-version index and its rows', async () => {
     const path = await tempDatabasePath()
     const first = openSessionSearchDatabase(path)

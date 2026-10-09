@@ -132,6 +132,18 @@ function openExisting(path: string): SyncDatabase {
       db = openWithPragmas(path)
     }
     db.exec(SCHEMA_SQL)
+    // Additive: preserve the existing index rather than rereading every transcript.
+    if (
+      !db
+        .prepare('PRAGMA table_info(files)')
+        .all()
+        .some(
+          (row) =>
+            typeof row === 'object' && row !== null && 'name' in row && row.name === 'sidecar_key'
+        )
+    ) {
+      db.exec('ALTER TABLE files ADD COLUMN sidecar_key TEXT')
+    }
     db.prepare('INSERT OR IGNORE INTO meta(key, value) VALUES (?, ?)').run(
       'index_incarnation',
       randomUUID()

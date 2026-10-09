@@ -1,4 +1,5 @@
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
+import { museFixture } from './session-scanner-muse-fixtures'
 
 import { antigravityFixture } from './session-scanner-antigravity-fixtures'
 import { codexFixture } from './session-scanner-codex-fixtures'
@@ -281,6 +282,7 @@ export function geminiJsonlFixture(): IncrementalAgentFixture {
 
 export function allIncrementalAgentFixtures(): IncrementalAgentFixture[] {
   return [
+    museFixture(),
     codexFixture(),
     cursorFixture(),
     copilotFixture(),

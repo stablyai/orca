@@ -89,7 +89,7 @@ export async function discoverFiles(args: {
  * forever. Only a genuinely missing path is `'none'`; every other failure —
  * a stalled WSL distro, EACCES, EIO — is `'unknown'`.
  */
-async function observeSessionSidecar(
+export async function observeSessionSidecar(
   filePath: string | undefined
 ): Promise<SessionSidecarObservation> {
   if (!filePath) {

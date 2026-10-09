@@ -1,4 +1,10 @@
 import { createQoderSessionResumeState } from './session-scanner-qoder-parser'
+import { createMuseSessionResumeState } from './session-scanner-muse-resume'
+import {
+  createGrokSessionResumeState,
+  grokHistoryFile,
+  observeGrokHistory
+} from './session-scanner-grok-resume'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { inSessionParseFileLane } from './session-parse-file-lane'
 import { createAntigravitySessionResumeState } from './session-scanner-antigravity-parser'
@@ -41,7 +47,7 @@ export {
 } from './session-parse-cache-store'
 
 // Incremental append-parsing applies only to transcripts that are append-only
-// JSONL line-folds. Whole-JSON documents (grok/rovo/devin/hermes/jcode/gemini-json)
+// JSONL line-folds, including Grok's history sibling. Whole-JSON documents (rovo/devin/hermes/jcode/gemini-json)
 // are rewritten in place, Kimi reads a state doc plus a sibling wire file, and
 // OpenCode reads SQLite rows or a doc plus a message dir — those formats keep
 // unchanged-file reuse only and re-parse whole when they change.
@@ -79,13 +85,17 @@ function resumableStateFactoryFor(
         : null
     case 'antigravity':
       return (messages) => createAntigravitySessionResumeState(candidate.file, messages)
-    case 'devin':
+    case 'muse':
+      return (messages) => createMuseSessionResumeState(candidate.file, messages)
     case 'grok':
+      return grokHistoryFile(candidate)
+        ? (messages) => createGrokSessionResumeState(candidate.file, messages)
+        : null
+    case 'devin':
     case 'hermes':
     case 'jcode':
     case 'cline':
     case 'kimi':
-    case 'muse':
     case 'opencode':
     case 'opencode2':
     case 'zcode':
@@ -127,8 +137,14 @@ export async function parseAgentSessionFileCached(
 ): Promise<AiVaultSession | null> {
   // The whole lookup-read-store sequence runs in the lane: a concurrent parse of
   // the same path shares this entry's resume point and its message channel.
-  return inSessionParseFileLane(candidate.file.path, () =>
-    parseCachedInLane(candidate, platform, stats, requireRead, signal)
+  return inSessionParseFileLane(candidate.file.path, async () =>
+    parseCachedInLane(
+      candidate.agent === 'grok' ? await observeGrokHistory(candidate) : candidate,
+      platform,
+      stats,
+      requireRead,
+      signal
+    )
   )
 }
 
@@ -177,7 +193,10 @@ async function parseCachedInLane(
   const { file } = candidate
   if (
     requireRead === 'whole' ||
-    (requireRead === 'any' && sessionParseCacheCoversTranscript(candidate, platform))
+    (requireRead === 'any' &&
+      sessionParseCacheCoversTranscript(candidate, platform) &&
+      (candidate.agent !== 'grok' ||
+        sidecarUnchanged(getSessionParseCacheEntry(file.path)?.sidecar, file.sidecar)))
   ) {
     requestWholeTranscriptRead(file.path)
   }
@@ -205,6 +224,7 @@ async function parseCachedInLane(
   if (stateFactory) {
     const read = await readResumableTranscript({
       candidate,
+      inputFile: candidate.agent === 'grok' ? grokHistoryFile(candidate) : undefined,
       platform,
       resume: entry?.platform === platform ? entry.resume : null,
       stateFactory,

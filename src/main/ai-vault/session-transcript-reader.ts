@@ -2,7 +2,11 @@ import { readTranscriptSlice } from '../native-chat/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { parseAgentSessionFile } from './session-scanner-agent-parser'
 import { consumeCompleteJsonlLines } from './session-scanner-jsonl-reader'
-import type { ResumableSessionParseState, SessionFileCandidate } from './session-scanner-types'
+import type {
+  FileWithMtime,
+  ResumableSessionParseState,
+  SessionFileCandidate
+} from './session-scanner-types'
 import {
   invalidateSessionParseCacheEntry,
   type SessionParseResumePoint
@@ -58,12 +62,14 @@ export function requestWholeTranscriptRead(path: string): void {
  */
 export async function readResumableTranscript(args: {
   candidate: SessionFileCandidate
+  /** A sibling transcript can supply bytes while the candidate retains its session identity. */
+  inputFile?: FileWithMtime
   platform: NodeJS.Platform
   resume: SessionParseResumePoint | null
   stateFactory: (messages: TranscriptMessageChannel) => ResumableSessionParseState
   stats?: TranscriptReadStats
 }): Promise<ResumableTranscriptRead> {
-  const { file } = args.candidate
+  const file = args.inputFile ?? args.candidate.file
   const resume = args.resume
   const canResume =
     resume !== null &&
@@ -115,7 +121,7 @@ export async function readResumableTranscript(args: {
     }
 
     // The stat this scan displays is current even when nothing new was consumed.
-    state.touchFile(file)
+    state.touchFile(args.candidate.file)
 
     // Keep parity with the one-shot parser: a final unterminated line is shown,
     // but stays out of the resumable state so the (possibly still-growing) line

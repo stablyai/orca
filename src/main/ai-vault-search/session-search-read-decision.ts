@@ -1,6 +1,10 @@
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import type { SessionParseReadRequirement } from '../ai-vault/session-scanner-parse-cache'
-import { requiresWholeRead, type SessionSearchIndexedFile } from './session-search-file-cursor'
+import {
+  requiresWholeRead,
+  sessionSearchSidecarKey,
+  type SessionSearchIndexedFile
+} from './session-search-file-cursor'
 import type { SessionSearchFileRow } from './session-search-store'
 
 /**
@@ -66,7 +70,10 @@ export function sessionSearchReadDecision(args: {
     // and no cursor. Appending onto either would splice two spans together.
     return 'whole'
   }
-  const size = file.sizeBytes
+  const size =
+    candidate.agent === 'grok' && typeof file.sidecar === 'object'
+      ? file.sidecar.sizeBytes
+      : file.sizeBytes
   if (typeof size === 'number' && cursor.byteOffset !== null && cursor.byteOffset > size) {
     // Shorter than the index read to: this is not the file that cursor came from.
     return 'whole'
@@ -94,6 +101,8 @@ function heldOut(row: SessionSearchFileRow, mtimeMs: number): boolean {
 /** The row already describes the file as it is now. */
 function statMatches(row: SessionSearchFileRow, file: SessionFileCandidate['file']): boolean {
   return (
+    file.sidecar !== 'unknown' &&
+    (row.sidecarKey ?? null) === sessionSearchSidecarKey(file) &&
     row.mtimeMs === file.mtimeMs &&
     (row.sizeBytes === null || file.sizeBytes === undefined || row.sizeBytes === file.sizeBytes)
   )

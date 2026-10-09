@@ -42,13 +42,28 @@ export async function parseGrokSessionFile(
   if (!record) {
     return null
   }
+  const accumulator = createAccumulator({
+    agent: 'grok',
+    file,
+    sessionId: sessionIdFromFileName(dirname(file.path)),
+    messages
+  })
+  applyGrokSummary(accumulator, record)
+  await consumeGrokChatHistory(accumulator, dirname(file.path))
+  return finalizeSession(accumulator, platform)
+}
+
+export function applyGrokSummary(
+  accumulator: SessionAccumulator,
+  record: Record<string, unknown>
+): void {
   const info = asRecord(record.info)
-  const sessionId = extractString(info?.id) ?? sessionIdFromFileName(dirname(file.path))
-  const accumulator = createAccumulator({ agent: 'grok', file, sessionId, messages })
+  accumulator.sessionId = extractString(info?.id) ?? accumulator.sessionId
   accumulator.cwd = extractString(info?.cwd)
   accumulator.title =
     normalizeTitleText(extractString(record.generated_title) ?? '') ??
-    normalizeTitleText(extractString(record.session_summary) ?? '')
+    normalizeTitleText(extractString(record.session_summary) ?? '') ??
+    accumulator.title
   accumulator.model = extractString(record.current_model_id)
   accumulator.branch = extractString(record.head_branch)
   accumulator.messageCount =
@@ -56,8 +71,6 @@ export async function parseGrokSessionFile(
   updateTimeline(accumulator, extractString(record.created_at))
   updateTimeline(accumulator, extractString(record.updated_at))
   updateTimeline(accumulator, extractString(record.last_active_at))
-  await consumeGrokChatHistory(accumulator, dirname(file.path))
-  return finalizeSession(accumulator, platform)
 }
 
 async function consumeGrokChatHistory(
@@ -72,47 +85,7 @@ async function consumeGrokChatHistory(
   const lines = createInterface({ input, crlfDelay: Infinity })
   try {
     for await (const line of lines) {
-      const record = parseJsonObject(line)
-      if (!record) {
-        continue
-      }
-      const role = extractString(record.type)
-      if (role !== 'user' && role !== 'assistant') {
-        continue
-      }
-
-      if (role === 'user') {
-        // Why: first-prompt copy must be the typed ask inside <user_query>, never
-        // the injected <user_info> bootstrap row.
-        const firstPromptBody = extractGrokFirstUserPromptText(record.content)
-        const text = firstPromptBody
-          ? normalizePreviewText(capGrokPreviewSource(firstPromptBody))
-          : null
-
-        if (firstPromptBody) {
-          accumulator.title ??= normalizeTitleText(firstPromptBody)
-          if (shouldCaptureFullFirstUserPrompt() && !accumulator.firstUserPrompt) {
-            accumulator.firstUserPrompt = normalizeFullFirstUserPromptText(firstPromptBody)
-          }
-        }
-
-        if (text) {
-          addPreviewMessage(accumulator, {
-            role: 'user',
-            text,
-            timestamp: extractString(record.timestamp),
-            seedFirstUserPrompt: false
-          })
-        }
-        continue
-      }
-
-      addPreviewMessage(accumulator, {
-        role: 'assistant',
-        text: extractGrokContentText(record.content),
-        timestamp: extractString(record.timestamp),
-        seedFirstUserPrompt: false
-      })
+      consumeGrokHistoryLine(accumulator, line)
     }
   } catch (error) {
     // Summary-only sessions still provide enough metadata for the Vault list. A
@@ -127,6 +100,50 @@ async function consumeGrokChatHistory(
     lines.close()
     input.destroy()
   }
+}
+
+export function consumeGrokHistoryLine(accumulator: SessionAccumulator, line: string): void {
+  const record = parseJsonObject(line)
+  if (!record) {
+    return
+  }
+  const role = extractString(record.type)
+  if (role !== 'user' && role !== 'assistant') {
+    return
+  }
+
+  if (role === 'user') {
+    // Why: first-prompt copy must be the typed ask inside <user_query>, never
+    // the injected <user_info> bootstrap row.
+    const firstPromptBody = extractGrokFirstUserPromptText(record.content)
+    const text = firstPromptBody
+      ? normalizePreviewText(capGrokPreviewSource(firstPromptBody))
+      : null
+
+    if (firstPromptBody) {
+      accumulator.title ??= normalizeTitleText(firstPromptBody)
+      if (shouldCaptureFullFirstUserPrompt() && !accumulator.firstUserPrompt) {
+        accumulator.firstUserPrompt = normalizeFullFirstUserPromptText(firstPromptBody)
+      }
+    }
+
+    if (text) {
+      addPreviewMessage(accumulator, {
+        role: 'user',
+        text,
+        timestamp: extractString(record.timestamp),
+        seedFirstUserPrompt: false
+      })
+    }
+    return
+  }
+
+  addPreviewMessage(accumulator, {
+    role: 'assistant',
+    text: extractGrokContentText(record.content),
+    timestamp: extractString(record.timestamp),
+    seedFirstUserPrompt: false
+  })
 }
 
 export function extractGrokContentText(value: unknown): string | null {

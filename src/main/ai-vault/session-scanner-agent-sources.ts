@@ -183,7 +183,8 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
         'sessions'
       ]),
     extensions: ['.json'],
-    filePredicate: (filePath) => basename(filePath) === 'summary.json'
+    filePredicate: (filePath) => basename(filePath) === 'summary.json',
+    contentDependencyPath: (filePath) => join(dirname(filePath), 'chat_history.jsonl')
   },
   devin: {
     rootDirs: (options, wslHomeDirs) => [
