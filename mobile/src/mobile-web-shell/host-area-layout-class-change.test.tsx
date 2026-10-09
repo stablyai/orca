@@ -166,3 +166,18 @@ describe('a detail session across a layout-class change', () => {
     expect(kinds).toEqual(['ready session-1', 'ready session-2'])
   })
 })
+
+describe('a phone mount', () => {
+  // The layout effect fires once on mount; on a phone it must be a no-op, not a restart.
+  it.each([
+    [true, '/h/host-1'],
+    [true, '/h/host-1/session/wt-1'],
+    [false, '/h/host-1'],
+    [false, '/h/host-1/session/wt-1']
+  ])('declares=%s, %s: one session, one manifest read', async (declares, routePathname) => {
+    expect(await settledKinds(declares, [false, false], routePathname)).toEqual({
+      kinds: ['ready session-1', 'ready session-1'],
+      manifestReads: 1
+    })
+  })
+})
