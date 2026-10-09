@@ -4,6 +4,7 @@ export {
   AutomationId,
   AutomationList,
   AutomationRuns,
+  AutomationRerun,
   AutomationUpdate,
   Destination,
   ExpectedOwner

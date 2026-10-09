@@ -2,9 +2,10 @@ import { toast } from 'sonner'
 import type { AutomationRun } from '../../../../shared/automations-types'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import { capturedAutomationOwner, capturedAutomationOwnerKey } from './automation-captured-owner'
 import { getAutomationTargetAvailability } from './automation-target-availability'
-import { runAutomationNowForTarget } from './automation-host-client'
-import { dispatchAutomationRunNow } from './automation-row-action-dispatch'
+import { runAutomationNowForTarget, rerunAutomationForTarget } from './automation-host-client'
+import { dispatchAutomationRunNow, dispatchAutomationRerun } from './automation-row-action-dispatch'
 import { waitForAutomationRerunPendingVisibility } from './automation-run-view-state'
 import type { AutomationListRow } from './automation-list-row-identity'
 import type { AutomationsPageActionContext } from './automations-page-action-context'
@@ -24,7 +25,7 @@ export function createAutomationRunActions({
     repoForRow,
     worktreeForRow
   } = store
-  const { rerunRunIdsInFlightRef, setRerunRunIdsInFlight } = local
+  const { rerunRunIdsInFlightRef, setRerunRunIdsInFlight, setSelectedAutomationRuns } = local
   const {
     automationHostTargetFor,
     automationDispatchContext,
@@ -32,6 +33,23 @@ export function createAutomationRunActions({
     invalidateRowHost
   } = destination
   const { automationSourceHostAvailabilityByRowKey } = sourceAvailability
+
+  const recordQueuedRun = (row: AutomationListRow, run: AutomationRun): void => {
+    const ownerKey = capturedAutomationOwnerKey(
+      capturedAutomationOwner(automationDispatchContext.capturedOwners, row.key)
+    )
+    pageRefresh.invalidateSelectedRunHistory()
+    // Make the returned attempt openable before an asynchronous history refresh settles.
+    setSelectedAutomationRuns((current) =>
+      current.rowKey === row.key && current.ownerKey === ownerKey
+        ? {
+            ...current,
+            runs: [run, ...current.runs.filter((entry) => entry.id !== run.id)],
+            notice: null
+          }
+        : current
+    )
+  }
 
   const runNow = async (row: AutomationListRow): Promise<void> => {
     const repo = repoForRow(row) ?? null
@@ -62,6 +80,7 @@ export function createAutomationRunActions({
     if (!result.ok) {
       return
     }
+    recordQueuedRun(row, result.value)
     useAppStore.getState().recordFeatureInteraction('automation-run')
     invalidateRowHost(row.key, 'run')
     await pageRefresh.hydratePersistedUIState()
@@ -80,16 +99,18 @@ export function createAutomationRunActions({
     rerunRunIdsInFlightRef.current.add(runId)
     setRerunRunIdsInFlight(new Set(rerunRunIdsInFlightRef.current))
     try {
-      const result = await dispatchAutomationRunNow(
+      const result = await dispatchAutomationRerun(
         automationDispatchContext,
         { rowKey: row.key, automationId: row.automation.id },
-        () => runAutomationNowForTarget(row.automation, automationHostTargetFor(row))
+        runId,
+        () => rerunAutomationForTarget(row.automation, runId, automationHostTargetFor(row))
       )
       reportOwnerAction(row.key, result.ok ? null : result.notice)
       if (!result.ok) {
         await pageRefresh.refresh()
         return
       }
+      recordQueuedRun(row, result.value)
       invalidateRowHost(row.key, 'run')
       await pageRefresh.hydratePersistedUIState()
       await pageRefresh.refresh()
