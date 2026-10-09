@@ -23,6 +23,7 @@ import {
   type TerminalPanePasteExecution
 } from './terminal-pane-paste-execution'
 
+/** Registers clipboard and app-menu paste listeners on a terminal pane container. */
 export function registerTerminalPanePasteListeners({
   container,
   controller,

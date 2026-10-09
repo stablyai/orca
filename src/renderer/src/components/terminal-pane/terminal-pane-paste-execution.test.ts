@@ -49,7 +49,8 @@ vi.mock('@/lib/connection-context', () => ({
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => null,
-  getRuntimeEnvironmentIdForWorktree: () => null
+  getRuntimeEnvironmentIdForWorktree: () => null,
+  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: () => null
 }))
 
 vi.mock('./terminal-paste-coordinator', async (importOriginal) => {
@@ -64,6 +65,7 @@ vi.mock('./terminal-clipboard-paste', () => ({
   pasteTerminalClipboard: vi.fn().mockResolvedValue({ status: 'pasted', kind: 'text' })
 }))
 
+/** Creates a minimal ManagedPane stub for paste execution tests. */
 function createStubPane(leafId: string): ManagedPane {
   const stub = {
     id: `pane-${leafId}`,
@@ -77,6 +79,7 @@ function createStubPane(leafId: string): ManagedPane {
   return stub as unknown as ManagedPane
 }
 
+/** Creates a minimal TerminalPaneCloseController stub for paste execution tests. */
 function createStubController(
   overrides: Partial<TerminalPaneCloseController> = {}
 ): TerminalPaneCloseController {
