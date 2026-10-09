@@ -336,15 +336,23 @@ function selectedBuildDir(selectedHost: RelocatedDaemonHost | null | undefined):
   return host ? dirname(host.execPath) : null
 }
 
+function reclaimCurrentVersionHostLeftovers(
+  versionLiveness: ReadonlyMap<string, ProcessLivenessVerdict>,
+  selectedHost?: RelocatedDaemonHost | null
+): void {
+  const version = getAppEnvironment().getVersion()
+  // A complete listing with no current-version record is positive exit evidence.
+  const verdict = versionLiveness.get(version) ?? { status: 'exited' }
+  const buildDir = verdict.status === 'exited' ? selectedBuildDir(selectedHost) : null
+  reclaimCurrentVersionDaemonHostLeftovers(join(getDaemonHostRootDir(), version), verdict, buildDir)
+}
+
 /**
  * Reclaim daemon-host/<ver> dirs that are neither the current version nor pinned by a live daemon,
  * plus current-version leftovers (see reclaimCurrentVersionDaemonHostLeftovers).
  * Best-effort — never throws; a locked/staging dir is retried on a future launch.
  */
-export function pruneOldDaemonHosts(
-  evidence: PinnedDaemonVersionsEvidence,
-  selectedHost?: RelocatedDaemonHost | null
-): void {
+export function pruneOldDaemonHosts(evidence: PinnedDaemonVersionsEvidence): void {
   if (!isPackagedElectronWin32()) {
     return
   }
@@ -365,13 +373,7 @@ export function pruneOldDaemonHosts(
       continue
     }
     if (entry.name === version) {
-      // A complete listing with no current-version record is positive evidence, as below.
-      const currentVerdict = evidence.versionLiveness.get(version) ?? { status: 'exited' }
-      reclaimCurrentVersionDaemonHostLeftovers(
-        join(root, version),
-        currentVerdict,
-        currentVerdict.status === 'exited' ? selectedBuildDir(selectedHost) : null
-      )
+      reclaimCurrentVersionHostLeftovers(evidence.versionLiveness)
       continue
     }
     // A complete runtime-dir listing with no pid record for this version proves it is unowned.
@@ -381,14 +383,17 @@ export function pruneOldDaemonHosts(
 }
 
 /**
- * Prune once the replacement preflight has retired any stale daemon and this launch has selected
- * its build, but before the new daemon's live pid record pins every same-version mirror.
+ * Reclaim current-version leftovers once preflight has retired any stale daemon and this launch has
+ * selected its build, before the new daemon's live pid record pins every same-version mirror.
+ * Superseded versions aren't pinned by it, so their deletion waits for the post-launch prune.
  */
 export function pruneDaemonHostsBeforeLaunch(
   runtimeDir: string,
   selectedHost: RelocatedDaemonHost | null
 ): void {
-  if (isPackagedElectronWin32()) {
-    pruneOldDaemonHosts(collectPinnedDaemonVersions(runtimeDir), selectedHost)
+  const evidence = isPackagedElectronWin32() ? collectPinnedDaemonVersions(runtimeDir) : null
+  // Unverifiable evidence is reported by the post-launch prune.
+  if (evidence?.status === 'complete') {
+    reclaimCurrentVersionHostLeftovers(evidence.versionLiveness, selectedHost)
   }
 }

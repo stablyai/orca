@@ -5,7 +5,11 @@ import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setAppEnvironment } from '../../shared/app-environment'
 import { buildInstallFixture } from './daemon-host-relocation.test-fixture'
-import { materializeRelocatedDaemonHost } from './daemon-host-relocation'
+import {
+  collectPinnedDaemonVersions,
+  materializeRelocatedDaemonHost,
+  pruneOldDaemonHosts
+} from './daemon-host-relocation'
 import { getDaemonPidPath } from './daemon-spawner'
 
 const harness = vi.hoisted(() => ({
@@ -198,6 +202,36 @@ describe('out-of-process launcher: same-version daemon-host reclaim', () => {
       expect(existsSync(seen.forkEntryPath ?? '')).toBe(true)
     }
   )
+
+  it('leaves an exited superseded version to the post-launch prune so it never delays the fork', async () => {
+    const oldBuild = seedSupersededLaunch()
+    // No pid record names 1.0.0, so its mirror is exited and reclaimable at any point.
+    const supersededVersion = join(dirname(dirname(oldBuild)), '1.0.0')
+    mkdirSync(supersededVersion, { recursive: true })
+    writeFileSync(join(supersededVersion, 'Orca.exe'), 'superseded')
+    harness.prepareDaemonReplacement.mockImplementation(async () => {
+      staleDaemon = 'exited'
+      return null
+    })
+    const seen = recordLaunch(oldBuild)
+    let supersededPresentAtFork: boolean | undefined
+    const fork = harness.launchDaemonChild.getMockImplementation()
+    harness.launchDaemonChild.mockImplementation(async (options) => {
+      supersededPresentAtFork = existsSync(join(supersededVersion, 'Orca.exe'))
+      return fork?.(options)
+    })
+
+    await launch()
+
+    expect(seen.oldBuildPresent).toBe(false)
+    expect(supersededPresentAtFork).toBe(true)
+    expect(existsSync(join(supersededVersion, 'Orca.exe'))).toBe(true)
+
+    pruneOldDaemonHosts(collectPinnedDaemonVersions(runtimeDir))
+
+    expect(existsSync(supersededVersion)).toBe(false)
+    expect(existsSync(seen.forkEntryPath ?? '')).toBe(true)
+  })
 
   it('reclaims nothing when preflight adopts the running daemon', async () => {
     const oldBuild = seedSupersededLaunch()
