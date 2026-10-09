@@ -204,15 +204,6 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
     )
   }
 
-  // Claude keeps its `✳` rest title under AskUserQuestion, so only the hook row shows the dialog.
-  protected isPtyAwaitingUserInput(ptyId: string): boolean {
-    const agent = this.tuiIdleEvidenceSource.getPaneAgent(ptyId)
-    return (
-      agent !== null &&
-      this.tuiIdleEvidenceSource.getHookTurn?.(ptyId, agent)?.state === 'permission'
-    )
-  }
-
   protected evaluateTuiIdleForPty(pty: RuntimePtyWorktreeRecord): TuiIdleVerdict {
     return evaluateTuiIdle(
       ptyTuiIdleEvidence(this.tuiIdleEvidenceSource, pty, () =>
