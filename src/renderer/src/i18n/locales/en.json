@@ -18699,6 +18699,11 @@
           "copied": "Tab ID copied",
           "failed": "Could not copy tab ID",
           "copy": "Copy Tab ID"
+        },
+        "CopyTabDetailsMenuItem": {
+          "copied": "Tab details copied",
+          "failed": "Could not copy tab details",
+          "copy": "Copy Tab Details"
         }
       }
     },
