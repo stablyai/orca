@@ -7,6 +7,7 @@ import {
   mapPaneTerminalErrors,
   MAX_TERMINAL_ERROR_CHARS,
   MAX_TERMINAL_ERROR_LINES,
+  REMOTE_TERMINAL_CLOSED_MARKER,
   terminalErrorForPane
 } from './terminal-error-accumulation'
 import { stripSshReconnectOwnedErrorLines } from './TerminalErrorToast'
@@ -94,6 +95,22 @@ describe('appendTerminalErrorMessage', () => {
     const huge = `${'x'.repeat(MAX_TERMINAL_ERROR_CHARS + 500)}\n${latestLine}`
 
     expect(boundTerminalErrorSurface(huge)).toBe(latestLine)
+  })
+
+  it('preserves the remote terminal closed marker when later content exceeds the budget', () => {
+    const surface = `${REMOTE_TERMINAL_CLOSED_MARKER}\n${'x'.repeat(
+      MAX_TERMINAL_ERROR_CHARS + 500
+    )}`
+
+    const bounded = boundTerminalErrorSurface(surface)
+    expect(bounded.startsWith(REMOTE_TERMINAL_CLOSED_MARKER)).toBe(true)
+    expect(bounded.length).toBeLessThanOrEqual(MAX_TERMINAL_ERROR_CHARS)
+  })
+
+  it('keeps only the marker when the line budget leaves no room for the rest', () => {
+    const surface = `${REMOTE_TERMINAL_CLOSED_MARKER}\nSSH connection failed: host unreachable`
+
+    expect(boundTerminalErrorSurface(surface, 1)).toBe(REMOTE_TERMINAL_CLOSED_MARKER)
   })
 })
 

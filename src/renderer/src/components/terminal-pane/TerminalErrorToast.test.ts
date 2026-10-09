@@ -19,6 +19,7 @@ import {
   humanizeTerminalError,
   isPaneOwnerUnverifiedError,
   isExplainedTerminalError,
+  isRemoteTerminalClosedError,
   isSshReconnectOwnedTerminalError,
   shouldOfferDaemonRestart,
   stripSshReconnectOwnedErrorLines
@@ -560,4 +561,65 @@ it('uses existing Korean recovery copy and preserves the path', async () => {
   } finally {
     await i18n.changeLanguage('en')
   }
+})
+
+describe('TerminalErrorToast teardown on dismiss (#21342)', () => {
+  it('identifies remote terminal closed error strings', () => {
+    expect(isRemoteTerminalClosedError('Remote terminal was closed.')).toBe(true)
+    expect(isRemoteTerminalClosedError('Paste failed.')).toBe(false)
+  })
+
+  it('× button dismisses but does not close pane on remote terminal closed error', () => {
+    const onDismiss = vi.fn()
+    const onClosePane = vi.fn()
+    const view = render(
+      React.createElement(TerminalErrorToast, {
+        error: 'Remote terminal was closed.',
+        onDismiss,
+        onClosePane
+      })
+    )
+
+    const dismissButton = view.getByRole('button', { name: '×' })
+    fireEvent.click(dismissButton)
+
+    expect(onDismiss).toHaveBeenCalledTimes(1)
+    expect(onClosePane).not.toHaveBeenCalled()
+  })
+
+  it('explicit Close Pane button closes pane on remote terminal closed error', () => {
+    const onDismiss = vi.fn()
+    const onClosePane = vi.fn()
+    const view = render(
+      React.createElement(TerminalErrorToast, {
+        error: 'Remote terminal was closed.',
+        onDismiss,
+        onClosePane
+      })
+    )
+
+    const closeButton = view.getByRole('button', { name: 'Close Pane' })
+    fireEvent.click(closeButton)
+
+    expect(onDismiss).not.toHaveBeenCalled()
+    expect(onClosePane).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not trigger onClosePane when dismissing other errors', () => {
+    const onDismiss = vi.fn()
+    const onClosePane = vi.fn()
+    const view = render(
+      React.createElement(TerminalErrorToast, {
+        error: 'Paste failed.',
+        onDismiss,
+        onClosePane
+      })
+    )
+
+    const dismissButton = view.getByRole('button', { name: '×' })
+    fireEvent.click(dismissButton)
+
+    expect(onDismiss).toHaveBeenCalledTimes(1)
+    expect(onClosePane).not.toHaveBeenCalled()
+  })
 })

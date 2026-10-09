@@ -2569,6 +2569,7 @@
           },
           "TerminalErrorToast": {
             "ptyAllocationLimit": "Your system cannot allocate any more pty devices. Close some terminals you are not using, in Orca or another program, then try again.",
+            "remoteTerminalClosed": "Remote terminal was closed.",
             "terminalProcessLimit": "Your system cannot start another terminal process. Close unused terminals or quit unused processes, then try again."
           },
           "TerminalSessionStateSaveFailureDialog": {
