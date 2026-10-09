@@ -160,10 +160,9 @@ export function isTerminalDriverState(
   if (!value || typeof value !== 'object' || !('kind' in value)) {
     return false
   }
-  const driver = value as { kind?: unknown; clientId?: unknown }
   return (
-    driver.kind === 'idle' ||
-    driver.kind === 'desktop' ||
-    (driver.kind === 'mobile' && typeof driver.clientId === 'string')
+    value.kind === 'idle' ||
+    value.kind === 'desktop' ||
+    (value.kind === 'mobile' && 'clientId' in value && typeof value.clientId === 'string')
   )
 }
