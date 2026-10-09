@@ -791,6 +791,7 @@ describe('RelayDispatcher', () => {
       }
     }
 
+    /** Seeded PRNG so the randomized sizing trials replay identically on every run. */
     function mulberry32(seed: number): () => number {
       let a = seed
       return () => {
@@ -802,7 +803,7 @@ describe('RelayDispatcher', () => {
     }
 
     // Multi-byte UTF-8, astral pairs, lone surrogates, controls, quotes, and backslashes.
-    const alphabet = 'aZ9 "\\\n\r\t éß€中𝄞😀𐀀�'
+    const alphabet = 'aZ9 "\\\n\r\t\u0000éß€中𝄞😀𐀀�'
 
     it('matches the pre-optimization sizing loop across randomized inputs', () => {
       const random = mulberry32(0xc0ffee)

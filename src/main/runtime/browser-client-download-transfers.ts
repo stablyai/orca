@@ -329,6 +329,7 @@ function isDestinationExistsError(error: unknown): boolean {
   )
 }
 
+/** NUL-joined so no page id or transfer id can collide with another pair. */
 function sessionKey(browserPageId: string, transferId: string): string {
-  return `${browserPageId} ${transferId}`
+  return `${browserPageId}\u0000${transferId}`
 }
