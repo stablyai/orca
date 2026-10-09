@@ -66,7 +66,8 @@ async function loadManagedServerCatalogs(targetId: string, environmentId: string
   const store = useAppStore.getState()
   try {
     // Why: host badges read server names from this catalog, which a conversion does not refresh.
-    store.setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
+    const { environments } = await window.api.runtimeEnvironments.list()
+    store.setRuntimeEnvironments(environments)
     void store.refreshRuntimeEnvironmentStatus(environmentId)
   } catch (error) {
     console.warn('[ssh] Could not refresh the managed server list:', error)

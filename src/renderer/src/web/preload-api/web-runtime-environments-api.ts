@@ -9,8 +9,7 @@ import { WebRuntimeClient } from '../web-runtime-client'
 import { isWebRuntimeUnauthorizedError } from '../web-runtime-client-error'
 import {
   createStoredWebRuntimeEnvironment,
-  redactStoredWebRuntimeEnvironment,
-  saveStoredWebRuntimeEnvironment
+  redactStoredWebRuntimeEnvironment
 } from '../web-runtime-environment'
 import { translate } from '@/i18n/i18n'
 import { translateHostAccessLinkError } from '@/lib/remote-pairing-copy'
@@ -22,10 +21,13 @@ import {
   observeWebRuntimeStatus,
   disconnectActiveRuntimeEnvironment,
   getClientForEnvironment,
+  getStoredRuntimeEnvironmentById,
+  listStoredRuntimeEnvironments,
   manuallyDisconnectedEnvironmentIds,
-  removeActiveRuntimeEnvironment,
-  requireActiveEnvironmentOrNull,
+  removeStoredRuntimeEnvironment,
   resolveEnvironment,
+  setActiveRuntimeEnvironment,
+  upsertStoredRuntimeEnvironment,
   webRuntimeState
 } from './web-runtime-session'
 
@@ -35,25 +37,23 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
   return {
     onStatusChanged: subscribeWebRuntimeStatus,
     getStatusSnapshots: async () => readWebRuntimeStatusSnapshots(),
-    list: async () => {
-      const environment = requireActiveEnvironmentOrNull()
-      return environment ? [redactStoredWebRuntimeEnvironment(environment)] : []
-    },
+    list: async () => ({
+      environments: listStoredRuntimeEnvironments().map(redactStoredWebRuntimeEnvironment),
+      activeEnvironmentId: webRuntimeState.activeEnvironment?.id ?? null
+    }),
     addFromPairingCode: async ({ name, pairingCode }) => {
       const offer = parseWebPairingInput(pairingCode)
       if (!offer) {
         throw new Error('Invalid Orca pairing code.')
       }
-      const previousEnvironment = webRuntimeState.activeEnvironment
-      closeActiveRuntimeClients()
-      webRuntimeState.activeEnvironment = createStoredWebRuntimeEnvironment({
+      const nextEnvironment = createStoredWebRuntimeEnvironment({
         name,
         offer,
-        previousEnvironment
+        previousEnvironment: webRuntimeState.activeEnvironment
       })
-      manuallyDisconnectedEnvironmentIds.clear()
-      saveStoredWebRuntimeEnvironment(webRuntimeState.activeEnvironment)
-      return { environment: redactStoredWebRuntimeEnvironment(webRuntimeState.activeEnvironment) }
+      upsertStoredRuntimeEnvironment(nextEnvironment)
+      setActiveRuntimeEnvironment(nextEnvironment.id)
+      return { environment: redactStoredWebRuntimeEnvironment(nextEnvironment) }
     },
     verifyAndAddFromPairingCode: async ({ name, pairingCode, allowLoopback }) => {
       const parsed = parseHostAccessLink(pairingCode)
@@ -138,7 +138,8 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
       }
       // Why: a browser storage failure must leave the currently active host usable.
       try {
-        saveStoredWebRuntimeEnvironment(nextEnvironment)
+        upsertStoredRuntimeEnvironment(nextEnvironment)
+        setActiveRuntimeEnvironment(nextEnvironment.id)
       } catch {
         return {
           ok: false,
@@ -149,9 +150,6 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
           )
         }
       }
-      manuallyDisconnectedEnvironmentIds.clear()
-      closeActiveRuntimeClients()
-      webRuntimeState.activeEnvironment = nextEnvironment
       getClientForEnvironment(nextEnvironment).statusOwner?.acceptVerified({
         id: 'status.get',
         ok: true,
@@ -166,18 +164,41 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
     },
     resolve: async ({ selector }) =>
       redactStoredWebRuntimeEnvironment(resolveEnvironment(selector)),
-    remove: async ({ selector }) => {
-      const environment = resolveEnvironment(selector)
-      if (webRuntimeState.activeEnvironment?.id === environment.id) {
-        removeActiveRuntimeEnvironment()
+    setActive: async ({ id }) => {
+      const environment = getStoredRuntimeEnvironmentById(id)
+      if (!environment) {
+        throw new Error(`Unknown Orca runtime environment: ${id}`)
       }
+      return { environment: redactStoredWebRuntimeEnvironment(setActiveRuntimeEnvironment(id)) }
+    },
+    remove: async ({ selector }) => {
+      // Why: active-first resolution, with a stored-env fallback so non-active hosts stay removable.
+      let environment
+      try {
+        environment = resolveEnvironment(selector)
+      } catch {
+        environment = getStoredRuntimeEnvironmentById(selector)
+      }
+      if (!environment) {
+        throw new Error(`Unknown Orca runtime environment: ${selector}`)
+      }
+      removeStoredRuntimeEnvironment(environment.id)
       manuallyDisconnectedEnvironmentIds.delete(environment.id)
       return { removed: redactStoredWebRuntimeEnvironment(environment) }
     },
     disconnect: async ({ selector }) => {
-      const environment = resolveEnvironment(selector)
+      let environment
+      try {
+        environment = resolveEnvironment(selector)
+      } catch {
+        // Why: per-env disconnect must work for non-active hosts too.
+        environment = getStoredRuntimeEnvironmentById(selector)
+      }
+      if (!environment) {
+        throw new Error(`Unknown Orca runtime environment: ${selector}`)
+      }
+      manuallyDisconnectedEnvironmentIds.add(environment.id)
       if (webRuntimeState.activeEnvironment?.id === environment.id) {
-        manuallyDisconnectedEnvironmentIds.add(environment.id)
         disconnectActiveRuntimeEnvironment()
       }
       return { disconnected: redactStoredWebRuntimeEnvironment(environment) }

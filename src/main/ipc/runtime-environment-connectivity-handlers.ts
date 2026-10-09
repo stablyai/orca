@@ -67,8 +67,18 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
   )
   ipcMain.handle('runtimeEnvironments:list', () => {
     const environments = listEnvironments(getUserDataPath())
-    readSettingsWithRuntimeEnvironmentPreference(store, getUserDataPath())
-    return environments.map(publicRuntimeEnvironmentWithHostKey)
+    const settings = readSettingsWithRuntimeEnvironmentPreference(store, getUserDataPath())
+    return {
+      environments: environments.map(publicRuntimeEnvironmentWithHostKey),
+      // single source of truth: the persisted Active Server preference in settings
+      activeEnvironmentId: settings.activeRuntimeEnvironmentId ?? null
+    }
+  })
+  ipcMain.handle('runtimeEnvironments:setActive', (_event, args: { id: string }) => {
+    // resolve validates the selector and throws on unknown environments
+    const environment = resolveEnvironment(getUserDataPath(), args.id)
+    store.updateSettings({ activeRuntimeEnvironmentId: environment.id }, { notifyListeners: true })
+    return { environment: publicRuntimeEnvironmentWithHostKey(environment) }
   })
   ipcMain.handle(
     'runtimeEnvironments:addFromPairingCode',

@@ -97,7 +97,8 @@ export function RuntimeEnvironmentsPane({
     setSwitchError,
     connectEnvironment,
     disconnectEnvironment,
-    switchToValue
+    switchToValue,
+    activateEnvironment
   } = useRuntimeEnvironmentConnectionActions({
     allowLocalRuntime,
     mountedRef,
@@ -232,6 +233,7 @@ export function RuntimeEnvironmentsPane({
         onOpenUpdateDialog={() => setRemoteServerUpdateDialogOpen(true)}
         refreshRemoteServerUpdates={refreshRemoteServerUpdates}
         onConnect={(environment) => void connectEnvironment(environment)}
+        onActivate={(environment) => void activateEnvironment(environment)}
         onDisconnect={(environment) => void disconnectEnvironment(environment)}
         onRemove={openRemoveDialog}
       />

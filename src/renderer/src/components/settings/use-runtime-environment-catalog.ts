@@ -45,7 +45,7 @@ export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
         setIsLoading(true)
       }
       try {
-        const nextEnvironments = await window.api.runtimeEnvironments.list()
+        const { environments: nextEnvironments } = await window.api.runtimeEnvironments.list()
         const visibleEnvironments = nextEnvironments.filter(isUserManagedRuntimeEnvironment)
         // Why: drop store status for servers no longer saved so stale hosts don't
         // linger in the sidebar registry.

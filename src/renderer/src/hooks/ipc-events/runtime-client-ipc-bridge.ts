@@ -166,7 +166,8 @@ export function registerRuntimeClientIpcBridge(
   }
 
   setRuntimeEnvironmentCatalogRefresher(async () => {
-    useAppStore.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
+    const { environments } = await window.api.runtimeEnvironments.list()
+    useAppStore.getState().setRuntimeEnvironments(environments)
   })
   unsubs.push(() => setRuntimeEnvironmentCatalogRefresher(null))
   const runtimeClientEventsSync = createRuntimeClientEventsSync({

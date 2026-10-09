@@ -319,7 +319,7 @@ describe('web settings preload API', () => {
     )
     const { installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
-    const environment = (await globals.window.api.runtimeEnvironments.list())[0]!
+    const environment = (await globals.window.api.runtimeEnvironments.list()).environments[0]!
     const read = globals.window.api.settings.get()
 
     await globals.window.api.runtimeEnvironments.remove({ selector: environment.id })

@@ -84,7 +84,10 @@ describe('remote server updates mixed inventory', () => {
       api: {
         updater: { getVersion: vi.fn(async () => '1.5.0') },
         runtimeEnvironments: {
-          list: vi.fn(async () => environments),
+          list: vi.fn(async () => ({
+            environments,
+            activeEnvironmentId: environments[0]?.id ?? null
+          })),
           getStatus,
           call
         }

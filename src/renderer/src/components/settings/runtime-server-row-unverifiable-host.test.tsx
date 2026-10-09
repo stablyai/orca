@@ -76,6 +76,7 @@ function renderRow(): void {
       removing={false}
       isBusy={false}
       onOpenUpdate={vi.fn()}
+      onActivate={vi.fn()}
       onDisconnect={vi.fn()}
       onConnect={vi.fn()}
       onRemove={vi.fn()}

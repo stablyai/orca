@@ -27,8 +27,12 @@ export const runtimeEnvironmentsApi = {
     ipcRenderer.on(RUNTIME_HOST_STATUS_CHANNEL, listener)
     return () => ipcRenderer.removeListener(RUNTIME_HOST_STATUS_CHANNEL, listener)
   },
-  list: (): Promise<PublicKnownRuntimeEnvironment[]> =>
-    ipcRenderer.invoke('runtimeEnvironments:list'),
+  list: (): Promise<{
+    environments: PublicKnownRuntimeEnvironment[]
+    activeEnvironmentId: string | null
+  }> => ipcRenderer.invoke('runtimeEnvironments:list'),
+  setActive: (args: { id: string }): Promise<{ environment: PublicKnownRuntimeEnvironment }> =>
+    ipcRenderer.invoke('runtimeEnvironments:setActive', args),
   addFromPairingCode: (args: {
     name: string
     pairingCode: string
