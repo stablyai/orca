@@ -20,6 +20,12 @@ import {
   shouldApplyRecoveredWebSessionTabsSnapshot
 } from './web-session-tabs-sync/tracking'
 import { recoverWebSessionTerminalOrphansBeforeApply } from './web-session-terminal-orphan-recovery'
+import type { WorktreeSelectionOwner } from '../../../shared/worktree-selection-owner'
+import { worktreeSelectionOwnerKey } from '@/lib/worktree-selection-owner'
+import {
+  admitsWebRuntimeSessionWorktreeSnapshot,
+  isCurrentWebRuntimeSessionWorktreeOwner
+} from './web-runtime-session-worktree-owner'
 
 const pendingRuntimeWorktreeRecoveryRefreshes = new Map<string, symbol>()
 const RUNTIME_WORKTREE_RECOVERY_REFRESH_DELAYS_MS = [250, 500, 1_000, 2_000, 4_000] as const
@@ -37,9 +43,27 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     }
     afterCurrentInFlight?: boolean
     errorMode?: 'warn' | 'throw'
+    owner?: WorktreeSelectionOwner
   } = {}
 ): Promise<void> {
   const webSessionTabsSync = await import('./web-session-tabs-sync')
+  if (
+    options.owner &&
+    (!options.owner.instanceId ||
+      !isCurrentWebRuntimeSessionWorktreeOwner(
+        useAppStore.getState(),
+        environmentId,
+        options.owner
+      ))
+  ) {
+    return
+  }
+  const worktreeSelector = toRuntimeWorktreeSelector(
+    worktreeId,
+    options.owner?.instanceId
+      ? { executionHostId: options.owner.executionHostId, instanceId: options.owner.instanceId }
+      : undefined
+  )
   const expectedEnvironmentPairingRevision =
     options.expectedEnvironmentPairingRevision ?? getRuntimeEnvironmentRevision(environmentId)
   const expectedEnvironmentConnectionGeneration =
@@ -51,12 +75,6 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     expectedEnvironmentPairingRevision
   )
   try {
-    if (options.acceptCurrentSnapshot) {
-      const { acceptReplayedWebSessionTabsSnapshot } = await import('./web-session-tabs-sync')
-      // Why: the host snapshot may have arrived before structured create returned;
-      // re-accept its current version after the exact provisional handoff is known.
-      acceptReplayedWebSessionTabsSnapshot(environmentId, worktreeId)
-    }
     const listSessionTabs =
       options.confirmAgentSessionHandoff || options.afterCurrentInFlight
         ? listRemoteRuntimeSessionTabsAfterCurrentInFlight
@@ -67,11 +85,12 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     const { snapshot, receivedFrame, runtimeId } = await listSessionTabs({
       environmentId,
       worktreeId,
+      worktreeSelector,
       load: async () => {
         const response = await callEnvironment({
           method: 'session.tabs.list',
           params: {
-            worktree: toRuntimeWorktreeSelector(worktreeId)
+            worktree: worktreeSelector
           },
           timeoutMs: 15_000
         })
@@ -83,6 +102,24 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
         }
       }
     })
+    if (
+      !admitsWebRuntimeSessionWorktreeSnapshot(
+        useAppStore.getState(),
+        environmentId,
+        snapshot,
+        options.owner
+      )
+    ) {
+      if (options.errorMode === 'throw') {
+        throw new Error('selector_not_found')
+      }
+      return
+    }
+    if (options.acceptCurrentSnapshot) {
+      const { acceptReplayedWebSessionTabsSnapshot } = await import('./web-session-tabs-sync')
+      // Why: re-accept a host answer only after its exact owner is admitted.
+      acceptReplayedWebSessionTabsSnapshot(environmentId, worktreeId)
+    }
     if (options.confirmAgentSessionHandoff) {
       const { confirmWebAgentSessionHandoffAfterCreate } =
         await import('./web-agent-session-handoff')
@@ -122,6 +159,12 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     )
     if (
       !recovered ||
+      !admitsWebRuntimeSessionWorktreeSnapshot(
+        useAppStore.getState(),
+        environmentId,
+        recovered,
+        options.owner
+      ) ||
       getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision
     ) {
       return
@@ -139,6 +182,11 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       : WEB_SESSION_TABS_FRAME_OUTRANKED
     const settleMirror = applyWebSessionTabsStorePatch(
       (state) => {
+        if (
+          !admitsWebRuntimeSessionWorktreeSnapshot(state, environmentId, recovered, options.owner)
+        ) {
+          return state
+        }
         // Why: eager refreshes can resolve after the user switched worktrees; update tabs without stealing focus.
         const patch = decision.apply
           ? applyWebSessionTabsSnapshot(state, recovered, environmentId)
@@ -175,7 +223,8 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
 export function scheduleRuntimeWorktreeRecoveryRefresh(
   environmentId: string,
   worktreeId: string,
-  expectedEnvironmentPairingRevision = getRuntimeEnvironmentRevision(environmentId)
+  expectedEnvironmentPairingRevision = getRuntimeEnvironmentRevision(environmentId),
+  owner?: WorktreeSelectionOwner
 ): void {
   const initialState = useAppStore.getState()
   if (!('tabsByWorktree' in initialState)) {
@@ -184,7 +233,7 @@ export function scheduleRuntimeWorktreeRecoveryRefresh(
   if ((initialState.tabsByWorktree[worktreeId] ?? []).length > 0) {
     return
   }
-  const key = `${environmentId}\0${expectedEnvironmentPairingRevision ?? ''}\0${worktreeId}`
+  const key = `${environmentId}\0${expectedEnvironmentPairingRevision ?? ''}\0${worktreeId}\0${worktreeSelectionOwnerKey(owner)}`
   const token = Symbol(key)
   pendingRuntimeWorktreeRecoveryRefreshes.set(key, token)
   void (async () => {
@@ -197,8 +246,15 @@ export function scheduleRuntimeWorktreeRecoveryRefresh(
         if (getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision) {
           return
         }
+        if (
+          owner &&
+          !isCurrentWebRuntimeSessionWorktreeOwner(useAppStore.getState(), environmentId, owner)
+        ) {
+          return
+        }
         await refreshWebRuntimeSessionTabsSnapshot(environmentId, worktreeId, {
-          expectedEnvironmentPairingRevision
+          expectedEnvironmentPairingRevision,
+          ...(owner ? { owner } : {})
         })
         if ((useAppStore.getState().tabsByWorktree[worktreeId] ?? []).length > 0) {
           return

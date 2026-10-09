@@ -30,6 +30,7 @@ export function useWebSessionTabsSync(): void {
   >(() => {})
 
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
+  const activeWorkspaceOwner = useAppStore((state) => state.activeWorkspaceOwner)
   const workspaceSessionReady = useAppStore((state) => state.workspaceSessionReady)
   const { environmentKey: runtimeSessionMirrorEnvironmentKey, resubscribeSignal } =
     useRuntimeSessionMirrorEnvironmentKeys()
@@ -113,6 +114,7 @@ export function useWebSessionTabsSync(): void {
       activeWorktreeRuntimeEnvironmentId,
       activeWorktreeRuntimeConnectionGeneration,
       activeWorktreeRuntimePairingRevision,
+      activeWorkspaceOwner,
       workspaceSessionReady,
       visibilitySnapshotReceipt: visibilitySnapshotReceiptRef,
       visibilitySnapshotApply: visibilitySnapshotApplyRef,
@@ -124,6 +126,7 @@ export function useWebSessionTabsSync(): void {
     activeWorktreeRuntimeConnectionGeneration,
     activeWorktreeRuntimeHostContactEpoch,
     activeWorktreeRuntimePairingRevision,
+    activeWorkspaceOwner,
     activeWorktreeRuntimeId,
     workspaceSessionReady
   ])

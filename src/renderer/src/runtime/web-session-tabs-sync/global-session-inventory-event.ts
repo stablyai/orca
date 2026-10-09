@@ -1,3 +1,4 @@
+import { admitsWebRuntimeSessionWorktreeSnapshot } from '../web-runtime-session-worktree-owner'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { recheckUnconfirmedStructuredAgentLaunches } from '../../lib/structured-agent-session-launch-unconfirmed-recheck'
@@ -51,6 +52,12 @@ export function handleGlobalSessionInventoryEvent({
   awaitingVisibilityResumeInventory,
   coordinator
 }: GlobalSessionInventoryEventArgs): void {
+  const admitted = event.snapshots.filter((snapshot) =>
+    admitsWebRuntimeSessionWorktreeSnapshot(useAppStore.getState(), environmentId, snapshot)
+  )
+  if (admitted.length !== event.snapshots.length) {
+    event = { ...event, snapshots: admitted, authoritative: false }
+  }
   const skipUnchangedResumeWork = awaitingVisibilityResumeInventory.value && !replayed
   awaitingVisibilityResumeInventory.value = false
   const unchanged = event.snapshots.map((snapshot) => {
@@ -125,7 +132,7 @@ export function handleGlobalSessionInventoryEvent({
       const decisions = applicable.map(({ index, snapshot }) =>
         unchanged[index]
           ? WEB_SESSION_TABS_FRAME_OUTRANKED
-          : decideWebSessionTabsSnapshot(snapshot, environmentId, runtimeId)
+          : decideWebSessionTabsSnapshot(snapshot, environmentId, runtimeId, useAppStore.getState())
       )
       const freshSnapshots = applicable.flatMap(({ snapshot }, index) =>
         decisions[index]!.apply ? [snapshot] : []

@@ -69,7 +69,7 @@ export function applyFreshWebSessionTabsSnapshot(
   environmentId: string,
   now = Date.now()
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
-  return shouldApplyWebSessionTabsSnapshot(snapshot, environmentId)
+  return shouldApplyWebSessionTabsSnapshot(snapshot, environmentId, undefined, state)
     ? applyWebSessionTabsSnapshot(state, snapshot, environmentId, now)
     : state
 }
@@ -81,7 +81,7 @@ export function applyFreshWebSessionTabsSnapshots(
   now = Date.now()
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
   const fresh = snapshots.filter((snapshot) =>
-    shouldApplyWebSessionTabsSnapshot(snapshot, environmentId)
+    shouldApplyWebSessionTabsSnapshot(snapshot, environmentId, undefined, state)
   )
   return fresh.length === 0 ? state : applyWebSessionTabsSnapshots(state, fresh, environmentId, now)
 }

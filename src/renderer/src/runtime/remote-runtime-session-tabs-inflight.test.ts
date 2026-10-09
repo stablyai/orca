@@ -17,6 +17,32 @@ const SNAPSHOT = {
 } satisfies RuntimeMobileSessionTabsResult
 
 describe('remote runtime session-tabs in-flight requests', () => {
+  it('joins same-owner panes and separates exact raw owners at the same locator', async () => {
+    let resolveA: (answer: { snapshot: RuntimeMobileSessionTabsResult }) => void = () => {}
+    const loadA = vi.fn(
+      () =>
+        new Promise<{ snapshot: RuntimeMobileSessionTabsResult }>((resolve) => {
+          resolveA = resolve
+        })
+    )
+    const loadB = vi.fn(async () => ({ snapshot: { ...SNAPSHOT, activeTabId: 'tab-b' } }))
+    const base = { environmentId: 'env-owner', worktreeId: 'wt-1' }
+    const a = { ...base, worktreeSelector: 'identity:owner-a', load: loadA }
+    const first = listRemoteRuntimeSessionTabsDeduped(a)
+    const samePane = listRemoteRuntimeSessionTabsDeduped(a)
+    const b = listRemoteRuntimeSessionTabsDeduped({
+      ...base,
+      worktreeSelector: 'identity:owner-b',
+      load: loadB
+    })
+    expect(loadA).toHaveBeenCalledOnce()
+    expect(loadB).toHaveBeenCalledOnce()
+    resolveA({ snapshot: SNAPSHOT })
+    const answers = await Promise.all([first, samePane, b])
+    expect(answers[0]).toBe(answers[1])
+    expect(answers[2].snapshot.activeTabId).toBe('tab-b')
+    expect(getRemoteRuntimeSessionTabsInFlightCountForTests()).toBe(0)
+  })
   it('shares one request within an environment/worktree and evicts it after settlement', async () => {
     let resolveLoad: (answer: { snapshot: RuntimeMobileSessionTabsResult }) => void = () => {}
     const load = vi.fn(

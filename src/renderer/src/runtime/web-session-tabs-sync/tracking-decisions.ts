@@ -3,7 +3,8 @@ import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-
 import {
   latestSessionTabsSnapshotByWorktree,
   replayableSessionTabsSnapshotByWorktree,
-  type SessionTabsStreamEvent
+  type SessionTabsStreamEvent,
+  type WebSessionTabsSyncState
 } from './state'
 import {
   acceptSessionTabsRuntimeId,
@@ -22,6 +23,7 @@ import { clearWebSessionTabsTrackingForWorktree } from './tracking-lifecycle'
 import { queueAcceptedWebSessionTerminalSnapshot } from '../web-session-terminal-handle-events'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
+import { admitsWebRuntimeSessionWorktreeSnapshot } from '../web-runtime-session-worktree-owner'
 
 /** A frame's fate, paired with whether that fate is host evidence for the worktree. */
 export type WebSessionTabsSnapshotDecision = {
@@ -49,16 +51,21 @@ function isHostMirroredWorktree(worktreeId: string): boolean {
 export function shouldApplyWebSessionTabsSnapshot(
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string,
-  runtimeId?: string
+  runtimeId?: string,
+  state?: WebSessionTabsSyncState
 ): boolean {
-  return decideWebSessionTabsSnapshot(snapshot, environmentId, runtimeId).apply
+  return decideWebSessionTabsSnapshot(snapshot, environmentId, runtimeId, state).apply
 }
 
 export function decideWebSessionTabsSnapshot(
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string,
-  runtimeId?: string
+  runtimeId?: string,
+  state?: WebSessionTabsSyncState
 ): WebSessionTabsSnapshotDecision {
+  if (state && !admitsWebRuntimeSessionWorktreeSnapshot(state, environmentId, snapshot)) {
+    return WEB_SESSION_TABS_FRAME_UNMIRRORED
+  }
   if (runtimeId && !acceptSessionTabsRuntimeId(environmentId, runtimeId)) {
     return WEB_SESSION_TABS_FRAME_OUTRANKED
   }

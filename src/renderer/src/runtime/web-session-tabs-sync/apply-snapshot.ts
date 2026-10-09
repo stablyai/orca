@@ -15,6 +15,7 @@ import { applyBrowserRecordUpdates } from './apply-browser-records'
 import { applyWorktreeRecordUpdates } from './apply-worktree-records'
 import { applyActiveStateUpdates } from './apply-active-state'
 import { buildWebSessionTabsFinalPatch } from './apply-final-patch'
+import { admitsWebRuntimeSessionWorktreeSnapshot } from '../web-runtime-session-worktree-owner'
 
 /** Reconcile one host frame through the staged terminal/browser/layout pipeline. */
 export function applyWebSessionTabsSnapshotWithContext(
@@ -26,6 +27,7 @@ export function applyWebSessionTabsSnapshotWithContext(
   options?: WebSessionTabsSnapshotApplyOptions
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
   if (
+    !admitsWebRuntimeSessionWorktreeSnapshot(state, environmentId, rawSnapshot) ||
     suppressE2eWebRuntimeBrowserSnapshot(rawSnapshot) ||
     rawSnapshot.worktree === FLOATING_TERMINAL_WORKTREE_ID
   ) {

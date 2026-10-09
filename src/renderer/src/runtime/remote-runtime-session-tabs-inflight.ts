@@ -19,11 +19,16 @@ const inFlightBySession = new Map<string, Promise<RemoteRuntimeSessionTabsAnswer
 type RemoteRuntimeSessionTabsLoad = {
   environmentId: string
   worktreeId: string
+  worktreeSelector?: string
   load: () => Promise<{ snapshot: RuntimeMobileSessionTabsResult; runtimeId?: string }>
 }
 
-function remoteRuntimeSessionTabsKey(args: { environmentId: string; worktreeId: string }): string {
-  return `${args.environmentId}\u0000${args.worktreeId}`
+function remoteRuntimeSessionTabsKey(args: {
+  environmentId: string
+  worktreeId: string
+  worktreeSelector?: string
+}): string {
+  return `${args.environmentId}\u0000${args.worktreeId}\u0000${args.worktreeSelector ?? ''}`
 }
 
 export function listRemoteRuntimeSessionTabsDeduped(
