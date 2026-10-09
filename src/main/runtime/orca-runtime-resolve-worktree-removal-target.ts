@@ -35,6 +35,7 @@ import { retryFailedRemovalUnlessRegistered } from '../worktree-removal-table'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import { resolveQoderTerminalCommandForWorkspace } from './qoder-terminal-command-resolution'
 import { buildRuntimeAgentTerminalStartupOptions } from './runtime-agent-terminal-startup'
+import { resolveRuntimeWorkspaceSessionOwner } from './runtime-workspace-session-owner'
 
 export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWithRemoveManagedWorktree {
   protected async resolveWorktreeRemovalTarget(
@@ -143,6 +144,12 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
     )
     const acceptedRendererSnapshot = this.acceptedRendererMobileSnapshotByWorktree.get(worktreeId)
     const storedSnapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    const capturedOwner =
+      storedSnapshot?.worktreeIdentity ?? acceptedRendererSnapshot?.worktreeIdentity
+    const removedOwner =
+      capturedOwner && (!hostId || capturedOwner.executionHostId === hostId)
+        ? (resolveRuntimeWorkspaceSessionOwner(store, worktreeId, capturedOwner) ?? undefined)
+        : undefined
     if (hostId) {
       store.removeWorktreeMeta(worktreeId, hostId)
     } else {
@@ -172,7 +179,7 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
       this.mobileSessionTabsAgentStatusHeartbeat.removeWorktree(worktreeId)
       this.acceptedRendererMobileSnapshotByWorktree.delete(worktreeId)
       this.cancelScheduledMobileSessionTabsChanged(worktreeId)
-      this.notifyMobileSessionTabsRemoved(worktreeId)
+      this.notifyMobileSessionTabsRemoved(worktreeId, removedOwner)
       advertisedUrlWatcher.forgetWorktree(worktreeId)
       deleteWorktreeHistoryDir(worktreeId)
       this.closeHeadlessBrowserPagesForWorktree(worktreeId)

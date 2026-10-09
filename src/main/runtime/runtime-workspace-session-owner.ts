@@ -1,4 +1,9 @@
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../shared/execution-host'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import {
@@ -9,6 +14,22 @@ import {
 import { readWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
 import type { RuntimeStore } from './runtime-store-contract'
 import { resolveWorktreeLaunchHost } from './worktree-launch-host-repo'
+
+export function readRuntimeWorkspaceSessionOwnerMetadata(
+  store: RuntimeStore,
+  worktreeId: string,
+  hostId: ExecutionHostId
+): WorktreeMeta | undefined {
+  const qualified = readWorktreeMetaForHost(store, worktreeId, hostId)
+  if (qualified) {
+    return qualified
+  }
+  const repoId = splitWorktreeIdForFilesystem(worktreeId)?.repoId
+  const candidates = (store.getRepos?.() ?? []).filter((repo) => repo.id === repoId)
+  return candidates.length === 1 && getRepoExecutionHostId(candidates[0]!) === hostId
+    ? store.getWorktreeMeta?.(worktreeId)
+    : undefined
+}
 
 /** Null refuses a known owner; undefined retains an unqualified legacy scope. */
 export function resolveRuntimeWorkspaceSessionOwner(
@@ -39,9 +60,7 @@ export function resolveRuntimeWorkspaceSessionOwner(
   if (repos.filter((candidate) => getRepoExecutionHostId(candidate) === hostId).length !== 1) {
     return null
   }
-  const meta =
-    readWorktreeMetaForHost(store, worktreeId, hostId) ??
-    (repos.length === 1 ? store.getWorktreeMeta?.(worktreeId) : undefined)
+  const meta = readRuntimeWorkspaceSessionOwnerMetadata(store, worktreeId, hostId)
   const instanceId = requested?.instanceId ?? meta?.instanceId
   if (!instanceId) {
     return requested ? null : undefined

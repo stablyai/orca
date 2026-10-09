@@ -9,6 +9,7 @@ import { getMobileSessionSnapshotTabIdentityKeys } from './mobile-session-tab-me
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import { sameRuntimeBrowserPlacement } from '../../shared/runtime-browser-placement'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
+import type { WorktreeIdentity } from '../../shared/worktree/identity'
 
 export class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab extends OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs {
   // Why: the accepted-revision no-op gate must not fossilize preserved runtime
@@ -91,7 +92,11 @@ export class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab extends Orc
     return (
       this.isHeadlessBuiltMobileSessionPublicationBase(snapshot.publicationEpoch) ||
       this.hasLiveRuntimeSessionOwnedPtyBinding(snapshot.worktree, tab) ||
-      this.hasLiveOrPersistedServeOrSshOwnedPtyBinding(snapshot.worktree, tab)
+      this.hasLiveOrPersistedServeOrSshOwnedPtyBinding(
+        snapshot.worktree,
+        tab,
+        snapshot.worktreeIdentity
+      )
     )
   }
 
@@ -129,9 +134,10 @@ export class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab extends Orc
     return this.clientHostedBrowserRows.deliverHydrationSnapshot()
   }
 
-  protected notifyMobileSessionTabsRemoved(worktreeId: string): void {
+  protected notifyMobileSessionTabsRemoved(worktreeId: string, owner?: WorktreeIdentity): void {
     const removed: RuntimeMobileSessionTabsRemovedResult = {
       worktree: worktreeId,
+      ...(owner ? { worktreeIdentity: owner } : {}),
       publicationEpoch: `removed:${Date.now().toString(36)}`,
       snapshotVersion: 0,
       removed: true,

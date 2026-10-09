@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, vi } from 'vitest'
 import { Store } from '../persistence'
+import type * as TerminalHistoryDeletion from '../terminal-history-deletion'
 import { createSqliteTestStore, closeTestStores } from '../persistence-test-harness'
 import { makeTerminalTab } from '../persistence-session-fixtures'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
@@ -23,6 +24,10 @@ vi.mock('electron', () => ({
   webContents: { fromId: () => null },
   ipcMain: { on: vi.fn(), removeListener: vi.fn() }
 }))
+vi.mock('../terminal-history-deletion', async (importOriginal) => ({
+  ...(await importOriginal<typeof TerminalHistoryDeletion>()),
+  deleteWorktreeHistoryDir: vi.fn()
+}))
 
 export const SESSION_OWNER_WORKTREE_ID = 'repo-session-owner::/repo/checkout'
 const directories: string[] = []
@@ -34,6 +39,17 @@ class SessionOwnerRuntime extends OrcaRuntimeService {
 
   sync(snapshots: RuntimeMobileSessionTabsSnapshot[]) {
     return this.syncMobileSessionTabs(snapshots)
+  }
+
+  retire(raw: string) {
+    if (!this.store) {
+      throw new Error('Missing fixture store')
+    }
+    this.removeWorktreeMetadataAndHistory(
+      this.store,
+      SESSION_OWNER_WORKTREE_ID,
+      `ssh:session-${raw}`
+    )
   }
 
   current() {
@@ -51,6 +67,20 @@ class SessionOwnerRuntime extends OrcaRuntimeService {
       leafId: randomUUID()
     })
     this.setPairedRendererSessionOwnership(ptyId, true)
+  }
+
+  registerOwnedLocalPane(ptyId: string, tabId: string, leafId: string) {
+    this.registerPty(ptyId, SESSION_OWNER_WORKTREE_ID, null, { tabId, leafId })
+    const record = this.ptysById.get(ptyId)
+    if (!record) {
+      throw new Error('Missing registered local pane')
+    }
+    record.runtimeSessionOwned = true
+    this.setPairedRendererSessionOwnership(ptyId, true)
+  }
+
+  isRuntimeSessionOwned(ptyId: string) {
+    return this.ptysById.get(ptyId)?.runtimeSessionOwned === true
   }
 
   notify() {

@@ -112,7 +112,10 @@ export class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs extends Orca
     ) {
       return
     }
-    const session = this.getWorkspaceSessionForWorktree(existing.worktree)
+    const session = this.getWorkspaceSessionForWorktree(
+      existing.worktree,
+      existing.worktreeIdentity
+    )
     const persistedTabs = session?.tabsByWorktree?.[existing.worktree]
     if (!session || !persistedTabs) {
       return

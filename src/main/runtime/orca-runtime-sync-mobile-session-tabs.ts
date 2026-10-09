@@ -6,6 +6,7 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import { getMobileSessionSnapshotTabIdentityKeys } from './mobile-session-tab-merge'
 import {
   admitRuntimeWorkspaceSessionSnapshot,
+  readRuntimeWorkspaceSessionOwnerMetadata,
   resolveRuntimeWorkspaceSessionOwner,
   runtimeSessionSnapshotsShareOwner
 } from './runtime-workspace-session-owner'
@@ -36,6 +37,10 @@ export class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWithWriteOr
       )
       if (!snapshot) {
         blockedRecreatedWorktreeIds.add(incoming.worktree)
+        const fence = this.removedMobileSessionWorktreeIds.get(incoming.worktree)
+        if (fence) {
+          fence.rejectedPublication = true
+        }
         return []
       }
       const fence = this.removedMobileSessionWorktreeIds.get(snapshot.worktree)
@@ -47,20 +52,24 @@ export class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWithWriteOr
         fence.rejectedPublication = true
         return false
       }
-      const currentMeta = snapshot.worktreeIdentity
-        ? this.store?.getWorktreeMetaForHost?.(
-            snapshot.worktree,
-            snapshot.worktreeIdentity.executionHostId
-          )
-        : this.store?.getWorktreeMeta(snapshot.worktree)
+      const currentMeta =
+        snapshot.worktreeIdentity && this.store
+          ? readRuntimeWorkspaceSessionOwnerMetadata(
+              this.store,
+              snapshot.worktree,
+              snapshot.worktreeIdentity.executionHostId
+            )
+          : this.store?.getWorktreeMeta(snapshot.worktree)
       if (!currentMeta) {
         reject()
         return []
       }
-      if (snapshot.worktreeInstanceId !== undefined) {
+      const incomingInstanceId =
+        incoming.worktreeIdentity?.instanceId ?? incoming.worktreeInstanceId
+      if (incomingInstanceId !== undefined) {
         // Why: every catalog row carries an instanceId, so a mismatch against the
         // live meta is exactly "not the current occupant" — no removed-id memory needed.
-        if (snapshot.worktreeInstanceId !== currentMeta.instanceId) {
+        if (incomingInstanceId !== currentMeta.instanceId) {
           reject()
           return []
         }
@@ -241,7 +250,7 @@ export class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWithWriteOr
           this.acceptedRendererMobileSnapshotByWorktree.delete(worktreeId)
           // Why: drop any pending coalesced notify so a stale snapshot can't land after the removed frame.
           this.cancelScheduledMobileSessionTabsChanged(worktreeId)
-          this.notifyMobileSessionTabsRemoved(worktreeId)
+          this.notifyMobileSessionTabsRemoved(worktreeId, existing.worktreeIdentity)
         }
       }
     }

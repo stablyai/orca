@@ -5,6 +5,7 @@ import type {
   RuntimeMobileSessionTerminalTab
 } from '../../shared/runtime-types'
 import { SSH_PANE_RECOVERY_GRACE_MS } from './orca-runtime-core'
+import type { WorktreeIdentity } from '../../shared/worktree/identity'
 
 export class OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding extends OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs {
   // Why: a snapshot tab can keep a serve/SSH-owned ptyId after the runtime
@@ -14,7 +15,8 @@ export class OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding extends 
   // binding is still re-hydratable, so it stays preserved).
   protected hasLiveOrPersistedServeOrSshOwnedPtyBinding(
     worktreeId: string,
-    tab: RuntimeMobileSessionTerminalTab
+    tab: RuntimeMobileSessionTerminalTab,
+    owner?: WorktreeIdentity
   ): boolean {
     const boundPtyIds = [
       tab.ptyId,
@@ -56,7 +58,7 @@ export class OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding extends 
       // Why: after a HUB restart, failed SSH reattach can remove persistence before the fresh runtime records an exit; keep the pane reachable for ensure.
       return true
     }
-    const session = this.getWorkspaceSessionForWorktree(worktreeId)
+    const session = this.getWorkspaceSessionForWorktree(worktreeId, owner)
     if (!session) {
       return false
     }
