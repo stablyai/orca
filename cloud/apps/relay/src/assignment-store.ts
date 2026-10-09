@@ -1,6 +1,7 @@
 import { createDrainMigrationRowLookup } from './drain-migration-row-lookup.js'
 import { HeapWindowReaper } from './heap-window-reaper.js'
 import { PlacementLoadBand } from './placement-load-band.js'
+import type { SeatFeedCell } from './shadow-seat-directory.js'
 import {
   selectIdleRegionalRehomes,
   type IdleRegionalRehomeCandidate,
@@ -149,6 +150,20 @@ export type RelayAssignment = AssignmentIdentity & {
 // Set only by reconnect verification, for a host whose home cell is isolated for
 // a roll right now: its next assign re-places it rather than re-granting the pin.
 export type ResolvedRelayAssignment = RelayAssignment & { homeCellRollIsolated?: true }
+
+export type HostWhereaboutsRow = {
+  cellId: string
+  assignmentEpoch: number
+  leaseExpiresAt: number
+  openMigration: {
+    sourceCellId: string
+    targetCellId: string
+    previousEpoch: number
+    assignmentEpoch: number
+    expiresAt: number
+    targetRegisteredAt: number | null
+  } | null
+}
 
 export type RelayRegionCatalogEntry = {
   region: RelayRegion
@@ -7821,6 +7836,76 @@ export class RelayAssignmentStore {
     return selected
       ? cell(selected.row, regions.get(selected.cellId) ?? RELAY_DEFAULT_REGION)
       : null
+  }
+
+  // Every cell, enabled or not: an existing-only cell still seats hosts. Liveness is
+  // placement's own rule (ready, heartbeat within heartbeatTtlMs).
+  async seatFeedCells(): Promise<SeatFeedCell[]> {
+    const now = this.now()
+    const rows = await this.database.query(
+      `SELECT cell.cell_id, cell.cell_url, cell.capacity_requests, region.region,
+              admission.roll_isolated_at, runtime.ready, runtime.last_heartbeat_at
+       FROM relay_cells cell
+       LEFT JOIN relay_cell_regions region ON region.cell_id = cell.cell_id
+       LEFT JOIN relay_cell_admission admission ON admission.cell_id = cell.cell_id
+       LEFT JOIN relay_cell_runtime runtime ON runtime.cell_id = cell.cell_id
+       ORDER BY cell.cell_id ASC`
+    )
+    return rows.map((row) => {
+      const lastHeartbeatAt = optionalInteger(row, 'last_heartbeat_at')
+      const heartbeatExpiresAt = !this.requireLiveCells
+        ? Number.MAX_SAFE_INTEGER
+        : optionalInteger(row, 'ready') === 1 && lastHeartbeatAt !== undefined
+          ? lastHeartbeatAt + this.heartbeatTtlMs
+          : null
+      return {
+        cellId: text(row, 'cell_id'),
+        cellUrl: text(row, 'cell_url'),
+        region: optionalRelayRegion(row, 'region') ?? RELAY_DEFAULT_REGION,
+        heartbeatExpiresAt,
+        requiredForComplete:
+          heartbeatExpiresAt !== null &&
+          heartbeatExpiresAt > now &&
+          integer(row, 'capacity_requests') > 0 &&
+          optionalInteger(row, 'roll_isolated_at') === undefined
+      }
+    })
+  }
+
+  // On-call "where is host X: primary-key reads only, no liveness filter.
+  async hostWhereabouts(identity: AssignmentIdentity): Promise<HostWhereaboutsRow | null> {
+    const row = (
+      await this.database.query(
+        `SELECT cell_id, assignment_epoch, lease_expires_at FROM relay_assignments
+         WHERE user_id = ? AND relay_host_id = ?`,
+        [identity.userId, identity.relayHostId]
+      )
+    )[0]
+    if (!row) return null
+    const migrations = await this.database.query(
+      `SELECT source_cell_id, target_cell_id, previous_epoch, assignment_epoch, expires_at,
+              target_registered_at
+       FROM relay_assignment_migrations
+       WHERE user_id = ? AND relay_host_id = ? AND completed_at IS NULL AND aborted_at IS NULL
+       ORDER BY assignment_epoch DESC LIMIT 1`,
+      [identity.userId, identity.relayHostId]
+    )
+    const migration = migrations[0]
+    return {
+      cellId: text(row, 'cell_id'),
+      assignmentEpoch: integer(row, 'assignment_epoch'),
+      leaseExpiresAt: integer(row, 'lease_expires_at'),
+      openMigration: migration
+        ? {
+            sourceCellId: text(migration, 'source_cell_id'),
+            targetCellId: text(migration, 'target_cell_id'),
+            previousEpoch: integer(migration, 'previous_epoch'),
+            assignmentEpoch: integer(migration, 'assignment_epoch'),
+            expiresAt: integer(migration, 'expires_at'),
+            targetRegisteredAt: optionalInteger(migration, 'target_registered_at') ?? null
+          }
+        : null
+    }
   }
 
   async regionCatalog(): Promise<RelayRegionCatalogEntry[]> {
