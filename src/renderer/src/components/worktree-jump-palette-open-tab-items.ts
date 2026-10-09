@@ -42,26 +42,31 @@ export function buildWorkspaceTabPaletteItems(
 export function buildOpenTabPaletteItems({
   browserItems,
   simulatorItems,
-  workspaceTabItems
+  workspaceTabItems,
+  transcriptOnlyItems = []
 }: {
   browserItems: readonly BrowserPaletteItem[]
   simulatorItems: readonly SimulatorPaletteItem[]
   workspaceTabItems: readonly WorkspaceTabPaletteItem[]
+  /** Already in the index's relevance order, and arrive late, so they trail every title match. */
+  transcriptOnlyItems?: readonly WorkspaceTabPaletteItem[]
 }): OpenTabPaletteItem[] {
-  return [...browserItems, ...simulatorItems, ...workspaceTabItems].sort((left, right) =>
-    comparePaletteRankedItems(
-      {
-        rank: left.result.rank,
-        order: left.result.score,
-        identity: left.id,
-        activity: left.result.activity
-      },
-      {
-        rank: right.result.rank,
-        order: right.result.score,
-        identity: right.id,
-        activity: right.result.activity
-      }
-    )
+  const titleMatches = [...browserItems, ...simulatorItems, ...workspaceTabItems].sort(
+    (left, right) =>
+      comparePaletteRankedItems(
+        {
+          rank: left.result.rank,
+          order: left.result.score,
+          identity: left.id,
+          activity: left.result.activity
+        },
+        {
+          rank: right.result.rank,
+          order: right.result.score,
+          identity: right.id,
+          activity: right.result.activity
+        }
+      )
   )
+  return transcriptOnlyItems.length ? [...titleMatches, ...transcriptOnlyItems] : titleMatches
 }
