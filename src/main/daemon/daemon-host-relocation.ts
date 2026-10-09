@@ -392,7 +392,7 @@ export function pruneDaemonHostsBeforeLaunch(
   selectedHost: RelocatedDaemonHost | null
 ): void {
   const evidence = isPackagedElectronWin32() ? collectPinnedDaemonVersions(runtimeDir) : null
-  // Unverifiable evidence is reported by the post-launch prune.
+  // Unverifiable evidence is reported by the post-launch prune at init; respawns skip silently.
   if (evidence?.status === 'complete') {
     reclaimCurrentVersionHostLeftovers(evidence.versionLiveness, selectedHost)
   }

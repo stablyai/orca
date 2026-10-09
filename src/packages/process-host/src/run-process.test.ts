@@ -175,7 +175,8 @@ describe('abort', () => {
       const root = await mkdtemp(path.join(tmpdir(), 'run-process-barrier-'))
       const marker = path.join(root, 'descendant-state')
       const descendantScript =
-        `printf ready > "$1";trap 'printf signaled > "$1"' TERM;` + `while :;do sleep 1;done`
+        // Trap before ready: an abort right after ready must not hit sh's default TERM action.
+        `trap 'printf signaled > "$1"' TERM;printf ready > "$1";` + `while :;do sleep 1;done`
       const controller = new AbortController()
       const pending = runProcess({
         program: process.execPath,
