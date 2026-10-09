@@ -73,3 +73,21 @@ export function buildSetupHostOptions({
       }
     })
 }
+
+export function setupsByOwnedExecutionHost(
+  setups: readonly ProjectHostSetup[],
+  selectedSetupId: string
+): ProjectHostSetup[] {
+  const byHost = new Map<string, ProjectHostSetup>()
+  for (const setup of setups) {
+    const key = JSON.stringify([
+      setup.hostId,
+      setup.executionHostId ?? setup.hostId,
+      setup.runtimeOwnerEnvironmentId ?? null
+    ])
+    if (!byHost.has(key) || setup.id === selectedSetupId) {
+      byHost.set(key, setup)
+    }
+  }
+  return [...byHost.values()]
+}
