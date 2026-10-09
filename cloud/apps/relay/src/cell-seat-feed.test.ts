@@ -11,8 +11,13 @@ import type { RelayRuntimeObserver } from './relay-observability.js'
 import type { RelayTokenClaims } from './relay-token-verifier.js'
 import { ProcessQueuedByteBudget } from './splice-forwarder.js'
 
+const adminTokenChecks = vi.hoisted(() => ({ count: 0 }))
+
 vi.mock('./admin-token-verifier.js', () => ({
-  createAdminTokenVerifier: () => async (token: string) => token === 'deploy-token',
+  createAdminTokenVerifier: () => async (token: string) => {
+    adminTokenChecks.count += 1
+    return token === 'deploy-token'
+  },
   createReadOnlyAdminTokenVerifier: () => async () => false,
   createRegionalRehomeControlApplyTokenVerifier: () => async () => false,
   createRegionalRehomeRuntimeTokenVerifier: () => async () => false,
@@ -52,14 +57,10 @@ const SeatFeedReplySchema = z.object({
   cellId: z.string(),
   incarnation: z.string(),
   at: z.number(),
-  fixLevel: z.number(),
   draining: z.boolean(),
   counts: z.object({
     controls: z.number(),
-    seats: z.number(),
-    splices: z.number(),
-    enforcedUnits: z.number().nullable(),
-    hardCap: z.number().nullable()
+    seats: z.number()
   }),
   seq: z.number(),
   changes: z.array(SeatChangeSchema).optional(),
@@ -220,7 +221,7 @@ describe('cell seat feed', () => {
       incarnation,
       seq: 2,
       draining: false,
-      counts: { controls: 2, seats: 2, splices: 0, enforcedUnits: null, hardCap: null }
+      counts: { controls: 2, seats: 2 }
     })
     expect(body.full).toHaveLength(body.counts.seats)
     expect(body.full).toContainEqual(
@@ -319,10 +320,14 @@ describe('cell seat feed', () => {
     expect((await poll('not a cursor')).status).toBe(400)
   })
 
-  it('accepts only the directors rehome identity', async () => {
+  it('accepts only the directors rehome identity, verified once per poll', async () => {
     const { poll } = createCell()
+    adminTokenChecks.count = 0
     expect((await poll(undefined, 'deploy-token')).status).toBe(401)
     expect((await poll(undefined, 'wrong')).status).toBe(401)
+    expect((await poll()).status).toBe(200)
+    // The admin middleware leaves this route to its own rehome check.
+    expect(adminTokenChecks.count).toBe(0)
   })
 
   it('is unavailable on a cell without the rehome pair, and on directors', async () => {

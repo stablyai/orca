@@ -271,7 +271,9 @@ export function createRelayApp(
   app.use('/v1/admin/*', async (context, next) => {
     if (
       context.req.path === '/v1/admin/cell-heartbeat' ||
-      context.req.path === '/v1/admin/cell-rehome-status'
+      context.req.path === '/v1/admin/cell-rehome-status' ||
+      // Its own route checks the rehome identity; an admin check first would verify each poll twice.
+      context.req.path === '/v1/admin/cell-seats'
     ) {
       return await next()
     }

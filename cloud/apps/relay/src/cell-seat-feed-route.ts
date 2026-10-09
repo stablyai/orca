@@ -2,7 +2,6 @@ import type { Hono } from 'hono'
 import type { CellSeatFeedPage } from './cell-seat-log.js'
 import { parseCellSeatCursor } from './cell-seat-log.js'
 import type { RelayConfig } from './config.js'
-import { RELAY_FIX_LEVEL } from './relay-fix-level.js'
 import type { RelayRuntimeCounts } from './relay-observability.js'
 import { readBearer } from './relay-token-verifier.js'
 
@@ -42,16 +41,12 @@ export function registerCellSeatFeedRoute(
       cellId: config.cellId,
       incarnation: input.cellIncarnation,
       at: (input.now ?? Date.now)(),
-      fixLevel: RELAY_FIX_LEVEL,
       draining: input.isDraining?.() ?? false,
       counts: {
         controls: counts?.controls ?? 0,
         // The feed's own view: a reader that applied every change holds exactly this many.
         // `controls` drops when a socket starts closing, `seats` when its close lands.
-        seats,
-        splices: counts?.splices ?? 0,
-        enforcedUnits: counts?.enforcedConnectionUnits ?? null,
-        hardCap: config.connectionHardCap ?? null
+        seats
       },
       ...page
     })
