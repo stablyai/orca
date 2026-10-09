@@ -464,6 +464,30 @@ describe('handleSwitchRecentTab', () => {
     expect(store.setActiveTabType).toHaveBeenCalledWith('browser', 'wt-1')
   })
 
+  it('skips an MRU entry naming a tab that no longer renders', () => {
+    const store = makeStore('editor')
+    store.activeFileId = 'file-c'
+    store.groupsByWorktree = {
+      'wt-1': [
+        {
+          id: 'group-1',
+          activeTabId: 'tab-c',
+          tabOrder: ['tab-a', 'tab-c'],
+          recentTabIds: ['tab-a', 'tab-pruned', 'tab-c']
+        }
+      ]
+    }
+    getStateMock.mockReturnValue(store)
+    getActiveTabNavOrderMock.mockReturnValue([
+      { type: 'editor', id: 'file-a', tabId: 'tab-a' },
+      { type: 'editor', id: 'file-c', tabId: 'tab-c' }
+    ])
+
+    expect(handleSwitchRecentTab()).toBe(true)
+    expect(store.setActiveFile).toHaveBeenCalledWith('file-a')
+    expect(store.activateTab).toHaveBeenCalledWith('tab-a')
+  })
+
   it('returns false when the MRU stack has no previous visible tab', () => {
     const store = makeStore('terminal')
     store.groupsByWorktree = {

@@ -6,7 +6,12 @@ import { callRuntimeRpc, getActiveRuntimeTarget, RuntimeRpcCallError } from './r
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
 function rangeReadTarget(args: RuntimeFileReadArgs) {
-  assertExternalSshReadOwnership(args.settings, args.connectionId, args.expectedExternalSshTargetId)
+  assertExternalSshReadOwnership(
+    args.settings,
+    args.connectionId,
+    args.expectedExternalSshTargetId,
+    args.expectedRuntimeEnvironmentId
+  )
   const target = getActiveRuntimeTarget(args.settings)
   if (target.kind !== 'environment') {
     return null

@@ -55,13 +55,17 @@ function readFileForEchoVerification(args: {
   worktreeId: string | null | undefined
   connectionId: string | undefined
   expectedExternalSshTargetId?: string
+  expectedRuntimeEnvironmentId?: string | null
 }): ReturnType<typeof readRuntimeFileContent> {
-  const key = [
-    args.runtimeEnvironmentId ?? '',
-    args.connectionId ?? '',
-    args.expectedExternalSshTargetId ?? '',
+  const key = JSON.stringify([
+    args.runtimeEnvironmentId ?? null,
+    args.connectionId ?? null,
+    args.expectedExternalSshTargetId ?? null,
+    args.expectedRuntimeEnvironmentId ?? null,
+    args.worktreeId ?? null,
+    args.relativePath,
     args.filePath
-  ].join('::')
+  ])
   let pending = inFlightEchoVerificationReads.get(key)
   if (!pending) {
     pending = readRuntimeFileContent({
@@ -72,7 +76,8 @@ function readFileForEchoVerification(args: {
       relativePath: args.relativePath,
       worktreeId: args.worktreeId ?? undefined,
       connectionId: args.connectionId,
-      expectedExternalSshTargetId: args.expectedExternalSshTargetId
+      expectedExternalSshTargetId: args.expectedExternalSshTargetId,
+      expectedRuntimeEnvironmentId: args.expectedRuntimeEnvironmentId
     })
     inFlightEchoVerificationReads.set(key, pending)
     const release = (): void => {
@@ -226,7 +231,8 @@ export function scheduleEditorSelfMoveEchoVerification(
       relativePath: file.relativePath,
       worktreeId: file.worktreeId,
       connectionId: target.connectionId,
-      expectedExternalSshTargetId: file.externalSshTargetId
+      expectedExternalSshTargetId: file.externalSshTargetId,
+      expectedRuntimeEnvironmentId: file.runtimeEnvironmentId
     })
       .then((result) => {
         const diskSignature = result.isBinary ? null : getDiskBaselineSignature(result.content)
@@ -261,7 +267,8 @@ export function scheduleSelfWriteAwareEditorExternalReload(
     relativePath: file.relativePath,
     worktreeId: file.worktreeId,
     connectionId: target.connectionId,
-    expectedExternalSshTargetId: file.externalSshTargetId
+    expectedExternalSshTargetId: file.externalSshTargetId,
+    expectedRuntimeEnvironmentId: file.runtimeEnvironmentId
   })
     .then((result) => {
       if (

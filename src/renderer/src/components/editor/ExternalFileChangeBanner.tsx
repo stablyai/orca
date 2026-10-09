@@ -94,6 +94,7 @@ export function keepTabEditsOverExternalChange(file: OpenFile): void {
     worktreeId: file.worktreeId,
     connectionId: getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined,
     expectedExternalSshTargetId: file.externalSshTargetId,
+    expectedRuntimeEnvironmentId: file.runtimeEnvironmentId,
     access: editorTabFileAccess(state, file)
   })
     .then((result) => {

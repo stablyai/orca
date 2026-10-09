@@ -11,12 +11,16 @@ import type { RuntimeFileOperationArgs } from './runtime-file-client-types'
 export function assertExternalSshReadOwnership(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   connectionId: string | undefined,
-  expectedExternalSshTargetId: string | undefined
+  expectedExternalSshTargetId: string | undefined,
+  expectedRuntimeEnvironmentId?: string | null
 ): void {
   const expectedTargetId = expectedExternalSshTargetId?.trim()
+  const runtime = getActiveRuntimeTarget(settings)
+  const runtimeEnvironmentId = runtime.kind === 'environment' ? runtime.environmentId : null
   if (
     expectedTargetId &&
-    (getActiveRuntimeTarget(settings).kind === 'environment' || connectionId !== expectedTargetId)
+    (runtimeEnvironmentId !== (expectedRuntimeEnvironmentId?.trim() || null) ||
+      connectionId !== expectedTargetId)
   ) {
     throw new Error('External SSH files are not available after the workspace host changes.')
   }

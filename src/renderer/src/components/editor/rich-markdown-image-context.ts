@@ -76,7 +76,8 @@ export function createRichMarkdownImageResolverContext({
           worktreeId,
           worktreePath: worktreeRoot,
           connectionId: getConnectionId(worktreeId),
-          expectedExternalSshTargetId: externalSshTargetId
+          expectedExternalSshTargetId: externalSshTargetId,
+          expectedRuntimeEnvironmentId: runtimeEnvironmentId
         }
       : undefined
   }

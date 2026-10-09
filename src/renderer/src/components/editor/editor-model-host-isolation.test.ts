@@ -11,6 +11,7 @@ import {
   resetModelLifetimeFixtures
 } from './editor-model-lifetime-fixture'
 import { getEditorModelOwnerKey } from './editor-model-owner'
+import { buildPersistedEditorFileRecords } from '@/lib/workspace-session-editor-records'
 import { toEditorModelUri } from './editor-model-uri'
 import {
   beginProgrammaticContentSync,
@@ -78,6 +79,65 @@ afterEach(() => {
 })
 
 describe('same-path models on different execution hosts', () => {
+  it('persists captured ownership while preserving contradictory records until explicitly closed', async () => {
+    const { owners, store, attach } = createHostModels()
+    const remote = owners[3]!
+    const stale = {
+      ...remote.file,
+      id: 'stale-fields',
+      runtimeEnvironmentId: 'wrong-hub',
+      externalSshTargetId: 'wrong-target'
+    }
+    store.setState({ openFiles: [remote.file, stale] })
+    const records = Object.values(
+      buildPersistedEditorFileRecords([remote.file, stale], {}, {}).openFilesByWorktree
+    ).flat()
+    expect(records).toHaveLength(1)
+    expect(records[0]).toMatchObject({
+      runtimeEnvironmentId: 'hub-a',
+      externalSshTargetId: 'target'
+    })
+    attach()
+    store.getState().closeFile(remote.file.id)
+    await Promise.resolve()
+    expect(store.getState().openFiles).toEqual([stale])
+    expect(remote.model.isDisposed()).toBe(false)
+    store.getState().closeFile(stale.id)
+    await Promise.resolve()
+    expect(store.getState().openFiles).toHaveLength(0)
+    expect(remote.model.isDisposed()).toBe(true)
+  })
+
+  it.each(['clean', 'same-draft', 'different-drafts'] as const)(
+    'persists all captured owners of same-path %s documents',
+    (kind) => {
+      const { owners } = createHostModels()
+      const files = owners.map((owner) => ({ ...owner.file, isDirty: kind !== 'clean' }))
+      const drafts = Object.fromEntries(
+        files.map((file, index) => [
+          file.id,
+          kind === 'same-draft' ? 'identical unsaved text' : `draft ${index}`
+        ])
+      )
+      const records = Object.values(
+        buildPersistedEditorFileRecords(files, drafts, {}).openFilesByWorktree
+      ).flat()
+      expect(records).toHaveLength(HOSTS.length)
+      expect(
+        records.map((record) => [record.runtimeEnvironmentId, record.externalSshTargetId ?? null])
+      ).toEqual([
+        [null, null],
+        [null, 'target'],
+        ['hub-a', null],
+        ['hub-a', 'target'],
+        ['hub-b', 'target']
+      ])
+      expect(records.map((record) => record.dirtyDraftContent)).toEqual(
+        files.map((file) => (kind === 'clean' ? undefined : drafts[file.id]))
+      )
+    }
+  )
+
   it.each([FILE_PATH, 'C:\\fixture\\workspace\\same-path.txt', '\\\\server\\share\\same-path.txt'])(
     'keeps host text and undo histories independent for %s',
     async (filePath) => {
@@ -258,6 +318,7 @@ describe('same-path models on different execution hosts', () => {
     }
     const detach = attachModelLifetimeView(local.model)
     edit(runtime.model, 'runtime independent edit')
+    store.setState({ editorDrafts: { [runtime.file.id]: 'runtime independent edit' } })
     attach()
     store.setState({
       openFiles: store

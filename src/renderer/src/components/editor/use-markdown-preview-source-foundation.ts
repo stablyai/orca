@@ -133,13 +133,15 @@ export function useMarkdownPreviewSourceFoundation({
             worktreeId: sourceRoutingWorktreeId,
             worktreePath: worktreeRoot,
             connectionId: sourceConnectionId,
-            expectedExternalSshTargetId: sourceOpenFile?.externalSshTargetId
+            expectedExternalSshTargetId: sourceOpenFile?.externalSshTargetId,
+            expectedRuntimeEnvironmentId: sourceOpenFile?.runtimeEnvironmentId
           }
         : undefined,
     [
       settings,
       sourceConnectionId,
       sourceOpenFile?.externalSshTargetId,
+      sourceOpenFile?.runtimeEnvironmentId,
       resolvedSourceRuntimeEnvironmentId,
       sourceRoutingWorktreeId,
       worktreeRoot

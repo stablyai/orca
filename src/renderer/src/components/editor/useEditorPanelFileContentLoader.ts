@@ -215,6 +215,7 @@ export function useEditorPanelFileContentLoader({
               worktreeId: readWorktreeId,
               connectionId: readConnectionId,
               expectedExternalSshTargetId: restoredOpenFile?.externalSshTargetId,
+              expectedRuntimeEnvironmentId: restoredOpenFile?.runtimeEnvironmentId,
               includeLocalLogMetadata: isLiveTailLogTab,
               access
             },

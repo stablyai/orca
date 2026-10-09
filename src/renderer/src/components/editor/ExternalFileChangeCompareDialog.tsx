@@ -64,6 +64,7 @@ export function ExternalFileChangeCompareDialog({
       worktreeId: file.worktreeId,
       connectionId: getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined,
       expectedExternalSshTargetId: file.externalSshTargetId,
+      expectedRuntimeEnvironmentId: file.runtimeEnvironmentId,
       access
     })
       .then((result) => {

@@ -251,6 +251,7 @@ async function readFileContent(file: OpenFile): Promise<string> {
     worktreeId: file.worktreeId,
     connectionId,
     expectedExternalSshTargetId: file.externalSshTargetId,
+    expectedRuntimeEnvironmentId: file.runtimeEnvironmentId,
     access: editorTabFileAccess(state, file)
   })
   if (result.isBinary) {

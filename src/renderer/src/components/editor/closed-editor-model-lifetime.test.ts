@@ -35,16 +35,28 @@ it('keeps a live model and releases only its closed sibling', async () => {
   expect(live.model.isDisposed()).toBe(false)
 })
 
-it('preserves a shared URI until its final file owner closes', async () => {
+it('releases a shared URI when all clean duplicate records close', async () => {
   const { store, attach, add } = createModelLifetimeFixture()
   const { file, model } = add('shared-a')
-  store.setState({ openFiles: [file, { ...file, id: 'shared-b', readOnly: true }] })
+  store.setState({ openFiles: [file, { ...file, id: 'shared-b' }] })
   attach()
   store.getState().closeFile(file.id)
   await Promise.resolve()
-  expect(store.getState().openFiles.map((openFile) => openFile.id)).toEqual(['shared-b'])
+  expect(store.getState().openFiles).toHaveLength(0)
+  expect(model.isDisposed()).toBe(true)
+})
+
+it('keeps a dirty shared-model duplicate alive until its own close', async () => {
+  const { store, attach, add } = createModelLifetimeFixture()
+  const { file, model } = add('shared-dirty-a')
+  const sibling = { ...file, id: 'shared-dirty-b', isDirty: true }
+  store.setState({ openFiles: [file, sibling], editorDrafts: { [sibling.id]: 'unsaved text' } })
+  attach()
+  store.getState().closeFile(file.id)
+  await Promise.resolve()
   expect(model.isDisposed()).toBe(false)
-  store.getState().closeFile('shared-b')
+  expect(store.getState().editorDrafts[sibling.id]).toBe('unsaved text')
+  store.getState().closeFile(sibling.id)
   await Promise.resolve()
   expect(model.isDisposed()).toBe(true)
 })

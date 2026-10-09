@@ -21,6 +21,46 @@ import {
 installRuntimeFileClientEnvironment()
 
 describe('runtime file client', () => {
+  it('reads a restored nested SSH file only through its recorded paired host', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      ok: true,
+      result: { content: 'nested owner', isBinary: false }
+    })
+    const args = {
+      settings: { activeRuntimeEnvironmentId: 'hub-a' },
+      filePath: '/repo/file.txt',
+      relativePath: 'file.txt',
+      worktreeId: 'wt-1',
+      connectionId: 'ssh-1',
+      expectedExternalSshTargetId: 'ssh-1',
+      expectedRuntimeEnvironmentId: 'hub-a'
+    }
+    await expect(readRuntimeFileContent(args)).resolves.toMatchObject({ content: 'nested owner' })
+    await expect(
+      readRuntimeFilePreview(
+        {
+          ...args,
+          worktreePath: '/repo',
+          connectionId: undefined,
+          expectedSshTargetId: 'ssh-1'
+        },
+        args.filePath
+      )
+    ).resolves.toMatchObject({ content: 'nested owner' })
+    expect(fsReadFile).not.toHaveBeenCalled()
+    runtimeEnvironmentCall.mockClear()
+    for (const wrongOwner of [
+      { settings: { activeRuntimeEnvironmentId: 'hub-b' } },
+      { settings: { activeRuntimeEnvironmentId: null } },
+      { connectionId: 'ssh-2' }
+    ]) {
+      await expect(readRuntimeFileContent({ ...args, ...wrongOwner })).rejects.toThrow(
+        'workspace host changes'
+      )
+    }
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
   it('uses local filesystem reads when no remote runtime is active', async () => {
     const localResult: RuntimeReadableFileContent = { content: 'hello', isBinary: false }
     fsReadFile.mockResolvedValue(localResult)

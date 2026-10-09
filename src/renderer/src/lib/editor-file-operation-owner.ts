@@ -1,3 +1,4 @@
+import type { OpenFile } from '@/store/slices/editor'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
@@ -20,6 +21,24 @@ export type EditorFileOperationProvenance = {
   generation: WorktreeOperationGenerationSnapshot
   ownershipProjection: 'explicit' | 'legacy'
   expectedSshConnectionGeneration?: number
+}
+
+export function getPersistedEditorOwnerFields(
+  file: Pick<OpenFile, 'runtimeEnvironmentId' | 'externalSshTargetId' | 'operationProvenance'>
+): Pick<OpenFile, 'runtimeEnvironmentId' | 'externalSshTargetId'> {
+  const captured = file.operationProvenance?.generation.route
+  const host = parseExecutionHostId(captured?.executionHostId)
+  if (!captured || !host) {
+    return {
+      runtimeEnvironmentId: file.runtimeEnvironmentId,
+      externalSshTargetId: file.externalSshTargetId
+    }
+  }
+  // A restart must retain the owner that opened the document, even after catalog replacement.
+  return {
+    runtimeEnvironmentId: captured.runtimeEnvironmentId,
+    externalSshTargetId: host.kind === 'ssh' ? host.targetId : undefined
+  }
 }
 
 type EditorOwnerState = Pick<
@@ -175,6 +194,7 @@ export function getEditorFileOperationContext(
   expectedSshTargetId?: string
   expectedSshConnectionGeneration?: number
   expectedExecutionHostId: 'local' | `ssh:${string}`
+  expectedRuntimeEnvironmentId: string | null
 } {
   const provenance =
     file.operationProvenance ??
@@ -203,7 +223,7 @@ export function getEditorFileOperationContext(
   if (
     externalSshTargetId &&
     (host.kind !== 'ssh' ||
-      route.runtimeEnvironmentId !== null ||
+      (file.runtimeEnvironmentId?.trim() || null) !== route.runtimeEnvironmentId ||
       host.targetId !== externalSshTargetId)
   ) {
     throw new Error(OWNER_CHANGED_MESSAGE)
@@ -217,6 +237,7 @@ export function getEditorFileOperationContext(
     worktreeId: file.worktreeId,
     worktreePath: resolvedWorktreePath,
     expectedExecutionHostId: host.kind === 'ssh' ? host.id : 'local',
+    expectedRuntimeEnvironmentId: route.runtimeEnvironmentId,
     ...(route.runtimeEnvironmentId === null && host?.kind === 'ssh'
       ? { connectionId: host.targetId }
       : {}),

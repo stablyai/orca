@@ -71,6 +71,7 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
         worktreeId: file.worktreeId,
         connectionId: getFileConnectionId(file),
         expectedExternalSshTargetId: file.externalSshTargetId,
+        expectedRuntimeEnvironmentId: file.runtimeEnvironmentId,
         access: editorTabFileAccess(state, file)
       })
       if (disposed) {

@@ -3,7 +3,8 @@ import { useAppStore } from '@/store'
 import {
   assertEditorFileOperationCurrent,
   captureEditorFileOperationProvenance,
-  getEditorFileOperationContext
+  getEditorFileOperationContext,
+  getPersistedEditorOwnerFields
 } from './editor-file-operation-owner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
@@ -122,78 +123,124 @@ describe('editor file operation owner', () => {
     ).toThrow('Reopen the file')
   })
 
-  it('captures and rejects replacement nested SSH connection generations', () => {
-    useAppStore.setState({
-      worktreesByRepo: {
-        repo: [
-          {
-            id: worktreeId,
-            repoId: 'repo',
-            path: '/remote/repo',
-            hostId: 'ssh:private',
-            runtimeOwnerEnvironmentId: 'hub-a'
-          } as never
-        ]
-      },
-      sshStateByEnvironment: new Map([
-        [
-          'hub-a',
-          {
-            targetsHydrated: true,
-            targetGenerations: new Map(),
-            targetLabels: new Map([['private', 'private']]),
-            removedTargetLabels: new Map(),
-            connectionStates: new Map([
-              [
-                'private',
-                {
-                  targetId: 'private',
-                  status: 'connected',
-                  error: null,
-                  reconnectAttempt: 0,
-                  connectionGeneration: 7
-                }
-              ]
-            ])
-          }
-        ]
-      ])
-    })
-    const provenance = captureEditorFileOperationProvenance(
-      useAppStore.getState(),
-      worktreeId,
-      undefined,
-      false
-    )
-    expect(provenance.expectedSshConnectionGeneration).toBe(7)
+  it.each([false, true])(
+    'keeps nested SSH operations owner-bound before and after serialization (%s)',
+    (persisted) => {
+      useAppStore.setState({
+        worktreesByRepo: {
+          repo: [
+            {
+              id: worktreeId,
+              repoId: 'repo',
+              path: '/remote/repo',
+              hostId: 'ssh:private',
+              runtimeOwnerEnvironmentId: 'hub-a'
+            } as never
+          ]
+        },
+        sshStateByEnvironment: new Map([
+          [
+            'hub-a',
+            {
+              targetsHydrated: true,
+              targetGenerations: new Map(),
+              targetLabels: new Map([['private', 'private']]),
+              removedTargetLabels: new Map(),
+              connectionStates: new Map([
+                [
+                  'private',
+                  {
+                    targetId: 'private',
+                    status: 'connected',
+                    error: null,
+                    reconnectAttempt: 0,
+                    connectionGeneration: 7
+                  }
+                ]
+              ])
+            }
+          ]
+        ])
+      })
+      const provenance = captureEditorFileOperationProvenance(
+        useAppStore.getState(),
+        worktreeId,
+        undefined,
+        false
+      )
+      expect(provenance.expectedSshConnectionGeneration).toBe(7)
 
-    useAppStore.setState((state) => ({
-      sshStateByEnvironment: new Map([
-        [
-          'hub-a',
-          {
-            ...state.sshStateByEnvironment.get('hub-a')!,
-            connectionStates: new Map([
-              [
-                'private',
-                {
-                  targetId: 'private',
-                  status: 'connected',
-                  error: null,
-                  reconnectAttempt: 0,
-                  connectionGeneration: 8
-                }
-              ]
-            ])
-          }
-        ]
-      ])
-    }))
+      const file = { worktreeId, runtimeEnvironmentId: 'hub-a', operationProvenance: provenance }
+      const ownerFields = persisted ? getPersistedEditorOwnerFields(file) : {}
+      const context = getEditorFileOperationContext(
+        useAppStore.getState(),
+        { ...file, ...ownerFields },
+        '/remote/repo'
+      )
+      expect(context).toMatchObject({
+        expectedExecutionHostId: 'ssh:private',
+        expectedSshTargetId: 'private',
+        expectedSshConnectionGeneration: 7
+      })
+      expect(context.settings?.activeRuntimeEnvironmentId).toBe('hub-a')
+      expect(context.connectionId).toBeUndefined()
+      if (persisted) {
+        expect(
+          getEditorFileOperationContext(
+            useAppStore.getState(),
+            { worktreeId, ...ownerFields },
+            '/remote/repo'
+          )
+        ).toMatchObject({
+          settings: expect.objectContaining({ activeRuntimeEnvironmentId: 'hub-a' }),
+          expectedExecutionHostId: 'ssh:private',
+          expectedSshTargetId: 'private',
+          expectedSshConnectionGeneration: 7
+        })
+      }
+      expect(() =>
+        getEditorFileOperationContext(
+          useAppStore.getState(),
+          { ...file, externalSshTargetId: 'private', runtimeEnvironmentId: null },
+          '/remote/repo'
+        )
+      ).toThrow('Reopen the file')
+      expect(() =>
+        getEditorFileOperationContext(
+          useAppStore.getState(),
+          { ...file, externalSshTargetId: 'another-target' },
+          '/remote/repo'
+        )
+      ).toThrow('Reopen the file')
 
-    expect(() =>
-      assertEditorFileOperationCurrent(useAppStore.getState(), worktreeId, provenance)
-    ).toThrow('Reopen the file')
-  })
+      useAppStore.setState((state) => ({
+        sshStateByEnvironment: new Map([
+          [
+            'hub-a',
+            {
+              ...state.sshStateByEnvironment.get('hub-a')!,
+              connectionStates: new Map([
+                [
+                  'private',
+                  {
+                    targetId: 'private',
+                    status: 'connected',
+                    error: null,
+                    reconnectAttempt: 0,
+                    connectionGeneration: 8
+                  }
+                ]
+              ])
+            }
+          ]
+        ])
+      }))
+
+      expect(() =>
+        assertEditorFileOperationCurrent(useAppStore.getState(), worktreeId, provenance)
+      ).toThrow('Reopen the file')
+    }
+  )
 
   it('rejects a restored external SSH file after its target changes', () => {
     useAppStore.setState({
