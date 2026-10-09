@@ -326,7 +326,13 @@ async function installOnJournal(
     ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
     ...(deps.hasOpenDispatch ? { hasOpenDispatch: deps.hasOpenDispatch } : {}),
     ...(deps.onSessionTabHidden ? { onSessionTabHidden: deps.onSessionTabHidden } : {}),
-    ...(await modelCatalogHostDeps({ store, agents, deps, envResolvers }))
+    ...(await modelCatalogHostDeps({
+      store,
+      agents,
+      registrations: STRUCTURED_AGENT_RUNTIME_REGISTRATIONS,
+      deps,
+      environment: envResolvers
+    }))
   })
   if (deps.attentionDelivery) {
     const installed = host
@@ -347,6 +353,9 @@ async function installOnJournal(
     })
   }
   setStructuredAgentSessionHost(host)
+  // The host starts with its runtime, local or remote, so this is the runtime-start listing.
+  const modelCatalog = host.deps.modelCatalog
+  void modelCatalog?.prewarm()
   installAgentSessionAttachments({
     stateDirectory: deps.stateDirectory,
     store,
@@ -367,6 +376,9 @@ async function installOnJournal(
     adapter,
     journalDatabase,
     waitForRecovery: lifecycle.drain,
-    ...(stopVisualsSweep ? { stopBackgroundWork: stopVisualsSweep } : {})
+    stopBackgroundWork: () => {
+      stopVisualsSweep?.()
+      modelCatalog?.stop()
+    }
   }
 }

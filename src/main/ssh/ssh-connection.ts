@@ -90,6 +90,7 @@ import {
 } from './ssh-transport-selection'
 import type { FileUploadSession } from '../providers/types'
 import { openSshSessionChannelWithRetry, waitForSshChannelOpen } from './ssh-channel-open'
+import { tagSftpHandshakeCorruption } from './sftp-handshake-corruption'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 import { isEphemeralRuntimeSshOwner } from '../../shared/managed-orcad-ssh-owner'
 export type { SshConnectionCallbacks } from './ssh-connection-utils'
@@ -340,7 +341,8 @@ export class SshConnection {
       this.assertNotDisposed()
       return waitForSshChannelOpen(
         'SSH SFTP channel timed out',
-        (callback) => client.sftp(callback),
+        (callback) =>
+          client.sftp((error, sftp) => callback(error && tagSftpHandshakeCorruption(error), sftp)),
         (sftp) => sftp.end(),
         signal,
         false,

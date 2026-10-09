@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 import { TAB_TOOLTIP_DELAY_MS } from './TabStripTooltipProvider'
@@ -15,11 +15,13 @@ export function TabCloseTooltip({ children }: { children: ReactNode }): React.JS
   )
 
   return (
-    <Tooltip delayDuration={TAB_CLOSE_TOOLTIP_DELAY_MS}>
-      <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={6}>
-        {closeShortcut ? `${closeLabel} (${closeShortcut})` : closeLabel}
-      </TooltipContent>
-    </Tooltip>
+    <TooltipProvider delayDuration={TAB_CLOSE_TOOLTIP_DELAY_MS} skipDelayDuration={0}>
+      <Tooltip>
+        <TooltipTrigger asChild>{children}</TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={6} data-tab-close-tooltip="true">
+          {closeShortcut ? `${closeLabel} (${closeShortcut})` : closeLabel}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   )
 }

@@ -12311,7 +12311,11 @@
             "confirmRestore": "スナップショットを復元して再起動",
             "keepState": "状態を保持",
             "statusUnknown": "ステータス不明",
-            "checking": "確認中…"
+            "checking": "確認中…",
+            "forget": "登録を解除…",
+            "confirmForget": "このデスクトップから登録を解除",
+            "keepLinked": "リンクを維持",
+            "forgetDescription": "ホストに接続せずに、このサーバーのリンクをここで解除します。ホストが復帰した場合、サーバーはまだそこで動作している可能性があります。"
           },
           "title": "管理対象サーバー",
           "description": "Orca は空の SSH ホストにサーバーをインストールして実行し、最新の状態に保ちます。",

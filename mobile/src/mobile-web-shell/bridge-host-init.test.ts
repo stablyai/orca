@@ -354,16 +354,16 @@ describe('init and state', () => {
   })
 
   it('refuses a storage write for a key the page was never told about', () => {
-    // The whole app's preferences share one namespace, the hybrid shell flag included, so the
-    // allowlist is what stands between a page and a feature it could turn on for itself.
+    // The whole app's preferences share one namespace, paired hosts included, so the allowlist is
+    // what stands between a page and state the native app owns.
     const bridge = harness()
     bridge.host.receive(clientFrame({ type: 'ready' }))
-    for (const key of ['orca:mobileWebShellEnabled', 'orca:pins:', 'orca:hosts']) {
+    for (const key of ['orca:pins:', 'orca:hosts']) {
       bridge.host.receive(clientFrame({ type: 'notify', name: 'storage', key, value: 'x' }))
     }
     expect(bridge.storageWrites).toEqual([])
     expect(bridge.diagnostics).toEqual(
-      Array.from({ length: 3 }, () => ({ kind: 'refused', refusal: 'unrecognised-message' }))
+      Array.from({ length: 2 }, () => ({ kind: 'refused', refusal: 'unrecognised-message' }))
     )
   })
 

@@ -1,5 +1,5 @@
 import type { SshConnection } from './ssh-connection'
-import { execCommand } from './ssh-relay-deploy-helpers'
+import { execHostCommand } from './ssh-relay-host-exec'
 import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 import {
   acquireInstallLockParentCommand,
@@ -11,7 +11,6 @@ import {
 import { isRelayGcClaimed } from './ssh-relay-gc-claim'
 import {
   getRemoteHostPlatform,
-  isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform
 } from './ssh-remote-platform'
@@ -21,15 +20,6 @@ import { removeRemoteTreeCommand } from './ssh-remote-commands'
 const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
 
 export type RelayRepairLockResult = 'acquired' | 'busy' | 'gc' | 'error'
-
-function execHostCommand(
-  conn: SshConnection,
-  host: RemoteHostPlatform,
-  command: string,
-  signal?: AbortSignal
-): Promise<string> {
-  return execCommand(conn, command, { wrapCommand: !isWindowsRemoteHost(host), signal })
-}
 
 /**
  * Try once to acquire the install lock for best-effort repair work.
@@ -63,17 +53,14 @@ export async function tryAcquireRelayRepairLock(
     if (gcClaimedBeforeAcquire !== false) {
       return 'error'
     }
-    await execHostCommand(
-      conn,
-      host,
-      acquireInstallLockParentCommand(host, remoteRelayDir),
-      options?.signal
-    )
+    await execHostCommand(conn, host, acquireInstallLockParentCommand(host, remoteRelayDir), {
+      signal: options?.signal
+    })
     const firstAttempt = await execHostCommand(
       conn,
       host,
       tryCreateInstallLockCommand(host, lockDir),
-      options?.signal
+      { signal: options?.signal }
     )
     if (firstAttempt.trim().endsWith('OK')) {
       return finishRepairLockAcquire(conn, remoteRelayDir, lockDir, host, options?.signal)
@@ -82,7 +69,7 @@ export async function tryAcquireRelayRepairLock(
       conn,
       host,
       tryStealInstallLockCommand(host, lockDir, INSTALL_LOCK_STALE_SECONDS),
-      options?.signal
+      { signal: options?.signal }
     )
     if (steal.trim().endsWith('OK')) {
       console.warn(`[ssh-relay] Stealing stale install lock at ${lockDir}`)
@@ -123,7 +110,7 @@ async function classifyRepairLockContention(
     conn,
     host,
     probeInstallLockExistsCommand(host, lockDir),
-    signal
+    { signal }
   ).catch((error) => {
     if (isUnconfirmedSshCommandTermination(error)) {
       throw error
@@ -134,12 +121,9 @@ async function classifyRepairLockContention(
   if (lockProbe.trim() !== 'LOCKED') {
     return 'error'
   }
-  const ageOutput = await execHostCommand(
-    conn,
-    host,
-    lockAgeSecondsCommand(host, lockDir),
+  const ageOutput = await execHostCommand(conn, host, lockAgeSecondsCommand(host, lockDir), {
     signal
-  ).catch((error) => {
+  }).catch((error) => {
     if (isUnconfirmedSshCommandTermination(error)) {
       throw error
     }

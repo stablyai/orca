@@ -12311,7 +12311,11 @@
             "confirmRestore": "Restaurar instantánea y reiniciar",
             "keepState": "Conservar estado",
             "statusUnknown": "Estado desconocido",
-            "checking": "Comprobando…"
+            "checking": "Comprobando…",
+            "forget": "Olvidar…",
+            "confirmForget": "Olvidar en este escritorio",
+            "keepLinked": "Mantener vinculado",
+            "forgetDescription": "Desvincula este servidor aquí sin contactar con su host. Si el host vuelve, es posible que el servidor siga ejecutándose allí."
           },
           "title": "Servidores gestionados",
           "description": "Orca instala y ejecuta un servidor en un host SSH vacío y lo mantiene actualizado.",

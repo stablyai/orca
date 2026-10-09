@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
+import { cancelHistoryGc } from '../terminal-history-gc'
 import type { registerSshHandlers } from '../ipc/ssh'
 import type { registerRemoteWorkspaceHandlers } from '../ipc/remote-workspace'
 import type { registerDaemonManagementHandlers } from '../ipc/pty-management'
@@ -206,6 +207,10 @@ async function fireReadyToShow(mainWindow: MainWindowStub): Promise<void> {
 }
 
 describe('attachMainWindowServices', () => {
+  afterEach(() => {
+    cancelHistoryGc()
+  })
+
   beforeEach(() => {
     vi.resetAllMocks()
     systemPreferencesAskForMediaAccessMock.mockResolvedValue(true)

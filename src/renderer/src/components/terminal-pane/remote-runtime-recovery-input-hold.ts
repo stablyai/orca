@@ -1,6 +1,7 @@
 import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import {
   createPtyPreconnectInputBuffer,
+  type AcceptedInputOptions,
   type PtyPreconnectInputBuffer
 } from './pty-preconnect-input-buffer'
 
@@ -14,7 +15,12 @@ type HeldInputWriter = {
   isCurrent: () => boolean
   sendInput: (data: string, inputKind: TerminalInputKind) => boolean
   sendInputImmediate: (data: string) => boolean
-  sendInputAccepted: (data: string, inputKind: TerminalInputKind) => Promise<boolean>
+  sendInputAccepted: (
+    data: string,
+    inputKind: TerminalInputKind,
+    options?: AcceptedInputOptions
+  ) => Promise<boolean>
+  continuesAfterFailedWrite?: () => boolean
 }
 
 export type RemoteRuntimeRecoveryInputHold = {
@@ -27,14 +33,15 @@ export type RemoteRuntimeRecoveryInputHold = {
   enqueueAccepted: (
     endpoint: RemoteRuntimeInputEndpoint,
     data: string,
-    inputKind: TerminalInputKind
+    inputKind: TerminalInputKind,
+    options?: AcceptedInputOptions
   ) => Promise<boolean>
   /** Delivers held input to the endpoint it was typed into, or drops it if the pane rebound elsewhere. */
   release: (bound: RemoteRuntimeInputEndpoint, writer: HeldInputWriter) => void
   discard: () => void
 }
 
-function isSameEndpoint(
+export function isSameRemoteRuntimeInputEndpoint(
   held: RemoteRuntimeInputEndpoint,
   bound: RemoteRuntimeInputEndpoint
 ): boolean {
@@ -61,13 +68,13 @@ export function createRemoteRuntimeRecoveryInputHold(): RemoteRuntimeRecoveryInp
   }
 
   const bufferFor = (endpoint: RemoteRuntimeInputEndpoint): PtyPreconnectInputBuffer => {
-    if (held && !isSameEndpoint(held.endpoint, endpoint)) {
+    if (held && !isSameRemoteRuntimeInputEndpoint(held.endpoint, endpoint)) {
       // Why: input typed at one shell must never run in its replacement (#10065).
       discard()
     }
     if (!held?.buffer.isBuffering()) {
       // Why: a drained buffer refuses input; its release bookkeeping may still be settling.
-      held = { endpoint, buffer: createPtyPreconnectInputBuffer() }
+      held = { endpoint, buffer: createPtyPreconnectInputBuffer([], { recoveryHold: true }) }
     }
     return held.buffer
   }
@@ -76,14 +83,14 @@ export function createRemoteRuntimeRecoveryInputHold(): RemoteRuntimeRecoveryInp
     isHolding: () => held?.buffer.isBuffering() === true,
     enqueue: (endpoint, data, inputKind) =>
       bufferFor(endpoint).enqueue(data, 'ordinary', inputKind),
-    enqueueAccepted: (endpoint, data, inputKind) =>
-      bufferFor(endpoint).enqueueAccepted(data, inputKind),
+    enqueueAccepted: (endpoint, data, inputKind, options) =>
+      bufferFor(endpoint).enqueueAccepted(data, inputKind, undefined, options),
     release(bound, writer) {
       const current = held
       if (!current) {
         return
       }
-      if (!isSameEndpoint(current.endpoint, bound)) {
+      if (!isSameRemoteRuntimeInputEndpoint(current.endpoint, bound)) {
         discard()
         return
       }

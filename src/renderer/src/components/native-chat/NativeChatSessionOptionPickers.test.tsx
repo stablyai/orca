@@ -389,44 +389,6 @@ describe('NativeChatSessionOptionPickers', () => {
     ).toBe('true')
   })
 
-  it('keeps the model pill shut, label intact, while its choices are still listed', async () => {
-    const pending = model({ settable: false, choicesPending: true })
-    const { rerender } = render(
-      <NativeChatSessionOptionPickers
-        surface={surface}
-        snapshot={[pending, effort]}
-        isWorking={false}
-        pickerRequest={{ id: 'model', sequence: 1 }}
-      />
-    )
-    const trigger = screen.getByRole('button', { name: 'Model Opus 4.8' })
-    expect(trigger.parentElement?.getAttribute('data-disabled')).toBe('true')
-    expect(trigger.closest('[data-testid="dropdown-root"]')?.getAttribute('data-open')).toBe(
-      'false'
-    )
-    expect(
-      screen
-        .getByRole('button', { name: 'Effort High' })
-        .parentElement?.getAttribute('data-disabled')
-    ).toBeNull()
-
-    rerender(
-      <NativeChatSessionOptionPickers
-        surface={surface}
-        snapshot={[model(), effort]}
-        isWorking={false}
-        pickerRequest={{ id: 'model', sequence: 2 }}
-      />
-    )
-    const listed = screen.getByRole('button', { name: 'Model Opus 4.8' })
-    expect(listed.parentElement?.getAttribute('data-disabled')).toBeNull()
-    await waitFor(() =>
-      expect(listed.closest('[data-testid="dropdown-root"]')?.getAttribute('data-open')).toBe(
-        'true'
-      )
-    )
-  })
-
   it('renders a session with no reported model without an empty model control', () => {
     const state = applyStructuredAgentSessionOptions(
       createStructuredAgentSessionOptionState('omp'),

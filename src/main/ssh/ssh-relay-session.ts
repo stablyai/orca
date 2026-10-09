@@ -355,8 +355,7 @@ export class SshRelaySession {
     run: RemoteOpenCodeRuntimePreparation
     controller: AbortController
   } | null = null
-  private aiVaultListMethodSupported: boolean | null = null
-  private aiVaultTitleMethodSupported: boolean | null = null
+  private readonly unsupportedRelayMethods = new Set<string>()
   private pendingPtyReattaches = new Map<string, PendingPtyReattach>()
   private readonly ptyRecoveryRetention = new SshPtyRecoveryRetentionBudget()
   private activePtyProviderGeneration: number | null = null
@@ -494,51 +493,51 @@ export class SshRelaySession {
     params: SshAiVaultRelayListParams,
     options: { signal?: AbortSignal; timeoutMs?: number } = {}
   ): Promise<unknown> {
-    if (this.aiVaultListMethodSupported === false) {
-      return null
-    }
-    const mux = this.mux
-    if (!mux || mux.isDisposed() || this._state !== 'ready') {
-      throw new Error('SSH relay is not ready')
-    }
-    this.prepareOpenCodeRuntimeForScan()
-    try {
-      const result = await mux.request(SSH_AI_VAULT_LIST_SESSIONS_METHOD, params, {
-        signal: options.signal,
-        timeoutMs: options.timeoutMs ?? SSH_AI_VAULT_LIST_SESSIONS_TIMEOUT_MS
-      })
-      this.aiVaultListMethodSupported = true
-      return result
-    } catch (error) {
-      if (isMethodNotFoundError(error)) {
-        this.aiVaultListMethodSupported = false
-        return null
-      }
-      throw error
-    }
+    return this.requestOptionalRelayMethod(
+      SSH_AI_VAULT_LIST_SESSIONS_METHOD,
+      params,
+      options,
+      SSH_AI_VAULT_LIST_SESSIONS_TIMEOUT_MS,
+      () => this.prepareOpenCodeRuntimeForScan()
+    )
   }
 
   async requestAiVaultSessionTitles(
     params: SshAiVaultRelayTitleParams,
     options: { signal?: AbortSignal; timeoutMs?: number } = {}
   ): Promise<unknown> {
-    if (this.aiVaultTitleMethodSupported === false) {
+    return this.requestOptionalRelayMethod(
+      SSH_AI_VAULT_RESOLVE_SESSION_TITLES_METHOD,
+      params,
+      options,
+      SSH_AI_VAULT_RESOLVE_SESSION_TITLES_TIMEOUT_MS
+    )
+  }
+
+  private async requestOptionalRelayMethod(
+    method: string,
+    params: Record<string, unknown>,
+    options: { signal?: AbortSignal; timeoutMs?: number },
+    defaultTimeoutMs: number,
+    before?: () => void
+  ): Promise<unknown> {
+    if (this.unsupportedRelayMethods.has(method)) {
       return null
     }
     const mux = this.mux
     if (!mux || mux.isDisposed() || this._state !== 'ready') {
       throw new Error('SSH relay is not ready')
     }
+    before?.()
     try {
-      const result = await mux.request(SSH_AI_VAULT_RESOLVE_SESSION_TITLES_METHOD, params, {
+      return await mux.request(method, params, {
         signal: options.signal,
-        timeoutMs: options.timeoutMs ?? SSH_AI_VAULT_RESOLVE_SESSION_TITLES_TIMEOUT_MS
+        timeoutMs: options.timeoutMs ?? defaultTimeoutMs
       })
-      this.aiVaultTitleMethodSupported = true
-      return result
     } catch (error) {
+      // Why: older relays lack optional methods; remember per session so callers degrade to null.
       if (isMethodNotFoundError(error)) {
-        this.aiVaultTitleMethodSupported = false
+        this.unsupportedRelayMethods.add(method)
         return null
       }
       throw error
@@ -563,8 +562,7 @@ export class SshRelaySession {
       throw new Error(`Cannot establish relay session in state: ${this._state}`)
     }
     this._state = 'deploying'
-    this.aiVaultListMethodSupported = null
-    this.aiVaultTitleMethodSupported = null
+    this.unsupportedRelayMethods.clear()
     this.currentConnection = conn
     this.lastGraceTimeSeconds = graceTimeSeconds
 
@@ -724,8 +722,7 @@ export class SshRelaySession {
     this.abortController = abortController
 
     this._state = 'reconnecting'
-    this.aiVaultListMethodSupported = null
-    this.aiVaultTitleMethodSupported = null
+    this.unsupportedRelayMethods.clear()
     this.currentConnection = conn
     this.lastGraceTimeSeconds = graceTimeSeconds
 
