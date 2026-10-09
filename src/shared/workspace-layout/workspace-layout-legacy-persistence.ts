@@ -62,15 +62,13 @@ export function updateLegacyPersistence(
     }
   })
   left.forEach((worktreeId, paneKey) => !arrived.has(paneKey) && changed.add(worktreeId))
-  const revisions = { ...after.legacy.topologyRevisionByRepoId }
-  for (const repoId of new Set([...changed].map(getRepoIdFromWorktreeId))) {
-    revisions[repoId] = (revisions[repoId] ?? 0) + 1
-  }
-  return {
-    ...after,
-    legacy: {
-      terminalRowOwners,
-      ...(Object.keys(revisions).length > 0 ? { topologyRevisionByRepoId: revisions } : {})
+  const legacy = { ...after.legacy, terminalRowOwners }
+  if (changed.size > 0) {
+    const revisions = { ...legacy.topologyRevisionByRepoId }
+    for (const repoId of new Set([...changed].map(getRepoIdFromWorktreeId))) {
+      revisions[repoId] = (revisions[repoId] ?? 0) + 1
     }
+    legacy.topologyRevisionByRepoId = revisions
   }
+  return { ...after, legacy }
 }
