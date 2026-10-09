@@ -16,7 +16,10 @@ import { getGiteaAuthStatus } from '../gitea/client'
 import { _resetKnownHostsCache } from '../gitlab/gl-utils'
 import { mergePersistedWindowsPathAsync } from '../pty/windows-environment-path'
 import { getActiveMultiplexer } from '../ssh/ssh-target-registry'
-import type { WslPreflightTarget } from '../ipc/preflight-wsl-agent-detection'
+import {
+  detectWslOpenCodeCliGeneration,
+  type WslPreflightTarget
+} from '../ipc/preflight-wsl-agent-detection'
 import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
@@ -40,6 +43,9 @@ import {
   KNOWN_TUI_AGENT_DETECTION_COMMANDS,
   resolveDetectedTuiAgentIds
 } from '../ipc/tui-agent-detection-commands'
+import { filterOpenCodeDetectedIds } from '../../shared/opencode-cli-detection'
+import type { OpenCodeCliGeneration } from '../../shared/opencode-cli-generation'
+import { detectLocalOpenCodeCliGeneration } from './opencode-generation-probe'
 import { invalidateWslGuestEnvironment } from '../wsl/wsl-guest-environment'
 import { prunePreflightWslCache } from '../preflight-wsl-cache'
 import { detectAgentCommandsOnHost } from './agent-command-detection'
@@ -149,11 +155,25 @@ export async function detectInstalledAgents(context?: PreflightRuntimeContext): 
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
     getPreflightWslTarget(context) ? 'wsl' : process.platform
   )
-  return resolveDetectedTuiAgentIds(
+  const detected = resolveDetectedTuiAgentIds(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
     await detectAgentCommandsOnHost(commands, { context }),
     getPreflightWslTarget(context) ? 'wsl' : process.platform
   )
+  return filterOpenCodeDetectedIds(detected, openCodeGenerationProbe(context))
+}
+
+function openCodeGenerationProbe(
+  context?: PreflightRuntimeContext
+): () => Promise<OpenCodeCliGeneration | null> {
+  const wslTarget = getPreflightWslTarget(context)
+  // Why: a v2-only host resolves BOTH opencode ids (the v2 package ships both
+  // bins), so a v2-only machine would otherwise report the v1 entry (#24987).
+  // The WSL probe reuses the walk's mount-skipping lookup; the local probe
+  // classifies the binary detection resolved, install-dir fallback included.
+  return wslTarget
+    ? () => detectWslOpenCodeCliGeneration(wslTarget)
+    : detectLocalOpenCodeCliGeneration
 }
 
 export async function detectInstalledAgentsWithShellPathHydration(
