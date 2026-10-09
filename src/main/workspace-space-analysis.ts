@@ -6,6 +6,10 @@ import type {
   WorkspaceSpaceScanProgress
 } from '../shared/workspace-space-types'
 import { mapWithConcurrency } from '../shared/map-with-concurrency'
+import {
+  armChildExitDeadline,
+  type ChildExitDeadline
+} from '../shared/child-process/child-exit-deadline'
 import { escapeRegex } from '../shared/string-utils'
 import {
   WorkspaceSpaceScanCancelledError,
@@ -57,26 +61,18 @@ async function readLocalDuDepthOne(
     let settled = false
     let child: ReturnType<typeof execFile> | undefined
     let onAbort: (() => void) | null = null
-    let timer: ReturnType<typeof setTimeout> | null = null
+    let deadline: ChildExitDeadline | undefined
     const settle = (callback: () => void): void => {
       if (settled) {
         return
       }
       settled = true
-      if (timer) {
-        clearTimeout(timer)
-      }
+      deadline?.clear()
       if (onAbort) {
         signal?.removeEventListener('abort', onAbort)
       }
       callback()
     }
-    timer = setTimeout(() => {
-      settle(() => {
-        child?.kill()
-        reject(new Error(`du timed out after ${DU_TIMEOUT_MS}ms`))
-      })
-    }, DU_TIMEOUT_MS)
     onAbort = () => {
       settle(() => {
         child?.kill()
@@ -92,7 +88,7 @@ async function readLocalDuDepthOne(
       child = execFile(
         'du',
         ['-k', '-d', '1', rootPath],
-        { encoding: 'utf8', maxBuffer: DU_MAX_BUFFER_BYTES, signal, timeout: DU_TIMEOUT_MS },
+        { encoding: 'utf8', maxBuffer: DU_MAX_BUFFER_BYTES, signal },
         (error, output) => {
           if (error) {
             settle(() => reject(error))
@@ -101,6 +97,16 @@ async function readLocalDuDepthOne(
           settle(() => resolve(String(output)))
         }
       )
+      if (!settled) {
+        // Why not execFile's `timeout`: after a main-thread freeze it can fire
+        // for a du that already exited and drop its unread output.
+        deadline = armChildExitDeadline(child, DU_TIMEOUT_MS, () =>
+          settle(() => {
+            child?.kill()
+            reject(new Error(`du timed out after ${DU_TIMEOUT_MS}ms`))
+          })
+        )
+      }
     } catch (error) {
       settle(() => reject(error))
     }

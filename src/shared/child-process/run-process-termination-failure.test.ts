@@ -26,6 +26,8 @@ function mockChild(): ChildProcess {
   return child as unknown as ChildProcess
 }
 
+// A `timeoutMs: 10` deadline is judged on the next loop turn, which fake
+// timers schedule 1ms later: hence 11 and 2_011 below.
 describe('runProcess termination failure', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -75,7 +77,7 @@ describe('runProcess termination failure', () => {
       settled = true
     })
 
-    await vi.advanceTimersByTimeAsync(10)
+    await vi.advanceTimersByTimeAsync(11)
     await vi.advanceTimersByTimeAsync(2_000)
     expect(settled).toBe(false)
     child.emit('exit', null, 'SIGKILL')
@@ -99,7 +101,7 @@ describe('runProcess termination failure', () => {
         onChildTerminated
       })
 
-      await vi.advanceTimersByTimeAsync(2_010)
+      await vi.advanceTimersByTimeAsync(2_011)
 
       await expect(pending).resolves.toMatchObject({ timedOut: true })
       expect(onChildTerminated).toHaveBeenCalledOnce()
@@ -121,7 +123,7 @@ describe('runProcess termination failure', () => {
       settled = true
     })
 
-    await vi.advanceTimersByTimeAsync(2_010)
+    await vi.advanceTimersByTimeAsync(2_011)
     expect(settled).toBe(false)
     expect(onChildTerminated).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(10_000)
@@ -160,7 +162,7 @@ describe('runProcess termination failure', () => {
       settled = true
     })
 
-    await vi.advanceTimersByTimeAsync(10)
+    await vi.advanceTimersByTimeAsync(11)
     child.emit('error', new Error('kill failed'))
     await vi.advanceTimersByTimeAsync(2_000)
     expect(settled).toBe(false)
@@ -183,7 +185,7 @@ describe('runProcess termination failure', () => {
     })
     void pending.catch(() => {})
 
-    await vi.advanceTimersByTimeAsync(2_010)
+    await vi.advanceTimersByTimeAsync(2_011)
 
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
     child.emit('exit', null, 'SIGKILL')
