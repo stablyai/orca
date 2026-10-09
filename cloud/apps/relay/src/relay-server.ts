@@ -64,6 +64,8 @@ function decodePathSegment(value: string): string | null {
 // tripping it. On 10-07 every window that met both also logged SQL failures.
 export const HOST_HELLO_SHED_OLDEST_WAIT_MS = 1_000
 const HOST_HELLO_SHED_RETRY_AFTER_SECONDS = 2
+// Well inside the flag channel's 5 s read, so a flip back starts re-registering within ~6 s.
+export const RESERVE_MODE_WATCH_MS = 1_000
 // Shipped desktops ignore it; it is for the ones that learn to read it.
 const CELL_FULL_RETRY_AFTER_SECONDS = 2
 
@@ -238,8 +240,20 @@ export function createRelayServer(
         }
       : undefined
   )
-  // Expired bookings give their units back even while no director is reserving.
-  const reserveSweepTimer = reserveBook ? setInterval(() => reserveBook.sweep(), 1_000) : null
+  // Expired bookings give their units back even while no director is reserving. A flip out of
+  // reserve mode voids the bookings and registers every control admitted from memory.
+  let appliedAdmitMode = options.cellFlags?.().flags.admitMode ?? 'db'
+  const reserveSweepTimer = reserveBook
+    ? setInterval(() => {
+        reserveBook.sweep()
+        const admitMode = options.cellFlags?.().flags.admitMode ?? 'db'
+        if (appliedAdmitMode === 'reserve' && admitMode !== 'reserve') {
+          reserveBook.clear()
+          sessions.reregisterMemoryControls()
+        }
+        appliedAdmitMode = admitMode
+      }, RESERVE_MODE_WATCH_MS)
+    : null
   reserveSweepTimer?.unref()
   const app = createRelayApp(config, {
     store,

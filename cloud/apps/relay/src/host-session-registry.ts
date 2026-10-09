@@ -89,7 +89,8 @@ export type HostSession = {
   readonly relayHostId: string
   readonly generation: number
   assignmentEpoch: number
-  readonly controlActivityId: string | null
+  // Null for a control admitted from memory until a flip back registers it.
+  controlActivityId: string | null
   readonly controlResumeSecret: string
   // Why: reconnect churn is only actionable once it can be pinned to a client build.
   // Refreshed on rebind so it describes the socket that closed, not the first one.
@@ -231,6 +232,11 @@ const NO_REJOIN_CLOSE_CODES: ReadonlySet<number> = new Set([
 ])
 // A demoted duplicate keeps its splices this long, then closes so the desktop re-assigns.
 export const DEMOTION_CLOSE_MS = 60_000
+// A flip back registers memory-admitted controls at this pace: 3k in about a minute.
+export const REREGISTER_PER_SECOND = 50
+const REREGISTER_TICK_MS = 100
+// A row the ledger has not written yet gets this long before the control is left as is.
+const REREGISTER_MAX_ATTEMPTS = 20
 
 export class HostSessionRegistry {
   private readonly sessions = new Map<string, HostSession>()
@@ -249,6 +255,11 @@ export class HostSessionRegistry {
   // Seat key -> the demoted control socket. Its own set, not drainSentHosts: it ends with
   // that socket (close, rebind or a new join), so a later booking here is a fresh seat.
   private readonly demotedSeats = new Map<string, WebSocket>()
+  private reregistration: {
+    queue: Array<{ key: string; generation: number; attempts: number; dueAt: number }>
+    inFlight: number
+    timer: ReturnType<typeof setInterval>
+  } | null = null
 
   private readonly idleWork = new Map<string, number>()
   private readonly idleAttempts = new Map<
@@ -388,6 +399,134 @@ export class HostSessionRegistry {
 
   inReserveMode(): boolean {
     return this.reserveMode()
+  }
+
+  // Leaving reserve mode: every control admitted from memory gets the database lease it
+  // never took, paced, while it stays connected. Nobody is disconnected; a control whose row
+  // never names it (a duplicate the ledger did not follow) is logged and left as it is.
+  reregisterMemoryControls(): number {
+    if (this.config.role !== 'cell') return 0
+    const now = this.now()
+    const queue = [...this.sessions.entries()]
+      .filter(([, session]) => session.controlActivityId === null && session.state !== 'closed')
+      .map(([key, session]) => ({ key, generation: session.generation, attempts: 0, dueAt: now }))
+    if (this.reregistration) clearInterval(this.reregistration.timer)
+    this.reregistration = null
+    if (queue.length === 0) return 0
+    const perTick = Math.max(1, Math.round((REREGISTER_PER_SECOND * REREGISTER_TICK_MS) / 1_000))
+    const state = {
+      queue,
+      inFlight: 0,
+      timer: setInterval(() => this.reregisterTick(state, perTick), REREGISTER_TICK_MS)
+    }
+    state.timer.unref?.()
+    this.reregistration = state
+    console.warn(
+      JSON.stringify({
+        event: 'orca_relay_cell_reregistration_started',
+        ...this.logIdentity(),
+        controls: queue.length
+      })
+    )
+    return queue.length
+  }
+
+  reregistrationPending(): number {
+    return this.reregistration ? this.reregistration.queue.length + this.reregistration.inFlight : 0
+  }
+
+  private reregisterTick(
+    state: NonNullable<HostSessionRegistry['reregistration']>,
+    perTick: number
+  ): void {
+    // Back in reserve mode, the remaining controls need no lease again.
+    if (this.reserveMode() || this.reregistration !== state) {
+      clearInterval(state.timer)
+      if (this.reregistration === state) this.reregistration = null
+      return
+    }
+    const now = this.now()
+    let started = 0
+    // A slow database holds a few ticks' worth in flight, never more.
+    while (started < perTick && state.inFlight < perTick * 4) {
+      const index = state.queue.findIndex((entry) => entry.dueAt <= now)
+      if (index < 0) break
+      const [entry] = state.queue.splice(index, 1)
+      started += 1
+      this.reregisterOne(state, entry!)
+    }
+    if (state.queue.length === 0 && state.inFlight === 0) {
+      clearInterval(state.timer)
+      this.reregistration = null
+      console.warn(
+        JSON.stringify({ event: 'orca_relay_cell_reregistration_finished', ...this.logIdentity() })
+      )
+    }
+  }
+
+  private reregisterOne(
+    state: NonNullable<HostSessionRegistry['reregistration']>,
+    entry: { key: string; generation: number; attempts: number; dueAt: number }
+  ): void {
+    const session = this.sessions.get(entry.key)
+    if (
+      !session ||
+      session.state === 'closed' ||
+      session.generation !== entry.generation ||
+      session.controlActivityId !== null
+    ) {
+      return
+    }
+    const identity = { userId: session.identity.sub, relayHostId: session.relayHostId }
+    const epoch = session.assignmentEpoch
+    state.inFlight += 1
+    void this.assignments
+      .activateControl(identity, {
+        cellId: this.config.cellId,
+        assignmentEpoch: epoch,
+        generation: session.generation,
+        idleRegionalRehome:
+          (session.socket &&
+            this.hostCapabilities.get(session.socket)?.has(RELAY_HOST_CAPABILITY_IDLE_REGIONAL_REHOME)) ??
+          false,
+        cellIncarnation: this.cellIncarnation
+      })
+      .then((activityId) => {
+        const current = this.sessions.get(entry.key)
+        if (
+          current !== session ||
+          session.state === 'closed' ||
+          session.generation !== entry.generation ||
+          session.assignmentEpoch !== epoch ||
+          this.reserveMode()
+        ) {
+          // The control moved on while the lease was taken; it must not stay leased.
+          this.releaseActivityBestEffort(identity, activityId)
+          return
+        }
+        session.controlActivityId = activityId
+        session.activityRenewalDueAt = this.now() + RELAY_PROTOCOL_LIMITS.controlPingIntervalMs
+      })
+      .catch((error: unknown) => {
+        entry.attempts += 1
+        if (entry.attempts < REREGISTER_MAX_ATTEMPTS && this.reregistration === state) {
+          entry.dueAt = this.now() + Math.min(5_000, 250 * 2 ** entry.attempts)
+          state.queue.push(entry)
+          return
+        }
+        console.warn(
+          JSON.stringify({
+            event: 'orca_relay_cell_reregistration_gave_up',
+            ...this.logIdentity(),
+            relayHostIdDigest: relayHostLogDigest(session.relayHostId),
+            assignmentEpoch: epoch,
+            reason: error instanceof Error ? error.message : 'unknown'
+          })
+        )
+      })
+      .finally(() => {
+        state.inFlight -= 1
+      })
   }
 
   reserveCounts(): { bookings: number; intake: { perSec: number; burst: number; tokens: number } } | null {
@@ -1417,6 +1556,9 @@ export class HostSessionRegistry {
       existing.orphanTimer = null
       existing.authorityRevision += 1
       existing.assignmentEpoch = assignmentEpoch
+      // A memory-admitted control rebound through the database now holds a lease (the same
+      // id today, since a rebind keeps its generation).
+      if (controlActivityId) existing.controlActivityId = controlActivityId
       existing.socket = socket
       existing.state = existing.regionalDrainAttemptId ? 'drain-only' : 'active'
       existing.appVersion = appVersion
