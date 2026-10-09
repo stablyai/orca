@@ -3,6 +3,7 @@ import type { AgentProviderSessionMetadata } from '../../../../shared/agent-sess
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
+  type AgentSessionHistoryPage,
   type AgentSessionHistoryResult
 } from '../../../../shared/agent-session-wire'
 import {
@@ -30,6 +31,7 @@ export type StructuredAgentSessionReadSnapshot = {
 }
 
 export type StructuredAgentSessionReadOwner = {
+  publishCreated: (page: AgentSessionHistoryPage) => void
   activate: () => () => void
   dispose: () => void
   getSnapshot: () => StructuredAgentSessionReadSnapshot
@@ -45,6 +47,7 @@ import {
 } from './structured-agent-session-read-owner-registry'
 export {
   findStructuredAgentSessionReadOwner,
+  retireStructuredAgentSessionReadOwner,
   resetStructuredAgentSessionReadOwnersForTests
 } from './structured-agent-session-read-owner-registry'
 
@@ -218,6 +221,11 @@ function createReadOwner(
     }
   }
   owner = {
+    publishCreated: (page) => {
+      if (snapshot.state.epoch === null) {
+        apply({ type: 'history-page', page })
+      }
+    },
     activate: () => {
       // Remounts and StrictMode re-run setup on an owner whose cleanup just forgot it.
       adoptStructuredReadOwner(key, owner)

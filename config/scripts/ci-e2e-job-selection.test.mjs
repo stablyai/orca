@@ -303,3 +303,24 @@ it.each([
     spec
   )
 })
+
+it('runs managed terminal root ownership in the Docker conversion lane', () => {
+  const spec = 'tests/e2e/ssh-orcad-terminal-root-owner.spec.ts'
+  expect(classify([spec])).toEqual({ e2e_run_changed: false, e2e_needs_build: true })
+  const lane = workflow.jobs['orcad-auto-convert-docker']
+  expect(lane.if).toContain(spec)
+  expect(
+    lane.steps.some((step) => step.run?.includes(spec) && step.env?.ORCA_E2E_SSH_DOCKER === '1')
+  ).toBe(true)
+  for (const source of [
+    'src/renderer/src/components/terminal-pane/terminal-worktree-path-link.ts',
+    'src/renderer/src/components/terminal-pane/terminal-file-open-routing.ts',
+    'src/renderer/src/components/terminal-pane/terminal-file-link-actions.ts',
+    'src/renderer/src/components/terminal-pane/terminal-file-link-hit-testing.ts',
+    'src/renderer/src/components/terminal-pane/terminal-link-handlers.ts',
+    'src/renderer/src/lib/worktree-owner-route.ts',
+    'tests/e2e/helpers/terminal-workspace-root-link.ts'
+  ]) {
+    expect(selectPrE2eSpecs([source]), source).toContain(spec)
+  }
+})

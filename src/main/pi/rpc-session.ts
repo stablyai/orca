@@ -19,6 +19,11 @@ import { PiRpcTurns } from './rpc-turns'
 import { PiRpcDialogCallbacks } from './rpc-dialog-callbacks'
 import { piRpcStateSchema } from './rpc-protocol'
 import { applyPiRpcSessionOption, readPiRpcCommands, readPiRpcSessionOptions } from './rpc-options'
+import {
+  unpickedSessionConfiguredChoice,
+  withLiveCatalogListing,
+  type AgentModelCatalogConfiguredChoice
+} from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
 
 export type PiRpcConnection = Pick<
   JsonlRpcAgentConnection,
@@ -57,6 +62,9 @@ export class PiRpcSession {
   readonly turns: PiRpcTurns
   readonly dialogs: PiRpcDialogCallbacks
   readonly selected = new Map<string, string>()
+  /** What this child started on, as its config's default; never re-read, so a later switch (an
+   *  extension's or the user's) teaches nothing. */
+  private startChoice?: AgentModelCatalogConfiguredChoice | null
   readonly skipped: string[] = []
   commands?: AgentSessionSlashCommand[]
   options?: AgentSessionOptionsResult
@@ -70,7 +78,9 @@ export class PiRpcSession {
     readonly input: StructuredAgentSessionAcquireInput,
     readonly generation: string,
     launch: ProviderProcessLaunch,
-    private readonly deps: PiRpcSessionDeps
+    private readonly deps: PiRpcSessionDeps,
+    /** A new Pi session starts on its config's model; a resumed or forked one keeps its own. */
+    readonly resolvesConfig = false
   ) {
     const sink = input.events && providerTimelineSink(input.events)
     if (!sink) {
@@ -142,11 +152,14 @@ export class PiRpcSession {
   async start(): Promise<string> {
     const state = piRpcStateSchema.parse(await this.connection.request('get_state'))
     this.lane.apply(this.turns.context.setModel(state.model ?? undefined, Date.now()))
+    // Keys a restore sent, whether or not Pi took them.
+    const picked = new Set<string>()
     for (const [key, value] of Object.entries(this.input.options ?? {})) {
       if (!['model', 'effort'].includes(key)) {
         this.skipped.push(key)
         continue
       }
+      picked.add(key)
       try {
         await applyPiRpcSessionOption(this.connection, this.selected, key, value)
       } catch (error) {
@@ -160,6 +173,11 @@ export class PiRpcSession {
       }
     }
     this.options = await readPiRpcSessionOptions(this.connection)
+    this.startChoice = unpickedSessionConfiguredChoice({
+      resolvesConfig: this.resolvesConfig,
+      picked,
+      ...this.options
+    })
     try {
       this.commands = (await readPiRpcCommands(this.connection)).commands
     } catch (error) {
@@ -170,6 +188,11 @@ export class PiRpcSession {
       })
     }
     return state.sessionFile
+  }
+
+  /** What the child reports now, with what its start said of its config's default. */
+  async readOptions() {
+    return withLiveCatalogListing(await readPiRpcSessionOptions(this.connection), this.startChoice)
   }
 
   async close(requested = true): ReturnType<PiRpcConnection['close']> {

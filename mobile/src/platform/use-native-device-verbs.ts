@@ -7,6 +7,9 @@ import { serveNativeClipboardVerb } from './native-clipboard'
 import { createNativeMediaVerbServer } from './native-media'
 import { discardStagedMedia, nativeMediaDeviceDeps } from './native-media-device'
 
+/** The storage read is the shell's own store, answered before this dispatcher is reached. */
+export type NativeDeviceVerb = Exclude<BridgeNativeVerb, 'native.storage.read'>
+
 /**
  * Every `native.` verb this device serves, behind the one function the host dispatches to.
  *
@@ -17,7 +20,7 @@ import { discardStagedMedia, nativeMediaDeviceDeps } from './native-media-device
  */
 export function useNativeDeviceVerbs(
   sessionId: string | null
-): (verb: BridgeNativeVerb, params: unknown) => Promise<unknown> {
+): (verb: NativeDeviceVerb, params: unknown) => Promise<unknown> {
   const registry = useMediaHandleRegistry({ sessionId, discard: discardStagedMedia })
   const serveMedia = useMemo(
     () => createNativeMediaVerbServer(nativeMediaDeviceDeps(registry)),

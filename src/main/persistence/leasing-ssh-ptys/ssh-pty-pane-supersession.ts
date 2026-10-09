@@ -1,5 +1,5 @@
 import { toSshExecutionHostId } from '../../../shared/execution-host'
-import type { SshRemotePtyLease } from '../../../shared/ssh-types'
+import { isLiveSshPtyLease, type SshRemotePtyLease } from '../../../shared/ssh-types'
 import { isTerminalLeafId } from '../../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { SshPtyLeaseOperations } from './ssh-pty-lease-operations'
@@ -34,11 +34,6 @@ function durablyBoundPtyIdsForPane(
     ...findLeafBindings(operations.state.workspaceSession)
   ]
   return [...new Set(ordered.map((ptyId) => operations.toComparablePtyId(targetId, ptyId)))]
-}
-
-/** A lease this client still holds a route to, as opposed to one it has already lost. */
-function isLiveLeaseState(state: SshRemotePtyLease['state']): boolean {
-  return state === 'attached' || state === 'detached'
 }
 
 /**
@@ -86,7 +81,7 @@ export function supersedeSiblingLeasesForPane(
       // Never retire a shell the pane is BOTH still bound to and still routable to. The stale
       // partition can name a predecessor, and retiring that is the point; retiring a live one
       // would strand a running remote process behind a pane that can no longer reach it.
-      (boundPtyIds.includes(lease.ptyId) && isLiveLeaseState(lease.state))
+      (boundPtyIds.includes(lease.ptyId) && isLiveSshPtyLease(lease))
     ) {
       continue
     }
@@ -137,7 +132,7 @@ function supersedeFromBoundPane(
     (lease) =>
       lease.targetId === targetId && lease.leafId === leafId && boundPtyIds.includes(lease.ptyId)
   )
-  const winner = candidates.find((lease) => isLiveLeaseState(lease.state))
+  const winner = candidates.find((lease) => isLiveSshPtyLease(lease))
   const marked = winner ? supersedeSiblingLeasesForPane(operations, winner, now) : false
   return marked
 }

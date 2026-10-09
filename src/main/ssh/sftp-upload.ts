@@ -3,6 +3,7 @@ import type { ReadStream } from 'node:fs'
 import { lstat, open, readdir, realpath } from 'node:fs/promises'
 import { isAbsolute, join as pathJoin, relative, sep } from 'node:path'
 import { finished } from 'node:stream/promises'
+import { promisify } from 'node:util'
 import type { SFTPWrapper } from 'ssh2'
 import {
   latchLateSftpSessionErrors,
@@ -30,16 +31,7 @@ export function mkdirSftp(
   })
 }
 
-export function uploadFile(
-  sftp: SFTPWrapper,
-  localPath: string,
-  remotePath: string,
-  options?: { exclusive?: boolean; signal?: AbortSignal }
-): Promise<void> {
-  return uploadFileAndJoinTeardown(sftp, localPath, remotePath, options)
-}
-
-async function uploadFileAndJoinTeardown(
+export async function uploadFile(
   sftp: SFTPWrapper,
   localPath: string,
   remotePath: string,
@@ -266,7 +258,7 @@ async function uploadDirectoryWithinRoot(
 }
 
 export async function removeDirectorySftp(sftp: SFTPWrapper, remoteDir: string): Promise<void> {
-  const entries = await readdirSftp(sftp, remoteDir)
+  const entries = (await promisify(sftp.readdir.bind(sftp))(remoteDir)) ?? []
   const normalizedRemoteDir = remoteDir.replace(/\/+$/, '')
   for (const entry of entries) {
     if (entry.filename === '.' || entry.filename === '..') {
@@ -275,52 +267,9 @@ export async function removeDirectorySftp(sftp: SFTPWrapper, remoteDir: string):
     const childPath = `${normalizedRemoteDir}/${entry.filename}`
     await (entry.attrs?.isDirectory?.()
       ? removeDirectorySftp(sftp, childPath)
-      : unlinkSftp(sftp, childPath))
+      : promisify(sftp.unlink.bind(sftp))(childPath))
   }
-  await rmdirSftp(sftp, remoteDir)
-}
-
-type SftpDirectoryEntry = {
-  filename: string
-  attrs?: {
-    isDirectory?: () => boolean
-  }
-}
-
-function readdirSftp(sftp: SFTPWrapper, remoteDir: string): Promise<SftpDirectoryEntry[]> {
-  return new Promise((resolve, reject) => {
-    sftp.readdir(remoteDir, (err, entries) => {
-      if (err) {
-        reject(err)
-        return
-      }
-      resolve((entries ?? []) as SftpDirectoryEntry[])
-    })
-  })
-}
-
-function unlinkSftp(sftp: SFTPWrapper, remotePath: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    sftp.unlink(remotePath, (err) => {
-      if (err) {
-        reject(err)
-        return
-      }
-      resolve()
-    })
-  })
-}
-
-function rmdirSftp(sftp: SFTPWrapper, remoteDir: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    sftp.rmdir(remoteDir, (err) => {
-      if (err) {
-        reject(err)
-        return
-      }
-      resolve()
-    })
-  })
+  await promisify(sftp.rmdir.bind(sftp))(remoteDir)
 }
 
 async function assertLocalUploadPathInsideRoot(

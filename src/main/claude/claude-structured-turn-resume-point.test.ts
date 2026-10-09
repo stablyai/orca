@@ -143,7 +143,7 @@ describe('Claude durable resume point at turn end', () => {
       store: { getRecord: () => store.record } as unknown as AgentSessionRecordStore,
       resolveWorkspacePath: async (id) => `/repos/${id}`,
       resolveCommand: () => '/usr/local/bin/claude',
-      resolveAuthPolicy: () => ({ stripAuthEnv: false })
+      resolveAuthPolicy: () => ({ account: 'system' })
     })
     const launch = await resolve({
       identity: {

@@ -24,6 +24,23 @@ import type { StructuredAgentSessionMutationContext } from './structured-agent-s
 
 type RestingOptions = Pick<AgentSessionOptionsResult, 'models' | 'fastModeSupport' | 'current'>
 
+/** Initial explicit picks follow the same rules as a pick made while the chat is at rest. */
+export function structuredAgentSessionOptionOverridesRefusal(
+  agents: Pick<StructuredAgentRegistry, 'definition'>,
+  provider: string,
+  options: Readonly<Record<string, string>>
+) {
+  const rules = agents.definition(provider)?.restingOptions
+  const key = Object.keys(options).find((key) => !rules?.acceptsKey(key))
+  return key === undefined
+    ? null
+    : refuse(
+        'agent_session_operation_invalid',
+        { reason: 'optionRejected' },
+        `${provider} has no session option named ${key}`
+      )
+}
+
 /** The at-rest rules of the record's agent, as this runtime registered it; null for any other. */
 function restingOptionRules(
   agents: Pick<StructuredAgentRegistry, 'definition'>,

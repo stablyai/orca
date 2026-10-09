@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto'
 import { ORCAD_RUNTIMES_DIRNAME } from '../../shared/orcad-artifacts'
 import type { SshConnection } from './ssh-connection'
 import { shellEscape } from './ssh-connection-utils'
-import { execCommand } from './ssh-relay-deploy-helpers'
+import { execHostCommand } from './ssh-relay-host-exec'
 import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 import { acquireInstallLock, INSTALL_LOCK_STALE_SECONDS } from './ssh-relay-install-lock'
 import {
@@ -83,7 +83,7 @@ async function releaseRuntimeStoreLock(
   const command = windows
     ? removeRemoteTreeCommand(host, lock)
     : `${posixReleaseOwnedLockCommand(host, lock, owner)} || true`
-  await execCommand(conn, command, { wrapCommand: !windows }).catch((error) => {
+  await execHostCommand(conn, host, command).catch((error) => {
     if (isUnconfirmedSshCommandTermination(error)) {
       throw error
     }
@@ -100,19 +100,22 @@ async function tryAcquireRuntimeStoreLock(
 ): Promise<boolean> {
   const lock = lockDir(host, storeDir)
   try {
-    // Why unwrapped on Windows: these are already self-contained powershell.exe command lines.
-    const wrapCommand = !isWindowsRemoteHost(host)
-    const created = await execCommand(conn, tryCreateInstallLockCommand(host, lock, owner), {
-      signal,
-      wrapCommand
-    })
+    const created = await execHostCommand(
+      conn,
+      host,
+      tryCreateInstallLockCommand(host, lock, owner),
+      {
+        signal
+      }
+    )
     if (created.trim().endsWith('OK')) {
       return true
     }
-    const stolen = await execCommand(
+    const stolen = await execHostCommand(
       conn,
+      host,
       tryStealInstallLockCommand(host, lock, INSTALL_LOCK_STALE_SECONDS, owner),
-      { signal, wrapCommand }
+      { signal }
     )
     return stolen.trim().endsWith('OK')
   } catch (error) {

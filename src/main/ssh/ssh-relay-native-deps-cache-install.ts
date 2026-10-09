@@ -12,8 +12,6 @@ import { join } from 'node:path'
 import type { SshConnection } from './ssh-connection'
 import { RELAY_ARTIFACTS } from '../../shared/relay-artifacts'
 import { execHostCommand } from './ssh-relay-host-exec'
-// Why the native-deps budget and not the default 30s: a seeding copy moves a whole
-// node_modules on the host's own disk, which is fast but not instant on a cold cache.
 import { NATIVE_DEPS_COMMAND_TIMEOUT_MS } from './ssh-relay-deploy-timing'
 import {
   computeRelayNativeDepsCacheKey,
@@ -123,6 +121,8 @@ export async function attachRelayNativeDepsCache(
   }
   const paths = cachePathsFor(context, key)
   try {
+    // Why the native-deps budget and not the default 30s: a seeding copy moves a whole
+    // node_modules on the host's own disk, which is fast but not instant on a cold cache.
     const output = await execHostCommand(
       conn,
       context.hostPlatform,

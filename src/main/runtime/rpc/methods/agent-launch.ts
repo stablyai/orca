@@ -43,7 +43,11 @@ import {
   settleQuietly,
   withEarlyTab
 } from './agent-launch-execution-outcome'
-import { AgentLaunch, AgentLaunchReplay, type AgentLaunchParams } from './agent-launch-schemas'
+import {
+  AgentLaunch,
+  AgentLaunchReplay,
+  type AgentLaunchParams
+} from '../../../../shared/rpc-contract/agent-launch-params'
 import { agentLaunchSurfaceFactory } from './agent-launch-surfaces'
 import {
   agentLaunchFailureCode,

@@ -113,7 +113,7 @@ describe('the model catalog contract on every registration', () => {
         stateDirectory: '/state',
         resolveClaudeCommand: () => resolveStructuredAgentCommand('claude', settings),
         resolveCodexCommand: (options) => resolveStructuredAgentCommand('codex', settings, options),
-        resolveClaudeAuthPolicy: () => ({ stripAuthEnv: false }),
+        resolveClaudeAuthPolicy: () => ({ account: 'system' as const }),
         resolveAgentCommandSettings: () => settings
       } as StructuredAgentModelCatalogContext['deps'],
       environment: {

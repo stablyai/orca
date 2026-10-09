@@ -3,7 +3,7 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from './execution-host'
-import { parseRemoteRuntimePtyId } from './remote-runtime-pty-id'
+import { parseRemoteRuntimePtyId, isRemoteRuntimePtyId } from './remote-runtime-pty-id'
 import { parseAppSshPtyId } from './ssh-pty-id'
 
 /** 'foreign' = the id proves the PTY runs off this host but cannot name where. */
@@ -30,7 +30,7 @@ export function getPtyExecutionHost(ptyId: string | null | undefined): PtyExecut
       ? toRuntimeExecutionHostId(environmentId)
       : 'foreign'
   }
-  if (ptyId.startsWith('ssh:') || ptyId.startsWith('remote:')) {
+  if (ptyId.startsWith('ssh:') || isRemoteRuntimePtyId(ptyId)) {
     return 'foreign'
   }
   return null

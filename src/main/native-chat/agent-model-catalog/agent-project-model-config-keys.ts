@@ -170,3 +170,27 @@ export function ompSettingsMayPickModel(text: string, format: 'json' | 'yaml' | 
   }
   return settings === null || setsOmpModelSetting(settings)
 }
+
+// Pi settings that pick the startup model or thinking level, or load project extension code, which
+// may register providers or set the model itself.
+const PI_MODEL_SETTINGS = [
+  'defaultProvider',
+  'defaultModel',
+  'defaultThinkingLevel',
+  'modelThinkingLevels',
+  'enabledModels',
+  'extensions',
+  'packages'
+] as const
+
+/** True when a Pi `.pi/settings.json`'s text could pick a model or thinking level; one Pi can't
+ *  parse counts. */
+export function piSettingsMayPickModel(text: string): boolean {
+  let settings: Record<string, unknown> | null
+  try {
+    settings = record(JSON.parse(text.replace(/^﻿/, '')))
+  } catch {
+    return true
+  }
+  return settings === null || setsAny(settings, PI_MODEL_SETTINGS)
+}

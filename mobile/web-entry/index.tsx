@@ -11,6 +11,7 @@ import {
   stampPageMountState,
   type PageMountTarget
 } from '../src/mobile-web-shell/bridge/page-bootstrap'
+import { storageReadResultSchema } from '../src/mobile-web-shell/bridge/bridge-native-verbs'
 import { publishPageStorage } from '../src/mobile-web-shell/bridge/page-async-storage'
 import {
   RouteScreenPaintProvider,
@@ -124,7 +125,13 @@ bootstrapShellPage({
       (key, value) => client.notifyStorageWrite(key, value),
       session.host?.id ?? '',
       session.route?.pathname ?? '',
-      session.storageOversize
+      session.storageOversize,
+      session.ownsHostArea
+        ? async (key) =>
+            storageReadResultSchema.parse(
+              (await client.callNativeVerb('native.storage.read', { key })).result
+            ).value
+        : null
     )
     createRoot(container).render(
       // Above `ExpoRoot`, not inside its wrapper: a route this bundle cannot resolve or import
