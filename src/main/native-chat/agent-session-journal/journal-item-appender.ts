@@ -7,6 +7,7 @@ import { journalItemRowBuilder } from './journal-row-builders'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalAppendResult, JournalItemAppendOptions } from './journal-store-contracts'
 import type { JournalRow } from './journal-row-schema'
+import type { JournalOperationReceipt } from './journal-row-writer'
 
 const NOTHING_RESOLVED = new Error('journal_item_resolved_to_nothing')
 
@@ -16,18 +17,22 @@ export class JournalItemAppender {
   constructor(
     private readonly deps: {
       state: () => JournalReducerState
-      enqueue: (build: (seq: number, ts: number) => JournalRow) => Promise<JournalRow>
+      enqueue: (
+        build: (seq: number, ts: number) => JournalRow,
+        receipt?: JournalOperationReceipt
+      ) => Promise<JournalRow>
     }
   ) {}
 
   append(
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
-    options: JournalItemAppendOptions
+    options: JournalItemAppendOptions,
+    receipt?: JournalOperationReceipt
   ): Promise<JournalAppendResult> {
     const itemId = agentJournalItemKey(identity)
     return this.deps
-      .enqueue(journalItemRowBuilder(this.deps.state, identity, body, options))
+      .enqueue(journalItemRowBuilder(this.deps.state, identity, body, options), receipt)
       .then((row) => appendResult(row, itemId))
   }
 

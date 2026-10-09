@@ -23,6 +23,8 @@ import {
   AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError
 } from './structured-agent-session-adapter'
+import type { CommandReceiptResult } from '../agent-session-journal/command-receipt-schema'
+import { readJournalItemRevision } from '../agent-session-journal/journal-item-revision-read'
 import { settledPrompt, validatePendingPrompt } from './structured-agent-session-prompt-state'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 
@@ -132,7 +134,9 @@ export async function performPrompt(
           identity,
           { ...prompt, resolution },
           // A revision: the prompt keeps the turn it was raised in.
-          { fence: ctx.fence, turnScope: ctx.journal.liveTurnScope() }
+          { fence: ctx.fence, turnScope: ctx.journal.liveTurnScope() },
+          // The answer's identity commits here, before the adapter tells the provider.
+          ctx.operationReceipt
         )
       }
     })
@@ -166,4 +170,26 @@ export async function performPrompt(
     ok: true,
     value: { itemId: appended.itemId, revision: appended.revision, resolution }
   }
+}
+
+/** The resolution an answer was accepted at, read where its receipt points, never the prompt's
+ *  latest revision; null once that epoch or row is gone, so the answer is spent, never run again. */
+export function acceptedPromptAnswer(
+  ctx: Pick<AgentSessionTurnContext, 'journal'>,
+  receipt: CommandReceiptResult | undefined
+): AgentSessionPromptResult | null {
+  const at =
+    receipt?.kind === 'journal-row'
+      ? { epoch: receipt.epoch, sequence: receipt.sequence }
+      : receipt?.kind === 'item-revision'
+        ? receipt
+        : null
+  const written = at ? readJournalItemRevision(ctx.journal, at) : null
+  const body = written?.body
+  if (!written || (body?.kind !== 'approval' && body?.kind !== 'question')) {
+    return null
+  }
+  return body.resolution.state === 'pending'
+    ? null
+    : { itemId: written.itemId, revision: written.revision, resolution: body.resolution }
 }

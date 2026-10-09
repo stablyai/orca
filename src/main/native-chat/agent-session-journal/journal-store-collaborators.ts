@@ -16,7 +16,7 @@ import { JournalQueuedMessages } from './journal-queued-messages'
 import { JournalStopMarks } from './journal-stop-marks'
 import { journalQueuePauseRestatement } from './queued-message-pause'
 import type { JournalReducerState } from './journal-reducer'
-import { JournalRowWriter } from './journal-row-writer'
+import { JournalRowWriter, type JournalOperationReceipt } from './journal-row-writer'
 import { JournalStepWriter } from './journal-step-writer'
 import { restoreJournalStore } from './journal-store-restore'
 import { JournalSubmissionWriter } from './journal-submission-writer'
@@ -42,7 +42,10 @@ export type JournalStoreHost = {
   adopt: (loaded: JournalLoad) => void
   commit: (row: JournalRow) => void
   journal: () => AgentSessionJournal
-  enqueue: (build: (seq: number, ts: number) => JournalRow) => Promise<JournalRow>
+  enqueue: (
+    build: (seq: number, ts: number) => JournalRow,
+    receipt?: JournalOperationReceipt
+  ) => Promise<JournalRow>
 }
 
 export type JournalStoreCollaborators = {

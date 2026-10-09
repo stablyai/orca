@@ -1,5 +1,8 @@
 import { parseAgentSessionOperationTimestamp } from '../../../shared/agent-session-host-authority'
-import { agentSessionLedgerRefusal } from '../../../shared/agent-session-mutation-envelope'
+import {
+  agentSessionLedgerRefusal,
+  refuseUnlessWriterAdmitted
+} from '../../../shared/agent-session-mutation-envelope'
 import {
   agentSessionRefusalFromReference,
   isAgentSessionRefusalError
@@ -15,6 +18,7 @@ import {
   refuseAgentSessionMutation
 } from './structured-agent-session-mutation-refusals'
 import type { AgentSessionMutationRequest } from './structured-agent-session-mutation-admission'
+import type { MutationCommandReceipt } from './structured-agent-session-mutation-plans'
 import { mutationTurnContext } from './structured-agent-session-mutation-turn-context'
 import { runCommandReceiptMutation } from './structured-agent-session-command-receipt'
 import {
@@ -22,10 +26,12 @@ import {
   resolveAgentSessionReplayOutcome
 } from './structured-agent-session-replay-outcome'
 
-/** Submission-accepting plans use their effect's receipt, never a ledger reservation. */
+/** A plan with a command receipt accepts through it, committed with its effect, never a ledger
+ *  reservation. */
 export async function admitCommandReceiptMutation<TValue>(
   request: AgentSessionMutationRequest<TValue>,
-  hostFingerprint: string
+  hostFingerprint: string,
+  commandReceipt: MutationCommandReceipt<TValue>
 ): Promise<AgentSessionMutationResult<TValue>> {
   const { store, envelope, plan, callerKey } = request
   if (parseAgentSessionOperationTimestamp(envelope.clientOperationId) === null) {
@@ -68,7 +74,11 @@ export async function admitCommandReceiptMutation<TValue>(
   if (!journal || !current) {
     return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
   }
-  // These plans write only to the conversation, whose journal enforces the execution-host fence.
+  // A conversation write is fenced by its journal; anything the provider must carry needs the lease.
+  const leaseRefusal = plan.conversationWrite ? null : refuseUnlessWriterAdmitted(current.lease)
+  if (leaseRefusal) {
+    return refuseAgentSessionMutation(leaseRefusal)
+  }
   const context = mutationTurnContext(request, journal, current)
   try {
     const outcome = await runCommandReceiptMutation({
@@ -78,6 +88,7 @@ export async function admitCommandReceiptMutation<TValue>(
       wakeDelivery: request.wakeDelivery,
       envelope,
       plan,
+      commandReceipt,
       context
     })
     if ('committedReceipt' in outcome) {
@@ -151,7 +162,7 @@ async function answerCommandReceipt<TValue>(
   const replay = resolveAgentSessionReplayOutcome({
     operationId: envelope.clientOperationId,
     outcome,
-    reconstruct: () => plan.replay(context, outcome),
+    reconstruct: () => plan.replay(context, outcome, receipt.result),
     rerunWhenReplayMissing: plan.rerunWhenReplayMissing?.(context),
     recoverUnknownFromDurableState: plan.recoverUnknownFromDurableState
   })

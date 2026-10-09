@@ -68,7 +68,7 @@ export type AgentSessionTurnContext = {
   publish: () => void
   /** Who a Stop's refusal row names. */
   failureTextContext?: AgentSessionFailureWordsContext
-  /** The operation's success, committed with the row that accepts it (`settlesWithWrite` or `acceptsWithCommandReceipt`). */
+  /** The operation's success, committed with the row that accepts it (`settlesWithWrite` or `commandReceipt`). */
   operationReceipt?: JournalOperationReceipt
   now: () => number
 }

@@ -16,7 +16,7 @@ import {
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
-import type { JournalOperationReceipt } from './journal-row-writer'
+import { writeReceiptIfChanged, type JournalOperationReceipt } from './journal-row-writer'
 import type { JournalSubmissionConsume } from './journal-store-contracts'
 import { holdQueuedMessages } from './queued-message-holds'
 import {
@@ -145,11 +145,10 @@ export class JournalQueuedMessages {
           queuedAt: { epoch, sequence: lastSequence },
           now: this.deps.now()
         })
-        receipt?.write(db)
         return row
       },
       () => inserted,
-      receipt?.committed
+      receipt
     )
   }
 
@@ -219,11 +218,11 @@ export class JournalQueuedMessages {
   }
 
   /** Compare-and-transition waiting ∪ returned rows to op-stamped tombstones,
-   *  kept only so a replay of the settling operation answers "spent". */
-  withdraw(input: {
-    messageIds: readonly string[]
-    settledByOp: string
-  }): Promise<QueuedMessageRow[]> {
+   *  kept only so a replay of the settling operation answers "spent". `receipt`: with a withdrawal. */
+  withdraw(
+    input: { messageIds: readonly string[]; settledByOp: string },
+    receipt?: JournalOperationReceipt
+  ): Promise<QueuedMessageRow[]> {
     if (input.messageIds.length === 0) {
       // Delete races and empty carries land here; neither may cost a write transaction.
       return Promise.resolve([])
@@ -235,7 +234,8 @@ export class JournalQueuedMessages {
           sessionId: this.deps.sessionId,
           now: this.deps.now()
         }),
-      (withdrawn) => withdrawn.length > 0
+      (withdrawn) => withdrawn.length > 0,
+      receipt
     )
   }
 
@@ -254,18 +254,18 @@ export class JournalQueuedMessages {
     }).length
   }
 
-  /** One standalone draft-table transaction on the journal's queue; one that
-   *  changed rows bumps the revision and notifies after COMMIT, `adopted` first. */
+  /** One standalone draft-table transaction on the journal's queue; one that changed rows commits
+   *  `receipt` with them, bumps the revision and notifies after COMMIT, the receipt first. */
   private transact<T>(
     run: (db: Database.Database) => JournalWriteResult<T>,
     changed: (result: T) => boolean,
-    adopted?: () => void
+    receipt?: JournalOperationReceipt
   ): Promise<T> {
     return this.deps.serialize(() => {
       assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
-      const result = this.deps.database().transaction(run)
+      const result = this.deps.database().transaction(writeReceiptIfChanged(run, changed, receipt))
       if (changed(result)) {
-        adopted?.()
+        receipt?.committed()
         this.changeRevision++
         this.deps.committed()
       }

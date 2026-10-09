@@ -29,6 +29,13 @@ export const commandReceiptResultSchema = z.discriminatedUnion('kind', [
     kind: z.literal('queued-draft'),
     messageId: z.string().min(1)
   }),
+  /** An earlier operation's revision this command acknowledged instead of writing its own. */
+  z.strictObject({
+    kind: z.literal('item-revision'),
+    epoch: z.string().min(1),
+    itemId: z.string().min(1),
+    revision: z.int().nonnegative()
+  }),
   z.strictObject({
     kind: z.literal('no-op'),
     outcome: z.discriminatedUnion('kind', [
@@ -37,7 +44,12 @@ export const commandReceiptResultSchema = z.discriminatedUnion('kind', [
         cancelled: z.literal(false),
         turnId: z.string().optional()
       }),
-      z.strictObject({ kind: z.literal('queue-resume'), resumed: z.literal(false) })
+      z.strictObject({ kind: z.literal('queue-resume'), resumed: z.literal(false) }),
+      z.strictObject({
+        kind: z.literal('queue-delete'),
+        messageId: z.string().min(1),
+        disposition: z.enum(['dispatched', 'withdrawn', 'missing'])
+      })
     ])
   })
 ])

@@ -16,11 +16,26 @@ import {
   HOST_TEST_THREAD as THREAD
 } from './structured-agent-session-host-test-data'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
-import { sendPlan } from './structured-agent-session-mutation-plans'
+import {
+  sendPlan,
+  type MutationCommandReceipt,
+  type MutationPlan
+} from './structured-agent-session-mutation-plans'
 import { runCommandReceiptMutation } from './structured-agent-session-command-receipt'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+
+const DRAFT_RECEIPT: MutationCommandReceipt<unknown> = {
+  result: () => ({ kind: 'queued-draft', messageId: 'draft' })
+}
+
+function withReceipt<TValue>(plan: MutationPlan<TValue>) {
+  if (!plan.commandReceipt) {
+    throw new Error('expected a plan that accepts through its command receipt')
+  }
+  return { plan, commandReceipt: plan.commandReceipt }
+}
 
 async function context(): Promise<AgentSessionTurnContext> {
   await attach()
@@ -68,12 +83,13 @@ it('rethrows a throw from a plan answered by its write, writing nothing and leav
     plan: {
       method: 'agentSession.send',
       fields: {},
-      settlesWithWrite: true,
+      commandReceipt: DRAFT_RECEIPT,
       run: async () => {
         throw refusal
       },
       replay: () => null
-    }
+    },
+    commandReceipt: DRAFT_RECEIPT
   }).catch((error: unknown) => error)
   expect(result).toBe(refusal)
   expect(writes).not.toHaveBeenCalled()
@@ -82,11 +98,11 @@ it('rethrows a throw from a plan answered by its write, writing nothing and leav
 })
 
 it.each([
-  { plan: 'answered by its write', settlesWithWrite: true as const, failures: 0 },
-  { plan: 'settled after its run', settlesWithWrite: undefined, failures: 2 }
+  { plan: 'answered by its write', acceptsWithReceipt: true, failures: 0 },
+  { plan: 'settled after its run', acceptsWithReceipt: false, failures: 2 }
 ])(
   'preserves a proven refusal of a plan $plan through $failures failed bookkeeping writes',
-  async ({ settlesWithWrite, failures }) => {
+  async ({ acceptsWithReceipt, failures }) => {
     const ctx = await context()
     const { store, dispatch } = hostTestState()
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -105,11 +121,12 @@ it.each([
       context: ctx,
       plan: { method: 'agentSession.send', fields: {}, run, replay: () => null }
     }
-    const result = settlesWithWrite
+    const result = acceptsWithReceipt
       ? await runCommandReceiptMutation({
           ...input,
           fingerprint: 'test-fingerprint',
-          plan: { ...input.plan, settlesWithWrite }
+          plan: { ...input.plan, commandReceipt: DRAFT_RECEIPT },
+          commandReceipt: DRAFT_RECEIPT
         })
       : await runSettledAgentSessionMutation(input)
     expect(result).toEqual(refusal)
@@ -135,7 +152,7 @@ it('accepts without touching the provider', async () => {
     fingerprint: 'test-fingerprint',
     envelope: operation,
     context: ctx,
-    plan: sendPlan({ envelope: operation, body, beforeRun })
+    ...withReceipt(sendPlan({ envelope: operation, body, beforeRun }))
   })
   expect(result).toMatchObject({ ok: true })
   expect(beforeRun).toHaveBeenCalledOnce()
@@ -162,7 +179,7 @@ it('refuses a superseded send at acceptance, recording and dispatching nothing',
     fingerprint: 'test-fingerprint',
     envelope: operation,
     context: ctx,
-    plan: sendPlan({ envelope: operation, body, beforeRun })
+    ...withReceipt(sendPlan({ envelope: operation, body, beforeRun }))
   }).catch((error: unknown) => error)
   expect(result).toBeInstanceOf(AgentSessionPreDispatchError)
   expect(writes).not.toHaveBeenCalled()
@@ -189,10 +206,10 @@ it('returns the pre-acceptance refusal without recording a receipt', async () =>
       fingerprint: 'test-fingerprint',
       envelope: operation,
       context: ctx,
-      plan: {
+      ...withReceipt({
         ...sendPlan({ envelope: operation, body }),
         run: async () => ({ ok: false, refusal })
-      }
+      })
     })
   ).toMatchObject({ ok: false, refusal })
   expect(writes).not.toHaveBeenCalled()

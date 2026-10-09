@@ -129,7 +129,7 @@ export class AgentSessionJournal {
       },
       notifyCommitted: () => this.onCommitted?.(),
       journal: () => this,
-      enqueue: (build) => this.rowWriter.enqueue(build)
+      enqueue: (build, receipt) => this.rowWriter.enqueue(build, undefined, receipt)
     })
     this.rowWriter = collaborators.rowWriter
     this.epochController = collaborators.epochController
@@ -278,9 +278,10 @@ export class AgentSessionJournal {
   appendItem(
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
-    options: JournalItemAppendOptions
+    options: JournalItemAppendOptions,
+    receipt?: JournalOperationReceipt
   ): Promise<JournalAppendResult> {
-    return this.itemAppender.append(identity, body, options)
+    return this.itemAppender.append(identity, body, options, receipt)
   }
 
   /** An upsert whose row is chosen from the fold at its own turn in the queue; null writes nothing. */
@@ -303,8 +304,12 @@ export class AgentSessionJournal {
   }
 
   /** A person's Resume of the queue. */
-  appendQueueResume(fence: number): Promise<AgentJournalCursor> {
-    return this.rowWriter.append(journalQueueResumeRowBuilder(() => this.state, fence))
+  appendQueueResume(fence: number, receipt?: JournalOperationReceipt): Promise<AgentJournalCursor> {
+    return this.rowWriter.append(
+      journalQueueResumeRowBuilder(() => this.state, fence),
+      undefined,
+      receipt
+    )
   }
 
   /** This open found waiting cards an earlier handle wrote (`queued-message-pause.ts`). */
