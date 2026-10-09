@@ -57,6 +57,8 @@ export type PtyIpcSessionOptions = {
   onPtyExit?: (id: string, exitSequence: number) => void
   /** The OS appearance, for a 'system' theme; absent on a host with no display. */
   systemPrefersDark?: () => boolean
+  /** Subscribes to OS appearance changes; returns the unsubscribe. */
+  onSystemAppearanceChanged?: (listener: () => void) => () => void
 }
 
 export type PtyRendererDelivery = Pick<

@@ -4,6 +4,7 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { isLegacyRepoForExternalWorktreeVisibility } from '../../../shared/external-worktree-visibility'
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control-ai'
+import { normalizeRepoTerminalThemeOverrides } from '../../../shared/repo-terminal-theme'
 import { normalizeWorktreeVisibilitySourcePreferences } from '../../../shared/worktree/visibility-sources'
 import type { GhAccountBinding } from '../../../shared/github/account-binding'
 import { invalidateGhAccountTokenCache } from '../../github/gh-account-token'
@@ -105,6 +106,7 @@ export class RepoUpdatePersistenceOperations {
       externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
       agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
       sourceControlAi?: Repo['sourceControlAi'] | null
+      terminalTheme?: Repo['terminalTheme'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       ghAccount?: GhAccountBinding | null
     },
@@ -225,6 +227,19 @@ export class RepoUpdatePersistenceOperations {
         delete sanitizedUpdates.sourceControlAi
       } else {
         sanitizedUpdates.sourceControlAi = normalizedSourceControlAi
+      }
+    }
+    if ('terminalTheme' in sanitizedUpdates && sanitizedUpdates.terminalTheme == null) {
+      delete repo.terminalTheme
+      delete sanitizedUpdates.terminalTheme
+    } else if ('terminalTheme' in sanitizedUpdates) {
+      const normalizedTerminalTheme = normalizeRepoTerminalThemeOverrides(
+        sanitizedUpdates.terminalTheme
+      )
+      if (normalizedTerminalTheme === undefined) {
+        delete sanitizedUpdates.terminalTheme
+      } else {
+        sanitizedUpdates.terminalTheme = normalizedTerminalTheme
       }
     }
     if ('ghAccount' in updates) {

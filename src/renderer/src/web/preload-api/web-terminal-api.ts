@@ -35,6 +35,7 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     setPtyDeliveryInterest: () => {},
     // Why: remote-runtime PTYs are never hidden-gate markable, so there's no main-side responder to feed.
     publishTerminalViewAttributes: () => {},
+    publishRepoTerminalViewAttributes: () => {},
     hasChildProcesses: () => Promise.resolve(false),
     getForegroundProcess: () => Promise.resolve(null),
     inspectProcess: () => Promise.reject(new Error('terminal_liveness_unavailable')),

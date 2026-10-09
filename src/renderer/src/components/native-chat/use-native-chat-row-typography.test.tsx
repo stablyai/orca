@@ -2,7 +2,7 @@
 import { useMemo, useRef } from 'react'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import * as terminalThemeSelection from '../../../../shared/terminal-theme-selection'
+import * as terminalViewerColors from '../../../../shared/terminal-viewer-colors'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { useAppStore } from '../../store'
 import { resetSystemPrefersDarkSubscriptionForTests } from '../terminal-pane/use-system-prefers-dark'
@@ -24,7 +24,7 @@ describe('memoized transcript row typography', () => {
       nativeChatAppearance: { matchTerminalInterface: true }
     })
     useAppStore.setState({ settings })
-    const resolveColors = vi.spyOn(terminalThemeSelection, 'resolveConfiguredTerminalColors')
+    const resolveColors = vi.spyOn(terminalViewerColors, 'resolveConfiguredTerminalColors')
     const matchMedia = vi.spyOn(window, 'matchMedia')
     const rendered = vi.fn()
     const { result, rerender } = renderHook(() => {

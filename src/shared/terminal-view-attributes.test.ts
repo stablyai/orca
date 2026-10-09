@@ -9,6 +9,8 @@ import {
   formatXColorRgbSpec,
   parseXColorSpec,
   terminalViewAttributesEqual,
+  terminalViewColorsEqual,
+  validateRepoTerminalViewAttributes,
   validateTerminalViewAttributes,
   type TerminalViewAttributes,
   type TerminalViewRgb
@@ -115,5 +117,106 @@ describe('terminalViewAttributesEqual', () => {
     ['cursorBlink', { ...snapshot(), cursorBlink: false }]
   ])('detects a change in %s', (_label, changed) => {
     expect(terminalViewAttributesEqual(snapshot(), changed as TerminalViewAttributes)).toBe(false)
+  })
+})
+
+describe('terminalViewColorsEqual', () => {
+  const snapshot = (): TerminalViewAttributes => ({
+    foreground: [1, 2, 3],
+    background: [4, 5, 6],
+    cursor: [7, 8, 9],
+    ansi: Array.from({ length: 256 }, (_, i): TerminalViewRgb => [i % 256, 0, 0]),
+    colorSchemeMode: 'dark',
+    cursorStyle: 'block',
+    cursorBlink: true
+  })
+
+  // Why: a theme apply only rewrites colours, so palette invalidation must ignore the rest.
+  it('ignores cursor style, cursor blink and the app mode', () => {
+    const changed: TerminalViewAttributes = {
+      ...snapshot(),
+      colorSchemeMode: 'light',
+      cursorStyle: 'bar',
+      cursorBlink: false
+    }
+    expect(terminalViewColorsEqual(snapshot(), changed)).toBe(true)
+  })
+
+  it('detects a palette change', () => {
+    const ansi = snapshot().ansi.map((rgb, i): TerminalViewRgb => (i === 2 ? [9, 9, 9] : rgb))
+    expect(terminalViewColorsEqual(snapshot(), { ...snapshot(), ansi })).toBe(false)
+  })
+})
+
+describe('validateRepoTerminalViewAttributes', () => {
+  const entry = (): TerminalViewAttributes => ({
+    foreground: [131, 148, 150],
+    background: [0, 43, 54],
+    cursor: [7, 8, 9],
+    ansi: Array.from({ length: 256 }, (_, i) => [i % 256, 0, 0] as TerminalViewRgb),
+    colorSchemeMode: 'dark',
+    cursorStyle: 'block',
+    cursorBlink: true
+  })
+
+  it('accepts per-host maps of valid per-repo snapshots, the same repo id on each host', () => {
+    const result = validateRepoTerminalViewAttributes({
+      byHostId: { local: { a: entry(), b: entry() }, 'ssh:target-1': { a: entry() } }
+    })
+    expect(Object.keys(result?.byHostId ?? {})).toEqual(['local', 'ssh:target-1'])
+    expect(Object.keys(result?.byHostId.local ?? {})).toEqual(['a', 'b'])
+    expect(result?.byHostId['ssh:target-1'].a.background).toEqual([0, 43, 54])
+  })
+
+  it('accepts an empty map (no themed repos clears every repo snapshot on every host)', () => {
+    expect(validateRepoTerminalViewAttributes({ byHostId: {} })).toEqual({ byHostId: {} })
+  })
+
+  it.each([
+    ['null payload', null],
+    ['string payload', 'x'],
+    ['missing byHostId', {}],
+    ['array byHostId', { byHostId: [entry()] }]
+  ])('rejects %s', (_label, payload) => {
+    expect(validateRepoTerminalViewAttributes(payload)).toBeNull()
+  })
+
+  it('drops only malformed entries and keeps the rest', () => {
+    const result = validateRepoTerminalViewAttributes({
+      byHostId: {
+        local: {
+          a: entry(),
+          b: { ...entry(), ansi: [] },
+          c: { ...entry(), background: [300, 0, 0] },
+          d: 42,
+          '': entry(),
+          e: entry()
+        }
+      }
+    })
+    expect(Object.keys(result?.byHostId.local ?? {})).toEqual(['a', 'e'])
+  })
+
+  it('drops hosts that are not this one or an SSH one, and hosts left without an entry', () => {
+    const result = validateRepoTerminalViewAttributes({
+      byHostId: {
+        'runtime:env-1': { a: entry() },
+        'not a host': { a: entry() },
+        'ssh:': { a: entry() },
+        'ssh:target-1': { a: 42 },
+        'ssh:target-2': [entry()],
+        'ssh:target-3': {},
+        'ssh:target-4': { a: entry() }
+      }
+    })
+    expect(Object.keys(result?.byHostId ?? {})).toEqual(['ssh:target-4'])
+  })
+
+  it('keeps __proto__ repo ids as own keys', () => {
+    const byRepoId = JSON.parse(`{"__proto__": ${JSON.stringify(entry())}, "a": 1}`)
+    const result = validateRepoTerminalViewAttributes({ byHostId: { local: byRepoId } })
+    expect(Object.keys(result?.byHostId.local ?? {})).toEqual(['__proto__'])
+    expect(Object.getPrototypeOf(result?.byHostId.local)).toBe(Object.prototype)
+    expect(Object.getPrototypeOf(result?.byHostId)).toBe(Object.prototype)
   })
 })

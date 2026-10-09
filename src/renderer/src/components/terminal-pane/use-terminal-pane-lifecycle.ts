@@ -142,10 +142,13 @@ export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): vo
       deps.paneTransportsRef.current,
       deps.effectiveMacOptionAsAltRef.current,
       deps.paneMode2031Ref.current,
-      deps.paneLastThemeModeRef.current
+      deps.paneLastThemeModeRef.current,
+      deps.repoTerminalThemeRef.current
     )
   }, [
     deps.settings,
+    deps.repoTerminalTheme,
+    deps.repoTerminalThemeRef,
     deps.systemPrefersDark,
     deps.effectiveMacOptionAsAlt,
     deps.managerRef,

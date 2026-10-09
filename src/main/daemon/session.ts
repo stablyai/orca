@@ -10,7 +10,8 @@ import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { randomUUID } from 'node:crypto'
-import { PtyStartupIngress } from '../../shared/pty-startup-ingress'
+import type { PtyStartupIngress } from '../../shared/pty-startup-ingress'
+import { createSessionStartupIngress } from './session-startup-ingress'
 
 import type {
   SessionState,
@@ -81,9 +82,7 @@ export class Session {
       acceptStartupIngress: (data) => this.startupIngress.accept(data)
     })
 
-    this.startupIngress = new PtyStartupIngress({
-      ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
-      ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
+    this.startupIngress = createSessionStartupIngress(opts, {
       write: (data) => this.subprocess.write(data),
       onEmission: (emission) => this.recoveryBarrier.accept(emission)
     })

@@ -75,12 +75,12 @@ export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
         return result
       }
       assertActiveEnvironment(owned.environmentId)
-      return {
-        repo: await createReposApi().update({
-          repoId: result.repo.id,
-          updates: { displayName }
-        })
-      }
+      // Why the fallback: the runtime RPC always replies with a row; null is only main's refusal.
+      const renamed = await createReposApi().update({
+        repoId: result.repo.id,
+        updates: { displayName }
+      })
+      return { repo: renamed ?? result.repo }
     },
     create: async ({ parentPath, name, kind }) => {
       invalidateRuntimeWorktreeCaches()

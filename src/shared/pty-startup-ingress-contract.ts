@@ -12,8 +12,8 @@ export type PtyIngressEmission = {
 export type PtyStartupIngressOptions = {
   intent?: PtyStartupIngressIntent
   ownerBackend?: PtyOwnerBackend
-  /** Host-wide viewer colours, read per query so a theme change reaches a long-lived pane.
-   *  Defaults to this process's pushed colours. */
+  /** This PTY's viewer colours (its project's, else host-wide), read per query so a theme
+   *  change reaches a long-lived pane. Defaults to this process's host-wide colours. */
   resolveHostColors?: () => TerminalOscColorQueryReplyColors | null
   write: (data: string) => void
   onEmission: (emission: PtyIngressEmission) => void

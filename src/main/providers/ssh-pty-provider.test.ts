@@ -239,6 +239,21 @@ describe('SshPtyProvider', () => {
     expect(mux.request).not.toHaveBeenCalledWith('pty.setColorQueryReplyColors', expect.anything())
   })
 
+  it("pushes this host's project colours beside the host colours, and no field while unknown", () => {
+    const colors = { foreground: '#ffffff', background: '#282c34' }
+    const byRepoId = { 'repo-a': { foreground: '#839496', background: '#002b36' } }
+    provider.setColorQueryReplyColors(colors, byRepoId)
+    provider.setColorQueryReplyColors(colors, {})
+    provider.setColorQueryReplyColors(colors)
+    expect(mux.notify.mock.calls).toEqual([
+      ['pty.setColorQueryReplyColors', { colors, byRepoId }],
+      ['pty.setColorQueryReplyColors', { colors, byRepoId: {} }],
+      // Why no key at all: the relay keeps its last map on absence; undefined would not survive JSON anyway.
+      ['pty.setColorQueryReplyColors', { colors }]
+    ])
+    expect(mux.notify.mock.calls[2]?.[1]).not.toHaveProperty('byRepoId')
+  })
+
   it('acknowledgeDataEvent sends pty.ackData notification', () => {
     provider.acknowledgeDataEvent(scopedPty1, 1024)
     expect(mux.notify).toHaveBeenCalledWith('pty.ackData', { id: 'pty-1', charCount: 1024 })

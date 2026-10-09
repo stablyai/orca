@@ -294,6 +294,25 @@ describe('LocalPtyProvider', () => {
       ])
     })
 
+    it("answers a themed project's PTY from its project colours, live", async () => {
+      const { id } = await provider.spawn({ cols: 80, rows: 24, worktreeId: 'repo-a::/src/a' })
+      const onDataCb = mockProc.onData.mock.calls[0][0]
+      const host = { foreground: '#ffffff', background: '#ffffff' }
+      provider.setColorQueryReplyColors(host, {
+        'repo-a': { foreground: '#839496', background: '#002b36' }
+      })
+      provider.closeStartupQueryAuthority(id)
+
+      onDataCb('\x1b]11;?\x07')
+      provider.setColorQueryReplyColors(host, {})
+      onDataCb('\x1b]11;?\x07')
+
+      expect(mockProc.write.mock.calls).toEqual([
+        ['\x1b]11;rgb:0000/2b2b/3636\x1b\\'],
+        ['\x1b]11;rgb:ffff/ffff/ffff\x1b\\']
+      ])
+    })
+
     it('keeps forwarded OSC color replies for a Windows-owned WSL PTY', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const { id } = await provider.spawn({

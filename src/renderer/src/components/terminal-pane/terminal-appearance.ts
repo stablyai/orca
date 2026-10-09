@@ -4,10 +4,12 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
 import {
+  applyRepoTerminalThemeOverride,
   getBuiltinTheme,
   resolvePaneStyleOptions,
   resolveEffectiveTerminalAppearance
 } from '@/lib/terminal-theme'
+import type { RepoTerminalThemeOverrides } from '../../../../shared/repo-terminal-theme'
 import { buildFontFamily } from '@/lib/monospace-font-family'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { canApplyPaneMetricOptions } from '@/lib/pane-manager/pane-fit'
@@ -24,72 +26,20 @@ import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import { setTerminalCursorBlinkOption } from '@/lib/pane-manager/pane-cursor-blink-suspension'
 import type { PtyTransport } from './pty-transport'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
-import { HEX_COLOR_RE } from '../../../../shared/color-validation'
+import { hexToRgba } from '../../../../shared/terminal-css-color'
 import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
-import { publishTerminalViewAttributes } from './terminal-view-attributes-publisher'
+import {
+  composeActiveTerminalTheme,
+  isHexColor
+} from '../../../../shared/terminal-view-attributes-composition'
+import { publishTerminalViewAttributesFromSettings } from './terminal-view-attributes-publisher'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
 import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
 import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
 import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
 
-export function hexToRgba(hex: string, alpha: number): string {
-  let clean = hex.replace('#', '')
-  if (clean.length === 3) {
-    clean = clean
-      .split('')
-      .map((c) => c + c)
-      .join('')
-  }
-  const r = Number.parseInt(clean.slice(0, 2), 16)
-  const g = Number.parseInt(clean.slice(2, 4), 16)
-  const b = Number.parseInt(clean.slice(4, 6), 16)
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`
-}
-
-export function isHexColor(value: string): boolean {
-  return HEX_COLOR_RE.test(value)
-}
-
-// Why extracted: lets the settings preview compose the same theme without depending on PaneManager. Keep pure.
-export function composeActiveTerminalTheme(
-  baseTheme: ITheme | null,
-  settings: Pick<
-    GlobalSettings,
-    'terminalColorOverrides' | 'terminalBackgroundOpacity' | 'terminalCursorOpacity'
-  >
-): ITheme | null {
-  if (!baseTheme) {
-    return null
-  }
-  // Why transparent ruler border: scrollbar.width enables xterm's overview ruler, whose border would paint a bright line.
-  // Why raised slider alpha: xterm's default (~0.2) is nearly invisible on dark bg. Before the spread so explicit theme wins.
-  let theme: ITheme = {
-    overviewRulerBorder: 'transparent',
-    scrollbarSliderBackground: 'rgba(180, 180, 185, 0.4)',
-    scrollbarSliderHoverBackground: 'rgba(180, 180, 185, 0.6)',
-    scrollbarSliderActiveBackground: 'rgba(180, 180, 185, 0.8)',
-    ...baseTheme
-  }
-  // Why: merge Ghostty color overrides atop the base theme so individual colors can be tweaked without losing the rest.
-  if (settings.terminalColorOverrides) {
-    theme = { ...theme, ...settings.terminalColorOverrides }
-  }
-  // Why: convert the hex background to rgba so xterm honors the opacity when allowTransparency is set.
-  if (settings.terminalBackgroundOpacity !== undefined && theme.background) {
-    theme = {
-      ...theme,
-      background: hexToRgba(theme.background, settings.terminalBackgroundOpacity)
-    }
-  }
-  // Why hex-only: hexToRgba expects a hex input, so named CSS cursor colors are left untouched.
-  if (settings.terminalCursorOpacity !== undefined && theme.cursor && isHexColor(theme.cursor)) {
-    theme = {
-      ...theme,
-      cursor: hexToRgba(theme.cursor, settings.terminalCursorOpacity)
-    }
-  }
-  return theme
-}
+// Why shared: main composes the same theme from persisted settings to pre-load hidden PTYs.
+export { composeActiveTerminalTheme, hexToRgba, isHexColor }
 
 /** Publishes composed terminal appearance at app start so hidden-at-launch PTYs can query OSC 10/11
  *  before any pane mounts (terminal-query-authority.md §Phase 6). Returns whether a publish went out. */
@@ -101,12 +51,9 @@ export function publishTerminalViewAttributesAtAppStart(
   if (!settings) {
     return false
   }
-  const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
-  const baseTheme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
-  const theme = composeActiveTerminalTheme(baseTheme, settings)
   return send !== undefined
-    ? publishTerminalViewAttributes(theme, appearance.mode, settings, send)
-    : publishTerminalViewAttributes(theme, appearance.mode, settings)
+    ? publishTerminalViewAttributesFromSettings(settings, systemPrefersDark, send)
+    : publishTerminalViewAttributesFromSettings(settings, systemPrefersDark)
 }
 
 // Value equality over composed ITheme objects (flat string slots plus the extendedAnsi array); gates the options.theme write.
@@ -142,14 +89,17 @@ export function applyTerminalAppearance(
   paneTransports: Map<number, PtyTransport>,
   effectiveMacOptionAsAlt: EffectiveMacOptionAsAlt,
   paneMode2031: Map<number, boolean>,
-  paneLastThemeMode: Map<number, 'dark' | 'light'>
+  paneLastThemeMode: Map<number, 'dark' | 'light'>,
+  repoTerminalTheme?: RepoTerminalThemeOverrides
 ): void {
-  const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
+  const paneSettings = applyRepoTerminalThemeOverride(settings, repoTerminalTheme)
+  const appearance = resolveEffectiveTerminalAppearance(paneSettings, systemPrefersDark)
   const paneStyles = resolvePaneStyleOptions(settings)
   const baseTheme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
-  const theme = composeActiveTerminalTheme(baseTheme, settings)
-  // Publish composed appearance to main's hidden-PTY query responder — the only point it exists; deduped in the publisher.
-  publishTerminalViewAttributes(theme, appearance.mode, settings)
+  const theme = composeActiveTerminalTheme(baseTheme, paneSettings)
+  // Publishes the GLOBAL snapshot (deduped); per-repo snapshots are published from store state by
+  // repo-terminal-view-attributes-publisher, so a themed pane must never push its own palette as the global one.
+  publishTerminalViewAttributesAtAppStart(settings, systemPrefersDark)
   const paneBackground = theme?.background ?? '#000000'
 
   const terminalFontWeights = resolveTerminalFontWeights(

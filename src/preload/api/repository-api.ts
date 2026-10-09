@@ -69,10 +69,12 @@ export type RepositoryApi = {
       externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
       agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
       sourceControlAi?: Repo['sourceControlAi'] | null
+      terminalTheme?: Repo['terminalTheme'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       ghAccount?: GhAccountBinding | null
     }
-  }) => Promise<Repo>
+    // Why nullable: main replies null when it refuses the write (row missing or held by another host).
+  }) => Promise<Repo | null>
   pickFolder: () => Promise<string | null>
   pickFolders: () => Promise<string[]>
   pickDirectory: () => Promise<string | null>

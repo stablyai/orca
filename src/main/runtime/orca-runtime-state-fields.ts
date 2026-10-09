@@ -41,7 +41,11 @@ import { configureAiVaultSessionSources } from '../ai-vault/cached-session-list'
 import { configureHostReadableTranscriptPathSources } from '../native-chat/host-readable-transcript-path'
 import { createEphemeralAgentSessionClaimSigner } from './agent-session-claim-identity'
 import { registerConptyDa1OverrideInstaller } from './terminal-model-query-authority'
-import { registerTerminalViewAttributesApplier } from './terminal-view-attribute-store'
+import {
+  getTerminalViewAttributesForScope,
+  registerTerminalViewAttributesApplier
+} from './terminal-view-attribute-store'
+import { resolvePtyViewAttributeScope } from './pty-view-attribute-scope'
 import { RuntimeMachineName } from './runtime-machine-name'
 
 export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
@@ -283,10 +287,20 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
     // Why: a renderer attribute push must reach already-live emulators too —
     // cursor options for DECRQSS/DECRQM parity plus the per-PTY OSC color
     // override reset a theme apply implies (terminal-query-authority.md
-    // §View-attribute bridge).
-    registerTerminalViewAttributesApplier((attributes) => {
-      for (const state of this.headlessTerminals.values()) {
-        state.emulator.applyPushedViewAttributes(attributes)
+    // §View-attribute bridge). Each PTY resolves its own repo-or-global
+    // snapshot before and after the push, so only PTYs whose palette a theme
+    // change moved lose their OSC SET overlays — never one whose base main
+    // merely learned (late worktree registration, first map arrival).
+    registerTerminalViewAttributesApplier((push) => {
+      for (const [ptyId, state] of this.headlessTerminals) {
+        const scope = resolvePtyViewAttributeScope(ptyId, this.ptysById.get(ptyId))
+        const attributes = getTerminalViewAttributesForScope(scope)
+        if (attributes) {
+          state.emulator.applyPushedViewAttributes(
+            attributes,
+            push.kind === 'theme-change' ? push.resolveBefore(scope) : null
+          )
+        }
       }
     })
   }

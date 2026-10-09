@@ -15,6 +15,24 @@ export const latestRepoCatalogGenerationByHostByStore = new WeakMap<
 
 export const latestAllHostRepoCatalogGenerationByStore = new WeakMap<() => AppState, number>()
 
+const firstLocalRepoCatalogFetchByStore = new WeakMap<
+  () => AppState,
+  { registered: Promise<void>; markRegistered: () => void }
+>()
+
+function awaitLocalRepoCatalogFetchRegistration(get: () => AppState): Promise<void> {
+  let first = firstLocalRepoCatalogFetchByStore.get(get)
+  if (!first) {
+    let markRegistered: () => void = () => undefined
+    const registered = new Promise<void>((resolve) => {
+      markRegistered = resolve
+    })
+    first = { registered, markRegistered }
+    firstLocalRepoCatalogFetchByStore.set(get, first)
+  }
+  return first.registered
+}
+
 export function startLocalRepoCatalogFetch(
   get: () => AppState
 ): (outcome: LocalRepoCatalogFetchOutcome) => void {
@@ -23,14 +41,18 @@ export function startLocalRepoCatalogFetch(
     settle = resolve
   })
   latestLocalRepoCatalogFetchByStore.set(get, settlement)
+  firstLocalRepoCatalogFetchByStore.get(get)?.markRegistered()
   return settle
 }
 
+/** Resolves once the newest local catalog fetch settles; waits for one to start if none has. */
 export async function awaitLatestLocalRepoCatalogFetch(get: () => AppState): Promise<void> {
   while (true) {
     const pending = latestLocalRepoCatalogFetchByStore.get(get)
     if (!pending) {
-      return
+      // Why wait, not return: runtime fetches never register, so local repos are not loaded yet.
+      await awaitLocalRepoCatalogFetchRegistration(get)
+      continue
     }
     const outcome = await pending
     if (latestLocalRepoCatalogFetchByStore.get(get) === pending) {

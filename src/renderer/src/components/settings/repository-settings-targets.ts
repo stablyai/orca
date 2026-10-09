@@ -18,3 +18,7 @@ export function getRepositorySourceControlAiActionRecipeSectionId(
 ): string {
   return `repo-${repoId}-source-control-ai-${actionId}`
 }
+
+export function getRepositoryTerminalThemeSectionId(repoId: string): string {
+  return `repo-${repoId}-terminal-theme`
+}

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { buildFontFamily } from '@/lib/monospace-font-family'
-import * as terminalThemeSelection from '../../../../shared/terminal-theme-selection'
-import { resolveConfiguredTerminalColors } from '../../../../shared/terminal-theme-selection'
+import * as terminalViewerColors from '../../../../shared/terminal-viewer-colors'
+import { resolveConfiguredTerminalColors } from '../../../../shared/terminal-viewer-colors'
 import { nativeChatAppearanceStyle, nativeChatContrastMix } from './native-chat-appearance-style'
 
 const makeSettings = createGlobalSettingsFixture
@@ -250,7 +250,11 @@ describe('contrast hierarchy and incomplete terminal palettes', () => {
   it.each([{}, { background: '#ffffff' }, { foreground: '#000000' }])(
     'uses the fallback source pair for an incomplete palette %j',
     (colors) => {
-      vi.spyOn(terminalThemeSelection, 'resolveConfiguredTerminalColors').mockReturnValue(colors)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Deliberately incomplete palette to exercise the fallback.
+      const incompletePalette = colors as unknown as terminalViewerColors.TerminalViewerColors
+      vi.spyOn(terminalViewerColors, 'resolveConfiguredTerminalColors').mockReturnValue(
+        incompletePalette
+      )
       for (const theme of ['light', 'dark'] as const) {
         const style = nativeChatAppearanceStyle(
           makeSettings({

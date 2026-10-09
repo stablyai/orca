@@ -3,7 +3,14 @@ import type { IPtyProvider } from '../../../providers/types'
 import { parseAppSshPtyId, toAppSshPtyId, toRelaySshPtyId } from '../../../providers/ssh-pty-id'
 import { ptyOwnership } from './ownership-state'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
-import { colorQueryReplyColorsEqual } from '../../../../shared/pty-owner-color-query-colors'
+import {
+  colorQueryReplyColorsEqual,
+  repoColorQueryReplyColorsByHostEqual,
+  repoColorQueryReplyColorsEqual,
+  type PtyOwnerRepoColors,
+  type PtyOwnerRepoColorsByHost
+} from '../../../../shared/pty-owner-color-query-colors'
+import { getConnectionTerminalThemeHostId } from '../../../../shared/terminal-theme-execution-host'
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Routes PTY operations by connectionId (null = local provider).
@@ -12,16 +19,38 @@ export let localProvider: IPtyProvider = new LocalPtyProvider()
 export const sshProviders = new Map<string, IPtyProvider>()
 export const sshProvidersByGeneration = new Map<number, IPtyProvider>()
 let colorQueryReplyColors: TerminalOscColorQueryReplyColors | null = null
+// Null until the renderer's first project-theme push (or main's seed), which covers every host.
+let repoColorQueryReplyColorsByHost: PtyOwnerRepoColorsByHost | null = null
+
+const NO_THEMED_PROJECTS: PtyOwnerRepoColors = {}
+
+/** The slice of the project map one owner is told: its own host's entries (repo ids are
+ *  unambiguous within a host), empty once main knows no project there is themed, and nothing at
+ *  all while main knows no map (the owner then keeps its last one). */
+function repoColorQueryReplyColorsForOwner(connectionId: string | null): PtyOwnerRepoColors | null {
+  if (!repoColorQueryReplyColorsByHost) {
+    return null
+  }
+  return (
+    repoColorQueryReplyColorsByHost[getConnectionTerminalThemeHostId(connectionId)] ??
+    NO_THEMED_PROJECTS
+  )
+}
 
 // Why push to every owner: each process that owns PTYs (in-process, daemon, relay) answers
 // OSC 10/11 itself, so a theme change must reach it before its next query, not at spawn.
 // Why never push "unknown": a daemon outlives the app and keeps the last run's theme.
-function pushColorQueryReplyColors(provider: IPtyProvider): void {
+function pushColorQueryReplyColors({ provider, connectionId }: RegisteredPtyProvider): void {
   if (!colorQueryReplyColors) {
     return
   }
   try {
-    provider.setColorQueryReplyColors?.(colorQueryReplyColors)
+    const byRepoId = repoColorQueryReplyColorsForOwner(connectionId)
+    if (byRepoId) {
+      provider.setColorQueryReplyColors?.(colorQueryReplyColors, byRepoId)
+    } else {
+      provider.setColorQueryReplyColors?.(colorQueryReplyColors)
+    }
   } catch {
     /* Best-effort; the owner keeps answering from its last or default colours. */
   }
@@ -33,13 +62,36 @@ export function publishColorQueryReplyColors(colors: TerminalOscColorQueryReplyC
     return
   }
   colorQueryReplyColors = colors
-  for (const { provider } of registeredPtyProviders()) {
-    pushColorQueryReplyColors(provider)
+  for (const registered of registeredPtyProviders()) {
+    pushColorQueryReplyColors(registered)
+  }
+}
+
+/** Project colours by execution host, then repo id; each owner hears only its own host's. */
+export function publishRepoColorQueryReplyColors(byHost: PtyOwnerRepoColorsByHost): void {
+  const previous = repoColorQueryReplyColorsByHost
+  if (previous && repoColorQueryReplyColorsByHostEqual(previous, byHost)) {
+    return
+  }
+  repoColorQueryReplyColorsByHost = byHost
+  for (const registered of registeredPtyProviders()) {
+    // Why per host: a change to another host's projects is not a change this owner can see.
+    const hostId = getConnectionTerminalThemeHostId(registered.connectionId)
+    if (
+      !previous ||
+      !repoColorQueryReplyColorsEqual(
+        previous[hostId] ?? NO_THEMED_PROJECTS,
+        byHost[hostId] ?? NO_THEMED_PROJECTS
+      )
+    ) {
+      pushColorQueryReplyColors(registered)
+    }
   }
 }
 
 export function _resetColorQueryReplyColorsForTest(): void {
   colorQueryReplyColors = null
+  repoColorQueryReplyColorsByHost = null
 }
 
 export type RegisteredPtyProvider = {
@@ -133,7 +185,9 @@ export function tryGetProviderForAgentSessionOwner(ptyId: string): IPtyProvider 
 /** Register an SSH PTY provider for a connection. */
 export function registerSshPtyProvider(connectionId: string, provider: IPtyProvider): void {
   sshProviders.set(connectionId, provider)
-  pushColorQueryReplyColors(provider)
+  // Why on every registration: a reconnect brings a fresh relay channel that must hear this
+  // host's colours and project map again.
+  pushColorQueryReplyColors({ provider, connectionId })
   const generation = (provider as { providerGeneration?: number }).providerGeneration
   if (Number.isSafeInteger(generation) && generation! > 0) {
     sshProvidersByGeneration.set(generation!, provider)
@@ -166,5 +220,5 @@ export function getLocalPtyProvider(): IPtyProvider {
  *  Call before registerPtyHandlers so the IPC layer routes through the daemon. */
 export function setLocalPtyProvider(provider: IPtyProvider): void {
   localProvider = provider
-  pushColorQueryReplyColors(provider)
+  pushColorQueryReplyColors({ provider, connectionId: null })
 }

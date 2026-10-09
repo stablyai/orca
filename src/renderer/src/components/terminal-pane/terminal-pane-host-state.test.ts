@@ -4,6 +4,7 @@ import { selectWorktreeHostConnectionPhase } from '@/lib/worktree-host-connectio
 import { selectTerminalPaneHostState } from './terminal-pane-host-state'
 
 function makeState(overrides: Record<string, unknown>): AppState {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture supplies the slices host-state resolution reads.
   return {
     activeWorktreeId: null,
     detectedWorktreesByRepo: {},
@@ -228,5 +229,45 @@ describe('selectTerminalPaneHostState', () => {
       sshReconnectStatus: null,
       sshReconnectTargetId: 'ssh-nested'
     })
+  })
+
+  it("carries the pane repo's terminal theme and re-publishes only when it changes", () => {
+    const terminalTheme = { dark: 'Dracula' }
+    const repos = [{ id: 'repo-theme', terminalTheme }]
+    const worktreesByRepo = { 'repo-theme': [{ id: 'repo-theme::/wt', repoId: 'repo-theme' }] }
+    const first = selectTerminalPaneHostState(
+      makeState({ repos, worktreesByRepo }),
+      'repo-theme::/wt'
+    )
+    expect(first.repoTerminalTheme).toBe(terminalTheme)
+    // A new store publication with the same repo rows keeps the memoized identity.
+    expect(
+      selectTerminalPaneHostState(makeState({ repos, worktreesByRepo }), 'repo-theme::/wt')
+    ).toBe(first)
+    const nextTheme = { dark: 'Nord' }
+    const changed = selectTerminalPaneHostState(
+      makeState({ repos: [{ id: 'repo-theme', terminalTheme: nextTheme }], worktreesByRepo }),
+      'repo-theme::/wt'
+    )
+    expect(changed).not.toBe(first)
+    expect(changed.repoTerminalTheme).toBe(nextTheme)
+  })
+
+  it('keeps the theme object when only the SSH status changes', () => {
+    const terminalTheme = { dark: 'Dracula' }
+    const withStatus = (status: string) =>
+      makeState({
+        repos: [{ id: 'repo-ssh-theme', connectionId: 'ssh-b', terminalTheme }],
+        sshConnectionStates: new Map([
+          ['ssh-b', { targetId: 'ssh-b', status, error: null, reconnectAttempt: 0 }]
+        ]),
+        worktreesByRepo: {
+          'repo-ssh-theme': [{ id: 'repo-ssh-theme::/wt', repoId: 'repo-ssh-theme' }]
+        }
+      })
+    const connected = selectTerminalPaneHostState(withStatus('connected'), 'repo-ssh-theme::/wt')
+    const connecting = selectTerminalPaneHostState(withStatus('connecting'), 'repo-ssh-theme::/wt')
+    expect(connecting).not.toBe(connected)
+    expect(connecting.repoTerminalTheme).toBe(connected.repoTerminalTheme)
   })
 })

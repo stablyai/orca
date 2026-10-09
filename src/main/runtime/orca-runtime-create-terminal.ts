@@ -115,7 +115,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
           tabId,
           agentTeamsPlan?.env
         )
-        const terminalColorQueryReplies = dependencies.getTerminalViewerColors()
+        const terminalColorQueryReplies = dependencies.getWorkspaceTerminalViewerColors(workspace)
         if (launchOpts.signal?.aborted) {
           throw new Error('client_disconnected')
         }

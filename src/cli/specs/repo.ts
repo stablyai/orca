@@ -33,6 +33,22 @@ export const REPO_COMMAND_SPECS: CommandSpec[] = [
     examples: ['orca repo set --repo path:/path/to/repo --external-worktree-visibility show --json']
   },
   {
+    path: ['repo', 'set-theme'],
+    summary: "Set a project's terminal theme for dark or light mode",
+    usage:
+      'orca repo set-theme --repo <selector> --mode dark|light --theme <name|custom:id|inherit> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'mode', 'theme'],
+    notes: [
+      'Use a built-in theme name or an imported custom:<id> selection. Quote names containing spaces.',
+      'inherit clears this mode’s override. The other mode is preserved.',
+      'Applies to local and SSH repo rows; paired-runtime rows are not supported.'
+    ],
+    examples: [
+      'orca repo set-theme --repo id:repo-1 --mode dark --theme "Dracula" --json',
+      'orca repo set-theme --repo id:repo-1 --mode light --theme inherit --json'
+    ]
+  },
+  {
     path: ['repo', 'set-base-ref'],
     summary: "Set the repo's default base ref for future worktrees",
     usage: 'orca repo set-base-ref --repo <selector> --ref <ref> [--json]',

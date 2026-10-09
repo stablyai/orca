@@ -17,6 +17,7 @@ import type { DaemonIdleRetirementResult } from './daemon-pty-runtime-state'
 import { DaemonRouterRetirement } from './daemon-router-retirement'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
 import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
+import type { PtyOwnerRepoColors } from '../../shared/pty-owner-color-query-colors'
 
 export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
@@ -192,9 +193,12 @@ export class DaemonPtyRouter implements IPtyProvider {
     return (await this.adapterFor(id).closeStartupQueryAuthority?.(id)) ?? 0
   }
 
-  setColorQueryReplyColors(colors: TerminalOscColorQueryReplyColors): void {
+  setColorQueryReplyColors(
+    colors: TerminalOscColorQueryReplyColors,
+    byRepoId?: PtyOwnerRepoColors
+  ): void {
     for (const adapter of this.allAdapters()) {
-      adapter.setColorQueryReplyColors(colors)
+      adapter.setColorQueryReplyColors(colors, byRepoId)
     }
   }
 

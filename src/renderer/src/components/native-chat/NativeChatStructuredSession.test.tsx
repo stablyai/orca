@@ -1,4 +1,4 @@
-import * as terminalThemeSelection from '../../../../shared/terminal-theme-selection'
+import * as terminalViewerColors from '../../../../shared/terminal-viewer-colors'
 import { getDefaultSettings } from '../../../../shared/constants'
 // @vitest-environment happy-dom
 
@@ -104,7 +104,7 @@ describe('NativeChatStructuredSession', () => {
       nativeChatAppearance: { matchTerminalInterface: true }
     }
     useAppStore.setState({ settings })
-    const resolveColors = vi.spyOn(terminalThemeSelection, 'resolveConfiguredTerminalColors')
+    const resolveColors = vi.spyOn(terminalViewerColors, 'resolveConfiguredTerminalColors')
     const view = render(
       <NativeChatStructuredSession
         isVisible
