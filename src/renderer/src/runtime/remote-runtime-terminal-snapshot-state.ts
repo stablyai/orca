@@ -82,6 +82,17 @@ export function rejectPendingSnapshotRequest(
   request.reject(new Error(message))
 }
 
+export function disposeRemoteTerminalStreamState(
+  stream: RemoteRuntimeMultiplexedTerminalState,
+  message: string
+): void {
+  discardOutputAcknowledgements(stream)
+  stream.watchdog.dispose()
+  clearSnapshot(stream)
+  clearResyncTimer(stream)
+  rejectPendingSnapshotRequest(stream, message)
+}
+
 export function decodeSnapshotInfo(
   payload: Uint8Array<ArrayBufferLike>
 ): RemoteRuntimeSnapshotInfo | null {
