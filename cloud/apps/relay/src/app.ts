@@ -734,6 +734,8 @@ export function createRelayApp(
       imageDigest: config.imageDigest ?? null,
       draining: operations.isDraining?.() ?? false,
       regionalRehomeProtocol: config.rehomeAudience && config.rehomeDirectorServiceAccount ? 3 : 0,
+      // The flag workflow's read-back: applied switches, never the desired object.
+      ...(operations.cellFlags ? { flagsApplied: operations.cellFlags() } : {}),
       connectionCapacity:
         config.connectionHardCap === undefined
           ? null
