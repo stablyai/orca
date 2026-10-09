@@ -39,6 +39,10 @@ export type CreateBrowserTabOptions = {
   sessionPartition?: string | null
   // Place the new tab in a specific group (e.g. "Open Preview to the Side"); defaults to the worktree's active group.
   targetGroupId?: string
+  /** Client-local unified tab id of the source; the new tab lands right after it when still live. */
+  afterTabId?: string
+  /** Verified execution host for the new wrapper; unset keeps createUnifiedTab's active-workspace fallback. */
+  executionHostId?: ExecutionHostId
   // Explicit "New Tab" focuses the address bar even with a real home URL; link-opened tabs leave it unset.
   focusAddressBar?: boolean
   browserRuntimeEnvironmentId?: string | null
@@ -108,6 +112,7 @@ export type BrowserSlice = {
   browserPagesByWorkspace: Record<string, BrowserPage[]>
   browserCertificateFailuresByPageId: Record<string, BrowserCertificateFailure>
   browserAnnotationsByPageId: Record<string, BrowserPageAnnotation[]>
+  browserAnnotationMarkerIdsByPageId: Record<string, string[]>
   remoteBrowserPageHandlesByPageId: Record<string, RemoteBrowserPageHandle>
   /**
    * Closes of client-hosted pages their owning runtime never heard, keyed by environment.
@@ -143,7 +148,9 @@ export type BrowserSlice = {
   closeBrowserTab: (tabId: string, options?: { reason?: 'cleanup' }) => void
   shutdownWorktreeBrowsers: (worktreeId: string) => Promise<void>
   reopenClosedBrowserTab: (worktreeId: string) => BrowserWorkspace | null
-  setActiveBrowserTab: (tabId: string) => void
+  /** Activation uses the tab's workspace unless a target is supplied; global selection
+   *  moves only when that workspace is active. */
+  setActiveBrowserTab: (tabId: string, targetWorktreeId?: string) => void
   createBrowserPage: (
     workspaceId: string,
     url: string,
@@ -192,6 +199,7 @@ export type BrowserSlice = {
   ) => void
   deleteBrowserPageAnnotation: (pageId: string, annotationId: string) => void
   clearBrowserPageAnnotations: (pageId: string) => void
+  invalidateBrowserPageAnnotationGeometry: (pageId: string) => void
   removeDeliveredBrowserPageAnnotations: (
     pageId: string,
     deliveredAnnotations: readonly BrowserPageAnnotation[]

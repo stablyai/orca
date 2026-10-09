@@ -7,9 +7,9 @@
  * set, so the page's store is the app's, reached over the `storage` grant.
  *
  * An allowlist and not a passthrough. Everything the app keeps under `orca:` is in one namespace —
- * push registrations, the hybrid shell flag itself — and a page that could write any of them could
- * turn the feature on for a build that never offered it. A prefix is listed only where the key
- * carries an id the desktop chooses; the rest are exact.
+ * paired hosts, push registrations — and a page that could write any of them could rewrite state
+ * the native app owns. A prefix is listed only where the key carries an id the desktop chooses; the
+ * rest are exact.
  *
  * Every key here was read off a page route's own closure rather than taken from a list: a key a
  * screen reads and this file does not name is a preference that silently falls back to its default
@@ -29,7 +29,7 @@ export const PAGE_STORAGE_EXACT_KEYS = [
   'orca:custom-accessory-keys',
   /** Whether a supported agent session opens on the terminal or the native chat. */
   'orca:defaultSessionView',
-  /** The durable send journal: which `agentSession.send` operation ids are still unsettled. */
+  /** Legacy journal access for embedded pages served by older hosts. */
   'orca:mobileStructuredSendOperations:v1',
   /** The terminal's text scale, which pinch-to-zoom writes. */
   'orca:terminalTextScale',

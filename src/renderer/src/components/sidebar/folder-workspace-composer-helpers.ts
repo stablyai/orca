@@ -23,7 +23,7 @@ import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
+import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/smart-workspace-name-field-model'
 import { translate } from '@/i18n/i18n'
 
 const EMPTY_REPOS: Repo[] = []

@@ -3,6 +3,7 @@ import {
   serializeBudgetedMobileSnapshot
 } from './terminal-snapshot-publication'
 import { getOutputAfterSnapshotSeq } from './terminal-stream-replay'
+import { getTerminalInputSequenceLedger } from './terminal-input-sequence-ledger'
 import type {
   MultiplexSubscribeRequest,
   TerminalMultiplexConnection
@@ -26,7 +27,7 @@ export async function publishMultiplexInitialSnapshot(
   const forcedInitialSnapshotTruncated =
     process.env.ORCA_E2E_FORCE_REMOTE_TERMINAL_INITIAL_SNAPSHOT_TRUNCATED === '1'
   let read = await runtime.readTerminal(request.terminal)
-  let serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
+  let serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId)
   if (state.closed || streams.get(request.streamId) !== stream) {
     return null
   }
@@ -36,7 +37,7 @@ export async function publishMultiplexInitialSnapshot(
     stream.pendingOutputBytes = 0
     stream.pendingOutputOverflowed = false
     read = await runtime.readTerminal(request.terminal)
-    serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
+    serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId)
     if (state.closed || streams.get(request.streamId) !== stream) {
       return null
     }
@@ -60,13 +61,19 @@ export async function publishMultiplexInitialSnapshot(
     rows: serialized?.rows ?? size?.rows,
     displayMode,
     seq: layoutSeq,
-    ...((stream.ackOutputSourceRanges || stream.supportsOutputPause) && {
+    ...((stream.ackOutputSourceRanges ||
+      stream.supportsOutputPause ||
+      stream.inputSessionId !== null) && {
       capabilities: {
         ...(stream.ackOutputSourceRanges ? { ackOutputSourceRanges: 1 as const } : {}),
-        ...(stream.supportsOutputPause ? { outputPause: 1 as const } : {})
+        ...(stream.supportsOutputPause ? { outputPause: 1 as const } : {}),
+        ...(stream.inputSessionId !== null ? { inputAck: 1 as const } : {})
       }
     }),
     ...(stream.ackOutputSourceRanges ? { streamGeneration: stream.streamGeneration } : {}),
+    ...(stream.inputSessionId !== null
+      ? { inputLedgerId: getTerminalInputSequenceLedger(runtime).id }
+      : {}),
     // Why: retained-tail truncation loses history, not the authoritative latest-screen fallback.
     truncated: initialOutputOverflowed
   })
@@ -95,6 +102,7 @@ export async function publishMultiplexInitialSnapshot(
       cwd: serialized?.cwd,
       truncated: initialOutputOverflowed,
       truncatedByByteBudget: serialized?.truncatedByByteBudget,
+      scrollbackRows: serialized?.scrollbackRows,
       source: serialized?.source,
       kittyKeyboardFlags: serialized?.kittyKeyboardFlags,
       alternateScreen: serialized?.alternateScreen,

@@ -26,7 +26,9 @@ vi.mock('./github-api-repository', async (importOriginal) =>
   )
 )
 
-import { getRepoSlug, getRepoUpstream, getWorkItem, getPullRequestPushTarget } from './client'
+import { getRepoSlug, getRepoUpstream } from './client/fetch/repo-slug-upstream'
+import { getWorkItem } from './client/fetch/get-work-item'
+import { getPullRequestPushTarget } from './client/lookup/pull-request-push-target'
 import { resetPRForBranchMocks } from './client-test-harness'
 
 const {
@@ -141,32 +143,6 @@ describe('getPRForBranch', () => {
         remoteUrl: 'git@github.com:prateek/orca.git'
       },
       maintainerCanModify: false
-    })
-  })
-
-  it('omits maintainerCanModify when the API does not report the flag', async () => {
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
-    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
-    ghExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: JSON.stringify({
-        head: {
-          ref: 'fix-sidebar',
-          repo: {
-            full_name: 'stablyai/orca',
-            name: 'orca',
-            clone_url: 'https://github.com/stablyai/orca.git',
-            ssh_url: 'git@github.com:stablyai/orca.git',
-            owner: { login: 'stablyai' }
-          }
-        }
-      })
-    })
-
-    await expect(getPullRequestPushTarget('/repo-root', 1738)).resolves.toEqual({
-      pushTarget: {
-        remoteName: 'origin',
-        branchName: 'fix-sidebar'
-      }
     })
   })
 

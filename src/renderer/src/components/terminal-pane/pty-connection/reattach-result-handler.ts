@@ -5,12 +5,12 @@ import { warnTerminalLifecycleAnomaly } from '../terminal-lifecycle-diagnostics'
 // actually attached — nothing is inspectable while the session hydrates.
 import { notifyCodexPaneBoundForStaleSweep } from '@/lib/codex-stale-pane-sweep'
 import { useAppStore } from '@/store'
-import { isPassiveCompletedHibernationEvidence } from '@/lib/sleeping-agent-pane-ownership'
 import { parseAppSshPtyId } from '../../../../../shared/ssh-pty-id'
 import { resolveHiddenRestoreScrollbackRows } from '../terminal-hidden-restore-scrollback'
 import { shouldIgnoreStalePanePtyLayoutBinding } from './pane-pty-layout-binding'
 
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
+import { hasEmptyReattachRetireEvidence } from './empty-reattach-retire-evidence'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -187,14 +187,12 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     const hasStructuralReplay = Boolean(
       connectResult?.snapshot || connectResult?.replay || connectResult?.coldRestore
     )
-    const resumeComesFromPassiveHibernation = Boolean(
-      coldRestoreStartup &&
-      !coldRestoreStartup.useLiveEntry &&
-      coldRestoreStartup.sleepingRecordEntry &&
-      isPassiveCompletedHibernationEvidence(coldRestoreStartup.sleepingRecordEntry.record)
-    )
-    // Why: reattach drops startup commands; only passive hibernation is authority to retire an empty adopted shell and resume its provider session.
-    if (!hasStructuralReplay && connectResult?.isReattach && resumeComesFromPassiveHibernation) {
+    // Why: reattach drops startup commands; only real hibernation is authority to retire an empty adopted shell and resume its provider session.
+    if (
+      !hasStructuralReplay &&
+      connectResult?.isReattach &&
+      hasEmptyReattachRetireEvidence(ptyId, coldRestoreStartup)
+    ) {
       session.transport.disconnect()
       if (staleSessionId) {
         session.clearExitedPanePtyLayoutBinding(staleSessionId)

@@ -1,3 +1,4 @@
+import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
 import type { AiVaultListResult } from '../../shared/ai-vault-types'
 import {
   aiVaultSessionDepthCovers,
@@ -23,6 +24,26 @@ const cachedHostLegs = new Map<string, CachedHostLeg>()
 // otherwise a delete's invalidation is silently undone by a scan that resolves
 // just after it.
 let cacheGeneration = 0
+let expiryTimer: ReturnType<typeof setTimeout> | null = null
+
+function scheduleHostLegExpiry(): void {
+  if (expiryTimer !== null || cachedHostLegs.size === 0) {
+    return
+  }
+  let earliest = Infinity
+  for (const entry of cachedHostLegs.values()) {
+    earliest = Math.min(earliest, entry.expiresAt)
+  }
+  expiryTimer = setTimeout(
+    () => {
+      expiryTimer = null
+      pruneExpiredHostLegs(Date.now())
+      scheduleHostLegExpiry()
+    },
+    Math.min(MAX_TIMER_DELAY_MS, Math.max(0, earliest - Date.now()))
+  )
+  expiryTimer.unref?.()
+}
 
 /** Serves one host's leg from the per-host TTL cache, and stores it only when
  * that host answered without a host issue — a failing host is retried on the
@@ -73,6 +94,7 @@ export async function scanHostLegWithCache(args: {
     result,
     expiresAt: Date.now() + AI_VAULT_CACHE_TTL_MS
   })
+  scheduleHostLegExpiry()
   return result
 }
 
@@ -91,6 +113,10 @@ function pruneExpiredHostLegs(now: number): void {
 export function invalidateAiVaultHostLegCache(): void {
   cacheGeneration++
   cachedHostLegs.clear()
+  if (expiryTimer !== null) {
+    clearTimeout(expiryTimer)
+  }
+  expiryTimer = null
 }
 
 export function resetAiVaultHostLegCacheForTests(): void {

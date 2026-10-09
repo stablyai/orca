@@ -42,6 +42,7 @@ import {
 import { dispatchWebRuntimeInitialTerminalBootstrap } from '../web-runtime-initial-terminal-bootstrap-dispatch'
 import { toRuntimeWorktreeSelector } from '../runtime-worktree-selector'
 import type { SessionTabsStreamEvent } from './state'
+import { subscribeRuntimeEnvironment } from '../runtime-environment-pairing-refresh'
 
 type Ref<T> = { current: T }
 
@@ -227,7 +228,7 @@ export function installActiveSessionTabsSubscription({
   return installWindowVisibilitySubscriptionParking([
     {
       subscribe: (isCurrent) =>
-        window.api.runtimeEnvironments.subscribe(
+        subscribeRuntimeEnvironment(
           {
             selector: environmentId,
             method: 'session.tabs.subscribe',

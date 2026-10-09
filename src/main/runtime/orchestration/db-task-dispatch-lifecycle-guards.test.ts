@@ -8,7 +8,6 @@ import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
 type WorkerFixture = {
   dispatchId: string
-  capability: string
   handle: string
   paneKey: string
   processIncarnation: string
@@ -47,8 +46,6 @@ describe('Task/Dispatch lifecycle guards', () => {
     expect(database.getDispatchContextById(second.dispatchId)?.status).toBe('dispatched')
     expect(database.getWorkerDispatch(first.dispatchId)?.state).toBe('ready')
     expect(database.getWorkerDispatch(second.dispatchId)?.state).toBe('ready')
-    expectCapability(database, first, true)
-    expectCapability(database, second, true)
   })
 
   it.each(['succeeded', 'failed'] as const)(
@@ -115,7 +112,7 @@ describe('Task/Dispatch lifecycle guards', () => {
   })
 
   it.each(['failed', 'stopped'] as const)(
-    'treats abandon of an already %s worker as stale without a lifecycle conflict',
+    'treats abandon of an already %s worker as settled without a lifecycle conflict',
     (state) => {
       const database = createDatabase()
       const task = database.createTask({
@@ -130,8 +127,8 @@ describe('Task/Dispatch lifecycle guards', () => {
         database.settleWorkerStop(worker.dispatchId)
       }
 
-      expect(database.abandonWorkerDispatch(worker.dispatchId)).toMatchObject({
-        disposition: 'stale',
+      expect(database.abandonWorkerDispatch(worker.dispatchId, 'epoch_test')).toMatchObject({
+        disposition: 'already_settled',
         worker: { state }
       })
     }
@@ -158,7 +155,6 @@ describe('Task/Dispatch lifecycle guards', () => {
       capability_revoked_at: null
     })
     expect(database.getWorkerDispatch(worker.dispatchId)?.state).toBe('ready')
-    expectCapability(database, worker, true)
   })
 
   it('atomically settles worker state when a proven process exit fails its Dispatch', () => {
@@ -178,7 +174,6 @@ describe('Task/Dispatch lifecycle guards', () => {
       stage: 'process_exited',
       last_error: 'process exited'
     })
-    expectCapability(database, worker, false)
   })
 
   it('settles a stop-unknown worker when a positive PTY exit arrives', () => {
@@ -211,7 +206,6 @@ describe('Task/Dispatch lifecycle guards', () => {
       stage: 'process_exited',
       last_error: 'process exited'
     })
-    expectCapability(database, worker, false)
   })
 
   it('keeps a Task dispatched when missing-terminal recovery leaves another worker active', () => {
@@ -234,12 +228,10 @@ describe('Task/Dispatch lifecycle guards', () => {
     expect(database.getWorkerDispatch(missing.dispatchId)?.state).toBe('abandoned')
     expect(database.getDispatchContextById(live.dispatchId)?.status).toBe('dispatched')
     expect(database.getWorkerDispatch(live.dispatchId)?.state).toBe('ready')
-    expectCapability(database, missing, false)
-    expectCapability(database, live, true)
 
     database.reconcileMissingWorkerTerminal(live.dispatchId, 'second terminal missing')
     expect(database.getTask(task.id)?.status).toBe('ready')
-    expectCapability(database, live, false)
+    expect(database.getDispatchContextById(live.dispatchId)?.status).toBe('failed')
   })
 
   it.each(['local', 'federated'] as const)(
@@ -288,7 +280,6 @@ describe('Task/Dispatch lifecycle guards', () => {
       expect(database.getWorkerDispatch(failed.dispatch.id)?.state).toBe('failed')
       expect(database.getDispatchContextById(live.dispatchId)?.status).toBe('dispatched')
       expect(database.getWorkerDispatch(live.dispatchId)?.state).toBe('ready')
-      expectCapability(database, live, true)
     }
   )
 
@@ -429,7 +420,7 @@ describe('Task/Dispatch lifecycle guards', () => {
       const released =
         operation === 'stop'
           ? database.beginWorkerStop(contextOnly.id, 'runtime_test')
-          : database.abandonWorkerDispatch(contextOnly.id)
+          : database.abandonWorkerDispatch(contextOnly.id, 'epoch_test')
       expect(released).toMatchObject({
         disposition: 'context_only',
         alreadySettled: false,
@@ -464,7 +455,7 @@ describe('Task/Dispatch lifecycle guards', () => {
       const released =
         operation === 'stop'
           ? database.beginWorkerStop(contextOnly.id, 'runtime_test')
-          : database.abandonWorkerDispatch(contextOnly.id)
+          : database.abandonWorkerDispatch(contextOnly.id, 'epoch_test')
 
       expect(released).toMatchObject({
         disposition: 'context_only',
@@ -523,12 +514,13 @@ describe('Task/Dispatch lifecycle guards', () => {
         )
         expect(database.settleWorkerStop(released.dispatchId).state).toBe('stopped')
       } else {
-        expect(database.abandonWorkerDispatch(released.dispatchId).disposition).toBe('abandoned')
+        expect(database.abandonWorkerDispatch(released.dispatchId, 'epoch_test').disposition).toBe(
+          'abandoned'
+        )
       }
 
       expect(database.getTask(task.id)?.status).toBe('dispatched')
       expect(database.getDispatchContextById(live.dispatchId)?.status).toBe('dispatched')
-      expectCapability(database, live, true)
       expect(
         database.settleWorkerReport({
           taskId: task.id,
@@ -538,7 +530,7 @@ describe('Task/Dispatch lifecycle guards', () => {
         })
       ).toEqual({ action: 'settled', outcome: 'succeeded', duplicate: false })
       expect(database.getTask(task.id)?.status).toBe('completed')
-      expectCapability(database, live, false)
+      expect(database.getDispatchContextById(live.dispatchId)?.status).toBe('completed')
     }
   )
 
@@ -555,7 +547,9 @@ describe('Task/Dispatch lifecycle guards', () => {
     expect(database.beginWorkerStop(stopping.dispatchId, 'runtime_test').disposition).toBe(
       'stopping'
     )
-    expect(database.abandonWorkerDispatch(abandoned.dispatchId).disposition).toBe('abandoned')
+    expect(database.abandonWorkerDispatch(abandoned.dispatchId, 'epoch_test').disposition).toBe(
+      'abandoned'
+    )
     expect(database.getTask(task.id)?.status).toBe('dispatched')
 
     expect(database.settleWorkerStop(stopping.dispatchId).state).toBe('stopped')
@@ -656,7 +650,6 @@ describe('Task/Dispatch lifecycle guards', () => {
     expect(database.getTask(task.id)?.status).toBe('dispatched')
     expect(database.getDispatchContextById(worker.dispatchId)?.status).toBe('dispatched')
     expect(database.getWorkerDispatch(worker.dispatchId)?.state).toBe('ready')
-    expectCapability(database, worker, true)
   })
 
   it('rolls back gate resolution when an active Dispatch blocks readiness', () => {
@@ -700,7 +693,7 @@ function startWorker(database: OrchestrationDb, taskId: string, name: string): W
   const paneKey = `tab_${name}:aaaaaaaa-aaaa-4aaa-8aaa-${paneSuffix}`
   const processIncarnation = `${name}:1`
   const handle = `term_${name}`
-  const capability = database.prepareStartingWorkerAuthority({
+  database.prepareStartingWorkerAuthority({
     dispatchId: started.dispatch.id,
     handle,
     paneKey,
@@ -711,18 +704,7 @@ function startWorker(database: OrchestrationDb, taskId: string, name: string): W
     terminalOwnership: 'created'
   })
   database.markWorkerDispatchReady(started.dispatch.id)
-  return { dispatchId: started.dispatch.id, capability, handle, paneKey, processIncarnation }
-}
-
-function expectCapability(database: OrchestrationDb, worker: WorkerFixture, valid: boolean): void {
-  expect(
-    database.verifyDispatchCapability({
-      dispatchId: worker.dispatchId,
-      capability: worker.capability,
-      paneKey: worker.paneKey,
-      processIncarnation: worker.processIncarnation
-    }).valid
-  ).toBe(valid)
+  return { dispatchId: started.dispatch.id, handle, paneKey, processIncarnation }
 }
 
 function sqliteFor(database: OrchestrationDb): Database.Database {

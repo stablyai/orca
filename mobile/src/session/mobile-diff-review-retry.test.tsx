@@ -55,6 +55,9 @@ function ReviewWhileUnreachable({
   const controller = useMobileDiffReviewController({
     client,
     connState,
+    hostCapabilities: [],
+    hostStatusPending: false,
+    hostStatusReadable: true,
     hostId: 'host-1',
     worktreeId: 'wt-1',
     name: 'review',

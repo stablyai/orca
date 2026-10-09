@@ -1,4 +1,10 @@
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
+import {
+  discardStagedStartupCommand,
+  stageStartupCommand,
+  startupStagingFailureNotice,
+  type StartupCommandStaging
+} from '../../shared/startup-command-staging'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
 import { getDaemonSessionResultMetadata } from './daemon-create-or-attach-result'
 import { enumerateDirectoryOnce } from './directory-enumeration-probe'
@@ -12,7 +18,7 @@ import type { TerminalHostTombstones } from './terminal-host-tombstones'
 import type { TerminalSessionTeardown } from './terminal-session-teardown'
 import { resolveDaemonSessionScrollbackRows } from './daemon-session-scrollback-window'
 import { TerminalAttachCanceledError } from './daemon-errors'
-import { rejectOnAbort } from './terminal-attach-cancellation'
+import { waitForTerminalAttachOperation } from './terminal-attach-cancellation'
 import { SessionNotFoundError } from './types'
 import { resolveWslSessionContext } from './wsl-session-context'
 
@@ -47,10 +53,11 @@ export async function createOrAttachTerminalSession(
     // reaches this a beat after the attach that retired it, and refusing surfaced the raw
     // SessionNotFoundError to the user. Windows makes it the common case, where the plain-shell
     // sweep holds the claim across an OS identity probe and taskkill (#18046).
-    await Promise.race([
+    await waitForTerminalAttachOperation(
       deps.sessionTeardown.settle(opts.sessionId),
-      rejectOnAbort(opts.cancelSignal, opts.sessionId)
-    ])
+      opts.cancelSignal,
+      opts.sessionId
+    )
     deps.assertCreateAllowed()
     existing = deps.sessions.get(opts.sessionId)
     // Unkillable child, or a fresh teardown claimed it while we waited: still nobody's to recreate.
@@ -130,6 +137,7 @@ async function spawnAndPublishSession(
     ...(opts.cancelSignal ? { cancelSignal: opts.cancelSignal } : {})
   })
 
+  let staging: StartupCommandStaging | undefined
   // Why: a fallback shell does not emit the preferred shell's ready marker;
   // retaining the stale capability would indefinitely queue its first command.
   const shellReadySupported =
@@ -155,7 +163,8 @@ async function spawnAndPublishSession(
     onExit: createSessionExitHandler(
       deps.onSessionExit,
       opts.sessionId,
-      opts.agentSessionGeneration
+      opts.agentSessionGeneration,
+      () => discardStagedStartupCommand(staging)
     ),
     ...(deps.reportReadinessEvent ? { reportReadinessEvent: deps.reportReadinessEvent } : {}),
     ...(opts.shellReadyTimeoutMs !== undefined
@@ -196,11 +205,26 @@ async function spawnAndPublishSession(
     // Diagnostics must never turn a live PTY into a failed create.
   }
   if (startupCommandWritten && opts.command) {
-    const submit = process.platform === 'win32' ? '\r' : '\n'
+    staging = stageStartupCommand({
+      command: opts.command,
+      shellPath: subprocess.shellPath,
+      orcaBuiltLine: opts.launchAgent !== undefined
+    })
+    const notice = startupStagingFailureNotice(staging)
+    if (notice) {
+      session.startupIngress.accept(notice)
+      try {
+        deps.reportReadinessEvent?.('startup-command-stage-failed', {
+          sessionId: opts.sessionId,
+          reason: staging.failure
+        })
+      } catch {
+        // Diagnostics must never turn a live PTY into a failed create.
+      }
+    }
     // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
     session.write(
-      buildStartupCommandSubmission(opts.command, {
-        submit,
+      buildStartupCommandSubmission(staging.command, {
         bracketedPasteSafe: shellReadySupported
       })
     )
@@ -221,9 +245,13 @@ async function spawnAndPublishSession(
 function createSessionExitHandler(
   onSessionExit: TerminalHostSessionCreateDependencies['onSessionExit'],
   sessionId: string,
-  generation: string | undefined
+  generation: string | undefined,
+  discardStagedCommand: () => void
 ): () => void {
-  return () => onSessionExit(sessionId, generation)
+  return () => {
+    discardStagedCommand()
+    onSessionExit(sessionId, generation)
+  }
 }
 
 // Why enumeration: a shell's cwd listing is what TCC withholds, and it can withhold it while

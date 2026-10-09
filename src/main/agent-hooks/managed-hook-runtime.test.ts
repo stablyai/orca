@@ -155,6 +155,18 @@ describe.runIf(process.platform !== 'win32')('installManagedHooks', () => {
       errors: 0
     })
 
-    expect((await readdir(home)).sort()).toEqual(['.claude', '.orca', SHELL_NAME, SHELL_RUNS_NAME])
+    expect((await readdir(home)).sort()).toEqual(['.claude', '.orca', SHELL_NAME])
+  })
+
+  it('still probes the login shell when Grok is selected', async () => {
+    const home = await createTempHome()
+    await stubLoginShell(home)
+
+    await expect(installManagedHooks({ agents: ['grok'] })).resolves.toEqual({
+      installers: 1,
+      errors: 0
+    })
+
+    expect((await readdir(home)).sort()).toEqual(['.grok', '.orca', SHELL_NAME, SHELL_RUNS_NAME])
   })
 })

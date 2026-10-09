@@ -3,6 +3,7 @@ import { join, relative, resolve, sep } from 'node:path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
 import { runWslProcess } from '../wsl/wsl-runner'
+import { stripSharedClaudeCredentialFields } from './shared-credential-fields'
 import {
   getClaudeManagedAccountsRoot,
   readClaudeManagedAuthFile,
@@ -74,6 +75,9 @@ export class ClaudeManagedAuthStorage {
     credentialsJson: string
   ): Promise<void> {
     const trustedPath = await this.assertOwned(managedAuthPath, accountId)
+    if (!parseWslUncPath(trustedPath)) {
+      credentialsJson = stripSharedClaudeCredentialFields(credentialsJson)
+    }
     if (process.platform === 'darwin') {
       await writeManagedClaudeKeychainCredentials(accountId, credentialsJson)
     } else {

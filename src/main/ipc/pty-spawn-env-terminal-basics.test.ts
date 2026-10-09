@@ -1,15 +1,17 @@
 import { withFreshOmpLaunch } from '../../shared/omp-fresh-launch'
 import { describe, expect, it, vi } from 'vitest'
 import { piBuildPtyEnvMock, spawnMock } from './pty-ipc-mock-registry'
-import { BUNDLED_CLI_PATH, TEST_CODEX_HOME, makeDisposable } from './pty-ipc-test-constants'
+import { TEST_CODEX_HOME, makeDisposable } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { delimiter } from 'node:path'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import { __resetPersistedWindowsPathCacheForTests } from '../pty/windows-environment-path'
 import { __setWindowsPathRegistryLoaderForTests } from '../pty/windows-path-registry-reader'
 import { hasLiveClaudePtys, markClaudePtySpawned } from '../claude-accounts/live-pty-gate'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
 import { registerPtyHandlers, buildPtyHostEnv, clearProviderPtyState } from './pty'
+import { buildJcodeRuntimeDir, shouldInjectJcodeRuntimeDir } from '../../shared/jcode-runtime-dir'
+import { makePaneKey } from '../../shared/stable-pane-id'
+import { selectShellStartupFeatures } from '../shell-startup-features'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -59,6 +61,41 @@ describe('registerPtyHandlers', () => {
   const { handlers, mainWindow, spawnAndGetEnv, withBundledCli } = setupPtyIpcSuite()
 
   describe('spawn environment', () => {
+    it.each(['/bin/bash', '/bin/zsh'])(
+      'does not wrap a bare %s pane merely to expose this app CLI',
+      (shellPath) => {
+        const originalPlatform = process.platform
+        Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+        try {
+          const env = buildPtyHostEnv(
+            'bare-cli-pane',
+            {},
+            {
+              isPackaged: false,
+              userDataPath: '/tmp/orca-user-data',
+              selectedCodexHomePath: null,
+              agentStatusHooksEnabled: false
+            }
+          )
+          expect(env.ORCA_CLI_BIN_DIR).toBe('/tmp/orca-user-data/cli/bin')
+          expect(
+            selectShellStartupFeatures({
+              shellPath,
+              env,
+              hasStartupCommand: false,
+              waitsForShellReady: false,
+              emitsStartupIdentity: false
+            })
+          ).toEqual([])
+        } finally {
+          Object.defineProperty(process, 'platform', {
+            configurable: true,
+            value: originalPlatform
+          })
+        }
+      }
+    )
+
     it('does not install managed Pi extensions when Pi is disabled', () => {
       piBuildPtyEnvMock.mockClear()
 
@@ -338,6 +375,31 @@ describe('registerPtyHandlers', () => {
       const env = await spawnAndGetEnv({ LANG: 'fr_FR.UTF-8' })
       expect(env.LANG).toBe('fr_FR.UTF-8')
     })
+
+    it('stamps a per-pane jcode runtime dir on local spawns', async () => {
+      const leafId = '7bad1a11-ba5f-4d47-9761-d5d7ac6e975f'
+      const tabId = 'tab-1'
+      const paneKey = makePaneKey(tabId, leafId)
+      handlers.clear()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the suite's mock BrowserWindow, widened the same way every other registerPtyHandlers call in this file does; the handler only touches webContents.send.
+      registerPtyHandlers(mainWindow as never)
+      await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        env: { ORCA_PANE_KEY: paneKey },
+        tabId,
+        leafId,
+        worktreeId: 'wt-1'
+      })
+      const spawnedEnv: Record<string, string | undefined> =
+        spawnMock.mock.calls.at(-1)?.[2]?.env ?? {}
+      // Why: buildJcodeRuntimeDirEnv intentionally omits the var on win32.
+      if (shouldInjectJcodeRuntimeDir(process.platform)) {
+        expect(spawnedEnv.JCODE_RUNTIME_DIR).toBe(buildJcodeRuntimeDir(paneKey))
+      } else {
+        expect(spawnedEnv.JCODE_RUNTIME_DIR).toBeUndefined()
+      }
+    })
     it('strips inherited Claude child-session stamps from a local spawn env', async () => {
       // Why: the local provider spreads main's process.env, so a GUI launched from
       // inside a Claude session would stamp every pane as a nested child and Claude
@@ -350,6 +412,16 @@ describe('registerPtyHandlers', () => {
       expect(env.CLAUDE_CODE_CHILD_SESSION).toBeUndefined()
       expect(env.CLAUDE_CODE_SESSION_ID).toBeUndefined()
       expect(env.CLAUDE_CODE_BRIDGE_SESSION_ID).toBeUndefined()
+    })
+    it('strips an inherited agent session id so a pane never claims that session', async () => {
+      // Why: an Orca launched inside a structured session inherits its id; every pane would then
+      // present that session as its orchestration caller instead of its own terminal.
+      const env = await spawnAndGetEnv(undefined, {
+        ORCA_AGENT_SESSION_ID: 'a0b1c2d3-0000-4000-8000-00000000abcd',
+        ORCA_STRUCTURED_SESSION: '1'
+      })
+      expect(env.ORCA_AGENT_SESSION_ID).toBeUndefined()
+      expect(env.ORCA_STRUCTURED_SESSION).toBeUndefined()
     })
     it('keeps an explicitly requested Claude child-session stamp on a local spawn', async () => {
       const env = await spawnAndGetEnv(
@@ -406,33 +478,8 @@ describe('registerPtyHandlers', () => {
       )
       expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
       expect(env.ORCA_CODEX_HOME).toBe(TEST_CODEX_HOME)
-      // Why (STA-4270): a bare name would be resolved by the post-profile PATH the codex()
-      // wrapper inherits, so the preflight must carry the CLI's verified absolute path.
-      expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).toBe(BUNDLED_CLI_PATH)
-    })
-    it('skips the Codex launch preflight when the bundled CLI is not executable', async () => {
-      const env = await withBundledCli(
-        () => spawnAndGetEnv(undefined, undefined, () => TEST_CODEX_HOME),
-        { launcherExecutable: false }
-      )
-
-      expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
+      // Why: the app prepares a native pane's Codex home; only WSL panes run the preflight.
       expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).toBeUndefined()
-    })
-    // Why (STA-4270): profile scripts run before the codex() wrapper and routinely prepend
-    // directories to PATH, so a scratch `orca` there must never become the preflight.
-    it('pins the Codex launch preflight to the bundled CLI even when PATH leads elsewhere', async () => {
-      const env = await withBundledCli(() =>
-        spawnAndGetEnv(
-          { PATH: `/tmp/hijack-scratch${delimiter}/usr/bin` },
-          undefined,
-          () => TEST_CODEX_HOME
-        )
-      )
-
-      expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).toBe(BUNDLED_CLI_PATH)
-      expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).not.toBe('orca')
-      expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT.startsWith('/tmp/hijack-scratch')).toBe(false)
     })
     it('does not install the Codex launch preflight when Codex hooks are disabled', async () => {
       const env = await spawnAndGetEnv(

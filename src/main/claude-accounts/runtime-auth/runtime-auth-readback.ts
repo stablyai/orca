@@ -22,7 +22,11 @@ export class ClaudeRuntimeAuthReadback extends ClaudeRuntimeAuthCredentialMatchi
         this.lastWrittenCredentialsJson === null
           ? candidates
           : candidates.filter(
-              (candidate) => candidate.credentialsJson !== this.lastWrittenCredentialsJson
+              (candidate) =>
+                !this.accountCredentialFieldsEqual(
+                  candidate.credentialsJson,
+                  this.lastWrittenCredentialsJson
+                )
             )
       if (changedCandidates.length === 0) {
         return { status: 'unchanged' }
@@ -97,12 +101,13 @@ export class ClaudeRuntimeAuthReadback extends ClaudeRuntimeAuthCredentialMatchi
 
       await this.writeManagedCredentials(match.account, runtimeContents)
       if (options.updateLastWrittenCredentialsJson) {
-        this.writeRuntimeCredentials(runtimeContents)
-        this.lastWrittenCredentialsJson = runtimeContents
+        const merged = await this.mergeLiveRuntimeSharedCredentials(runtimeContents)
+        this.writeRuntimeCredentials(merged)
         if (process.platform === 'darwin') {
           const paths = this.pathResolver.getRuntimePaths()
-          await writeActiveClaudeKeychainCredentialsForRuntime(runtimeContents, paths.configDir)
+          await writeActiveClaudeKeychainCredentialsForRuntime(merged, paths.configDir)
         }
+        this.lastWrittenSharedCredentialsJson = merged
       }
       return { status: 'persisted' }
     } catch (error) {
@@ -145,7 +150,8 @@ export class ClaudeRuntimeAuthReadback extends ClaudeRuntimeAuthCredentialMatchi
         pushCandidate(legacyKeychainCredentials)
         pushCandidate(fileCredentials)
         return candidates.filter(
-          (candidate) => candidate.credentialsJson !== baselineCredentialsJson
+          (candidate) =>
+            !this.accountCredentialFieldsEqual(candidate.credentialsJson, baselineCredentialsJson)
         )
       }
       pushCandidate(scopedKeychainCredentials)

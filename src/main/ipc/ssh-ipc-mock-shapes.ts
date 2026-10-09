@@ -52,6 +52,7 @@ export type SshPtyProviderMock = {
   attach: Mock
   attachForReconnect: Mock
   shutdown: Mock
+  listProcesses: Mock
   providerGeneration: number
 }
 
@@ -97,6 +98,7 @@ export type SshIpcMockModules = {
   sshConfigHostPicker: SshIpcMockModule
   electron: SshIpcMockModule
   sshPtyOutputIntakeRegistry: SshIpcMockModule
+  hostServerConnect: SshIpcMockModule
   sshConnectionStore: SshIpcMockModule
   sshConnectionManager: SshIpcMockModule
   sshRelayDeploy: SshIpcMockModule

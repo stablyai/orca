@@ -1,8 +1,8 @@
 import { toast } from 'sonner'
 import { getAgentLabel } from '@/lib/agent-catalog'
-import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
@@ -15,7 +15,6 @@ type LaunchAgentSessionContinuationArgs = {
   prompt: string
   worktreeId: string
   groupId?: string | null
-  workspacePath: string
   initialCwd?: string | null
   launchSource: LaunchSource
 }
@@ -73,7 +72,6 @@ export async function launchAgentSessionContinuation({
   prompt,
   worktreeId,
   groupId,
-  workspacePath,
   initialCwd,
   launchSource
 }: LaunchAgentSessionContinuationArgs): Promise<boolean> {
@@ -81,15 +79,13 @@ export async function launchAgentSessionContinuation({
     return false
   }
 
-  const connectionId = getConnectionIdFromState(useAppStore.getState(), worktreeId)
-  await preflightAgentTrust({ agent, workspacePath, connectionId })
-
   const label = getAgentLabel(agent)
   // Why: the paste helper writes blind when the agent's composer was never observed, so a
   // written prompt is not a delivered one. Claiming success there is how the whole handoff
   // could vanish silently (#22479).
   let deliveryUnconfirmed = false
   const result = launchAgentInNewTab({
+    requestId: newAgentLaunchRequestId(),
     agent,
     worktreeId,
     ...(groupId ? { groupId } : {}),

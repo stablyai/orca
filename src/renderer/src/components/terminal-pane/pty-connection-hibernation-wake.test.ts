@@ -130,14 +130,14 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 }
 
 describe('connectPanePty', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -207,6 +207,52 @@ describe('connectPanePty', () => {
     binding.noteVisibilityResume()
     await flushAsyncTicks()
     expect(transport.connect.mock.calls.length).toBe(connectCallsAfterWake)
+  })
+
+  // Why: pins #16308's incidental effect. Hibernation writes a worktree-sleep note, yet any
+  // suppressed exit over a finished turn's live idle anchor now arms a resume on reveal.
+  it('arms an in-place resume from a finished turn idle anchor on a suppressed exit', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-pane-2')
+    transportFactoryQueue.push(transport)
+    const deps = createDeps({
+      consumeSuppressedPtyExit: vi.fn(() => true),
+      isVisibleRef: { current: false }
+    })
+    const pane = createPane(2)
+    const paneKey = `tab-1:${leafIdForPane(2)}`
+    mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
+      paneKey,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'sess-idle-anchor' },
+      prompt: '',
+      state: 'done',
+      capturedAt: 1,
+      updatedAt: 1,
+      origin: 'live'
+    }
+    mockStoreState.suppressedPtyExitIds['tab-pty'] = true
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
+    const args = [pane, createManager(1), deps] as unknown as Parameters<typeof connectPanePty>
+    const binding = connectPanePty(...args)
+    await flushAsyncTicks()
+    const onPtyExit = createdTransportOptions[0]?.onPtyExit
+    expect(onPtyExit).toBeTypeOf('function')
+    const connectCallsBeforeExit = transport.connect.mock.calls.length
+    if (typeof onPtyExit === 'function') {
+      onPtyExit('tab-pty')
+    }
+    await flushAsyncTicks()
+
+    binding.noteVisibilityResume()
+    await flushAsyncTicks()
+
+    const resumeConnectOptions: { command?: string } | undefined =
+      transport.connect.mock.calls.at(-1)?.[0]
+    expect(transport.connect.mock.calls.length).toBeGreaterThan(connectCallsBeforeExit)
+    expect(resumeConnectOptions?.command).toContain('sess-idle-anchor')
   })
 
   it('resumes a hibernated agent from a navigation-free wake without a visibility reveal', async () => {
@@ -692,7 +738,7 @@ describe('connectPanePty', () => {
     sendTerminalInputThroughPane(pane, '\x1b[O')
     expect(mockStoreState.recordTerminalInput).not.toHaveBeenCalled()
     // The reply still reaches the shell; only the activity recording is gated.
-    expect(transport.sendInput).toHaveBeenCalledWith('\x1b[O')
+    expect(transport.sendInput).toHaveBeenCalledWith('\x1b[O', 'query-reply')
 
     // Real user input fires the core signal and records activity.
     for (const listener of userInputListeners) {

@@ -132,14 +132,14 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 }
 
 describe('connectPanePty', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -164,8 +164,8 @@ describe('connectPanePty', () => {
       const pane = createPane(1)
       const synchronizedOutput = { synchronizedOutput: false }
       const renderRows = vi.fn()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture exposes xterm's private render state to observe the DEC 2026 present.
       ;(
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fixture exposes xterm's private render state to observe the DEC 2026 present.
         pane.terminal as unknown as {
           _core: {
             coreService: { decPrivateModes: typeof synchronizedOutput }

@@ -25,7 +25,15 @@ import type {
 export function isRootAgentJournalItem(
   item: Pick<AgentJournalRenderItem, 'agentId'> | undefined
 ): boolean {
-  return item?.agentId == null
+  return agentJournalItemSubagentId(item) === null
+}
+
+/** The subagent that produced a row, or null when the session's own agent did.
+ *  Same reading of absence as {@link isRootAgentJournalItem}. */
+export function agentJournalItemSubagentId(
+  item: Pick<AgentJournalRenderItem, 'agentId'> | undefined
+): string | null {
+  return item?.agentId ?? null
 }
 
 /** Whether a write names its producer at all. One that does not revises a row

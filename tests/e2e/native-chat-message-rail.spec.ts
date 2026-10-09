@@ -1,10 +1,10 @@
-// Exercise the prompt picker and an off-window jump against a real transcript.
+// Exercise the rail's per-tick preview and its jumps against a real transcript.
 
 import { randomUUID } from 'node:crypto'
 import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import type { Page } from '@stablyai/playwright-test'
+import type { Locator, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
@@ -65,10 +65,16 @@ function claudeTranscript(rowCount: number, sessionId: string): string {
     const turn = Math.floor(index / 2)
     const body = isUser
       ? `Question ${turn}: what does the rail do when I scroll a long reply?`
-      : Array.from(
-          { length: 6 + (turn % 7) * 3 },
-          (_unused, line) => `Answer paragraph ${line + 1} for turn ${turn}.`
-        ).join('\n\n')
+      : [
+          // Headings and code draw at heights the row estimate misses, so a jump
+          // crosses rows that resize under it.
+          `## Answer for turn ${turn}`,
+          `\`\`\`ts\n${Array.from({ length: 2 + (turn % 5) * 4 }, (_unused, line) => `const line${line} = ${turn}`).join('\n')}\n\`\`\``,
+          ...Array.from(
+            { length: 6 + (turn % 7) * 3 },
+            (_unused, line) => `Answer paragraph ${line + 1} for turn ${turn}.`
+          )
+        ].join('\n\n')
     return JSON.stringify({
       sessionId,
       uuid: `${sessionId}-${index}`,
@@ -116,43 +122,49 @@ test.describe('Native chat message rail', () => {
     const rail = orcaPage.locator('[data-native-chat-rail]')
     await expect(rail).toBeVisible({ timeout: 30_000 })
 
-    // Sampling cap: 30 user turns must not render 30 bars.
-    const tickCount = await rail.locator(':scope > span').count()
-    expect(tickCount).toBeGreaterThan(2)
-    expect(tickCount).toBeLessThanOrEqual(20)
+    // Every user turn has a tick while the rail fits: a tick is the only way to its message.
+    const ticks = rail.getByRole('button')
+    await expect(ticks).toHaveCount(TRANSCRIPT_ROWS / 2)
 
     await orcaPage.screenshot({
       path: path.join(SHOT_DIR, 'rail-01-app.png'),
       animations: 'disabled'
     })
 
-    await rail.hover()
-    const panel = orcaPage.getByRole('dialog', { name: 'Your messages' })
-    await expect(panel).toBeVisible({ timeout: 10_000 })
-    // The panel lists every user message, not the sampled ticks.
-    await expect(panel.getByRole('button').first()).toBeVisible()
+    // Hovering one tick previews that message and the reply to it, not the whole thread.
+    const tick = rail.getByRole('button', { name: 'Question 5:', exact: false })
+    await tick.hover()
+    const preview = orcaPage.locator('[data-slot="hover-card-content"]')
+    await expect(preview).toBeVisible({ timeout: 10_000 })
+    await expect(preview).toContainText('Question 5:')
+    await expect(preview).not.toContainText('Question 6:')
+    await expect(preview).toContainText('Answer for turn 5')
+    await expect(preview.locator('p')).toHaveCount(2)
     await orcaPage.screenshot({
-      path: path.join(SHOT_DIR, 'rail-02-panel.png'),
+      path: path.join(SHOT_DIR, 'rail-02-preview.png'),
       animations: 'disabled'
     })
 
-    // Exact, not `> ticks`: a panel that listed only the sampled ticks would
-    // still satisfy a loose bound at 20 vs 20.
-    const panelCount = await panel.getByRole('button').count()
-    expect(panelCount).toBe(TRANSCRIPT_ROWS / 2)
-
-    // Activating the hover preview transfers focus into the prompt picker.
-    await rail.press('Enter')
-    await expect(panel.getByRole('button').first()).toBeFocused()
-    await panel.getByRole('button', { name: 'Question 5:', exact: false }).click()
-    await expect(panel).not.toBeVisible()
-    const target = transcriptWindow.locator('[data-index="10"]')
     const scroller = orcaPage.locator('[data-native-chat-scroll]')
-    const targetOffset = async (): Promise<number> => {
-      const [row, viewport] = await Promise.all([target.boundingBox(), scroller.boundingBox()])
-      return row && viewport ? Math.abs(row.y - viewport.y) : Number.POSITIVE_INFINITY
+    const offsetOf = (row: Locator) => async (): Promise<number> => {
+      const [box, viewport] = await Promise.all([row.boundingBox(), scroller.boundingBox()])
+      return box && viewport ? Math.abs(box.y - viewport.y) : Number.POSITIVE_INFINITY
     }
-    await expect.poll(targetOffset).toBeLessThan(4)
+    // One click lands the message at the top and lights its tick: from the end to a
+    // message near it, then across the thread, with rows resizing under each jump.
+    // Animated and instant jumps take different paths through the list.
+    for (const reducedMotion of ['reduce', 'no-preference'] as const) {
+      await orcaPage.emulateMedia({ reducedMotion })
+      for (const turn of [22, 12, 5]) {
+        const jumped = rail.getByRole('button', { name: `Question ${turn}:`, exact: false })
+        await jumped.click()
+        await expect
+          .poll(offsetOf(transcriptWindow.locator(`[data-index="${turn * 2}"]`)))
+          .toBeLessThan(4)
+        await expect(jumped).toHaveAttribute('aria-current', 'true')
+      }
+    }
+    const targetOffset = offsetOf(transcriptWindow.locator('[data-index="10"]'))
 
     for (let revision = 0; revision < 3; revision += 1) {
       const body = `Later streamed output ${revision}`
@@ -170,6 +182,6 @@ test.describe('Native chat message rail', () => {
       await expect.poll(targetOffset).toBeLessThan(4)
     }
 
-    console.log(`[rail] ticks=${tickCount} panelRows=${panelCount} shots=${SHOT_DIR}`)
+    console.log(`[rail] shots=${SHOT_DIR}`)
   })
 })

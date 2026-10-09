@@ -1,3 +1,4 @@
+import { ImeTextarea } from '@/lib/ime-text-field'
 import React, { useCallback, useRef, useState } from 'react'
 import { LoaderCircle, Send } from 'lucide-react'
 import { toast } from 'sonner'
@@ -123,7 +124,7 @@ export function LinearIssueCommentFooter({
         ref={handleFooterRef}
         className="rounded-xl border border-border/70 bg-background shadow-xs"
       >
-        <textarea
+        <ImeTextarea
           ref={textareaRef}
           value={body}
           onChange={(e) => {
@@ -168,7 +169,7 @@ export function LinearIssueCommentFooter({
       ref={handleFooterRef}
       className="flex items-end gap-2 border-t border-border/60 bg-background/40 px-4 py-3"
     >
-      <textarea
+      <ImeTextarea
         ref={textareaRef}
         value={body}
         onChange={(e) => {

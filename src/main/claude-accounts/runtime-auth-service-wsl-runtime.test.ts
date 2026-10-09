@@ -15,6 +15,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import type * as ClaudeProfileRouting from '../../shared/claude-profile-routing'
 
 vi.mock('electron', () => createElectronMock())
 
@@ -270,6 +271,42 @@ describe('ClaudeRuntimeAuthService', () => {
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)
       }
+    }
+  })
+
+  it('routes a WSL distro through its guest router, and a failed guest publish never fails a select', async () => {
+    setPlatform('win32')
+    const wslRouter = {
+      prepareLaunch: vi.fn(async (distro: string) => ({ runtime: 'wsl', wslDistro: distro })),
+      publish: vi.fn(async () => {
+        throw new Error('distro is gone')
+      }),
+      runningDistros: vi.fn(async () => [])
+    }
+    vi.doMock('../../shared/claude-profile-routing', async (original) => ({
+      ...(await original<typeof ClaudeProfileRouting>()),
+      claudeProfileRoutingEnabled: () => true
+    }))
+    vi.doMock('./claude-profile-wsl-router', () => ({
+      ClaudeWslProfileRouter: function ClaudeWslProfileRouter() {
+        return wslRouter
+      }
+    }))
+    try {
+      const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+      const store = createStore(createSettings())
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the service reads only getSettings/updateSettings, which the harness store implements.
+      const service = new ClaudeRuntimeAuthService(store as never)
+      await expect(
+        service.prepareForClaudeLaunch({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+      ).resolves.toMatchObject({ wslDistro: 'Ubuntu' })
+      await expect(
+        service.syncForCurrentSelection({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+      ).resolves.toBeUndefined()
+      expect(wslRouter.publish).toHaveBeenCalledWith('Ubuntu')
+    } finally {
+      vi.doUnmock('../../shared/claude-profile-routing')
+      vi.doUnmock('./claude-profile-wsl-router')
     }
   })
 })

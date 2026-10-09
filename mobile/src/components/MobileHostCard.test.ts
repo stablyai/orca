@@ -342,7 +342,6 @@ describe('MobileHostCard', () => {
             deviceToken: 'token',
             publicKeyB64: 'key',
             lastConnected: 1,
-            relayHostId: 'AbCdEf0123_-xyZ9',
             relay: {
               v: 1 as const,
               directorUrl: 'https://relay-staging.onorca.dev',

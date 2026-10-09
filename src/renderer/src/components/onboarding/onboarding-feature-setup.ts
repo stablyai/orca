@@ -1,4 +1,3 @@
-import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import type {
   ComputerUsePermissionSetupResult,
   ComputerUsePermissionStatusResult
@@ -12,13 +11,9 @@ import {
 } from '@/lib/agent-feature-install-commands'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
 import { e2eConfig } from '@/lib/e2e-config'
-import { showOrcaCliRegistrationPromptToast } from '@/lib/agent-skill-cli-prerequisite'
 import type { ProjectAgentSkillRuntime } from '@/lib/project-skill-runtime'
 import type { OnboardingFeatureSetupRuntimeContext } from './onboarding-feature-setup-runtime'
-import {
-  buildSkillCommandForRuntime,
-  getWslCliDistroRequest
-} from '../settings/CliSkillRuntimeSetup'
+import { buildSkillCommandForRuntime } from '../settings/CliSkillRuntimeSetup'
 import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
@@ -72,13 +67,12 @@ const FEATURE_TELEMETRY_IDS: Record<
 }
 
 export type OnboardingFeatureSetupWarning = {
-  featureId: OnboardingFeatureSetupId | 'cli' | 'skills'
+  featureId: OnboardingFeatureSetupId | 'skills'
   message: string
 }
 
 export type OnboardingFeatureSetupResult = {
   selectedIds: OnboardingFeatureSetupId[]
-  cliTouched: boolean
   skillCommandsCopied: boolean
   skillInstallCommand: string | null
   computerUsePermissionsOpened: boolean
@@ -86,9 +80,6 @@ export type OnboardingFeatureSetupResult = {
 }
 
 export type OnboardingFeatureSetupDeps = {
-  getCliStatus: () => Promise<CliInstallStatus>
-  showCliRegistrationPrompt?: () => Promise<void>
-  installCli: () => Promise<CliInstallStatus>
   writeClipboardText: (text: string) => Promise<void>
   getComputerUsePermissionStatus: () => Promise<ComputerUsePermissionStatusResult>
   openComputerUsePermissionSetup: () => Promise<ComputerUsePermissionSetupResult>
@@ -161,7 +152,7 @@ export function onboardingFeatureSetupRunTelemetry(
 ): EventProps<'onboarding_feature_setup_run'> {
   return {
     ...onboardingFeatureSetupTelemetrySelection(selection),
-    cli_touched: result.cliTouched,
+    cli_touched: false,
     skill_commands_copied: result.skillCommandsCopied,
     skill_install_command_prepared: result.skillInstallCommand !== null,
     computer_use_permissions_opened: result.computerUsePermissionsOpened,
@@ -169,26 +160,13 @@ export function onboardingFeatureSetupRunTelemetry(
   }
 }
 
-export function createOnboardingFeatureSetupDeps(
-  agentRuntime?: ProjectAgentSkillRuntime
-): OnboardingFeatureSetupDeps {
+export function createOnboardingFeatureSetupDeps(): OnboardingFeatureSetupDeps {
   const e2eDeps = getE2EOnboardingFeatureSetupDeps()
   if (e2eDeps) {
     return e2eDeps
   }
 
-  // Register `orca` on the same PATH used by the skill install (#12103).
-  const wslDistroRequest =
-    agentRuntime?.runtime === 'wsl' ? getWslCliDistroRequest(agentRuntime) : undefined
-  const isWsl = agentRuntime?.runtime === 'wsl'
   return {
-    getCliStatus: () =>
-      isWsl
-        ? window.api.cli.getWslInstallStatus(wslDistroRequest)
-        : window.api.cli.getInstallStatus(),
-    showCliRegistrationPrompt: showOrcaCliRegistrationPromptToast,
-    installCli: () =>
-      isWsl ? window.api.cli.installWsl(wslDistroRequest) : window.api.cli.install(),
     writeClipboardText: (text) => window.api.ui.writeClipboardText(text),
     getComputerUsePermissionStatus: () => window.api.computerUsePermissions.getStatus(),
     openComputerUsePermissionSetup: () => window.api.computerUsePermissions.openSetup(),
@@ -216,10 +194,9 @@ export async function runOnboardingFeatureSetup(
   const agentRuntime = runtimeContext?.installDisabledReason
     ? undefined
     : runtimeContext?.agentRuntime
-  const deps = explicitDeps ?? createOnboardingFeatureSetupDeps(agentRuntime)
+  const deps = explicitDeps ?? createOnboardingFeatureSetupDeps()
   const selectedIds = selectedOnboardingFeatureSetupIds(selection)
   const warnings: OnboardingFeatureSetupWarning[] = []
-  let cliTouched = false
   let skillCommandsCopied = false
   const skillInstallCommand = buildOnboardingFeatureSetupSkillCommand(selection)
   let computerUsePermissionsOpened = false
@@ -234,42 +211,11 @@ export async function runOnboardingFeatureSetup(
   if (selectedIds.length === 0) {
     return {
       selectedIds,
-      cliTouched,
       skillCommandsCopied,
       skillInstallCommand,
       computerUsePermissionsOpened,
       warnings
     }
-  }
-
-  try {
-    const status = await deps.getCliStatus()
-    if (!status.supported) {
-      warnings.push({
-        featureId: 'cli',
-        message: status.detail ?? 'Orca CLI registration is not available on this platform.'
-      })
-    } else if (status.pathConfigured === null) {
-      // Why: an unknown registry read cannot safely drive a PATH read-modify-write.
-      warnings.push({
-        featureId: 'cli',
-        message: status.detail ?? 'Orca could not check your Windows user PATH.'
-      })
-    } else if (status.state !== 'installed' || status.pathConfigured === false) {
-      await deps.showCliRegistrationPrompt?.()
-      const next = await deps.installCli()
-      cliTouched = true
-      if (next.state !== 'installed') {
-        warnings.push({
-          featureId: 'cli',
-          message: next.detail ?? 'Orca CLI registration needs attention.'
-        })
-      } else if (next.pathConfigured !== true && next.detail) {
-        warnings.push({ featureId: 'cli', message: next.detail })
-      }
-    }
-  } catch (error) {
-    warnings.push({ featureId: 'cli', message: formatFeatureSetupError(error) })
   }
 
   if (selection.computerUse) {
@@ -306,7 +252,6 @@ export async function runOnboardingFeatureSetup(
 
   return {
     selectedIds,
-    cliTouched,
     skillCommandsCopied,
     skillInstallCommand,
     computerUsePermissionsOpened,

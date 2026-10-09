@@ -306,7 +306,7 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
   // Default: no direct-read recovery, so a listing that omits the row still fails the create.
   describeCreatedWorktreeMock.mockResolvedValue(undefined)
   forceDeleteLocalBranchMock.mockResolvedValue(undefined)
-  const runtimeStub = createWorktreeRuntimeStub()
+  const runtimeStub = createWorktreeRuntimeStub(mainWindow)
   registerWorktreeHandlers(mainWindow as never, store as never, runtimeStub as never)
   return runtimeStub
 }

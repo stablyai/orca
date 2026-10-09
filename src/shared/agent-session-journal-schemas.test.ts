@@ -3,9 +3,9 @@ import {
   AgentJournalItemBodySchema,
   isAdmissibleAgentJournalItemBody,
   isAdmissibleAgentJournalMessageBody,
-  isAdmissibleAgentJournalRenderItem,
-  isAdmissibleAgentJournalSubmission
+  isAdmissibleAgentJournalRenderItem
 } from './agent-session-journal-schemas'
+import { isAdmissibleAgentJournalSubmission } from './agent-session-journal-submission-schema'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
@@ -23,6 +23,18 @@ const RESOLUTION = {
 // Canonical fixtures are typed: if a shape here stops compiling, the schema
 // audit below is validating the wrong model.
 const CANONICAL_BODIES: AgentJournalItemBody[] = [
+  {
+    kind: 'message',
+    role: 'reasoning',
+    blocks: [{ type: 'text', text: 'Inspecting the request' }]
+  },
+  {
+    kind: 'message',
+    role: 'reasoning',
+    blocks: [{ type: 'text', text: 'Inspecting the request' }],
+    state: 'completed',
+    completedAt: 2_000
+  },
   {
     kind: 'message',
     role: 'user',
@@ -308,6 +320,7 @@ describe('optional notice metadata', () => {
   it.each([
     {},
     { presentation: 'compaction' },
+    { presentation: 'compaction-skipped', tone: 'warning' },
     { presentation: 'plan-document' },
     { tone: 'warning' },
     { tone: 'error' },
@@ -329,6 +342,57 @@ describe('optional notice metadata', () => {
     expect(isAdmissibleAgentJournalItemBody({ kind: 'status', text: 'Text', ...metadata })).toBe(
       false
     )
+  })
+})
+
+describe('typed failure facts', () => {
+  it('admits a status row and a submission with a fact, and the same rows without one', () => {
+    const failure = {
+      kind: 'providerStartFailed',
+      detail: { text: 'exit status 1', audience: 'log' }
+    }
+    expect(isAdmissibleAgentJournalItemBody({ kind: 'status', text: 'Stopped.', failure })).toBe(
+      true
+    )
+    expect(isAdmissibleAgentJournalItemBody({ kind: 'status', text: 'Stopped.' })).toBe(true)
+    const submission = {
+      clientMessageId: 'cm-1',
+      fence: 1,
+      payloadFingerprint: 'fp',
+      dispatchState: 'rejected',
+      providerItemId: null,
+      reason: 'Not sent.',
+      submittedAt: 1,
+      resolvedAt: 2
+    }
+    expect(isAdmissibleAgentJournalSubmission(submission)).toBe(true)
+    expect(isAdmissibleAgentJournalSubmission({ ...submission, rejection: failure })).toBe(true)
+  })
+
+  it("admits a refusal's details, and a row an earlier build wrote with its cause", () => {
+    const refused = (refusal: Record<string, unknown>) =>
+      isAdmissibleAgentJournalItemBody({
+        kind: 'status',
+        text: "Codex couldn't restart.",
+        failure: { kind: 'restartFailed', refusal }
+      })
+    expect(
+      refused({
+        code: 'agent_session_conflict',
+        details: { reason: 'claimConflicted', futureFact: 1 }
+      })
+    ).toBe(true)
+    expect(refused({ code: 'agent_session_conflict', cause: 'claimConflicted' })).toBe(true)
+  })
+
+  it('keeps a kind or audience a newer host writes admissible', () => {
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'status',
+        text: 'Stopped.',
+        failure: { kind: 'futureKind', detail: { text: 'x', audience: 'future' } }
+      })
+    ).toBe(true)
   })
 })
 
@@ -426,6 +490,14 @@ describe('thread goal fields', () => {
     ).toBe(true)
     expect(
       isAdmissibleAgentJournalItemBody({
+        kind: 'message',
+        role: 'reasoning',
+        blocks: [],
+        state: 'paused'
+      })
+    ).toBe(true)
+    expect(
+      isAdmissibleAgentJournalItemBody({
         kind: 'status',
         text: 'Goal archived',
         threadGoal: { state: 'archived' }
@@ -444,6 +516,8 @@ describe('thread goal fields', () => {
     for (const body of [
       { kind: 'message', role: 'user', blocks: [], sentAs: 5 },
       { kind: 'message', role: 'user', blocks: [], sentAs: '' },
+      { kind: 'message', role: 'reasoning', blocks: [], state: '' },
+      { kind: 'message', role: 'reasoning', blocks: [], completedAt: 'later' },
       { kind: 'status', text: 'Goal set', threadGoal: { state: 'set' } },
       {
         kind: 'status',

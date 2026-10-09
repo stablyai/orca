@@ -49,6 +49,7 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
   const ENV_KEYS = [
     'ORCA_PANE_KEY',
     'ORCA_OPENCODE_AGENT',
+    'ORCA_OPENCODE_PLUGIN_API',
     'ORCA_AGENT_HOOK_ENDPOINT',
     'ORCA_AGENT_HOOK_PORT',
     'ORCA_AGENT_HOOK_TOKEN'
@@ -66,6 +67,7 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
       savedEnv[key] = process.env[key]
     }
     process.env.ORCA_OPENCODE_AGENT = agent
+    process.env.ORCA_OPENCODE_PLUGIN_API = 'v2'
     delete process.env.ORCA_AGENT_HOOK_ENDPOINT
     process.env.ORCA_AGENT_HOOK_PORT = '59999'
     process.env.ORCA_AGENT_HOOK_TOKEN = 'test-token'
@@ -205,6 +207,7 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
       expect(posts).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
+            opencodeMajor: 2,
             payload: expect.objectContaining({ hook_event_name: 'SessionBusy' })
           }),
           expect.objectContaining({
@@ -220,6 +223,33 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
     await cleanup?.()
     expect(dispose).toHaveBeenCalledOnce()
     expect(subscriptionSignal?.aborted).toBe(true)
+  })
+
+  // Why: the host's OpenCode 1 session binder must stay off OpenCode 2 posts only.
+  it('declares no OpenCode major on posts from the OpenCode 1 server() entry', async () => {
+    process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
+    const bodies: Record<string, unknown>[] = []
+    globalThis.fetch = vi.fn(async (_input, init) => {
+      bodies.push(record(JSON.parse(String(init?.body))) ?? {})
+      return new Response('{}', { status: 200 })
+    })
+    const module = await loadPluginModule(
+      agent === 'opencode2'
+        ? _internals.getOpenCode2PluginSource()
+        : _internals.getOpenCodePluginSource()
+    )
+    const hooks = await module.default?.server?.({
+      client: { session: { get: async () => ({ data: { id: 'ses_root' } }) } }
+    })
+    await hooks?.event({
+      event: {
+        type: 'session.status',
+        properties: { sessionID: 'ses_root', status: { type: 'busy' } }
+      }
+    })
+    await vi.waitFor(() => expect(bodies.length).toBeGreaterThan(0))
+    expect(bodies.filter((body) => 'opencodeMajor' in body)).toEqual([])
+    await hooks?.dispose?.()
   })
 
   it('maps permission, form, and text events through the live setup bridge', async () => {

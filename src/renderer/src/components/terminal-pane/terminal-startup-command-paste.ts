@@ -47,7 +47,7 @@ export async function executeTerminalStartupCommandPaste({
 
   return executeTerminalPastePlan(plan, {
     pasteText: (text, options) => pasteTerminalText(pane.terminal, text, options),
-    writePty: (data) => writeTerminalPastePtyInput(transport, data),
+    writePty: (data, signal) => writeTerminalPastePtyInput(transport, data, 'launch', signal),
     isTargetCurrent: isCurrent,
     canContinue: isCurrent
   })

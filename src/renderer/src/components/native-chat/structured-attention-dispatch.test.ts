@@ -10,6 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { AgentSessionTurnCompletion } from '../../../../shared/agent-session-wire'
+import { agentSessionAttentionKey } from '../../../../shared/agent-session-attention'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import {
   createTestStore,
@@ -20,6 +22,7 @@ import {
 } from '@/store/slices/store-test-helpers'
 import type { NotificationDispatchRequest } from '../../../../shared/notification-settings-types'
 import { isStructuredTab, type StructuredTab } from './structured-agent-session-tabs'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store.getState() } }))
 // The two client-side follow-ups of a delivery are leaf side effects with their own tests; this
@@ -34,7 +37,7 @@ vi.mock('@/lib/blocked-notification-fallback', () => ({
 const store = createTestStore()
 
 const dispatched: NotificationDispatchRequest[] = []
-const dismissed: string[][] = []
+const dismissed: { ids: string[]; paneKeys?: string[] }[] = []
 
 const { dispatchStructuredTurnCompletionAttention } =
   await import('./structured-attention-dispatch')
@@ -46,9 +49,12 @@ const CHAT_TAB = 'chat-tab'
 const SESSION = 'session-1'
 
 function settingsWith(groupAttention: boolean): GlobalSettings {
-  // The dispatcher reads exactly one settings field and GlobalSettings has no test factory.
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only field read.
-  return { experimentalTerminalAttention: groupAttention } as GlobalSettings
+  // The dispatcher reads only these settings fields and GlobalSettings has no test factory.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only fields read.
+  return {
+    experimentalTerminalAttention: groupAttention,
+    floatingTerminalEnabled: true
+  } as GlobalSettings
 }
 
 function completion(overrides?: Partial<AgentSessionTurnCompletion>): AgentSessionTurnCompletion {
@@ -78,6 +84,7 @@ function seed(overrides?: {
   workspaceId?: string
   folderWorkspaces?: FolderWorkspace[]
   tabs?: boolean
+  floatingPanelOpen?: boolean
 }): void {
   const workspaceId = overrides?.workspaceId ?? WORKSPACE
   store.setState({
@@ -110,6 +117,7 @@ function seed(overrides?: {
       ]
     },
     activeGroupIdByWorktree: { [workspaceId]: GROUP },
+    activeView: 'terminal',
     // Default: the user is looking somewhere else, which is when unread is owed.
     activeWorktreeId:
       overrides?.activeWorktreeId === undefined ? 'other-workspace' : overrides.activeWorktreeId,
@@ -117,6 +125,7 @@ function seed(overrides?: {
     unreadTerminalPanes: {},
     unreadAgentCompletionPanes: {},
     settings: settingsWith(overrides?.groupAttention ?? true),
+    floatingWorkspacePanelOpen: overrides?.floatingPanelOpen ?? false,
     // Persistence is not what this test is about; the folder path would otherwise call out to IPC.
     updateFolderWorkspace: async () => true
   })
@@ -168,8 +177,8 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
             dispatched.push(request)
             return { delivered: true }
           },
-          dismiss: async (ids: string[]) => {
-            dismissed.push(ids)
+          dismiss: async (ids: string[], paneKeys?: string[]) => {
+            dismissed.push({ ids, paneKeys })
             return { dismissed: ids.length }
           }
         }
@@ -180,6 +189,42 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+  })
+
+  it('leaves the phone to a local host, which pushed it already, and relays for a remote one', () => {
+    dispatchStructuredTurnCompletionAttention(structuredTab(), completion(), { kind: 'local' })
+    dispatchStructuredTurnCompletionAttention(structuredTab(), completion({ turnId: 'turn-2' }), {
+      kind: 'environment',
+      environmentId: 'env-1'
+    })
+    expect(dispatched.map((request) => request.mobileDeliveredByHost)).toEqual([true, undefined])
+    expect(dispatched.map((request) => request.attentionKey)).toEqual([
+      agentSessionAttentionKey({ type: 'completion', completion: completion() }),
+      agentSessionAttentionKey({ type: 'completion', completion: completion({ turnId: 'turn-2' }) })
+    ])
+  })
+
+  it('uses the receiving paired subscription over the tab’s execution host', () => {
+    store.setState({
+      runtimeEnvironments: [
+        {
+          id: 'env-1',
+          name: 'Paired server',
+          createdAt: 1,
+          updatedAt: 1,
+          lastUsedAt: null,
+          runtimeId: null,
+          endpoints: [],
+          preferredEndpointId: 'endpoint'
+        }
+      ]
+    })
+    dispatchStructuredTurnCompletionAttention(
+      { ...structuredTab(), executionHostId: 'local' },
+      completion(),
+      { kind: 'environment', environmentId: 'env-1' }
+    )
+    expect(onlyDispatch().notificationSourceId).toBe('runtime:env-1')
   })
 
   it('lights workspace bold, the amber pane dot and the tab dot for a successful turn', () => {
@@ -230,7 +275,34 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
     expect(indicators().paneDot).toBe('agent-completion')
   })
 
-  it('words a successful turn as finished and a stopped one through the shipped interrupted flag', () => {
+  it('earns no unread for a floating chat selected in the open floating panel', () => {
+    // The main window is on another workspace; the floating panel is what the user is reading.
+    seed({ workspaceId: FLOATING_TERMINAL_WORKTREE_ID, floatingPanelOpen: true })
+    dispatchStructuredTurnCompletionAttention(
+      structuredTab(FLOATING_TERMINAL_WORKTREE_ID),
+      completion()
+    )
+    expect(store.getState().unreadAgentCompletionPanes).toEqual({})
+    expect(store.getState().unreadTerminalTabs).toEqual({})
+  })
+
+  it('earns unread for a floating chat while the floating panel is closed', () => {
+    seed({ workspaceId: FLOATING_TERMINAL_WORKTREE_ID })
+    dispatchStructuredTurnCompletionAttention(
+      structuredTab(FLOATING_TERMINAL_WORKTREE_ID),
+      completion()
+    )
+    expect(indicators(FLOATING_TERMINAL_WORKTREE_ID).paneDot).toBe('agent-completion')
+  })
+
+  it('earns unread when the workspace chat is behind another top-level view', () => {
+    seed({ activeWorktreeId: WORKSPACE })
+    store.setState({ activeView: 'tasks' })
+    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
+    expect(indicators().paneDot).toBe('agent-completion')
+  })
+
+  it('hands main the host verdict, which picks finished, failed or stopped', () => {
     dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
     // 'done' is the host's report that the turn settled, not a reading of the status row: main
     // words a 'working' state as "working", which would announce a finished turn as unfinished.
@@ -238,16 +310,39 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
       source: 'agent-task-complete',
       surface: 'agent-session',
       agentState: 'done',
-      agentInterrupted: false
+      agentTurnOutcome: 'success'
     })
+
+    for (const [outcome, turnId] of [
+      ['cancellation', 'turn-2'],
+      ['failure', 'turn-3']
+    ] as const) {
+      dispatched.length = 0
+      seed()
+      dispatchStructuredTurnCompletionAttention(structuredTab(), completion({ outcome, turnId }))
+      expect(onlyDispatch()).toMatchObject({ agentState: 'done', agentTurnOutcome: outcome })
+    }
+  })
+
+  it('calls back a send refused before any turn, named by its journal item key, as failed', () => {
+    dispatchStructuredTurnCompletionAttention(
+      structuredTab(),
+      completion({ outcome: 'failure', turnId: agentJournalSubmissionKey('m1') })
+    )
+    expect(indicators().paneDot).toBe('agent-completion')
+    expect(onlyDispatch()).toMatchObject({ agentState: 'done', agentTurnOutcome: 'failure' })
+  })
+
+  it('asks for input when the host settled a request while a prompt waits on the user', () => {
+    // e.g. a subagent's approval is unanswered.
+    dispatchStructuredTurnCompletionAttention(structuredTab(), completion({ awaitingUser: true }))
+    expect(indicators().paneDot).toBe('agent-completion')
+    expect(onlyDispatch()).toMatchObject({ agentState: 'blocked', agentTurnOutcome: 'success' })
 
     dispatched.length = 0
     seed()
-    dispatchStructuredTurnCompletionAttention(
-      structuredTab(),
-      completion({ outcome: 'cancellation', turnId: 'turn-2' })
-    )
-    expect(onlyDispatch()).toMatchObject({ agentState: 'done', agentInterrupted: true })
+    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
+    expect(onlyDispatch()).toMatchObject({ agentState: 'done' })
   })
 
   it('says done even while the status row still reads working, because the host settled the turn', () => {
@@ -270,10 +365,10 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
       }
     })
     dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
-    expect(onlyDispatch()).toMatchObject({ agentState: 'done', agentInterrupted: false })
+    expect(onlyDispatch()).toMatchObject({ agentState: 'done', agentTurnOutcome: 'success' })
   })
 
-  it('delivers an id the acknowledgement round trip dismisses when the user reads the chat', () => {
+  it('delivers the edge identity as its id, retired by subject when the user reads the chat', () => {
     const paneKey = structuredAgentSessionPaneKey(CHAT_TAB, SESSION)
     store.setState({
       agentStatusByPaneKey: {
@@ -290,11 +385,14 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
       }
     })
     dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
-    const deliveredId = onlyDispatch().notificationId
-    expect(deliveredId).toBeTruthy()
+    // The same id the host's phone push carries, so retiring it here retires the phone's too.
+    expect(onlyDispatch().notificationId).toBe(
+      agentSessionAttentionKey({ type: 'completion', completion: completion() })
+    )
 
     store.getState().acknowledgeAgents([paneKey])
-    expect(dismissed).toEqual([[deliveredId]])
+    // Main keeps the ids it announced per pane; the subject is what retires this one.
+    expect(dismissed.flatMap((call) => call.paneKeys ?? [])).toContain(paneKey)
   })
 
   it('rejects a completion for a session this tab does not own', () => {

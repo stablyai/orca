@@ -5,6 +5,7 @@ import { vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { NativeChatMessageList } from './NativeChatMessageList'
+import { transcriptRowOffset, transcriptWindowHeight } from './native-chat-window-test-layout'
 import {
   estimateNativeChatRowHeight,
   nativeChatRowContentMetrics
@@ -62,12 +63,8 @@ function overrideLayoutProperty(name: string, descriptor: PropertyDescriptor): (
   }
 }
 
-/** The spacer's reserved height, which is the transcript's whole rendered height:
- *  windowed rows are absolutely positioned inside it, so a row growing in place
- *  reaches the document only through the height the window reserves for it. */
 function reservedTranscriptHeight(root: ParentNode): number {
-  const spacer = root.querySelector<HTMLElement>('[data-native-chat-window]')
-  return spacer ? Number.parseFloat(spacer.style.height) || 0 : 0
+  return transcriptWindowHeight(root)
 }
 
 // The virtualizer measures with `offsetHeight` — not `clientHeight`, not a
@@ -108,7 +105,7 @@ export function stubLayout({
         }
         // The transcript column: as tall as the window it wraps, plus what sits
         // under it. This is the element the list observes for streamed growth.
-        return this.classList.contains('max-w-4xl')
+        return this.hasAttribute('data-native-chat-transcript-column')
           ? reservedTranscriptHeight(this) + belowTranscriptPx
           : 0
       }
@@ -145,14 +142,22 @@ export function stubLayout({
     restores.push(
       overrideLayoutProperty('offsetTop', {
         get(this: HTMLElement): number {
-          return this.hasAttribute('data-native-chat-window') ? aboveTranscriptPx : 0
+          return this.hasAttribute('data-native-chat-window')
+            ? aboveTranscriptPx
+            : this.hasAttribute('data-index')
+              ? transcriptRowOffset(this)
+              : 0
         }
       }),
       // happy-dom has no `offsetParent` at all, so production's walk to the
       // scroll root ends before it starts and every margin reads zero.
       overrideLayoutProperty('offsetParent', {
         get(this: HTMLElement): HTMLElement | null {
-          return this.parentElement?.closest<HTMLElement>('[data-native-chat-scroll]') ?? null
+          return this.hasAttribute('data-index')
+            ? this.parentElement
+            : (this.parentElement?.closest<HTMLElement>('[data-index]') ??
+                this.parentElement?.closest<HTMLElement>('[data-native-chat-scroll]') ??
+                null)
         }
       })
     )
@@ -180,12 +185,7 @@ export function session(messages: NativeChatMessage[]): NativeChatLiveSession {
 
 export function list(messages: NativeChatMessage[]): React.JSX.Element {
   return (
-    <NativeChatMessageList
-      session={session(messages)}
-      isWorking={false}
-      expandSignal={false}
-      fontScale={1}
-    />
+    <NativeChatMessageList session={session(messages)} isWorking={false} expandSignal={false} />
   )
 }
 
@@ -199,7 +199,7 @@ export function windowState(container: HTMLElement): { totalSize: number; indexe
   if (!spacer) {
     throw new Error('transcript is not windowed: no spacer, every row is mounted')
   }
-  const totalSize = Number.parseFloat(spacer.style.height)
+  const totalSize = transcriptWindowHeight(container)
   if (!(totalSize > 0)) {
     throw new Error(`transcript reserved no height (${spacer.style.height})`)
   }

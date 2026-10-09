@@ -46,6 +46,11 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       return
     }
     const currentPtyId = session.transport.getPtyId()
+    // Protocol replies keep the TUI responsive while an account notice blocks typing.
+    if (isTerminalQueryReply(data)) {
+      session.sendDesktopQueryReplyImmediate(data)
+      return
+    }
     // Why: after a Codex account switch, the runtime auth has already moved to
     // the newly selected account. Stale panes must not keep sending input until
     // they restart, or work can execute under the wrong account while the UI
@@ -78,19 +83,6 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       // disabling the mode would permanently silence focus events on resume.
       return
     }
-    // Why: xterm answers CPR/DSR/DA queries natively through this same onData
-    // stream (mixed with keystrokes). Those replies are latency-critical — a
-    // querying program reads them in raw mode with a short timeout — so send
-    // them immediately, skipping the remote input debounce that would corrupt
-    // them (#7329). They are not user input, so they bypass intent inference and
-    // activity recording below. No pending-intent guard: the only intents are
-    // plain-escape (`\x1b`) and ctrl-c (`\x03`), neither of which can satisfy
-    // isTerminalQueryReply (it requires length >= 3 and a full reply grammar),
-    // so a real keystroke never reaches this branch.
-    if (isTerminalQueryReply(data)) {
-      session.sendDesktopQueryReplyImmediate(data)
-      return
-    }
     // Why after the query-reply branch: device replies are not user input and
     // must always reach the shell, or a program querying during reattach hangs.
     // Why at all: a replaced endpoint reattaches to a fresh shell, so the tail
@@ -100,6 +92,8 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       session.clearPendingTerminalInputIntent()
       return
     }
+    // Why xterm's provenance: its own focus reports reach onData too, and no person typed them.
+    const inputKind = wasUserInput ? 'driving' : 'query-reply'
     const intent = session.pendingTerminalInputIntent
     // Why: real xterm can deliver the terminal byte even when our DOM keydown
     // listener missed the press. Exact Ctrl+C/Escape bytes are still safe to
@@ -123,7 +117,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       }
       session.clearPendingTerminalInputIntent()
       const writePromise = session.transport
-        .sendInputAccepted(data)
+        .sendInputAccepted(data, inputKind)
         .then((accepted): boolean | Promise<boolean> | null => {
           if (accepted) {
             // Why: rejected writes use transport recovery and must not arm a parser probe.
@@ -152,7 +146,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     }
     if (intent) {
       session.claimViewportForUserActivity()
-      if (session.transport.sendInput(data)) {
+      if (session.transport.sendInput(data, inputKind)) {
         session.markAcceptedTerminalInputSent()
         session.observeAcceptedShellCommandInput(data)
         session.observeAcceptedTerminalInput(data, intent)
@@ -163,7 +157,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       return
     }
     session.claimViewportForUserActivity()
-    if (session.transport.sendInput(data)) {
+    if (session.transport.sendInput(data, inputKind)) {
       session.markAcceptedTerminalInputSent()
       session.observeAcceptedShellCommandInput(data)
       session.observeAcceptedTerminalInput(data)

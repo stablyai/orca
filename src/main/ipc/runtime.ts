@@ -12,6 +12,7 @@ import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-br
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal-fit-restore-deadline'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './desktop-renderer-runtime-capabilities'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
+import { DESKTOP_RPC_CALLER } from '../runtime/rpc/rpc-caller-identity'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods'
 import { DesktopRuntimeSenderLifecycle } from './desktop-runtime-sender-lifecycle'
 
@@ -78,6 +79,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
         },
         {
           clientId: 'desktop-renderer',
+          caller: DESKTOP_RPC_CALLER,
           clientKind: 'runtime',
           connectionId: desktopSenders.connectionIdFor(event.sender),
           clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
@@ -102,33 +104,30 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       const controller = new AbortController()
       senderSubscriptions.set(args.subscriptionId, controller)
       const channel = `runtime:subscription:${args.subscriptionId}`
-      const stop = (): void => {
-        if (senderSubscriptions.get(args.subscriptionId) === controller) {
-          senderSubscriptions.delete(args.subscriptionId)
-        }
-      }
-      void new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS })
-        .dispatchStreaming(
-          {
-            id: args.subscriptionId,
-            authToken: 'desktop-ipc',
-            method: args.method,
-            params: args.params
-          },
-          (response) => {
-            if (!controller.signal.aborted && !event.sender.isDestroyed()) {
-              event.sender.send(channel, JSON.parse(response) as RuntimeRpcResponse<unknown>)
-            }
-          },
-          {
-            signal: controller.signal,
-            clientId: 'desktop-renderer',
-            clientKind: 'runtime',
-            connectionId,
-            clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
+      // The controller outlives the dispatch: most streaming handlers return once set up and
+      // keep streaming until their signal aborts, so `runtime:unsubscribe` or sender retirement
+      // is what ends it, never the handler settling.
+      void new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatchStreaming(
+        {
+          id: args.subscriptionId,
+          authToken: 'desktop-ipc',
+          method: args.method,
+          params: args.params
+        },
+        (response) => {
+          if (!controller.signal.aborted && !event.sender.isDestroyed()) {
+            event.sender.send(channel, JSON.parse(response) as RuntimeRpcResponse<unknown>)
           }
-        )
-        .finally(stop)
+        },
+        {
+          signal: controller.signal,
+          clientId: 'desktop-renderer',
+          caller: DESKTOP_RPC_CALLER,
+          clientKind: 'runtime',
+          connectionId,
+          clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
+        }
+      )
       return { subscribed: true }
     }
   )

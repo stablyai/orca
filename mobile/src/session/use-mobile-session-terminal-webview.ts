@@ -1,5 +1,7 @@
+import { pendingSelectionHandle, pendingSelectionWantsHandle } from './pending-session-selection'
 import { useEffect, useCallback } from 'react'
 import type { TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
+import type { TerminalFrame } from '../terminal/terminal-webview-messages'
 import type { MobileSessionTabSwitchingModel } from './use-mobile-session-tab-switching'
 
 export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitchingModel) {
@@ -15,14 +17,16 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     terminalDiagnosticsRef,
     webReadyHandlesRef,
     activeHandleRef,
-    pendingActiveTerminalHandleRef,
+    pendingSelectionRef,
     activeSessionTab,
     unsubscribeTerminal,
-    measureViewportOnce,
     subscribeToTerminal,
     nativeChatStream,
     readMarkdownTab,
-    readFileTab
+    readFileTab,
+    terminalFrameRef,
+    notifyTerminalFrameHeight,
+    notifyTerminalFrameWidth
   } = scope
   // Why: only store the ref; subscribe on web-ready to avoid the blank-terminal race (init queued before xterm.js loaded).
   const setTerminalWebViewRef = useCallback((handle: string, ref: TerminalWebViewHandle | null) => {
@@ -60,20 +64,49 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
         }
         return
       }
-      // Why: first subscribe may skip (no WebView ref); await measure so it carries the viewport, else it races measureViewportOnce and skips.
       // Why: a just-created tab can lose activeHandleRef to a lagging snapshot; honor the pending marker so its web-ready subscribe still fires.
-      const isIntendedActive = () =>
-        handle === activeHandleRef.current || handle === pendingActiveTerminalHandleRef.current
-      if (isIntendedActive() && !terminalUnsubsRef.current.has(handle)) {
-        void (async () => {
-          await measureViewportOnce(handle)
-          if (isIntendedActive() && !terminalUnsubsRef.current.has(handle)) {
-            subscribeToTerminal(handle)
-          }
-        })()
+      const isIntendedActive =
+        handle === activeHandleRef.current ||
+        pendingSelectionWantsHandle(pendingSelectionRef.current, handle)
+      // Why: web-ready carried the cell box xterm laid out, so subscribeToTerminal sizes this subscribe.
+      if (isIntendedActive && !terminalUnsubsRef.current.has(handle)) {
+        subscribeToTerminal(handle)
       }
     },
-    [measureViewportOnce, nativeChatStream, subscribeToTerminal, unsubscribeTerminal]
+    [nativeChatStream, subscribeToTerminal, unsubscribeTerminal]
+  )
+
+  const subscribeIntendedActiveTerminal = useCallback(() => {
+    const handle = pendingSelectionHandle(pendingSelectionRef.current) ?? activeHandleRef.current
+    if (handle && !terminalUnsubsRef.current.has(handle)) {
+      subscribeToTerminal(handle)
+    }
+  }, [activeHandleRef, pendingSelectionRef, subscribeToTerminal, terminalUnsubsRef])
+
+  /** The terminal frame React Native laid out: kept in the one frame ref, then what it changed. */
+  const notifyTerminalFrame = useCallback(
+    (frame: TerminalFrame) => {
+      // Why: notify height imperatively so dock settling re-fits the PTY without rerendering SessionScreen.
+      notifyTerminalFrameHeight(Math.round(frame.height))
+      // Why: the page reports a hidden frame as 0x0; it keeps the box it was laid out at.
+      if (frame.width <= 0) {
+        return
+      }
+      const previous = terminalFrameRef.current
+      terminalFrameRef.current = frame
+      if (!previous) {
+        // Why: a ready document held back for its frame subscribes on the first layout.
+        subscribeIntendedActiveTerminal()
+      } else if (frame.width !== previous.width) {
+        notifyTerminalFrameWidth()
+      }
+    },
+    [
+      notifyTerminalFrameHeight,
+      notifyTerminalFrameWidth,
+      subscribeIntendedActiveTerminal,
+      terminalFrameRef
+    ]
   )
 
   useEffect(() => {
@@ -97,7 +130,8 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
   }, [activeSessionTab, fileDocs, readFileTab])
   return {
     setTerminalWebViewRef,
-    handleTerminalWebReady
+    handleTerminalWebReady,
+    notifyTerminalFrame
   }
 }
 

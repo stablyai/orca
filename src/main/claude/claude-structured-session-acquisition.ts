@@ -7,20 +7,26 @@ import { CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE } from '../claude-accounts/envir
 import { isClaudeAuthSwitchInProgress } from '../claude-accounts/live-pty-gate'
 import { openClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import { buildClaudePermissionCallbacks } from './claude-structured-inbound-control'
-import { resolveClaudeReplayTurn } from './claude-structured-dispatch'
-import { readClaudeFrameString, readClaudeInit } from './claude-structured-init-proof'
+import { resolveClaudeReplayTurn } from './claude-replay-turn-resolution'
+import { claudeSessionStateEndsTurn } from './claude-session-state-turn-over'
+import { settleClaudeTurnEndWaiters } from './claude-request-end-wait'
+import {
+  createClaudeInitProof,
+  readClaudeCapabilities,
+  readClaudeFrameString,
+  readClaudeInit
+} from './claude-structured-init-proof'
 import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
 import { CLAUDE_SPAWN_TOKEN_ENV, claudeProcessIdentity } from './claude-structured-owner-identity'
 import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
-import { restoredClaudeStructuredSessionOptions } from './claude-structured-options'
-import { createClaudeSessionJournalTranslator } from './claude-structured-journal-translation'
+import { adoptClaudeStructuredSpawnOptions } from './claude-structured-spawn-options'
 import { observeClaudeFastModeFacts } from './claude-structured-session-options'
 import {
-  createClaudeInitProof,
   readClaudeStartupFacts,
   settleClaudeSessionStartup
 } from './claude-structured-session-startup'
 import { createClaudeSessionPublication } from './claude-structured-session-publication'
+import { readClaudeStructuredSessionSettings } from './claude-structured-session-acquisition-options'
 import {
   mintClaudeAcquisitionGeneration,
   type ClaudeAcquisitionRegistry,
@@ -30,14 +36,14 @@ import {
   type ClaudeAcquireCallbacks
 } from './claude-structured-session-state'
 import { resolveClaudeAcquisitionError } from './claude-structured-session-close'
-import { readClaudeTranscriptEntryUuid } from './claude-tui-exit'
+import { withObservedProviderExit } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import { readClaudeTranscriptEntryUuid } from './claude-transcript-entry-uuid'
 import { persistClaudeTurnResumePoint } from './claude-structured-resume-point'
 import { withAgentSessionCreatePhase } from '../observability/agent-session-instrumentation'
 import { resolveClaudeAcquisitionLaunch } from './claude-structured-acquisition-launch'
-import { agentModelCatalogSessionAccess } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 import {
   bindClaudeConnectionJournalControls,
-  createClaudeJournalFailureHandler
+  createClaudeSessionJournalTranslator
 } from './claude-structured-session-journal-control'
 
 export async function acquireClaudeSession({
@@ -58,7 +64,9 @@ export async function acquireClaudeSession({
   // A managed-account switch is mid-swap of the pinned credential home; refuse here,
   // before this acquisition cancels the previous attempt and closes the live session.
   if (isClaudeAuthSwitchInProgress()) {
-    throw new AgentSessionPreSpawnError(new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE))
+    throw new AgentSessionPreSpawnError(new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE), {
+      reason: 'accountSwitchInProgress'
+    })
   }
   const sessionId = input.identity.sessionId
   const prompts = new ClaudePromptRegistry()
@@ -72,20 +80,20 @@ export async function acquireClaudeSession({
   // Frames are admitted only after launch resolution proves the provider session
   // this acquisition owns. Keep the check ahead of every stateful consumer.
   const initProof = createClaudeInitProof()
-  const translator = createClaudeSessionJournalTranslator(
-    input.events,
-    prompts,
-    String(input.fence),
-    createClaudeJournalFailureHandler({ attempt, initProof, callbacks, sessionId })
-  )
+  const translator = createClaudeSessionJournalTranslator(input.events, String(input.fence), {
+    attempt,
+    initProof,
+    callbacks,
+    sessionId
+  })
 
   const onMessage = (message: Record<string, unknown>): void => {
     const init = readClaudeInit(message)
     if (readClaudeFrameString(message, 'session_id') !== expectedProviderSessionId) {
-      // An init proof for another (or unnamed) provider must fail acquisition
+      // An init proof for another (or unnamed) provider must fail the start or end the session
       // promptly, while ordinary foreign frames stay quarantined silently.
       if (init || (message.type === 'system' && message.subtype === 'init')) {
-        initProof.reject(new Error('claude provider session expected'))
+        initProof.refuse()
       }
       return
     }
@@ -98,6 +106,9 @@ export async function acquireClaudeSession({
         liveSession.reportedOptions.model = init.model
         liveSession.reportedModelMutation = liveSession.optionMutationSequence
       }
+      if (liveSession) {
+        liveSession.capabilities = readClaudeCapabilities(liveSession.capabilities, init.message)
+      }
     }
     observedLeafUuid = readClaudeTranscriptEntryUuid(message) ?? observedLeafUuid
     if (liveSession) {
@@ -107,10 +118,18 @@ export async function acquireClaudeSession({
       if (message.type === 'result' && sessions.get(sessionId) === liveSession) {
         persistClaudeTurnResumePoint(sessionId, liveSession, deps)
       }
+      // The CLI's idle releases its doubted sends; a late echo still accepts one it goes on to run.
+      if (claudeSessionStateEndsTurn(message) && sessions.get(sessionId) === liveSession) {
+        settleClaudeTurnEndWaiters(liveSession)
+        deps.onSessionIdle?.({ sessionId })
+      }
     }
+    // Settled after the turn this echo opens is emitted: a send read as answered before its turn
+    // lands reads as nothing running, and Stop and Working blink off in between.
+    const settlements: (() => void)[] = []
     const turnOrigin = liveSession
       ? resolveClaudeReplayTurn(liveSession, message, (settlement) =>
-          deps.onDispatchSettledLate?.({ sessionId, ...settlement })
+          settlements.push(() => deps.onDispatchSettledLate?.({ sessionId, ...settlement }))
         )
       : null
     const startsTurn = turnOrigin !== null
@@ -125,17 +144,17 @@ export async function acquireClaudeSession({
         message,
         ...(startsTurn ? { startsTurn: true } : {}),
         ...(requestedAt === null || requestedAt === undefined ? {} : { requestedAt }),
+        ...(turnOrigin?.clientMessageId ? { clientMessageId: turnOrigin.clientMessageId } : {}),
         ...observedAt
       })
     )
+    for (const settle of settlements) {
+      settle()
+    }
   }
-  const { canUseTool, onUserDialog } = buildClaudePermissionCallbacks({
-    sessionId,
-    prompts,
-    currentTurnId: () => translator?.currentTurnId ?? null,
-    emit: (event) =>
-      callbacks.deliver(attempt, sessionId, () => callbacks.emit(liveSession, input.events, event))
-  })
+  const emit = (event: Parameters<typeof callbacks.emit>[2]): void =>
+    callbacks.deliver(attempt, sessionId, () => callbacks.emit(liveSession, input.events, event))
+  const { canUseTool, onUserDialog } = buildClaudePermissionCallbacks({ sessionId, prompts, emit })
 
   try {
     const launch = await resolveClaudeAcquisitionLaunch({
@@ -149,6 +168,7 @@ export async function acquireClaudeSession({
       attempt
     })
     expectedProviderSessionId = launch.providerSessionId
+    attempt.account = launch.account
     observedLeafUuid = launch.resumeLeafUuid
     const open = deps.openConnection ?? openClaudeStreamJsonConnection
     const connection = await withAgentSessionCreatePhase('spawn', input.recordPhase, () =>
@@ -173,11 +193,19 @@ export async function acquireClaudeSession({
           onMessage,
           canUseTool,
           onUserDialog,
+          ...(input.onOutput ? { onOutput: input.onOutput } : {}),
           onFault: (error) => {
             childEnded ??= error
             initProof.reject(error)
           },
-          onExit: (error) => {
+          onExit: (error, exit) => {
+            if (exit?.expected) {
+              // The end of a close Orca began; that close settles it, or finishes it now.
+              callbacks.finishClose(sessionId, attempt)
+              return
+            }
+            // The child exited on its own; marked in place, as the fault report may hold this error.
+            withObservedProviderExit(error)
             childEnded ??= error
             initProof.reject(error)
             callbacks.handleExit(sessionId, attempt, error)
@@ -193,8 +221,6 @@ export async function acquireClaudeSession({
       deps.now ? { now: deps.now } : {}
     )
     acquisitions.assertCurrent(sessionId, attempt)
-    const emit = (event: Parameters<typeof callbacks.emit>[2]): void =>
-      callbacks.deliver(attempt, sessionId, () => callbacks.emit(liveSession, input.events, event))
     if (connection.pid === undefined) {
       // A pid-less spawn always reports its error next; surface that, not the missing pid.
       await initProof.promise
@@ -203,7 +229,7 @@ export async function acquireClaudeSession({
       { ...input, pid: connection.pid },
       deps.readProcessStartTime
     ).catch((error: unknown) => {
-      // A child that already ended explains why its start time could not be read.
+      // A child that already ended explains a missing pid or a failed read.
       throw childEnded ?? error
     })
     acquisitions.assertCurrent(sessionId, attempt)
@@ -226,20 +252,13 @@ export async function acquireClaudeSession({
       ...(unbindReadingControl ? { unbindReadingControl } : {}),
       process,
       acquisitionGeneration: mintClaudeAcquisitionGeneration(deps),
-      options: restoredClaudeStructuredSessionOptions(input.options),
+      options: launch.savedOptions.options,
       ...(deps.mintLinkId ? { linkId: deps.mintLinkId() } : {}),
       observedAt: deps.now?.() ?? Date.now()
     })
     const session = publication.session
     liveSession = session
-    const catalogAccess = agentModelCatalogSessionAccess(
-      deps.modelCatalog,
-      'claude',
-      launch.claudeConfigDir
-    )
-    if (catalogAccess) {
-      session.catalogAccess = catalogAccess
-    }
+    adoptClaudeStructuredSpawnOptions(session, launch.savedOptions)
     acquisitions.deleteIfCurrent(sessionId, attempt)
     await withAgentSessionCreatePhase('publish', input.recordPhase, async () => {
       sessions.set(sessionId, session)
@@ -248,30 +267,37 @@ export async function acquireClaudeSession({
         event()
       }
     })
-    session.startup.settled = settleClaudeSessionStartup({
-      session,
-      facts: readClaudeStartupFacts({
-        connection,
-        initProof,
-        sessionId,
-        providerSessionId: launch.providerSessionId,
-        resumesTranscript: launch.resumesTranscript,
-        inputOptions: input.options,
-        requestTimeoutMs: deps.requestTimeoutMs,
-        emit
-      }),
-      isCurrent: () => sessions.get(sessionId) === session,
-      requestTimeoutMs: deps.requestTimeoutMs,
-      fault: (error) => callbacks.handleExit(sessionId, attempt, error),
-      onStarted: (options) =>
-        emit({
-          type: 'started',
+    // Whichever comes first: the start landing or faulting, or the child being ended.
+    session.startup.settled = Promise.race([
+      session.startup.settled,
+      settleClaudeSessionStartup({
+        session,
+        facts: readClaudeStartupFacts({
+          account: launch.account,
+          connection,
+          initProof,
           sessionId,
-          fence: input.fence,
-          acquisitionGeneration: session.acquisitionGeneration,
-          ...options
-        })
-    })
+          providerSessionId: launch.providerSessionId,
+          startup: session.startup,
+          resumesTranscript: launch.resumesTranscript,
+          requestTimeoutMs: deps.requestTimeoutMs,
+          emit
+        }),
+        readSettings: () => readClaudeStructuredSessionSettings(connection, deps.requestTimeoutMs),
+        isCurrent: () => sessions.get(sessionId) === session,
+        fault: (error) => callbacks.handleExit(sessionId, attempt, error),
+        diagnose: (diagnostic) => emit({ type: 'auth-diagnostic', sessionId, diagnostic }),
+        // The host's minted attempt always carries it; only adapter tests that pass less omit it.
+        optionRevision: () => input.optionRevision?.() ?? 0,
+        report: (event) =>
+          emit({
+            ...event,
+            sessionId,
+            fence: input.fence,
+            acquisitionGeneration: session.acquisitionGeneration
+          })
+      })
+    ])
     // A child whose exit already reached `handleExit` is not handed over as live: the create
     // fails with the CLI's own diagnostic, as one that died before publish does.
     if (sessions.get(sessionId) !== session) {
@@ -279,8 +305,7 @@ export async function acquireClaudeSession({
         exits.get(sessionId)?.error ?? new Error('claude session ended before acquisition returned')
       )
     }
-    // The start applies its facts and restores saved options only after publish, so the child
-    // is `starting` until `started` says otherwise.
+    // The start reads its facts only after publish, so the child is `starting` until `started`.
     return { ...publication.acquisition, providerChildPhase: 'starting' }
   } catch (error) {
     unbindReadingControl?.()

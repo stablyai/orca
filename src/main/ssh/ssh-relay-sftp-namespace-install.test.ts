@@ -7,6 +7,9 @@ import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RelayInstallMarkerModule from './ssh-relay-install-marker'
 
+vi.mock('./ssh-relay-opencode-runtime', () => ({
+  ensureRemoteOpenCodeRuntime: vi.fn().mockResolvedValue('ready')
+}))
 vi.mock('./ssh-relay-ripgrep-install', () => ({
   remoteRipgrepLayout: vi.fn().mockReturnValue(null),
   recordRemoteRipgrepReference: vi.fn().mockResolvedValue(false),
@@ -320,8 +323,11 @@ describe('relay install writes on a split SFTP namespace', () => {
   let capture: Capture
   let warnSpy: ReturnType<typeof vi.spyOn>
 
+  afterEach(() => vi.unstubAllEnvs())
   beforeEach(() => {
     vi.clearAllMocks()
+    // The host-npm path is opt-in; these cases cover it.
+    vi.stubEnv('ORCA_SSH_REMOTE_RUNTIME', 'legacy')
     vi.mocked(execCommand).mockReset().mockResolvedValue('')
     vi.mocked(uploadDirectory).mockImplementation((_sftp, _local, remote: string) => {
       capture.uploadTargets.push(remote)
@@ -582,8 +588,11 @@ describe('relay repair writes on a split SFTP namespace', () => {
   let capture: Capture
   let warnSpy: ReturnType<typeof vi.spyOn>
 
+  afterEach(() => vi.unstubAllEnvs())
   beforeEach(() => {
     vi.clearAllMocks()
+    // The host-npm path is opt-in; these cases cover it.
+    vi.stubEnv('ORCA_SSH_REMOTE_RUNTIME', 'legacy')
     vi.mocked(execCommand).mockReset().mockResolvedValue('')
     vi.mocked(uploadDirectory).mockResolvedValue(undefined)
     vi.mocked(parseUnameToRelayPlatform).mockReturnValue('linux-x64')

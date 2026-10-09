@@ -7,6 +7,9 @@ import { isPtyAlreadyGoneError, delay, verifyPtyStopped } from '../provider/live
 import { recordUndeliveredSshPtyKill } from './undelivered-ssh-kill'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 
+// Bounds the wait for an observed exit to reach the runtime record when the caller set no deadline.
+const OBSERVED_EXIT_RECORD_WAIT_MS = 10_000
+
 export function killPtyFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
   ptyId: string
@@ -19,8 +22,7 @@ export function killPtyFromRuntimeController(
     rememberSyntheticKillExit,
     sendPtyExitToRenderer,
     finishPtyShutdown,
-    retiredRejectedPtyIds,
-    reversibleStopOwnersByPtyId
+    retiredRejectedPtyIds
   } = deps
   runtime?.markPtyStopRequested?.(ptyId)
   let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
@@ -31,7 +33,7 @@ export function killPtyFromRuntimeController(
       store,
       ptyId,
       connectionId,
-      reversible: reversibleStopOwnersByPtyId.has(ptyId),
+      reversible: runtime?.intentionalPtyStops?.isReversibleStopInFlight(ptyId) ?? false,
       incarnationId
     })
   }
@@ -184,31 +186,6 @@ export function retireRejectedPtyFromRuntimeController(
   })
 }
 
-export function markReversibleStopsFromRuntimeController(
-  deps: PtyRuntimeControllerDeps,
-  ptyIds: readonly string[]
-): () => void {
-  const { reversibleStopOwnersByPtyId } = deps
-  for (const ptyId of ptyIds) {
-    reversibleStopOwnersByPtyId.set(ptyId, (reversibleStopOwnersByPtyId.get(ptyId) ?? 0) + 1)
-  }
-  let released = false
-  return () => {
-    if (released) {
-      return
-    }
-    released = true
-    for (const ptyId of ptyIds) {
-      const owners = (reversibleStopOwnersByPtyId.get(ptyId) ?? 0) - 1
-      if (owners > 0) {
-        reversibleStopOwnersByPtyId.set(ptyId, owners)
-      } else {
-        reversibleStopOwnersByPtyId.delete(ptyId)
-      }
-    }
-  }
-}
-
 /**
  * Deliberately records no undelivered-stop intent, unlike `killPtyFromRuntimeController`.
  *
@@ -332,6 +309,11 @@ export async function stopAndWaitPtyFromRuntimeController(
       code: 0,
       ...(incarnationId ? { incarnationId } : {})
     })
+  } else {
+    // Why: an SSH exit frame reaches the runtime only after its output intake drains, so callers
+    // reading the verdict right after this stop would otherwise see a still-connected PTY.
+    const waitUntil = Math.min(deadlineMs ?? Infinity, Date.now() + OBSERVED_EXIT_RECORD_WAIT_MS)
+    await runtime?.waitForPtyExitRecord?.(ptyId, waitUntil - Date.now())
   }
   return true
 }

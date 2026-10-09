@@ -185,11 +185,11 @@ describe('ArtifactCollection', () => {
   // Why: happy-dom has no layout, and the virtualizer sizes its window from the scroller's
   // offsetHeight — left at 0 it mounts no rows at all and the assertions below would be vacuous.
   function stubScrollerViewport(): void {
-    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
-      function (this: HTMLElement) {
-        return this.classList.contains('overflow-auto') ? 600 : 53
-      }
-    )
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      return this.classList.contains('overflow-auto') ? 600 : 53
+    })
   }
 
   function announcedSetSizes(container: HTMLElement): string[] {

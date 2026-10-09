@@ -13,6 +13,7 @@ describe('copyable setup commands', () => {
     expect(windows('C:\\My Env\\python.exe')).toBe(`& 'C:\\My Env\\python.exe'${pip}`)
     expect(windows('C:\\Dev&Test\\python.exe')).toBe(`& 'C:\\Dev&Test\\python.exe'${pip}`)
     expect(windows("C:\\Bob's\\python.exe")).toBe(`& 'C:\\Bob''s\\python.exe'${pip}`)
+    expect(windows('C:\\Bob\u2019s\\python.exe')).toBe(`& 'C:\\Bob\u2019\u2019s\\python.exe'${pip}`)
   })
 
   it('creates the venv and installs into it only when creation succeeded', () => {

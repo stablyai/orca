@@ -257,11 +257,15 @@ export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
     }
 
     const paths = this.pathResolver.getRuntimePaths()
-    this.writeRuntimeCredentials(credentialsJson)
+    const runtimeCredentialsJson = await this.mergeLiveRuntimeSharedCredentials(credentialsJson)
+    this.writeRuntimeCredentials(runtimeCredentialsJson)
     if (process.platform === 'darwin') {
       // Why: Claude Code 2.1+ reads the scoped service, older builds the legacy unsuffixed one; runtime switching must satisfy both.
       try {
-        await writeActiveClaudeKeychainCredentialsForRuntime(credentialsJson, paths.configDir)
+        await writeActiveClaudeKeychainCredentialsForRuntime(
+          runtimeCredentialsJson,
+          paths.configDir
+        )
       } catch (error) {
         await this.restoreSystemDefaultSnapshot(
           credentialsJson,
@@ -270,6 +274,7 @@ export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
         throw error
       }
     }
+    this.lastWrittenSharedCredentialsJson = runtimeCredentialsJson
     const managedOauthAccount = await this.readManagedOauthAccount(activeAccount)
     if (this.writeRuntimeOauthAccount(managedOauthAccount)) {
       this.lastWrittenOauthAccount = managedOauthAccount

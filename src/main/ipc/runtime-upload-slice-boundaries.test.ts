@@ -16,7 +16,6 @@ import type { StagedRuntimeUploadFileIdentity } from '../../shared/runtime-uploa
 
 // Why: real limits, real host write flags ('wx' then 'a') and the real chunk
 // schema — the slice loop is exercised exactly at the boundaries it must respect.
-vi.mock('./filesystem-auth', () => ({ authorizeExternalPath: () => {} }))
 
 type ChunkParams = { relativePath: string; contentBase64: string; append: boolean }
 type CallOptions = { expectedEnvironmentRuntimeId?: string; signal?: AbortSignal }

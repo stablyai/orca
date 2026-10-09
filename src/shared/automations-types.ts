@@ -96,6 +96,8 @@ export type Automation = {
   prompt: string
   precheck: AutomationPrecheck | null
   agentId: TuiAgent
+  /** Saved text appended to the host's default agent Arguments on each fresh run; absent means none. */
+  extraAgentArgs?: string
   /** Why: runContext carries the logical project + host setup identity for
    *  multi-host projects; projectId remains only as the legacy repo-id storage
    *  field for pre-host-context automations.
@@ -183,6 +185,8 @@ export type AutomationCreateInput = {
   prompt: string
   precheck?: AutomationPrecheck | null
   agentId: TuiAgent
+  /** Empty or whitespace means no extras. */
+  extraAgentArgs?: string
   runContext?: WorkspaceRunContext | null
   sourceContext?: TaskSourceContext | null
   /** @deprecated Legacy repo-id compatibility field required for older stored
@@ -207,6 +211,7 @@ export type AutomationUpdateInput = Partial<
     | 'prompt'
     | 'precheck'
     | 'agentId'
+    | 'extraAgentArgs'
     | 'runContext'
     | 'sourceContext'
     | 'projectId'

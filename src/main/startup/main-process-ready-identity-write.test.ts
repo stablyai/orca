@@ -82,6 +82,16 @@ vi.mock('../persistence', () => ({
   },
   getCanonicalUserDataPath: () => mocks.userDataPath
 }))
+vi.mock('../persistence/profile-state/profile-state-startup-authority', () => ({
+  createProfileStateStoreForStartup: () => ({
+    store: {
+      getSettings: () => ({}),
+      onSettingsChanged: () => {},
+      getClaudeLivePtySessionIds: () => [],
+      getSshTargets: () => []
+    }
+  })
+}))
 // The registry reads the canonical path from this module, not from '../persistence'.
 vi.mock('../persistence/loading-store/user-data-path', () => ({
   getCanonicalUserDataPath: () => mocks.userDataPath
@@ -127,7 +137,10 @@ vi.mock('../host/deferred-secret-protection-report', () => ({
 vi.mock('../ssh/ssh-host-key-store', () => ({ initSshHostKeyStoreFile: vi.fn() }))
 vi.mock('../pty/legacy-terminal-shim-dir', () => ({ neutralizeLegacyTerminalShimDir: vi.fn() }))
 vi.mock('./windows-shell-path-hydration', () => ({
-  createWindowsShellPathHydration: () => ({ whenReady: Promise.resolve() })
+  createWindowsShellPathHydration: () => ({
+    configure: vi.fn(),
+    whenReady: Promise.resolve()
+  })
 }))
 vi.mock('../git/runner', () => ({
   configureWindowsHostGitEnvironmentReadiness: vi.fn(),
@@ -152,6 +165,7 @@ vi.mock('../browser/browser-session-proxy', () => ({
   invalidateBrowserSessionProxyApplication: vi.fn()
 }))
 vi.mock('../browser/doc-preview-protocol', () => ({ installDocPreviewProtocolHandler: vi.fn() }))
+vi.mock('../media/media-preview-protocol', () => ({ installMediaPreviewProtocolHandler: vi.fn() }))
 vi.mock('../ipc/doc-preview-grant-ipc', () => ({ registerDocPreviewGrantHandlers: vi.fn() }))
 
 // browser-session-startup and browser-session-registry are deliberately NOT mocked: they are the

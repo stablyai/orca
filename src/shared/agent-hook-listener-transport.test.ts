@@ -11,6 +11,7 @@ import {
 } from './agent-hook-listener/endpoint-publication'
 import {
   HOOK_REQUEST_MAX_BYTES,
+  parseAgentHookJson,
   parseFormEncodedBody,
   readRequestBody
 } from './agent-hook-listener/request-body'
@@ -161,12 +162,66 @@ describe('shared agent-hook-listener', () => {
     expectRequestParserListenersReleased(req)
   })
 
-  it('strips exactly one outer JSON BOM', async () => {
+  it.each([0, 1, 2, 3])(
+    'reads %i outer BOMs with every UTF-8 byte in a separate chunk',
+    async (count) => {
+      const req = createReadableRequest({ 'content-type': 'application/json' })
+      const body = readRequestBody(req as unknown as IncomingMessage)
+      const bytes = Buffer.concat([
+        ...Array.from({ length: count }, () => Buffer.from([0xef, 0xbb, 0xbf])),
+        Buffer.from('{"text":"café 日本語 😀"}')
+      ])
+      for (const byte of bytes) {
+        req.emit('data', Buffer.from([byte]))
+      }
+      req.emit('end')
+      await expect(body).resolves.toEqual({ text: 'café 日本語 😀' })
+      expectRequestParserListenersReleased(req)
+    }
+  )
+
+  it.each(['', '\uFEFF', '\uFEFF\uFEFF'])(
+    'preserves JSON whitespace and string BOMs after prefix %j',
+    (prefix) => {
+      expect(parseAgentHookJson(`${prefix} \r\n\t{"text":"a\uFEFFb"} \t\r\n`)).toEqual({
+        text: 'a\uFEFFb'
+      })
+    }
+  )
+
+  it.each([
+    '',
+    ' ',
+    '\uFEFF',
+    '\uFEFF\uFEFF',
+    '\uFEFF\uFEFFnot json',
+    ' \uFEFF{}',
+    '\uFEFF \uFEFF{}',
+    '{\uFEFF"ok":true}',
+    '{}\uFEFF',
+    '\uFEFF\uFEFF{"ok":}'
+  ])('rejects invalid JSON %j without trimming misplaced BOMs', (body) => {
+    expect(() => parseAgentHookJson(body)).toThrow()
+  })
+
+  it('keeps an empty HTTP body as an empty envelope', async () => {
     const req = createReadableRequest({ 'content-type': 'application/json' })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The existing request harness supplies the headers and stream events used by the reader.
     const body = readRequestBody(req as unknown as IncomingMessage)
-    req.emit('data', Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('{"ok":true}')]))
     req.emit('end')
-    await expect(body).resolves.toEqual({ ok: true })
+    await expect(body).resolves.toEqual({})
+    expectRequestParserListenersReleased(req)
+  })
+
+  it('counts BOM bytes toward the cap across incremental chunks', async () => {
+    const req = createReadableRequest({ 'content-type': 'application/json' })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The existing request harness supplies the headers and stream events used by the reader.
+    const body = readRequestBody(req as unknown as IncomingMessage)
+    req.emit('data', Buffer.from([0xef, 0xbb, 0xbf, 0xef, 0xbb, 0xbf]))
+    req.emit('data', Buffer.from(JSON.stringify({ x: 'a'.repeat(HOOK_REQUEST_MAX_BYTES - 8) })))
+    await expect(body).rejects.toThrow('payload too large')
+    expect(req.destroy).toHaveBeenCalledTimes(1)
+    expectRequestParserListenersReleased(req)
   })
 
   it('rejects JSON beyond the nesting-depth limit', async () => {

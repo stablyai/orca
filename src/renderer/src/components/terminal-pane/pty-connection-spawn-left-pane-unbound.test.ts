@@ -120,14 +120,14 @@ vi.mock('./pty-dispatcher', async (importOriginal) => {
 })
 
 describe('fresh spawn leaves a local pane unbound', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
@@ -202,6 +202,25 @@ describe('fresh spawn leaves a local pane unbound', () => {
     expect(settleDirectSshPaneRetry).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'failed', attemptId: 'attempt-1' })
     )
+    expect(requestTerminalPaneRecovery).not.toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'spawn-left-pane-unbound' })
+    )
+  })
+
+  // #21195: connect() resolves empty while the remote transport still holds an armed retry.
+  it('leaves recovery to a transport that owns its own retry', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = Object.assign(createMockTransport(), { ownsRecovery: vi.fn(() => true) })
+    transport.connect.mockImplementation(async () => undefined)
+    transportFactoryQueue.push(transport)
+
+    const deps = createDeps({ tabId: 'tab-transport-retry' })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocks cover every pane, manager, and deps member the connect path reads.
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(40)
+
+    expect(transport.connect).toHaveBeenCalled()
+    expect(transport.ownsRecovery).toHaveBeenCalled()
     expect(requestTerminalPaneRecovery).not.toHaveBeenCalledWith(
       expect.objectContaining({ reason: 'spawn-left-pane-unbound' })
     )

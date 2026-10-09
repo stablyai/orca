@@ -35,6 +35,9 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: vi.fn()
 }))
 
+vi.mock('./ssh-relay-opencode-runtime', () => ({
+  ensureRemoteOpenCodeRuntime: vi.fn().mockResolvedValue('ready')
+}))
 vi.mock('./ssh-relay-ripgrep-install', () => ({
   remoteRipgrepLayout: vi.fn().mockReturnValue(null),
   recordRemoteRipgrepReference: vi.fn().mockResolvedValue(false),
@@ -100,8 +103,11 @@ describe('relay native-deps cache on the deploy path', () => {
   let warnSpy: ReturnType<typeof vi.spyOn>
   const sftpCapture: SftpWriteCapture = { paths: [], contents: {}, execCallCountAtWrite: {} }
 
+  afterEach(() => vi.unstubAllEnvs())
   beforeEach(() => {
     vi.clearAllMocks()
+    // The host-npm path is opt-in; these cases cover it.
+    vi.stubEnv('ORCA_SSH_REMOTE_RUNTIME', 'legacy')
     vi.mocked(execCommand).mockReset().mockResolvedValue('')
     vi.mocked(uploadDirectory).mockResolvedValue(undefined)
     sftpCapture.paths.length = 0

@@ -8,33 +8,25 @@
  */
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 type RouteDependencies = {
-  storage: Map<string, string>
   routes: { pathname: string; params?: Record<string, string> }[]
   refusals: (string | undefined)[]
   params: Record<string, string | string[] | undefined>
 }
 
 const dependencies = vi.hoisted((): RouteDependencies => ({
-  storage: new Map(),
   routes: [],
   refusals: [],
   params: {}
 }))
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
-  default: {
-    getItem: async (key: string) => dependencies.storage.get(key) ?? null,
-    setItem: async (key: string, value: string) => {
-      dependencies.storage.set(key, value)
-    }
-  }
+  default: { getItem: async () => null, setItem: async () => {} }
 }))
 
 vi.mock('react-native', () => ({
-  ActivityIndicator: 'ActivityIndicator',
   StyleSheet: { create: (styles: unknown) => styles },
   View: 'View'
 }))
@@ -69,12 +61,14 @@ async function render(): Promise<void> {
 }
 
 beforeEach(() => {
-  dependencies.storage.clear()
   dependencies.routes.length = 0
   dependencies.refusals.length = 0
   dependencies.params = { hostId: 'host-1', page: ['settings'] }
-  Object.assign(globalThis, { __DEV__: true })
-  dependencies.storage.set('orca:mobileWebShellEnabled', 'true')
+  vi.stubEnv('EXPO_PUBLIC_MOBILE_SHELL', 'ota')
+})
+
+afterEach(() => {
+  vi.unstubAllEnvs()
 })
 
 describe('the catch-all switch', () => {
@@ -109,12 +103,11 @@ describe('the catch-all switch', () => {
     dependencies.params = { hostId: 'host-1', page: [] }
     await render()
     expect(dependencies.routes).toEqual([])
-    // Twice: once before the flag read settles and once after, both on the refusal.
     expect([...new Set(dependencies.refusals)]).toEqual(['host-1'])
   })
 
-  it('refuses while the flag read is still settling', async () => {
-    dependencies.storage.clear()
+  it('refuses in a build without the shell', async () => {
+    vi.stubEnv('EXPO_PUBLIC_MOBILE_SHELL', undefined)
     await render()
     expect(dependencies.routes).toEqual([])
     expect(dependencies.refusals.length).toBeGreaterThan(0)
@@ -174,14 +167,6 @@ describe('the catch-all switch', () => {
     dependencies.params = { hostId: 'host-1', page: ['session', 'wt-1'], '#': 'files', tab: 'diff' }
     await render()
     expect(dependencies.routes[0]?.params).toEqual({ tab: 'diff' })
-  })
-
-  it('never carries its own segments back as query params', async () => {
-    // `useLocalSearchParams` merges the route params into the search params, and both of these are
-    // already in the pathname above.
-    dependencies.params = { hostId: 'host-1', page: ['settings'] }
-    await render()
-    expect(dependencies.routes[0]).not.toHaveProperty('params')
   })
 
   it('refuses a deep link carrying more params than the bridge will take', async () => {

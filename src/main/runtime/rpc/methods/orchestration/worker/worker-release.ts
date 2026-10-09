@@ -14,6 +14,7 @@ import { OrchestrationWorkerTerminalUserInputParams } from '../../../../../../sh
 export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
   defineMethod({
     name: 'orchestration.workerRelease',
+    permission: 'workspace',
     params: WorkerDispatchParams,
     handler: async (params, { runtime, orchestrationMutation }): Promise<WorkerReleaseReceipt> => {
       const db = runtime.getOrchestrationDb()
@@ -85,6 +86,7 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
   }),
   defineMethod({
     name: 'orchestration.workerRetain',
+    permission: 'workspace',
     params: WorkerRetainParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
@@ -132,6 +134,7 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
   ORCHESTRATION_WORKER_LIST_METHOD,
   defineMethod({
     name: 'orchestration.workerTerminalUserInput',
+    permission: 'workspace',
     // `sessionId` addresses a worker that IS a structured agent session. Its pane key is a random
     // identity credential that never leaves main, so the caller names the session and the owning
     // runtime resolves it — a renderer echoing the pane key back would make it learnable.

@@ -10,23 +10,7 @@ export function relayHost(
   relay: MobileRelayEndpoint
 ): HostProfile {
   const host = journal.metadata.host
-  return {
-    ...host,
-    deviceToken: journal.secrets.deviceToken,
-    endpoints: [
-      { id: 'direct-primary', kind: 'lan', url: host.endpoint },
-      { id: 'relay-primary', kind: 'relay', url: relayWebSocketUrl(relay) }
-    ],
-    relayHostId: relay.relayHostId,
-    relay
-  }
-}
-
-export function relayWebSocketUrl(relay: MobileRelayEndpoint): string {
-  const url = new URL(relay.cellUrl)
-  url.protocol = 'wss:'
-  url.pathname = `/v1/connect/${encodeURIComponent(relay.relayHostId)}`
-  return url.toString()
+  return { ...host, deviceToken: journal.secrets.deviceToken, relay }
 }
 
 export function assertCommittedInstall(

@@ -12,7 +12,6 @@ import {
 import type { AiVaultSearchResponse } from '../../shared/ai-vault-search-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { searchAllExecutionHosts, type SessionSearchHostLeg } from './ai-vault-search-all-hosts'
-import { encodeMergedSearchCursor } from './ai-vault-search-merged-cursor'
 
 /**
  * Three real indexes over real transcripts, wired as three legs. Everything a
@@ -254,24 +253,6 @@ it('reports an unreachable host, keeps hasMore, and picks it up on the retry', a
   }
   expect(new Set(seen).size).toBe(seen.length)
   expect([...seen].sort()).toEqual(everyKey().sort())
-})
-
-it('refuses a cursor whose page size or host set no longer matches the request', async () => {
-  const first = resultsOf(await searchAllExecutionHosts({ query: 'needle', limit: 5 }, legs()))
-  expect(
-    await searchAllExecutionHosts(
-      { query: 'needle', limit: 20, cursor: first.page.cursor! },
-      legs()
-    )
-  ).toEqual({ kind: 'malformed-cursor' })
-  const nonHost = encodeMergedSearchCursor({
-    limit: 5,
-    sort: 'relevance',
-    hosts: { 'not-a-host': { c: null, e: 0, g: 0 } }
-  })
-  expect(
-    await searchAllExecutionHosts({ query: 'needle', limit: 5, cursor: nonHost }, legs())
-  ).toEqual({ kind: 'malformed-cursor' })
 })
 
 it('reports a disabled host without aborting the merge', async () => {

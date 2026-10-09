@@ -9,7 +9,11 @@ import {
   activeRendererPtys
 } from './visibility-state'
 import { PTY_BATCH_INTERVAL_MS } from './constants'
-import { appendPendingPtyData, getDroppedMode2031RendererData } from './pending'
+import {
+  appendPendingPtyData,
+  getDroppedMode2031RendererData,
+  getDroppedSynchronizedOutputRendererData
+} from './pending'
 import { sendModelRestoreNeededMarker, sendPtyDataToRenderer } from './payload'
 import { shouldSendInteractiveOutputNow } from './interactive'
 import { requestDeliveryResyncForGatedPty } from './accounting'
@@ -36,7 +40,7 @@ export function acceptPtyDataForRenderer(
   const preservesSeq = !payload.transformed && rawLength === payload.data.length
   const startSeq = typeof outputSeq === 'number' ? Math.max(0, outputSeq - rawLength) : undefined
   const projectionId = projection?.identity.projectionSemanticsId
-  if (session.mainWindow.isDestroyed()) {
+  if (!session.mainWindow || session.mainWindow.isDestroyed()) {
     if (projectionId) {
       session.sshOutputIntake?.transferProjections([projectionId], 'renderer-destroyed')
     }
@@ -98,7 +102,13 @@ export function acceptPtyDataForRenderer(
     pending.droppedOutput === true &&
     !overflowMarkedBeforeAppend &&
     session.pendingOverflowMarkedPtys.has(payload.id)
-  const nextData = pending.data + getDroppedMode2031RendererData(pending)
+  // Why the 2026 release goes BEFORE the 2031 data: that payload ends with a
+  // deliberately-retained INCOMPLETE private-mode sequence (extractPrivateModeScanTail),
+  // and an ESC after it would abort the dangling CSI and lose the carried mode.
+  const nextData =
+    pending.data +
+    getDroppedSynchronizedOutputRendererData(pending) +
+    getDroppedMode2031RendererData(pending)
   const isInteractiveOutput = shouldSendInteractiveOutputNow(
     payload.id,
     nextData,

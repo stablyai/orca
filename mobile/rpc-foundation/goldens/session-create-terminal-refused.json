@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "session.create-terminal",
   "family": "session.create-terminal",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "80e0bee23b8153f5db195a0d8c1db114f28bd336",
-  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
-  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "fa7d9fd6428e89282f08e04fefba4289000eb3aed1462489a2f11efed374382c",
-  "scenarioSha256": "e9c32bdf3357ca5d69ac07cb7bbc63fe279c1a23c44e5c79fa0b1db4fd1c55dd",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "023a38d473d3": {
       "name": "session.tabs.createTerminal#1",
@@ -53,31 +44,25 @@
         }
       }
     },
-    "11bf871f5dfc": {
-      "activeHandle": "terminal-0",
-      "activeSessionTabId": "tab-0",
-      "createError": "No pty slots left on the host",
-      "creating": false,
-      "initializedHandles": ["terminal-0"],
-      "pendingActiveSessionTabId": {
-        "$rpc": "null"
-      },
-      "pendingActiveTerminalHandle": {
-        "$rpc": "null"
-      },
-      "sessionTabs": [],
-      "terminals": []
-    },
-    "4c528a84c114": {
+    "6275ace50da2": {
       "activeHandle": "terminal-0",
       "activeSessionTabId": "tab-0",
       "createError": "",
       "creating": true,
       "initializedHandles": ["terminal-0"],
-      "pendingActiveSessionTabId": {
+      "pendingSelection": {
         "$rpc": "null"
       },
-      "pendingActiveTerminalHandle": {
+      "sessionTabs": [],
+      "terminals": []
+    },
+    "7853d5a23971": {
+      "activeHandle": "terminal-0",
+      "activeSessionTabId": "tab-0",
+      "createError": "No pty slots left on the host",
+      "creating": false,
+      "initializedHandles": ["terminal-0"],
+      "pendingSelection": {
         "$rpc": "null"
       },
       "sessionTabs": [],
@@ -152,7 +137,7 @@
             "mount": "eb79a9b3682a",
             "create": "9270aeb7d9c6"
           },
-          "state": "4c528a84c114",
+          "state": "6275ace50da2",
           "effects": []
         }
       },
@@ -165,7 +150,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "11bf871f5dfc",
+          "state": "7853d5a23971",
           "effects": ["b1152db10a02"]
         }
       }

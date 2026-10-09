@@ -1,7 +1,7 @@
 import type { RemoteBrowserPageSession } from './remote-browser-page-session'
 import {
   isRemoteBrowserPageMissingError,
-  resolveRemoteBrowserStreamRestartFailure
+  resolveRemoteBrowserStreamFailure
 } from './remote-browser-stream-errors'
 import {
   remoteBrowserStreamRetrying,
@@ -63,7 +63,7 @@ export function createRemoteBrowserStreamRestartAttempt(
         deps.closeMissingRemotePage(token.remotePageId)
         return false
       }
-      const failure = resolveRemoteBrowserStreamRestartFailure(error)
+      const failure = resolveRemoteBrowserStreamFailure(error)
       if (failure.logRawError) {
         // The raw text is transport-level and written for logs; keep it out of the UI but not out of
         // reach, since nothing else records it.

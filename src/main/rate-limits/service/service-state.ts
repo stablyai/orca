@@ -13,6 +13,8 @@ import {
   type ClaudeAuthPreparationResolver,
   type OpenCodeGoRateLimitConfig,
   type MiniMaxRateLimitConfig,
+  type AntigravityUsageEnabledResolver,
+  type ZcodePlanRateLimitConfig,
   type GeminiCliOAuthEnabledResolver,
   type NormalizedCodexAccountSelectionTarget,
   type NormalizedClaudeAccountSelectionTarget,
@@ -31,9 +33,14 @@ export abstract class RateLimitServiceState {
     kimi: null,
     antigravity: null,
     minimax: null,
-    grok: null
+    grok: null,
+    cursor: null,
+    zcode: null
   }
   protected grokAuthConfigured = readGrokAuthSession().status === 'ok'
+  // Why: the Cursor probe reads the macOS Keychain, so it cannot run synchronously
+  // at construction the way Grok's auth-file probe does; each fetch cycle sets it.
+  protected cursorAuthConfigured = false
   protected openCodeGoApiKeyConfigured = false
   protected pollInterval: number = DEFAULT_POLL_MS
   protected timer: ReturnType<typeof setInterval> | null = null
@@ -47,7 +54,9 @@ export abstract class RateLimitServiceState {
     kimi: 0,
     minimax: 0,
     grok: 0,
-    antigravity: 0
+    antigravity: 0,
+    cursor: 0,
+    zcode: 0
   }
   // Why: consecutive failures drive exponential backoff of the fast activation-retry lane; reset on any success/unavailable result.
   protected activeFailureStreakByProvider: Record<ActiveRateLimitProvider, number> = {
@@ -58,7 +67,9 @@ export abstract class RateLimitServiceState {
     kimi: 0,
     minimax: 0,
     grok: 0,
-    antigravity: 0
+    antigravity: 0,
+    cursor: 0,
+    zcode: 0
   }
   protected mainWindow: BrowserWindow | null = null
   protected detachWindowListeners: (() => void) | null = null
@@ -75,8 +86,10 @@ export abstract class RateLimitServiceState {
   protected lastClaudeAuthSnapshot: { configDir: string | null; provenance: string } | null = null
   protected opencodeFetchGeneration = 0
   protected minimaxFetchGeneration = 0
+  protected zcodeFetchGeneration = 0
   protected lastOpencodeConfigHash = ''
   protected lastMiniMaxConfigHash = ''
+  protected lastZcodeConfigHash = ''
   protected codexHomePathResolver: CodexHomePathResolver | null = null
   protected codexFetchTarget: NormalizedCodexAccountSelectionTarget = {
     runtime: 'host',
@@ -90,8 +103,11 @@ export abstract class RateLimitServiceState {
     wslDistro: null
   }
   protected openCodeGoConfigResolver: (() => OpenCodeGoRateLimitConfig) | null = null
+  protected openCodeGoApiKeyResolver: (() => string | null) | null = null
   protected miniMaxConfigResolver: (() => MiniMaxRateLimitConfig) | null = null
+  protected zcodePlanConfigResolver: (() => ZcodePlanRateLimitConfig) | null = null
   protected geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
+  protected antigravityUsageEnabledResolver: AntigravityUsageEnabledResolver | null = null
   protected inactiveClaudeAccountsResolver: (() => InactiveClaudeAccountInfo[]) | null = null
   protected inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null
   protected networkProxySettingsResolver: (() => NetworkProxySettings) | null = null

@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
 
@@ -99,7 +98,9 @@ describe('resolvePnpmCliInvocation', () => {
       prefixArgs: [],
       shell: false
     })
-    expect(resolvePnpmCliInvocation({ npmExecPath: '', nodeExecPath, platform: 'win32' })).toEqual({
+    expect(
+      resolvePnpmCliInvocation({ npmExecPath: '', nodeExecPath, platform: 'win32', pnpmHome: '' })
+    ).toEqual({
       command: 'pnpm.cmd',
       prefixArgs: [],
       shell: true
@@ -125,6 +126,7 @@ describe('resolvePnpmCliInvocation', () => {
 
   it('falls back to PATH pnpm when npm_execpath is absent from the environment', () => {
     vi.stubEnv('npm_execpath', undefined)
+    vi.stubEnv('PNPM_HOME', undefined)
     expect(resolvePnpmCliInvocation({ nodeExecPath, platform: 'darwin' })).toEqual({
       command: 'pnpm',
       prefixArgs: [],
@@ -136,17 +138,80 @@ describe('resolvePnpmCliInvocation', () => {
       shell: true
     })
   })
-})
+  it('uses the flat native Windows install when exec supplies no npm_execpath', () => {
+    vi.stubEnv('npm_execpath', undefined)
+    vi.stubEnv('PNPM_HOME', 'C:\\Users\\Runner Admin\\setup-pnpm')
+    const native = 'C:\\Users\\Runner Admin\\setup-pnpm\\pnpm.exe'
+    const fileExists = vi.fn((path) => path === native)
+    expect(resolvePnpmCliInvocation({ platform: 'win32', fileExists })).toEqual({
+      command: native,
+      prefixArgs: [],
+      shell: false
+    })
+    expect(fileExists.mock.calls.map(([path]) => path)).toEqual([
+      'C:\\Users\\Runner Admin\\setup-pnpm\\bin\\pnpm.exe',
+      native
+    ])
+  })
 
-describe('pnpm 12 native-cli callers', () => {
-  it('reinvokes pnpm through the helper rather than `node $npm_execpath`', () => {
-    for (const file of [
-      './build-native-for-platform.mjs',
-      './run-ssh-docker-bulk-open-freeze-e2e.mjs'
-    ]) {
-      const source = readFileSync(new URL(file, import.meta.url), 'utf8')
-      expect(source).toContain("from './pnpm-cli-invocation.mjs'")
-      expect(source).not.toMatch(/process\.execPath,\s*\[\s*(?:pnpmEntry|npmExecPath)/)
-    }
+  it('prefers the updated native bin entry over the original native install', () => {
+    const native = 'C:\\pnpm\\bin\\pnpm.exe'
+    const fileExists = vi.fn(() => true)
+    expect(
+      resolvePnpmCliInvocation({
+        npmExecPath: '',
+        platform: 'win32',
+        pnpmHome: 'C:/pnpm',
+        fileExists
+      })
+    ).toEqual({ command: native, prefixArgs: [], shell: false })
+    expect(fileExists).toHaveBeenCalledExactlyOnceWith(native)
+  })
+
+  it.each([
+    ['C:\\legacy\\pnpm.cjs', nodeExecPath, ['C:\\legacy\\pnpm.cjs'], false],
+    ['C:\\legacy\\pnpm.CMD', 'C:\\legacy\\pnpm.CMD', [], true],
+    ['C:\\legacy\\pnpm.exe', 'C:\\legacy\\pnpm.exe', [], false]
+  ])('keeps explicit %s ahead of any native home fallback', (entry, command, prefixArgs, shell) => {
+    const fileExists = vi.fn(() => true)
+    expect(
+      resolvePnpmCliInvocation({
+        npmExecPath: entry,
+        nodeExecPath,
+        platform: 'win32',
+        pnpmHome: 'C:\\pnpm',
+        fileExists
+      })
+    ).toEqual({ command, prefixArgs, shell })
+    expect(fileExists).not.toHaveBeenCalled()
+  })
+
+  it.each(['', 'pnpm', 'C:pnpm'])('does not probe the relative or empty home %s', (pnpmHome) => {
+    const fileExists = vi.fn(() => true)
+    expect(
+      resolvePnpmCliInvocation({ npmExecPath: '', platform: 'win32', pnpmHome, fileExists })
+    ).toEqual({ command: 'pnpm.cmd', prefixArgs: [], shell: true })
+    expect(fileExists).not.toHaveBeenCalled()
+  })
+
+  it('keeps the batch fallback when the native home files are absent', () => {
+    const fileExists = vi.fn(() => false)
+    expect(
+      resolvePnpmCliInvocation({
+        npmExecPath: '',
+        platform: 'win32',
+        pnpmHome: 'C:\\pnpm',
+        fileExists
+      })
+    ).toEqual({ command: 'pnpm.cmd', prefixArgs: [], shell: true })
+    expect(fileExists).toHaveBeenCalledTimes(2)
+  })
+
+  it.each(['darwin', 'linux'])('does not use a Windows home lookup on %s', (platform) => {
+    const fileExists = vi.fn(() => true)
+    expect(
+      resolvePnpmCliInvocation({ npmExecPath: '', platform, pnpmHome: 'C:\\pnpm', fileExists })
+    ).toEqual({ command: 'pnpm', prefixArgs: [], shell: false })
+    expect(fileExists).not.toHaveBeenCalled()
   })
 })

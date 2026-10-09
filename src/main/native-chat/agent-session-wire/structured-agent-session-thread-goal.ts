@@ -1,6 +1,7 @@
 // `agentSession.threadGoal`: change the provider thread's goal through the same
 // admission, ledger and journal path every other session mutation takes.
 
+import { refuse, type AgentSessionRefusalReason } from '../../../shared/agent-session-wire-refusals'
 import type {
   AgentJournalItemIdentity,
   AgentJournalThreadGoal
@@ -13,8 +14,11 @@ import type {
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 
-function refused(message: string): TurnOutcome<AgentSessionThreadGoalResult> {
-  return { ok: false, refusal: { code: 'agent_session_operation_invalid', message } }
+function refused(
+  reason: AgentSessionRefusalReason<'agent_session_operation_invalid'>,
+  message: string
+): TurnOutcome<AgentSessionThreadGoalResult> {
+  return { ok: false, refusal: refuse('agent_session_operation_invalid', { reason }, message) }
 }
 
 /** Keyed by the operation, so a replayed set upserts its one objective row. */
@@ -43,16 +47,15 @@ export async function performThreadGoalChange(
   ctx: AgentSessionTurnContext,
   input: { clientOperationId: string; change: AgentSessionThreadGoalChange }
 ): Promise<TurnOutcome<AgentSessionThreadGoalResult>> {
-  if (!ctx.adapter.changeThreadGoal || !ctx.adapter.supportsThreadGoal?.(ctx.sessionId)) {
-    return refused('Goals are unavailable for this chat session.')
+  if (!ctx.adapter.changeThreadGoal || !ctx.agents.capabilities(ctx.agent)?.threadGoal) {
+    return refused('goalsUnsupported', 'Goals are unavailable for this chat session.')
   }
   const { change } = input
   const identity = objectiveIdentity(input.clientOperationId)
   let replacesGoal = false
   if (change.kind === 'set') {
-    // A goal transition the host accepted but has not journaled yet decides this too.
-    await ctx.flushStreamedEvents()
-    // Read before the objective row lands: that row is a message, not a goal transition.
+    // Read before the objective row lands: that row is a message, not a goal transition. A goal
+    // transition the host accepted is already in the fold: it landed at its call.
     replacesGoal = ctx.journal.threadGoal() !== null
   }
   // Journal first: an active goal starts provider work at once, and the objective
@@ -66,15 +69,14 @@ export async function performThreadGoalChange(
         blocks: [{ type: 'text', text: change.objective }],
         sentAs: 'goal'
       },
-      { fence: ctx.fence }
+      // Accepting a goal is delivering it, so it joins whatever turn runs now.
+      { fence: ctx.fence, turnScope: ctx.journal.liveTurnScope() }
     )
-    ctx.publish()
   }
   const withdrawObjective = async (): Promise<void> => {
     if (change.kind === 'set') {
       // Nothing was sent as a goal.
       await ctx.journal.appendTombstone(identity, { fence: ctx.fence })
-      ctx.publish()
     }
   }
   let result: Awaited<ReturnType<typeof ctx.adapter.changeThreadGoal>>
@@ -91,7 +93,7 @@ export async function performThreadGoalChange(
   }
   if (!result.ok) {
     await withdrawObjective()
-    return refused(result.rejected)
+    return refused('providerRejected', result.rejected)
   }
   return { ok: true, value: { change: change.kind } }
 }

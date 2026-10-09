@@ -32,7 +32,7 @@ const plan: LocalPtyLaunchPlan = {
   windowsFallbackAttempts: [],
   shellReadyLaunch: null,
   getFallbackShellReadyConfig: undefined,
-  primaryLaunchEnvKeys: [],
+  primaryPreLaunchEnv: {},
   isWslShell: false,
   launchWslDistro: null
 }

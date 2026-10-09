@@ -104,7 +104,6 @@ export async function setupTerminalCreateSurfacing(
     settings: {
       terminalFontSize: 13,
       experimentalNativeChat: false,
-      openAgentTabsInChatByDefault: false,
       activeRuntimeEnvironmentId: undefined as string | undefined
     }
   }
@@ -177,7 +176,6 @@ export async function setupTerminalCreateSurfacing(
   }))
   vi.doMock('@/lib/floating-workspace-terminal-actions', () => ({
     createFloatingWorkspaceTerminalTab,
-    isEmptyFloatingWorkspacePanelVisible: () => false,
     isFloatingWorkspacePanelFocused: () => isFloatingPanelFocused()
   }))
   vi.doMock('@/runtime/web-runtime-session', () => ({

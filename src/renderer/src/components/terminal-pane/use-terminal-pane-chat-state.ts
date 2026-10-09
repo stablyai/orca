@@ -7,7 +7,7 @@ import { collectLeafIdsInOrder, EMPTY_LAYOUT } from './layout-serialization'
 import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
 import { resolveNativeChatLeafTitleAgent } from './native-chat-leaf-title-agent'
 import { useTerminalPaneStoreActions } from './use-terminal-pane-store-actions'
-import { selectUnifiedTerminalTabChatFields } from './terminal-unified-tab-lookup'
+import { selectUnifiedTerminalTabFields } from './terminal-unified-tab-lookup'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
 import {
   nativeChatLaunchAgentForLeaf,
@@ -33,6 +33,7 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     clearCodexRestartNotice,
     consumePendingCodexPaneRestart,
     setTabCanExpandPane,
+    setTabLayout,
     setTabPaneExpanded,
     setTabViewMode,
     suppressPtyExit,
@@ -41,13 +42,12 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
   const pendingCodexPaneRestartIds = useAppStore((store) => store.pendingCodexPaneRestartIds)
   // Why one selector: five separate subscriptions each re-read the same unified
   // tab, so one publication paid the lookup five times per mounted tab.
-  const { unifiedTabId, isChatViewMode, unifiedTabLabel } = useAppStore(
+  const { unifiedTabId, isChatViewMode, unifiedTabLabel, isTabPinned } = useAppStore(
     useShallow((store) =>
-      selectUnifiedTerminalTabChatFields(store.unifiedTabsByWorktree, worktreeId, tabId)
+      selectUnifiedTerminalTabFields(store.unifiedTabsByWorktree, worktreeId, tabId)
     )
   )
-  const nativeChatEnabled = useAppStore((store) => store.settings?.experimentalNativeChat === true)
-  const effectiveChatViewMode = nativeChatEnabled && isChatViewMode
+  const effectiveChatViewMode = isChatViewMode
   const runtimePaneTitlesByPaneId = useAppStore(
     useShallow((store) => store.runtimePaneTitlesByTabId[tabId] ?? {})
   )
@@ -128,7 +128,6 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
         leafIds: getNativeChatLeafIds()
       })
       return canToggleNativeChat({
-        experimentalNativeChatEnabled: nativeChatEnabled,
         contentType: 'terminal',
         launchAgent: detectedAgent ? null : launchAgent,
         detectedAgent,
@@ -138,7 +137,6 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     },
     [
       tabAgentTypeByLeaf,
-      nativeChatEnabled,
       nativeChatTranscriptIsLocalReadable,
       terminalTab?.launchAgent,
       getNativeChatLeafIds,
@@ -148,15 +146,35 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
   )
   const applyNativeChatLeafRoute = useCallback(
     (route: NativeChatLeafRoute): void => {
+      const state = useAppStore.getState()
+      const currentMode = selectUnifiedTerminalTabFields(
+        state.unifiedTabsByWorktree,
+        worktreeId,
+        tabId
+      ).isChatViewMode
+      if (!isChatViewMode && currentMode && chatLeafId && route.chatLeafId === null) {
+        // Keep the owner through the batched toggle that turns chat mode on.
+        return
+      }
       if (route.chatLeafId !== chatLeafId) {
         setChatLeafId(route.chatLeafId)
+      }
+      const existingLayout = useAppStore.getState().terminalLayoutsByTabId[tabId]
+      if (existingLayout && existingLayout.chatLeafId !== (route.chatLeafId ?? undefined)) {
+        if (route.chatLeafId) {
+          setTabLayout(tabId, { ...existingLayout, chatLeafId: route.chatLeafId })
+        } else if (existingLayout?.chatLeafId) {
+          const nextLayout = { ...existingLayout }
+          delete nextLayout.chatLeafId
+          setTabLayout(tabId, nextLayout)
+        }
       }
       if (route.exitChat && unifiedTabId) {
         setTabViewMode(unifiedTabId, 'terminal')
       }
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    [chatLeafId, setTabViewMode, unifiedTabId]
+    [chatLeafId, isChatViewMode, setTabLayout, setTabViewMode, tabId, unifiedTabId, worktreeId]
   )
   const handleConfirmedAgentExit = useCallback(
     (leafId: string): void => {
@@ -187,9 +205,9 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     (leafId: string | null): boolean => {
       // Scope the "always allow toggling back" rule to the leaf showing chat; must not make an unsupported sibling look eligible.
       const isChatViewForLeaf = effectiveChatViewMode && leafId !== null && chatLeafId === leafId
-      return (nativeChatEnabled && isChatViewForLeaf) || isChatEligibleForLeaf(leafId)
+      return isChatViewForLeaf || isChatEligibleForLeaf(leafId)
     },
-    [chatLeafId, effectiveChatViewMode, isChatEligibleForLeaf, nativeChatEnabled]
+    [chatLeafId, effectiveChatViewMode, isChatEligibleForLeaf]
   )
   const toggleNativeChatForLeaf = useCallback(
     (leafId: string) => {
@@ -240,9 +258,9 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     clearCodexRestartNotice,
     unifiedTabId,
     isChatViewMode,
-    nativeChatEnabled,
     effectiveChatViewMode,
     unifiedTabLabel,
+    isTabPinned,
     runtimePaneTitlesByPaneId,
     tabAgentTypeByLeaf,
     setTabViewMode,

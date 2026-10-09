@@ -1,7 +1,12 @@
 import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
 import { isAgentSessionLaunchArgs } from './agent-session-launch-args'
-import { isAgentSessionSurfaceTabId } from './agent-session-surface-tab-id'
 import { isAgentSessionConversationName } from './agent-session-conversation-name'
+import {
+  isPersistedAgentSessionHandoffStage,
+  isPersistedAgentSessionRuntimeKind,
+  type PersistedAgentSessionLease,
+  type PersistedAgentSessionRecord
+} from './agent-session-legacy-handoff-lease'
 /**
  * Durable agent-session record and its single-writer lease.
  *
@@ -16,10 +21,21 @@ import {
   type AgentSessionConversationCommandRecord
 } from './agent-session-conversation-command'
 import {
-  isAgentSessionProviderHandleChain,
-  type AgentSessionHandleProvider,
+  decodePersistedAgentSessionProviderHandleChain,
   type AgentSessionProviderHandleLink
 } from './agent-session-provider-handle'
+import {
+  isAgentSessionProviderContextBoundary,
+  type AgentSessionProviderContextBoundary
+} from './agent-session-provider-context'
+import { isStructuredAgentId } from './agent-session-provider-handle-encoding'
+import {
+  isAgentSessionAccountHome,
+  MAX_PATH_LENGTH,
+  type AgentSessionAccountHome
+} from './agent-session-account-home'
+
+export type { AgentSessionAccountHome } from './agent-session-account-home'
 
 export const AGENT_SESSION_RECORD_SCHEMA_VERSION = 2 as const
 
@@ -38,46 +54,39 @@ export type AgentSessionExecutionLocation = {
   workspaceKind: AgentSessionWorkspaceKind
 }
 
-/** Account root pinned at launch by the account selector, so a resume cannot drift to another login. */
-export type AgentSessionAccountHome = {
-  variable: 'CLAUDE_CONFIG_DIR' | 'CODEX_HOME'
-  /** Host-resolved absolute path in the execution host's own path syntax. */
-  path: string
-}
-
 /** Provider launch environment captured by the host when the session is created. */
 export type AgentSessionLaunchEnv = Record<string, string>
 
 /** Provider CLI arguments captured by the host when the session is created. */
 export type AgentSessionLaunchArgs = string[]
 
-export type AgentSessionOwnerRuntimeKind = 'native' | 'tui'
+/** Still persisted because older builds read it. The removed terminal handoff's `tui` is mapped
+ *  away at decode (agent-session-legacy-handoff-lease). */
+export type AgentSessionOwnerRuntimeKind = 'native'
 
-export type AgentSessionHandoffStage =
-  | 'preparing'
-  | 'old-owner-stopped'
-  | 'new-owner-proving'
-  | 'recovering'
-  | 'manual-recovery'
+/** The acquisition stage. Stages only older builds wrote are mapped away at decode. */
+export type AgentSessionHandoffStage = 'new-owner-proving' | 'recovering'
 
 /**
  * PID-reuse-safe process identity. `spawnToken` is the only element available on every platform:
- * process start time costs a CIM query on Windows and is absent in some containers. An exact
- * identity stays in `recovering`; an ownerless, unattributable reservation uses `manual-recovery`.
+ * process start time costs a CIM query on Windows and is absent in some containers.
  */
 export type AgentSessionProcessIdentity = {
   hostId: string
   pid: number
   processStartTimeMs: number | null
   spawnToken: string
+  /** The Orca runtime that started this process and holds its transport, stamped when the owner is
+   *  recorded; absent on owners older builds recorded. */
+  runtime?: string
 }
 
 export type AgentSessionJournalCheckpoint = { epoch: number; sequence: number }
 
 /**
- * Mirrors the in-memory claim registry's reserved / live / conflicted states so a conflict
- * survives a restart. `released` has no registry equivalent: the registry expresses "no owner" by
- * deleting the entry, and a durable record that outlives its owner needs a name for that.
+ * `released` means no owner: a durable record that outlives its owner needs a name for that.
+ * `conflicted` is how a terminal owner an older build recorded loads: recovery waits it out and
+ * never stops it, because it is the user's own agent.
  */
 export type AgentSessionClaimStatus = 'reserved' | 'live' | 'conflicted' | 'released'
 
@@ -85,6 +94,18 @@ export type AgentSessionDeathEvidence = {
   kind: 'exit-observed' | 'pid-absent' | 'identity-mismatch'
   detail: string
   observedAt: number
+  /** Fence of the owner (or reservation) this death is about; a fence names exactly one. Absent on
+   *  evidence older builds wrote, which then speaks for no turn. */
+  ownerFence?: number
+  /** The death interval's lower bound: the last time the runtime holding the owner's transport
+   *  proved it alive. Only a probe's proof records it: absent on a surface-release exit, a failed
+   *  start, and evidence older builds wrote. */
+  lastProvenAliveAt?: number
+  /** How the Orca runtime that held the owner ended, when the owner died with it: the quit or
+   *  update it had begun, else 'crash'. Absent when a provider died on its own while Orca ran, and
+   *  whenever that cannot be told. A string, since a newer build may write a cause this one does
+   *  not know; read it with `isAgentSessionOrcaStopCause`. */
+  runtimeEnd?: string
 }
 
 export type AgentSessionLease = {
@@ -99,9 +120,9 @@ export type AgentSessionLease = {
   ownerProcess: AgentSessionProcessIdentity | null
   /** Reserved before any process exists, then matched against the child's environment. */
   reservedSpawnToken: string | null
-  /** Set only when acquisition failed before any spawn attempt. */
-  processlessAt?: number | null
   leaseDeadlineAt: number
+  /** While `ownerProcess` is set, the last time its transport holder proved it alive; parking in
+   *  `recovering` proves nothing, so it leaves this alone. */
   lastRenewedAt: number
   handoffOperationId: string | null
   journalCheckpoint: AgentSessionJournalCheckpoint | null
@@ -111,26 +132,29 @@ export type AgentSessionLease = {
   /** True from load until the host adjudicates it; no writer is granted while set. */
   unreconciled: boolean
   /**
-   * Lowest fence a future grant may use. Set only after the store recovers from its backup, where
-   * the commit that never landed may already have granted a fence the backup cannot show. The
-   * CURRENT fence is deliberately left alone: `live` means a handle proven at exactly that number,
-   * so rewriting it would invalidate the record it is trying to save.
+   * Lowest fence a future grant may use. Set only by an earlier build's import of its records file,
+   * when the copy came from its backup or sat beside a set-aside copy of the same chat: either may
+   * hide a fence already granted. The CURRENT fence is deliberately left alone: `live` means a
+   * handle proven at exactly that number, so rewriting it would invalidate the record it is trying
+   * to save.
    */
   minimumNextFence?: number
+  /** Null on a released lease when nothing proved its owner gone. */
   deathEvidence: AgentSessionDeathEvidence | null
-  /** A positively observed provider exit whose terminal journal settlement still needs retry. */
-  settlementRetryRequired?: boolean
-  /** Stable lifecycle batch id used when retrying the terminal settlement. */
-  settlementRetryId?: string
 }
 
 export type AgentSessionRecord = {
   schemaVersion: typeof AGENT_SESSION_RECORD_SCHEMA_VERSION
   sessionId: string
   location: AgentSessionExecutionLocation
-  provider: AgentSessionHandleProvider
+  /** The agent this session names, whether this build can run it or not. */
+  provider: string
   providerHandleChain: AgentSessionProviderHandleLink[]
+  providerContextBoundary?: AgentSessionProviderContextBoundary
   accountHome: AgentSessionAccountHome
+  /** The directory the provider first launched in, in the execution host's path syntax. Floating
+   *  sessions resume here; worktree and folder ids still resolve by id to their durable place. */
+  launchDirectory?: string
   /** Provider options the user chose, replayed whenever a new owner starts the session. */
   options?: Record<string, string>
   rewind?: AgentSessionRewindRecord
@@ -138,9 +162,6 @@ export type AgentSessionRecord = {
   /** The name Orca gave this conversation, so a later acquisition need not name it again. */
   conversationName?: string
   launchArgs?: AgentSessionLaunchArgs
-  /** The id of the tab that shows this conversation on every client: host-owned and pinned once;
-   *  readers copy it, never derive it. Older records are backfilled at load with the derived id. */
-  surfaceTabId?: string
   lease: AgentSessionLease
   createdAt: number
   updatedAt: number
@@ -154,7 +175,8 @@ export type AgentSessionOptionsReplacement = {
 }
 
 const MAX_ID_LENGTH = 512
-const MAX_PATH_LENGTH = 4096
+/** A death evidence's `detail` past this fails a load, so whoever writes one cuts it here. */
+export const MAX_AGENT_SESSION_DEATH_DETAIL_CHARS = MAX_ID_LENGTH
 const MAX_LAUNCH_ENV_ENTRIES = 256
 const MAX_LAUNCH_ENV_VALUE_LENGTH = 65_536
 const SESSION_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/
@@ -219,18 +241,8 @@ export function isAgentSessionProcessIdentity(
     (identity.processStartTimeMs === null ||
       (Number.isSafeInteger(identity.processStartTimeMs) &&
         (identity.processStartTimeMs as number) >= 0)) &&
-    isBoundedString(identity.spawnToken, MAX_ID_LENGTH)
-  )
-}
-
-function isAgentSessionAccountHome(value: unknown): value is AgentSessionAccountHome {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-  const home = value as Partial<AgentSessionAccountHome>
-  return (
-    (home.variable === 'CLAUDE_CONFIG_DIR' || home.variable === 'CODEX_HOME') &&
-    isBoundedString(home.path, MAX_PATH_LENGTH)
+    isBoundedString(identity.spawnToken, MAX_ID_LENGTH) &&
+    (identity.runtime === undefined || isBoundedString(identity.runtime, MAX_ID_LENGTH))
   )
 }
 
@@ -282,39 +294,39 @@ function isAgentSessionDeathEvidence(value: unknown): value is AgentSessionDeath
     return false
   }
   const evidence = value as Partial<AgentSessionDeathEvidence>
+  const { observedAt, lastProvenAliveAt, ownerFence, runtimeEnd } = evidence
   return (
     (evidence.kind === 'exit-observed' ||
       evidence.kind === 'pid-absent' ||
       evidence.kind === 'identity-mismatch') &&
-    isBoundedString(evidence.detail, MAX_ID_LENGTH) &&
-    Number.isSafeInteger(evidence.observedAt) &&
-    (evidence.observedAt as number) >= 0
+    isBoundedString(evidence.detail, MAX_AGENT_SESSION_DEATH_DETAIL_CHARS) &&
+    typeof observedAt === 'number' &&
+    Number.isSafeInteger(observedAt) &&
+    observedAt >= 0 &&
+    (ownerFence === undefined || (Number.isSafeInteger(ownerFence) && ownerFence >= 0)) &&
+    (lastProvenAliveAt === undefined ||
+      (Number.isSafeInteger(lastProvenAliveAt) &&
+        lastProvenAliveAt >= 0 &&
+        lastProvenAliveAt <= observedAt)) &&
+    (runtimeEnd === undefined || isBoundedString(runtimeEnd, MAX_ID_LENGTH))
   )
 }
 
-function isAgentSessionLease(value: unknown): value is AgentSessionLease {
+function isPersistedAgentSessionLease(value: unknown): value is PersistedAgentSessionLease {
   if (typeof value !== 'object' || value === null) {
     return false
   }
   const lease = value as Partial<AgentSessionLease>
   return (
     isAgentSessionId(lease.sessionId) &&
-    (lease.runtimeKind === 'native' || lease.runtimeKind === 'tui') &&
+    isPersistedAgentSessionRuntimeKind(lease.runtimeKind) &&
     Number.isSafeInteger(lease.runtimeFence) &&
     (lease.runtimeFence as number) >= 0 &&
-    (lease.handoffStage === null ||
-      lease.handoffStage === 'preparing' ||
-      lease.handoffStage === 'old-owner-stopped' ||
-      lease.handoffStage === 'new-owner-proving' ||
-      lease.handoffStage === 'recovering' ||
-      lease.handoffStage === 'manual-recovery') &&
+    (lease.handoffStage === null || isPersistedAgentSessionHandoffStage(lease.handoffStage)) &&
     (lease.provenHandleLinkId === null || isBoundedString(lease.provenHandleLinkId, 128)) &&
     (lease.ownerProcess === null || isAgentSessionProcessIdentity(lease.ownerProcess)) &&
     (lease.reservedSpawnToken === null ||
       isBoundedString(lease.reservedSpawnToken, MAX_ID_LENGTH)) &&
-    (lease.processlessAt === undefined ||
-      lease.processlessAt === null ||
-      (Number.isSafeInteger(lease.processlessAt) && (lease.processlessAt as number) >= 0)) &&
     Number.isSafeInteger(lease.leaseDeadlineAt) &&
     Number.isSafeInteger(lease.lastRenewedAt) &&
     (lease.handoffOperationId === null ||
@@ -327,15 +339,14 @@ function isAgentSessionLease(value: unknown): value is AgentSessionLease {
       lease.claimStatus === 'conflicted' ||
       lease.claimStatus === 'released') &&
     typeof lease.unreconciled === 'boolean' &&
-    (lease.settlementRetryRequired === undefined ||
-      typeof lease.settlementRetryRequired === 'boolean') &&
-    (lease.settlementRetryId === undefined ||
-      isBoundedString(lease.settlementRetryId, MAX_ID_LENGTH)) &&
     (lease.deathEvidence === null || isAgentSessionDeathEvidence(lease.deathEvidence))
   )
 }
 
-export function isAgentSessionRecord(value: unknown): value is AgentSessionRecord {
+/** Stored identity is independent of registrations; availability is checked only at start. */
+export function isPersistedAgentSessionRecord(
+  value: unknown
+): value is PersistedAgentSessionRecord {
   if (typeof value !== 'object' || value === null) {
     return false
   }
@@ -344,19 +355,21 @@ export function isAgentSessionRecord(value: unknown): value is AgentSessionRecor
     record.schemaVersion === AGENT_SESSION_RECORD_SCHEMA_VERSION &&
     isAgentSessionId(record.sessionId) &&
     isAgentSessionExecutionLocation(record.location) &&
-    (record.provider === 'claude' || record.provider === 'codex') &&
-    isAgentSessionProviderHandleChain(record.providerHandleChain) &&
+    isStructuredAgentId(record.provider) &&
     isAgentSessionAccountHome(record.accountHome) &&
+    (record.launchDirectory === undefined ||
+      isBoundedString(record.launchDirectory, MAX_PATH_LENGTH)) &&
     (record.options === undefined || isAgentSessionOptions(record.options)) &&
     (record.rewind === undefined || isAgentSessionRewindRecord(record.rewind)) &&
+    (record.providerContextBoundary === undefined ||
+      isAgentSessionProviderContextBoundary(record.providerContextBoundary)) &&
     (record.conversationCommand === undefined ||
       isAgentSessionConversationCommandRecord(record.conversationCommand)) &&
     (record.conversationName === undefined ||
       isAgentSessionConversationName(record.conversationName)) &&
     (record.launchArgs === undefined || isAgentSessionLaunchArgs(record.launchArgs)) &&
-    (record.surfaceTabId === undefined || isAgentSessionSurfaceTabId(record.surfaceTabId)) &&
     !Object.hasOwn(record, 'launchEnv') &&
-    isAgentSessionLease(record.lease) &&
+    isPersistedAgentSessionLease(record.lease) &&
     record.lease.sessionId === record.sessionId &&
     Number.isSafeInteger(record.createdAt) &&
     Number.isSafeInteger(record.updatedAt)
@@ -364,9 +377,15 @@ export function isAgentSessionRecord(value: unknown): value is AgentSessionRecor
     return false
   }
   const validated = record as AgentSessionRecord
-  const head = validated.providerHandleChain.at(-1)
+  // The row holds stored handles; validate the chain they decode to.
+  const chain = decodePersistedAgentSessionProviderHandleChain(validated.providerHandleChain)
+  const head = chain?.at(-1)
   return (
-    validated.providerHandleChain.every((link) => link.handle.provider === validated.provider) &&
+    chain !== null &&
+    // Chain validation already enforces one namespace.
+    (!head || head.handle.agent === validated.provider) &&
+    (validated.providerContextBoundary === undefined ||
+      validated.providerContextBoundary.afterFence <= validated.lease.runtimeFence) &&
     (validated.lease.claimStatus !== 'live' ||
       (validated.lease.ownerProcess !== null &&
         head?.linkId === validated.lease.provenHandleLinkId &&

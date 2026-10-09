@@ -69,7 +69,7 @@ const PROBE_END = 'ORCA-INCUMBENT-END'
 const CONNECT_PROBE_TIMEOUT_MS = 1000
 
 // Why ES5 syntax: nodePath may be a host-resolved system node, not the bundled one.
-const CONNECT_PROBE_JS = [
+export const RELAY_CONNECT_PROBE_JS = [
   'var s=require("net").connect(process.argv[1]);',
   'var done=false;',
   'function say(v){if(done)return;done=true;try{s.destroy()}catch(e){};',
@@ -100,7 +100,7 @@ export function relayEndpointIncumbentProbeCommand(nodePath: string, sockPath: s
     `printf '%s\\n' ${shellEscape(PROBE_BEGIN)}`,
     'if [ -S "$sock" ]; then',
     "  printf 'PRESENT=yes\\n'",
-    `  listen=$("$node" -e ${shellEscape(CONNECT_PROBE_JS)} "$sock" 2>/dev/null) || listen=unknown`,
+    `  listen=$("$node" -e ${shellEscape(RELAY_CONNECT_PROBE_JS)} "$sock" 2>/dev/null) || listen=unknown`,
     '  [ -n "$listen" ] || listen=unknown',
     'else',
     "  printf 'PRESENT=no\\n'",

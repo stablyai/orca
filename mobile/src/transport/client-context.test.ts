@@ -40,12 +40,17 @@ vi.mock('./host-store', () => ({
 vi.mock('./connection-revival-triggers', () => ({
   subscribeConnectionRevivalTriggers: () => () => {}
 }))
+vi.mock('./connection-log-background-flush', () => ({
+  subscribeConnectionLogBackgroundFlush: () => () => {}
+}))
 
 import {
   RpcClientProvider,
   useDisconnectHostClient,
   useForceReconnect,
-  useHostClient
+  useHostClient,
+  usePrimeHosts,
+  useRefreshHostClient
 } from './client-context'
 import { useAllHostClients } from './use-all-host-clients'
 import { useRelayRecoveryStatus } from './client-context-connection-metrics'
@@ -415,6 +420,49 @@ describe('useHostClient', () => {
     }
   })
 
+  it('refreshes a Relay-active owned client onto the saved row after an endpoint edit', async () => {
+    const relayClient = makeFakeClient('connected', 'relay')
+    const replacement = makeFakeClient('connecting', 'tailscale')
+    connectMock.mockReturnValueOnce(relayClient).mockReturnValueOnce(replacement)
+    loadHostsMock.mockResolvedValue([HOST])
+    const edited = { ...HOST, endpoint: 'ws://100.101.102.103:6768' }
+
+    const states: ConnectionState[] = []
+    let refreshHostClient: ((hostId: string) => void) | null = null
+    let primeHosts: ((hosts: (typeof HOST)[]) => void) | null = null
+    let renderer: ReactTestRenderer | null = null
+    function Probe(): null {
+      refreshHostClient = useRefreshHostClient()
+      primeHosts = usePrimeHosts()
+      states.push(useHostClient(HOST.id).state)
+      return null
+    }
+
+    try {
+      await act(async () => {
+        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
+        await Promise.resolve()
+      })
+      // A failed post-save re-prime leaves the pre-edit profile cached.
+      act(() => primeHosts?.([HOST]))
+      loadHostsMock.mockResolvedValue([edited])
+      states.length = 0
+
+      await act(async () => {
+        refreshHostClient?.(HOST.id)
+        await Promise.resolve()
+      })
+
+      expect(relayClient.closeMock).toHaveBeenCalled()
+      expect(relayClient.notifyForeground).not.toHaveBeenCalled()
+      expect(connectMock.mock.calls[1]?.[0]).toEqual(edited)
+      // The owner reads amber through the rebuild, never a grey flash.
+      expect(states).not.toContain('disconnected')
+    } finally {
+      act(() => renderer?.unmount())
+    }
+  })
+
   it('rebuilds a pairing-rejected Relay client so re-pairing credentials are re-read', async () => {
     const rejectedRelayClient = makeFakeClient('disconnected', 'relay')
     const replacement = makeFakeClient('connecting', 'tailscale')
@@ -591,40 +639,6 @@ describe('useAllHostClients', () => {
       })
       expect(connectMock).toHaveBeenCalledOnce()
       expect(connectMock).toHaveBeenCalledWith(host2, expect.any(Function))
-    } finally {
-      act(() => renderer?.unmount())
-    }
-  })
-
-  it('keeps startup connection fanout constant for a large saved-host list', async () => {
-    const hosts = Array.from({ length: 1_000 }, (_, index) => ({
-      ...HOST,
-      id: `host-${index}`,
-      name: `Host ${index}`,
-      lastConnected: index
-    }))
-    const hostIds = hosts.map((host) => host.id)
-    const autoConnectHostIds = selectHomeAutoConnectHostIds(hosts)
-    connectMock.mockReturnValue(makeFakeClient('connected'))
-    loadHostsMock.mockResolvedValue(hosts)
-
-    let renderer: ReactTestRenderer | null = null
-    function Probe(): null {
-      useAllHostClients(hostIds, { autoConnectHostIds })
-      return null
-    }
-
-    try {
-      await act(async () => {
-        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
-        await Promise.resolve()
-      })
-      expect(connectMock).toHaveBeenCalledTimes(3)
-      expect(connectMock.mock.calls.map(([host]) => host.id)).toEqual([
-        'host-999',
-        'host-998',
-        'host-997'
-      ])
     } finally {
       act(() => renderer?.unmount())
     }

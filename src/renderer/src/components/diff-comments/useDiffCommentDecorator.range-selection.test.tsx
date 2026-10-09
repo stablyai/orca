@@ -1,8 +1,18 @@
 // @vitest-environment happy-dom
-import { renderHook } from '@testing-library/react'
+import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Selection } from 'monaco-editor'
 import type * as DiffCommentZoneCardModule from './diff-comment-zone-card'
+import type { NotesSendMenu } from '../editor/NotesSendMenu'
+
+const notesMenuFixture = vi.hoisted(() => ({
+  NotesSendMenu: vi.fn<typeof NotesSendMenu>(() => {
+    throw new Error('Range selection must not render the agent notes menu')
+  })
+}))
+
+// Saved-note delivery is outside the selection and inline-draft paths exercised here.
+vi.mock('../editor/NotesSendMenu', () => ({ NotesSendMenu: notesMenuFixture.NotesSendMenu }))
 
 const storeFixture = vi.hoisted(() => ({
   activeGroupIdByWorktree: {},
@@ -37,6 +47,12 @@ type DecoratorProps = {
   commentableLineNumbers?: readonly number[]
   addNoteShortcutEnabled?: boolean
   onAddCommentClick?: (args: { lineNumber: number; startLine?: number; top: number }) => void
+  // Present on the inline-draft surfaces; absent for the legacy popover callers.
+  onCreateComment?: (args: {
+    lineNumber: number
+    startLine?: number
+    body: string
+  }) => Promise<boolean>
 }
 
 function renderDecorator(fake: FakeDiffCommentEditor, initialProps: DecoratorProps = {}) {
@@ -51,6 +67,7 @@ function renderDecorator(fake: FakeDiffCommentEditor, initialProps: DecoratorPro
         pendingCommentTarget: props.pendingCommentTarget ?? null,
         addNoteShortcutEnabled: props.addNoteShortcutEnabled ?? false,
         onAddCommentClick: props.onAddCommentClick ?? vi.fn(),
+        onCreateComment: props.onCreateComment,
         onDeleteComment: vi.fn()
       }),
     { initialProps }
@@ -102,19 +119,19 @@ function firePointerEvent(
 }
 
 // Mod+Shift+A on the platform this test's user agent reports.
-function pressAddReviewNoteChord(node: HTMLElement): void {
+function pressAddReviewNoteChord(node: HTMLElement): KeyboardEvent {
   const isMac = navigator.userAgent.includes('Mac')
-  node.dispatchEvent(
-    new KeyboardEvent('keydown', {
-      key: 'A',
-      code: 'KeyA',
-      shiftKey: true,
-      metaKey: isMac,
-      ctrlKey: !isMac,
-      bubbles: true,
-      cancelable: true
-    })
-  )
+  const event = new KeyboardEvent('keydown', {
+    key: 'A',
+    code: 'KeyA',
+    shiftKey: true,
+    metaKey: isMac,
+    ctrlKey: !isMac,
+    bubbles: true,
+    cancelable: true
+  })
+  node.dispatchEvent(event)
+  return event
 }
 
 const frameCallbacks: FrameRequestCallback[] = []
@@ -139,7 +156,11 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals()
   document.body.replaceChildren()
-  vi.clearAllMocks()
+  try {
+    expect(notesMenuFixture.NotesSendMenu).not.toHaveBeenCalled()
+  } finally {
+    vi.clearAllMocks()
+  }
 })
 
 describe('useDiffCommentDecorator range highlight', () => {
@@ -376,5 +397,30 @@ describe('useDiffCommentDecorator add-note chord', () => {
     pressAddReviewNoteChord(fake.domNode)
 
     expect(onAddCommentClick).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves the chord to an open inline draft card instead of re-anchoring it', () => {
+    const fake = createFakeDiffCommentEditor()
+    vi.spyOn(fake.editor, 'getSelection').mockReturnValue(selectionOf(9, 1, 14, 8))
+    renderDecorator(fake, {
+      addNoteShortcutEnabled: true,
+      onCreateComment: vi.fn().mockResolvedValue(true)
+    })
+
+    act(() => {
+      pressAddReviewNoteChord(fake.domNode)
+    })
+    const [zone] = [...fake.zones.values()]
+    expect(zone?.afterLineNumber).toBe(14)
+
+    // The selection moved on, but the open card must keep its anchor and its text.
+    vi.spyOn(fake.editor, 'getSelection').mockReturnValue(selectionOf(30, 1, 32, 4))
+    const secondChord: { event?: KeyboardEvent } = {}
+    act(() => {
+      secondChord.event = pressAddReviewNoteChord(fake.domNode)
+    })
+
+    expect(secondChord.event?.defaultPrevented).toBe(true)
+    expect([...fake.zones.values()]).toEqual([zone])
   })
 })

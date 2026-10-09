@@ -4,13 +4,12 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { getMrStateFilters, getSmartWorkspaceNameModes } from './smart-workspace-localized-options'
 import {
   SEARCH_DEBOUNCE_MS,
-  type NormalizedSmartWorkspaceNameFieldProps
+  type NormalizedWorkItemSourceSearchProps
 } from './smart-workspace-name-field-model'
 import { canUseGitLabSmartSource } from './smart-workspace-provider-availability'
-import { useSmartWorkspaceFieldFocusControls } from './use-smart-workspace-field-focus-controls'
-import type { useSmartWorkspaceNameFieldState } from './use-smart-workspace-name-field-state'
+import type { useWorkItemSourceState } from './use-work-item-source-state'
 
-type FieldState = ReturnType<typeof useSmartWorkspaceNameFieldState>
+type FieldState = ReturnType<typeof useWorkItemSourceState>
 
 export function useSmartWorkspaceFieldAvailability({
   props,
@@ -26,7 +25,7 @@ export function useSmartWorkspaceFieldAvailability({
   checkLinearConnection,
   jiraSourceConnected
 }: {
-  props: NormalizedSmartWorkspaceNameFieldProps
+  props: NormalizedWorkItemSourceSearchProps
   state: FieldState
   repoBackedSearchTargets: {
     gitlabSourceContext: { hostId?: ExecutionHostId | null } | null
@@ -41,37 +40,8 @@ export function useSmartWorkspaceFieldAvailability({
   checkLinearConnection: () => Promise<void>
   jiraSourceConnected: boolean
 }) {
-  const {
-    disabled,
-    textOnly,
-    repoBackedSourcesDisabled,
-    branchesEnabled,
-    onActiveSourceModeChange,
-    value
-  } = props
-  const {
-    mode,
-    setMode,
-    setOpen,
-    setGithubItems,
-    setGitlabItems,
-    setBranches,
-    setGithubLoading,
-    setGitlabLoading,
-    setBranchesLoading,
-    setBranchResultsSource,
-    setCrossRepoPrompt,
-    setLinearIssues,
-    setJiraIssues,
-    setLinearLoading,
-    setJiraLoading,
-    setCommandValue,
-    setDebouncedQuery
-  } = state
-
-  useEffect(() => {
-    onActiveSourceModeChange?.(mode)
-  }, [mode, onActiveSourceModeChange])
+  const { disabled, textOnly, repoBackedSourcesDisabled, branchesEnabled, value } = props
+  const { mode: storedMode, setMode, setDebouncedQuery } = state
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
   const localGitlabAvailable = preflightStatusCurrent && preflightStatus?.glab?.installed === true
   const gitlabSourceAvailable = repoBackedSearchTargets.some((target) =>
@@ -109,42 +79,17 @@ export function useSmartWorkspaceFieldAvailability({
     if (item.id === 'branches') {
       return branchesEnabled && !repoBackedSourcesDisabled
     }
-    return true
+    return item.id !== 'text' || props.typedTextEnabled === true
   })
+  const mode = availableModes.some((item) => item.id === storedMode)
+    ? storedMode
+    : (availableModes[0]?.id ?? 'text')
+  useEffect(() => {
+    if (storedMode !== mode) {
+      setMode(mode)
+    }
+  }, [storedMode, setMode, mode])
   const mrStateFilters = getMrStateFilters()
-
-  useEffect(() => {
-    if (availableModes.some((item) => item.id === mode)) {
-      return
-    }
-    setMode(availableModes[0]?.id ?? 'text')
-  }, [availableModes, mode, setMode])
-
-  useEffect(() => {
-    if (!repoBackedSourcesDisabled) {
-      return
-    }
-    setGithubItems([])
-    setGitlabItems([])
-    setBranches([])
-    setGithubLoading(false)
-    setGitlabLoading(false)
-    setBranchesLoading(false)
-    setBranchResultsSource(null)
-    setCrossRepoPrompt(null)
-  }, [
-    repoBackedSourcesDisabled,
-    setBranches,
-    setBranchesLoading,
-    setBranchResultsSource,
-    setCrossRepoPrompt,
-    setGithubItems,
-    setGithubLoading,
-    setGitlabItems,
-    setGitlabLoading
-  ])
-
-  const focusControls = useSmartWorkspaceFieldFocusControls({ props, state })
 
   useEffect(() => {
     if (disabled || textOnly) {
@@ -167,89 +112,15 @@ export function useSmartWorkspaceFieldAvailability({
   ])
 
   useEffect(() => {
-    if (textOnly) {
-      if (mode !== 'text') {
-        setMode('text')
-      }
-      setOpen(false)
-      return
-    }
-    if ((mode === 'gitlab' && gitlabSourceAvailable) || (mode === 'linear' && linearAvailable)) {
-      return
-    }
-    if (mode !== 'gitlab' && mode !== 'linear') {
-      return
-    }
-    setMode('smart')
-    setGitlabItems([])
-    setLinearIssues([])
-    setJiraIssues([])
-    setGitlabLoading(false)
-    setLinearLoading(false)
-    setJiraLoading(false)
-    setCommandValue('')
-  }, [
-    gitlabSourceAvailable,
-    linearAvailable,
-    mode,
-    setCommandValue,
-    setGitlabItems,
-    setGitlabLoading,
-    setJiraIssues,
-    setJiraLoading,
-    setLinearIssues,
-    setLinearLoading,
-    setMode,
-    setOpen,
-    textOnly
-  ])
-
-  useEffect(() => {
-    if (!disabled) {
-      return
-    }
-    setOpen(false)
-    setGithubItems([])
-    setGitlabItems([])
-    setBranches([])
-    setBranchResultsSource(null)
-    setLinearIssues([])
-    setJiraIssues([])
-    setGithubLoading(false)
-    setGitlabLoading(false)
-    setBranchesLoading(false)
-    setLinearLoading(false)
-    setJiraLoading(false)
-    setCommandValue('')
-    setCrossRepoPrompt(null)
-  }, [
-    disabled,
-    setBranches,
-    setBranchesLoading,
-    setBranchResultsSource,
-    setCommandValue,
-    setCrossRepoPrompt,
-    setGithubItems,
-    setGithubLoading,
-    setGitlabItems,
-    setGitlabLoading,
-    setJiraIssues,
-    setJiraLoading,
-    setLinearIssues,
-    setLinearLoading,
-    setOpen
-  ])
-
-  useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(value), SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
   }, [setDebouncedQuery, value])
 
   return {
+    mode,
     gitlabSourceAvailable,
     linearAvailable,
     availableModes,
-    mrStateFilters,
-    ...focusControls
+    mrStateFilters
   }
 }

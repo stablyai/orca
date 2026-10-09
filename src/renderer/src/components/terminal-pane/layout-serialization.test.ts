@@ -38,7 +38,6 @@ import {
   POST_REPLAY_MODE_RESET,
   replayPayloadEndsWithCursorHidden,
   RESET_GRAPHIC_RENDITION,
-  RESET_KITTY_KEYBOARD_PROTOCOL,
   RESET_TERMINAL_CURSOR_STYLE
 } from '../../../../shared/terminal-mode-reset-profiles'
 import {
@@ -462,7 +461,7 @@ describe('replayPayloadEndsWithCursorHidden', () => {
 describe('buildPostReplayLiveAgentReattachReset', () => {
   it('preserves an intentionally hidden cursor', () => {
     expect(buildPostReplayLiveAgentReattachReset('agent frame\x1b[?25l')).toBe(
-      `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`
+      RESET_TERMINAL_CURSOR_STYLE
     )
   })
 

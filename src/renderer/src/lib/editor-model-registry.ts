@@ -1,13 +1,15 @@
 import type * as Monaco from 'monaco-editor'
 
+type EditorModelRegistry = Pick<typeof Monaco, 'editor' | 'Uri'>
+
 export type EditorModelRegistryBridge = {
-  get(): typeof Monaco | null
+  get(): EditorModelRegistry | null
   subscribe(listener: () => void): () => void
-  register(registry: typeof Monaco): () => void
+  register(registry: EditorModelRegistry): () => void
 }
 
 export function createEditorModelRegistry(): EditorModelRegistryBridge {
-  let registration: { registry: typeof Monaco } | null = null
+  let registration: { registry: EditorModelRegistry } | null = null
   const listeners = new Set<() => void>()
   const notify = (): void => {
     for (const listener of listeners) {
@@ -15,12 +17,12 @@ export function createEditorModelRegistry(): EditorModelRegistryBridge {
     }
   }
   return {
-    get: (): typeof Monaco | null => registration?.registry ?? null,
+    get: (): EditorModelRegistry | null => registration?.registry ?? null,
     subscribe(listener: () => void): () => void {
       listeners.add(listener)
       return () => listeners.delete(listener)
     },
-    register(registry: typeof Monaco): () => void {
+    register(registry: EditorModelRegistry): () => void {
       const next = { registry }
       registration = next
       notify()

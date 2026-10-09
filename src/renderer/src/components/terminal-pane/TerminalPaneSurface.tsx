@@ -1,4 +1,6 @@
 import { createPortal } from 'react-dom'
+import { TerminalPaneFileDropOwner } from './TerminalPaneFileDropOwner'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 import TerminalSearch from '@/components/TerminalSearch'
 import { DaemonActionDialog } from '@/components/shared/useDaemonActions'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
@@ -7,6 +9,7 @@ import CloseTerminalDialog from './CloseTerminalDialog'
 import TerminalContextMenu from './TerminalContextMenu'
 import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
 import { isPaneOwnerUnverifiedError, TerminalErrorToast } from './TerminalErrorToast'
+import { AgentLaunchPaneNoticePortal } from './AgentLaunchPaneNotice'
 import { requestTerminalPaneRecovery } from './terminal-pane-recovery'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
@@ -23,6 +26,8 @@ import {
   TerminalPaneSshReconnectPortals
 } from './TerminalPaneRuntimePortals'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
+import { useAppStore } from '@/store'
+import { isTerminalPaneOnClient } from './terminal-pane-client-host'
 
 export function TerminalPaneSurface({
   controller
@@ -63,6 +68,7 @@ export function TerminalPaneSurface({
     handleToggleNativeChat,
     hiddenStartupStyle,
     isActive,
+    isTabPinned,
     keybindings,
     managedPanes,
     managerRef,
@@ -91,14 +97,14 @@ export function TerminalPaneSurface({
     searchStateRef,
     searchInputRef,
     sessionRestoredBannerPaneIds,
-    sessionStateSaveFailureOpen,
+    sessionStateSaveFailureMessage,
     setAgentSessionContinuation,
     setAgentSessionFork,
     setContainerRef,
     setQuickCommandEditorOpen,
     setRenameValue,
     setSearchOpen,
-    setSessionStateSaveFailureOpen,
+    setSessionStateSaveFailureMessage,
     showSplitButton,
     showSshReconnectOverlay,
     splitTerminalPaneFromHeader,
@@ -108,16 +114,17 @@ export function TerminalPaneSurface({
     terminalLinkActionRequest,
     titleUsesLightSurface,
     visibleQuickCommandHosts,
+    visibleLaunchRefusal,
     visibleTerminalError,
     worktreeId
   } = controller
+  const paneOnClient = useAppStore((state) => isTerminalPaneOnClient(state, worktreeId))
 
   return (
     <>
       <div
         ref={setContainerRef}
         className="absolute inset-0 min-h-0 min-w-0"
-        data-native-file-drop-target="terminal"
         data-terminal-tab-id={tabId}
         data-terminal-chat-view={effectiveChatViewMode && activePaneIsChatLeaf ? 'true' : undefined}
         data-terminal-layout-leaf-ids={expectedLayoutLeafIdsAttr}
@@ -159,13 +166,31 @@ export function TerminalPaneSurface({
           })
         }}
       />
+      {managedPanes.map((pane) => (
+        <TerminalPaneFileDropOwner
+          key={makePaneKey(tabId, pane.leafId)}
+          pane={pane}
+          tabId={tabId}
+          worktreeId={worktreeId}
+          cwd={cwd}
+          managerRef={managerRef}
+          paneTransportsRef={paneTransportsRef}
+        />
+      ))}
       <TerminalPaneCodexRestartPortals controller={controller} />
+      <AgentLaunchPaneNoticePortal
+        refusal={visibleLaunchRefusal}
+        isActive={isActive}
+        pane={activePane}
+        tabId={tabId}
+      />
       {/* Why: the reconnect banner already owns SSH recovery UX; the z-50 error
           toast was painting over it (same bottom strip) with the raw ssh:connect failure. */}
       {visibleTerminalError && isActive && !showSshReconnectOverlay && activePane
         ? createPortal(
             <TerminalErrorToast
               error={visibleTerminalError}
+              paneOnClient={paneOnClient}
               onDismiss={dismissTerminalError}
               onRestartDaemon={() => daemonActions.setPending('restart')}
               onRetry={
@@ -200,8 +225,9 @@ export function TerminalPaneSurface({
       <DaemonActionDialog api={daemonActions} />
       {isActive && (
         <TerminalSessionStateSaveFailureDialog
-          open={sessionStateSaveFailureOpen}
-          onDismiss={() => setSessionStateSaveFailureOpen(false)}
+          open={sessionStateSaveFailureMessage !== null}
+          failureMessage={sessionStateSaveFailureMessage ?? ''}
+          onDismiss={() => setSessionStateSaveFailureMessage(null)}
           onOpenSpaceAnalyzer={openDiskSpaceAnalyzer}
         />
       )}
@@ -241,6 +267,7 @@ export function TerminalPaneSurface({
         onEqualizePaneSizes={contextMenu.onEqualizePaneSizes}
         onClosePane={contextMenu.onClosePane}
         onClearScreen={contextMenu.onClearScreen}
+        onResetTerminal={contextMenu.onResetTerminal}
         canContinueAgentSessionInNewSession={contextMenuCanContinueInNewSession}
         onContinueAgentSessionInNewSession={contextMenu.onContinueAgentSessionInNewSession}
         onForkAgentSession={() => void contextMenu.onForkAgentSession()}
@@ -302,6 +329,7 @@ export function TerminalPaneSurface({
         cwd={cwd ?? ''}
         showAlwaysOnHeaders={isActive && terminalContentVisible}
         showSplitButton={showSplitButton}
+        isTabPinned={isTabPinned}
         paneCount={paneCount}
         activePaneId={activePane?.id}
         panes={managedPanes}

@@ -209,7 +209,8 @@ describe('startParkedTerminalByteWatcher', () => {
   })
 
   it('marks unread on BEL and schedules the delayed terminal-bell OS notification', async () => {
-    const { dispose } = await startWatcher()
+    const workspaceOwner = { executionHostId: 'ssh:qa' as const, runtimeEnvironmentId: 'hub' }
+    const { dispose } = await startWatcher({ workspaceOwner })
 
     emit('build finished\x07')
     flushSideEffects()
@@ -224,7 +225,9 @@ describe('startParkedTerminalByteWatcher', () => {
     expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
     expect(dispatchTerminalNotification).toHaveBeenCalledWith(WORKTREE_ID, {
       source: 'terminal-bell',
-      paneKey: PANE_KEY
+      paneKey: PANE_KEY,
+      ptyId: PTY_ID,
+      workspaceOwner
     })
     dispose()
   })
@@ -278,7 +281,8 @@ describe('startParkedTerminalByteWatcher', () => {
     expect(dispatchTerminalNotification).toHaveBeenCalledWith(WORKTREE_ID, {
       source: 'agent-task-complete',
       terminalTitle: IDLE_TITLE,
-      paneKey: PANE_KEY
+      paneKey: PANE_KEY,
+      ptyId: PTY_ID
     })
     dispose()
   })
@@ -299,7 +303,8 @@ describe('startParkedTerminalByteWatcher', () => {
     expect(dispatchTerminalNotification).toHaveBeenCalledWith(WORKTREE_ID, {
       source: 'agent-task-complete',
       terminalTitle: IDLE_TITLE,
-      paneKey: PANE_KEY
+      paneKey: PANE_KEY,
+      ptyId: PTY_ID
     })
     dispose()
   })
@@ -390,7 +395,8 @@ describe('startParkedTerminalByteWatcher', () => {
         url: 'https://github.com/orca-dev/orca/pull/421',
         number: 421,
         slug: { owner: 'orca-dev', repo: 'orca', host: 'github.com' }
-      })
+      }),
+      expect.objectContaining({ tabId: TAB_ID, ptyId: PTY_ID })
     )
     dispose()
   })
@@ -467,7 +473,8 @@ describe('startParkedTerminalByteWatcher', () => {
     expect(dispatchTerminalNotification).toHaveBeenCalledWith(WORKTREE_ID, {
       source: 'agent-task-complete',
       terminalTitle: IDLE_TITLE,
-      paneKey: PANE_KEY
+      paneKey: PANE_KEY,
+      ptyId: PTY_ID
     })
     dispose()
   })
@@ -779,7 +786,8 @@ describe('startParkedTerminalByteWatcher', () => {
       vi.advanceTimersByTime(NOTIFICATION_GRACE_MS)
       expect(dispatchTerminalNotification).toHaveBeenCalledWith(WORKTREE_ID, {
         source: 'terminal-bell',
-        paneKey: PANE_KEY
+        paneKey: PANE_KEY,
+        ptyId: PTY_ID
       })
       dispose()
     })
@@ -807,7 +815,8 @@ describe('startParkedTerminalByteWatcher', () => {
       expect(dispatchTerminalNotification).toHaveBeenCalledWith(WORKTREE_ID, {
         source: 'agent-task-complete',
         terminalTitle: IDLE_TITLE,
-        paneKey: PANE_KEY
+        paneKey: PANE_KEY,
+        ptyId: PTY_ID
       })
       dispose()
     })
@@ -934,7 +943,8 @@ describe('startParkedTerminalByteWatcher', () => {
       expect(mockStoreState.observeTerminalGitHubPullRequestLink).toHaveBeenCalledTimes(1)
       expect(mockStoreState.observeTerminalGitHubPullRequestLink).toHaveBeenCalledWith(
         WORKTREE_ID,
-        link
+        link,
+        expect.objectContaining({ tabId: TAB_ID, ptyId: PTY_ID })
       )
       dispose()
     })

@@ -55,7 +55,7 @@ export async function moveTerminalPaneByLeafId(
 export async function sendToTerminal(page: Page, ptyId: string, text: string): Promise<void> {
   await page.evaluate(
     ({ ptyId, text }) => {
-      window.api.pty.write(ptyId, text)
+      window.api.pty.write(ptyId, text, 'driving')
     },
     { ptyId, text }
   )

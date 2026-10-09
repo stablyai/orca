@@ -110,6 +110,7 @@ function seedCreatedWorkspaceWithPendingLaunch(
   // The provisional Claude launch: host create RPC in flight, nothing published yet.
   writeStructuredAgentLaunchRecord({
     sessionId: SESSION_ID,
+    executionHostId: 'local',
     agent: 'claude',
     lifecycle: 'pending',
     clientOperationId: 'op-1',

@@ -19,6 +19,7 @@ vi.mock('lucide-react-native', mocks['lucide-react-native'])
 vi.mock('react-native-safe-area-context', mocks['react-native-safe-area-context'])
 vi.mock('expo-router', mocks['expo-router'])
 vi.mock('../../modules/orca-mobile-web-shell/src', mocks['../../modules/orca-mobile-web-shell/src'])
+vi.mock('../app-update/use-wall-app-update', mocks['../app-update/use-wall-app-update'])
 vi.mock('../transport/client-context', mocks['../transport/client-context'])
 vi.mock('./use-page-host-snapshot', mocks['./use-page-host-snapshot'])
 vi.mock('./use-mobile-web-shell-session', mocks['./use-mobile-web-shell-session'])
@@ -28,7 +29,6 @@ import { act, create } from 'react-test-renderer'
 import { bridgeId, clientFrame, createFakeRpcClient } from './bridge-host-test-fakes'
 import {
   byName,
-  DEFAULT_ROUTE_GRANTS,
   trackRenderedScreen,
   NativeFallback,
   SCREEN_BUILD_ID as BUILD_ID,
@@ -39,14 +39,13 @@ import {
   textOf,
   updateScreen as reRenderScreen
 } from './mobile-web-shell-screen-test-harness'
-import { BRIDGE_BACK_CLAIM_NOTIFY, BRIDGE_BACK_FRAME } from './bridge/bridge-page-back'
+import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge/bridge-page-back'
 import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
 import {
   BRIDGE_FAULT_GRANT,
   BRIDGE_NAVIGATE_BACK_NOTIFY,
   readBridgeHostMessage
 } from './bridge/bridge-envelope'
-import { BRIDGE_ROUTE_UPDATE_ACCEPT } from './bridge/bridge-route-update'
 import { MobileWebShellScreen } from './MobileWebShellScreen'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer'
@@ -151,7 +150,6 @@ describe('the hybrid shell screen', () => {
     const tree = await renderScreen(readyState('session-one'))
     const view = byName(tree, 'ShellViewProbe')[0]
     expect(view.props.bridgeEnabled).toBe(true)
-    expect(typeof view.props.onBridgeMessage).toBe('function')
     // Delivered with no client behind it: there is no host to answer, and nothing throws.
     await act(async () => {
       view.props.onBridgeMessage({ nativeEvent: { json: '{"v":1,"type":"ready"}' } })
@@ -227,7 +225,7 @@ describe('the hybrid shell screen', () => {
     tree: ReactTestRenderer
     initRoutes: () => (Record<string, string> | undefined)[]
     move: (next: Record<string, string>) => Promise<void>
-    ready: (accepts?: readonly string[]) => Promise<void>
+    ready: () => Promise<void>
   }> {
     const element = (next: Record<string, string>) =>
       createElement(MobileWebShellScreen, {
@@ -259,10 +257,10 @@ describe('the hybrid shell screen', () => {
           tree.update(element(next))
         })
       },
-      ready: async (accepts = [BRIDGE_ROUTE_UPDATE_ACCEPT]) => {
+      ready: async () => {
         await act(async () => {
           byName(tree, 'ShellViewProbe')[0]?.props.onBridgeMessage({
-            nativeEvent: { json: clientFrame({ type: 'ready', accepts }) }
+            nativeEvent: { json: clientFrame({ type: 'ready' }) }
           })
         })
       }
@@ -300,18 +298,6 @@ describe('the hybrid shell screen', () => {
     await page.ready()
     expect(page.initRoutes().at(-1)).toEqual({ paneKey: 'pane-1' })
     warned.mockRestore()
-  })
-
-  it('sends no second init to a page that never said it takes one', async () => {
-    dependencies.client = createFakeRpcClient()
-    const page = await renderForRoute({ paneKey: '' })
-    // A page built before route updates existed declares nothing, and reads a second `init` as a
-    // replacement: the route still moves, so its next `ready` is answered with the new one.
-    await page.ready([])
-    await page.move({ paneKey: 'pane-1' })
-    expect(page.initRoutes()).toEqual([{ paneKey: '' }])
-    await page.ready([])
-    expect(page.initRoutes()).toEqual([{ paneKey: '' }, { paneKey: 'pane-1' }])
   })
 
   it('ends that wait on the page asking for a session', async () => {
@@ -434,7 +420,7 @@ describe('the hybrid shell screen', () => {
     const tree = await renderScreen(readyState('session-one'))
     await act(async () => {
       byName(tree, 'ShellViewProbe')[0].props.onBridgeMessage({
-        nativeEvent: { json: clientFrame({ type: 'ready', accepts: [BRIDGE_BACK_FRAME] }) }
+        nativeEvent: { json: clientFrame({ type: 'ready' }) }
       })
       byName(tree, 'ShellViewProbe')[0].props.onBridgeMessage({
         nativeEvent: {
@@ -648,41 +634,6 @@ describe('a refused update is said beside the page, not in front of it', () => {
 })
 
 /**
- * Last in the file on purpose: it is the case the block above would have poisoned.
- *
- * Those cases grant the screencast lane and install a client, and before the shared setup reset
- * them both, whatever ran next inherited a route granted a lane it never asked for. Deleting the
- * reset fails here and nowhere else, because nothing else runs after a case that mutates them.
- */
-describe('what one case mutates does not reach the next', () => {
-  it('starts from the shared route grants and no client', () => {
-    expect({ grants: dependencies.routeGrants, client: dependencies.client }).toEqual({
-      grants: DEFAULT_ROUTE_GRANTS,
-      client: null
-    })
-  })
-
-  it('keeps both bar strips off the view for a page that does not pad for them', async () => {
-    // A page served from an older desktop has no reader for the insets, so the shell reserves
-    // the strips itself. Edge-to-edge makes the manifest's `adjustResize` inert, so the keyboard
-    // strip comes off the view too: the page's `visualViewport` reads full height with the IME up.
-    const tree = await renderScreen(readyState('session-keyboard'))
-    const root = tree.root.find((node) => node.props.testID === 'mobile-web-shell-ready')
-    expect(root.props.style[1]).toEqual({ paddingTop: 44, paddingBottom: 8 })
-
-    await act(async () => {
-      dependencies.keyboardListeners.get('keyboardWillShow')?.({ endCoordinates: { height: 336 } })
-    })
-    expect(root.props.style[1]).toEqual({ paddingTop: 44, paddingBottom: 336 })
-
-    await act(async () => {
-      dependencies.keyboardListeners.get('keyboardWillHide')?.({ endCoordinates: { height: 0 } })
-    })
-    expect(root.props.style[1]).toEqual({ paddingTop: 44, paddingBottom: 8 })
-  })
-})
-
-/**
  * What is on screen between the generation being mounted and the page having a frame.
  *
  * Before this the answer was nothing: the shell tore its own frame down at `ready` and the WebView
@@ -718,17 +669,17 @@ describe('the frame under a page that has not painted', () => {
     expect(tree.root.findAll((node) => node.props.testID === 'mobile-web-shell-cover')).toEqual([])
   })
 
-  it('covers the same box the view gets, which is what the keyboard strip shortens', async () => {
+  it('covers the same box the view gets, which the keyboard does not shorten', async () => {
     // Both are children of the padded root: the view is `flex: 1` and the cover is an absolute
-    // fill, so Yoga lays each of them out against the same content box. The keyboard takes its
-    // strip off that box, so it takes it off both, and the cover cannot leave a gap the view fills.
+    // fill, so Yoga lays each of them out against the same content box, and the cover cannot leave
+    // a gap the view fills. The keyboard covers that box rather than taking a strip off it.
     dependencies.pageFrame = 'unpainted'
     const tree = await renderScreen(readyState('session-keyboard-cover'))
     const root = tree.root.find((node) => node.props.testID === 'mobile-web-shell-ready')
     await act(async () => {
       dependencies.keyboardListeners.get('keyboardWillShow')?.({ endCoordinates: { height: 336 } })
     })
-    expect(root.props.style[1]).toEqual({ paddingTop: 44, paddingBottom: 336 })
+    expect(root.props.style[1]).toEqual({ paddingTop: 0 })
     const cover = tree.root.find((node) => node.props.testID === 'mobile-web-shell-cover')
     expect(cover.props.style[0]).toMatchObject({
       position: 'absolute',
@@ -750,13 +701,10 @@ describe('the frame under a page that has not painted', () => {
     const probe = byName(tree, 'ShellViewProbe')[0]
     await act(async () => {
       probe.props.onBridgeMessage({
-        nativeEvent: { json: clientFrame({ type: 'ready', reports: [BRIDGE_PAGE_PAINTED] }) }
+        nativeEvent: { json: clientFrame({ type: 'ready' }) }
       })
     })
-    expect(dependencies.reportPageReady).toHaveBeenCalledWith({
-      reports: [BRIDGE_PAGE_PAINTED],
-      accepts: []
-    })
+    expect(dependencies.reportPageReady).toHaveBeenCalledTimes(1)
     await act(async () => {
       probe.props.onBridgeMessage({
         nativeEvent: { json: clientFrame({ type: 'notify', name: BRIDGE_PAGE_PAINTED }) }

@@ -24,6 +24,8 @@ function hostSkipReason(outcome: AiVaultSearchHostOutcome['outcome']): string | 
       return 'unreachable'
     case 'scope-unknown':
       return 'scope not found there'
+    case 'unsupported-agent':
+      return 'agent not supported'
   }
 }
 
@@ -72,6 +74,7 @@ export function AiVaultPanelSearch({
       await store.updateSettingsOrThrow({
         aiVaultSearch: { ...resolveAiVaultSearchSettings(store.settings), enabled: true }
       })
+      store.markFeatureTipsSeen(['agent-session-search'])
       onRetry()
     } catch {
       setSaveError(true)
@@ -109,6 +112,11 @@ export function AiVaultPanelSearch({
     message = translate(
       'sessionSearch.panel.noService',
       'Search is unavailable on this computer. It may need an Orca update or a runtime with search support.'
+    )
+  } else if (unavailable === 'unsupported-agent') {
+    message = translate(
+      'sessionSearch.panel.unsupportedAgent',
+      'This computer does not support history search for the selected agent. Update Orca on that computer or select another agent.'
     )
   } else if (unavailable === 'scope-unknown') {
     message = translate(

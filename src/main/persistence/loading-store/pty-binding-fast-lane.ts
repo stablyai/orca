@@ -18,6 +18,7 @@ export type PtyBindingFastLaneMiss =
   | 'leaf_pty'
   | 'incarnation'
   | 'tombstone'
+  | 'inactive_worktree'
   | 'not_durable'
 
 export type PtyBindingFastLaneRequest = {
@@ -79,6 +80,12 @@ export function evaluatePtyBindingFastLane(
   }
   if (session.terminalSurfaceTombstonesByPaneKey?.[paneKey]) {
     misses.push('tombstone')
+  }
+  if (
+    session.activeWorktreeIdsOnShutdown &&
+    !session.activeWorktreeIdsOnShutdown.includes(bindingWorktreeId)
+  ) {
+    misses.push('inactive_worktree')
   }
   if (!durable) {
     misses.push('not_durable')

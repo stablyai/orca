@@ -54,7 +54,7 @@ import {
   buildWorkspaceSourceSelection,
   shouldApplyWorkspaceSourceAutoName
 } from '../../../../shared/new-workspace/workspace-source'
-import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
+import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/smart-workspace-name-field-model'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 
 export function useIssueSourceActions(input: IssueSourceActionsInput) {

@@ -3,7 +3,7 @@ import { encodeClaudeProjectPaths, isClaudeProjectDirInScope } from './claude-pr
 
 /** An agent that keeps one directory per cwd, named by a lossy encoding of that cwd. */
 export type CwdBucketLayout = {
-  agent: Extract<AiVaultAgent, 'claude' | 'pi'>
+  agent: Extract<AiVaultAgent, 'claude' | 'pi' | 'codebuddy'>
   encodeScopePrefixes: (scopePath: string) => string[]
   isDirInScope: (dirName: string, prefixes: ReadonlySet<string>) => boolean
 }
@@ -40,4 +40,29 @@ export const PI_CWD_BUCKET_LAYOUT: CwdBucketLayout = {
     }
     return false
   }
+}
+
+// CodeBuddy 2.159.0 collapses separators and retains 180 UTF-8 bytes before long-path hashes.
+function codebuddyScopePrefix(path: string): string {
+  const encoded = path
+    .replace(/[/\\:]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+  let prefix = ''
+  for (const character of encoded) {
+    if (Buffer.byteLength(prefix + character, 'utf8') > 180) {
+      break
+    }
+    prefix += character
+  }
+  return prefix
+}
+
+export const CODEBUDDY_CWD_BUCKET_LAYOUT: CwdBucketLayout = {
+  agent: 'codebuddy',
+  encodeScopePrefixes: (path) => [
+    ...new Set([path, path.normalize('NFC')].map(codebuddyScopePrefix))
+  ],
+  // This is only a prefilter: each transcript's cwd decides membership, including lossy collisions.
+  isDirInScope: (name, prefixes) => [...prefixes].some((prefix) => name.startsWith(prefix))
 }

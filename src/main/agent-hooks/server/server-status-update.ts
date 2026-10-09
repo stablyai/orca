@@ -1,3 +1,4 @@
+import { transitionHookPresence } from '../../../shared/agent-hook-presence-transition'
 import {
   reconcileRemoteCodexState,
   markCodexLeadTurnInterrupted
@@ -9,6 +10,8 @@ import {
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentStatusObservationOrigin } from '../../../shared/agent-status-observation'
+import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/claude-owed-notification-expiry-timers'
+import { setClaudeMainAgentTurnState } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
 import {
   attachClaudePermissionToolUseId,
   pairedClaudeNonAgentWork,
@@ -20,6 +23,26 @@ import { resolveCancelVerdictLatch } from './server-cancel-verdict-latch'
 import { AgentHookServerStatusApplication } from './server-status-application'
 
 export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusApplication {
+  protected readonly claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(
+    this.state
+  )
+
+  // Why here: every stored row passes through, including a cancel inference and a pane move.
+  protected override commitStatusRowMutation(
+    before: EnrichedAgentHookEventPayload | null | undefined,
+    after: EnrichedAgentHookEventPayload | null | undefined,
+    emit = true
+  ): boolean {
+    if (after) {
+      this.claudeOwedNotificationExpiry.arm(after.paneKey, (row) => {
+        if (this.server) {
+          this.applyNormalizedStatus(row)
+        }
+      })
+    }
+    return super.commitStatusRowMutation(before, after, emit)
+  }
+
   protected applyNormalizedStatus(
     incoming: AgentHookEventPayload & { authorityRestartId?: string },
     onAccepted?: () => void,
@@ -27,8 +50,22 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     observedAt?: number,
     mutationBefore?: EnrichedAgentHookEventPayload
   ): EnrichedAgentHookEventPayload | undefined {
-    const { authorityRestartId, ...payload } = incoming
+    const transitioned = transitionHookPresence(
+      incoming,
+      this.state.lastStatusByPaneKey.get(incoming.paneKey)
+    )
+    if (!transitioned) {
+      return undefined
+    }
+    const { authorityRestartId, ...payload } = { ...incoming, ...transitioned }
     if (!this.canWriteLegacyStatusRow(payload)) {
+      return undefined
+    }
+    if (payload.agentPresence?.ended) {
+      this.reconcileEndedProcessForPaneKeys([payload.paneKey], {
+        preserveResumeIdentity: true,
+        endedPresence: payload.agentPresence
+      })
       return undefined
     }
     if (payload.hookEventName === 'UserPromptSubmit') {
@@ -86,7 +123,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     const stateReconciledPayload =
       terminalOwnedPayload.connectionId &&
       terminalOwnedPayload.payload.agentType === 'codex' &&
-      terminalOwnedPayload.hookEventName
+      (terminalOwnedPayload.hookEventName || terminalOwnedPayload.payload.mainAgent)
         ? {
             ...terminalOwnedPayload,
             payload: reconcileRemoteCodexState(
@@ -156,6 +193,16 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     // restatement of a main agent the desktop cancelled must not replace the cancel.
     const latch = resolveCancelVerdictLatch(previous, attachedPayload, Date.now())
     if (latch.hold) {
+      if (
+        attachedPayload.connectionId === null &&
+        attachedPayload.payload.agentType === 'claude' &&
+        previous?.connectionId === null &&
+        previous.payload.mainAgent?.state === 'done' &&
+        this.sameTerminalOwner(previous, attachedPayload)
+      ) {
+        // A refused late hook already mutated the local producer; keep its idle lease clock.
+        setClaudeMainAgentTurnState(this.state, attachedPayload.paneKey, previous.payload.mainAgent)
+      }
       if (
         attachedPayload.payload.agentType === 'codex' &&
         attachedPayload.payload.state === 'working'

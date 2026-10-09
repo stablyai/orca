@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createFakeBridgePortPair } from './bridge-port-pair-test-harness'
 import type { BridgeInitRoute } from './bridge-envelope'
-import { BRIDGE_ROUTE_UPDATE_ACCEPT } from './bridge-route-update'
 
 const SESSION = '/h/host-a/session/wt-1'
 
@@ -79,17 +78,13 @@ describe('a route update over a re-sent init', () => {
   it('publishes nothing for a re-asked ready that carries the route the page holds', async () => {
     const pair = await openedOnTheSession()
     const seen = recordRouteUpdates(pair)
-    pair.host.receive(
-      JSON.stringify({ v: 1, type: 'ready', accepts: [BRIDGE_ROUTE_UPDATE_ACCEPT] })
-    )
+    pair.host.receive(JSON.stringify({ v: 1, type: 'ready' }))
     await pair.flush()
     expect(seen).toEqual([])
     // And the same ask after a real update still leaves exactly the one delivery behind it.
     pair.host.publishRoute(sessionRoute('pane-1'))
     await pair.flush()
-    pair.host.receive(
-      JSON.stringify({ v: 1, type: 'ready', accepts: [BRIDGE_ROUTE_UPDATE_ACCEPT] })
-    )
+    pair.host.receive(JSON.stringify({ v: 1, type: 'ready' }))
     await pair.flush()
     expect(seen).toEqual(['pane-1'])
   })
@@ -114,32 +109,13 @@ describe('a route update over a re-sent init', () => {
     expect(pair.client.getShellSession()?.storage).toBe(before)
   })
 
-  /**
-   * Wire compatibility, the half a schema cannot state: an older page never declares `accepts`, so
-   * the shell must not post it a second `init`. That page would read one as a replacement and
-   * settle every request it held; the tap it degrades to losing is what it loses today.
-   */
-  it('sends no second init to a page that never declared it accepts one', async () => {
+  it('sends the second init to a page whose ready declares nothing', async () => {
     const pair = await openedOnTheSession()
-    expect(pair.readToShell().find((frame) => frame.type === 'ready')?.accepts).toContain(
-      BRIDGE_ROUTE_UPDATE_ACCEPT
-    )
-    // This page, then the same document reloaded as a build that declares nothing -- which is what
-    // a released page is. The host reads `accepts` off whichever `ready` it last answered.
     pair.host.receive(JSON.stringify({ v: 1, type: 'ready' }))
     await pair.flush()
     const framesBefore = pair.toPage.length
     pair.host.publishRoute(sessionRoute('pane-1'))
     await pair.flush()
-    expect(pair.toPage.length).toBe(framesBefore)
-    // And the contrast, so the case fails when the gate stops gating rather than when it starts.
-    pair.host.receive(
-      JSON.stringify({ v: 1, type: 'ready', accepts: [BRIDGE_ROUTE_UPDATE_ACCEPT] })
-    )
-    await pair.flush()
-    const framesAfterReady = pair.toPage.length
-    pair.host.publishRoute(sessionRoute('pane-2'))
-    await pair.flush()
-    expect(pair.toPage.length).toBe(framesAfterReady + 1)
+    expect(pair.toPage.length).toBe(framesBefore + 1)
   })
 })

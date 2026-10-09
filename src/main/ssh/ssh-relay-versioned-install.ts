@@ -7,7 +7,8 @@
 import { join } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
 import type { SshConnection } from './ssh-connection'
-import { execCommand } from './ssh-relay-deploy-helpers'
+import { execHostCommand } from './ssh-relay-host-exec'
+import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 import { RELAY_INSTALL_LOCK_NAME } from './ssh-relay-install-lock'
 import { remoteInstallDirSegments } from './ssh-relay-install-namespace'
 import { RELAY_INSTALL_MODEL, type RemoteInstallModel } from './remote-install-model'
@@ -18,7 +19,6 @@ import {
 } from './ssh-remote-commands'
 import {
   getRemoteHostPlatform,
-  isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform,
   type RemotePathFlavor
@@ -31,18 +31,6 @@ const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
 type RelayInstalledProbeOptions = {
   rethrowSessionLimitErrors?: boolean
   signal?: AbortSignal
-}
-
-function execHostCommand(
-  conn: SshConnection,
-  host: RemoteHostPlatform,
-  command: string,
-  options?: { signal?: AbortSignal }
-): Promise<string> {
-  return execCommand(conn, command, {
-    wrapCommand: host.commandDialect !== 'powershell',
-    signal: options?.signal
-  })
 }
 
 /**
@@ -126,13 +114,16 @@ export async function isRemoteInstallComplete(
       conn,
       host,
       probeRemoteInstallCompleteCommand(host, remoteRelayDir, [
-        ...model.requiredArtifacts(isWindowsRemoteHost(host)),
+        ...model.requiredArtifacts(host),
         model.installCompleteFilename
       ]),
       { signal: options?.signal }
     )
     return probe.trim() === 'OK'
   } catch (err) {
+    if (isUnconfirmedSshCommandTermination(err)) {
+      throw err
+    }
     options?.signal?.throwIfAborted()
     if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
       throw err
@@ -160,7 +151,11 @@ export async function finalizeInstall(
   if (options?.releaseLock !== false) {
     await execHostCommand(conn, host, removeRemoteTreeCommand(host, lock), {
       signal: options?.signal
-    }).catch(() => {})
+    }).catch((error) => {
+      if (isUnconfirmedSshCommandTermination(error)) {
+        throw error
+      }
+    })
   }
   options?.signal?.throwIfAborted()
 }
@@ -173,15 +168,24 @@ export async function abandonInstall(
   conn: SshConnection,
   remoteRelayDir: string,
   host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
-): Promise<void> {
+): Promise<boolean> {
   const lock = joinRemotePath(host, remoteRelayDir, RELAY_INSTALL_LOCK_NAME)
-  await execHostCommand(conn, host, removeRemoteTreeCommand(host, lock)).catch(() => {})
+  return execHostCommand(conn, host, removeRemoteTreeCommand(host, lock)).then(
+    () => true,
+    (error) => {
+      if (isUnconfirmedSshCommandTermination(error)) {
+        throw error
+      }
+      // Not confirmed removed: the lock may remain.
+      return false
+    }
+  )
 }
 
 /**
  * Garbage-collect old version directories: remove an idle, fully-installed,
- * unlocked sibling version dir (never the current one). Best-effort — errors
- * are swallowed so GC never blocks the user from connecting.
+ * unlocked sibling version dir (never the current one). Confirmed failures are
+ * best-effort; unconfirmed command termination stops later deployment commands.
  */
 // Why re-exported rather than moved outright: deploy and the relay tests import the whole
 // versioned-install surface from here, and the split exists for file size, not to redraw an API.

@@ -4,7 +4,6 @@ import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-termi
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
 import { isCursorAgentTitle } from '../../shared/agent-detection'
-import { isAbsolute, relative, resolve } from 'node:path'
 import { IMMEDIATE_KILL_REPLY_BUDGET_MS } from '../daemon/immediate-kill-reply-budget'
 import type {
   RuntimeTerminalDriverState,
@@ -58,10 +57,6 @@ export function isCursorAgentOrchestrationTarget(
 ): boolean {
   return [leaf.lastOscTitle, leaf.paneTitle, tabTitle].some(isCursorAgentTitle)
 }
-
-export const AGENT_SESSION_OPERATION_PER_CLIENT_LIMIT = 512
-
-export const AGENT_SESSION_OPERATION_GLOBAL_LIMIT = 4_096
 
 // Why: long enough for a phone to reconnect and retry a create whose response
 // was lost, short enough that an intentional later re-resume forks fresh.
@@ -272,11 +267,6 @@ export function addListenerToMap<T>(
       map.delete(key)
     }
   }
-}
-
-export function isPathWithinDirectory(directory: string, candidate: string): boolean {
-  const relativePath = relative(resolve(directory), resolve(candidate))
-  return relativePath === '' || (!relativePath.startsWith('..') && !isAbsolute(relativePath))
 }
 
 export const AGENT_HOOK_RUNTIME_ENV_KEYS = [

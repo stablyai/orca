@@ -118,6 +118,44 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
     rmSync(tmpDir, { recursive: true, force: true })
   })
 
+  it('publishes a title-confirmed Claude Escape from the execution host and replays it on reconnect', async () => {
+    const paneKey = `tab-7:${LEAF_7}`
+    const { port, token } = hookServer.getCoordinates()
+    const response = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Orca-Agent-Hook-Token': token },
+      body: JSON.stringify({
+        paneKey,
+        tabId: 'tab-7',
+        worktreeId: 'folder-workspace',
+        env: 'remote',
+        version: '1',
+        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'long table' }
+      })
+    })
+    expect(response.status).toBe(204)
+    await expect.poll(() => orcaServer.getStatusSnapshotForPane(paneKey)[0]?.state).toBe('working')
+    const native = hookServer.claudeTerminalInterrupts
+    native.observe(paneKey, { kind: 'title', title: '◐ Long table' })
+    native.observe(paneKey, { kind: 'input', data: '\x1b' })
+    native.observe(paneKey, { kind: 'title', title: '◑ Long table' })
+    expect(orcaServer.getStatusSnapshotForPane(paneKey)[0].state).toBe('working')
+    native.observe(paneKey, { kind: 'input', data: '\x1b' })
+    native.observe(paneKey, { kind: 'title', title: '✳ Long table' })
+    await expect
+      .poll(() => orcaServer.getStatusSnapshotForPane(paneKey)[0])
+      .toMatchObject({
+        state: 'done',
+        interrupted: true,
+        connectionId: 'conn-test',
+        mainAgent: { state: 'done', outcome: 'cancellation' }
+      })
+    expect(hookServer.replayCachedPayloadsForPanes()).toBe(1)
+    await expect
+      .poll(() => orcaServer.getStatusSnapshotForPane(paneKey)[0]?.mainAgent?.outcome)
+      .toBe('cancellation')
+  })
+
   it.each([
     { agent: 'claude', input: { hook_event_name: 'UserPromptSubmit', prompt: 'roundtrip' } },
     {
@@ -166,6 +204,77 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
     expect(payload.state).toBe('working')
     expect(payload.prompt).toBe('roundtrip')
     expect(payload.agentType).toBe(agent)
+  })
+
+  it.each([0, 1, 2, 3])(
+    'delivers Cursor form payloads with %i BOMs to the host-owned status store',
+    async (count) => {
+      const { port, token } = hookServer.getCoordinates()
+      for (const [hookEventName, state] of [
+        ['beforeSubmitPrompt', 'working'],
+        ['stop', 'done']
+      ]) {
+        const payload = Buffer.concat([
+          ...Array.from({ length: count }, () => Buffer.from([0xef, 0xbb, 0xbf])),
+          Buffer.from(
+            JSON.stringify({
+              hook_event_name: hookEventName,
+              prompt: 'Synthetic café 😀',
+              status: 'completed'
+            })
+          )
+        ])
+        const response = await fetch(`http://127.0.0.1:${port}/hook/cursor`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Orca-Agent-Hook-Token': token
+          },
+          body: new URLSearchParams({
+            paneKey: `tab-7:${LEAF_7}`,
+            worktreeId: 'folder:synthetic-cursor',
+            payload: payload.toString('utf8')
+          }).toString()
+        })
+        expect(response.status).toBe(204)
+        await expect
+          .poll(() => orcaServer.getStatusSnapshot())
+          .toEqual([
+            expect.objectContaining({
+              paneKey: `tab-7:${LEAF_7}`,
+              worktreeId: 'folder:synthetic-cursor',
+              connectionId: 'conn-test',
+              state,
+              agentType: 'cursor',
+              prompt: 'Synthetic café 😀'
+            })
+          ])
+      }
+    }
+  )
+
+  it('acknowledges malformed Cursor form payloads without publishing status', async () => {
+    const { port, token } = hookServer.getCoordinates()
+    for (const payload of [
+      '',
+      '\uFEFF\uFEFFnot json',
+      ' \uFEFF{}',
+      '{\uFEFF"hook_event_name":"stop"}',
+      '\uFEFF\uFEFF{"hook_event_name":"unknown"}'
+    ]) {
+      const response = await fetch(`http://127.0.0.1:${port}/hook/cursor`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: new URLSearchParams({ paneKey: `tab-7:${LEAF_7}`, payload }).toString()
+      })
+      expect(response.status).toBe(204)
+    }
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(hookServer.replayCachedPayloadsForPanes()).toBe(0)
+    expect(orcaServer.getStatusSnapshot()).toEqual([])
   })
 
   it('sheds an oversized assistant message through the production publication path', async () => {

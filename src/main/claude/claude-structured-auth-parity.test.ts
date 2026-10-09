@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { beginClaudeAuthSwitch, endClaudeAuthSwitch } from '../claude-accounts/live-pty-gate'
@@ -6,7 +6,6 @@ import {
   CLAUDE_AUTH_ENV_CONFLICT_MESSAGE,
   CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE
 } from '../claude-accounts/environment'
-import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import { createClaudeStructuredLaunchResolver } from './claude-structured-launch-resolution'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
 import {
@@ -15,6 +14,7 @@ import {
   fakeClaude,
   identityFor
 } from './claude-structured-session-test-support'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION_ID = 'orca-session-auth'
 const IDENTITY = { sessionId: SESSION_ID } as Parameters<
@@ -42,7 +42,8 @@ function resolverFor(options: {
   authSwitchSettleTimeoutMs?: number
 }): ReturnType<typeof createClaudeStructuredLaunchResolver> {
   return createClaudeStructuredLaunchResolver({
-    store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
+    resolveLaunchArgs: () => [],
+    store: { getRecord: () => record(), pinLaunchDirectory: vi.fn() },
     resolveWorkspacePath: async (id) => `/repos/${id}`,
     resolveCommand: () => '/usr/local/bin/claude',
     resolveAuthPolicy: () => ({ stripAuthEnv: options.stripAuthEnv }),
@@ -60,15 +61,15 @@ function realResolverAdapter(
   claude: ReturnType<typeof fakeClaude>,
   authSwitchSettleTimeoutMs: number
 ): ClaudeStructuredSessionAdapter {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only the chain head's handle from this partial record.
   const resumable = {
     ...record(),
-    providerHandleChain: [
-      { handle: { provider: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: null } }
-    ]
+    providerHandleChain: [{ handle: claudeProviderHandle(PROVIDER_SESSION_ID, null) }]
   } as unknown as AgentSessionRecord
   return new ClaudeStructuredSessionAdapter({
     resolveLaunch: createClaudeStructuredLaunchResolver({
-      store: { getRecord: () => resumable } as unknown as AgentSessionRecordStore,
+      resolveLaunchArgs: () => [],
+      store: { getRecord: () => resumable, pinLaunchDirectory: vi.fn() },
       resolveWorkspacePath: async (id) => `/repos/${id}`,
       resolveCommand: () => '/usr/local/bin/claude',
       resolveAuthPolicy: () => ({ stripAuthEnv: false }),
@@ -105,7 +106,10 @@ describe('claude structured auth parity with the terminal preflight', () => {
       resolverFor({ stripAuthEnv: true, overlay: { ANTHROPIC_API_KEY: 'sk-ant-CONFIGURED' } })({
         identity: IDENTITY
       })
-    ).rejects.toThrow(CLAUDE_AUTH_ENV_CONFLICT_MESSAGE)
+    ).rejects.toMatchObject({
+      message: CLAUDE_AUTH_ENV_CONFLICT_MESSAGE,
+      reason: 'managedAccountEnvOverride'
+    })
   })
 
   it('refuses an auth-like ANTHROPIC_CUSTOM_HEADERS override while a managed account is pinned', async () => {
@@ -114,7 +118,10 @@ describe('claude structured auth parity with the terminal preflight', () => {
         stripAuthEnv: true,
         overlay: { ANTHROPIC_CUSTOM_HEADERS: 'Authorization: Bearer sk-ant-CONFIGURED' }
       })({ identity: IDENTITY })
-    ).rejects.toThrow(CLAUDE_AUTH_ENV_CONFLICT_MESSAGE)
+    ).rejects.toMatchObject({
+      message: CLAUDE_AUTH_ENV_CONFLICT_MESSAGE,
+      reason: 'managedAccountEnvOverride'
+    })
   })
 
   it('still admits a non-auth env overlay under a managed account', async () => {
@@ -161,7 +168,10 @@ describe('claude structured auth parity with the terminal preflight', () => {
 
     await expect(
       resolverFor({ stripAuthEnv: true, authSwitchSettleTimeoutMs: 20 })({ identity: IDENTITY })
-    ).rejects.toThrow(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
+    ).rejects.toMatchObject({
+      message: CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE,
+      reason: 'accountSwitchInProgress'
+    })
   })
 
   it('waits a settling account switch out rather than refusing a resolved launch', async () => {
@@ -183,7 +193,10 @@ describe('claude structured auth parity with the terminal preflight', () => {
 
     await expect(
       adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
-    ).rejects.toThrow(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
+    ).rejects.toMatchObject({
+      message: CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE,
+      reason: 'accountSwitchInProgress'
+    })
     // Nothing was spawned, so the refusal must not have opened a connection.
     expect(claude.connections).toHaveLength(0)
   })
@@ -227,7 +240,10 @@ describe('claude structured auth parity with the terminal preflight', () => {
 
     await expect(
       adapter.acquire({ identity: identityFor(), fence: 8, spawnToken: 'spawn-10' })
-    ).rejects.toThrow(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
+    ).rejects.toMatchObject({
+      message: CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE,
+      reason: 'accountSwitchInProgress'
+    })
     // No replacement child was opened, so nothing is left running unowned.
     expect(claude.connections).toHaveLength(1)
     await adapter.closeAll()

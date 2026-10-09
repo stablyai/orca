@@ -10,10 +10,7 @@ import { buildPersistedUnifiedTabSessionData } from '../lib/workspace-session-un
 import { buildHydratedTabState } from '../store/slices/tabs-hydration'
 import {
   applyLocalStructuredSessionTabSnapshots,
-  clearLocalStructuredSessionTabs,
   projectLocalStructuredSessionTabs,
-  removeLocalStructuredSessionTabs,
-  refreshLocalStructuredSessionTabs,
   resetLocalStructuredSessionVersionForTests,
   startLocalStructuredSessionTabsSync
 } from './local-structured-session-tabs-sync'
@@ -26,6 +23,12 @@ import {
   recordWebSessionFocusIntent,
   resetWebSessionFocusIntentForTests
 } from './web-session-focus-intent'
+
+const mocks = vi.hoisted(() => ({ recheckUnconfirmedLaunches: vi.fn() }))
+
+vi.mock('../lib/structured-agent-session-launch-unconfirmed-recheck', () => ({
+  recheckUnconfirmedStructuredAgentLaunches: mocks.recheckUnconfirmedLaunches
+}))
 
 const WORKTREE_ID = 'repo-1::worktree-1'
 const TERMINAL_ID = 'terminal-1'
@@ -163,19 +166,6 @@ function expectExactSplit(state: {
 }
 
 describe('local structured session tab projection', () => {
-  it('removes only locally mirrored structured tabs when the feature is disabled', () => {
-    const mirrored = applyLocalStructuredSessionTabSnapshots(createSnapshot(), [
-      structuredInventory('epoch-1', 1, 'codex-1')
-    ])
-
-    const disabled = removeLocalStructuredSessionTabs(mirrored)
-
-    expect(disabled.unifiedTabsByWorktree[WORKTREE_ID]).toEqual([
-      expect.objectContaining({ id: TERMINAL_ID, contentType: 'terminal' })
-    ])
-    expect(disabled.activeTabTypeByWorktree[WORKTREE_ID]).toBe('terminal')
-  })
-
   it('reports publication from every accepted host snapshot', () => {
     const accepted: string[] = []
     applyLocalStructuredSessionTabSnapshots(
@@ -260,43 +250,15 @@ describe('local structured session tab projection', () => {
     }
   })
 
-  it('ignores an in-flight inventory response after toggle-off clears the mirror', async () => {
-    let resolveInventory: ((response: unknown) => void) | undefined
-    const pendingInventory = new Promise((resolve) => {
-      resolveInventory = resolve
-    })
+  it('re-checks unconfirmed chat starts each time the host stream reopens, not on each frame', async () => {
+    vi.useFakeTimers()
+    mocks.recheckUnconfirmedLaunches.mockClear()
     const priorApi = window.api
-    Object.defineProperty(window, 'api', {
-      configurable: true,
-      value: {
-        runtime: {
-          call: vi.fn().mockReturnValue(pendingInventory)
-        }
-      }
-    })
-    try {
-      const refresh = refreshLocalStructuredSessionTabs()
-      clearLocalStructuredSessionTabs()
-      resolveInventory?.({
-        ok: true,
-        result: { snapshots: [structuredInventory('epoch-1', 8, 'stale-session')] }
-      })
-      await refresh
-
-      const fresh = applyLocalStructuredSessionTabSnapshots(createSnapshot(), [
-        structuredInventory('epoch-1', 1, 'fresh-session')
-      ])
-      expect(fresh.unifiedTabsByWorktree[WORKTREE_ID]).toEqual(
-        expect.arrayContaining([expect.objectContaining({ entityId: 'fresh-session' })])
-      )
-    } finally {
-      Object.defineProperty(window, 'api', { configurable: true, value: priorApi })
-    }
-  })
-
-  it('ignores a subscription frame after toggle-off clears the mirror', async () => {
     const callbacks: ((response: unknown) => void)[] = []
-    const priorApi = window.api
+    const subscribe = vi.fn(async (_args: unknown, callback: (response: unknown) => void) => {
+      callbacks.push(callback)
+      return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+    })
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
@@ -305,31 +267,33 @@ describe('local structured session tab projection', () => {
             capabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
           }),
           call: vi.fn().mockResolvedValue({ ok: true, result: { snapshots: [] } }),
-          subscribe: vi.fn(async (_args: unknown, callback: (response: unknown) => void) => {
-            callbacks.push(callback)
-            return { unsubscribe: vi.fn() }
-          })
+          subscribe
         }
       }
     })
-    let unsubscribe = (): void => {}
+    const census = { ok: true, result: { type: 'snapshots', snapshots: [], authoritative: true } }
     try {
       await startLocalStructuredSessionTabsSync({
         isDisposed: () => false,
-        setUnsubscribe: (next) => {
-          unsubscribe = next
-        }
+        setUnsubscribe: () => undefined
       })
-      clearLocalStructuredSessionTabs()
-      callbacks[0]?.({ ok: true, result: structuredInventory('epoch-1', 8, 'stale-session') })
-      const fresh = applyLocalStructuredSessionTabSnapshots(createSnapshot(), [
-        structuredInventory('epoch-1', 1, 'fresh-session')
-      ])
-      expect(fresh.unifiedTabsByWorktree[WORKTREE_ID]).toEqual(
-        expect.arrayContaining([expect.objectContaining({ entityId: 'fresh-session' })])
-      )
+      // The startup inventory alone is not the stream reopening.
+      expect(mocks.recheckUnconfirmedLaunches).not.toHaveBeenCalled()
+
+      callbacks[0]?.(census)
+      expect(mocks.recheckUnconfirmedLaunches).toHaveBeenCalledOnce()
+      expect(mocks.recheckUnconfirmedLaunches).toHaveBeenCalledWith('local')
+      callbacks[0]?.({ ok: true, result: { type: 'updated', ...structuredInventory('e', 3, 'c') } })
+      expect(mocks.recheckUnconfirmedLaunches).toHaveBeenCalledOnce()
+
+      // The runtime restarted: the stream ends and the resubscribe opens with a new census.
+      callbacks[0]?.({ ok: true, result: { type: 'end' } })
+      await vi.advanceTimersByTimeAsync(250)
+      await Promise.resolve()
+      expect(subscribe).toHaveBeenCalledTimes(2)
+      callbacks[1]?.(census)
+      expect(mocks.recheckUnconfirmedLaunches).toHaveBeenCalledTimes(2)
     } finally {
-      unsubscribe()
       Object.defineProperty(window, 'api', { configurable: true, value: priorApi })
     }
   })

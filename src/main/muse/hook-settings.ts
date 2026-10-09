@@ -1,14 +1,18 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import {
   buildManagedCommandHook,
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
-  isPlainObject,
   wrapPosixHookCommand,
   wrapWindowsHookCommand,
   type HookDefinition
 } from '../agent-hooks/installer-utils'
+import { readManagedHookEventsFromJson } from '../agent-hooks/managed-hooks-json-events'
+import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
+import { parseMuseSettingsText } from './hook-config-json'
 
 const MUSE_SCRIPT_BASE = 'muse-hook'
 
@@ -64,7 +68,7 @@ export function getMuseRemoteManagedHooksPath(remoteHome: string): string {
 
 export function getMuseManagedCommand(scriptPath: string): string {
   return process.platform === 'win32'
-    ? wrapWindowsHookCommand(scriptPath)
+    ? (wrapWindowsDirectCmdHookCommand(scriptPath) ?? wrapWindowsHookCommand(scriptPath))
     : wrapPosixHookCommand(scriptPath)
 }
 
@@ -83,49 +87,29 @@ export function buildMuseManagedHooksFile(command: string): string {
   return `${JSON.stringify({ hooks }, null, 2)}\n`
 }
 
+export async function refreshMuseManagedHooksFile(): Promise<void> {
+  const managedHooksPath = getMuseManagedHooksPath()
+  const [settings, existing] = await Promise.all([
+    readFile(getMuseConfigPath(), 'utf8').catch(() => null),
+    readFile(managedHooksPath, 'utf8').catch(() => null)
+  ])
+  const config = settings === null ? null : parseMuseSettingsText(settings, 'Muse settings.json')
+  if (!existing || config?.managed_hooks_path !== managedHooksPath) {
+    return
+  }
+  const next = buildMuseManagedHooksFile(getMuseManagedCommand(getMuseManagedScriptPath()))
+  if (existing !== next) {
+    await refreshManagedScriptIfPresent(managedHooksPath, next)
+  }
+}
+
 export function readManagedMuseHookEvents(
   parsed: unknown,
   isManagedCommand: (command: string | undefined) => boolean
 ): Set<string> {
-  const present = new Set<string>()
-  if (!isPlainObject(parsed) || !isPlainObject(parsed.hooks)) {
-    return present
-  }
-  for (const event of MUSE_HOOK_EVENTS) {
-    const definitions = parsed.hooks[event]
-    if (!Array.isArray(definitions)) {
-      continue
-    }
-    // Why: a hand-edited managed file can hold null definitions, non-array
-    // hook lists, or null entries — treat all of them as absent so status
-    // calculation never throws on user content.
-    if (
-      definitions.some((definition) =>
-        managedHookEntries(definition).some((hook) => isManagedCommand(hookEntryCommand(hook)))
-      )
-    ) {
-      present.add(event)
-    }
-  }
-  return present
+  return readManagedHookEventsFromJson(parsed, MUSE_HOOK_EVENTS, isManagedCommand)
 }
 
 export function getMuseManagedCommandMatcher(): (command: string | undefined) => boolean {
   return createManagedCommandMatcher(getMuseManagedScriptFileName())
-}
-
-function managedHookEntries(definition: unknown): readonly unknown[] {
-  if (!isPlainObject(definition)) {
-    return []
-  }
-  const hooks = definition.hooks
-  return Array.isArray(hooks) ? hooks : []
-}
-
-function hookEntryCommand(hook: unknown): string | undefined {
-  if (!isPlainObject(hook)) {
-    return undefined
-  }
-  const command = hook.command
-  return typeof command === 'string' ? command : undefined
 }

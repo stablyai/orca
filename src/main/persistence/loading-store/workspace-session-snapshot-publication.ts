@@ -104,14 +104,27 @@ export function setLocalWorkspaceSession(
     deleteRemovedTerminalScrollbackSnapshots(
       prior,
       session,
-      context.runtime.terminalScrollbackSnapshotStorage
+      context.runtime.terminalScrollbackSnapshotStorage,
+      retainedScrollbackRefs(context.runtime)
     )
   }
   context.runtime.state.workspaceSession = session
   if (deferSnapshotFiles) {
     enqueueTerminalScrollbackSnapshotWork(owner, prior, session)
   }
-  scheduleSave(context.scheduling)
+  if (
+    remappedAcknowledgements.changed ||
+    remappedActivityCutoffs.changed ||
+    remappedManualUnread.changed
+  ) {
+    // UI remaps include protected fields, so keep the complete serializer boundary.
+    scheduleSave(context.scheduling)
+  } else {
+    scheduleSave(
+      context.scheduling,
+      remappedLeases.changed ? ['workspaceSession', 'sshRemotePtyLeases'] : ['workspaceSession']
+    )
+  }
 }
 
 export function enqueueTerminalScrollbackSnapshotWork(
@@ -128,7 +141,8 @@ export function enqueueTerminalScrollbackSnapshotWork(
           await deleteRemovedTerminalScrollbackSnapshotsAsync(
             prior,
             context.runtime.state.workspaceSession,
-            context.runtime.terminalScrollbackSnapshotStorage
+            context.runtime.terminalScrollbackSnapshotStorage,
+            retainedScrollbackRefs(context.runtime)
           )
         }
         return
@@ -147,14 +161,16 @@ export function enqueueTerminalScrollbackSnapshotWork(
         await deleteRemovedTerminalScrollbackSnapshotsAsync(
           migrated,
           current,
-          context.runtime.terminalScrollbackSnapshotStorage
+          context.runtime.terminalScrollbackSnapshotStorage,
+          retainedScrollbackRefs(context.runtime)
         )
       }
       if (current) {
         await deleteRemovedTerminalScrollbackSnapshotsAsync(
           prior,
           current,
-          context.runtime.terminalScrollbackSnapshotStorage
+          context.runtime.terminalScrollbackSnapshotStorage,
+          retainedScrollbackRefs(context.runtime)
         )
       }
     })
@@ -167,4 +183,12 @@ export function enqueueTerminalScrollbackSnapshotWork(
       }
     })
   context.runtime.pendingSnapshotFileWork = work
+}
+
+function retainedScrollbackRefs(runtime: {
+  retainedScrollbackRefsByMigrationId: ReadonlyMap<string, ReadonlySet<string>>
+}): ReadonlySet<string> {
+  return new Set(
+    [...runtime.retainedScrollbackRefsByMigrationId.values()].flatMap((refs) => [...refs])
+  )
 }

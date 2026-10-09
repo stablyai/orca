@@ -95,7 +95,6 @@ describe('openCodexThread', () => {
     ).resolves.toEqual({
       threadId: 'thread-standard',
       thread: { id: 'thread-standard' },
-      historyPath: null,
       serviceTier: null
     })
   })
@@ -258,6 +257,29 @@ describe('openCodexThread', () => {
         {
           timeoutMs: 2_000
         }
+      )
+    })
+
+    it('opens the replacement thread on the chosen model', async () => {
+      const request = codexWithoutRollout()
+
+      await openCodexThread(
+        connectionFor(request),
+        {
+          cwd: '/workspace',
+          resumeThreadId: 'thread-unsaved',
+          supersedeIfUnsaved: true,
+          model: 'gpt-chosen'
+        },
+        2_000
+      )
+
+      // A resume keeps the thread's own saved model, provider and effort, which naming one skips.
+      expect(request.mock.calls[0]?.[1]).not.toHaveProperty('model')
+      expect(request).toHaveBeenLastCalledWith(
+        'thread/start',
+        { cwd: '/workspace', model: 'gpt-chosen' },
+        { timeoutMs: 2_000 }
       )
     })
 

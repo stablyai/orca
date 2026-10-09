@@ -1,8 +1,7 @@
-import { answerStartupColorQuery } from './pty-startup-color-query-answer'
-import { parsePtyStartupQuery } from './pty-startup-query'
+import { nextQueryCandidate, parsePtyStartupQuery } from './pty-startup-query'
+import { PtyOwnerColorQueryReplies } from './pty-owner-color-query-replies'
 import { TerminalKittyKeyboardModeTracker } from './terminal-kitty-keyboard-mode-tracker'
 import type { TerminalOscColorQuerySlot } from './terminal-osc-color-reply'
-import type { PtyStartupIngressIntent } from './pty-startup-ingress-intent'
 import type { PtyOwnerBackend } from './pty-owner-backend'
 import { PtyStartupReplyDelivery } from './pty-startup-reply-delivery'
 import { deliverTerminalQueryReplyPayload } from './terminal-query-reply-delivery'
@@ -26,41 +25,49 @@ const MAX_QUERY_CANDIDATE_CHARS = 64
 // Why this long: a torn echo whose halves straddle this window is released raw, so
 // anything under relay jitter reinstates the leak (#12112). Almost nothing is risked
 // by waiting, because the timer is rarely what ends a hold — the next read is, and
-// the startup deadline and snapshot barrier both cap the wait independently. The
+// the snapshot barrier caps the wait independently. The
 // exposure is at most one projection's worth of echo-shaped bytes on an already idle
 // pane, which is why the guess is allowed to be slow rather than tight.
 const ECHO_CONTINUATION_HOLD_MS = 500
+// Why a default: every PTY has a startup window, because it bounds the long echo watch.
+const DEFAULT_STARTUP_WINDOW_MS = 5_000
 
 /**
- * Serialized source-side startup classifier. Its raw sequence begins after
- * shell-ready preprocessing and every accepted range is emitted exactly once.
+ * Serialized source-side classifier. Its raw sequence begins after shell-ready
+ * preprocessing and every accepted range is emitted exactly once.
+ *
+ * It is the only OSC 10/11 answerer for its PTY, for the PTY's whole life: every
+ * query is answered and stripped here, so no downstream view ever sees one to answer
+ * twice. Kitty keyboard queries alone keep a startup window.
  */
 export class PtyStartupIngress {
-  private readonly intent: PtyStartupIngressIntent | undefined
+  private readonly colorQueries: PtyOwnerColorQueryReplies
   private readonly ownerBackend: PtyOwnerBackend
   private readonly delivery: PtyStartupReplyDelivery
   private readonly onEmission: (emission: PtyIngressEmission) => void
   private readonly operations: PtyStartupIngressOperation[] = []
-  private readonly answeredSlots = new Set<TerminalOscColorQuerySlot>()
   private processing = false
   private closed = false
-  private queryOpen: boolean
   private kittyQueryOpen: boolean
   private readonly kittyModes = new TerminalKittyKeyboardModeTracker()
   private rawHighWater = 0
   private queryPending: PtyIngressSourceSpan | null = null
   private echoPending: PtyIngressSourceSpan | null = null
   private echoHoldTimer: ReturnType<typeof setTimeout> | null = null
+  private queryHoldTimer: ReturnType<typeof setTimeout> | null = null
   private deadlineTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(options: PtyStartupIngressOptions) {
-    this.intent = options.intent
+    this.colorQueries = new PtyOwnerColorQueryReplies(options.intent, options.resolveHostColors)
     this.ownerBackend = options.ownerBackend ?? 'posix-pty'
-    this.delivery = new PtyStartupReplyDelivery(this.ownerBackend, options.write)
+    this.delivery = new PtyStartupReplyDelivery(
+      this.ownerBackend,
+      options.write,
+      Date.now() + (options.intent?.deadlineMs ?? DEFAULT_STARTUP_WINDOW_MS)
+    )
     this.onEmission = options.onEmission
-    this.queryOpen = options.intent !== undefined
     this.kittyQueryOpen = options.intent?.kittyKeyboardProtocol === true
-    if (options.intent) {
+    if (options.intent && this.kittyQueryOpen) {
       this.deadlineTimer = setTimeout(
         () => this.enqueue({ kind: 'expire' }),
         Math.max(0, options.intent.deadlineMs)
@@ -132,37 +139,31 @@ export class PtyStartupIngress {
         this.processEchoSpan(operation.chunk)
         return
       case 'close-query':
+        // Why only Kitty: colour authority never hands off, and the echo hold survives
+        // too, because a reply already on the wire is still Orca's to swallow.
         this.kittyQueryOpen = false
         if (this.queryPending?.data.startsWith('\x1b[')) {
           this.releaseQueryPending()
         }
-        if (this.ownerBackend !== 'windows-conpty') {
-          this.queryOpen = false
-          // Why the echo hold deliberately survives this, unlike `snapshot`: the
-          // handoff ends query *authority*, but a reply already on the wire is still
-          // Orca's to swallow. Releasing here would show the first half of an echo
-          // split across the boundary and orphan the second.
-          this.releaseQueryPending()
-        }
-        // Why: ConPTY cannot safely transfer color-query authority to a downstream view.
         return
       case 'expire':
-        this.queryOpen = false
         this.kittyQueryOpen = false
         this.releasePendingInSourceOrder(false)
-        this.delivery.reset()
         this.clearDeadline()
         return
       case 'snapshot':
       case 'release-echo':
         this.releasePendingInSourceOrder(false)
         return
+      case 'release-query':
+        this.releaseQueryPending()
+        return
       case 'teardown':
-        this.queryOpen = false
         this.kittyQueryOpen = false
         this.releasePendingInSourceOrder(true)
         this.delivery.close()
         this.clearDeadline()
+        this.clearQueryHold()
         this.closed = true
     }
   }
@@ -249,16 +250,13 @@ export class PtyStartupIngress {
   private processQuerySpan(span: PtyIngressSourceSpan): void {
     const input = combinePtyIngressSourceSpans(this.queryPending, span)
     this.queryPending = null
+    this.clearQueryHold()
     const suppressConptyQuery = this.ownerBackend === 'windows-conpty'
-    if ((!this.queryOpen || !this.intent) && !this.kittyQueryOpen && !suppressConptyQuery) {
-      this.emit(input, false)
-      return
-    }
 
     let scanOffset = 0
     let emittedOffset = 0
     while (scanOffset < input.data.length) {
-      const candidateIndex = input.data.indexOf('\x1b', scanOffset)
+      const candidateIndex = nextQueryCandidate(input.data, scanOffset, this.kittyQueryOpen)
       if (candidateIndex === -1) {
         this.emit(slicePtyIngressSourceSpan(input, emittedOffset), false)
         return
@@ -275,6 +273,7 @@ export class PtyStartupIngress {
         const candidate = slicePtyIngressSourceSpan(input, candidateIndex)
         if (candidate.data.length <= MAX_QUERY_CANDIDATE_CHARS) {
           this.queryPending = candidate
+          this.armQueryHold()
         } else {
           this.emit(candidate, false)
         }
@@ -287,11 +286,13 @@ export class PtyStartupIngress {
       const querySpan = slicePtyIngressSourceSpan(input, candidateIndex, query.endIndex)
       const answered =
         query.kind === 'kitty'
-          ? this.delivery.answer(`\x1b[?${this.kittyModes.flags}u`)
-          : this.queryOpen && this.intent && this.answerQuery(query.slots)
+          ? this.delivery.answer(`\x1b[?${this.kittyModes.flags}u`, 'owner')
+          : this.answerColorQuery(query.slots)
       if (query.kind === 'kitty' && answered) {
         this.kittyQueryOpen = false
       }
+      // A failed write passes the query on, except under ConPTY, whose ESC-stripped
+      // echo of a downstream reply would leak into a cooked shell (#9651).
       if (answered || (suppressConptyQuery && query.kind !== 'kitty')) {
         this.emit(querySpan, true, '')
       } else {
@@ -302,17 +303,19 @@ export class PtyStartupIngress {
     }
   }
 
-  private answerQuery(slots: readonly TerminalOscColorQuerySlot[]): boolean {
-    const answered = answerStartupColorQuery(this.intent, slots, this.answeredSlots, this.delivery)
-    if (this.answeredSlots.has(10) && this.answeredSlots.has(11)) {
-      this.queryOpen = false
-    }
-    return answered
+  /** True when at least the first reply landed; a failed write stops the rest in order. */
+  private answerColorQuery(slots: readonly TerminalOscColorQuerySlot[]): boolean {
+    const replies = this.colorQueries.replies(slots)
+    return (
+      replies.length > 0 &&
+      replies.findIndex((reply) => !this.delivery.answer(reply, 'owner')) !== 0
+    )
   }
 
   private releaseQueryPending(): void {
     const pending = this.queryPending
     this.queryPending = null
+    this.clearQueryHold()
     if (pending) {
       this.emit(pending, false)
     }
@@ -323,13 +326,12 @@ export class PtyStartupIngress {
    * bytes. `classifyRead` only ever arms one — it either keeps a viable query and
    * returns, or releases a disproven one before holding the echo — so this is defense
    * against a future second arming site, not a live inversion.
+   *
+   * A torn colour query survives these barriers: released raw, its halves would reach a
+   * view that has no authority to answer it. Only its own hold timer or teardown ends it.
    */
-  private releasePendingInSourceOrder(includeConptyQuery: boolean): void {
-    if (
-      includeConptyQuery ||
-      this.ownerBackend !== 'windows-conpty' ||
-      this.queryPending?.data.startsWith('\x1b[')
-    ) {
+  private releasePendingInSourceOrder(includeColorQuery: boolean): void {
+    if (includeColorQuery || this.queryPending?.data.startsWith('\x1b[')) {
       this.releaseQueryPending()
     }
     const pending = this.takeEchoPending()
@@ -359,10 +361,25 @@ export class PtyStartupIngress {
     this.echoHoldTimer.unref?.()
   }
 
+  /** Why: a torn candidate that never completes must not withhold output indefinitely. */
+  private armQueryHold(): void {
+    this.queryHoldTimer ??= setTimeout(
+      () => this.enqueue({ kind: 'release-query' }),
+      ECHO_CONTINUATION_HOLD_MS
+    )
+    this.queryHoldTimer.unref?.()
+  }
+
+  private clearQueryHold(): void {
+    clearTimeout(this.queryHoldTimer ?? undefined)
+    this.queryHoldTimer = null
+  }
+
   private emit(span: PtyIngressSourceSpan, transformed: boolean, data = span.data): void {
     if (this.kittyQueryOpen) {
       this.kittyModes.scan(data)
     }
+    this.colorQueries.observe(data)
     this.onEmission({ data, rawStartSeq: span.rawStartSeq, rawEndSeq: span.rawEndSeq, transformed })
   }
 

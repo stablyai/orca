@@ -7,7 +7,7 @@ import {
   releaseDaemonStreamEntry
 } from './daemon-stream-entry-accounting'
 import { DaemonStreamHeldRefill } from './daemon-stream-held-refill'
-import { clampToSafeSplitIndex, writeStreamDataEvents } from './daemon-stream-data-split'
+import { clampToSafeBulkWriteSplitIndex, writeStreamDataEvents } from './daemon-stream-data-split'
 import type { PendingStreamDataBatch } from './daemon-stream-keep-tail-drop'
 import type { DaemonEvent } from './types'
 import {
@@ -213,7 +213,7 @@ export class DaemonStreamDataBatcher {
       const end =
         entry.transformed || entry.data.length <= BULK_WRITE_SLICE_CHARS
           ? entry.data.length
-          : clampToSafeSplitIndex(entry.data, 0, BULK_WRITE_SLICE_CHARS)
+          : clampToSafeBulkWriteSplitIndex(entry.data, BULK_WRITE_SLICE_CHARS)
       const slice = entry.data.slice(0, end)
       const entrySequenceChars = entry.sequenceChars ?? entry.data.length
       const sliceSequenceChars = entry.transformed

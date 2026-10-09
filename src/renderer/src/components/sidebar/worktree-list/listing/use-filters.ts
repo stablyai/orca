@@ -96,7 +96,7 @@ export function useSidebarWorktreeFilters() {
     if (scopedHostIds && !scopedHostIds.includes(targetHostId)) {
       state.setVisibleWorkspaceHostIds([...scopedHostIds, targetHostId])
     }
-    if (state.hideDefaultBranchWorkspace && isDefaultBranchWorkspace(worktree)) {
+    if (state.hideDefaultBranchWorkspace && isDefaultBranchWorkspace(worktree, repo)) {
       state.setHideDefaultBranchWorkspace(false)
     }
     if (state.hideAutomationGeneratedWorkspaces && isAutomationGeneratedWorkspace(worktree)) {

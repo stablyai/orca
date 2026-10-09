@@ -37,7 +37,7 @@ describe('agent prompt line-settle scheduling', () => {
       () => undefined,
       'antigravity'
     )
-    const submission = runtime.sendTerminalAgentPrompt(handle, prompt)
+    const submission = runtime.sendTerminalAgentPrompt(handle, prompt, { inputKind: 'driving' })
     const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')
 
     await vi.advanceTimersByTimeAsync(submitDelayMs - 1)

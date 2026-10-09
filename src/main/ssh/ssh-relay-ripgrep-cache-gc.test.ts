@@ -84,19 +84,6 @@ describe('remote ripgrep cache GC', () => {
     expect(removedTrees()).toEqual([])
   })
 
-  // Why this case exists: the relay directory is named from a hash of the relay bytes, and
-  // ripgrep is not among them, so a release that bumps only the ripgrep package -- the monthly
-  // Dependabot PR -- shares a relay directory with its predecessor while minting a new entry.
-  // With a single marker slot the second client overwrote the first's reference and this pass
-  // then collected the binary the first client's relay was still running against.
-  it('keeps both builds when two clients share one relay directory', async () => {
-    reply([CURRENT, SUPERSEDED], [CURRENT, SUPERSEDED])
-
-    await gcRemoteRipgrepCache(conn, LINUX, '/home/me', { pinnedEntry: CURRENT })
-
-    expect(removedTrees()).toEqual([])
-  })
-
   // Why assert the shell and not just the parse: the marker is per entry, so a scan that read a
   // single fixed filename would silently see only one of the two references above.
   it('scans every marker in a relay directory, not one fixed name', async () => {

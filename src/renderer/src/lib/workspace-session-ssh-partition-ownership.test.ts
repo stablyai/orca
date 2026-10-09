@@ -95,7 +95,7 @@ describe('ssh folder workspace partition ownership', () => {
       },
       { tabsByWorktree: { [FOLDER_KEY]: [tab('tab-desktop', FOLDER_KEY)] } },
       state
-    )
+    ).written
 
     // Main applies a patch field-wise ({ ...current, ...patch }), so a `tabsByWorktree` written to
     // `ssh:<targetId>` WITHOUT the folder row replaces the row main put there.
@@ -313,7 +313,7 @@ describe('a bare workspace id two partitions both hold', () => {
         contestedHostWorkspaceSessions: read.contestedHostWorkspaceSessions,
         contestedPrimaryHostBySessionKey: read.contestedPrimaryHostBySessionKey
       }
-    )
+    ).written
 
     // Main applies a patch field-wise, so an `ssh:<targetId>` write carrying only the sibling would
     // erase the declined row from the one partition that still holds it. Declining to show a row
@@ -342,5 +342,31 @@ describe('a bare workspace id two partitions both hold', () => {
     // then be written into `ssh:target-2`, overwriting the live one.
     expect(read.session.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual(['tab-live'])
     expect(read.contestedPrimaryHostBySessionKey?.[WORKTREE_ID]).toBe(OTHER_SSH_HOST_ID)
+  })
+})
+
+describe('a stray local copy beside a leftover in another ssh partition', () => {
+  const REPO_ID = 'repo-remote'
+  const WORKTREE_ID = `${REPO_ID}::/remote/checkout/feature`
+
+  // Both sort orders, since partitions are read in sorted host-id order.
+  it.each([
+    [TARGET_ID, OTHER_SSH_HOST_ID],
+    [OTHER_TARGET_ID, SSH_HOST_ID]
+  ])('keeps the rows of the partition the catalog names (owner %s)', async (owner, leftover) => {
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      partitionedApi({
+        local: session({ tabsByWorktree: { [WORKTREE_ID]: [tab('tab-local', WORKTREE_ID)] } }),
+        [`ssh:${owner}`]: session({
+          tabsByWorktree: { [WORKTREE_ID]: [tab('tab-live', WORKTREE_ID)] }
+        }),
+        [leftover]: session({
+          tabsByWorktree: { [WORKTREE_ID]: [tab('tab-leftover', WORKTREE_ID)] }
+        })
+      }),
+      [{ id: REPO_ID, connectionId: owner, executionHostId: null }]
+    )
+
+    expect(read.session.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual(['tab-live'])
   })
 })

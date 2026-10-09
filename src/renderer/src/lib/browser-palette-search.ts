@@ -79,7 +79,7 @@ export type BrowserPaletteSearchResult = {
 
 export const BROWSER_PALETTE_QUERY_MAX_BYTES = 2 * 1024
 
-export function isBrowserPaletteQueryTooLarge(
+function isBrowserPaletteQueryTooLarge(
   query: string,
   maxBytes = BROWSER_PALETTE_QUERY_MAX_BYTES
 ): boolean {

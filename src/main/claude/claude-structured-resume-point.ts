@@ -2,6 +2,7 @@ import type {
   ClaudeSession,
   ClaudeStructuredSessionAdapterDeps
 } from './claude-structured-session-state'
+import { settleClaudeTurnEndWaiters } from './claude-request-end-wait'
 
 /**
  * Record a completed turn: its leaf becomes the one close and exit persist, and the durable point
@@ -17,6 +18,8 @@ export function persistClaudeTurnResumePoint(
     return
   }
   session.turnEndLeafUuid = session.leafUuid
+  // The turn ended: a Stop waiting to end the child re-reads what Claude still has in flight.
+  settleClaudeTurnEndWaiters(session)
   const leafUuid = session.turnEndLeafUuid
   const persist = deps.persistResumePoint
   if (!persist || leafUuid === null || session.resumePointWrite?.leafUuid === leafUuid) {

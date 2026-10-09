@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { onMock, spawnMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers, getPtyRendererDeliveryDebugSnapshot } from './pty'
+import { _resetColorQueryReplyColorsForTest } from './pty/provider/registry'
+import { _resetPtyOwnerHostColorsForTest } from '../../shared/pty-owner-color-query-colors'
+import { _resetTerminalViewAttributesForTest } from '../runtime/terminal-view-attribute-store'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -317,7 +320,7 @@ describe('registerPtyHandlers', () => {
       vi.useRealTimers()
     }
   })
-  it('does not answer ordinary terminal OSC color queries in main', async () => {
+  it('answers a plain shell at the owner, then from the colours the renderer pushes', async () => {
     vi.useFakeTimers()
     const mockProc = createMockProc()
     spawnMock.mockReturnValue(mockProc.proc)
@@ -335,16 +338,40 @@ describe('registerPtyHandlers', () => {
       })) as { id: string }
       mainWindow.webContents.send.mockClear()
 
-      const query = '\x1b]10;?\x1b\\\x1b]11;?\x1b\\'
+      const query = '\x1b]11;?\x1b\\'
       mockProc.emitData(`${query}ready`)
+      const pushViewAttributes: unknown = onMock.mock.calls.find(
+        (call: unknown[]) => call[0] === 'pty:terminalViewAttributes'
+      )?.[1]
+      if (typeof pushViewAttributes !== 'function') {
+        throw new Error('pty:terminalViewAttributes listener was not registered')
+      }
+      pushViewAttributes(null, {
+        foreground: [0, 0, 0],
+        background: [0x12, 0x34, 0x56],
+        cursor: [0, 0, 0],
+        ansi: Array.from({ length: 256 }, () => [0, 0, 0]),
+        colorSchemeMode: 'light',
+        cursorStyle: 'block',
+        cursorBlink: false
+      })
+      mockProc.emitData(query)
 
-      expect(mockProc.proc.write).not.toHaveBeenCalled()
+      expect(mockProc.proc.write.mock.calls).toEqual([
+        ['\x1b]11;rgb:1111/1111/1111\x1b\\'],
+        ['\x1b]11;rgb:1212/3434/5656\x1b\\']
+      ])
       vi.advanceTimersByTime(2)
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
-        data: `${query}ready`
+        data: 'ready',
+        rawLength: `${query}ready${query}`.length,
+        transformed: true
       })
     } finally {
+      _resetTerminalViewAttributesForTest()
+      _resetColorQueryReplyColorsForTest()
+      _resetPtyOwnerHostColorsForTest()
       vi.useRealTimers()
     }
   })

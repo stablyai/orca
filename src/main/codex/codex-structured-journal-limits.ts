@@ -1,4 +1,6 @@
 export const MAX_CODEX_GENERIC_ROWS_PER_TURN = 8
+/** Stored-only rows (no client draws them) per turn; past it they are dropped without a summary. */
+export const MAX_CODEX_WORDLESS_ROWS_PER_TURN = 8
 export const MAX_CODEX_GENERIC_TURN_BUCKETS = 64
 export const MAX_CODEX_GENERIC_BOOKKEEPING_ENTRIES = 128
 export const MAX_CODEX_GENERIC_BOOKKEEPING_BYTES = 32 * 1024

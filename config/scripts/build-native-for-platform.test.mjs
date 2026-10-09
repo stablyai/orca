@@ -328,7 +328,9 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     )
     await sleep(300)
     build.releaseExit()
-    await waitFor(() => build.events().some(({ event }) => event === 'completed'))
+    await waitFor(() =>
+      build.events().some(({ event, name }) => event === 'completed' && name.includes('computer'))
+    )
     const accepted = Math.max(
       ...build
         .events()

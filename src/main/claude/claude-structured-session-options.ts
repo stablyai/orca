@@ -1,8 +1,4 @@
-import type {
-  AgentSessionFastModeState,
-  AgentSessionFastModeSupport,
-  AgentSessionOptionsResult
-} from '../../shared/agent-session-wire'
+import type { AgentSessionFastModeState } from '../../shared/agent-session-wire'
 import {
   currentModelId,
   listedModels,
@@ -13,6 +9,14 @@ import {
   type ListedModel
 } from './claude-structured-model-catalog'
 import type { ClaudeSession } from './claude-structured-session-state'
+import { structuredAgentSessionOptionModels } from '../native-chat/agent-session-wire/structured-agent-session-option-models'
+import {
+  claudeCatalogListing,
+  claudeFastModeSupport,
+  wireClaudeModels,
+  type WireClaudeModel
+} from './claude-structured-catalog-listing'
+import type { StructuredAgentSessionLiveOptions } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
 
 /**
@@ -121,14 +125,6 @@ export function readClaudeCurrentModel(session: ClaudeSession): {
   }
 }
 
-/**
- * The effort levels the session's current model advertises, with the catalog id
- * that matched so a refusal names the model the pill shows. Levels are null when
- * nothing identified the model: `apply_flag_settings` accepts and stores any
- * level for a model with no effort control, so the catalog is the only evidence
- * of a refusal — and an absent or unlisted one is not evidence, or a live CLI
- * that predates `list_models` would have every effort refused under it.
- */
 /** One catalog read serves a whole option write. The admit check, the effort guard
  *  and the Fast guard all ask about the same list; each taking its own read made a
  *  single model write pay for two `list_models` round trips and let two guards answer
@@ -142,6 +138,14 @@ export async function readClaudeListedModels(
   return catalog ? listedModels({ models: catalog }) : []
 }
 
+/**
+ * The effort levels the session's current model advertises, with the catalog id
+ * that matched so a refusal names the model the pill shows. Levels are null when
+ * nothing identified the model: `apply_flag_settings` accepts and stores any
+ * level for a model with no effort control, so the catalog is the only evidence
+ * of a refusal — and an absent or unlisted one is not evidence, or a live CLI
+ * that predates `list_models` would have every effort refused under it.
+ */
 export function claudeModelEffortLevels(
   session: ClaudeSession,
   models: readonly ListedModel[]
@@ -168,27 +172,6 @@ export function claudeModelFastModeSupport(
     modelId: matched?.id ?? modelId,
     supported: matched?.supportsFastMode ?? null
   }
-}
-
-const TRANSIENT_FAST_MODE_REASONS = new Set(['network_error', 'unknown', 'pending'])
-const NON_BLOCKING_FAST_MODE_REASONS = new Set(['preference', 'sdk_opt_in_required'])
-
-function claudeFastModeSupport(
-  models: readonly ListedModel[],
-  disabledReason: string | undefined
-): AgentSessionFastModeSupport | undefined {
-  if (disabledReason && TRANSIENT_FAST_MODE_REASONS.has(disabledReason)) {
-    return undefined
-  }
-  if (disabledReason && !NON_BLOCKING_FAST_MODE_REASONS.has(disabledReason)) {
-    return { supported: false, reason: disabledReason }
-  }
-  if (!models.some((model) => model.supportsFastMode === true)) {
-    return models.length > 0 && models.every((model) => model.supportsFastMode === false)
-      ? { supported: false, reason: 'model-not-supported' }
-      : undefined
-  }
-  return { supported: true }
 }
 
 function listedModelFastModeSupport(
@@ -223,37 +206,16 @@ export function claudeCatalogAdmitsModel(models: readonly ListedModel[], modelId
   )
 }
 
-function wireClaudeModels(models: readonly ListedModel[]): AgentSessionOptionsResult['models'] {
-  return models.map((entry) => ({
-    id: entry.id,
-    label: entry.label,
-    ...(entry.description ? { description: entry.description } : {}),
-    isDefault: entry.isDefault,
-    efforts: entry.efforts,
-    ...(entry.supportsFastMode !== undefined ? { supportsFastMode: entry.supportsFastMode } : {})
-  }))
-}
-
-/** Write a provider-listed catalog through to the host store. Account-level
- *  facts only: this session's disabled reason and its unlisted current model
- *  stay out, so another surface never inherits session state as a catalog. */
-function writeClaudeCatalogThrough(session: ClaudeSession, discovered: ListedModel[]): void {
-  if (discovered.length === 0 || !session.catalogAccess) {
-    return
-  }
-  const support = claudeFastModeSupport(discovered, undefined)
-  session.catalogAccess.store.recordSuccess(session.catalogAccess.fingerprint, 'claude', {
-    models: wireClaudeModels(discovered),
-    ...(support ? { fastModeSupport: support } : {}),
-    fastModeTierByModel: new Map(),
-    origin: 'live-session'
-  })
+/** The built-in models a running child lists when the CLI gives it none; a chat at rest with no
+ *  catalog lists the same. */
+export function claudeFallbackModelOptions(): WireClaudeModel[] {
+  return wireClaudeModels(seedModels())
 }
 
 export async function readClaudeStructuredSessionOptions(
   session: ClaudeSession,
   timeoutMs: number | undefined
-): Promise<AgentSessionOptionsResult> {
+): Promise<StructuredAgentSessionLiveOptions> {
   const readMutationSequence = session.optionMutationSequence
   // Before startup both requests would wait on initialize; answer from the saved options.
   const [catalog, settings] =
@@ -294,22 +256,23 @@ function observeClaudeSettingsReadback(
 }
 
 /** The options as main already holds them, over `catalog`; asks the CLI nothing. Startup's
- *  settings readback and restore's confirmations are applied by the time a start proves, and
- *  the SDK answers `list_models` from its initialize result, so a started session's snapshot
- *  passes that result here rather than paying two round trips for what it already read. */
+ *  settings readback is applied by the time a start proves, and the SDK answers `list_models`
+ *  from its initialize result, so a started session's snapshot passes that result here rather
+ *  than paying two round trips for what it already read. */
 export function claudeStructuredSessionOptionsFrom(
   session: ClaudeSession,
   catalog: unknown[] | null,
   readMutationSequence = session.optionMutationSequence
-): AgentSessionOptionsResult {
+): StructuredAgentSessionLiveOptions {
   const discovered = listedModels(catalog ? { models: catalog } : null)
-  writeClaudeCatalogThrough(session, discovered)
-  const models = discovered.length > 0 ? discovered : seedModels()
+  const catalogListing = claudeCatalogListing(session, discovered)
+  const listed = discovered.length > 0 ? discovered : seedModels()
   const current = readClaudeCurrentModel(session)
-  const model = currentModelId(models, current.id)
-  if (!models.some((entry) => entry.id === model)) {
-    models.push({ id: model, label: model, isDefault: false, efforts: [], resolvedModel: null })
-  }
+  const model = currentModelId(listed, current.id)
+  const models = structuredAgentSessionOptionModels(listed, model, (row) => ({
+    ...row,
+    resolvedModel: null
+  }))
   const effort =
     session.options.get('effort') ??
     session.reportedOptions.effort ??
@@ -352,6 +315,7 @@ export function claudeStructuredSessionOptionsFrom(
       ...(fastMode !== undefined ? { fastMode } : {}),
       ...(session.fastModeState ? { fastModeState: session.fastModeState } : {}),
       ...(confirmed.length > 0 ? { confirmed } : {})
-    }
+    },
+    ...(catalogListing ? { catalogListing } : {})
   }
 }

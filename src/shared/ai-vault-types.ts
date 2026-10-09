@@ -3,6 +3,8 @@ import type { ExecutionHostId, ExecutionHostScope } from './execution-host'
 
 export const AI_VAULT_AGENTS = [
   'claude',
+  'codebuddy',
+  'qoder',
   'codex',
   'hermes',
   'pi',
@@ -15,13 +17,15 @@ export const AI_VAULT_AGENTS = [
   'copilot',
   'opencode',
   'opencode2',
+  'zcode',
   'grok',
   'openclaw',
   'devin',
   'droid',
   'cline',
   'kimi',
-  'muse'
+  'muse',
+  'jcode'
 ] as const satisfies readonly TuiAgent[]
 
 // Why: the aiVault.listSessions RPC schema CLAMPS scopePaths to this bound
@@ -50,6 +54,8 @@ export type AiVaultGroup = 'project' | 'folder' | 'agent'
 
 export const AI_VAULT_AGENT_LABELS = {
   claude: 'Claude',
+  codebuddy: 'CodeBuddy',
+  qoder: 'Qoder',
   codex: 'Codex',
   hermes: 'Hermes',
   pi: 'Pi',
@@ -62,13 +68,15 @@ export const AI_VAULT_AGENT_LABELS = {
   copilot: 'GitHub Copilot',
   opencode: 'OpenCode',
   opencode2: 'OpenCode 2',
+  zcode: 'ZCode',
   grok: 'Grok',
   openclaw: 'OpenClaw',
   devin: 'Devin',
   droid: 'Droid',
   cline: 'Cline',
   kimi: 'Kimi',
-  muse: 'Muse'
+  muse: 'Muse',
+  jcode: 'Jcode'
 } as const satisfies Record<AiVaultAgent, string>
 
 export type AiVaultSessionPreviewMessage = {
@@ -110,6 +118,8 @@ export type AiVaultSession = {
   /** Older messages fell out of the newest-N window: the earliest preview turn
    * is NOT the opening ask, so first-prompt consumers must not scan it. */
   previewMessagesTruncated?: boolean
+  /** Bounded opening-prompt identity for Antigravity history joins; never a rolling preview. */
+  antigravityOpeningPrompt?: { hash: string; timestamp: string | null }
   /**
    * Full first non-injected user prompt. List scans omit this (payload/perf);
    * populated only by on-demand `aiVault.getFirstUserPrompt` re-parses for copy.
@@ -206,6 +216,8 @@ export type AiVaultScanIssue = {
 }
 
 export type AiVaultListArgs = {
+  /** Opt-in promises this client starts IDE history in a new CLI conversation. */
+  includeAntigravityIdeSessions?: boolean
   limit?: number
   unlimited?: boolean
   force?: boolean

@@ -203,6 +203,52 @@ describe('RepoRefMaintenance gating', () => {
     })
   })
 
+  it('maintains the pack index even when the loose-ref backlog is small', async () => {
+    const refs = await refsDirectoryWith(1)
+    const { maintenance, packRefs } = createHarness()
+    const maintainPackIndex = vi.fn(async () => {})
+    maintenance.arm(target('local::/fragmented/.git', refs, packRefs, { maintainPackIndex }))
+    await elapseQuietPeriod(maintenance)
+    expect(maintainPackIndex).toHaveBeenCalledTimes(1)
+    expect(packRefs).not.toHaveBeenCalled()
+  })
+
+  it('rechecks activity after config probes before starting object maintenance', async () => {
+    const refs = await refsDirectoryWith(THRESHOLD + 2)
+    let busy = false
+    const { maintenance, packRefs } = createHarness({ isBusy: () => busy })
+    const maintainPackIndex = vi.fn(async () => {})
+    maintenance.arm(
+      target('local::/busy-after-probe/.git', refs, packRefs, {
+        isOptedOut: async () => {
+          busy = true
+          return false
+        },
+        maintainPackIndex
+      })
+    )
+    await elapseQuietPeriod(maintenance)
+    expect(maintainPackIndex).not.toHaveBeenCalled()
+    expect(packRefs).not.toHaveBeenCalled()
+    maintenance.dispose()
+  })
+
+  it('rechecks activity after object maintenance before packing refs', async () => {
+    const refs = await refsDirectoryWith(THRESHOLD + 2)
+    let busy = false
+    const { maintenance, packRefs } = createHarness({ isBusy: () => busy })
+    maintenance.arm(
+      target('local::/busy-after-index/.git', refs, packRefs, {
+        maintainPackIndex: async () => {
+          busy = true
+        }
+      })
+    )
+    await elapseQuietPeriod(maintenance)
+    expect(packRefs).not.toHaveBeenCalled()
+    maintenance.dispose()
+  })
+
   it('does not run while the app is busy', async () => {
     const refs = await refsDirectoryWith(THRESHOLD + 2)
     let busy = true
@@ -232,12 +278,17 @@ describe('RepoRefMaintenance gating', () => {
     const refs = await refsDirectoryWith(THRESHOLD + 2)
     const { maintenance, spans, packRefs } = createHarness()
 
+    const maintainPackIndex = vi.fn(async () => {})
     maintenance.arm(
-      target('local::/opted-out/.git', refs, packRefs, { isOptedOut: async () => true })
+      target('local::/opted-out/.git', refs, packRefs, {
+        isOptedOut: async () => true,
+        maintainPackIndex
+      })
     )
     await elapseQuietPeriod(maintenance)
 
     expect(packRefs).not.toHaveBeenCalled()
+    expect(maintainPackIndex).not.toHaveBeenCalled()
     expect(attributesOf(spans[0])['repo.maintenance_outcome']).toBe('opted_out')
   })
 
@@ -286,6 +337,37 @@ describe('RepoRefMaintenance gating', () => {
 })
 
 describe('RepoRefMaintenance single-flight and backoff', () => {
+  it('serializes pack-index writes across execution hosts without merging their identities', async () => {
+    const refs = await refsDirectoryWith(1)
+    const { maintenance, packRefs } = createHarness()
+    const releases: (() => void)[] = []
+    const started: string[] = []
+    let concurrent = 0
+    let peak = 0
+    const indexTarget = (key: string) =>
+      target(key, refs, packRefs, {
+        maintainPackIndex: async () => {
+          started.push(key)
+          concurrent += 1
+          peak = Math.max(peak, concurrent)
+          await new Promise<void>((resolve) => releases.push(resolve))
+          concurrent -= 1
+        }
+      })
+    maintenance.arm(indexTarget('local::/repo/.git'))
+    maintenance.arm(indexTarget('wsl:Ubuntu::/repo/.git'))
+    await vi.advanceTimersByTimeAsync(QUIET_MS)
+    await until(() => concurrent === 1, 'the first index write')
+    releases.shift()?.()
+    await maintenance.whenAttemptSettled()
+    await untilWithTimers(() => started.length === 2, 'the second execution host')
+    releases.shift()?.()
+    await maintenance.whenAttemptSettled()
+    expect(peak).toBe(1)
+    expect(started).toEqual(['local::/repo/.git', 'wsl:Ubuntu::/repo/.git'])
+    expect(packRefs).not.toHaveBeenCalled()
+  })
+
   it('runs one repository at a time', async () => {
     const refs = await refsDirectoryWith(THRESHOLD + 2)
     let concurrent = 0
