@@ -53,6 +53,16 @@ const rules = (session: WorkspaceSessionState) =>
   )
 
 describe('Loader precedence for stored data that disagrees with itself, and its change report', () => {
+  it('reads an absent editor or browser map as an empty one, which is not a change', () => {
+    // Main's row mint stores an SSH partition without these maps; the Serializer always writes them.
+    const stored = addWorkspace(emptySession(), SSH_KEY, [
+      { id: 'g1', tabs: [{ id: 'tab-a', leaves: [[leaf(1), 'pty-a']] }] }
+    ])
+    delete stored.openFilesByWorktree
+    delete stored.browserTabsByWorktree
+    expect(changed(load(stored))).toEqual([])
+  })
+
   it('gives terminal rows saved without a tab bar (headless runtime) an entry in a new first group', () => {
     const stored = twoTabs()
     stored.unifiedTabs = {}
