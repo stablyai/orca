@@ -1,6 +1,7 @@
 import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 import { parseClaudeModelList } from './claude-model-list-probe'
 import { labelFromModelId } from './model-id-label'
+import { iterateProcessOutputLines } from './process-output-field-scanner'
 import type { CommitMessageModel, ThinkingLevel } from './commit-message-agent-spec'
 
 export const COMMIT_MESSAGE_MODEL_JSON_STRUCTURE_LIMITS = {
@@ -38,27 +39,6 @@ function uniqueModels(models: CommitMessageModel[]): CommitMessageModel[] {
     seen.add(model.id)
     return true
   })
-}
-
-function* iterateModelOutputLines(output: string): Generator<string> {
-  let lineStart = 0
-
-  for (let index = 0; index < output.length; index++) {
-    const code = output.charCodeAt(index)
-    if (code !== 10 && code !== 13) {
-      continue
-    }
-
-    yield output.slice(lineStart, index)
-    if (code === 13 && output.charCodeAt(index + 1) === 10) {
-      index++
-    }
-    lineStart = index + 1
-  }
-
-  if (lineStart <= output.length) {
-    yield output.slice(lineStart)
-  }
 }
 
 export function withOpenAiThinking(
@@ -131,7 +111,7 @@ export function parseCodexModels(stdout: string): CommitMessageModel[] {
 
 export function parseLineModels(stdout: string): CommitMessageModel[] {
   const models: CommitMessageModel[] = []
-  for (const rawLine of iterateModelOutputLines(stdout)) {
+  for (const rawLine of iterateProcessOutputLines(stdout)) {
     const id = rawLine.trim()
     if (id.length === 0 || id.includes(' ')) {
       continue
@@ -147,7 +127,7 @@ export function parseLineModels(stdout: string): CommitMessageModel[] {
 
 export function parseCursorModels(stdout: string): CommitMessageModel[] {
   const models: CommitMessageModel[] = []
-  for (const rawLine of iterateModelOutputLines(stdout)) {
+  for (const rawLine of iterateProcessOutputLines(stdout)) {
     const match = /^([^\s]+)\s+-\s+(.+)$/.exec(rawLine.trim())
     if (!match) {
       continue
@@ -163,7 +143,7 @@ export function parseCursorModels(stdout: string): CommitMessageModel[] {
 
 export function parseAntigravityModels(stdout: string): CommitMessageModel[] {
   const models: CommitMessageModel[] = []
-  for (const rawLine of iterateModelOutputLines(stdout)) {
+  for (const rawLine of iterateProcessOutputLines(stdout)) {
     const line = rawLine.trim()
     const separator = line.indexOf('\t')
     const id = (separator === -1 ? line : line.slice(0, separator)).trim()

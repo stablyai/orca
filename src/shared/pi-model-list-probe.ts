@@ -1,5 +1,6 @@
 import type { CommitMessageModel } from './commit-message-agent-spec'
 import { labelFromModelId } from './model-id-label'
+import { getProcessOutputFields, iterateProcessOutputLines } from './process-output-field-scanner'
 
 /** `pi --list-models` prints the table these parsers read. */
 export const PI_MODEL_LIST_ARGS = ['--list-models']
@@ -22,7 +23,7 @@ export type PiModelTableRow = {
 }
 
 export function parsePiModelTableRow(line: string): PiModelTableRow | null {
-  const parts = getPiModelTableFields(line, 6)
+  const parts = getProcessOutputFields(line, 6)
   if (parts.length < 6 || parts[0] === 'provider') {
     return null
   }
@@ -37,7 +38,7 @@ export function parsePiModelTableRow(line: string): PiModelTableRow | null {
 export function parsePiModelList(stdout: string): CommitMessageModel[] {
   const models: CommitMessageModel[] = []
   const seen = new Set<string>()
-  for (const rawLine of iteratePiModelOutputLines(stdout)) {
+  for (const rawLine of iterateProcessOutputLines(stdout)) {
     const row = parsePiModelTableRow(rawLine)
     if (!row) {
       continue
@@ -62,66 +63,4 @@ export function parsePiModelList(stdout: string): CommitMessageModel[] {
     })
   }
   return models
-}
-
-function* iteratePiModelOutputLines(output: string): Generator<string> {
-  let lineStart = 0
-
-  for (let index = 0; index < output.length; index++) {
-    const code = output.charCodeAt(index)
-    if (code !== 10 && code !== 13) {
-      continue
-    }
-
-    yield output.slice(lineStart, index)
-    if (code === 13 && output.charCodeAt(index + 1) === 10) {
-      index++
-    }
-    lineStart = index + 1
-  }
-
-  if (lineStart <= output.length) {
-    yield output.slice(lineStart)
-  }
-}
-
-// Why: model discovery output can include paste-sized noisy lines; only the first fields matter.
-function getPiModelTableFields(line: string, maxFields: number): string[] {
-  const fields: string[] = []
-  let tokenStart = -1
-
-  for (let index = 0; index <= line.length; index += 1) {
-    const isEnd = index === line.length
-    if (!isEnd && !isPiModelTableWhitespace(line.charCodeAt(index))) {
-      if (tokenStart === -1) {
-        tokenStart = index
-      }
-      continue
-    }
-    if (tokenStart !== -1) {
-      fields.push(line.slice(tokenStart, index))
-      tokenStart = -1
-      if (fields.length >= maxFields) {
-        break
-      }
-    }
-  }
-
-  return fields
-}
-
-function isPiModelTableWhitespace(code: number): boolean {
-  return (
-    code === 32 ||
-    (code >= 9 && code <= 13) ||
-    code === 160 ||
-    code === 5760 ||
-    (code >= 8192 && code <= 8202) ||
-    code === 8232 ||
-    code === 8233 ||
-    code === 8239 ||
-    code === 8287 ||
-    code === 12288 ||
-    code === 65279
-  )
 }

@@ -17,7 +17,7 @@ const PI_THINKING: CatalogOption = {
       value: level.id,
       label: level.label
     })),
-    defaultValue: 'medium'
+    defaultValue: 'low'
   },
   apply: {
     launchArgs: (value) => ['--thinking', String(value)],

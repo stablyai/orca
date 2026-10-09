@@ -25,6 +25,35 @@ describe('getAgentModelProbeSpec', () => {
     expect(parsed).toEqual([{ id: 'grok-4.5', label: 'Grok 4.5', isDefault: true }])
   })
 
+  it('resolves devin as a discovery-only probe wired to its JSON listing', () => {
+    const spec = getAgentModelProbeSpec('devin')
+    expect(spec).toMatchObject({
+      id: 'devin',
+      binary: 'devin',
+      modelSource: 'dynamic',
+      models: [],
+      defaultModelId: ''
+    })
+    // Pinning binary and args alone would still pass with the wrong parser attached,
+    // leaving discovery to publish nothing on every host.
+    expect(spec?.modelDiscovery).toMatchObject({
+      binary: 'devin',
+      args: ['models', 'list', '--format', 'json']
+    })
+    expect(
+      spec?.modelDiscovery?.parse(
+        JSON.stringify({
+          families: [
+            {
+              family_label: 'SWE-2',
+              variants: [{ model_uid: 'swe-2-medium', label: 'SWE-2 Medium' }]
+            }
+          ]
+        })
+      )
+    ).toEqual([{ id: 'swe-2-medium', label: 'SWE-2 Medium', description: 'SWE-2' }])
+  })
+
   it('keeps the grok probe default in step with the catalog seed', () => {
     expect(getAgentModelProbeSpec('grok')!.defaultModelId).toBe(
       GROK_SESSION_OPTION_CATALOG.models[0].id
