@@ -120,7 +120,8 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
 
   it('rejects at once and cleans up when the daemon closes the connection', async () => {
     const result = await roundTrip(fakeDaemon('(socket) => socket.destroy()'), 10_000)
-    expect(result.error?.message).toMatch(/closed the control connection/)
+    // A destroyed socket with unread input may surface as a reset instead of a clean close.
+    expect(result.error?.message).toMatch(/closed the control connection|ECONNRESET/)
     expect(result.elapsedMs).toBeLessThan(10_000)
     expect(result.daemonAlive).toBe(false)
     expect(result.scratchDirs).toEqual([])

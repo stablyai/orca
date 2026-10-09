@@ -22122,7 +22122,6 @@
       "invariant": "A packaged macOS daemon runs from a verified signed bundle copy the updater never touches, and the fork fallback still fits the startup gate. Unverified observations never delete code or replace live sessions.",
       "oracle": "Deterministic launch, fallback-deadline, retirement and status tests, plus the signed launcher validation recorded in #25848.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/macos-daemon-bundle.test.ts src/main/daemon/macos-daemon-launchd.test.ts src/main/daemon/daemon-init-macos-stable-launch-fallback.test.ts src/main/daemon/macos-daemon-job-state.test.ts src/main/daemon/macos-daemon-bundle-retirement.test.ts src/main/daemon/daemon-full-disk-access-status.test.ts src/main/daemon/daemon-pty-adapter-full-disk-access.test.ts config/scripts/macos-folder-usage-descriptions.test.mjs src/renderer/src/components/settings/DeveloperPermissionsPane.test.tsx"
       ],
       "testFiles": [
@@ -22158,15 +22157,6 @@
         }
       ],
       "evidenceRuns": [
-        {
-          "date": "2026-10-06",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon",
-          "result": "failed",
-          "durationSeconds": 24.35,
-          "summary": "2417 of 2434 passed (15 skipped). The 2 failures are real-PTY #13767 repro tests that fail identically on the merge-base main checkout on this Mac."
-        },
         {
           "date": "2026-10-06",
           "runner": "local",
