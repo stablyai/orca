@@ -34,9 +34,15 @@ import { listedRow, listedExternalEntries } from './automations-page-listed-item
 import {
   makeAutomation,
   makeExternalManager,
+  makeWorktree,
   REPO_ID,
   WORKSPACE_ID
 } from './automations-page-fixtures'
+import type { Repo } from '../../../../shared/repo-types'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
+import { repoWithFetchedOwner } from '../../store/repos/owner-routing'
+import { setupWithFetchedOwner } from '../../store/projects/project-host-routing'
+import { withRepoHostOwnership } from '../../store/slices/worktrees/listing/worktree-host-ownership'
 
 installAutomationsPageHarness()
 
@@ -342,6 +348,75 @@ describe('AutomationsPage mutations', () => {
       expectedOwner: SELF_PRECONDITION
     })
   })
+
+  it.each([false, true])(
+    'runs the captured local target with a same-ID SSH sibling (first: %s)',
+    async (first) => {
+      const target = { kind: 'local' } as const
+      const raw: Repo = {
+        id: REPO_ID,
+        path: '/local',
+        displayName: 'Local selected',
+        badgeColor: 'blue',
+        addedAt: 1
+      }
+      const local = repoWithFetchedOwner(raw, target)
+      const ssh = repoWithFetchedOwner({ ...raw, executionHostId: 'ssh:b', path: '/ssh' }, target)
+      const setup: ProjectHostSetup = {
+        id: 'shared-setup',
+        projectId: 'project-1',
+        hostId: 'local',
+        repoId: REPO_ID,
+        path: local.path,
+        displayName: 'Local selected',
+        setupState: 'ready',
+        setupMethod: 'legacy-repo',
+        createdAt: 1,
+        updatedAt: 1
+      }
+      const localWorkspace = withRepoHostOwnership(
+        makeWorktree({ hostId: 'local', path: '/local/checkout' }),
+        'local'
+      )
+      const sshWorkspace = withRepoHostOwnership(
+        makeWorktree({ hostId: 'ssh:b', path: '/ssh/checkout' }),
+        'ssh:b'
+      )
+      const automation = makeAutomation({
+        id: 'a-1',
+        workspaceMode: 'existing',
+        workspaceId: WORKSPACE_ID,
+        runContext: {
+          kind: 'workspace-run',
+          projectId: setup.projectId,
+          projectHostSetupId: setup.id,
+          repoId: REPO_ID,
+          path: local.path,
+          hostId: 'local'
+        }
+      })
+      mocks.state.repos = first ? [local, ssh] : [ssh, local]
+      mocks.state.projectHostSetups = [
+        setupWithFetchedOwner(setup, target),
+        setupWithFetchedOwner({ ...setup, hostId: 'ssh:b', path: ssh.path }, target)
+      ]
+      mocks.state.worktreesByRepo = { [REPO_ID]: [sshWorkspace, localWorkspace] }
+      mocks.repoMap = new Map([[REPO_ID, ssh]])
+      mocks.worktreeMap = new Map([[WORKSPACE_ID, sshWorkspace]])
+      api.automations.list.mockResolvedValue([automation])
+      scopedList([automation])
+      await renderPage()
+      await act(async () => {
+        await mocks.listPanel?.runNow(listedRow(automation.id))
+      })
+      expect(api.automations.runNow).toHaveBeenCalledOnce()
+      expect(api.automations.runNow).toHaveBeenCalledWith({
+        id: automation.id,
+        expectedOwner: SELF_PRECONDITION
+      })
+      expect(mocks.toastError).not.toHaveBeenCalled()
+    }
+  )
 
   it('routes enable/disable to an update on the owning authority', async () => {
     const automation = makeAutomation({ id: 'a-1', enabled: true })

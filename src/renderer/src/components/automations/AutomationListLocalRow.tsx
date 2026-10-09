@@ -135,9 +135,13 @@ export function AutomationListLocalRow({
   const allows = (row: AutomationListRow, action: AutomationRowAction): boolean =>
     isActionEnabled?.(row, action) ?? true
   const { automation } = row
-  const automationRepo = repoForRow?.(row) ?? repoMap.get(getAutomationRunRepoId(automation))
+  const automationRepo = repoForRow
+    ? repoForRow(row)
+    : repoMap.get(getAutomationRunRepoId(automation))
   const automationWorktree = automation.workspaceId
-    ? (worktreeForRow?.(row, automationRepo) ?? worktreeMap.get(automation.workspaceId))
+    ? worktreeForRow
+      ? worktreeForRow(row, automationRepo)
+      : worktreeMap.get(automation.workspaceId)
     : null
   const automationRunAvailability = getAutomationTargetAvailability({
     automation,

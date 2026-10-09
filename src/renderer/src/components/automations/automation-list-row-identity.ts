@@ -24,6 +24,8 @@ import {
 } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { getRepoCatalogOwnerHostId } from '../../store/projects/project-catalog-owner'
+import { worktreeMatchesHost } from '../../store/slices/worktrees/listing/worktree-host-ownership'
 
 export type AutomationListRow = {
   /** Authority-qualified and incarnation-free; see the module note. */
@@ -80,15 +82,27 @@ export function automationRepoForRow(
   if (!authority) {
     return fallback.get(repoId)
   }
-  return repos.find((repo) => {
-    const host = getRepoExecutionHostId(repo)
-    return (
-      repo.id === repoId &&
-      (authority.kind === 'runtime'
-        ? host === `runtime:${encodeURIComponent(authority.environmentId)}`
-        : !host.startsWith('runtime:'))
-    )
+  const publisherHostId =
+    authority.kind === 'runtime'
+      ? `runtime:${encodeURIComponent(authority.environmentId)}`
+      : 'local'
+  const candidates = repos.filter(
+    (repo) => repo.id === repoId && getRepoCatalogOwnerHostId(repo) === publisherHostId
+  )
+  const context = row.automation.runContext
+  if (!context) {
+    return candidates[0]
+  }
+  const matching = candidates.filter((repo) => {
+    const rawHost = repo.authoritativeExecutionHostId ?? getRepoExecutionHostId(repo)
+    const legacyServerLocal =
+      !repo.authoritativeExecutionHostId &&
+      authority.kind === 'runtime' &&
+      rawHost === publisherHostId &&
+      context.hostId === 'local'
+    return repo.path === context.path && (rawHost === context.hostId || legacyServerLocal)
   })
+  return matching.length === 1 ? matching[0] : undefined
 }
 
 export function automationWorktreeForRow(
@@ -98,14 +112,27 @@ export function automationWorktreeForRow(
   fallback: ReadonlyMap<string, Worktree>,
   workspaceId: string | null | undefined = row.automation.workspaceId
 ): Worktree | undefined {
-  if (!workspaceId || !row.catalogRef || !repo) {
-    return workspaceId ? fallback.get(workspaceId) : undefined
+  if (!workspaceId) {
+    return undefined
+  }
+  if (!row.catalogRef) {
+    return fallback.get(workspaceId)
+  }
+  if (!repo) {
+    return undefined
   }
   const hostId = getRepoExecutionHostId(repo)
-  return Object.values(worktreesByRepo)
+  const rawHostId = repo.authoritativeExecutionHostId ?? hostId
+  const candidates = Object.values(worktreesByRepo)
     .flat()
-    .find(
+    .filter(
       (worktree) =>
-        worktree.id === workspaceId && getWorktreeExecutionHostId(worktree, repo) === hostId
+        worktree.id === workspaceId &&
+        worktreeMatchesHost(worktree, hostId) &&
+        (worktree.identity
+          ? worktree.identity.executionHostId === rawHostId
+          : getWorktreeExecutionHostId(worktree, repo) === rawHostId ||
+            (rawHostId === 'local' && worktree.hostId === getRepoCatalogOwnerHostId(repo)))
     )
+  return candidates.length === 1 ? candidates[0] : undefined
 }
