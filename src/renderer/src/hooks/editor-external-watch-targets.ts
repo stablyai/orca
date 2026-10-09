@@ -32,7 +32,8 @@ export type EditorExternalWatchTargetState = Pick<
   | 'sshConnectionStates'
   | 'folderWorkspaces'
   | 'projectGroups'
->
+> &
+  Partial<Pick<AppState, 'rightSidebarEffectiveTab'>>
 
 type WatchedTargetsSnapshot = {
   targets: EditorExternalWatchTarget[]
@@ -46,6 +47,7 @@ let cachedActiveWorktreeId: string | null = null
 let cachedRuntimeEnvironmentId: string | undefined
 let cachedRightSidebarOpen: boolean | null = null
 let cachedRightSidebarTab: AppState['rightSidebarTab'] | null = null
+let cachedRightSidebarEffectiveTab: AppState['rightSidebarEffectiveTab'] | undefined
 let cachedRightSidebarExplorerView: AppState['rightSidebarExplorerView'] | null = null
 let cachedGitStatusHugeByWorktree: AppState['gitStatusHugeByWorktree'] | null = null
 let cachedSshConnectionStates: AppState['sshConnectionStates'] | null = null
@@ -119,6 +121,7 @@ export function selectEditorExternalWatchTargets(
     cachedRuntimeEnvironmentId === runtimeEnvironmentId &&
     cachedRightSidebarOpen === state.rightSidebarOpen &&
     cachedRightSidebarTab === state.rightSidebarTab &&
+    cachedRightSidebarEffectiveTab === state.rightSidebarEffectiveTab &&
     cachedRightSidebarExplorerView === state.rightSidebarExplorerView &&
     cachedGitStatusHugeByWorktree === state.gitStatusHugeByWorktree &&
     cachedSshConnectionStates === state.sshConnectionStates &&
@@ -158,11 +161,13 @@ export function selectEditorExternalWatchTargets(
     !state.gitStatusHugeByWorktree[activeWorktreeId] &&
     (!activeRepo.connectionId ||
       state.sshConnectionStates.get(activeRepo.connectionId)?.status === 'connected')
+  // Why: the stored tab can be hidden for this workspace (Source Control on a folder) while Explorer renders as the fallback.
+  const shownRightSidebarTab = state.rightSidebarEffectiveTab ?? state.rightSidebarTab
   const activeWorktreeNeedsSidebarWatch =
     activeWorktreeId !== null &&
     state.rightSidebarOpen &&
-    ((state.rightSidebarTab === 'explorer' && state.rightSidebarExplorerView === 'files') ||
-      (state.rightSidebarTab === 'source-control' && sourceControlCanConsumeWatch))
+    ((shownRightSidebarTab === 'explorer' && state.rightSidebarExplorerView === 'files') ||
+      (shownRightSidebarTab === 'source-control' && sourceControlCanConsumeWatch))
   if (activeWorktreeNeedsSidebarWatch) {
     // Why: this app-level watcher owns Explorer/Source-Control subscriptions so downstream consumers don't fight over watch/unwatch IPC.
     let owners = targetOwnersByWorktreeId.get(activeWorktreeId)
@@ -245,6 +250,7 @@ export function selectEditorExternalWatchTargets(
   cachedRuntimeEnvironmentId = runtimeEnvironmentId
   cachedRightSidebarOpen = state.rightSidebarOpen
   cachedRightSidebarTab = state.rightSidebarTab
+  cachedRightSidebarEffectiveTab = state.rightSidebarEffectiveTab
   cachedRightSidebarExplorerView = state.rightSidebarExplorerView
   cachedGitStatusHugeByWorktree = state.gitStatusHugeByWorktree
   cachedSshConnectionStates = state.sshConnectionStates

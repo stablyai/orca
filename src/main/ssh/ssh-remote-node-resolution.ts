@@ -160,12 +160,13 @@ export async function tryResolveViaLoginShell<T>(
       return null
     }
 
+    const probe = buildSshLoginShellCommand(shell, 'command -v node')
     const nodePath = await execCommand(
       conn,
-      buildSshLoginShellCommand(shell, 'command -v node'),
+      probe.command,
       commandOptions({ wrapCommand: false, timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS }, options)
     )
-    const candidate = nodePath.trim().split('\n')[0]
+    const candidate = probe.readStdout(nodePath)?.trim().split('\n')[0]
     if (!candidate) {
       return null
     }
@@ -287,14 +288,14 @@ function throwWindowsNodeNotFound(options?: RemoteNodeResolutionOptions): never 
   throwIfAborted(options)
   throw new RemoteNodeNotFoundError(
     [
-      'Node.js not found on remote host. Orca relay requires Node.js 24+ and npm.',
+      'Node.js not found on remote host. Orca relay requires Node.js 18+ and npm.',
       '',
-      'Install Node.js 24+ on the remote host, then reconnect:',
+      'Install Node.js 18+ on the remote host, then reconnect:',
       '  winget install OpenJS.NodeJS.LTS',
       '  choco install nodejs-lts',
       '',
       'Verify the remote runtime before reconnecting:',
-      '  node --version  # must be v24 or newer',
+      '  node --version  # must be v18 or newer',
       '  npm --version',
       '',
       'If those package managers are unavailable, install an LTS release from https://nodejs.org/.'

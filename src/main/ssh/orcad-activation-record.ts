@@ -158,7 +158,12 @@ export function withActivatedVersion(
   appVersion?: string
 ): OrcadActivationRecord {
   const same = record.active === version
-  const previousAppVersion = same ? record.previousAppVersion : record.activeAppVersion
+  // A stopped record keeps activeAppVersion with nothing active; it names no `previous` here.
+  const previousAppVersion = same
+    ? record.previousAppVersion
+    : record.active
+      ? record.activeAppVersion
+      : undefined
   return {
     schemaVersion: ORCAD_ACTIVATION_SCHEMA_VERSION,
     active: version,
@@ -202,6 +207,22 @@ export function withDeactivatedVersion(record: OrcadActivationRecord): OrcadActi
     activatedAt: null,
     // No version is active, so there is nothing a pre-activation snapshot could roll back to.
     snapshot: null
+  }
+}
+
+/**
+ * The deactivated record as committed to the host. Never journaled: released peers require a stop
+ * journal's `recordAfter` to equal their core-only `withDeactivatedVersion`, byte for byte.
+ */
+export function withDeactivatedVersionCommitted(
+  record: OrcadActivationRecord
+): OrcadActivationRecord {
+  return {
+    ...withDeactivatedVersion(record),
+    // Why kept with nothing active: the stopped build may have migrated the host's state, and
+    // released planners already skip a host whose activeAppVersion is newer than theirs.
+    ...(record.activeAppVersion ? { activeAppVersion: record.activeAppVersion } : {}),
+    ...(record.rolledBackFrom ? { rolledBackFrom: record.rolledBackFrom } : {})
   }
 }
 

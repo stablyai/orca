@@ -12315,7 +12315,11 @@
             "confirmRestore": "스냅샷 복원 및 다시 시작",
             "keepState": "상태 유지",
             "statusUnknown": "상태 알 수 없음",
-            "checking": "확인 중…"
+            "checking": "확인 중…",
+            "forget": "잊기…",
+            "confirmForget": "이 데스크톱에서 잊기",
+            "keepLinked": "연결 유지",
+            "forgetDescription": "호스트에 연결하지 않고 여기서 이 서버의 연결을 해제합니다. 호스트가 다시 살아나면 서버가 그곳에서 계속 실행 중일 수 있습니다."
           },
           "title": "관리형 서버",
           "description": "Orca는 빈 SSH 호스트에 서버를 설치하고 실행하며 최신 상태로 유지합니다.",

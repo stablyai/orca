@@ -3443,7 +3443,7 @@
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "Reconnexion au runtime distant",
             "disconnectedTitle": "Runtime distant déconnecté",
-            "retryingBody": "Orca réessaiera pendant une minute au maximum. Ce terminal reprendra si la connexion revient.",
+            "retryingBody": "Orca réessaie automatiquement. Ce terminal reprendra si la connexion revient.",
             "disconnectedBody": "Les tentatives automatiques sont interrompues. Reconnectez-vous pour reprendre cette session de terminal.",
             "reconnectButton": "Reconnecter"
           },
@@ -12416,7 +12416,11 @@
             "confirmRestore": "Restaurer l'instantané et redémarrer",
             "keepState": "Conserver l'état",
             "statusUnknown": "Statut inconnu",
-            "checking": "Vérification…"
+            "checking": "Vérification…",
+            "forget": "Oublier…",
+            "confirmForget": "Oublier sur ce poste",
+            "keepLinked": "Garder lié",
+            "forgetDescription": "Dissocie ce serveur ici sans contacter son hôte. Si l'hôte revient, le serveur y tourne peut-être encore."
           },
           "title": "Serveurs gérés",
           "description": "Orca installe et exécute un serveur sur un hôte SSH vide, et le maintient à jour.",

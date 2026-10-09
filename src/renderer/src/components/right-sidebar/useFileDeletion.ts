@@ -9,6 +9,10 @@ import { runBatchDeletion, selectDeletionRoots } from './file-explorer-batch-del
 import type { TreeNode } from './file-explorer-types'
 import { captureFileExplorerOperationGuard } from './file-explorer-operation-owner'
 import {
+  getFileExplorerDeletionEditors,
+  type FileExplorerDeletionEditor
+} from './file-explorer-deletion-editors'
+import {
   getFileDeleteErrorMessage,
   isLocalDeleteNode,
   needsRemoteDeleteConfirmation
@@ -27,11 +31,7 @@ import { translate } from '@/i18n/i18n'
 
 type UseFileDeletionParams = {
   activeWorktreeId: string | null
-  openFiles: {
-    id: string
-    filePath: string
-    isDirty?: boolean
-  }[]
+  openFiles: FileExplorerDeletionEditor[]
   closeFile: (fileId: string) => void
   refreshDir: (dirPath: string) => Promise<void>
   setSelectedPaths: (paths: Set<string>) => void
@@ -106,8 +106,12 @@ export function useFileDeletion({
           }
         }
 
-        const filesToClose = openFiles.filter((file) =>
-          isPathEqualOrDescendant(file.filePath, node.path)
+        const operationRoute = operationGuard.assertCurrent()
+        const filesToClose = getFileExplorerDeletionEditors(
+          useAppStore.getState(),
+          openFiles,
+          node.path,
+          operationRoute
         )
         // Why: force-save any dirty buffers before trashing so the undo snapshot
         // reads the user's latest edits from disk — not an older version that
@@ -122,7 +126,7 @@ export function useFileDeletion({
         await Promise.all(filesToClose.map((file) => requestEditorSaveQuiesce({ fileId: file.id })))
 
         // Why: confirmation and autosave can outlive a reconnect or graph replacement; mutations require the owner generation that produced the row.
-        const operationRoute = operationGuard.assertCurrent()
+        operationGuard.assertCurrent()
         const state = useAppStore.getState()
         const worktree = activeWorktreeId ? state.getKnownWorktreeById(activeWorktreeId) : null
         const fileContext = {

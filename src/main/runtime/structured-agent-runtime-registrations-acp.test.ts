@@ -16,7 +16,7 @@ describe('ACP agents in the runtime registrations', () => {
       accountHomeVariable: 'GROK_HOME',
       capabilities: {
         rewind: false,
-        compact: false,
+        compact: true,
         threadGoal: false,
         contextUsage: true,
         imagePrompts: false,

@@ -2,7 +2,7 @@ import { createElement, useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { TabHoverCard } from './TabHoverCard'
 import { basename } from '@/lib/path'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { renameFileOnDisk } from '@/lib/rename-file'
@@ -90,6 +90,15 @@ export default function EditorFileTab({
   const isConflictReview = file.mode === 'conflict-review'
   const isCheckDetails = file.mode === 'check-details'
   const isMarkdownPreviewTab = file.mode === 'markdown-preview'
+  const HoverIcon = isConflictReview
+    ? ShieldAlert
+    : isCheckDetails
+      ? ListChecks
+      : isDiff
+        ? GitCompareArrows
+        : isMarkdownPreviewTab
+          ? Eye
+          : FileIcon
   // Why: only deleted/renamed mean the file is gone from its path, which is
   // what strikethrough conveys. 'changed' keeps a normal label — its surface
   // is the changed-on-disk banner inside the editor.
@@ -151,11 +160,8 @@ export default function EditorFileTab({
     // so one user action cannot start a second rename against the old path.
     renameCancelledRef.current = true
     setIsRenaming(false)
-    if (!newName) {
-      return
-    }
     const oldName = basename(file.filePath)
-    if (newName === oldName) {
+    if (!newName || newName === oldName) {
       return
     }
     const worktreePath = getUntitledFileRoot(file, worktree?.path ?? null)
@@ -398,16 +404,14 @@ export default function EditorFileTab({
         {isRenaming || menuOpen ? (
           tabRoot
         ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>{tabRoot}</TooltipTrigger>
-            <TooltipContent
-              side="bottom"
-              sideOffset={6}
-              className="max-w-80 whitespace-normal break-words text-left"
-            >
-              {tabLabel}
-            </TooltipContent>
-          </Tooltip>
+          <TabHoverCard
+            title={tabLabel}
+            programName={translate('tabHoverCard.editor', 'Editor')}
+            icon={createElement(HoverIcon, { className: 'size-4' })}
+            description={file.relativePath}
+          >
+            {tabRoot}
+          </TabHoverCard>
         )}
       </div>
 

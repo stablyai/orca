@@ -199,8 +199,8 @@ describe('verifyPinnedRelayInstall', () => {
       glibc: { major: 2, minor: 31 },
       fullVersion: '0.1.0+0123456789ab',
       addons: { dir: '/tmp/a', digest: 'd', dispose: async () => {} },
-      nodePath: '/opt/node24/bin/node',
-      hostNode: { version: { major: 24, minor: 20 }, napi: 9 }
+      nodePath: '/opt/node18/bin/node',
+      hostNode: { version: { major: 18, minor: 20 }, napi: 9 }
     }
     vi.mocked(runPinnedRuntimeSelfTest).mockResolvedValueOnce({
       verdict: 'refused',
@@ -213,7 +213,7 @@ describe('verifyPinnedRelayInstall', () => {
     expect(runPinnedRuntimeSelfTest).toHaveBeenCalledWith(
       conn,
       context.remoteRelayDir,
-      '/opt/node24/bin/node',
+      '/opt/node18/bin/node',
       undefined,
       { host, expectPinnedVersion: false }
     )

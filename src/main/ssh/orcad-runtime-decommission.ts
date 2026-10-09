@@ -4,6 +4,7 @@
  */
 import type {
   OrcadManagedCancelStopResult,
+  OrcadManagedForgetResult,
   OrcadManagedStopResult
 } from '../../shared/orcad-managed-runtime'
 import type { OrcadDaemonRetirementVerdict } from '../../shared/orcad-stop-request'
@@ -61,7 +62,7 @@ export function stopManagedOrcadEnvironment(
     if ('outcome' in stopped) {
       return stopped
     }
-    await unlinkStoppedEnvironment(userDataPath, environment, deployment, policy)
+    await unlinkEnvironmentLocally(userDataPath, environment, deployment, policy)
     return {
       outcome: 'unlinked',
       verdict: 'exited',
@@ -69,6 +70,34 @@ export function stopManagedOrcadEnvironment(
       sshTargetId: deployment.sshTargetId,
       stoppedVersion: stopped.version,
       retirement: stopped.retirement
+    }
+  })
+}
+
+/**
+ * Stop's local half alone, for a host that can no longer answer (P1-E). Nothing on the host is
+ * touched or assumed: a server still running there keeps running, and a later connect relinks it.
+ */
+export function forgetManagedOrcadEnvironment(
+  userDataPath: string,
+  args: { selector: string },
+  policy: ManagedOrcadStopPolicy
+): Promise<OrcadManagedForgetResult> {
+  return withManagedOrcadLifecycle(userDataPath, args.selector, async (managed) => {
+    const { environment, deployment } = managed
+    if (policy.isActiveEnvironment(environment.id)) {
+      return refuse(
+        'live',
+        'orcad_forget_active_environment',
+        'Choose another Active Server in Advanced before forgetting this server.'
+      )
+    }
+    await unlinkEnvironmentLocally(userDataPath, environment, deployment, policy)
+    return {
+      outcome: 'forgotten',
+      verdict: 'unverifiable',
+      environmentId: environment.id,
+      sshTargetId: deployment.sshTargetId
     }
   })
 }
@@ -132,7 +161,7 @@ async function stopRemote(
   return { version: result.version, retirement: result.retirement }
 }
 
-async function unlinkStoppedEnvironment(
+async function unlinkEnvironmentLocally(
   userDataPath: string,
   environment: KnownRuntimeEnvironment,
   deployment: OrcadDeploymentLink,

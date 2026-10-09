@@ -3,8 +3,8 @@
  *
  *   A       Orca's pinned Node + slot prebuilds
  *   B       a compat pinned Node + compat addons (chosen only when a compat runtime exists)
- *   C       the host's Node >= 24 + Orca's N-API prebuilds, no npm
- *   legacy  the host's Node >= 24 + npm install, unsupported; the only rung when the user opts in
+ *   C       the host's Node >= 18 + Orca's N-API prebuilds, no npm
+ *   legacy  the host's Node + npm install, unsupported; the only rung when the user opts in
  *   D       nothing runs: plain SSH terminals and SFTP, recording the classified reason
  *
  * The ladder steps down on a classified refusal (a `PinnedRelayFallbackError`), including an
@@ -154,7 +154,7 @@ const REMOTE_RUNTIME_UNAVAILABLE_MESSAGES: Record<RemoteRuntimeUnavailableReason
     'unavailable until an administrator allows exec there.',
   no_runtime:
     "Orca can't run its remote runtime on this host: its bundled Node.js was refused and no " +
-    'Node.js 24 or newer with npm was found on the host. Install Node.js 24+ and npm on the ' +
+    'Node.js 18 or newer with npm was found on the host. Install Node.js 18+ and npm on the ' +
     'host, then reconnect.'
 }
 
@@ -166,15 +166,15 @@ const REMEMBERED_NOEXEC_MESSAGE =
 
 const WINDOWS_NO_HOST_NODE_MESSAGE =
   "Orca can't run its remote runtime on this Windows host: its bundled Node.js could not run, " +
-  'and no Node.js 24 or newer with npm was found on the host to run on instead. Allow ' +
-  "Orca's Node.js through security software or application control, or install Node.js 24+ " +
+  'and no Node.js 18 or newer with npm was found on the host to run on instead. Allow ' +
+  "Orca's Node.js through security software or application control, or install Node.js 18+ " +
   'on the host, then reconnect.'
 
 // Why its own wording: the bundled Node never reached the host, so nothing about the host refused it.
 const CLIENT_ARTIFACTS_NO_HOST_NODE_MESSAGE =
   "Orca can't run its remote runtime on this host: this copy of Orca could not prepare its bundled " +
-  'Node.js, and no Node.js 24 or newer was found on the host to run on instead. Install Node.js ' +
-  '24+ and npm on the host, or reconnect once Orca can fetch its runtime.'
+  'Node.js, and no Node.js 18 or newer was found on the host to run on instead. Install Node.js ' +
+  '18+ and npm on the host, or reconnect once Orca can fetch its runtime.'
 
 // Why its own wording: the unsupported host-Node fallback ran and the host answered it with a failure.
 const HOST_NODE_FALLBACK_FAILED_MESSAGE =

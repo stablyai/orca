@@ -18,6 +18,7 @@ import { writeOrcadActivationTransaction } from './orcad-activation-transaction-
 import { withOrcadActivationLock } from './orcad-activation-lock'
 import { orcadActivationFenceRefusal } from './orcad-activation-fence-hold'
 import {
+  committedOrcadDecommissionRecord,
   createOrcadDecommissionTransaction,
   withOrcadDecommissionProcessExited,
   withOrcadDecommissionStopDispatched
@@ -123,7 +124,7 @@ export async function decommissionRemoteOrcad(
       }
       transaction = withOrcadDecommissionProcessExited(transaction, now())
       await writeOrcadActivationTransaction(options, transaction)
-      await writeOrcadActivationRecord(options, transaction.recordAfter)
+      await writeOrcadActivationRecord(options, committedOrcadDecommissionRecord(transaction))
       return {
         outcome: 'decommissioned',
         version: activeVersion,

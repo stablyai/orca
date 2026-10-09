@@ -40,11 +40,16 @@ export abstract class RemoteRuntimeTerminalFlowController extends RemoteRuntimeT
     return this.streams.get(stream.streamId) === stream
   }
 
-  protected sendInput(stream: RemoteRuntimeMultiplexedTerminalState, text: string): boolean {
+  protected sendInput(
+    stream: RemoteRuntimeMultiplexedTerminalState,
+    text: string,
+    inputSeq?: number
+  ): boolean {
     const sent = this.sendFrame(
       stream.streamId,
       TerminalStreamOpcode.Input,
-      encodeTerminalStreamText(text)
+      encodeTerminalStreamText(text),
+      stream.supportsInputAck ? inputSeq : undefined
     )
     if (sent && !stream.outputPaused) {
       stream.watchdog.recordCommandInput(text)

@@ -17400,8 +17400,8 @@
         {
           "file": "src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-replay.test.ts",
           "assertions": [
-            "repaints a pushed image exactly and keeps the history the TUI covers",
-            "keeps the pane's history when the host screen has another grid",
+            "repaints a pushed image exactly, normal buffer included",
+            "replaces both buffers when the host screen has another grid",
             "keeps history unduplicated when a pushed image also carries history",
             "paints the whole image when the TUI started while hidden",
             "reads the pane buffer after a queued alt-screen entry parses",
@@ -17414,7 +17414,8 @@
           "file": "src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-host-chain.test.ts",
           "assertions": [
             "keeps the covered history for a live TUI exactly as the host holds it",
-            "repaints from the normal buffer once the host TUI has exited"
+            "repaints from the normal buffer once the host TUI has exited",
+            "replaces the normal history that changed between two alt-screen sessions"
           ]
         },
         {
@@ -20285,8 +20286,8 @@
       "demotionRule": "Keep experimental or demote if any case terminates on a signal, the preconditions stop holding on the CI runner, or an assertion can be satisfied by anything other than the command's own output."
     },
     {
-      "id": "ssh-managed-hooks.node24-runtime-compatibility",
-      "title": "SSH managed-hook companions load and install hooks on Node 24",
+      "id": "ssh-managed-hooks.node18-runtime-compatibility",
+      "title": "SSH managed-hook companions load and install hooks on Node 18",
       "maturity": "experimental",
       "protection": "partial",
       "owner": "agent-hooks",
@@ -20300,23 +20301,23 @@
       "providers": ["ssh"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["ssh"],
-      "coverageNotes": "A real Node 24 process loads every platform's built companion and runs the bundled Codex and Claude installers against an isolated temporary home. The six artifacts share one platform-neutral source bundle; live SSH transport and physical remote hosts remain uncollected.",
+      "coverageNotes": "A real Node 18 process loads every platform's built companion and runs the bundled Codex and Claude installers against an isolated temporary home. The six artifacts share one platform-neutral source bundle; live SSH transport and physical remote hosts remain uncollected.",
       "motivatingLinks": ["https://github.com/stablyai/orca/pull/12617"],
-      "invariant": "Every managed-hook companion shipped for Node 24 must load before agent installers execute, and importing desktop-only state inspection must not make unrelated remote installers depend on node:sqlite.",
-      "oracle": "Build all relay artifacts, require each managed-hook-runtime.js in a real Node 24 process, assert its installer export, then install only Codex and Claude into a fresh temporary home. Require two successful installer results, executable hook scripts, and both agent configs to reference their managed scripts without touching the user's home.",
+      "invariant": "Every managed-hook companion shipped for Node 18 must load before agent installers execute, and importing desktop-only state inspection must not make unrelated remote installers depend on node:sqlite.",
+      "oracle": "Build all relay artifacts, require each managed-hook-runtime.js in a real Node 18 process, assert its installer export, then install only Codex and Claude into a fresh temporary home. Require two successful installer results, executable hook scripts, and both agent configs to reference their managed scripts without touching the user's home.",
       "commands": [
-        "pnpm run build:relay && node config/scripts/smoke-managed-hook-runtime-node24.mjs",
+        "pnpm run build:relay && npx -y node@18 config/scripts/smoke-managed-hook-runtime-node18.mjs",
         "pnpm exec vitest run --config config/vitest.config.ts config/scripts/pr-workflow-parallelism.test.mjs"
       ],
       "testFiles": [
-        "config/scripts/smoke-managed-hook-runtime-node24.mjs",
+        "config/scripts/smoke-managed-hook-runtime-node18.mjs",
         "config/scripts/pr-workflow-parallelism.test.mjs"
       ],
       "assertionRefs": [
         {
-          "file": "config/scripts/smoke-managed-hook-runtime-node24.mjs",
+          "file": "config/scripts/smoke-managed-hook-runtime-node18.mjs",
           "assertions": [
-            "all six built companions load and export installManagedHooks under Node 24",
+            "all six built companions load and export installManagedHooks under Node 18",
             "Codex and Claude installations both succeed in an isolated home",
             "both generated configs reference executable managed hook scripts"
           ]
@@ -20324,19 +20325,19 @@
         {
           "file": "config/scripts/pr-workflow-parallelism.test.mjs",
           "assertions": [
-            "PR CI builds the companions before switching to Node 24 and running the smoke oracle"
+            "PR CI builds the companions before switching to Node 18 and running the smoke oracle"
           ]
         }
       ],
       "evidenceRuns": [
         {
-          "date": "2026-10-07",
+          "date": "2026-08-08",
           "runner": "local",
           "platform": "macos",
           "result": "passed",
-          "command": "pnpm run build:relay && node config/scripts/smoke-managed-hook-runtime-node24.mjs",
-          "durationSeconds": 1,
-          "summary": "All six companions loaded under Node 24.20.0; Codex and Claude produced successful installations and executable hook scripts in an isolated temporary home."
+          "command": "pnpm run build:relay && npx -y node@18 config/scripts/smoke-managed-hook-runtime-node18.mjs",
+          "durationSeconds": 4,
+          "summary": "All six companions loaded under Node 18.20.8; Codex and Claude produced two successful results, executable hook scripts, and managed configs in a temporary home."
         }
       ],
       "runtimeBudget": {
@@ -20348,12 +20349,12 @@
         "evidence": "New deterministic artifact smoke with no timing oracle; CI history is not yet available."
       },
       "redGreenEvidence": {
-        "status": "missing",
-        "evidence": "The runtime floor is now Node 24; the earlier Node 18 import regression no longer describes this contract."
+        "status": "complete",
+        "evidence": "On main de4f272b31, the same Node 18 require exited 1 before exports with ERR_UNKNOWN_BUILTIN_MODULE for node:sqlite. The candidate passes all six loads and both installers; restoring the eager node:sqlite value import reproduces the original exit."
       },
       "performanceBudget": {
         "required": false,
-        "evidence": "The companion runtime-floor change adds no polling, IPC, filesystem scan, subprocess, listener, or recurring work."
+        "evidence": "The product change replaces one eager built-in import with a constructor-time built-in lookup. It adds no polling, IPC, filesystem scan, subprocess, listener, or recurring work."
       },
       "promotionCriteria": [
         "Collect 100 consecutive focused CI passes or 14 days of soak history.",
@@ -20364,7 +20365,7 @@
         "The artifact journey uses local filesystem calls rather than a live SSH transport.",
         "Platform-named bundles are loaded on macOS locally; physical Linux and Windows evidence is not yet recorded."
       ],
-      "demotionRule": "Demote if any shipped companion stops loading on Node 24, selected installers mutate outside the isolated home, or the CI lane no longer runs the built artifact with Node 24."
+      "demotionRule": "Demote if any shipped companion stops loading on Node 18, selected installers mutate outside the isolated home, or the CI lane no longer runs the built artifact with Node 18."
     },
     {
       "id": "terminal-history.daemon-checkpoint-session-isolation",

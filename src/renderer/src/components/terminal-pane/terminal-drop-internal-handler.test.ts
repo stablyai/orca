@@ -179,7 +179,9 @@ describe('handleInternalTerminalFileDrop', () => {
 
     expect(result).toEqual({ status: 'cancelled', reason: 'target-stale', pathCount: 1 })
     expect(sendInputAccepted).toHaveBeenCalledTimes(1)
-    expect(sendInputAccepted).toHaveBeenCalledWith('/repo/a.ts ', 'driving')
+    expect(sendInputAccepted).toHaveBeenCalledWith('/repo/a.ts ', 'driving', {
+      signal: expect.any(AbortSignal)
+    })
     expect(sendInput).not.toHaveBeenCalled()
     expect(replacementSendInput).not.toHaveBeenCalled()
     expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
@@ -213,7 +215,9 @@ describe('handleInternalTerminalFileDrop', () => {
     })
 
     expect(result).toEqual({ status: 'pasted', pathCount: 1 })
-    expect(sendInputAccepted).toHaveBeenCalledWith('/repo/a.ts ', 'driving')
+    expect(sendInputAccepted).toHaveBeenCalledWith('/repo/a.ts ', 'driving', {
+      signal: expect.any(AbortSignal)
+    })
     expect(sendInput).not.toHaveBeenCalled()
     expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
     expect(focus).toHaveBeenCalled()

@@ -111,6 +111,19 @@ export class OrcadManagedTunnelManager {
     return operation
   }
 
+  /** Forwards anew to the port the server bound now; a redeploy can bind another port. */
+  async rebuild(
+    environment: KnownRuntimeEnvironment,
+    resolveCurrent: () => KnownRuntimeEnvironment | null = () => environment
+  ): Promise<void> {
+    await this.inFlight.get(environment.id)?.catch(() => undefined)
+    const active = this.active.get(environment.id)
+    if (active) {
+      await dropActiveOrcadTunnel(this.active, this.forwards, environment.id, active)
+    }
+    await this.ensure(environment, resolveCurrent)
+  }
+
   async start(
     environmentId: string,
     target: SshTarget,

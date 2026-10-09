@@ -12311,7 +12311,11 @@
             "confirmRestore": "恢复快照并重新启动",
             "keepState": "保留状态",
             "statusUnknown": "状态未知",
-            "checking": "正在检查…"
+            "checking": "正在检查…",
+            "forget": "忘记…",
+            "confirmForget": "在此桌面上忘记",
+            "keepLinked": "保持关联",
+            "forgetDescription": "在此处取消关联此服务器，而不联系其主机。如果主机恢复，服务器可能仍在那里运行。"
           },
           "title": "受管服务器",
           "description": "Orca 会在空的 SSH 主机上安装并运行服务器，并使其保持最新。",
