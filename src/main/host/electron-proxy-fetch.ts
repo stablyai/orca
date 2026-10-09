@@ -54,7 +54,13 @@ export function fetchElectronProxyRequest(
         bodyController.error(error)
       }
       abortNative()
-      upload?.destroy(error instanceof Error ? error : new Error('Request body cancelled'))
+      upload?.destroy(
+        request.signal.aborted
+          ? undefined
+          : error instanceof Error
+            ? error
+            : new Error('Request body cancelled')
+      )
       void cancelBody?.(error).catch(() => {})
     }
     const onAbort = (): void => {

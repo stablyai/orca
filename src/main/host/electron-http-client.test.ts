@@ -597,7 +597,7 @@ describe('electronHttpClient configured proxy authentication', () => {
     expect(await response.text()).toBe('')
   })
 
-  it('writes request data through Writable backpressure without disabling native replay', async () => {
+  it('writes exact upload bytes through held native callbacks without disabling replay', async () => {
     await configureProxy()
     let produced = 0
     netRequestMock.mockImplementation((options) => {
@@ -615,21 +615,43 @@ describe('electronHttpClient configured proxy authentication', () => {
         }
       }
     })
-    const init = { method: 'POST', body, duplex: 'half' } satisfies RequestInit & { duplex: 'half' }
+    const controller = new AbortController()
+    const init = {
+      method: 'POST',
+      body,
+      duplex: 'half',
+      signal: controller.signal
+    } satisfies RequestInit & { duplex: 'half' }
     const pending = electronHttpClient.fetch('https://origin.example/upload', init)
-    const request = await nextRequest()
-    await vi.waitFor(() => expect(request.chunks.length).toBeGreaterThan(0))
-    expect(produced).toBeLessThan(64)
-    expect(request.writableFinished).toBe(false)
-    expect(request.chunkedEncoding).toBe(false)
-    request.flushWrites()
-    await vi.waitFor(() => expect(request.writableFinished).toBe(true))
-    expect(Buffer.concat(request.chunks).length).toBe(2 * 1024 * 1024)
-    request.respond().finish()
-    await pending
+    const settled = pending.catch(() => undefined)
+    let request: NativeHttpRequest | undefined
+    try {
+      request = await nextRequest()
+      const active = request
+      await vi.waitFor(() => expect(active.chunks).toHaveLength(1))
+      expect(request.writableFinished).toBe(false)
+      expect(request.chunkedEncoding).toBe(false)
+      request.flushWrites()
+      await vi.waitFor(() => expect(active.writableFinished).toBe(true))
+      expect(produced).toBe(64)
+      const expected = Buffer.concat(
+        Array.from({ length: 64 }, (_, index) => Buffer.alloc(32 * 1024, index + 1))
+      )
+      expect(Buffer.concat(request.chunks).equals(expected)).toBe(true)
+      request.respond().finish()
+      await (await pending).text()
+    } finally {
+      controller.abort()
+      request?.flushWrites()
+      await settled
+    }
   })
 
-  it('cancels a streaming upload source when the caller aborts', async () => {
+  it.each([
+    { label: 'default', reason: undefined },
+    { label: 'Error', reason: new Error('Synthetic caller abort') },
+    { label: 'null', reason: null }
+  ])('preserves native upload cancellation for a caller $label abort', async ({ reason }) => {
     await configureProxy()
     const cancelled = vi.fn()
     netRequestMock.mockImplementation((options) => {
@@ -652,14 +674,49 @@ describe('electronHttpClient configured proxy authentication', () => {
       signal: controller.signal
     } satisfies RequestInit & { duplex: 'half' }
     const pending = electronHttpClient.fetch('https://origin.example/upload', init)
-    const rejection = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
-    const request = await nextRequest()
-    await vi.waitFor(() => expect(request.chunks.length).toBeGreaterThan(0))
-    controller.abort()
-    request.flushWrites()
-    await rejection
-    await vi.waitFor(() => expect(cancelled).toHaveBeenCalledOnce())
-    expect(request.abort).toHaveBeenCalledOnce()
+    const outcome = pending.then(
+      () => ({ resolved: true, error: undefined }),
+      (error: unknown) => ({ resolved: false, error })
+    )
+    let request: NativeHttpRequest | undefined
+    try {
+      request = await nextRequest()
+      const active = request
+      await vi.waitFor(() => expect(active.chunks).toHaveLength(1))
+      controller.abort(reason)
+      request.flushWrites()
+      const result = await outcome
+      expect(result.resolved).toBe(false)
+      if (reason === null) {
+        expect(result.error).toBeInstanceOf(DOMException)
+        expect(result.error).toMatchObject({
+          name: 'AbortError',
+          message: 'The operation was aborted.'
+        })
+      } else {
+        expect(result.error).toBe(controller.signal.reason)
+      }
+      await vi.waitFor(() => expect(cancelled).toHaveBeenCalledOnce())
+      const cancellation: unknown = cancelled.mock.calls[0]?.[0]
+      expect(cancellation).toBeInstanceOf(Error)
+      expect(cancellation).toMatchObject({
+        name: 'AbortError',
+        message: 'The operation was aborted',
+        code: 'ABORT_ERR'
+      })
+      if (!(cancellation instanceof Error)) {
+        throw new Error('Expected native upload cancellation error')
+      }
+      expect(cancellation.constructor.name).toBe('AbortError')
+      expect(cancellation).not.toBe(controller.signal.reason)
+      expect(request.writableFinished).toBe(false)
+      expect(request.responses).toHaveLength(0)
+      expect(request.abort).toHaveBeenCalledOnce()
+    } finally {
+      controller.abort()
+      request?.flushWrites()
+      await outcome
+    }
   })
 
   it('rejects a failed streaming request source and aborts the native request', async () => {
