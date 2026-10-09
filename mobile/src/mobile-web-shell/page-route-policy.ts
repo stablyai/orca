@@ -225,9 +225,15 @@ export function routeViewOf(
     return { pageRoutes: [], pageRouteGrants: [], routeGrants: [], ownsHostArea: false }
   }
   const ownsHostArea = wide && pathname === root
+  // No pair for the host route in a wide detail session, so a hop there goes to the shell, which
+  // opens it owning the area rather than as a second host list in this pane.
+  const paired =
+    wide && !ownsHostArea && root !== null
+      ? entries.filter((route) => !matchesRoutePattern(root, route.pathname))
+      : entries
   return {
     pageRoutes: entries.map((route) => route.pathname),
-    pageRouteGrants: entries.map((route) => ({
+    pageRouteGrants: paired.map((route) => ({
       pathname: route.pathname,
       grants: effectiveRouteGrants(route)
     })),

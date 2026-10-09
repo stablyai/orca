@@ -72,8 +72,11 @@ function Screen(): null {
   return null
 }
 
-/** The page holding the `init` the shell builds for the host route, as one session or the other. */
-function mountHostPage(hostArea: boolean): { handoff: RouteHandoff; navigations: () => number } {
+/** The page holding the `init` the shell builds for this route at this layout class. */
+function mountPage(
+  pathname: string,
+  wide: boolean
+): { handoff: RouteHandoff; navigations: () => number } {
   const posted: string[] = []
   const channel: {
     postMessage: (json: string) => void
@@ -84,7 +87,7 @@ function mountHostPage(hostArea: boolean): { handoff: RouteHandoff; navigations:
   if (client === null) {
     throw new Error('no channel installed')
   }
-  const view = routeViewOf(ROUTES, '/h/host-1', hostArea)
+  const view = routeViewOf(ROUTES, pathname, wide)
   const init = createBridgeInitFrame({
     sessionId: 'session-a',
     buildId: 'build-a',
@@ -95,13 +98,13 @@ function mountHostPage(hostArea: boolean): { handoff: RouteHandoff; navigations:
       lastInboundAt: 1,
       generation: 0
     },
-    route: { pathname: '/h/host-1' },
+    route: { pathname },
     pageRoutes: view.pageRoutes,
     pageRouteGrants: view.pageRouteGrants,
     granted: ['fault', ...view.routeGrants],
     host: { id: 'host-1', name: 'Host', endpoint: 'ws://h', lastConnected: 0 },
     storage: {},
-    ownsHostArea: hostArea
+    ownsHostArea: view.ownsHostArea
   })
   channel.onmessage?.({ data: JSON.stringify(init) })
   act(() => {
@@ -129,23 +132,43 @@ beforeEach(() => {
 
 describe('a worktree row in the host-area page', () => {
   it('opens the session inside this document, without a native push', () => {
-    const page = mountHostPage(true)
+    const page = mountPage('/h/host-1', true)
     page.handoff.push('/h/host-1/session/wt-1?name=main')
     expect(router.push).toHaveBeenCalledWith('/h/host-1/session/wt-1?name=main', undefined)
     expect(page.navigations()).toBe(0)
   })
 
   it('switches workspaces in place too, which the embedded sidebar does with a replace', () => {
-    const page = mountHostPage(true)
+    const page = mountPage('/h/host-1', true)
     page.handoff.replace('/h/host-1/session/wt-2')
     expect(router.replace).toHaveBeenCalledWith('/h/host-1/session/wt-2', undefined)
     expect(page.navigations()).toBe(0)
   })
 
   it('is still handed to the shell from a phone host page, whose grants do not cover it', () => {
-    const page = mountHostPage(false)
+    const page = mountPage('/h/host-1', false)
     page.handoff.push('/h/host-1/session/wt-1')
     expect(router.push).not.toHaveBeenCalled()
     expect(page.navigations()).toBe(1)
+  })
+})
+
+describe('a session page opened on its own, leaving for the host route', () => {
+  // A missing worktree's notice and the session's own way out both replace to the host route.
+  const hop = '/h/host-1?notice=worktree-missing'
+
+  it('hands the hop to the shell on a wide layout, which opens the area-owning session', () => {
+    const page = mountPage('/h/host-1/session/wt-1', true)
+    page.handoff.replace(hop)
+    expect(router.replace).not.toHaveBeenCalled()
+    expect(page.navigations()).toBe(1)
+    expect(routeViewOf(ROUTES, '/h/host-1', true).ownsHostArea).toBe(true)
+  })
+
+  it('keeps it in this document on a phone, as before', () => {
+    const page = mountPage('/h/host-1/session/wt-1', false)
+    page.handoff.replace(hop)
+    expect(router.replace).toHaveBeenCalledWith(hop, undefined)
+    expect(page.navigations()).toBe(0)
   })
 })
