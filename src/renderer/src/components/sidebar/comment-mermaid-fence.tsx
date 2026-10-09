@@ -11,13 +11,15 @@ export function isMermaidFence(className: string | undefined): boolean {
 export function renderMermaidFence(
   children: React.ReactNode,
   className?: string,
-  pendingContent?: React.ReactNode
+  pendingContent?: React.ReactNode,
+  renderEnabled = true
 ): React.JSX.Element {
   return (
     <CommentMermaidBlock
       content={String(children).trimEnd()}
       className={className}
       pendingContent={pendingContent}
+      renderEnabled={renderEnabled}
     />
   )
 }

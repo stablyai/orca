@@ -344,6 +344,25 @@ describe("a subagent's rows in the transcript", () => {
     expect(screen.getByText('The PR is CLEAN.')).toBeInTheDocument()
   })
 
+  it("does not replay a working subagent's streaming reply when its section reopens", () => {
+    const items = itemsWith('working', false).filter((next) => next.itemId !== 'child-edit')
+    render(
+      <NativeChatMessageList
+        session={session(projectStructuredItemsToNativeChat(items))}
+        journalItems={items}
+        isWorking
+        expandSignal={false}
+      />
+    )
+    expect(screen.getByText('The PR is CLEAN.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /explore the lane/, expanded: true }))
+    expect(screen.queryByText('The PR is CLEAN.')).toBeNull()
+
+    // Back as the transcript's last, still-streaming row: already read, so it shows whole at once.
+    fireEvent.click(screen.getByRole('button', { name: /explore the lane/, expanded: false }))
+    expect(screen.getByText('The PR is CLEAN.')).toBeInTheDocument()
+  })
+
   it('names a section from the client roster when its roster row is not loaded', () => {
     const items = itemsWith('completed', true)
     const loaded = items.filter((next) => next.itemId !== 'spawn')

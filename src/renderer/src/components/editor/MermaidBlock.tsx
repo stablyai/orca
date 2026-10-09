@@ -24,6 +24,7 @@ type MermaidBlockProps = {
   htmlLabels?: boolean
   className?: string
   pendingContent?: React.ReactNode
+  renderEnabled?: boolean
 }
 
 // Why: mermaid.render() manipulates global DOM state (element IDs, internal
@@ -57,12 +58,24 @@ export default function MermaidBlock({
   isDark,
   htmlLabels = false,
   className,
-  pendingContent
+  pendingContent,
+  renderEnabled = true
 }: MermaidBlockProps): React.JSX.Element {
   const id = useId().replace(/:/g, '_')
-  const [result, setResult] = useState<{ svg: string } | { error: string } | null>(null)
+  const [rendered, setRendered] = useState<{
+    content: string
+    result: { svg: string } | { error: string }
+  } | null>(null)
+  // Why: new source waits as source, but a theme change keeps the old diagram until it re-renders.
+  const result =
+    pendingContent !== undefined && rendered?.content !== content
+      ? null
+      : (rendered?.result ?? null)
 
   useEffect(() => {
+    if (!renderEnabled) {
+      return
+    }
     let cancelled = false
 
     const render = async (): Promise<void> => {
@@ -82,13 +95,17 @@ export default function MermaidBlock({
           // Why: although mermaid uses DOMPurify internally, we add an explicit
           // sanitization pass as defense-in-depth against XSS in case upstream
           // behaviour changes or a mermaid version ships without sanitization.
-          setResult({
-            svg: DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true } })
+          setRendered({
+            content,
+            result: { svg: DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true } }) }
           })
         }
       } catch (err) {
         if (!cancelled) {
-          setResult({ error: err instanceof Error ? err.message : 'Invalid mermaid syntax' })
+          setRendered({
+            content,
+            result: { error: err instanceof Error ? err.message : 'Invalid mermaid syntax' }
+          })
           // Mermaid leaves an error element in the DOM on failure — clean it up.
           const errorEl = document.getElementById(`d${`mermaid-${id}`}`)
           errorEl?.remove()
@@ -102,9 +119,9 @@ export default function MermaidBlock({
     return () => {
       cancelled = true
     }
-  }, [content, htmlLabels, isDark, id])
+  }, [content, htmlLabels, isDark, id, renderEnabled])
 
-  if (result === null && pendingContent !== undefined) {
+  if ((!renderEnabled || result === null) && pendingContent !== undefined) {
     return <>{pendingContent}</>
   }
 

@@ -11,11 +11,13 @@ import { cn } from '@/lib/utils'
 export default function CommentMermaidBlock({
   content,
   className,
-  pendingContent
+  pendingContent,
+  renderEnabled = true
 }: {
   content: string
   className?: string
   pendingContent?: React.ReactNode
+  renderEnabled?: boolean
 }): React.JSX.Element {
   const isDark = useDocumentDarkTheme()
 
@@ -34,6 +36,7 @@ export default function CommentMermaidBlock({
       htmlLabels={false}
       className={className}
       pendingContent={pendingContent}
+      renderEnabled={renderEnabled}
     />
   )
 }

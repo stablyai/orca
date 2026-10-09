@@ -12,7 +12,18 @@ const reveals: NativeChatReplyReveals = { begun: new Set(['reply']), drawn: new 
 
 const mermaid = vi.hoisted(() => ({ rendered: vi.fn() }))
 vi.mock('@/components/sidebar/CommentMermaidBlock', () => ({
-  default: ({ content: code }: { content: string }) => {
+  default: ({
+    content: code,
+    pendingContent,
+    renderEnabled
+  }: {
+    content: string
+    pendingContent?: React.ReactNode
+    renderEnabled?: boolean
+  }) => {
+    if (renderEnabled === false) {
+      return <>{pendingContent}</>
+    }
     mermaid.rendered(code)
     return <div data-testid="diagram">{code}</div>
   }
