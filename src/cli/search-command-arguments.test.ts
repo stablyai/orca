@@ -189,6 +189,18 @@ describe('orca search --index-status', () => {
       `--index-status reports on the index and takes no query, so it cannot be combined with ${flag}.`
     )
   })
+
+  it('still allows the global output and host flags', () => {
+    expect(
+      parseSearch(['search', '--index-status', '--json', '--environment', 'build-server'])
+    ).toEqual({ kind: 'index-status' })
+  })
+
+  it.each(['index-status', 'fresh', 'debug'])('rejects a value on --%s', (flag) => {
+    expect(() => parseSearch(['search', 'q', `--${flag}=false`])).toThrow(
+      `--${flag} does not take a value.`
+    )
+  })
 })
 
 describe('repeatable flags are command-scoped', () => {

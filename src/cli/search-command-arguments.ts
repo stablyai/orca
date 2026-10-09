@@ -5,6 +5,7 @@ import {
 } from '../shared/ai-vault-types'
 import { AiVaultSearchFiltersSchema } from '../shared/ai-vault-search-contract'
 import type { AiVaultSearchRequest } from '../shared/ai-vault-search-types'
+import { CLI_GLOBAL_FLAGS } from '../shared/cli-argument-boundary'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
@@ -16,20 +17,18 @@ export type SearchCommand =
   | { kind: 'index-status' }
   | { kind: 'search'; request: AiVaultSearchRequest }
 
-// Why enumerated: --index-status calls a different RPC that reads none of these,
-// so ignoring one would answer a question the caller did not ask.
-const QUERY_ONLY_FLAGS = [
-  'query',
-  'scope',
-  'fresh',
-  'limit',
-  'cursor',
-  'agent',
-  'path',
-  'since',
-  'sort',
-  'debug'
-] as const
+// A boolean flag's equals form is stored as a string. Presence alone would treat
+// `--fresh=false` as a request to wait.
+function readSwitch(flags: Map<string, string | boolean>, name: string): boolean {
+  const value = flags.get(name)
+  if (value === undefined) {
+    return false
+  }
+  if (value === true) {
+    return true
+  }
+  throw new RuntimeClientError('invalid_argument', `--${name} does not take a value.`)
+}
 
 function readEnum<TValue extends string>(
   flags: Map<string, string | boolean>,
@@ -131,8 +130,12 @@ function readFilters(
 
 /** Maps `orca search` flags onto the session-search contract; nothing it does not have. */
 export function parseSearchCommand(flags: Map<string, string | boolean>): SearchCommand {
-  if (flags.has('index-status')) {
-    const conflicting = QUERY_ONLY_FLAGS.filter((flag) => flags.has(flag))
+  if (readSwitch(flags, 'index-status')) {
+    // Why from the flags present: this RPC reads none of the search request, so a
+    // second copy of the spec's flag list here would drift and then ignore one.
+    const conflicting = [...flags.keys()].filter(
+      (flag) => flag !== 'index-status' && !CLI_GLOBAL_FLAGS.includes(flag)
+    )
     if (conflicting.length > 0) {
       throw new RuntimeClientError(
         'invalid_argument',
@@ -152,11 +155,11 @@ export function parseSearchCommand(flags: Map<string, string | boolean>): Search
     request: {
       query,
       ...(scope ? { scope } : {}),
-      ...(flags.has('fresh') ? { freshness: 'wait-until-current' as const } : {}),
+      ...(readSwitch(flags, 'fresh') ? { freshness: 'wait-until-current' as const } : {}),
       ...(limit === undefined ? {} : { limit }),
       ...(cursor ? { cursor } : {}),
       ...(filters ? { filters } : {}),
-      ...(flags.has('debug') ? { debug: true } : {})
+      ...(readSwitch(flags, 'debug') ? { debug: true } : {})
     }
   }
 }
