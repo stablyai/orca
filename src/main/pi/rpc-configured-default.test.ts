@@ -352,7 +352,6 @@ describe('Pi’s default comes from what a chat with no pick runs', () => {
       'pi',
       {
         models: piModelCatalogFromListing(LISTING),
-        fastModeTierByModel: new Map(),
         origin: 'probe'
       },
       'discovery'
