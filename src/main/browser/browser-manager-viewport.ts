@@ -36,8 +36,8 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
       guest,
       resolveRenderer: (tabId) => this.resolveRendererForBrowserTab(tabId),
       isViewportEmulated: () => {
-        const state = this.viewportPresetActiveByTabId.get(browserTabId)
-        return state?.guestWebContentsId === guest.id && state.active
+        const state = this.viewportPresetByTabId.get(browserTabId)
+        return state?.guestWebContentsId === guest.id && state.requested !== null
       }
     })
     guest.openDevTools({ mode: 'detach' })
