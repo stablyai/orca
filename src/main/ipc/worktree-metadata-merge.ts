@@ -65,6 +65,7 @@ export function mergeWorktree(
             ? 'fixed'
             : 'automatic',
     comment: meta?.comment || '',
+    ...(meta?.metadataUpdatedAt !== undefined ? { metadataUpdatedAt: meta.metadataUpdatedAt } : {}),
     linkedIssue: meta?.linkedIssue ?? null,
     linkedPR: meta?.linkedPR ?? null,
     ...(meta?.suppressedGitHubPR !== undefined

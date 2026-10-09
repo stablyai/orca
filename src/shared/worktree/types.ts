@@ -111,6 +111,8 @@ export type Worktree = {
   /** Projection of persisted display-name provenance. */
   displayNameMode?: 'fixed' | 'automatic'
   comment: string
+  /** Host time in milliseconds of the last comment or workspaceStatus change; absent for legacy data. */
+  metadataUpdatedAt?: number
   linkedIssue: number | null
   linkedPR: number | null
   /** GitHub PR hidden from branch discovery after an explicit unlink. */

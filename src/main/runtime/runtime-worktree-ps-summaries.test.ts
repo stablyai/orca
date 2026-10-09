@@ -5,6 +5,7 @@ import type { RuntimeStore } from './runtime-store-contract'
 
 describe('buildRuntimeWorktreePsSummaries', () => {
   it('preserves persisted host ownership over the resolved row fallback', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the summary builder reads only the resolved row fields supplied by this fixture.
     const worktree = {
       id: 'repo-1::/workspace/app',
       repoId: 'repo-1',
@@ -18,9 +19,10 @@ describe('buildRuntimeWorktreePsSummaries', () => {
       lineage: null,
       lastActivityAt: 0
     } as unknown as ResolvedWorktree
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the summary builder reads only the store members supplied by this fixture.
     const store = {
       getRepos: () => [],
-      getWorktreeMeta: () => ({ hostId: 'ssh:persisted-host' }),
+      getWorktreeMeta: () => ({ hostId: 'ssh:persisted-host', metadataUpdatedAt: 123 }),
       getAllWorktreeMeta: () => ({}),
       getFolderWorkspaces: () => [],
       getProjectGroups: () => []
@@ -33,6 +35,7 @@ describe('buildRuntimeWorktreePsSummaries', () => {
     }).get(worktree.id)
 
     expect(summary?.hostId).toBe('ssh:persisted-host')
+    expect(summary?.metadataUpdatedAt).toBe(123)
   })
 
   it('carries the error of a failed delete the host still lists', () => {

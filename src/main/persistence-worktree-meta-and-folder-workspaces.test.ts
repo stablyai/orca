@@ -78,6 +78,51 @@ describe('Store', () => {
     expect(meta.linkedIssue).toBeNull()
     expect(meta.isArchived).toBe(false)
     expect(typeof meta.sortOrder).toBe('number')
+    expect(meta.metadataUpdatedAt).toBeUndefined()
+  })
+
+  it('persists comment/status change times for git and folder workspaces', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Status',
+      parentPath: '/workspace/status',
+      createdFrom: 'folder-scan'
+    })
+    const folder = store.createFolderWorkspace({ projectGroupId: group.id })
+    expect(folder.metadataUpdatedAt).toBeUndefined()
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1000)
+    try {
+      expect(store.setWorktreeMeta('status-wt', { comment: 'Working' }).metadataUpdatedAt).toBe(
+        1000
+      )
+      expect(
+        store.updateFolderWorkspace(folder.id, { comment: 'Working' })?.metadataUpdatedAt
+      ).toBe(1000)
+      clock.mockReturnValue(2000)
+      expect(
+        store.setWorktreeMeta('status-wt', { comment: 'Working', lastActivityAt: 99 })
+          .metadataUpdatedAt
+      ).toBe(1000)
+      expect(
+        store.updateFolderWorkspace(folder.id, { comment: 'Working', lastActivityAt: 99 })
+          ?.metadataUpdatedAt
+      ).toBe(1000)
+      expect(
+        store.setWorktreeMeta('status-wt', { workspaceStatus: 'in-review' }).metadataUpdatedAt
+      ).toBe(2000)
+      expect(
+        store.updateFolderWorkspace(folder.id, { workspaceStatus: 'in-review' })?.metadataUpdatedAt
+      ).toBe(2000)
+      clock.mockReturnValue(3000)
+      expect(store.setWorktreeMeta('status-wt', { comment: '' }).metadataUpdatedAt).toBe(3000)
+      expect(store.updateFolderWorkspace(folder.id, { comment: '' })?.metadataUpdatedAt).toBe(3000)
+      store.flush()
+      const restored = await createStore()
+      expect(restored.getWorktreeMeta('status-wt')?.metadataUpdatedAt).toBe(3000)
+      expect(restored.getFolderWorkspace(folder.id)?.metadataUpdatedAt).toBe(3000)
+    } finally {
+      clock.mockRestore()
+    }
   })
 
   it('setWorktreeMeta merges with existing meta', async () => {

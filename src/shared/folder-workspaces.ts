@@ -90,6 +90,9 @@ export function normalizeFolderWorkspaces(
         ? linkedTaskSourceContext
         : null,
       comment: typeof raw.comment === 'string' ? raw.comment : '',
+      ...(typeof raw.metadataUpdatedAt === 'number' && Number.isFinite(raw.metadataUpdatedAt)
+        ? { metadataUpdatedAt: raw.metadataUpdatedAt }
+        : {}),
       isArchived: raw.isArchived === true,
       isUnread: raw.isUnread === true,
       isPinned: raw.isPinned === true,

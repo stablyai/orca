@@ -30,6 +30,8 @@ export type FolderWorkspace = {
   linkedItems?: WorkspaceAttachment[]
   linkedTaskSourceContext?: TaskSourceContext | null
   comment: string
+  /** Host time in milliseconds of the last comment or workspaceStatus change; absent for legacy data. */
+  metadataUpdatedAt?: number
   isArchived: boolean
   isUnread: boolean
   isPinned: boolean

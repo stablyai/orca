@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../shared/workspace-statuses'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
@@ -148,6 +149,13 @@ export class FolderWorkspacePersistenceOperations {
     const workspace = this.getFolderWorkspace(id)
     if (!workspace) {
       return null
+    }
+    if (
+      (updates.comment !== undefined && updates.comment !== workspace.comment) ||
+      (updates.workspaceStatus !== undefined &&
+        updates.workspaceStatus !== (workspace.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID))
+    ) {
+      workspace.metadataUpdatedAt = Date.now()
     }
     const linkedUpdates = normalizeWorkspaceAttachmentUpdate(
       {

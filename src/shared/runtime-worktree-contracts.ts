@@ -65,6 +65,8 @@ export type RuntimeWorktreePsSummary = {
   linkedGitLabMR: number | null
   linkedGitLabIssue: number | null
   comment: string
+  /** Host time in milliseconds of the last comment or workspaceStatus change; absent for legacy data. */
+  metadataUpdatedAt?: number
   isPinned: boolean
   isActive: boolean
   unread: boolean

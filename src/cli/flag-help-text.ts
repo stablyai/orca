@@ -5,7 +5,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   agent: '--agent <id>          Launch a known TUI agent in the first terminal',
   'base-branch': '--base-branch <ref>    Base branch/ref to create the worktree from',
   command: '--command <text>       Command to run in the terminal on startup',
-  comment: '--comment <text>       Comment stored in Orca metadata',
+  comment:
+    '--comment <text>       Comment stored in Orca metadata (changes update metadataUpdatedAt)',
   cursor: '--cursor <n>           Line cursor from a previous read (returns only new output)',
   action: '--action <name>       Secondary accessibility action name',
   activate: '--activate             Reveal the new worktree in the Orca app',
@@ -77,7 +78,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
     '--worktree <selector>  Worktree selector such as identity:<identity>, id:<repo-id>::<path>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current',
   workspace: '--workspace <selector> Existing worktree selector for automation runs',
   'workspace-status':
-    '--workspace-status <id> Board status id (defaults: todo, in-progress, in-review, completed)',
+    '--workspace-status <id> Board status id (defaults: todo, in-progress, in-review, completed; changes update metadataUpdatedAt)',
   staged: '--staged               Open staged source-control changes',
   provider: '--provider <agent>     Agent id such as codex, claude, or gemini',
   'source-context':
