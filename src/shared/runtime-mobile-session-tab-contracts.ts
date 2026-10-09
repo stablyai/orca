@@ -28,6 +28,8 @@ export type RuntimeMobileSessionTerminalTab = {
   viewMode?: 'terminal' | 'chat'
   launchDraft?: string
   launchDraftCreatedAt?: number
+  /** Host-owned PTY lifecycle; optional for mixed-version clients. */
+  lifecycle?: 'live' | 'disconnected' | 'exited'
   isActive: boolean
 }
 
