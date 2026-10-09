@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { runProcess } from '../../shared/child-process/run-process'
+import { areWorktreePathsEqual } from '../ipc/worktree-path-comparison'
 import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
 import { Store } from '../persistence/loading-store/store'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -70,8 +71,8 @@ describe('runtime creation and discovery remain metadata authorities', () => {
                 name: 'First workspace'
               })
             ).worktree
-          : (await runtime.listManagedWorktrees(`id:${repo.id}`)).worktrees.find(
-              (row) => row.path === repo.path
+          : (await runtime.listManagedWorktrees(`id:${repo.id}`)).worktrees.find((row) =>
+              areWorktreePathsEqual(row.path, repo.path)
             )
       if (!worktree) {
         throw new Error('fixture_missing_worktree')
