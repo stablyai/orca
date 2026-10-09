@@ -6,7 +6,11 @@ import type {
 } from './agent-session-option-catalog-types'
 import { PI_THINKING_LEVELS, parsePiModelList } from './pi-model-list-probe'
 
-/** Orca's `effort` reaches Pi as `--thinking`; the choice list is Pi's flag domain verbatim. */
+/** Orca's `effort` reaches Pi as `--thinking`. The choice list is Pi's flag domain
+ *  verbatim: unlike the RPC session layer (which withholds xhigh/max unless the
+ *  model's thinkingLevelMap names them), the CLI flag accepts every level and Pi
+ *  resolves per-model support itself — the right contract for opaque ids whose
+ *  capabilities the catalog cannot see. */
 const PI_THINKING: CatalogOption = {
   id: 'effort',
   label: 'Thinking',
