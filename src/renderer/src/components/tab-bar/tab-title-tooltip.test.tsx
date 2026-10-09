@@ -87,8 +87,8 @@ vi.mock('../../../../shared/agent-title-decoration', () => ({
     title.replace(/^(?:[✳✦⏲◇✋⠀-⣿]+|[.*]\s)\s*/, '').trimStart() || title
 }))
 
-vi.mock('@/lib/use-tab-agent', () => ({
-  useTabAgent: () => mockTabAgent
+vi.mock('@/lib/use-status-title-held-tab-agent', () => ({
+  useStatusTitleHeldTabAgent: () => mockTabAgent
 }))
 
 vi.mock('../../store', () => ({
