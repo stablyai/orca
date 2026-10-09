@@ -29,7 +29,9 @@ createStoreCascadesMockApi()
 
 const WT = 'repo1::/path/wt1'
 
-function seed(settings: Partial<ReturnType<typeof getDefaultSettings>> = {}) {
+type Settings = Partial<ReturnType<typeof getDefaultSettings>>
+
+function seed(settings: Settings = {}) {
   const store = createTestStore()
   storeBox.store = store
   seedStore(store, {
@@ -74,13 +76,14 @@ describe('a plain new-tab launch', () => {
     expect(store.getState().activeTabId).toBe(tabId)
   })
 
-  it.each([
+  const kept: [string, { prompt?: string; freshNewTab?: true }, Settings][] = [
     ['a prompt', { prompt: 'fix it' }, {}],
     ['no opt-in', { freshNewTab: undefined }, {}],
     ['a disabled agent', {}, { disabledTuiAgents: ['claude'] }],
     ['the chat default on', {}, { experimentalNativeChat: true }]
-  ] as const)('keeps main launch with %s', async (_label, extra, settings) => {
-    const store = seed(settings as Partial<ReturnType<typeof getDefaultSettings>>)
+  ]
+  it.each(kept)('keeps main launch with %s', async (_label, extra, settings) => {
+    const store = seed(settings)
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     launchAgentInNewTab({

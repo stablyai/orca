@@ -9,10 +9,13 @@ vi.mock('@/lib/agent-launch-through-host', () => host)
 vi.mock('@/lib/launch-agent-tab-prompt-paste', () => ({
   pasteAgentLaunchPromptOnceReady: vi.fn()
 }))
-const state = vi.hoisted(() => ({
-  settings: { disabledTuiAgents: [] as string[] },
-  connectionId: null as string | null | undefined
-}))
+const state = vi.hoisted(() => {
+  const initial: {
+    settings: { disabledTuiAgents: string[] }
+    connectionId: string | null | undefined
+  } = { settings: { disabledTuiAgents: [] }, connectionId: null }
+  return initial
+})
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({ settings: state.settings }) } }))
 vi.mock('@/lib/connection-context', () => ({
   getConnectionIdFromState: () => state.connectionId
