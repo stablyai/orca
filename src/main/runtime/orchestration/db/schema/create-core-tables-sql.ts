@@ -116,6 +116,10 @@ CREATE TABLE IF NOT EXISTS mutation_receipts (
   PRIMARY KEY (caller_fingerprint, request_id)
 );
 
+-- Serves background expiry of stranded pending receipts (mutation-receipt-maintenance.ts).
+CREATE INDEX IF NOT EXISTS idx_mutation_receipts_pending_updated
+  ON mutation_receipts(updated_at) WHERE state = 'pending';
+
 CREATE TABLE IF NOT EXISTS mutation_caller_identities (
   transport           TEXT PRIMARY KEY,
   caller_fingerprint  TEXT NOT NULL UNIQUE

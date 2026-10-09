@@ -1,6 +1,5 @@
 import type { DispatchContextRow, TaskRow, WorkerDispatchRow } from '../../types'
 import { OrchestrationError } from '../../orchestration-error'
-import { ensureMutationReceiptCapacity } from '../../mutation-receipt-capacity'
 import { CURRENT_CONTRACT_VERSION } from '../contract-constants'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -60,7 +59,6 @@ export function createStartingWorkerDispatch(
           `Mutation ${receipt.requestId} already has a durable acceptance record.`
         )
       }
-      ensureMutationReceiptCapacity(this.db)
       this.db
         .prepare(
           `INSERT INTO mutation_receipts (

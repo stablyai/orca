@@ -16,6 +16,10 @@ import {
   type AutomationListResult
 } from '../../shared/automation-list-scope'
 import { OrchestrationDb } from './orchestration/db'
+import {
+  startMutationReceiptMaintenance,
+  type MutationReceiptMaintenance
+} from './orchestration/mutation-receipt-maintenance'
 import { join } from 'node:path'
 import { existsSync } from 'node:fs'
 import { getAppEnvironment } from '../../shared/app-environment'
@@ -24,7 +28,12 @@ import type { LegacyWorkerTerminalRecoveryResult } from './runtime-legacy-worker
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
 
+const RECEIPT_MAINTENANCE_FIRST_RUN_MS = 60 * 1000
+const RECEIPT_MAINTENANCE_INTERVAL_MS = 60 * 60 * 1000
+
 export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForegroundProcessReads {
+  private mutationReceiptMaintenance: MutationReceiptMaintenance | null = null
+
   protected fenceAutomationOwner(
     id: string,
     expectedOwner: AutomationOwnerPrecondition | undefined,
@@ -154,6 +163,11 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
   getOrchestrationDb(): OrchestrationDb {
     if (!this._orchestrationDb) {
       this._orchestrationDb = new OrchestrationDb(this.orchestrationDbPath())
+      this.mutationReceiptMaintenance = startMutationReceiptMaintenance(this._orchestrationDb.db, {
+        initialDelayMs: RECEIPT_MAINTENANCE_FIRST_RUN_MS,
+        intervalMs: RECEIPT_MAINTENANCE_INTERVAL_MS,
+        onError: (error) => console.warn('[orchestration] mutation receipt cleanup failed', error)
+      })
       this.ensureOrchestrationFederationRelay()
       this.scheduleRestoredMessageRepoints()
     }
@@ -171,7 +185,10 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
     return join(getAppEnvironment().getPath('userData'), 'orchestration.db')
   }
 
+  // Injected databases (tests) run no maintenance; the replaced one's job must not outlive it.
   setOrchestrationDb(db: OrchestrationDb): void {
+    this.mutationReceiptMaintenance?.stop()
+    this.mutationReceiptMaintenance = null
     this.orchestrationFederation.resetForDatabaseChange()
     this.mailPointerRepointScheduler.clear()
     this._orchestrationDb = db

@@ -4,11 +4,13 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { OrchestrationDb } from './db'
-import { MUTATION_RECEIPT_MAX_ROWS } from './mutation-receipt-capacity'
 import { SCHEMA_VERSION } from './db/contract-constants'
+import { MUTATION_RECEIPT_PRUNE_RULES } from './mutation-receipt-maintenance'
+
+const PREVIOUS_RECEIPT_LIMIT = 10_000
 
 function sqliteFor(db: OrchestrationDb): Database.Database {
-  return (db as unknown as { db: Database.Database }).db
+  return db.db
 }
 
 function insertReceipts(
@@ -55,33 +57,22 @@ describe('mutation receipt capacity schema', () => {
     }
   })
 
-  it('uses the completed receipt index for age and capacity pruning', () => {
+  it('serves every maintenance statement from a receipt index without a sort', () => {
     db = new OrchestrationDb(':memory:')
     const sqlite = sqliteFor(db)
     insertReceipts(sqlite, 10, 'completed')
 
-    const agePlan = sqlite
-      .prepare(
-        `EXPLAIN QUERY PLAN
-         DELETE FROM mutation_receipts
-         WHERE state = 'completed'
-           AND updated_at < datetime('now', ?)`
-      )
-      .all('-30 days') as { detail: string }[]
-    const capacityPlan = sqlite
-      .prepare(
-        `EXPLAIN QUERY PLAN
-         SELECT rowid FROM mutation_receipts
-         WHERE state = 'completed'
-         ORDER BY updated_at ASC, rowid ASC
-         LIMIT ?`
-      )
-      .all(64) as { detail: string }[]
-    const details = [...agePlan, ...capacityPlan].map((row) => row.detail).join('\n')
+    for (const rule of MUTATION_RECEIPT_PRUNE_RULES) {
+      const details = sqlite
+        .prepare(`EXPLAIN QUERY PLAN ${rule.sql}`)
+        .all(...rule.params, 256)
+        .map((row) => String(row.detail))
+        .join('\n')
 
-    expect(details).toContain('idx_mutation_receipts_completed_updated')
-    expect(details).not.toContain('USE TEMP B-TREE')
-    expect(details).not.toMatch(/SCAN mutation_receipts(?:\n|$)/)
+      expect(details).toMatch(/idx_mutation_receipts_(completed|pending)_updated/)
+      expect(details).not.toContain('USE TEMP B-TREE')
+      expect(details).not.toMatch(/SCAN mutation_receipts(?:\n|$)/)
+    }
   })
 
   it('migrates a populated v25 database and tracks writes from older connections', () => {
@@ -124,10 +115,10 @@ describe('mutation receipt capacity schema', () => {
     })
   })
 
-  it('amortizes capacity pruning while retaining the newest replay records', () => {
+  it('retains replay records beyond the previous count limit', () => {
     db = new OrchestrationDb(':memory:')
     const sqlite = sqliteFor(db)
-    insertReceipts(sqlite, MUTATION_RECEIPT_MAX_ROWS, 'completed')
+    insertReceipts(sqlite, PREVIOUS_RECEIPT_LIMIT, 'completed')
 
     beginReceipt(db, 'first')
     const afterFirst = sqlite
@@ -138,20 +129,20 @@ describe('mutation receipt capacity schema', () => {
       .prepare('SELECT receipt_count FROM mutation_receipt_ledger')
       .get() as { receipt_count: number }
 
-    expect(afterFirst.receipt_count).toBe(MUTATION_RECEIPT_MAX_ROWS - 63)
+    expect(afterFirst.receipt_count).toBe(PREVIOUS_RECEIPT_LIMIT + 1)
     expect(afterSecond.receipt_count).toBe(afterFirst.receipt_count + 1)
-    expect(db.getMutationReceipt('caller', 'request_00064')).toBeUndefined()
+    expect(db.getMutationReceipt('caller', 'request_00064')).toMatchObject({ state: 'completed' })
     expect(db.getMutationReceipt('caller', 'request_00065')).toMatchObject({ state: 'completed' })
     expect(db.getMutationReceipt('caller', 'request_10000')).toMatchObject({ state: 'completed' })
   })
 
-  it('keeps the row limit exact across independent database connections', () => {
+  it('admits fresh receipts across independent connections past the previous limit', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-mutation-receipt-concurrency-'))
     const dbPath = join(tempDir, 'orchestration.db')
     db = new OrchestrationDb(dbPath)
     secondDb = new OrchestrationDb(dbPath)
     const sqlite = sqliteFor(db)
-    insertReceipts(sqlite, MUTATION_RECEIPT_MAX_ROWS - 1, 'pending')
+    insertReceipts(sqlite, PREVIOUS_RECEIPT_LIMIT - 1, 'pending')
     sqlite.exec(`
       INSERT INTO mutation_receipts (
         caller_fingerprint, request_id, method, payload_hash, state
@@ -159,14 +150,10 @@ describe('mutation receipt capacity schema', () => {
     `)
 
     beginReceipt(db, 'first-connection')
-    expect(() => beginReceipt(secondDb!, 'second-connection')).toThrowError(
-      expect.objectContaining({ code: 'mutation_ledger_full' })
-    )
-    db.discardPendingMutationReceipt('new-caller', 'first-connection')
     beginReceipt(secondDb, 'second-connection')
 
     expect(sqlite.prepare('SELECT receipt_count FROM mutation_receipt_ledger').get()).toEqual({
-      receipt_count: MUTATION_RECEIPT_MAX_ROWS
+      receipt_count: PREVIOUS_RECEIPT_LIMIT + 2
     })
   })
 })

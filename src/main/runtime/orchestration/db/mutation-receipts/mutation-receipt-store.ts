@@ -1,7 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import type { MutationReceiptRow } from '../../types'
 import { OrchestrationError } from '../../orchestration-error'
-import { ensureMutationReceiptCapacity } from '../../mutation-receipt-capacity'
 import type { OrchestrationDb } from '../orchestration-db'
 
 // ── Durable mutation receipts ──
@@ -59,7 +58,6 @@ export function beginMutationReceipt(
       this.db.exec('COMMIT')
       return { disposition: existing.state, row: existing }
     }
-    ensureMutationReceiptCapacity(this.db)
     this.db
       .prepare(
         `INSERT INTO mutation_receipts (

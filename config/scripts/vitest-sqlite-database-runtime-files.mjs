@@ -93,6 +93,7 @@ export const SQLITE_DATABASE_RUNTIME_INCLUDE = [
   'src/main/runtime/orchestration/mailbox-pointer-submit.test.ts',
   'src/main/runtime/orchestration/message-batch-atomicity.test.ts',
   'src/main/runtime/orchestration/mutation-receipt-capacity.test.ts',
+  'src/main/runtime/orchestration/mutation-receipt-maintenance.test.ts',
   'src/main/runtime/orchestration/nested-worker-depth-migration.test.ts',
   'src/main/runtime/orchestration/orchestration-adopted-run-binding.test.ts',
   'src/main/runtime/orchestration/orchestration-all-start-versions-migration.test.ts',

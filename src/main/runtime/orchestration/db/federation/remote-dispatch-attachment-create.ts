@@ -1,6 +1,5 @@
 import type { WorkerDispatchState, RemoteDispatchAttachmentRow } from '../../types'
 import { OrchestrationError } from '../../orchestration-error'
-import { ensureMutationReceiptCapacity } from '../../mutation-receipt-capacity'
 import type { OrchestrationDb } from '../orchestration-db'
 import { federatedStubHomeRunId } from '../contract-constants'
 import { insertRemoteDispatchAttachmentRow } from '../dispatch-row-writer'
@@ -57,7 +56,6 @@ export function createRemoteDispatchAttachment(
       )
       .run(runId, `Coordinated from ${params.homePeerFingerprint}`)
     this.requireRun(runId)
-    ensureMutationReceiptCapacity(this.db)
     this.db
       .prepare(
         `INSERT INTO mutation_receipts (
