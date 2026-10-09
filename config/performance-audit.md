@@ -16,7 +16,7 @@ manual review. A warning identifies repeated setup, not proof of visible lag.
 
 `pnpm test:perf:contracts` runs the explicit selection in
 `vitest.performance.config.ts`: SQLite statement reuse and schema parity, relay
-filesystem concurrency, Codex append-only byte budgets,
+filesystem concurrency, Claude/Codex append-only byte budgets,
 tokenizer rejection, highlighting cache, queued
 cancellation, terminal backing-memory retention and detector fixtures. Missing
 listed files fail configuration loading. Tests run serially, without retries,

@@ -7,6 +7,7 @@ import { nodeRuntimePool } from './scripts/vitest-node-runtime-pool'
 const contracts = [
   'src/main/sqlite/sync-database.test.ts',
   'src/main/runtime/orchestration/db/row-column-lists.test.ts',
+  'src/main/claude-usage/scanner-incremental-append.test.ts',
   'src/main/codex-usage/scanner-incremental-append.test.ts',
   'src/relay/fs-path-metadata-symlink-concurrency.test.ts',
   'src/renderer/src/components/editor/rich-markdown-list-tokenizers.test.ts',
