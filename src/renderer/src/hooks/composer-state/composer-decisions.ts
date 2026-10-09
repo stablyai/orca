@@ -3,7 +3,7 @@ import {
   getLinkedWorkItemWorkspaceName
 } from '../../../../shared/workspace-name'
 import { normalizeExecutionHostId } from '../../../../shared/execution-host'
-import { isWorkItemLookupText } from '@/lib/work-item-lookup-text'
+import { shouldApplyWorkspaceSourceAutoName } from '../../../../shared/new-workspace/workspace-source'
 import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-linked-item-source-context'
 import { getGitHubLinkedWorkItemIdentity } from './source-selection-decisions'
@@ -30,7 +30,11 @@ export type ComposerDecisions = {
     item: LinkedWorkItemSummary | null | undefined,
     context: TaskSourceContext | null | undefined
   ) => TaskSourceContext | null
-  isExplicitWorkspaceNameInput: (input: { name: string; lastAutoName: string }) => boolean
+  isExplicitWorkspaceNameInput: (input: {
+    name: string
+    lastAutoName: string
+    lookupTextIsQuery?: boolean
+  }) => boolean
   resolveInitialWorkspaceRunSeed: (input: {
     draftProjectId?: string | null
     draftHostId?: string | null
@@ -67,13 +71,15 @@ export function canResolveFolderSmartGitHubSubmit({
 
 export function isExplicitWorkspaceNameInput({
   name,
-  lastAutoName
+  lastAutoName,
+  lookupTextIsQuery
 }: {
   name: string
   lastAutoName: string
+  lookupTextIsQuery?: boolean
 }): boolean {
   // Why: a user-authored name must win over linked-item and first-message AI naming.
-  return Boolean(name.trim()) && name !== lastAutoName && !isWorkItemLookupText(name)
+  return !shouldApplyWorkspaceSourceAutoName({ currentName: name, lastAutoName, lookupTextIsQuery })
 }
 
 export function resolveSmartGitHubCreateNames({

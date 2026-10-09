@@ -8,6 +8,7 @@ type GitLabProviderSelectionInput = Pick<
   | 'handleBaseBranchMrSelect'
   | 'isProjectGroupTarget'
   | 'lastAutoNameRef'
+  | 'linkedWorkItem'
   | 'name'
   | 'selectedRepo'
   | 'setBaseBranch'
@@ -48,6 +49,7 @@ export function useGitLabProviderSelection(input: GitLabProviderSelectionInput) 
     handleBaseBranchMrSelect,
     isProjectGroupTarget,
     lastAutoNameRef,
+    linkedWorkItem,
     name,
     selectedRepo,
     setBaseBranch,
@@ -83,7 +85,8 @@ export function useGitLabProviderSelection(input: GitLabProviderSelectionInput) 
           nextName &&
           shouldApplyWorkspaceSourceAutoName({
             currentName: name,
-            lastAutoName: lastAutoNameRef.current
+            lastAutoName: lastAutoNameRef.current,
+            lookupTextIsQuery: !linkedWorkItem
           })
         ) {
           setName(nextName)
@@ -151,7 +154,8 @@ export function useGitLabProviderSelection(input: GitLabProviderSelectionInput) 
             result.baseBranch,
             item,
             result.pushTarget,
-            result.compareBaseRef
+            result.compareBaseRef,
+            { sourceAlreadyLinked: true }
           )
         })
         .catch((error: unknown) => {
@@ -171,6 +175,7 @@ export function useGitLabProviderSelection(input: GitLabProviderSelectionInput) 
       handleBaseBranchMrSelect,
       isProjectGroupTarget,
       name,
+      linkedWorkItem,
       selectedRepo,
       settings,
       branchAutoNameRef,

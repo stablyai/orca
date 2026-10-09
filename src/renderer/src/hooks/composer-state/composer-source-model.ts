@@ -25,14 +25,16 @@ export type ComposerSourceModel = {
     nextBaseBranch: string,
     item: GitLabWorkItem,
     nextPushTarget?: GitPushTarget | undefined,
-    nextCompareBaseRef?: string | undefined
+    nextCompareBaseRef?: string | undefined,
+    options?: { sourceAlreadyLinked?: boolean }
   ) => void
   handleBaseBranchPrSelect: (
     nextBaseBranch: string,
     item: GitHubWorkItem,
     nextPushTarget?: GitPushTarget | undefined,
     nextBranchNameOverride?: string | undefined,
-    nextCompareBaseRef?: string | undefined
+    nextCompareBaseRef?: string | undefined,
+    options?: { sourceAlreadyLinked?: boolean }
   ) => void
   handleBranchNameOverrideChange: (value: string | undefined) => void
   handleClearSmartNameSelection: () => void

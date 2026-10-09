@@ -71,7 +71,8 @@ export function useQuickSubmitSourcePreparation(input: QuickSubmitSourcePreparat
 
       const nameIsAutoManaged = !isExplicitWorkspaceNameInput({
         name,
-        lastAutoName: lastAutoNameRef.current
+        lastAutoName: lastAutoNameRef.current,
+        lookupTextIsQuery: !linkedWorkItem && smartGitHubResolution.kind !== 'none'
       })
 
       const smartGitHubCreateNames =

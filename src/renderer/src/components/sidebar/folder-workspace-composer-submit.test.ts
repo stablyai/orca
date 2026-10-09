@@ -65,6 +65,36 @@ function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWo
 }
 
 describe('submitFolderWorkspaceCreate', () => {
+  it.each(['347', '002'])('keeps manual folder name %s with its linked source', async (name) => {
+    const linkedWorkItem = {
+      provider: 'github' as const,
+      type: 'issue' as const,
+      number: Number(name),
+      title: 'Fix export',
+      url: `https://github.com/fixture/repo/issues/${Number(name)}`
+    }
+    const createFolderWorkspace = vi.fn(async () => null)
+    await submitFolderWorkspaceCreate({
+      projectGroup: makeProjectGroup(),
+      name,
+      lastAutoName: 'Fix export',
+      linkedWorkItem,
+      note: '',
+      quickAgent: null,
+      autoRenameBranchFromWork: false,
+      agentCmdOverrides: {},
+      createFolderWorkspace,
+      onOpenChange: vi.fn()
+    })
+
+    expect(createFolderWorkspace).toHaveBeenCalledWith({
+      projectGroupId: 'group-1',
+      name,
+      connectionId: null,
+      linkedTask: linkedWorkItem
+    })
+  })
+
   beforeEach(() => {
     mocks.activateAndRevealFolderWorkspace.mockReturnValue({ primaryTabId: 'tab-1' })
   })

@@ -135,7 +135,8 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
       item: GitHubWorkItem,
       nextPushTarget?: GitPushTarget,
       nextBranchNameOverride?: string,
-      nextCompareBaseRef?: string
+      nextCompareBaseRef?: string,
+      options: { sourceAlreadyLinked?: boolean } = {}
     ): void => {
       setBaseBranch(nextBaseBranch)
       setBaseBranchNamesWorkspace(true)
@@ -146,7 +147,10 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
       branchAutoNameRef.current = ''
       setStartFromResetHint(null)
       // Why: a Start-from PR pick is also a linkedWorkItem assignment; reuse applyLinkedWorkItem so auto-name and linkedPR stay one code path.
-      applyLinkedWorkItem(item, { preserveBranchNameOverride: Boolean(nextBranchNameOverride) })
+      // Provider picks already linked the source; a delayed base result must not replay its name.
+      if (!options.sourceAlreadyLinked) {
+        applyLinkedWorkItem(item, { preserveBranchNameOverride: Boolean(nextBranchNameOverride) })
+      }
       // Why: prefill the note from the PR (only when empty or still an auto-fill) so the sidebar surfaces it without clobbering user text.
       const identity = resolveGitHubWorkItemIdentity(item)
       if (identity.type === 'pr') {
@@ -180,7 +184,8 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
       nextBaseBranch: string,
       item: GitLabWorkItem,
       nextPushTarget?: GitPushTarget,
-      nextCompareBaseRef?: string
+      nextCompareBaseRef?: string,
+      options: { sourceAlreadyLinked?: boolean } = {}
     ): void => {
       setBaseBranch(nextBaseBranch)
       setBaseBranchNamesWorkspace(true)
@@ -189,7 +194,9 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
       setBranchNameOverride(undefined)
       branchAutoNameRef.current = ''
       setStartFromResetHint(null)
-      applyLinkedGitLabWorkItem(item)
+      if (!options.sourceAlreadyLinked) {
+        applyLinkedGitLabWorkItem(item)
+      }
       if (item.type === 'mr') {
         const suggestedNote = `MR !${item.number} — ${item.title}`
         const currentNote = noteRef.current
