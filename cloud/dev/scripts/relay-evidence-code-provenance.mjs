@@ -14,24 +14,29 @@ export const TRUSTED_EVIDENCE_CODE_PATHS = [
   // Produces and seals the 15-minute dry-run evidence.
   relayWorkflowPath('monitor-relay-production.yml'),
   relayWorkflowPath('monitor-relay-production-job.yml'),
-  // Download it, verify its authority, and mutate production on it.
-  relayWorkflowPath('deploy-relay-production-same-cap.yml'),
-  relayWorkflowPath('deploy-relay-production-same-cap-job.yml'),
+  // Rehome enable downloads it, verifies its authority, and mutates production on it.
   relayWorkflowPath('operate-relay-production-rehome.yml'),
   relayWorkflowPath('operate-relay-production-rehome-job.yml'),
+  // Same-cap seals and spends canary authority, which a later batch accepts only from this code.
+  relayWorkflowPath('deploy-relay-production-same-cap.yml'),
+  relayWorkflowPath('deploy-relay-production-same-cap-job.yml'),
   // Sealing, verification, the wave/canary authority, and the path constants below.
   relayTreePath('dev/scripts/relay-evidence-code-provenance.mjs'),
   relayTreePath('dev/scripts/relay-monitor-evidence.mjs'),
   relayTreePath('dev/scripts/relay-production-same-cap-wave.mjs'),
   relayTreePath('dev/scripts/relay-repository.mjs'),
   // Every other script those jobs run against live production.
+  relayTreePath('dev/scripts/check-relay-same-cap-headroom.mjs'),
   relayTreePath('dev/scripts/infra.mjs'),
   relayTreePath('dev/scripts/operate-relay-regional-rehome.mjs'),
   relayTreePath('dev/scripts/prepare-relay-production-capacity-canary.mjs'),
   relayTreePath('dev/scripts/probe-relay-rehome-trust.mjs'),
   relayTreePath('dev/scripts/validate-relay-capacity-plan.mjs'),
   relayTreePath('dev/scripts/verify-relay-capacity-transition.mjs'),
-  // The monitor itself and the live preflight recheck, plus anything that changes their behaviour.
+  // The exit metric filter the same-cap pre-drain sample's crash rule reads.
+  relayTreePath('infra/terraform/relay-observability.tf'),
+  // The monitor, the live preflight recheck, and the same-cap pre-drain sample, plus anything that
+  // changes their behaviour.
   relayTreePath('apps/relay-ops'),
   relayTreePath('package.json'),
   relayTreePath('pnpm-lock.yaml'),

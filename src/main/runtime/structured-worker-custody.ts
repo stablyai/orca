@@ -12,6 +12,9 @@
  */
 
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import { isOrcaSessionId } from '../../shared/orca-session-address'
+import { canonicalOrcaSessionId } from './orchestration/canonical-orca-session-id'
+import type { RunningStructuredSession } from './orchestration/structured-session-lineage'
 import type { OrchestrationDb } from './orchestration/db'
 import type { WorkerDispatchState } from './orchestration/types'
 import {
@@ -26,29 +29,39 @@ import {
 } from './structured-worker-identity'
 
 /**
- * Whether this runtime still owns the worker's session: routing, addressing and authority ask
- * this, never whether its process runs. Null when the host is not installed, because reading the
- * record store would install it — not being able to look is not an answer.
+ * Whether this runtime still owns the session running the worker: routing, addressing and
+ * authority ask this, never whether its process runs. Takes the resolved running session, so the
+ * session a worker was minted under cannot be judged in its place. Null when the host is not
+ * installed, because reading the record store would install it — not being able to look is not an
+ * answer.
  */
-export function structuredWorkerOwned(sessionId: string): boolean | null {
+export function structuredWorkerOwned(running: RunningStructuredSession): boolean | null {
   const host = getStructuredAgentSessionHost()
   if (!host) {
     return null
   }
-  let record: AgentSessionRecord | null
-  try {
-    record = host.deps.store.getRecord(sessionId)
-  } catch {
-    record = null
-  }
   return structuredWorkerRecordIsCurrent(
-    record,
-    record?.lease.claimStatus === 'released' && structuredWorkerTabListed(host, sessionId)
+    running.record,
+    running.record.lease.claimStatus === 'released' &&
+      structuredSessionTabListed(host, running.sessionId)
   )
 }
 
+/** Whether the persisted tab index authoritatively omits the session; an unreadable index does not. */
+export function structuredSessionTabRetired(
+  host: NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>,
+  sessionId: string
+): boolean {
+  try {
+    const index = host.getPersistedVisibleSessionTabIndex?.()
+    return index?.present === true && !index.sessionIds.includes(sessionId)
+  } catch {
+    return false
+  }
+}
+
 /** Retirement is the tab index: every path that ends a chat for good hides its tab. */
-function structuredWorkerTabListed(
+function structuredSessionTabListed(
   host: NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>,
   sessionId: string
 ): boolean {
@@ -81,10 +94,10 @@ function ownerState(
  */
 export function structuredWorkerAddressable(
   db: OrchestrationDb | null | undefined,
-  sessionId: string,
+  running: RunningStructuredSession,
   row: CustodyRow | undefined
 ): boolean | null {
-  const owned = structuredWorkerOwned(sessionId)
+  const owned = structuredWorkerOwned(running)
   if (owned === null) {
     return null
   }
@@ -104,7 +117,8 @@ export function structuredWorkerAddressable(
  * addressed to its incarnation, on a process this host owns a terminal for. That covers its own
  * worker-start dispatch (whose context stays open while the worker is active, a stop in doubt
  * included, because a supervised worker's context settles only with it) and any task later
- * dispatched to it. A `reclaimable` worker's dispatch has settled, so it owes nothing.
+ * dispatched to it. A `reclaimable` worker's dispatch has settled, so it owes nothing. A `/clear`
+ * successor owes what its lineage root, the session the worker was minted under, owes.
  */
 export function structuredWorkerOwesWork(
   db: OrchestrationDb | null,
@@ -114,7 +128,9 @@ export function structuredWorkerOwesWork(
   if (!db || !hostScope) {
     return false
   }
-  const incarnation = structuredWorkerProcessIncarnation(record.sessionId)
+  const incarnation = structuredWorkerProcessIncarnation(
+    isOrcaSessionId(record.sessionId) ? canonicalOrcaSessionId(record.sessionId) : record.sessionId
+  )
   const owned = db.db
     .prepare(
       `SELECT 1 FROM worker_terminal_resources

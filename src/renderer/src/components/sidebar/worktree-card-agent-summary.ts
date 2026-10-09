@@ -1,8 +1,7 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
-import { agentRowDotState } from '@/lib/agent-row-dot-state'
-import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
+import { agentRowDisplayDotState } from '@/lib/agent-row-dot-state'
 
 export type SummaryAgentGroup = {
   state: AgentDotState
@@ -16,6 +15,8 @@ const SUMMARY_STATE_ORDER: AgentDotState[] = [
   'failed',
   'working',
   'monitoring',
+  'unconfirmed',
+  // Why: a user's Stop is not news, but it is not a finish either.
   'interrupted',
   'done',
   // Why: below every reporting state, above true idle — the pane is still held.
@@ -24,9 +25,7 @@ const SUMMARY_STATE_ORDER: AgentDotState[] = [
 ]
 
 export function getAgentDotState(agent: DashboardAgentRowData): AgentDotState {
-  return (
-    agentVerdictDisplayMark(agent.entry) ?? agentRowDotState(agent.state, agent.entry.workingMode)
-  )
+  return agentRowDisplayDotState(agent)
 }
 
 export function formatSummaryStateLabel(state: AgentDotState): string {
@@ -49,6 +48,8 @@ export function formatSummaryStateLabel(state: AgentDotState): string {
       return 'idle'
     case 'unverifiable':
       return 'not reporting'
+    case 'unconfirmed':
+      return 'unconfirmed'
     case 'permission':
       return 'needs attention'
   }

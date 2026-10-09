@@ -141,7 +141,7 @@ describe('profile state Store authority factory', () => {
   it('uses a capability probe that remains false on a Node 18-style host', () => {
     const original = process.getBuiltinModule
     vi.spyOn(process, 'getBuiltinModule').mockImplementation((id) => {
-      if (id === 'node:sqlite' || id === 'bun:sqlite') {
+      if (id === 'node:sqlite') {
         return undefined
       }
       return original(id)
@@ -303,6 +303,40 @@ describe('profile state Store authority factory', () => {
     })
   })
 
+  it.each([
+    [
+      { experimentalNativeChat: true, openAgentTabsInChatByDefault: false },
+      false,
+      true,
+      'chat-ui-on'
+    ],
+    [
+      { experimentalNativeChat: false, openAgentTabsInChatByDefault: false },
+      true,
+      false,
+      'chat-ui-off'
+    ]
+  ])(
+    'decides the native chat upgrade tip audience once from the startup snapshot (%o)',
+    (settings, laterChatUi, inAudience, basis) => {
+      const options = createOptions()
+      writeFileSync(options.dataFile, JSON.stringify({ settings }))
+      const first = createProfileStateStore({ ...options })
+      expect(first.store.isInNativeChatUpgradeTipAudience()).toBe(inAudience)
+
+      // Why: a later Chat UI change must never move a profile into or out of the audience.
+      first.store.updateSettings({ experimentalNativeChat: laterChatUi })
+      first.store.flushOrThrow()
+      rmSync(options.dataFile)
+      const restarted = createProfileStateStore({ ...options })
+
+      expect(restarted.store.isInNativeChatUpgradeTipAudience()).toBe(inAudience)
+      expect(JSON.parse(restarted.store.prepareProfileStateExport().json)).toMatchObject({
+        nativeChatUpgradeTipAudience: { membership: inAudience ? 'eligible' : 'excluded', basis }
+      })
+    }
+  )
+
   it('initializes a valid empty SQLite profile instead of falling back to legacy JSON', () => {
     const options = createOptions()
     const opened = openProfileStateDatabase(options.databaseFile, options.profileId)
@@ -358,7 +392,7 @@ describe('profile state Store authority factory', () => {
       }
       const original = process.getBuiltinModule
       vi.spyOn(process, 'getBuiltinModule').mockImplementation((id) =>
-        id === 'node:sqlite' || id === 'bun:sqlite' ? undefined : original(id)
+        id === 'node:sqlite' ? undefined : original(id)
       )
       expect(() => createProfileStateStore(options)).toThrow('Writable profiles require SQLite')
       expect(existsSync(options.databaseFile)).toBe(false)

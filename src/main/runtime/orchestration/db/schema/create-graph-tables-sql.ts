@@ -146,7 +146,7 @@ CREATE TABLE IF NOT EXISTS dispatch_contexts (
   assignee_handle     TEXT,
   assignee_pane_key   TEXT,
   -- Bare Orca session id the agent is addressed by, when it has one (today only structured
-  -- sessions); for a /clear'd chat, its lineage root's. Not its session:<id> address.
+  -- sessions); for a /clear'd chat, its lineage root's. Not its orca_session_id:<id> address.
   assignee_orca_session_id TEXT,
   capability_hash     TEXT,
   process_incarnation TEXT,

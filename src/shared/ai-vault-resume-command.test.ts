@@ -28,6 +28,17 @@ describe('buildAiVaultResumeCommand', () => {
     ).toBe('cmd /d /s /c "cd /d ""C:\\Users\\Ada Lovelace\\repo"" && codex resume ""session-1"""')
   })
 
+  it('resumes CodeBuddy sessions with the Claude-compatible --resume flag', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'codebuddy',
+        sessionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+        cwd: '/repo/app',
+        platform: 'darwin'
+      })
+    ).toBe("cd '/repo/app' && codebuddy --resume 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'")
+  })
+
   it('builds a direct queued command for a live cmd shell', () => {
     expect(
       buildAiVaultResumeCommand({
@@ -151,6 +162,29 @@ describe('buildAiVaultResumeCommand', () => {
         platform: 'darwin'
       })
     ).toBe("cd '/Users/ada/repo' && prime-agent --resume 'dddddddd-eeee-4fff-8aaa-111111111111'")
+  })
+
+  it('resumes Rovo Dev through its acli launch command', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'rovo',
+        sessionId: 'rovo-session',
+        cwd: '/Users/ada/repo',
+        platform: 'darwin'
+      })
+    ).toBe("cd '/Users/ada/repo' && acli rovodev run --restore 'rovo-session'")
+  })
+
+  it('appends the Rovo Dev restore flag to a full-command settings override', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'rovo',
+        sessionId: 'rovo-session',
+        cwd: null,
+        platform: 'darwin',
+        commandOverride: '/opt/acli/acli rovodev run'
+      })
+    ).toBe("/opt/acli/acli rovodev run --restore 'rovo-session'")
   })
 
   it('resumes Muse by session id in the session cwd', () => {

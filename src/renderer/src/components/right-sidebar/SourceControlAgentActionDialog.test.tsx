@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
   onSaveAgentDefault: vi.fn(),
   onLaunched: vi.fn(),
   onStart: vi.fn(),
-  planSourceControlAgentActionLaunch: vi.fn(),
+  checkSourceControlAgentActionLaunch: vi.fn(),
   toastError: vi.fn()
 }))
 vi.mock('@/components/agent/AgentCombobox', () => ({
@@ -51,8 +51,8 @@ vi.mock('@/components/ui/select', () => ({
 vi.mock('../source-control/SourceControlActionVariableChips', () => ({
   SourceControlActionVariableChips: () => React.createElement('div')
 }))
-vi.mock('@/lib/source-control-agent-action-plan', () => ({
-  planSourceControlAgentActionLaunch: mocks.planSourceControlAgentActionLaunch
+vi.mock('@/lib/source-control-agent-action-launch-check', () => ({
+  checkSourceControlAgentActionLaunch: mocks.checkSourceControlAgentActionLaunch
 }))
 vi.mock('sonner', () => ({
   toast: { error: mocks.toastError }
@@ -181,12 +181,7 @@ describe('SourceControlAgentActionDialog', () => {
     mocks.ensureDetectedAgents.mockResolvedValue(['codex'])
     mocks.ensureRemoteDetectedAgents.mockResolvedValue(['codex'])
     mocks.onStart.mockResolvedValue(true)
-    mocks.planSourceControlAgentActionLaunch.mockReturnValue({
-      ok: true,
-      summary: 'Ready to launch.',
-      commandLabel: 'codex',
-      caveat: 'The prompt will be submitted after the agent is ready.'
-    })
+    mocks.checkSourceControlAgentActionLaunch.mockReturnValue({ ok: true })
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -239,9 +234,7 @@ describe('SourceControlAgentActionDialog', () => {
     resetStore(
       {
         ...settingsWithGlobalRecipe(null),
-        experimentalNativeChat: true,
-        experimentalStructuredNativeChat: true,
-        openAgentTabsInChatByDefault: true
+        experimentalNativeChat: true
       },
       [repoWithSavedRecipe('--model saved', 'build-box', 'ssh:build-box')]
     )
@@ -269,9 +262,7 @@ describe('SourceControlAgentActionDialog', () => {
     resetStore(
       {
         ...settingsWithGlobalRecipe(recipe),
-        experimentalNativeChat: true,
-        experimentalStructuredNativeChat: true,
-        openAgentTabsInChatByDefault: true
+        experimentalNativeChat: true
       },
       []
     )

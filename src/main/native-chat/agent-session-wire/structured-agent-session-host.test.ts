@@ -1,10 +1,11 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
-import { join } from 'node:path'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
@@ -26,6 +27,11 @@ import {
   HOST_TEST_THREAD as THREAD,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 let root: string
 let store: AgentSessionRecordStore
@@ -52,6 +58,27 @@ beforeEach(() => {
 })
 
 describe('attach', () => {
+  it('founds a client-location floating chat with the host folder and keeps it on replay', async () => {
+    const resolveWorkspacePath = vi.fn(async () => '/host/original-folder')
+    host.deps.resolveWorkspacePath = resolveWorkspacePath
+    const params = attachParams({
+      location: {
+        executionHostId: 'local',
+        wslDistro: null,
+        workspaceId: FLOATING_TERMINAL_WORKTREE_ID,
+        workspaceKind: 'folder'
+      }
+    })
+
+    expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
+    expect(store.getRecord(SESSION)?.launchDirectory).toBe('/host/original-folder')
+    resolveWorkspacePath.mockResolvedValue('/host/changed-folder')
+
+    expect(await host.attach(CALLER, params)).toMatchObject({ ok: true, replayed: true })
+    expect(store.getRecord(SESSION)?.launchDirectory).toBe('/host/original-folder')
+    expect(resolveWorkspacePath).toHaveBeenCalledTimes(1)
+  })
+
   it('reserves the lease, spawns through the adapter, and opens the journal', async () => {
     const result = await host.attach(CALLER, attachParams())
     expect(result).toMatchObject({ ok: true, replayed: false })
@@ -108,7 +135,7 @@ describe('attach', () => {
         },
         link: {
           linkId: 'stale-link',
-          handle: { provider: 'codex', threadId: THREAD },
+          handle: codexProviderHandle(THREAD),
           origin: 'created',
           mintedAtFence: fence + 1,
           observedAt: NOW
@@ -123,16 +150,18 @@ describe('attach', () => {
         },
         link: {
           linkId: `link-${fence}`,
-          handle: { provider: 'codex', threadId: THREAD },
+          handle: codexProviderHandle(THREAD),
           origin: 'created',
           mintedAtFence: fence,
           observedAt: NOW
         }
       }))
     host = new StructuredAgentSessionHost({
+      agents: NO_STRUCTURED_AGENTS,
+      logger: createStructuredAgentSessionLogger(),
       store,
       adapter: { ...adapter(), acquire },
-      journalRoot: root,
+      journalDatabase: openTestJournalHostDatabase(root),
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-a',
       now: () => NOW
@@ -186,7 +215,8 @@ describe('attach', () => {
     })
     events?.appendItem(
       { provider: 'orca', clientMessageId: 'old-journal-write' },
-      { kind: 'status', text: 'old journal write' }
+      { kind: 'status', text: 'old journal write' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await vi.waitFor(() => expect(append).toHaveBeenCalledOnce())
     const released = await store.evictProvenDeadOwner({
@@ -298,27 +328,6 @@ describe('cancel', () => {
     expect(cancelTurn).not.toHaveBeenCalled()
   })
 
-  it('records an unknown outcome when lifecycle draining fails and never interrupts on replay', async () => {
-    await attach()
-    const prompt = await seedApproval()
-    vi.spyOn(host, 'flushStreamedEvents').mockRejectedValueOnce(new Error('journal drain failed'))
-    const fields = {
-      turnId: 'turn-1',
-      prompt: { itemId: prompt.itemId, expectedRevision: prompt.revision }
-    }
-    const params = {
-      envelope: envelope('agentSession.cancel', fields),
-      ...fields
-    }
-
-    await expect(host.cancel(CALLER, params)).rejects.toThrow('journal drain failed')
-    expect(await host.cancel(CALLER, params)).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_unknown' }
-    })
-    expect(cancelTurn).toHaveBeenCalledTimes(1)
-  })
-
   it('records an unknown outcome when strict prompt interruption throws and never retries it', async () => {
     await attach()
     const prompt = await seedApproval()
@@ -389,7 +398,7 @@ describe('respondToPrompt', () => {
         options: [{ id: 'allow', label: 'Allow' }],
         resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
       },
-      child
+      { ...child, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await host.flushStreamedEvents(SESSION)
     const itemId = agentJournalItemKey(identity)
@@ -410,16 +419,17 @@ describe('respondToPrompt', () => {
     })
   })
 
-  it('refuses a second answer to one prompt and says which answer won', async () => {
+  it('tells a second answer with the same choice that it holds, and asks the provider once', async () => {
     await attach()
     const prompt = await seedApproval()
     const fields = { itemId: prompt.itemId, expectedRevision: prompt.revision, optionId: 'allow' }
-    await host.respondToPrompt(CALLER, {
+    const first = await host.respondToPrompt(CALLER, {
       envelope: envelope('agentSession.respondTo:approval', fields),
       kind: 'approval',
       ...fields
     })
-    const loser = await host.respondToPrompt(
+    // Another device, or a re-click after a lost reply: a new operation making the same choice.
+    const second = await host.respondToPrompt(
       { callerKey: 'client-2' },
       {
         envelope: envelope('agentSession.respondTo:approval', fields),
@@ -427,12 +437,11 @@ describe('respondToPrompt', () => {
         ...fields
       }
     )
-    expect(loser).toMatchObject({
-      ok: false,
-      refusal: {
-        code: 'agent_session_item_revision_stale',
-        resolution: { selectedOptionId: 'allow' }
-      }
+    expect(first.ok).toBe(true)
+    expect(second).toEqual({ ...first, replayed: false })
+    expect(second).toMatchObject({
+      ok: true,
+      value: { resolution: { selectedOptionId: 'allow', resolvedBy: 'client-1' } }
     })
     expect(answerPrompt).toHaveBeenCalledTimes(1)
   })
@@ -557,11 +566,13 @@ describe('restart', () => {
     adapterOverrides: Partial<StructuredAgentSessionAdapter> = {},
     stopOwnerProcess?: StructuredAgentSessionHostDeps['stopOwnerProcess']
   ) {
-    store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+    store = await openTestAgentSessionRecordStore(root)
     host = new StructuredAgentSessionHost({
+      agents: NO_STRUCTURED_AGENTS,
+      logger: createStructuredAgentSessionLogger(),
       store,
       adapter: { ...adapter(), ...adapterOverrides },
-      journalRoot: root,
+      journalDatabase: openTestJournalHostDatabase(root),
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-b',
       probeOwner,
@@ -681,11 +692,11 @@ describe('restart', () => {
     expect(status).toMatchObject({ owner: 'native' })
   })
 
-  it('vouches for no owner of a chat this host cannot run', async () => {
+  it('reads stored ownership even when this host cannot start the provider', async () => {
     await attach()
 
     await reboot(async () => ({ outcome: 'pid-absent' }), { supportsCreate: () => false })
-    expect(() => host.handoffStatus(SESSION)).toThrow('structured_agent_session_unsupported')
+    expect(host.handoffStatus(SESSION)).toMatchObject({ owner: 'native' })
   })
 
   it('releases a session whose owner can never be probed, signalling nothing, and starts over', async () => {

@@ -452,6 +452,8 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
       mayReviveRetiredSurface: false,
       origin: 'relay_reattach'
     })
+    // Into the pane's home partition: a `local` copy shadowed it at the next startup (STA-9544).
+    expect(mockStore.persistPtyBinding).toHaveBeenCalledWith(expect.any(Function), 'ssh:target-1')
     expect(vi.mocked(mockStore.persistPtyBinding).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(mockStore.markSshRemotePtyLeasesAttachedAsync).mock.invocationCallOrder[0]!
     )

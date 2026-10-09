@@ -22,6 +22,8 @@ const {
   emitOutput,
   emitSnapshot,
   latestFrameForOpcode,
+  inputFrameTexts,
+  subscribeFrameCount,
   resetRemoteRuntimeTransport
 } = createRemoteRuntimeTransportMocks({
   getCallbacks: () => subscriptionCallbacks,
@@ -205,13 +207,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     subscriptionCallbacks?.onClose?.()
     await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(2))
-    await vi.waitFor(() =>
-      expect(
-        subscriptionSendBinary.mock.calls
-          .map((call) => decodeTerminalStreamFrame(call[0]))
-          .filter((frame) => frame?.opcode === TerminalStreamOpcode.Subscribe)
-      ).toHaveLength(2)
-    )
+    await vi.waitFor(() => expect(subscribeFrameCount()).toBe(2))
     const reconnectStreamId = latestSubscribePayload().streamId
     emitSnapshot(reconnectStreamId, 'RECONNECT_SNAPSHOT')
     subscriptionCallbacks?.onResponse({
@@ -275,13 +271,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     subscriptionCallbacks?.onClose?.()
     await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(2))
-    await vi.waitFor(() =>
-      expect(
-        subscriptionSendBinary.mock.calls
-          .map((call) => decodeTerminalStreamFrame(call[0]))
-          .filter((frame) => frame?.opcode === TerminalStreamOpcode.Subscribe)
-      ).toHaveLength(2)
-    )
+    await vi.waitFor(() => expect(subscribeFrameCount()).toBe(2))
     const reconnectStreamId = latestSubscribePayload().streamId
     // An exited-but-preserved pane has nothing to push and will never emit live bytes,
     // so without the re-arm the pane stays blank until a visibility flip.
@@ -300,13 +290,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     subscriptionCallbacks?.onClose?.()
     await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(3))
-    await vi.waitFor(() =>
-      expect(
-        subscriptionSendBinary.mock.calls
-          .map((call) => decodeTerminalStreamFrame(call[0]))
-          .filter((frame) => frame?.opcode === TerminalStreamOpcode.Subscribe)
-      ).toHaveLength(3)
-    )
+    await vi.waitFor(() => expect(subscribeFrameCount()).toBe(3))
     const populatedReconnectStreamId = latestSubscribePayload().streamId
     emitSnapshot(populatedReconnectStreamId, 'RECOVERY_SNAPSHOT')
     subscriptionCallbacks?.onResponse({
@@ -434,7 +418,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(unsubscribe).toHaveBeenCalledTimes(1)
   })
 
-  it('recovers repeated partitions without changing PTY identity or accepting detached input', async () => {
+  it('recovers repeated partitions without changing PTY identity and delivers detached input once', async () => {
     const callbacksByEpoch: NonNullable<typeof subscriptionCallbacks>[] = []
     const unsubscribeByEpoch: ReturnType<typeof vi.fn>[] = []
     runtimeSubscribe.mockImplementation(
@@ -466,7 +450,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       })
 
       expect(transport.isConnected()).toBe(false)
-      expect(transport.sendInput(`detached-${cycle}`, 'driving')).toBe(false)
+      // Why: keys typed while the same PTY recovers are held and delivered once it rebinds (#25784).
+      expect(transport.sendInput(`detached-${cycle}`, 'driving')).toBe(true)
       expect(unsubscribeByEpoch[cycle]).toHaveBeenCalledTimes(1)
       await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(cycle + 2))
       await vi.waitFor(() => expect(latestSubscribePayload().terminal).toBe('terminal-1'))
@@ -478,6 +463,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(transport.sendInputImmediate(`input-${cycle}`)).toBe(true)
 
       expect(transport.getPtyId()).toBe(ptyId)
+      expect(inputFrameTexts().filter((text) => text.includes(`detached-${cycle}`))).toHaveLength(1)
       expect(onData).toHaveBeenCalledWith(`output-${cycle}`, expect.any(Object))
       expect(
         decodeTerminalStreamText(
@@ -551,12 +537,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(transport.retryRecovery?.()).toBe(true)
       expect(transport.retryRecovery?.()).toBe(false)
       await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(callsAtCutoff + 1))
-      await vi.waitFor(() => {
-        const subscribeFrames = subscriptionSendBinary.mock.calls
-          .map((call) => decodeTerminalStreamFrame(call[0]))
-          .filter((frame) => frame?.opcode === TerminalStreamOpcode.Subscribe)
-        expect(subscribeFrames).toHaveLength(2)
-      })
+      await vi.waitFor(() => expect(subscribeFrameCount()).toBe(2))
       const manualStream = latestSubscribePayload()
       expect(manualStream.terminal).toBe('terminal-1')
       emitSnapshot(manualStream.streamId, 'after manual reconnect')
@@ -596,7 +577,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     rejectReconnect(new Error('reconnect failed'))
 
     await expect(accepted).resolves.toBe(false)
-    expect(onError).toHaveBeenCalledWith('reconnect failed')
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledWith('reconnect failed'))
   })
 
   it('releases pending claimed input when the remote terminal ends', async () => {

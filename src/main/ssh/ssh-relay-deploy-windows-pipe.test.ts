@@ -1,6 +1,6 @@
 // Windows named-pipe endpoint deploys, split out of ssh-relay-deploy.test.ts: that file sits at
 // the max-lines cap, and these four share only the deploy harness with the rest of it.
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RelayRipgrepInstallModule from './ssh-relay-ripgrep-install'
 
 vi.mock('electron', () => ({
@@ -120,7 +120,9 @@ const extractWindowsMarkerPath = (script: string): string =>
   /-LiteralPath\s+'([^']*\.windows-active-pipe[^']*)'/.exec(script)?.[1] ?? ''
 
 function makeMockConnection(): SshConnection {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture mocks every connection method used by the legacy deployment path.
   return {
+    getTarget: () => ({ id: 'legacy-target', remoteRuntime: 'legacy' }),
     canRunConcurrentExecCommands: vi.fn().mockReturnValue(true),
     exec: vi.fn().mockResolvedValue({
       on: vi.fn(),
@@ -146,8 +148,11 @@ function makeMockConnection(): SshConnection {
 }
 
 describe('deployAndLaunchRelay on Windows remotes', () => {
+  afterEach(() => vi.unstubAllEnvs())
   beforeEach(() => {
     vi.clearAllMocks()
+    // The host-npm path is opt-in; these cases cover it.
+    vi.stubEnv('ORCA_SSH_REMOTE_RUNTIME', 'legacy')
     vi.mocked(execCommand).mockReset().mockResolvedValue('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
     vi.mocked(waitForSentinel).mockReset().mockResolvedValue({
       write: vi.fn(),

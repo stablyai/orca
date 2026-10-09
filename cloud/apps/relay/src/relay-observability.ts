@@ -5,6 +5,7 @@ import type { ControlRenewalFlush } from './control-renewal-batch.js'
 import type { CellInventoryHoldCounts } from './cell-inventory-hold-samples.js'
 import type { PostgresPoolPressureCounts } from './postgres-pool-pressure.js'
 import type { RelayReadinessGraceEvent, RelayReadinessObservation } from './relay-readiness.js'
+import { RELAY_FIX_LEVEL } from './relay-fix-level.js'
 
 export type RelayRuntimeCounts = {
   totalConnections: number
@@ -44,8 +45,33 @@ export type AssignmentAdmissionOutcome =
   | 'sticky-rejected'
   | 'placement'
   | 'placement-rejected'
+  | 'drain-return'
+  | 'drain-return-deferred'
 
-export type AssignmentAdmissionLane = 'sticky' | 'placement'
+export type AssignmentAdmissionLane = 'sticky' | 'placement' | 'drain-return'
+
+// Why every /v1/assign 503 has a cause: drain-return deferrals are scheduled
+// 503s, so a gate on all 503s trips on every fast drain.
+export type AssignmentUnavailableCause =
+  | 'disabled'
+  | 'sticky-lane'
+  | 'sticky-verify-database'
+  | 'placement-lane'
+  | 'drain-return-deferred'
+  | 'database'
+  | 'relay_capacity_exhausted'
+  | 'relay_connection_headroom_exhausted'
+  | 'relay_home_cell_unavailable'
+  | 'relay_assignment_row_busy'
+
+// Row-lock waiters seen in one pg_stat_activity sample, by who waits, on which
+// table, behind whom. Roles come from each pool's application_name.
+export type DatabaseLockWaitSample = {
+  waiterRole: string
+  table: string
+  holderRole: string
+  waiters: number
+}[]
 
 export interface RelayRuntimeObserver {
   recordAuth(success: boolean): void
@@ -58,6 +84,10 @@ export interface RelayRuntimeObserver {
   recordControlActivityRecovery?(success: boolean): void
   recordAssignmentAdmission?(outcome: AssignmentAdmissionOutcome): void
   recordAssignmentRejectionReason?(lane: AssignmentAdmissionLane, reason: string): void
+  recordDrainReturnRetryAfter?(seconds: number): void
+  recordAdmissionServiceMs?(lane: 'sticky' | 'drain-return', durationMs: number): void
+  recordAssignmentUnavailable?(cause: AssignmentUnavailableCause): void
+  recordDatabaseLockWaitSample?(sample: DatabaseLockWaitSample): void
   recordRegionRequest?(region: RelayRegion | undefined): void
   recordRegionSelection?(input: {
     targetRegion: RelayRegion
@@ -107,6 +137,16 @@ type RelayMetricDeltas = {
   placementAssignmentRejections: number
   stickyRejectionsByReason: Record<string, number>
   placementRejectionsByReason: Record<string, number>
+  drainReturnAssignments: number
+  drainReturnDeferrals: number
+  drainReturnRejectionsByReason: Record<string, number>
+  drainReturnRetryAfterSecondsMax: number
+  drainReturnRetryAfterSecondsSum: number
+  drainReturnServiceMs: number[]
+  stickyServiceMs: number[]
+  assign503sByCause: Record<string, number>
+  dbLockWaitSamples: number
+  dbLockWaitersByKey: Record<string, number>
   requestedRegions: Record<string, number>
   selectedRegions: Record<string, number>
   regionFallbacks: Record<string, number>
@@ -125,6 +165,7 @@ type RelayMetricDeltas = {
   controlRenewalFlushRowsMax: number
   controlActivityRecoveries: number
   controlActivityRecoveryFailures: number
+  hostHellosShed: number
 }
 
 // A host chooses how often it answers a ping, so the process-wide window is a
@@ -148,6 +189,16 @@ const emptyDeltas = (): RelayMetricDeltas => ({
   placementAssignmentRejections: 0,
   stickyRejectionsByReason: {},
   placementRejectionsByReason: {},
+  drainReturnAssignments: 0,
+  drainReturnDeferrals: 0,
+  drainReturnRejectionsByReason: {},
+  drainReturnRetryAfterSecondsMax: 0,
+  drainReturnRetryAfterSecondsSum: 0,
+  drainReturnServiceMs: [],
+  stickyServiceMs: [],
+  assign503sByCause: {},
+  dbLockWaitSamples: 0,
+  dbLockWaitersByKey: {},
   requestedRegions: {},
   selectedRegions: {},
   regionFallbacks: {},
@@ -171,7 +222,8 @@ const emptyDeltas = (): RelayMetricDeltas => ({
   controlRenewalFlushLatenciesMs: [],
   controlRenewalFlushRowsMax: 0,
   controlActivityRecoveries: 0,
-  controlActivityRecoveryFailures: 0
+  controlActivityRecoveryFailures: 0,
+  hostHellosShed: 0
 })
 
 function ascending(values: number[]): number[] {
@@ -239,10 +291,16 @@ export class RelayObservability implements RelayRuntimeObserver {
     this.deltas.reconnects++
   }
 
+  recordHostHelloShed(): void {
+    this.deltas.hostHellosShed++
+  }
+
   recordAssignmentAdmission(outcome: AssignmentAdmissionOutcome): void {
     if (outcome === 'sticky') this.deltas.stickyAssignments++
     else if (outcome === 'sticky-rejected') this.deltas.stickyAssignmentRejections++
     else if (outcome === 'placement') this.deltas.placementAssignments++
+    else if (outcome === 'drain-return') this.deltas.drainReturnAssignments++
+    else if (outcome === 'drain-return-deferred') this.deltas.drainReturnDeferrals++
     else this.deltas.placementAssignmentRejections++
   }
 
@@ -250,8 +308,35 @@ export class RelayObservability implements RelayRuntimeObserver {
     const counts =
       lane === 'sticky'
         ? this.deltas.stickyRejectionsByReason
-        : this.deltas.placementRejectionsByReason
+        : lane === 'drain-return'
+          ? this.deltas.drainReturnRejectionsByReason
+          : this.deltas.placementRejectionsByReason
     counts[reason] = (counts[reason] ?? 0) + 1
+  }
+
+  recordDrainReturnRetryAfter(seconds: number): void {
+    this.deltas.drainReturnRetryAfterSecondsMax = Math.max(
+      this.deltas.drainReturnRetryAfterSecondsMax,
+      seconds
+    )
+    this.deltas.drainReturnRetryAfterSecondsSum += seconds
+  }
+
+  recordAdmissionServiceMs(lane: 'sticky' | 'drain-return', durationMs: number): void {
+    if (lane === 'sticky') this.deltas.stickyServiceMs.push(durationMs)
+    else this.deltas.drainReturnServiceMs.push(durationMs)
+  }
+
+  recordAssignmentUnavailable(cause: AssignmentUnavailableCause): void {
+    increment(this.deltas.assign503sByCause, cause)
+  }
+
+  recordDatabaseLockWaitSample(sample: DatabaseLockWaitSample): void {
+    this.deltas.dbLockWaitSamples++
+    for (const row of sample) {
+      const key = `${row.waiterRole}:${row.table}:${row.holderRole}`
+      this.deltas.dbLockWaitersByKey[key] = (this.deltas.dbLockWaitersByKey[key] ?? 0) + row.waiters
+    }
   }
 
   recordRegionRequest(region: RelayRegion | undefined): void {
@@ -402,6 +487,7 @@ export class RelayObservability implements RelayRuntimeObserver {
       message: 'Orca Relay runtime metrics',
       event: 'orca_relay_runtime_metrics',
       metricVersion: 2,
+      fixLevel: RELAY_FIX_LEVEL,
       role: this.identity.role,
       cellId: this.identity.cellId,
       region: this.identity.region,
@@ -416,6 +502,35 @@ export class RelayObservability implements RelayRuntimeObserver {
       placementAssignmentRejectionsDelta: deltas.placementAssignmentRejections,
       stickyRejectionsByReasonDelta: deltas.stickyRejectionsByReason,
       placementRejectionsByReasonDelta: deltas.placementRejectionsByReason,
+      drainReturnAssignmentsDelta: deltas.drainReturnAssignments,
+      drainReturnDeferralsDelta: deltas.drainReturnDeferrals,
+      drainReturnRejectionsByReasonDelta: deltas.drainReturnRejectionsByReason,
+      drainReturnRetryAfterSecondsMax: deltas.drainReturnRetryAfterSecondsMax,
+      drainReturnRetryAfterSecondsSum: deltas.drainReturnRetryAfterSecondsSum,
+      // Slot hold times; a lane serves concurrency / service time per second.
+      // Omitted when empty for the same reason as the accept percentiles below.
+      ...(deltas.drainReturnServiceMs.length === 0
+        ? {}
+        : {
+            drainReturnServiceMsP50: roundMs(percentile(deltas.drainReturnServiceMs, 0.5)),
+            drainReturnServiceMsP95: roundMs(percentile(deltas.drainReturnServiceMs, 0.95))
+          }),
+      ...(deltas.stickyServiceMs.length === 0
+        ? {}
+        : {
+            stickyServiceMsP50: roundMs(percentile(deltas.stickyServiceMs, 0.5)),
+            stickyServiceMsP99: roundMs(percentile(deltas.stickyServiceMs, 0.99))
+          }),
+      assign503sByCauseDelta: deltas.assign503sByCause,
+      assignNonDrain503sDelta: Object.entries(deltas.assign503sByCause)
+        .filter(([cause]) => cause !== 'drain-return-deferred')
+        .reduce((sum, [, count]) => sum + count, 0),
+      // Waiters summed over samples; divided by samples it is the mean number of
+      // backends waiting, i.e. lock-wait seconds per second.
+      dbLockWaitSamplesDelta: deltas.dbLockWaitSamples,
+      dbLockWaitersByKeyDelta: deltas.dbLockWaitersByKey,
+      dbCellRowLockWaitersDirectorDelta: lockWaiters(deltas.dbLockWaitersByKey, 'director'),
+      dbCellRowLockWaitersCellDelta: lockWaiters(deltas.dbLockWaitersByKey, 'cell'),
       requestedRegionsDelta: deltas.requestedRegions,
       selectedRegionsDelta: deltas.selectedRegions,
       ...regionCounterFields('requestedRegion', deltas.requestedRegions),
@@ -462,6 +577,7 @@ export class RelayObservability implements RelayRuntimeObserver {
         deltas.controlRenewalsByOutcome.control_activity_not_found ?? 0,
       controlActivityRecoveriesDelta: deltas.controlActivityRecoveries,
       controlActivityRecoveryFailuresDelta: deltas.controlActivityRecoveryFailures,
+      hostHellosShedDelta: deltas.hostHellosShed,
       // Meaning changed when renewals began batching: for a batched row this is
       // the flush's duration, not that row's own statement latency. The
       // per-flush fields below are the ones to read for statement cost.
@@ -494,6 +610,12 @@ function regionCounterFields(
       counts[region] ?? 0
     ])
   )
+}
+
+function lockWaiters(byKey: Record<string, number>, waiterRole: string): number {
+  return Object.entries(byKey)
+    .filter(([key]) => key.startsWith(`${waiterRole}:relay_cells:`))
+    .reduce((sum, [, waiters]) => sum + waiters, 0)
 }
 
 function increment(counts: Record<string, number>, key: string): void {

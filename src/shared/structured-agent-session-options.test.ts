@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { OMP_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-omp'
 import { CODEX_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-claude-codex'
 import { buildNativeChatSessionOptionSnapshot } from './native-chat-session-option-snapshot'
 import { createNativeChatSessionOptionRecord } from './native-chat-session-option-state'
@@ -17,6 +18,29 @@ function viewModel(...args: Parameters<typeof structuredAgentSessionOptionView>)
 }
 
 describe('structured agent session options', () => {
+  it('keeps a missing model out of the picker and adopts a later report', () => {
+    const state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('omp'),
+      OMP_SESSION_OPTION_CATALOG,
+      { models: [], current: { effort: 'off', confirmed: ['effort'] } }
+    )
+    expect(state.catalog?.models).toEqual([])
+    expect(structuredAgentSessionOptionSnapshot(state)).toEqual([])
+    expect(state.record.model).toBeUndefined()
+
+    const reported = applyStructuredAgentSessionOptions(state, OMP_SESSION_OPTION_CATALOG, {
+      models: [{ id: 'reported-model', label: 'Reported Model', isDefault: true, efforts: [] }],
+      current: { model: 'reported-model', confirmed: ['model'] }
+    })
+    expect(structuredAgentSessionOptionSnapshot(reported)[0]).toMatchObject({
+      valueSource: 'reported',
+      kind: {
+        currentValue: 'reported-model',
+        choices: [{ value: 'reported-model', label: 'Reported Model' }]
+      }
+    })
+  })
+
   it('projects native Codex selects while bridge Codex keeps its agent picker', () => {
     const state = applyStructuredAgentSessionOptions(
       createStructuredAgentSessionOptionState('codex'),

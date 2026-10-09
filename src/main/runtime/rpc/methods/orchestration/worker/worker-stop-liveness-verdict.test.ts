@@ -229,7 +229,7 @@ describe('worker-stop against a terminal we lost contact with', () => {
     const dispatch = createWorker()
     expect(db.beginWorkerStop(dispatch.id, runtime.getRuntimeId()).disposition).toBe('stopping')
 
-    expect(() => db.abandonWorkerDispatch(dispatch.id)).toThrow(
+    expect(() => db.abandonWorkerDispatch(dispatch.id, runtime.getRuntimeId())).toThrow(
       'is stopping; wait for worker-stop to settle before abandoning'
     )
     expect(db.getWorkerDispatch(dispatch.id)?.state).toBe('stopping')

@@ -57,6 +57,7 @@ export function createSshIpcMocks(): SshIpcMocks {
       attach: vi.fn(),
       attachForReconnect: vi.fn().mockResolvedValue({}),
       shutdown: vi.fn(),
+      listProcesses: vi.fn(async () => []),
       providerGeneration: 0
     },
     mockFsProvider: {},
@@ -143,7 +144,21 @@ export function createSshIpcMocks(): SshIpcMocks {
       installSshPtySourceAckPublisher: vi.fn().mockReturnValue(() => {}),
       installSshPtySourceCancellationPublisher: vi.fn().mockReturnValue(() => {})
     },
+    // Null keeps today's relay path; the real decision is covered by its own tests.
+    hostServerConnect: {
+      decideHostServer: vi.fn(async () => null),
+      recheckWhenManagedFenceClears: vi.fn(),
+      publishHostServerDecisionFailure: vi.fn(),
+      publishManagedServerConnect: vi.fn(),
+      recordRelayDecision: vi.fn(),
+      refineRelayTerminalDecision: vi.fn(async () => {})
+    },
     sshConnectionStore: {
+      isRuntimeOwnedSshTarget: (target: { owner?: unknown }) => target.owner !== undefined,
+      isManagedOrcadSshTarget: (target: { orcadFence?: unknown; orcadProvisioning?: unknown }) =>
+        target.orcadFence !== undefined || target.orcadProvisioning !== undefined,
+      allowsDirectSshRelay: (target: { orcadFence?: unknown; orcadProvisioning?: unknown }) =>
+        target.orcadFence === undefined && target.orcadProvisioning === undefined,
       SshConnectionStore: class MockSshConnectionStore {
         constructor() {
           return mockSshStore

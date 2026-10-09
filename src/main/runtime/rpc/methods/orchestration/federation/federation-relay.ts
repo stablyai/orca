@@ -16,6 +16,7 @@ import {
 export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
   defineMethod({
     name: 'orchestration.federationPull',
+    permission: 'workspace',
     params: FederationPullParams,
     handler: (params, { runtime, authenticatedCallerFingerprint }) => {
       requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
@@ -37,6 +38,7 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
   }),
   defineMethod({
     name: 'orchestration.federationAck',
+    permission: 'workspace',
     params: FederationAckParams,
     handler: (params, { runtime, authenticatedCallerFingerprint }) => {
       requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
@@ -101,6 +103,7 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
   }),
   defineMethod({
     name: 'orchestration.federationImport',
+    permission: 'workspace',
     params: FederationImportParams,
     handler: (params, { runtime, authenticatedCallerFingerprint }) => {
       const db = runtime.getOrchestrationDb()

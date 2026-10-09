@@ -47,6 +47,8 @@ export type DetectedWorktreeScan = {
 export type DetectedWorktreeSideEffectToken = Readonly<{
   generation: number
   authorizedRootsRevision: number
+  /** The distro whose Git listed the scan; undefined is host Git. */
+  wslDistro?: string
 }>
 
 export type DetectedWorktreeMetadataPrune = Readonly<{
@@ -173,7 +175,7 @@ export async function listDetectedGitWorktrees(
   const scan: DetectedWorktreeScan = {
     invalidated: false,
     promise: listRepoWorktreesForDetectedScan(repo, localWorktreeGitOptions),
-    sideEffectToken: { generation, authorizedRootsRevision },
+    sideEffectToken: { generation, authorizedRootsRevision, ...localWorktreeGitOptions },
     hygieneDue,
     ...(metadataPruneExpectation
       ? {
@@ -269,7 +271,7 @@ export async function applyFreshDetectedWorktreeScanSideEffects(
   ) {
     return false
   }
-  rememberLocalWorktreeRoots(store, repo, gitWorktrees)
+  rememberLocalWorktreeRoots(store, repo, gitWorktrees, sideEffectToken)
   // Why: lineage retention is decided against the metadata rows the prune preserved, so running it
   // without that pass would drop lineage for rows the pass would have kept. Both halves share the
   // hygiene cadence instead.
@@ -294,14 +296,17 @@ export function getDetectedWorktreeScanCacheKey(
 export function rememberLocalWorktreeRoots(
   store: Store,
   repo: Repo,
-  gitWorktrees: GitWorktreeInfo[]
+  gitWorktrees: GitWorktreeInfo[],
+  listing: { wslDistro?: string } = {}
 ): void {
   if (getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID) {
     return
   }
   // Why: reuse the `git worktree list` result so later git/file IPC validation skips a second scan that can trigger macOS folder-permission prompts.
-  registerWorktreeRootsForRepo(store, repo, [
-    repo.path,
-    ...gitWorktrees.map((worktree) => worktree.path)
-  ])
+  registerWorktreeRootsForRepo(
+    store,
+    repo,
+    [repo.path, ...gitWorktrees.map((worktree) => worktree.path)],
+    listing
+  )
 }

@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // The crash boundary: the host wrote a submission row, dispatched, and died
 // before it learned whether the provider took the message. Replay must reconcile
 // without duplicating the user's message and without losing it.
@@ -24,14 +25,15 @@ import {
   type ProviderHistoryItem,
   type ProviderHistoryWindow
 } from './journal-submission-reconciler'
-import { createTrackedJournalOpener } from './journal-store-test-open'
+import { createTrackedJournalOpener } from './journal-host-database-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 
 const TURN_ID = '019fd8ca-edbe-7c43-b231-4c7aea3a2d89'
@@ -62,7 +64,7 @@ const journals = createTrackedJournalOpener()
 async function open() {
   return journals.open({
     identity: IDENTITY,
-    journalDir: root,
+    stateDirectory: root,
     now: tick,
     mintEpoch: () => `epoch-${clock}`
   })
@@ -138,7 +140,10 @@ describe('crash between provider accept and journal commit', () => {
     })
     // The provider's own copy of the message arrives next, under the identity
     // reconciliation adopted. It must land in the bubble the user already sees.
-    await restarted.appendItem(outcome.identity, userMessage('deploy the thing'), { fence: 2 })
+    await restarted.appendItem(outcome.identity, userMessage('deploy the thing'), {
+      fence: 2,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
 
     const items = restarted.snapshot().items
     expect(items).toHaveLength(1)

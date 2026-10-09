@@ -38,12 +38,6 @@ import { recordCoalescedDurableCrashBreadcrumb } from './durable-crash-breadcrum
  *   taskkill (neither runs in main); and the browser-route Electron probes,
  *   which are reached only from `*.electron.test.ts`.
  *
- * `main-process-tree-kill-gate.test.ts` is the ratchet that keeps that list
- * closed: it counts `/pid` call sites against gate admissions per file, so a new
- * pid-addressed kill fails it whether it lands in a new file or inside a family
- * that already asks the gate. It does not see a `/pid` argument built from a
- * variable.
- *
  * A daemon or relay kill missing from the count is a diagnostics gap, not a
  * missed suspect: those hosts cannot reach a Chromium pid in the first place
  * (see `orca-chromium-process-pids.ts`), and a group or Job-Object kill can
@@ -60,8 +54,8 @@ export type SelfInitiatedTreeKill = {
   at: number
 }
 
-// Why 32 and not the sibling ring's 16: one teardown fans out over every root of
-// a codex turn, so a single incident can spend a dozen entries on its own.
+// Why 32 and not the sibling ring's 16: a window close tears down every session at once,
+// a burst of 30+ group kills (see the eviction note below).
 const MAX_TRACKED_SELF_KILLS = 32
 
 // Why asymmetric: a kill older than this cannot plausibly explain the death,

@@ -2,6 +2,7 @@ import { homedir } from 'node:os'
 import { normalizeProxyUrl } from '../../../shared/network-proxy'
 import { normalizeKagiSessionLink } from '../../../shared/browser-url'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { NativeChatUpgradeTipAudience } from '../../../shared/native-chat-upgrade-tip-audience'
 import type { SshPtyConsumerRecovery } from '../../../shared/ssh-types'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
@@ -14,11 +15,11 @@ import {
   sshPtyOwnerLeaseSecretSlot
 } from '../../protected-secret-persistence'
 import {
-  isLegacyOpenCodeGoApiKey,
   isLegacyOpenCodeSessionCookie,
   isLegacySshPtyOwnerLease
 } from '../leasing-ssh-ptys/secret-validation'
 import { readGithubCacheSnapshot } from './user-data-path'
+import { retainLegacyOpenCodeGoApiKey } from './legacy-opencode-go-api-key-migration'
 import {
   gcStaleWorktreeMeta,
   normalizeWorktreeLinkedItemMetadata
@@ -86,6 +87,7 @@ export class LoadedStateParsingOperations {
 
     let result: PersistedState | null = null
     let parsed: PersistedState | undefined
+    let nativeChatUpgradeTipAudience: NativeChatUpgradeTipAudience | null = null
     try {
       if (fileExistedOnLoad) {
         const readStartedAt = performance.now()
@@ -105,6 +107,8 @@ export class LoadedStateParsingOperations {
         if (parsed === undefined) {
           throw new Error('Profile state startup snapshot is missing')
         }
+        // Why: decide from the profile as saved, before defaults or migrations can touch Chat UI.
+        nativeChatUpgradeTipAudience = this.cohorts.captureNativeChatUpgradeTipAudience(parsed)
         // Why: secrets are stored encrypted via safeStorage; decrypt at the load boundary so the app sees plaintext.
         if (parsed.settings?.opencodeSessionCookie) {
           parsed.settings.opencodeSessionCookie = this.runtime.protectedSecrets.decrypt(
@@ -113,13 +117,7 @@ export class LoadedStateParsingOperations {
             isLegacyOpenCodeSessionCookie
           )
         }
-        if (parsed.settings?.opencodeGoApiKey) {
-          parsed.settings.opencodeGoApiKey = this.runtime.protectedSecrets.decrypt(
-            PROTECTED_SECRET_SLOT.opencodeGoApiKey,
-            parsed.settings.opencodeGoApiKey,
-            isLegacyOpenCodeGoApiKey
-          )
-        }
+        retainLegacyOpenCodeGoApiKey(parsed.settings, this.runtime.protectedSecrets)
         if (parsed.settings?.httpProxyUrl) {
           const decryptedProxy = this.runtime.protectedSecrets.decryptWithStatus(
             PROTECTED_SECRET_SLOT.httpProxyUrl,
@@ -269,10 +267,14 @@ export class LoadedStateParsingOperations {
       this.runtime.loadNeedsSave = true
     }
 
-    const migrated = this.cohorts.migrateTabSwitchKeybindings(
-      this.cohorts.migrateTelemetry(result, fileExistedOnLoad),
-      fileExistedOnLoad
-    )
+    const migrated = {
+      ...this.cohorts.migrateTabSwitchKeybindings(
+        this.cohorts.migrateTelemetry(result, fileExistedOnLoad),
+        fileExistedOnLoad
+      ),
+      nativeChatUpgradeTipAudience:
+        nativeChatUpgradeTipAudience ?? this.cohorts.captureNativeChatUpgradeTipAudience(undefined)
+    }
 
     // githubCache is a sidecar file now (see getGithubCacheFile); legacy in-file caches seed the session, then get stripped.
     const legacyCache = migrated.githubCache

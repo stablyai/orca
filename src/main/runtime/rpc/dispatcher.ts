@@ -24,6 +24,13 @@ import { mapDispatcherError } from './dispatcher-error-response'
 import { parseRpcRequestParams } from './dispatcher-request-parsing'
 import { RpcStreamingDispatcher } from './rpc-streaming-dispatcher'
 import { invokeDispatcherUnaryMethod } from './dispatcher-unary-method-invocation'
+import { resolveRpcCallerIdentity } from './rpc-caller-identity'
+import {
+  bindRpcCallToCallerScope,
+  denyRpcMethodForCaller,
+  OWNER_RPC_CALLER_SCOPE,
+  type RpcCallerScope
+} from './rpc-caller-scope'
 import {
   needsOrchestrationCallerResolution,
   resolveOrchestrationSessionCaller,
@@ -33,6 +40,8 @@ import {
 export type DispatcherOptions = {
   runtime: OrcaRuntimeService
   methods?: readonly RpcAnyMethodDeclaration[]
+  /** Pins every call to this scope, for in-process bridges that relay a non-owner caller. */
+  callerScope?: RpcCallerScope
 }
 
 type DispatchCallOptions = RpcDispatchStreamingOptions
@@ -43,9 +52,11 @@ export class RpcDispatcher {
   private readonly orchestrationMutations: OrchestrationMutationExecutor
   private readonly legacyOrchestration: OrchestrationLegacyCompatibility
   private readonly streamingDispatcher: RpcStreamingDispatcher
+  private readonly pinnedCallerScope: RpcCallerScope | undefined
 
-  constructor({ runtime, methods = ALL_RPC_METHODS }: DispatcherOptions) {
+  constructor({ runtime, methods = ALL_RPC_METHODS, callerScope }: DispatcherOptions) {
     this.runtime = runtime
+    this.pinnedCallerScope = callerScope
     this.registry = buildRegistry(methods)
     this.orchestrationMutations = getOrchestrationMutationExecutor(runtime)
     this.legacyOrchestration = new OrchestrationLegacyCompatibility(runtime)
@@ -54,13 +65,19 @@ export class RpcDispatcher {
       registry: this.registry,
       orchestrationMutations: this.orchestrationMutations,
       legacyOrchestration: this.legacyOrchestration,
-      meta: () => this.meta()
+      meta: () => this.meta(),
+      pinnedCallerScope: callerScope
     })
   }
 
   async dispatch(request: RpcRequest, options?: DispatchCallOptions): Promise<RpcResponse> {
     const meta = this.meta()
     const method = this.registry.get(request.method)
+    const callerScope = this.pinnedCallerScope ?? options?.callerScope ?? OWNER_RPC_CALLER_SCOPE
+    const denial = denyRpcMethodForCaller(callerScope, request.method, method?.permission)
+    if (denial) {
+      return errorResponse(request.id, meta, 'forbidden', denial)
+    }
     if (!method) {
       return errorResponse(
         request.id,
@@ -97,6 +114,17 @@ export class RpcDispatcher {
       )
     }
 
+    const pendingBinding = bindRpcCallToCallerScope(
+      callerScope,
+      this.runtime,
+      request.method,
+      parsedParams.value
+    )
+    const binding = pendingBinding ? await pendingBinding : null
+    if (binding?.kind === 'denied') {
+      return errorResponse(request.id, meta, 'forbidden', binding.message)
+    }
+
     if (request.method.startsWith('emulator.')) {
       emulatorProbe(`rpc ${request.method}`, request.params)
     }
@@ -116,17 +144,21 @@ export class RpcDispatcher {
             : undefined,
           requestId: request.id,
           clientId: options?.clientId,
+          caller: resolveRpcCallerIdentity(options),
           clientKind: options?.clientKind,
           clientCapabilities: options?.clientCapabilities,
           updateClientCapabilities: options?.updateClientCapabilities,
-          orchestrationCapability: request.orchestrationCapability,
           authenticatedCallerFingerprint: options?.authenticatedCallerFingerprint,
           orchestrationCaller: resolved.caller
         },
         orchestrationMutations: this.orchestrationMutations,
         legacyOrchestration: this.legacyOrchestration
       })
-      return successResponse(request.id, meta, result)
+      const filtered = binding?.filterResult?.(result) ?? { kind: 'allowed', result }
+      if (filtered.kind === 'denied') {
+        return errorResponse(request.id, meta, 'forbidden', filtered.message)
+      }
+      return successResponse(request.id, meta, filtered.result)
     } catch (error) {
       if (request.method.startsWith('emulator.')) {
         emulatorProbeError(`rpc ${request.method}`, error, { params: request.params })

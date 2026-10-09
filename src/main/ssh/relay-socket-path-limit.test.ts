@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('./ssh-relay-opencode-runtime', () => ({
   ensureRemoteOpenCodeRuntime: vi.fn().mockResolvedValue('ready')
@@ -95,7 +95,9 @@ const LONG_HOME = '/var/www/611f7cf9-f715-49e6-91d9-0ffac1d7c4c0'
 const RELAY_VERSION_DIR_NAME = 'relay-0.1.0+8d4e15ad63eb'
 
 function makeMockConnection(): SshConnection {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture mocks every connection method used by the legacy deployment path.
   return {
+    getTarget: () => ({ id: 'legacy-target', remoteRuntime: 'legacy' }),
     canRunConcurrentExecCommands: vi.fn().mockReturnValue(true),
     exec: vi.fn().mockResolvedValue({
       on: vi.fn(),
@@ -169,8 +171,11 @@ describe('remote unix socket path limit', () => {
 })
 
 describe('relay launch with a long remote $HOME', () => {
+  afterEach(() => vi.unstubAllEnvs())
   beforeEach(() => {
     vi.clearAllMocks()
+    // The host-npm path is opt-in; these cases cover it.
+    vi.stubEnv('ORCA_SSH_REMOTE_RUNTIME', 'legacy')
   })
 
   it('keeps the launched socket path inside the remote sun_path limit', async () => {

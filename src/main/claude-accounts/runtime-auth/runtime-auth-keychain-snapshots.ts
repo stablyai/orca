@@ -41,7 +41,11 @@ export class ClaudeRuntimeAuthKeychainSnapshots extends ClaudeRuntimeAuthManaged
     service: 'scoped' | 'legacy',
     managedCredentialsJson: string | undefined
   ): string | null {
-    if (managedCredentialsJson && credentialsJson === managedCredentialsJson && previousSnapshot) {
+    if (
+      managedCredentialsJson &&
+      this.accountCredentialFieldsEqual(credentialsJson, managedCredentialsJson) &&
+      previousSnapshot
+    ) {
       const previousValue = this.readKeychainSnapshotValue(previousSnapshot, service)
       if (previousValue.status === 'captured') {
         return previousValue.credentialsJson

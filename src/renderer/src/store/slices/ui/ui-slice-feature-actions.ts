@@ -29,6 +29,9 @@ export function createUiFeatureActions(set: UISliceSet, get: UISliceGet): Partia
         window.api.ui.set({ featureTipsSeenIds: next }).catch(console.error)
         return { featureTipsSeenIds: next }
       }),
+    inNativeChatUpgradeTipAudience: null,
+    setInNativeChatUpgradeTipAudience: (inAudience) =>
+      set({ inNativeChatUpgradeTipAudience: inAudience }),
     featureInteractions: {},
     recordFeatureInteraction: (id) => {
       let tourProgression: ReturnType<typeof getContextualTourProgressionForFeatureInteraction> =

@@ -2,6 +2,7 @@ import type { SshConnectionCallbacks } from '../ssh/ssh-connection'
 import type { SshConnectionState, SshTarget } from '../../shared/ssh-types'
 import { rotateSshProviderAuthority } from '../ssh/ssh-provider-authority'
 import { getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
+import { isSshHostCensusInFlight } from '../ssh/ssh-connection-attribution'
 import { activeSessions } from './ssh-active-relay-sessions'
 import {
   connectInFlight,
@@ -79,10 +80,10 @@ export function handleSshConnectionStateChange(targetId: string, state: SshConne
     return
   } else if (
     state.status === 'connected' &&
-    session !== undefined &&
+    // No session yet: the server decision's census, deploy or conversion opened the transport.
     sessionState !== 'ready' &&
     !completedTransportReconnect &&
-    connectInFlight.has(targetId)
+    (connectInFlight.has(targetId) || isSshHostCensusInFlight(targetId))
   ) {
     // Why: the raw SSH transport reaches 'connected' before the relay session establishes during an
     // explicit connect. Forwarding it makes the renderer treat the host as fully up — it remounts
@@ -96,7 +97,8 @@ export function handleSshConnectionStateChange(targetId: string, state: SshConne
     clearRelayStateOverride(targetId)
     broadcastSshState(getCurrentMainWindow, targetId, {
       targetId,
-      status: 'deploying-relay',
+      // Before any session the connect is still deciding the host's server.
+      status: session ? 'deploying-relay' : 'connecting',
       error: state.error,
       reconnectAttempt: state.reconnectAttempt
     })

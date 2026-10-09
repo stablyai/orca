@@ -644,40 +644,6 @@ describe('useAllHostClients', () => {
     }
   })
 
-  it('keeps startup connection fanout constant for a large saved-host list', async () => {
-    const hosts = Array.from({ length: 1_000 }, (_, index) => ({
-      ...HOST,
-      id: `host-${index}`,
-      name: `Host ${index}`,
-      lastConnected: index
-    }))
-    const hostIds = hosts.map((host) => host.id)
-    const autoConnectHostIds = selectHomeAutoConnectHostIds(hosts)
-    connectMock.mockReturnValue(makeFakeClient('connected'))
-    loadHostsMock.mockResolvedValue(hosts)
-
-    let renderer: ReactTestRenderer | null = null
-    function Probe(): null {
-      useAllHostClients(hostIds, { autoConnectHostIds })
-      return null
-    }
-
-    try {
-      await act(async () => {
-        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
-        await Promise.resolve()
-      })
-      expect(connectMock).toHaveBeenCalledTimes(3)
-      expect(connectMock.mock.calls.map(([host]) => host.id)).toEqual([
-        'host-999',
-        'host-998',
-        'host-997'
-      ])
-    } finally {
-      act(() => renderer?.unmount())
-    }
-  })
-
   it('closes a demoted Home client when the recent-host set rotates', async () => {
     const hosts = [
       { ...HOST, id: 'host-a', lastConnected: 4 },

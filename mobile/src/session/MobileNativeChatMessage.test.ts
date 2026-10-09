@@ -1,8 +1,13 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { AgentJournalToolCallItem } from '../../../src/shared/agent-session-journal-types'
 import { MAX_TOOL_DETAIL_LENGTH } from '../../../src/shared/native-chat-tool-summary'
+import { projectStructuredItemToNativeChat } from '../../../src/shared/structured-agent-session-projection'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { AGENT_SESSION_HOST_STATUS_COPY } from '../../../src/shared/agent-session-host-status-rows'
+import { colors } from '../theme/mobile-theme'
+import { styles } from './mobile-native-chat-message-styles'
 
 vi.mock('react-native', async () => {
   const React = await import('react')
@@ -20,7 +25,10 @@ vi.mock('react-native', async () => {
       timing: () => ({ start: vi.fn(), stop: vi.fn() })
     },
     Image: 'Image',
+    Platform: { OS: 'ios' },
     Pressable: 'Pressable',
+    ScrollView: ({ children, ...props }: { children?: unknown }) =>
+      React.createElement('ScrollView', props, children),
     Text,
     View: ({ children, ...props }: { children?: unknown }) =>
       React.createElement('View', props, children),
@@ -30,6 +38,7 @@ vi.mock('react-native', async () => {
 vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
+  Brain: 'Brain',
   ChevronDown: 'ChevronDown',
   Copy: 'Copy',
   SquareChevronRight: 'SquareChevronRight',
@@ -38,6 +47,9 @@ vi.mock('lucide-react-native', () => ({
   ChevronRight: 'ChevronRight'
 }))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
+vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
+  MobileNativeChatMessageActionsSheet: 'MessageActionsSheet'
+}))
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 
@@ -60,6 +72,7 @@ describe('MobileNativeChatMessage', () => {
   function render(
     message: NativeChatMessage,
     props: {
+      fontScale?: number
       toolsExpanded?: boolean
       structuredActivityUi?: boolean
       activeTurnIsWorking?: boolean
@@ -70,6 +83,7 @@ describe('MobileNativeChatMessage', () => {
         workedSeconds: number | null
       } | null
       onToggleTurn?: () => void
+      reasoningIsLive?: boolean
     } = {}
   ): ReactTestRenderer {
     act(() => {
@@ -80,6 +94,86 @@ describe('MobileNativeChatMessage', () => {
 
   const textIn = (node: ReactTestInstance): string[] =>
     node.findAllByType('Text' as never).map((text) => String(text.children.join('')))
+
+  it('renders the shared clear boundary as one muted divider with prior history retained', () => {
+    const message = projectStructuredItemToNativeChat({
+      itemId: 'clear',
+      revision: 1,
+      sequence: 5,
+      observedAt: 5,
+      body: {
+        kind: 'status',
+        text: 'Context cleared',
+        presentation: 'context-cleared',
+        contextClear: { operationId: 'clear', afterFence: 3, clearedAt: 5 }
+      }
+    })!
+    const tree = render(message)
+    expect(textIn(tree.root)).toEqual(['Context cleared'])
+    expect(tree.root.findAll((node) => String(node.type) === 'MobileMarkdown')).toHaveLength(0)
+    expect(
+      tree.root.findAll(
+        (node) => String(node.type) === 'View' && node.props.style === styles.contextBoundary
+      )
+    ).toHaveLength(1)
+    expect(styles.contextBoundary.borderTopColor).toBe(colors.borderSubtle)
+  })
+
+  it.each(['system', 'user'] as const)(
+    'renders a %s host notice as selectable muted text rather than a markdown answer',
+    (role) => {
+      const tree = render(
+        {
+          id: 'notice',
+          role,
+          timestamp: 1,
+          blocks: [
+            { type: 'text', text: 'provider fallback', presentation: 'history-item-too-large' }
+          ]
+        },
+        { fontScale: 1.5 }
+      )
+      expect(tree.root.findAll((node) => String(node.type) === 'MobileMarkdown')).toHaveLength(0)
+      const text = tree.root.find((node) => String(node.type) === 'Text')
+      expect(text.props.children).toBe(AGENT_SESSION_HOST_STATUS_COPY['history-item-too-large'])
+      expect(text.props.selectable).toBe(true)
+      expect(Object.assign({}, ...text.props.style)).toMatchObject({
+        color: colors.textMuted,
+        fontSize: 25.5
+      })
+    }
+  )
+
+  it("names another agent's message and sets it apart from the person's bubble", () => {
+    const agentMessage: NativeChatMessage = {
+      ...userMessage([{ type: 'text', text: 'You have 1 orchestration message.' }]),
+      from: {
+        kind: 'agent',
+        senders: [
+          {
+            party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null },
+            name: 'Coder'
+          }
+        ],
+        orchestration: null
+      }
+    }
+    const tree = render(agentMessage)
+    expect(textIn(tree.root)[0]).toBe('Message from Coder')
+    // Left-aligned agent prose, not the person's inverted bubble.
+    expect(tree.root.findAll((node) => String(node.type) === 'MobileMarkdown')).toHaveLength(1)
+    const rows = tree.root.findAll(
+      (node) => String(node.type) === 'View' && Array.isArray(node.props.style)
+    )
+    expect(rows.some((row) => row.props.style.includes(styles.rowUser))).toBe(false)
+  })
+
+  it('preserves an ordinary assistant answer without interpreting its text as a host notice', () => {
+    const tree = render(toolMessage([{ type: 'text', text: 'provider fallback' }]))
+    expect(tree.root.find((node) => String(node.type) === 'MobileMarkdown').props.content).toBe(
+      'provider fallback'
+    )
+  })
 
   it('renders a loadable preview URI as an image thumbnail', () => {
     const tree = render(userMessage([{ type: 'image-ref', url: 'file:///a.jpg', alt: 'a photo' }]))
@@ -193,6 +287,56 @@ describe('MobileNativeChatMessage', () => {
     expect(tree.root.findAllByType('SquareChevronRight' as never)).toHaveLength(1)
   })
 
+  describe('output a call left when it ended early', () => {
+    function projectedCall(ending: Pick<AgentJournalToolCallItem, 'endedAs'>): NativeChatMessage {
+      const body: AgentJournalToolCallItem = {
+        kind: 'tool-call',
+        name: 'shell',
+        input: { command: 'sleep 20' },
+        state: 'failed',
+        ...ending,
+        output: { head: 'partial', byteLength: 7, digest: 'd', truncated: false }
+      }
+      const projected = projectStructuredItemToNativeChat({
+        itemId: 'call',
+        sequence: 1,
+        revision: 1,
+        observedAt: 100,
+        body
+      })
+      if (!projected) {
+        throw new Error('the call projects no message')
+      }
+      return { ...projected, id: 'a1', source: 'transcript' }
+    }
+    const outputStyle = (message: NativeChatMessage): unknown => {
+      const tree = render(message, { toolsExpanded: true })
+      const output = tree.root
+        .findAllByType('Text' as never)
+        .find((node) => node.children.join('') === 'partial')
+      // The tint is on the result box: the nearest View around the output text.
+      let box = output?.parent ?? null
+      while (box && String(box.type) !== 'View') {
+        box = box.parent
+      }
+      return box?.props.style
+    }
+
+    it('shows the output a stop cut short without the error tint', () => {
+      expect(outputStyle(projectedCall({ endedAs: 'interrupted' }))).toEqual([
+        expect.any(Object),
+        false
+      ])
+    })
+
+    it('keeps the error tint on a call nothing proved was cut short', () => {
+      expect(outputStyle(projectedCall({ endedAs: 'unverifiable' }))).toEqual([
+        expect.any(Object),
+        expect.objectContaining({ backgroundColor: expect.any(String) })
+      ])
+    })
+  })
+
   describe('structured activity UI', () => {
     const runningCall = {
       type: 'tool-call' as const,
@@ -284,75 +428,86 @@ describe('MobileNativeChatMessage', () => {
       expect(textIn(tree.root)).toEqual(['go'])
     })
   })
-})
 
-describe("MobileNativeChatMessage — a subagent's row speaks as that subagent", () => {
-  let renderer: ReactTestRenderer | null = null
-
-  afterEach(() => {
-    act(() => renderer?.unmount())
-    renderer = null
-  })
-
-  function renderAgentRow(agentId: string | undefined, subagentLabel?: string): ReactTestRenderer {
-    const message: NativeChatMessage = {
-      id: 'a1',
-      role: 'assistant',
-      blocks: [{ type: 'text', text: 'The PR is CLEAN.' }],
-      timestamp: null,
+  describe('a reasoning row', () => {
+    const reasoning = (fields: Partial<NativeChatMessage> = {}): NativeChatMessage => ({
+      id: 'r1',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'Weighing two approaches' }],
+      timestamp: 1_000,
       source: 'transcript',
-      ...(agentId === undefined ? {} : { agentId })
-    }
-    act(() => {
-      renderer = create(createElement(MobileNativeChatMessage, { message, subagentLabel }))
+      state: 'completed',
+      completedAt: 4_000,
+      ...fields
     })
-    return renderer!
-  }
+    const toggleOf = (tree: ReactTestRenderer): ReactTestInstance =>
+      tree.root.find(
+        (node) => String(node.type) === 'Pressable' && node.props.accessibilityRole === 'button'
+      )
+    const markdownIn = (tree: ReactTestRenderer): ReactTestInstance[] =>
+      tree.root.findAll((node) => String(node.type) === 'MobileMarkdown')
 
-  const captions = (tree: ReactTestRenderer): ReactTestInstance[] =>
-    tree.root
-      .findAllByType('Text' as never)
-      .filter((node) => typeof node.props.accessibilityLabel === 'string')
+    it('starts collapsed to its headline, with its text unmounted', () => {
+      const tree = render(reasoning())
+      expect(textIn(tree.root)).toContain('Thought for 3s')
+      expect(toggleOf(tree).props.accessibilityState).toEqual({ expanded: false })
+      // Said with what it is, as desktop's screen-reader prefix does, on a 32 + 2 × 6 pt target.
+      expect(toggleOf(tree).props.accessibilityLabel).toBe('Reasoning: Thought for 3s')
+      expect(toggleOf(tree).props.hitSlop).toBe(6)
+      expect(markdownIn(tree)).toHaveLength(0)
+    })
 
-  it('names the subagent that wrote the row', () => {
-    const [caption] = captions(renderAgentRow('task-1', 'review the PR'))
-    expect(caption?.props.accessibilityLabel).toBe('Written by subagent review the PR')
-    expect(caption?.children.join('')).toBe('review the PR')
-  })
+    it('leads its headline with the brain, as desktop does', () => {
+      const [first] = toggleOf(render(reasoning())).children
+      expect(typeof first === 'string' ? first : first?.type).toBe('Brain')
+    })
 
-  it('still marks the row as a subagent when no loaded roster names it', () => {
-    const [caption] = captions(renderAgentRow('task-9'))
-    expect(caption?.children.join('')).toBe('Subagent')
-  })
+    it('mounts its text once opened', () => {
+      const tree = render(reasoning())
+      act(() => toggleOf(tree).props.onPress())
+      expect(toggleOf(tree).props.accessibilityState).toEqual({ expanded: true })
+      expect(markdownIn(tree).map((node) => node.props.content)).toEqual([
+        'Weighing two approaches'
+      ])
+    })
 
-  it("adds nothing to the session's own row", () => {
-    expect(captions(renderAgentRow(undefined, 'review the PR'))).toEqual([])
-  })
+    it('draws nothing while the live line discloses it, or when blank', () => {
+      expect(
+        render(reasoning({ state: 'running' }), {
+          activeTurnIsWorking: true,
+          reasoningIsLive: true
+        }).toJSON()
+      ).toBeNull()
+      expect(render(reasoning({ blocks: [{ type: 'text', text: ' \n ' }] })).toJSON()).toBeNull()
+    })
 
-  it('names no one on a settled row whose only content is hidden, and names the live one', () => {
-    const toolOnly: NativeChatMessage = {
-      id: 'a2',
-      role: 'assistant',
-      blocks: [{ type: 'tool-call', name: 'Grep', input: {}, state: 'completed' }],
-      timestamp: null,
-      source: 'transcript',
-      agentId: 'task-1'
-    }
-    const renderToolOnly = (activeTurnIsWorking: boolean): ReactTestRenderer => {
-      act(() => {
-        renderer = create(
-          createElement(MobileNativeChatMessage, {
-            message: toolOnly,
-            subagentLabel: 'review the PR',
-            structuredActivityUi: true,
-            activeTurnIsWorking
-          })
-        )
+    // The turn's bar is not the block's: hiding the block must not hide the bar it sits on.
+    it("still draws its turn's bar while the live line discloses it", () => {
+      const tree = render(reasoning({ state: 'running' }), {
+        activeTurnIsWorking: true,
+        reasoningIsLive: true,
+        turnStatus: { startedAt: 1_000, thinking: true, workedSeconds: null }
       })
-      return renderer!
-    }
-    expect(captions(renderToolOnly(false))).toEqual([])
-    act(() => renderer?.unmount())
-    expect(captions(renderToolOnly(true))).toHaveLength(1)
+      expect(tree.root.findAll((node) => String(node.type) === 'Pressable')).toHaveLength(0)
+      expect(textIn(tree.root).some((text) => text.startsWith('Working for'))).toBe(true)
+    })
+
+    // Only the block the line discloses hides: a subagent's or a stale open block draws, unended.
+    it('draws any other open block in its working turn as Reasoning', () => {
+      const child = render(reasoning({ state: 'running', agentId: 'sub-1' }), {
+        activeTurnIsWorking: true
+      })
+      expect(textIn(child.root)).toContain('Reasoning')
+      expect(toggleOf(child).props.accessibilityLabel).toBe('Reasoning')
+    })
+
+    it('says only what the host saw', () => {
+      expect(textIn(render(reasoning({ state: 'running' })).root)).toContain('Thought')
+      const unknown = render(reasoning({ state: undefined, completedAt: undefined }))
+      expect(textIn(unknown.root)).toContain('Reasoning')
+      // No "Reasoning: Reasoning".
+      expect(toggleOf(unknown).props.accessibilityLabel).toBe('Reasoning')
+      expect(textIn(render(reasoning({ completedAt: 1_300 })).root)).toContain('Thought for 1s')
+    })
   })
 })

@@ -13,6 +13,7 @@ describe('parseRpcRequestParams', () => {
   it('parses repeated valid requests through the compiled schema', () => {
     const method = defineMethod({
       name: 'test.parse',
+      permission: 'workspace',
       params: z.object({ requestId: z.string().min(1), count: z.number().int().nonnegative() }),
       handler: () => null
     })
@@ -28,6 +29,7 @@ describe('parseRpcRequestParams', () => {
   it('preserves validation errors from the runtime fallback', () => {
     const method = defineMethod({
       name: 'test.parse',
+      permission: 'workspace',
       params: z.object({ count: z.number().int('Count must be an integer') }),
       handler: () => null
     })
@@ -43,6 +45,7 @@ describe('parseRpcRequestParams', () => {
   it('keeps transform output when compilation falls back', () => {
     const method = defineMethod({
       name: 'test.parse',
+      permission: 'workspace',
       params: z.object({ value: z.string().transform((value) => value.toUpperCase()) }),
       handler: () => null
     })

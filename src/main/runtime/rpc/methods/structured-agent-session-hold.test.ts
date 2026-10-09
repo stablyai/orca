@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 // `agentSession.hold` / `release` are kept answering for clients that still send them, and do
 // nothing else: a view never starts or keeps an agent.
 //
@@ -19,13 +20,20 @@ import {
 } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import { AgentSessionRecordStore } from '../../agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import { agentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
+import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+import { codexProviderHandle } from '../../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
+import { getDefaultPersistedState } from '../../../../shared/constants'
+import { RuntimeClientSettingsController } from '../../runtime-client-settings'
 
 const CONNECTION = 'connection-1'
 const CLIENT = {
@@ -66,7 +74,7 @@ beforeEach(async () => {
     process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
     link: {
       linkId: `link-${fence}`,
-      handle: { provider: 'codex' as const, threadId: THREAD },
+      handle: codexProviderHandle(THREAD),
       origin: store.getRecord(SESSION)?.providerHandleChain.length
         ? ('resumed' as const)
         : ('created' as const),
@@ -74,8 +82,10 @@ beforeEach(async () => {
       observedAt: NOW
     }
   }))
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
       acquire,
@@ -93,7 +103,7 @@ beforeEach(async () => {
       answerPrompt: async () => undefined,
       setOption: async () => undefined
     },
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW
@@ -101,12 +111,14 @@ beforeEach(async () => {
   setStructuredAgentSessionHost(host)
   runtime = new OrcaRuntimeService()
   // The structured surface is settings-gated for every caller, in-process included.
-  vi.spyOn(runtime, 'getClientSettings').mockImplementation(
-    () =>
-      ({ experimentalStructuredNativeChat: structuredNativeChatEnabled }) as ReturnType<
-        OrcaRuntimeService['getClientSettings']
-      >
-  )
+  const clientSettings = new RuntimeClientSettingsController({
+    getSettings: () => ({
+      ...getDefaultPersistedState(root).settings,
+      experimentalNativeChat: structuredNativeChatEnabled
+    }),
+    updateSettings: () => undefined
+  }).get()
+  vi.spyOn(runtime, 'getClientSettings').mockImplementation(() => clientSettings)
   dispatcher = new RpcDispatcher({ runtime, methods: STRUCTURED_AGENT_SESSION_METHODS })
   expect(await host.attach({ callerKey: 'client-1' }, hostTestAttachParams(null))).toMatchObject({
     ok: true
@@ -121,7 +133,7 @@ afterEach(async () => {
 
 describe('the hold surface, for clients that still call it', () => {
   it('answers a hold without starting an agent or registering a cleanup', async () => {
-    await host.close(SESSION)
+    await host.close(SESSION, 'evict')
     expect(host.hasSession(SESSION)).toBe(false)
     const registered = vi.spyOn(runtime, 'registerOwnedSubscriptionCleanup')
     const acquiresBefore = acquire.mock.calls.length
@@ -148,12 +160,12 @@ describe('the hold surface, for clients that still call it', () => {
     expect(host.hasSession(SESSION)).toBe(true)
   })
 
-  it('refuses a hold once the setting is off, and still answers a release', async () => {
+  it('answers a hold and a release whatever the host structured-chat setting says', async () => {
     structuredNativeChatEnabled = false
 
     expect(
       await call('agentSession.hold', { sessionId: SESSION, holderId: 'chat-1' })
-    ).toMatchObject({ ok: false })
+    ).toMatchObject({ ok: true, result: { held: true } })
     expect(
       await call('agentSession.release', { sessionId: SESSION, holderId: 'chat-1' })
     ).toMatchObject({ ok: true, result: { released: true } })
@@ -161,7 +173,7 @@ describe('the hold surface, for clients that still call it', () => {
   })
 
   it('answers a hold even when no agent could be started', async () => {
-    await host.close(SESSION)
+    await host.close(SESSION, 'evict')
     acquire.mockRejectedValue(new Error('provider unavailable'))
     const acquiresBefore = acquire.mock.calls.length
 
@@ -174,7 +186,7 @@ describe('the hold surface, for clients that still call it', () => {
 
 describe('a stream', () => {
   it('reads a closed conversation without starting its agent', async () => {
-    await host.close(SESSION)
+    await host.close(SESSION, 'evict')
     expect(host.hasSession(SESSION)).toBe(false)
     const acquiresBefore = acquire.mock.calls.length
     const frames: unknown[] = []

@@ -8,9 +8,13 @@ export type CodexAppServerConnectionHandlers = {
   onNotification?: (method: string, params: unknown) => void
   onServerRequest?: (request: CodexAppServerServerRequest) => void
   onUnhandledFrame?: (kind: string, payload: unknown) => void
-  onExit?: (error: Error) => void
+  /** The root process exited, reported once. `expected`: a close had begun, so it is that close's
+   *  end, even one that gave up first and came back unproven. */
+  onExit?: (error: Error, exit?: { expected: boolean }) => void
   /** Awaited once the child has a pid and before the handshake; a rejection reaps the child. */
   onSpawned?: (pid: number) => Promise<void>
+  /** Any stdout or stderr chunk from the child. */
+  onOutput?: () => void
 }
 
 export type CodexAppServerConnection = {
@@ -30,4 +34,6 @@ export type CodexAppServerConnection = {
   resumeReading?: () => void
   /** Resolves true only after the child emitted `exit` or `close`; false is unproven. */
   close: () => Promise<boolean>
+  /** The root exited, but the forced kill of its process tree could not prove the tree gone. */
+  readonly processTreeUnproven?: boolean
 }

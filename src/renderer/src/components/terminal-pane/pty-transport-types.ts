@@ -13,6 +13,7 @@ import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { PtyDataMeta } from './pty-dispatcher'
 import type { RemoteRuntimeSnapshotOutcome } from '../../runtime/remote-runtime-terminal-multiplexer'
@@ -38,6 +39,9 @@ export type PtyBufferSnapshot = {
   alternateScreen?: boolean
   /** Authoritative normal buffer paired with an alternate-screen frame. */
   scrollbackAnsi?: string
+  /** `data` starts on the normal buffer and enters alt itself (remote images fold
+   *  their normal buffer in rather than splitting it into `scrollbackAnsi`). */
+  carriesNormalBuffer?: boolean
   /** Trailing incomplete escape sequence main's emulator ingested (a PTY read
    *  ended mid-escape). Must be written LAST — after post-replay resets, right
    *  before post-snapshot live chunks — so the continuation completes it
@@ -65,6 +69,11 @@ export type PtyReplayDataMeta = {
    *  it; the drain replays there and fits back to the pane afterwards. */
   snapshotCols?: number
   snapshotRows?: number
+  /** An image that starts on the normal buffer and enters alt itself; absent for
+   *  raw byte replays such as an SSH relay's ring buffer. */
+  carriesNormalBuffer?: boolean
+  /** The image carries no history, so replay clears the screen but keeps scrollback. */
+  keepsLocalScrollback?: boolean
 }
 
 export type LocalPtySessionMetadata = {
@@ -212,11 +221,15 @@ export type PtyTransport = {
   getRecoveryState?: () => PtyTransportRecoveryState
   /** Starts a fresh connection epoch while preserving the authoritative remote PTY identity. */
   retryRecovery?: () => boolean
+  /** True while the transport has a retry armed or parked; pane-level remounts must defer to it. */
+  ownsRecovery?: () => boolean
   /** Lets a wrapper retain input when recovery re-enters connect internally. */
   setConnectForRecovery?: (connect: PtyTransport['connect']) => void
   /** The user dismissed the error surface; the next occurrence of the same message must surface again. */
   notifyErrorSurfaceDismissed?: () => void
   getPtyId: () => string | null
+  /** A connect (spawn or reattach) is still awaiting its PTY id. */
+  isConnectPending?: () => boolean
   getConnectionId?: () => string | null | undefined
   /** The runtime captured by this transport; legacy remote PTY ids do not
    * encode their owner, and current worktree settings may have changed. */
@@ -272,6 +285,8 @@ export type IpcPtyTransportOptions = {
   worktreeId?: string
   tabId?: string
   leafId?: string
+  /** Sent on fresh spawns only; a reattach names a PTY whose leaf main already knows. */
+  placement?: TerminalPanePlacement
   activate?: boolean
   shellOverride?: string
   projectRuntime?: ProjectExecutionRuntimeResolution

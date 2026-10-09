@@ -19,6 +19,7 @@ import { defineMethod, defineStreamingMethod } from '../core'
 export const BROWSER_CLIENT_HOST_METHODS = [
   defineStreamingMethod({
     name: 'browser.clientHost.attach',
+    permission: 'workspace',
     params: BrowserClientHostAttachParams,
     handler: async (
       params,
@@ -164,6 +165,7 @@ export const BROWSER_CLIENT_HOST_METHODS = [
   }),
   defineMethod({
     name: 'browser.clientHost.commandResult',
+    permission: 'workspace',
     params: BrowserClientHostCommandResultParams,
     handler: (
       params,
@@ -196,6 +198,7 @@ export const BROWSER_CLIENT_HOST_METHODS = [
   }),
   defineMethod({
     name: 'browser.clientHost.pageMetadata',
+    permission: 'workspace',
     params: BrowserClientPageMetadataParams,
     handler: (
       params,

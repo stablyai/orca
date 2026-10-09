@@ -198,7 +198,7 @@ export class WslHookRelayManager {
       onNoNode: () =>
         this.markFailed(
           state,
-          `no node >= 18 found in distro '${state.distro}'; agent hooks stay degraded there`,
+          `no node >= 24 found in distro '${state.distro}'; agent hooks stay degraded there`,
           { cooldownBaseMs: NO_NODE_COOLDOWN_MS }
         ),
       onFailure: (message) =>
@@ -226,6 +226,7 @@ export class WslHookRelayManager {
     const mux = new SshChannelMultiplexer(transport)
     state.mux = mux
     wireWslRelayLink({
+      bindInterruptReconciliation: this.deps.bindInterruptReconciliation,
       mux,
       child,
       distro: state.distro,

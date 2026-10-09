@@ -188,7 +188,7 @@ export class OrcaRuntimeWithGetRuntimeId extends OrcaRuntimeWithHasExactPersiste
     worktreeId: string,
     session: WorkspaceSessionState
   ): void {
-    this.workspaceSessions.set(worktreeId, session)
+    this.workspaceSessions.setForWorktree(worktreeId, session)
   }
 
   protected getKnownWorkspaceSessionWorktreeIds(): Set<string> {

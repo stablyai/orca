@@ -4,7 +4,7 @@ import { WatcherProcessSupervisor } from '../main/ipc/parcel-watcher-process-sup
 
 export type RelayWatcherProcessPool = Pick<
   RuntimeWatcherProcessPool,
-  'dispose' | 'forgetRoot' | 'subscribe'
+  'dispose' | 'disposeAndWait' | 'forgetRoot' | 'reopen' | 'subscribe'
 >
 
 export function getRelayWatcherProcessEntryPath(): string {

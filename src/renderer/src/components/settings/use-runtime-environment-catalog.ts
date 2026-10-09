@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useState,
   type Dispatch,
   type MutableRefObject,
@@ -32,7 +33,11 @@ type RuntimeEnvironmentCatalog = {
 }
 
 export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
-  const [environments, setEnvironments] = useState<PublicKnownRuntimeEnvironment[]>([])
+  const savedEnvironments = useAppStore((state) => state.runtimeEnvironments)
+  const environments = useMemo(
+    () => savedEnvironments.filter(isUserManagedRuntimeEnvironment),
+    [savedEnvironments]
+  )
   const [isLoading, setIsLoading] = useState(false)
   const [detailsByEnvironmentId, setDetailsByEnvironmentId] = useState<
     Record<string, RuntimeHostDetails>
@@ -54,7 +59,6 @@ export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
           await useAppStore.getState().readRuntimeHostStatusSnapshots()
         }
         if (mountedRef.current) {
-          setEnvironments(visibleEnvironments)
           setDetailsByEnvironmentId((current) => {
             const next: Record<string, RuntimeHostDetails> = {}
             for (const environment of visibleEnvironments) {

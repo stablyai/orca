@@ -140,7 +140,11 @@ export function WorkspaceSpaceManagerTable({
                       deleteState={getDeleteStateForWorktree(worktree)}
                       onToggleSelected={() => toggleSelection(worktree)}
                       onInspect={() => setInspectedWorktreeId(identity)}
-                      onOpenWorkspace={() => activateAndRevealWorktree(worktree.worktreeId)}
+                      onOpenWorkspace={() =>
+                        activateAndRevealWorktree(worktree.worktreeId, {
+                          navigationIntent: 'user-open'
+                        })
+                      }
                       onDelete={() => deleteWorktrees([worktree])}
                       onForceDelete={() => forceDeleteWorktree(worktree)}
                     />

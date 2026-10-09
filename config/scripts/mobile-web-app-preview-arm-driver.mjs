@@ -4,6 +4,8 @@
 import { recordRequestsTo } from './mobile-web-app-preview-request-log.mjs'
 import { watchImageEvidence } from './mobile-web-app-preview-image-evidence.mjs'
 import { artifact } from './mobile-web-app-preview-artifact-fixture.mjs'
+import { pollReportsUntil } from './mobile-web-app-preview-csp-reports.mjs'
+import { describePreviewFrame, untilAborted } from './mobile-web-app-preview-frame-diagnosis.mjs'
 import {
   previewFrame,
   settleAfterMount,
@@ -42,6 +44,7 @@ export async function openPreviewArm(
     assets,
     doctype,
     reportReady = null,
+    reportAfterAct = null,
     /** What the shell told this page it may do. Defaults to the session route's own list, so an arm
      *  that does not mention it measures the shipped screen (C8.1). */
     grants = null,
@@ -183,7 +186,10 @@ export async function openPreviewArm(
     if (act) {
       // Recorded, never swallowed: a click that never landed and a click that produced no
       // navigation are the same empty counter, and only one of them is the product's doing.
-      await act({ page, frame: previewFrame(page) }).catch((error) => {
+      if (!artifactFrame || artifactFrame.isDetached()) {
+        throw new Error('The loaded preview frame is missing before its action')
+      }
+      await act({ page, frame: artifactFrame }).catch((error) => {
         actError = String(error).split('\n')[0]
       })
     }
@@ -199,6 +205,15 @@ export async function openPreviewArm(
       // write, and the bounded wait says so rather than leaving a bare timeout.
       actError
     })
+    // A refusal caused by the tap arrives after mount readiness.
+    if (reportAfterAct && !actError) {
+      await untilAborted(
+        pollReportsUntil(cspReports, nonce, reportAfterAct, signal),
+        signal,
+        async () =>
+          `the policy reported no ${String(reportAfterAct)} refusal after the action: ${arm} | ${await describePreviewFrame(page, previewFrame(page), browserVersion)}`
+      )
+    }
     const result = await readPreviewArm({
       page,
       clip,

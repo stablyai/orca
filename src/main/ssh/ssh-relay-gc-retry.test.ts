@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ app: { getAppPath: () => '/mock/app' } }))
 vi.mock('fs', () => ({
@@ -70,7 +70,9 @@ function makeConnection(): SshConnection {
     stderr: { on: vi.fn() },
     close: vi.fn()
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture mocks every connection method used by the legacy deployment path.
   return {
+    getTarget: () => ({ id: 'legacy-target', remoteRuntime: 'legacy' }),
     canRunConcurrentExecCommands: vi.fn().mockReturnValue(true),
     exec: vi.fn().mockResolvedValue(channel),
     writeFile: vi.fn().mockResolvedValue(undefined)
@@ -78,8 +80,11 @@ function makeConnection(): SshConnection {
 }
 
 describe('relay GC deploy retry', () => {
+  afterEach(() => vi.unstubAllEnvs())
   beforeEach(() => {
     vi.clearAllMocks()
+    // The host-npm path is opt-in; these cases cover it.
+    vi.stubEnv('ORCA_SSH_REMOTE_RUNTIME', 'legacy')
   })
 
   it('recomputes install state when GC wins before a healthy relay launch', async () => {

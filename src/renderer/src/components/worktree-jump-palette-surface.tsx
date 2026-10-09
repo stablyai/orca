@@ -64,9 +64,9 @@ export function WorktreeJumpPaletteSurface({
         onKeyDown={(event) => controller.emojiInput.handleKeyDown(event)}
         wrapperClassName="mx-3 mt-3 rounded-lg border border-border/55 bg-muted/28 px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
         iconClassName="mr-2.5 h-4 w-4 text-muted-foreground/60"
-        className="h-12 text-[14px] placeholder:text-muted-foreground/75"
+        className="h-12 min-w-0 flex-1"
         trailing={
-          <div ref={controller.setDialogElementFromNode}>
+          <div ref={controller.setDialogElementFromNode} className="shrink-0">
             <PaletteFilterMenu
               model={controller.filterModel}
               filter={controller.filter}

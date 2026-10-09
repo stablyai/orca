@@ -78,6 +78,8 @@ export type TerminalDocumentState = {
   lastEmittedModes: TerminalDocumentModes
   /** `terminal-init`: whether the terminal has ever reached ready. */
   everReady: boolean
+  /** `mouse-mode-decset-scan`: whether the encoding is proven (1006/1016 set or reset, RIS, or a live tracking enable). */
+  mouseEncodingKnown: boolean
   /** `mouse-mode-decset-scan`: the tail of the last chunk, in case a DECSET straddles two writes. */
   mouseModeScanTail: string
   /** `mouse-mode-decset-scan`: the mouse tracking mode the TUI last asked for. */
@@ -262,6 +264,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
       sgrMousePixelsMode: false
     },
     everReady: false,
+    mouseEncodingKnown: false,
     mouseModeScanTail: '',
     trackedMouseTrackingMode: 'none',
     sgrMouseMode: false,

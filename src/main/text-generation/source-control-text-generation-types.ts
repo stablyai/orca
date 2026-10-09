@@ -1,3 +1,4 @@
+import type { AgentSessionUnavailable } from '../../shared/agent-session-availability'
 import type { spawnProcess } from '../../shared/child-process/run-process'
 import type { AgentGenerationFailureOutput } from './agent-failure-output'
 import type {
@@ -18,7 +19,7 @@ export type DiscoverCommitMessageModelsResult =
       defaultModelId: string
       catalogOrigin: 'probe' | 'spec'
     }
-  | { success: false; error: string }
+  | { success: false; error: string; unavailable?: AgentSessionUnavailable }
 
 export type GeneratePullRequestFieldsResult<TFields> =
   | {
@@ -38,7 +39,11 @@ export type RemoteCommitMessageExecResult = {
   spawnError?: string
 }
 
-export type TextGenerationOperation = 'commit-message' | 'pull-request-fields' | 'branch-name'
+export type TextGenerationOperation =
+  | 'commit-message'
+  | 'pull-request-fields'
+  | 'branch-name'
+  | 'conversation-name'
 
 export type CommitMessageGenerationTarget =
   | { kind: 'local'; cwd: string; env?: NodeJS.ProcessEnv; wslDistro?: string }
@@ -72,17 +77,29 @@ export type GenerateBranchNameResult =
       failureOutput?: AgentGenerationFailureOutput
     }
 
+export type GenerateConversationNameResult =
+  | { success: true; name: string; agentLabel?: string }
+  | {
+      success: false
+      error: string
+      canceled?: boolean
+      failureOutput?: AgentGenerationFailureOutput
+    }
+
 export type LocalProcessExecution<T> = {
   result: Promise<T>
   processClosed: Promise<void>
 }
 
-export type SpawnedSourceControlAgentProcess = ReturnType<typeof spawnProcess>
+export type SpawnedSourceControlAgentProcess = ReturnType<typeof spawnProcess> & {
+  /** True when the child is the POSIX provider supervisor: SIGTERM stops the agent's group, then itself. */
+  readonly supervised?: boolean
+}
 
 export type LocalGenerationTarget = Extract<CommitMessageGenerationTarget, { kind: 'local' }>
 export type RemoteGenerationTarget = Extract<CommitMessageGenerationTarget, { kind: 'remote' }>
 
-export type SpawnSourceControlAgent = (input: {
+export type SourceControlAgentSpawnInput = {
   binary: string
   args: string[]
   cwd?: string
@@ -92,4 +109,8 @@ export type SpawnSourceControlAgent = (input: {
   commandEnv?: Record<string, string>
   stdinMode: 'ignore' | 'pipe'
   useCwdForNative: boolean
-}) => SpawnedSourceControlAgentProcess
+}
+
+export type SpawnSourceControlAgent = (
+  input: SourceControlAgentSpawnInput
+) => SpawnedSourceControlAgentProcess

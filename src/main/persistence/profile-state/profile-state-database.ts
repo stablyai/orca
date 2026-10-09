@@ -1,4 +1,5 @@
 import { withProfileStateWriteTransaction } from './profile-state-write-transaction'
+import { hasProfileStateAuthorityMarker } from './profile-state-authority-marker'
 import Database, { isSqliteAvailable } from '../../sqlite/sync-database'
 import { migrateAutomationRunsStorage } from './profile-state-automation-runs-migration'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
@@ -24,7 +25,7 @@ import {
 
 export const PROFILE_STATE_BUSY_TIMEOUT_MS = 5_000
 
-// Keep relay-only Node 18 imports safe while selecting the actual database driver.
+// Check the database driver before opening profile state.
 export const isProfileStateSqliteAvailable = isSqliteAvailable
 
 export { ProfileStateDatabaseOpenError }
@@ -71,7 +72,7 @@ export function openProfileStateDatabase(
 
   let probe: Database.Database
   try {
-    probe = new Database(dbPath)
+    probe = new Database(dbPath, { fileMustExist: hasProfileStateAuthorityMarker(dbPath) })
   } catch (error) {
     throw new ProfileStateDatabaseOpenError(
       'unreadable',

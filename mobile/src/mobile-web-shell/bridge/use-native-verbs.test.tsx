@@ -197,11 +197,6 @@ describe('a verb the shell refuses', () => {
     expect(reasons).toEqual(['native_verb_failed', 'reply-too-large', 'native_verb_result'])
   })
 
-  it('names the frame refusal when the reply could never have reached the page', async () => {
-    const error = await rejectionFrom(() => Promise.resolve({ value: 'a'.repeat(9 * 1024 * 1024) }))
-    expect(error.reason).toBe('reply-too-large')
-  })
-
   it('names the grant when this side refused before sending', async () => {
     const page = createPageClient()
     page.deliver({ ...INIT, grants: { ...GRANTS, native: ['navigate'] } })

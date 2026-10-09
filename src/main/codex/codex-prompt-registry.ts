@@ -191,23 +191,6 @@ export class CodexPromptRegistry {
     return this.claims.get(claim.prompt) === claim && this.find(claim.itemId) === claim.prompt
   }
 
-  ownsBoundClaim(
-    claim: CodexPromptClaim,
-    journalItemId: string,
-    threadId: string,
-    turnId: string
-  ): boolean {
-    return (
-      claim.itemId === journalItemId &&
-      this.claims.get(claim.prompt) === claim &&
-      this.journalItemIds.get(journalItemId) ===
-        this.address(claim.prompt.threadId, claim.prompt.promptKey) &&
-      this.boundPrompts.get(journalItemId) === claim.prompt &&
-      claim.prompt.threadId === threadId &&
-      codexPromptMatchesTurn(claim.prompt, turnId)
-    )
-  }
-
   releaseClaim(claim: CodexPromptClaim): void {
     if (this.claims.get(claim.prompt) === claim) {
       this.claims.delete(claim.prompt)

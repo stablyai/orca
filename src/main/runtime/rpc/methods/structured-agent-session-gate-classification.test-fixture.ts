@@ -1,5 +1,5 @@
-// The method-to-gate classification from `structured-agent-session-gate.ts`, as a table the
-// suites iterate. Adding an `agentSession.*` method means adding it to exactly one of these.
+// Every `agentSession.*` method with valid params, as tables the suites iterate. Adding a method
+// means adding it to exactly one of these.
 
 import {
   attachParams,
@@ -9,7 +9,7 @@ import {
 } from './structured-agent-session-rpc.test-fixture'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
 
-/** Stops or retires work the caller already owns, so admission may already have been revoked. */
+/** Stops or retires work the caller already owns; none of these builds a host. */
 export const CLEANUP_METHODS = [
   {
     method: 'agentSession.close',
@@ -36,8 +36,8 @@ export const CLEANUP_METHODS = [
   }
 ] as const
 
-/** Starts, extends, retains or reads work, so every one stays refused once the setting is off. */
-export const ADMISSION_METHODS = [
+/** Starts, extends, retains or reads work. */
+export const WORK_METHODS = [
   { method: 'agentSession.createSupport', params: { worktree: 'id:workspace-1', agent: 'codex' } },
   {
     method: 'agentSession.create',
@@ -56,6 +56,15 @@ export const ADMISSION_METHODS = [
   },
   { method: 'agentSession.ensure', params: attachParams() },
   { method: 'agentSession.send', params: sendParams() },
+  {
+    method: 'agentSession.queuedMessageSend',
+    params: { envelope: envelope(), messageId: 'queued-1' }
+  },
+  {
+    method: 'agentSession.queuedMessageDelete',
+    params: { envelope: envelope(), messageId: 'queued-1' }
+  },
+  { method: 'agentSession.queuedMessagesResume', params: { envelope: envelope() } },
   {
     method: 'agentSession.rewind',
     params: { envelope: envelope(), itemId: 'chosen', expectedEpoch: 'epoch' }

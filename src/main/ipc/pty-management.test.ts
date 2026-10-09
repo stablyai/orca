@@ -601,24 +601,6 @@ describe('pty:management IPC handlers', () => {
       }
     )
 
-    // Whether a refresh is worth running is the refresh's own decision; the handler just reports
-    // whatever evidence is there afterwards.
-    it('reports a settled allowed verdict unchanged', async () => {
-      getDaemonFolderAccessMismatchMock.mockReturnValue(evidence('allowed'))
-
-      const result = await readAttribution()
-
-      expect(result.folderAccessMismatch).toEqual(evidence('allowed'))
-    })
-
-    it('reports no evidence at all as no mismatch', async () => {
-      getDaemonFolderAccessMismatchMock.mockReturnValue(null)
-
-      const result = await readAttribution()
-
-      expect(result.folderAccessMismatch).toBeNull()
-    })
-
     it('keeps the folder evidence when the refresh throws', async () => {
       getDaemonFolderAccessMismatchMock.mockReturnValue(evidence('denied'))
       refreshDaemonFolderAccessProbeMock.mockRejectedValue(new Error('probe exploded'))

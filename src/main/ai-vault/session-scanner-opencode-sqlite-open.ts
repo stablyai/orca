@@ -35,7 +35,7 @@ export function openCodeBusyTimeoutMs(dbPath: string): number {
   return isWslUncPath(dbPath) ? 0 : OPENCODE_SQLITE_BUSY_TIMEOUT_MS
 }
 
-function openOpenCodeDatabaseReadonly(dbPath: string): SyncDatabase {
+export function openOpenCodeDatabaseReadonly(dbPath: string): SyncDatabase {
   const db = new SyncDatabase(dbPath, {
     readonly: true,
     fileMustExist: true,

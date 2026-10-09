@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('./ssh-relay-opencode-runtime', () => ({
   ensureRemoteOpenCodeRuntime: vi.fn().mockResolvedValue('ready')
@@ -80,7 +80,9 @@ import {
 import type { SshConnection } from './ssh-connection'
 
 function makeMockConnection(): SshConnection {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture mocks every connection method used by the legacy deployment path.
   return {
+    getTarget: () => ({ id: 'legacy-target', remoteRuntime: 'legacy' }),
     canRunConcurrentExecCommands: vi.fn().mockReturnValue(true),
     exec: vi.fn().mockResolvedValue({
       on: vi.fn(),
@@ -123,8 +125,11 @@ function launchedDaemon(conn: SshConnection): boolean {
  * probe exists to prevent: the fresh daemon loses the bind by luck, not by design.
  */
 describe('deployAndLaunchRelay honours the incumbent verdict', () => {
+  afterEach(() => vi.unstubAllEnvs())
   beforeEach(() => {
     vi.clearAllMocks()
+    // The host-npm path is opt-in; these cases cover it.
+    vi.stubEnv('ORCA_SSH_REMOTE_RUNTIME', 'legacy')
     vi.mocked(sweepSupersededRelayEndpoints).mockReset().mockResolvedValue([])
     vi.mocked(execCommand).mockReset().mockResolvedValue('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
     vi.mocked(waitForSentinel).mockReset()

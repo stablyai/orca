@@ -4,7 +4,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { CompactAgentRow, getCompactAgentSecondary } from './worktree-card-compact-agent-row'
-import { getAgentDotState, summarizeAgents } from './worktree-card-agent-summary'
+import {
+  buildSummaryAgentGroups,
+  getAgentDotState,
+  summarizeAgents
+} from './worktree-card-agent-summary'
 import { buildSubagentChildRows } from './worktree-subagent-child-rows'
 
 function monitoringAgent(): DashboardAgentRowData {
@@ -46,6 +50,30 @@ function renderCompactAgentRow(props: React.ComponentProps<typeof CompactAgentRo
 }
 
 describe('worktree card agent summary', () => {
+  // The sidebar lists running children only, so a child row it counts is one that runs.
+  it("counts a running child by its own row's state", () => {
+    const running: DashboardAgentRowData = {
+      ...monitoringAgent(),
+      paneKey: 'tab-1:leaf-1\u0000subagent:child',
+      rowSource: 'subagent',
+      state: 'working',
+      childRow: {
+        id: 'child',
+        kind: 'agent',
+        displayState: 'waiting',
+        name: 'Fuzz the tokenizer',
+        detail: null,
+        firstObservedAt: 1,
+        recencyAt: 1,
+        canStop: false,
+        settled: false,
+        owned: []
+      }
+    }
+    expect(getAgentDotState(running)).toBe('waiting')
+    expect(buildSummaryAgentGroups([running]).map((group) => group.state)).toEqual(['waiting'])
+  })
+
   it('presents passive working as monitoring', () => {
     const agent = monitoringAgent()
 
@@ -90,7 +118,7 @@ describe('worktree card agent summary', () => {
     expect(eligible).toContain('data-slot="tooltip-trigger"')
   })
 
-  it('lists interrupted outcomes before clean completions', () => {
+  it("lists a crash-cut turn as failed and a user's Stop as interrupted, before clean completions", () => {
     const done = monitoringAgent()
     done.state = 'done'
     done.entry.state = 'done'
@@ -98,13 +126,37 @@ describe('worktree card agent summary', () => {
     const interrupted = {
       ...done,
       paneKey: 'tab-1:leaf-2',
-      entry: { ...done.entry, paneKey: 'tab-1:leaf-2', interrupted: true }
+      entry: {
+        ...done.entry,
+        paneKey: 'tab-1:leaf-2',
+        mainAgent: { state: 'done' as const, outcome: 'interruption' as const, stateStartedAt: 1 }
+      }
+    }
+    const stopped = {
+      ...done,
+      paneKey: 'tab-1:leaf-3',
+      entry: { ...done.entry, paneKey: 'tab-1:leaf-3', interrupted: true }
     }
 
-    expect(summarizeAgents([done, interrupted], 'Agents')).toBe('Agents: 1 interrupted, 1 done')
+    expect(getAgentDotState(interrupted)).toBe('failed')
+    expect(getCompactAgentSecondary(interrupted, 0)).toBe('Failed')
+    expect(getAgentDotState(stopped)).toBe('interrupted')
+    expect(getCompactAgentSecondary(stopped, 0)).toBe('Interrupted by user')
+    const replaced = {
+      ...done,
+      entry: {
+        ...done.entry,
+        mainAgent: { state: 'done' as const, outcome: 'superseded' as const, stateStartedAt: 1 }
+      }
+    }
+    expect(getAgentDotState(replaced)).toBe('interrupted')
+    expect(getCompactAgentSecondary(replaced, 0)).toBe('Interrupted')
+    expect(summarizeAgents([done, interrupted, stopped], 'Agents')).toBe(
+      'Agents: 1 failed, 1 interrupted, 1 done'
+    )
   })
 
-  it('lists a failed turn as failed, not done, ahead of an interrupted one', () => {
+  it("lists a failed turn as failed, not done, ahead of a user's Stop", () => {
     const done = monitoringAgent()
     done.state = 'done'
     done.entry.state = 'done'
@@ -121,7 +173,11 @@ describe('worktree card agent summary', () => {
     const interrupted = {
       ...done,
       paneKey: 'tab-1:leaf-2',
-      entry: { ...done.entry, paneKey: 'tab-1:leaf-2', interrupted: true }
+      entry: {
+        ...done.entry,
+        paneKey: 'tab-1:leaf-2',
+        mainAgent: { state: 'done' as const, outcome: 'cancellation' as const, stateStartedAt: 1 }
+      }
     }
 
     expect(getAgentDotState(failed)).toBe('failed')

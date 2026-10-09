@@ -17,6 +17,7 @@ import {
 } from './session-scanner-opencode-sqlite-schema'
 import { normalizeTitleText } from './session-scanner-values'
 import { zcodeVisibleMessageFilter } from './session-scanner-zcode-visibility'
+import { zcodeTranscriptOrder } from './session-scanner-zcode-order'
 import type SyncDatabase from '../sqlite/sync-database'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 
@@ -162,11 +163,11 @@ function readFirstUserPromptFromOpenCodeDb(
                    ${zcodeVisibleMessageFilter(agent)}
                    AND json_extract(m.data, '$.role') = 'user'
                    AND json_extract(fp.data, '$.type') = 'text'
-                 ORDER BY m.time_created ASC, m.id ASC
+                 ORDER BY ${zcodeTranscriptOrder(db, agent, 'message', 'm', 'ASC')}
                  LIMIT 1
                )
            AND json_extract(p.data, '$.type') = 'text'
-         ORDER BY p.time_created ASC, p.rowid ASC
+         ORDER BY ${zcodeTranscriptOrder(db, agent, 'part', 'p', 'ASC')}
          LIMIT ${FIRST_USER_PROMPT_PART_LIMIT}`
       )
       .all(sessionId)
@@ -198,15 +199,19 @@ function buildPreviewQuery(db: SyncDatabase, agent: 'opencode' | 'zcode'): strin
                  p.time_created,
                  json_extract(m.data, '$.summary.title') AS summary_title,
                  json_extract(m.data, '$.summary.body') AS summary_body
-          FROM (SELECT id, data FROM message
-                WHERE session_id = ?
-                ${zcodeVisibleMessageFilter(agent, 'data')}
-                ORDER BY time_created DESC, id DESC
+          FROM (SELECT ${agent === 'zcode' ? 'm.rowid AS rowid, m.*' : 'm.id, m.data'} FROM message m
+                WHERE m.session_id = ?
+                ${zcodeVisibleMessageFilter(agent)}
+                ORDER BY ${zcodeTranscriptOrder(db, agent, 'message', 'm', 'DESC')}
                 LIMIT ${OPENCODE_SQLITE_PREVIEW_MESSAGE_WINDOW}) m
           JOIN part p ON p.message_id = m.id
           WHERE json_extract(m.data, '$.role') IN ('user','assistant')
             AND json_extract(p.data, '$.type') = 'text'
-          ORDER BY p.time_created DESC
+          ORDER BY ${
+            agent === 'zcode'
+              ? `${zcodeTranscriptOrder(db, agent, 'message', 'm', 'DESC')}, ${zcodeTranscriptOrder(db, agent, 'part', 'p', 'DESC')}`
+              : 'p.time_created DESC'
+          }
           LIMIT ?`
 }
 

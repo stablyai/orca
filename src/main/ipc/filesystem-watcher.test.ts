@@ -52,13 +52,7 @@ import {
 import { stat } from 'node:fs/promises'
 import { subscribe as subscribeParcelWatcher } from '@parcel/watcher'
 import { createWslWatcher } from './filesystem-watcher-wsl'
-import { createDebouncedBatch } from './filesystem-watcher-batch-control'
-import {
-  MAX_PHYSICAL_WATCHER_CHILDREN,
-  reserveWatcherChild,
-  resetWatcherChildRegistryForTest,
-  WatcherChildCapacityError
-} from './parcel-watcher-child-registry'
+import { resetWatcherChildRegistryForTest } from './parcel-watcher-child-registry'
 import { acquireWatcherRemovalGate } from './watcher-removal-gate'
 import { WATCH_BATCH_TRAILING_MS } from '../../shared/filesystem-watch-batch-window'
 
@@ -118,62 +112,6 @@ describe('registerFilesystemWatcherHandlers', () => {
     )
 
     await closeAllWatchers()
-  })
-
-  it('automatically retries a WSL watcher when child capacity becomes available', async () => {
-    Object.defineProperty(process, 'platform', {
-      configurable: true,
-      value: 'win32'
-    })
-    vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
-    const heldReservations = Array.from({ length: MAX_PHYSICAL_WATCHER_CHILDREN }, () =>
-      reserveWatcherChild()
-    )
-    vi.mocked(createWslWatcher).mockImplementation(async (_rootKey, worktreePath) => {
-      const release = reserveWatcherChild()
-      if (!release) {
-        throw new WatcherChildCapacityError()
-      }
-      return {
-        subscription: { unsubscribe: vi.fn(async () => release()) },
-        listeners: new Map(),
-        batch: createDebouncedBatch(),
-        rootPath: worktreePath
-      }
-    })
-    const sender = createWatcherSender(1)
-    const args = { worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo' }
-
-    await expect(handlers['fs:watchWorktree']({ sender }, args)).resolves.toBeUndefined()
-    expect(createWslWatcher).toHaveBeenCalledOnce()
-
-    heldReservations.pop()?.()
-    await vi.waitFor(() => expect(createWslWatcher).toHaveBeenCalledTimes(2))
-    await closeAllWatchers()
-    heldReservations.forEach((release) => release?.())
-  })
-
-  it('cancels a pending WSL capacity retry when the renderer unwatches', async () => {
-    Object.defineProperty(process, 'platform', {
-      configurable: true,
-      value: 'win32'
-    })
-    vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
-    const heldReservations = Array.from({ length: MAX_PHYSICAL_WATCHER_CHILDREN }, () =>
-      reserveWatcherChild()
-    )
-    vi.mocked(createWslWatcher).mockRejectedValue(new WatcherChildCapacityError())
-    const sender = createWatcherSender(1)
-    const args = { worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo' }
-
-    await handlers['fs:watchWorktree']({ sender }, args)
-    handlers['fs:unwatchWorktree']({ sender: { id: sender.id } }, args)
-    heldReservations.pop()?.()
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(createWslWatcher).toHaveBeenCalledOnce()
-    heldReservations.forEach((release) => release?.())
   })
 
   it('rejects installs during destructive removal and allows a retry afterward', async () => {

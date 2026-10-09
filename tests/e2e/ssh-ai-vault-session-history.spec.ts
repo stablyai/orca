@@ -9,6 +9,8 @@ import {
 import { connectDockerRemote } from './ssh-codex-reconnect-replay-driver'
 import { dockerExec, dockerWriteFile } from './ssh-codex-repro-remote-fixtures'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import { getTerminalContent } from './helpers/terminal-pane-identity'
+import { waitForTerminalOutput } from './helpers/terminal-pane-operations'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
 
@@ -119,6 +121,82 @@ test.describe('SSH Agent Session History', () => {
         .toContain(`CODEX_HOME='/root/.codex' codex resume '${defaultSessionId}'`)
       const queuedWorktreeId = await readLastQueuedStartupWorktreeId(orcaPage)
       expect(queuedWorktreeId).toBe(remote.worktreeId)
+    } finally {
+      cleanupDockerSshRelayTarget(target)
+    }
+  })
+
+  test('resumes a Codex session whose recorded worktree was deleted at the SSH workspace root', async ({
+    orcaPage
+  }, testInfo: TestInfo) => {
+    test.slow()
+    let target: DockerSshRelayTarget | null = null
+    const stamp = Date.now()
+    const sessionId = `remote-ai-vault-deleted-${stamp}`
+    const title = `Remote Deleted Worktree ${stamp}`
+    const deletedCwd = `/tmp/orca-deleted-worktree-${stamp}`
+
+    try {
+      target = startDockerSshRelayTarget(testInfo)
+      dockerExec(target, 'mkdir -p /root/.codex/sessions/2026/07/04')
+      dockerWriteFile(
+        target,
+        '/root/.codex/session_index.jsonl',
+        jsonLines([{ id: sessionId, thread_name: title }]),
+        '600'
+      )
+      // Why: the recorded folder never exists on the host, like a worktree removed after the session.
+      dockerWriteFile(
+        target,
+        `/root/.codex/sessions/2026/07/04/${sessionId}.jsonl`,
+        codexTranscript({
+          sessionId,
+          title,
+          cwd: deletedCwd,
+          timestamp: '2026-07-04T01:00:00.000Z'
+        }),
+        '600'
+      )
+      // Why: a stand-in agent reports where the resume really ran and with which argv.
+      dockerWriteFile(
+        target,
+        '/usr/local/bin/codex',
+        '#!/bin/sh\necho "FAKE_CODEX pwd=$(pwd) args=$*"\n',
+        '755'
+      )
+
+      await waitForSessionReady(orcaPage)
+      await waitForActiveWorktree(orcaPage)
+      await connectDockerRemote(orcaPage, target)
+      await openAiVaultSidebar(orcaPage)
+      const hostButton = orcaPage.getByRole('button', { name: /Session History host:/ })
+      await hostButton.click()
+      await orcaPage
+        .getByRole('menuitemradio')
+        .filter({ hasNotText: /Local|All hosts/ })
+        .click()
+      // Why: the deleted folder is outside every workspace, so the default Workspace scope hides it.
+      await orcaPage.getByRole('radio', { name: 'All' }).click()
+      const sessionTitle = orcaPage.getByText(title, { exact: true })
+      await expect(sessionTitle.first()).toBeVisible({ timeout: 30_000 })
+
+      await installStartupQueueProbe(orcaPage)
+      await sessionTitle.first().click()
+      await expect(orcaPage.getByText('Unavailable worktree').first()).toBeVisible()
+      await orcaPage.getByText('Resume in New Tab', { exact: true }).click()
+
+      await expect
+        .poll(() => readLastQueuedStartupCommand(orcaPage), { timeout: 30_000 })
+        .toContain(`'resume' '${sessionId}'`)
+      expect(await readLastQueuedStartupCommand(orcaPage)).not.toContain(deletedCwd)
+      await waitForTerminalOutput(
+        orcaPage,
+        `FAKE_CODEX pwd=${DOCKER_SSH_RELAY_REMOTE_REPO_PATH} args=`,
+        30_000
+      )
+      expect(await getTerminalContent(orcaPage)).toContain(
+        `-c tui.resume_cwd=current resume ${sessionId}`
+      )
     } finally {
       cleanupDockerSshRelayTarget(target)
     }

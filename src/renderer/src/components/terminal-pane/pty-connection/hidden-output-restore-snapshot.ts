@@ -61,6 +61,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
     pendingDeliveryStartSeq?: number
     alternateScreen?: boolean
     scrollbackAnsi?: string
+    carriesNormalBuffer?: boolean
     pendingEscapeTailAnsi?: string
     kittyKeyboardFlags?: number
     terminalOwner?: 'shell'

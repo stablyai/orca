@@ -1,3 +1,4 @@
+import { launchedSelection, type PendingSessionSelection } from './pending-session-selection'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -13,6 +14,14 @@ vi.mock('../platform/haptics', () => ({
   triggerSuccess: vi.fn(),
   triggerError: vi.fn()
 }))
+
+function noPendingSelection(): { current: PendingSessionSelection | null } {
+  return { current: null }
+}
+
+function noCreateLock(): { current: string | null } {
+  return { current: null }
+}
 
 function clientReturning(...responses: unknown[]): RpcClient {
   let responseIndex = 0
@@ -51,7 +60,7 @@ function createScope(client: RpcClient) {
     activeSessionTabIdRef: { current: 'existing-tab' },
     setActiveSessionTabId: vi.fn(),
     setCreating: vi.fn(),
-    creatingTerminalRef: { current: false },
+    creatingTerminalRef: noCreateLock(),
     creatingBrowser: false,
     creatingMarkdown: false,
     setCreateError: vi.fn(),
@@ -59,8 +68,7 @@ function createScope(client: RpcClient) {
     initializedHandlesRef: { current: new Set<string>() },
     activeHandleRef: { current: 'existing-terminal' },
     activeSessionTabTypeRef: { current: 'terminal' },
-    pendingActiveSessionTabIdRef: { current: null },
-    pendingActiveTerminalHandleRef: { current: null },
+    pendingSelectionRef: noPendingSelection(),
     scheduleDelayedAction: vi.fn(),
     showToast: vi.fn(),
     unsubscribeTerminal: vi.fn(),
@@ -111,9 +119,17 @@ describe('mobile + Codex tab creation routing', () => {
       'session.tabs.createTerminal',
       expect.anything()
     )
-    expect(scope.setActiveSessionTabId).toHaveBeenCalledWith('agent-session:codex_session_1')
-    expect(scope.setActiveHandle).toHaveBeenCalledWith(null)
-    expect(scope.unsubscribeTerminal).toHaveBeenCalledWith('existing-terminal')
+    // The chat's tab is found by its session in the next snapshot, never by a predicted id.
+    expect(scope.pendingSelectionRef.current).toEqual(
+      launchedSelection(expect.any(String), { sessionId: 'codex_session_1' })
+    )
+    expect(scope.setActiveSessionTabId).not.toHaveBeenCalled()
+    // The open terminal stays live until the chat's tab lands, rather than blanking beside it.
+    expect(scope.setActiveHandle).not.toHaveBeenCalled()
+    expect(scope.unsubscribeTerminal).not.toHaveBeenCalled()
+    expect(scope.activeSessionTabTypeRef.current).toBe('terminal')
+    expect(scope.fetchSessionTabs).toHaveBeenCalledTimes(1)
+    expect(scope.scheduleDelayedAction).not.toHaveBeenCalled()
   })
 
   it('keeps the legacy terminal path when structured support is disabled', async () => {
@@ -378,8 +394,11 @@ describe('optimistic placement of a created tab', () => {
     await createTerminal(scope)
 
     expect(scope.setSessionTabs).not.toHaveBeenCalled()
-    expect(scope.pendingActiveSessionTabIdRef.current).toBe('terminal-tab-1')
-    expect(scope.pendingActiveTerminalHandleRef.current).toBe('terminal-1')
+    expect(scope.pendingSelectionRef.current).toEqual({
+      kind: 'terminal',
+      handle: 'terminal-1',
+      tabId: 'terminal-tab-1'
+    })
     expect(scope.subscribeToTerminal).toHaveBeenCalledWith('terminal-1')
   })
 

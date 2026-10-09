@@ -1,3 +1,4 @@
+import { makePaneKey } from '../../../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
 import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-delivery-credit'
 import { recordAgentHibernationPaneOutput } from '@/lib/agent-hibernation-output-activity'
@@ -46,6 +47,12 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
       } else {
         // Why: main dropped buffered output at the pending cap, so the stream has a gap; repaint from the main-owned snapshot instead of writing on.
         session.markHiddenOutputRestoreNeeded()
+        // Why the synthesized \x1b[?2026l is not written here: this branch discards
+        // `data` deliberately, and the grounded snapshot replay
+        // (REPLAY_BASELINE_TERMINAL_RESET) releases the latch instead. Writing it
+        // through writePtyOutputToXterm perturbs the hidden-output-restore state
+        // machine (it consumes the pending snapshot), so the release rides the
+        // restore. Residual gap: a pane whose restore never arrives.
         if (data) {
           // The sentinel can carry query bytes carved from the bulk drop (extractDroppedPtyQueryBytes in main); replies must still flow.
           session.salvageRendererQueriesFromDiscardedRestoreData(data)
@@ -58,7 +65,12 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
     // Why: under main side-effect authority these facts arrive via pty:sideEffect; byte-scanning here would double-fire. Remote PTYs / kill-switch-off keep this path.
     if (!session.mainSideEffectAuthority) {
       for (const link of session.observeTerminalGitHubPRLink(data)) {
-        useAppStore.getState().observeTerminalGitHubPullRequestLink(session.deps.worktreeId, link)
+        useAppStore.getState().observeTerminalGitHubPullRequestLink(session.deps.worktreeId, link, {
+          tabId: session.deps.tabId,
+          paneKey: makePaneKey(session.deps.tabId, session.pane.leafId),
+          ptyId: session.transport.getPtyId(),
+          executionHostId: session.transport.getExecutionHostId?.() ?? undefined
+        })
       }
       session.commandLifecycle.handlePtyData(data)
     }

@@ -336,8 +336,16 @@
   },
   {
     "id": "ruby",
-    "extensions": [".rb", ".rbx", ".rjs", ".gemspec", ".pp"],
-    "filenames": ["rakefile", "Gemfile"]
+    "extensions": [".rb", ".rbx", ".rjs", ".gemspec", ".pp", ".rake", ".ru", ".jbuilder", ".thor"],
+    "filenames": [
+      "rakefile",
+      "Gemfile",
+      "Guardfile",
+      "Capfile",
+      "Podfile",
+      "Brewfile",
+      "Vagrantfile"
+    ]
   },
   {
     "id": "rust",

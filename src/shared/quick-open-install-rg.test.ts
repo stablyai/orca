@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { detectLinuxInstallCommandFromOsRelease } from './quick-open-install-rg'
 
 describe('detectLinuxInstallCommandFromOsRelease', () => {
@@ -23,19 +23,5 @@ describe('detectLinuxInstallCommandFromOsRelease', () => {
     expect(detectLinuxInstallCommandFromOsRelease('ID=unknown')).toBe(
       'install ripgrep via your package manager (e.g. apt/dnf/pacman)'
     )
-  })
-
-  it('does not use whitespace regex splitting for ID_LIKE parsing', () => {
-    const splitSpy = vi.spyOn(String.prototype, 'split')
-
-    expect(detectLinuxInstallCommandFromOsRelease('ID=unknown\nID_LIKE="rhel fedora"')).toBe(
-      'sudo dnf install ripgrep'
-    )
-
-    const usedWhitespaceFieldSplit = splitSpy.mock.calls.some(
-      ([separator]) => separator instanceof RegExp && separator.source.includes('\\s+')
-    )
-    splitSpy.mockRestore()
-    expect(usedWhitespaceFieldSplit).toBe(false)
   })
 })

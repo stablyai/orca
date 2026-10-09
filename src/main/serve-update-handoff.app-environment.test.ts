@@ -9,8 +9,7 @@ import {
 } from '../shared/serve-update-handoff'
 
 /**
- * Runtime companion to the source-level ordering guard in
- * startup/desktop-startup-ordering.test.ts (issue #16761).
+ * Guards app-environment initialization before resolving update-handoff paths (issue #16761).
  *
  * The sibling serve-update-handoff.test.ts mocks `./persistence`, so under it
  * getCanonicalUserDataPath() can never throw — which is exactly why a module-scope call to

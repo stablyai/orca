@@ -32,8 +32,8 @@ export function killCodexAppServerProcessTree(
       return
     }
     try {
-      // Why: npm-installed Codex runs behind cmd.exe; killing only that wrapper
-      // leaves the app-server child alive after a timeout or failed shutdown.
+      // Why: npm-installed Codex runs behind a launcher (node, or cmd.exe for an unresolved shim);
+      // killing only that wrapper leaves the app-server child alive after a timeout.
       const killer = spawnImpl('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
         stdio: 'ignore',
         windowsHide: true

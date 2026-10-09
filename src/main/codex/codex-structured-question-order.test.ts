@@ -5,7 +5,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalRenderItem
+} from '../../shared/agent-session-journal-types'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,
@@ -13,7 +16,8 @@ import {
 } from '../../shared/structured-agent-session-reducer'
 import { projectStructuredAgentSessionMessages } from '../../shared/structured-agent-session-message-projection'
 import { projectNativeChatTranscriptMessages } from '../../shared/native-chat-transcript-projection'
-import { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../runtime/agent-session-record-store-test-harness'
 import { CodexJournalPrompts } from './codex-structured-journal-prompts'
 import { CODEX_USER_INPUT_METHOD } from './codex-structured-prompt-replies'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
@@ -31,6 +35,10 @@ import {
   projectStructuredQuestionMessages,
   structuredQuestionTranscript
 } from '../../renderer/src/components/native-chat/structured-agent-question-projection'
+import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -73,7 +81,7 @@ beforeEach(async () => {
         },
         link: {
           linkId: `link-${fence}`,
-          handle: { provider: 'codex', threadId: THREAD },
+          handle: codexProviderHandle(THREAD),
           origin: 'created',
           mintedAtFence: fence,
           observedAt: HOST_TEST_NOW
@@ -86,11 +94,13 @@ beforeEach(async () => {
     answerPrompt: vi.fn(async ({ commit }) => commit()),
     setOption: vi.fn(async () => undefined)
   }
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter,
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     // Every write lands on its own millisecond, as it does live.
@@ -125,7 +135,7 @@ function codexPrompts(): CodexJournalPrompts {
     throw new Error('session was never acquired')
   }
   return new CodexJournalPrompts(
-    { sink, linkageFor: () => ({}) },
+    { sink, attributionFor: () => ({ turnScope: AGENT_JOURNAL_THREAD_SCOPE }) },
     () => null,
     () => 'turn-1'
   )
@@ -199,6 +209,7 @@ function drawnPromptRows(): string[][] {
       client.items,
       [],
       client.submissions,
+      { rejectedInPlace: true },
       projectStructuredQuestionMessages
     )
   )
@@ -236,9 +247,9 @@ describe('a Codex ask with several questions', () => {
     ])
     // Mobile draws the shared projection in journal order, one row per question.
     expect(
-      projectStructuredAgentSessionMessages(client.items, [], client.submissions).map(
-        ({ blocks }) => (blocks[0]?.type === 'text' ? blocks[0].text.split('\n')[0] : null)
-      )
+      projectStructuredAgentSessionMessages(client.items, [], client.submissions, {
+        rejectedInPlace: false
+      }).map(({ blocks }) => (blocks[0]?.type === 'text' ? blocks[0].text.split('\n')[0] : null))
     ).toEqual(ASKED.map(({ question }) => question))
   })
 

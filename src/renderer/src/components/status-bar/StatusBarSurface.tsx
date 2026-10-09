@@ -15,7 +15,7 @@ import {
   shouldOpenStatusBarContextMenu
 } from './status-bar-context-menu-policy'
 import { StatusBarUsageEmptyCta } from './StatusBarUsageEmptyCta'
-import { UsagePercentageDisplayChangeNotice } from './UsagePercentageDisplayChangeNotice'
+import { StatusBarUsageChangeNotices } from './StatusBarUsageChangeNotices'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { SkillUpdateStatusSegment } from './SkillUpdateStatusSegment'
 import { NativeChatResumeStatusSegment } from './NativeChatResumeStatusSegment'
@@ -25,7 +25,8 @@ import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/FloatingTerminalIconContextMenu'
 import { ClaudeSwitcherMenu } from './ClaudeSwitcherMenu'
 import { CodexSwitcherMenu } from './CodexSwitcherMenu'
-import { ProviderDetailsMenu, CLOSE_ALL_CONTEXT_MENUS_EVENT } from './ProviderDetailsMenu'
+import { ProviderDetailsMenu } from './ProviderDetailsMenu'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import { ProviderSegment, UsageOverflowChip, getUsageTone } from './StatusBarProviderSegment'
 import { useStatusBarController } from './use-status-bar-controller'
 import { StatusBarVisibilityMenu } from './StatusBarVisibilityMenu'
@@ -125,7 +126,7 @@ export function StatusBarSurface({
             ) : null
           ) : hasVisibleUsageMeters ? (
             // Consolidated roster pill → opens the all-agents Usage popover (mock parity).
-            <UsagePercentageDisplayChangeNotice hasVisibleUsageMeters={hasVisibleUsageMeters}>
+            <StatusBarUsageChangeNotices hasVisibleUsageMeters={hasVisibleUsageMeters}>
               <DropdownMenu
                 open={usageMenuOpen}
                 onOpenChange={handleUsageMenuOpenChange}
@@ -235,7 +236,7 @@ export function StatusBarSurface({
                   />
                 </DropdownMenuContent>
               </DropdownMenu>
-            </UsagePercentageDisplayChangeNotice>
+            </StatusBarUsageChangeNotices>
           ) : null}
           {anyVisible && !isEmptyUsageState && (
             <Tooltip>

@@ -38,10 +38,11 @@ it('keeps a live model and releases only its closed sibling', async () => {
 it('preserves a shared URI until its final file owner closes', async () => {
   const { store, attach, add } = createModelLifetimeFixture()
   const { file, model } = add('shared-a')
-  store.setState({ openFiles: [file, { ...file, id: 'shared-b' }] })
+  store.setState({ openFiles: [file, { ...file, id: 'shared-b', readOnly: true }] })
   attach()
   store.getState().closeFile(file.id)
   await Promise.resolve()
+  expect(store.getState().openFiles.map((openFile) => openFile.id)).toEqual(['shared-b'])
   expect(model.isDisposed()).toBe(false)
   store.getState().closeFile('shared-b')
   await Promise.resolve()

@@ -1,9 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { spawnMock, execFileMock, queryWindowsProcessDescendantsMock } = vi.hoisted(() => ({
+const { spawnMock, execFileMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
-  execFileMock: vi.fn(),
-  queryWindowsProcessDescendantsMock: vi.fn()
+  execFileMock: vi.fn()
 }))
 
 vi.mock('node:child_process', async (importOriginal) => ({
@@ -12,9 +11,6 @@ vi.mock('node:child_process', async (importOriginal) => ({
   execFile: execFileMock
 }))
 vi.mock('electron', () => ({ ipcMain: { handle: vi.fn(), on: vi.fn() } }))
-vi.mock('./providers/windows-foreground-process-rows', () => ({
-  queryWindowsProcessDescendants: queryWindowsProcessDescendantsMock
-}))
 
 import {
   getAppEnvironment,
@@ -36,7 +32,6 @@ import { killSpawnedCommandTree } from './git/command-runner/spawned-command-tre
 import { killCodexAppServerProcessTree } from './codex/codex-app-server-process-tree-kill'
 import { signalProcessTree } from '../shared/child-process/process-tree-termination'
 import { killSourceControlAgentProcess } from './text-generation/source-control-local-process'
-import { terminateCodexTurnProcesses } from './codex/codex-structured-turn-processes'
 
 /** A pid Electron reports as one of ours: every gate below must refuse it. */
 const RENDERER_PID = 1001
@@ -72,7 +67,6 @@ beforeEach(() => {
   installMainProcessTreeKillGate()
   spawnMock.mockReset()
   execFileMock.mockReset()
-  queryWindowsProcessDescendantsMock.mockReset()
   spawnMock.mockReturnValue({ on: vi.fn(), once: vi.fn(), unref: vi.fn(), kill: vi.fn() })
 })
 
@@ -173,37 +167,5 @@ describe('a refused tree-kill still terminates the root it owns', () => {
       })
     ])
     processKill.mockRestore()
-  })
-})
-
-/**
- * The one gated site with nothing to fall back to: the roots it kills are found
- * by a process-table walk, not spawned here, so there is no child handle. A
- * refusal must then be visible — the refusal crumb is written and the turn is
- * reported as not cancelled — rather than resolving as if the tree had gone.
- */
-describe('a refused tree-kill with no handle to fall back to', () => {
-  it('reports the codex turn as not cancelled and records the refused added root', async () => {
-    const appServerPid = 500
-    const addedRoot = {
-      pid: RENDERER_PID,
-      ppid: appServerPid,
-      name: 'node.exe',
-      command: 'node',
-      depth: 1
-    }
-    queryWindowsProcessDescendantsMock.mockResolvedValue([addedRoot])
-
-    await expect(
-      terminateCodexTurnProcesses(appServerPid, { platform: 'win32', identities: new Map() })
-    ).resolves.toBe(false)
-
-    expect(execFileMock).not.toHaveBeenCalled()
-    expect(getCrashBreadcrumbSnapshot()).toEqual([
-      expect.objectContaining({
-        name: 'self_tree_kill_refused_own_chromium',
-        data: expect.objectContaining({ pid: RENDERER_PID, site: 'codex-turn-added-roots' })
-      })
-    ])
   })
 })

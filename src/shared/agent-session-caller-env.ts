@@ -21,7 +21,7 @@ export function readInjectedAgentSessionId(
 
 /**
  * The address the host gives this session (`mailboxAddressOf` on its resolved party): a structured
- * worker keeps the handle it was minted, any other session is `session:<id>`. Only for text that
+ * worker keeps the handle it was minted, any other session is `orca_session_id:<id>`. Only for text that
  * must match what the host writes; the CLI spells it without the host resolver.
  */
 export function injectedSessionAddress(

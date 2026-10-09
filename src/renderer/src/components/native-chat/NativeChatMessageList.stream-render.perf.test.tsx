@@ -85,7 +85,6 @@ describe('native chat transcript re-render cost during a streaming turn', () => 
         session={sessionWith(messages)}
         isWorking={true}
         expandSignal={false}
-        fontScale={1}
       />
     )
 
@@ -104,7 +103,6 @@ describe('native chat transcript re-render cost during a streaming turn', () => 
           session={sessionWith(streaming)}
           isWorking={true}
           expandSignal={false}
-          fontScale={1}
         />
       )
     }
@@ -143,11 +141,12 @@ describe('native chat transcript re-render cost during a streaming turn', () => 
     }
     const view = (items: AgentJournalRenderItem[]) => (
       <NativeChatMessageList
-        session={sessionWith(projectStructuredAgentSessionMessages(items, [], []))}
+        session={sessionWith(
+          projectStructuredAgentSessionMessages(items, [], [], { rejectedInPlace: true })
+        )}
         journalItems={items}
         isWorking={false}
         expandSignal={false}
-        fontScale={1}
       />
     )
     const { rerender } = render(view([user, diff]))

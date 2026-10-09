@@ -67,6 +67,9 @@ describe('send', () => {
     if (!result.ok) {
       throw new Error(`expected a send, got ${result.refusal.code}`)
     }
+    if (!('submission' in result.value)) {
+      throw new Error('expected the submission arm')
+    }
     // Answered once accepted; the delivery loop hands it over after.
     expect(result.value.submission).toMatchObject({
       dispatchState: 'pending',
@@ -300,23 +303,20 @@ describe('send', () => {
     expect(journal.submissions()).toHaveLength(1)
   })
 
-  it('reconstructs an accepted send after the ledger settlement is lost', async () => {
+  it('answers a send whose ledger settlement fails, its row committed with the submission', async () => {
     await attach()
-    const persist = store.recordOperationOutcome.bind(store)
-    let failSettlement = true
-    vi.spyOn(store, 'recordOperationOutcome').mockImplementation(async (input) => {
-      if (failSettlement && input.outcome.status === 'succeeded') {
-        failSettlement = false
-        throw new Error('operation settlement failed')
-      }
-      return persist(input)
-    })
-    const body = hostTestMessage('accepted before settlement failed')
+    vi.spyOn(store, 'recordOperationOutcome').mockRejectedValue(
+      new Error('operation settlement failed')
+    )
+    const body = hostTestMessage('accepted while settlement fails')
     const params = { envelope: envelope('agentSession.send', { body }), body }
+    const clientMessageId = params.envelope.clientOperationId
 
-    await expect(host.send(CALLER, params)).rejects.toThrow('operation settlement failed')
-    // The submission was recorded before the ledger write failed, so it is still delivered.
-    await delivered(params.envelope.clientOperationId)
+    await expect(host.send(CALLER, params)).resolves.toMatchObject({ ok: true, replayed: false })
+    expect(
+      store.listOperationRows().find((row) => row.operationId === clientMessageId)
+    ).toMatchObject({ outcome: { status: 'succeeded' } })
+    await delivered(clientMessageId)
     await expect(host.send(CALLER, params)).resolves.toMatchObject({
       ok: true,
       replayed: true,
@@ -325,51 +325,54 @@ describe('send', () => {
     expect(dispatch).toHaveBeenCalledTimes(1)
   })
 
-  it('never reruns an admission-only send after the caller changes', async () => {
+  it('runs a send that threw before writing for the first time when it is resent, once', async () => {
     await attach()
-    const settlement = vi
-      .spyOn(store, 'recordOperationOutcome')
-      .mockRejectedValue(new Error('operation settlement failed'))
     const body = hostTestMessage('first delivery after caller recovery')
     const params = { envelope: envelope('agentSession.send', { body }), body }
+    const clientMessageId = params.envelope.clientOperationId
+    const beforeRun = () => {
+      throw new Error('host fault before the write')
+    }
 
-    await expect(host.send(CALLER, params)).rejects.toThrow('operation settlement failed')
-    expect(dispatch).not.toHaveBeenCalled()
-    settlement.mockRestore()
+    await expect(host.send(CALLER, { ...params, beforeRun })).rejects.toThrow(
+      'host fault before the write'
+    )
+    expect(hostJournal().submissions()).toHaveLength(0)
+    // Its success would have committed with its write, so a row still pending wrote nothing.
+    expect(
+      store.listOperationRows().find((row) => row.operationId === clientMessageId)
+    ).toMatchObject({ outcome: { status: 'pending' } })
 
     await expect(host.send({ callerKey: 'client-after-recovery' }, params)).resolves.toMatchObject({
       ok: true,
-      replayed: true,
-      value: {
-        submission: {
-          dispatchState: 'unknown',
-          reason: DISPATCH_DOUBT_SUBMISSION_MISSING
-        }
-      }
+      replayed: false,
+      value: { submission: { clientMessageId, dispatchState: 'pending' } }
     })
-    expect(dispatch).not.toHaveBeenCalled()
+    await delivered(clientMessageId)
     expect(
-      store.listOperationRows().find((row) => row.operationId === params.envelope.clientOperationId)
-    ).toMatchObject({ callerKey: CALLER.callerKey, outcome: { status: 'pending' } })
+      store.listOperationRows().find((row) => row.operationId === clientMessageId)
+    ).toMatchObject({ callerKey: CALLER.callerKey, outcome: { status: 'succeeded' } })
+    await expect(host.send(CALLER, params)).resolves.toMatchObject({ ok: true, replayed: true })
+    expect(dispatch).toHaveBeenCalledTimes(1)
   })
 
-  it('never redelivers after admission survives without its journal submission', async () => {
+  it("answers an older build's unknown row a new epoch emptied as recorded, never redelivering", async () => {
     await attach()
-    const persist = store.recordOperationOutcome.bind(store)
-    const settlement = vi
-      .spyOn(store, 'recordOperationOutcome')
-      .mockImplementation(async (input) => {
-        if (input.outcome.status === 'succeeded') {
-          throw new Error('operation settlement failed')
-        }
-        return persist(input)
-      })
     const body = hostTestMessage('delivered before epoch recovery')
     const params = { envelope: envelope('agentSession.send', { body }), body }
-
-    await expect(host.send(CALLER, params)).rejects.toThrow('operation settlement failed')
-    settlement.mockRestore()
+    await host.send(CALLER, params)
     await delivered(params.envelope.clientOperationId)
+    // What a build that marked a send unknown before running it leaves behind.
+    await store.recordOperationOutcome({
+      callerKey: CALLER.callerKey,
+      operationId: params.envelope.clientOperationId,
+      outcome: { status: 'pending' }
+    })
+    await store.recordOperationOutcome({
+      callerKey: CALLER.callerKey,
+      operationId: params.envelope.clientOperationId,
+      outcome: { status: 'unknown' }
+    })
     const journal = hostJournal()
     await journal.rollEpoch('schema_unreadable', store.getRecord(SESSION)?.lease.runtimeFence ?? 1)
     expect(journal.submissions()).toHaveLength(0)
@@ -391,33 +394,22 @@ describe('send', () => {
     expect(journal.submissions()).toHaveLength(0)
   })
 
-  it('fails closed when a legacy pending row survives without its submission', async () => {
+  it('answers an accepted send a new epoch dropped as recorded, never by running it again', async () => {
     await attach()
-    const body = hostTestMessage('legacy pending send after caller recovery')
+    const body = hostTestMessage('accepted, then the epoch was replaced')
     const params = { envelope: envelope('agentSession.send', { body }), body }
-
     await host.send(CALLER, params)
     await delivered(params.envelope.clientOperationId)
-    expect(dispatch).toHaveBeenCalledTimes(1)
-    await store.recordOperationOutcome({
-      callerKey: CALLER.callerKey,
-      operationId: params.envelope.clientOperationId,
-      outcome: { status: 'pending' }
-    })
+    await hostJournal().rollEpoch(
+      'schema_unreadable',
+      store.getRecord(SESSION)?.lease.runtimeFence ?? 1
+    )
 
-    const journal = (
-      host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
-    ).sessions.get(SESSION)!.journal
-    await journal.rollEpoch('schema_unreadable', store.getRecord(SESSION)?.lease.runtimeFence ?? 1)
-
-    await expect(host.send({ callerKey: 'client-after-recovery' }, params)).resolves.toMatchObject({
+    await expect(host.send(CALLER, params)).resolves.toMatchObject({
       ok: true,
       replayed: true,
       value: {
-        submission: {
-          dispatchState: 'unknown',
-          reason: DISPATCH_DOUBT_SUBMISSION_MISSING
-        }
+        submission: { dispatchState: 'unknown', reason: DISPATCH_DOUBT_SUBMISSION_MISSING }
       }
     })
     expect(dispatch).toHaveBeenCalledTimes(1)

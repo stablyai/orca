@@ -93,7 +93,9 @@ describe('a Task whose supervised worker is stopping', () => {
       expect(db.getWorkerDispatch(dispatch.id)?.runtime_epoch).toBe('epoch_new_runtime')
 
       db.markWorkerStopUnknown(dispatch.id, 'the execution host did not answer')
-      expect(db.abandonWorkerDispatch(dispatch.id)).toMatchObject({ disposition: 'abandoned' })
+      expect(db.abandonWorkerDispatch(dispatch.id, 'epoch_test')).toMatchObject({
+        disposition: 'abandoned'
+      })
       expect(db.getTask(task.id)?.status).toBe('blocked')
     })
 

@@ -3,6 +3,7 @@ import type { CommandHandler } from '../dispatch'
 import { formatCliStatus, formatStatus, printResult } from '../format'
 import { RuntimeClientError, serveOrcaApp } from '../runtime-client'
 import { stripElectronRunAsNode } from '../runtime/launch'
+import { resolveCliStatusCaller } from '../runtime/status-caller'
 import { getServeOptionValidationError } from '../../shared/serve-option-validation'
 
 function envRecord(): Record<string, string> {
@@ -101,10 +102,12 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     const projectRoot = typeof projectRootValue === 'string' ? projectRootValue : null
     const noPairing = flags.get('no-pairing') === true
     const mobilePairing = flags.get('mobile-pairing') === true
+    const grantDesktopControl = flags.get('grant-desktop-control') === true
     const recipeJson = flags.get('recipe-json') === true
     const validationError = getServeOptionValidationError({
       noPairing,
       mobilePairing,
+      grantDesktopControl,
       recipeJson,
       projectRoot
     })
@@ -119,6 +122,7 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
       pairingAddress: typeof pairingAddressValue === 'string' ? pairingAddressValue : null,
       noPairing,
       mobilePairing,
+      grantDesktopControl,
       recipeJson,
       projectRoot
     })
@@ -129,6 +133,13 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     if (!json && !result.result.runtime.reachable) {
       process.exitCode = 1
     }
-    printResult(result, json, formatStatus)
+    const caller = result.result.runtime.reachable
+      ? await resolveCliStatusCaller(client)
+      : undefined
+    printResult(
+      caller === undefined ? result : { ...result, result: { ...result.result, caller } },
+      json,
+      formatStatus
+    )
   }
 }

@@ -42,7 +42,9 @@ export function makeMockConnection(capture: SftpWriteCapture): SshConnection {
       end: vi.fn(() => setTimeout(() => sftp.emit('close'), 0))
     })
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture mocks every connection method used by the legacy deployment path.
   return {
+    getTarget: () => ({ id: 'legacy-target', remoteRuntime: 'legacy' }),
     canRunConcurrentExecCommands: vi.fn().mockReturnValue(false),
     exec: vi.fn().mockResolvedValue({
       on: vi.fn(),

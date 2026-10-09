@@ -12,6 +12,8 @@ import type { ClaudeStructuredLaunchResolverDeps } from '../claude/claude-struct
 import type { CodexStructuredLaunchResolverDeps } from '../codex/codex-structured-launch-resolution'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime'
+import type { StructuredAgentRegistry } from '../native-chat/agent-session-wire/structured-agent-registry'
+import { agentDrivesSession } from '../native-chat/agent-session-wire/structured-agent-session-provider-support'
 
 // The store is process-global; hydrate it from disk at most once per process.
 let persistenceAttached = false
@@ -44,10 +46,13 @@ export async function attachAgentModelCatalogPersistenceOnce(
  */
 export async function modelCatalogHostDeps(input: {
   store: Pick<AgentSessionRecordStore, 'getRecord'>
+  agents: Pick<StructuredAgentRegistry, 'definition'>
   deps: Pick<
     StructuredAgentSessionRuntimeDeps,
     | 'stateDirectory'
     | 'resolveAgentAccountHome'
+    | 'resolveCodexAccountKind'
+    | 'prepareCodexCatalogProbeHome'
     | 'resolveCodexCommand'
     | 'resolveClaudeCommand'
     | 'resolveClaudeLaunchEnv'
@@ -68,10 +73,15 @@ export async function modelCatalogHostDeps(input: {
   const modelCatalog = createAgentModelCatalogService({
     store: agentModelCatalogStore,
     getRecord: (sessionId) => input.store.getRecord(sessionId) ?? undefined,
+    drivesRecord: (record) => agentDrivesSession(input.agents, record),
     resolveAccountHome: deps.resolveAgentAccountHome,
     workspaceMayOverrideDefaultModel,
     probes: {
       codex: createCodexModelCatalogProbe({
+        resolveAccountKind: deps.resolveCodexAccountKind,
+        ...(deps.prepareCodexCatalogProbeHome
+          ? { prepareHome: deps.prepareCodexCatalogProbeHome }
+          : {}),
         resolveEnvironment: input.envResolvers.resolveCodexEnvironment,
         ...(deps.resolveCodexCommand ? { resolveCommand: deps.resolveCodexCommand } : {})
       }),

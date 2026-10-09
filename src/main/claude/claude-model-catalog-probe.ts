@@ -1,3 +1,4 @@
+import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { discoverModelsLocal } from '../text-generation/commit-message-model-discovery'
 import { commandBackslashMode } from '../text-generation/commit-message-text-generation'
 import { spawnSourceControlAgent } from '../text-generation/source-control-agent-launch'
@@ -39,6 +40,7 @@ export function createClaudeModelCatalogProbe(
     }))
     const result = await (deps.discover ?? discoverModelsLocal)({
       agentId: 'claude',
+      binary: command,
       env,
       options: {},
       backslash: commandBackslashMode({ kind: 'local', cwd: '' }),
@@ -48,6 +50,9 @@ export function createClaudeModelCatalogProbe(
       spawnAgent: (input) =>
         (deps.spawnAgent ?? spawnSourceControlAgent)({ ...input, binary: command })
     })
+    if (!result.success && result.unavailable) {
+      throw new AgentModelCatalogUnavailableError(result.unavailable)
+    }
     // The spec's static fallback must never pass as a listing: Claude's real
     // list replaces the seed, so only a probe-origin answer is a catalog.
     if (!result.success || result.catalogOrigin !== 'probe' || result.models.length === 0) {

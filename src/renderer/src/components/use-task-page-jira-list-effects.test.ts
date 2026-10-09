@@ -28,6 +28,7 @@ function createModel(): TaskPageLinearCollectionEffectsModel {
     setJiraLoading: vi.fn(),
     setJiraError: vi.fn(),
     setJiraErrorDetailsOpen: vi.fn(),
+    setJiraJqlRejection: vi.fn(),
     jiraSearchInput: '',
     appliedJiraSearch: '',
     setAppliedJiraSearch: vi.fn(),
@@ -79,5 +80,71 @@ describe('useTaskPageJiraListEffects refresh wiring', () => {
       sourceContext: null,
       force: false
     })
+  })
+
+  it('passes force through the text-search wrapper on refresh', async () => {
+    const model = createModel()
+    model.appliedJiraSearch = 'fix login'
+    const { rerender } = renderHook(() => useTaskPageJiraListEffects(model))
+    await waitFor(() => expect(searchJiraIssues).toHaveBeenCalledTimes(1))
+
+    await act(async () => {
+      model.jiraRefreshNonce = 1
+      rerender()
+      await Promise.resolve()
+    })
+    await waitFor(() => expect(searchJiraIssues).toHaveBeenCalledTimes(2))
+    expect(searchJiraIssues).toHaveBeenNthCalledWith(2, 'text ~ "fix login*"', 50, {
+      sourceContext: null,
+      force: true
+    })
+  })
+
+  it('shows the JQL rejection with its text matches and clears it for the next search', async () => {
+    const model = createModel()
+    model.appliedJiraSearch = 'project = NOPE'
+    searchJiraIssues
+      .mockRejectedValueOnce(new Error("Error 400: The value 'NOPE' does not exist."))
+      .mockResolvedValueOnce([])
+    const { rerender } = renderHook(() => useTaskPageJiraListEffects(model))
+    const rejection = { reason: "The value 'NOPE' does not exist.", likelyTypo: true }
+    await waitFor(() => expect(model.setJiraJqlRejection).toHaveBeenLastCalledWith(rejection))
+
+    // The next search never settles, so only the reset at its start can clear the notice.
+    searchJiraIssues.mockReturnValueOnce(new Promise(() => {}))
+    await act(async () => {
+      model.appliedJiraSearch = 'fix login'
+      rerender()
+      await Promise.resolve()
+    })
+    expect(model.setJiraJqlRejection).toHaveBeenLastCalledWith(null)
+  })
+
+  it('drops the rejection of a search that was replaced before it finished', async () => {
+    const model = createModel()
+    model.appliedJiraSearch = 'project = NOPE'
+    let rejectJql: (error: Error) => void = () => {}
+    searchJiraIssues
+      .mockReturnValueOnce(new Promise((_, reject) => (rejectJql = reject)))
+      .mockResolvedValue([])
+    const { rerender } = renderHook(() => useTaskPageJiraListEffects(model))
+    await waitFor(() => expect(searchJiraIssues).toHaveBeenCalledTimes(1))
+
+    await act(async () => {
+      model.appliedJiraSearch = 'fix login'
+      rerender()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      rejectJql(new Error("Error 400: The value 'NOPE' does not exist."))
+      await Promise.resolve()
+    })
+    await waitFor(() => expect(searchJiraIssues).toHaveBeenCalledTimes(3))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(model.setJiraJqlRejection).not.toHaveBeenCalledWith(
+      expect.objectContaining({ likelyTypo: true })
+    )
   })
 })

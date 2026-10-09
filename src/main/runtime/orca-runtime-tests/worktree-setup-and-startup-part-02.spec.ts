@@ -94,7 +94,13 @@ describe('OrcaRuntimeService', () => {
     expect(runHook).not.toHaveBeenCalled()
     expect(createTerminal).toHaveBeenCalledWith(
       `id:${result.worktree.id}`,
-      expect.objectContaining({ viewMode: 'chat' })
+      expect.objectContaining({ viewMode: 'chat' }),
+      expect.objectContaining({
+        id: result.worktree.id,
+        path: result.worktree.path,
+        repoId: result.worktree.repoId,
+        identity: result.worktree.identity
+      })
     )
     // Why: setup is provisioned fire-and-forget; the wait-for-setup guarantee comes from the shell nonce/marker, not JS spawn ordering.
     await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2))

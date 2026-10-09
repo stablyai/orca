@@ -1,3 +1,4 @@
+import { useWallAppUpdate } from '../app-update/use-wall-app-update'
 import { openExternalLink } from '../platform/external-link'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
@@ -67,18 +68,22 @@ function blockBody(verdict: BlockedVerdict, remedy: BlockRemedy, storeName: stri
 
 export function ProtocolBlockScreen({ verdict }: Props) {
   const router = useRouteHandoff()
+  const mobileUpdate = useWallAppUpdate()
   const remedy = blockRemedy(verdict)
   // Why: Android APKs ship through GitHub Releases until a Play Store listing exists.
   const mobileUpdateTarget =
     Platform.OS === 'ios'
       ? { label: 'Open App Store', url: IOS_APP_STORE_URL, storeName: 'the App Store' }
       : { label: 'Open GitHub Releases', url: RELEASES_URL, storeName: 'GitHub Releases' }
+  const mobileAction = mobileUpdate
+    ? { label: `Get Orca ${mobileUpdate.version}`, url: mobileUpdate.url }
+    : { label: mobileUpdateTarget.label, url: mobileUpdateTarget.url }
   // No download to offer when the fix is a refetch: reconnecting is what this screen leaves you to do.
   const primaryAction =
     remedy === 'refresh-bundle'
       ? null
       : remedy === 'update-mobile'
-        ? { label: mobileUpdateTarget.label, url: mobileUpdateTarget.url }
+        ? mobileAction
         : { label: 'Open GitHub Releases', url: RELEASES_URL }
 
   const title = blockTitle(remedy)

@@ -3,6 +3,12 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import type * as ReactModule from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { OMP_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session-option-catalog-omp'
+import {
+  applyStructuredAgentSessionOptions,
+  createStructuredAgentSessionOptionState,
+  structuredAgentSessionOptionSnapshot
+} from '../../../../shared/structured-agent-session-options'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 
@@ -158,6 +164,35 @@ vi.mock('@/components/ui/dropdown-menu', () => {
   }
 })
 
+// Same test ids as the dropdown mock: the model pill is a popover, the options pill a menu.
+vi.mock('@/components/ui/popover', () => ({
+  Popover: ({ children, open }: { children: React.ReactNode; open?: boolean }) => (
+    <div data-testid="dropdown-root" data-open={open ? 'true' : 'false'}>
+      {children}
+    </div>
+  ),
+  PopoverTrigger: ({ children, disabled }: { children: React.ReactNode; disabled?: boolean }) => (
+    <div data-disabled={disabled || undefined}>{children}</div>
+  ),
+  PopoverContent: ({
+    children,
+    side,
+    collisionPadding
+  }: {
+    children: React.ReactNode
+    side?: string
+    collisionPadding?: number
+  }) => (
+    <div
+      data-testid="session-option-menu"
+      data-side={side}
+      data-collision-padding={collisionPadding}
+    >
+      {children}
+    </div>
+  )
+}))
+
 import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
 
 const surface = {
@@ -268,6 +303,19 @@ describe('NativeChatSessionOptionPickers', () => {
     )
   })
 
+  it('sends a picked model to the session surface', async () => {
+    const setOption = vi.fn().mockResolvedValue({ snapshot: [] })
+    render(
+      <NativeChatSessionOptionPickers
+        surface={{ ...surface, setOption }}
+        snapshot={[model()]}
+        isWorking={false}
+      />
+    )
+    screen.getByRole('option', { name: 'Sonnet 5' }).click()
+    await waitFor(() => expect(setOption).toHaveBeenCalledExactlyOnceWith('model', 'sonnet'))
+  })
+
   it('prefers collision-aware upward placement for model and option menus', () => {
     render(
       <NativeChatSessionOptionPickers
@@ -341,6 +389,61 @@ describe('NativeChatSessionOptionPickers', () => {
     ).toBe('true')
   })
 
+  it('keeps the model pill shut, label intact, while its choices are still listed', async () => {
+    const pending = model({ settable: false, choicesPending: true })
+    const { rerender } = render(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[pending, effort]}
+        isWorking={false}
+        pickerRequest={{ id: 'model', sequence: 1 }}
+      />
+    )
+    const trigger = screen.getByRole('button', { name: 'Model Opus 4.8' })
+    expect(trigger.parentElement?.getAttribute('data-disabled')).toBe('true')
+    expect(trigger.closest('[data-testid="dropdown-root"]')?.getAttribute('data-open')).toBe(
+      'false'
+    )
+    expect(
+      screen
+        .getByRole('button', { name: 'Effort High' })
+        .parentElement?.getAttribute('data-disabled')
+    ).toBeNull()
+
+    rerender(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[model(), effort]}
+        isWorking={false}
+        pickerRequest={{ id: 'model', sequence: 2 }}
+      />
+    )
+    const listed = screen.getByRole('button', { name: 'Model Opus 4.8' })
+    expect(listed.parentElement?.getAttribute('data-disabled')).toBeNull()
+    await waitFor(() =>
+      expect(listed.closest('[data-testid="dropdown-root"]')?.getAttribute('data-open')).toBe(
+        'true'
+      )
+    )
+  })
+
+  it('renders a session with no reported model without an empty model control', () => {
+    const state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('omp'),
+      OMP_SESSION_OPTION_CATALOG,
+      { models: [], current: { effort: 'off', confirmed: ['effort'] } }
+    )
+    render(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={structuredAgentSessionOptionSnapshot(state)}
+        isWorking={false}
+      />
+    )
+    expect(screen.queryByRole('button', { name: /^Model/ })).toBeNull()
+    expect(screen.queryAllByRole('button', { name: '' })).toEqual([])
+  })
+
   it('does not duplicate titles for unknown values or misname generic controls', () => {
     const { rerender } = render(
       <NativeChatSessionOptionPickers
@@ -401,7 +504,7 @@ describe('NativeChatSessionOptionPickers', () => {
     expect(screen.queryByText(/not confirmed/)).toBeNull()
   })
 
-  it.each(['catalog', 'agent-session'] as const)(
+  it.each(['catalog'] as const)(
     'does not hedge a reported value on the %s transport',
     (transport) => {
       render(
@@ -583,24 +686,12 @@ describe('NativeChatSessionOptionPickers', () => {
     await waitFor(() => expect(setOption).toHaveBeenCalledWith('thinking', false))
   })
 
-  // Both arms: `default` and `unreported` make opposite claims, and only
-  // `unreported` is reachable in the structured lane, so one arm proves nothing.
+  // The switch row is the label and the switch, whatever said the value; no provenance caption.
   it.each([
-    {
-      name: 'a live unreported boolean is never labelled a default',
-      valueSource: 'unknown',
-      transport: 'agent-session',
-      shown: 'Not reported',
-      hidden: 'Default'
-    },
-    {
-      name: 'a draft catalog default says so',
-      valueSource: 'default',
-      transport: 'catalog',
-      shown: 'Default',
-      hidden: 'Not reported'
-    }
-  ] as const)('$name', ({ valueSource, transport, shown, hidden }) => {
+    { valueSource: 'unknown', transport: 'agent-session' },
+    { valueSource: 'default', transport: 'catalog' },
+    { valueSource: 'reported', transport: 'agent-session' }
+  ] as const)('shows a $valueSource boolean as its switch alone', ({ valueSource, transport }) => {
     render(
       <NativeChatSessionOptionPickers
         surface={surface}
@@ -611,27 +702,11 @@ describe('NativeChatSessionOptionPickers', () => {
         isWorking={false}
       />
     )
-    expect(screen.getAllByText(shown).length).toBeGreaterThan(0)
-    expect(screen.queryByText(hidden)).toBeNull()
-    // The marker qualifies the value; it must not become part of the control's name.
     const control = screen.getByRole('switch', { name: 'Fast mode' })
-    // ...but it must still reach assistive tech: hiding it would leave screen
-    // reader users unable to tell a default from an unreported value at all.
-    const describedBy = control.getAttribute('aria-describedby') ?? ''
-    expect(describedBy).not.toBe('')
-    expect(document.getElementById(describedBy)?.textContent).toBe(shown)
-  })
-
-  it('drops the marker once something has picked the value', () => {
-    render(
-      <NativeChatSessionOptionPickers
-        surface={surface}
-        snapshot={[model(), { ...fast, valueSource: 'reported' }]}
-        isWorking={false}
-      />
-    )
-    expect(screen.queryByText('Default')).toBeNull()
+    expect(control.textContent).toBe('Fast mode')
+    expect(control.hasAttribute('aria-describedby')).toBe(false)
     expect(screen.queryByText('Not reported')).toBeNull()
+    expect(screen.queryByText('Default')).toBeNull()
   })
 
   it('tooltips a dispatched option pill with the category alone', () => {

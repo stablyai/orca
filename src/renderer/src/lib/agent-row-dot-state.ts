@@ -1,5 +1,7 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
-import type { AgentWorkingMode } from '../../../shared/agent-status-types'
+import type { AgentChildRowModel } from '../../../shared/agent-child-row-model'
+import { agentVerdictDisplayMark } from '../../../shared/agent-main-agent-verdict'
+import type { AgentStatusEntry, AgentWorkingMode } from '../../../shared/agent-status-types'
 import type { AgentRowState } from './agent-row-decay-state'
 
 /**
@@ -21,4 +23,21 @@ export function agentRowDotState(
       return state
   }
   return 'idle'
+}
+
+/**
+ * The dot an agent row renders: a child row's own, else the main agent's verdict (a stop or a
+ * failure, which a failure shows even while subagents still run), else its state.
+ */
+export function agentRowDisplayDotState(agent: {
+  state: AgentRowState
+  entry: Pick<AgentStatusEntry, 'state' | 'interrupted' | 'mainAgent' | 'workingMode'>
+  childRow?: Pick<AgentChildRowModel, 'displayState'>
+}): AgentDotState {
+  if (agent.childRow) {
+    return agent.childRow.displayState
+  }
+  return (
+    agentVerdictDisplayMark(agent.entry) ?? agentRowDotState(agent.state, agent.entry.workingMode)
+  )
 }

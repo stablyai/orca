@@ -15,7 +15,6 @@ const { handleMock, mockStore } = vi.hoisted(() => ({
     getRepo: vi.fn(),
     addRepo: vi.fn(),
     updateRepo: vi.fn(),
-    removeProject: vi.fn(),
     removeProjectForHost: vi.fn(),
     reorderRepos: vi.fn().mockReturnValue(true)
   }
@@ -35,7 +34,10 @@ vi.mock('../git/repo', () => ({
   filterBaseRefSearchOutput: vi.fn().mockReturnValue([])
 }))
 
-vi.mock('./registered-worktree-roots-cache', () => ({ invalidateAuthorizedRootsCache: vi.fn() }))
+vi.mock('./registered-worktree-roots-cache', () => ({
+  invalidateAuthorizedRootsCache: vi.fn(),
+  invalidateAuthorizedRootsCacheForRepo: vi.fn()
+}))
 vi.mock('../providers/ssh-git-dispatch', () => ({ getSshGitProvider: vi.fn() }))
 vi.mock('./ssh', () => ({ getActiveMultiplexer: vi.fn() }))
 
@@ -66,23 +68,12 @@ beforeEach(() => {
     handlers.set(channel, handler)
   })
   mainWindow.webContents.send.mockReset()
-  mockStore.removeProject.mockReset()
   mockStore.removeProjectForHost.mockReset()
   mockStore.reorderRepos.mockReset().mockReturnValue(true)
 })
 
 describe('repo IPC mutations notify paired clients', () => {
-  it('broadcasts once for repos:remove and still notifies the local renderer', async () => {
-    const notify = vi.fn()
-    await registerHandlersWithNotifier(notify)
-
-    await handlers.get('repos:remove')!(null, { repoId: 'repo-1' })
-
-    expect(notify).toHaveBeenCalledTimes(1)
-    expect(mainWindow.webContents.send).toHaveBeenCalledWith('repos:changed')
-  })
-
-  it('broadcasts once for repos:removeForHost', async () => {
+  it('broadcasts once for repos:removeForHost and still notifies the local renderer', async () => {
     const notify = vi.fn()
     await registerHandlersWithNotifier(notify)
 
@@ -90,6 +81,7 @@ describe('repo IPC mutations notify paired clients', () => {
 
     expect(mockStore.removeProjectForHost).toHaveBeenCalledWith('repo-1', 'ssh:host-1')
     expect(notify).toHaveBeenCalledTimes(1)
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('repos:changed')
   })
 
   it('broadcasts for non-removal mutations too, via the shared helper', async () => {
@@ -104,7 +96,9 @@ describe('repo IPC mutations notify paired clients', () => {
   it('does not throw when no notifier has been set', async () => {
     await registerHandlersWithoutNotifier()
 
-    await expect(handlers.get('repos:remove')!(null, { repoId: 'repo-1' })).resolves.toBeUndefined()
+    await expect(
+      handlers.get('repos:removeForHost')!(null, { repoId: 'repo-1', hostId: 'local' })
+    ).resolves.toBeUndefined()
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('repos:changed')
   })
 
@@ -113,6 +107,8 @@ describe('repo IPC mutations notify paired clients', () => {
       throw new Error('client event stream exploded')
     })
 
-    await expect(handlers.get('repos:remove')!(null, { repoId: 'repo-1' })).resolves.toBeUndefined()
+    await expect(
+      handlers.get('repos:removeForHost')!(null, { repoId: 'repo-1', hostId: 'local' })
+    ).resolves.toBeUndefined()
   })
 })

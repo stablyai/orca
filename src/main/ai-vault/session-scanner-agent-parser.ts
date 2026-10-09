@@ -1,3 +1,5 @@
+import { parseQoderSessionFile } from './session-scanner-qoder-parser'
+import { parseCodebuddySessionFile } from './session-scanner-codebuddy-parser'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
 import { parseDevinSessionFile } from './session-scanner-devin-parser'
@@ -9,6 +11,7 @@ import { parseMessageGraphSessionFile, parseRovoSessionFile } from './session-sc
 import { parseKimiSessionFile } from './session-scanner-kimi-parser'
 import { parseMuseSessionFile } from './session-scanner-muse-parser'
 import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
+import { parseJcodeSessionFile } from './session-scanner-jcode-parser'
 import {
   captureOpenCodeSqliteSessionViaWorker,
   captureOpenCode2SqliteSessionViaWorker,
@@ -87,6 +90,10 @@ export async function parseAgentSessionFile(
   signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
   switch (candidate.agent) {
+    case 'qoder':
+      return parseQoderSessionFile(candidate.file, platform, messages)
+    case 'codebuddy':
+      return parseCodebuddySessionFile(candidate.file, platform, messages)
     case 'claude':
       return parseClaudeSessionFile(candidate.file, platform, messages)
     case 'codex':
@@ -155,5 +162,7 @@ export async function parseAgentSessionFile(
       return parseKimiSessionFile(candidate.file, platform, messages)
     case 'muse':
       return parseMuseSessionFile(candidate.file, platform, messages)
+    case 'jcode':
+      return parseJcodeSessionFile(candidate.file, platform, messages)
   }
 }

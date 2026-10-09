@@ -19,17 +19,21 @@ import { extractCommandCodeToolFields } from './providers/command-code-tool-fiel
 import { isGrokEvent } from './provider-event-names'
 import { extractGrokToolFields } from './providers/grok-tool-fields'
 import { extractHermesToolFields } from './providers/hermes-tool-fields'
+import { extractJcodeToolFields } from './providers/jcode-tool-fields'
 
 /** The per-provider answer to "is this event a user-initiated new turn?". Exported so the
  *  observation stamp reuses it instead of minting a second list of event-name literals. */
 export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
   // Why: exhaustive switch so a new AgentHookSource fails typecheck here instead of falling through to false.
   switch (source) {
+    case 'qoder-cn':
+    case 'qwen-code':
     case 'qoder':
     case 'claude':
       // Why: SessionStart lands an idle row (STA-3386) and must also drop stale
       // tool/prompt caches left by the pane's previous session.
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
+    case 'codebuddy':
     case 'kimi':
       // Why: Kimi Code emits Claude-compatible hook events, so UserPromptSubmit is its new-turn boundary too.
       return eventName === 'UserPromptSubmit'
@@ -78,6 +82,11 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
     case 'devin':
       // Why: SessionStart is handled by an early return in normalizeDevinEvent, so UserPromptSubmit is Devin's real new-turn boundary here.
       return eventName === 'UserPromptSubmit'
+    case 'jcode':
+      // Why: jcode has no UserPromptSubmit, but turn_start fires once per submitted
+      // prompt before the model generates — its real turn boundary. session_start
+      // returns early in normalizeJcodeEvent and clears the cache itself.
+      return eventName === 'turn_start'
   }
 }
 
@@ -102,6 +111,18 @@ export function hasExplicitUserPrompt(
     isNewTurnEvent(source, eventName) &&
     resolvedPromptText.trim().length > 0
   ) {
+    return true
+  }
+  if (
+    source === 'jcode' &&
+    (eventName === 'turn_start' ||
+      eventName === 'pre_tool' ||
+      eventName === 'post_tool' ||
+      eventName === 'turn_end') &&
+    hasTranscriptPromptEvidence &&
+    resolvedPromptText.trim().length > 0
+  ) {
+    // Why: jcode hooks carry no prompt field; only the journal-backed prompt counts as explicit user text.
     return true
   }
   if (extractedPrompt.source === 'role_user_text') {
@@ -139,10 +160,13 @@ export function extractToolFields(
 ): ToolSnapshot {
   // Why: exhaustive switch so a new AgentHookSource fails typecheck here instead of silently routing through OpenCode's extractor.
   switch (source) {
+    case 'qoder-cn':
+    case 'qwen-code':
     case 'qoder':
     case 'claude':
     // Why: Kimi Code uses Claude's tool_name/tool_input payload fields verbatim.
     // falls through
+    case 'codebuddy':
     case 'kimi':
     // Muse uses Claude-compatible tool fields.
     // falls through
@@ -184,5 +208,7 @@ export function extractToolFields(
       return extractHermesToolFields(eventName, hookPayload)
     case 'devin':
       return extractClaudeToolFields(eventName, hookPayload)
+    case 'jcode':
+      return extractJcodeToolFields(eventName, hookPayload)
   }
 }

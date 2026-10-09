@@ -7,9 +7,9 @@ export type ExternalEditorOpenCapability =
 
 export function getExternalEditorOpenCapability(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
-  context: { connectionId?: string | null; command?: string }
+  context: { connectionId?: string | null; command?: string; runtimeEnvironmentId?: string | null }
 ): ExternalEditorOpenCapability {
-  if (settings?.activeRuntimeEnvironmentId?.trim()) {
+  if (settings?.activeRuntimeEnvironmentId?.trim() || context.runtimeEnvironmentId?.trim()) {
     return { allowed: false, reason: 'remote-runtime' }
   }
   if (!context.connectionId?.trim()) {

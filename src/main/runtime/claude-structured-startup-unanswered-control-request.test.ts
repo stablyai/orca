@@ -1,12 +1,9 @@
-// A Claude start has no deadline of its own, but each option write the restore replays, and
-// startup's own settings read, is a control request under the ordinary request deadline. A CLI
-// that answers initialize and then never answers one of those used to fault the whole session
-// when that deadline fired: a start that was merely slow died with the deadline's error as its
-// cause. Now the unanswered request is skipped and startup lands on the CLI's own values, while
-// the saved choice stays saved for the next start to retry. Against
-// the production runtime, adapter, record store and host, with only the CLI process scripted.
+// A Claude start asks the CLI one control request after initialize, its settings read, under the
+// ordinary request deadline; the chat's saved options ride the launch, so no option write runs at
+// startup. A CLI that answers initialize and then answers no control request still starts, on its
+// launch options, and the saved choices stay saved. Against the production runtime, adapter, record
+// store and host, with only the CLI process scripted.
 
-import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-launch-resolution'
@@ -17,6 +14,8 @@ import { createScriptedClaudeRuntime } from './structured-claude-scripted-runtim
 const SESSION = 'claude-startup-unanswered-control'
 const CALLER = { callerKey: 'client-1' }
 const DEADLINE_MS = 50
+/** As live: no frame before the first turn names a model, so only a turn reports one. */
+const LIVE_START = { sendsNoStartFrame: true }
 
 let claude = createScriptedClaudeRuntime([SESSION])
 let operations = 0
@@ -79,16 +78,24 @@ async function statusRows(host: StructuredAgentSessionHost): Promise<string[]> {
 }
 
 async function send(host: StructuredAgentSessionHost, text: string): Promise<void> {
+  await sendTo(host, SESSION, text)
+}
+
+async function sendTo(
+  host: StructuredAgentSessionHost,
+  sessionId: string,
+  text: string
+): Promise<void> {
   const body = hostTestMessage(text)
   await expect(
     host.send(CALLER, {
       envelope: {
-        sessionId: SESSION,
-        clientOperationId: `${Date.now()}-${(++operations).toString(16).padStart(32, '0')}`,
-        expectedRuntimeFence: record(host)?.lease.runtimeFence ?? 0,
+        sessionId,
+        clientOperationId: operationId(),
+        expectedRuntimeFence: host.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? 0,
         payloadFingerprint: computeAgentSessionPayloadFingerprint({
           method: 'agentSession.send',
-          sessionId: SESSION,
+          sessionId,
           fields: { body }
         })
       },
@@ -98,8 +105,8 @@ async function send(host: StructuredAgentSessionHost, text: string): Promise<voi
 }
 
 describe('a Claude start whose CLI answers initialize but not a control request', () => {
-  it('lands with the unanswered option write skipped instead of faulting at the deadline, and keeps the saved choice', async () => {
-    claude.behave(SESSION, { optionWritesHang: true, controlTimeoutMs: DEADLINE_MS })
+  it('launches with the saved choices, writes none of them, and keeps them saved', async () => {
+    claude.behave(SESSION, { ...LIVE_START, optionWritesHang: true, controlTimeoutMs: DEADLINE_MS })
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const host = await claude.install()
     const saved = { model: 'sonnet', permissionMode: 'plan' }
@@ -107,28 +114,29 @@ describe('a Claude start whose CLI answers initialize but not a control request'
       host.attach(CALLER, claude.attachParams(SESSION, null, { options: saved }))
     ).resolves.toMatchObject({ ok: true })
 
-    // The restore asked; the CLI never answered; startup went on without it.
-    await vi.waitFor(() => expect(claude.child(SESSION).calls).toContain('set_model'))
-    await vi.waitFor(() => expect(claude.child(SESSION).calls).toContain('set_permission_mode'))
     await vi.waitFor(() => expect(record(host)?.lease.claimStatus).toBe('live'), {
       timeout: DEADLINE_MS * 40
     })
-    // The live child runs on the CLI's own model; silence is not a refusal, so the saved
-    // choice is neither replaced by that value nor dropped, and the next start retries it.
+    expect(claude.child(SESSION).launch.options).toMatchObject({
+      model: 'sonnet',
+      permissionMode: 'plan'
+    })
+    // The record keeps the saved choices through the start.
     await vi.waitFor(() => expect(record(host)?.options).toEqual({ ...saved, effort: 'high' }), {
       timeout: DEADLINE_MS * 40
     })
     expect(host.deps.adapter.readOptionRestoreFailures?.(SESSION)).toEqual([])
     expect(await statusRows(host)).toEqual([])
     expect(claude.children(SESSION)).toHaveLength(1)
+    expect(claude.child(SESSION).calls).not.toContain('set_model')
+    expect(claude.child(SESSION).calls).not.toContain('set_permission_mode')
 
-    // The proven child takes the next message.
     await send(host, 'hello')
     await vi.waitFor(() => expect(claude.child(SESSION).calls).toContain('send'))
   })
 
-  it('keeps the unanswered saved choice when the user later changes a different option', async () => {
-    const behavior = { optionWritesHang: true, controlTimeoutMs: DEADLINE_MS }
+  it('keeps the launched saved choice when the user later changes a different option', async () => {
+    const behavior = { ...LIVE_START, optionWritesHang: true, controlTimeoutMs: DEADLINE_MS }
     claude.behave(SESSION, behavior)
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const host = await claude.install()
@@ -148,14 +156,9 @@ describe('a Claude start whose CLI answers initialize but not a control request'
     expect(record(host)?.options).toMatchObject({ model: 'sonnet', permissionMode: 'plan' })
   })
 
-  it('replays the unanswered saved model after a turn reports another model, another option changes, and the chat is cleared', async () => {
-    const clearOperation = operationId()
-    const replacement = `clear-${createHash('sha256')
-      .update(JSON.stringify([SESSION, CALLER.callerKey, clearOperation]))
-      .digest('hex')
-      .slice(0, 40)}`
-    claude = createScriptedClaudeRuntime([SESSION, replacement])
-    const behavior = { optionWritesHang: true, controlTimeoutMs: DEADLINE_MS }
+  it('launches the saved model again after a turn reports another model, another option changes, and the chat is cleared', async () => {
+    claude = createScriptedClaudeRuntime([SESSION])
+    const behavior = { ...LIVE_START, optionWritesHang: true, controlTimeoutMs: DEADLINE_MS }
     claude.behave(SESSION, behavior)
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const host = await claude.install()
@@ -187,7 +190,7 @@ describe('a Claude start whose CLI answers initialize but not a control request'
       command: 'clear',
       envelope: {
         sessionId: SESSION,
-        clientOperationId: clearOperation,
+        clientOperationId: operationId(),
         expectedRuntimeFence: record(host)?.lease.runtimeFence ?? 0,
         payloadFingerprint: computeAgentSessionPayloadFingerprint({
           method: 'agentSession.conversationCommand',
@@ -198,22 +201,36 @@ describe('a Claude start whose CLI answers initialize but not a control request'
     })
     expect(cleared, JSON.stringify(cleared)).toMatchObject({
       ok: true,
-      value: { replacementSessionId: replacement }
+      value: { command: 'clear', state: 'completed' }
     })
-    // The cleared chat's start replays the saved model rather than the one the turn reported.
-    await vi.waitFor(() => expect(claude.child(replacement).calls).toContain('set_model'))
+    expect(cleared.ok && cleared.value.replacementSessionId).toBeUndefined()
+    const boundary = record(host)?.providerContextBoundary
+    expect(boundary).toBeDefined()
+    const freshProviderSessionId = claudeSessionIdForOrcaSession(SESSION, boundary?.operationId)
+    expect(freshProviderSessionId).not.toBe(claudeSessionIdForOrcaSession(SESSION))
+    claude.behave(SESSION, LIVE_START)
+    // The cleared chat starts nothing until its first message.
+    expect(claude.children(SESSION)).toHaveLength(1)
+    expect(claude.child(SESSION).connection.closed).toBe(true)
+    await send(host, 'first message')
+    await vi.waitFor(() => expect(claude.children(SESSION)).toHaveLength(2))
+    expect(claude.child(SESSION).launch.options).toMatchObject({
+      sessionId: freshProviderSessionId,
+      model: 'sonnet',
+      permissionMode: 'plan'
+    })
+    expect(claude.child(SESSION).launch.options.resume).toBeUndefined()
     await vi.waitFor(() =>
-      expect(host.deps.store.getRecord(replacement)?.options).toEqual({
+      expect(record(host)?.options).toEqual({
         model: 'sonnet',
         effort: 'high',
         permissionMode: 'plan'
       })
     )
-    expect(record(host)?.options).toEqual({ model: 'sonnet', permissionMode: 'plan' })
   })
 
-  it('replaces the unanswered saved model with the one the user then sets', async () => {
-    const behavior = { optionWritesHang: true, controlTimeoutMs: DEADLINE_MS }
+  it('replaces the launched saved model with the one the user then sets', async () => {
+    const behavior = { ...LIVE_START, optionWritesHang: true, controlTimeoutMs: DEADLINE_MS }
     claude.behave(SESSION, behavior)
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const host = await claude.install()
@@ -221,7 +238,7 @@ describe('a Claude start whose CLI answers initialize but not a control request'
       host.attach(CALLER, claude.attachParams(SESSION, null, { options: { model: 'sonnet' } }))
     ).resolves.toMatchObject({ ok: true })
     // The record holds the saved model from creation; only the start's own report (effort) says
-    // startup finished, and an option write before then is refused as still starting.
+    // startup finished, and an option write before then waits for it.
     await vi.waitFor(
       () => expect(record(host)?.options).toEqual({ model: 'sonnet', effort: 'high' }),
       { timeout: DEADLINE_MS * 40 }

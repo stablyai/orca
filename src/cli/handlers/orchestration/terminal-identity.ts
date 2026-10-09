@@ -7,11 +7,12 @@ import {
   injectedSessionAddress,
   readInjectedAgentSessionId
 } from '../../../shared/agent-session-caller-env'
+import { sessionAddressForHost } from '../../session-caller-flags'
 
 /**
  * The caller's terminal handle, or `undefined` when an injected agent session id names the caller:
  * the orchestration envelope carries that id and the host binds the caller param to it, so nothing
- * is resolved or guessed here.
+ * is resolved or guessed here, except a session address only the host can place.
  */
 export async function resolveOrchestrationTerminalHandle(
   flags: Map<string, string | boolean>,
@@ -21,10 +22,11 @@ export async function resolveOrchestrationTerminalHandle(
   options: { validateEnvHandle?: boolean } = {}
 ): Promise<string | undefined> {
   // A caller flag naming anyone else was already refused at the CLI entry, from the command's spec.
-  if (readInjectedAgentSessionId()) {
-    return undefined
-  }
   const explicit = getOptionalStringFlag(flags, flagName)
+  const sessionId = readInjectedAgentSessionId()
+  if (sessionId) {
+    return explicit ? sessionAddressForHost(explicit, sessionId) : undefined
+  }
   if (explicit) {
     return explicit
   }
@@ -173,6 +175,16 @@ function getClientErrorMessage(err: unknown): string | undefined {
 /** How check output names its caller: the handle, or the session's address. */
 export function orchestrationCallerLabel(handle: string | undefined): string {
   return handle ?? injectedSessionAddress() ?? 'unknown'
+}
+
+/**
+ * The caller for a read that `--run` scopes: no terminal is resolved, but a session's declared
+ * address still goes to the host, which places a `/clear` root and refuses anyone else.
+ */
+export function runScopedSessionCaller(flags: Map<string, string | boolean>): string | undefined {
+  const declared = getOptionalStringFlag(flags, 'from')
+  const sessionId = readInjectedAgentSessionId()
+  return declared && sessionId ? sessionAddressForHost(declared, sessionId) : undefined
 }
 
 export async function resolveCoordinatorTerminalHandle(

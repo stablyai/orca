@@ -2,19 +2,20 @@ import { describe, expect, it } from 'vitest'
 import { AGENT_STATUS_MAX_FIELD_LENGTH } from './agent-status-field-normalization'
 import { agentSessionFailureWords } from './agent-session-failure-words'
 import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
+import { AgentJournalRenderItemSchema } from './agent-session-journal-schemas'
 import { parsePaneKey } from './stable-pane-id'
 import {
   activeStructuredAgentSessionTurnId,
   hasUnansweredStructuredAgentSessionDispatch,
   projectStructuredItemToNativeChat,
   projectStructuredItemsToNativeChat,
-  latestStructuredAgentSessionAssistantMessage,
   projectStructuredAgentSessionStatus,
   projectStructuredAgentSessionStatusState,
   projectStructuredAgentSessionStatusSummary,
   structuredAgentSessionPaneKey
 } from './structured-agent-session-projection'
 import { statusStructuredAgentSessionToolCall } from './structured-agent-session-live-turn'
+import { latestStructuredAgentSessionAssistantMessage } from './structured-agent-session-latest-request'
 
 function item(
   itemId: string,
@@ -76,8 +77,8 @@ describe('structured agent session status projection', () => {
       blocks: [{ type: 'tool-call' }, { type: 'tool-result', output: '@@\n+second' }]
     })
     expect(second?.blocks).toEqual([
-      { type: 'tool-call', name: 'Diff', input: { path: 'a.ts' } },
-      { type: 'tool-result', output: '@@\n+second' }
+      { type: 'tool-call', name: 'Diff', input: { path: 'a.ts' }, callId: 'diff' },
+      { type: 'tool-result', output: '@@\n+second', callId: 'diff' }
     ])
     const pending = item('approval', 2, {
       kind: 'approval',
@@ -122,6 +123,41 @@ describe('structured agent session status projection', () => {
       type: 'text',
       text: 'Stopped.'
     })
+  })
+
+  it('names the call a tool row output answers, so a run pairs it by id', () => {
+    const projected = projectStructuredItemToNativeChat(
+      item('wait', 1, {
+        kind: 'tool-call',
+        name: 'wait_agent',
+        callId: 'call-wait',
+        input: null,
+        state: 'completed',
+        output: { head: 'CHILD_REPLY', digest: 'd', byteLength: 11, truncated: false }
+      })
+    )
+    expect(projected?.blocks).toEqual([
+      expect.objectContaining({ type: 'tool-call', callId: 'call-wait' }),
+      { type: 'tool-result', output: 'CHILD_REPLY', isError: false, callId: 'call-wait' }
+    ])
+  })
+
+  it('carries a cut-short call through the schema, and its partial output is not an error', () => {
+    const body = {
+      kind: 'tool-call' as const,
+      name: 'shell',
+      callId: 'call-sleep',
+      input: { command: 'sleep 20' },
+      state: 'failed' as const,
+      endedAs: 'interrupted' as const,
+      output: { head: 'partial', digest: 'd', byteLength: 7, truncated: false }
+    }
+    const parsed = AgentJournalRenderItemSchema.parse(item('sleep', 1, body))
+    expect(parsed.body).toMatchObject({ state: 'failed', endedAs: 'interrupted' })
+    expect(projectStructuredItemToNativeChat(item('sleep', 1, body))?.blocks).toEqual([
+      expect.objectContaining({ type: 'tool-call', state: 'failed', endedAs: 'interrupted' }),
+      { type: 'tool-result', output: 'partial', isError: false, callId: 'call-sleep' }
+    ])
   })
 
   it('projects running, attention, and completed lifecycle states', () => {
@@ -481,16 +517,16 @@ describe('structured agent session status projection', () => {
 
   it('preserves structured tool lifecycle state for the live renderer', () => {
     const projected = projectStructuredItemToNativeChat(
-      item('running-tool', 1, {
+      item('ls', 1, {
         kind: 'tool-call',
         name: 'shell',
-        input: { command: 'cat package.json' },
+        input: { command: 'ls' },
         state: 'running'
       })
     )
 
     expect(projected?.blocks).toEqual([
-      { type: 'tool-call', name: 'shell', input: { command: 'cat package.json' }, state: 'running' }
+      { type: 'tool-call', name: 'shell', input: { command: 'ls' }, state: 'running', callId: 'ls' }
     ])
   })
 
@@ -801,7 +837,7 @@ describe('the turn verdict on the status summary', () => {
     })
   })
 
-  it('reports no verdict for a settled turn the provider never judged', () => {
+  it('reports no verdict for a completed turn the provider never judged', () => {
     const completed = item('turn-completed', 2, {
       kind: 'turn',
       turnId: 'turn-1',
@@ -810,5 +846,42 @@ describe('the turn verdict on the status summary', () => {
     expect(projectStructuredAgentSessionStatusSummary([user, completed])).not.toHaveProperty(
       'turnOutcome'
     )
+  })
+
+  // With no verdict from the provider, the lifecycle the host settled is what the row reports.
+  it.each([
+    ['interrupted', 'interruption'],
+    ['unverifiable', 'unconfirmed']
+  ] as const)(
+    'reads an %s turn the provider never judged as its host-observed end',
+    (state, outcome) => {
+      const ended = item('turn-ended', 2, { kind: 'turn', turnId: 'turn-1', state })
+      expect(projectStructuredAgentSessionStatusSummary([user, ended])).toMatchObject({
+        status: 'idle',
+        turnOutcome: outcome
+      })
+    }
+  )
+
+  it("keeps the provider's own verdict over what the host observed of the end", () => {
+    for (const outcome of ['cancellation', 'failure', 'success'] as const) {
+      const judged = item('turn-judged', 2, {
+        kind: 'turn',
+        turnId: 'turn-1',
+        state: 'interrupted',
+        outcome
+      })
+      expect(projectStructuredAgentSessionStatusSummary([user, judged])).toMatchObject({
+        turnOutcome: outcome
+      })
+    }
+  })
+
+  it('keeps the observed end off the request the completion feed announces', () => {
+    const ended = item('turn-ended', 2, { kind: 'turn', turnId: 'turn-1', state: 'interrupted' })
+    expect(projectStructuredAgentSessionStatusState([user, ended]).latestRequest).toMatchObject({
+      turnState: 'interrupted',
+      outcome: null
+    })
   })
 })

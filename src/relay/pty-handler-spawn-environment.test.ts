@@ -336,6 +336,44 @@ describe('PtyHandler', () => {
       }
     )
 
+    it.each(['process', 'client'])(
+      'drops an ORCA_CODEX_LAUNCH_PREFLIGHT from the relay %s env',
+      async (source) => {
+        const inherited = '/opt/orca/bin/orca'
+        const previous = process.env.ORCA_CODEX_LAUNCH_PREFLIGHT
+        if (source === 'process') {
+          process.env.ORCA_CODEX_LAUNCH_PREFLIGHT = inherited
+        }
+        try {
+          await dispatcher.callRequest('pty.spawn', {
+            cols: 80,
+            rows: 24,
+            ...(source === 'client' ? { env: { ORCA_CODEX_LAUNCH_PREFLIGHT: inherited } } : {})
+          })
+        } finally {
+          if (previous === undefined) {
+            delete process.env.ORCA_CODEX_LAUNCH_PREFLIGHT
+          } else {
+            process.env.ORCA_CODEX_LAUNCH_PREFLIGHT = previous
+          }
+        }
+
+        const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+        expect(spawnEnv.ORCA_CODEX_LAUNCH_PREFLIGHT).toBeUndefined()
+      }
+    )
+
+    it('keeps the Codex server opt-out the client asked for', async () => {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        env: { ORCA_CODEX_ISOLATE: '0' }
+      })
+
+      const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+      expect(spawnEnv.ORCA_CODEX_ISOLATE).toBe('0')
+    })
+
     it('drops an ORCA_HISTFILE handed over in the client env', async () => {
       await dispatcher.callRequest('pty.spawn', {
         cols: 80,

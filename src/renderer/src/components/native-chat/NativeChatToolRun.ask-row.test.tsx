@@ -10,6 +10,7 @@ import {
   NativeChatDisclosureContext,
   useNativeChatDisclosures
 } from './native-chat-disclosure-store'
+import { openToolRunMembers } from './native-chat-tool-run-members-test-support'
 
 afterEach(cleanup)
 
@@ -96,6 +97,7 @@ describe('NativeChatToolRun awaiting-input row', () => {
         activeTurnIsWorking={false}
       />
     )
+    openToolRunMembers()
     expect(screen.queryByText('Awaiting user input:')).toBeNull()
     expect(screen.queryByText('Asked:')).toBeNull()
     expect(screen.getAllByText('Question rejected').length).toBeGreaterThan(0)
@@ -231,7 +233,7 @@ describe('NativeChatToolRun awaiting-input row', () => {
       />
     )
 
-    expect(screen.getByText('Awaiting user input:')).toBeInTheDocument()
+    expect(screen.getByText('Awaiting user input')).toBeInTheDocument()
     expect(screen.queryByText(/request_user_input/)).toBeNull()
   })
 })

@@ -8,6 +8,8 @@ export type OnboardingApi = {
       checklist?: Partial<OnboardingState['checklist']>
     }
   ) => Promise<OnboardingState>
+  /** Read-only: main decides the audience once, from the profile as saved before the chat upgrade. */
+  isInNativeChatUpgradeTipAudience: () => Promise<boolean>
 }
 
 export type StarNagApi = {

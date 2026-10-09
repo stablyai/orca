@@ -242,6 +242,15 @@ export function registerShellHandlers(store: Store): void {
     return result.filePaths[0]
   })
 
+  // Why: a separate plural handler, like repos:pickFolder/pickFolders — callers that
+  // must take exactly one file (the notebook interpreter picker) keep pickAttachment.
+  ipcMain.handle('shell:pickAttachments', async (): Promise<string[]> => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile', 'multiSelections']
+    })
+    return result.canceled ? [] : result.filePaths
+  })
+
   // Why: window.prompt() and <input type="file"> are unreliable in Electron,
   // so we use the native OS dialog to let the user pick an image file.
   ipcMain.handle('shell:pickImage', async (): Promise<string | null> => {

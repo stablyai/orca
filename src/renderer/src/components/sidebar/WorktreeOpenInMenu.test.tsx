@@ -307,4 +307,26 @@ describe('WorktreeOpenInMenu', () => {
       }
     )
   })
+  it.each(['file-manager', 'external-editor'] as const)(
+    'blocks a %s click for an owner other than the focused desktop',
+    async (target) => {
+      await openWorktreePath({
+        target,
+        worktreePath: '/same/path',
+        command: 'zed',
+        runtimeEnvironmentId: 'managed-owner'
+      })
+      expect(openInFileManagerMock).not.toHaveBeenCalled()
+      expect(openInExternalEditorMock).not.toHaveBeenCalled()
+      expect(toastErrorMock).toHaveBeenCalled()
+    }
+  )
+
+  it('marks a managed owner local-only in the menu with a locally focused desktop', () => {
+    const entry = { id: 'zed', label: 'Zed', target: 'external-editor', command: 'zed' } as const
+    expect(getOpenInEntryAvailability(entry, mockState.settings, null, 'managed-owner')).toEqual({
+      disabled: true,
+      metadata: 'Local only'
+    })
+  })
 })

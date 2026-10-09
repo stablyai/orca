@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Plugin, Rollup } from 'vite'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   CLI_MAIN_ENTRY_NAMES,
   createPlainNodeEntryGuardPlugin,
@@ -160,14 +160,20 @@ describe('guarded entry names', () => {
 // hand-written "must stay electron-free" comments, and the port-scan worker sits
 // one import away from a client that deliberately does require electron.
 describe('CLI and worker thread entry guard', () => {
-  function runEntryWriteBundle(plugin: Plugin, bundle: Rollup.OutputBundle): void {
+  function runEntryWriteBundle(
+    plugin: Plugin,
+    bundle: Rollup.OutputBundle,
+    watchMode = false
+  ): void {
     const hook = plugin.writeBundle
     if (typeof hook !== 'function') {
       throw new Error('Expected writeBundle hook')
     }
     hook.call(
-      { meta: { watchMode: false } } as never,
-      { dir: createOutputDir() } as Rollup.NormalizedOutputOptions,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This hook reads only meta.watchMode from its context.
+      { meta: { watchMode } } as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This hook reads only dir from the output options.
+      { dir: outputDir ?? createOutputDir() } as Rollup.NormalizedOutputOptions,
       bundle
     )
   }
@@ -183,6 +189,93 @@ describe('CLI and worker thread entry guard', () => {
       name
     } as Rollup.OutputChunk
   }
+
+  function countElectronRequireScans(run: () => void): number {
+    const pattern = /require\(\s*["'`]electron(?:\/[^"'`]+)?["'`]\s*\)/
+    const originalTest = RegExp.prototype.test
+    let scans = 0
+    const spy = vi.spyOn(RegExp.prototype, 'test').mockImplementation(function (
+      this: RegExp,
+      value: string
+    ) {
+      if (this.source === pattern.source) {
+        scans += 1
+      }
+      return originalTest.call(this, value)
+    })
+    try {
+      run()
+    } finally {
+      spy.mockRestore()
+    }
+    return scans
+  }
+
+  it('scans shared code once across every guarded entry', () => {
+    const shared = entryChunk('shared', 'require("node:fs")')
+    shared.isEntry = false
+    const bundle: Rollup.OutputBundle = { [shared.fileName]: shared }
+    for (const name of GUARDED_ENTRY_NAMES) {
+      const entry = entryChunk(name, `require("./shared.js"); // ${name}`, [shared.fileName])
+      bundle[entry.fileName] = entry
+    }
+    const snapshot = structuredClone(bundle)
+
+    const scans = countElectronRequireScans(() => {
+      runEntryWriteBundle(createPlainNodeEntryGuardPlugin(), bundle)
+    })
+
+    expect(bundle).toEqual(snapshot)
+    expect(scans).toBe(GUARDED_ENTRY_NAMES.length + 1)
+  })
+
+  it('does not retain a successful scan across output bundles', () => {
+    const plugin = createPlainNodeEntryGuardPlugin()
+    const entry = entryChunk('stt-worker', 'require("node:fs")')
+    const bundle: Rollup.OutputBundle = { [entry.fileName]: entry }
+    const scans = countElectronRequireScans(() => {
+      runEntryWriteBundle(plugin, bundle)
+      runEntryWriteBundle(plugin, bundle)
+    })
+    expect(scans).toBe(2)
+
+    entry.code = 'require("electron/main")'
+    expect(() => runEntryWriteBundle(plugin, bundle)).toThrow(
+      '[plain-node-entry-guard] "stt-worker" reaches chunk "stt-worker.js" that requires electron. '
+    )
+  })
+
+  it('still reads changed code on the same chunk within one bundle scan', () => {
+    const first = entryChunk('stt-worker', 'require("node:fs")')
+    const second = entryChunk('warp-theme-parser-worker', 'require("node:fs")')
+    const shared = entryChunk('shared', '')
+    shared.isEntry = false
+    let reads = 0
+    Object.defineProperty(shared, 'code', {
+      get: () => (++reads === 1 ? 'require("node:fs")' : 'require("electron")')
+    })
+    first.imports = [shared.fileName]
+    second.dynamicImports = [shared.fileName]
+    const bundle: Rollup.OutputBundle = {
+      [first.fileName]: first,
+      [second.fileName]: second,
+      [shared.fileName]: shared
+    }
+
+    expect(() => runEntryWriteBundle(createPlainNodeEntryGuardPlugin(), bundle)).toThrow(
+      '[plain-node-entry-guard] "warp-theme-parser-worker" reaches chunk "shared.js"'
+    )
+    expect(reads).toBe(2)
+  })
+
+  it('keeps watch mode free of entry scanning', () => {
+    const entry = entryChunk('stt-worker', 'require("electron")')
+    const bundle: Rollup.OutputBundle = { [entry.fileName]: entry }
+    const scans = countElectronRequireScans(() => {
+      runEntryWriteBundle(createPlainNodeEntryGuardPlugin(), bundle, true)
+    })
+    expect(scans).toBe(0)
+  })
 
   it.each(CLI_MAIN_ENTRY_NAMES)('rejects direct and transitive Electron imports in %s', (name) => {
     const plugin = createPlainNodeEntryGuardPlugin()
@@ -231,8 +324,8 @@ describe('CLI and worker thread entry guard', () => {
   it('follows shared chunks out of a worker entry', () => {
     const plugin = createPlainNodeEntryGuardPlugin()
     const bundle: Rollup.OutputBundle = {
-      'session-scanner-opencode-sqlite-worker-entry.js': entryChunk(
-        'session-scanner-opencode-sqlite-worker-entry',
+      'foreign-sqlite-reader-entry.js': entryChunk(
+        'foreign-sqlite-reader-entry',
         'require("./chunks/shared.js")',
         ['chunks/shared.js']
       ),

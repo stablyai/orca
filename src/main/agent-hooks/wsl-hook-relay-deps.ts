@@ -1,6 +1,7 @@
 // DI seam for WslHookRelayManager: the full dependency contract plus the
 // production wiring. Tests construct the manager with fakes for everything
 // that spawns wsl.exe or touches the live agentHookServer.
+import { bindRemoteClaudeInterruptReconciliation } from '../ssh/ssh-agent-hook-interrupt-reconciliation'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 
@@ -32,7 +33,7 @@ export const WSL_RELAY_TRANSIENT_RETRY_DELAY_MS = 2_000
 // Restart/cooldown policy for the manager's state machine.
 export const FAILURE_COOLDOWN_BASE_MS = 60_000
 export const FAILURE_COOLDOWN_MAX_MS = 10 * 60_000
-// Why: a distro without node >= 18 will not grow one mid-session; probe
+// Why: a distro without node >= 24 will not grow one mid-session; probe
 // rarely instead of once per PTY spawn.
 export const NO_NODE_COOLDOWN_MS = 10 * 60_000
 // Why: a previously-healthy relay dying mid-session (mux protocol error, WSL
@@ -64,6 +65,11 @@ export type WslHookRelayManagerDeps = {
   runInstall: typeof runWslInstallProcess
   waitForSentinel: typeof waitForWslRelaySentinel
   ingest: (envelope: Record<string, unknown>, connectionId: string) => void
+  bindInterruptReconciliation?: (
+    mux: Parameters<typeof bindRemoteClaudeInterruptReconciliation>[1],
+    connectionId: string,
+    isCurrent: () => boolean
+  ) => () => void
   installHooks: typeof installRemoteManagedAgentHooks
   installCodex: (runtimeHomePath: string, distro: string) => Promise<AgentHookInstallStatus | null>
   managedHookSettings: () => ManagedHookDetectionSettings
@@ -112,6 +118,8 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: envelope is the wire-deserialized notification; ingestRemote independently re-validates paneKey's type before trusting anything here.
     return agentHookServer.ingestRemote(capped as IngestEnvelope, connectionId)
   },
+  bindInterruptReconciliation: (mux, connectionId, isCurrent) =>
+    bindRemoteClaudeInterruptReconciliation(agentHookServer, mux, connectionId, isCurrent),
   installHooks: installRemoteManagedAgentHooks,
   installCodex: (runtimeHomePath, distro) =>
     codexHookService.installForRuntimeHomeSerialized(runtimeHomePath, {

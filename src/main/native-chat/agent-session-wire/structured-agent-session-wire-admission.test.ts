@@ -6,18 +6,26 @@ import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity
 } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionBackgroundTaskState,
+  AgentSessionSubscribeEvent
+} from '../../../shared/agent-session-wire'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime-memory-limits'
 import { mobileE2EETextPayloadAdmissionBytes } from '../../runtime/rpc/mobile-e2ee-outbound-admission'
-import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
-import { openJournalDatabase } from '../agent-session-journal/journal-database'
-import { journalDatabaseFile } from '../agent-session-journal/journal-paths'
-import { insertJournalRow } from '../agent-session-journal/journal-row-table'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  AGENT_SESSION_JOURNAL_SCHEMA_VERSION
+} from '../../../shared/agent-session-journal-types'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import {
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase,
+  insertTestJournalRow
+} from '../agent-session-journal/journal-host-database-test-support'
 import { readAgentSessionHistory } from './agent-session-history-page'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'wire-admission-session'
 const LARGE_TEXT = 'x'.repeat(250 * 1024)
@@ -34,12 +42,15 @@ beforeEach(async () => {
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      providerHandle: codexProviderHandle('thread-1')
     },
-    journalDir: root
+    stateDirectory: root
   })
   for (let ordinal = 1; ordinal <= 20; ordinal += 1) {
-    await journal.appendItem(item(ordinal), body(`${ordinal}:${LARGE_TEXT}`), { fence: 1 })
+    await journal.appendItem(item(ordinal), body(`${ordinal}:${LARGE_TEXT}`), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
   }
 })
 
@@ -54,7 +65,8 @@ describe('structured agent-session outbound admission', () => {
       REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
     )
 
-    const subscribers = new AgentSessionSubscribers()
+    let roster: AgentSessionBackgroundTaskState | null = null
+    const subscribers = new AgentSessionSubscribers({ readBackgroundTasks: () => roster })
     const initial: AgentSessionSubscribeEvent[] = []
     const dispose = subscribers.open({
       id: 'initial',
@@ -67,7 +79,8 @@ describe('structured agent-session outbound admission', () => {
     expect(initial[0]).toMatchObject({ type: 'snapshot', page: { hasOlder: true } })
     expectAdmitted(initial[0])
 
-    subscribers.backgroundTasks(SESSION, null, 2)
+    roster = { state: 'monitoring' }
+    subscribers.republishBackgroundTasks(SESSION, 2)
     subscribers.snapshot(SESSION, journal, 2)
     expect(initial.slice(1)).toHaveLength(2)
     initial.slice(1).forEach(expectAdmitted)
@@ -167,15 +180,15 @@ async function reopenWithOversizedRemoval(afterSequence: number): Promise<AgentS
     { ...base, kind: 'tombstone', itemId: hugeItemId, revision: 2, seq: afterSequence + 2 }
   ]
   await journal.close()
-  const opened = openJournalDatabase(journalDatabaseFile(root))
+  const opened = openTestJournalHostDatabase(root)
   try {
     opened.db.exec('BEGIN IMMEDIATE')
     for (const row of rows) {
-      insertJournalRow(opened.db, SESSION, row)
+      insertTestJournalRow(opened.db, SESSION, row)
     }
     opened.db.exec('COMMIT')
   } finally {
-    opened.db.close()
+    opened.close()
   }
   return journals.open({
     identity: {
@@ -183,8 +196,8 @@ async function reopenWithOversizedRemoval(afterSequence: number): Promise<AgentS
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      providerHandle: codexProviderHandle('thread-1')
     },
-    journalDir: root
+    stateDirectory: root
   })
 }

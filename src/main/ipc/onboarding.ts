@@ -5,6 +5,7 @@ import type { OnboardingState } from '../../shared/onboarding-state-types'
 export function registerOnboardingHandlers(store: Store): void {
   ipcMain.removeHandler('onboarding:get')
   ipcMain.removeHandler('onboarding:update')
+  ipcMain.removeHandler('onboarding:isInNativeChatUpgradeTipAudience')
 
   ipcMain.handle('onboarding:get', (): OnboardingState => store.getOnboarding())
   // Why: never trust renderer input — a compromised/buggy caller could send
@@ -13,4 +14,7 @@ export function registerOnboardingHandlers(store: Store): void {
   ipcMain.handle('onboarding:update', (_event, updates: unknown): OnboardingState => {
     return store.updateOnboarding(sanitizeOnboardingUpdate(updates))
   })
+  ipcMain.handle('onboarding:isInNativeChatUpgradeTipAudience', (): boolean =>
+    store.isInNativeChatUpgradeTipAudience()
+  )
 }

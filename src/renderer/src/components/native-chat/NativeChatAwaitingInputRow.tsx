@@ -1,4 +1,3 @@
-import { useCallback, useRef, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -8,6 +7,7 @@ import {
 } from '../../../../shared/native-chat-ask-row'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { NativeChatToolRunIcon } from './NativeChatToolIcon'
+import { useNativeChatClippedLine } from './use-native-chat-clipped-line'
 
 const ROW_CLASS_NAME =
   'flex min-h-6 w-full items-center gap-1.5 py-0.5 text-left text-sm leading-relaxed text-muted-foreground'
@@ -50,31 +50,21 @@ export function NativeChatAwaitingInputRow({
   )
   // Seeded from `open`: a row remounted open was clipped when the reader opened
   // it, and dropping the toggle as it folds would drop keyboard focus with it.
-  const [clipped, setClipped] = useState(open)
-  const observerRef = useRef<ResizeObserver | null>(null)
-  // Attached to the question only while it sits on the line; an open row keeps its verdict.
-  const measureLine = useCallback((line: HTMLSpanElement | null) => {
-    observerRef.current?.disconnect()
-    observerRef.current = null
-    if (!line) {
-      return
-    }
-    const measure = (): void => setClipped(line.scrollWidth > line.clientWidth)
-    measure()
-    if (typeof ResizeObserver === 'undefined') {
-      return
-    }
-    observerRef.current = new ResizeObserver(measure)
-    observerRef.current.observe(line)
-  }, [])
+  const [clipped, measureLine] = useNativeChatClippedLine(open)
 
   const question = subject?.kind === 'question' ? subject.text : null
   const questions = subject?.kind === 'questions' && listsQuestions ? subject.questions : null
   // A count always hides its questions, so the list needs no clipping measurement.
   const toggles = questions !== null || (question !== null && (open || clipped))
-  const label = pending
-    ? translate('components.native-chat.ask.awaiting', NATIVE_CHAT_ASK_ROW_COPY.awaiting)
-    : translate('components.native-chat.ask.asked', NATIVE_CHAT_ASK_ROW_COPY.asked)
+  // With nothing to name, the label must read as a whole phrase, not end on a colon.
+  const label = !pending
+    ? translate('components.native-chat.ask.asked', NATIVE_CHAT_ASK_ROW_COPY.asked)
+    : subject === null
+      ? translate(
+          'components.native-chat.ask.awaitingUnnamed',
+          NATIVE_CHAT_ASK_ROW_COPY.awaitingUnnamed
+        )
+      : translate('components.native-chat.ask.awaiting', NATIVE_CHAT_ASK_ROW_COPY.awaiting)
   const text =
     subject === null
       ? null

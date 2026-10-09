@@ -243,6 +243,8 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   const {
     markThreadRead,
     markThreadUnread,
+    markThreadsRead,
+    markThreadsUnread,
     selectThread,
     jumpToWorkspace,
     markAllThreadsRead,
@@ -263,12 +265,14 @@ export default function ActivityPrototypePage(): React.JSX.Element {
         worktreesByRepo: storeData.worktreesByRepo,
         detectedWorktreesByRepo: storeData.detectedWorktreesByRepo,
         folderWorkspaces: storeData.folderWorkspaces,
+        floatingWorkspacePath: storeData.floatingWorkspacePath,
         defaultHostId: storeData.defaultHostId
       }),
     [
       storeData.worktreesByRepo,
       storeData.detectedWorktreesByRepo,
       storeData.folderWorkspaces,
+      storeData.floatingWorkspacePath,
       storeData.defaultHostId
     ]
   )
@@ -337,6 +341,8 @@ export default function ActivityPrototypePage(): React.JSX.Element {
           onJumpToWorkspace={jumpToWorkspace}
           onMarkThreadRead={markThreadRead}
           onMarkThreadUnread={markThreadUnread}
+          onMarkThreadsRead={markThreadsRead}
+          onMarkThreadsUnread={markThreadsUnread}
           canJumpToWorkspace={canJumpToWorkspace}
           isThreadListResizing={isThreadListResizing}
           onResizeStart={onResizeStart}

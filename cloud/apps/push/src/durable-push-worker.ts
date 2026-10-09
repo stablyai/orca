@@ -1,6 +1,7 @@
 import { buildPushDelivery } from './push-delivery-message.js'
 import type { PushDispatcher } from './push-dispatcher.js'
 import type { DurablePushStore } from './durable-push-store.js'
+import { WORKER_DRAINS } from './push-worker-concurrency.js'
 
 export class DurablePushWorker {
   private timer?: NodeJS.Timeout
@@ -29,7 +30,8 @@ export class DurablePushWorker {
       return
     }
     if (this.stopped) return
-    const pending = Promise.allSettled(Array.from({ length: 4 }, () => this.drain())).then(
+    const drains = Array.from({ length: WORKER_DRAINS }, () => this.drain())
+    const pending = Promise.allSettled(drains).then(
       (results) => {
         const failure = results.find((result) => result.status === 'rejected')
         if (failure?.status === 'rejected') throw failure.reason

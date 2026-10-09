@@ -50,8 +50,13 @@ export function applyRemoteWorkspacePushStatus(
       message: translate('auto.hooks.useIpcEvents.f8aaf2bde3', 'Workspace uploaded')
     })
   } else {
-    const authority =
-      result.snapshot ?? currentTransientAuthority(store, targetId, fallbackAuthority)
+    const authority = result.snapshot
+      ? {
+          revision: result.snapshot.revision,
+          updatedAt: result.snapshot.updatedAt,
+          hostObservationToken: result.snapshot.hostObservationToken
+        }
+      : currentTransientAuthority(store, targetId, fallbackAuthority)
     store.setRemoteWorkspaceSyncStatus(targetId, {
       phase: result.reason === 'stale-revision' ? 'conflict' : 'offline',
       direction: 'push',

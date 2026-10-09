@@ -29,6 +29,8 @@ function referenceProjection(map: AppState['agentStatusByPaneKey']): string {
         prompt: entry.prompt,
         updatedAtBucket: Math.floor(entry.updatedAt / BUCKET_MS),
         stateStartedAt: entry.stateStartedAt,
+        // A new turn can keep the state (child work held it open); its stamp alone must republish.
+        turnStartedAt: entry.turnStartedAt ?? null,
         agentType: entry.agentType ?? null,
         terminalTitle: entry.terminalTitle ?? null,
         stateHistory: entry.stateHistory.map((history) => ({
@@ -77,6 +79,7 @@ describe('mobile agent-status projection equivalence', () => {
     statusMaps.push({})
     statusMaps.push({ 'tab-0:leaf-0': makeEntry(0) })
     statusMaps.push({ 'tab-0:leaf-0': makeEntry(0, { workingMode: 'monitoring' }) })
+    statusMaps.push({ 'tab-0:leaf-0': makeEntry(0, { turnStartedAt: 1740000000500 }) })
     const many: AppState['agentStatusByPaneKey'] = {}
     for (let index = 0; index < 12; index += 1) {
       many[`tab-${index}:leaf-0`] = makeEntry(index)

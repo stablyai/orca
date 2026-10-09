@@ -575,7 +575,9 @@ describe('remote runtime terminal multiplex ACK gate', () => {
       pendingEscapeTailAnsi: undefined,
       // The host's serialization grid; the restorer replays there, not at the pane's own.
       cols: 120,
-      rows: 40
+      rows: 40,
+      // No scrollbackRows: an older host's screen-only image.
+      keepsLocalScrollback: true
     })
     expect(onSubscribed).toHaveBeenCalledTimes(1)
 
@@ -585,17 +587,19 @@ describe('remote runtime terminal multiplex ACK gate', () => {
         cols: 120,
         rows: 40,
         reason: 'ack-pending-overflow',
-        truncated: false
+        truncated: false,
+        scrollbackRows: 1000
       },
       'recovered state'
     )
-    // Why: an unsolicited recovery snapshot replaces terminal state, so it
-    // clears screen and scrollback first and must not replay the subscribe
-    // lifecycle.
-    expect(onSnapshot).toHaveBeenCalledWith(`\x1b[2J\x1b[3J\x1b[H${'recovered state'}`, {
+    // Why: an unsolicited recovery snapshot that carries history replaces
+    // terminal state, so it clears screen and scrollback first and must not
+    // replay the subscribe lifecycle.
+    expect(onSnapshot).toHaveBeenCalledWith(`\x1b[?2026l\x1b[2J\x1b[3J\x1b[H${'recovered state'}`, {
       pendingEscapeTailAnsi: undefined,
       cols: 120,
-      rows: 40
+      rows: 40,
+      keepsLocalScrollback: false
     })
     expect(onSubscribed).toHaveBeenCalledTimes(1)
 
@@ -611,10 +615,12 @@ describe('remote runtime terminal multiplex ACK gate', () => {
       },
       ''
     )
-    expect(onSnapshot).toHaveBeenCalledWith('\x1b[2J\x1b[3J\x1b[H', {
+    // A screen-only recovery (scrollbackRows absent or 0) keeps the pane's history (#14593).
+    expect(onSnapshot).toHaveBeenCalledWith('\x1b[?2026l\x1b[2J\x1b[H', {
       pendingEscapeTailAnsi: undefined,
       cols: 120,
-      rows: 40
+      rows: 40,
+      keepsLocalScrollback: true
     })
     expect(onSubscribed).toHaveBeenCalledTimes(1)
 

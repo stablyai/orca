@@ -5,6 +5,33 @@ import { runSleepWorktree } from '@/components/sidebar/sleep-worktree-flow'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
 import { useAppStore } from '../../store'
+import type { AppState } from '../../store/types'
+import type { EditorTabSelection } from '../../store/slices/editor/types/open-file'
+import {
+  navigationTargetsHost,
+  type RuntimeNavigationTarget
+} from '../../../../shared/runtime-navigation'
+
+// Why: a caller that names a non-host target (CLI without --focus) must not change anything on screen;
+// the tab is selected only inside a worktree the user is not viewing, without counting as a visit.
+// No target (phones, older CLIs) keeps the original switch, which the phone's "Open in session" relies on.
+function openRuntimeEditorTab(
+  worktreeId: string,
+  navigation: RuntimeNavigationTarget | undefined,
+  open: (store: AppState, selection: EditorTabSelection) => void
+): void {
+  const store = useAppStore.getState()
+  if (navigation !== undefined && !navigationTargetsHost(navigation)) {
+    open(store, worktreeId === store.activeWorktreeId ? 'none' : 'background')
+    return
+  }
+  store.setActiveWorktree(worktreeId)
+  store.markWorktreeVisited(worktreeId)
+  store.setActiveView('terminal')
+  open(store, 'focus')
+  store.setActiveTabType('editor', worktreeId)
+  store.revealWorktreeInSidebar(worktreeId)
+}
 
 export function registerMobileAndTerminalCloseIpcBridge(
   unsubs: (() => void)[],
@@ -12,41 +39,36 @@ export function registerMobileAndTerminalCloseIpcBridge(
 ): void {
   unsubs.push(
     window.api.ui.onOpenFileFromMobile(
-      ({ worktreeId, filePath, relativePath, runtimeEnvironmentId }) => {
-        const store = useAppStore.getState()
+      ({ worktreeId, filePath, relativePath, runtimeEnvironmentId, navigation }) => {
         const basename = relativePath.split(/[\\/]/).pop() || relativePath
-        store.setActiveWorktree(worktreeId)
-        store.markWorktreeVisited(worktreeId)
-        store.setActiveView('terminal')
-        // Why: renderer owns tab creation so grouped order and markdown bridges share the desktop File Explorer's store path.
-        store.openFile({
-          filePath,
-          relativePath,
-          worktreeId,
-          language: detectLanguage(basename),
-          runtimeEnvironmentId,
-          mode: 'edit'
-        })
-        store.setActiveTabType('editor', worktreeId)
-        store.revealWorktreeInSidebar(worktreeId)
+        openRuntimeEditorTab(worktreeId, navigation, (store, selection) =>
+          // Why: renderer owns tab creation so grouped order and markdown bridges share the desktop File Explorer's store path.
+          store.openFile(
+            {
+              filePath,
+              relativePath,
+              worktreeId,
+              language: detectLanguage(basename),
+              runtimeEnvironmentId,
+              mode: 'edit'
+            },
+            { selection }
+          )
+        )
       }
     )
   )
 
   unsubs.push(
     window.api.ui.onOpenDiffFromMobile(
-      ({ worktreeId, filePath, relativePath, staged, runtimeEnvironmentId }) => {
-        const store = useAppStore.getState()
-        const language = detectLanguage(relativePath)
-        store.setActiveWorktree(worktreeId)
-        store.markWorktreeVisited(worktreeId)
-        store.setActiveView('terminal')
-        // Why: mobile renders diffs from metadata; the editor-local Changes shortcut would send plain markdown back to mobile.
-        store.openDiff(worktreeId, filePath, relativePath, language, staged, {
-          runtimeEnvironmentId
-        })
-        store.setActiveTabType('editor', worktreeId)
-        store.revealWorktreeInSidebar(worktreeId)
+      ({ worktreeId, filePath, relativePath, staged, runtimeEnvironmentId, navigation }) => {
+        openRuntimeEditorTab(worktreeId, navigation, (store, selection) =>
+          // Why: mobile renders diffs from metadata; the editor-local Changes shortcut would send plain markdown back to mobile.
+          store.openDiff(worktreeId, filePath, relativePath, detectLanguage(relativePath), staged, {
+            runtimeEnvironmentId,
+            selection
+          })
+        )
       }
     )
   )

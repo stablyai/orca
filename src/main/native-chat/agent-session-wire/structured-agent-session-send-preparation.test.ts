@@ -10,7 +10,8 @@ import type {
   AgentSessionMutationEnvelope,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { CodexAppServerRequestError } from '../../codex/codex-app-server-request-error'
@@ -23,6 +24,9 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -49,7 +53,7 @@ beforeEach(async () => {
     acquisitionGeneration: `generation-${++generation}`,
     link: {
       linkId: `link-${fence}`,
-      handle: { provider: 'codex' as const, threadId: THREAD },
+      handle: codexProviderHandle(THREAD),
       origin: store.getRecord(SESSION)?.providerHandleChain.length
         ? ('resumed' as const)
         : ('created' as const),
@@ -67,8 +71,13 @@ beforeEach(async () => {
       ordinal: dispatch.mock.calls.length
     }
   }))
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
+    logger: {
+      warn: (_message, fields) => hostErrors.push(fields.error),
+      error: (_message, fields) => hostErrors.push(fields.error)
+    },
     store,
     adapter: {
       acquire,
@@ -79,11 +88,10 @@ beforeEach(async () => {
       answerPrompt: vi.fn(async () => undefined),
       setOption: vi.fn(async () => undefined)
     },
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${acquire.mock.calls.length}`,
-    now: () => NOW,
-    onEventSinkError: ({ error }) => hostErrors.push(error)
+    now: () => NOW
   })
   expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
 })
@@ -143,7 +151,7 @@ async function errorStatuses(): Promise<string[]> {
 
 /** The child timed out or exited: its lease is handed back and the host holds no session. */
 async function loseOwner(): Promise<void> {
-  await host.close(SESSION)
+  await host.close(SESSION, 'evict')
   expect(store.getRecord(SESSION)?.lease).toMatchObject({
     claimStatus: 'released',
     ownerProcess: null
@@ -191,7 +199,7 @@ describe('a send with no live owner', () => {
     expect(acquire).not.toHaveBeenCalled()
   })
 
-  it('does not restart an owner for a send the session refuses anyway', async () => {
+  it('restarts an independently retained old-build clear source', async () => {
     await loseOwner()
     await store.transitionHandoff(SESSION, (current) => ({
       ...current,
@@ -205,12 +213,10 @@ describe('a send with no live owner', () => {
       }
     }))
 
-    await expect(host.send(CALLER, sendParams('into a cleared chat'))).resolves.toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_invalid' }
+    await expect(host.send(CALLER, sendParams('into the retained chat'))).resolves.toMatchObject({
+      ok: true
     })
-
-    expect(acquire).not.toHaveBeenCalled()
+    await eventually(() => expect(acquire).toHaveBeenCalledOnce())
   })
 
   it('restarts an owner that exited while the session stayed readable', async () => {
@@ -269,10 +275,12 @@ describe('a send with no live owner', () => {
     expect(acquire).toHaveBeenCalledOnce()
   })
 
-  it('restarts nothing for a send the ledger holds but the journal never saw', async () => {
-    const params = sendParams('claimed, then the host died')
-    // The row was claimed and the host went down before the journal write: on replay, admission
-    // reconstructs an unknown-outcome submission and never needs an owner.
+  /** A row admitted for this send, then the host died before the journal write, left as `outcome`
+   *  says: `pending` by this build, `unknown` by a build that marked it before running. */
+  async function admittedThenHostDied(
+    params: ReturnType<typeof sendParams>,
+    outcome: 'pending' | 'unknown'
+  ) {
     await store.admitMutationOperation({
       callerKey: CALLER.callerKey,
       envelope: params.envelope,
@@ -280,11 +288,13 @@ describe('a send with no live owner', () => {
       now: NOW,
       operationIdScope: 'global'
     })
-    await store.recordOperationOutcome({
-      callerKey: CALLER.callerKey,
-      operationId: params.envelope.clientOperationId,
-      outcome: { status: 'unknown' }
-    })
+    if (outcome === 'unknown') {
+      await store.recordOperationOutcome({
+        callerKey: CALLER.callerKey,
+        operationId: params.envelope.clientOperationId,
+        outcome: { status: 'unknown' }
+      })
+    }
     await host.handleAdapterEvent({
       type: 'ended',
       sessionId: SESSION,
@@ -295,16 +305,31 @@ describe('a send with no live owner', () => {
     })
     expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
     acquire.mockClear()
-
-    const result = await host.send(CALLER, {
+    return {
       ...params,
       envelope: {
         ...params.envelope,
         expectedRuntimeFence: store.getRecord(SESSION)?.lease.runtimeFence ?? 0
       }
-    })
+    }
+  }
 
-    expect(result).toMatchObject({
+  it('runs a send admitted but never run for the first time, restarting the owner once', async () => {
+    const resent = await admittedThenHostDied(sendParams('admitted, then the host died'), 'pending')
+
+    await expect(host.send(CALLER, resent)).resolves.toMatchObject({
+      ok: true,
+      replayed: false,
+      value: { submission: { dispatchState: 'pending' } }
+    })
+    await eventually(async () => expect(dispatch).toHaveBeenCalledOnce())
+    expect(acquire).toHaveBeenCalledOnce()
+  })
+
+  it("restarts nothing for an older build's unknown row the journal never saw", async () => {
+    const resent = await admittedThenHostDied(sendParams('marked unknown, then died'), 'unknown')
+
+    await expect(host.send(CALLER, resent)).resolves.toMatchObject({
       ok: true,
       replayed: true,
       value: { submission: { dispatchState: 'unknown', recovered: true } }
@@ -405,8 +430,6 @@ describe('a send with no live owner', () => {
     acquire.mockRejectedValue(
       new CodexAppServerRequestError('thread/resume', -32600, `thread/resume failed: ${said}`, said)
     )
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-
     const id = await accept(sendParams('after the thread went away'))
 
     // The sentence names no cause and quotes nothing; Codex's words ride in the fact for Details.
@@ -424,11 +447,11 @@ describe('a send with no live owner', () => {
       "Codex couldn't restart. Send your message to try again."
     ])
     // Orca's own text is logged once where the start failed.
-    expect(warn).toHaveBeenCalledWith(
-      '[agent-session] provider start failed:',
-      expect.objectContaining({ message: `thread/resume failed: ${said}` })
-    )
-    warn.mockRestore()
+    expect(
+      hostErrors.filter(
+        (error) => error instanceof Error && error.message === `thread/resume failed: ${said}`
+      )
+    ).toHaveLength(1)
   })
 
   it('restarts again for a Retry under a new id, and replays a resend of the same id', async () => {

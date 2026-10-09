@@ -12,7 +12,7 @@ import {
   completedWorkerFakeCodexCommand,
   completedWorkerLaunchEnv,
   listRuntimeTerminals,
-  readCompletedWorkerDispatchCapability,
+  hasCompletedWorkerReceivedPreamble,
   readCompletedWorkerLedger,
   readPersistedWorkerRecoveryRecord,
   runBuiltOrcaCli,
@@ -176,13 +176,7 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
     await expect
       .poll(() => readCompletedWorkerLedger().filter((event) => event.event === 'spawn'))
       .toHaveLength(1)
-    let dispatchCapability: string | null = null
-    await expect
-      .poll(() => {
-        dispatchCapability = readCompletedWorkerDispatchCapability()
-        return dispatchCapability
-      })
-      .not.toBeNull()
+    await expect.poll(() => hasCompletedWorkerReceivedPreamble()).toBe(true)
     await expect
       .poll(() =>
         readCompletedWorkerLedger()
@@ -190,9 +184,6 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
           .map((event) => event.mode)
       )
       .toEqual(['bracketed'])
-    if (!dispatchCapability) {
-      throw new Error('Background worker did not receive its dispatch capability')
-    }
 
     seedCurrentCodexTranscript(isolatedHome, PROVIDER_SESSION_ID, targetWorktreePath)
 
@@ -237,21 +228,17 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
       )
       .toEqual(expectedRecovery)
 
-    const completed = await client.call<{ message: { type: string } }>(
-      'orchestration.send',
-      {
-        from: workerHandle,
-        subject: 'Completed',
-        body: 'The fixture completed. It found no work. Nothing remains.',
-        type: 'worker_done',
-        payload: JSON.stringify({
-          taskId: task.result.task.id,
-          dispatchId: started.result.dispatchId,
-          outcome: 'succeeded'
-        })
-      },
-      { orchestrationCapability: dispatchCapability }
-    )
+    const completed = await client.call<{ message: { type: string } }>('orchestration.send', {
+      from: workerHandle,
+      subject: 'Completed',
+      body: 'The fixture completed. It found no work. Nothing remains.',
+      type: 'worker_done',
+      payload: JSON.stringify({
+        taskId: task.result.task.id,
+        dispatchId: started.result.dispatchId,
+        outcome: 'succeeded'
+      })
+    })
     expect(completed.result.message.type).toBe('worker_done')
     await expect
       .poll(

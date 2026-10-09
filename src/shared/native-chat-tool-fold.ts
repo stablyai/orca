@@ -8,9 +8,12 @@ import {
   type NativeChatToolCallBlock,
   type NativeChatToolResultBlock
 } from './native-chat-types'
-import { agentJournalItemSubagentId } from './agent-session-journal-producer'
 import { isKnownHarnessInjectedUserTurnText } from './harness-injected-user-turns'
 import { isNoiseMessage } from './native-chat-noise'
+import {
+  CODEX_PLAN_UPDATED_FRAME_KIND,
+  isWordlessProviderFrameMessage
+} from './native-chat-provider-frame-summary'
 
 function isToolOnlyMessage(message: NativeChatMessage): boolean {
   return (
@@ -49,6 +52,20 @@ function isBackgroundTaskMessage(message: NativeChatMessage): boolean {
   return message.blocks.some(isBackgroundTaskBlock)
 }
 
+/** A stored-only provider event draws nothing, so it must not split the run around it. A plan
+ *  update still does: the desktop draws it in place as the task list. */
+function isUndrawnProviderFrameMessage(message: NativeChatMessage): boolean {
+  return (
+    isWordlessProviderFrameMessage(message) &&
+    !message.blocks.some(
+      (block) =>
+        block.type === 'text' &&
+        block.providerFrame?.provider === 'codex' &&
+        block.providerFrame.kind === CODEX_PLAN_UPDATED_FRAME_KIND
+    )
+  )
+}
+
 function isInterruptionBoundary(message: NativeChatMessage): boolean {
   return message.blocks.some(
     (block) =>
@@ -79,23 +96,21 @@ function dropUnattributableToolResults(message: NativeChatMessage): NativeChatMe
   return blocks.length > 0 ? { ...message, blocks } : null
 }
 
-/** Fold consecutive tool-only messages into their preceding assistant turn.
- *  Only into a run the same agent wrote: a subagent's calls interleave with its
- *  parent's in one journal, and absorbing one into the other would present one
- *  agent's work as the other's. */
+/** A run drawn at its assistant row can hold calls newer than rows drawn below it. */
+function recordFoldedPosition(target: NativeChatMessage, folded: NativeChatMessage): void {
+  if (folded.journalPosition) {
+    target.foldedJournalPosition = folded.journalPosition
+  }
+}
+
+/** Fold consecutive tool-only messages into their preceding assistant turn. */
 export function foldToolMessages(messages: readonly NativeChatMessage[]): NativeChatMessage[] {
   const output: NativeChatMessage[] = []
   let mutableAssistantIndex = -1
   let clonedAssistantIndex = -1
   for (const message of messages) {
-    const foldTarget =
-      mutableAssistantIndex >= 0 &&
-      agentJournalItemSubagentId(output[mutableAssistantIndex]) ===
-        agentJournalItemSubagentId(message)
-        ? mutableAssistantIndex
-        : -1
-    if (isHarnessSidecarToolMessage(message) && foldTarget >= 0) {
-      const index = foldTarget
+    if (isHarnessSidecarToolMessage(message) && mutableAssistantIndex >= 0) {
+      const index = mutableAssistantIndex
       const assistant = output[index]
       if (assistant?.role === 'assistant') {
         if (clonedAssistantIndex !== index) {
@@ -103,6 +118,7 @@ export function foldToolMessages(messages: readonly NativeChatMessage[]): Native
           clonedAssistantIndex = index
         }
         output[index].blocks.push(...message.blocks.filter(isToolResultBlock))
+        recordFoldedPosition(output[index], message)
         output.push({
           ...message,
           blocks: message.blocks.filter((block) => !isToolResultBlock(block))
@@ -110,8 +126,8 @@ export function foldToolMessages(messages: readonly NativeChatMessage[]): Native
         continue
       }
     }
-    if (isToolOnlyMessage(message) && foldTarget >= 0) {
-      const index = foldTarget
+    if (isToolOnlyMessage(message) && mutableAssistantIndex >= 0) {
+      const index = mutableAssistantIndex
       const assistant = output[index]
       if (assistant?.role !== 'assistant') {
         output.push(message)
@@ -123,6 +139,7 @@ export function foldToolMessages(messages: readonly NativeChatMessage[]): Native
         clonedAssistantIndex = index
       }
       output[index]!.blocks.push(...message.blocks)
+      recordFoldedPosition(output[index]!, message)
       continue
     }
     output.push(message)
@@ -132,6 +149,7 @@ export function foldToolMessages(messages: readonly NativeChatMessage[]): Native
     } else if (
       !isSubagentRosterMessage(message) &&
       !isBackgroundTaskMessage(message) &&
+      !isUndrawnProviderFrameMessage(message) &&
       (!isNoiseMessage(message) || isInterruptionBoundary(message))
     ) {
       mutableAssistantIndex = -1
@@ -153,16 +171,29 @@ export type NativeChatToolPair = {
   result?: NativeChatToolResultBlock
 }
 
-/** Pair calls and results by FIFO ordinal because transcript blocks carry no tool ids. */
+/** Where in `unanswered` (oldest first) the call `result` answers is, or -1 for none. */
+function answeredToolCallIndex<T>(
+  unanswered: readonly T[],
+  result: NativeChatToolResultBlock,
+  callIdOf: (entry: T) => string | undefined
+): number {
+  if (result.callId === undefined) {
+    return unanswered.length > 0 ? 0 : -1
+  }
+  return unanswered.findIndex((entry) => callIdOf(entry) === result.callId)
+}
+
+/** Pair results to calls by `answeredToolCallIndex`. Every reader of a run pairs through this
+ *  (`pairNativeChatToolResults` included), so they all agree on who owns an output. */
 export function pairToolBlocks(
   blocks: readonly NativeChatBlock[],
   limit = Infinity
 ): NativeChatToolPair[] {
   const pairs: NativeChatToolPair[] = []
+  /** Slots of retained calls not yet answered, oldest first. */
   const callSlots: number[] = []
-  let resultOrdinal = 0
   for (const block of blocks) {
-    if (pairs.length >= limit && resultOrdinal >= callSlots.length) {
+    if (pairs.length >= limit && callSlots.length === 0) {
       break
     }
     if (block.type === 'tool-call') {
@@ -175,13 +206,13 @@ export function pairToolBlocks(
     if (block.type !== 'tool-result') {
       continue
     }
-    const slot = callSlots[resultOrdinal]
+    const answered = answeredToolCallIndex(callSlots, block, (slot) => pairs[slot]?.call?.callId)
+    const [slot] = answered === -1 ? [] : callSlots.splice(answered, 1)
     if (slot === undefined) {
       if (pairs.length < limit) {
         pairs.push({ result: block })
       }
     } else {
-      resultOrdinal += 1
       pairs[slot]!.result = block
     }
   }

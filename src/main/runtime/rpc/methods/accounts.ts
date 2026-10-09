@@ -1,5 +1,8 @@
 import { defineMethod, defineStreamingMethod } from '../core'
 import {
+  AddDataAccountParams,
+  SelectDataAccountParams,
+  RemoveDataAccountParams,
   AccountsUnsubscribeParams,
   AddClaudeFromConfigDirParams,
   AddCodexFromHomeParams,
@@ -26,7 +29,39 @@ let accountsSubscriptionSeq = 0
 // to the local runtime connection, never a mobile device token. See #1438.
 export const ACCOUNT_METHODS = [
   defineMethod({
+    name: 'accounts.listData',
+    permission: 'workspace',
+    params: null,
+    handler: async (_, { runtime }) => runtime.getDataAccountsSnapshot()
+  }),
+  defineMethod({
+    name: 'accounts.addDataFromHome',
+    permission: 'accounts-admin',
+    params: AddDataAccountParams,
+    handler: async (params, { runtime, clientKind }) => {
+      if (clientKind !== undefined) {
+        throw new Error('Adding accounts is only available on the Orca host runtime.')
+      }
+      return runtime.addDataAccountFromHome(params.provider, params.sourceDataHome, params.label)
+    }
+  }),
+  defineMethod({
+    name: 'accounts.selectData',
+    permission: 'accounts-admin',
+    params: SelectDataAccountParams,
+    handler: async (params, { runtime }) =>
+      runtime.selectDataAccount(params.provider, params.accountId)
+  }),
+  defineMethod({
+    name: 'accounts.removeData',
+    permission: 'accounts-admin',
+    params: RemoveDataAccountParams,
+    handler: async (params, { runtime }) =>
+      runtime.removeDataAccount(params.provider, params.accountId)
+  }),
+  defineMethod({
     name: 'accounts.list',
+    permission: 'workspace',
     params: ListAccountsParams,
     handler: async (params, { runtime }) => {
       // Why: ensure the snapshot reflects the latest provider state before
@@ -41,11 +76,13 @@ export const ACCOUNT_METHODS = [
   }),
   defineMethod({
     name: 'accounts.selectClaude',
+    permission: 'accounts-admin',
     params: SelectAccountParams,
     handler: async (params, { runtime }) => runtime.selectClaudeAccount(params.accountId)
   }),
   defineMethod({
     name: 'accounts.selectCodex',
+    permission: 'accounts-admin',
     params: SelectAccountParams,
     handler: async (params, { runtime }) => runtime.selectCodexAccount(params.accountId)
   }),
@@ -53,28 +90,33 @@ export const ACCOUNT_METHODS = [
     // Why: old hosts silently strip unknown target fields from selectCodex.
     // A distinct RPC makes version skew fail before it can clear the host slot.
     name: 'accounts.selectCodexForTarget',
+    permission: 'accounts-admin',
     params: SelectCodexAccountForTargetParams,
     handler: async (params, { runtime }) =>
       runtime.selectCodexAccountForTarget(params.accountId, params.target)
   }),
   defineMethod({
     name: 'accounts.consumeCodexResetCredit',
+    permission: 'accounts-admin',
     params: ConsumeCodexResetCreditParams,
     handler: async (params, { runtime }) =>
       runtime.consumeCodexRateLimitResetCredit(params.idempotencyKey, params.expectedScope)
   }),
   defineMethod({
     name: 'accounts.removeClaude',
+    permission: 'accounts-admin',
     params: RemoveAccountParams,
     handler: async (params, { runtime }) => runtime.removeClaudeAccount(params.accountId)
   }),
   defineMethod({
     name: 'accounts.removeCodex',
+    permission: 'accounts-admin',
     params: RemoveAccountParams,
     handler: async (params, { runtime }) => runtime.removeCodexAccount(params.accountId)
   }),
   defineMethod({
     name: 'accounts.addClaudeFromConfigDir',
+    permission: 'accounts-admin',
     params: AddClaudeFromConfigDirParams,
     handler: async (params, { runtime, clientKind }) => {
       // Why: capturing a host filesystem path is local-socket-only; paired
@@ -91,6 +133,7 @@ export const ACCOUNT_METHODS = [
   }),
   defineMethod({
     name: 'accounts.addCodexFromHome',
+    permission: 'accounts-admin',
     params: AddCodexFromHomeParams,
     handler: async (params, { runtime, clientKind }) => {
       if (clientKind !== undefined) {
@@ -107,6 +150,7 @@ export const ACCOUNT_METHODS = [
   // accounts on either side. Mirrors the notifications.subscribe pattern.
   defineStreamingMethod({
     name: 'accounts.subscribe',
+    permission: 'workspace',
     params: null,
     handler: async (_params, { runtime, connectionId }, emit) => {
       await new Promise<void>((resolve) => {
@@ -142,6 +186,7 @@ export const ACCOUNT_METHODS = [
   }),
   defineMethod({
     name: 'accounts.unsubscribe',
+    permission: 'workspace',
     params: AccountsUnsubscribeParams,
     handler: async (params, { runtime }) => {
       runtime.cleanupSubscription(params.subscriptionId)

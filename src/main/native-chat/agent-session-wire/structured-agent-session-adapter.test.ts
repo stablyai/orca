@@ -4,9 +4,9 @@ import {
   AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionAcquisitionRefusal,
-  AgentSessionAcquisitionRootExitObservedError,
-  rethrowAfterAgentSessionAcquisitionCleanup
+  AgentSessionAcquisitionRootExitObservedError
 } from './structured-agent-session-adapter'
+import { rethrowAfterAgentSessionAcquisitionCleanup } from './structured-agent-session-provider-exit-proof'
 
 describe('failed agent-session acquisition cleanup', () => {
   it('names a failure exit-proven after proven cleanup, keeping its diagnostic and cause', async () => {

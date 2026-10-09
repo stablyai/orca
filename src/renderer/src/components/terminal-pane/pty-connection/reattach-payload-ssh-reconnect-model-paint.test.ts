@@ -89,7 +89,9 @@ function paintedBytes(fireLog: FireLog): string {
 // test over sshReconnectPaintsFromModel stayed green, so the coverage has to run
 // through createReattachPayloadHandlers rather than the gate itself.
 describe('reattach payload SSH reconnect model paint', () => {
-  beforeEach(() => installTerminalTestGlobals())
+  beforeEach(async () => {
+    await installTerminalTestGlobals()
+  })
 
   afterEach(async () => restoreTerminalTestGlobals())
 

@@ -2,6 +2,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { createPaneDOM } from './pane-dom-creation'
+import { terminalMouseEncodingRestoreAnsi } from './terminal-mouse-encoding-tracker'
+
+const csiHandlers = vi.hoisted(() => new Map<string, (params: (number | number[])[]) => boolean>())
 
 const webLinksAddonMock = vi.hoisted(() => ({
   handler: null as ((event: MouseEvent, uri: string) => void) | null,
@@ -45,7 +48,16 @@ vi.mock('@xterm/xterm', () => ({
     return {
       options: {},
       loadAddon: vi.fn(),
-      open: vi.fn()
+      open: vi.fn(),
+      parser: {
+        registerCsiHandler: vi.fn(
+          (id: { final: string }, handler: (params: (number | number[])[]) => boolean) => {
+            csiHandlers.set(id.final, handler)
+            return { dispose: vi.fn() }
+          }
+        ),
+        registerEscHandler: vi.fn(() => ({ dispose: vi.fn() }))
+      }
     }
   })
 }))
@@ -155,5 +167,23 @@ describe('createPaneDOM link tooltips', () => {
     webLinksAddonMock.handler?.(event, 'https://example.com')
 
     expect(onLinkClick).toHaveBeenCalledWith(7, event, 'https://example.com')
+  })
+})
+
+describe('createPaneDOM mouse encoding', () => {
+  it('tracks the encoding the pane terminal parses so its snapshot can carry it', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
+    const pane = createPaneDOM(
+      1,
+      leafId,
+      { linkOpenHint: () => 'open hint' },
+      { active: null } as never,
+      {} as never,
+      vi.fn(),
+      vi.fn()
+    )
+
+    expect(csiHandlers.get('h')?.([1003, 1006])).toBe(false)
+    expect(terminalMouseEncodingRestoreAnsi(pane.terminal)).toBe('\x1b[?1006h')
   })
 })

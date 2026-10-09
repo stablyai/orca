@@ -3,6 +3,13 @@ import { pathToFileURL } from 'node:url'
 import { isDocsOnlyPath } from './pr-code-change-scope.mjs'
 
 const APPLICATION_PREFIXES = ['src/', 'mobile/app/', 'mobile/src/']
+// The root lockfile triggers Mobile Checks for its tests and typechecks; the Ruby release checks
+// read no root Node dependency.
+const NON_RELEASE_FILES = new Set([
+  'mobile/README.md',
+  'pnpm-lock.yaml',
+  'config/reliability-gates.jsonc'
+])
 
 export function shouldRunMobileReleaseChecks(files) {
   return (
@@ -10,7 +17,7 @@ export function shouldRunMobileReleaseChecks(files) {
     files.some(
       (file) =>
         !isDocsOnlyPath(file) &&
-        file !== 'mobile/README.md' &&
+        !NON_RELEASE_FILES.has(file) &&
         !file.startsWith('mobile/docs/') &&
         !(
           APPLICATION_PREFIXES.some((prefix) => file.startsWith(prefix)) &&

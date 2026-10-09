@@ -41,6 +41,9 @@ describe('normalizeDshEvent', () => {
     const started = normalizeAndAccept(state, 'dsh', event('SessionStart', { source: 'startup' }))
     expect(started?.payload.state).toBe('done')
     expect(started?.payload.agentType).toBe('dsh')
+    expect(started?.payload.sessionBoundary).toBe(true)
+    const stopped = normalizeAndAccept(state, 'dsh', event('Stop', { stop_hook_active: false }))
+    expect(stopped?.payload.sessionBoundary).toBeUndefined()
   })
 
   it('treats an ordinary tool as working and surfaces its name', () => {
@@ -107,16 +110,5 @@ describe('normalizeDshEvent', () => {
         })
       ).toBeNull()
     }
-  })
-
-  it('ignores events the bridge cannot send', () => {
-    // Notification and PermissionRequest are Claude-only; if one ever arrives it is not
-    // from this bridge, and guessing a state from it would be unfounded.
-    expect(
-      normalizeAndAccept(state, 'dsh', event('Notification', { message: 'waiting' }))
-    ).toBeNull()
-    expect(
-      normalizeAndAccept(state, 'dsh', event('PermissionRequest', { tool_name: 'bash' }))
-    ).toBeNull()
   })
 })

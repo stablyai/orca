@@ -7,6 +7,9 @@ import { isPtyAlreadyGoneError, delay, verifyPtyStopped } from '../provider/live
 import { recordUndeliveredSshPtyKill } from './undelivered-ssh-kill'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 
+// Bounds the wait for an observed exit to reach the runtime record when the caller set no deadline.
+const OBSERVED_EXIT_RECORD_WAIT_MS = 10_000
+
 export function killPtyFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
   ptyId: string
@@ -306,6 +309,11 @@ export async function stopAndWaitPtyFromRuntimeController(
       code: 0,
       ...(incarnationId ? { incarnationId } : {})
     })
+  } else {
+    // Why: an SSH exit frame reaches the runtime only after its output intake drains, so callers
+    // reading the verdict right after this stop would otherwise see a still-connected PTY.
+    const waitUntil = Math.min(deadlineMs ?? Infinity, Date.now() + OBSERVED_EXIT_RECORD_WAIT_MS)
+    await runtime?.waitForPtyExitRecord?.(ptyId, waitUntil - Date.now())
   }
   return true
 }

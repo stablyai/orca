@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { beginClaudeAuthSwitch, endClaudeAuthSwitch } from '../claude-accounts/live-pty-gate'
@@ -6,7 +6,6 @@ import {
   CLAUDE_AUTH_ENV_CONFLICT_MESSAGE,
   CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE
 } from '../claude-accounts/environment'
-import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import { createClaudeStructuredLaunchResolver } from './claude-structured-launch-resolution'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
 import {
@@ -15,6 +14,7 @@ import {
   fakeClaude,
   identityFor
 } from './claude-structured-session-test-support'
+import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION_ID = 'orca-session-auth'
 const IDENTITY = { sessionId: SESSION_ID } as Parameters<
@@ -42,7 +42,8 @@ function resolverFor(options: {
   authSwitchSettleTimeoutMs?: number
 }): ReturnType<typeof createClaudeStructuredLaunchResolver> {
   return createClaudeStructuredLaunchResolver({
-    store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
+    resolveLaunchArgs: () => [],
+    store: { getRecord: () => record(), pinLaunchDirectory: vi.fn() },
     resolveWorkspacePath: async (id) => `/repos/${id}`,
     resolveCommand: () => '/usr/local/bin/claude',
     resolveAuthPolicy: () => ({ stripAuthEnv: options.stripAuthEnv }),
@@ -60,15 +61,15 @@ function realResolverAdapter(
   claude: ReturnType<typeof fakeClaude>,
   authSwitchSettleTimeoutMs: number
 ): ClaudeStructuredSessionAdapter {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only the chain head's handle from this partial record.
   const resumable = {
     ...record(),
-    providerHandleChain: [
-      { handle: { provider: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: null } }
-    ]
+    providerHandleChain: [{ handle: claudeProviderHandle(PROVIDER_SESSION_ID, null) }]
   } as unknown as AgentSessionRecord
   return new ClaudeStructuredSessionAdapter({
     resolveLaunch: createClaudeStructuredLaunchResolver({
-      store: { getRecord: () => resumable } as unknown as AgentSessionRecordStore,
+      resolveLaunchArgs: () => [],
+      store: { getRecord: () => resumable, pinLaunchDirectory: vi.fn() },
       resolveWorkspacePath: async (id) => `/repos/${id}`,
       resolveCommand: () => '/usr/local/bin/claude',
       resolveAuthPolicy: () => ({ stripAuthEnv: false }),

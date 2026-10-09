@@ -241,6 +241,7 @@ export function installMultiplexSlotFrames(
         pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
         truncated: false,
         truncatedByByteBudget: serialized?.truncatedByByteBudget,
+        scrollbackRows: serialized?.scrollbackRows,
         // Why: no serializer answered, which is not proof the pane is empty — say so instead of passing off '' as the buffer.
         unavailable: serialized ? undefined : 'no-serializable-buffer',
         data: serialized?.data ?? ''

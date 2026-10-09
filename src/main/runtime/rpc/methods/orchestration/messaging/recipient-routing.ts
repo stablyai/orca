@@ -2,11 +2,15 @@ import type { LegacyAdoptedMailboxOwner, OrchestrationDb } from '../../../../orc
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { DispatchContextRow, DispatchStatus } from '../../../../orchestration/types'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { readStructuredAgentSessionRecord } from '../../../../structured-worker-authority'
-import { structuredWorkerHostScope } from '../../../../structured-worker-identity'
 import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
 import { isEquivalentPaneKey } from '../../../../orchestration/db/pane-key-match'
 import { CURRENT_CONTRACT_VERSION } from '../../../../orchestration/db/contract-constants'
+import { readAgentSessionRecordStore } from '../../../../orchestration/structured-session-lineage'
+import {
+  readSessionRecipient,
+  refuseUndeliverableSessionRecipient,
+  type SessionRecipientRefusal
+} from './session-recipient'
 
 const ACTIVE_DISPATCH_STATUSES: readonly DispatchStatus[] = ['pending', 'dispatched']
 
@@ -150,7 +154,11 @@ export type BareRecipientResolution =
     }
   | {
       ok: false
-      code: 'terminal_not_found' | 'recipient_ambiguous' | 'recipient_run_mismatch'
+      code:
+        | 'terminal_not_found'
+        | 'recipient_ambiguous'
+        | 'recipient_run_mismatch'
+        | SessionRecipientRefusal['code']
       message: string
       warning: SendRecipientWarning
     }
@@ -164,7 +172,12 @@ export function resolveBareOrchestrationRecipient(params: {
   legacyAdoptedMailboxOwner?: LegacyAdoptedMailboxOwner | null
 }): BareRecipientResolution {
   const { runtime, db } = params
-  const party = resolveOrchestrationParty(params.handle, db)
+  const sessionStore = readAgentSessionRecordStore()
+  const session = readSessionRecipient(params.handle, sessionStore)
+  if (session && 'code' in session) {
+    return refused(params.handle, session)
+  }
+  const party = resolveOrchestrationParty(session?.address ?? params.handle, db)
   const handle = party.address
   const paneKey =
     party.terminalHandle === null
@@ -208,6 +221,13 @@ export function resolveBareOrchestrationRecipient(params: {
     return mismatch ?? { ok: true, to: `run:${selectedRunId}`, runId: selectedRunId }
   }
 
+  if (session) {
+    const refusal = refuseUndeliverableSessionRecipient(session, sessionStore, db)
+    return refusal
+      ? refused(params.handle, refusal)
+      : { ok: true, to: handle, runId: params.senderRunId }
+  }
+
   if (paneKey) {
     return {
       ok: true,
@@ -221,24 +241,21 @@ export function resolveBareOrchestrationRecipient(params: {
     }
   }
 
-  const chatSessionId = party.terminalHandle === null ? party.orcaSessionId : null
-  if (chatSessionId !== null) {
-    const record = readStructuredAgentSessionRecord(chatSessionId)
-    // Unlike a terminal handle, a session address outlives its process, so its direct mail is durable.
-    if (record && structuredWorkerHostScope(record.location)) {
-      return { ok: true, to: handle, runId: params.senderRunId }
-    }
-  }
-
-  const message =
-    chatSessionId !== null
-      ? `Agent session ${chatSessionId} does not run on this host and has no durable Run/Dispatch mailbox.`
-      : `Terminal ${handle} has no live pane or durable Run/Dispatch mailbox.`
+  const message = `Terminal ${handle} has no live pane or durable Run/Dispatch mailbox.`
   return {
     ok: false,
     code: 'terminal_not_found',
     message,
     warning: { code: 'recipient_unreachable', recipient: handle, message }
+  }
+}
+
+function refused(recipient: string, refusal: SessionRecipientRefusal): BareRecipientResolution {
+  return {
+    ok: false,
+    code: refusal.code,
+    message: refusal.message,
+    warning: { code: 'recipient_unreachable', recipient, message: refusal.message }
   }
 }
 

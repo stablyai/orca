@@ -12,7 +12,7 @@ import { CodexBackgroundCommandTracker } from './codex-background-command-tracke
 import { CodexChildWorkEvidence } from './codex-child-work-evidence'
 import type { CodexAbandonedCommand } from './codex-prompt-registry'
 import type { CodexStructuredSessionAdapterDeps } from './codex-structured-session-state'
-import { boundSubagentField } from './codex-subagent-group-body'
+import { boundSubagentField } from '../native-chat/agent-session-journal/journal-subagent-group-body'
 
 /** Where a session's child-work evidence goes, and the host clock that stamps it. */
 export type CodexChildWorkSink = {
@@ -44,7 +44,7 @@ export class CodexBackgroundTaskTracker {
   ) {
     this.commands = new CodexBackgroundCommandTracker(primaryThreadId)
     this.childWork = new CodexChildWorkEvidence(primaryThreadId, executions, (threadId) =>
-      this.commands.threadTasks(threadId)
+      this.commands.threadCommands(threadId)
     )
   }
 
@@ -64,24 +64,29 @@ export class CodexBackgroundTaskTracker {
   ): boolean {
     const itemEvent = event.method === 'item/started' || event.method === 'item/completed'
     const command = itemEvent ? this.commands.observe(event) : null
+    const frame = readCodexBackgroundTaskFrame(event, this.primaryThreadId)
     const commands = [
       ...unapproved.flatMap((abandoned) => this.commands.endUnapproved(abandoned) ?? []),
+      ...(frame?.kind === 'turn' && frame.state !== 'working'
+        ? this.commands.endTurn(frame.threadId, frame.turnId)
+        : []),
       ...(event.method === 'thread/closed'
         ? this.commands.endThread(event.threadId)
         : command
           ? [command]
           : [])
     ]
-    const frame = readCodexBackgroundTaskFrame(event, this.primaryThreadId)
-    if (frame?.kind === 'subagent') {
-      this.executions.register(
-        frame.agentThreadId,
-        frame.label,
-        frame.parentTurnId,
-        frame.spawnerThreadId
-      )
-    } else if (frame?.kind === 'turn-ended') {
-      this.executions.endTurn(frame.threadId, frame.turnId, frame.state)
+    if (frame?.kind === 'subagents') {
+      for (const child of frame.children) {
+        this.executions.register(
+          child.agentThreadId,
+          child.label,
+          child.parentTurnId,
+          child.spawnerThreadId
+        )
+      }
+    } else if (frame?.kind === 'thread-closed') {
+      this.executions.closeThread(frame.threadId)
     } else if (frame && frame.threadId !== this.primaryThreadId) {
       this.executions.observeTurn(frame.threadId, frame.turnId, frame.state)
     }

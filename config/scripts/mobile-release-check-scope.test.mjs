@@ -51,7 +51,6 @@ it.each([
   'mobile/src/release.json',
   'mobile/new-toolchain/input',
   'package.json',
-  'pnpm-lock.yaml',
   '.github/workflows/mobile.yml',
   '.github/workflows/mobile-ios-release.yml',
   '.github/actions/install-node-dependencies/action.yml',
@@ -60,6 +59,11 @@ it.each([
 ])('retains Ruby release coverage for changed or unknown inputs: %s', (file) => {
   expect(shouldRunMobileReleaseChecks([file])).toBe(true)
   expect(shouldRunMobileReleaseChecks(['mobile/src/view.tsx', file])).toBe(true)
+})
+
+it('skips Ruby checks for a root lockfile change, which fastlane never reads', () => {
+  expect(shouldRunMobileReleaseChecks(['pnpm-lock.yaml'])).toBe(false)
+  expect(shouldRunMobileReleaseChecks(['pnpm-lock.yaml', 'mobile/fastlane/Fastfile'])).toBe(true)
 })
 
 it('runs Ruby checks when the changed-file evidence is empty', () => {
@@ -72,7 +76,12 @@ it('gates Ruby independently and retains mobile static validation', () => {
   expect(steps.indexOf(detector)).toBeGreaterThan(
     steps.findIndex((step) => step.uses === './.github/actions/install-node-dependencies')
   )
-  const gated = steps.filter((step) => step.if !== undefined && step.name !== 'Test')
+  const gated = steps.filter(
+    (step) =>
+      step.if !== undefined &&
+      step.name !== 'Test' &&
+      step.name !== 'Summarize RPC recording changes'
+  )
   expect(gated.map((step) => step.name)).toEqual([
     'Setup Ruby and fastlane',
     'Test iOS release version resolution',
@@ -163,6 +172,17 @@ describe.skipIf(process.platform === 'win32')('the Linux workflow detector comma
     repo.write('mobile/src/view.tsx', 'export const view = 2\n')
     repo.commit()
     expect(repo.detect()).toBe('should_run=false\n')
+  })
+
+  it('skips reliability metadata alone and retains mixed Fastfile changes', () => {
+    const repo = fixture()
+    repo.write('config/reliability-gates.jsonc', '{"gates": []}\n')
+    repo.commit()
+    expect(repo.detect()).toBe('should_run=false\n')
+    repo.write('config/reliability-gates.jsonc', '{"gates": [1]}\n')
+    repo.write('mobile/fastlane/Fastfile', 'default_platform(:android)\n')
+    repo.commit()
+    expect(repo.detect()).toBe('should_run=false\nshould_run=true\n')
   })
 
   it('keeps a deleted release input when a rename moves it into an excluded directory', () => {

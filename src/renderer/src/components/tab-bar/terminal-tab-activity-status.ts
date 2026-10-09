@@ -100,6 +100,7 @@ function getOrCreateTerminalTabActivityFlags(
       hasLiveMonitoring: false,
       hasFailed: false,
       hasInterrupted: false,
+      hasUnconfirmed: false,
       hasLiveDone: false,
       paneIds: new Set(),
       stalePaneIds: new Set()
@@ -165,6 +166,7 @@ export function resolveTerminalTabActivityStatus({
     hasLiveMonitoring: flags?.hasLiveMonitoring ?? false,
     hasFailed: flags?.hasFailed ?? false,
     hasInterrupted: flags?.hasInterrupted ?? false,
+    hasUnconfirmed: flags?.hasUnconfirmed ?? false,
     hasLiveDone: flags?.hasLiveDone ?? false,
     // Why: retained/orchestration promotions are worktree-aggregate concerns;
     // a tab reflects its own live panes and title only.
@@ -187,6 +189,7 @@ export type TerminalTabAttentionBadge =
   | 'permission'
   | 'failed'
   | 'interrupted'
+  | 'unconfirmed'
   | 'unread'
   | 'done'
 
@@ -216,7 +219,7 @@ export function resolveTerminalTabAttentionBadge({
   if (status === 'done') {
     return 'done'
   }
-  if (status === 'failed' || status === 'interrupted') {
+  if (status === 'failed' || status === 'interrupted' || status === 'unconfirmed') {
     return status
   }
   return null
@@ -225,13 +228,22 @@ export function resolveTerminalTabAttentionBadge({
 /** Map a container activity status onto AgentStateDot's vocabulary (no unread — that's a bell). */
 export function terminalTabActivityToAgentDotState(
   status: TerminalTabActivityStatus
-): 'working' | 'monitoring' | 'permission' | 'failed' | 'interrupted' | 'done' | null {
+):
+  | 'working'
+  | 'monitoring'
+  | 'permission'
+  | 'failed'
+  | 'interrupted'
+  | 'unconfirmed'
+  | 'done'
+  | null {
   switch (status) {
     case 'working':
     case 'monitoring':
     case 'permission':
     case 'failed':
     case 'interrupted':
+    case 'unconfirmed':
     case 'done':
       return status
     case 'active':

@@ -1,14 +1,22 @@
-import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction
+} from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { appendReturnedDraftText } from '../../../src/shared/returned-draft-text'
 import {
   countUserTextOccurrences,
   findLandedImagePreviewEchoes,
-  findLandedUnconfirmedSends,
   mergeLandedImagePreviewEchoes,
   migrateImagePreviewMessageIds,
-  normalizeReconcileText,
-  type UnconfirmedSend
+  normalizeReconcileText
 } from './mobile-native-chat-draft-reconcile'
+import { useMobileNativeChatUnconfirmedSends } from './use-mobile-native-chat-unconfirmed-sends'
 import { rebaseMobileNativeChatPendingBaselines } from './mobile-native-chat-pending-baseline'
 import { retireLandedMobileNativeChatPending } from './mobile-native-chat-pending-retirement'
 import {
@@ -28,9 +36,6 @@ export type { MobileNativeChatPendingMessage, MobileNativeChatSendOrigin }
 
 const NO_PENDING_MESSAGES: MobileNativeChatPendingMessage[] = []
 const NO_IMAGE_PREVIEWS: Record<string, string[]> = {}
-
-// Ack-lost sends wait for a transcript echo before surfacing as unconfirmed.
-const UNCONFIRMED_SEND_DEADLINE_MS = 20_000
 
 export function useMobileNativeChatDrafts(args: {
   hostId: string
@@ -52,9 +57,14 @@ export function useMobileNativeChatDrafts(args: {
    *  is an empty conversation, not a read that failed or never ran. Only then
    *  does a send's captured tail describe a real boundary. */
   transcriptSettled: boolean
+  /** The active pane's host-held queued-draft cards (structured lane only). */
+  queuedCards?: readonly { messageId: string; text: string }[]
 }): {
   composerText: string
   setComposerText: Dispatch<SetStateAction<string>>
+  /** Append after existing typing (newline-joined); a queued card's Edit copy lands here.
+   *  False when nothing was appended: no active draft, or no text. */
+  appendComposerText: (text: string) => boolean
   getComposerEditGeneration: () => number
   pending: MobileNativeChatPendingMessage[]
   /** Phone-local previews rebound to the transcript message that replaced the
@@ -68,7 +78,7 @@ export function useMobileNativeChatDrafts(args: {
   readSeededLaunchDraftSeed: () => MobileNativeChatLaunchDraftSeed | null
   /** Clear the composer at send time, before the RPC settles. */
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
-  /** Put the text back after a definite rejection, unless newer edits exist. */
+  /** Put the text back after a definite rejection, after whatever the composer holds now. */
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
   acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => void
   holdUnconfirmedSend: (
@@ -87,7 +97,8 @@ export function useMobileNativeChatDrafts(args: {
     launchDraftCreatedAt,
     chatActive = true,
     transcriptLoading,
-    transcriptSettled
+    transcriptSettled,
+    queuedCards
   } = args
   const draftKey = mobileNativeChatScopeKey(hostId, worktreeId, tabId)
   const pendingKey = draftKey && sessionId ? `${draftKey}\0${sessionId}` : null
@@ -105,11 +116,11 @@ export function useMobileNativeChatDrafts(args: {
   const draftEditGenerationsRef = useRef(new MobileNativeChatDraftEditGenerations())
   const messagesRef = useRef(messages)
   messagesRef.current = messages
-  const activeDraftKeyRef = useRef(draftKey)
-  activeDraftKeyRef.current = draftKey
-  const activePendingKeyRef = useRef(pendingKey)
-  activePendingKeyRef.current = pendingKey
-  const mountedRef = useRef(false)
+  const queuedCardsRef = useRef(queuedCards)
+  // Read only by captureSendOrigin, which runs from a send after this commit.
+  useLayoutEffect(() => {
+    queuedCardsRef.current = queuedCards
+  }, [queuedCards])
 
   const { readSeededLaunchDraft, readSeededLaunchDraftSeed } = useMobileNativeChatLaunchDraftSeed({
     draftKey,
@@ -135,6 +146,23 @@ export function useMobileNativeChatDrafts(args: {
     },
     [draftKey]
   )
+  // Copied queued-card text goes after whatever is there, so newer typing is preserved.
+  const appendComposerText = useCallback(
+    (text: string): boolean => {
+      if (!draftKey || text.length === 0) {
+        return false
+      }
+      draftEditGenerationsRef.current.advance(draftKey)
+      setDrafts((previous) => {
+        const current = previous[draftKey] ?? ''
+        const next = current.length === 0 ? text : `${current}\n${text}`
+        return { ...previous, [draftKey]: next }
+      })
+      return true
+    },
+    [draftKey]
+  )
+
   const captureSendOrigin = useCallback(
     (text: string) => {
       if (!draftKey) {
@@ -151,7 +179,10 @@ export function useMobileNativeChatDrafts(args: {
         // Only a settled read makes this a boundary. Anything else — hydrating,
         // or a read that failed — hands back an empty list that reads as "the
         // conversation was empty", which lets any row claim this send later.
-        baselineResolved: transcriptSettled
+        baselineResolved: transcriptSettled,
+        ...(queuedCardsRef.current?.length
+          ? { baselineQueuedMessageIds: queuedCardsRef.current.map((card) => card.messageId) }
+          : {})
       }
     },
     [draftKey, pendingKey, transcriptSettled]
@@ -170,13 +201,12 @@ export function useMobileNativeChatDrafts(args: {
   }, [])
 
   const restoreRejectedDraft = useCallback((origin: MobileNativeChatSendOrigin, text: string) => {
-    // Why: never clobber text the user typed while the rejection was in flight.
-    setDrafts((previous) =>
-      draftEditGenerationsRef.current.isCurrent(origin.draftKey, origin.draftEditGeneration) &&
-      (previous[origin.draftKey] ?? '') === ''
-        ? { ...previous, [origin.draftKey]: text }
-        : previous
-    )
+    // Appended, so typing done while the send was in flight stays and the returned text isn't dropped.
+    setDrafts((previous) => {
+      const current = previous[origin.draftKey] ?? ''
+      const next = appendReturnedDraftText(current, text)
+      return next === current ? previous : { ...previous, [origin.draftKey]: next }
+    })
   }, [])
 
   const acceptSend = useCallback(
@@ -200,74 +230,12 @@ export function useMobileNativeChatDrafts(args: {
     []
   )
 
-  // Why: a relay drop mid-send loses only the ack in the common case — the
-  // desktop already delivered the message. Hold the send instead of claiming
-  // failure (which baits a duplicate): stay quiet when the transcript echo
-  // lands, and surface the uncertainty if the deadline passes without one.
-  // The composer was already cleared at send time, so this never touches drafts.
-  const unconfirmedRef = useRef<UnconfirmedSend[]>([])
-  const holdUnconfirmedSend = useCallback(
-    (origin: MobileNativeChatSendOrigin, text: string, onUnconfirmed: () => void) => {
-      if (!mountedRef.current) {
-        return
-      }
-      const isActiveTranscript =
-        activeDraftKeyRef.current === origin.draftKey &&
-        (origin.pendingKey === null || activePendingKeyRef.current === origin.pendingKey)
-      const entry: UnconfirmedSend = {
-        draftKey: origin.draftKey,
-        pendingKey: origin.pendingKey,
-        text,
-        normalizedText: origin.normalizedText,
-        baselineTailMessageId: origin.baselineTailMessageId,
-        deadline: null
-      }
-      // Why: the transcript event can beat the lost RPC acknowledgement.
-      if (
-        isActiveTranscript &&
-        findLandedUnconfirmedSends(messagesRef.current, [entry]).length > 0
-      ) {
-        return
-      }
-      entry.deadline = setTimeout(() => {
-        unconfirmedRef.current = unconfirmedRef.current.filter((held) => held !== entry)
-        onUnconfirmed()
-      }, UNCONFIRMED_SEND_DEADLINE_MS)
-      unconfirmedRef.current = [...unconfirmedRef.current, entry]
-    },
-    []
-  )
-
-  useEffect(() => {
-    if (!draftKey || unconfirmedRef.current.length === 0) {
-      return
-    }
-    const relevant = unconfirmedRef.current.filter(
-      (entry) =>
-        entry.draftKey === draftKey &&
-        (entry.pendingKey === null || entry.pendingKey === pendingKey)
-    )
-    const landed = findLandedUnconfirmedSends(messages, relevant)
-    if (landed.length === 0) {
-      return
-    }
-    const landedSet = new Set(landed)
-    unconfirmedRef.current = unconfirmedRef.current.filter((entry) => !landedSet.has(entry))
-    for (const entry of landed) {
-      clearTimeout(entry.deadline ?? undefined)
-    }
-  }, [messages, draftKey, pendingKey])
-
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-      for (const entry of unconfirmedRef.current) {
-        clearTimeout(entry.deadline ?? undefined)
-      }
-      unconfirmedRef.current = []
-    }
-  }, [])
+  const { holdUnconfirmedSend } = useMobileNativeChatUnconfirmedSends({
+    draftKey,
+    pendingKey,
+    messages,
+    ...(queuedCards ? { queuedCards } : {})
+  })
 
   const waitingForSession = draftKey
     ? (pendingWaitingForSession[draftKey] ?? NO_PENDING_MESSAGES)
@@ -336,6 +304,7 @@ export function useMobileNativeChatDrafts(args: {
   return {
     composerText: draftKey ? (drafts[draftKey] ?? '') : '',
     setComposerText,
+    appendComposerText,
     getComposerEditGeneration: draftEditGenerationsRef.current.readComposer,
     pending,
     imagePreviewsByMessageId: pendingKey

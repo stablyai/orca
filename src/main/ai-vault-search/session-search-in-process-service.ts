@@ -11,16 +11,14 @@ import { sessionSearchSqliteAvailable } from './session-search-sqlite-support'
  *
  * The desktop puts the index in that child because the child is where the
  * transcript reader runs, so one read serves both the session list and the index.
- * Neither of these hosts has that child: orcad ships only the watcher and daemon
- * entries beside `orcad.js`, and the relay's AI Vault sidecar runs the remote
+ * Neither host gives that child the index: orcad's scanner child gets no search
+ * data root and only lists sessions, and the relay's AI Vault sidecar runs the remote
  * scanner, which reads through a filesystem provider and publishes nothing to the
  * transcript channel. On both, the process that would drive the index's reads is
  * this one, and it is the only writer, so the two-process rebuild race the
  * desktop rule avoids cannot arise here.
  *
- * Returns null on a runtime with no `node:sqlite`: both hosts are built for a
- * Node 18 floor, and a host that cannot hold an index registers nothing rather
- * than answering `disabled` for a reason that is not consent.
+ * A runtime without SQLite registers no search service.
  */
 export function installInProcessSessionSearchService(args: {
   dataRoot: string

@@ -142,7 +142,9 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
   updateTimeline(accumulator, extractString(record.timestamp))
 
   const payload = asRecord(record.payload)
-  if (record.type === 'session_meta' && payload) {
+  // Codex keeps the first session_meta canonical; a fork copies its parent's in after it, and
+  // such a later one is ignored below like any other record type this parser does not read.
+  if (record.type === 'session_meta' && payload && !state.sawSessionMeta) {
     state.nonUserOrigin = readCodexNonUserOrigin(payload)
     if (state.nonUserOrigin) {
       return

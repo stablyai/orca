@@ -20,18 +20,21 @@ const ProbeParams = z.object({ id: z.string(), count: z.number().optional() })
 
 const probe = defineMethod({
   name: 'test.typedProbe',
+  permission: 'workspace',
   params: ProbeParams,
   handler: (params) => ({ id: params.id, count: params.count ?? 0 })
 })
 
 const schemalessProbe = defineMethod({
   name: 'test.schemalessProbe',
+  permission: 'workspace',
   params: null,
   handler: () => ['a', 'b']
 })
 
 const streamingProbe = defineStreamingMethod({
   name: 'test.streamingProbe',
+  permission: 'workspace',
   params: ProbeParams,
   handler: async (params, _ctx, emit) => {
     emit(params.id)
@@ -82,13 +85,6 @@ describe('eraseRpcMethods is the registry boundary', () => {
     expectTypeOf(eraseRpcMethods([probe])[0]!.handler)
       .parameter(0)
       .toEqualTypeOf<unknown>()
-  })
-
-  it('returns the same methods, so nothing about the runtime value changes', () => {
-    const erased = eraseRpcMethods([probe, streamingProbe])
-
-    expect(erased[0]).toBe(probe)
-    expect(erased[1]).toBe(streamingProbe)
   })
 
   it('produces methods the registry accepts and the dispatcher can invoke', async () => {

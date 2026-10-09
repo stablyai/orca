@@ -32,6 +32,7 @@ export function installMultiplexFlowControl(
     stream.ackRecoverySnapshotInFlight = true
     let replacement: RemoteTerminalSourceRangeReplacementReservation | null = null
     try {
+      // Why screen-only: this client is already behind, and a 0-row image tells it to keep its own history.
       const serialized = await serializeBudgetedRequestedSnapshot(runtime, stream.ptyId, 0)
       if (state.closed || streams.get(stream.streamId) !== stream || stream.outputPaused) {
         return
@@ -79,6 +80,7 @@ export function installMultiplexFlowControl(
           alternateScreen: serialized.alternateScreen,
           terminalOwner: serialized.terminalOwner,
           truncatedByByteBudget: serialized.truncatedByByteBudget,
+          scrollbackRows: serialized.scrollbackRows,
           data: serialized.data
         }
       )

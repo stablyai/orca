@@ -8,7 +8,7 @@
 // the original "stale daemon serves new client" bug.
 
 import { EventEmitter } from 'node:events'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RelayInstallMarkerModule from './ssh-relay-install-marker'
 
 vi.mock('electron', () => ({
@@ -61,9 +61,12 @@ vi.mock('./ssh-connection-utils', () => ({
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import type { SshConnection } from './ssh-connection'
+import { REMOTE_INSTALL_ORDER_OK } from './remote-install-previous-version'
 
 function makeMockConnection(): SshConnection {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture mocks every connection method used by the legacy deployment path.
   return {
+    getTarget: () => ({ id: 'legacy-target', remoteRuntime: 'legacy' }),
     canRunConcurrentExecCommands: vi.fn().mockReturnValue(false),
     exec: vi.fn().mockResolvedValue({
       on: vi.fn(),
@@ -99,8 +102,11 @@ function makeMockConnection(): SshConnection {
 }
 
 describe('cross-version isolation', () => {
+  afterEach(() => vi.unstubAllEnvs())
   beforeEach(() => {
     vi.clearAllMocks()
+    // The host-npm path is opt-in; these cases cover it.
+    vi.stubEnv('ORCA_SSH_REMOTE_RUNTIME', 'legacy')
   })
 
   it('a v2 deploy never references the v1 install dir or v1 socket path', async () => {
@@ -149,6 +155,12 @@ describe('cross-version isolation', () => {
       }
       if (command.includes('test -S') && command.includes('echo ALIVE || echo DEAD')) {
         return Promise.resolve('DEAD')
+      }
+      if (command.includes(REMOTE_INSTALL_ORDER_OK)) {
+        // A newer v0 is the previous build, so v1 is kept only by its live socket.
+        return Promise.resolve(
+          `relay-0.1.0+222222222222\nrelay-0.1.0+000000000000\nrelay-0.1.0+111111111111\n${REMOTE_INSTALL_ORDER_OK}`
+        )
       }
       if (command.includes('__ORCA_RELAY_GC_FIND_STATUS__')) {
         return Promise.resolve('relay-0.1.0+111111111111\nrelay-0.1.0+222222222222\n')

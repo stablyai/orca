@@ -172,16 +172,6 @@ function isDetectionUnsupportedInRuntime(
   return command.unsupportedRuntimes?.includes(runtime) === true
 }
 
-export function buildCommandLookupSpec(
-  command: string,
-  platform: NodeJS.Platform,
-  env: NodeJS.ProcessEnv = process.env,
-  accountLoginShell?: string | null
-): CommandLookupSpec {
-  const [spec] = buildCommandLookupSpecs(command, platform, env, accountLoginShell)
-  return spec ?? buildPosixCommandLookupSpec(command, '/bin/sh')
-}
-
 export function buildCommandLookupSpecs(
   command: string,
   platform: NodeJS.Platform,

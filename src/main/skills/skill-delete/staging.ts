@@ -89,8 +89,6 @@ export async function rollbackSkillDeleteMoves(
   filesystem: SkillInstallFilesystem
 ): Promise<string[]> {
   const unrestored: string[] = []
-  // Indexed rather than `toReversed()`: the delete modules reach the Node 18
-  // relay bundle, where the ES2023 array-copy methods do not exist.
   for (let index = staged.length - 1; index >= 0; index -= 1) {
     const move = staged[index]
     try {

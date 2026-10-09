@@ -10,7 +10,7 @@ import {
   type AgentSessionTokenUsage
 } from '../../shared/agent-session-context-usage'
 import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection'
-import type { ClaudeJournalTranslator } from './claude-structured-journal-translation'
+import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 
 /** A report later than this describes a context the user has likely moved past. */
 export const CLAUDE_CONTEXT_USAGE_TIMEOUT_MS = 5_000
