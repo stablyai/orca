@@ -113,8 +113,12 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
         (spawnSurface && this.getMobileTerminalLeafPtyIds(spawnSurface.tab).length === 0
           ? spawnSurface
           : null)
-      const tabId = surface?.tab.parentTabId ?? pty.pty.tabId ?? pty.record.tabId
-      const leafId = surface?.tab.leafId ?? parsePaneKey(pty.pty.paneKey ?? '')?.leafId
+      const tabId =
+        ptyCloseAuthority?.tabId ?? surface?.tab.parentTabId ?? pty.pty.tabId ?? pty.record.tabId
+      const leafId =
+        ptyCloseAuthority?.leafId ??
+        surface?.tab.leafId ??
+        parsePaneKey(pty.pty.paneKey ?? '')?.leafId
       const paneTarget = leafId ? { kind: 'pane' as const, tabId, leafId } : null
       // Why: a PTY with no pane identity cannot be placed in any tab's layout, so it closes nothing.
       const closesTab =
@@ -135,22 +139,25 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
         const stop = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
         return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
       }
-      if (closesTab && surface && ptyCloseAuthority && !this.tabs.has(surface.tab.parentTabId)) {
+      if (closesTab && ptyCloseAuthority && !this.tabs.has(tabId)) {
+        const acknowledgeRetirement = this.captureTerminalTabRetirement(pty.pty.worktreeId, tabId)
         try {
-          await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId, {
+          await this.closeHeadlessMobileTerminalTab(pty.pty.worktreeId, tabId, {
             reason: 'user',
-            localPtyTeardownOwnedExternally: true,
-            expectedPtyCloseAuthority: closeAuthority
+            allowMissingPersistedTab: true,
+            killPtys: false,
+            authorizedPty: ptyCloseAuthority.pty
           })
         } catch (error) {
           if (!(error instanceof Error) || error.message !== 'workspace_session_unavailable') {
             throw error
           }
-          const stop = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
-          this.notifyRendererOfHeadlessTerminalClose(tabId)
-          return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
+        }
+        if (!acknowledgeRetirement().matches) {
+          throw new Error('terminal_pane_owner_changed')
         }
         const stop = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
+        this.notifyRendererOfHeadlessTerminalClose(tabId)
         return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
       }
       // Why the tabs guard: a headless host has no renderer tab to close through the notifier.
@@ -233,9 +240,7 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
         incarnationId: pty.pty.incarnationId,
         worktreeId: pty.pty.worktreeId
       }
-      const tabId =
-        this.resolvePtyTabCloseSurfaceAuthority(closeAuthority)?.surface.tab.parentTabId ??
-        pty.pty.tabId
+      const tabId = this.resolvePtyTabCloseSurfaceAuthority(closeAuthority)?.tabId ?? pty.pty.tabId
       if (!tabId) {
         return this.closeTerminal(handle)
       }

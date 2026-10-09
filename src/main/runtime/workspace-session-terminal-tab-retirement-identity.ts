@@ -80,13 +80,15 @@ export function captureAcknowledgedTerminalTabRetirement(
 ): () => { matches: boolean; hasPersistedTab: boolean } {
   const { hostId, session, snapshot, incarnationOf } = readState()
   const identity = capturePersistedTerminalTabRetirementIdentity(session, worktreeId, tabId)
-  const surfaces = new Map(
-    snapshot?.tabs.flatMap((tab) =>
+  // A saved pane's first publication does not introduce a new owner during the close.
+  const surfaces = new Map([
+    ...[...(identity?.leaves ?? [])].map(([leafId, binding]) => [leafId, binding.ptyId] as const),
+    ...(snapshot?.tabs.flatMap((tab) =>
       tab.type === 'terminal' && tab.parentTabId === tabId
         ? [[tab.leafId, tab.ptyId ?? null] as const]
         : []
-    )
-  )
+    ) ?? [])
+  ])
   const ptyIds = new Set([
     identity?.ptyId,
     identity?.remoteSessionId,

@@ -114,9 +114,12 @@ export class OrcaRuntimeWithWaitForMobileTerminalSurface extends OrcaRuntimeWith
     }
   }
 
-  protected resolvePtyTabCloseSurfaceAuthority(
-    authority: RuntimePtyTabCloseAuthority
-  ): { pty: RuntimePtyWorktreeRecord; surface: RuntimeMobileSessionCreateTerminalResult } | null {
+  protected resolvePtyTabCloseSurfaceAuthority(authority: RuntimePtyTabCloseAuthority): {
+    pty: RuntimePtyWorktreeRecord
+    tabId: string
+    leafId: string
+    surface: RuntimeMobileSessionCreateTerminalResult | null
+  } | null {
     const live = this.getLivePtyForHandle(authority.handle)
     if (
       !live ||
@@ -128,26 +131,39 @@ export class OrcaRuntimeWithWaitForMobileTerminalSurface extends OrcaRuntimeWith
       return null
     }
     const surface = this.findMobileTerminalSurfaceForPty(authority.worktreeId, authority.ptyId)
-    if (!surface) {
+    const tabId = surface?.tab.parentTabId ?? live.pty.tabId
+    const leafId = surface?.tab.leafId ?? parsePaneKey(live.pty.paneKey ?? '')?.leafId
+    if (!tabId || !leafId) {
       return null
+    }
+    if (!surface) {
+      // An ambiguous or conflicting publication must not fall back to a saved owner.
+      const snapshot = this.mobileSessionTabsByWorktree.get(authority.worktreeId)
+      if (
+        snapshot?.tabs.some(
+          (tab) =>
+            tab.type === 'terminal' &&
+            (tab.parentTabId === tabId ||
+              this.getMobileTerminalLeafPtyIds(tab).includes(authority.ptyId))
+        ) ||
+        !this.hasExactPersistedTerminalSurfaceIdentity({ ...authority, tabId, leafId })
+      ) {
+        return null
+      }
     }
     const session = this.getWorkspaceSessionForWorktree(authority.worktreeId)
     const sessionWorktreeId = session
       ? resolveTerminalSessionWorktreeId(session, authority.worktreeId)
       : null
     const persistedTab = sessionWorktreeId
-      ? session?.tabsByWorktree[sessionWorktreeId]?.find(
-          (tab) => tab.id === surface.tab.parentTabId
-        )
+      ? session?.tabsByWorktree[sessionWorktreeId]?.find((tab) => tab.id === tabId)
       : undefined
     if (persistedTab && !worktreeIdsEqual(persistedTab.worktreeId, authority.worktreeId)) {
       return null
     }
-    const paneKey = makePaneKey(surface.tab.parentTabId, surface.tab.leafId)
+    const paneKey = makePaneKey(tabId, leafId)
     const persistedPtyId =
-      session?.terminalLayoutsByTabId?.[surface.tab.parentTabId]?.ptyIdsByLeafId?.[
-        surface.tab.leafId
-      ] ?? null
+      session?.terminalLayoutsByTabId?.[tabId]?.ptyIdsByLeafId?.[leafId] ?? null
     const persistedIncarnationId = session?.terminalPtyIncarnationsByPaneKey?.[paneKey] ?? null
     if (
       (persistedPtyId && persistedPtyId !== authority.ptyId) ||
@@ -158,14 +174,14 @@ export class OrcaRuntimeWithWaitForMobileTerminalSurface extends OrcaRuntimeWith
     if (
       !this.resolveTerminalSplitSourceAuthority(
         authority.worktreeId,
-        surface.tab.parentTabId,
-        surface.tab.leafId,
+        tabId,
+        leafId,
         authority.ptyId
       )
     ) {
       return null
     }
-    return { pty: live.pty, surface }
+    return { pty: live.pty, tabId, leafId, surface }
   }
 
   // Why: publish an in-flight mobile create main-side from the live PTY so it can't stall on graph sync and destroy the session (#7587).

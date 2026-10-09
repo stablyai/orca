@@ -28,7 +28,7 @@ class CloseRuntime extends OrcaRuntimeService {
     if (!snapshot || tab?.type !== 'terminal') {
       throw new Error('missing test tab')
     }
-    await this.closeHeadlessMobileTerminalTab(binding.worktreeId, snapshot, tab)
+    await this.closeHeadlessMobileTerminalTab(binding.worktreeId, tab.parentTabId)
   }
   publish(): void {
     const snapshot: RuntimeMobileSessionTabsSnapshot = {

@@ -3,8 +3,7 @@ import { OrcaRuntimeWithCloseStructuredAgentSessionTab } from './orca-runtime-cl
 import type {
   RuntimeMobileSessionTabMove,
   RuntimeMobileSessionTabMoveResult,
-  RuntimeMobileSessionTabsSnapshot,
-  RuntimeMobileSessionTerminalTab
+  RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { buildHeadlessMobileSessionTabGroups } from './mobile-session-layout-projection'
@@ -16,8 +15,7 @@ import type { RuntimeSessionTabCloseReason } from '../../shared/runtime-session-
 export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWithCloseStructuredAgentSessionTab {
   protected async closeHeadlessMobileTerminalTab(
     worktreeId: string,
-    snapshot: RuntimeMobileSessionTabsSnapshot,
-    tab: RuntimeMobileSessionTerminalTab,
+    closedParentTabId: string,
     options: {
       allowMissingPersistedTab?: boolean
       killPtys?: boolean
@@ -26,18 +24,20 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
       reason?: RuntimeSessionTabCloseReason
     } = {}
   ): Promise<void> {
-    const closedParentTabId = tab.parentTabId
-    const retirementProofs = snapshot.tabs.flatMap((candidate) => {
-      if (candidate.type !== 'terminal' || candidate.parentTabId !== closedParentTabId) {
-        return []
-      }
-      const proof = this.getMobileSessionTerminalRetirementProof(
-        worktreeId,
-        candidate,
-        options.authorizedPty
-      )
-      return proof ? [proof] : []
-    })
+    let snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    const captureProofs = () =>
+      (snapshot?.tabs ?? []).flatMap((candidate) => {
+        if (candidate.type !== 'terminal' || candidate.parentTabId !== closedParentTabId) {
+          return []
+        }
+        const proof = this.getMobileSessionTerminalRetirementProof(
+          worktreeId,
+          candidate,
+          options.authorizedPty
+        )
+        return proof ? [proof] : []
+      })
+    const retirementProofs = captureProofs()
     const acknowledgeRetirement = this.captureTerminalTabRetirement(worktreeId, closedParentTabId)
     const projectedPtyIds = await this.closeTerminalSurface(
       worktreeId,
@@ -53,7 +53,10 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
     }
     // Renderer frames may add other tabs while the durable close is in flight.
     snapshot = this.mobileSessionTabsByWorktree.get(worktreeId) ?? snapshot
-    this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, closedParentTabId)
+    retirementProofs.push(...captureProofs())
+    if (snapshot) {
+      this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, closedParentTabId)
+    }
     if (options.authorizedPty) {
       options.authorizedPty.runtimeSessionOwned = false
       this.setPairedRendererSessionOwnership(options.authorizedPty.ptyId, false)
@@ -62,7 +65,7 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
     // persisted id is not kill authority. SSH relay ids remain durable exact
     // identities even before pane metadata reconnects.
     const ptyIdsToKill = new Set(projectedPtyIds.filter((ptyId) => parseAppSshPtyId(ptyId)))
-    for (const candidate of snapshot.tabs) {
+    for (const candidate of snapshot?.tabs ?? []) {
       if (candidate.type !== 'terminal' || candidate.parentTabId !== closedParentTabId) {
         continue
       }
@@ -73,7 +76,7 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
           : null
       const livePty = this.findPtyForMobileTerminalTab(worktreeId, candidate) ?? authorizedPty
       const ptyId = livePty?.ptyId ?? candidate.ptyId
-      const hasOtherOwner = snapshot.tabs.some(
+      const hasOtherOwner = snapshot?.tabs.some(
         (other) =>
           other.type === 'terminal' &&
           other.parentTabId !== closedParentTabId &&
@@ -90,6 +93,17 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
       for (const ptyId of ptyIdsToKill) {
         this.ptyController?.kill(ptyId)
       }
+    }
+    this.clientSessionTabSelections.forgetTabs(worktreeId, [
+      closedParentTabId,
+      ...(snapshot?.tabs.flatMap((candidate) =>
+        candidate.type === 'terminal' && candidate.parentTabId === closedParentTabId
+          ? [candidate.id]
+          : []
+      ) ?? [])
+    ])
+    if (!snapshot) {
+      return
     }
     const nextTabs = snapshot.tabs.filter((candidate) => {
       if (candidate.type !== 'terminal' || candidate.parentTabId !== closedParentTabId) {
