@@ -1,8 +1,7 @@
 import type { IPtyProvider } from '../../../providers/types'
 import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../../shared/pty-liveness-verdict'
-import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
 import { ptyOwnership, ptyIncarnationById } from '../provider/ownership-state'
-import { getProvider, getProviderForPty } from '../provider/registry'
+import { getProviderForPty, getPtySshConnectionId } from '../provider/registry'
 import { isPtyAlreadyGoneError, delay, verifyPtyStopped } from '../provider/liveness'
 import { recordUndeliveredSshPtyKill } from './undelivered-ssh-kill'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
@@ -10,11 +9,6 @@ import { errorMessage } from '../../../../shared/error-message'
 
 // Bounds the wait for an observed exit to reach the runtime record when the caller set no deadline.
 const OBSERVED_EXIT_RECORD_WAIT_MS = 10_000
-
-function resolvePtyConnectionId(ptyId: string): string | null | undefined {
-  const owned = ptyOwnership.get(ptyId)
-  return owned !== undefined ? owned : parseAppSshPtyId(ptyId)?.connectionId
-}
 
 function publishSyntheticExit(
   deps: PtyRuntimeControllerDeps,
@@ -40,7 +34,7 @@ export function killPtyFromRuntimeController(
     retiredRejectedPtyIds
   } = deps
   runtime?.markPtyStopRequested?.(ptyId)
-  const connectionId = resolvePtyConnectionId(ptyId)
+  const connectionId = getPtySshConnectionId(ptyId)
   const recordUndelivered = (incarnationId?: string): void => {
     recordUndeliveredSshPtyKill({
       store,
@@ -66,7 +60,7 @@ export function killPtyFromRuntimeController(
   const killWithCurrentProvider = (): boolean => {
     let provider: IPtyProvider
     try {
-      provider = connectionId ? getProvider(connectionId) : getProviderForPty(ptyId)
+      provider = getProviderForPty(ptyId)
     } catch {
       if (connectionId) {
         // Why: runtime/CLI close can target a detached SSH PTY after its
@@ -143,7 +137,7 @@ export function retireRejectedPtyFromRuntimeController(
     runtime?.onPtyExit(ptyId, 0, ptyIncarnationById.get(ptyId))
     return
   }
-  const connectionId = resolvePtyConnectionId(ptyId)
+  const connectionId = getPtySshConnectionId(ptyId)
   publishSyntheticExit(deps, ptyId, 0, finishPtyShutdown(ptyId, connectionId, store))
 }
 
@@ -168,7 +162,7 @@ export async function stopAndWaitPtyFromRuntimeController(
     finishPtyShutdown
   } = deps
   runtime?.markPtyStopRequested?.(ptyId)
-  const connectionId = resolvePtyConnectionId(ptyId)
+  const connectionId = getPtySshConnectionId(ptyId)
   // Why: destructive teardown threads one absolute deadline through every await
   // below; each RPC leaf converts it to the remaining time when it issues, so
   // sequential RPCs share the budget and cannot overrun the sweep deadline.
@@ -198,7 +192,7 @@ export async function stopAndWaitPtyFromRuntimeController(
   }
   let provider: IPtyProvider
   try {
-    provider = connectionId ? getProvider(connectionId) : getProviderForPty(ptyId)
+    provider = getProviderForPty(ptyId)
   } catch {
     if (connectionId) {
       // Why: an absent SSH provider means there is no live target left to

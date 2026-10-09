@@ -17,6 +17,7 @@ import {
 import type { CodexSharedServerStatus } from '../../../../shared/codex-shared-server-command'
 import { ptyOwnership } from '../provider/ownership-state'
 import { getProviderForPty, hasPtyProviderForInspection } from '../provider/registry'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 // Why per shell: a new terminal fixes Codex only where this build's daemon gives that shell Orca's
 // codex function; cmd.exe and unrecognized shells never get one.
@@ -37,7 +38,7 @@ async function findLocalPaneRootPid(deps: Deps, id: unknown): Promise<number | n
     typeof id !== 'string' ||
     isRemoteRuntimePtyId(id) ||
     parseAppSshPtyId(id) ||
-    (ptyOwnership.get(id) ?? null) !== null
+    (ptyOwnership.get(id) ?? LOCAL_EXECUTION_HOST_ID) !== LOCAL_EXECUTION_HOST_ID
   ) {
     return null
   }

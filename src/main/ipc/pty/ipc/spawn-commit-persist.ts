@@ -1,4 +1,7 @@
-import { toSshExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getConnectionExecutionHostId,
+  toSshExecutionHostId
+} from '../../../../shared/execution-host'
 import { closeStartupQueryAuthorityForPty, getRelayPtyId } from '../provider/registry'
 import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared/terminal-session-state-save-failure'
 import { recordCodexPaneAccountForSpawn } from '../host-env/codex-home'
@@ -109,7 +112,7 @@ export function publishPtyIpcSpawnCommit(ctx: PtyIpcSpawnState, committedSize: P
     target: ctx.codexSelectionTarget,
     settings: ctx.deps.getSettings?.()
   })
-  ptyOwnership.set(ctx.result.id, args.connectionId ?? null)
+  ptyOwnership.set(ctx.result.id, getConnectionExecutionHostId(args.connectionId))
   if (ctx.result.incarnationId) {
     ptyIncarnationById.set(ctx.result.id, ctx.result.incarnationId)
   }
