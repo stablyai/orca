@@ -619,6 +619,31 @@ describe('Codex reported tier', () => {
       applyCodexStructuredSessionOption(session, 'model', 'gpt-6-luna')
     ).resolves.toEqual({ model: 'gpt-6-luna' })
   })
+
+  it('lets the reported Flex be picked again after another tier', async () => {
+    const session = optionSession(vi.fn(async () => listing))
+    session.reportedOptions = { model: 'gpt-6.1-sol', serviceTier: 'flex', serviceTierKnown: true }
+    await primePicker(session)
+
+    await applyCodexStructuredSessionOption(session, 'serviceTier', 'ultrafast')
+    await expect(
+      applyCodexStructuredSessionOption(session, 'serviceTier', 'flex')
+    ).resolves.toEqual({ serviceTier: 'flex' })
+  })
+
+  it('resets a reported tier the old model listed when the new model does not', async () => {
+    const session = optionSession(vi.fn(async () => listing))
+    session.reportedOptions = {
+      model: 'gpt-6.1-sol',
+      serviceTier: 'ultrafast',
+      serviceTierKnown: true
+    }
+    await primePicker(session)
+
+    await expect(
+      applyCodexStructuredSessionOption(session, 'model', 'gpt-6-luna')
+    ).resolves.toEqual({ model: 'gpt-6-luna', serviceTier: 'default' })
+  })
 })
 
 describe('Codex option picks before the model list arrives', () => {

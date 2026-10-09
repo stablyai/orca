@@ -189,7 +189,11 @@ function applyValidatedCodexStructuredSessionOption(
     session.options.set(key, value)
     return Object.fromEntries(session.options)
   }
-  if (key === 'serviceTier' && value === CODEX_DEFAULT_SERVICE_TIER) {
+  // The thread's own reported tier (a configured Flex, say) stays pickable even when unlisted.
+  if (
+    key === 'serviceTier' &&
+    (value === CODEX_DEFAULT_SERVICE_TIER || value === session.reportedOptions.serviceTier)
+  ) {
     session.options.set(key, value)
     return Object.fromEntries(session.options)
   }
@@ -229,6 +233,20 @@ function applyValidatedCodexStructuredSessionOption(
     session.options.delete('effort')
   }
   dropUnlistedCodexServiceTier(session, model)
+  const reportedTier = session.reportedOptions.serviceTier
+  const priorTiers = catalog.models.find(
+    (entry) => entry.id === catalog.current.model
+  )?.serviceTiers
+  // A reported tier the old model listed and the new one does not would be omitted by Codex.
+  if (
+    !session.options.has('serviceTier') &&
+    reportedTier &&
+    priorTiers?.some((tier) => tier.value === reportedTier) &&
+    model?.serviceTiers &&
+    !model.serviceTiers.some((tier) => tier.value === reportedTier)
+  ) {
+    session.options.set('serviceTier', CODEX_DEFAULT_SERVICE_TIER)
+  }
   return Object.fromEntries(session.options)
 }
 
