@@ -67,7 +67,7 @@ export function selectFreshExplicitAgentStatusRow(args: HookRowJoin): AgentStatu
 
 /** The freshest explicit state for a terminal, matched on its handle or its pane key. */
 export function selectFreshExplicitAgentStatus(args: {
-  handle: string
+  handle: string | null
   paneKey: string | null
   hookRows: readonly AgentStatusIpcPayload[]
 }): {

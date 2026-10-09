@@ -13,7 +13,15 @@ import type { IPtyProvider } from '../providers/types'
 import { killAllProcessesForWorktree } from './worktree-teardown'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 import type { MemorySnapshot, StatsSummary } from '../../shared/process-stats-types'
+import type {
+  RuntimeServeStatsAgentState,
+  RuntimeServeStatsLongPolls,
+  RuntimeServeStatsResult
+} from '../../shared/runtime-types'
+import type { AgentStatus } from '../../shared/agent-detection'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import { collectMemorySnapshot } from '../memory/collector'
+import { collectRuntimeServeStats, resolveServeStatsPtyAgentState } from './serve-stats-aggregation'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { FeatureInteractionId } from '../../shared/feature-interactions'
 import type { RuntimeClientSettingsUpdate } from './runtime-client-settings'
@@ -166,6 +174,48 @@ export class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithSta
 
   getStatsSummary(): StatsSummary | null {
     return this.stats?.getSummary() ?? null
+  }
+
+  setServePort(port: number | null): void {
+    this.servePort = port
+  }
+
+  /**
+   * Registers the RPC server's live long-poll reader, or clears it with `null` on shutdown.
+   *
+   * A pull, not a push: the counters move on every long-poll admit and release (the hot path for
+   * every `terminal.wait` / `orchestration.ask` in the fleet), so a setter called per increment
+   * would put a cross-object write on that path and go stale the moment any release path forgot
+   * to call it. One closure registered where `setServePort` is, read only when someone actually
+   * asks for stats, cannot drift from the counters it reads. Null means "no listener is serving",
+   * which is exactly when there is no admission budget to report.
+   */
+  setLongPollStatsProvider(provider: (() => RuntimeServeStatsLongPolls) | null): void {
+    this.longPollStatsProvider = provider
+  }
+
+  // Occupancy follows runtime PTYs; turn-duration statistics exclude waiting agents.
+  async getServeStats(): Promise<RuntimeServeStatsResult> {
+    return collectRuntimeServeStats(this)
+  }
+
+  /**
+   * One connected pty's turn state, from maps this process already holds.
+   *
+   * The explicit hook status is keyed by pane, and the lifecycle tracker by pty id, so neither
+   * needs a terminal handle, a syscall, or a DB read; a pty with no current evidence stays
+   * `unknown` rather than borrowing a plausible state.
+   */
+  protected resolveServeStatsPtyAgentState(
+    pty: {
+      ptyId: string
+      paneKey: string | null
+      lastAgentStatus: AgentStatus | null
+      lastAgentStatusObservedLive: boolean
+    },
+    hookRows: readonly AgentStatusIpcPayload[]
+  ): RuntimeServeStatsAgentState {
+    return resolveServeStatsPtyAgentState(this, pty, hookRows)
   }
 
   getMemorySnapshot(): Promise<MemorySnapshot> {

@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
+import type { RuntimeServeStatsResult } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
-import { formatCliStatus, formatStatus, printResult } from '../format'
+import { formatCliStatus, formatServeStats, formatStatus, printResult } from '../format'
 import { RuntimeClientError, serveOrcaApp } from '../runtime-client'
 import { stripElectronRunAsNode } from '../runtime/launch'
 import { resolveCliStatusCaller } from '../runtime/status-caller'
@@ -141,5 +142,9 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
       json,
       formatStatus
     )
+  },
+  'serve stats': async ({ client, json }) => {
+    const result = await client.call<RuntimeServeStatsResult>('serve.stats')
+    printResult(result, json, formatServeStats)
   }
 }

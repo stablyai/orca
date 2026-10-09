@@ -5,6 +5,7 @@ import type { RpcRequest, RpcResponse } from '../rpc/core'
 import { errorResponse } from '../rpc/errors'
 import { RuntimeRpcBinaryRouting } from './runtime-rpc-binary-routing'
 import { classifyRuntimeLongPoll, type RuntimeLongPollClass } from './runtime-rpc-long-poll'
+import type { RuntimeServeStatsLongPolls } from '../../../shared/runtime-types'
 import { OWNER_RPC_CALLER_SCOPE, type RpcCallerScope } from '../rpc/rpc-caller-scope'
 import { sshBridgeCredentials } from '../rpc/ssh-bridge-credentials'
 
@@ -110,6 +111,30 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
         } else {
           this.activeBrowserHostLongPollsByDevice.delete(pairedDeviceId)
         }
+      }
+    }
+  }
+
+  /**
+   * A snapshot of every fence `admitLongPoll` consults, for `serve stats`.
+   *
+   * Read on demand rather than pushed on each admit/release: the counters move on the hot path of
+   * every long poll, and a snapshot taken here can never lag them (#19342 — the operator could
+   * not find the cap that rejected them without reading source).
+   */
+  protected readLongPollStats(): RuntimeServeStatsLongPolls {
+    return {
+      total: { active: this.activeLongPolls, cap: this.longPollCap },
+      ask: { active: this.activeAskLongPolls, cap: this.askLongPollCap },
+      browserHost: {
+        active: this.activeBrowserHostLongPolls,
+        cap: this.browserHostLongPollCap
+      },
+      // The shared ceiling asks and browser hosts are shed by together, which is why its active
+      // reading is their sum and not a counter of its own.
+      specialized: {
+        active: this.activeAskLongPolls + this.activeBrowserHostLongPolls,
+        cap: this.specializedLongPollCap
       }
     }
   }
