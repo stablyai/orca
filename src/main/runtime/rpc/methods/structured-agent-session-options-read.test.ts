@@ -191,6 +191,7 @@ describe("agentSession.modelCatalog with what the running agent's start said", (
     startUnavailable.mockClear()
     setStructuredAgentSessionHost(
       Object.assign(hostStub(), {
+        providerStarting: () => false,
         deps: {
           modelCatalog: { read },
           store: { getRecord: () => record },
@@ -229,5 +230,68 @@ describe("agentSession.modelCatalog with what the running agent's start said", (
     const reply = await readFor('pi')
     expect(reply).toMatchObject({ ok: true })
     expect(reply).not.toMatchObject({ result: { unavailable: expect.anything() } })
+  })
+})
+
+describe("agentSession.modelCatalog while the chat's agent proves its start", () => {
+  const record: AgentSessionRecord = { ...agentSessionRecordFixture(), provider: 'pi' }
+  let unavailable: AgentSessionUnavailable | undefined
+  let starting = true
+  const start = Promise.withResolvers<'ready'>()
+  const awaitProviderStart = vi.fn(() => start.promise)
+  const readFor = (extra: { waitForListing?: true; savedOnly?: true } = {}) =>
+    call(
+      'agentSession.modelCatalog',
+      { agent: 'pi', sessionId: record.sessionId, ...extra },
+      PI_CLIENT
+    )
+
+  beforeEach(() => {
+    unavailable = undefined
+    starting = true
+    awaitProviderStart.mockClear()
+    setStructuredAgentSessionHost(
+      Object.assign(hostStub(), {
+        providerStarting: () => starting,
+        awaitProviderStart,
+        deps: {
+          modelCatalog: { read: vi.fn(async () => ({ origin: 'unknown' as const })) },
+          store: { getRecord: () => record },
+          adapter: { startUnavailable: () => unavailable }
+        }
+      })
+    )
+  })
+
+  // A client that re-reads only on this flag still learns what the start says (a signed-out Pi).
+  it('says the answer is in progress, and a waiting read answers with what the start found', async () => {
+    const first = await readFor()
+    expect(first).toMatchObject({
+      ok: true,
+      result: { origin: 'unknown', listingInProgress: true }
+    })
+    expect(first).not.toMatchObject({ result: { unavailable: expect.anything() } })
+    expect(awaitProviderStart).not.toHaveBeenCalled()
+
+    let settled = false
+    const waiting = readFor({ waitForListing: true }).finally(() => {
+      settled = true
+    })
+    await vi.waitFor(() =>
+      expect(awaitProviderStart).toHaveBeenCalledWith(record.sessionId, 30_000)
+    )
+    expect(settled).toBe(false)
+    starting = false
+    unavailable = { reason: 'notSignedIn' }
+    start.resolve('ready')
+    const answered = await waiting
+    expect(answered).toMatchObject({ ok: true, result: { unavailable: { reason: 'notSignedIn' } } })
+    expect(answered).not.toMatchObject({ result: { listingInProgress: true } })
+  })
+
+  it('never holds a saved-only read', async () => {
+    const reply = await readFor({ savedOnly: true })
+    expect(reply).not.toMatchObject({ result: { listingInProgress: true } })
+    expect(awaitProviderStart).not.toHaveBeenCalled()
   })
 })

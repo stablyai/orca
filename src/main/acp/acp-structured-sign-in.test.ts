@@ -96,6 +96,25 @@ it.each(ACP_LAUNCH_SPECS)(
   }
 )
 
+it.each(ACP_LAUNCH_SPECS)(
+  "keeps $agent's sign-in words over log lines it wrote before refusing its start",
+  async (spec) => {
+    const detail = 'Sign-in credentials are missing.'
+    const rig = await openAcpAdapterRig({
+      spec,
+      script: (agent) =>
+        agent.on('session/new', (frame) => {
+          rig.child().stderr = 'warn: telemetry endpoint unreachable'
+          agent.fail(frame, -32000, detail)
+        })
+    })
+    await rig.acquire()
+    expect(rig.ended).toMatchObject([
+      { failure: { kind: 'notSignedIn', detail: { text: detail, audience: 'person' } } }
+    ])
+  }
+)
+
 it.each([
   [
     'No API key found for anthropic.\n\nUse /login, set an API key environment variable, or create /host/agent.db',

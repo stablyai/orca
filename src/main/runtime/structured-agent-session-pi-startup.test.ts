@@ -28,10 +28,9 @@ afterEach(async () => {
   }
 })
 
-async function setup() {
+async function setup(script = piScriptedChild()) {
   directory = await mkdtemp(join(tmpdir(), 'orca-pi-startup-'))
   const root = directory
-  const script = piScriptedChild()
   const host = await ensureStructuredAgentSessionHost({
     logger: createStructuredAgentSessionLogger(),
     stateDirectory: root,
@@ -185,4 +184,22 @@ it('ends Pi on Stop and resumes its real session file when the next send starts 
   await vi.waitFor(() =>
     expect(script.prompts()).toEqual(['start a long turn', 'resume after Stop'])
   )
+})
+
+// The picker's catalog read waits this out, so a client that reads once at spawn still hears it.
+it('lets a read wait out Pi proving its start, then reads that start said Pi is signed out', async () => {
+  const { script, host } = await setup(Object.assign(piScriptedChild(), { listsNoModels: true }))
+  expect(host.providerStarting(HOST_TEST_SESSION)).toBe(true)
+  let settled = false
+  const waited = host.awaitProviderStart(HOST_TEST_SESSION, 30_000).finally(() => {
+    settled = true
+  })
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(settled).toBe(false)
+  script.releaseHandshake()
+  expect(await waited).toBe('ready')
+  expect(host.providerStarting(HOST_TEST_SESSION)).toBe(false)
+  expect(host.deps.adapter.startUnavailable?.(HOST_TEST_SESSION)).toEqual({
+    reason: 'notSignedIn'
+  })
 })

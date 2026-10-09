@@ -5,7 +5,7 @@ import {
 } from '../../shared/agent-session-failure'
 import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { AcpAgentError } from './acp-errors'
-import { acpAuthenticationRequired, acpPromptErrorDetail } from './acp-turn-failures'
+import { acpAuthenticationRequired, acpSignInRequiredFailure } from './acp-turn-failures'
 import type { AcpStructuredSession } from './acp-structured-session'
 
 export type AcpStartingSession = Pick<
@@ -33,20 +33,14 @@ export function acpStartupFailure(
   session: AcpStartingSession,
   error: unknown
 ): SubmissionRejectionFact {
-  const { dialect } = session.spec
-  const signIn = acpAuthenticationRequired(dialect, error)
+  if (error instanceof AcpAgentError && acpAuthenticationRequired(session.spec.dialect, error)) {
+    // The agent's sign-in words, never log lines it wrote before refusing.
+    return acpSignInRequiredFailure(session.spec.dialect, error)
+  }
   const text =
-    session.connection.stderrTail() ||
-    (error instanceof AcpAgentError
-      ? signIn
-        ? acpPromptErrorDetail(dialect, error)
-        : error.message
-      : '')
+    session.connection.stderrTail() || (error instanceof AcpAgentError ? error.message : '')
   const detail = providerDiagnostic(text, 'person')
-  return agentSessionFailureFact(
-    signIn ? 'notSignedIn' : 'providerStartFailed',
-    detail ? { detail } : {}
-  )
+  return agentSessionFailureFact('providerStartFailed', detail ? { detail } : {})
 }
 
 export function endAcpStartingSession(
@@ -71,7 +65,7 @@ export function endAcpStartingSession(
       (session.connection.stderrTail() || `${session.spec.agent} ACP agent ended while starting`),
     failure: requested
       ? agentSessionFailureFact('hostStopped')
-      : detail
+      : detail && failure.kind !== 'notSignedIn'
         ? { ...failure, detail }
         : failure,
     cause: requested ? 'requested-close' : 'unexpected-exit',
