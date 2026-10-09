@@ -1043,7 +1043,10 @@ const POSTGRES_CONNECTION_TIMEOUT_MS = 2_000
 // leaves room for the connect timeout above.
 export const POSTGRES_STATEMENT_TIMEOUT_MS = 5_000
 const POSTGRES_IDLE_TRANSACTION_TIMEOUT_MS = 5_000
-const POSTGRES_READ_TIMEOUT_MARGIN_MS = 2_000
+// Past statement_timeout because a whole-VM database stall delays replies the server has
+// already timed: 5-7 s stalls are routine (connect-burst RCA), and a read timeout inside one
+// would destroy healthy clients and fail requests that succeed today.
+export const POSTGRES_READ_TIMEOUT_MARGIN_MS = 10_000
 const POSTGRES_IDLE_SESSION_TIMEOUT_MS = 30_000
 
 export function relayPostgresStatementTimeoutMs(
@@ -1056,6 +1059,18 @@ export function relayPostgresStatementTimeoutMs(
   // to enforce from being disabled by a typo in an environment variable.
   if (!Number.isInteger(milliseconds) || milliseconds < 1) {
     throw new Error('invalid_statement_timeout')
+  }
+  return milliseconds
+}
+
+export function relayPostgresReadTimeoutMarginMs(
+  env: NodeJS.ProcessEnv = process.env
+): number {
+  const configured = env.ORCA_RELAY_POSTGRES_READ_TIMEOUT_MARGIN_MS
+  if (configured === undefined || configured === '') return POSTGRES_READ_TIMEOUT_MARGIN_MS
+  const milliseconds = Number(configured)
+  if (!Number.isInteger(milliseconds) || milliseconds < 1) {
+    throw new Error('invalid_read_timeout_margin')
   }
   return milliseconds
 }
@@ -1393,6 +1408,7 @@ export type RelayDatabaseOpenInput = {
   poolMax?: number
   applicationName?: string
   statementTimeoutMs?: number
+  readTimeoutMarginMs?: number
   // Directors own the PostgreSQL schema. A cell skips it and never touches the database
   // at boot, so it starts listening while the database is down and stays unready until
   // its first successful query.
@@ -1414,8 +1430,9 @@ export async function openRelayDatabase(input: RelayDatabaseOpenInput): Promise<
       connectionTimeoutMillis: POSTGRES_CONNECTION_TIMEOUT_MS,
       statement_timeout: statementTimeoutMs,
       // The server answers every statement within statement_timeout, as 57014 at worst, so
-      // this fires only on a lost reply or an event-loop stall of 2 s.
-      query_timeout: statementTimeoutMs + POSTGRES_READ_TIMEOUT_MARGIN_MS,
+      // this fires only on a lost reply, or a database or event-loop stall past the margin.
+      query_timeout:
+        statementTimeoutMs + (input.readTimeoutMarginMs ?? relayPostgresReadTimeoutMarginMs()),
       lock_timeout: POSTGRES_LOCK_TIMEOUT_MS,
       idle_in_transaction_session_timeout: POSTGRES_IDLE_TRANSACTION_TIMEOUT_MS,
       // Bounds a backend whose client was destroyed outside a transaction (after a lost

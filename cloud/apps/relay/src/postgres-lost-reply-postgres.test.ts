@@ -1,18 +1,25 @@
 import { createServer, connect, type Server, type Socket } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
-import { isRelayDatabaseTransientError, openRelayDatabase, type RelayDatabase } from './database.js'
+import {
+  isRelayDatabaseTransientError,
+  openRelayDatabase,
+  POSTGRES_READ_TIMEOUT_MARGIN_MS,
+  type RelayDatabase
+} from './database.js'
 
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const describePostgres = databaseUrl ? describe : describe.skip
 
 const STATEMENT_TIMEOUT_MS = 500
-// query_timeout = statement timeout + 2 s.
-const READ_TIMEOUT_MS = STATEMENT_TIMEOUT_MS + 2_000
+// A short margin keeps the blackhole case fast; production's is 10 s.
+const READ_TIMEOUT_MARGIN_MS = 2_000
+const READ_TIMEOUT_MS = STATEMENT_TIMEOUT_MS + READ_TIMEOUT_MARGIN_MS
 const PROBE_TABLE = 'relay_lost_reply_probe'
 
 // Forwards each connection to PostgreSQL. Once a connection sends a statement naming the
-// trigger, the server's replies on that connection are dropped: a reply lost in the network.
-async function blackholeProxy(target: URL, trigger: string) {
+// trigger, the server's replies on that connection are dropped (a reply lost in the network),
+// or, with `delayMs`, held that long and then delivered (a whole-VM database stall).
+async function blackholeProxy(target: URL, trigger: string, delayMs?: number) {
   const sockets = new Set<Socket>()
   const afterTrigger: Buffer[] = []
   const server: Server = createServer((client) => {
@@ -27,6 +34,7 @@ async function blackholeProxy(target: URL, trigger: string) {
     })
     upstream.on('data', (chunk: Buffer) => {
       if (!swallowing) client.write(chunk)
+      else if (delayMs !== undefined) setTimeout(() => client.write(chunk), delayMs)
     })
     for (const socket of [client, upstream]) {
       socket.on('error', () => undefined)
@@ -58,12 +66,17 @@ describePostgres('a lost PostgreSQL reply against a real server', () => {
     for (const cleanup of cleanups.splice(0).reverse()) await cleanup()
   })
 
-  async function open(url: string): Promise<RelayDatabase> {
+  async function open(
+    url: string,
+    options: { readTimeoutMarginMs?: number; poolMax?: number } = {}
+  ): Promise<RelayDatabase> {
     const database = await openRelayDatabase({
       databaseUrl: url,
       dataDir: '',
       appliesPostgresSchema: false,
-      statementTimeoutMs: STATEMENT_TIMEOUT_MS
+      statementTimeoutMs: STATEMENT_TIMEOUT_MS,
+      readTimeoutMarginMs: options.readTimeoutMarginMs ?? READ_TIMEOUT_MARGIN_MS,
+      poolMax: options.poolMax
     })
     cleanups.push(async () => await database.close())
     return database
@@ -111,6 +124,28 @@ describePostgres('a lost PostgreSQL reply against a real server', () => {
       )
     ).resolves.toEqual([{ id: 'c1' }])
   }, 20_000)
+
+  // A reply the server sent after statement_timeout, held up by a whole-VM stall, is still a
+  // reply: the default margin must outlast the routine 5-7 s stalls.
+  it('keeps a reply delayed 6.5 s by a stall, on the same connection', async () => {
+    const proxy = await blackholeProxy(new URL(databaseUrl!), 'stalled_reply_probe', 6_500)
+    cleanups.push(proxy.close)
+    const database = await open(proxy.url, {
+      readTimeoutMarginMs: POSTGRES_READ_TIMEOUT_MARGIN_MS,
+      poolMax: 1
+    })
+    const pid = async () => (await database.query('SELECT pg_backend_pid() AS pid'))[0]?.pid
+    const before = await pid()
+    const startedAt = performance.now()
+    // Autocommit: inside a transaction the proxy's hold would trip the server's own 5 s
+    // idle-in-transaction limit, which a real VM stall pauses along with everything else.
+    await expect(database.query("SELECT 'stalled_reply_probe' AS probe")).resolves.toEqual([
+      { probe: 'stalled_reply_probe' }
+    ])
+    expect(performance.now() - startedAt).toBeGreaterThan(6_000)
+    // Not destroyed: the one pooled connection is still the same backend.
+    expect(await pid()).toBe(before)
+  }, 30_000)
 
   it('runs request sessions with the server bounding idle backends at 30 s', async () => {
     const database = await open(databaseUrl!)

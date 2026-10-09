@@ -3,4 +3,4 @@
 // the fixed floor `relay_cell_min_fix_level` (production.tfvars) for 6 hours; raise the floor
 // once every serving cell runs the new level. Images from before this constant report nothing,
 // which the alert reads as below.
-export const RELAY_FIX_LEVEL = 1
+export const RELAY_FIX_LEVEL = 2
