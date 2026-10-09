@@ -1,4 +1,6 @@
+import { getSelectedFloatingWorkspaceId, useFloatingWorkspaceHost } from './floating-workspace-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { floatingWorkspaceEnvironmentId } from '../../../shared/floating-workspace-id'
 import type { BrowserTab } from '../../../shared/browser-workspace-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { createUntitledMarkdownFileWithTemplateSelection } from './create-untitled-markdown'
@@ -24,11 +26,10 @@ export async function createFloatingWorkspaceTerminalTab(
   /** A split group's own "+"; omitted, the tab lands in the focused group. */
   groupId?: string
 ): Promise<TerminalTab | null> {
-  const targetGroupId = groupId ?? store.activeGroupIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
+  const targetGroupId = groupId ?? store.activeGroupIdByWorktree[getSelectedFloatingWorkspaceId()]
 
-  // Why: the floating workspace is a local scratchpad; a focused remote runtime
-  // must not own its SSH/tmux terminals or prune them via session snapshots.
-  const tab = store.createTab(FLOATING_TERMINAL_WORKTREE_ID, targetGroupId, shellOverride)
+  // Only the floating host selector can change this owner; sidebar focus cannot.
+  const tab = store.createTab(getSelectedFloatingWorkspaceId(), targetGroupId, shellOverride)
   focusTerminalTabSurface(tab.id)
   return tab
 }
@@ -38,19 +39,18 @@ export async function createFloatingWorkspaceBrowserTab(
 ): Promise<BrowserTab | null> {
   assertClientCreationActionAvailable(
     store as AppState,
-    FLOATING_TERMINAL_WORKTREE_ID,
+    getSelectedFloatingWorkspaceId(),
     'managed-browser'
   )
-  const targetGroupId = store.activeGroupIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
+  const targetGroupId = store.activeGroupIdByWorktree[getSelectedFloatingWorkspaceId()]
   const url = store.browserDefaultUrl ?? 'about:blank'
 
-  // Why: browser tabs in the floating workspace share the same local-only
-  // ownership rule as floating terminals.
-  return store.createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, url, {
+  // Browsers follow the selected floating host, independently of sidebar focus.
+  return store.createBrowserTab(getSelectedFloatingWorkspaceId(), url, {
     title: translate('auto.lib.floating.workspace.tab.creation.f3785eddc2', 'New Browser Tab'),
     focusAddressBar: true,
     targetGroupId,
-    browserRuntimeEnvironmentId: null
+    browserRuntimeEnvironmentId: floatingWorkspaceEnvironmentId(getSelectedFloatingWorkspaceId())
   })
 }
 
@@ -73,6 +73,7 @@ export async function createFloatingWorkspaceMarkdownTab(
   if (!fileInfo) {
     return
   }
+  useFloatingWorkspaceHost.getState().selectHost(null)
   store.openFile(
     {
       ...fileInfo,

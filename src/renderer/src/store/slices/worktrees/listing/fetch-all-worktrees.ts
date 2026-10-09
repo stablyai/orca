@@ -1,3 +1,4 @@
+import { floatingWorkspaceId } from '../../../../../../shared/floating-workspace-id'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import { isStaleWorktreeCatalogPublication } from './worktree-catalog-version-state'
 import type { WorktreeSliceGet, WorktreeSliceSet } from './worktree-slice-types'
@@ -191,6 +192,9 @@ export function createFetchAllWorktrees(
     const validIds = new Set<string>()
     // Why: floating is persisted renderer state, not a repo worktree an authoritative scan returns.
     validIds.add(FLOATING_TERMINAL_WORKTREE_ID)
+    for (const environment of get().runtimeEnvironments ?? []) {
+      validIds.add(floatingWorkspaceId(environment.id))
+    }
     // Why: folder workspaces persist tabs under `folder:<id>` keys that authoritative repo scans never return.
     for (const workspace of get().folderWorkspaces ?? []) {
       validIds.add(folderWorkspaceKey(workspace.id))

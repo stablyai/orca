@@ -1,3 +1,4 @@
+import { floatingWorkspaceId } from '../../../shared/floating-workspace-id'
 import { describe, expect, it } from 'vitest'
 import {
   toRuntimeTerminalWorktreeSelector,
@@ -11,6 +12,12 @@ describe('toRuntimeWorktreeSelector', () => {
     expect(toRuntimeWorktreeSelector('repo-1::C:/Users/me/orca/workspaces/orca/new-worktree')).toBe(
       'id:repo-1::C:/Users/me/orca/workspaces/orca/new-worktree'
     )
+  })
+
+  it('normalizes both raw and prefixed floating host namespaces', () => {
+    const id = floatingWorkspaceId('host:/one')
+    expect(toRuntimeWorktreeSelector(id)).toBe('id:global-floating-terminal')
+    expect(toRuntimeWorktreeSelector(` id:${id} `)).toBe('id:global-floating-terminal')
   })
 
   it('preserves existing ID selectors and empty values', () => {

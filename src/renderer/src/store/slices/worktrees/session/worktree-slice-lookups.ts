@@ -1,6 +1,6 @@
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
+import { isFloatingWorkspaceId } from '../../../../../../shared/floating-workspace-id'
 import { getTerminalActivationSpawnSuppression } from '../../terminal-activation-spawn-suppression'
 import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
 import { buildWorktreePurgeState } from '../teardown/worktree-purge-state'
@@ -145,7 +145,7 @@ export function createPurgeWorktreeTerminalState(
   return (worktreeTargets) => {
     const purgeableWorktreeTargets = worktreeTargets.filter((target) => {
       const worktreeId = typeof target === 'string' ? target : target.id
-      return worktreeId !== FLOATING_TERMINAL_WORKTREE_ID
+      return !isFloatingWorkspaceId(worktreeId)
     })
     if (purgeableWorktreeTargets.length === 0) {
       return

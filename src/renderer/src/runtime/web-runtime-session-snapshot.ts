@@ -1,3 +1,4 @@
+import { projectFloatingSessionSnapshot } from './floating-session-snapshot'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
@@ -76,8 +77,10 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
           timeoutMs: 15_000
         })
         return {
-          snapshot: unwrapRuntimeRpcResult(
-            response as RuntimeRpcResponse<RuntimeMobileSessionTabsResult>
+          snapshot: projectFloatingSessionSnapshot(
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: session.tabs.list is the host's typed session snapshot method; RPC failure is checked by unwrap.
+            unwrapRuntimeRpcResult(response as RuntimeRpcResponse<RuntimeMobileSessionTabsResult>),
+            environmentId
           ),
           runtimeId: getSessionTabsRuntimeIdFromResponse(response)
         }

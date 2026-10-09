@@ -1,3 +1,4 @@
+import { floatingWorkspaceEnvironmentId } from '../../../shared/floating-workspace-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../shared/ephemeral-setup-terminal-worktree-id'
 import { parseExecutionHostId } from '../../../shared/execution-host'
@@ -54,6 +55,10 @@ export function resolveTerminalHostOwnership(
   worktreeId: string | null | undefined,
   purpose: TerminalHostOwnershipPurpose
 ): TerminalHostOwnership {
+  const floatingOwner = floatingWorkspaceEnvironmentId(worktreeId)
+  if (floatingOwner) {
+    return { kind: 'runtime', runtimeEnvironmentId: floatingOwner }
+  }
   if (!worktreeId) {
     // Why: a tab with no owning row proves nothing about its host, so teardown cannot claim its PTY.
     return purpose === 'teardown' ? UNRESOLVED_TERMINAL_HOST : LOCAL_OR_SSH_TERMINAL_HOST

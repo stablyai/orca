@@ -1,10 +1,12 @@
+import { floatingWorkspaceEnvironmentId } from '../../../../shared/floating-workspace-id'
+import { Button } from '@/components/ui/button'
+import { translate } from '@/i18n/i18n'
 import TabBar from '@/components/tab-bar/TabBar'
 import { TabGroupSplitNodeTree } from '@/components/tab-group/TabGroupSplitNodeTree'
 import { WorkspaceTabDragLayer } from '@/components/tab-group/WorkspaceTabDragLayer'
 import { WorkspacePaneOverlayLayers } from '@/components/WorkspacePaneOverlayLayers'
 import { isTerminalImeInputContextRefreshing } from '@/components/terminal-pane/terminal-ime-input-context-refresh'
 import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { FloatingTerminalEmptyState } from './FloatingTerminalEmptyState'
 import { renderFloatingTerminalOrchestrationCard } from './FloatingTerminalOrchestrationCard'
 import { FloatingTerminalOrchestrationDialog } from './FloatingTerminalOrchestrationDialog'
@@ -15,6 +17,8 @@ import type { useFloatingTerminalPanelController } from './use-floating-terminal
 const NO_ACTIVITY_TERMINAL_PORTALS: [] = []
 
 export function renderFloatingTerminalPanelSurface({
+  worktreeId,
+  remoteSession,
   open,
   onOpenChange,
   bounds,
@@ -81,6 +85,7 @@ export function renderFloatingTerminalPanelSurface({
     <div
       ref={setPanelNode}
       data-floating-terminal-panel
+      data-floating-workspace-id={worktreeId}
       aria-hidden={!open}
       tabIndex={-1}
       className={`fixed z-[45] flex min-h-[280px] min-w-[420px] rounded-lg bg-transparent text-card-foreground shadow-[0_4px_12px_rgba(0,0,0,0.16),0_24px_64px_rgba(0,0,0,0.32)] outline-none dark:shadow-[0_8px_20px_rgba(0,0,0,0.35),0_28px_72px_rgba(0,0,0,0.58)] ${open ? 'opacity-100' : 'invisible pointer-events-none opacity-0'}`}
@@ -116,7 +121,7 @@ export function renderFloatingTerminalPanelSurface({
           body tree's split/pane-body drop targets must live in the same dnd-kit scope, so a
           floating tab drag can reorder in the strip or split against the tree — exactly one
           DndContext owns floating tab drag. */}
-      <WorkspaceTabDragLayer worktreeId={FLOATING_TERMINAL_WORKTREE_ID} enabled={open}>
+      <WorkspaceTabDragLayer worktreeId={worktreeId} enabled={open}>
         {({ isTabDragActive, hoveredTabInsertion, setDragRootNode }) => (
           <div
             ref={setDragRootNode}
@@ -138,7 +143,7 @@ export function renderFloatingTerminalPanelSurface({
                     activeTab?.contentType === 'agent-session' ? activeTab.id : activeTerminalId
                   }
                   groupId={activeGroup?.id}
-                  worktreeId={FLOATING_TERMINAL_WORKTREE_ID}
+                  worktreeId={worktreeId}
                   expandedPaneByTabId={expandedPaneByTabId}
                   onActivate={model.commands.activateTerminal}
                   onClose={closeFloatingItemConfirmed}
@@ -176,10 +181,10 @@ export function renderFloatingTerminalPanelSurface({
                     if (!source) {
                       return
                     }
-                    createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, source.url, {
+                    createBrowserTab(worktreeId, source.url, {
                       ...buildDuplicatedBrowserTabOptions(source),
                       afterTabId: sourceUnifiedTabId,
-                      browserRuntimeEnvironmentId: null
+                      browserRuntimeEnvironmentId: floatingWorkspaceEnvironmentId(worktreeId)
                     })
                   }}
                   onCloseAllFiles={closeAllFiles}
@@ -205,14 +210,31 @@ export function renderFloatingTerminalPanelSurface({
             >
               {/* Why also gated on resolvable items: stale unified tabs whose entities are gone
                   must show the empty state (with its CTAs), not a blank group body. */}
-              {surface.kind === 'workspace' && hasVisibleFloatingTabs ? (
+              {remoteSession.error && !hasVisibleFloatingTabs ? (
+                <div
+                  role="alert"
+                  className="flex h-full flex-col items-center justify-center gap-3 p-4"
+                >
+                  <p className="text-sm text-muted-foreground">{remoteSession.error}</p>
+                  <Button variant="outline" onClick={remoteSession.retry}>
+                    {translate('remoteFloatingTerminal.reconnect', 'Reconnect')}
+                  </Button>
+                </div>
+              ) : remoteSession.loading && !hasVisibleFloatingTabs ? (
+                <div
+                  role="status"
+                  className="flex h-full items-center justify-center text-sm text-muted-foreground"
+                >
+                  {translate('remoteFloatingTerminal.loading', 'Loading sessions…')}
+                </div>
+              ) : surface.kind === 'workspace' && hasVisibleFloatingTabs ? (
                 // Why the flex frame: the tree's nodes size themselves as flex items (flex-1), so
                 // the host must own their rect with a flex container — same contract as
                 // WorktreeSplitSurface. In a block parent every pane collapses to 0px.
                 <div className="absolute inset-0 flex" data-floating-workspace-surface-frame>
                   <TabGroupSplitNodeTree
                     layout={surface.layout}
-                    worktreeId={FLOATING_TERMINAL_WORKTREE_ID}
+                    worktreeId={worktreeId}
                     focusedGroupId={surface.focusedGroupId}
                     isWorktreeActive={open}
                     isTabDragActive={isTabDragActive}
@@ -230,7 +252,7 @@ export function renderFloatingTerminalPanelSurface({
                       reflows the buffer under a live TUI. An empty worktreePath mounts no
                       terminal panes; browser/editor/chat panes are not viewport-fitted. */}
                   <WorkspacePaneOverlayLayers
-                    worktreeId={FLOATING_TERMINAL_WORKTREE_ID}
+                    worktreeId={worktreeId}
                     worktreePath={cwd && panelViewportSettled ? cwd : ''}
                     isVisible={open}
                     shouldMeasureHiddenWorktree={false}

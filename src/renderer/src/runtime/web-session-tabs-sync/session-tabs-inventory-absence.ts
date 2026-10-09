@@ -1,3 +1,4 @@
+import { floatingWorkspaceEnvironmentId } from '../../../../shared/floating-workspace-id'
 import type {
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult
@@ -104,6 +105,10 @@ export function buildMissingWebSessionTabsRemovals(
 }[] {
   return trackedWorktrees
     .filter((trackedWorktree) => {
+      // Floating mirrors have client-scoped keys; their scoped stream owns removals.
+      if (floatingWorkspaceEnvironmentId(trackedWorktree.worktree)) {
+        return false
+      }
       if (publishedWorktrees.has(trackedWorktree.worktree)) {
         clearTrackedWebSessionTabsInventoryAbsence(environmentId, trackedWorktree.worktree)
         return false

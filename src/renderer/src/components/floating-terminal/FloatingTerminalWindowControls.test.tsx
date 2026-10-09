@@ -28,6 +28,7 @@ vi.mock('react', async () => {
   const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
+    useSyncExternalStore: <T,>(_subscribe: unknown, getSnapshot: () => T) => getSnapshot(),
     useCallback: <T,>(callback: T) => callback,
     useMemo: <T,>(factory: () => T) => factory()
   }

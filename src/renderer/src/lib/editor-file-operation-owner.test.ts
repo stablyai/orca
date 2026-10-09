@@ -1,3 +1,4 @@
+import { floatingWorkspaceId } from '../../../shared/floating-workspace-id'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import {
@@ -61,6 +62,47 @@ describe('editor file operation owner', () => {
       worktreePath: '/tmp/orca/floating-workspace',
       expectedExecutionHostId: 'local'
     })
+  })
+
+  it('keeps remote floating file operations on their paired host across focus changes', () => {
+    useAppStore.getState().setRuntimeEnvironments([runtimeEnvironment('hub-a', 1)])
+    const id = floatingWorkspaceId('hub-a')
+    const provenance = captureEditorFileOperationProvenance(
+      useAppStore.getState(),
+      id,
+      'hub-a',
+      true
+    )
+    const context = getEditorFileOperationContext(
+      useAppStore.getState(),
+      {
+        worktreeId: id,
+        runtimeEnvironmentId: 'hub-a',
+        operationProvenance: provenance
+      },
+      null
+    )
+    expect(context.settings?.activeRuntimeEnvironmentId).toBe('hub-a')
+    expect(context.expectedExecutionHostId).toBe('local')
+    useAppStore.getState().setRuntimeEnvironments([runtimeEnvironment('hub-a', 2)])
+    expect(() => assertEditorFileOperationCurrent(useAppStore.getState(), id, provenance)).toThrow(
+      'owns this file'
+    )
+  })
+
+  it('rejects a remote floating file after its pairing is removed', () => {
+    useAppStore.getState().setRuntimeEnvironments([runtimeEnvironment('hub-a', 1)])
+    const id = floatingWorkspaceId('hub-a')
+    const provenance = captureEditorFileOperationProvenance(
+      useAppStore.getState(),
+      id,
+      'hub-a',
+      true
+    )
+    useAppStore.getState().setRuntimeEnvironments([])
+    expect(() => assertEditorFileOperationCurrent(useAppStore.getState(), id, provenance)).toThrow(
+      'owns this file'
+    )
   })
 
   it('uses the explicit worktree owner instead of global runtime focus', () => {

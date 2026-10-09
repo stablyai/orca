@@ -6,7 +6,7 @@ import {
 } from '@/lib/worktree-runtime-owner'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import { resolveTerminalHostOwnership } from '@/lib/terminal-worktree-route'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-id'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { locateTerminalTab } from '../terminals/terminal-tab-location'
@@ -119,7 +119,7 @@ export function classifyTerminalRetirementWorktree(
   if (!worktreeId) {
     return 'absent'
   }
-  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+  if (isFloatingWorkspaceId(worktreeId)) {
     return 'floating'
   }
   if (isEphemeralSetupTerminalWorktreeId(worktreeId)) {

@@ -50,7 +50,8 @@ function reuseExpandedPanesIfEqual(
 }
 
 export function createFloatingTerminalPanelInputsSelector(
-  dependencies: SelectorDependencies = {}
+  dependencies: SelectorDependencies = {},
+  worktreeId = FLOATING_TERMINAL_WORKTREE_ID
 ): (state: FloatingTerminalPanelState) => FloatingTerminalPanelInputs {
   let openFilesSource: AppState['openFiles'] | null = null
   let floatingFiles = EMPTY_FILES
@@ -60,18 +61,16 @@ export function createFloatingTerminalPanelInputsSelector(
   let previous: FloatingTerminalPanelInputs | null = null
 
   return (state) => {
-    const tabs = state.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_TABS
-    const browserTabs =
-      state.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_BROWSER_TABS
-    const groups = state.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_GROUPS
-    const unifiedTabs =
-      state.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_UNIFIED_TABS
+    const tabs = state.tabsByWorktree[worktreeId] ?? EMPTY_TABS
+    const browserTabs = state.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS
+    const groups = state.groupsByWorktree[worktreeId] ?? EMPTY_GROUPS
+    const unifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS
 
     if (state.openFiles !== openFilesSource) {
       const nextFloatingFiles = [] as AppState['openFiles']
       for (const file of state.openFiles) {
         dependencies.onOpenFileVisited?.(file.id)
-        if (file.worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+        if (file.worktreeId === worktreeId) {
           nextFloatingFiles.push(file)
         }
       }

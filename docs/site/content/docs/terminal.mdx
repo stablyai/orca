@@ -92,6 +92,8 @@ The floating terminal is a global shell surface that's always one chord away, re
 - Set the starting working directory under the same setting (`~` by default) so new floating tabs land where you expect.
 - The floating panel hosts its own tabs and supports orchestration setup — kick off background runs without claiming a worktree pane.
 
+Click the host icon button in the floating panel's title bar to switch between **Local** and a paired server. Each host keeps its own tabs and active selection; switching hosts or minimizing the panel leaves its terminals running. Remote terminals use the same tab, split, keyboard, reconnect, and mobile handoff controls as other terminals. After using a phone, choose **Restore** in the terminal to fit it to this computer again. Add servers under **Settings → Remote Orca Servers**.
+
 ## Quick Commands
 
 Quick Commands save terminal commands you run often, such as `npm run dev`, `pnpm test`, or a project-specific setup script. They can also save reusable agent prompts for launch-time prompt agents such as Claude and Codex. Create them from **Settings → Quick Commands** or the tab bar's **Add command** button, then run them from the Quick Commands split-button in a worktree tab bar or from the terminal context menu.

@@ -54,6 +54,7 @@ import {
   type RemoteRuntimeSnapshotOutcome
 } from '../../runtime/remote-runtime-terminal-multiplexer'
 import {
+  toRuntimeWorktreeId,
   toRuntimeTerminalWorktreeSelector,
   toRuntimeWorktreeSelector
 } from '../../runtime/runtime-worktree-selector'
@@ -1034,7 +1035,7 @@ export function createRemoteRuntimePtyTransport(
           terminal.handle === hostHandle &&
           terminal.tabId === hostTabId &&
           terminal.leafId === leafId &&
-          (!terminal.worktreeId || terminal.worktreeId === worktreeId)
+          (!terminal.worktreeId || terminal.worktreeId === toRuntimeWorktreeId(worktreeId))
         ) {
           adoptExecutionMetadata(terminal)
         }
@@ -1304,7 +1305,7 @@ export function createRemoteRuntimePtyTransport(
     if (
       terminal.tabId !== tabId ||
       terminal.leafId !== leafId ||
-      (terminal.worktreeId !== undefined && terminal.worktreeId !== worktreeId)
+      (terminal.worktreeId !== undefined && terminal.worktreeId !== toRuntimeWorktreeId(worktreeId))
     ) {
       throw new Error('terminal_owner_mismatch')
     }

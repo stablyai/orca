@@ -1,4 +1,4 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { getSelectedFloatingWorkspaceId } from '@/lib/floating-workspace-host'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { AppState } from './types'
 
@@ -14,6 +14,7 @@ type FloatingVisibleTabCountState = Pick<
 export type EmptyFloatingWorkspacePanelState = FloatingWorkspacePanelVisibilityState &
   FloatingVisibleTabCountState
 type FloatingVisibleTabCountCache = {
+  worktreeId: string
   terminalTabs: NonNullable<AppState['tabsByWorktree'][string]>
   browserTabs: NonNullable<AppState['browserTabsByWorktree'][string]>
   openFiles: AppState['openFiles']
@@ -38,14 +39,14 @@ export function selectFloatingWorkspacePanelVisible(
 }
 
 export function selectFloatingVisibleTabCount(state: FloatingVisibleTabCountState): number {
-  const terminalTabs = state.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_TABS
-  const browserTabs =
-    state.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_BROWSER_TABS
-  const unifiedTabs =
-    state.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_UNIFIED_TABS
+  const worktreeId = getSelectedFloatingWorkspaceId()
+  const terminalTabs = state.tabsByWorktree[worktreeId] ?? EMPTY_TABS
+  const browserTabs = state.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS
+  const unifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS
   const cached = floatingVisibleTabCountCache
   if (
     cached &&
+    cached.worktreeId === worktreeId &&
     cached.terminalTabs === terminalTabs &&
     cached.browserTabs === browserTabs &&
     cached.openFiles === state.openFiles &&
@@ -64,7 +65,7 @@ export function selectFloatingVisibleTabCount(state: FloatingVisibleTabCountStat
   }
   const editorIds = new Set<string>()
   for (const file of state.openFiles) {
-    if (file.worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+    if (file.worktreeId === worktreeId) {
       editorIds.add(file.id)
     }
   }
@@ -85,6 +86,7 @@ export function selectFloatingVisibleTabCount(state: FloatingVisibleTabCountStat
   }
 
   floatingVisibleTabCountCache = {
+    worktreeId,
     terminalTabs,
     browserTabs,
     openFiles: state.openFiles,

@@ -3,7 +3,8 @@
  * worktree/detected-worktree rows and their repos, with any disagreement
  * between owners reported as `ambiguous` rather than silently picked.
  */
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { floatingWorkspaceEnvironmentId } from '../../../shared/floating-workspace-id'
+import { toRuntimeExecutionHostId, getRepoExecutionHostId } from '../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import { addRoute, resolveExactWorktreeRoute, routeForOwner } from './worktree-owner-route'
 import {
@@ -26,6 +27,23 @@ export function resolveExplicitWorktreeOperationRouteResult(
   state: WorktreeOperationRouteState,
   worktreeId: string
 ): WorktreeOperationRouteResolution {
+  const environmentId = floatingWorkspaceEnvironmentId(worktreeId)
+  if (environmentId) {
+    if (
+      state.removedRuntimeEnvironmentIds?.has(environmentId) ||
+      (state.runtimeEnvironmentCatalogHydrated &&
+        !state.runtimeEnvironments?.some((host) => host.id === environmentId))
+    ) {
+      return { kind: 'missing' }
+    }
+    return {
+      kind: 'resolved',
+      route: {
+        executionHostId: toRuntimeExecutionHostId(environmentId),
+        runtimeEnvironmentId: environmentId
+      }
+    }
+  }
   const exactRoutes = new Map<string, WorktreeOperationRoute>()
   const exactRepoIds = new Set<string>()
   const indexedWorktree = resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId)

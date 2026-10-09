@@ -19503,6 +19503,12 @@
     "openFailed": "기본 앱에서 파일을 열 수 없습니다.",
     "openDefault": "기본 앱에서 열기"
   },
+  "remoteFloatingTerminal": {
+    "host": "원격 호스트",
+    "loading": "원격 세션을 불러오는 중…",
+    "reconnect": "다시 연결",
+    "unavailableHost": "연결할 수 없는 호스트"
+  },
   "projectBoard": {
     "noColumnField": "이 보드 보기에는 그룹화할 단일 선택 또는 반복 필드가 없어 Orca가 대신 항목을 나열합니다.",
     "noField": "{{field}} 없음"

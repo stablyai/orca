@@ -1,4 +1,4 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { getSelectedFloatingWorkspaceId } from './floating-workspace-host'
 import type { BrowserTab } from '../../../shared/browser-workspace-types'
 import type { TabGroup } from '../../../shared/tab-types'
 import { getGroupVisibleTabOrder } from '@/components/tab-bar/group-tab-order'
@@ -61,8 +61,8 @@ type EmptyFloatingWorkspaceCloseShortcutEvent = Pick<
 >
 
 function getActiveFloatingWorkspaceGroup(store: FloatingWorkspaceTabSwitchStore): TabGroup | null {
-  const groups = store.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []
-  const activeGroupId = store.activeGroupIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
+  const groups = store.groupsByWorktree[getSelectedFloatingWorkspaceId()] ?? []
+  const activeGroupId = store.activeGroupIdByWorktree[getSelectedFloatingWorkspaceId()]
   if (activeGroupId) {
     const activeGroup = groups.find((group) => group.id === activeGroupId)
     if (activeGroup) {
@@ -76,19 +76,21 @@ function getFloatingWorkspaceVisibleTabs(
   store: FloatingWorkspaceTabSwitchStore,
   group: TabGroup
 ): TypeCyclableTab[] {
-  const groupTabs = (store.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).filter(
+  const groupTabs = (store.unifiedTabsByWorktree[getSelectedFloatingWorkspaceId()] ?? []).filter(
     (tab) => tab.groupId === group.id
   )
   return getGroupVisibleTabOrder(
     group,
     groupTabs,
-    new Set((store.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).map((tab) => tab.id)),
+    new Set((store.tabsByWorktree[getSelectedFloatingWorkspaceId()] ?? []).map((tab) => tab.id)),
     new Set(
       store.openFiles
-        .filter((file) => file.worktreeId === FLOATING_TERMINAL_WORKTREE_ID)
+        .filter((file) => file.worktreeId === getSelectedFloatingWorkspaceId())
         .map((file) => file.id)
     ),
-    new Set((store.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).map((tab) => tab.id))
+    new Set(
+      (store.browserTabsByWorktree[getSelectedFloatingWorkspaceId()] ?? []).map((tab) => tab.id)
+    )
   )
 }
 
@@ -133,7 +135,7 @@ function getFloatingWorkspaceBrowserTab(
   browserTabId: string
 ): BrowserTab | null {
   return (
-    (store.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).find(
+    (store.browserTabsByWorktree[getSelectedFloatingWorkspaceId()] ?? []).find(
       (tab) => tab.id === browserTabId
     ) ?? null
   )
@@ -149,7 +151,7 @@ export function resolveFloatingWorkspaceBrowserWorkspaceId(
   sourceId: string
 ): string | null {
   return (
-    resolveBrowserWorkspaceOwner(store, sourceId, FLOATING_TERMINAL_WORKTREE_ID)?.workspaceId ??
+    resolveBrowserWorkspaceOwner(store, sourceId, getSelectedFloatingWorkspaceId())?.workspaceId ??
     null
   )
 }
@@ -214,7 +216,7 @@ export function resolveKeyboardWorkspaceId(
   activeWorktreeId: string | null
 ): string | null {
   return isEventTargetInsideFloatingWorkspacePanel(target)
-    ? FLOATING_TERMINAL_WORKTREE_ID
+    ? getSelectedFloatingWorkspaceId()
     : activeWorktreeId
 }
 

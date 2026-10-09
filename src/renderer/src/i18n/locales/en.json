@@ -19550,6 +19550,12 @@
     "openFailed": "Could not open this file in the default app.",
     "openDefault": "Open in Default App"
   },
+  "remoteFloatingTerminal": {
+    "host": "Remote host",
+    "loading": "Loading remote sessions…",
+    "reconnect": "Reconnect",
+    "unavailableHost": "Unavailable host"
+  },
   "workspace": {
     "links": {
       "foreignReview": "This review belongs to another repository. Add reviews from this workspace’s repository.",

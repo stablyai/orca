@@ -1,3 +1,4 @@
+import { floatingWorkspaceEnvironmentId } from '../../../shared/floating-workspace-id'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
@@ -60,6 +61,10 @@ export function getRuntimeEnvironmentIdForWorktree(
   state: WorktreeRuntimeOwnerState,
   worktreeId: string | null | undefined
 ): string | null {
+  const floatingOwner = floatingWorkspaceEnvironmentId(worktreeId)
+  if (floatingOwner) {
+    return floatingOwner
+  }
   if (!worktreeId) {
     return null
   }
@@ -113,6 +118,10 @@ export function getExplicitRuntimeEnvironmentIdForWorktree(
   state: WorktreeRuntimeOwnerState,
   worktreeId: string | null | undefined
 ): string | null {
+  const floatingOwner = floatingWorkspaceEnvironmentId(worktreeId)
+  if (floatingOwner) {
+    return floatingOwner
+  }
   if (!worktreeId) {
     return null
   }
@@ -179,6 +188,10 @@ export function getKnownExecutionHostIdForWorktree(
   state: WorktreeRuntimeOwnerState,
   worktreeId: string | null | undefined
 ): ExecutionHostId | null {
+  const floatingOwner = floatingWorkspaceEnvironmentId(worktreeId)
+  if (floatingOwner) {
+    return `runtime:${encodeURIComponent(floatingOwner)}`
+  }
   if (!worktreeId) {
     return 'local'
   }

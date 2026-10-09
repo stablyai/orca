@@ -111,10 +111,10 @@ export function buildMirroredEditorTabs(
   hasLocalDraft: (fileId: string) => boolean
 ): MirroredEditorTab[] {
   return snapshot.tabs.filter(isReadyEditorTab).map((tab, index) => {
-    const fileId = localEditorFileId(tab)
+    const fileId = localEditorFileId(tab, snapshot.worktree)
     const existingFile = worktreeOpenFileById.get(fileId)
     const existingUnifiedTab = existingTabIndex.getEditorUnifiedTab(fileId, tab.id)
-    const sourceFileId = editorSourceFileId(tab)
+    const sourceFileId = editorSourceFileId(tab, snapshot.worktree)
     const groupId = hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId
     // Why: the host publishes only its own store's flag and never learns of client edits, so
     // taking it verbatim would clear a client-dirty tab and the tab strip would then close it

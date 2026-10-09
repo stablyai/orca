@@ -8,13 +8,14 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { useAppStore } from '@/store'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { useFloatingWorkspaceId } from '@/lib/floating-workspace-host'
 import {
   DEFAULT_DISABLED_TUI_AGENTS,
   isTuiAgentEnabled
 } from '../../../../shared/tui-agent-selection'
 import { translate } from '@/i18n/i18n'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { FloatingTerminalHostSwitcher } from './FloatingTerminalHostSwitcher'
 
 type FloatingTerminalWindowControlsProps = {
   maximized: boolean
@@ -38,6 +39,7 @@ export function FloatingTerminalWindowControls({
   onToggleMaximized,
   onMinimize
 }: FloatingTerminalWindowControlsProps): React.JSX.Element {
+  const worktreeId = useFloatingWorkspaceId()
   const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
   const setActiveTabForWorktree = useAppStore((s) => s.setActiveTabForWorktree)
   const activateTab = useAppStore((s) => s.activateTab)
@@ -72,7 +74,7 @@ export function FloatingTerminalWindowControls({
     const result = launchAgentInNewTab({
       requestId: newAgentLaunchRequestId(),
       agent: defaultAgent,
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      worktreeId: worktreeId,
       launchSource: 'shortcut',
       // Why: `agent-auto-ack-targets` relies on the floating panel's active tab never becoming the
       // global `activeTabId`; activating here would also flip the main view off an open editor.
@@ -96,13 +98,14 @@ export function FloatingTerminalWindowControls({
     // activeTabId. setActiveTabForWorktree only writes activeTabIdByWorktree, so
     // the new agent tab would be appended but never selected/focused. activateTab
     // selects it within the group, matching the empty-state tab creators.
-    setActiveTabForWorktree(FLOATING_TERMINAL_WORKTREE_ID, result.surface.tabId)
+    setActiveTabForWorktree(worktreeId, result.surface.tabId)
     activateTab(result.surface.tabId)
     focusTerminalTabSurface(result.surface.tabId)
-  }, [activateTab, defaultAgent, defaultAgentLabel, setActiveTabForWorktree])
+  }, [activateTab, defaultAgent, defaultAgentLabel, setActiveTabForWorktree, worktreeId])
 
   return (
     <div className="flex items-center gap-1 px-2" data-floating-terminal-no-drag>
+      <FloatingTerminalHostSwitcher />
       {defaultAgent ? (
         <Tooltip>
           <TooltipTrigger asChild>

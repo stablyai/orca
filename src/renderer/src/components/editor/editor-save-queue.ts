@@ -1,9 +1,15 @@
+import { readFloatingMarkdownTab } from '@/runtime/floating-markdown-client'
+import { floatingWorkspaceEnvironmentId } from '../../../../shared/floating-workspace-id'
 import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { writeRuntimeFile } from '@/runtime/runtime-file-client'
-import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
+import {
+  assertEditorFileOperationCurrent,
+  captureEditorFileOperationProvenance,
+  getEditorFileOperationContext
+} from '@/lib/editor-file-operation-owner'
 import {
   canAutoSaveOpenFile,
   isAutosaveSuspendedForFile,
@@ -122,12 +128,45 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
             : undefined
         )
         try {
-          await writeRuntimeFile(
-            fileContext,
-            liveFile.filePath,
-            contentToSave,
-            editorTabFileAccess(state, liveFile)
-          )
+          const floatingOwner = floatingWorkspaceEnvironmentId(liveFile.worktreeId)
+          const provenance = floatingOwner
+            ? captureEditorFileOperationProvenance(state, liveFile.worktreeId, floatingOwner, true)
+            : null
+          const floatingDocument = floatingOwner
+            ? await readFloatingMarkdownTab({ ...fileContext, filePath: liveFile.filePath })
+            : null
+          if (floatingOwner) {
+            const current = store.getState().openFiles.find((openFile) => openFile.id === file.id)
+            if (
+              (saveGeneration.get(file.id) ?? 0) !== queuedGeneration ||
+              !current ||
+              current.worktreeId !== liveFile.worktreeId ||
+              current.runtimeEnvironmentId !== liveFile.runtimeEnvironmentId ||
+              current.filePath !== liveFile.filePath
+            ) {
+              clearSelfWrite(liveFile.filePath, liveFile.runtimeEnvironmentId)
+              return
+            }
+            if (provenance) {
+              assertEditorFileOperationCurrent(store.getState(), liveFile.worktreeId, provenance)
+            }
+          }
+          if (floatingDocument) {
+            if (
+              liveFile.lastKnownDiskSignature !==
+              getDiskBaselineSignature(floatingDocument.document.content)
+            ) {
+              throw new Error('The remote document changed. Reload it before saving your draft.')
+            }
+            await floatingDocument.save(contentToSave)
+          } else {
+            await writeRuntimeFile(
+              fileContext,
+              liveFile.filePath,
+              contentToSave,
+              editorTabFileAccess(state, liveFile)
+            )
+          }
         } catch (error) {
           // Why: the self-write stamp is only valid after a real write; clear on failure so it can't suppress a real update.
           clearSelfWrite(liveFile.filePath, liveFile.runtimeEnvironmentId)

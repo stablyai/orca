@@ -1,15 +1,23 @@
+import { floatingWorkspaceEnvironmentId } from '../../../shared/floating-workspace-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../shared/ephemeral-setup-terminal-worktree-id'
 
 const RUNTIME_WORKTREE_ID_SELECTOR_PREFIX = 'id:'
 
-/** Address a raw worktree id as a runtime `id:` selector; passes through empty or already-prefixed values. */
+/** Client-only floating host namespaces never cross the runtime boundary. */
+export function toRuntimeWorktreeId(worktreeId: string): string {
+  return floatingWorkspaceEnvironmentId(worktreeId) ? FLOATING_TERMINAL_WORKTREE_ID : worktreeId
+}
+
 export function toRuntimeWorktreeSelector(worktreeId: string): string {
   const trimmed = worktreeId.trim()
-  if (!trimmed || trimmed.startsWith(RUNTIME_WORKTREE_ID_SELECTOR_PREFIX)) {
+  if (!trimmed) {
     return trimmed
   }
-  return `${RUNTIME_WORKTREE_ID_SELECTOR_PREFIX}${trimmed}`
+  const id = trimmed.startsWith(RUNTIME_WORKTREE_ID_SELECTOR_PREFIX)
+    ? trimmed.slice(RUNTIME_WORKTREE_ID_SELECTOR_PREFIX.length)
+    : trimmed
+  return `${RUNTIME_WORKTREE_ID_SELECTOR_PREFIX}${toRuntimeWorktreeId(id)}`
 }
 
 /**

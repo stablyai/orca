@@ -1,3 +1,4 @@
+import { assertFloatingFileOwner, readFloatingMarkdownTab } from './floating-markdown-client'
 import type {
   RuntimeFilePreviewResult,
   RuntimeFileReadChunkResult,
@@ -44,6 +45,7 @@ export async function readRuntimeFileContent({
   includeLocalLogMetadata,
   access
 }: RuntimeFileReadArgs): Promise<RuntimeReadableFileContent> {
+  assertFloatingFileOwner({ settings, worktreeId })
   assertExternalSshReadOwnership(settings, connectionId, expectedExternalSshTargetId)
   const target = getActiveRuntimeTarget(settings)
   if (target.kind !== 'environment' || !worktreeId) {
@@ -53,6 +55,10 @@ export async function readRuntimeFileContent({
       includeLocalLogMetadata,
       ...localAccess(connectionId, access)
     })
+  }
+  const floatingDocument = await readFloatingMarkdownTab({ settings, worktreeId, filePath })
+  if (floatingDocument) {
+    return { content: floatingDocument.document.content, isBinary: false }
   }
   if (!canReadRelativeRuntimeFile(relativePath)) {
     throw new Error('Remote file is outside the owning runtime worktree')

@@ -1,3 +1,5 @@
+import { floatingWorkspaceEnvironmentId } from '../../../../shared/floating-workspace-id'
+import { buildOwnedEditorFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionAgentTab
@@ -141,15 +143,28 @@ export function buildMirroredAgentTabs(
   })
 }
 
-export function localEditorFileId(tab: ReadyEditorSurface): string {
-  if (tab.type === 'markdown' && tab.mode === 'markdown-preview') {
-    return `markdown-preview::${tab.sourceFilePath}`
-  }
-  return tab.filePath
+function scopeFloatingEditorFileId(fileId: string, worktreeId: string | undefined): string {
+  const environmentId = floatingWorkspaceEnvironmentId(worktreeId)
+  return worktreeId && environmentId
+    ? buildOwnedEditorFileId(fileId, worktreeId, environmentId)
+    : fileId
 }
 
-export function editorSourceFileId(tab: ReadyEditorSurface): string | undefined {
-  return tab.type === 'markdown' && tab.mode === 'markdown-preview' ? tab.sourceFilePath : undefined
+export function localEditorFileId(tab: ReadyEditorSurface, worktreeId?: string): string {
+  const fileId =
+    tab.type === 'markdown' && tab.mode === 'markdown-preview'
+      ? `markdown-preview::${tab.sourceFilePath}`
+      : tab.filePath
+  return scopeFloatingEditorFileId(fileId, worktreeId)
+}
+
+export function editorSourceFileId(
+  tab: ReadyEditorSurface,
+  worktreeId?: string
+): string | undefined {
+  return tab.type === 'markdown' && tab.mode === 'markdown-preview'
+    ? scopeFloatingEditorFileId(tab.sourceFilePath, worktreeId)
+    : undefined
 }
 
 export function isRuntimeTerminalTabForEnvironment(
