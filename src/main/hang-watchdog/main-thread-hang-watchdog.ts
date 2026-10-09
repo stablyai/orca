@@ -1,5 +1,7 @@
 import { Worker } from 'node:worker_threads'
 import { app } from 'electron'
+import { subscribeSpanActivity } from '../observability/tracer'
+import { redactString } from '../observability/redactor'
 import { hangDetectionMarkerPath } from './hang-detection-marker'
 import { resolveHangWatchdogWorkerPath } from './hang-watchdog-worker-path'
 import {
@@ -23,7 +25,7 @@ function positiveTiming(value: string | undefined, fallback: number): number {
 export function installMainThreadHangWatchdog(options: {
   userDataPath: string
 }): MainThreadHangWatchdogHandle | null {
-  if (process.platform !== 'darwin') {
+  if (process.platform !== 'darwin' && process.platform !== 'win32') {
     return null
   }
   // Why: dev main threads pause in debuggers routinely; watch packaged builds only unless forced.
@@ -42,7 +44,7 @@ export function installMainThreadHangWatchdog(options: {
   }
   let worker: Worker
   try {
-    // Why: the worker survives an AppKit main-thread deadlock without another Electron process.
+    // The worker can record a stalled main thread without another Electron process.
     worker = new Worker(workerPath, {
       name: 'orca-main-thread-hang-watchdog',
       workerData
@@ -68,11 +70,15 @@ export function installMainThreadHangWatchdog(options: {
   const heartbeatTimer = setInterval(() => {
     postMessage({ type: 'heartbeat' })
   }, HANG_WATCHDOG_HEARTBEAT_INTERVAL_MS)
+  const unsubscribeSpans = subscribeSpanActivity(({ spanId, name, active }) => {
+    postMessage({ type: 'span', spanId, name: redactString(name).slice(0, 120), active })
+  })
   const stop = (): void => {
     if (stopped) {
       return
     }
     stopped = true
+    unsubscribeSpans()
     // Drop the app-level callback as soon as this watchdog is retired so a
     // closed worker cannot keep its closure (and worker handle) alive.
     app.off('will-quit', stop)
@@ -81,6 +87,7 @@ export function installMainThreadHangWatchdog(options: {
   }
   worker.once('exit', () => {
     stopped = true
+    unsubscribeSpans()
     app.off('will-quit', stop)
     clearInterval(heartbeatTimer)
   })

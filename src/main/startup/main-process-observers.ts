@@ -97,6 +97,16 @@ export function initializeMainProcessObservers(): void {
   // Honors DO_NOT_TRACK / ORCA_TELEMETRY_DISABLED / ORCA_DIAGNOSTICS_DISABLED
   // / CI internally; those gates do not need to be re-checked here.
   initObservability()
+  if (state.hangDetection) {
+    recordDurableCrashBreadcrumb('main_thread_hang_detected', {
+      unresponsiveMs: state.hangDetection.unresponsiveMs,
+      previousPid: state.hangDetection.parentPid,
+      selfRecovered: state.hangDetection.selfRecovered,
+      ...(state.hangDetection.activeSpanNames
+        ? { activeSpanNames: state.hangDetection.activeSpanNames.join(', ') }
+        : {})
+    })
+  }
   recordDurableCrashBreadcrumb('main_process_lifecycle_started', {
     packaged: app.isPackaged,
     platform: process.platform

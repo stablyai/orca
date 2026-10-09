@@ -52,6 +52,22 @@ describe('hang detection marker', () => {
     expect(consumeHangDetectionMarker(hangDetectionMarkerPath(dir))).toBeNull()
   })
 
+  it('bounds and validates optional span names from a prior launch', () => {
+    const markerPath = hangDetectionMarkerPath(dir)
+    writeFileSync(
+      markerPath,
+      JSON.stringify({
+        detectedAt: 1,
+        parentPid: 2,
+        unresponsiveMs: 45_000,
+        activeSpanNames: [null, 42, ...Array.from({ length: 80 }, () => 'x'.repeat(200))]
+      })
+    )
+    const names = consumeHangDetectionMarker(markerPath)?.activeSpanNames
+    expect(names).toHaveLength(64)
+    expect(names?.every((name) => name.length === 120)).toBe(true)
+  })
+
   // Why: a marker written by the detect leg has no selfRecovered field until the resolve leg
   // rewrites it, and "never resolved" is the conservative reading of its absence.
   it('treats a missing selfRecovered flag as an unresolved hang', () => {

@@ -32,6 +32,7 @@ vi.mock('electron', () => ({
 }))
 
 import { installMainThreadHangWatchdog } from './main-thread-hang-watchdog'
+import { setActiveSink, startSpan } from '../observability/tracer'
 
 function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
   const original = process.platform
@@ -67,20 +68,55 @@ describe('installMainThreadHangWatchdog', () => {
   })
 
   afterEach(() => {
+    for (const [event, listener] of appMock.on.mock.calls) {
+      if (event === 'will-quit') {
+        listener()
+      }
+    }
     vi.useRealTimers()
     delete process.env.ORCA_HANG_WATCHDOG_FORCE
     delete process.env.ORCA_HANG_WATCHDOG_TIMEOUT_MS
     delete process.env.ORCA_HANG_WATCHDOG_CHECK_INTERVAL_MS
   })
 
-  it('is a no-op off macOS', () => {
-    expect(
-      withPlatform('win32', () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
-    ).toBeNull()
+  it('is a no-op on Linux', () => {
     expect(
       withPlatform('linux', () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
     ).toBeNull()
     expect(workerState.calls).toHaveLength(0)
+  })
+
+  it('records Windows span activity and removes the subscription on stop', () => {
+    const worker = fakeWorker()
+    workerState.instance = worker
+    const handle = withPlatform('win32', () =>
+      installMainThreadHangWatchdog({ userDataPath: '/ud' })
+    )
+    setActiveSink({ push: vi.fn(), flush: vi.fn(), close: vi.fn() })
+    try {
+      expect(handle).not.toBeNull()
+      const span = startSpan('git.exec', { attributes: { command: 'private argument' } })
+      expect(worker.postMessage).toHaveBeenLastCalledWith({
+        type: 'span',
+        spanId: span.spanId,
+        name: 'git.exec',
+        active: true
+      })
+      span.end()
+      expect(worker.postMessage).toHaveBeenLastCalledWith({
+        type: 'span',
+        spanId: span.spanId,
+        name: 'git.exec',
+        active: false
+      })
+      handle?.stop()
+      worker.postMessage.mockClear()
+      startSpan('after-stop').end()
+      expect(worker.postMessage).not.toHaveBeenCalled()
+    } finally {
+      handle?.stop()
+      setActiveSink(null)
+    }
   })
 
   it('is a no-op in unpackaged builds unless forced', () => {

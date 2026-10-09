@@ -1,5 +1,6 @@
 import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { HANG_WATCHDOG_MAX_SPANS } from './hang-watchdog-worker-protocol'
 
 // Why: written by the watchdog worker when main-thread heartbeats stop, and rewritten if
 // they resume; consumed on the next launch to report how long the stall lasted and whether it ever
@@ -10,6 +11,7 @@ export type HangDetectionMarker = {
   parentPid: number
   unresponsiveMs: number
   selfRecovered: boolean
+  activeSpanNames?: string[]
 }
 
 export function hangDetectionMarkerPath(userDataPath: string): string {
@@ -46,7 +48,15 @@ export function consumeHangDetectionMarker(markerPath: string): HangDetectionMar
       parentPid: parsed.parentPid,
       unresponsiveMs: parsed.unresponsiveMs,
       // Why: a marker left by the detect leg and never rewritten means the stall never cleared.
-      selfRecovered: parsed.selfRecovered === true
+      selfRecovered: parsed.selfRecovered === true,
+      ...(Array.isArray(parsed.activeSpanNames)
+        ? {
+            activeSpanNames: parsed.activeSpanNames
+              .filter((name): name is string => typeof name === 'string')
+              .slice(0, HANG_WATCHDOG_MAX_SPANS)
+              .map((name) => name.slice(0, 120))
+          }
+        : {})
     }
   } catch {
     return null

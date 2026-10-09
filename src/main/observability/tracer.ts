@@ -88,6 +88,25 @@ const noopSpan: ActiveSpan = {
 
 let activeSink: TracerSink | null = null
 const contextStorage = new AsyncLocalStorage<SpanContext>()
+export type SpanActivity = { spanId: string; name: string; active: boolean }
+const spanActivityListeners = new Set<(activity: SpanActivity) => void>()
+
+export function subscribeSpanActivity(listener: (activity: SpanActivity) => void): () => void {
+  spanActivityListeners.add(listener)
+  return () => {
+    spanActivityListeners.delete(listener)
+  }
+}
+
+function publishSpanActivity(activity: SpanActivity): void {
+  for (const listener of spanActivityListeners) {
+    try {
+      listener(activity)
+    } catch {
+      // Diagnostic observers cannot interrupt the operation being traced.
+    }
+  }
+}
 
 // 16-byte traceId / 8-byte spanId — compact hex IDs keep local NDJSON
 // records close to standard trace shapes without introducing UUID dashes.
@@ -187,6 +206,7 @@ export function startSpan(
   const traceId = parent?.traceId ?? genTraceId()
   const spanId = genSpanId()
   const startTimeUnixNano = nowUnixNano()
+  publishSpanActivity({ spanId, name, active: true })
 
   const pending: PendingSpan = {
     name,
@@ -206,6 +226,7 @@ export function startSpan(
       return
     }
     pending.ended = true
+    publishSpanActivity({ spanId, name, active: false })
     pending.exit = exit
     const endTimeUnixNano = nowUnixNano()
     const durationMs = Number(endTimeUnixNano - pending.startTimeUnixNano) / 1_000_000
