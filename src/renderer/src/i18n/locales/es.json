@@ -3263,6 +3263,7 @@
                 "ce8248b835": "Ruta del worktree no disponible.",
                 "internalTooManyPaths": "El drop contiene demasiadas rutas para pegarlas de forma segura en el terminal.",
                 "internalPathsTooLarge": "La lista de rutas del drop es demasiado grande para pegarla de forma segura en el terminal.",
+                "internalHostMismatch": "Arrastra archivos del mismo host que este terminal.",
                 "b4cf68e889": "Se omitió {{value0}} {{value1}}.",
                 "writeTimeout": "Se canceló el drop de archivos: el terminal no aceptó la ruta antes del tiempo límite de seguridad.",
                 "writeRejected": "Se canceló el drop de archivos: el terminal no pudo aceptar la ruta."
