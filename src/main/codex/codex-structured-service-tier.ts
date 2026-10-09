@@ -18,8 +18,9 @@ function text(value: unknown): string | null {
 export function readCodexServiceTiers(
   row: Record<string, unknown>
 ): AgentSessionOptionChoice[] | undefined {
-  if (Array.isArray(row.serviceTiers)) {
-    return row.serviceTiers.flatMap((value) => {
+  const modern = Array.isArray(row.serviceTiers) ? row.serviceTiers : []
+  if (modern.length > 0) {
+    return modern.flatMap((value) => {
       const tier = readRecord(value)
       const id = text(tier.id)
       const name = text(tier.name)
@@ -27,14 +28,14 @@ export function readCodexServiceTiers(
       return id && name ? [{ value: id, label: name, ...(description ? { description } : {}) }] : []
     })
   }
-  // Older app-servers list bare ids instead.
-  if (Array.isArray(row.additionalSpeedTiers)) {
+  // Older catalogs list bare ids instead, sometimes beside an empty `serviceTiers`.
+  if (Array.isArray(row.additionalSpeedTiers) && row.additionalSpeedTiers.length > 0) {
     return row.additionalSpeedTiers.flatMap((value) => {
       const id = text(value)
       return id ? [{ value: id, label: id.toLowerCase() === 'fast' ? 'Fast' : id }] : []
     })
   }
-  return undefined
+  return Array.isArray(row.serviceTiers) || Array.isArray(row.additionalSpeedTiers) ? [] : undefined
 }
 
 /** The tier an older client's Fast toggle stands for. */
@@ -83,14 +84,13 @@ export function reportedCodexThreadOptions(
   }
 }
 
-/** A tier the model does not list, picked or reported by the thread, falls back to standard, so
- *  the picker never shows a value it cannot offer. Unknown tiers (no listing) are kept. */
+/** A picked tier the model does not list falls back to standard. A tier Codex reports for the
+ *  thread is Codex's to judge (it accepts unlisted ones such as `flex`), so it is never rewritten. */
 export function dropUnlistedCodexServiceTier(
   session: CodexSession,
   model: Pick<AgentSessionModelOption, 'serviceTiers'> | undefined
 ): void {
-  const tier =
-    session.options.get('serviceTier') ?? session.reportedOptions.serviceTier ?? undefined
+  const tier = session.options.get('serviceTier')
   if (
     tier !== undefined &&
     tier !== CODEX_DEFAULT_SERVICE_TIER &&

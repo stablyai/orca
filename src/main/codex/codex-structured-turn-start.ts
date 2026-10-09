@@ -145,7 +145,7 @@ export async function startCodexTurn(
       threadId: host.threadId,
       clientUserMessageId: input.clientMessageId,
       input: turnInputFor(input.body),
-      // A tier the model no longer lists is Codex's to drop, with its own warning.
+      // Codex omits a tier the model does not list.
       ...Object.fromEntries(host.options)
     },
     { timeoutMs: input.timeoutMs }

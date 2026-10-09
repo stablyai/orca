@@ -444,6 +444,29 @@ describe('structured Codex session options', () => {
     })
   })
 
+  it('falls back to the legacy Fast tier beside an empty service tier list', async () => {
+    const result = await readCodexStructuredSessionOptions({
+      connection: {
+        request: vi.fn(async () => ({
+          data: [
+            {
+              model: 'gpt-live',
+              supportedReasoningEfforts: [],
+              serviceTiers: [],
+              additionalSpeedTiers: ['fast']
+            }
+          ],
+          nextCursor: null
+        }))
+      },
+      current: { model: 'gpt-live' }
+    })
+    expect(result.models[0]).toMatchObject({
+      supportsFastMode: true,
+      serviceTiers: [{ value: 'fast', label: 'Fast' }]
+    })
+  })
+
   it('uses only the bounded legacy Fast tier value the provider advertised', async () => {
     const result = await readCodexStructuredSessionOptions({
       connection: {
@@ -567,35 +590,34 @@ describe('Codex service tiers', () => {
   })
 })
 
-describe('Codex reported tier on a model switch', () => {
-  it('drops a tier the thread reported when the next model does not list it', async () => {
-    const session = optionSession(
-      vi.fn(async () => ({
-        data: [
-          {
-            model: 'gpt-6.1-sol',
-            supportedReasoningEfforts: [],
-            serviceTiers: [{ id: 'ultrafast', name: 'Ultrafast' }]
-          },
-          {
-            model: 'gpt-6-luna',
-            supportedReasoningEfforts: [],
-            serviceTiers: [{ id: 'priority', name: 'Fast' }]
-          }
-        ],
-        nextCursor: null
-      }))
-    )
-    session.reportedOptions = {
-      model: 'gpt-6.1-sol',
-      serviceTier: 'ultrafast',
-      serviceTierKnown: true
-    }
+describe('Codex reported tier', () => {
+  const listing = {
+    data: [
+      {
+        model: 'gpt-6.1-sol',
+        supportedReasoningEfforts: [],
+        serviceTiers: [{ id: 'ultrafast', name: 'Ultrafast' }]
+      },
+      {
+        model: 'gpt-6-luna',
+        supportedReasoningEfforts: [],
+        serviceTiers: [{ id: 'priority', name: 'Fast' }]
+      }
+    ],
+    nextCursor: null
+  }
+
+  it('never rewrites a tier Codex reports, such as a configured Flex', async () => {
+    const session = optionSession(vi.fn(async () => listing))
+    session.reportedOptions = { model: 'gpt-6.1-sol', serviceTier: 'flex', serviceTierKnown: true }
     await primePicker(session)
 
+    await expect(readLiveCodexSessionOptions(session, undefined)).resolves.toMatchObject({
+      current: { serviceTier: 'flex' }
+    })
     await expect(
       applyCodexStructuredSessionOption(session, 'model', 'gpt-6-luna')
-    ).resolves.toMatchObject({ model: 'gpt-6-luna', serviceTier: 'default' })
+    ).resolves.toEqual({ model: 'gpt-6-luna' })
   })
 })
 
