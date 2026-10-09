@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
-import { parsePiModels } from '../../shared/commit-message-model-parsers'
+import { parsePiModelList } from '../../shared/pi-model-list-probe'
 import type { resolveCliCommand } from '../../shared/node-cli-command-resolution'
 import type { probeAgentCliVersion } from '../agent-cli-version-probe'
 import type {
@@ -26,7 +26,7 @@ export type PiModelCatalogProbeDeps = {
 /** Pi's table names each model and whether it reasons; its live thinking menu is model-specific,
  *  so a reasoning model lists the levels every map keeps and names no default. */
 export function piModelCatalogFromListing(stdout: string): AgentModelCatalogSuccess['models'] {
-  return parsePiModels(stdout).map((model) => ({
+  return parsePiModelList(stdout).map((model) => ({
     id: model.id,
     label: model.label,
     isDefault: false,

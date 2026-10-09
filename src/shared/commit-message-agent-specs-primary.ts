@@ -5,6 +5,7 @@ import type {
   ThinkingLevel
 } from './commit-message-agent-spec'
 import { CLAUDE_MODEL_LIST_ARGS, CLAUDE_MODEL_LIST_STDIN } from './claude-model-list-probe'
+import { PI_MODEL_LIST_ARGS } from './pi-model-list-probe'
 
 type PrimaryAgentSpecDeps = {
   CLAUDE_THINKING_LEVELS: ThinkingLevel[]
@@ -232,7 +233,7 @@ export function buildPrimaryCommitMessageAgentSpecs({
         ...(thinkingLevel ? ['--thinking', thinkingLevel] : [])
       ],
       modelSource: 'dynamic',
-      modelDiscovery: { binary: 'pi', args: ['--list-models'], parse: parsePiModels },
+      modelDiscovery: { binary: 'pi', args: PI_MODEL_LIST_ARGS, parse: parsePiModels },
       models: [
         {
           // Why: the unqualified choice lets Pi use its configured provider and

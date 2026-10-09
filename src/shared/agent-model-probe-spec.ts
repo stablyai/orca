@@ -1,4 +1,5 @@
 import { getCommitMessageAgentSpec, type CommitMessageAgentSpec } from './commit-message-agent-spec'
+import { DEVIN_MODEL_LIST_ARGS, parseDevinModelList } from './devin-model-list-probe'
 import { GROK_MODEL_LIST_ARGS, parseGrokModelList } from './grok-model-list-probe'
 import { OMP_MODEL_LIST_ARGS, parseOmpModelList } from './omp-model-list-probe'
 import type { TuiAgent } from './tui-agent'
@@ -36,6 +37,21 @@ const MODEL_DISCOVERY_ONLY_SPECS: Partial<Record<TuiAgent, AgentModelProbeSpec>>
     },
     // Why: nothing is available on every OMP install, so there is no seed and no
     // default to name; discovery's first row stands in when a default is required.
+    models: [],
+    defaultModelId: ''
+  },
+  devin: {
+    id: 'devin',
+    label: 'Devin',
+    binary: 'devin',
+    modelSource: 'dynamic',
+    modelDiscovery: {
+      binary: 'devin',
+      args: DEVIN_MODEL_LIST_ARGS,
+      parse: parseDevinModelList
+    },
+    // Why: a Devin account's model list is account-scoped, so there is no seed
+    // and no default to name; `agent.model` in the user's config stays in charge.
     models: [],
     defaultModelId: ''
   }

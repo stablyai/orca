@@ -107,6 +107,74 @@ describe('tui agent startup session options', () => {
     expect(plan?.sessionOptions).toEqual({ model: 'zai-coding-plan/glm-5.3-flash' })
   })
 
+  it('launches a Pi worker with a model and thinking level without persisting them', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'pi',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      sessionOptions: { model: 'google/gemini-3-pro', effort: 'xhigh' },
+      sessionOptionsOverrideAgentArgs: true,
+      agentArgs: '--continue'
+    })
+    expect(plan?.launchCommand).toBe(
+      "pi '--continue' '--model' 'google/gemini-3-pro' '--thinking' 'xhigh'"
+    )
+    expect(plan?.launchConfig.agentCommand).toBe("pi '--continue'")
+    expect(plan?.sessionOptions).toEqual({ model: 'google/gemini-3-pro', effort: 'xhigh' })
+  })
+
+  it('replaces configured Pi model and thinking args instead of sending the flags twice', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'pi',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      sessionOptions: { model: 'google/gemini-3-pro', effort: 'high' },
+      sessionOptionsOverrideAgentArgs: true,
+      agentArgs: '--model openai-codex/gpt-6-luna --thinking low --continue'
+    })
+    expect(plan?.launchCommand).toBe(
+      "pi '--continue' '--model' 'google/gemini-3-pro' '--thinking' 'high'"
+    )
+    expect(plan?.sessionOptions).toEqual({ model: 'google/gemini-3-pro', effort: 'high' })
+  })
+
+  it('launches a Devin worker model while keeping its configured permission args', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'devin',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      sessionOptions: { model: 'swe-2-medium' },
+      sessionOptionsOverrideAgentArgs: true,
+      agentArgs: '--permission-mode bypass --respect-workspace-trust false --model swe-2-max'
+    })
+    expect(plan?.launchCommand).toBe(
+      "devin '--permission-mode' 'bypass' '--respect-workspace-trust' 'false' '--model' 'swe-2-medium'"
+    )
+    expect(plan?.sessionOptions).toEqual({ model: 'swe-2-medium' })
+  })
+
+  it('sends a Devin model before a prompt terminator', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'devin',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      sessionOptions: { model: 'swe-2-medium' },
+      sessionOptionsOverrideAgentArgs: true,
+      agentArgs: '--permission-mode bypass -- literal prompt'
+    })
+    expect(plan?.launchCommand).toBe(
+      "devin '--permission-mode' 'bypass' '--model' 'swe-2-medium' '--' 'literal' 'prompt'"
+    )
+  })
+
   it('inserts worker preferences before an argument terminator', () => {
     const plan = buildAgentStartupPlan({
       agent: 'codex',

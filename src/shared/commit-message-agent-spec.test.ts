@@ -16,9 +16,9 @@ import {
   parseClaudeModels,
   parseCodexModels,
   parseCursorModels,
-  parseLineModels,
-  parsePiModels
+  parseLineModels
 } from './commit-message-model-parsers'
+import { parsePiModelList } from './pi-model-list-probe'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -458,16 +458,18 @@ describe('model discovery parsers', () => {
       'github-copilot  gpt-4o                  128K     4.1K     no        yes'
     ].join('\n')
 
-    expect(parsePiModels(output)).toEqual([
+    expect(parsePiModelList(output)).toEqual([
       {
         id: 'github-copilot/gpt-5.4-mini',
         label: 'Github Copilot GPT 5.4 Mini',
         thinkingLevels: [
           { id: 'off', label: 'Off' },
+          { id: 'minimal', label: 'Minimal' },
           { id: 'low', label: 'Low' },
           { id: 'medium', label: 'Medium' },
           { id: 'high', label: 'High' },
-          { id: 'xhigh', label: 'Extra High' }
+          { id: 'xhigh', label: 'Extra High' },
+          { id: 'max', label: 'Max' }
         ],
         defaultThinkingLevel: 'low'
       },
@@ -549,7 +551,7 @@ describe('model discovery parsers', () => {
       }
     ])
     expect(
-      parsePiModels(
+      parsePiModelList(
         `${noise}provider model context max-out thinking images\r\ngithub-copilot gpt-5.4-mini 400K 128K yes yes\r\n`
       )[0]?.id
     ).toBe('github-copilot/gpt-5.4-mini')
