@@ -4,9 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type WebSocket from 'ws'
 import { z } from 'zod'
 import type { RelayAssignmentStore } from './assignment-store.js'
+import { CELL_FLAG_DEFAULTS, type CellFlags } from './cell-flags.js'
 import type { RelayConfig } from './config.js'
 import type { RelayCredentialStore } from './credential-store.js'
 import { HostSessionRegistry, type HostSession } from './host-session-registry.js'
+import type { AppliedControlFlags } from './relay-control-flag-channel.js'
 import type { RelayRuntimeObserver } from './relay-observability.js'
 import type { RelayTokenClaims } from './relay-token-verifier.js'
 import { ProcessQueuedByteBudget } from './splice-forwarder.js'
@@ -62,6 +64,12 @@ const SeatFeedReplySchema = z.object({
     controls: z.number(),
     seats: z.number()
   }),
+  flagsApplied: z
+    .object({
+      generation: z.number(),
+      flags: z.object({ readinessLocal: z.boolean(), ticketCheck: z.enum(['off', 'shadow']) })
+    })
+    .optional(),
   seq: z.number(),
   changes: z.array(SeatChangeSchema).optional(),
   more: z.boolean().optional(),
@@ -123,7 +131,7 @@ function hostIdentity(index: number, exp = 4_102_444_800): RelayTokenClaims {
 // What a host's auth-refresh token verifies as.
 const verifyRelayToken = vi.fn<(token: string) => Promise<RelayTokenClaims | null>>()
 
-function createCell(relayConfig = config()) {
+function createCell(relayConfig = config(), cellFlags?: () => AppliedControlFlags<CellFlags>) {
   const assignments = {
     activateControl: vi.fn().mockResolvedValue('control:production-gce-c7:1'),
     markMigrationTargetRegistered: vi.fn().mockResolvedValue(undefined),
@@ -184,6 +192,7 @@ function createCell(relayConfig = config()) {
     drain: (graceMs, options) => registry.drain(graceMs, options ?? {}),
     cellIncarnation: incarnation,
     cellSeatFeed: (sinceSeq) => registry.seatFeed(sinceSeq),
+    cellFlags,
     isDraining: () => registry.isDraining(),
     runtimeCounts: () => ({
       totalConnections: 0,
@@ -318,6 +327,14 @@ describe('cell seat feed', () => {
     const body = await read('22222222-2222-4222-8222-222222222222:1')
     expect(body.full).toHaveLength(1)
     expect((await poll('not a cursor')).status).toBe(400)
+  })
+
+  it('reports the applied cell flags, so a flip can be read back through the feed', async () => {
+    let applied: AppliedControlFlags<CellFlags> = { generation: 0, flags: CELL_FLAG_DEFAULTS }
+    const { read } = createCell(config(), () => applied)
+    expect((await read()).flagsApplied).toEqual({ generation: 0, flags: CELL_FLAG_DEFAULTS })
+    applied = { generation: 12, flags: { readinessLocal: true, ticketCheck: 'shadow' } }
+    expect((await read()).flagsApplied).toEqual(applied)
   })
 
   it('accepts only the directors rehome identity, verified once per poll', async () => {

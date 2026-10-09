@@ -39,6 +39,8 @@ import { AssignmentRejectionLogWindow } from './assignment-rejection-log-window.
 import { CELL_ADMISSION_STATES } from './cell-admission-selector.js'
 import { registerCellSeatFeedRoute } from './cell-seat-feed-route.js'
 import type { CellSeatFeedPage } from './cell-seat-log.js'
+import type { CellFlags } from './cell-flags.js'
+import type { AppliedControlFlags } from './relay-control-flag-channel.js'
 import { RELAY_MAX_CELL_CAPACITY_REQUESTS, type RelayConfig } from './config.js'
 import type { RelayCredentialStore } from './credential-store.js'
 import { isRelayDatabaseTransientError } from './database.js'
@@ -115,6 +117,7 @@ export function createRelayApp(
     regionalRehomeTrustProbeHostExists?: (input: { userId: string; relayHostId: string }) => boolean
     cellIncarnation?: string
     cellSeatFeed?: (sinceSeq: number | null) => CellSeatFeedPage
+    cellFlags?: () => AppliedControlFlags<CellFlags>
     isDraining?: () => boolean
     regionalRehomeSafetySnapshot?: () => RegionalRehomeSafetySnapshot
     runtimeCounts?: () => RelayRuntimeCounts
@@ -290,7 +293,8 @@ export function createRelayApp(
     cellIncarnation: operations.cellIncarnation,
     seatFeed: operations.cellSeatFeed,
     isDraining: operations.isDraining,
-    runtimeCounts: operations.runtimeCounts
+    runtimeCounts: operations.runtimeCounts,
+    cellFlags: operations.cellFlags
   })
 
   // Not /healthz: Google Front End reserves that path before the container.
