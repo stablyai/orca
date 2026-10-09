@@ -15,6 +15,7 @@ type TestWatchTarget = {
 const subscriptionState = vi.hoisted(() => ({
   snapshot: { targets: [] as TestWatchTarget[], targetsKey: '' },
   subscribeRuntimeFileChanges: vi.fn(),
+  handleFsChanged: vi.fn(),
   disposeEventHandler: vi.fn()
 }))
 
@@ -37,7 +38,7 @@ vi.mock('./editor-external-watch-targets', () => ({
 }))
 vi.mock('./editor-external-watch-event-reconciliation', () => ({
   buildEditorExternalWatchEventHandler: vi.fn(() => ({
-    handleFsChanged: vi.fn(),
+    handleFsChanged: subscriptionState.handleFsChanged,
     dispose: subscriptionState.disposeEventHandler
   })),
   collectOverflowEditorExternalReloadTargets: vi.fn()
@@ -47,6 +48,7 @@ vi.mock('./editor-external-watch-disk-verification', () => ({
 }))
 
 import { useEditorExternalWatch } from './useEditorExternalWatch'
+import { buildEditorExternalWatchEventHandler } from './editor-external-watch-event-reconciliation'
 
 function WatchProbe(): null {
   useEditorExternalWatch()
@@ -134,6 +136,66 @@ describe('useEditorExternalWatch subscriptions', () => {
     expect(subscriptionState.disposeEventHandler).toHaveBeenCalledTimes(1)
   })
 
+  it.each(['first', 'second'])(
+    'keeps a shared watch after removing the %s owner',
+    async (removedOwner) => {
+      const targets: TestWatchTarget[] = ['first', 'second'].map((worktreeId) => ({
+        worktreeId,
+        worktreePath: '/shared',
+        connectionId: undefined,
+        runtimeEnvironmentId: null
+      }))
+      subscriptionState.snapshot = { targets, targetsKey: 'both-owners' }
+      await act(async () => root.render(createElement(WatchProbe)))
+      expect(watchWorktree).toHaveBeenCalledTimes(1)
+
+      subscriptionState.snapshot = {
+        targets: targets.filter((target) => target.worktreeId !== removedOwner),
+        targetsKey: 'one-owner'
+      }
+      await act(async () => root.render(createElement(WatchProbe)))
+      expect(unwatchWorktree).not.toHaveBeenCalled()
+      expect(watchWorktree).toHaveBeenCalledTimes(1)
+      await act(async () => root.unmount())
+      expect(unwatchWorktree).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('routes shared-root events to every owner on the emitting host', async () => {
+    const targets: TestWatchTarget[] = [
+      {
+        worktreeId: 'local-a',
+        worktreePath: '/shared',
+        connectionId: undefined,
+        runtimeEnvironmentId: null
+      },
+      {
+        worktreeId: 'local-b',
+        worktreePath: '/shared',
+        connectionId: undefined,
+        runtimeEnvironmentId: null
+      },
+      {
+        worktreeId: 'ssh-a',
+        worktreePath: '/shared',
+        connectionId: 'host-a',
+        runtimeEnvironmentId: null
+      },
+      {
+        worktreeId: 'ssh-b',
+        worktreePath: '/shared',
+        connectionId: 'host-b',
+        runtimeEnvironmentId: null
+      }
+    ]
+    subscriptionState.snapshot = { targets, targetsKey: 'shared-hosts' }
+    await act(async () => root.render(createElement(WatchProbe)))
+    const lookup = vi.mocked(buildEditorExternalWatchEventHandler).mock.calls[0][0]
+    expect(lookup('/shared', null)).toEqual(targets.slice(0, 2))
+    expect(lookup('/shared', null, 'host-a')).toEqual([targets[2]])
+    expect(lookup('/shared', null, 'host-b')).toEqual([targets[3]])
+  })
+
   it('disposes a runtime subscription that resolves after unmount', async () => {
     const pending = deferredRuntimeSubscription()
     const unsubscribeRuntime = vi.fn()
@@ -150,6 +212,110 @@ describe('useEditorExternalWatch subscriptions', () => {
 
     expect(unsubscribeRuntime).toHaveBeenCalledTimes(1)
     expect(unwatchWorktree).not.toHaveBeenCalled()
+  })
+
+  it('retains the subscription owner when an older runtime omits event connection identity', async () => {
+    const target = runtimeTarget()
+    subscriptionState.subscribeRuntimeFileChanges.mockResolvedValueOnce(vi.fn())
+    subscriptionState.snapshot = { targets: [target], targetsKey: 'legacy-runtime-watch' }
+    await act(async () => root.render(createElement(WatchProbe)))
+    const callback = subscriptionState.subscribeRuntimeFileChanges.mock.calls[0][1]
+    const payload = {
+      worktreePath: target.worktreePath,
+      events: [{ kind: 'update', absolutePath: `${target.worktreePath}/notes.md` }]
+    }
+    callback(payload)
+    expect(subscriptionState.handleFsChanged).toHaveBeenCalledExactlyOnceWith(
+      { ...payload, connectionId: target.connectionId },
+      target.runtimeEnvironmentId,
+      target.worktreeId
+    )
+  })
+
+  it('routes same-root runtime streams only to their captured workspace selectors', async () => {
+    const targets = ['runtime-a', 'runtime-b'].map((worktreeId) => ({
+      ...runtimeTarget(),
+      worktreeId
+    }))
+    subscriptionState.subscribeRuntimeFileChanges
+      .mockResolvedValueOnce(vi.fn())
+      .mockResolvedValueOnce(vi.fn())
+    subscriptionState.snapshot = { targets, targetsKey: 'two-runtime-workspaces' }
+    await act(async () => root.render(createElement(WatchProbe)))
+    expect(subscriptionState.subscribeRuntimeFileChanges).toHaveBeenCalledTimes(2)
+    const lookup = vi.mocked(buildEditorExternalWatchEventHandler).mock.calls[0][0]
+    const payload = { worktreePath: targets[0].worktreePath, events: [] }
+    for (const [index, target] of targets.entries()) {
+      const callback = subscriptionState.subscribeRuntimeFileChanges.mock.calls[index][1]
+      callback(payload)
+      expect(subscriptionState.handleFsChanged).toHaveBeenLastCalledWith(
+        { ...payload, connectionId: target.connectionId },
+        target.runtimeEnvironmentId,
+        target.worktreeId
+      )
+      expect(
+        lookup(
+          target.worktreePath,
+          target.runtimeEnvironmentId,
+          target.connectionId,
+          target.worktreeId
+        )
+      ).toEqual([target])
+    }
+  })
+
+  it('shares the physical watch while retaining each owner alias policy', async () => {
+    const first: TestWatchTarget = {
+      worktreeId: 'first',
+      worktreePath: 'C:/Repo',
+      connectionId: undefined,
+      runtimeEnvironmentId: null,
+      allowLocalWindowsWslAliases: true
+    }
+    const second: TestWatchTarget = {
+      ...first,
+      worktreeId: 'second',
+      allowLocalWindowsWslAliases: undefined
+    }
+    subscriptionState.snapshot = { targets: [first, second], targetsKey: 'mixed-alias-policy' }
+    await act(async () => root.render(createElement(WatchProbe)))
+    expect(watchWorktree).toHaveBeenCalledExactlyOnceWith({
+      worktreePath: 'C:/Repo',
+      connectionId: undefined
+    })
+    const lookup = vi.mocked(buildEditorExternalWatchEventHandler).mock.calls[0][0]
+    expect(lookup('c:/repo', null)).toEqual([first, second])
+  })
+
+  it('does not let a pending local watch resolution tear down a re-added owner', async () => {
+    let resolve!: () => void
+    const pending = new Promise<void>((settle) => {
+      resolve = settle
+    })
+    watchWorktree.mockReturnValueOnce(pending)
+    const target: TestWatchTarget = {
+      worktreeId: 'first',
+      worktreePath: '/shared',
+      connectionId: undefined,
+      runtimeEnvironmentId: null
+    }
+    const second = { ...target, worktreeId: 'second' }
+    subscriptionState.snapshot = { targets: [target, second], targetsKey: 'pending-both' }
+    await act(async () => root.render(createElement(WatchProbe)))
+    subscriptionState.snapshot = { targets: [second], targetsKey: 'pending-one' }
+    await act(async () => root.render(createElement(WatchProbe)))
+    expect(unwatchWorktree).not.toHaveBeenCalled()
+    subscriptionState.snapshot = { targets: [], targetsKey: 'pending-none' }
+    await act(async () => root.render(createElement(WatchProbe)))
+    expect(unwatchWorktree).toHaveBeenCalledTimes(1)
+    subscriptionState.snapshot = { targets: [second], targetsKey: 'pending-readded' }
+    await act(async () => root.render(createElement(WatchProbe)))
+    resolve()
+    await act(async () => pending)
+    expect(watchWorktree).toHaveBeenCalledTimes(2)
+    expect(unwatchWorktree).toHaveBeenCalledTimes(1)
+    await act(async () => root.unmount())
+    expect(unwatchWorktree).toHaveBeenCalledTimes(2)
   })
 
   it('cannot let an old runtime subscribe resolution replace a re-added watch', async () => {

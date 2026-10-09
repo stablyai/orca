@@ -11,6 +11,19 @@ import {
 import { buildEditorExternalWatchEventHandler } from './editor-external-watch-event-reconciliation'
 import { verifyLatchedEditorMoveDestinations } from './editor-external-watch-disk-verification'
 
+function getWatchSubscriptionKey(target: EditorExternalWatchTarget): string {
+  // Local IPC watches share a host/root; runtime subscriptions retain their workspace selector.
+  return target.runtimeEnvironmentId
+    ? getEditorExternalWatchTargetKey(target)
+    : `${normalizeRuntimePathForComparison(target.worktreePath)}::${target.connectionId ?? 'local'}`
+}
+
+function uniqueWatchSubscriptions(
+  targets: EditorExternalWatchTarget[]
+): EditorExternalWatchTarget[] {
+  return [...new Map(targets.map((target) => [getWatchSubscriptionKey(target), target])).values()]
+}
+
 function warnExternalWatchFailure(target: EditorExternalWatchTarget, err: unknown): void {
   console.warn('[filesystem-watch] failed to watch worktree', {
     worktreeId: target.worktreeId,
@@ -28,20 +41,26 @@ export function useEditorExternalWatch(): void {
   latestTargetsRef.current = targets
   const remoteWatchUnsubsRef = useRef(new Map<string, () => void>())
   const fsChangedHandlerRef = useRef<
-    ((payload: FsChangedPayload, runtimeEnvironmentId?: string | null) => void) | null
+    | ((
+        payload: FsChangedPayload,
+        runtimeEnvironmentId?: string | null,
+        worktreeId?: string
+      ) => void)
+    | null
   >(null)
 
   // Why: diff targets so unchanged worktrees keep their subscription; full teardown on every store change drops events in the gap.
   useEffect(() => {
     const nextTargets = latestTargetsRef.current
-    const previousTargets = targetsRef.current
-    const previousKeys = new Set(previousTargets.map(getEditorExternalWatchTargetKey))
-    const nextKeys = new Set(nextTargets.map(getEditorExternalWatchTargetKey))
+    const previousTargets = uniqueWatchSubscriptions(targetsRef.current)
+    const nextSubscriptions = uniqueWatchSubscriptions(nextTargets)
+    const previousKeys = new Set(previousTargets.map(getWatchSubscriptionKey))
+    const nextKeys = new Set(nextSubscriptions.map(getWatchSubscriptionKey))
     const removed = previousTargets.filter(
-      (target) => !nextKeys.has(getEditorExternalWatchTargetKey(target))
+      (target) => !nextKeys.has(getWatchSubscriptionKey(target))
     )
-    const added = nextTargets.filter(
-      (target) => !previousKeys.has(getEditorExternalWatchTargetKey(target))
+    const added = nextSubscriptions.filter(
+      (target) => !previousKeys.has(getWatchSubscriptionKey(target))
     )
 
     for (const target of removed) {
@@ -80,12 +99,14 @@ export function useEditorExternalWatch(): void {
   useEffect(() => {
     const remoteWatchUnsubs = remoteWatchUnsubsRef.current
     const { handleFsChanged, dispose } = buildEditorExternalWatchEventHandler(
-      (worktreePath, runtimeEnvironmentId) =>
-        targetsRef.current.find(
+      (worktreePath, runtimeEnvironmentId, connectionId, worktreeId) =>
+        targetsRef.current.filter(
           (target) =>
             normalizeRuntimePathForComparison(target.worktreePath) ===
               normalizeRuntimePathForComparison(worktreePath) &&
-            target.runtimeEnvironmentId === runtimeEnvironmentId
+            target.runtimeEnvironmentId === runtimeEnvironmentId &&
+            target.connectionId === connectionId &&
+            (worktreeId === undefined || target.worktreeId === worktreeId)
         )
     )
     const unsubscribe = window.api.fs.onFsChanged((payload) => handleFsChanged(payload, null))
@@ -95,7 +116,7 @@ export function useEditorExternalWatch(): void {
       unsubscribe()
       dispose()
       fsChangedHandlerRef.current = null
-      for (const target of targetsRef.current) {
+      for (const target of uniqueWatchSubscriptions(targetsRef.current)) {
         const key = getEditorExternalWatchTargetKey(target)
         const remoteUnsubscribe = remoteWatchUnsubs.get(key)
         if (remoteUnsubscribe) {
@@ -118,7 +139,13 @@ function subscribeRuntimeTarget(
   target: EditorExternalWatchTarget,
   remoteWatchUnsubs: Map<string, () => void>,
   fsChangedHandlerRef: {
-    current: ((payload: FsChangedPayload, runtimeEnvironmentId?: string | null) => void) | null
+    current:
+      | ((
+          payload: FsChangedPayload,
+          runtimeEnvironmentId?: string | null,
+          worktreeId?: string
+        ) => void)
+      | null
   }
 ): void {
   const key = getEditorExternalWatchTargetKey(target)
@@ -134,7 +161,12 @@ function subscribeRuntimeTarget(
       worktreePath: target.worktreePath,
       connectionId: target.connectionId
     },
-    (payload) => fsChangedHandlerRef.current?.(payload, target.runtimeEnvironmentId),
+    (payload) =>
+      fsChangedHandlerRef.current?.(
+        { ...payload, connectionId: target.connectionId },
+        target.runtimeEnvironmentId,
+        target.worktreeId
+      ),
     (err) => warnExternalWatchFailure(target, err)
   )
     .then((unsubscribe) => {

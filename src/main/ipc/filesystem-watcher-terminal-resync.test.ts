@@ -34,6 +34,7 @@ type TerminalErrorHandler = (error: Error) => void
 const WORKTREE_PATH = '/home/me/repo'
 const ARGS = { worktreePath: WORKTREE_PATH, connectionId: 'conn-1' }
 const OVERFLOW_PAYLOAD = {
+  connectionId: 'conn-1',
   worktreePath: WORKTREE_PATH,
   events: [{ kind: 'overflow', absolutePath: WORKTREE_PATH }]
 }

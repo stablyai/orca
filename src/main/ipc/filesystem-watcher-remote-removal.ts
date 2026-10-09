@@ -91,6 +91,7 @@ export async function restoreRemoteWatcherAfterFailedRemoval(
       scheduleRemoteWatcherRetry(sender, connectionId, worktreePath)
     }
     sender.send('fs:changed', {
+      connectionId,
       worktreePath,
       events: [{ kind: 'overflow', absolutePath: worktreePath }]
     } satisfies FsChangedPayload)
