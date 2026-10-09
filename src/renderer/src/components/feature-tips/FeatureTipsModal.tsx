@@ -301,7 +301,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
         open={isOpen}
         tip={currentTip}
         primaryBusy={primaryBusy}
-        offerChatMode={nativeChatUpgradeTipVariant === 'keep-terminal'}
+        variant={nativeChatUpgradeTipVariant ?? 'none'}
         chatModeOn={settings?.experimentalNativeChat === true}
         onOpenChange={handleOpenChange}
         onPrimaryAction={() => void handlePrimaryAction()}

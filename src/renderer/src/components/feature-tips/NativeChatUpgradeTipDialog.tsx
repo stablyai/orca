@@ -1,6 +1,7 @@
 import { useId, useRef, type JSX } from 'react'
 import { MessagesSquare, SquareTerminal, type LucideIcon } from 'lucide-react'
 import type { FeatureTip } from '../../../../shared/feature-tips'
+import type { NativeChatUpgradeTipVariant } from '../../../../shared/native-chat-upgrade-tip-audience'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
@@ -92,7 +93,7 @@ export function NativeChatUpgradeTipDialog({
   open,
   tip,
   primaryBusy,
-  offerChatMode,
+  variant,
   chatModeOn,
   onOpenChange,
   onPrimaryAction,
@@ -102,8 +103,8 @@ export function NativeChatUpgradeTipDialog({
   open: boolean
   tip: FeatureTip
   primaryBusy: boolean
-  /** From the saved tip audience: new agent tabs opened in the terminal before the upgrade. */
-  offerChatMode: boolean
+  /** From the saved tip audience, never the live setting. */
+  variant: NativeChatUpgradeTipVariant
   /** Live Chat UI setting. */
   chatModeOn: boolean
   onOpenChange: (open: boolean) => void
@@ -112,6 +113,8 @@ export function NativeChatUpgradeTipDialog({
   onSettingsClick: () => void
 }): JSX.Element {
   const primaryButtonRef = useRef<HTMLButtonElement>(null)
+  // Why: only profiles whose new agent tabs opened in the terminal before the upgrade.
+  const offerChatMode = variant === 'keep-terminal'
 
   return (
     <FeatureTipDialogFrame

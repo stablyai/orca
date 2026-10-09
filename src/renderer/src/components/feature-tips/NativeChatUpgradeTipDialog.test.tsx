@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { FEATURE_TIPS, type FeatureTip } from '../../../../shared/feature-tips'
+import type { NativeChatUpgradeTipVariant } from '../../../../shared/native-chat-upgrade-tip-audience'
 import { NativeChatUpgradeTipDialog } from './NativeChatUpgradeTipDialog'
 import { NativeChatUpgradeFeatureTipVisual } from './NativeChatUpgradeFeatureTipVisual'
 
@@ -37,13 +38,13 @@ function textOf(html: string): string {
 // Why: repo convention — React only suppresses its act() warning when this global is set.
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
-function dialog(offerChatMode: boolean, chatModeOn: boolean): JSX.Element {
+function dialog(variant: NativeChatUpgradeTipVariant, chatModeOn: boolean): JSX.Element {
   return (
     <NativeChatUpgradeTipDialog
       open
       tip={getTip()}
       primaryBusy={false}
-      offerChatMode={offerChatMode}
+      variant={variant}
       chatModeOn={chatModeOn}
       onOpenChange={() => {}}
       onPrimaryAction={() => {}}
@@ -53,13 +54,13 @@ function dialog(offerChatMode: boolean, chatModeOn: boolean): JSX.Element {
   )
 }
 
-function renderDialog(offerChatMode: boolean, chatModeOn: boolean): string {
-  return renderToStaticMarkup(dialog(offerChatMode, chatModeOn))
+function renderDialog(variant: NativeChatUpgradeTipVariant, chatModeOn: boolean): string {
+  return renderToStaticMarkup(dialog(variant, chatModeOn))
 }
 
 describe('NativeChatUpgradeTipDialog', () => {
   it('shows the approved copy with one Got it button and the Experimental settings link', () => {
-    const text = textOf(renderDialog(false, true))
+    const text = textOf(renderDialog('standard', true))
     expect(text).toContain('NEW')
     expect(text).toContain('Native chat got an upgrade')
     expect(text).toContain(
@@ -75,11 +76,11 @@ describe('NativeChatUpgradeTipDialog', () => {
     expect(text).toContain('Got it')
     expect(text).not.toContain('Maybe Later')
     expect(text).not.toContain('Turn on chat mode')
-    expect(renderDialog(false, true)).toContain('27rem')
+    expect(renderDialog('standard', true)).toContain('27rem')
   })
 
   it('never offers chat mode to a chat-view member, even with Chat UI turned off', () => {
-    const html = renderDialog(false, false)
+    const html = renderDialog('standard', false)
     const text = textOf(html)
     expect(text).not.toContain('New agent tabs still open in the terminal')
     expect(text).not.toContain('Turn on chat mode')
@@ -89,7 +90,7 @@ describe('NativeChatUpgradeTipDialog', () => {
   })
 
   it('offers chat mode, in a taller tip, when new agent tabs still open in the terminal', () => {
-    const html = renderDialog(true, false)
+    const html = renderDialog('keep-terminal', false)
     const text = textOf(html)
     expect(text).toContain('New agent tabs still open in the terminal, as before.')
     expect(text).toContain('Turn on chat mode')
@@ -102,7 +103,7 @@ describe('NativeChatUpgradeTipDialog', () => {
   })
 
   it('keeps offering chat mode, switched on, when Chat UI was already on', () => {
-    const html = renderDialog(true, true)
+    const html = renderDialog('keep-terminal', true)
     expect(textOf(html)).toContain('Turn on chat mode')
     expect(html).toContain('aria-checked="true"')
     expect(html).toContain('33rem')
@@ -111,9 +112,9 @@ describe('NativeChatUpgradeTipDialog', () => {
   it('keeps the switch in place, now on, after it is flipped', () => {
     const container = document.createElement('div')
     const root = createRoot(container)
-    act(() => root.render(dialog(true, false)))
+    act(() => root.render(dialog('keep-terminal', false)))
     expect(container.querySelector('[role="switch"]')?.getAttribute('aria-checked')).toBe('false')
-    act(() => root.render(dialog(true, true)))
+    act(() => root.render(dialog('keep-terminal', true)))
     expect(container.querySelector('[role="switch"]')?.getAttribute('aria-checked')).toBe('true')
     expect(container.textContent).toContain('New agent tabs still open in the terminal, as before.')
     expect(container.innerHTML).toContain('33rem')
