@@ -277,6 +277,7 @@ export function createCloseFileAction(
           activeFileId: newActiveId,
           // Why: if the last editor closes with no browser/terminal surface left, return to the landing state like the terminal/browser close handlers do.
           activeWorktreeId: shouldDeactivateWorktree ? null : s.activeWorktreeId,
+          activeWorkspaceOwner: shouldDeactivateWorktree ? null : s.activeWorkspaceOwner,
           activeBrowserTabId: shouldDeactivateWorktree
             ? null
             : activeWorktreeId && remainingForWorktree.length === 0

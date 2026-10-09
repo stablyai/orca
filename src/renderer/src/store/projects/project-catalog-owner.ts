@@ -10,7 +10,9 @@ function catalogOwnerForExecutionHost(hostId: string): string {
   return parseExecutionHostId(hostId)?.kind === 'runtime' ? hostId : LOCAL_EXECUTION_HOST_ID
 }
 
-export function getRepoCatalogOwnerHostId(repo: Repo): string {
+export function getRepoCatalogOwnerHostId(
+  repo: Pick<Repo, 'catalogOwnerHostId' | 'executionHostId' | 'connectionId'>
+): string {
   return repo.catalogOwnerHostId ?? catalogOwnerForExecutionHost(getRepoExecutionHostId(repo))
 }
 

@@ -49,6 +49,7 @@ export function mergeWorkspaceSessions(
     activeRepoId: base.activeRepoId ?? incoming.activeRepoId,
     activeWorkspaceExecutionHostId:
       base.activeWorkspaceExecutionHostId ?? incoming.activeWorkspaceExecutionHostId,
+    activeWorkspaceOwner: base.activeWorktreeId ? base.activeWorkspaceOwner : null,
     tabsByWorktree: { ...base.tabsByWorktree, ...incoming.tabsByWorktree },
     terminalLayoutsByTabId: {
       ...base.terminalLayoutsByTabId,
@@ -214,6 +215,7 @@ export function removeRepoFromWorkspaceSession(
   }
   if (next.activeWorktreeId && isRepoWorktreeId(repoId, next.activeWorktreeId)) {
     next.activeWorktreeId = null
+    next.activeWorkspaceOwner = null
   }
   const activeScope = next.activeWorkspaceKey ? parseWorkspaceKey(next.activeWorkspaceKey) : null
   if (activeScope?.type === 'worktree' && isRepoWorktreeId(repoId, activeScope.worktreeId)) {

@@ -270,6 +270,7 @@ export function createRepoRemovalActions(
                   activeWorktreeId: null,
                   activeWorkspaceKey: null,
                   activeWorkspaceExecutionHostId: null,
+                  activeWorkspaceOwner: null,
                   activeRepoId: null
                 }
               : {})

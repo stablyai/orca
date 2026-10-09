@@ -34,6 +34,7 @@ type OwnerState = Pick<
   | 'sshStateByEnvironment'
   | 'activeWorktreeId'
   | 'activeWorkspaceExecutionHostId'
+  | 'activeWorkspaceOwner'
   | 'restoredRuntimeHostIdByWorkspaceSessionKey'
   | 'tabsByWorktree'
   | 'unifiedTabsByWorktree'
@@ -58,6 +59,7 @@ export function selectNativeChatImageOwnerState(state: AppState): OwnerState {
     sshStateByEnvironment: state.sshStateByEnvironment,
     activeWorktreeId: state.activeWorktreeId,
     activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
+    activeWorkspaceOwner: state.activeWorkspaceOwner,
     restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
     tabsByWorktree: state.tabsByWorktree,
     unifiedTabsByWorktree: state.unifiedTabsByWorktree

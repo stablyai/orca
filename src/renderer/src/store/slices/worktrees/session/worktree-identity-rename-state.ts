@@ -262,7 +262,15 @@ export function buildWorktreeRenameState(
       ? { closedTerminalTabTombstonesByTabId }
       : {}),
     ...(closeIntentsChanged ? { clientHostedBrowserCloseIntentsByEnvironment } : {}),
-    ...(s.activeWorktreeId === oldWorktreeId ? { activeWorktreeId: newWorktreeId } : {}),
+    ...(s.activeWorktreeId === oldWorktreeId
+      ? {
+          activeWorktreeId: newWorktreeId,
+          activeWorkspaceOwner:
+            s.activeWorkspaceOwner?.worktreeId === oldWorktreeId
+              ? { ...s.activeWorkspaceOwner, worktreeId: newWorktreeId }
+              : null
+        }
+      : {}),
     // The active workspace key derives from the worktree id, so keep it in sync when the active worktree is renamed.
     ...(s.activeWorkspaceKey === worktreeWorkspaceKey(oldWorktreeId)
       ? { activeWorkspaceKey: worktreeWorkspaceKey(newWorktreeId) }

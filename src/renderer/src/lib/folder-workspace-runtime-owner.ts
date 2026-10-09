@@ -1,6 +1,7 @@
 import { parseExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
 import type { ExecutionHostId, ParsedExecutionHost } from '../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { WorktreeSelectionOwner } from '../../../shared/worktree-selection-owner'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import {
@@ -23,6 +24,7 @@ export type FolderWorkspaceRuntimeOwnerState = SingleRuntimeLegacyOwnerState & {
   restoredRuntimeHostIdByWorkspaceSessionKey?: Record<string, ExecutionHostId>
   activeWorktreeId?: string | null
   activeWorkspaceExecutionHostId?: ExecutionHostId | null
+  activeWorkspaceOwner?: WorktreeSelectionOwner | null
 }
 
 function getPreferredFolderExecutionHostId(

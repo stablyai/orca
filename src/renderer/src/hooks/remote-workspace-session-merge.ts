@@ -4,7 +4,7 @@ import {
   hasClosedTerminalTabRecord,
   type ClosedTerminalTabTombstonesByTabId
 } from '../../../shared/closed-terminal-tab-tombstones'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 import { retainLocalScrollbackInRemoteLayout } from '@/components/terminal-pane/remote-layout-scrollback-retention'
@@ -243,8 +243,16 @@ export function mergeDirectSshRemoteWorkspaceSession(
         ])
     )
   }
+  const currentOwner = current.activeWorkspaceOwner
+  // Direct SSH snapshots belong to this client even when a HUB publishes the same raw host alias.
+  const activeOutsideDirectSource =
+    replaceExecutionHostId !== undefined &&
+    currentOwner?.worktreeId === current.activeWorktreeId &&
+    (currentOwner.publisherHostId !== LOCAL_EXECUTION_HOST_ID ||
+      currentOwner.executionHostId !== replaceExecutionHostId)
   const activeOutsideTarget =
-    current.activeWorktreeId != null && !replaceWorktreeIds.has(current.activeWorktreeId)
+    current.activeWorktreeId != null &&
+    (!replaceWorktreeIds.has(current.activeWorktreeId) || activeOutsideDirectSource)
   // Why this is narrow: a null from the host is not always missing information. A null activeTabId
   // is a deliberate deselect that arms the duplicate-tab repair, so it is honoured verbatim below.
   // A null activeWorktreeId is different — it is what a snapshot carries when the host never named
@@ -269,11 +277,22 @@ export function mergeDirectSshRemoteWorkspaceSession(
   const activeWorktreeId = activeOutsideTarget
     ? current.activeWorktreeId
     : (remote.activeWorktreeId ?? preservedActiveWorktreeId)
+  const selectedOwner =
+    activeOutsideTarget || keepsLocalWorkspace
+      ? current.activeWorkspaceOwner
+      : remote.activeWorkspaceOwner
+  const activeWorkspaceOwner =
+    selectedOwner?.worktreeId === activeWorktreeId &&
+    (current.activeWorkspaceExecutionHostId === selectedOwner.publisherHostId ||
+      current.activeWorkspaceExecutionHostId === selectedOwner.executionHostId)
+      ? selectedOwner
+      : null
   return {
     ...current,
     activeRepoId:
       activeOutsideTarget || keepsLocalWorkspace ? current.activeRepoId : remote.activeRepoId,
     activeWorktreeId,
+    activeWorkspaceOwner,
     activeWorkspaceKey: activeOutsideTarget
       ? current.activeWorkspaceKey
       : activeWorktreeId

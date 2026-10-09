@@ -2,7 +2,6 @@ import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-op
 import { createAgentSessionKeyboardOptions } from './agent-session-keyboard-capability'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../shared/runtime-types'
-import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { translate } from '../i18n/i18n'
 import { useAppStore } from '../store'
 import { agentResumeHostAuthorityCapability } from './agent-resume-host-authority-capability'
@@ -72,10 +71,7 @@ export async function createWebRuntimeSessionTerminalResult(
     selectWebRuntimeSessionWorktree(args.worktreeId, environmentId)
     workspaceSelectionRollback = {
       previous,
-      applied: {
-        worktreeId: args.worktreeId,
-        executionHostId: toRuntimeExecutionHostId(environmentId)
-      }
+      applied: readActiveWorkspaceSelection()
     }
   }
   let hostCreated = false

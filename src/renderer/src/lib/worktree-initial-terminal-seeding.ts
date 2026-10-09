@@ -1,3 +1,6 @@
+import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import { type WorktreeSelectionOwner, worktreeSelectionOwnerKey } from './worktree-selection-owner'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
@@ -36,6 +39,7 @@ export type GatedEmptyWorkspaceReseedIntent = {
   callerProvidesSurface: boolean
   seedUserDefaultSurface: boolean
   executionHostId?: ExecutionHostId
+  owner?: WorktreeSelectionOwner
 }
 
 /** Re-seed after an empty gate unless its activation owns the surface or no longer owns the host. */
@@ -49,6 +53,8 @@ export function reseedGatedEmptyWorkspace(
     callerProvidesSurface === true ||
     isEmptyWorkspaceDefaultSurfacePending(workspaceKey) ||
     state.activeWorktreeId !== workspaceKey ||
+    worktreeSelectionOwnerKey(state.activeWorkspaceOwner) !==
+      worktreeSelectionOwnerKey(intent.owner) ||
     (executionHostId !== undefined && state.activeWorkspaceExecutionHostId !== executionHostId)
   ) {
     return
@@ -281,4 +287,30 @@ export function ensureWorktreeHasInitialTerminal(
   )
 
   return terminalTab.id
+}
+
+export function ensureFolderWorkspaceInitialTerminal(
+  folderWorkspace: FolderWorkspace,
+  startup?: WorktreeStartupPayload,
+  providesInitialSurface?: boolean,
+  seedUserDefaultSurface?: boolean
+): string | null {
+  if (providesInitialSurface === true && startup === undefined) {
+    return null
+  }
+  const state = useAppStore.getState()
+  const workspaceKey = folderWorkspaceKey(folderWorkspace.id)
+  const primaryTabId = ensureWorktreeHasInitialTerminal(
+    state,
+    workspaceKey,
+    startup,
+    undefined,
+    undefined,
+    undefined,
+    {
+      reseedEmptiedWorkspace: providesInitialSurface !== true,
+      ...(seedUserDefaultSurface ? { seedUserDefaultSurface: true } : {})
+    }
+  )
+  return primaryTabId
 }

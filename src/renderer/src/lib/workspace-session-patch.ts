@@ -72,6 +72,9 @@ export function buildWorkspaceSessionPatch(
   if (changed.has('activeWorkspaceExecutionHostId')) {
     patch.activeWorkspaceExecutionHostId = snapshot.activeWorkspaceExecutionHostId ?? null
   }
+  if (changed.has('activeWorkspaceOwner')) {
+    patch.activeWorkspaceOwner = snapshot.activeWorkspaceOwner ?? null
+  }
   if (changed.has('activeTabId')) {
     patch.activeTabId = snapshot.activeTabId
   }

@@ -4,6 +4,7 @@ import type {
   WorktreeSetupLaunch
 } from '../../../shared/worktree/launch-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { WorktreeSelectionOwner } from '../../../shared/worktree-selection-owner'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
 import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import type { IssueCommandLaunch } from '@/lib/worktree-setup-issue-command-queue'
@@ -29,6 +30,7 @@ export type WorktreeActivationOptions = WorktreeActivationSurfaceSelection & {
   /** Explicit request to see the workspace in the list: leave the activity view once activation commits. */
   showWorkspaceList?: boolean
   executionHostId?: ExecutionHostId
+  owner?: WorktreeSelectionOwner
   backendStartupTerminalSpawned?: boolean
   /** Install a preserved fallback startup beside setup/default terminals already seeded. */
   createNewTerminalForStartup?: boolean

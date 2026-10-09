@@ -15,6 +15,7 @@ import {
   findIndexedWorktreeOwnerForHost
 } from './worktree-runtime-owner-index'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner'
+import { findWorktreeForSelectionOwner, getActiveWorktreeOwner } from './worktree-selection-owner'
 
 function getResolvedFolderHost(
   state: WorktreeRuntimeOwnerState,
@@ -62,6 +63,10 @@ export function getResolvedExecutionHostIdForWorktree(
   }
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return LOCAL_EXECUTION_HOST_ID
+  }
+  const owner = getActiveWorktreeOwner(state, worktreeId)
+  if (owner) {
+    return findWorktreeForSelectionOwner(state, owner) ? owner.executionHostId : null
   }
   const scope = parseWorkspaceKey(worktreeId)
   if (scope?.type === 'folder') {

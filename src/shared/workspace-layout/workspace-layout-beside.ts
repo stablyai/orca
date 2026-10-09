@@ -16,6 +16,7 @@ export const SESSION_FIELD_OWNERS = {
   activeRepoId: 'view',
   activeWorkspaceKey: 'view',
   activeWorkspaceExecutionHostId: 'view',
+  activeWorkspaceOwner: 'view',
   activeWorktreeId: 'view',
   activeTabId: 'view',
   tabsByWorktree: 'layout',

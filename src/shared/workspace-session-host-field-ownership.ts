@@ -16,6 +16,7 @@ export const WORKSPACE_SESSION_FIELD_OWNERSHIP = {
   activeRepoId: 'global',
   activeWorktreeId: 'global',
   activeWorkspaceExecutionHostId: 'global',
+  activeWorkspaceOwner: 'global',
   activeTabId: 'global',
   browserUrlHistory: 'global',
   workspaceDocHistory: 'global',
@@ -74,6 +75,7 @@ export const SESSION_FOCUS_FIELDS = [
   'activeWorktreeId',
   'activeWorkspaceKey',
   'activeWorkspaceExecutionHostId',
+  'activeWorkspaceOwner',
   'activeTabId'
 ] as const satisfies readonly (keyof WorkspaceSessionState)[]
 

@@ -45,6 +45,7 @@ export const WORKSPACE_SESSION_FIELD_DISPOSITION = {
   activeRepoId: { onRepoRemoval: 'notRepoScoped', onTransfer: 'notTransferred' },
   activeWorkspaceKey: { onRepoRemoval: 'prunedByBespokeRule', onTransfer: 'copiedByBespokeRule' },
   activeWorkspaceExecutionHostId: { onRepoRemoval: 'notRepoScoped', onTransfer: 'notTransferred' },
+  activeWorkspaceOwner: { onRepoRemoval: 'prunedByBespokeRule', onTransfer: 'notTransferred' },
   activeWorktreeId: { onRepoRemoval: 'prunedByBespokeRule', onTransfer: 'copiedByBespokeRule' },
   // Residue here specifically: the owner-removal path nulls this when it deletes the tab it names,
   // but repo removal does not, so it can outlive the tab.

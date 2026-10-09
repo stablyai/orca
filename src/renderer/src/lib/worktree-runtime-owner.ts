@@ -25,6 +25,7 @@ import {
   resolveWorktreeOperationRouteResult
 } from './worktree-operation-route'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
+import { findWorktreeForSelectionOwner, getActiveWorktreeOwner } from './worktree-selection-owner'
 export type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 export { getRuntimeSessionMirrorEnvironmentIds } from './runtime-session-mirror-owners'
 
@@ -68,6 +69,9 @@ export function getRuntimeEnvironmentIdForWorktree(
     return floatingRoute.runtimeEnvironmentId
   }
   const activeRoute = resolveActiveWorkspaceRoute(state, worktreeId)
+  if (getActiveWorktreeOwner(state, worktreeId)) {
+    return activeRoute?.runtimeEnvironmentId ?? null
+  }
   if (activeRoute) {
     return activeRoute.runtimeEnvironmentId
   }
@@ -117,6 +121,9 @@ export function getExplicitRuntimeEnvironmentIdForWorktree(
     return null
   }
   const activeRoute = resolveActiveWorkspaceRoute(state, worktreeId)
+  if (getActiveWorktreeOwner(state, worktreeId)) {
+    return activeRoute?.runtimeEnvironmentId ?? null
+  }
   if (activeRoute) {
     return activeRoute.runtimeEnvironmentId
   }
@@ -187,6 +194,12 @@ export function getKnownExecutionHostIdForWorktree(
     return floatingRoute.executionHostId
   }
   const activeHostId = getActiveWorkspaceExecutionHostId(state, worktreeId)
+  const owner = getActiveWorktreeOwner(state, worktreeId)
+  if (owner) {
+    return findWorktreeForSelectionOwner(state, owner)
+      ? owner.executionHostId
+      : 'runtime:unresolved-owner'
+  }
   if (activeHostId) {
     return activeHostId
   }

@@ -136,6 +136,7 @@ export function resolveWorkspaceTerminalHostAuthority(
 const AUTHORITY_INPUT_KEYS = [
   'activeWorktreeId',
   'activeWorkspaceExecutionHostId',
+  'activeWorkspaceOwner',
   'detectedWorktreesByRepo',
   'folderWorkspaces',
   'projectGroups',
