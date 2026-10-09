@@ -3,7 +3,12 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as UnreadBadgeCountModule from '@/lib/unread-badge-count'
-import { makeFolderWorkspace, makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import {
+  makeFolderWorkspace,
+  makeWorktree,
+  TEST_REPO
+} from '@/store/slices/worktrees-slice-test-fixtures'
+import { createTabsSliceMockApi } from '@/store/slices/tabs-slice-test-harness'
 import { makeTab } from '../store/slices/store-session-test-harness'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
 
@@ -22,12 +27,14 @@ const initialState = useAppStore.getInitialState()
 
 describe('useUnreadDockBadge', () => {
   let setUnreadDockBadgeCount: ReturnType<typeof vi.fn>
+  let updateWorktreeMeta: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
     getUnreadBadgeCount.mockClear()
     useAppStore.setState(
       {
         ...initialState,
+        repos: [{ ...TEST_REPO, id: 'repo', executionHostId: 'local' }],
         worktreesByRepo: {},
         folderWorkspaces: [],
         tabsByWorktree: {},
@@ -36,8 +43,11 @@ describe('useUnreadDockBadge', () => {
       true
     )
     setUnreadDockBadgeCount = vi.fn().mockResolvedValue(undefined)
+    const mockApi = createTabsSliceMockApi()
+    updateWorktreeMeta = mockApi.worktrees.updateMeta
     vi.stubGlobal('window', {
       api: {
+        worktrees: mockApi.worktrees,
         app: {
           setUnreadDockBadgeCount
         }
@@ -118,6 +128,19 @@ describe('useUnreadDockBadge', () => {
     act(() => useAppStore.getState().clearWorktreeUnread(worktree.id))
     expect(getUnreadBadgeCount).toHaveBeenCalledTimes(4)
     expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(0)
+  })
+
+  it('ignores an unread mutation for an unregistered synthetic row', () => {
+    const worktree = makeWorktree({ id: 'unknown::unread', repoId: 'unknown' })
+    useAppStore.setState({ repos: [], worktreesByRepo: { unknown: [worktree] } })
+    renderHook(() => useUnreadDockBadge(false))
+
+    act(() => useAppStore.getState().markWorktreeUnread(worktree.id))
+
+    expect(useAppStore.getState().worktreesByRepo.unknown[0].isUnread).toBe(false)
+    expect(getUnreadBadgeCount).toHaveBeenCalledTimes(1)
+    expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(0)
+    expect(updateWorktreeMeta).not.toHaveBeenCalled()
   })
 
   // Why render-counted: this hook is mounted on the App root, so anything that wakes its

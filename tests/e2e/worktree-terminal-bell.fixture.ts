@@ -1,5 +1,6 @@
 import { vi } from 'vitest'
 import { useAppStore } from '../../src/renderer/src/store'
+import { capturePassiveWorktreeMetaOwner } from '../../src/renderer/src/store/slices/worktrees/listing/worktree-owner-settings'
 import { installPanePtyVisibilityBind } from '../../src/renderer/src/components/terminal-pane/pty-connection/pane-pty-visibility-bind'
 import type { ConnectPanePtySession } from '../../src/renderer/src/components/terminal-pane/pty-connection/connect-pane-pty-session'
 import type { ExecutionHostId } from '../../src/shared/execution-host'
@@ -26,6 +27,11 @@ export function mountedBellSession(
       getExecutionHostId: () => hostId,
       getRuntimeEnvironmentId: () => runtimeEnvironmentId
     },
+    worktreeMetadataOwner:
+      capturePassiveWorktreeMetaOwner(renderer.getState(), id, {
+        executionHostId: hostId,
+        runtimeEnvironmentId
+      }) ?? null,
     cacheKey: 'mounted-tab:leaf',
     terminalBellNotificationTimer: null,
     agentCompletionCoordinator: { hasPendingHookDoneCompletion: () => true }

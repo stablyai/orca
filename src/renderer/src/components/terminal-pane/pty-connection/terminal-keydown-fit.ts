@@ -1,6 +1,4 @@
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
-import { captureNotificationTransportOwner } from '@/attention/notification-subject-owner'
-import { capturePassiveWorktreeMetaOwner } from '@/store/slices/worktrees/listing/worktree-owner-settings'
 import { makePaneKey } from '../../../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
@@ -21,14 +19,7 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 /** Keydown intent, PTY fit binding, side-effect fact consumption, and the agent completion coordinator. */
 export function installTerminalKeydownFit(session: ConnectPanePtySession): void {
-  const workspaceOwner = captureNotificationTransportOwner(session.transport)
-  const metadataOwner = workspaceOwner
-    ? capturePassiveWorktreeMetaOwner(
-        useAppStore.getState(),
-        session.deps.worktreeId,
-        workspaceOwner
-      )
-    : undefined
+  session.worktreeMetadataOwner = null
   session.onTerminalKeyDown = (event: KeyboardEvent): void => {
     if (isPlainEscapeKeyEvent(event)) {
       session.setPendingTerminalInputIntent('plain-escape')
@@ -37,7 +28,7 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
       // the early return for interrupt-intent inference.
       session.deps.clearTerminalTabUnread(session.deps.tabId)
       session.deps.clearTerminalPaneUnread(session.cacheKey)
-      session.deps.clearWorktreeUnread(session.deps.worktreeId, metadataOwner ?? null)
+      session.deps.clearWorktreeUnread(session.deps.worktreeId, session.worktreeMetadataOwner)
       return
     }
     if (isCtrlCKeyEvent(event)) {
@@ -77,7 +68,7 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     }
     session.deps.clearTerminalTabUnread(session.deps.tabId)
     session.deps.clearTerminalPaneUnread(session.cacheKey)
-    session.deps.clearWorktreeUnread(session.deps.worktreeId, metadataOwner ?? null)
+    session.deps.clearWorktreeUnread(session.deps.worktreeId, session.worktreeMetadataOwner)
   }
   // Why: infer only from focused xterm key events. Raw PTY bytes cannot
   // distinguish plain Escape from Alt/meta sequences, and programmatic writes
