@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, posix as pathPosix } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 
@@ -33,6 +33,7 @@ import {
   getKiroRemoteAgentsDir,
   getKiroRemoteManagedCommand,
   isKiroAgentConfigFileName,
+  isKiroHooksConfigSupported,
   KIRO_HOOK_EVENTS,
   readManagedKiroHookEvents,
   removeManagedKiroHooks,
@@ -96,9 +97,13 @@ function status(
 function parseAgentConfig(fileName: string, text: string): AgentFileRead {
   try {
     const parsed: unknown = JSON.parse(text)
-    return isPlainObject(parsed)
-      ? { fileName, config: parsed }
-      : { fileName, error: 'not a JSON object' }
+    if (!isPlainObject(parsed)) {
+      return { fileName, error: 'not a JSON object' }
+    }
+    if (!isKiroHooksConfigSupported(parsed)) {
+      return { fileName, error: 'unsupported hooks structure' }
+    }
+    return { fileName, config: parsed }
   } catch {
     return { fileName, error: 'not valid JSON' }
   }
@@ -149,7 +154,11 @@ function buildStatus(agentsDir: string, files: AgentFileRead[]): AgentHookInstal
     return status(agentsDir, 'installed', null, true)
   }
   if (!managedHooksPresent && complete === 0) {
-    return status(agentsDir, 'not_installed', null)
+    return status(
+      agentsDir,
+      files.some((file) => 'error' in file) ? 'error' : 'not_installed',
+      problems.join('; ')
+    )
   }
   return status(agentsDir, 'partial', problems.join('; '), managedHooksPresent)
 }
@@ -163,9 +172,13 @@ export class KiroHookService {
   getStatus(): AgentHookInstallStatus {
     const agentsDir = getKiroAgentsDir()
     const files = readLocalAgentFiles(agentsDir)
-    return files === null
-      ? status(agentsDir, 'error', 'Could not read the Kiro agents directory')
-      : buildStatus(agentsDir, files)
+    if (files === null) {
+      return status(agentsDir, 'error', 'Could not read the Kiro agents directory')
+    }
+    const result = buildStatus(agentsDir, files)
+    return result.managedHooksPresent && !existsSync(getKiroManagedScriptPath())
+      ? { ...result, state: 'partial', detail: 'Managed hook script missing' }
+      : result
   }
 
   install(): AgentHookInstallStatus {

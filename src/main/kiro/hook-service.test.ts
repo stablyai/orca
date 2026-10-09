@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createManagedHookLocalFilesystem } from '../agent-hooks/managed-hook-local-filesystem'
+import { isPlainObject } from '../agent-hooks/installer-utils'
 import { KiroHookService } from './hook-service'
 import { getKiroManagedCommandMatcher, KIRO_HOOK_EVENTS } from './hook-settings'
 
@@ -84,15 +85,26 @@ describe('KiroHookService', () => {
 
     const caverna = readAgent('caverna')
     expect(caverna.tools).toEqual(['*'])
-    const hooks = caverna.hooks as Record<string, Record<string, unknown>[]>
+    const hooks = caverna.hooks
+    if (!isPlainObject(hooks)) {
+      throw new Error('Expected hooks object')
+    }
     expect(Object.keys(hooks).sort()).toEqual([...KIRO_HOOK_EVENTS].sort())
     const isManaged = getKiroManagedCommandMatcher()
     for (const event of KIRO_HOOK_EVENTS) {
-      expect(hooks[event].filter((entry) => isManaged(String(entry.command)))).toHaveLength(1)
+      const entries = hooks[event]
+      if (!Array.isArray(entries)) {
+        throw new Error('Expected hook array')
+      }
+      expect(
+        entries.filter((entry) => isPlainObject(entry) && isManaged(String(entry.command)))
+      ).toHaveLength(1)
     }
-    expect(hooks.stop[0]).toEqual(USER_STOP_HOOK)
-    expect(hooks.preToolUse.at(-1)?.matcher).toBe('*')
-    expect(hooks.stop.at(-1)?.matcher).toBeUndefined()
+    expect(hooks.stop).toEqual([
+      USER_STOP_HOOK,
+      expect.objectContaining({ command: expect.any(String) })
+    ])
+    expect(hooks.preToolUse).toEqual([expect.objectContaining({ matcher: '*' })])
     expect(readAgent('reviewer').hooks).toBeDefined()
   })
 
@@ -117,6 +129,33 @@ describe('KiroHookService', () => {
     expect(result.state).toBe('partial')
     expect(result.detail).toContain('later.json has no Orca hooks')
   })
+
+  it('reports a missing launcher as partial instead of installed', () => {
+    writeAgent('tracked', { name: 'tracked' })
+    const service = new KiroHookService()
+    service.install()
+    rmSync(scriptPath())
+    expect(service.getStatus()).toMatchObject({
+      state: 'partial',
+      managedHooksPresent: true,
+      detail: expect.stringContaining('script missing')
+    })
+  })
+
+  it.each([{ hooks: [] }, { hooks: 'keep this' }, { hooks: { stop: { command: 'say done' } } }])(
+    'preserves unsupported user hook structures and reports them locally and remotely: %j',
+    async ({ hooks }) => {
+      writeAgent('unsupported', { name: 'unsupported', hooks })
+      const original = readFileSync(agentPath('unsupported'), 'utf-8')
+      const service = new KiroHookService()
+      expect(service.install()).toMatchObject({ state: 'error' })
+      expect(readFileSync(agentPath('unsupported'), 'utf-8')).toBe(original)
+      expect(await service.installRemote(createManagedHookLocalFilesystem(), home)).toMatchObject({
+        state: 'error'
+      })
+      expect(readFileSync(agentPath('unsupported'), 'utf-8')).toBe(original)
+    }
+  )
 
   it('removes only managed hooks and drops the hooks block it emptied', () => {
     writeAgent('caverna', { name: 'caverna', hooks: { stop: [USER_STOP_HOOK] } })

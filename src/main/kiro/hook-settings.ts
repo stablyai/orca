@@ -25,6 +25,19 @@ export const KIRO_HOOK_EVENTS = [
 
 const KIRO_TOOL_EVENTS: ReadonlySet<string> = new Set(['preToolUse', 'postToolUse'])
 
+export function isKiroHooksConfigSupported(config: Record<string, unknown>): boolean {
+  if (config.hooks === undefined) {
+    return true
+  }
+  if (!isPlainObject(config.hooks)) {
+    return false
+  }
+  const hooks = config.hooks
+  return KIRO_HOOK_EVENTS.every(
+    (event) => hooks[event] === undefined || Array.isArray(hooks[event])
+  )
+}
+
 /**
  * Kiro has no global hook config: hooks live in each agent file, and the built-in
  * `kiro_default` agent has none to edit. So Orca patches every global agent the user owns.

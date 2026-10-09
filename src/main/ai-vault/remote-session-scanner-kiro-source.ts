@@ -41,11 +41,14 @@ async function readTranscriptLines(
 
 export function remoteKiroSource(
   remoteHome: string,
-  hostPlatform: RemoteHostPlatform
+  hostPlatform: RemoteHostPlatform,
+  kiroHomeDir?: string
 ): RemoteSessionSource {
   return {
     agent: 'kiro',
-    rootDir: joinRemotePath(hostPlatform, remoteHome, '.kiro', 'sessions', 'cli'),
+    rootDir: kiroHomeDir
+      ? joinRemotePath(hostPlatform, kiroHomeDir, 'sessions', 'cli')
+      : joinRemotePath(hostPlatform, remoteHome, '.kiro', 'sessions', 'cli'),
     extensions: ['.json'],
     filePredicate: isKiroSessionMetadataPath,
     contentDependencyPath: kiroTranscriptPathForMetadata,

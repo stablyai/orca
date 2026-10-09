@@ -54,7 +54,8 @@ type RemoteContentParser<T = string> = (
 export function remoteSessionSources(
   remoteHome: string,
   hostPlatform: RemoteHostPlatform,
-  includeAntigravityIdeSessions = false
+  includeAntigravityIdeSessions = false,
+  kiroHomeDir?: string
 ): RemoteSessionSource[] {
   return [
     ...remoteCodexSources(remoteHome, hostPlatform),
@@ -122,7 +123,7 @@ export function remoteSessionSources(
       (path) => remotePathSegments(path).includes('agent-transcripts')
     ),
     remoteClineSource(remoteHome, hostPlatform),
-    remoteKiroSource(remoteHome, hostPlatform),
+    remoteKiroSource(remoteHome, hostPlatform, kiroHomeDir),
     source(
       'hermes',
       remoteHome,
