@@ -30,6 +30,7 @@ import { observeRelayDatabase } from './observed-relay-database.js'
 import { RelayObservability } from './relay-observability.js'
 import { combineRegionalRehomeSafety } from './regional-rehome-safety.js'
 import { RelayConnectionLedger, type RelayConnectionUpgrade } from './relay-connection-ledger.js'
+import { PlacementLoadBand } from './placement-load-band.js'
 import { createRelayReadiness } from './relay-readiness.js'
 import { createRelayTokenVerifier, readBearer } from './relay-token-verifier.js'
 import { closeRelayWebSocket } from './relay-websocket-close.js'
@@ -129,6 +130,7 @@ export function createRelayServer(
   const store = new RelayCredentialStore(observedDatabase, options.now)
   const assignments = new RelayAssignmentStore(observedDatabase, options.now, {
     requireLiveCells: config.role === 'director',
+    placementLoadBand: config.role === 'director' ? new PlacementLoadBand(options.random) : undefined,
     regionalRehomeCohortPercent: config.regionCorrectionCohortPercent ?? 0,
     // The director runs in the database's region; only its rehome readers use this.
     regionalRehomeDirectorRegion:
