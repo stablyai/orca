@@ -99,6 +99,32 @@ describe('per-repo "Hide when idle"', () => {
     expect(visible).toEqual(allIds)
   })
 
+  it('keeps the open workspace visible through the global "Hide sleeping" sweep too', () => {
+    const visible = computeVisibleWorktreeIds(
+      worktreesByRepo,
+      allIds,
+      visibleOptions({
+        activeWorktreeId: idleId,
+        showSleepingWorkspaces: false,
+        alwaysShowDefaultBranchWorkspace: false
+      })
+    )
+    expect(visible).toEqual([idleId, busyId])
+  })
+
+  it('leaves the global "Hide sleeping" sweep unchanged for projects that did not opt in', () => {
+    const visible = computeVisibleWorktreeIds(
+      worktreesByRepo,
+      allIds,
+      visibleOptions({
+        activeWorktreeId: ordinaryId,
+        showSleepingWorkspaces: false,
+        alwaysShowDefaultBranchWorkspace: false
+      })
+    )
+    expect(visible).toEqual([busyId])
+  })
+
   it('treats a browser tab, live agent or structured chat as activity', () => {
     for (const overrides of [
       { browserTabsByWorktree: { [idleId]: [{ id: 'browser-1' }] } },

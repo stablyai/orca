@@ -48,7 +48,7 @@ import {
   computeRenderedSidebarWorktrees
 } from './rendered-sidebar-worktree-order'
 import { isWorkspaceFromOtherDevice } from './workspace-creator-visibility'
-import { isHiddenWhileIdle } from './repo-idle-visibility'
+import { isHiddenWhileIdle, isOpenHideWhenIdleWorkspace } from './repo-idle-visibility'
 import { isDefaultBranchWorkspace } from './default-branch-workspace'
 import { getLineageAncestorIndex, getSortedWorktreeRankIndex } from './visible-worktree-indexes'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
@@ -157,6 +157,7 @@ export function computeVisibleWorktrees(
     all = all.filter(
       (w) =>
         isSleepingSweepExemptWorkspace(w, opts.alwaysShowDefaultBranchWorkspace) ||
+        isOpenHideWhenIdleWorkspace(w, opts) ||
         !isInactiveWorkspace(
           w.id,
           opts.tabsByWorktree,
