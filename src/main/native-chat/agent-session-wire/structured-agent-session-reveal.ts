@@ -93,7 +93,8 @@ export function createStructuredAgentSessionHostRestore(
     // Tracked like a start, so a quit waits for an attempt before it closes what it writes to.
     track: (operation) => startup.tasks.trackAttach(operation),
     publishGenerationEnded: (sessionId, options) =>
-      startup.clientDelivery.publishGenerationEnded(sessionId, options)
+      startup.clientDelivery.publishGenerationEnded(sessionId, options),
+    reconcile
   })
   let startupSettled: Promise<void> = Promise.resolve()
   const restorer = new StructuredAgentSessionReadableRestorer({

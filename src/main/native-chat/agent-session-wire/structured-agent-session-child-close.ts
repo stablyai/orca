@@ -10,7 +10,10 @@
 import { refuse } from '../../../shared/agent-session-wire-refusals'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
 import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
-import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
+import type {
+  StructuredAgentSessionHostSession,
+  StructuredAgentSessionProviderChild
+} from './structured-agent-session-host-types'
 import { stopAgentSessionProviderRoot } from './structured-agent-session-provider-exit-proof'
 import { releaseStoredStructuredAgentSessionOwnerAfterExit } from './structured-agent-session-lease-release'
 import { isSurfaceReleasableAgentSessionRecord } from '../../runtime/agent-session-surface-release-transition'
@@ -102,7 +105,10 @@ function closeProviderRoot(
 /** Whether the lease still names the child this host last proved gone, unreleased: only that
  *  in-memory proof lets this host release it without a probe, so the handle carrying it stays. */
 export function structuredAgentSessionEndedChildHoldsLease(
-  context: Pick<StructuredAgentSessionLifetimeContext, 'deps' | 'sessions'>,
+  context: {
+    deps: Pick<StructuredAgentSessionLifetimeContext['deps'], 'store'>
+    sessions: ReadonlyMap<string, Pick<StructuredAgentSessionHostSession, 'lastEndedChild'>>
+  },
   sessionId: string
 ): boolean {
   const ended = context.sessions.get(sessionId)?.lastEndedChild

@@ -17,8 +17,9 @@ export type StructuredAgentSessionReconciliationLoad =
   | { kind: 'loaded'; session: StructuredAgentSessionHostSession }
   /** Opened by a reader meanwhile, or quitting: nothing read. */
   | { kind: 'skipped' }
-  /** Nothing owed: no journal (nothing was ever written), or one damaged or written by a newer Orca,
-   *  which no retry reads (reported once here). */
+  /** Nothing owed: no journal (nothing was ever written), a named epoch holding no row (founded
+   *  afresh in memory, so nothing durable is there to settle), or one damaged or written by a
+   *  newer Orca, which no retry reads (reported once here). */
   | { kind: 'nothing' }
 
 /** Replays a closed chat's journal, for a caller in a background slot. Throws only a failure that
@@ -36,7 +37,17 @@ export async function loadStructuredAgentSessionForReconciliation(
   }
   try {
     const opened = await restoreStructuredAgentSessionRead(deps, sessionId)
-    return opened ? { kind: 'loaded', session: opened.session } : { kind: 'nothing' }
+    if (!opened) {
+      return { kind: 'nothing' }
+    }
+    const { journal } = opened.session
+    // The read founded a fresh epoch because the named one holds no row: nothing durable to settle,
+    // and a handle on an epoch the store never names would read as stale on every attempt.
+    if (readJournalSessionEpoch(deps.journalDatabase.db, sessionId) !== journal.cursor().epoch) {
+      await journal.close()
+      return { kind: 'nothing' }
+    }
+    return { kind: 'loaded', session: opened.session }
   } catch (error) {
     if (!isJournalOpenFailurePermanent(error)) {
       throw error

@@ -135,3 +135,31 @@ describe('a visible chat whose agent outlived the earlier process', () => {
     expect(await turnState(current, CHAT)).toBe('interrupted')
   })
 })
+
+describe('a chat whose startup lease reconcile failed (storage was busy)', () => {
+  it('is reconciled by its worker after a backoff, and its turn settles with no attach or send', async () => {
+    await seedTestAgentSessionRecordStore(root, { records: [record(CHAT, false)] })
+    await seedScanJournal(root, CHAT)
+    store = await openTestAgentSessionRecordStore(root)
+    const busy = () => new Error('database is locked')
+    // Startup's reconcile and the worker's first retry meet a locked store; the next one lands.
+    const reconcile = vi
+      .spyOn(store, 'reconcileOnRestart')
+      .mockRejectedValueOnce(busy())
+      .mockRejectedValueOnce(busy())
+    host = openScanHost(root, store)
+    const current = host
+
+    await current.reconcileRestartLeases()
+    expect(store.getRecord(CHAT)?.lease.unreconciled).toBe(true)
+    await vi.waitFor(() => expect(store.getRecord(CHAT)?.lease.unreconciled).toBe(false), {
+      timeout: 5_000
+    })
+    await idle(current, [CHAT])
+
+    expect(reconcile.mock.calls.length).toBeGreaterThanOrEqual(3)
+    // The owner was proven gone: the turn ends, and nothing reads working.
+    expect(await turnState(current, CHAT)).toBe('interrupted')
+    expect(current.currentWork(CHAT)?.working()).toBe(false)
+  })
+})

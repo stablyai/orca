@@ -24,7 +24,6 @@
 // journal can never load, when the database is read-only, or at shutdown. Nothing a person does
 // (send, start, open, Stop, answer) ever waits on it.
 
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionGenerationEnd } from '../../runtime/agent-session-generation-end'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
@@ -38,14 +37,15 @@ import {
   loadStructuredAgentSessionForReconciliation,
   structuredAgentSessionJournalIsCurrent
 } from './structured-agent-session-reconciliation-load'
+import { StructuredAgentSessionReconciliationMemory } from './structured-agent-session-reconciliation-memory'
+import {
+  RECONCILIATION_MAX_FAILED_ATTEMPTS,
+  reconciliationBackoffDelay
+} from './structured-agent-session-reconciliation-backoff'
 import {
   StructuredAgentSessionReconciliationSlots,
   type StructuredAgentSessionReconciliationSlotWaiter
 } from './structured-agent-session-reconciliation-slots'
-
-export const RECONCILIATION_BACKOFF_MS = { first: 1_000, max: 30_000 } as const
-/** Consecutive failed attempts after which the worker gives up (about three minutes of backoff). */
-export const RECONCILIATION_MAX_FAILED_ATTEMPTS = 10
 
 export type StructuredAgentSessionReconciliationSignal = {
   /** Proof the lease no longer holds (`AgentSessionGenerationEnd.evidence`). */
@@ -65,11 +65,15 @@ export type StructuredAgentSessionReconciliationContext =
     track: <T>(operation: Promise<T>) => Promise<T>
     /** Publishes what is current now and wakes the queued-card drain. */
     publishGenerationEnded: (sessionId: string, options?: { restate?: boolean }) => void
+    /** Startup's lease reconcile (`createReaderReconcile`): whether every lease is settled. */
+    reconcile: (sessionId: string) => Promise<boolean>
   }
 
 /** `done`: a pass found nothing owed, unless a signal came meanwhile; `retire`: nothing this
- *  worker can do, whatever came meanwhile (a later signal starts a new one). */
-type Outcome = 'done' | 'retire' | 'again' | 'failed'
+ *  worker can do, whatever came meanwhile (a later signal starts a new one); `again`: a pass wrote
+ *  rows, so the next one verifies at once; `stale`: no pass ran (its read went stale), which backs
+ *  off like a failure, since nothing moved. */
+type Outcome = 'done' | 'retire' | 'again' | 'stale' | 'failed'
 
 type ChatWorker = StructuredAgentSessionReconciliationSlotWaiter & {
   debts: StructuredAgentSessionReconciliationDebts
@@ -86,11 +90,7 @@ type ChatWorker = StructuredAgentSessionReconciliationSlotWaiter & {
 
 export class StructuredAgentSessionReconciliation {
   private readonly workers = new Map<string, ChatWorker>()
-  /** Debts a retired worker still held (a lease in recovery, or a run given up), for the next. */
-  private readonly parked = new Map<string, StructuredAgentSessionReconciliationDebts>()
-  /** Process-scoped, never persisted: where this host process first opened each chat's journal.
-   *  Every send at or before it was accepted by an earlier host process, every one after by this. */
-  private readonly firstOpened = new Map<string, AgentJournalCursor>()
+  private readonly memory = new StructuredAgentSessionReconciliationMemory()
   private disposed = false
   private readonly slots = new StructuredAgentSessionReconciliationSlots(() => this.disposed)
   private readonly unsubscribe: () => void
@@ -134,11 +134,8 @@ export class StructuredAgentSessionReconciliation {
   }
 
   /** A handle this host opened on the chat's journal; only its first one marks the boundary. */
-  noteOpened = (sessionId: string, journal: Pick<AgentSessionJournal, 'openedAt'>): void => {
-    if (!this.firstOpened.has(sessionId)) {
-      this.firstOpened.set(sessionId, journal.openedAt())
-    }
-  }
+  noteOpened = (sessionId: string, journal: Pick<AgentSessionJournal, 'openedAt'>): void =>
+    this.memory.noteOpened(sessionId, journal)
 
   /** A reader opened the chat: whatever its worker still waits a slot for goes ahead of the scan. */
   prioritize = (sessionId: string): void => {
@@ -183,7 +180,7 @@ export class StructuredAgentSessionReconciliation {
     let worker = this.workers.get(sessionId)
     if (!worker) {
       worker = {
-        debts: this.parked.get(sessionId) ?? {},
+        debts: this.memory.take(sessionId),
         running: false,
         dirty: false,
         timer: null,
@@ -191,7 +188,6 @@ export class StructuredAgentSessionReconciliation {
         attempted: [],
         urgent: false
       }
-      this.parked.delete(sessionId)
       this.workers.set(sessionId, worker)
     }
     return worker
@@ -213,8 +209,21 @@ export class StructuredAgentSessionReconciliation {
   private async runAttempt(sessionId: string, worker: ChatWorker): Promise<Outcome> {
     try {
       const { store } = this.context.deps
-      if (this.disposed || store.readOnly || !store.getRecord(sessionId)) {
+      if (!this.disposed && !store.getRecord(sessionId)) {
+        // The chat is gone: nothing of it is owed again.
+        this.memory.forget(sessionId)
         return 'retire'
+      }
+      if (this.disposed || store.readOnly) {
+        return 'retire'
+      }
+      // Startup's reconcile failed (storage was busy): retried here, the same deduped step, so a
+      // gone owner's lease does not read live until a person sends. It never stops a process.
+      if (
+        store.getRecord(sessionId)?.lease.unreconciled &&
+        !(await this.context.reconcile(sessionId))
+      ) {
+        return 'failed'
       }
       if (!this.context.sessions.has(sessionId) && !worker.loaded) {
         const stop = await this.load(sessionId, worker)
@@ -237,14 +246,14 @@ export class StructuredAgentSessionReconciliation {
     const session = this.sessionFor(sessionId, worker)
     // Closed, or written by another handle, since this attempt began: the next one reads it again.
     if (!session) {
-      return 'again'
+      return 'stale'
     }
     const pass = await runStructuredAgentSessionReconciliationPass(
       this.context,
       sessionId,
       session,
       worker.debts,
-      this.firstOpened.get(sessionId) ?? session.journal.openedAt()
+      this.memory.processOpened(sessionId) ?? session.journal.openedAt()
     )
     if (pass.failed.length > 0) {
       this.warn(sessionId, pass.failed[0])
@@ -292,7 +301,7 @@ export class StructuredAgentSessionReconciliation {
     }
     if (loaded.kind === 'loaded') {
       worker.loaded = loaded.session
-      this.noteOpened(sessionId, loaded.session.journal)
+      this.memory.noteOpened(sessionId, loaded.session.journal)
     }
     // Skipped: a reader opened it meanwhile, and the pass uses their conversation.
     return loaded.kind === 'nothing' ? 'retire' : null
@@ -321,7 +330,7 @@ export class StructuredAgentSessionReconciliation {
       this.dropLoaded(worker)
       return
     }
-    if (outcome === 'failed') {
+    if (outcome === 'failed' || outcome === 'stale') {
       worker.failures += 1
       if (worker.failures >= RECONCILIATION_MAX_FAILED_ATTEMPTS) {
         this.context.deps.logger.warn("gave up settling a gone agent's leftover work for now", {
@@ -332,11 +341,7 @@ export class StructuredAgentSessionReconciliation {
         this.retire(sessionId, worker)
         return
       }
-      const delay = Math.min(
-        RECONCILIATION_BACKOFF_MS.max,
-        RECONCILIATION_BACKOFF_MS.first * 2 ** (worker.failures - 1)
-      )
-      this.schedule(sessionId, worker, delay)
+      this.schedule(sessionId, worker, reconciliationBackoffDelay(worker.failures))
       return
     }
     worker.failures = 0
@@ -365,9 +370,8 @@ export class StructuredAgentSessionReconciliation {
     }
     worker.timer = null
     this.workers.delete(sessionId)
-    const { evidence, exit } = worker.debts
-    if (!this.disposed && (evidence || exit) && this.context.deps.store.getRecord(sessionId)) {
-      this.parked.set(sessionId, worker.debts)
+    if (!this.disposed && this.context.deps.store.getRecord(sessionId)) {
+      this.memory.park(sessionId, worker.debts)
     }
     if (!worker.running) {
       this.dropLoaded(worker)

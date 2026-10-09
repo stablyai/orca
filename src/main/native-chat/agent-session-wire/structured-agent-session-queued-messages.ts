@@ -29,6 +29,10 @@ import { QueuedMessageNotConsumableError } from '../agent-session-journal/journa
 import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import {
+  isTransientStorageFailure,
+  StructuredAgentSessionQueuedDrainRetry
+} from './structured-agent-session-queued-drain-retry'
+import {
   structuredAgentSessionHostInstance,
   structuredQueuePauses
 } from './structured-agent-session-queued-pause'
@@ -233,6 +237,9 @@ export type QueuedMessageDrainDeps = {
   currentWork: (sessionId: string) => StructuredAgentSessionCurrentWork | null
   /** The consumed submission is ordinary #22821 work from here on. */
   wakeDelivery: (sessionId: string) => void
+  /** An exited child's lease still awaits its release (`structuredAgentSessionEndedChildHoldsLease`):
+   *  the release's repair wakes the drain once it lands. */
+  endedChildHoldsLease: (sessionId: string) => boolean
   logger: StructuredAgentSessionLogger
 }
 
@@ -247,6 +254,7 @@ export type QueuedMessageDrainDeps = {
 export class StructuredAgentSessionQueuedMessageDrain {
   private readonly scheduled = new Set<string>()
   private disposed = false
+  private readonly retry = new StructuredAgentSessionQueuedDrainRetry((id) => this.schedule(id))
 
   constructor(private readonly deps: QueuedMessageDrainDeps) {}
 
@@ -255,6 +263,7 @@ export class StructuredAgentSessionQueuedMessageDrain {
    *  right before it appends, since quit can land while it awaits. */
   dispose(): void {
     this.disposed = true
+    this.retry.dispose()
   }
 
   schedule(sessionId: string): void {
@@ -318,6 +327,15 @@ export class StructuredAgentSessionQueuedMessageDrain {
     const work = this.deps.currentWork(sessionId)
     const next = work ? nextStructuredQueuedMessage({ journal, record, work }) : null
     if (this.disposed || !next) {
+      this.retry.settled(sessionId)
+      return
+    }
+    // An exited child's lease not yet released: its storage is failing now, and the release's
+    // repair wakes this step once it lands. A person's Send now never waits on it.
+    if (
+      this.deps.endedChildHoldsLease(sessionId) ||
+      this.retry.waiting(sessionId, next.messageId)
+    ) {
       return
     }
     // Always a fresh id: the submission names its draft by `queuedMessageId`, never by id equality.
@@ -344,17 +362,22 @@ export class StructuredAgentSessionQueuedMessageDrain {
     } catch (error) {
       if (error instanceof QueuedMessageNotConsumableError) {
         // Lost a race with a Send-now, a Delete or a Stop; their transition stands.
+        this.retry.settled(sessionId)
         return
       }
-      // Pre-consume failure: the draft stays waiting, held with the marker on
-      // the card (a stored fact, so it survives eviction and restart). The
-      // hold's own commit notification publishes it. An explicit Send retries;
-      // no automatic retry loop.
+      // Storage another connection holds: retried after a backoff, with nothing shown.
+      if (isTransientStorageFailure(error) && this.retry.retryLater(sessionId, next.messageId)) {
+        return
+      }
+      // A refusal, or contention past its retries: the draft stays waiting, held with the marker
+      // on the card (a stored fact, so it survives eviction and restart). The hold's own commit
+      // notification publishes it. An explicit Send retries.
       await journal.queuedMessages
         .hold({ messageIds: [next.messageId], reason: QUEUED_MESSAGE_PAUSED_SEND_FAILED })
         .catch(() => {})
       throw error
     }
+    this.retry.settled(sessionId)
     this.deps.wakeDelivery(sessionId)
   }
 }

@@ -16,6 +16,7 @@ import {
   sendQueuedStructuredAgentMessage
 } from './structured-agent-session-queued-mutations'
 import { deferredStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { structuredAgentSessionEndedChildHoldsLease } from './structured-agent-session-child-close'
 
 /** `sessions` are the live conversations (their `touch` is the idle sweep's activity renewal,
  *  which the drain's schedule rides); everything else comes from the host's mutation context,
@@ -35,6 +36,8 @@ export function wireStructuredAgentSessionQueuedMessages(
     currentWork: (sessionId) =>
       hostStructuredAgentSessionCurrentWork({ store: context().deps.store, sessions }, sessionId),
     wakeDelivery: (sessionId) => context().wakeDelivery(sessionId),
+    endedChildHoldsLease: (sessionId) =>
+      structuredAgentSessionEndedChildHoldsLease({ deps: context().deps, sessions }, sessionId),
     // Read lazily, like the rest of this wiring: the host's deps are not assigned yet.
     logger: deferredStructuredAgentSessionLogger(() => context().deps.logger)
   })

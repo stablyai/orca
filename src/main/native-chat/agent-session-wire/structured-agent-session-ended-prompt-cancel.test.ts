@@ -1,8 +1,8 @@
 // A Cancel that names a card an ended generation raised, from a client that still shows it. As on
 // main: the card is dismissed in the journal alone, and a provider whose card Cancel routes
-// (Claude, Pi) stops nothing; one with no route (Codex, ACP) interrupts the live turn the request
-// names through that turn's own cancel, never the chat's Stop, so queued messages stay and no Stop
-// event pauses the queue.
+// (Claude, Pi) stops nothing. One with no route gets the turn's own cancel with the card, never the
+// chat's Stop, so queued messages stay and no Stop event pauses the queue: ACP interrupts the live
+// turn the request names; Codex finds no such card in its live child and interrupts nothing.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -173,29 +173,33 @@ describe('a card an ended generation raised, cancelled from a client that still 
     }
   )
 
-  it.each(['Codex', 'ACP'])(
-    '%s (no card route): the named live turn is interrupted through its own cancel',
-    async () => {
-      const { journal, itemId } = await endedCardAndLiveTurn()
-      const agent = provider()
-      const stop = chatStop()
-      const ctx = context(journal, agent)
-      const input = { turnId: 'turn-2', prompt: { itemId, expectedRevision: 1 } }
+  it.each([
+    ['ACP: the named live turn is interrupted', true],
+    ['Codex: its live child holds no such card, so nothing is interrupted, as on main', false]
+  ] as const)("no card route, through the turn's own cancel. %s", async (_name, interrupts) => {
+    const { journal, itemId } = await endedCardAndLiveTurn()
+    const agent = provider()
+    agent.cancelTurn.mockResolvedValueOnce({ cancelled: interrupts })
+    const stop = chatStop()
+    const ctx = context(journal, agent)
+    const input = { turnId: 'turn-2', prompt: { itemId, expectedRevision: 1 } }
 
-      const result = await cancelStructuredAgentSessionPrompt(ctx, input, {
-        stop,
-        // What the host's plan runs: the turn's cancel, with the card, as on main.
-        interrupt: () => performCancel(ctx, { clientOperationId: 'cancel-1', ...input })
-      })
+    const result = await cancelStructuredAgentSessionPrompt(ctx, input, {
+      stop,
+      // What the host's plan runs: the turn's cancel, with the card, as on main.
+      interrupt: () => performCancel(ctx, { clientOperationId: 'cancel-1', ...input })
+    })
 
-      expect(result).toMatchObject({ ok: true })
-      expect(agent.cancelTurn).toHaveBeenCalledOnce()
-      expect(agent.cancelTurn.mock.calls[0]?.[0]).toMatchObject({ turnId: 'turn-2' })
-      expect(stop).not.toHaveBeenCalled()
-      expect(resolution(journal, itemId)).toBe('cancelled')
-      queueUntouched(journal)
-    }
-  )
+    expect(result).toMatchObject({ ok: true, value: { cancelled: interrupts } })
+    expect(agent.cancelTurn).toHaveBeenCalledOnce()
+    expect(agent.cancelTurn.mock.calls[0]?.[0]).toMatchObject({
+      turnId: 'turn-2',
+      prompt: { itemId }
+    })
+    expect(stop).not.toHaveBeenCalled()
+    expect(resolution(journal, itemId)).toBe('cancelled')
+    queueUntouched(journal)
+  })
 
   it.each([
     ['naming no turn', undefined],

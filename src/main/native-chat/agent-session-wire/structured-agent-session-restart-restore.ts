@@ -80,7 +80,8 @@ export async function restoreStructuredAgentSessionsOnRestart(
   }
   // One check for the pass. Each chat checks again while it holds, since another writer can mark
   // leases unreconciled mid-pass; after the first failure, retrying per chat only waits on the
-  // same store again, and the next attach or send settles those chats instead.
+  // same store again; each chat's reconciliation worker retries it with a backoff instead, and the
+  // next attach or send reconciles before it acts.
   let settled = await input.reconcile(first.sessionId)
   const settleLeases = async (sessionId: string): Promise<void> => {
     // A session latched in recovery exits here at startup, without waiting for a client.

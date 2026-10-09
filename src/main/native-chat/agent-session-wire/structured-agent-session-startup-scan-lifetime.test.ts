@@ -16,9 +16,12 @@ import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
+import { publishJournalSessionEpoch } from '../agent-session-journal/journal-row-table'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { HOST_TEST_LOCATION as LOCATION } from './structured-agent-session-host-test-data'
+import * as reconciliationLoad from './structured-agent-session-reconciliation-load'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import {
   openScanHost,
@@ -211,5 +214,38 @@ describe('a startup worker whose step cannot succeed', () => {
     // Not tried here at all: without its provider it cannot succeed.
     expect(warnings).toEqual([])
     expect(await turnState(current, CHAT)).toBe('unverifiable')
+  })
+
+  it('retires at once on a journal whose named epoch holds no row, reading it once', async () => {
+    // An older build's repair crashed after naming the epoch: nothing durable is there to settle.
+    await seedTestAgentSessionRecordStore(root, { records: [record(CHAT, true)] })
+    publishJournalSessionEpoch(
+      openTestJournalHostDatabase(root).db,
+      { sessionId: CHAT, workspaceId: LOCATION.workspaceId },
+      'empty-epoch'
+    )
+    store = await openTestAgentSessionRecordStore(root)
+    const counter = countOpens()
+    const current = openHost()
+    await current.reconcileRestartLeases()
+    await current.startupSettled()
+
+    expect(current.collaboratorsForTests().reconciliation.owes(CHAT)).toBe(false)
+    await new Promise((resolve) => setTimeout(resolve, 1_200))
+    expect(counter.opens).toBe(1)
+  })
+
+  it('backs off a read that goes stale on every attempt instead of re-reading at once', async () => {
+    await seed([CHAT])
+    vi.spyOn(reconciliationLoad, 'structuredAgentSessionJournalIsCurrent').mockReturnValue(false)
+    const counter = countOpens()
+    const current = openHost()
+    await current.reconcileRestartLeases()
+    await new Promise((resolve) => setTimeout(resolve, 2_500))
+
+    // Attempts at 0 s, 1 s and 3 s: a read each, never a loop.
+    expect(counter.opens).toBeGreaterThanOrEqual(2)
+    expect(counter.opens).toBeLessThanOrEqual(3)
+    expect(current.collaboratorsForTests().reconciliation.owes(CHAT)).toBe(true)
   })
 })

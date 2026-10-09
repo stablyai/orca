@@ -54,8 +54,8 @@ export type ReaderBookkeepingFailures = {
   clear: () => void
 }
 
-/** Startup and the read carry on past a failure: the next attach or send reconciles and resolves
- *  recovery again before it acts. */
+/** Startup and the read carry on past a failure: each chat's reconciliation worker retries it with
+ *  a backoff, and the next attach or send reconciles and resolves recovery again before it acts. */
 export function reportEachFailureOnce(
   logger: StructuredAgentSessionLogger
 ): ReaderBookkeepingFailures {
@@ -77,8 +77,9 @@ export function reportEachFailureOnce(
   }
 }
 
-/** The reconcile a reader runs, at startup and before each restored read: it never throws, since
- *  an unreconciled lease grants no writer and the next send reconciles again before it acts.
+/** The reconcile a reader runs, at startup, before each restored read and in the reconciliation
+ *  worker: it never throws, since an unreconciled lease grants no writer and the next send
+ *  reconciles again before it acts.
  *  Answers whether every lease is settled. */
 export function createReaderReconcile(
   reconcile: (sessionId: string) => Promise<AgentSessionWireRefusal | null>,

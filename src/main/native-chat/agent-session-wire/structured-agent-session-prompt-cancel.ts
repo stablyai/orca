@@ -71,9 +71,10 @@ export async function cancelStructuredAgentSessionPrompt(
 
 /** A card an ended generation raised: no live provider holds it, so it is dismissed in the journal
  *  alone. As on main, a provider whose card Cancel routes (a dismissal, or a Stop of the turn that
- *  raised it) stops nothing, since the live turn did not raise it; one with no route interrupts the
- *  turn the request names when that turn is live, through the turn's own cancel, never the chat's
- *  Stop, so queued messages stay and the queue is not paused. */
+ *  raised it) stops nothing, since the live turn did not raise it. One with no route gets the
+ *  named live turn's own cancel with the card, as main's plan does, never the chat's Stop, so
+ *  queued messages stay and the queue is not paused: ACP interrupts that turn, and Codex, finding
+ *  no such card in its live child, interrupts nothing. */
 async function cancelEndedGenerationPrompt(
   ctx: AgentSessionTurnContext,
   input: { turnId?: string },
