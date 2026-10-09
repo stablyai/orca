@@ -137,6 +137,20 @@ describe('database rejection fence', () => {
     ])
   })
 
+  it('fences a socket reset or broken pipe thrown mid-statement', async () => {
+    for (const code of ['ECONNRESET', 'EPIPE']) {
+      const dropped = Object.assign(new Error(`read ${code}`), { code })
+      const reason = await rejectionFrom(() =>
+        databaseFailingWith(dropped).transaction(
+          async (transaction) => await transaction.query('SELECT 1')
+        )
+      )
+      expect(reason).toBe(dropped)
+      expect(() => handleRelayUnhandledRejection(reason)).not.toThrow()
+    }
+    expect(error).not.toHaveBeenCalled()
+  })
+
   it('keeps a database-looking error fatal when the database layer never saw it', () => {
     const socketReset = Object.assign(new Error('write EPIPE'), { code: 'EPIPE' })
     const unmarked = serverError('23505', 'duplicate key')

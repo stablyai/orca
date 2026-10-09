@@ -17,6 +17,8 @@ const databaseLayerErrors = new WeakSet<object>()
 // Set by pg's query_timeout timer (pg@8.22 client.js).
 export const POSTGRES_READ_TIMEOUT_MESSAGE = 'Query read timeout'
 const CONNECTION_TERMINATED_PREFIX = 'Connection terminated'
+// pg@8.22 rejects the active query with the raw socket error when the connection drops.
+const DROPPED_SOCKET_ERRNOS = new Set(['ECONNRESET', 'EPIPE'])
 const FENCED_SQLSTATE_CLASSES = new Set(['08', '23', '40', '53', '55', '57', '58'])
 // Class 25 is otherwise a code error (a statement in the wrong transaction state). 25P03 is the
 // server ending a session left idle in a transaction past 5 s, which a whole-VM stall of 6-7 s
@@ -39,6 +41,7 @@ export function isFencedRelayDatabaseRejection(reason: unknown): boolean {
   }
   if (!(reason instanceof Error) || reason instanceof TypeError) return false
   return (
+    ('code' in reason && DROPPED_SOCKET_ERRNOS.has(String(reason.code))) ||
     reason.message === POSTGRES_READ_TIMEOUT_MESSAGE ||
     reason.message.startsWith(CONNECTION_TERMINATED_PREFIX)
   )
