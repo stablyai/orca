@@ -61,6 +61,15 @@ locals {
     # close but stamps it with the stream's start, and a log-based metric counts by that stamp. Of
     # the 1,046 `internal_error` streams on 2026-10-06 18:34Z, 42 were stamped within 10 minutes of
     # the drop; the median was 2.4 h earlier, so an LB-log rate never shows the pulse.
+    # Both lines come from the unhandledRejection fence (relay-database-rejection-fence.ts).
+    database_rejection_fenced = {
+      description = "Database faults that reached unhandledRejection and were survived: a caller forgot to await a database promise. Should be zero; each one is a bug to find."
+      filter      = "((resource.type=\"cloud_run_revision\" AND (${local.relay_service_log_filter})) OR resource.type=\"gce_instance\") AND jsonPayload.event=\"orca_relay_database_rejection_fenced\""
+    }
+    process_fatal = {
+      description = "Unhandled rejections the fence kept fatal (not a database fault); each is followed by a process exit."
+      filter      = "((resource.type=\"cloud_run_revision\" AND (${local.relay_service_log_filter})) OR resource.type=\"gce_instance\") AND jsonPayload.event=\"orca_relay_process_fatal\""
+    }
     cell_control_abnormal_closes = {
       description = "Desktop control sockets a GCE cell saw end with no close frame (1006), counted when they closed. Hundreds on one cell in a minute is the load balancer ending streams."
       filter      = "resource.type=\"gce_instance\" AND logName=\"projects/${var.project_id}/logs/cos_containers\" AND jsonPayload.message:\"[orca-relay] control closed \" AND jsonPayload.message:\" code=1006 \""
@@ -1384,4 +1393,167 @@ resource "google_monitoring_dashboard" "relay_incident" {
   })
 
   depends_on = [google_logging_metric.relay_incident, google_logging_metric.relay_snapshot]
+}
+
+# ticketCheck=shadow (assignment-lease-shadow.ts): one line per cell per minute with traffic.
+# The lease never decides an admission, so these observe only.
+locals {
+  relay_assignment_lease_shadow_metrics = {
+    agree         = { field = "classes.agree", description = "Host hellos whose echoed lease was valid and the database admitted." }
+    disagree      = { field = "classes.disagree", description = "Host hellos whose echoed lease was valid but the database refused; step 5 must explain each before a lease alone admits." }
+    absent        = { field = "classes.absent", description = "Host hellos with no echoed lease (desktops that predate the header)." }
+    expired       = { field = "classes.expired", description = "Host hellos whose echoed lease had expired." }
+    bad_signature = { field = "classes.badSignature", description = "Host hellos whose echoed lease failed signature, key id, or shape checks." }
+    wrong_host    = { field = "classes.wrongHost", description = "Host hellos whose echoed lease named another user or host." }
+    wrong_cell    = { field = "classes.wrongCell", description = "Host hellos whose echoed lease named another cell; expected during drains." }
+    epoch_behind  = { field = "classes.epochBehind", description = "Host hellos whose echoed lease was older than the hello's assignment epoch." }
+    epoch_ahead   = { field = "classes.epochAhead", description = "Host hellos whose echoed lease was newer than the hello's assignment epoch." }
+    db_read_ms    = { field = "dbReadMs.p99", description = "p99 of the hello's assignment database read, the read a lease-admitted hello would skip." }
+  }
+}
+
+resource "google_logging_metric" "relay_assignment_lease_shadow" {
+  for_each = local.relay_assignment_lease_shadow_metrics
+
+  project         = var.project_id
+  name            = "orca_relay_assignment_lease_shadow_${each.key}"
+  description     = each.value.description
+  filter          = "resource.type=\"gce_instance\" AND jsonPayload.event=\"orca_relay_assignment_lease_shadow\""
+  value_extractor = "EXTRACT(jsonPayload.${each.value.field})"
+  label_extractors = {
+    cell_id = "EXTRACT(jsonPayload.cellId)"
+  }
+
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "DISTRIBUTION"
+    unit        = each.key == "db_read_ms" ? "ms" : "1"
+
+    labels {
+      key         = "cell_id"
+      value_type  = "STRING"
+      description = "Durable relay cell identifier."
+    }
+  }
+
+  bucket_options {
+    exponential_buckets {
+      num_finite_buckets = 24
+      growth_factor      = 2
+      scale              = 1
+    }
+  }
+}
+
+resource "google_monitoring_alert_policy" "relay_process_fatal" {
+  project               = var.project_id
+  display_name          = "Orca Relay: fatal unhandled rejection"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = var.relay_alert_notification_channels
+
+  dynamic "conditions" {
+    for_each = {
+      "Cloud Run" = "cloud_run_revision"
+      "GCE cell"  = "gce_instance"
+    }
+    content {
+      display_name = "Fatal unhandled rejection (${conditions.key})"
+
+      condition_threshold {
+        filter          = "resource.type=\"${conditions.value}\" AND metric.type=\"logging.googleapis.com/user/orca_relay_process_fatal\""
+        comparison      = "COMPARISON_GT"
+        threshold_value = 0
+        duration        = "0s"
+
+        aggregations {
+          alignment_period     = "300s"
+          per_series_aligner   = "ALIGN_SUM"
+          cross_series_reducer = "REDUCE_SUM"
+          group_by_fields      = [conditions.value == "gce_instance" ? "resource.label.\"instance_id\"" : "resource.label.\"service_name\""]
+        }
+
+        trigger {
+          count = 1
+        }
+      }
+    }
+  }
+
+  documentation {
+    content   = "A relay process logged `orca_relay_process_fatal` and exited: an unhandled rejection that is not a database fault (a programming error, a schema error, or a bare socket errno). On a cell it drops every host. Read the line's `code` and `message`, then the container stderr stack. During a cell roll this is an abort signal for the canary."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [google_logging_metric.relay_incident]
+}
+
+resource "google_monitoring_alert_policy" "relay_database_rejection_fenced" {
+  project               = var.project_id
+  display_name          = "Orca Relay: database rejection survived without a handler"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = var.relay_alert_notification_channels
+
+  dynamic "conditions" {
+    for_each = {
+      "Cloud Run" = "cloud_run_revision"
+      "GCE cell"  = "gce_instance"
+    }
+    content {
+      display_name = "Fenced database rejection (${conditions.key})"
+
+      condition_threshold {
+        filter          = "resource.type=\"${conditions.value}\" AND metric.type=\"logging.googleapis.com/user/orca_relay_database_rejection_fenced\""
+        comparison      = "COMPARISON_GT"
+        threshold_value = 0
+        duration        = "0s"
+
+        aggregations {
+          alignment_period     = "300s"
+          per_series_aligner   = "ALIGN_SUM"
+          cross_series_reducer = "REDUCE_SUM"
+          group_by_fields      = [conditions.value == "gce_instance" ? "resource.label.\"instance_id\"" : "resource.label.\"service_name\""]
+        }
+
+        trigger {
+          count = 1
+        }
+      }
+    }
+  }
+
+  documentation {
+    content   = "A database fault reached `unhandledRejection` and the process survived it (`orca_relay_database_rejection_fenced`). Nothing crashed, but some caller started a database promise without awaiting it: find it from the line's `code`, `message` and timing, and fix it. Before the fence, this was a process exit."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [google_logging_metric.relay_incident]
+}
+
+# A bad signature is a key or key-id mismatch between directors and cells, not a stale lease;
+# it is the one shadow class with no benign source.
+resource "google_monitoring_alert_policy" "relay_assignment_lease_bad_signature" {
+  project               = var.project_id
+  display_name          = "Orca Relay: assignment lease shadow sees bad signatures"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = var.relay_alert_notification_channels
+
+  conditions {
+    display_name = "Bad lease signatures on a cell for 15 minutes"
+
+    # The class totals are distributions (a value extractor needs one), so the sum is the count.
+    condition_prometheus_query_language {
+      query    = "sum by (cell_id) (increase(logging_googleapis_com:user_orca_relay_assignment_lease_shadow_bad_signature_sum{monitored_resource=\"gce_instance\"}[15m])) > 0"
+      duration = "900s"
+    }
+  }
+
+  documentation {
+    content   = "A cell with `ticketCheck: shadow` keeps seeing assignment leases that fail verification. The database still decides every admission, so no desktop is affected; but a mismatch between the directors' and the cell's signing key (or key id) would block `ticketCheck: enforce`. Compare the lease `kid` the directors issue with `k1-<sha256(key)[0:8]>` on the cell."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [google_logging_metric.relay_assignment_lease_shadow]
 }
