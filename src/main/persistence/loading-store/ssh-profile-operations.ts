@@ -157,12 +157,3 @@ export function getSshTargetStateOperations(owner: SshProfileOperations): SshTar
     }
   }
 }
-
-export function installSshProfileOperationsContext(
-  target: SshProfileOperations,
-  source: SshProfileOperations
-): void {
-  Object.defineProperty(target, sshProfileOperationsContext, {
-    value: source[sshProfileOperationsContext]
-  })
-}

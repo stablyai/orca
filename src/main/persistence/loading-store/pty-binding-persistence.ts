@@ -296,12 +296,3 @@ function writePtyBinding(
     throw error
   }
 }
-
-export function installPtyBindingPersistenceOperationsContext(
-  target: PtyBindingPersistenceOperations,
-  source: PtyBindingPersistenceOperations
-): void {
-  Object.defineProperty(target, ptyBindingPersistenceOperationsContext, {
-    value: source[ptyBindingPersistenceOperationsContext]
-  })
-}

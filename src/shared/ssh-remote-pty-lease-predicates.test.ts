@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isLiveSshPtyLease } from './ssh-pty-lease-liveness'
+import { isLiveSshPtyLease } from './ssh-types'
 
 describe('isLiveSshPtyLease', () => {
   it.each([
