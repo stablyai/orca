@@ -90,6 +90,7 @@ export class ClaudeRuntimeAuthSnapshotCapture extends ClaudeRuntimeAuthReadback 
       credentialsJson,
       configOauthAccount:
         configOauthAccount === RUNTIME_OAUTH_ACCOUNT_PARSE_ERROR ? null : configOauthAccount,
+      configPath: paths.configPath,
       keychainCredentialsJson,
       scopedKeychainCredentialsJson,
       legacyKeychainCredentialsJson: legacyKeychainSnapshotJson,
@@ -98,6 +99,40 @@ export class ClaudeRuntimeAuthSnapshotCapture extends ClaudeRuntimeAuthReadback 
       capturedAt: Date.now()
     }
     this.writeJson(snapshotPath, snapshot)
+  }
+
+  /**
+   * Clears the system-default oauthAccount when the snapshot came from another config file.
+   *
+   * Why: older resolvers read ~/.claude/.claude.json whenever it existed, although Claude
+   * without CLAUDE_CONFIG_DIR only reads ~/.claude.json, and snapshots did not record their
+   * source, so the value may belong to a file Claude never read. Nothing on disk proves which
+   * identity was the system's, so it is treated as unknown: restore removes oauthAccount and
+   * Claude repopulates it from its token's profile on next start. Runs before any runtime
+   * mutation so a rollback can never restore the unreconciled value.
+   */
+  protected reconcileSystemDefaultSnapshotConfigPath(): void {
+    const snapshotPath = this.getSystemDefaultSnapshotPath()
+    // Why: invalid snapshots stay for the restore paths that own their cleanup.
+    const snapshot = this.peekSystemDefaultSnapshot(snapshotPath)
+    const { configPath } = this.pathResolver.getRuntimePaths()
+    if (!snapshot || snapshot.configPath === configPath) {
+      return
+    }
+    this.writeJson(snapshotPath, { ...snapshot, configPath, configOauthAccount: null })
+  }
+
+  private peekSystemDefaultSnapshot(snapshotPath: string): ClaudeSystemDefaultSnapshot | null {
+    if (!existsSync(snapshotPath)) {
+      return null
+    }
+    try {
+      const parsed = JSON.parse(readFileSync(snapshotPath, 'utf-8')) as unknown
+      return this.isSystemDefaultSnapshot(parsed) ? parsed : null
+    } catch {
+      // Why: an unparsable snapshot is reported and removed by readSystemDefaultSnapshot.
+      return null
+    }
   }
 
   protected readSystemDefaultSnapshot(snapshotPath: string): ClaudeSystemDefaultSnapshot | null {
