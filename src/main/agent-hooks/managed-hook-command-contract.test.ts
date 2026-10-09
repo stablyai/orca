@@ -25,6 +25,7 @@ import { getMuseManagedCommand, getMuseRemoteManagedCommand } from '../muse/hook
 import { getDshManagedCommand, getDshRemoteManagedCommand } from '../dsh/hook-settings'
 import { getZCodeManagedCommand, getZCodeRemoteManagedCommand } from '../zcode/hook-settings'
 import { getJcodeManagedCommand, getJcodeRemoteManagedCommand } from '../jcode/hook-settings'
+import { getManagedHook as getAuggieManagedHook } from '../auggie/hook-settings'
 import {
   wrapPosixHookCommand,
   wrapWindowsCmdHookCommand,
@@ -226,6 +227,15 @@ const buildersByAgent = new Map<string, CommandBuilders>([
     {
       local: (path) => [getJcodeManagedCommand(path)],
       remote: (path) => [getJcodeRemoteManagedCommand(path)]
+    }
+  ],
+  [
+    // Why bare: Auggie rejects a compound shell wrapper, so the command is the literal
+    // absolute script path with no quoting/wrapping to scan.
+    'aug',
+    {
+      local: (path) => [getAuggieManagedHook(path).command],
+      remote: (path) => [getAuggieManagedHook(path).command]
     }
   ]
 ])

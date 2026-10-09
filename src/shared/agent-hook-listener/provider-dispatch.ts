@@ -25,6 +25,8 @@ import { normalizeCopilotEvent } from './providers/copilot-events'
 import { normalizeHermesEvent } from './providers/hermes-events'
 import { normalizeDevinEvent } from './providers/devin-events'
 import { normalizeKimiEvent } from './providers/kimi-events'
+import { normalizeAuggieEvent } from './providers/aug-events'
+import { readString } from './tool-input-preview'
 import { normalizeMuseEvent } from './providers/muse-events'
 import { normalizeDshEvent } from './providers/dsh-events'
 import { normalizeZCodeEvent } from './providers/zcode-events'
@@ -206,7 +208,21 @@ export function normalizeProviderEvent(input: {
         resolvedPromptText = promptText
       }
       payload = normalizeJcodeEvent(state, eventName, resolvedPromptText, paneKey, hookPayload)
+      break
     }
+    case 'aug':
+      // Why: Auggie's only prompt field is nested conversation.userPrompt (Stop only); extractPromptText misses it.
+      if (typeof hookPayload.conversation === 'object' && hookPayload.conversation !== null) {
+        const conversationPrompt = readString(
+          hookPayload.conversation as Record<string, unknown>,
+          'userPrompt'
+        )
+        if (conversationPrompt) {
+          resolvedPromptText = conversationPrompt
+        }
+      }
+      payload = normalizeAuggieEvent(state, eventName, resolvedPromptText, paneKey, hookPayload)
+      break
   }
 
   return { payload, resolvedPromptText, promptInteractionKey, hasTranscriptPromptEvidence }

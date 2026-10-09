@@ -19,7 +19,21 @@ import { extractCommandCodeToolFields } from './providers/command-code-tool-fiel
 import { isGrokEvent } from './provider-event-names'
 import { extractGrokToolFields } from './providers/grok-tool-fields'
 import { extractHermesToolFields } from './providers/hermes-tool-fields'
+import { extractAuggieToolFields } from './providers/aug-tool-fields'
 import { extractJcodeToolFields } from './providers/jcode-tool-fields'
+
+export function isGrokIdleNotification(message: string | undefined): boolean {
+  if (!message) {
+    return false
+  }
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('type your message') ||
+    lower.includes('enter send') ||
+    lower.includes('shift-tab normal') ||
+    lower.includes('ask a side question')
+  )
+}
 
 /** The per-provider answer to "is this event a user-initiated new turn?". Exported so the
  *  observation stamp reuses it instead of minting a second list of event-name literals. */
@@ -87,6 +101,12 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
       // prompt before the model generates — its real turn boundary. session_start
       // returns early in normalizeJcodeEvent and clears the cache itself.
       return eventName === 'turn_start'
+    case 'aug':
+      // Why: PromptSubmit (added in a newer Auggie build than this integration's original)
+      // fires on every user turn, unlike SessionStart which fires once per process — it is
+      // Auggie's real per-turn boundary. Kept alongside SessionStart for older CLI builds that
+      // never emit PromptSubmit and only ever get one turn boundary at process start.
+      return eventName === 'SessionStart' || eventName === 'PromptSubmit'
   }
 }
 
@@ -210,5 +230,7 @@ export function extractToolFields(
       return extractClaudeToolFields(eventName, hookPayload)
     case 'jcode':
       return extractJcodeToolFields(eventName, hookPayload)
+    case 'aug':
+      return extractAuggieToolFields(eventName, hookPayload)
   }
 }

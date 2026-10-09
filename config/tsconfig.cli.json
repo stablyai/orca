@@ -126,6 +126,8 @@
     "../src/main/antigravity/windows-hook-json-post.ts",
     "../src/main/antigravity/hook-service.ts",
     "../src/main/antigravity/hooks-json-bundle.ts",
+    "../src/main/auggie/hook-settings.ts",
+    "../src/main/auggie/hook-service.ts",
     "../src/main/claude/hook-settings.ts",
     "../src/main/claude/hook-service.ts",
     "../src/main/claude/claude-profile-hook-target.ts",

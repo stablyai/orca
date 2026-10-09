@@ -71,7 +71,16 @@ const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   ask_question: ['question', 'questions'],
   ask_permission: ['Action', 'Target', 'Reason'],
   spawn_subagent: ['prompt', 'description', 'subagent_type'],
-  open_page: ['url']
+  open_page: ['url'],
+  // Why: Auggie's built-in tool names (docs.augmentcode.com/cli/hooks — tool_name examples).
+  // `view` is already covered by the shared entry above.
+  'launch-process': ['command'],
+  'str-replace-editor': ['path'],
+  'save-file': ['path'],
+  'remove-files': ['file_paths', 'path'],
+  'web-fetch': ['url'],
+  'web-search': ['query'],
+  'codebase-retrieval': ['information_request']
 }
 
 const FALLBACK_TOOL_INPUT_KEYS = [

@@ -9,6 +9,7 @@ vi.mock('electron', () => ({
 
 import { ampHookService } from '../amp/hook-service'
 import { antigravityHookService } from '../antigravity/hook-service'
+import { auggieHookService } from '../auggie/hook-service'
 import { claudeHookService } from '../claude/hook-service'
 import { codexHookService } from '../codex/hook-service'
 import { commandCodeHookService } from '../command-code/hook-service'
@@ -61,7 +62,8 @@ describe('remote hook service registry coverage', () => {
       ['codebuddy', codebuddyHookService],
       ['zcode', zcodeHookService],
       ['dsh', dshHookService],
-      ['jcode', jcodeHookService]
+      ['jcode', jcodeHookService],
+      ['aug', auggieHookService]
     ])
 
     // Guard against a service silently missing from the map above as new agents land.
