@@ -2,6 +2,18 @@ export const PET_SIZE_MIN = 60
 export const PET_SIZE_MAX = 360
 export const PET_SIZE_DEFAULT = 180
 
+// Why shared: main validates `pet.select` against the same ids the renderer ships art for.
+export const DEFAULT_PET_ID = 'claude-the-mage'
+export const OPENCODE_PET_ID = 'opencode-the-rogue'
+export const GREMLIN_PET_ID = 'gremlin-the-trickster'
+export const BUNDLED_PET_IDS = [DEFAULT_PET_ID, OPENCODE_PET_ID, GREMLIN_PET_ID] as const
+export type BundledPetId = (typeof BUNDLED_PET_IDS)[number]
+
+/** True for pets that ship with Orca, which have no stored files to read or delete. */
+export function isBundledPetId(id: string | undefined): id is BundledPetId {
+  return BUNDLED_PET_IDS.some((bundledId) => bundledId === id)
+}
+
 /** User-uploaded pet image metadata; renderer fetches bytes from main via pet:read (id, fileName), never learning the on-disk path. */
 export type CustomPet = {
   id: string
@@ -33,4 +45,24 @@ export type SpriteAnimation = {
   frames: number
   /** Per-frame holds in ms (length === frames). Absent means uniform sheet fps. */
   frameDurationsMs?: number[]
+}
+
+export type PetLibraryEntry = {
+  id: string
+  /** Custom pets only; built-in names are localized in the renderer. */
+  name: string | null
+  kind: 'built-in' | 'image' | 'bundle'
+  active: boolean
+}
+
+/** `pet.list` and `pet.select` result; the other `pet.*` mutations embed it so callers see the outcome. */
+export type PetLibrary = {
+  activePetId: string
+  visible: boolean
+  pets: PetLibraryEntry[]
+}
+
+export type PetMutationResult = {
+  pet: { id: string; name: string; kind: 'image' | 'bundle' }
+  library: PetLibrary
 }

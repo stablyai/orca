@@ -37,6 +37,13 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   'skills install': {
     agent: '--agent <names>        Comma-separated install targets; default is detected agents'
   },
+  'pet import': {
+    path: '--path <path>          .codex-pet bundle folder, or the pet.json inside it',
+    name: '--name <name>          Name shown in the pet menu; defaults to the bundle displayName'
+  },
+  'pet rename': {
+    name: '--name <name>          New name shown in the pet menu (40 characters max)'
+  },
   'worktree set': {
     unread: '--unread               Mark the workspace unread in the sidebar',
     read: '--read                 Mark the workspace read, clearing the unread dot'

@@ -1,10 +1,12 @@
 import type { BrowserWindow, IpcMainEvent } from 'electron'
+import type { CustomPet } from '../../shared/pet-types'
 
 /**
  * The desktop facilities `OrcaRuntimeService` uses, which a Node host does not have.
  *
- * Three sites, all optional by nature: a native notification toast, a lookup of the
- * authoritative renderer window, and one ipcMain channel used only by the
+ * Four sites, all optional by nature: a native notification toast, a lookup of the
+ * authoritative renderer window, pet bundle import (its sprite check decodes with
+ * nativeImage), and one ipcMain channel used only by the
  * renderer-backed tab-create fallback. With no renderer that fallback is unreachable —
  * `createTerminal` already takes the background spawn branch when there is no
  * authoritative window (#10333) — so a Node host needs none of them.
@@ -23,6 +25,8 @@ export type RuntimeDesktopSurface = {
   showNotification(input: { title: string; body: string }): boolean
   /** The renderer window with this id, or null when there is no desktop. */
   findWindowById(id: number): BrowserWindow | null
+  /** Copy a `.codex-pet` bundle into pet storage; absent where there is no pet overlay to show it. */
+  importPetBundle?(path: string): Promise<CustomPet>
   onIpc(channel: string, listener: (event: IpcMainEvent, ...args: never[]) => void): void
   removeIpcListener(channel: string, listener: (...args: never[]) => void): void
 }

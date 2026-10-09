@@ -1,5 +1,6 @@
 import { BrowserWindow, ipcMain, Notification, powerMonitor } from 'electron'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
+import { importPetBundleFromPath } from '../ipc/pet-bundle-import'
 import type { RuntimeDesktopSurface } from '../runtime/runtime-desktop-surface'
 import { translateMain } from '../i18n/main-i18n'
 
@@ -15,6 +16,7 @@ export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
     return true
   },
   findWindowById: (id) => BrowserWindow.fromId(id),
+  importPetBundle: importPetBundleFromPath,
   onIpc: (channel, listener) => {
     ipcMain.on(channel, listener as Parameters<typeof ipcMain.on>[1])
   },
