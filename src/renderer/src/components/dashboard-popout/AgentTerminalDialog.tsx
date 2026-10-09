@@ -14,6 +14,8 @@ import { AgentTerminalPreview } from './AgentTerminalPreview'
 import { AgentCardLastMessages, hasAgentCardLastMessages } from './AgentCardLastMessages'
 import { terminalPreviewUnavailableMessage } from './terminal-preview-unavailable-message'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store'
+import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { cn } from '@/lib/class-names'
 
 /** Routing payload for focusing an agent's pane in the main window. */
@@ -139,6 +141,12 @@ export function AgentTerminalDialog({
         onBrowserForeground()
       }
     : undefined
+  const terminalEscape = useAppStore(
+    (s) => s.settings?.experimentalAgentDashboardTerminalEscape ?? 'send-to-agent'
+  )
+  // Why: an IME's cancelling Esc can redispatch as an unmarked Escape with the same code and
+  // timeStamp after compositionend; xterm drops it (_canceledKey), so it must not close either.
+  const imeEscapeRef = useRef<Pick<KeyboardEvent, 'code' | 'timeStamp'> | null>(null)
   return (
     <Dialog open={card !== null} onOpenChange={changeOpen}>
       {card ? (
@@ -154,10 +162,27 @@ export function AgentTerminalDialog({
           className="flex w-[calc(100vw-40px)] max-w-none flex-col gap-0 p-0 sm:max-w-none"
           // Place the close control in the compact header; the default absolute offsets assume dialog padding.
           showCloseButton={false}
-          // Let xterm consume Escape as interrupt without closing the dialog; outside clicks still dismiss.
+          onKeyDownCapture={({ nativeEvent: e }) => {
+            if (isImeOwnedKeyboardEvent(e) && (e.key === 'Escape' || e.code === 'Escape')) {
+              imeEscapeRef.current = { code: e.code, timeStamp: e.timeStamp }
+            }
+          }}
+          // Why: Radix hears Esc in document capture, BEFORE xterm's textarea listener,
+          // and xterm ignores defaultPrevented — preventDefault only keeps the dialog open.
           onEscapeKeyDown={(e) => {
-            if (e.target instanceof HTMLElement && e.target.closest('.xterm')) {
-              e.preventDefault()
+            if (!(e.target instanceof HTMLElement && e.target.closest('.xterm'))) {
+              return
+            }
+            e.preventDefault()
+            const imeEscape = imeEscapeRef.current
+            if (imeEscape?.code === e.code && imeEscape.timeStamp === e.timeStamp) {
+              imeEscapeRef.current = null
+              return
+            }
+            if (terminalEscape === 'close-dialog') {
+              // Why: stopping here keeps Esc from xterm; closing directly survives an earlier listener's preventDefault.
+              e.stopPropagation()
+              onOpenChange(false)
             }
           }}
           // The preview owns focus after snapshot paint; prevent Radix from taking an earlier default target.

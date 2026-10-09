@@ -77,6 +77,17 @@ afterEach(() => {
 })
 
 describe('AgentDashboardDrawer', () => {
+  it('ignores a held Esc so a repeat cannot close the board after the terminal dialog closed', () => {
+    render(<AgentDashboardDrawer statusBarVisible />)
+
+    act(() => useAppStore.setState({ agentDashboardDrawerOpen: true }))
+    fireEvent.keyDown(document.body, { key: 'Escape', repeat: true })
+    expect(useAppStore.getState().agentDashboardDrawerOpen).toBe(true)
+
+    fireEvent.keyDown(document.body, { key: 'Escape' })
+    expect(useAppStore.getState().agentDashboardDrawerOpen).toBe(false)
+  })
+
   it('keeps the dismissal Escape from a focused terminal but not from other fields', () => {
     const terminalInput = document.createElement('textarea')
     terminalInput.className = 'xterm-helper-textarea'
