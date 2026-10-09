@@ -16,7 +16,9 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     if (this.inactiveClaudeFetching.size > 0) {
       return
     }
-    const accounts = this.inactiveClaudeAccountsResolver?.() ?? []
+    const accounts = (this.inactiveClaudeAccountsResolver?.() ?? []).filter(
+      (account) => !this.isRetryAfterActive(this.inactiveClaudeCache.get(account.id) ?? null)
+    )
     if (accounts.length === 0) {
       return
     }

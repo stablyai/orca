@@ -11,7 +11,9 @@ import {
 } from './claude-managed-account-credentials'
 import { fetchClaudeManagedUsagePanelSupplement } from './claude-managed-usage-panel'
 import { parseClaudeOAuthCredentialsJson } from './claude-oauth-credentials'
+import { makeClaudeUsageClassificationError } from './claude-oauth-recovery'
 import { fetchClaudeOAuthUsage } from './claude-oauth-usage-request'
+import { classifyClaudeOAuthUsageError } from './claude-usage-error-classification'
 import type { ClaudeManagedAccountUsageOptions } from './claude-usage-fetch-options'
 import {
   abortedClaudeRateLimitResult,
@@ -47,7 +49,8 @@ export async function fetchInactiveClaudeAccountUsage(
     return noClaudeManagedCredentialsResult()
   }
 
-  let token = parseClaudeOAuthCredentialsJson(credentialsJson, 'credentials-file').token
+  const credentialSource = location.kind === 'keychain' ? 'scoped-keychain' : 'credentials-file'
+  let token = parseClaudeOAuthCredentialsJson(credentialsJson, credentialSource).token
   if (isOauthTokenExpiring(credentialsJson)) {
     const refreshed = await refreshClaudeOauthCredentials(credentialsJson)
     if (options.signal?.aborted) {
@@ -60,14 +63,41 @@ export async function fetchInactiveClaudeAccountUsage(
         // Keep the refreshed token for this fetch; a later poll can persist it.
       }
       credentialsJson = refreshed
-      token = parseClaudeOAuthCredentialsJson(refreshed, 'credentials-file').token
+      token = parseClaudeOAuthCredentialsJson(refreshed, credentialSource).token
     }
   }
 
   if (!token) {
     return noClaudeManagedCredentialsResult()
   }
-  const oauthLimits = await fetchClaudeOAuthUsage(token, options.signal)
+  let oauthLimits: ProviderRateLimits
+  try {
+    oauthLimits = await fetchClaudeOAuthUsage(token, options.signal)
+  } catch (error) {
+    if (options.signal?.aborted) {
+      return abortedClaudeRateLimitResult()
+    }
+    const classification = classifyClaudeOAuthUsageError(error)
+    if (classification.failureKind !== 'rate-limited') {
+      throw error
+    }
+    const failure = makeClaudeUsageClassificationError({
+      error,
+      classification,
+      attempts: { attemptedSources: ['oauth'] },
+      oauthCredentials: parseClaudeOAuthCredentialsJson(credentialsJson, credentialSource)
+    })
+    return {
+      ...failure,
+      usageMetadata: {
+        ...failure.usageMetadata,
+        authProvenance:
+          account.managedAuthRuntime === 'wsl'
+            ? `managed:${account.id}:wsl:${account.wslDistro ?? ''}`
+            : `managed:${account.id}`
+      }
+    }
+  }
   if (options.signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
@@ -96,7 +126,7 @@ export async function fetchInactiveClaudeAccountUsage(
   } catch (error) {
     warnClaudeUsageFetchFailure(
       undefined,
-      parseClaudeOAuthCredentialsJson(credentialsJson, 'credentials-file'),
+      parseClaudeOAuthCredentialsJson(credentialsJson, credentialSource),
       error
     )
     return oauthLimits
