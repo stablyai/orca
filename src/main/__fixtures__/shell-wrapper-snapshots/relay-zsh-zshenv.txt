@@ -190,6 +190,30 @@ __orca_deferred_init() {
     }
   fi
   unset __orca_codex_binary
+  __orca_claude_binary="$(unalias claude 2>/dev/null || :; command -v claude 2>/dev/null || :)"
+  if [[ -n "${ORCA_CLAUDE_PROFILE_POINTER:-}" && -n "${__orca_claude_binary:-}" && -x "${__orca_claude_binary}" ]]; then
+    function claude {
+      local __orca_claude_home __orca_claude_pointer="${ORCA_CLAUDE_PROFILE_POINTER:-}"
+      # Why: a WSL pane's pointer is relative to the guest home, which the host cannot know at spawn.
+      case "$__orca_claude_pointer" in '~/'*) __orca_claude_pointer="${HOME:-}/${__orca_claude_pointer#??}" ;; esac
+      __orca_claude_home="$(cat "$__orca_claude_pointer" 2>/dev/null || :)"
+      if [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ "$CLAUDE_CONFIG_DIR" != "${ORCA_CLAUDE_INJECTED_CONFIG_DIR:-}" ]; then
+        command claude "$@"; return
+      fi
+      # Why: Orca's value replaced the user's own at spawn, so System default restores theirs.
+      if [ -z "$__orca_claude_home" ] && [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ -n "${ORCA_CLAUDE_USER_CONFIG_DIR:-}" ]; then
+        ( unset ORCA_CLAUDE_INJECTED_CONFIG_DIR; export CLAUDE_CONFIG_DIR="$ORCA_CLAUDE_USER_CONFIG_DIR"; command claude "$@" ); return
+      fi
+      if [ -z "$__orca_claude_home" ]; then
+        ( unset CLAUDE_CONFIG_DIR ORCA_CLAUDE_INJECTED_CONFIG_DIR; command claude "$@" ); return
+      fi
+      case "$__orca_claude_home" in /*|[A-Za-z]:*) ;; *) return 1 ;; esac
+      # Why -m 700: matches the folder Orca's setup creates; a credentials folder stays private.
+      [ -d "$__orca_claude_home" ] || mkdir -p -m 700 -- "$__orca_claude_home" 2>/dev/null
+      ( export CLAUDE_CONFIG_DIR="$__orca_claude_home" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$__orca_claude_home"; command claude "$@" )
+    }
+  fi
+  unset __orca_claude_binary
   if [[ -n "${_orca_histfile:-}" ]]; then
     HISTFILE="$_orca_histfile"
   fi

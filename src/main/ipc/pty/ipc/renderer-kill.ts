@@ -1,3 +1,4 @@
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { getPtyIpc } from '../../pty-host-bindings'
 import type { Store } from '../../../persistence'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
@@ -52,7 +53,7 @@ async function stopRendererOwnedPtyAs(
   args: { id: string; keepHistory?: boolean },
   intentionalStop: TerminalIntentionalStopKind | null
 ): Promise<void> {
-  if (typeof args?.id !== 'string' || !args.id || args.id.startsWith('remote:')) {
+  if (typeof args?.id !== 'string' || !args.id || isRemoteRuntimePtyId(args.id)) {
     // Why: runtime terminal handles belong to terminal.close; unowned PTY routing could target the local provider.
     throw new Error('Invalid PTY provider id')
   }

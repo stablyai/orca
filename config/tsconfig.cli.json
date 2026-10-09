@@ -259,6 +259,8 @@
     "../src/main/jcode/hook-service.ts",
     "../src/main/kimi/hook-service.ts",
     "../src/main/kimi/kimi-hook-config-toml.ts",
+    "../src/main/kiro/hook-service.ts",
+    "../src/main/kiro/hook-settings.ts",
     "../src/main/dsh/dsh-home-patch.ts",
     "../src/main/dsh/hook-service.ts",
     "../src/main/dsh/hook-settings.ts",

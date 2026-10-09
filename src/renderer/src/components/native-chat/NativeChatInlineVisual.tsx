@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Maximize2 } from 'lucide-react'
+import { SquareArrowOutUpRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
@@ -23,19 +23,17 @@ export function NativeChatVisualUnavailable(): React.JSX.Element {
  */
 export function NativeChatInlineVisual({
   owner,
-  messageId,
   file,
   title
 }: {
   owner: NativeChatVisualOwner
-  messageId: string
   file: string
   title: string | null
 }): React.JSX.Element {
   const boxRef = useRef<HTMLDivElement | null>(null)
   const [near, setNear] = useState(false)
   const [retired, setRetired] = useState(false)
-  const openRightSidebarVisual = useAppStore((state) => state.openRightSidebarVisual)
+  const openChatVisualTab = useAppStore((state) => state.openChatVisualTab)
   const state = useNativeChatVisualDocument(
     { target: owner.target, sessionId: owner.sessionId, file },
     near
@@ -57,7 +55,7 @@ export function NativeChatInlineVisual({
     return <NativeChatVisualUnavailable />
   }
   const label = title ?? file
-  const openLabel = translate('components.native-chat.visualOpenInSidebar', 'Open in sidebar')
+  const openLabel = translate('components.native-chat.visualOpenInNewTab', 'Open in new tab')
 
   return (
     <div ref={boxRef} className="group/visual relative my-3">
@@ -78,18 +76,15 @@ export function NativeChatInlineVisual({
                   size="icon-xs"
                   aria-label={openLabel}
                   onClick={() =>
-                    openRightSidebarVisual({
+                    openChatVisualTab(owner.worktreeId, {
                       target: owner.target,
                       sessionId: owner.sessionId,
-                      tabId: owner.tabId,
-                      worktreeId: owner.worktreeId,
-                      messageId,
                       file,
                       title
                     })
                   }
                 >
-                  <Maximize2 />
+                  <SquareArrowOutUpRight />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>

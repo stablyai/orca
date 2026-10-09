@@ -92,6 +92,8 @@ export type MobileWebShellBridgeArgs = {
   pageRouteGrants: readonly { pathname: string; grants: readonly string[] }[]
   /** What this route declared, which is what `init` grants and what every grant check reads. */
   routeGrants: readonly string[]
+  /** This session owns the whole host area, which `init` tells the page. */
+  ownsHostArea?: boolean
   /** Opens a screen the page does not render, over the still-mounted view. */
   onNavigate: (href: string) => void
   /** Opens a URL outside the app, on the page's behalf. */
@@ -199,6 +201,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       pageRoutes: latest.pageRoutes,
       pageRouteGrants: latest.pageRouteGrants,
       routeGrants: latest.routeGrants,
+      ownsHostArea: latest.ownsHostArea === true,
       sessionEstablished: latest.sessionEstablished,
       ...(establishedBackRef.current?.sessionId === sessionId
         ? { sessionBack: establishedBackRef.current.back }

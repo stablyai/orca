@@ -3,7 +3,11 @@ import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
 import { getDaemonRuntimeDir as getRuntimeDir } from './daemon-launch-paths'
 import { readDaemonPidRecord as readDaemonPidRecordAt } from './daemon-endpoint-incarnation'
 import type { ParsedDaemonPid } from './daemon-pid-file-parse'
-import { listEveryDaemonGeneration, type DaemonProvider } from './daemon-provider-routing'
+import {
+  getLegacyDaemonAdapters,
+  listEveryDaemonGeneration,
+  type DaemonProvider
+} from './daemon-provider-routing'
 import { getDaemonPidPath, getDaemonSocketPath, getDaemonTokenPath } from './daemon-spawner'
 import type { DaemonSpawner } from './daemon-spawner'
 import {
@@ -77,6 +81,18 @@ export function readDaemonPidRecord(): ParsedDaemonPid | null {
 // Why: a narrow getter (not a raw export) keeps the "swap on restart" invariant in one place (replaceDaemonProvider).
 export function getDaemonProvider(): DaemonProvider | null {
   return adapter
+}
+
+/** True for a terminal on a kept-alive older daemon whose protocol matches; never for an SSH pane. */
+export function isTerminalOnLegacyDaemon(
+  ptyId: string,
+  matches: (protocolVersion: number) => boolean
+): boolean {
+  return adapter
+    ? getLegacyDaemonAdapters(adapter).some(
+        (legacy) => matches(legacy.protocolVersion) && legacy.hasPty(ptyId)
+      )
+    : false
 }
 
 // Why: computed from the pid record on demand (not cached at adoption) so the Settings

@@ -29,6 +29,8 @@ export type FolderWorkspaceHost =
   | { kind: 'missing' }
   | { kind: 'local' }
   | { kind: 'ssh'; targetId: string }
+  // A paired server's folder; `sshTargetId` is that server's own target, addressable only with it.
+  | { kind: 'runtime'; environmentId: string; sshTargetId: string | null }
   | { kind: 'ambiguous' }
 
 /** Reads a stored connection id: blank is local, since no write path normalizes it. */
@@ -46,8 +48,7 @@ export function normalizeConnectionId(value: string | null | undefined): string 
  * reading raw in either place drops the row before the resolver can classify it.
  *
  * A non-SSH host falls back to the raw field so a `runtime:` row keeps contributing its nested
- * target exactly as it does today. That target is not this client's to dial, but changing it is a
- * separate defect with its own reasoning — see the note in `resolveFolderWorkspaceHost`.
+ * target, which is not this client's to dial.
  */
 function getRepoScopeConnectionId(repo: Repo): string | null {
   const host = parseExecutionHostId(getRepoExecutionHostId(repo))
@@ -118,22 +119,33 @@ export function resolveFolderWorkspaceHost(
   if (!workspace) {
     return { kind: 'missing' }
   }
+  const readScopeConnectionId = (): string | null =>
+    normalizeConnectionId(
+      workspace.connectionId ??
+        state.projectGroups.find((entry) => entry.id === workspace.projectGroupId)?.connectionId
+    )
   const explicitHost = parseExecutionHostId(workspace.executionHostId)
-  if (explicitHost) {
-    // A `runtime:` workspace deliberately answers `local`, and `FolderWorkspaceHost` has no runtime
-    // variant to answer with instead. That omission is known: a runtime environment's own server
-    // normalizes its work to `local`, and the nested SSH target on such a row is addressable only as
-    // the pair (environmentId, targetId) — handing it to this client's SSH table would dial a
-    // same-named box in the wrong namespace. Widening the type is its own change, not an oversight
-    // here.
-    return explicitHost.kind === 'ssh'
-      ? { kind: 'ssh', targetId: explicitHost.targetId }
-      : { kind: 'local' }
+  switch (explicitHost?.kind) {
+    case 'ssh':
+      return { kind: 'ssh', targetId: explicitHost.targetId }
+    case 'runtime': {
+      // Why: another host may hold a folder with this id, and this lookup cannot tell which one is
+      // selected, so the server's target is named only when the id is unambiguous.
+      const isOnlyOwner = state.folderWorkspaces.every(
+        (entry) => entry.id !== folderWorkspaceId || entry === workspace
+      )
+      return {
+        kind: 'runtime',
+        environmentId: explicitHost.environmentId,
+        sshTargetId: isOnlyOwner ? readScopeConnectionId() : null
+      }
+    }
+    case 'local':
+      return { kind: 'local' }
+    case undefined:
+      break
   }
-  const scopeConnectionId = normalizeConnectionId(
-    workspace.connectionId ??
-      state.projectGroups.find((entry) => entry.id === workspace.projectGroupId)?.connectionId
-  )
+  const scopeConnectionId = readScopeConnectionId()
   const candidateRepos = findFolderWorkspaceCandidateRepos(state, folderWorkspaceId)
   let hasLocalRepo = false
   const connectionIds = new Set<string>()
