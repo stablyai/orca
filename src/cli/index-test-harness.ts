@@ -108,6 +108,35 @@ export function pairRuntimeEnvironment(listEnvironmentsMock: Mock, id: string, n
   ])
 }
 
+/**
+ * Clears the workspace stamp Orca exports into its own terminals.
+ *
+ * Why every CLI suite needs it: the CLI now defaults to that workspace, so a developer running
+ * the tests from inside Orca would otherwise retarget every unscoped command under test.
+ */
+export function useOrcaTerminalWorkspaceEnvironment(): void {
+  const originalWorkspaceId = process.env.ORCA_WORKSPACE_ID
+  const originalWorktreeId = process.env.ORCA_WORKTREE_ID
+
+  beforeEach(() => {
+    delete process.env.ORCA_WORKSPACE_ID
+    delete process.env.ORCA_WORKTREE_ID
+  })
+
+  afterEach(() => {
+    if (originalWorkspaceId === undefined) {
+      delete process.env.ORCA_WORKSPACE_ID
+    } else {
+      process.env.ORCA_WORKSPACE_ID = originalWorkspaceId
+    }
+    if (originalWorktreeId === undefined) {
+      delete process.env.ORCA_WORKTREE_ID
+    } else {
+      process.env.ORCA_WORKTREE_ID = originalWorktreeId
+    }
+  })
+}
+
 /** Installs the env-var save/restore + mock-reset hooks shared by the CLI worktree-awareness suites. */
 export function useWorktreeAwarenessEnvironment(mocks: WorktreeAwarenessMocks): void {
   const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
@@ -116,16 +145,13 @@ export function useWorktreeAwarenessEnvironment(mocks: WorktreeAwarenessMocks): 
   const originalPairingCode = process.env.ORCA_PAIRING_CODE
   const originalRemotePairing = process.env.ORCA_REMOTE_PAIRING
   const originalEnvironment = process.env.ORCA_ENVIRONMENT
-  const originalWorkspaceId = process.env.ORCA_WORKSPACE_ID
-  const originalWorktreeId = process.env.ORCA_WORKTREE_ID
+  useOrcaTerminalWorkspaceEnvironment()
 
   beforeEach(() => {
     mocks.callMock.mockReset()
     delete process.env.ORCA_TERMINAL_HANDLE
     delete process.env.ORCA_USER_DATA_PATH
     delete process.env.ORCA_DEV_CLI_INVOCATION
-    delete process.env.ORCA_WORKSPACE_ID
-    delete process.env.ORCA_WORKTREE_ID
     // Isolate the pane key so claude-teams tests that set it don't leak a
     // senderPaneKey into later orchestration.send assertions.
     delete process.env.ORCA_PANE_KEY
@@ -187,16 +213,6 @@ export function useWorktreeAwarenessEnvironment(mocks: WorktreeAwarenessMocks): 
       delete process.env.ORCA_ENVIRONMENT
     } else {
       process.env.ORCA_ENVIRONMENT = originalEnvironment
-    }
-    if (originalWorkspaceId === undefined) {
-      delete process.env.ORCA_WORKSPACE_ID
-    } else {
-      process.env.ORCA_WORKSPACE_ID = originalWorkspaceId
-    }
-    if (originalWorktreeId === undefined) {
-      delete process.env.ORCA_WORKTREE_ID
-    } else {
-      process.env.ORCA_WORKTREE_ID = originalWorktreeId
     }
   })
 }

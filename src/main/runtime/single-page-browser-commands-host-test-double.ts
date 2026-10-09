@@ -26,7 +26,7 @@ export function createSinglePageBrowserCommandsHost(
   } as unknown as AgentBrowserBridge
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: page commands read only these host members.
   return {
-    resolveWorktreeSelector: async () => ({ id: 'wt-1' }),
+    resolveBrowserWorkspace: async () => ({ id: 'wt-1' }),
     getAgentBrowserBridge: () => bridge,
     getRuntimeBrowserPageRegistry: () => runtimeBrowserPages,
     getAvailableAuthoritativeWindow: vi.fn(() => window),

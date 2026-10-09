@@ -35,9 +35,12 @@ vi.mock('../runtime-client', () => {
 })
 
 import { main } from '../index'
+import { useOrcaTerminalWorkspaceEnvironment } from '../index-test-harness'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from '../test-fixtures'
 
 describe('orca computer action CLI routing', () => {
+  useOrcaTerminalWorkspaceEnvironment()
+
   beforeEach(() => {
     vi.restoreAllMocks()
     callMock.mockReset()

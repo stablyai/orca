@@ -127,7 +127,9 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     getExplicitWorktreeId: (selector) => this.getValidatedExplicitWorktreeIdSelector(selector),
     getResolvedCache: () => this.resolvedWorktrees.peek(),
     buildWorktreeFromId: (worktreeId) => this.buildResolvedWorktreeFromId(worktreeId),
-    resolveWorktree: (selector) => this.resolveWorktreeSelector(selector),
+    // Why the folder-aware resolver: a terminal in a Folder Workspace scopes itself by
+    // `folder:<id>`, which the git-only selector grammar cannot match.
+    resolveWorktree: (selector) => this.resolveWorkspaceSelector(selector),
     listKnownWorktrees: (worktreeId, target) =>
       this.listKnownResolvedWorktreesForExplicitTarget(worktreeId, target),
     getWorktreeMap: () => this.getResolvedWorktreeMap(),

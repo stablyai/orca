@@ -108,7 +108,7 @@ describe('implicit sender resolution refuses to guess', () => {
     return {
       graphStatus: 'ready',
       assertGraphReady: () => {},
-      resolveWorktreeSelector: async () => ({ id: 'wt_1' }),
+      resolveWorkspaceSelector: async () => ({ id: 'wt_1' }),
       tabs: new Map(),
       leaves: new Map(
         leafIds.map((leafId) => [leafId, { tabId: 'tab_1', leafId, worktreeId: 'wt_1' }])
@@ -139,7 +139,7 @@ describe('implicit sender resolution refuses to guess', () => {
     // focus guess left in, proving nothing about it.
     const preReady = {
       graphStatus: 'starting',
-      resolveWorktreeSelector: async () => ({ id: 'wt_1' }),
+      resolveWorkspaceSelector: async () => ({ id: 'wt_1' }),
       getMobileSessionTabsForWorktree: () => ({
         tabs: [{ type: 'terminal', isActive: true, status: 'ready', terminal: 'term_focused' }]
       }),

@@ -97,7 +97,6 @@ function createHost(overrides: Partial<RuntimeBrowserCommandHost> = {}): Runtime
         }))
       } as unknown as AgentBrowserBridge)
   return {
-    resolveWorktreeSelector: async (selector) => ({ id: selector.replace(/^id:/, '') }),
     resolveBrowserWorkspace: async (selector) => ({ id: selector.replace(/^id:/, '') }),
     getRuntimeBrowserPageRegistry: () => runtimeBrowserPages,
     getAuthoritativeWindow: vi.fn(),

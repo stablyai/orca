@@ -3,6 +3,7 @@ import { findCommandSpec, isCommandGroup, matches, supportsBrowserPageFlag } fro
 import { unknownCommandData } from './command-suggestion'
 import { formatCommandScopedFlagHelp } from './command-scoped-flag-help'
 import { FLAG_HELP_TEXT } from './flag-help-text'
+import { formatWorktreeSelectorFlagHelp } from './worktree-selector-flag-help'
 import { ROOT_HELP_TEXT_PRIMARY } from './root-help-text-primary'
 import { ROOT_HELP_TEXT_SECONDARY } from './root-help-text-secondary'
 
@@ -81,7 +82,8 @@ export function formatGroupHelp(specs: CommandSpec[], groupPath: string[]): stri
 
 function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   const command = commandPath.join(' ')
-  const scopedHelp = formatCommandScopedFlagHelp(command, flag)
+  const scopedHelp =
+    formatCommandScopedFlagHelp(command, flag) ?? formatWorktreeSelectorFlagHelp(command, flag)
   if (scopedHelp) {
     return scopedHelp
   }
@@ -90,9 +92,6 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   }
   if (command === 'linear issue' && flag === 'id') {
     return '--id <id>             Linear issue key, id, or URL'
-  }
-  if (command === 'linear issue' && flag === 'workspace') {
-    return '--workspace <id>      Connected Linear workspace id'
   }
   if (command === 'linear search' && flag === 'query') {
     return '--query <text>        Text to search across Linear issues'

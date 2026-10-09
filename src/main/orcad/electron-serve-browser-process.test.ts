@@ -42,7 +42,6 @@ const host: RuntimeBrowserCommandHost = {
   getAgentBrowserBridge: () => null,
   // Why an id distinct from the selector: it proves the registry fences on the
   // resolved worktree id, not on whatever string the caller passed.
-  resolveWorktreeSelector: async (selector) => ({ id: `id-${selector}` }),
   resolveBrowserWorkspace: async (selector) => ({ id: `id-${selector}` }),
   // Unused by the sidecar command paths under test; the daemon's real host is
   // OrcaRuntimeService, which owns the client-hosted registries.
