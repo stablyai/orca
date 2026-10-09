@@ -28,14 +28,14 @@ type StoreState = {
 function emptyStoreState(): StoreState {
   const group = (id: string): TabGroup => ({
     id,
-    worktreeId: 'wt-reuse',
+    worktreeId: 'wt-new-chat',
     activeTabId: null,
     tabOrder: []
   })
   return {
     unifiedTabsByWorktree: {},
-    groupsByWorktree: { 'wt-reuse': [group('group-left'), group('group-right')] },
-    activeGroupIdByWorktree: { 'wt-reuse': 'group-left' },
+    groupsByWorktree: { 'wt-new-chat': [group('group-left'), group('group-right')] },
+    activeGroupIdByWorktree: { 'wt-new-chat': 'group-left' },
     nativeChatLaunchDraftByTabId: {}
   }
 }
@@ -59,7 +59,7 @@ vi.mock('@/lib/launch-structured-agent-session', () => {
     StructuredAgentSessionOwnerUnresolvedError
   }
 })
-// Reuse is decided where an admitted launch opens its chat; here this machine admits at once.
+// Each pick opens its chat once its host admits it; here this machine admits at once.
 vi.mock('@/lib/structured-agent-session-launch-admission', async (importOriginal) => ({
   ...(await importOriginal<typeof LaunchAdmissionModule>()),
   beginHostAdmittedStructuredLaunch: (args: { openAdmitted: () => unknown }) => args.openAdmitted()
@@ -116,22 +116,7 @@ vi.mock('@/store', () => ({
 }))
 
 import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
-import {
-  appendNativeChatAttachmentCache,
-  clearNativeChatAttachmentCacheForTests
-} from '@/components/native-chat/use-native-chat-composer-attachments'
-import {
-  clearNativeChatDraftCacheForTests,
-  writeNativeChatDraftCache
-} from '@/components/native-chat/native-chat-draft-cache'
-import {
-  hydrateNativeChatComposerDrafts,
-  structuredAgentSessionDraftScopeKey
-} from '@/components/native-chat/native-chat-composer-draft-store'
-import {
-  createMemoryNativeChatComposerDraftStorage,
-  setNativeChatComposerDraftStorageForTests
-} from '@/components/native-chat/native-chat-composer-draft-storage'
+import { clearNativeChatDraftCacheForTests } from '@/components/native-chat/native-chat-draft-cache'
 import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
 import {
   beginStructuredAgentSessionProvisionalLaunch,
@@ -145,7 +130,7 @@ import {
 import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
 import { resetStructuredAgentLaunchRegistryForTests } from './structured-agent-session-launch-registry'
 
-const WORKTREE_ID = 'wt-reuse'
+const WORKTREE_ID = 'wt-new-chat'
 
 function launchIntent(
   sessionId: string,
@@ -241,7 +226,6 @@ beforeEach(() => {
   vi.resetAllMocks()
   localStorage.clear()
   clearNativeChatDraftCacheForTests()
-  clearNativeChatAttachmentCacheForTests()
   resetStructuredAgentLaunchPersistenceForTests()
   resetStructuredAgentLaunchRegistryForTests()
   resetStructuredAgentSessionSendsForTests()
@@ -313,9 +297,21 @@ describe('a "new chat" with text', () => {
     })
   })
 
-  it('opens its own chat in its own split beside an empty chat starting in another', () => {
+  it('opens its own chat beside an empty one still starting', () => {
     mocks.launch.mockImplementation(() => new Promise(() => undefined))
-    const blank = pick('plus-pick-1', { group: 'group-left' })
+    const blank = pick('plus-pick-1')
+
+    const notes = pick('notes-send', { prompt: 'review notes' })
+
+    expect(notes.sessionId).toBe(second.sessionId)
+    expect(store.state.unifiedTabsByWorktree[WORKTREE_ID]).toHaveLength(2)
+    expect(hasStagedStructuredLaunchPrompt(blank.sessionId)).toBe(false)
+    expect(hasStagedStructuredLaunchPrompt(second.sessionId)).toBe(true)
+  })
+
+  it('opens its own chat in the split it was sent from', () => {
+    mocks.launch.mockImplementation(() => new Promise(() => undefined))
+    pick('plus-pick-1', { group: 'group-left' })
 
     const notes = pick('notes-send', { prompt: 'review notes', group: 'group-right' })
 
@@ -326,62 +322,5 @@ describe('a "new chat" with text', () => {
       )?.groupId
     ).toBe('group-right')
     expect(mocks.focusGroup).not.toHaveBeenCalled()
-    expect(hasStagedStructuredLaunchPrompt(blank.sessionId)).toBe(false)
-    expect(hasStagedStructuredLaunchPrompt(second.sessionId)).toBe(true)
-  })
-
-  it('takes an empty chat starting in its own split', () => {
-    mocks.launch.mockImplementation(() => new Promise(() => undefined))
-    const blank = pick('plus-pick-1', { group: 'group-right' })
-
-    expect(pick('notes-send', { prompt: 'review notes', group: 'group-right' }).sessionId).toBe(
-      blank.sessionId
-    )
-  })
-
-  it('leaves a starting chat whose draft holds text, given back or typed, to its user', () => {
-    mocks.launch.mockImplementation(() => new Promise(() => undefined))
-    const blank = pick('plus-pick-1')
-    writeNativeChatDraftCache(structuredAgentSessionDraftScopeKey(blank.sessionId), 'my words')
-
-    expect(pick('notes-send', { prompt: 'review notes' }).sessionId).toBe(second.sessionId)
-    expect(hasStagedStructuredLaunchPrompt(blank.sessionId)).toBe(false)
-  })
-
-  it('never takes over or reuses a chat whose saved draft holds text or only an image', async () => {
-    mocks.launch.mockImplementation(() => new Promise(() => undefined))
-    const typed = pick('plus-pick-1')
-    writeNativeChatDraftCache(structuredAgentSessionDraftScopeKey(typed.sessionId), 'my words')
-    // The saved drafts have loaded, so only the draft itself keeps this chat from looking empty.
-    await hydrateNativeChatComposerDrafts()
-    const taken = pick('notes-send', { prompt: 'review notes' })
-    expect(taken.sessionId).not.toBe(typed.sessionId)
-    expect(hasStagedStructuredLaunchPrompt(typed.sessionId)).toBe(false)
-
-    appendNativeChatAttachmentCache(structuredAgentSessionDraftScopeKey(taken.sessionId), [
-      { id: 'shot', path: '/tmp/shot.png' }
-    ])
-    await hydrateNativeChatComposerDrafts()
-    expect(pick('notes-send-2', { prompt: 'more notes' }).sessionId).not.toBe(taken.sessionId)
-  })
-
-  it('takes no chat while saved drafts are still loading, since one may hold a draft', () => {
-    mocks.launch.mockImplementation(() => new Promise(() => undefined))
-    const blank = pick('plus-pick-1')
-    const loading = createMemoryNativeChatComposerDraftStorage()
-    setNativeChatComposerDraftStorageForTests({
-      ...loading,
-      loadAll: () => new Promise<ReadonlyMap<string, unknown>>(() => undefined)
-    })
-    void hydrateNativeChatComposerDrafts()
-
-    expect(pick('notes-send', { prompt: 'review notes' }).sessionId).not.toBe(blank.sessionId)
-  })
-
-  it('takes an empty chat still starting, as before', () => {
-    mocks.launch.mockImplementation(() => new Promise(() => undefined))
-    const blank = pick('plus-pick-1')
-
-    expect(pick('notes-send', { prompt: 'review notes' }).sessionId).toBe(blank.sessionId)
   })
 })

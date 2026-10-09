@@ -24,8 +24,6 @@ export type StructuredAgentLaunchOptions = {
   executionHostId?: ExecutionHostId
   /** The saved selection a paired host reported it will seed; read only by the starting caller. */
   hostSeedOptions?: Readonly<Record<string, string>>
-  /** The tab group the chat opens in; a request with text takes an empty starting chat only there. */
-  targetGroupId?: string
 }
 
 export type StructuredLaunchCaller = {
