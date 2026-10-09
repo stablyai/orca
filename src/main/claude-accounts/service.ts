@@ -28,8 +28,7 @@ export class ClaudeAccountService {
     rateLimits: ClaudeAccountUsage,
     private readonly runtimeAuth: ClaudeAccountRuntime &
       Pick<ClaudeRuntimeAuthService, 'getRuntimeConfigDir'>,
-    private readonly runLoginCommand = runClaudeCommandProcess,
-    private readonly openSignInLink: (signInLink: string) => Promise<void> = async () => {}
+    private readonly runLoginCommand = runClaudeCommandProcess
   ) {
     this.selection = new ClaudeAccountSelection(store, rateLimits, runtimeAuth)
     this.registration = new ClaudeAccountRegistration({
@@ -125,10 +124,9 @@ export class ClaudeAccountService {
               runCommand: this.runLoginCommand,
               setCancel: (cancel) => {
                 this.cancelPendingClaudeLogin = cancel
-              },
-              openLink: this.openSignInLink
+              }
             },
-            { copyLink: options.copyLink === true, onLink: settleLink }
+            options.copyLink ? settleLink : undefined
           )
         )
       } finally {

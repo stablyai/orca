@@ -1,4 +1,4 @@
-import { app, shell } from 'electron'
+import { app } from 'electron'
 import { RateLimitService } from '../rate-limits/service'
 import { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-service'
 import { CodexAccountService } from '../codex-accounts/service'
@@ -77,13 +77,7 @@ export function initializeMainProcessAccountServices(): void {
   // launches re-arm the non-destructive pass for new rollouts (#4444, #8612, #12480).
   state.codexSessionMigration.scheduleInitialRun()
   state.claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
-  state.claudeAccounts = new ClaudeAccountService(
-    store,
-    state.rateLimits,
-    state.claudeRuntimeAuth,
-    undefined,
-    (link) => shell.openExternal(link)
-  )
+  state.claudeAccounts = new ClaudeAccountService(store, state.rateLimits, state.claudeRuntimeAuth)
   state.rateLimits.setCodexHomePathResolver((target) =>
     state.codexRuntimeHome!.prepareForRateLimitFetch(target)
   )

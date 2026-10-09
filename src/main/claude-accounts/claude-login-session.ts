@@ -1,5 +1,6 @@
 import type { ClaudeCommandConfig, ClaudeCommandOptions } from './claude-command-process'
-import { prepareClaudeSignInBrowser } from './claude-sign-in-browser'
+import { CLAUDE_SIGN_IN_FAILED_MESSAGE } from '../../shared/claude-sign-in-link'
+import { prepareClaudeSignInBrowser, type ClaudeSignInBrowser } from './claude-sign-in-browser'
 
 // Why 10 minutes: copying the link into a private window takes longer than one click.
 const LOGIN_TIMEOUT_MS = 600_000
@@ -12,31 +13,18 @@ type ClaudeLoginSessionDependencies = {
     options?: ClaudeCommandOptions
   ) => Promise<string>
   setCancel: (cancel: (() => boolean) | null) => void
-  openLink: (signInLink: string) => Promise<void>
 }
 
-export type ClaudeLoginLinkRequest = {
-  /** Hand the link to `onLink` instead of opening the default browser. */
-  copyLink: boolean
-  /** The sign-in link, or null once the sign-in ends without one; called once. */
-  onLink: (signInLink: string | null) => void
-}
-
-/** Runs a hidden `claude auth login` that writes its login straight into the account's folder. */
+/** Runs a hidden `claude auth login` that writes its login straight into the account's folder.
+ *  With `onLink`, no browser opens: the sign-in link goes there instead (null if it never comes). */
 export async function runClaudeLoginSession(
   folder: ClaudeCommandConfig,
   dependencies: ClaudeLoginSessionDependencies,
-  linkRequest: ClaudeLoginLinkRequest = { copyLink: false, onLink: () => {} }
+  onLink?: (signInLink: string | null) => void
 ): Promise<void> {
   const controller = new AbortController()
   const watch = new AbortController()
-  let linkSettled = false
-  const settleLink = (signInLink: string | null): void => {
-    if (!linkSettled) {
-      linkSettled = true
-      linkRequest.onLink(signInLink)
-    }
-  }
+  let browser: ClaudeSignInBrowser | null = null
   dependencies.setCancel(() => {
     if (controller.signal.aborted) {
       return false
@@ -44,29 +32,25 @@ export async function runClaudeLoginSession(
     controller.abort()
     return true
   })
-  // Why null falls back: there Claude opens the default browser itself, as before.
-  const browser = await prepareClaudeSignInBrowser(folder).catch((error: unknown) => {
-    console.warn('[claude-accounts] Could not prepare the Claude sign-in browser:', error)
-    return null
-  })
   try {
-    void browser?.nextLink(watch.signal).then((signInLink) => {
-      if (!signInLink || linkRequest.copyLink) {
-        settleLink(signInLink)
-        return
-      }
-      dependencies.openLink(signInLink).catch((error: unknown) => {
-        console.warn('[claude-accounts] Could not open the Claude sign-in page:', error)
+    if (onLink) {
+      browser = await prepareClaudeSignInBrowser(folder).catch((error: unknown) => {
+        console.warn('[claude-accounts] Could not prepare the Claude sign-in browser:', error)
+        return null
       })
-    })
+      // Why fail: without BROWSER, Claude opens the default browser the user asked to avoid.
+      if (!browser) {
+        throw new Error(CLAUDE_SIGN_IN_FAILED_MESSAGE)
+      }
+      void browser.nextLink(watch.signal).then(onLink)
+    }
     await dependencies.runCommand(['auth', 'login', '--claudeai'], folder, LOGIN_TIMEOUT_MS, {
       signal: controller.signal,
       keepStdinOpen: true,
-      browser: browser?.path
+      ...(browser ? { browser: browser.path } : {})
     })
   } finally {
     watch.abort()
-    settleLink(null)
     dependencies.setCancel(null)
     await browser?.dispose().catch((error: unknown) => {
       console.warn('[claude-accounts] Could not remove the Claude sign-in browser:', error)

@@ -98,7 +98,7 @@ describe('runClaudeCommandProcess', () => {
     )
     expect(spawned.specs[0].args?.[5]).toBe(
       buildWslLoginShellCommand(
-        `chmod 700 '/home/u/a/.orca-sign-in-browser' && exec env CLAUDE_CONFIG_DIR='/home/u/a' BROWSER='/home/u/a/.orca-sign-in-browser' claude 'auth' 'login' '--claudeai'`
+        `chmod 700 '/home/u/a/.orca-sign-in-browser'; exec env CLAUDE_CONFIG_DIR='/home/u/a' BROWSER='/home/u/a/.orca-sign-in-browser' claude 'auth' 'login' '--claudeai'`
       )
     )
   })

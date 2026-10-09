@@ -205,9 +205,9 @@ function wslClaudeCommand(linuxPath: string, args: string[], browser: string | u
   if (!browser) {
     return `exec env ${configDir} ${claude}`
   }
-  // Why chmod here: a file Orca writes over \\wsl$ arrives without an exec bit.
+  // Why chmod here: a file Orca writes over \\wsl$ arrives without an exec bit; a failure must not stop the login.
   const helper = quotePosixShell(browser)
-  return `chmod 700 ${helper} && exec env ${configDir} BROWSER=${helper} ${claude}`
+  return `chmod 700 ${helper}; exec env ${configDir} BROWSER=${helper} ${claude}`
 }
 
 function resolveClaudeInvocation(

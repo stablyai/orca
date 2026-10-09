@@ -1,3 +1,4 @@
+export const CLAUDE_SIGN_IN_FAILED_MESSAGE = 'Claude sign-in failed. Please try again.'
 const CLAUDE_AUTHORIZE_HOSTS = new Set(['claude.com', 'claude.ai'])
 const LOCAL_CALLBACK_HOSTS = new Set(['localhost', '127.0.0.1'])
 

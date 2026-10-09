@@ -35,7 +35,15 @@ export function signInWithCopiedClaudeLink(
         )
       )
     })
-    .catch((error: unknown) => console.warn('Could not copy the Claude sign-in link:', error))
+    .catch((error: unknown) => {
+      console.warn('Could not copy the Claude sign-in link:', error)
+      toast.error(
+        translate(
+          'auto.components.settings.AccountsPane.codexLoginLinkCopyFailed',
+          'Could not copy the link.'
+        )
+      )
+    })
   return signIn
 }
 

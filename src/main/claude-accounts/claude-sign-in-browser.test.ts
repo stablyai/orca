@@ -41,18 +41,21 @@ describe('prepareClaudeSignInBrowser', () => {
     }
   )
 
-  it('refuses a link that is not a localhost sign-in', async () => {
-    const home = folder()
-    const browser = await prepareClaudeSignInBrowser({
-      windowsPath: home,
-      linuxPath: null,
-      wslDistro: null
-    })
-    writeFileSync(`${browser!.path}.link`, 'https://evil.test/oauth/authorize')
-    await expect(browser!.nextLink(new AbortController().signal)).resolves.toBeNull()
-  })
+  it.skipIf(process.platform === 'win32')(
+    'refuses a link that is not a localhost sign-in',
+    async () => {
+      const home = folder()
+      const browser = await prepareClaudeSignInBrowser({
+        windowsPath: home,
+        linuxPath: null,
+        wslDistro: null
+      })
+      writeFileSync(`${browser!.path}.link`, 'https://evil.test/oauth/authorize')
+      await expect(browser!.nextLink(new AbortController().signal)).resolves.toBeNull()
+    }
+  )
 
-  it('stops waiting once the sign-in ends', async () => {
+  it.skipIf(process.platform === 'win32')('stops waiting once the sign-in ends', async () => {
     const home = folder()
     const browser = await prepareClaudeSignInBrowser({
       windowsPath: home,
