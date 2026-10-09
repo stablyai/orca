@@ -589,7 +589,10 @@ describe('execCommand', () => {
     await expect(commandPromise).resolves.toBe('MISSING\n')
     expect(captured).toEqual(['node: --bogus is not allowed in NODE_OPTIONS\n'])
     // onStderr must not leak into the SSH exec options.
-    expect(conn.exec).toHaveBeenCalledWith("(node -e 'x' || echo MISSING)", {})
+    expect(conn.exec).toHaveBeenCalledWith(
+      expect.stringContaining("\n(node -e 'x' || echo MISSING)\n"),
+      {}
+    )
   })
 
   it('uses custom command timeouts without forwarding them to SSH exec', async () => {

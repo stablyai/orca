@@ -161,22 +161,29 @@ describe('whether a launch passes a Claude CLI flag', () => {
 
   it('spends the budget finding the binary too, and caches nothing when that runs out', async () => {
     let slow = true
+    let slowKeyTimer: ReturnType<typeof setTimeout> | undefined
     const { support, calls } = supportWith(
       async () => '2.1.280',
       30,
       async (command, cwd) => {
         if (slow) {
-          await new Promise((resolve) => setTimeout(resolve, 1_000))
+          await new Promise((resolve) => {
+            slowKeyTimer = setTimeout(resolve, 1_000)
+          })
         }
         return `${command}\n${cwd}`
       }
     )
-    const started = performance.now()
-    await expect(thinking(support, LAUNCH)).resolves.toBe(false)
-    expect(performance.now() - started).toBeLessThan(500)
-    expect(calls).not.toHaveBeenCalled()
-    slow = false
-    await expect(thinking(support, LAUNCH)).resolves.toBe(true)
+    try {
+      const started = performance.now()
+      await expect(thinking(support, LAUNCH)).resolves.toBe(false)
+      expect(performance.now() - started).toBeLessThan(500)
+      expect(calls).not.toHaveBeenCalled()
+      slow = false
+      await expect(thinking(support, LAUNCH)).resolves.toBe(true)
+    } finally {
+      clearTimeout(slowKeyTimer)
+    }
   })
 
   it('forgets the binaries launched least recently, not the ones in use', async () => {

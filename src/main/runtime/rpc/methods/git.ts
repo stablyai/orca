@@ -4,6 +4,7 @@ import { GIT_DIFF_METHODS } from './git-diff-methods'
 import {
   GitBranchCompare,
   GitBulkPaths,
+  GitBulkStage,
   GitCheckIgnored,
   GitCheckout,
   GitCommit,
@@ -208,9 +209,9 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.bulkStage',
     permission: 'workspace',
-    params: GitBulkPaths,
+    params: GitBulkStage,
     handler: async (params, { runtime }) =>
-      runtime.bulkStageRuntimeGitPaths(params.worktree, params.filePaths)
+      runtime.bulkStageRuntimeGitPaths(params.worktree, params.filePaths, params.scope)
   }),
   defineMethod({
     name: 'git.unstage',

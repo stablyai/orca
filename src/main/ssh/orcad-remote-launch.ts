@@ -33,7 +33,7 @@ import {
 import type { ServeReadiness } from '../server/serve-readiness'
 import { selectOrcadSlotRuntimeCommand } from './orcad-remote-runtime'
 import { ORCAD_STOP_REQUEST_FILENAME } from '../../shared/orcad-stop-request'
-import { windowsOrcadLivenessProbeCommand } from './orcad-remote-liveness-windows'
+import { orcadWindowsSlotOpCommand } from './orcad-remote-windows-node'
 import {
   ORCAD_E2E_IDLE_TIMEOUT_ENV,
   ORCAD_MANAGED_ACTIVATION_ROOT_ENV,
@@ -149,7 +149,8 @@ export function orcadLivenessProbeCommand(
   remoteInstallDir: string
 ): string {
   if (isWindowsRemoteHost(host)) {
-    return windowsOrcadLivenessProbeCommand(host, remoteInstallDir)
+    // Windows: PID plus process creation time (PIDs are reused); anything unanswerable is UNKNOWN, never DEAD.
+    return orcadWindowsSlotOpCommand(host, remoteInstallDir, 'liveness', [remoteInstallDir])
   }
   const pidFile = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_PID_FILENAME))
   const readiness = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_READINESS_FILENAME))

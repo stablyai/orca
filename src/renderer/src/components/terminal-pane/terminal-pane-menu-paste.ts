@@ -90,7 +90,7 @@ export const executeTerminalPaneMenuPasteText = async (
   const execution = await executeTerminalPastePlan(plan, {
     pasteText: (pasteText, pasteOptions) =>
       pasteTerminalText(pane.terminal, pasteText, pasteOptions),
-    writePty: (data) => writeTerminalPastePtyInput(transport, data, 'driving'),
+    writePty: (data, signal) => writeTerminalPastePtyInput(transport, data, 'driving', signal),
     isTargetCurrent: () => isPanePasteTargetMounted(context, pane, transport, ptyId),
     canContinue: () => isPanePasteTargetMounted(context, pane, transport, ptyId)
   })

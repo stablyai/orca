@@ -161,6 +161,7 @@ export function StatusBarSurface({
                     ))}
                     {collapseUsage ? (
                       <UsageOverflowChip
+                        providerCount={rosterProviders.length}
                         hidden={rosterProviders.filter((p) =>
                           collapsedUsageProviders.includes(p.provider)
                         )}

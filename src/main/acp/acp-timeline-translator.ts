@@ -8,7 +8,7 @@ import { AcpAgentError } from './acp-errors'
 import { acpTurnEnd, AcpPromptTurns } from './acp-prompt-turns'
 import { readAcpSessionEvent, type AcpSessionEvent } from './acp-session-events'
 import { translateAcpRequest } from './acp-timeline-requests'
-import { acpSessionUpdate } from './acp-session-update'
+import { ACP_SUBSTANTIVE_UPDATES, acpSessionUpdate } from './acp-session-update'
 import { AcpSubagentTimeline } from './acp-subagent-timeline'
 import { AcpToolTimeline } from './acp-tool-timeline'
 import {
@@ -23,14 +23,6 @@ import type { NativeChatSubagentState } from '../../shared/native-chat-types'
 export { acpTurnEnd } from './acp-prompt-turns'
 
 const requestSessionSchema = z.object({ sessionId: z.string() })
-const SUBSTANTIVE_UPDATES = [
-  'user_message_chunk',
-  'agent_message_chunk',
-  'agent_thought_chunk',
-  'tool_call',
-  'tool_call_update',
-  'plan'
-]
 
 export type AcpTimelineTranslatorOptions = {
   sessionId: string
@@ -59,10 +51,7 @@ export class AcpTimelineTranslator {
     this.dialect = options.dialect ?? GENERIC_ACP_DIALECT
     this.failures = new AcpTurnFailures(options.sessionId, this.dialect, options.agentName)
     this.backgroundTasks = new AcpBackgroundTaskTimeline((callId) => this.tools.turn(callId))
-    this.prompts = new AcpPromptTurns(
-      options.sessionId,
-      this.dialect.injectedPromptIdentity === true
-    )
+    this.prompts = new AcpPromptTurns(options.sessionId, this.dialect, options.agentName)
   }
 
   dispose(): void {
@@ -74,15 +63,17 @@ export class AcpTimelineTranslator {
     return this.dialect.injectedPromptIdentity === true
   }
 
-  /** The host injects promptId as session/prompt._meta.promptId (and requestId). */
+  /** The host injects promptId as session/prompt._meta.promptId (and requestId). A `/compact` runs
+   *  as `compactionTurn`, the command turn the host opened. */
   openPrompt(
     clientMessageId: string,
-    at: number
+    at: number,
+    compactionTurn?: string
   ): { promptId: string; events: ProviderTimelineEvent[] } {
     if (this.loading) {
       throw new Error('ACP prompt overlaps a prompt or load')
     }
-    return this.prompts.open(clientMessageId, at)
+    return this.prompts.open(clientMessageId, at, compactionTurn)
   }
 
   promptResult(
@@ -207,13 +198,15 @@ export class AcpTimelineTranslator {
     }
     const providerTurn = extension?.turn
     const opens =
-      (update !== undefined && SUBSTANTIVE_UPDATES.includes(update.sessionUpdate)) ||
+      (update !== undefined && ACP_SUBSTANTIVE_UPDATES.includes(update.sessionUpdate)) ||
       extension?.end !== undefined ||
       extension?.started === true
     const offeredTurn =
       providerTurn ?? (this.prompts.current?.opened ? this.prompts.current.turn : this.activeTurn)
     const owner = update ? this.messages.owner(offeredTurn, update) : { turn: offeredTurn }
-    const turn = owner.turn
+    // A running compaction's turn is the host's, open in the assembler under no provider key, so
+    // its frames name none; its words and end are read for the result its answer writes.
+    const turn = this.prompts.compacting(owner.turn) ? undefined : owner.turn
     if (
       owner.settled &&
       (update?.sessionUpdate === 'agent_message_chunk' ||
@@ -244,6 +237,9 @@ export class AcpTimelineTranslator {
     }
     if (extension?.usage) {
       events.push(...this.context.update(extension.usage, join))
+    }
+    if (this.prompts.absorbCompaction(owner.turn, extension, update)) {
+      return events
     }
     if (extension?.failureDetail && turn) {
       events.push(...this.failures.row(turn, extension.failureDetail))
@@ -303,8 +299,11 @@ export class AcpTimelineTranslator {
     failureDetail: string | undefined,
     notSignedIn = false
   ): ProviderTimelineEvent[] {
-    const events = this.failures.ended(turn, stopReason, failureDetail, notSignedIn)
-    events.push(acpTurnEnd(turn, stopReason, at, durationMs))
+    const ending = { stopReason, at, failureDetail, notSignedIn }
+    const events = this.prompts.endCompaction(turn, ending) ?? [
+      ...this.failures.ended(turn, stopReason, failureDetail, notSignedIn),
+      acpTurnEnd(turn, stopReason, at, durationMs)
+    ]
     this.end(turn)
     if (this.prompts.current?.turn === turn) {
       this.prompts.finish()

@@ -5,17 +5,15 @@ import { detectLanguage } from '@/lib/language-detect'
 import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
 import { canClientOsOpenWorkspaceFile } from '@/lib/workspace-file-host-routing'
-import {
-  isMissingRuntimePathError,
-  type RuntimeFileOperationArgs
-} from '@/runtime/runtime-file-client'
+import { isMissingRuntimePathError } from '@/runtime/runtime-file-client'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace, activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
 import {
   getTerminalFileContext,
   mapTerminalFilePath,
-  terminalLinkWslDistro
+  terminalLinkWslDistro,
+  type TerminalFileContext
 } from './terminal-file-path-mapping'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -30,7 +28,8 @@ export {
   getTerminalFileContext,
   mapTerminalFilePath,
   terminalLinkWslDistro,
-  terminalPathWslDistro
+  terminalPathWslDistro,
+  type TerminalFileContext
 } from './terminal-file-path-mapping'
 
 export type FileOpenFailure = {
@@ -67,10 +66,11 @@ function openHtmlFileInBrowser(filePath: string, worktreeId: string): void {
 }
 
 export function shouldOpenTerminalFileWithSystemDefault(
-  fileContext: RuntimeFileOperationArgs,
+  fileContext: TerminalFileContext,
   filePath: string
 ): boolean {
-  return canClientOsOpenWorkspaceFile(fileContext, filePath)
+  // Why: an unresolved owner has no connectionId either, which would otherwise read as local.
+  return fileContext.sourceHostResolved && canClientOsOpenWorkspaceFile(fileContext, filePath)
 }
 
 let latestOpenDetectedFilePathRequestId = 0
@@ -120,13 +120,25 @@ export function openDetectedFilePath(
   void (async () => {
     let statResult
     const fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
+    if (!fileContext.sourceHostResolved) {
+      // Why: with no owner the host is unknown — refuse rather than touch this machine's files.
+      deps.onOpenFailure?.({
+        verdict: 'unverifiable',
+        error: new Error('The terminal workspace host could not be determined')
+      })
+      return
+    }
     const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(
       fileContext,
       mappedFilePath
     )
 
     if (!openWithSystemDefault) {
-      const worktreeRootLink = resolveKnownWorktreeRootPathLink(mappedFilePath)
+      const worktreeRootLink = resolveKnownWorktreeRootPathLink(
+        mappedFilePath,
+        useAppStore.getState(),
+        fileContext
+      )
       if (worktreeRootLink) {
         // Why: root workspace switching must work for SSH/runtime paths without
         // local auth/stat, while still coalescing provider + fallback clicks.
@@ -134,7 +146,9 @@ export function openDetectedFilePath(
         if (requestId !== latestOpenDetectedFilePathRequestId) {
           return
         }
-        activateAndRevealWorktree(worktreeRootLink.id)
+        activateAndRevealWorktree(worktreeRootLink.id, {
+          executionHostId: worktreeRootLink.executionHostId
+        })
         return
       }
     }
