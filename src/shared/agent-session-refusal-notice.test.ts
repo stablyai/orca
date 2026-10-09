@@ -564,6 +564,20 @@ describe('an answer to a prompt whose agent stopped', () => {
       'Codex has stopped, so your answer was not sent. Send a message to continue.'
     )
   })
+
+  it.each(['providerStartFailed', 'notSignedIn', 'cliMissing', 'historyTooLarge'] as const)(
+    'keeps that sentence its own: %s still reads "Your answer was not sent."',
+    (reason) => {
+      const refusal = {
+        code: 'agent_session_operation_invalid' as const,
+        message: HOST_TEXT,
+        details: { reason }
+      }
+      expect(agentSessionRefusalNotice(refusal, 'answer', { agentName: 'Codex' })).toBe(
+        'Your answer was not sent.'
+      )
+    }
+  )
 })
 
 describe('a refusal from a host that names no reason this build knows', () => {

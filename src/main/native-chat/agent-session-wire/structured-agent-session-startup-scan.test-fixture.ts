@@ -83,11 +83,12 @@ export function scanRecord(
 }
 
 /** The chat's journal as the crashed process left it: a running turn at fence 13, and, when
- *  asked, a send it accepted and never handed over. */
+ *  asked, a send it accepted and never handed over (at `queuedFence`, the released lease's 14 by
+ *  default). */
 export async function seedScanJournal(
   root: string,
   sessionId: string,
-  options: { queued?: true } = {}
+  options: { queued?: true; queuedFence?: number } = {}
 ): Promise<void> {
   const journal = await openAgentSessionJournal({
     identity: {
@@ -110,7 +111,7 @@ export async function seedScanJournal(
       clientMessageId: `${sessionId}-queued`,
       payloadFingerprint: '0'.repeat(64),
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'after this' }] },
-      fence: 14,
+      fence: options.queuedFence ?? 14,
       handoverRecorded: true,
       origin: 'client',
       source: { kind: 'user' }

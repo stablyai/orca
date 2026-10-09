@@ -7,9 +7,10 @@
 // operational revision, the published view, the queued-card drain), then wakes the worker. Startup
 // carries no debt: it only wakes every chat, since every pass derives what is owed.
 //
-// A lease latched in recovery is left alone: deciding it signals a process that may still run, so
-// only a person's view or action on the chat does (the visible-tab restore, a start, an attach),
-// and that decision's release is itself the signal that settles what the owner left.
+// The worker never decides a lease latched in recovery: that signals a process that may still
+// run, which only a person's view or action on the chat does (the visible-tab restore, a start, an
+// attach). It still keeps what the earlier process left as cards; the decision's release is the
+// signal that settles the rest, so a worker retiring meanwhile parks the debts it held for it.
 //
 // The worker coalesces: a chat has at most one attempt running and one timer waiting, and every
 // attempt re-derives everything owed (`runStructuredAgentSessionReconciliationPass`). A chat nobody
@@ -85,6 +86,8 @@ type ChatWorker = StructuredAgentSessionReconciliationSlotWaiter & {
 
 export class StructuredAgentSessionReconciliation {
   private readonly workers = new Map<string, ChatWorker>()
+  /** Debts a retired worker still held (a lease in recovery, or a run given up), for the next. */
+  private readonly parked = new Map<string, StructuredAgentSessionReconciliationDebts>()
   /** Process-scoped, never persisted: where this host process first opened each chat's journal.
    *  Every send at or before it was accepted by an earlier host process, every one after by this. */
   private readonly firstOpened = new Map<string, AgentJournalCursor>()
@@ -180,7 +183,7 @@ export class StructuredAgentSessionReconciliation {
     let worker = this.workers.get(sessionId)
     if (!worker) {
       worker = {
-        debts: {},
+        debts: this.parked.get(sessionId) ?? {},
         running: false,
         dirty: false,
         timer: null,
@@ -188,6 +191,7 @@ export class StructuredAgentSessionReconciliation {
         attempted: [],
         urgent: false
       }
+      this.parked.delete(sessionId)
       this.workers.set(sessionId, worker)
     }
     return worker
@@ -209,13 +213,8 @@ export class StructuredAgentSessionReconciliation {
   private async runAttempt(sessionId: string, worker: ChatWorker): Promise<Outcome> {
     try {
       const { store } = this.context.deps
-      const record = store.getRecord(sessionId)
-      if (this.disposed || store.readOnly || !record) {
+      if (this.disposed || store.readOnly || !store.getRecord(sessionId)) {
         return 'retire'
-      }
-      // Nothing owed until its recovery is decided, whose release signals again: no journal read.
-      if (record.lease.handoffStage === 'recovering') {
-        return 'done'
       }
       if (!this.context.sessions.has(sessionId) && !worker.loaded) {
         const stop = await this.load(sessionId, worker)
@@ -366,6 +365,10 @@ export class StructuredAgentSessionReconciliation {
     }
     worker.timer = null
     this.workers.delete(sessionId)
+    const { evidence, exit } = worker.debts
+    if (!this.disposed && (evidence || exit) && this.context.deps.store.getRecord(sessionId)) {
+      this.parked.set(sessionId, worker.debts)
+    }
     if (!worker.running) {
       this.dropLoaded(worker)
       worker.attempted.splice(0).forEach((resolve) => resolve())

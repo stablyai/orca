@@ -33,13 +33,13 @@ export async function cancelStructuredAgentSessionPrompt(
   if (!validated.ok) {
     return answerCancelOfSettledPrompt(ctx, input, validated)
   }
-  if (isEndedGenerationPrompt(ctx, validated)) {
-    return cancelEndedGenerationPrompt(ctx, input, validated, routes.stop)
-  }
   const route = ctx.adapter.routePromptCancel?.({
     sessionId: ctx.sessionId,
     prompt: validated.prompt
   })
+  if (isEndedGenerationPrompt(ctx, validated)) {
+    return cancelEndedGenerationPrompt(ctx, input, validated, route ? null : routes.interrupt)
+  }
   if (!route) {
     return routes.interrupt()
   }
@@ -70,23 +70,41 @@ export async function cancelStructuredAgentSessionPrompt(
 }
 
 /** A card an ended generation raised: no live provider holds it, so it is dismissed in the journal
- *  alone and the live turn is not this card's. A request that also names the live turn (an older
- *  phone's Stop carries the card it shows) is that turn's Stop as well. */
+ *  alone. As on main, a provider whose card Cancel routes (a dismissal, or a Stop of the turn that
+ *  raised it) stops nothing, since the live turn did not raise it; one with no route interrupts the
+ *  turn the request names when that turn is live, through the turn's own cancel, never the chat's
+ *  Stop, so queued messages stay and the queue is not paused. */
 async function cancelEndedGenerationPrompt(
   ctx: AgentSessionTurnContext,
   input: { turnId?: string },
   pending: PendingPrompt,
-  stop: () => Promise<StructuredAgentSessionChatStopRun>
+  interrupt: (() => Promise<CancelOutcome>) | null
 ): Promise<CancelOutcome> {
-  const dismissed = await dismissEndedGenerationPrompt(ctx, pending)
-  if (!dismissed.ok) {
-    return dismissed
-  }
   const liveTurnId = contextStructuredAgentSessionCurrentWork(ctx).activeTurnId()
-  if (input.turnId !== undefined && input.turnId === liveTurnId) {
-    return (await stop()).outcome
+  const interrupted =
+    interrupt && input.turnId !== undefined && input.turnId === liveTurnId
+      ? await interrupt()
+      : null
+  if (interrupted && !interrupted.ok) {
+    return interrupted
   }
-  return { ok: true, value: { ...(input.turnId ? { turnId: input.turnId } : {}), cancelled: true } }
+  // The interrupt's provider may have let go of it already; what is still pending is dismissed.
+  const still = validatePendingPrompt(ctx, {
+    itemId: pending.item.itemId,
+    expectedRevision: pending.item.revision
+  })
+  if (still.ok) {
+    const dismissed = await dismissEndedGenerationPrompt(ctx, still)
+    if (!dismissed.ok) {
+      return dismissed
+    }
+  }
+  return (
+    interrupted ?? {
+      ok: true,
+      value: { ...(input.turnId ? { turnId: input.turnId } : {}), cancelled: true }
+    }
+  )
 }
 
 function raisedByLiveTurn(ctx: AgentSessionTurnContext, pending: PendingPrompt): boolean {

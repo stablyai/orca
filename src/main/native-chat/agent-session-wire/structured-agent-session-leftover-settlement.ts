@@ -100,7 +100,8 @@ export async function settleStructuredAgentSessionLeftovers(
           sessionId,
           fence,
           acquisitionGeneration: null,
-          // Read with the rows: the evidence the release before this settlement wrote.
+          // Read with the rows: the proof the lease holds now. On an observed exit this settlement
+          // runs before the release, so the exit's own account (`exit`) judges instead.
           deathEvidence: proof ?? input.store.getRecord(sessionId)?.lease.deathEvidence ?? null,
           failureTextContext,
           below,

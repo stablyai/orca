@@ -1,6 +1,7 @@
 // What startup decides about a lease latched in recovery: nothing, for a chat nobody looks at.
 // Deciding it signals a process that may still run, so only the visible-tab restore, a start or an
 // attach does; that decision's release then wakes the chat's worker, which settles what it left.
+// What the earlier process left unsent is kept as a card meanwhile, as every open did on main.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -13,7 +14,6 @@ import {
   seedTestAgentSessionRecordStore
 } from '../../runtime/agent-session-record-store-test-harness'
 import { closeTestJournalHostDatabases } from '../agent-session-journal/journal-host-database-test-support'
-import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { attachParamsForRecord } from './structured-agent-session-conversation-open'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
@@ -32,9 +32,9 @@ let store: AgentSessionRecordStore
 let host: StructuredAgentSessionHost | undefined
 
 /** The earlier process's agent outlived it, until something stops it. */
-async function openWithSurvivingOwner() {
+async function openWithSurvivingOwner(options: Parameters<typeof seedScanJournal>[2] = {}) {
   await seedTestAgentSessionRecordStore(root, { records: [record(CHAT, false)] })
-  await seedScanJournal(root, CHAT)
+  await seedScanJournal(root, CHAT, options)
   store = await openTestAgentSessionRecordStore(root)
   let alive = true
   const stopOwnerProcess = vi.fn((_pid: number, _signal: 'SIGTERM' | 'SIGKILL') => {
@@ -61,20 +61,18 @@ afterEach(async () => {
 describe('a hidden chat whose agent outlived the earlier process', () => {
   it('is left alone at startup, and settled once an attach decides its recovery', async () => {
     const { current, stopOwnerProcess } = await openWithSurvivingOwner()
-    const open = vi.spyOn(AgentSessionJournal.prototype, 'open')
 
     await current.reconcileRestartLeases()
     await current.startupSettled()
     await idle(current, [CHAT])
 
-    // No signal to a process that may still run, no lease change, and not even a read.
+    // No signal to a process that may still run, and no lease change.
     expect(stopOwnerProcess).not.toHaveBeenCalled()
     expect(store.getRecord(CHAT)?.lease).toMatchObject({
       handoffStage: 'recovering',
       runtimeFence: 13,
       ownerProcess: { pid: OWNER_PID }
     })
-    expect(open).not.toHaveBeenCalled()
 
     // The person attaches: recovery is decided first, as on every build, stopping the owner.
     const params = attachParamsForRecord(store.getRecord(CHAT)!, {
@@ -88,6 +86,38 @@ describe('a hidden chat whose agent outlived the earlier process', () => {
     // Its release woke the worker, which settles the turn the owner left by that proof.
     await idle(current, [CHAT])
     expect(await turnState(current, CHAT)).toBe('interrupted')
+  })
+})
+
+describe("a hidden chat's send the earlier process never handed over, while its lease recovers", () => {
+  it('is a card once the chat is read, with no attach and no decision about the owner', async () => {
+    // Accepted at the owner's own fence, which the lease still holds.
+    const { current, stopOwnerProcess } = await openWithSurvivingOwner({
+      queued: true,
+      queuedFence: 13
+    })
+
+    await current.reconcileRestartLeases()
+    await current.startupSettled()
+    await idle(current, [CHAT])
+    // Desktop opens a chat by reading it.
+    const page = await current.history({ sessionId: CHAT, direction: 'tail' })
+    const { submissions } = await current.journalSnapshot(CHAT)
+
+    expect(page.ok && page.page.queuedMessages?.map((card) => card.messageId)).toEqual([
+      `${CHAT}-queued`
+    ])
+    expect(submissions.find((entry) => entry.clientMessageId === `${CHAT}-queued`)).toMatchObject({
+      dispatchState: 'rejected'
+    })
+    expect(stopOwnerProcess).not.toHaveBeenCalled()
+    expect(store.getRecord(CHAT)?.lease).toMatchObject({
+      handoffStage: 'recovering',
+      runtimeFence: 13,
+      ownerProcess: { pid: OWNER_PID }
+    })
+    // What the owner left running waits for the decision: no verdict yet.
+    expect(await turnState(current, CHAT)).toBe('running')
   })
 })
 

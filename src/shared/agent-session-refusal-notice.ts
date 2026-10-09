@@ -125,7 +125,7 @@ function reasonParts(
     return undefined
   }
   if ('fact' in words) {
-    if (write === 'answer') {
+    if (write === 'answer' && words.fact === 'providerExited') {
       // An approval or question was waiting on the person when its agent stopped: one sentence
       // that says the answer was not sent, names the agent, and says how to go on.
       return [{ failure: { kind: words.fact }, surface: 'answer', context }]

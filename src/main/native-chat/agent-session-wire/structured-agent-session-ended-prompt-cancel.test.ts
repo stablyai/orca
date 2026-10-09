@@ -1,6 +1,8 @@
-// A Cancel that names a card an ended generation raised, from a client that still shows it: the
-// card is dismissed in the journal alone, no provider is asked about it, and the live generation's
-// turn is stopped only by a request that names it (an older phone's Stop carries the card it shows).
+// A Cancel that names a card an ended generation raised, from a client that still shows it. As on
+// main: the card is dismissed in the journal alone, and a provider whose card Cancel routes
+// (Claude, Pi) stops nothing; one with no route (Codex, ACP) interrupts the live turn the request
+// names through that turn's own cancel, never the chat's Stop, so queued messages stay and no Stop
+// event pauses the queue.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -17,6 +19,7 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 import type { StructuredAgentSessionChatStopRun } from './structured-agent-session-chat-stop'
+import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { cancelStructuredAgentSessionPrompt } from './structured-agent-session-prompt-cancel'
 import { performCancel, type AgentSessionTurnContext } from './structured-agent-session-turns'
@@ -42,8 +45,11 @@ afterEach(async () => {
   }
 })
 
-/** Generation 1 raised a card and ended without its cleanup; generation 2 runs `turn-2`. */
-async function endedCardAndLiveTurn(): Promise<{ journal: AgentSessionJournal; itemId: string }> {
+/** Generation 1 raised a card and ended without its cleanup; generation 2 runs `turn-2`, with a
+ *  message queued behind it. */
+async function endedCardAndLiveTurn(
+  kind: 'approval' | 'question' = 'approval'
+): Promise<{ journal: AgentSessionJournal; itemId: string }> {
   root = await mkdtemp(join(tmpdir(), 'orca-ended-prompt-cancel-'))
   const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
   const turn = (turnId: string, fence: number) =>
@@ -53,19 +59,46 @@ async function endedCardAndLiveTurn(): Promise<{ journal: AgentSessionJournal; i
       { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
   const old = await turn('turn-1', ENDED)
+  const pending = {
+    state: 'pending' as const,
+    selectedOptionId: null,
+    resolvedBy: null,
+    resolvedAt: null
+  }
   const card = await journal.appendItem(
     { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 1 },
-    {
-      kind: 'approval',
-      title: 'Approve?',
-      detail: null,
-      options: [{ id: 'allow', label: 'Allow' }],
-      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
-    },
+    kind === 'approval'
+      ? {
+          kind: 'approval',
+          title: 'Approve?',
+          detail: null,
+          options: [{ id: 'allow', label: 'Allow' }],
+          resolution: pending
+        }
+      : {
+          kind: 'question',
+          question: 'Which?',
+          options: [{ id: 'a', label: 'A' }],
+          resolution: pending
+        },
     { fence: ENDED, turnScope: { kind: 'turn', turnItemId: old.itemId } }
   )
   await turn('turn-2', LIVE)
+  await journal.queuedMessages.insert({
+    messageId: 'queued-1',
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'after this' }] },
+    fingerprint: 'queued-1',
+    hostInstance: 'host-1'
+  })
   return { journal, itemId: card.itemId }
+}
+
+/** The queue as the live turn left it: its message waiting, and nothing pausing it. */
+function queueUntouched(journal: AgentSessionJournal): void {
+  expect(journal.queuedMessages.list().map((card) => [card.messageId, card.state])).toEqual([
+    ['queued-1', 'waiting']
+  ])
+  expect(structuredQueuePauses(journal)).toEqual([])
 }
 
 function provider(routePromptCancel?: StructuredAgentSessionAdapter['routePromptCancel']) {
@@ -107,71 +140,83 @@ function chatStop() {
 
 function resolution(journal: AgentSessionJournal, itemId: string) {
   const body = journal.snapshot().items.find((item) => item.itemId === itemId)?.body
-  return body?.kind === 'approval' ? body.resolution.state : undefined
+  return body?.kind === 'approval' || body?.kind === 'question' ? body.resolution.state : undefined
 }
 
 describe('a card an ended generation raised, cancelled from a client that still shows it', () => {
+  const pi = () => ({ kind: 'dismiss' as const })
   it.each([
-    ['naming no turn', undefined],
-    ["naming the ended generation's turn", 'turn-1']
-  ])(
-    'ACP (no card route): %s, it is dismissed and the live turn is not interrupted',
-    async (_name, turnId) => {
-      const { journal, itemId } = await endedCardAndLiveTurn()
-      const acp = provider()
+    ['Claude approval', 'approval', claudePromptCancelRoute],
+    ['Claude question', 'question', claudePromptCancelRoute],
+    ['Pi (every card dismisses)', 'approval', pi]
+  ] as const)(
+    '%s: dismissed only, even when the request names the live turn',
+    async (_name, kind, route) => {
+      const { journal, itemId } = await endedCardAndLiveTurn(kind)
+      const agent = provider(route)
       const stop = chatStop()
       const interrupt = vi.fn()
 
       const result = await cancelStructuredAgentSessionPrompt(
-        context(journal, acp),
-        { ...(turnId ? { turnId } : {}), prompt: { itemId, expectedRevision: 1 } },
+        context(journal, agent),
+        { turnId: 'turn-2', prompt: { itemId, expectedRevision: 1 } },
         { stop, interrupt }
       )
 
-      expect(result).toMatchObject({ ok: true, value: { cancelled: true } })
+      expect(result).toMatchObject({ ok: true, value: { turnId: 'turn-2', cancelled: true } })
       expect(resolution(journal, itemId)).toBe('cancelled')
-      expect(interrupt).not.toHaveBeenCalled()
       expect(stop).not.toHaveBeenCalled()
-      expect(acp.cancelTurn).not.toHaveBeenCalled()
-      expect(acp.dismissPrompt).not.toHaveBeenCalled()
+      expect(interrupt).not.toHaveBeenCalled()
+      expect(agent.cancelTurn).not.toHaveBeenCalled()
+      expect(agent.dismissPrompt).not.toHaveBeenCalled()
+      queueUntouched(journal)
+    }
+  )
+
+  it.each(['Codex', 'ACP'])(
+    '%s (no card route): the named live turn is interrupted through its own cancel',
+    async () => {
+      const { journal, itemId } = await endedCardAndLiveTurn()
+      const agent = provider()
+      const stop = chatStop()
+      const ctx = context(journal, agent)
+      const input = { turnId: 'turn-2', prompt: { itemId, expectedRevision: 1 } }
+
+      const result = await cancelStructuredAgentSessionPrompt(ctx, input, {
+        stop,
+        // What the host's plan runs: the turn's cancel, with the card, as on main.
+        interrupt: () => performCancel(ctx, { clientOperationId: 'cancel-1', ...input })
+      })
+
+      expect(result).toMatchObject({ ok: true })
+      expect(agent.cancelTurn).toHaveBeenCalledOnce()
+      expect(agent.cancelTurn.mock.calls[0]?.[0]).toMatchObject({ turnId: 'turn-2' })
+      expect(stop).not.toHaveBeenCalled()
+      expect(resolution(journal, itemId)).toBe('cancelled')
+      queueUntouched(journal)
     }
   )
 
   it.each([
-    ['Claude (an approval routes to a dismissal)', claudePromptCancelRoute],
-    ['Codex (no card route)', undefined]
-  ])("%s: an older phone's Stop carrying it still stops the live turn", async (_name, route) => {
+    ['naming no turn', undefined],
+    ["naming the ended generation's turn", 'turn-1']
+  ])('Codex or ACP, %s: dismissed only, and the live turn runs on', async (_name, turnId) => {
     const { journal, itemId } = await endedCardAndLiveTurn()
-    const agent = provider(route)
+    const agent = provider()
     const stop = chatStop()
     const interrupt = vi.fn()
 
     const result = await cancelStructuredAgentSessionPrompt(
       context(journal, agent),
-      { turnId: 'turn-2', prompt: { itemId, expectedRevision: 1 } },
+      { ...(turnId ? { turnId } : {}), prompt: { itemId, expectedRevision: 1 } },
       { stop, interrupt }
     )
 
-    expect(result).toMatchObject({ ok: true, value: { turnId: 'turn-2', cancelled: true } })
-    expect(stop).toHaveBeenCalledOnce()
+    expect(result).toMatchObject({ ok: true, value: { cancelled: true } })
+    expect(resolution(journal, itemId)).toBe('cancelled')
     expect(interrupt).not.toHaveBeenCalled()
-    expect(agent.dismissPrompt).not.toHaveBeenCalled()
-    expect(resolution(journal, itemId)).toBe('cancelled')
-  })
-
-  it('reaching the Stop itself, the card is dropped and the live turn is stopped plainly', async () => {
-    const { journal, itemId } = await endedCardAndLiveTurn()
-    const codex = provider()
-
-    await performCancel(context(journal, codex), {
-      clientOperationId: 'cancel-1',
-      turnId: 'turn-2',
-      prompt: { itemId, expectedRevision: 1 }
-    })
-
-    expect(codex.cancelTurn).toHaveBeenCalledOnce()
-    expect(codex.cancelTurn.mock.calls[0]?.[0]).not.toHaveProperty('prompt')
-    expect(codex.cancelTurn.mock.calls[0]?.[0]).toMatchObject({ turnId: 'turn-2' })
-    expect(resolution(journal, itemId)).toBe('cancelled')
+    expect(stop).not.toHaveBeenCalled()
+    expect(agent.cancelTurn).not.toHaveBeenCalled()
+    queueUntouched(journal)
   })
 })

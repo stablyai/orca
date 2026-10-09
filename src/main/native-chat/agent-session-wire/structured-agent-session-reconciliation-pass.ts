@@ -2,7 +2,8 @@
 // short recheck and the writes. Everything owed is re-derived here from the lease, this host's
 // sight of an exit and the journal, so a pass that finds nothing owed writes nothing; only what
 // cannot be derived rides in from the signals (an exit's own account, a proof the lease no longer
-// holds). A lease latched in recovery owes nothing until its decision releases it.
+// holds). A lease latched in recovery still gets (b), which touches no process and no lease, as
+// every open did on main; (a) and (c) wait for its decision, whose release signals again.
 //
 // The steps stay apart, so one never retires another's debt:
 //  (a) lease-release repair: an exit this host observed whose release write failed;
@@ -14,6 +15,7 @@
 // An empty item plan says nothing of (a) or (b).
 
 import { holdUnsentSends } from '../agent-session-journal/journal-unsent-send-hold'
+import { queuedMessageReopenMarkStart } from '../agent-session-journal/queued-message-reopen-floor'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
@@ -67,16 +69,19 @@ export async function runStructuredAgentSessionReconciliationPass(
   processOpened: AgentJournalCursor
 ): Promise<StructuredAgentSessionReconciliationPass> {
   const pass: StructuredAgentSessionReconciliationPass = { failed: [], wrote: false }
-  if (context.deps.store.getRecord(sessionId)?.lease.handoffStage === 'recovering') {
-    return pass
-  }
+  const recovering = context.deps.store.getRecord(sessionId)?.lease.handoffStage === 'recovering'
   if (
+    !recovering &&
     structuredAgentSessionEndedChildHoldsLease(context, sessionId) &&
     (await releaseLeaseOfEndedStructuredAgentSessionChild(context, sessionId))
   ) {
     pass.failed.push(new Error('agent_session_exit_release_owed'))
   }
   await settleEarlierProcess(context, sessionId, session.journal, processOpened, pass)
+  if (recovering) {
+    // What ended is not known until its recovery is decided; the debts wait for that signal.
+    return pass
+  }
   const settle = (proof?: AgentSessionDeathEvidence & { ownerFence: number }) =>
     settleStructuredAgentSessionLeftovers({
       store: context.deps.store,
@@ -162,11 +167,12 @@ async function settleEarlierProcess(
         hold: { cause: 'hostRestarted', which: (entry) => earlier(entry.acceptedSequence) }
       })) !== null
   })
-  // After every card the earlier process left, from where this process first opened the chat, so
-  // a card this one queued is never held by it. Reported, never owed: the pause starts there
-  // anyway, and a failed mark leaves the floor set, so the next pass marks again.
-  if (converted || journal.reopenFloor() !== null) {
-    const since = sameEpoch ? processOpened.sequence + 1 : undefined
+  // After every card the earlier process left, so a card this one queued is never held by it.
+  // Reported, never owed: the pause starts there anyway, and a failed mark leaves the floor set,
+  // so the next pass marks again.
+  const floor = journal.reopenFloor()
+  const since = queuedMessageReopenMarkStart(floor, processOpened, journal.cursor().epoch)
+  if ((converted || floor !== null) && since !== null) {
     await markStructuredQueueReopen(sessionId, journal, fence, context.deps.logger, since)
   }
   // A rewind left prepared refuses every send until settled. With no provider here, one only its
