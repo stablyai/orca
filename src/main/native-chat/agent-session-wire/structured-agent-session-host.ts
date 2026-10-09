@@ -48,7 +48,6 @@ import {
 import { structuredAgentSessionRestartResumeSurfaces } from './structured-agent-session-restart-resume-wiring'
 import * as conversation from './structured-agent-session-host-delivery'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
-import { awaitProviderChildStart } from './structured-agent-session-provider-start-hold'
 import { wireStructuredAgentSessionQueuedMessages } from './structured-agent-session-queued-wiring'
 import * as sessionLogger from './structured-agent-session-logger'
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
@@ -306,11 +305,6 @@ export class StructuredAgentSessionHost {
   setOption = this.mutations.setOption
   changeThreadGoal = this.mutations.changeThreadGoal
   readOptions = this.mutations.readOptions
-  /** The chat's agent has not proven its start yet; `awaitProviderStart` waits it out, bounded. */
-  providerStarting = (sessionId: string) =>
-    this.sessions.get(sessionId)?.child?.phase === 'starting'
-  awaitProviderStart = (sessionId: string, ceilingMs: number) =>
-    awaitProviderChildStart(this.sessions.get(sessionId), ceilingMs)
 
   rewind = (caller: StructuredAgentSessionCaller, params: AgentSessionRewindParams) =>
     rewindStructuredAgentSession(this.mutationContext(), this.attachContext(), caller, params)

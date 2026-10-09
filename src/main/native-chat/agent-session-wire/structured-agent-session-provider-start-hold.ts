@@ -35,7 +35,7 @@ export function refuseWhileProviderStarting(
 }
 
 /** The startup limit always ends a start; the ceiling only bounds a wait nothing else would. */
-export async function awaitProviderChildStart(
+async function awaitProviderChildStart(
   session: Pick<StructuredAgentSessionHostSession, 'child'> | undefined,
   ceilingMs: number = STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS
 ): Promise<StructuredAgentSessionChildStartOutcome | 'timeout'> {

@@ -414,10 +414,9 @@ export type AgentSessionFastModeSupport = {
  * surface: an older host simply lacks the method.
  */
 export type AgentSessionModelCatalogResult = {
-  /** The host is running the listing this answer is waiting on (its first for the account, the
-   *  probe re-checking `unavailable`, or the chat's agent proving its start); a `waitForListing`
-   *  read answers when it lands. Absent from a host that predates it; such a host sends it only
-   *  with `unknown`. */
+  /** The host is running the listing this answer is waiting on (its first for the account, or
+   *  the probe re-checking `unavailable`); a `waitForListing` read answers when it lands. Absent
+   *  from a host that predates it; such a host sends it only with `unknown`. */
   listingInProgress?: true
   /** Why no chat can start under the account, as the host's probe last found it. Absent is
    *  unknown, which shows nothing; an older host never sends it. */

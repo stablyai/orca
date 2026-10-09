@@ -24,7 +24,7 @@ class ScriptedPiConnection implements PiRpcConnection {
   constructor(
     launch: ProviderProcessLaunch,
     private readonly handlers: JsonlRpcAgentConnectionOptions,
-    private readonly script: ScriptedPiChild,
+    private readonly script: ScriptedAgentChild,
     private readonly received: string[],
     private readonly wire: string[],
     private readonly onClosed: () => void,
@@ -55,7 +55,7 @@ class ScriptedPiConnection implements PiRpcConnection {
       return this.state()
     }
     if (command === 'get_available_models') {
-      return { models: this.script.listsNoModels ? [] : [this.model] }
+      return { models: [this.model] }
     }
     if (command === 'get_commands') {
       return { commands: [] }
@@ -182,8 +182,6 @@ class ScriptedPiConnection implements PiRpcConnection {
 }
 
 export type ScriptedPiChild = ScriptedAgentChild & {
-  /** Lists no model, as a signed-out Pi does. */
-  listsNoModels?: boolean
   /** Every request command and prompt any spawn received, in order. */
   wire(): readonly string[]
 }

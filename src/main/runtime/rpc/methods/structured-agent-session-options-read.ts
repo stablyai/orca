@@ -24,9 +24,6 @@ import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-
 import { clientReadsOptionsWithoutModel } from './structured-agent-session-policy'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
 
-// Under every client's waiting-read timeout (the phone's is 45 s); the catalog's wait runs beside it.
-const START_WAIT_MS = 30_000
-
 export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
   defineMethod({
     name: 'agentSession.handoffStatus',
@@ -90,25 +87,13 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
           .catch(() => null)
         return catalog.read({ ...params, workspacePath })
       }
-      const ownAgent = record?.provider === params.agent ? record : null
-      // A start under way can still change the answer, and a client re-reads only on
-      // `listingInProgress`: the answer says so, and a waiting read waits the start out.
-      const starting =
-        ownAgent !== null && !params.savedOnly && host.providerStarting(ownAgent.sessionId)
-      const [answer] = await Promise.all([
-        read(),
-        starting && params.waitForListing
-          ? host.awaitProviderStart(ownAgent.sessionId, START_WAIT_MS)
-          : null
-      ])
+      const answer = await read()
       // The chat's running agent can say what no listing does: a Pi that started with no model.
-      const started = ownAgent
-        ? host.deps.adapter.startUnavailable?.(ownAgent.sessionId)
-        : undefined
-      const result = started && !answer.unavailable ? { ...answer, unavailable: started } : answer
-      return starting && !params.waitForListing
-        ? { ...result, listingInProgress: true as const }
-        : result
+      const started =
+        record?.provider === params.agent
+          ? host.deps.adapter.startUnavailable?.(record.sessionId)
+          : undefined
+      return started && !answer.unavailable ? { ...answer, unavailable: started } : answer
     }
   })
 ]
