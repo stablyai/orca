@@ -9,28 +9,14 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CameraView, useCameraPermissions } from 'expo-camera'
-import { useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { ChevronLeft, Clipboard as ClipboardIcon, QrCode } from 'lucide-react-native'
 import { decodePairingUrl, parsePairingCode } from '../src/transport/pairing'
-import {
-  startPreProfilePairing,
-  type PreProfilePairingAttempt
-} from '../src/transport/pre-profile-pairing-coordinator'
-import type { ConnectionLogEntry, PairingOffer } from '../src/transport/types'
-import { useRefreshHostClient } from '../src/transport/client-context'
+import { loadRecalledPairingCode } from '../src/transport/pairing-code-recall'
 import { colors, spacing } from '../src/theme/mobile-theme'
 import { TextInputModal } from '../src/components/TextInputModal'
-import { ConnectionLog } from '../src/components/ConnectionLog'
-import {
-  loadMobileOnboardingSteps,
-  mobileOnboardingDestination
-} from '../src/onboarding/mobile-onboarding-plan'
 import { pairScanStyles as styles } from '../src/pair-scan-styles'
 
-// Why: see pair-confirm.tsx — cap initial-pair "Connecting…" so a broken
-// route surfaces as a real error with the log visible instead of a
-// silent infinite spinner.
-const PAIRING_OVERALL_TIMEOUT_MS = 25_000
 const SCAN_RETICLE_SCALE = 0.62
 const SCAN_RETICLE_MAX_SIZE = 360
 
@@ -47,30 +33,34 @@ function Step({ number, text }: { number: number; text: string }) {
 
 export default function PairScanScreen() {
   const router = useRouter()
-  const refreshHostClient = useRefreshHostClient()
   const insets = useSafeAreaInsets()
   const [permission, requestPermission] = useCameraPermissions()
-  const [status, setStatus] = useState<'scanning' | 'connecting' | 'error'>('scanning')
+  const [status, setStatus] = useState<'scanning' | 'error'>('scanning')
   const [errorMessage, setErrorMessage] = useState('')
   const [pasteVisible, setPasteVisible] = useState(false)
   const [cameraBounds, setCameraBounds] = useState({ width: 0, height: 0 })
-  const [logs, setLogs] = useState<ConnectionLogEntry[]>([])
-  const logsRef = useRef<ConnectionLogEntry[]>([])
+  const [recalledCode, setRecalledCode] = useState<string | null>(null)
   const processingRef = useRef(false)
-  const mountedRef = useRef(true)
-  const activePairingAttemptRef = useRef<PreProfilePairingAttempt | null>(null)
 
-  const setPairScanRootRef = useCallback((node: View | null): void => {
-    if (node !== null) {
-      mountedRef.current = true
-      return
-    }
-    // Why: pairing attempts can outlive the visible route; dispose them when
-    // the scan screen detaches without a passive cleanup-only Effect.
-    mountedRef.current = false
-    activePairingAttemptRef.current?.dispose()
-    activePairingAttemptRef.current = null
-  }, [])
+  // Why: the scanner keeps running behind pair-confirm; when the user comes
+  // back (pair failed or was cancelled) the next scan must be accepted again.
+  useFocusEffect(
+    useCallback(() => {
+      processingRef.current = false
+      let current = true
+      void loadRecalledPairingCode()
+        .then((code) => {
+          if (current) {
+            setRecalledCode(code)
+          }
+        })
+        // Why: a failed read only means there is no code to offer.
+        .catch(() => {})
+      return () => {
+        current = false
+      }
+    }, [])
+  )
 
   const handleBarCodeScanned = useCallback(
     ({ data }: { data: string }) => {
@@ -79,36 +69,37 @@ export default function PairScanScreen() {
       }
       processingRef.current = true
 
-      const offer = decodePairingUrl(data)
-      if (!offer) {
+      if (!decodePairingUrl(data)) {
         setStatus('error')
         setErrorMessage('Not a valid Orca QR code')
         processingRef.current = false
         return
       }
-
-      void testAndSave(offer)
+      // Why: pair-confirm owns pairing and offers the SSH connection route,
+      // so every entry path (QR, paste, deep link) gets the same choice.
+      router.push({ pathname: '/pair-confirm', params: { code: data } })
     },
     [router]
   )
 
-  const handlePasteSubmit = useCallback((input: string) => {
-    setPasteVisible(false)
-    if (processingRef.current) {
-      return
-    }
-    processingRef.current = true
+  const handlePasteSubmit = useCallback(
+    (input: string) => {
+      setPasteVisible(false)
+      if (processingRef.current) {
+        return
+      }
+      processingRef.current = true
 
-    const offer = parsePairingCode(input)
-    if (!offer) {
-      setStatus('error')
-      setErrorMessage('Not a valid pairing code — copy it from your computer and paste again')
-      processingRef.current = false
-      return
-    }
-
-    void testAndSave(offer)
-  }, [])
+      if (!parsePairingCode(input)) {
+        setStatus('error')
+        setErrorMessage('Not a valid pairing code — copy it from your computer and paste again')
+        processingRef.current = false
+        return
+      }
+      router.push({ pathname: '/pair-confirm', params: { code: input } })
+    },
+    [router]
+  )
 
   const handleCameraLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout
@@ -123,72 +114,9 @@ export default function PairScanScreen() {
     )
   }, [])
 
-  async function testAndSave(offer: PairingOffer) {
-    setStatus('connecting')
-    logsRef.current = []
-    setLogs([])
-    activePairingAttemptRef.current?.dispose()
-
-    const attempt = startPreProfilePairing({
-      offer,
-      timeoutMs: PAIRING_OVERALL_TIMEOUT_MS,
-      connectOptions: {
-        onLog: (entry) => {
-          if (!mountedRef.current || activePairingAttemptRef.current !== attempt) {
-            return
-          }
-          logsRef.current = [...logsRef.current, entry]
-          setLogs(logsRef.current)
-        }
-      }
-    })
-    activePairingAttemptRef.current = attempt
-    try {
-      const { hostId } = await attempt.result
-      const attemptIsCurrent = activePairingAttemptRef.current === attempt
-      attempt.dispose()
-      if (activePairingAttemptRef.current === attempt) {
-        activePairingAttemptRef.current = null
-      }
-      if (!mountedRef.current || !attemptIsCurrent) {
-        return
-      }
-      // Why: re-pairing the same desktop now reuses its existing host id
-      // (STA-1840 dedup), so a client cached under that id from an earlier
-      // pairing would keep the stale endpoint/relay. Close it so the
-      // Refresh any cached client from the newly persisted pairing profile.
-      refreshHostClient(hostId)
-      const onboardingSteps = await loadMobileOnboardingSteps()
-      if (!mountedRef.current) {
-        return
-      }
-      router.replace(mobileOnboardingDestination(onboardingSteps, hostId))
-    } catch (err) {
-      const timedOut = attempt.timedOut
-      const attemptIsCurrent = activePairingAttemptRef.current === attempt
-      attempt.dispose()
-      if (activePairingAttemptRef.current === attempt) {
-        activePairingAttemptRef.current = null
-      }
-      if (!mountedRef.current || !attemptIsCurrent) {
-        return
-      }
-      console.warn('[pair] connect failed', err)
-      setStatus('error')
-      setErrorMessage(
-        timedOut
-          ? `Couldn't connect within ${PAIRING_OVERALL_TIMEOUT_MS / 1000}s — see log below for where it stalled`
-          : `Pairing failed: ${err instanceof Error ? err.message : String(err)}`
-      )
-      processingRef.current = false
-    }
-  }
-
   function retry() {
     setStatus('scanning')
     setErrorMessage('')
-    logsRef.current = []
-    setLogs([])
     processingRef.current = false
   }
 
@@ -208,7 +136,7 @@ export default function PairScanScreen() {
 
   if (!permission) {
     return (
-      <View ref={setPairScanRootRef} style={[styles.container, containerPadding]}>
+      <View style={[styles.container, containerPadding]}>
         <ActivityIndicator color={colors.textSecondary} />
       </View>
     )
@@ -217,7 +145,7 @@ export default function PairScanScreen() {
   if (!permission.granted) {
     const canAskAgain = permission.canAskAgain !== false
     return (
-      <View ref={setPairScanRootRef} style={[styles.container, containerPadding]}>
+      <View style={[styles.container, containerPadding]}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
@@ -247,6 +175,24 @@ export default function PairScanScreen() {
             <Text style={styles.pasteButtonText}>Paste code instead</Text>
           </Pressable>
         </View>
+        <Pressable
+          style={styles.pasteButton}
+          accessibilityRole="button"
+          onPress={() => router.push('/ssh-connections')}
+        >
+          <Text style={styles.pasteButtonText}>Set up SSH connections</Text>
+        </Pressable>
+        {recalledCode && (
+          <Pressable
+            style={styles.pasteButton}
+            accessibilityRole="button"
+            onPress={() =>
+              router.push({ pathname: '/pair-confirm', params: { code: recalledCode } })
+            }
+          >
+            <Text style={styles.pasteButtonText}>Retry last pairing code</Text>
+          </Pressable>
+        )}
         <TextInputModal
           visible={pasteVisible}
           title="Paste pairing code"
@@ -260,10 +206,20 @@ export default function PairScanScreen() {
   }
 
   return (
-    <View ref={setPairScanRootRef} style={[styles.container, containerPadding]}>
+    <View style={[styles.container, containerPadding]}>
       <Pressable style={styles.backButton} onPress={() => router.back()}>
         <ChevronLeft size={22} color={colors.textSecondary} />
       </Pressable>
+
+      {status === 'scanning' && (
+        <Pressable
+          style={styles.pasteButton}
+          accessibilityRole="button"
+          onPress={() => router.push('/ssh-connections')}
+        >
+          <Text style={styles.pasteButtonText}>Set up SSH connections</Text>
+        </Pressable>
+      )}
 
       <View style={styles.steps}>
         <Step number={1} text="Open Orca on your computer" />
@@ -307,24 +263,9 @@ export default function PairScanScreen() {
         </>
       )}
 
-      {status === 'connecting' && (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={colors.textSecondary} />
-          <Text style={styles.connectingText}>Connecting…</Text>
-          <View style={styles.logSlot}>
-            <ConnectionLog entries={logs} title="Pairing log" />
-          </View>
-        </View>
-      )}
-
       {status === 'error' && (
         <View style={styles.centered}>
           <Text style={styles.errorText}>{errorMessage}</Text>
-          {logs.length > 0 && (
-            <View style={styles.logSlot}>
-              <ConnectionLog entries={logs} title="Pairing log" />
-            </View>
-          )}
           <View style={styles.errorActions}>
             <Pressable style={styles.primaryButton} onPress={retry}>
               <Text style={styles.primaryButtonText}>Try Again</Text>

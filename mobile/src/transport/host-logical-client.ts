@@ -1,3 +1,4 @@
+import { createSshConnectionRoute } from './ssh-connection-route'
 import { AppState, Platform } from 'react-native'
 import { connect, type RpcClient } from './rpc-client'
 import { createStableLogicalRpcClient } from './stable-logical-rpc-client'
@@ -6,6 +7,14 @@ import { directPathForEndpoint } from './mobile-direct-endpoint-probe'
 import { startMobileEndpointLifecycle } from './mobile-endpoint-lifecycle'
 
 export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSink): RpcClient {
+  if (host.connectionRoute) {
+    // Why: client-context already nudges every published client on app-resume
+    // and network-change, so the route only supplies the SSH provider here.
+    return connect(host.endpoint, host.deviceToken, host.publicKeyB64, {
+      onLog,
+      routeProvider: createSshConnectionRoute(host.connectionRoute)
+    })
+  }
   // Why: the stable facade owns app-visible RPC/subscription state while the
   // direct socket remains a replaceable first physical generation.
   const logical = createStableLogicalRpcClient(

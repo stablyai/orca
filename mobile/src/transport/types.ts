@@ -1,3 +1,4 @@
+import { ConnectionRouteSchema, type ConnectionRoute } from './connection-route'
 import { z } from 'zod'
 import {
   PairingOfferSchema,
@@ -111,6 +112,7 @@ export type HostProfile = {
   lastKnownMachineName?: string
   lastKnownHostPlatform?: NodeJS.Platform
   endpoint: string
+  connectionRoute?: ConnectionRoute
   deviceToken: string
   publicKeyB64: string
   lastConnected: number
@@ -142,6 +144,7 @@ export const HostProfileSchema = z.object({
   name: z.string().min(1),
   ...hostNameIdentityFields,
   endpoint: z.string().min(1),
+  connectionRoute: ConnectionRouteSchema.optional(),
   deviceToken: z.string().min(1),
   publicKeyB64: z.string().min(1),
   lastConnected: z.number().finite(),
@@ -156,6 +159,7 @@ export const StoredHostProfileSchema = z.object({
   name: z.string().min(1),
   ...hostNameIdentityFields,
   endpoint: z.string().min(1),
+  connectionRoute: ConnectionRouteSchema.optional(),
   publicKeyB64: z.string().min(1),
   lastConnected: z.number().finite()
 })

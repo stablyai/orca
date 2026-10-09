@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, useEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import EditHostScreen from '../app/h/[hostId]/edit'
@@ -8,7 +8,8 @@ const dependencies = vi.hoisted(() => ({
   refreshHostClient: vi.fn(),
   loadHosts: vi.fn(),
   primeHosts: vi.fn(),
-  updateHostNameAndEndpoint: vi.fn()
+  updateHostNameAndEndpoint: vi.fn(),
+  updateHostConnectionRoute: vi.fn()
 }))
 
 vi.mock('react-native', () => ({
@@ -29,7 +30,9 @@ vi.mock('react-native-safe-area-context', () => ({
 
 vi.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ hostId: 'host-1' }),
-  useRouter: () => ({ back: dependencies.back })
+  useRouter: () => ({ back: dependencies.back }),
+  // The screen re-reads the host on focus; without focus tracking it is a mount effect.
+  useFocusEffect: (callback: () => void) => useEffect(callback, [callback])
 }))
 
 vi.mock('lucide-react-native', () => ({
@@ -39,6 +42,10 @@ vi.mock('lucide-react-native', () => ({
 vi.mock('./transport/host-store', () => ({
   loadHosts: dependencies.loadHosts,
   updateHostNameAndEndpoint: dependencies.updateHostNameAndEndpoint
+}))
+
+vi.mock('./transport/host-connection-route-store', () => ({
+  updateHostConnectionRoute: dependencies.updateHostConnectionRoute
 }))
 
 vi.mock('./transport/client-context', () => ({

@@ -1,0 +1,5 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": { "modules": ["OrcaSshTunnelModule"] },
+  "android": { "modules": ["expo.modules.orcasshtunnel.OrcaSshTunnelModule"] }
+}

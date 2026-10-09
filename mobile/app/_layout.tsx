@@ -219,6 +219,8 @@ export default function RootLayout() {
           />
           <Stack.Screen name="pair-scan" options={{ headerShown: false }} />
           <Stack.Screen name="pair" options={{ headerShown: false }} />
+          <Stack.Screen name="ssh-connections" options={{ headerShown: false }} />
+          <Stack.Screen name="ssh-connection" options={{ headerShown: false }} />
           <Stack.Screen name="pair-confirm" options={{ headerShown: false }} />
           <Stack.Screen
             name="mobile-onboarding"

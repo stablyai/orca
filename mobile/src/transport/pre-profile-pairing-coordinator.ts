@@ -1,3 +1,5 @@
+import { createSshConnectionRoute } from './ssh-connection-route'
+import type { ConnectionRoute } from './connection-route'
 import { Platform } from 'react-native'
 import { connect, type ConnectOptions } from './rpc-client'
 import { resolvePairingHostIdentity, savePairedHost } from './host-store'
@@ -72,6 +74,7 @@ const defaultDependencies: Dependencies = {
 
 export function startPreProfilePairing(args: {
   offer: PairingOffer
+  connectionRoute?: ConnectionRoute
   timeoutMs: number
   connectOptions?: ConnectOptions
   dependencies?: Partial<Dependencies>
@@ -102,7 +105,14 @@ export function startPreProfilePairing(args: {
     dispose()
   }, args.timeoutMs)
 
-  const result = runPairing(args.offer, args.connectOptions, dependencies, clients, () => disposed)
+  const result = runPairing(
+    args.offer,
+    args.connectOptions,
+    dependencies,
+    clients,
+    () => disposed,
+    args.connectionRoute
+  )
     .catch((error: unknown) => {
       if (timedOut) {
         throw new Error('mobile pairing timed out')
@@ -134,7 +144,8 @@ async function runPairing(
   connectOptions: ConnectOptions | undefined,
   dependencies: Dependencies,
   clients: Set<PairingCandidateClient>,
-  isDisposed: () => boolean
+  isDisposed: () => boolean,
+  connectionRoute?: ConnectionRoute
 ): Promise<{ hostId: string }> {
   const now = dependencies.now()
   // Why: every pairing artifact must share the preserved host id so re-pairing
@@ -145,7 +156,7 @@ async function runPairing(
   )
   assertActive(isDisposed)
   let journal: MobileRelayPairingJournal | null = null
-  if (offer.relay && dependencies.platform !== 'web') {
+  if (!connectionRoute && offer.relay && dependencies.platform !== 'web') {
     journal = createMobileRelayPairingJournal({
       offer: { ...offer, relay: offer.relay },
       hostId,
@@ -160,7 +171,11 @@ async function runPairing(
     offer.endpoint,
     offer.deviceToken,
     offer.publicKeyB64,
-    { ...connectOptions, onLog: attributePairingLogPath('direct', connectOptions?.onLog) }
+    {
+      ...connectOptions,
+      ...(connectionRoute ? { routeProvider: createSshConnectionRoute(connectionRoute) } : {}),
+      onLog: attributePairingLogPath('direct', connectOptions?.onLog)
+    }
   )
   clients.add(directClient)
   const candidates: PairingCandidate[] = [{ path: 'direct', client: directClient }]
@@ -206,7 +221,10 @@ async function runPairing(
   assertActive(isDisposed)
 
   if (!journal) {
-    await dependencies.savePairedHost(baseHost(offer, hostId, hostName, now))
+    await dependencies.savePairedHost({
+      ...baseHost(offer, hostId, hostName, now),
+      ...(connectionRoute ? { connectionRoute } : {})
+    })
     recordWinnerDescriptor(dependencies, hostId, winner.status)
     return { hostId }
   }
@@ -231,7 +249,10 @@ async function runPairing(
     // Why: this commits a LAN-only host instead of failing, so the refusal code is the only
     // record of why the phone never got a relay endpoint.
     log('info', 'Relay: desktop will not serve relay pairing', provision.error.code)
-    await dependencies.savePairedHost(baseHost(offer, hostId, hostName, now))
+    await dependencies.savePairedHost({
+      ...baseHost(offer, hostId, hostName, now),
+      ...(connectionRoute ? { connectionRoute } : {})
+    })
     await dependencies.clearJournal(journal.metadata.journalId)
     recordWinnerDescriptor(dependencies, hostId, winner.status)
     return { hostId }
