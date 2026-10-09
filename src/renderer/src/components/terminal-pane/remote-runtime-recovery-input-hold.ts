@@ -2,6 +2,7 @@ import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import {
   createPtyPreconnectInputBuffer,
   type AcceptedInputOptions,
+  type PreconnectInputWriter,
   type PtyPreconnectInputBuffer
 } from './pty-preconnect-input-buffer'
 
@@ -11,17 +12,9 @@ export type RemoteRuntimeInputEndpoint = {
   incarnationId: string | null
 }
 
-type HeldInputWriter = {
-  isCurrent: () => boolean
-  sendInput: (data: string, inputKind: TerminalInputKind) => boolean
-  sendInputImmediate: (data: string) => boolean
-  sendInputAccepted: (
-    data: string,
-    inputKind: TerminalInputKind,
-    options?: AcceptedInputOptions
-  ) => Promise<boolean>
-  continuesAfterFailedWrite?: () => boolean
-}
+// Why: release() always supplies an accepted-write path, so the hold requires what the buffer only accepts.
+type HeldInputWriter = PreconnectInputWriter &
+  Required<Pick<PreconnectInputWriter, 'sendInputAccepted'>>
 
 export type RemoteRuntimeRecoveryInputHold = {
   isHolding: () => boolean

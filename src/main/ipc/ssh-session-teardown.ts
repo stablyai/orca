@@ -15,6 +15,7 @@ import { connectionManager, persistedStore, portForwardManager } from './ssh-ipc
 import { clearRelayLostBackoff } from './ssh-relay-lost-backoff'
 import { clearRelayStateOverride } from './ssh-renderer-broadcast'
 import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
+import { errorMessage } from '../../shared/error-message'
 
 export async function disconnectRegisteredSshTarget(targetId: string): Promise<void> {
   invalidateConnectAttempt(targetId)
@@ -38,9 +39,7 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
       await teardownSshTargetTransport(targetId, (session) => session.disposeAndPersist())
     } catch (err) {
       // Why: a failed disconnect must not block metadata removal, else the target lingers in the store with uncleaned leases.
-      console.warn(
-        `[ssh] Failed to disconnect removed target ${targetId}: ${err instanceof Error ? err.message : String(err)}`
-      )
+      console.warn(`[ssh] Failed to disconnect removed target ${targetId}: ${errorMessage(err)}`)
     }
     persistedStore?.removeSshRemotePtyLeases(targetId)
     store.removeTarget(targetId)
@@ -61,7 +60,7 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
       await storage.clearBrowserRoutePartitionStorageForLocalSshTarget(targetId)
     } catch (error) {
       console.warn(
-        `[ssh] Failed to clear browser partitions for removed target ${targetId}: ${error instanceof Error ? error.message : String(error)}`
+        `[ssh] Failed to clear browser partitions for removed target ${targetId}: ${errorMessage(error)}`
       )
     }
   })
@@ -71,28 +70,17 @@ export async function teardownSshTargetTransport(
   targetId: string,
   teardown: (session: SshRelaySession) => void | Promise<void>
 ): Promise<void> {
-  let transportDisconnect: Promise<{ ok: true } | { ok: false; error: unknown }>
-  try {
-    transportDisconnect = Promise.resolve(connectionManager?.disconnect(targetId)).then(
-      () => ({ ok: true }) as const,
-      (error: unknown) => ({ ok: false, error }) as const
-    )
-  } catch (error) {
-    transportDisconnect = Promise.resolve({ ok: false, error })
-  }
-  const sessionTeardown = teardownActiveSshSession(targetId, teardown).then(
-    () => ({ ok: true }) as const,
-    (error: unknown) => ({ ok: false, error }) as const
-  )
-  const [disconnectResult, teardownResult] = await Promise.all([
-    transportDisconnect,
-    sessionTeardown
+  // Why: start the transport disconnect before session teardown; the async wrapper turns a sync throw into a rejection.
+  const transportDisconnect = (async () => connectionManager?.disconnect(targetId))()
+  const [teardownResult, disconnectResult] = await Promise.allSettled([
+    teardownActiveSshSession(targetId, teardown),
+    transportDisconnect
   ])
-  if (!teardownResult.ok) {
-    throw teardownResult.error
+  if (teardownResult.status === 'rejected') {
+    throw teardownResult.reason
   }
-  if (!disconnectResult.ok) {
-    throw disconnectResult.error
+  if (disconnectResult.status === 'rejected') {
+    throw disconnectResult.reason
   }
 }
 
@@ -141,9 +129,7 @@ export async function abandonFailedSshSession(
     await session.detachAndPersist()
   } catch (error) {
     // Why: a teardown throw must not mask the connect error the caller is about to rethrow.
-    console.warn(
-      `[ssh] Failed to detach abandoned session for ${targetId}: ${error instanceof Error ? error.message : String(error)}`
-    )
+    console.warn(`[ssh] Failed to detach abandoned session for ${targetId}: ${errorMessage(error)}`)
   }
   if (activeSessions.get(targetId) === session) {
     activeSessions.delete(targetId)
@@ -172,7 +158,7 @@ export async function abandonCancelledConnectAttempt(
   } catch (error) {
     // Why: the caller is about to throw the cancellation; a teardown throw must not replace it.
     console.warn(
-      `[ssh] Failed to disconnect cancelled connect transport for ${targetId}: ${error instanceof Error ? error.message : String(error)}`
+      `[ssh] Failed to disconnect cancelled connect transport for ${targetId}: ${errorMessage(error)}`
     )
   }
 }
@@ -205,7 +191,7 @@ export async function abandonDecisionTransport(
   } catch (error) {
     // Why: the caller is about to throw the cancellation; a teardown throw must not replace it.
     console.warn(
-      `[ssh] Failed to close the transport a cancelled decision opened for ${targetId}: ${error instanceof Error ? error.message : String(error)}`
+      `[ssh] Failed to close the transport a cancelled decision opened for ${targetId}: ${errorMessage(error)}`
     )
   }
 }

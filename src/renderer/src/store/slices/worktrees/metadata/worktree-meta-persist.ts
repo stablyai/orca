@@ -57,14 +57,16 @@ export function persistWorktreeMeta(
   worktreeId: string,
   updates: Partial<WorktreeMeta> & WorkspaceAttachmentMutation,
   executionHostId?: ExecutionHostId,
-  identityKey?: string
+  identityKey?: string,
+  expectedInstanceId?: string
 ): Promise<void> {
   const operation = persistWorktreeMetaUntracked(
     settings,
     worktreeId,
     updates,
     executionHostId,
-    identityKey
+    identityKey,
+    expectedInstanceId
   )
   if (!('displayName' in updates)) {
     return operation
@@ -86,15 +88,20 @@ async function persistWorktreeMetaUntracked(
   worktreeId: string,
   updates: Partial<WorktreeMeta> & WorkspaceAttachmentMutation,
   executionHostId?: ExecutionHostId,
-  identityKey?: string
+  identityKey?: string,
+  expectedInstanceId?: string
 ): Promise<void> {
   const target = getActiveRuntimeTarget(settings)
   if (target.kind === 'local') {
-    await window.api.worktrees.updateMeta({
+    const result = await window.api.worktrees.updateMeta({
       worktreeId,
       ...(executionHostId ? { executionHostId } : {}),
+      ...(expectedInstanceId ? { expectedInstanceId } : {}),
       updates: updates
     })
+    if (result === null) {
+      throw new Error('selector_not_found')
+    }
     return
   }
   await assertWorkspaceAttachmentWriteCapability(target, updates)
@@ -164,7 +171,14 @@ async function persistWorktreeMetaUntracked(
     target,
     'worktree.set',
     {
-      worktree: identityKey ? `identity:${identityKey}` : toRuntimeWorktreeSelector(worktreeId),
+      worktree: identityKey
+        ? `identity:${identityKey}`
+        : toRuntimeWorktreeSelector(
+            worktreeId,
+            executionHostId && expectedInstanceId
+              ? { executionHostId, instanceId: expectedInstanceId }
+              : undefined
+          ),
       ...encodePushTargetClearForRuntimeRpc(compatibleUpdates)
     },
     { timeoutMs: 15_000 }

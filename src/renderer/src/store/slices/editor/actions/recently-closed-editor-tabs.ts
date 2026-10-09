@@ -17,6 +17,7 @@ import {
   shouldDeleteUntouchedUntitledFile
 } from '../tabs/untitled-file-cleanup'
 import { unifiedTabsKeepWorktreeSelected } from './unified-tabs-keep-worktree-selected'
+import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
 
 export function createRecentlyClosedEditorTabs(
   set: EditorSet,
@@ -78,10 +79,7 @@ export function createRecentlyClosedEditorTabs(
         .flat()
         .filter(
           (item) =>
-            (item.contentType === 'editor' ||
-              item.contentType === 'diff' ||
-              item.contentType === 'conflict-review' ||
-              item.contentType === 'check-details') &&
+            isEditorTabContentType(item.contentType) &&
             (!activeWorktreeId || item.worktreeId === activeWorktreeId)
         )
         .map((item) => item.id)
@@ -167,8 +165,12 @@ export function createRecentlyClosedEditorTabs(
         // Why: one shared index — a per-file position lookup rescans tab order and group membership, making close-all cubic.
         const positionIndex = createRecentlyClosedTabPositionIndex(s, activeWorktreeId)
         for (const f of [...closingFiles].toReversed()) {
-          // Why: skip untitled non-dirty files (deleted from disk after close) and ephemeral preview tabs so the reopen stack has no vanished/junk paths.
-          if (untitledIdsToDelete.has(f.id) || f.mode === 'markdown-preview') {
+          // Why: skip untitled non-dirty files (deleted from disk after close), ephemeral preview tabs, and chat visuals (one click away in their chat) so the reopen stack has no vanished/junk paths.
+          if (
+            untitledIdsToDelete.has(f.id) ||
+            f.mode === 'markdown-preview' ||
+            f.mode === 'chat-visual'
+          ) {
             continue
           }
           const { id: _id, isDirty: _dirty, mirroredFromRuntimeSession: _mirrored, ...snap } = f

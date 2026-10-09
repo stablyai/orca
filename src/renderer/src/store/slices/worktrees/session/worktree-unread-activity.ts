@@ -1,25 +1,23 @@
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { applyWorktreeUpdates, getRepoIdFromWorktreeId } from '../../worktree-helpers'
-import {
-  applyDetectedWorktreeUpdates,
-  findKnownWorktreeById
-} from '../listing/detected-worktree-meta'
+import { applyWorktreeUpdates } from '../../worktree-helpers'
+import { applyDetectedWorktreeUpdates } from '../listing/detected-worktree-meta'
 import { getFolderWorkspaceActivityPersistence } from './folder-workspace-activity'
 import {
   persistPassiveWorktreeMetaForOwner,
-  trySettingsForWorktreeOwner,
-  warnAmbiguousOwnerOnce
+  resolvePassiveWorktreeMetaOwner,
+  passiveWorktreeMetaUpdateGuard
 } from '../listing/worktree-owner-settings'
-import { persistWorktreeMeta } from '../metadata/worktree-meta-persist'
-import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-errors'
 
 export function createMarkWorktreeUnread(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
 ): WorktreeSlice['markWorktreeUnread'] {
-  return (worktreeId) => {
+  return (worktreeId, qualification) => {
+    if (qualification === null) {
+      return
+    }
     // Why: attention dot stays until the user engages the worktree; cleared by pane interaction or activation.
     const now = Date.now()
     const workspaceScope = parseWorkspaceKey(worktreeId)
@@ -52,24 +50,37 @@ export function createMarkWorktreeUnread(
       })
       return
     }
+    const owner = resolvePassiveWorktreeMetaOwner(get(), worktreeId, qualification)
+    if (!owner) {
+      return
+    }
+    const guard = passiveWorktreeMetaUpdateGuard(owner.worktree)
     let shouldPersist = false
     set((s) => {
-      const worktree = findKnownWorktreeById(s, worktreeId)
+      const worktree = owner.worktree
       if (!worktree || worktree.isUnread) {
         return s
       }
       shouldPersist = true
-      const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, {
-        isUnread: true,
-        lastActivityAt: now
-      })
+      const nextWorktrees = applyWorktreeUpdates(
+        s.worktreesByRepo,
+        worktreeId,
+        {
+          isUnread: true,
+          lastActivityAt: now
+        },
+        worktree.hostId,
+        guard
+      )
       const nextDetectedWorktrees = applyDetectedWorktreeUpdates(
         s.detectedWorktreesByRepo,
         worktreeId,
         {
           isUnread: true,
           lastActivityAt: now
-        }
+        },
+        worktree.hostId,
+        guard
       )
       return {
         ...(nextWorktrees !== s.worktreesByRepo
@@ -89,7 +100,8 @@ export function createMarkWorktreeUnread(
       get,
       worktreeId,
       { isUnread: true, lastActivityAt: now },
-      'persist unread worktree state'
+      'persist unread worktree state',
+      { owner }
     )
   }
 }
@@ -98,7 +110,10 @@ export function createClearWorktreeUnread(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
 ): WorktreeSlice['clearWorktreeUnread'] {
-  return (worktreeId) => {
+  return (worktreeId, qualification) => {
+    if (qualification === null) {
+      return
+    }
     const workspaceScope = parseWorkspaceKey(worktreeId)
     if (workspaceScope?.type === 'folder') {
       const folderWorkspaceId = workspaceScope.folderWorkspaceId
@@ -117,23 +132,36 @@ export function createClearWorktreeUnread(
       void get().updateFolderWorkspace(folderWorkspaceId, { isUnread: false })
       return
     }
+    const owner = resolvePassiveWorktreeMetaOwner(get(), worktreeId, qualification)
+    if (!owner) {
+      return
+    }
+    const guard = passiveWorktreeMetaUpdateGuard(owner.worktree)
     let shouldPersist = false
     set((s) => {
-      const worktree = findKnownWorktreeById(s, worktreeId)
+      const worktree = owner.worktree
       if (!worktree || !worktree.isUnread) {
         // Why: return `s` (not {}) to keep the object reference on this hot-path no-op (every keystroke), avoiding selector churn.
         return s
       }
       shouldPersist = true
-      const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, {
-        isUnread: false
-      })
+      const nextWorktrees = applyWorktreeUpdates(
+        s.worktreesByRepo,
+        worktreeId,
+        {
+          isUnread: false
+        },
+        worktree.hostId,
+        guard
+      )
       const nextDetectedWorktrees = applyDetectedWorktreeUpdates(
         s.detectedWorktreesByRepo,
         worktreeId,
         {
           isUnread: false
-        }
+        },
+        worktree.hostId,
+        guard
       )
       return {
         ...(nextWorktrees !== s.worktreesByRepo ? { worktreesByRepo: nextWorktrees } : {}),
@@ -151,7 +179,8 @@ export function createClearWorktreeUnread(
       get,
       worktreeId,
       { isUnread: false },
-      'persist cleared unread worktree state'
+      'persist cleared unread worktree state',
+      { owner }
     )
   }
 }
@@ -160,7 +189,10 @@ export function createBumpWorktreeActivity(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
 ): WorktreeSlice['bumpWorktreeActivity'] {
-  return (worktreeId) => {
+  return (worktreeId, qualification) => {
+    if (qualification === null) {
+      return
+    }
     const now = Date.now()
     const workspaceScope = parseWorkspaceKey(worktreeId)
     if (workspaceScope?.type === 'folder') {
@@ -187,9 +219,14 @@ export function createBumpWorktreeActivity(
       }
       return
     }
+    const owner = resolvePassiveWorktreeMetaOwner(get(), worktreeId, qualification)
+    if (!owner) {
+      return
+    }
+    const guard = passiveWorktreeMetaUpdateGuard(owner.worktree)
     let shouldPersist = false
     set((s) => {
-      const worktree = findKnownWorktreeById(s, worktreeId)
+      const worktree = owner.worktree
       if (!worktree) {
         return s
       }
@@ -197,15 +234,23 @@ export function createBumpWorktreeActivity(
       // Why: skip sortEpoch bump for the active worktree — its PTY events are click side-effects (reorder-on-click bug, PR #209).
       // lastActivityAt is still persisted so the next background-driven sortEpoch bump includes this worktree's score.
       const isActive = s.activeWorktreeId === worktreeId
-      const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, {
-        lastActivityAt: now
-      })
+      const nextWorktrees = applyWorktreeUpdates(
+        s.worktreesByRepo,
+        worktreeId,
+        {
+          lastActivityAt: now
+        },
+        worktree.hostId,
+        guard
+      )
       const nextDetectedWorktrees = applyDetectedWorktreeUpdates(
         s.detectedWorktreesByRepo,
         worktreeId,
         {
           lastActivityAt: now
-        }
+        },
+        worktree.hostId,
+        guard
       )
       return {
         ...(nextWorktrees !== s.worktreesByRepo
@@ -224,19 +269,12 @@ export function createBumpWorktreeActivity(
       return
     }
 
-    const ownerSettings = trySettingsForWorktreeOwner(get(), worktreeId)
-    if (!ownerSettings) {
-      warnAmbiguousOwnerOnce(worktreeId, 'persist worktree activity timestamp')
-      return
-    }
-    void persistWorktreeMeta(ownerSettings, worktreeId, {
-      lastActivityAt: now
-    }).catch((err) => {
-      if (isRuntimeSelectorNotFoundError(err)) {
-        return
-      }
-      console.error('Failed to persist worktree activity timestamp:', err)
-      void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
-    })
+    persistPassiveWorktreeMetaForOwner(
+      get,
+      worktreeId,
+      { lastActivityAt: now },
+      'persist worktree activity timestamp',
+      { owner, reconcileSelectorMiss: false }
+    )
   }
 }

@@ -1,3 +1,4 @@
+import type { WorktreeSlice } from '@/store/slices/worktree-helpers'
 import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
 import type { AgentAttentionUnreadReason } from '@/attention/agent-attention-contract'
 import type { IDisposable } from '@xterm/xterm'
@@ -93,10 +94,10 @@ export type UseTerminalPaneLifecycleDeps = {
     replacedPtyId?: string,
     directSshRetryAttemptId?: DirectSshPaneRetryAttemptId
   ) => void
-  markWorktreeUnread: (worktreeId: string) => void
+  markWorktreeUnread: WorktreeSlice['markWorktreeUnread']
   markTerminalTabUnread: (tabId: string, reason: AgentAttentionUnreadReason) => void
   markTerminalPaneUnread: (paneKey: string, reason: AgentAttentionUnreadReason) => void
-  clearWorktreeUnread: (worktreeId: string) => void
+  clearWorktreeUnread: WorktreeSlice['clearWorktreeUnread']
   clearTerminalTabUnread: (tabId: string) => void
   clearTerminalPaneUnread: (paneKey: string) => void
   onShowSessionRestoredBanner: (paneId: number, reason?: SessionRestoredBannerReason) => void

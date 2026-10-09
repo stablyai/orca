@@ -1,12 +1,12 @@
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
-import { collapseGroupLayout } from './tabs-layout'
+import { collapseGroupLayout } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
 import {
-  dedupeTabOrder,
   findGroupForTab,
   findTabAndWorktree,
   pickNextActiveTab,
   sanitizeRecentTabIds
 } from '../tab-group-state'
+import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-order'
 import { buildActiveSurfacePatch } from './tabs-surface'
 import { beginStructuredAgentSessionTabClose } from '@/runtime/structured-agent-session-tab-retirement'
 import {

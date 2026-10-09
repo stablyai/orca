@@ -14,6 +14,7 @@ import {
 } from '../tabs/untitled-file-cleanup'
 import { unifiedTabsKeepWorktreeSelected } from './unified-tabs-keep-worktree-selected'
 import { isSameEditorOwner, mayShareEditorBackingFile } from '../file-ids/editor-file-ids'
+import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
 
 function isSameDocumentOwner(candidate: OpenFile, closedFile: OpenFile): boolean {
   const expectedRoute = closedFile.operationProvenance?.generation.route
@@ -98,11 +99,7 @@ export function createCloseFileAction(
           tabs
             .filter(
               (entry) =>
-                fileIdsToClose.has(entry.entityId) &&
-                (entry.contentType === 'editor' ||
-                  entry.contentType === 'diff' ||
-                  entry.contentType === 'conflict-review' ||
-                  entry.contentType === 'check-details')
+                fileIdsToClose.has(entry.entityId) && isEditorTabContentType(entry.contentType)
             )
             .map((entry) => entry.id)
       )
@@ -239,12 +236,13 @@ export function createCloseFileAction(
         let nextRecentlyClosed = s.recentlyClosedEditorTabsByWorktree
         let nextRecentlyClosedKinds = s.recentlyClosedTabKindsByWorktree
         const wtRecent = closedFile?.worktreeId
-        // Why: exclude untitled unedited files (deleted from disk after close, so Cmd+Shift+T can't reopen a gone path) and ephemeral preview tabs from the reopen stack.
+        // Why: exclude untitled unedited files (deleted from disk after close, so Cmd+Shift+T can't reopen a gone path), ephemeral preview tabs, and chat visuals (one click away in their chat) from the reopen stack.
         if (
           closedFile &&
           wtRecent &&
           !shouldDeleteFromDisk &&
-          closedFile.mode !== 'markdown-preview'
+          closedFile.mode !== 'markdown-preview' &&
+          closedFile.mode !== 'chat-visual'
         ) {
           const {
             id: _id,

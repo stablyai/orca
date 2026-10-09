@@ -1,5 +1,5 @@
 import { defineMethod } from '../core'
-import { BrowserTarget } from '../schemas'
+import { BrowserTarget } from '../../../../shared/rpc-contract/rpc-param-primitives'
 import {
   Check,
   Drag,
@@ -26,7 +26,10 @@ import {
   Upload,
   Wait
 } from './browser-schemas'
-import { BrowserOpenUrlParams, BrowserTabCreateParams } from './browser-tab-create-schema'
+import {
+  BrowserOpenUrlParams,
+  BrowserTabCreateParams
+} from '../../../../shared/rpc-contract/browser-tab-create-params'
 import { BROWSER_TEXT_METHODS } from './browser-text-rpc-methods'
 import { BROWSER_PROFILE_METHODS } from './browser-profile-rpc-methods'
 import { CertificateProceed } from '../../../../shared/rpc-contract/browser-core-params'

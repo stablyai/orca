@@ -3,6 +3,7 @@ import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { splitWorktreeId } from '../../shared/worktree/id'
 import { planWorktreeSortOrderUpdates } from '../../shared/worktree/sort-order-update'
+import { getWorktreeInstanceId } from '../../shared/worktree/identity'
 import { stripOrcaProvenanceMetaUpdates } from '../worktree-removal-safety'
 import type { RuntimeStore } from './runtime-store-contract'
 import { RuntimeLineageError } from './runtime-worktree-lineage-resolution'
@@ -29,6 +30,7 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
   ports: Ports
 }): Promise<Worktree> {
   const worktree = await args.ports.resolveWorktree(args.selector)
+  assertCurrentMetadata(args.store, worktree, args.updates)
   const { lineage, ...metaUpdates } = args.updates
   if (lineage?.parentWorktree) {
     args.ports.invalidateResolved()
@@ -56,6 +58,8 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
     args.store.removeWorkspaceLineage?.(worktreeWorkspaceKey(worktree.id))
   } else if (lineage?.parentWorktree) {
     const parent = await args.ports.resolveWorktree(lineage.parentWorktree)
+    assertCurrentMetadata(args.store, worktree, args.updates)
+    assertCurrentMetadata(args.store, parent)
     args.ports.validateParent(worktree, parent)
     if (!worktree.instanceId || !parent.instanceId) {
       throw new RuntimeLineageError(
@@ -90,16 +94,38 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
     })
   }
   const metadataUpdates = stripOrcaProvenanceMetaUpdates(persisted)
-  const executionHostId = worktree.identity?.executionHostId ?? worktree.hostId
-  if (executionHostId && args.store.setWorktreeMetaForHost) {
-    args.store.setWorktreeMetaForHost(worktree.id, executionHostId, metadataUpdates)
-  } else {
-    args.store.setWorktreeMeta(worktree.id, metadataUpdates)
+  const meta = args.store.updateExistingWorktreeMeta?.(worktree.id, metadataUpdates, {
+    executionHostId: worktree.identity?.executionHostId ?? worktree.hostId,
+    instanceId: getWorktreeInstanceId(worktree)
+  })
+  if (!meta) {
+    throw new Error('selector_not_found')
   }
   // Why: CLI callers need an explicit push for metadata changed outside the renderer's optimistic update path.
   args.ports.invalidateResolved()
   args.ports.notifyChanged(worktree.repoId)
-  return args.ports.showWorktree(`id:${worktree.id}`)
+  return args.ports.showWorktree(
+    worktree.identity ? `identity:${worktree.identity.key}` : args.selector
+  )
+}
+
+function assertCurrentMetadata(
+  store: RuntimeStore,
+  worktree: ResolvedWorktree,
+  updates: Partial<Pick<WorktreeMeta, 'hostId' | 'instanceId'>> = {}
+): void {
+  if (
+    !store.isCurrentWorktreeMetadata?.(
+      worktree.id,
+      {
+        executionHostId: worktree.identity?.executionHostId ?? worktree.hostId,
+        instanceId: getWorktreeInstanceId(worktree)
+      },
+      updates
+    )
+  ) {
+    throw new Error('selector_not_found')
+  }
 }
 
 export function persistRuntimeManagedWorktreeSortOrder(args: {
@@ -113,15 +139,19 @@ export function persistRuntimeManagedWorktreeSortOrder(args: {
     (worktreeId) => args.store.getWorktreeMeta(worktreeId),
     Date.now()
   )
-  for (const update of updates) {
-    args.store.setWorktreeMeta(update.worktreeId, { sortOrder: update.sortOrder })
-  }
-  if (updates.length === 0) {
+  const accepted =
+    args.store.updateExistingWorktreeMetaBatch?.(
+      updates.map((update) => ({
+        worktreeId: update.worktreeId,
+        updates: { sortOrder: update.sortOrder }
+      }))
+    ) ?? []
+  if (accepted.length === 0) {
     return { updated: 0 }
   }
   args.invalidateResolved()
   const repoIds = new Set(
-    updates.flatMap(({ worktreeId }) => {
+    accepted.flatMap((worktreeId) => {
       const parsed = splitWorktreeId(worktreeId)
       return parsed ? [parsed.repoId] : []
     })
@@ -129,7 +159,7 @@ export function persistRuntimeManagedWorktreeSortOrder(args: {
   for (const repoId of repoIds) {
     args.notifyChanged(repoId)
   }
-  return { updated: updates.length }
+  return { updated: accepted.length }
 }
 
 function omitUndefinedProperties<T extends Record<string, unknown>>(value: T): Partial<T> {

@@ -131,7 +131,26 @@ export const LAYOUT_ORACLE_KNOWN_ON_MAIN: readonly KnownOnMain[] = [
     check: 'expected',
     step: 'rename after restart',
     cause: 'orcad title after restart'
-  }
+  },
+  // Headless group moves save the groups but still no tab bar, so the groups list tabs the tab bar
+  // lacks.
+  ...(['orcad', 'electron'] as const).flatMap((kind) =>
+    ['split-tab-into-new-group', 'move-tab-between-groups'].map((id) => ({
+      scenario: `headless-${kind}-${id}`,
+      check: 'rules' as const,
+      rule: 'group_lists_missing_tab',
+      cause: 'headless saves groups but no tab bar'
+    }))
+  ),
+  // After a headless move into an existing group, paired clients still see that group's previous
+  // tab selected, not the moved one. A split into a new group selects the moved tab.
+  ...(['orcad', 'electron'] as const).map((kind) => ({
+    scenario: `headless-${kind}-move-tab-between-groups`,
+    check: 'expected' as const,
+    step: 'move',
+    detail: /^group \S+ selects /,
+    cause: 'headless move-to-group keeps the target group selection'
+  }))
 ]
 
 function covers(

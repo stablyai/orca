@@ -44,7 +44,7 @@ import {
   readAgentLaunchModeSettings
 } from '../../../agent-launch/agent-launch-mode'
 import type { RpcContext } from '../core'
-import type { AgentLaunchParams } from './agent-launch-schemas'
+import type { AgentLaunchParams } from '../../../../shared/rpc-contract/agent-launch-params'
 import { agentLaunchOperationCallerKey } from './agent-launch-replay'
 
 /** Whether a launch may move the host window at all: a paired device's launch moves only its own

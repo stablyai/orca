@@ -1,3 +1,4 @@
+import { capturePassiveWorktreeMetaOwner } from '@/store/slices/worktrees/listing/worktree-owner-settings'
 /**
  * Parked terminal side-effect watcher.
  * Why: parking unmounts TerminalPane, so this replays its bell/title/agent-completion/PR-link side effects while parked.
@@ -74,6 +75,10 @@ export function startParkedTerminalByteWatcher(
     resolveTerminalNotificationOwner(useAppStore.getState(), worktreeId, { paneKey, ptyId }) ??
     undefined
 
+  const metadataOwner = workspaceOwner
+    ? capturePassiveWorktreeMetaOwner(useAppStore.getState(), worktreeId, workspaceOwner)
+    : undefined
+
   // Why: one watcher per PTY — a stale watcher from a previous park cycle would double-fire bell/completion for the same bytes.
   parkedWatcherDisposersByPtyId.get(ptyId)?.()
 
@@ -138,7 +143,7 @@ export function startParkedTerminalByteWatcher(
     },
     onBell: (): void => {
       const state = useAppStore.getState()
-      state.markWorktreeUnread(worktreeId)
+      state.markWorktreeUnread(worktreeId, metadataOwner ?? null)
       state.markTerminalTabUnread(tabId, 'terminal-bell')
       if (state.settings?.experimentalTerminalAttention === true) {
         state.markTerminalPaneUnread(paneKey, 'terminal-bell')

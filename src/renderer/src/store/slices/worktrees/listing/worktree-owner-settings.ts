@@ -1,7 +1,11 @@
 import type { AppState } from '../../../types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
-import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
+import {
+  getRepoIdFromWorktreeId,
+  type WorktreePassiveMetadataOwner,
+  type WorktreeMetaUpdateGuard
+} from '../../worktree-helpers'
 import { findRepoForHost } from '../../repo-host-identity'
 import {
   getRepoExecutionHostId,
@@ -11,12 +15,16 @@ import {
 import {
   resolveWorktreeOperationRoute,
   resolveWorktreeOperationRouteForHost,
-  settingsForWorktreeOperationRoute
+  settingsForWorktreeOperationRoute,
+  type WorktreeOperationRoute
 } from '@/lib/worktree-operation-route'
+import { resolveExactWorktreeRoute } from '@/lib/worktree-owner-route'
 import { WORKTREE_REMOVAL_AMBIGUOUS_ERROR } from './worktree-slice-constants'
 import { isRuntimeSelectorNotFoundError } from './runtime-worktree-rpc-errors'
 import { persistWorktreeMeta } from '../metadata/worktree-meta-persist'
 import type { WorktreeSliceGet } from './worktree-slice-types'
+import { findKnownWorktreeById } from './detected-worktree-meta'
+import { getWorktreeInstanceId } from '../../../../../../shared/worktree/identity'
 
 export function replaceWorktreeInRepoLists(
   worktreesByRepo: Record<string, Worktree[]>,
@@ -141,20 +149,124 @@ export function warnAmbiguousOwnerOnce(worktreeId: string, errorLabel: string): 
   console.warn(`Skipped ${errorLabel}: workspace identity is ambiguous across hosts`, worktreeId)
 }
 
+function sameRoute(left: WorktreeOperationRoute | null, right: WorktreeOperationRoute): boolean {
+  return (
+    left?.executionHostId === right.executionHostId &&
+    left.runtimeEnvironmentId === right.runtimeEnvironmentId
+  )
+}
+
+function findPassiveWorktreeForRoute(
+  state: AppState,
+  worktreeId: string,
+  route: WorktreeOperationRoute
+) {
+  const repoId = getRepoIdFromWorktreeId(worktreeId)
+  const matches = (worktree: {
+    id: string
+    repoId: string
+    hostId?: ExecutionHostId
+    runtimeOwnerEnvironmentId?: string
+  }) => {
+    const exact = resolveExactWorktreeRoute(state, worktree)
+    return worktree.id === worktreeId && exact.kind === 'resolved' && sameRoute(exact.route, route)
+  }
+  const visible = (state.worktreesByRepo?.[repoId] ?? []).filter(matches)
+  if (visible.length) {
+    return visible.length === 1 ? visible[0] : undefined
+  }
+  const detected = (state.detectedWorktreesByRepo?.[repoId]?.worktrees ?? []).filter(matches)
+  if (detected.length) {
+    return detected.length === 1 ? detected[0] : undefined
+  }
+  if (!state.worktreesByRepo || !state.detectedWorktreesByRepo) {
+    return undefined
+  }
+  const legacy = findKnownWorktreeById(state, worktreeId)
+  return legacy &&
+    !legacy.hostId &&
+    !legacy.runtimeOwnerEnvironmentId &&
+    sameRoute(resolveWorktreeOperationRoute(state, worktreeId), route)
+    ? legacy
+    : undefined
+}
+
+export function resolvePassiveWorktreeMetaOwner(
+  state: AppState,
+  worktreeId: string,
+  qualification?: WorktreePassiveMetadataOwner | null
+) {
+  if (qualification === null) {
+    return undefined
+  }
+  const route = qualification ?? resolveWorktreeOperationRoute(state, worktreeId)
+  if (!route) {
+    if (findKnownWorktreeById(state, worktreeId)) {
+      warnAmbiguousOwnerOnce(worktreeId, 'persist worktree metadata')
+    }
+    return undefined
+  }
+  const worktree = findPassiveWorktreeForRoute(state, worktreeId, route)
+  if (
+    !worktree ||
+    (qualification?.expectedInstanceId !== undefined &&
+      getWorktreeInstanceId(worktree) !== qualification.expectedInstanceId)
+  ) {
+    return undefined
+  }
+  return { worktree, route }
+}
+
+export function passiveWorktreeMetaUpdateGuard(
+  captured: NonNullable<Parameters<WorktreeMetaUpdateGuard>[0]>
+): WorktreeMetaUpdateGuard {
+  const instanceId = getWorktreeInstanceId(captured)
+  return (worktree) =>
+    worktree !== undefined &&
+    worktree.runtimeOwnerEnvironmentId === captured.runtimeOwnerEnvironmentId &&
+    getWorktreeInstanceId(worktree) === instanceId
+}
+
+export function capturePassiveWorktreeMetaOwner(
+  state: AppState,
+  worktreeId: string,
+  route: WorktreeOperationRoute
+): WorktreePassiveMetadataOwner {
+  const owner = resolvePassiveWorktreeMetaOwner(state, worktreeId, route)
+  const expectedInstanceId = owner ? getWorktreeInstanceId(owner.worktree) : undefined
+  return { ...route, ...(expectedInstanceId ? { expectedInstanceId } : {}) }
+}
+
 export function persistPassiveWorktreeMetaForOwner(
   get: WorktreeSliceGet,
   worktreeId: string,
   updates: Partial<WorktreeMeta>,
-  errorLabel: string
+  errorLabel: string,
+  options: {
+    owner?: NonNullable<ReturnType<typeof resolvePassiveWorktreeMetaOwner>>
+    reconcileSelectorMiss?: boolean
+  } = {}
 ): void {
-  const ownerSettings = trySettingsForWorktreeOwner(get(), worktreeId)
-  if (!ownerSettings) {
+  const state = get()
+  const owner = options.owner ?? resolvePassiveWorktreeMetaOwner(state, worktreeId)
+  if (!owner) {
     warnAmbiguousOwnerOnce(worktreeId, errorLabel)
     return
   }
-  void persistWorktreeMeta(ownerSettings, worktreeId, updates).catch((err) => {
+  const { worktree, route } = owner
+  const ownerSettings = settingsForWorktreeOperationRoute(state.settings, route)
+  void persistWorktreeMeta(
+    ownerSettings,
+    worktreeId,
+    updates,
+    worktree.identity?.executionHostId ?? worktree.hostId ?? route.executionHostId ?? undefined,
+    worktree.identity?.key,
+    getWorktreeInstanceId(worktree)
+  ).catch((err) => {
     if (isRuntimeSelectorNotFoundError(err)) {
-      void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+      if (options.reconcileSelectorMiss !== false) {
+        void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+      }
       return
     }
     console.error(`Failed to ${errorLabel}:`, err)

@@ -58,6 +58,11 @@ import { useNativeChatHostOutageNotice } from './use-native-chat-host-outage-not
 import { useNativeChatAvailabilityNotice } from './use-native-chat-availability-notice'
 import { useStructuredAgentSessionStartFailureFacts } from './use-structured-agent-session-start-failure-facts'
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session-approval-subject'
+import {
+  isClaudeSignInFailureKind,
+  NativeChatClaudeSignInContext,
+  useNativeChatClaudeSignIn
+} from './native-chat-claude-sign-in'
 
 export function NativeChatStructuredSession(
   props: Omit<NativeChatStructuredViewProps, 'mode'>
@@ -146,7 +151,7 @@ export function NativeChatStructuredSession(
     )
   const startFailures = useStructuredAgentSessionStartFailureFacts(
     controller.journalItems,
-    needsFailureFacts
+    needsFailureFacts || props.agent === 'claude'
   )
   const deliveryNotices = useStructuredAgentSessionDeliveryNotices({
     pending: controller.pending,
@@ -232,11 +237,18 @@ export function NativeChatStructuredSession(
     submissions: controller.submissions,
     deliveryNotices
   })
+  const claudeSignIn = useNativeChatClaudeSignIn({
+    agent: props.agent,
+    target: props.target,
+    failure: provisionalLaunch.failure,
+    failureRows: startFailures.filter((fact) => isClaudeSignInFailureKind(fact.kind)).length
+  })
   const notices = structuredSessionNotices({
     launch,
     agentLabel,
     sessionError,
     composerError: composerError ?? continuation.continueError,
+    claudeSignIn,
     availability
   })
   if (hostNotice) {
@@ -276,29 +288,31 @@ export function NativeChatStructuredSession(
         ) : (
           <NativeChatRewindContext.Provider value={controller.rewind.surface}>
             <NativeChatOrcaStopContext.Provider value={continuation.view}>
-              <NativeChatMessageList
-                // A rewind replaces the conversation; nothing the old transcript held carries over.
-                key={controller.epoch ?? undefined}
-                ref={submits.messageListRef}
-                session={session}
-                journalItems={controller.journalItems}
-                journalSubmissions={controller.submissions}
-                journalLatestTurn={controller.latestTurn}
-                subagentRoster={controller.subagentRoster}
-                railOutline={controller.railOutline}
-                isVisible={props.isVisible}
-                isWorking={controller.isWorking}
-                expandSignal={false}
-                workingStartedAt={controller.workingStartedAt}
-                settledTurns={controller.settledTurns}
-                awaitingInput={prompt === null ? null : 'shown'}
-                turnActivity={controller.turnActivity}
-                stopping={stopControls.stopping}
-                onLinkClick={onLinkClick}
-                allowFileUriLinks={onLinkClick !== undefined}
-                runtimeContext={imageRuntimeContext}
-                deliveryNotices={deliveryNotices}
-              />
+              <NativeChatClaudeSignInContext.Provider value={claudeSignIn}>
+                <NativeChatMessageList
+                  // A rewind replaces the conversation; nothing the old transcript held carries over.
+                  key={controller.epoch ?? undefined}
+                  ref={submits.messageListRef}
+                  session={session}
+                  journalItems={controller.journalItems}
+                  journalSubmissions={controller.submissions}
+                  journalLatestTurn={controller.latestTurn}
+                  subagentRoster={controller.subagentRoster}
+                  railOutline={controller.railOutline}
+                  isVisible={props.isVisible}
+                  isWorking={controller.isWorking}
+                  expandSignal={false}
+                  workingStartedAt={controller.workingStartedAt}
+                  settledTurns={controller.settledTurns}
+                  awaitingInput={prompt === null ? null : 'shown'}
+                  turnActivity={controller.turnActivity}
+                  stopping={stopControls.stopping}
+                  onLinkClick={onLinkClick}
+                  allowFileUriLinks={onLinkClick !== undefined}
+                  runtimeContext={imageRuntimeContext}
+                  deliveryNotices={deliveryNotices}
+                />
+              </NativeChatClaudeSignInContext.Provider>
             </NativeChatOrcaStopContext.Provider>
           </NativeChatRewindContext.Provider>
         )}

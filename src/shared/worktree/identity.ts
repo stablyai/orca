@@ -27,3 +27,9 @@ export function createWorktreeIdentity(ref: WorktreeIdentityRef): WorktreeIdenti
     instanceId: ref.instanceId
   }
 }
+
+export function getWorktreeInstanceId(
+  worktree: { instanceId?: string; identity?: WorktreeIdentity } | undefined
+): string | undefined {
+  return worktree?.identity?.instanceId ?? worktree?.instanceId
+}

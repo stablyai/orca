@@ -1,4 +1,15 @@
 import { hasRuntimeRpcErrorCode, RuntimeRpcCallError } from '../../../../runtime/runtime-rpc-client'
+import { translate } from '@/i18n/i18n'
+
+export function worktreeMetadataUnavailableResult(): { ok: false; error: string } {
+  return {
+    ok: false,
+    error: translate(
+      'auto.store.slices.worktrees.c6cf133786',
+      'This workspace is no longer available.'
+    )
+  }
+}
 
 export function isRuntimeMethodNotFoundError(error: unknown): boolean {
   return error instanceof RuntimeRpcCallError && error.code === 'method_not_found'
