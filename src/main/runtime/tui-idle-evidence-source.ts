@@ -14,11 +14,19 @@ import {
   type AgentStateVerdict
 } from './agent-state-rules/agent-state-rules-engine'
 import type { TuiIdleHookTurn } from './tui-idle-hook-lane'
+import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
 import type {
   FirstPartyAgentStatus,
   TuiIdleEvaluationInput,
   TuiIdleEvidenceRecord
 } from './tui-idle-evidence'
+
+export type BlockedTextRead = {
+  ptyId: string | null | undefined
+  record: TuiIdleEvidenceRecord & { waitBlockedAt: number | null }
+  rendererTitle?: string | null
+  readTailText: () => string
+}
 
 /** The runtime state every tui-idle site reads its evidence from. */
 export type TuiIdleEvidenceSource = {
@@ -33,6 +41,8 @@ export type TuiIdleEvidenceSource = {
   /** The painted grid on the PTY's own size, which only agents whose rules read the trusted
    *  screen, and screen vetoes, use. Absent, they have no trustworthy screen. */
   readRuledScreen?(ptyId: string | null | undefined): RuledScreen | null
+  /** Tier 0b's judgement of the pane's blocked text. Absent, tail text blocks as found. */
+  judgeBlockedText?(read: BlockedTextRead): RuntimeTerminalWaitBlockedReason | null
   /** When the PTY last observed a title of its own. Absent, no title has an age. */
   getTitleObservedAtEpochMs?(ptyId: string | null | undefined): number | null
 }
@@ -92,6 +102,16 @@ function screenInputVetoReader(
   }
 }
 
+function blockedTextReader(
+  source: TuiIdleEvidenceSource,
+  read: BlockedTextRead
+): () => RuntimeTerminalWaitBlockedReason | null {
+  return () =>
+    source.judgeBlockedText
+      ? source.judgeBlockedText(read)
+      : detectTerminalWaitBlockedReason(read.readTailText())
+}
+
 function lazyWaitText(readWaitText: () => string): () => string {
   let waitText: string | null = null
   return () => (waitText ??= readWaitText())
@@ -105,10 +125,16 @@ export function leafTuiIdleEvidence(
   const waitText = lazyWaitText(readWaitText)
   const agent = source.getPaneAgent(leaf.ptyId)
   const readScreen = screenReader(source, agent, leaf.ptyId)
+  const rendererTitle = leaf.paneTitle ?? source.getTabTitle(leaf.tabId)
   return {
     record: leaf,
-    readTailBlockedReason: () => detectTerminalWaitBlockedReason(waitText()),
-    rendererTitle: leaf.paneTitle ?? source.getTabTitle(leaf.tabId),
+    readTailBlockedReason: blockedTextReader(source, {
+      ptyId: leaf.ptyId,
+      record: leaf,
+      rendererTitle,
+      readTailText: waitText
+    }),
+    rendererTitle,
     readPositiveBodyEvidence: () =>
       isKnownReadyPromptBody(waitText(), agent, readScreen, leaf.lastOutputAt !== null),
     readQuietReadyBodyEvidence: () => isQuietReadyScreenBody(waitText(), agent, readScreen),
@@ -132,7 +158,11 @@ export function ptyTuiIdleEvidence(
   const readScreen = screenReader(source, agent, pty.ptyId)
   return {
     record: pty,
-    readTailBlockedReason: () => detectTerminalWaitBlockedReason(waitText()),
+    readTailBlockedReason: blockedTextReader(source, {
+      ptyId: pty.ptyId,
+      record: pty,
+      readTailText: waitText
+    }),
     readPositiveBodyEvidence: () =>
       (agent !== 'qoder' &&
         agent !== 'qoder-cn' &&

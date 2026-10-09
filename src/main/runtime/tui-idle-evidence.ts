@@ -32,7 +32,8 @@ import { evaluateHookTurn, type TuiIdleHookTurn } from './tui-idle-hook-lane'
  *   0. HOOKS — for an agent whose hooks are authoritative (agent-state-rules/ profile), a fresh
  *      hook row for the main agent's turn: done, working, or a permission wait, with the tail's
  *      blocked text judged by the permission arbiter against it (tui-idle-hook-lane.ts).
- *   0b. BLOCKED — otherwise, the tail shows a prompt waiting on the user.
+ *   0b. BLOCKED — otherwise, the rendered screen (or the line tail without a current one) shows a
+ *       prompt waiting on the user.
  *   1. STRONG READY — the agent states it is ready: an explicit idle marker in its own
  *      title, or a known ready-prompt body.
  *   1b. QUIET READY SCREEN — Muse titles no rest signal, and agents whose rules
@@ -81,33 +82,15 @@ export function hasExplicitIdleTitle(
 }
 
 /**
- * Tier 1, first-party: the agent's own hook says the turn ENDED.
- *
- * Why DSH needs its own lane: the other tiers all read the title, and DSH cannot carry idle
- * there. Its rest prefix is `✦`, which is Gemini's WORKING glyph, so the title detector
- * deliberately reports no status for a DSH pane at all (see agent-title-status.ts) — which
- * left `tui-idle` with nothing to settle on, and a supervised worker waiting on a ready
- * composer until its timeout.
- *
- * Why a hook `done` is trustworthy here where a title would not be: it is the agent's own
- * account of its own turn, and `normalizeDshEvent` drops SubagentStart/SubagentStop, so a
- * `done` row for a DSH pane is the LEAD's, never a child's finishing early.
- *
- * Scoped rather than general: for agents whose hooks do report child turns, a `done` row
- * can arrive mid-turn, and settling on it is exactly the #6011 class this file exists to
- * prevent.
- *
- * The second lane is narrower and agent-agnostic: a `sessionBoundary` row does not claim a
- * turn ended, it claims a NEW SESSION owns the pane and is waiting for its first input. That
- * cannot arrive mid-turn by construction — the producers only set it for a startup/resume/
- * reset boundary — so it carries no #6011 risk for any agent that emits it.
+ * Tier 1, first-party: a `sessionBoundary` row, which claims a NEW SESSION owns the pane and waits
+ * for its first input. Producers set it only for a startup/resume/reset boundary, so it cannot
+ * arrive mid-turn (#6011). An ordinary hook `done` decides only through the hook lane (tier 0).
  */
 export function hasFreshDoneFirstPartyStatus(
-  agent: TuiAgent | null | undefined,
   status: FirstPartyAgentStatus,
   staleAfterMs = AGENT_STATUS_STALE_AFTER_MS
 ): boolean {
-  if (status?.state !== 'done' || (agent !== 'dsh' && status.sessionBoundary !== true)) {
+  if (status?.state !== 'done' || status.sessionBoundary !== true) {
     return false
   }
   return Date.now() - status.updatedAt <= staleAfterMs
@@ -195,7 +178,7 @@ export function quietForegroundLaneForTerminalAgent(
 
 export type TuiIdleEvaluationInput = {
   record: TuiIdleEvidenceRecord
-  /** Tier 0: a blocking prompt in the line tail. */
+  /** Tier 0: a blocking prompt on the rendered screen, or in the line tail without one. */
   readTailBlockedReason: () => RuntimeTerminalWaitBlockedReason | null
   /** Renderer-synced pane/tab title, when one exists. */
   rendererTitle?: string | null
@@ -302,7 +285,7 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
   }
   // Why beside the title lane, not after the veto: both are tier 1, and a first-party `done`
   // and a fresh `working` cannot both hold — the same row carries one state.
-  if (hasFreshDoneFirstPartyStatus(input.agent, input.firstPartyStatus)) {
+  if (hasFreshDoneFirstPartyStatus(input.firstPartyStatus)) {
     return READY_STRONG
   }
   if (hasFreshWorkingFirstPartyStatus(input.firstPartyStatus)) {
@@ -376,4 +359,43 @@ function isSettledWeakIdle(
 
 export function isTuiIdleReadyVerdict(verdict: TuiIdleVerdict): boolean {
   return verdict.kind === 'ready-strong' || verdict.kind === 'ready-weak'
+}
+
+/**
+ * Tier 0b over the current rendered screen. The tail arbiter's stamp-vs-clear ordering judges
+ * whether HISTORY is stale; screen text is present now, so only strong evidence clears it.
+ */
+export function judgeScreenBlockedText(input: {
+  reason: RuntimeTerminalWaitBlockedReason | null
+  record: TuiIdleEvidenceRecord
+  rendererTitle?: string | null
+  firstPartyStatus: FirstPartyAgentStatus
+  explicitStatus: { status: AgentStatus; updatedAt: number } | null
+  /** When the tail scan stamped this pane's blocker; null when the tail never saw one. */
+  blockedAt: number | null
+}): RuntimeTerminalWaitBlockedReason | null {
+  const { reason, explicitStatus } = input
+  // Why exempt: the arbiter lets no title clear an approval menu, which Cursor paints under its
+  // working spinner.
+  if (reason === null || reason === 'agent-approval-prompt') {
+    return reason
+  }
+  // Why the working gate, as the poll's screen read: a mid-turn agent's output can quote a dialog.
+  if (
+    input.record.lastAgentStatus === 'working' ||
+    (hasFreshWorkingFirstPartyStatus(input.firstPartyStatus) &&
+      input.firstPartyStatus?.state === 'working') ||
+    hasFreshDoneFirstPartyStatus(input.firstPartyStatus) ||
+    hasExplicitIdleTitle(input.record, input.rendererTitle)
+  ) {
+    return null
+  }
+  if (explicitStatus === null || explicitStatus.status === 'permission') {
+    return reason
+  }
+  // Why only a done newer than the blocker: a menu painted after the turn ended is still open.
+  return explicitStatus.status === 'working' ||
+    (input.blockedAt !== null && explicitStatus.updatedAt > input.blockedAt)
+    ? null
+    : reason
 }

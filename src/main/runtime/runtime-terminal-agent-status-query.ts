@@ -6,18 +6,19 @@ import {
   type AgentStatus
 } from '../../shared/agent-detection'
 import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
-import type { RuntimeTerminalAgentStatus } from '../../shared/runtime-types'
+import type {
+  RuntimeTerminalAgentStatus,
+  RuntimeTerminalWaitBlockedReason
+} from '../../shared/runtime-types'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import {
   terminalTitleBlocksExplicitAgentStatus,
-  getDisplayPromptLifecycle,
   getLatestAgentCandidateTitleInfo,
   getLeafDisplayRecord,
   getPtyDisplayRecord,
   type TitleDisplayClear
 } from './runtime-worktree-status-projection'
-import { detectTerminalWaitBlockedReason } from './terminal-wait-detection'
 import { getTerminalState } from './terminal-wait-results'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 
@@ -43,6 +44,8 @@ type Dependencies = {
   ): { status: AgentStatus | null; updatedAt: number } | null | undefined
   isRunning(handle: string): Promise<boolean>
   getTitleDisplayClear(ptyId: string): TitleDisplayClear | null
+  /** tui-idle's blocked verdict for the pane, the judge every blocked reader shares. */
+  readTuiIdleBlockedReason(handle: string): RuntimeTerminalWaitBlockedReason | null
   /** Stamps blocked text the PTY's throttled scan has not yet judged. */
   flushPendingBlockedStamp(ptyId: string): void
 }
@@ -76,32 +79,10 @@ export class RuntimeTerminalAgentStatusQuery {
     const clear = this.deps.getTitleDisplayClear(ptyId)
     const terminal = this.getSnapshot(handle, ptyId, clear)
     const explicitStatus = this.deps.getExplicitStatus(handle)
-    const lifecycle = getDisplayPromptLifecycle(this.deps.getLifecycleStatus(ptyId), clear)
-    const blockedByWaitText = detectTerminalWaitBlockedReason(terminal.waitText)
-    const liveTitleClearsBlockedText =
-      terminal.titleStatusIsLive &&
-      terminal.titleStatus !== null &&
-      terminal.titleStatus !== 'permission' &&
-      !isOpenCodeNativeTitle(terminal.title) &&
-      blockedByWaitText !== 'agent-approval-prompt'
-    const newestPermissionAt = Math.max(
-      explicitStatus?.status === 'permission' ? explicitStatus.updatedAt : -1,
-      lifecycle?.status === 'permission' ? lifecycle.updatedAt : -1,
-      terminal.waitBlockedAt ?? -1
-    )
-    const newestClearAt = Math.max(
-      explicitStatus && explicitStatus.status !== 'permission' ? explicitStatus.updatedAt : -1,
-      lifecycle?.status && lifecycle.status !== 'permission' ? lifecycle.updatedAt : -1
-    )
     if (terminal.titleStatus === 'permission' && terminal.titleStatusIsLive) {
       return { handle, isRunningAgent: true, status: 'permission' }
     }
-    if (
-      blockedByWaitText &&
-      (!liveTitleClearsBlockedText || lifecycle?.status === terminal.titleStatus) &&
-      (blockedByWaitText === 'agent-approval-prompt' ||
-        (newestPermissionAt >= 0 && newestPermissionAt >= newestClearAt))
-    ) {
+    if (this.deps.readTuiIdleBlockedReason(handle) !== null) {
       return { handle, isRunningAgent: true, status: 'permission' }
     }
     if (explicitStatus) {

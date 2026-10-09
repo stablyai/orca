@@ -13,7 +13,6 @@ import type {
   AgentPromptWaitTextCache
 } from './agent-prompt-submission-verification'
 import { readAgentPromptWaitText } from './agent-prompt-submission-verification'
-import type { AgentStatus } from '../../shared/agent-detection'
 
 export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWithControllerKnowsPtyIsLive {
   protected async serializeAgentPromptSubmission<T>(
@@ -287,16 +286,13 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
           () => this.getTerminalAgentStatusSnapshot(handle, ptyId).waitText
         )
       : undefined
-    const waitInputs = this.getTerminalWaitPermissionInputs(handle, ptyId, waitText)
-    const status = this.hasAuthoritativeTerminalWaitPermission(
-      waitInputs.terminal,
-      explicit,
-      waitInputs.lifecycle
-    )
-      ? 'permission'
-      : lifecycleIsNewer
-        ? lifecycle.status
-        : (explicit?.status ?? ptyStatus ?? null)
+    const status =
+      this.readTuiIdleBlockedReason(handle, waitText === undefined ? undefined : () => waitText) !==
+      null
+        ? 'permission'
+        : lifecycleIsNewer
+          ? lifecycle.status
+          : (explicit?.status ?? ptyStatus ?? null)
     return {
       generation: this.getPtyLifecycleGeneration(ptyId),
       permissionSequence: this.agentPromptPermissionSequenceByPtyId.get(ptyId) ?? 0,
@@ -305,16 +301,6 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
       outputSequence,
       status
     }
-  }
-
-  protected hasAuthoritativeTerminalWaitPermission(
-    terminal: RuntimeTerminalAgentStatusSnapshot,
-    explicitStatus: { status: AgentStatus; updatedAt: number } | null,
-    lifecycle: { status: AgentStatus | null; updatedAt: number } | null | undefined
-  ): boolean {
-    return (
-      this.resolveAuthoritativeTerminalWaitPermission(terminal, explicitStatus, lifecycle) !== null
-    )
   }
 
   protected getFreshExplicitAgentStatusForPty(handle: string, ptyId: string) {

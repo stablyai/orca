@@ -17,8 +17,14 @@ import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { TerminalAgent } from '../../shared/terminal-agent'
 import type { AgentPromptActivity } from './agent-prompt-submission-verification'
-import { hasExplicitIdleTitle } from './tui-idle-evidence'
+import { evaluateTuiIdle, hasExplicitIdleTitle, judgeScreenBlockedText } from './tui-idle-evidence'
 import { readTuiIdleHookTurn, type TuiIdleHookTurn } from './tui-idle-hook-lane'
+import {
+  leafTuiIdleEvidence,
+  ptyTuiIdleEvidence,
+  type BlockedTextRead
+} from './tui-idle-evidence-source'
+import { buildTerminalWaitText } from './terminal-wait-tail-state'
 
 export class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends OrcaRuntimeWithAgentPromptRequestCorrelation {
   readOpenCodeStartupPromptOwner(ptyId: string, incarnationId: string, launchToken: string) {
@@ -71,6 +77,29 @@ export class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends O
       lifecycle?.status && lifecycle.status !== 'permission' ? lifecycle.updatedAt : -1
     )
     return newestPermissionAt >= 0 && newestPermissionAt >= newestClearAt ? blockedByWaitText : null
+  }
+
+  /** tui-idle's blocked verdict for the pane behind `handle`: the one judge of a blocked prompt. */
+  protected readTuiIdleBlockedReason(
+    handle: string,
+    readWaitText?: () => string
+  ): RuntimeTerminalWaitBlockedReason | null {
+    const live = this.getLivePtyForHandle(handle)
+    const record = live ? live.pty : this.getLiveLeafForHandle(handle).leaf
+    const waitText =
+      readWaitText ??
+      (() => buildTerminalWaitText(record.tailBuffer, record.tailPartialLine, record.preview))
+    const verdict = evaluateTuiIdle(
+      live
+        ? ptyTuiIdleEvidence(this.tuiIdleEvidenceSource, live.pty, waitText)
+        : leafTuiIdleEvidence(this.tuiIdleEvidenceSource, record, waitText)
+    )
+    return verdict.kind === 'blocked' ? verdict.reason : null
+  }
+
+  /** Whether the pane's blocked text (the screen when current, else the tail) shows a prompt. */
+  protected terminalShowsBlockedText(ptyId: string, tailText: string): boolean {
+    return detectTerminalWaitBlockedReason(this.readCurrentScreenText(ptyId) ?? tailText) !== null
   }
 
   /**
@@ -136,14 +165,66 @@ export class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends O
     state: 'done' | 'working' | 'permission',
     row: AgentStatusIpcPayload
   ): RuntimeTerminalWaitBlockedReason | null {
-    const handle = this.handleByPtyId.get(ptyId) ?? handles[0]
-    if (!handle) {
+    const pty = this.ptysById.get(ptyId)
+    if (!pty) {
       return null
     }
+    return this.judgeTuiIdleBlockedText(
+      {
+        ptyId,
+        record: pty,
+        readTailText: () => buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+      },
+      { status: state === 'done' ? 'idle' : state, updatedAt: row.receivedAt },
+      handles
+    )
+  }
+
+  /**
+   * Tier 0b of tui-idle, and the blocked text its hook lane weighs: the current screen judged by
+   * strong evidence (judgeScreenBlockedText), or without one the permission arbiter over the tail.
+   * `explicitStatus` defaults to the pane's fresh hook status.
+   */
+  protected judgeTuiIdleBlockedText(
+    read: BlockedTextRead,
+    explicitStatus?: { status: AgentStatus; updatedAt: number } | null,
+    handles?: readonly string[]
+  ): RuntimeTerminalWaitBlockedReason | null {
+    const { ptyId } = read
+    const handle = ptyId
+      ? (this.handleByPtyId.get(ptyId) ??
+        (handles ?? this.getExistingTerminalHandlesForPtyId(ptyId))[0])
+      : undefined
+    if (!ptyId || !handle) {
+      return detectTerminalWaitBlockedReason(read.readTailText())
+    }
     try {
+      const readExplicit = () =>
+        explicitStatus !== undefined
+          ? explicitStatus
+          : this.getFreshExplicitAgentStatusForPty(handle, ptyId)
+      const screen = this.readCurrentScreenText(ptyId)
+      if (screen !== null) {
+        const reason = detectTerminalWaitBlockedReason(screen)
+        // Why before the hook read: a pane showing no blocker needs no status lookup at all.
+        return reason === null
+          ? null
+          : judgeScreenBlockedText({
+              reason,
+              record: read.record,
+              rendererTitle: read.rendererTitle,
+              firstPartyStatus: this.tuiIdleEvidenceSource.getFirstPartyAgentStatus(ptyId),
+              explicitStatus: readExplicit(),
+              blockedAt: read.record.waitBlockedAt
+            })
+      }
+      const tailText = read.readTailText()
+      if (detectTerminalWaitBlockedReason(tailText) === null) {
+        return null
+      }
       return this.resolveAuthoritativeTerminalWaitPermission(
-        this.getTerminalAgentStatusSnapshot(handle, ptyId),
-        { status: state === 'done' ? 'idle' : state, updatedAt: row.receivedAt },
+        { ...this.getTerminalAgentStatusSnapshot(handle, ptyId), waitText: tailText },
+        readExplicit(),
         this.agentPromptLifecycleByPtyId.get(ptyId)
       )
     } catch {

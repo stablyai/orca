@@ -3,7 +3,8 @@ import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
 import { OrcaRuntimeWithAdoptTerminalOrphansFromInventory } from './orca-runtime-adopt-terminal-orphans-from-inventory'
 import type {
   RuntimeTerminalAgentStatus,
-  RuntimeTerminalInteractiveWait
+  RuntimeTerminalInteractiveWait,
+  RuntimeTerminalWaitBlockedReason
 } from '../../shared/runtime-types'
 import type { RuntimeTerminalAgentStatusSnapshot } from './runtime-terminal-agent-status-query'
 import type { AgentStatus } from '../../shared/agent-detection'
@@ -36,18 +37,22 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
     }
     try {
       ptyId = this.getTerminalAgentStatusPtyId(handle)
-      inputs = this.getTerminalWaitPermissionInputs(handle, ptyId)
     } catch {
       return undefined
     }
-    const { terminal, lifecycle } = inputs
+    // Why: tui-idle reads the screen only once its model has applied every received byte.
+    await this.headlessTerminals.get(ptyId)?.writeChain
+    let promptReason: RuntimeTerminalWaitBlockedReason | null
+    try {
+      inputs = this.getTerminalWaitPermissionInputs(handle, ptyId)
+      promptReason = this.readTuiIdleBlockedReason(handle)
+    } catch {
+      return undefined
+    }
+    const { terminal } = inputs
     const explicitStatus = this.getFreshExplicitAgentStatusForHandle(handle)
-    const promptReason = this.resolveAuthoritativeTerminalWaitPermission(
-      terminal,
-      explicitStatus,
-      lifecycle
-    )
-    if (promptReason) {
+    // Why text-shown only: a hook wait with no dialog text keeps its hook provenance below.
+    if (promptReason && this.terminalShowsBlockedText(ptyId, terminal.waitText)) {
       return {
         source: 'prompt-text',
         reason: promptReason,

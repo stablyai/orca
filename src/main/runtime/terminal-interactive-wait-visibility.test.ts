@@ -44,13 +44,19 @@ function agentStatusOsc(state: string): string {
   return `]9999;${JSON.stringify({ state, prompt: 'ship it', agentType: 'claude' })}`
 }
 
+// Why CRLF: these texts carry bare LFs, and a real PTY's output translation sends CRLF; without
+// it the runtime's screen model stair-steps every line.
+function ptyOutput(text: string): string {
+  return text.replace(/\r?\n/g, '\r\n')
+}
+
 async function createPane(
   options: TranscriptPaneOptions
 ): Promise<Awaited<ReturnType<typeof createTranscriptPane>>> {
   // Compose the same central hook-store wiring as desktop and orcad so OSC rows exercise the
   // production status path rather than silently disappearing in a bare runtime fixture.
   const statusWiring = makeAgentStatusStoreWiring()
-  return createTranscriptPane(options, statusWiring.deps)
+  return createTranscriptPane({ ...options, data: ptyOutput(options.data) }, statusWiring.deps)
 }
 
 // cursor-agent renders a braille spinner in its OSC title while it works, and Orca reads
@@ -170,7 +176,7 @@ describe('terminal interactive-wait visibility (STA-4513, STA-3714)', () => {
 
       runtime.onPtyData(
         PTY_ID,
-        '\nCommand completed successfully.\nContinuing automatically.\n',
+        ptyOutput('\nCommand completed successfully.\nContinuing automatically.\n'),
         Date.now()
       )
 
@@ -261,6 +267,11 @@ describe('terminal interactive-wait visibility (STA-4513, STA-3714)', () => {
         foregroundProcess: 'claude',
         data: CLAUDE_TRUST
       })
+      // Why no screen model: the modal here owns the live screen, which only strong evidence
+      // clears; the title rule this pins judges tail text, read when no current model exists.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: marks the model partial the way a reattach does; the set is the runtime's own.
+      const internals = runtime as unknown as { providerSnapshotPreferredPtys: Set<string> }
+      internals.providerSnapshotPreferredPtys.add(PTY_ID)
 
       await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toBeNull()
     })

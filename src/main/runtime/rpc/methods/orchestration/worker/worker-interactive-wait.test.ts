@@ -86,7 +86,9 @@ describe('worker-show interactive wait (STA-3714, STA-4513)', () => {
         }
       ]
     })
-    runtime.onPtyData(PTY_ID, paneOutput, Date.now())
+    // Why CRLF: the fixture is rendered text with bare LFs; a real PTY's output translation sends
+    // CRLF, without which the runtime's screen model stair-steps every line.
+    runtime.onPtyData(PTY_ID, paneOutput.replace(/\r?\n/g, '\r\n'), Date.now())
 
     db = new OrchestrationDb(':memory:')
     runtime.setOrchestrationDb(db)

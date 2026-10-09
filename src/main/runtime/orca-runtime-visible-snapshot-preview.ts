@@ -153,6 +153,17 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
     return state ? projectTerminalVisibleLines(state.emulator).lines : null
   }
 
+  /** The rendered screen as text, or null unless the model holds every byte the PTY delivered. */
+  protected readCurrentScreenText(ptyId: string | null | undefined): string | null {
+    const state = this.readWholeScreenModel(ptyId)
+    // Why caught up: the model applies bytes asynchronously, and a lagging grid would hide what
+    // the newest chunk painted.
+    if (!ptyId || !state || state.outputSequence < this.getPtyOutputSequence(ptyId)) {
+      return null
+    }
+    return projectTerminalVisibleLines(state.emulator).lines.join('\n')
+  }
+
   /** The grid a screen-ruled agent's rule reads: as painted, and only on the PTY's own size. */
   protected readRuledScreen(ptyId: string | null | undefined): RuledScreen | null {
     const state = this.readWholeScreenModel(ptyId)

@@ -351,6 +351,7 @@ export class OrcaRuntimeWithRuntimeId {
     getHookTurn: (ptyId, agent) => this.readTuiIdleHookTurnForPty(ptyId, agent),
     readScreenLines: (ptyId) => this.readLiveTerminalScreenLines(ptyId),
     readRuledScreen: (ptyId) => this.readRuledScreen(ptyId),
+    judgeBlockedText: (read) => this.judgeTuiIdleBlockedText(read),
     getTitleObservedAtEpochMs: (ptyId) =>
       (ptyId ? this.ptysById.get(ptyId)?.lastOscTitleEpochMs : null) ?? null
   }
