@@ -13,6 +13,7 @@ import {
   formatXColorRgbSpec,
   parseXColorSpec,
   TERMINAL_VIEW_ANSI_COLOR_COUNT,
+  terminalViewColorsEqual,
   type TerminalViewAttributes,
   type TerminalViewRgb
 } from '../../shared/terminal-view-attributes'
@@ -30,11 +31,12 @@ export type TerminalViewAttributeResponderDeps = {
 }
 
 export type TerminalViewAttributeResponder = {
-  /** A changed renderer attribute push replaces the whole palette, exactly
-   *  like xterm's ThemeService `_setTheme` overwrites OSC-SET-mutated colors
-   *  on a visible pane's theme apply. Identical re-pushes (fresh renderer
-   *  process) are filtered in main's store and never reach this. */
-  clearColorOverrides: () => void
+  /** Clears OSC SET overrides only when THIS PTY's colours moved (xterm's `_setTheme` behind the
+   *  pane's value-gated options.theme write); null `previous` = base merely learned, keep them. */
+  applyPushedBase: (
+    attributes: TerminalViewAttributes,
+    previous: TerminalViewAttributes | null
+  ) => void
 }
 
 type SpecialColorSlot = 'foreground' | 'background' | 'cursor'
@@ -183,9 +185,13 @@ export function installTerminalViewAttributeResponder(
   })
 
   return {
-    clearColorOverrides: () => {
-      ansiOverrides.clear()
-      specialOverrides.clear()
+    applyPushedBase: (attributes, previous) => {
+      // Boundary: a theme change that only moves slots outside TerminalViewAttributes (e.g.
+      // selectionBackground) clears overlays in the visible xterm but not here.
+      if (previous && !terminalViewColorsEqual(previous, attributes)) {
+        ansiOverrides.clear()
+        specialOverrides.clear()
+      }
     }
   }
 }

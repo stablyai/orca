@@ -34,7 +34,7 @@ const GUIDE_REFERENCES = {
     'recovery-and-cleanup.md',
     'worker-contract.md'
   ],
-  'orca-cli': ['automations.md', 'browser.md', 'publishing.md'],
+  'orca-cli': ['automations.md', 'browser.md', 'publishing.md', 'terminal-themes.md'],
   'orca-per-workspace-env': [
     'docker-ssh.md',
     'failure-modes.md',

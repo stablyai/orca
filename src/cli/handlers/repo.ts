@@ -1,4 +1,5 @@
 import type { RuntimeRepoList, RuntimeRepoSearchRefs } from '../../shared/runtime-types'
+import { setRepoTerminalTheme } from './repo-terminal-theme'
 import type { CommandHandler } from '../dispatch'
 import { formatRepoList, formatRepoRefs, formatRepoShow, printResult } from '../format'
 import { getOptionalPositiveIntegerFlag, getRequiredStringFlag } from '../flags'
@@ -38,6 +39,7 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
     })
     printResult(result, json, formatRepoShow)
   },
+  'repo set-theme': setRepoTerminalTheme,
   'repo set-base-ref': async ({ flags, client, json }) => {
     const result = await client.call<{ repo: Record<string, unknown> }>('repo.setBaseRef', {
       repo: getRequiredStringFlag(flags, 'repo'),

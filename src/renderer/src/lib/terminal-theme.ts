@@ -13,6 +13,7 @@ import {
   lookupTerminalTheme,
   selectTerminalTheme
 } from '../../../shared/terminal-theme-selection'
+import { lookupSelectedTerminalTheme } from '../../../shared/terminal-view-attributes-composition'
 
 export const BUILTIN_TERMINAL_THEME_NAMES = getThemeNames()
 
@@ -54,20 +55,6 @@ export function getTerminalTheme(
   selection: string
 ): ITheme | null {
   return lookupTerminalTheme(settings, selection)
-}
-
-function getTerminalThemePreview(
-  name: string,
-  settings?: Pick<GlobalSettings, 'terminalCustomThemes'>,
-  fallbackMode: 'dark' | 'light' = 'dark'
-): ITheme | null {
-  const theme = getTerminalTheme(settings, name)
-  if (theme) {
-    return theme
-  }
-  return getTheme(
-    fallbackMode === 'light' ? DEFAULT_TERMINAL_THEME_LIGHT : DEFAULT_TERMINAL_THEME_DARK
-  )
 }
 
 export function getAvailableTerminalThemeOptions(
@@ -120,10 +107,14 @@ export function resolveEffectiveTerminalAppearance(
     sourceTheme: settings.theme,
     themeName,
     dividerColor,
-    theme: getTerminalThemePreview(themeName, settings, useLightVariant ? 'light' : 'dark'),
+    // Why shared: main pre-loads hidden PTYs from the same selection-with-fallback rule.
+    theme: lookupSelectedTerminalTheme(settings, { themeName, useLightVariant }),
     systemPrefersDark
   }
 }
+
+// Why shared: main seeds project colours from the same override rule the panes paint with.
+export { applyRepoTerminalThemeOverride } from '../../../shared/repo-terminal-theme-settings'
 
 export function normalizeColor(value: string | undefined, fallback: string): string {
   const trimmed = value?.trim()

@@ -18,6 +18,11 @@ import {
 import { matchesSettingsSearch } from './settings-search'
 import { TooltipProvider } from '../ui/tooltip'
 
+// Why: the full pane now mounts the terminal-theme preview, whose xterm canvas happy-dom cannot open.
+vi.mock('./TerminalSettingsPreview', () => ({
+  TerminalSettingsPreview: () => null
+}))
+
 let container: HTMLDivElement
 let root: Root
 
@@ -88,6 +93,33 @@ afterEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
 })
 
+const ungatedTerminalThemeRepos: Repo[] = [
+  { ...repo, kind: 'folder' },
+  { ...repo, connectionId: 'builder', executionHostId: 'ssh:builder' }
+]
+
+const runtimeHostedRepo: Repo = { ...repo, connectionId: null, executionHostId: 'runtime:env-1' }
+
+function renderRepositoryPane(variant: Repo): void {
+  act(() => {
+    root.render(
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(RepositoryPane, {
+          repo: variant,
+          yamlHooks: null,
+          hasHooksFile: false,
+          hooksInspectionReady: true,
+          mayNeedUpdate: false,
+          updateRepo: vi.fn(),
+          removeProject: vi.fn()
+        })
+      )
+    )
+  })
+}
+
 describe('RepositoryPane search entries', () => {
   it('keeps renamed hook sections reachable through settings search', () => {
     const entries = getRepositoryPaneSearchEntries(repo, { isLocalWindowsProject: true })
@@ -111,6 +143,43 @@ describe('RepositoryPane search entries', () => {
 
     expect(entries.filter(({ title }) => title === 'Project Icon')).toHaveLength(1)
     expect(entries.filter(({ title }) => title === 'Default Worktree Base')).toHaveLength(1)
+  })
+
+  it('keeps terminal theme search for folder and SSH-hosted projects', () => {
+    for (const variant of ungatedTerminalThemeRepos) {
+      const entries = getRepositoryPaneSearchEntries(variant)
+      expect(entries.filter(({ title }) => title === 'Terminal Theme')).toHaveLength(1)
+    }
+  })
+
+  it('renders the terminal theme section for folder and SSH-hosted projects', () => {
+    useAppStore.setState({
+      settingsSearchQuery: 'Example Repo',
+      settingsSearchInputQuery: 'Example Repo',
+      settings: getDefaultSettings('/tmp')
+    })
+
+    // Why client render: zustand's server snapshot is the initial state, which has no settings.
+    for (const variant of ungatedTerminalThemeRepos) {
+      renderRepositoryPane(variant)
+      expect(container.querySelector('#repo-repo-1-terminal-theme')).not.toBeNull()
+    }
+  })
+
+  it('omits terminal theme search for runtime-hosted projects', () => {
+    const entries = getRepositoryPaneSearchEntries(runtimeHostedRepo)
+    expect(entries.filter(({ title }) => title === 'Terminal Theme')).toHaveLength(0)
+  })
+
+  it('hides the terminal theme section for runtime-hosted projects', () => {
+    useAppStore.setState({
+      settingsSearchQuery: 'Example Repo',
+      settingsSearchInputQuery: 'Example Repo',
+      settings: getDefaultSettings('/tmp')
+    })
+
+    renderRepositoryPane(runtimeHostedRepo)
+    expect(container.querySelector('#repo-repo-1-terminal-theme')).toBeNull()
   })
 
   it('omits project runtime search for remote or unsupported repos', () => {

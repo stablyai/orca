@@ -8,6 +8,7 @@ import {
 } from '../../shared/startup-command-staging'
 import { PtyStartupIngress, type PtyIngressEmission } from '../../shared/pty-startup-ingress'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
+import { getPtyOwnerColorsForWorktree } from '../../shared/pty-owner-color-query-colors'
 import { resolveProcessExitCause } from '../../shared/terminal-exit-cause'
 import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/posix-shell-startup-command'
 import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
@@ -102,6 +103,7 @@ export function activateLocalPtySession(args: {
   }
   const startupIngress = new PtyStartupIngress({
     ...(spawn.startupIngress ? { intent: spawn.startupIngress } : {}),
+    resolveHostColors: () => getPtyOwnerColorsForWorktree(spawn.worktreeId),
     ownerBackend: resolvePtyOwnerBackend({
       platform: process.platform,
       shellPath: plan.shellPath,

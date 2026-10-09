@@ -10707,7 +10707,15 @@
             "wsl": "wsl",
             "distro": "distro",
             "agentRuntime": "agent runtime",
-            "skillRuntime": "skill runtime"
+            "skillRuntime": "skill runtime",
+            "terminalTheme": "Terminal Theme",
+            "terminalThemeDescription": "Project-specific terminal color themes for dark and light mode.",
+            "terminal": "terminal",
+            "theme": "theme",
+            "dark": "dark",
+            "light": "light",
+            "ghostty": "ghostty",
+            "colorScheme": "color scheme"
           }
         },
         "runtime": {
@@ -11332,7 +11340,8 @@
           "providerHost": "Provider host",
           "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration.",
           "hostCollectionProjectScopes": "Host collection + project scopes",
-          "terminalQuickCommandHostCollections": "Commands are saved on the selected Orca host, then scoped globally or to a project setup. Commands from this device also remain available in remote workspaces."
+          "terminalQuickCommandHostCollections": "Commands are saved on the selected Orca host, then scoped globally or to a project setup. Commands from this device also remain available in remote workspaces.",
+          "repositoryTerminalTheme": "Terminals in this project use these themes on this host. A mode left unset uses the client terminal theme."
         },
         "RepositoryForkSyncSection": {
           "defaultBranch": "default branch",
@@ -12607,6 +12616,17 @@
           "terminalsElsewhere_one": "Runs the relay while {{count}} terminal another Orca desktop or session opened on this host is running.",
           "terminalsElsewhere_other": "Runs the relay while {{count}} terminals another Orca desktop or session opened on this host are running.",
           "terminalsElsewhereUncounted": "Runs the relay while terminals another Orca desktop or session opened on this host are running."
+        },
+        "RepositoryTerminalThemeSection": {
+          "lightDescription": "Terminal theme for this project when Orca is in light mode.",
+          "darkDescription": "Terminal theme for this project when Orca is in dark mode.",
+          "title": "Terminal Theme",
+          "useGlobal": "Use global",
+          "usingGlobal": "Using global: {{value0}}",
+          "staleOverride": "Saved theme {{value0}} is no longer available. Using global: {{value1}}",
+          "unstorableSelection": "This theme name is too long to save for a project. Rename the theme and try again.",
+          "saveFailed": "Could not save this theme for the project. Try again.",
+          "mirrorsRepoDark": "Follows this project's dark theme: {{value0}}"
         },
         "ZcodePlanAccountsSection": {
           "site": {

@@ -2,7 +2,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import * as terminalThemeSelection from '../../../../shared/terminal-theme-selection'
+import * as terminalViewerColors from '../../../../shared/terminal-viewer-colors'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { resetSystemPrefersDarkSubscriptionForTests } from '../terminal-pane/use-system-prefers-dark'
 import { useNativeChatAppearanceStyle } from './native-chat-appearance-style'
@@ -46,7 +46,7 @@ describe('shared chat appearance hook', () => {
     expect(removeListener).toHaveBeenCalledTimes(1)
   })
   it('keeps the style and palette resolution stable across unrelated settings and render changes', () => {
-    const resolveColors = vi.spyOn(terminalThemeSelection, 'resolveConfiguredTerminalColors')
+    const resolveColors = vi.spyOn(terminalViewerColors, 'resolveConfiguredTerminalColors')
     const settings = createGlobalSettingsFixture({
       theme: 'dark',
       nativeChatAppearance: { matchTerminalInterface: true },

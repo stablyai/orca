@@ -265,3 +265,7 @@ This guide covers worktrees, terminals, and handoffs on its own. At a gate below
 | Creating, editing, running, or inspecting scheduled automations                                                 | `references/automations.md`      |
 | Publishing or revoking an artifact link, or publishing installed skills                                         | `references/publishing.md`       |
 | Mobile emulator taps, gestures, typing, buttons, camera, or permissions                                         | invoke the `orca-emulator` skill |
+
+For building a terminal theme or adding one to the selectable list, load
+`references/terminal-themes.md`. It covers importable YAML, separate dark/light
+palettes, and built-in catalog additions.
