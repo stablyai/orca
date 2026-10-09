@@ -11,14 +11,16 @@ import {
   type JournalReducerState
 } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
-import type { QueuedMessageRow } from './queued-message-table'
+import type { QueuedMessageHeader } from './queued-message-table'
+
+export type QueuedMessageEchoDraftReader = (messageId: string) => QueuedMessageHeader | null
 
 /** The waiting draft this appended row proves was delivered, or null. Called
  *  before the row applies, for every row, so a row that is no new provider
  *  echo of a user message returns before anything else is read. */
 export function draftDeliveredByEcho(
   state: JournalReducerState,
-  drafts: () => readonly QueuedMessageRow[],
+  drafts: () => QueuedMessageEchoDraftReader,
   row: JournalRow
 ): string | null {
   const echoes = appendedItems(row).filter(
@@ -48,13 +50,13 @@ export function draftDeliveredByEcho(
  * was folded into its submission's item. Reads every item, so callers run it
  * only where a draft is about to send, never per streamed row.
  */
-export function draftsDeliveredByAppliedEcho(
+export function* draftsDeliveredByAppliedEcho(
   state: JournalReducerState,
-  drafts: readonly QueuedMessageRow[]
-): string[] {
+  drafts: QueuedMessageEchoDraftReader
+): IterableIterator<string> {
   const spent = spentWaitingDrafts(state, drafts)
   if (spent.length === 0) {
-    return []
+    return
   }
   const delivered = new Set<string>()
   for (const item of state.items.values()) {
@@ -62,22 +64,25 @@ export function draftsDeliveredByAppliedEcho(
       continue
     }
     for (const candidate of spent) {
-      if (echoProvesDelivered(state, candidate, item.body, item.sequence)) {
+      if (
+        !delivered.has(candidate.draft.messageId) &&
+        echoProvesDelivered(state, candidate, item.body, item.sequence)
+      ) {
         delivered.add(candidate.draft.messageId)
+        yield candidate.draft.messageId
       }
     }
   }
-  return [...delivered]
 }
 
-type SpentDraft = { draft: QueuedMessageRow; since: number }
+type SpentDraft = { draft: QueuedMessageHeader; since: number }
 
 /** Waiting drafts some hand-off of which was handed over, then rejected as never delivered;
  *  `since` is the earliest such hand-off's row. A hand-off rejected before hand-over is
  *  provably unwritten: an echo matching it is some other message, and must not delete the card. */
 function spentWaitingDrafts(
   state: JournalReducerState,
-  drafts: readonly QueuedMessageRow[]
+  drafts: QueuedMessageEchoDraftReader
 ): SpentDraft[] {
   const since = new Map<string, number>()
   for (const submission of state.submissions.values()) {
@@ -91,10 +96,17 @@ function spentWaitingDrafts(
       since.set(submission.queuedMessageId, Math.min(earliest ?? sequence, sequence))
     }
   }
-  return drafts.flatMap((draft) => {
-    const from = since.get(draft.messageId)
-    return draft.state === 'waiting' && from !== undefined ? [{ draft, since: from }] : []
-  })
+  if (since.size === 0) {
+    return []
+  }
+  const spent: SpentDraft[] = []
+  for (const [messageId, from] of since) {
+    const draft = drafts(messageId)
+    if (draft?.state === 'waiting') {
+      spent.push({ draft, since: from })
+    }
+  }
+  return spent.sort((a, b) => a.draft.position - b.draft.position)
 }
 
 /** The one predicate both paths share: an unclaimed echo appended after a disproved hand-off,

@@ -77,11 +77,11 @@ export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
     }
     configureJournalPragmas(probe, stored)
     migrateJournalSchema(probe, stored)
+    ensureAgentSessionAttachmentClaimTables(probe)
     // Outside `migrateJournalSchema` on purpose: its early return skips a db
     // already at the current version, and this table must exist at EVERY
     // writable open with no `user_version` bump (see `ensureQueuedMessagesTable`).
     ensureQueuedMessagesTable(probe)
-    ensureAgentSessionAttachmentClaimTables(probe)
     hardenSqliteDatabaseFiles(dbPath)
     transferred = true
     return { db: probe, readOnly: false }

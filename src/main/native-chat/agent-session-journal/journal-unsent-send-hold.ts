@@ -196,40 +196,59 @@ function headOfQueuePositions(
   journal: AgentSessionJournal,
   batch: readonly { submission: AgentJournalSubmission; body: AgentJournalMessageItem | null }[]
 ): { placed: QueuedMessagePositionMove[]; earlier: QueuedMessagePositionMove[] } {
-  const cards = journal.queuedMessages.list()
   const keptIds = new Set(
     journal.submissions().flatMap((entry) => entry.keptAsQueuedMessageId ?? [])
   )
   const { epoch } = journal.cursor()
   // Kept by an earlier settlement: its rejection names it, or, past an epoch that dropped that
   // row, it was queued in an earlier epoch, before anything this one accepted.
-  const earlier = cards
-    .filter(
-      (card) =>
-        card.state === 'waiting' &&
-        (keptIds.has(card.messageId) || (card.queuedAt !== null && card.queuedAt.epoch !== epoch))
-    )
-    .map((card) => card.messageId)
+  const earlier: string[] = []
+  const clientSends = new Set(
+    batch
+      .filter(({ submission }) => submission.origin === 'client')
+      .map(({ submission }) => submission.clientMessageId)
+  )
+  const consumedClientSends = new Set<string>()
+  for (const card of journal.queuedMessages.headers()) {
+    if (
+      card.state === 'waiting' &&
+      (keptIds.has(card.messageId) || (card.queuedAt !== null && card.queuedAt.epoch !== epoch))
+    ) {
+      earlier.push(card.messageId)
+    }
+    if (card.consumedAs !== null && clientSends.has(card.consumedAs)) {
+      consumedClientSends.add(card.consumedAs)
+    }
+  }
+  const earlierIds = new Set(earlier)
   const placed: QueuedMessagePositionMove[] = []
   for (const { submission, body } of batch) {
     const { clientMessageId } = submission
-    if (body && !earlier.includes(clientMessageId)) {
+    if (body && !earlierIds.has(clientMessageId)) {
       placed.push({ messageId: clientMessageId, position: 0 })
     } else if (
       // Kept by its settlement (`rejectedDraftSettlement`): a Send the person asked for.
       submission.origin === 'client' &&
-      cards.some((card) => card.consumedAs === clientMessageId)
+      consumedClientSends.has(clientMessageId)
     ) {
       placed.push({ consumedAs: clientMessageId, position: 0 })
     }
   }
-  const inHead = (card: (typeof cards)[number]): boolean =>
-    earlier.includes(card.messageId) ||
-    placed.some((move) =>
-      'messageId' in move ? move.messageId === card.messageId : move.consumedAs === card.consumedAs
-    )
-  const others = cards.filter((card) => !inHead(card)).map((card) => card.position)
-  const anchor = others.length > 0 ? Math.min(...others) : 1
+  const placedIds = new Set(placed.flatMap((move) => ('messageId' in move ? [move.messageId] : [])))
+  const placedSubmissions = new Set(
+    placed.flatMap((move) => ('consumedAs' in move ? [move.consumedAs] : []))
+  )
+  let anchor = 1
+  for (const card of journal.queuedMessages.headers()) {
+    if (
+      !earlierIds.has(card.messageId) &&
+      !placedIds.has(card.messageId) &&
+      (card.consumedAs === null || !placedSubmissions.has(card.consumedAs))
+    ) {
+      anchor = card.position
+      break
+    }
+  }
   const first = anchor - earlier.length - placed.length
   return {
     earlier: earlier.map((messageId, index) => ({ messageId, position: first + index })),

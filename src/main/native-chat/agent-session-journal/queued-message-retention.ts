@@ -3,7 +3,34 @@
 
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import { listQueuedMessages } from './queued-message-table'
+import {
+  AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
+  AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
+} from '../../../shared/agent-session-host-authority'
+import { expiredDispatchedQueuedMessageHeaders } from './queued-message-headers'
+import type { JournalReducerState } from './journal-reducer'
+import { settleOwedQueuedMessages } from './queued-message-settlement'
+
+/** Tombstones must outlive the window in which their operation id could still be admitted as new. */
+export const QUEUED_MESSAGE_REPLAY_WINDOW_MS =
+  AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
+
+/** Open-time repair: owed settlements apply as the live hook would have, then retention runs. */
+export function repairAndPruneQueuedMessages(
+  db: Database.Database,
+  input: { sessionId: string; state: JournalReducerState; now: number }
+): number {
+  const { sessionId, state, now } = input
+  return (
+    settleOwedQueuedMessages(db, input) +
+    pruneQueuedMessages(db, {
+      sessionId,
+      now,
+      replayWindowMs: QUEUED_MESSAGE_REPLAY_WINDOW_MS,
+      submissionVerdict: retainedSubmissionVerdict(state.submissions)
+    })
+  )
+}
 
 /** What the loaded journal says about a dispatched draft's consumed submission. */
 export type QueuedMessageSubmissionVerdict =
@@ -39,10 +66,7 @@ export function pruneQueuedMessages(
     )
     .run(input.sessionId, cutoff)
   let pruned = Number(tombstones.changes ?? 0)
-  for (const row of listQueuedMessages(db, input.sessionId)) {
-    if (row.state !== 'dispatched' || row.settledAt === null || row.settledAt >= cutoff) {
-      continue
-    }
+  for (const row of expiredDispatchedQueuedMessageHeaders(db, input.sessionId, cutoff)) {
     // A dispatched row always names its hand-off; one that does not has nothing to wait for.
     const verdict = row.consumedAs === null ? 'absent' : input.submissionVerdict(row.consumedAs)
     if (verdict === 'terminal-not-refused' || verdict === 'absent') {

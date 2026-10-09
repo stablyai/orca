@@ -4,38 +4,50 @@
 import type { UnreadAgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import { readStoredRejectionFact } from './journal-dispatch-reducer'
-import type { QueuedMessageRow } from './queued-message-table'
+import type { SqliteRow } from '../../sqlite/sqlite-statement'
+import type { QueuedMessageHeader, QueuedMessageRow } from './queued-message-table'
 
 /** A `queued_messages` row as this file's SELECTs return it; null when it cannot be read back. */
-export function readStoredQueuedMessageRow(row: unknown): QueuedMessageRow | null {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: rows come from this file's own SELECTs, which name exactly these columns; better-sqlite3 types them as unknown.
+export function readStoredQueuedMessageRow(row: SqliteRow): QueuedMessageRow | null {
+  const header = readStoredQueuedMessageHeader(row)
+  if (!header || typeof row.body_json !== 'string') {
+    return null
+  }
+  let body: AgentJournalMessageItem
+  try {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: body_json is written only by insertQueuedMessage from a schema-validated AgentJournalMessageItem.
+    body = JSON.parse(row.body_json) as AgentJournalMessageItem
+  } catch {
+    return null
+  }
+  return {
+    ...header,
+    body,
+    returnedRejection: storedRejection(
+      typeof row.returned_rejection === 'string' ? row.returned_rejection : null
+    )
+  }
+}
+
+/** Header queries exclude unreadable bodies in SQL without bringing their text into JS. */
+export function readStoredQueuedMessageHeader(row: SqliteRow): QueuedMessageHeader | null {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the queue repository SELECTs name these columns with the table's declared string, number, and nullable types.
   const record = row as {
     session_id: string
     message_id: string
     position: number
-    body_json: string
     fingerprint: string
     created_at: number
     host_instance: string
     state: string
     hold_reason: string | null
     returned_reason: string | null
-    returned_rejection: string | null
     settled_at: number | null
     settled_by_op: string | null
     consumed_as: string | null
     carried_from: string | null
     queued_epoch: string | null
     queued_sequence: number | null
-  }
-  let body: AgentJournalMessageItem
-  try {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: body_json is written only by insertQueuedMessage from a schema-validated AgentJournalMessageItem.
-    body = JSON.parse(record.body_json) as AgentJournalMessageItem
-  } catch {
-    // Our own writer stringified it; an unreadable body is corruption, and a
-    // row we cannot re-materialize must not masquerade as an empty message.
-    return null
   }
   const state = record.state
   if (
@@ -50,14 +62,12 @@ export function readStoredQueuedMessageRow(row: unknown): QueuedMessageRow | nul
     sessionId: record.session_id,
     messageId: record.message_id,
     position: record.position,
-    body,
     fingerprint: record.fingerprint,
     createdAt: record.created_at,
     hostInstance: record.host_instance,
     state,
     holdReason: storedHoldReason(record.hold_reason),
     returnedReason: record.returned_reason,
-    returnedRejection: storedRejection(record.returned_rejection),
     settledAt: record.settled_at,
     settledByOp: record.settled_by_op,
     consumedAs: record.consumed_as,

@@ -717,6 +717,8 @@ describe('open-time repair and retention', () => {
     await journal.close()
     clock += QUEUED_MESSAGE_REPLAY_WINDOW_MS + 1_000
     journal = await open()
+    expect(journal.queuedMessages.get('accepted-1')).toBeNull()
+    expect(journal.queuedMessages.get('withdrawn-1')).toBeNull()
     expect(journal.queuedMessages.list().map((row) => [row.messageId, row.state])).toEqual([
       ['waiting-1', 'waiting'],
       ['returned-1', 'returned']

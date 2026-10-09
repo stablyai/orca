@@ -9,10 +9,6 @@ import type {
   AgentJournalCursor,
   AgentJournalMessageItem
 } from '../../../shared/agent-session-journal-types'
-import {
-  AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
-  AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
-} from '../../../shared/agent-session-host-authority'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
@@ -36,9 +32,18 @@ import {
   type QueuedMessageHoldReason,
   type QueuedMessageRow
 } from './queued-message-table'
+import {
+  hasReadableQueuedMessage,
+  hasWaitingQueuedMessage,
+  getQueuedMessageHeader,
+  queuedMessageAwaitingReopen,
+  queuedMessageHeaders,
+  unsettledQueuedMessageBodyBytes,
+  type QueuedMessageHeaderSelection
+} from './queued-message-headers'
 import { draftsDeliveredByAppliedEcho } from './queued-message-delivered-echo'
 import { moveQueuedMessages, type QueuedMessagePositionMove } from './queued-message-positions'
-import { pruneQueuedMessages, retainedSubmissionVerdict } from './queued-message-retention'
+import { repairAndPruneQueuedMessages } from './queued-message-retention'
 import {
   queuedMessageSettlementOwed,
   settleOwedQueuedMessages,
@@ -50,9 +55,7 @@ import type { JournalWriteBody, JournalWriteResult } from './journal-write-queue
 import { QueuedMessageNotConsumableError } from './queued-message-consume-error'
 export { QueuedMessageNotConsumableError } from './queued-message-consume-error'
 
-/** Tombstones must outlive the window in which their operation id could still be admitted as new. */
-export const QUEUED_MESSAGE_REPLAY_WINDOW_MS =
-  AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
+export { QUEUED_MESSAGE_REPLAY_WINDOW_MS } from './queued-message-retention'
 
 export type JournalQueuedMessagesDeps = {
   sessionId: string
@@ -75,7 +78,6 @@ export type JournalQueuedMessagesDeps = {
 export class JournalQueuedMessages {
   /** Bumped on every draft-table write, so publication memos recompute only when they must. */
   private changeRevision = 0
-  private listed: { revision: number; rows: readonly QueuedMessageRow[] } | null = null
 
   constructor(private readonly deps: JournalQueuedMessagesDeps) {}
 
@@ -92,16 +94,23 @@ export class JournalQueuedMessages {
     this.changeRevision++
   }
 
-  /** Cached per revision: the drain re-checks on every journal publish, so an
-   *  unchanged table must cost no SQL read or body parse on token streams. */
+  /** Full bodies only for v1 publication and /clear's command withdrawal, filtered in SQL. */
   list(): readonly QueuedMessageRow[] {
-    if (this.listed?.revision !== this.changeRevision) {
-      this.listed = {
-        revision: this.changeRevision,
-        rows: listQueuedMessages(this.deps.database().db, this.deps.sessionId)
-      }
-    }
-    return this.listed.rows
+    return listQueuedMessages(this.deps.database().db, this.deps.sessionId)
+  }
+
+  headers(selection?: QueuedMessageHeaderSelection) {
+    return queuedMessageHeaders(this.deps.database().db, this.deps.sessionId, selection)
+  }
+
+  publishedBodyBytes(): number {
+    return unsettledQueuedMessageBodyBytes(this.deps.database().db, this.deps.sessionId)
+  }
+
+  nextSendable() {
+    return hasWaitingQueuedMessage(this.deps.database().db, this.deps.sessionId)
+      ? nextSendableQueuedCard(this.pauses(), this.headers('unsettled'))
+      : null
   }
 
   get(messageId: string): QueuedMessageRow | null {
@@ -165,37 +174,30 @@ export class JournalQueuedMessages {
 
   /** The queue's pauses in force, derived from the fold and the cards (`queued-message-pause.ts`). */
   pauses(): DerivedQueuePause[] {
-    return this.derivePauses(this.list())
+    const state = this.deps.state()
+    return deriveQueuePauses({
+      epoch: state.epoch,
+      marks: state.queuePauseMarks,
+      latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
+      cards: this.headers('waiting'),
+      reopenFloor: this.deps.reopenFloor()
+    })
   }
 
   /** A card waits, or is mid-hand-off and may come back to waiting: a chat that stops running
    *  marks it (`AgentSessionJournal.markQueueReopen`). */
   awaitReopenMark(): boolean {
-    const { submissions } = this.deps.state()
-    return this.list().some((row) => {
-      if (row.state === 'waiting') {
-        return true
-      }
-      const handOff = row.consumedAs ? submissions.get(row.consumedAs)?.dispatchState : undefined
-      return row.state === 'dispatched' && (handOff === 'pending' || handOff === 'unknown')
-    })
+    return queuedMessageAwaitingReopen(
+      this.deps.database().db,
+      this.deps.sessionId,
+      this.deps.state().submissions
+    )
   }
 
   /** The person's Stop still pausing the queue, if any (`journalUserStopInForce`). */
   userStopInForce(): JournalQueuePauseMarks['latestStop'] {
     const state = this.deps.state()
     return journalUserStopInForce(state.queuePauseMarks, state.latestAcceptedTurnSequence)
-  }
-
-  private derivePauses(cards: readonly QueuedMessageRow[]): DerivedQueuePause[] {
-    const state = this.deps.state()
-    return deriveQueuePauses({
-      epoch: state.epoch,
-      marks: state.queuePauseMarks,
-      latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
-      cards,
-      reopenFloor: this.deps.reopenFloor()
-    })
   }
 
   /** Inside the caller's journal-row transaction (`journal-unsent-send-hold.ts`): one kept send
@@ -279,7 +281,7 @@ export class JournalQueuedMessages {
     this.changeRevision += settleQueuedMessagesForRow(db, {
       sessionId: this.deps.sessionId,
       state: this.deps.state(),
-      drafts: () => this.list(),
+      drafts: () => (messageId) => getQueuedMessageHeader(db, this.deps.sessionId, messageId),
       row,
       now: this.deps.now()
     })
@@ -300,9 +302,7 @@ export class JournalQueuedMessages {
       // Judged again here, by the drain's own rule. Today a Stop cannot land between the drain's
       // pick and this claim (both run on the session's serialized lane, held across the send), so
       // this guards any pause-relevant row written off that lane from overtaking a held card.
-      const cards = listQueuedMessages(db, this.deps.sessionId)
-      const pauses = this.derivePauses(cards)
-      if (nextSendableQueuedCard(pauses, cards)?.messageId !== input.messageId) {
+      if (this.nextSendable()?.messageId !== input.messageId) {
         throw new QueuedMessageNotConsumableError(input.messageId, input.expect)
       }
     }
@@ -319,13 +319,20 @@ export class JournalQueuedMessages {
 
   /** A skipped live settlement the journal already decided (`queued-message-settlement.ts`). */
   settlementOwed(): boolean {
-    return queuedMessageSettlementOwed(this.list(), this.deps.state().submissions)
+    return queuedMessageSettlementOwed(
+      this.deps.database().db,
+      this.deps.sessionId,
+      this.deps.state().submissions
+    )
   }
 
   /** Waiting drafts a skipped echo hook left unwithdrawn; reads every item, so only the drain
    *  step asks, right before a draft would send. */
   deliveredByEchoOwed(): boolean {
-    return draftsDeliveredByAppliedEcho(this.deps.state(), this.list()).length > 0
+    const delivered = draftsDeliveredByAppliedEcho(this.deps.state(), (messageId) =>
+      getQueuedMessageHeader(this.deps.database().db, this.deps.sessionId, messageId)
+    )
+    return delivered.next().done === false
   }
 
   /** Applies owed settlements now, so a skipped live transition heals without a reopen. */
@@ -360,23 +367,17 @@ export class JournalQueuedMessages {
    */
   repairAndPrune(): Promise<void> {
     // No draft, no work, and no write.
-    if (this.deps.readOnly() || this.list().length === 0) {
+    const { sessionId } = this.deps
+    if (this.deps.readOnly() || !hasReadableQueuedMessage(this.deps.database().db, sessionId)) {
       return Promise.resolve()
     }
-    const { sessionId } = this.deps
     return this.transact(
-      (db) => {
-        const [now, state] = [this.deps.now(), this.deps.state()]
-        return (
-          settleOwedQueuedMessages(db, { sessionId, state, now }) +
-          pruneQueuedMessages(db, {
-            sessionId,
-            now,
-            replayWindowMs: QUEUED_MESSAGE_REPLAY_WINDOW_MS,
-            submissionVerdict: retainedSubmissionVerdict(state.submissions)
-          })
-        )
-      },
+      (db) =>
+        repairAndPruneQueuedMessages(db, {
+          sessionId,
+          state: this.deps.state(),
+          now: this.deps.now()
+        }),
       (changed) => changed > 0
     ).then(() => undefined)
   }

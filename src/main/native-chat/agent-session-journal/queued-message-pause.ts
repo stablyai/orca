@@ -170,7 +170,7 @@ export function deriveQueuePauses(input: {
   epoch: string
   marks: JournalQueuePauseMarks
   latestAcceptedTurnSequence: number
-  cards: readonly QueueCard[]
+  cards: Iterable<QueueCard>
   /** Where the reopen's pause begins when this handle could not mark it; null otherwise. */
   reopenFloor: AgentJournalCursor | null
 }): DerivedQueuePause[] {
@@ -180,26 +180,37 @@ export function deriveQueuePauses(input: {
   if (stop) {
     pauses.push({ reason: 'stopped', since: { epoch, sequence: stop.sequence } })
   }
-  const waiting = input.cards.filter((card) => card.state === 'waiting')
   const cleared = marks.cleared
-  if (
-    cleared &&
+  const clearHolds =
+    cleared !== undefined &&
     !cleared.lifted &&
     cleared.sequence > Math.max(latestAcceptedTurnSequence, marks.resumedSequence)
-  ) {
-    const membership = new Set(cleared.messageIds)
-    const messageIds = waiting.flatMap((card) =>
-      card.messageId && membership.has(card.messageId) ? [card.messageId] : []
-    )
-    if (messageIds.length > 0) {
-      pauses.push({ reason: 'cleared', since: { epoch, sequence: cleared.sequence }, messageIds })
+  const members = clearHolds ? new Set(cleared.messageIds) : null
+  const reopened = reopenPause(input)
+  // Every waiting member, in queue order: the pause holds exactly these and a rewind restates them.
+  const clearedIds: string[] = []
+  let beforeReopen = false
+  if ((members && members.size > 0) || reopened) {
+    for (const card of input.cards) {
+      if (card.state === 'waiting') {
+        if (members && card.messageId && members.has(card.messageId)) {
+          clearedIds.push(card.messageId)
+        }
+        beforeReopen ||= !!reopened && card.holdReason === null && queuedBefore(reopened, card)
+      }
+      if ((!members || clearedIds.length === members.size) && (!reopened || beforeReopen)) {
+        break
+      }
     }
   }
-  const reopened = reopenPause(input)
-  if (
-    reopened &&
-    waiting.some((card) => card.holdReason === null && queuedBefore(reopened, card))
-  ) {
+  if (cleared && clearedIds.length > 0) {
+    pauses.push({
+      reason: 'cleared',
+      since: { epoch, sequence: cleared.sequence },
+      messageIds: clearedIds
+    })
+  }
+  if (reopened && beforeReopen) {
     pauses.push(reopened)
   }
   return pauses
@@ -261,7 +272,7 @@ export function queuePauseHolding(
  *  consume both read this. */
 export function nextSendableQueuedCard<T extends QueueCard>(
   pauses: readonly DerivedQueuePause[],
-  cards: readonly T[]
+  cards: Iterable<T>
 ): T | null {
   for (const card of cards) {
     if (card.state === 'returned' || queuePauseHolding(pauses, card)) {
@@ -279,8 +290,11 @@ export function nextSendableQueuedCard<T extends QueueCard>(
  *  never offers a Resume that sends nothing. */
 export function resumableQueuePause(
   pauses: readonly DerivedQueuePause[],
-  cards: readonly QueueCard[]
+  cards: Iterable<QueueCard>
 ): DerivedQueuePause | null {
+  if (pauses.length === 0) {
+    return null
+  }
   for (const card of cards) {
     if (card.state === 'returned') {
       return null

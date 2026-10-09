@@ -8,7 +8,6 @@ import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-r
 import { MAX_PROMPT_BYTES } from '../../../shared/rpc-contract/structured-agent-session-params'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { AGENT_SESSION_HISTORY_MAX_PAGE_BYTES } from './agent-session-history-page-bounds'
-import { unsettledQueuedMessages } from './structured-agent-session-queued-stop'
 
 /** A frame bound, not a queue limit: every unsettled card's body rides each hydrating frame and
  *  history answer beside a full page, and a frame past the outbound cap closes the remote session. */
@@ -26,10 +25,7 @@ export function queuedMessagesPublishedBytesRefusal(
   body: AgentJournalMessageItem,
   fromPerson: boolean
 ): AgentSessionWireRefusal | null {
-  const bytes = unsettledQueuedMessages(journal).reduce(
-    (sum, row) => sum + publishedBodyBytes(row.body),
-    publishedBodyBytes(body)
-  )
+  const bytes = journal.queuedMessages.publishedBodyBytes() + publishedBodyBytes(body)
   const limit = fromPerson
     ? QUEUED_MESSAGES_PUBLISHED_MAX_BYTES
     : QUEUED_MESSAGES_PUBLISHED_MAX_BYTES - QUEUED_MESSAGES_PERSON_RESERVE_BYTES

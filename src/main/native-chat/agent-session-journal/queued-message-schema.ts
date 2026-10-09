@@ -1,6 +1,8 @@
 // The draft table's shape, created and healed at every writable open.
 
 import type Database from '../../sqlite/sync-database'
+import { classifyJournalOpenFailure } from './journal-open-failure'
+import { READABLE_UNSETTLED_QUEUED_MESSAGE } from './queued-message-readability'
 
 /** Columns a later build added, so an older draft table can gain them in place. */
 const NULLABLE_COLUMNS: readonly (readonly [name: string, type: string])[] = [
@@ -68,4 +70,21 @@ CREATE TABLE IF NOT EXISTS queued_messages (
 CREATE UNIQUE INDEX IF NOT EXISTS queued_messages_consumed_as
   ON queued_messages (session_id, consumed_as) WHERE consumed_as IS NOT NULL;
 `)
+  // Autocommit keeps optional index failures from rolling back the required schema.
+  try {
+    db.exec(`
+CREATE INDEX IF NOT EXISTS queued_messages_position
+  ON queued_messages (session_id, position);
+-- Keep WHERE textually identical to the query predicate; changing it requires renaming this index.
+CREATE INDEX IF NOT EXISTS queued_messages_readable_unsettled_position
+  ON queued_messages (session_id, position) WHERE ${READABLE_UNSETTLED_QUEUED_MESSAGE};
+CREATE INDEX IF NOT EXISTS queued_messages_state_settled
+  ON queued_messages (session_id, state, settled_at, message_id);
+`)
+  } catch (error) {
+    console.warn('[journal-open] queued-message indexes skipped:', {
+      reason: classifyJournalOpenFailure(error),
+      error: error instanceof Error ? error.message : String(error)
+    })
+  }
 }

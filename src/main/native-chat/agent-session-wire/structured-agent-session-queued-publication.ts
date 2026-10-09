@@ -129,7 +129,9 @@ export function readQueuePublication(
           stop.epoch !== pause.since.epoch ||
           stop.sequence < pause.since.sequence))
   )
-  const resumable = silent ? null : resumableQueuePause(pauses, journal.queuedMessages.list())
+  const resumable = silent
+    ? null
+    : resumableQueuePause(pauses, journal.queuedMessages.headers('unsettled'))
   // The submissions are read only while a pause would show, never while the queue runs freely.
   const pause =
     resumable && !queuePauseLiftOnItsWay(resumable, journal.submissions()) ? resumable : null

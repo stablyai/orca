@@ -14,27 +14,42 @@ import type { JournalReducerState } from './journal-reducer'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { structuredAgentSessionCommandTurnIdentity } from '../../../shared/structured-agent-session-command-turn-identity'
 import type { JournalRow } from './journal-row-schema'
-import { draftDeliveredByEcho, draftsDeliveredByAppliedEcho } from './queued-message-delivered-echo'
 import {
-  listQueuedMessages,
+  draftDeliveredByEcho,
+  draftsDeliveredByAppliedEcho,
+  type QueuedMessageEchoDraftReader
+} from './queued-message-delivered-echo'
+import {
   settleRejectedQueuedMessage,
-  withdrawQueuedMessages,
-  type QueuedMessageRow
+  withdrawQueuedMessageInTransaction
 } from './queued-message-table'
+import { dispatchedQueuedMessageHeader, getQueuedMessageHeader } from './queued-message-headers'
 
 type Submissions = ReadonlyMap<string, AgentJournalSubmission>
 
 /** Some dispatched draft still waits on a settlement the journal already decided. */
 export function queuedMessageSettlementOwed(
-  rows: readonly QueuedMessageRow[],
+  db: Database.Database,
+  sessionId: string,
   submissions: Submissions
 ): boolean {
-  return rows.some(
-    (row) =>
-      row.state === 'dispatched' &&
-      row.consumedAs !== null &&
-      consumedSubmissionWasRejected(submissions.get(row.consumedAs))
-  )
+  return owedQueuedMessageSettlements(db, sessionId, submissions).next().done === false
+}
+
+function* owedQueuedMessageSettlements(
+  db: Database.Database,
+  sessionId: string,
+  submissions: Submissions
+): IterableIterator<AgentJournalSubmission> {
+  for (const submission of submissions.values()) {
+    if (
+      submission.queuedMessageId !== undefined &&
+      consumedSubmissionWasRejected(submission) &&
+      dispatchedQueuedMessageHeader(db, sessionId, submission.clientMessageId)
+    ) {
+      yield submission
+    }
+  }
 }
 
 /** Applies each owed settlement, and withdraws each waiting draft an applied echo proves
@@ -45,37 +60,26 @@ export function settleOwedQueuedMessages(
 ): number {
   const { submissions } = input.state
   let settled = 0
-  for (const row of listQueuedMessages(db, input.sessionId)) {
-    const consumedRef = row.consumedAs
-    const submission = consumedRef === null ? undefined : submissions.get(consumedRef)
-    if (
-      row.state !== 'dispatched' ||
-      consumedRef === null ||
-      !consumedSubmissionWasRejected(submission)
-    ) {
-      continue
-    }
+  for (const submission of owedQueuedMessageSettlements(db, input.sessionId, submissions)) {
     const changed = settleRejectedQueuedMessage(db, {
       sessionId: input.sessionId,
-      consumedRef,
-      reason: submission?.reason ?? null,
-      rejection: submission?.rejection,
-      commandTurnReported: commandTurnReported(input.state, consumedRef),
+      consumedRef: submission.clientMessageId,
+      reason: submission.reason ?? null,
+      rejection: submission.rejection,
+      commandTurnReported: commandTurnReported(input.state, submission.clientMessageId),
       now: input.now
     })
     settled += changed ? 1 : 0
   }
-  const delivered = draftsDeliveredByAppliedEcho(
-    input.state,
-    listQueuedMessages(db, input.sessionId)
-  )
-  if (delivered.length > 0) {
-    settled += withdrawQueuedMessages(db, {
+  for (const messageId of draftsDeliveredByAppliedEcho(input.state, (messageId) =>
+    getQueuedMessageHeader(db, input.sessionId, messageId)
+  )) {
+    settled += withdrawQueuedMessageInTransaction(db, {
       sessionId: input.sessionId,
-      messageIds: delivered,
+      messageId,
       settledByOp: null,
       now: input.now
-    }).length
+    })
   }
   return settled
 }
@@ -95,9 +99,8 @@ export function settleQueuedMessagesForRow(
   input: {
     sessionId: string
     state: JournalReducerState
-    /** Read only once the row holds an unclaimed echo: a list read inside the append's
-     *  transaction must not be cached under state a rollback could undo. */
-    drafts: () => readonly QueuedMessageRow[]
+    /** Read only for an unclaimed echo, without caching a transaction's provisional state. */
+    drafts: () => QueuedMessageEchoDraftReader
     row: JournalRow
     now: number
   }
@@ -107,12 +110,12 @@ export function settleQueuedMessagesForRow(
   const delivered = draftDeliveredByEcho(input.state, input.drafts, row)
   if (delivered !== null) {
     // Its first send reached the agent after all; sending it again would repeat it.
-    changed += withdrawQueuedMessages(db, {
+    changed += withdrawQueuedMessageInTransaction(db, {
       sessionId: input.sessionId,
-      messageIds: [delivered],
+      messageId: delivered,
       settledByOp: null,
       now: input.now
-    }).length
+    })
   }
   if (row.kind !== 'dispatch' || row.state !== 'rejected') {
     return changed
