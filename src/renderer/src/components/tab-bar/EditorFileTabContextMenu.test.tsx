@@ -209,6 +209,7 @@ async function renderMenu(
     runtimeEnvironmentId?: string | null
     externalSshTargetId?: string
     mode?: 'edit' | 'check-details'
+    unifiedTabId?: string
   } = {}
 ): Promise<unknown> {
   const { runtimeEnvironmentId, externalSshTargetId, mode = 'edit', ...props } = overrides
@@ -286,6 +287,26 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
+
+  it.each(['editor-view-1', 'editor-view-2'])(
+    'copies the individual editor view ID %s',
+    async (unifiedTabId) => {
+      const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+      const onActivate = vi.fn()
+      vi.stubGlobal('window', { api: { ui: { writeClipboardText } } })
+      const tree = expandNode(await renderMenu({ unifiedTabId, onActivate }))
+      const item = findElementsByType(tree, 'DropdownMenuItem').find(
+        (candidate) => extractText(candidate.props.children) === 'Copy Tab ID'
+      )
+      const onSelect = item?.props.onSelect
+      if (typeof onSelect !== 'function') {
+        throw new Error('Missing Copy Tab ID action')
+      }
+      onSelect()
+      expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith(`orcaTabId: ${unifiedTabId}`)
+      expect(onActivate).not.toHaveBeenCalled()
+    }
+  )
 
   it('opens rename only after menu close releases focus and consumes the request once', async () => {
     const onActivate = vi.fn()
