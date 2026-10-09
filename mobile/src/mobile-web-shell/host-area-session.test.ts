@@ -171,11 +171,21 @@ describe('a layout change on a mounted session', () => {
     ).session
   }
 
-  it('keeps a declared detail session through the flip both ways', () => {
+  it('restarts a declared detail session, whose page may no longer keep the host-route hop', () => {
     const narrow = narrowStateFor(desktopRoutes(true), '/h/host-1/files/wt-1')
-    const wide = run(narrow, { type: 'layout-changed', wide: true }).session
-    expect(wide).toEqual({ ...narrow, wide: true })
-    expect(run(wide, { type: 'layout-changed', wide: false }).session).toEqual(narrow)
+    expect(narrow.pageRouteGrants.map((pair) => pair.pathname)).toContain('/h/[hostId]')
+    const wide = run(narrow, { type: 'layout-changed', wide: true })
+    expect(wide.session.flow).toBe(narrow.flow + 1)
+    expect(wide.effects).toEqual([{ kind: 'open-cache' }])
+    const served = run(
+      wide.session,
+      { type: 'cache-read', generation: null },
+      {
+        type: 'manifest-read',
+        manifest: manifestFacts({ ...MANIFEST_WIRE, routes: desktopRoutes(true) })
+      }
+    ).session
+    expect(served.pageRouteGrants.map((pair) => pair.pathname)).not.toContain('/h/[hostId]')
   })
 
   it('restarts a detail session an undeclaring page may not serve wide', () => {

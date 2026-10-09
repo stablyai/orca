@@ -147,10 +147,11 @@ async function settledKinds(
 }
 
 describe('a detail session across a layout-class change', () => {
-  it('keeps an open page through a flip under a declaring bundle: same session, no re-read', async () => {
+  // Once per flip: the wide session may not keep the host-route hop the narrow one could.
+  it('restarts an open page once per flip under a declaring bundle', async () => {
     expect(await settledKinds(true, [false, true, false])).toEqual({
-      kinds: ['ready session-1', 'ready session-1', 'ready session-1'],
-      manifestReads: 1
+      kinds: ['ready session-1', 'ready session-2', 'ready session-3'],
+      manifestReads: 3
     })
   })
 

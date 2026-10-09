@@ -244,17 +244,21 @@ export function routeViewOf(
 
 type RouteViewFacts = {
   readonly pageRoutes: readonly string[]
+  readonly pageRouteGrants: readonly { readonly pathname: string }[]
   readonly routeGrants: readonly string[]
   readonly ownsHostArea: boolean
 }
 
-/** Whether two views serve the same routes with the same grants and the same host-area answer. */
+/** Whether two views serve the same routes with the same grants and the same host-area answer.
+ *  The paired routes count too: a wide detail session has no host-route pair to hop in-page on. */
 export function sameRouteView(a: RouteViewFacts, b: RouteViewFacts): boolean {
   const same = (x: readonly string[], y: readonly string[]) =>
     x.length === y.length && x.every((item, index) => item === y[index])
+  const paired = (view: RouteViewFacts) => view.pageRouteGrants.map((pair) => pair.pathname)
   return (
     a.ownsHostArea === b.ownsHostArea &&
     same(a.pageRoutes, b.pageRoutes) &&
+    same(paired(a), paired(b)) &&
     same(a.routeGrants, b.routeGrants)
   )
 }
