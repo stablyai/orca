@@ -28,7 +28,9 @@ import {
 import {
   getTerminalPathExistsCacheKey,
   readTerminalPathExistsCache,
-  writeTerminalPathExistsCache
+  startTerminalPathExistsProbe,
+  writeTerminalPathExistsCache,
+  type TerminalPathExistsCache
 } from './terminal-path-exists-cache'
 import {
   getTerminalHtmlFileOpenHint,
@@ -56,7 +58,7 @@ export type LinkHandlerDeps = {
   getPaneLinkCwd?: (paneId: number) => string | null
   managerRef: React.RefObject<PaneManager | null>
   linkProviderDisposablesRef: React.RefObject<Map<number, IDisposable>>
-  pathExistsCache: Map<string, boolean>
+  pathExistsCache: TerminalPathExistsCache
   runtimeEnvironmentId?: string | null
   terminalHomePath?: string | null
   wslDistro?: string | null
@@ -172,10 +174,15 @@ export function createFilePathLinkProvider(
               // Why: exact known workspace roots must stay clickable for SSH or
               // stale local paths even when filesystem probing says "missing".
               if (!worktreeRootLink) {
+                const probe = startTerminalPathExistsProbe()
                 const cachedExists = readTerminalPathExistsCache(pathExistsCache, cacheKey)
                 const exists =
                   cachedExists ?? (await pathExists(fileContext, mappedPath, isRemoteRuntimePath))
-                writeTerminalPathExistsCache(pathExistsCache, cacheKey, exists)
+                // Why: refreshing a cached negative's timestamp on every hover
+                // would keep frequently scanned missing paths stale forever.
+                if (cachedExists === undefined) {
+                  writeTerminalPathExistsCache(pathExistsCache, cacheKey, exists, probe)
+                }
                 if (!exists) {
                   return null
                 }
