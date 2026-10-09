@@ -194,6 +194,7 @@ export function createRelayServer(
     ready,
     readinessDegradation: () => readiness.degradedDependencies(),
     readinessLocal: () => options.cellFlags?.().flags.readinessLocal ?? false,
+    relayJwks,
     localReadiness: createRelayLocalReadiness({
       listening: () => server.listening,
       keys: relayJwks,
