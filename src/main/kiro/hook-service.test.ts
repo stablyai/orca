@@ -214,11 +214,15 @@ describe('KiroHookService', () => {
     const sftp = createManagedHookLocalFilesystem()
     const readFile = sftp.readFile
     Object.assign(sftp, {
-      readFile: (path: string, ...rest: unknown[]) => {
+      readFile: (
+        path: string,
+        encoding: BufferEncoding,
+        callback: (error: Error | undefined, contents: Buffer) => void
+      ) => {
         if (path.endsWith('gone.json')) {
           rmSync(path)
         }
-        return Reflect.apply(readFile, sftp, [path, ...rest])
+        return readFile(path, encoding, callback)
       }
     })
 
