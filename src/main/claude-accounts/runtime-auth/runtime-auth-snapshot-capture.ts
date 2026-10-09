@@ -50,9 +50,13 @@ export class ClaudeRuntimeAuthSnapshotCapture extends ClaudeRuntimeAuthReadback 
         : existsSync(paths.credentialsPath)
           ? readFileSync(paths.credentialsPath, 'utf-8')
           : null
-    const keychainCredentialsJson = await this.readAggregateClaudeKeychainCredentialsBestEffort(
-      paths.configDir
+    const aggregateKeychainCredentialsJson =
+      await this.readAggregateClaudeKeychainCredentialsBestEffort(paths.configDir)
+    const keychainCredentialsJson = this.isEmptyClaudeOAuthCredentials(
+      aggregateKeychainCredentialsJson
     )
+      ? null
+      : aggregateKeychainCredentialsJson
     const scopedKeychainCredentials =
       process.platform === 'darwin'
         ? await this.readActiveClaudeKeychainCredentialsForSnapshot(paths.configDir)
@@ -67,34 +71,34 @@ export class ClaudeRuntimeAuthSnapshotCapture extends ClaudeRuntimeAuthReadback 
     ) {
       throw new Error('Cannot capture current Claude Keychain credentials')
     }
-    const scopedKeychainCredentialsJson =
-      scopedKeychainCredentials.status === 'captured'
-        ? this.snapshotKeychainCredentials(
-            scopedKeychainCredentials.credentialsJson,
-            options.previousSnapshot,
-            'scoped',
-            options.managedCredentialsJson
-          )
-        : undefined
-    const legacyKeychainSnapshotJson =
-      legacyKeychainCredentialsJson.status === 'captured'
-        ? this.snapshotKeychainCredentials(
-            legacyKeychainCredentialsJson.credentialsJson,
-            options.previousSnapshot,
-            'legacy',
-            options.managedCredentialsJson
-          )
-        : undefined
+    const scopedKeychainSnapshot = this.snapshotKeychainCredentials(
+      scopedKeychainCredentials.credentialsJson,
+      options.previousSnapshot,
+      'scoped',
+      options.managedCredentialsJson
+    )
+    const legacyKeychainSnapshot = this.snapshotKeychainCredentials(
+      legacyKeychainCredentialsJson.credentialsJson,
+      options.previousSnapshot,
+      'legacy',
+      options.managedCredentialsJson
+    )
     const configOauthAccount = this.readRuntimeOauthAccount()
     const snapshot: ClaudeSystemDefaultSnapshot = {
       credentialsJson,
       configOauthAccount:
         configOauthAccount === RUNTIME_OAUTH_ACCOUNT_PARSE_ERROR ? null : configOauthAccount,
       keychainCredentialsJson,
-      scopedKeychainCredentialsJson,
-      legacyKeychainCredentialsJson: legacyKeychainSnapshotJson,
-      scopedKeychainCredentialsCaptured: scopedKeychainCredentials.status === 'captured',
-      legacyKeychainCredentialsCaptured: legacyKeychainCredentialsJson.status === 'captured',
+      ...(scopedKeychainSnapshot.status === 'captured'
+        ? { scopedKeychainCredentialsJson: scopedKeychainSnapshot.credentialsJson }
+        : {}),
+      ...(legacyKeychainSnapshot.status === 'captured'
+        ? { legacyKeychainCredentialsJson: legacyKeychainSnapshot.credentialsJson }
+        : {}),
+      scopedKeychainCredentialsCaptured: scopedKeychainSnapshot.status === 'captured',
+      legacyKeychainCredentialsCaptured: legacyKeychainSnapshot.status === 'captured',
+      scopedKeychainCredentialsEmpty: scopedKeychainSnapshot.status === 'empty',
+      legacyKeychainCredentialsEmpty: legacyKeychainSnapshot.status === 'empty',
       capturedAt: Date.now()
     }
     this.writeJson(snapshotPath, snapshot)

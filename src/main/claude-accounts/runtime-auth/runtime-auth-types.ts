@@ -20,6 +20,8 @@ export type ClaudeSystemDefaultSnapshot = {
   legacyKeychainCredentialsJson?: string | null
   scopedKeychainCredentialsCaptured?: boolean
   legacyKeychainCredentialsCaptured?: boolean
+  scopedKeychainCredentialsEmpty?: boolean
+  legacyKeychainCredentialsEmpty?: boolean
   capturedAt: number
 }
 
@@ -45,6 +47,7 @@ export type ClaudeKeychainReadResult =
   | { status: 'failed' }
 export type ClaudeKeychainSnapshotValue =
   | { status: 'captured'; credentialsJson: string | null }
+  | { status: 'empty' }
   | { status: 'unknown' }
 export type ClaudeRefreshTokenComparison = 'same' | 'different' | 'missing'
 export type ClaudeRuntimeCredentialCandidate = {

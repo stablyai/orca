@@ -21,6 +21,8 @@ export class ClaudeRuntimeAuthKeychainSnapshots extends ClaudeRuntimeAuthManaged
       this.isOptionalNullableString(snapshot.legacyKeychainCredentialsJson) &&
       this.isOptionalBoolean(snapshot.scopedKeychainCredentialsCaptured) &&
       this.isOptionalBoolean(snapshot.legacyKeychainCredentialsCaptured) &&
+      this.isOptionalBoolean(snapshot.scopedKeychainCredentialsEmpty) &&
+      this.isOptionalBoolean(snapshot.legacyKeychainCredentialsEmpty) &&
       this.hasValidKeychainSnapshotValue(snapshot, 'scoped') &&
       this.hasValidKeychainSnapshotValue(snapshot, 'legacy') &&
       (snapshot.capturedAt === undefined || typeof snapshot.capturedAt === 'number')
@@ -40,18 +42,19 @@ export class ClaudeRuntimeAuthKeychainSnapshots extends ClaudeRuntimeAuthManaged
     previousSnapshot: ClaudeSystemDefaultSnapshot | null | undefined,
     service: 'scoped' | 'legacy',
     managedCredentialsJson: string | undefined
-  ): string | null {
+  ): ClaudeKeychainSnapshotValue {
+    if (this.isEmptyClaudeOAuthCredentials(credentialsJson)) {
+      return { status: 'empty' }
+    }
     if (
       managedCredentialsJson &&
       this.accountCredentialFieldsEqual(credentialsJson, managedCredentialsJson) &&
       previousSnapshot
     ) {
       const previousValue = this.readKeychainSnapshotValue(previousSnapshot, service)
-      if (previousValue.status === 'captured') {
-        return previousValue.credentialsJson
-      }
+      return previousValue
     }
-    return credentialsJson
+    return { status: 'captured', credentialsJson }
   }
 
   protected hasValidKeychainSnapshotValue(
@@ -62,6 +65,11 @@ export class ClaudeRuntimeAuthKeychainSnapshots extends ClaudeRuntimeAuthManaged
       service === 'scoped'
         ? 'scopedKeychainCredentialsCaptured'
         : 'legacyKeychainCredentialsCaptured'
+    const emptyKey =
+      service === 'scoped' ? 'scopedKeychainCredentialsEmpty' : 'legacyKeychainCredentialsEmpty'
+    if (snapshot[emptyKey] === true) {
+      return snapshot[capturedKey] !== true
+    }
     if (snapshot[capturedKey] === false) {
       return true
     }
@@ -83,18 +91,53 @@ export class ClaudeRuntimeAuthKeychainSnapshots extends ClaudeRuntimeAuthManaged
       service === 'scoped'
         ? 'scopedKeychainCredentialsCaptured'
         : 'legacyKeychainCredentialsCaptured'
+    const emptyKey =
+      service === 'scoped' ? 'scopedKeychainCredentialsEmpty' : 'legacyKeychainCredentialsEmpty'
+    if (snapshot[emptyKey] === true) {
+      return { status: 'empty' }
+    }
     if (snapshot[capturedKey] === false) {
       return { status: 'unknown' }
     }
     const credentialsKey =
       service === 'scoped' ? 'scopedKeychainCredentialsJson' : 'legacyKeychainCredentialsJson'
+    const credentialsJson = Object.hasOwn(snapshot, credentialsKey)
+      ? (snapshot[credentialsKey] ?? null)
+      : snapshot.keychainCredentialsJson
+    if (this.isEmptyClaudeOAuthCredentials(credentialsJson)) {
+      return { status: 'empty' }
+    }
     if (Object.hasOwn(snapshot, credentialsKey)) {
       return {
         status: 'captured',
-        credentialsJson: snapshot[credentialsKey] ?? null
+        credentialsJson: credentialsJson ?? null
       }
     }
-    return { status: 'captured', credentialsJson: snapshot.keychainCredentialsJson }
+    return { status: 'captured', credentialsJson: credentialsJson ?? null }
+  }
+
+  protected hasEmptyClaudeKeychainSnapshot(snapshot: ClaudeSystemDefaultSnapshot | null): boolean {
+    return (
+      this.readKeychainSnapshotValue(snapshot, 'scoped').status === 'empty' ||
+      this.readKeychainSnapshotValue(snapshot, 'legacy').status === 'empty'
+    )
+  }
+
+  protected isEmptyClaudeOAuthCredentials(credentialsJson: string | null | undefined): boolean {
+    if (typeof credentialsJson !== 'string') {
+      return false
+    }
+    try {
+      const credentials = this.asRecord(JSON.parse(credentialsJson))
+      const oauth = this.asRecord(credentials?.claudeAiOauth)
+      return (
+        oauth !== null &&
+        this.normalizeField(this.readString(oauth, 'accessToken')) === null &&
+        this.normalizeField(this.readString(oauth, 'refreshToken')) === null
+      )
+    } catch {
+      return false
+    }
   }
 
   protected async readAggregateClaudeKeychainCredentialsBestEffort(

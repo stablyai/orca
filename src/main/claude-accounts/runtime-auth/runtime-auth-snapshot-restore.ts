@@ -19,6 +19,13 @@ export class ClaudeRuntimeAuthSnapshotRestore extends ClaudeRuntimeAuthSnapshotC
     let hasCredentialSurfaceOwnership = fileCredentialsOwned
     // Why: prove ownership before mutating anything, and restore OAuth first so a failure leaves the credential proof intact for retry.
     this.lastWrittenCredentialsJson = previouslyWrittenCredentialsJson
+    if (
+      this.store.getSettings().activeClaudeManagedAccountId &&
+      this.hasEmptyClaudeKeychainSnapshot(snapshot)
+    ) {
+      // Why: an empty default token is not a safe rollback target while its managed account remains selected; the next sync can retry materialization.
+      return
+    }
     let scopedSnapshot: ClaudeKeychainSnapshotValue | null = null
     let legacySnapshot: ClaudeKeychainSnapshotValue | null = null
     let scopedKeychainOwned = false
@@ -50,16 +57,16 @@ export class ClaudeRuntimeAuthSnapshotRestore extends ClaudeRuntimeAuthSnapshotC
       this.restoreRuntimeCredentials(snapshot?.credentialsJson ?? null, sharedCredentialsJson)
     }
     if (process.platform === 'darwin') {
-      if (scopedSnapshot?.status === 'captured' && scopedKeychainOwned) {
+      if (scopedSnapshot && scopedSnapshot.status !== 'unknown' && scopedKeychainOwned) {
         await this.restoreActiveClaudeKeychainCredentials(
-          scopedSnapshot.credentialsJson,
+          scopedSnapshot.status === 'empty' ? null : scopedSnapshot.credentialsJson,
           paths.configDir,
           sharedCredentialsJson
         )
       }
-      if (legacySnapshot?.status === 'captured' && legacyKeychainOwned) {
+      if (legacySnapshot && legacySnapshot.status !== 'unknown' && legacyKeychainOwned) {
         await this.restoreActiveClaudeKeychainCredentials(
-          legacySnapshot.credentialsJson,
+          legacySnapshot.status === 'empty' ? null : legacySnapshot.credentialsJson,
           undefined,
           sharedCredentialsJson
         )
@@ -68,8 +75,8 @@ export class ClaudeRuntimeAuthSnapshotRestore extends ClaudeRuntimeAuthSnapshotC
     this.recordRestoredSharedCredentials(
       sharedCredentialsJson,
       fileCredentialsOwned,
-      scopedSnapshot?.status === 'captured' && scopedKeychainOwned,
-      legacySnapshot?.status === 'captured' && legacyKeychainOwned
+      scopedSnapshot !== null && scopedSnapshot.status !== 'unknown' && scopedKeychainOwned,
+      legacySnapshot !== null && legacySnapshot.status !== 'unknown' && legacyKeychainOwned
     )
     this.lastWrittenCredentialsJson = null
     this.lastWrittenOauthAccount = null
@@ -213,16 +220,16 @@ export class ClaudeRuntimeAuthSnapshotRestore extends ClaudeRuntimeAuthSnapshotC
       this.restoreRuntimeCredentials(snapshot.credentialsJson, sharedCredentialsJson)
     }
     if (process.platform === 'darwin') {
-      if (scopedSnapshot?.status === 'captured' && scopedKeychainOwned) {
+      if (scopedSnapshot && scopedSnapshot.status !== 'unknown' && scopedKeychainOwned) {
         await this.restoreActiveClaudeKeychainCredentials(
-          scopedSnapshot.credentialsJson,
+          scopedSnapshot.status === 'empty' ? null : scopedSnapshot.credentialsJson,
           paths.configDir,
           sharedCredentialsJson
         )
       }
-      if (legacySnapshot?.status === 'captured' && legacyKeychainOwned) {
+      if (legacySnapshot && legacySnapshot.status !== 'unknown' && legacyKeychainOwned) {
         await this.restoreActiveClaudeKeychainCredentials(
-          legacySnapshot.credentialsJson,
+          legacySnapshot.status === 'empty' ? null : legacySnapshot.credentialsJson,
           undefined,
           sharedCredentialsJson
         )
@@ -231,8 +238,8 @@ export class ClaudeRuntimeAuthSnapshotRestore extends ClaudeRuntimeAuthSnapshotC
     this.recordRestoredSharedCredentials(
       sharedCredentialsJson,
       fileCredentialsOwned,
-      scopedSnapshot?.status === 'captured' && scopedKeychainOwned,
-      legacySnapshot?.status === 'captured' && legacyKeychainOwned
+      scopedSnapshot !== null && scopedSnapshot.status !== 'unknown' && scopedKeychainOwned,
+      legacySnapshot !== null && legacySnapshot.status !== 'unknown' && legacyKeychainOwned
     )
     this.clearLastWrittenRuntimeState()
   }

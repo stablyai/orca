@@ -575,6 +575,64 @@ describe('ClaudeRuntimeAuthService', () => {
     expect(testState.legacyKeychainCredentials).toBe(systemCredentials)
   })
 
+  it('keeps the selected managed auth when an empty Keychain snapshot follows a partial write failure', async () => {
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    const snapshotPath = join(
+      testState.userDataDir,
+      'claude-runtime-auth',
+      'system-default-auth.json'
+    )
+    const systemCredentials = createClaudeCredentialsJson('system@example.com', 'system')
+    const emptyCredentials = JSON.stringify({
+      claudeAiOauth: { accessToken: '', refreshToken: '', expiresAt: 0 }
+    })
+    const managedCredentials = createClaudeCredentialsJson('user@example.com', 'managed')
+    writeFileSync(runtimeCredentialsPath, systemCredentials, 'utf-8')
+    testState.scopedKeychainCredentials = emptyCredentials
+    testState.legacyKeychainCredentials = emptyCredentials
+    const managedAuthPath = createManagedClaudeAuth(
+      testState.userDataDir,
+      'account-1',
+      managedCredentials
+    )
+    const settings = createSettings({
+      claudeManagedAccounts: [createClaudeAccount('account-1', managedAuthPath)]
+    })
+    const store = createStore(settings)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    settings.activeClaudeManagedAccountId = 'account-1'
+    testState.throwLegacyRuntimeKeychainWrite = true
+    await expect(service.syncForCurrentSelection()).rejects.toThrow(
+      'legacy runtime keychain write failed'
+    )
+
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(managedCredentials)
+    expect(testState.scopedKeychainCredentials).toBe(managedCredentials)
+    expect(testState.legacyKeychainCredentials).toBe(emptyCredentials)
+    const snapshotJson = readFileSync(snapshotPath, 'utf-8')
+    expect(snapshotJson).not.toContain(emptyCredentials)
+    expect(JSON.parse(snapshotJson)).toMatchObject({
+      scopedKeychainCredentialsCaptured: false,
+      legacyKeychainCredentialsCaptured: false,
+      scopedKeychainCredentialsEmpty: true,
+      legacyKeychainCredentialsEmpty: true
+    })
+
+    testState.throwLegacyRuntimeKeychainWrite = false
+    await service.syncForCurrentSelection()
+    expect(testState.scopedKeychainCredentials).toBe(managedCredentials)
+    expect(testState.legacyKeychainCredentials).toBe(managedCredentials)
+
+    settings.activeClaudeManagedAccountId = null
+    await service.syncForCurrentSelection()
+
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(systemCredentials)
+    expect(testState.scopedKeychainCredentials).toBeNull()
+    expect(testState.legacyKeychainCredentials).toBeNull()
+  })
+
   it('restores scoped keychain after legacy runtime keychain write fails', async () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
     const systemCredentials = createClaudeCredentialsJson('system@example.com', 'system')
