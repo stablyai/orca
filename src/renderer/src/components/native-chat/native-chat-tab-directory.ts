@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
+import { isStructuredAgentId } from '../../../../shared/agent-session-provider-handle'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 import { resolveWorkspaceDirectory, type WorkspaceDirectoryState } from '@/lib/workspace-directory'
 import type { StructuredSessionLaunchDirectory } from '@/store/slices/structured-session-launch-directories'
@@ -40,7 +40,7 @@ export function resolveNativeChatTabDirectoryResolution(
         (tab) =>
           tab.id === tabId &&
           tab.contentType === 'agent-session' &&
-          isAgentSessionHandleProvider(tab.agentSessionAgent)
+          isStructuredAgentId(tab.agentSessionAgent)
       )
     : undefined
   if (!structuredTab) {
