@@ -44,17 +44,19 @@ describe('MessageRow control visibility', () => {
     Object.assign(window, { api: { ui: { writeClipboardText } } })
 
     render(
-      <MessageRow
-        message={{
-          id: 'message',
-          role: 'assistant',
-          timestamp: 0,
-          source: 'transcript',
-          blocks: [{ type: 'text', text: '```ts\nconst answer = 42\n```' }]
-        }}
-        expandSignal={false}
-        onScrollMessageToTop={vi.fn()}
-      />
+      <TooltipProvider>
+        <MessageRow
+          message={{
+            id: 'message',
+            role: 'assistant',
+            timestamp: 0,
+            source: 'transcript',
+            blocks: [{ type: 'text', text: '```ts\nconst answer = 42\n```' }]
+          }}
+          expandSignal={false}
+          onScrollMessageToTop={vi.fn()}
+        />
+      </TooltipProvider>
     )
 
     expect(screen.getByText('ts')).toBeInTheDocument()

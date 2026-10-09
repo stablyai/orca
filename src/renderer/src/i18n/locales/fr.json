@@ -18435,6 +18435,8 @@
         "subtitle": "Les fichiers sont ajoutés à votre message sous forme de chemins que l'agent peut lire."
       },
       "copyCode": "Copier le code",
+      "wrapLines": "Retour à la ligne",
+      "disableLineWrap": "Désactiver le retour à la ligne",
       "context": {
         "unavailable": "L'utilisation du contexte n'est pas encore connue. Elle sera disponible après la prochaine réponse de l'agent.",
         "summary": "Contexte : {{used}} / {{window}} tokens ({{percent}} %), estimation basée sur la dernière réponse.",

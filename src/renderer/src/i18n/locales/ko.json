@@ -18369,6 +18369,8 @@
         "subtitle": "파일은 에이전트가 읽을 수 있는 경로로 메시지에 추가됩니다."
       },
       "copyCode": "코드 복사",
+      "wrapLines": "줄 바꿈",
+      "disableLineWrap": "줄 바꿈 끄기",
       "context": {
         "unavailable": "컨텍스트 사용량을 아직 알 수 없습니다. agent가 다음에 응답하면 확인할 수 있습니다.",
         "summary": "컨텍스트: {{used}}/{{window}} 토큰 ({{percent}}%), 마지막 응답 기준 추정치입니다.",

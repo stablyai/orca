@@ -18334,6 +18334,8 @@
         "subtitle": "文件将作为智能体可以读取的路径添加到您的消息中。"
       },
       "copyCode": "复制代码",
+      "wrapLines": "自动换行",
+      "disableLineWrap": "关闭自动换行",
       "context": {
         "unavailable": "上下文用量暂时未知，将在智能体下次响应后提供。",
         "summary": "上下文：{{used}}/{{window}} token（{{percent}}%），根据上一次响应的估算值。",

@@ -18386,6 +18386,8 @@
         "subtitle": "Los archivos se añaden a tu mensaje como rutas que el agente puede leer."
       },
       "copyCode": "Copiar código",
+      "wrapLines": "Ajustar líneas",
+      "disableLineWrap": "Desactivar ajuste de línea",
       "context": {
         "unavailable": "El uso del contexto aún no se conoce. Estará disponible cuando el agente vuelva a responder.",
         "summary": "Contexto: {{used}} / {{window}} tokens ({{percent}} %), estimado a partir de la última respuesta.",

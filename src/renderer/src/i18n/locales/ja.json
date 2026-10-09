@@ -18369,6 +18369,8 @@
         "subtitle": "ファイルは、Agent が読み取ることができるパスとしてメッセージに追加されます。"
       },
       "copyCode": "コードをコピーする",
+      "wrapLines": "行を折り返す",
+      "disableLineWrap": "行の折り返しを無効にする",
       "context": {
         "unavailable": "コンテキストの使用量はまだ不明です。Agent が次に応答すると表示されます。",
         "summary": "コンテキスト: {{used}} / {{window}} トークン ({{percent}}%)、最後の応答から推定。",

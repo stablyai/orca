@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import CommentMarkdown, { remarkGitHubReferences } from './CommentMarkdown'
 import { NativeChatCodeBlock } from '@/components/native-chat/NativeChatCodeBlock'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 describe('CommentMarkdown', () => {
   it('marks compact headings so a parent can opt into block flow', () => {
@@ -227,11 +228,13 @@ describe('CommentMarkdown', () => {
 
   it('uses the supplied code-block renderer for fenced document markdown', () => {
     const markup = renderToStaticMarkup(
-      <CommentMarkdown
-        variant="document"
-        content={'```ts\nconst answer = 42\n```'}
-        renderCodeBlock={NativeChatCodeBlock}
-      />
+      <TooltipProvider>
+        <CommentMarkdown
+          variant="document"
+          content={'```ts\nconst answer = 42\n```'}
+          renderCodeBlock={NativeChatCodeBlock}
+        />
+      </TooltipProvider>
     )
 
     expect(markup).toContain('aria-label="Copy code"')
@@ -241,11 +244,13 @@ describe('CommentMarkdown', () => {
 
   it('does not invent a language label for a bare code fence', () => {
     const markup = renderToStaticMarkup(
-      <CommentMarkdown
-        variant="document"
-        content={'```\nconst answer = 42\n```'}
-        renderCodeBlock={NativeChatCodeBlock}
-      />
+      <TooltipProvider>
+        <CommentMarkdown
+          variant="document"
+          content={'```\nconst answer = 42\n```'}
+          renderCodeBlock={NativeChatCodeBlock}
+        />
+      </TooltipProvider>
     )
 
     expect(markup).toContain('aria-label="Copy code"')
