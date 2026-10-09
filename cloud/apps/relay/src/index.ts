@@ -66,7 +66,8 @@ const {
   runtimeCounts,
   connectionSnapshot,
   ready,
-  cellIncarnation
+  cellIncarnation,
+  shadowSeatPoller
 } = createRelayServer(config, database, { cellFlags: cellFlagChannel?.applied })
 // Same owner as the assignment sweep: the cleanup only expires credentials that every reader
 // already re-checks at read time, so running it in all 23 cells multiplied one table scan by 23
@@ -178,6 +179,7 @@ const shutdown = (): void => {
   observability.stop()
   heartbeat?.stop()
   regionalRehomeWorker?.stop()
+  shadowSeatPoller?.stop()
   cellFlagChannel?.stop()
   sessions.drain(0)
   server.close(() => void database.close().catch(() => undefined))

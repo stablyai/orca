@@ -1,6 +1,7 @@
 import { createDrainMigrationRowLookup } from './drain-migration-row-lookup.js'
 import { HeapWindowReaper } from './heap-window-reaper.js'
 import { PlacementLoadBand } from './placement-load-band.js'
+import type { SeatFeedCell } from './shadow-seat-directory.js'
 import {
   selectIdleRegionalRehomes,
   type IdleRegionalRehomeCandidate,
@@ -7824,6 +7825,40 @@ export class RelayAssignmentStore {
     return selected
       ? cell(selected.row, regions.get(selected.cellId) ?? RELAY_DEFAULT_REGION)
       : null
+  }
+
+  // Every cell, enabled or not: an existing-only cell still seats hosts. Liveness is
+  // placement's own rule (ready, heartbeat within heartbeatTtlMs).
+  async seatFeedCells(): Promise<SeatFeedCell[]> {
+    const now = this.now()
+    const rows = await this.database.query(
+      `SELECT cell.cell_id, cell.cell_url, cell.capacity_requests, region.region,
+              admission.roll_isolated_at, runtime.ready, runtime.last_heartbeat_at
+       FROM relay_cells cell
+       LEFT JOIN relay_cell_regions region ON region.cell_id = cell.cell_id
+       LEFT JOIN relay_cell_admission admission ON admission.cell_id = cell.cell_id
+       LEFT JOIN relay_cell_runtime runtime ON runtime.cell_id = cell.cell_id
+       ORDER BY cell.cell_id ASC`
+    )
+    return rows.map((row) => {
+      const lastHeartbeatAt = optionalInteger(row, 'last_heartbeat_at')
+      const heartbeatExpiresAt = !this.requireLiveCells
+        ? Number.MAX_SAFE_INTEGER
+        : optionalInteger(row, 'ready') === 1 && lastHeartbeatAt !== undefined
+          ? lastHeartbeatAt + this.heartbeatTtlMs
+          : null
+      return {
+        cellId: text(row, 'cell_id'),
+        cellUrl: text(row, 'cell_url'),
+        region: optionalRelayRegion(row, 'region') ?? RELAY_DEFAULT_REGION,
+        heartbeatExpiresAt,
+        requiredForComplete:
+          heartbeatExpiresAt !== null &&
+          heartbeatExpiresAt > now &&
+          integer(row, 'capacity_requests') > 0 &&
+          optionalInteger(row, 'roll_isolated_at') === undefined
+      }
+    })
   }
 
   async regionCatalog(): Promise<RelayRegionCatalogEntry[]> {
