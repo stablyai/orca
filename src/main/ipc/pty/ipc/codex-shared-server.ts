@@ -1,3 +1,4 @@
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { getPtyIpc } from '../../pty-host-bindings'
 import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
 import {
@@ -34,7 +35,7 @@ async function findLocalPaneRootPid(deps: Deps, id: unknown): Promise<number | n
   // Why local only: SSH and WSL panes run Codex on another host, which must answer for itself.
   if (
     typeof id !== 'string' ||
-    id.startsWith('remote:') ||
+    isRemoteRuntimePtyId(id) ||
     parseAppSshPtyId(id) ||
     (ptyOwnership.get(id) ?? null) !== null
   ) {
