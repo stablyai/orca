@@ -121,3 +121,33 @@ test('rejects a mismatching topology state output', () => {
     cellIds: 'production-gce-c27', imageDigest: digest
   }), /does not match/)
 })
+
+test('appends a US cell at the Asia shape with the default pool, never the Asia one', () => {
+  const usCell = {
+    ...topologyCell(32, 'us-central1-a'), region: 'us-central1', database_pool_max: 10
+  }
+  const current = [{
+    id: 'production-gce-c26', url: 'https://c26.relay.onorca.dev', capacityRequests: 4_000,
+    initiallyEnabled: false, connectionHardCap: 1_000, connectionUnobservedBound: 60
+  }]
+  const result = prepareRelayAsiaDirectorCells({
+    currentCells: current, topology: { 'production-gce-c32': usCell },
+    cellIds: 'production-gce-c32', imageDigest: digest
+  })
+  assert.deepEqual(result.at(-1), {
+    id: 'production-gce-c32', url: 'https://c32.relay.onorca.dev', capacityRequests: 6_000,
+    region: 'us-central1', initiallyEnabled: false, connectionHardCap: 3_000,
+    connectionUnobservedBound: 60
+  })
+  for (const drift of [{ database_pool_max: 16 }, { region: 'europe-west1' }]) {
+    assert.throws(() => prepareRelayAsiaDirectorCells({
+      currentCells: current, topology: { 'production-gce-c32': { ...usCell, ...drift } },
+      cellIds: 'production-gce-c32', imageDigest: digest
+    }), /reviewed Asia shape/, JSON.stringify(drift))
+  }
+  // Staging has no US cell at this shape.
+  assert.throws(() => prepareRelayAsiaDirectorCells({
+    currentCells: [], topology: { 'staging-gce-c4': { ...usCell, database_pool_max: 10 } },
+    cellIds: 'staging-gce-c4', imageDigest: digest
+  }), /reviewed Asia shape/)
+})

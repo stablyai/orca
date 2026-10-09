@@ -6,7 +6,8 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import {
   AgentSessionPreSpawnError,
   type StructuredAgentSessionAdapter
@@ -19,6 +20,10 @@ import {
   hostTestAttachParams,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 const EXIT_REASON = 'claude stream-json exited (code 1): claude: not signed in'
@@ -35,7 +40,7 @@ beforeEach(async () => {
     process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
     link: {
       linkId: `link-${fence}`,
-      handle: { provider: 'codex', threadId: THREAD },
+      handle: codexProviderHandle(THREAD),
       // A resume continues the chain the first start created.
       origin: store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',
       mintedAtFence: fence,
@@ -43,8 +48,10 @@ beforeEach(async () => {
     },
     acquisitionGeneration: `generation-${fence}`
   }))
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
+    logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
       acquire,
@@ -54,7 +61,7 @@ beforeEach(async () => {
       answerPrompt: vi.fn(async () => undefined),
       setOption: vi.fn(async () => undefined)
     },
-    journalRoot: root,
+    journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW
@@ -82,8 +89,11 @@ describe('a create that fails after its child wrote through the unbound sink', (
 
       const failed = host.attach(CALLER, hostTestAttachParams(null))
       await (cause instanceof AgentSessionPreSpawnError
-        ? expect(failed).rejects.toThrow(EXIT_REASON)
-        : expect(failed).resolves.toMatchObject({ ok: false, refusal: { message: EXIT_REASON } }))
+        ? expect(failed).rejects.toThrow("Codex couldn't restart. Send your message to try again.")
+        : expect(failed).resolves.toMatchObject({
+            ok: false,
+            refusal: { message: "Codex couldn't restart. Send your message to try again." }
+          }))
 
       await expect(host.attach(CALLER, hostTestAttachParams(null))).resolves.toMatchObject({
         ok: true
@@ -118,7 +128,7 @@ describe('a create that fails after its child wrote through the unbound sink', (
     // The session stays indexed across this failure: it is a resume, not a create.
     const failed = host.attach(CALLER, hostTestAttachParams(releasedFence))
     await (cause instanceof AgentSessionPreSpawnError
-      ? expect(failed).rejects.toThrow(EXIT_REASON)
+      ? expect(failed).rejects.toThrow("Codex couldn't restart. Send your message to try again.")
       : expect(failed).resolves.toMatchObject({ ok: false }))
 
     const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0

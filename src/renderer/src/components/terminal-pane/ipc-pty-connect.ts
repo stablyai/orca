@@ -1,5 +1,5 @@
 import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { readIpcErrorDetail } from '@/lib/ipc-error'
 import { ensurePtyDispatcher } from './pty-dispatcher'
 import {
   clearConsumedPreHandlerPtyExit,
@@ -14,6 +14,7 @@ import { waitAtTerminalPtyPreSpawnE2EBarrier } from './terminal-pty-pre-spawn-e2
 import type { IpcPtySessionHandlers } from './ipc-pty-session-handlers'
 import { isSshSessionGoneError } from './pty-connection/pty-connect-limits'
 import { spawnIpcPty } from './ipc-pty-spawn-request'
+import { agentLaunchPaneSpawnHold } from '@/lib/agent-launch-pane-spawn-hold'
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
 
 const SSH_PTY_CONNECTION_MISMATCH_MARKER = 'belongs to SSH connection'
@@ -39,7 +40,7 @@ export async function connectIpcPty(
   context: IpcPtyConnectContext
 ): Promise<void | string | PtyConnectResult> {
   const { transportOptions, handlers } = context
-  const { onPtySpawn } = transportOptions
+  const { onPtySpawn, retainDisposedSpawn } = transportOptions
   context.setCallbacks(options.callbacks)
   ensurePtyDispatcher()
 
@@ -81,6 +82,14 @@ export async function connectIpcPty(
         return
       }
     }
+    // A launch pane this window made spawns only once the host has taken it.
+    const launchPaneHold = agentLaunchPaneSpawnHold(transportOptions.tabId, transportOptions.leafId)
+    if (launchPaneHold) {
+      await launchPaneHold
+      if (context.isDestroyed()) {
+        return
+      }
+    }
     if (options.shouldContinue && !options.shouldContinue()) {
       return
     }
@@ -89,36 +98,37 @@ export async function connectIpcPty(
     // recorded before we asked for a PTY, so it belongs to that earlier owner, not to us.
     const priorIncarnationFence = currentPreHandlerPtySequence()
     const spawnResult = await spawnIpcPty(transportOptions, options, admittedSessionId)
-    const retireFreshSpawn = async (): Promise<void> => {
+    const retireFreshSpawn = async (path: 'disposed' | 'refused'): Promise<void> => {
       if (context.handleExplicitlyClosedConnect?.(spawnResult.id)) {
         return
       }
       // A newer generation may already own a recycled id; an id-only kill would retire its PTY.
-      if (
-        !spawnResult.isReattach &&
-        !spawnResult.coldRestore &&
-        !context.ownsPtyId(spawnResult.id)
-      ) {
+      if (spawnResult.isReattach || spawnResult.coldRestore || context.ownsPtyId(spawnResult.id)) {
+        return
+      }
+      // Only disposed transports can have a successor; live refusal must still retire the PTY (#11003).
+      const retained = path === 'disposed' && retainDisposedSpawn?.() === true
+      if (!retained) {
         await window.api.pty.kill(spawnResult.id)
       }
     }
 
     if (context.isDestroyed()) {
-      await retireFreshSpawn()
+      await retireFreshSpawn('disposed')
       return
     }
     if (options.admitPtyId && !options.admitPtyId(spawnResult.id)) {
-      await retireFreshSpawn()
+      await retireFreshSpawn('refused')
       return context.isDestroyed() ? undefined : spawnResult
     }
     if (context.isDestroyed()) {
-      await retireFreshSpawn()
+      await retireFreshSpawn('disposed')
       return
     }
     if (spawnResult.isReattach && !admittedSessionId) {
       context.getCallbacks().onReattachDetermined?.()
       if (context.isDestroyed()) {
-        await retireFreshSpawn()
+        await retireFreshSpawn('disposed')
         return
       }
     }
@@ -180,10 +190,9 @@ function handleConnectError(
   context: IpcPtyConnectContext
 ): PtyConnectResult | undefined {
   const { connectionId } = context.transportOptions
-  const message = extractIpcErrorMessage(
-    error,
-    error instanceof Error ? error.message : String(error)
-  )
+  // Unclamped: host diagnoses put the remedy on later lines, and the pane toast renders them all.
+  const message =
+    readIpcErrorDetail(error) ?? (error instanceof Error ? error.message : String(error))
   if (connectionId && options.sessionId && isSshSessionGoneError(message)) {
     return { id: options.sessionId, sessionExpired: true }
   }

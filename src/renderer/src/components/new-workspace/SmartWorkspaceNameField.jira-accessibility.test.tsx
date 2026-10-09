@@ -4,9 +4,8 @@ import React, { act } from 'react'
 import { cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JiraIssue } from '../../../../shared/jira-types'
-import SmartWorkspaceNameField, {
-  type SmartWorkspaceNameSelection
-} from './SmartWorkspaceNameField'
+import SmartWorkspaceNameField from './SmartWorkspaceNameField'
+import type { SmartWorkspaceNameSelection } from './smart-workspace-name-field-model'
 
 const jiraMock = vi.hoisted(() => ({
   retry: vi.fn(),
@@ -420,6 +419,33 @@ describe('SmartWorkspaceNameField Jira accessibility', () => {
         name: /ORCA-123.*Disambiguate Jira search.*Company Jira.*ada@example.com/
       })
     ).not.toBeNull()
+  })
+
+  it('searches issue text when a key-shaped query matches no issue key', async () => {
+    Object.assign(jiraMock.state, { intent: false, loading: false })
+    Object.assign(jiraConnectionMock.status, { connected: true, selectedSiteId: 'site-a' })
+    jiraSearchMock.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      {
+        id: 'jira-2',
+        key: 'ORCA-7',
+        title: 'Decode utf-8 names',
+        url: 'https://company.atlassian.net/browse/ORCA-7',
+        project: { id: 'project-1', key: 'ORCA', name: 'Orca' },
+        issueType: { id: 'type-1', name: 'Task' },
+        status: { id: 'status-1', name: 'Open', categoryKey: 'new', categoryName: 'To Do' },
+        labels: [],
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z'
+      }
+    ])
+    renderField({ jiraSourceContext: true, value: 'utf-8' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Jira' }))
+
+    expect(await screen.findByRole('button', { name: /ORCA-7.*Decode utf-8 names/ })).not.toBeNull()
+    expect(jiraSearchMock).toHaveBeenCalledTimes(2)
+    expect(jiraSearchMock).toHaveBeenNthCalledWith(1, 'key = "UTF-8"', 12, expect.anything())
+    expect(jiraSearchMock).toHaveBeenNthCalledWith(2, 'text ~ "utf 8*"', 12, expect.anything())
   })
 
   it('labels duplicate-account choices with site and account', () => {

@@ -13,8 +13,8 @@ against a real `opencode serve` instance and reading the server's `/api/event` S
 v2.0.12 bundle (still exactly five on `v2.0.15`, in `tool/plugin/question.ts`,
 `tool/plugin/websearch.ts` and `mcp/index.ts`):
 
-| `metadata.kind`      | Form title                                    | `sessionID` | Blocks the pane owner    |
-| -------------------- | --------------------------------------------- | ----------- | ------------------------ |
+| `metadata.kind`      | Form title                                    | `sessionID` | Blocks the pane owner     |
+| -------------------- | --------------------------------------------- | ----------- | ------------------------- |
 | `question`           | `Questions`                                   | the session | yes — the `question` tool |
 | `websearch.provider` | `Web Search` / `Choose a web search provider` | the session | yes — the turn is stalled |
 | `mcp-elicitation`    | `<server> is requesting input`                | `"global"`  | no — see below            |

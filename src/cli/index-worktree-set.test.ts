@@ -391,4 +391,71 @@ describe('orca cli worktree awareness', () => {
       noParent: false
     })
   })
+
+  it.each([
+    ['id:repo::/tmp/repo/child', '--unread', true],
+    ['id:repo::/tmp/repo/child', '--read', false],
+    ['id:folder-repo::/tmp/notes', '--unread', true],
+    ['id:folder-repo::/tmp/notes', '--read', false]
+  ])('passes %s %s through worktree.set as isUnread', async (selector, flag, isUnread) => {
+    queueFixtures(
+      callMock,
+      okFixture('req_set_unread', {
+        worktree: { ...buildWorktree('/tmp/repo/child', 'feature/child'), isUnread }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['worktree', 'set', '--worktree', selector, flag, '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledExactlyOnceWith('worktree.set', {
+      worktree: selector,
+      displayName: undefined,
+      linkedIssue: undefined,
+      comment: undefined,
+      workspaceStatus: undefined,
+      isUnread,
+      parentWorktree: undefined,
+      noParent: false
+    })
+  })
+
+  it('leaves isUnread unchanged when neither --unread nor --read is passed', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_set_comment', { worktree: buildWorktree('/tmp/repo/child', 'feature/child') })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'set', '--worktree', 'id:repo::/tmp/repo/child', '--comment', 'hi', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock.mock.calls[0]?.[1]).toHaveProperty('isUnread', undefined)
+    expect(JSON.stringify(callMock.mock.calls[0]?.[1])).not.toContain('isUnread')
+  })
+
+  it.each([
+    [['--unread', '--read'], 'Choose either --unread or --read'],
+    [['--read', '--unread'], 'Choose either --unread or --read'],
+    [['--read', 'yes'], '--read takes no value'],
+    [['--read=false'], '--read takes no value'],
+    [['--read='], '--read takes no value'],
+    [['--unread=false'], '--unread takes no value'],
+    [['--unread='], '--unread takes no value']
+  ])('rejects %j on worktree.set before resolving selectors', async (flags, message) => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    // `active` resolves through worktree.list, so any RPC here means validation ran too late.
+    await main(['worktree', 'set', '--worktree', 'active', ...flags, '--json'], '/tmp/repo')
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(message)
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
 })

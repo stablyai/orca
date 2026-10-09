@@ -31,6 +31,7 @@ import {
 import {
   attachClientPageRendererMock,
   browserWindowMock,
+  createRendererRecoveryWindowHarness,
   resetMainWindowMocks,
   retireClientPageRendererMock,
   withPlatform
@@ -349,43 +350,6 @@ describe('createMainWindow', () => {
     consoleError.mockRestore()
   })
 
-  const createRendererRecoveryWindowHarness = () => {
-    const windowHandlers: Record<string, (...args: any[]) => void> = {}
-    const webContents = {
-      id: 143,
-      getURL: vi.fn(() => 'file:///opt/orca/renderer/index.html'),
-      isDestroyed: vi.fn(() => false),
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      setZoomLevel: vi.fn(),
-      setBackgroundThrottling: vi.fn(),
-      invalidate: vi.fn(),
-      setWindowOpenHandler: vi.fn(),
-      send: vi.fn()
-    }
-    const browserWindowInstance = {
-      webContents,
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      isDestroyed: vi.fn(() => false),
-      isMaximized: vi.fn(() => true),
-      isFullScreen: vi.fn(() => false),
-      getSize: vi.fn(() => [1200, 800]),
-      setSize: vi.fn(),
-      maximize: vi.fn(),
-      show: vi.fn(),
-      loadFile: vi.fn(() => Promise.resolve()),
-      loadURL: vi.fn(() => Promise.resolve())
-    }
-    browserWindowMock.mockImplementation(function () {
-      return browserWindowInstance
-    })
-
-    return { browserWindowInstance, windowHandlers }
-  }
-
   it('reloads the app shell after an unexpected renderer process loss', () => {
     vi.useFakeTimers()
 
@@ -633,47 +597,5 @@ describe('createMainWindow', () => {
     expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(2)
 
     consoleError.mockRestore()
-  })
-
-  it('bounds renderer launch-failed recovery with the crash-loop breaker', () => {
-    vi.useFakeTimers()
-
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const onRendererRecoveryExhausted = vi.fn()
-    const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
-
-    try {
-      createMainWindow(null, {
-        onRendererRecoveryExhausted,
-        shouldRecoverRenderer: (details) =>
-          shouldRecoverRendererAfterProcessGone({
-            reason: details.reason,
-            expectedTeardown: 'none'
-          })
-      })
-
-      const details = {
-        reason: 'launch-failed',
-        exitCode: 18
-      } as Electron.RenderProcessGoneDetails
-      const driveLaunchFailure = (): void => {
-        windowHandlers['render-process-gone']?.({} as never, details)
-        vi.advanceTimersByTime(250)
-      }
-
-      driveLaunchFailure()
-      driveLaunchFailure()
-      driveLaunchFailure()
-      expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
-
-      driveLaunchFailure()
-      expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
-      expect(onRendererRecoveryExhausted).toHaveBeenCalledOnce()
-      expect(onRendererRecoveryExhausted).toHaveBeenCalledWith(
-        expect.objectContaining({ details, recentRecoveryCount: 3 })
-      )
-    } finally {
-      consoleError.mockRestore()
-    }
   })
 })

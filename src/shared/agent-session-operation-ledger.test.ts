@@ -6,7 +6,10 @@ import {
 import {
   agentSessionOperationExpiry,
   agentSessionOperationKey,
+  claimAgentSessionOperation,
   evaluateAgentSessionOperation,
+  pendingAgentSessionOperationRow,
+  settleAgentSessionOperation,
   isAgentSessionOperationRow,
   pruneAgentSessionOperationRows,
   type AgentSessionOperationRow
@@ -25,8 +28,6 @@ function evaluate(
     operationId: string
     fingerprint: string
     now: number
-    perClientLimit: number
-    globalLimit: number
   }> = {}
 ) {
   return evaluateAgentSessionOperation({
@@ -64,7 +65,8 @@ describe('operation admission', () => {
     admit(rows)
     expect(evaluate(rows, { fingerprint: 'fp-2' })).toEqual({
       decision: 'refused',
-      code: 'agent_session_operation_conflict'
+      code: 'agent_session_operation_conflict',
+      details: { reason: 'operationIdReused' }
     })
   })
 
@@ -78,14 +80,19 @@ describe('operation admission', () => {
     const rows = new Map<string, AgentSessionOperationRow>()
     expect(evaluate(rows, { operationId: 'not-an-operation-id' })).toEqual({
       decision: 'refused',
-      code: 'agent_session_operation_invalid'
+      code: 'agent_session_operation_invalid',
+      details: { reason: 'operationIdInvalid' }
     })
     // Why: a future-dated id would look new again after its own tombstone is collected.
     expect(
       evaluate(rows, {
         operationId: operationId(NOW + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS + 1)
       })
-    ).toEqual({ decision: 'refused', code: 'agent_session_operation_invalid' })
+    ).toEqual({
+      decision: 'refused',
+      code: 'agent_session_operation_invalid',
+      details: { reason: 'operationIdInvalid' }
+    })
     expect(
       evaluate(rows, { operationId: operationId(NOW + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS) })
         .decision
@@ -97,7 +104,8 @@ describe('operation admission', () => {
     const stale = operationId(NOW - AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS - 1)
     expect(evaluate(rows, { operationId: stale })).toEqual({
       decision: 'refused',
-      code: 'agent_session_operation_expired'
+      code: 'agent_session_operation_expired',
+      details: { reason: 'operationExpired' }
     })
     expect(
       evaluate(rows, { operationId: operationId(NOW - AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS) })
@@ -105,19 +113,75 @@ describe('operation admission', () => {
     ).toBe('admit')
   })
 
-  it('refuses new ids at the per-client and global caps rather than evicting tombstones', () => {
+  it('admits a fresh id however many unexpired rows other callers hold', () => {
+    // Why: a count cap filled by background agent traffic used to refuse the user's own send.
     const rows = new Map<string, AgentSessionOperationRow>()
-    admit(rows, { operationId: operationId(NOW, 'b'.repeat(32)) })
-    expect(evaluate(rows, { perClientLimit: 1 })).toEqual({
-      decision: 'refused',
-      code: 'agent_session_operation_capacity'
+    for (let index = 0; index < 5_000; index += 1) {
+      admit(rows, {
+        callerKey: `agent-${index % 10}`,
+        operationId: operationId(NOW - index, index.toString(16).padStart(32, '0'))
+      })
+    }
+    for (let index = 0; index < 600; index += 1) {
+      admit(rows, {
+        callerKey: 'desktop',
+        operationId: operationId(NOW - index, `d${index.toString(16).padStart(31, '0')}`)
+      })
+    }
+    const fresh = evaluate(rows, {
+      callerKey: 'desktop',
+      operationId: operationId(NOW, 'e'.repeat(32))
     })
-    // A different caller is still refused once the global cap is reached.
-    expect(evaluate(rows, { callerKey: 'client-2', globalLimit: 1 })).toEqual({
-      decision: 'refused',
-      code: 'agent_session_operation_capacity'
+    expect(fresh.decision).toBe('admit')
+    // Retries of earlier ids still replay rather than running again.
+    expect(
+      evaluate(rows, {
+        callerKey: 'agent-0',
+        operationId: operationId(NOW, '0'.repeat(32))
+      }).decision
+    ).toBe('replay')
+  })
+})
+
+describe('the pane a launch laid out', () => {
+  const pane = { worktreeId: 'wt-1', paneKey: 'tab-1:leaf-1' }
+
+  it('is recorded only by the claim that wins, and outlives the settle', () => {
+    const id = operationId(NOW)
+    const key = agentSessionOperationKey('caller', id)
+    const pending = new Map([
+      [
+        key,
+        pendingAgentSessionOperationRow({
+          callerKey: 'caller',
+          operationId: id,
+          fingerprint: 'fp',
+          now: NOW
+        })
+      ]
+    ])
+
+    const won = claimAgentSessionOperation(pending, {
+      callerKey: 'caller',
+      operationId: id,
+      ownedPane: pane
     })
-    expect(evaluate(rows, { callerKey: 'client-2', perClientLimit: 1 }).decision).toBe('admit')
+    expect(won.rows.get(key)?.ownedPane).toEqual(pane)
+    const lost = claimAgentSessionOperation(won.rows, {
+      callerKey: 'caller',
+      operationId: id,
+      ownedPane: { worktreeId: 'wt-1', paneKey: 'tab-2:leaf-2' }
+    })
+    expect(lost.claim.claim).toBe('lost')
+    expect(lost.rows.get(key)?.ownedPane).toEqual(pane)
+
+    const settled = settleAgentSessionOperation(won.rows, {
+      callerKey: 'caller',
+      operationId: id,
+      outcome: { status: 'failed', code: 'boom' }
+    })
+    expect(settled.get(key)?.ownedPane).toEqual(pane)
+    expect(isAgentSessionOperationRow(settled.get(key))).toBe(true)
   })
 })
 

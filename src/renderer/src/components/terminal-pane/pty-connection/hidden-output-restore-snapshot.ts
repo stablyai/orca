@@ -6,7 +6,8 @@ import {
   POST_REPLAY_LIVE_SNAPSHOT_RESET,
   POST_REPLAY_DEAD_TUI_RESET,
   POST_REPLAY_REATTACH_RESET,
-  RESET_AFTER_BYTE_GAP
+  RESET_AFTER_BYTE_GAP,
+  buildKittyKeyboardRestore
 } from '../../../../../shared/terminal-mode-reset-profiles'
 import {
   discardTerminalOutput,
@@ -30,9 +31,18 @@ import { recordTerminalFreezeBreadcrumb } from '../terminal-freeze-breadcrumbs'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession): void {
+  // Why the kitty restore: an abandoned restore discards queued chunks the
+  // mirror already scanned, so xterm re-adopts the mirror's flags.
+  session.writeAbandonedRestoreGap = function (): void {
+    session.writePtyOutputToXterm(
+      `${RESET_AFTER_BYTE_GAP}${buildKittyKeyboardRestore(session.kittyKeyboardModes.snapshotFlags)}`,
+      true
+    )
+  }
+
   session.writeRestoreUnavailableWarning = function (): void {
     // The reset must parse before both the warning and any foreground drain.
-    session.writePtyOutputToXterm(RESET_AFTER_BYTE_GAP, true)
+    session.writeAbandonedRestoreGap()
     if (!shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)) {
       return
     }
@@ -51,6 +61,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
     pendingDeliveryStartSeq?: number
     alternateScreen?: boolean
     scrollbackAnsi?: string
+    carriesNormalBuffer?: boolean
     pendingEscapeTailAnsi?: string
     kittyKeyboardFlags?: number
     terminalOwner?: 'shell'
@@ -156,7 +167,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
               : hasLiveAgent
                 ? POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET
                 : POST_REPLAY_LIVE_SNAPSHOT_RESET
-          session.writeReplayData(postReplayReset)
+          session.writeReplayEpilogue(postReplayReset)
           if (snapshot.pendingEscapeTailAnsi) {
             // Why last: snapshot taken mid-escape; re-arm as the FINAL replay write (any later ESC aborts it) so the live tail completes it, not render literally (Bug E / #7329).
             session.writeReplayData(snapshot.pendingEscapeTailAnsi)

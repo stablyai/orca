@@ -131,8 +131,14 @@ export class DaemonServer {
       },
       onLastAuthenticatedClientDisconnected: () =>
         this.lifecycle.onLastAuthenticatedClientDisconnected(),
-      onControlRequest: (socket, clientId, request) =>
-        void this.handleRequest(socket, clientId, request),
+      onControlRequest: (socket, clientId, request) => {
+        // Why: a rejection here would be unhandled, and the daemon treats that as fatal.
+        this.handleRequest(socket, clientId, request).catch((error: unknown) => {
+          this.log.log('client-request-failed', {
+            error: error instanceof Error ? error.message : String(error)
+          })
+        })
+      },
       onControlReplaced: (clientId) => {
         this.preparations.cancelForClient(clientId)
         this.historySeedTransfers.clearOwner(clientId)
@@ -233,7 +239,7 @@ export class DaemonServer {
   }
 
   private isIdle(): boolean {
-    if (this.admission.inFlight > 0 || this.host.listSessions().length > 0) {
+    if (this.admission.inFlight > 0 || this.host.hasLiveSessions()) {
       return false
     }
     if (this.endpoint.lost) {

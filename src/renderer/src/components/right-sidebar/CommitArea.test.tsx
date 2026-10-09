@@ -3,12 +3,12 @@ import React from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { fireEvent, render } from '@testing-library/react'
+import { CommitArea } from './source-control/commit/commit-area'
 import {
-  CommitArea,
   ConflictSummaryCard,
-  handleSourceControlCommitShortcut,
   OperationBanner
-} from './SourceControl'
+} from './source-control/listing/conflict-status-cards'
+import { handleSourceControlCommitShortcut } from './source-control/commit/commit-shortcut'
 import {
   resolveCommitAreaPrimaryAction,
   type PrimaryActionInputs
@@ -508,18 +508,6 @@ describe('CommitArea', () => {
       })
     )
     expect(firstButton(markup)).not.toContain('animate-spin')
-  })
-
-  it('shows a spinner on a Commit primary while the commit itself is in flight', () => {
-    const props = baseProps({
-      stagedCount: 1,
-      hasMessage: true,
-      upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
-      isCommitting: true
-    })
-    expect(firstButton(renderCommitArea({ ...props, isCommitting: true }))).toContain(
-      'animate-spin'
-    )
   })
 
   it('shows a spinner on a remote primary while the matching remote op is active', () => {

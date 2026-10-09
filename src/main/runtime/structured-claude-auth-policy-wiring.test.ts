@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -10,28 +9,11 @@ import {
 } from './structured-agent-session-runtime'
 
 /**
- * The structured host's Claude auth policy has exactly one production wiring, and it
- * lives in `orca-runtime-get-worktree-ps.ts` — a `@ts-nocheck` file, so neither the
- * compiler nor a type test can see the field disappear. Deleting that wiring used to
- * leave ~1000 tests green while every `ANTHROPIC_*` variable in the shell reached the
- * child, because `stripAuthEnv` silently fell back to `false`.
- *
- * Two independent guards replace that silence, and this file pins both.
+ * The structured host's Claude auth policy has exactly one production wiring. Deleting it
+ * used to leave ~1000 tests green while every `ANTHROPIC_*` variable in the shell reached
+ * the child, because `stripAuthEnv` silently fell back to `false`.
  */
 describe('structured Claude auth policy wiring', () => {
-  // The behavioural version of this assertion — importing the runtime class and
-  // capturing the installed deps — costs 35s of module transform for the whole
-  // OrcaRuntime chain (measured), so the wiring itself is pinned by source and the
-  // policy's meaning by claude-structured-auth-policy.test.ts.
-  it('passes a settings-derived Claude auth policy to the host installer', () => {
-    const source = readFileSync(join(__dirname, 'orca-runtime-get-worktree-ps.ts'), 'utf8')
-
-    expect(source).toContain('claudeStructuredAuthPolicyForSettings')
-    expect(source).toMatch(
-      /resolveClaudeAuthPolicy:\s*\(\)\s*=>\s*\n?\s*claudeStructuredAuthPolicyForSettings\(/
-    )
-  })
-
   describe('installing without one', () => {
     let stateDirectory: string | null = null
 

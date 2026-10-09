@@ -1,6 +1,7 @@
 import { forkProcess, type ForkSpec } from '../../shared/child-process/fork-process'
 import { spawnProcess, type SpawnedProcess } from '../../shared/child-process/run-process'
 import { getAppEnvironment } from '../../shared/app-environment'
+import { removeChromiumDisabledSessionBus } from '../pty/chromium-session-bus-env'
 import { buildDurableDaemonScopeCommand } from './daemon-cgroup-scope'
 import { daemonLogArgs } from './daemon-launch-paths'
 
@@ -14,6 +15,8 @@ export type DaemonChildSpawnOptions = {
   pidPath: string
   launchNonce: string
   macosLoginSessionWatch: boolean
+  /** Defaults to 10 s; a cold first exec on Windows can need longer. */
+  startupTimeoutMs?: number
 }
 
 function buildDaemonScriptArgs(options: DaemonChildSpawnOptions): string[] {
@@ -58,12 +61,14 @@ export function spawnDaemonChildProcess(
   const { forkEntryPath, relocatedExecPath, userDataPath, launchNonce } = options
   const scriptArgs = buildDaemonScriptArgs(options)
   // Why: run as plain Node so Electron's GPU/display init can't interfere with node-pty's posix_spawn of the spawn-helper.
-  const daemonEnv = {
+  const daemonEnv: NodeJS.ProcessEnv = {
     ...process.env,
     ELECTRON_RUN_AS_NODE: '1',
     // Why: the detached plain-Node daemon has no AppEnvironment, but shell rcfiles must live outside swept tmp.
     ORCA_USER_DATA_PATH: userDataPath
   }
+  // Why: this env becomes the daemon's, and so every PTY's (#21119).
+  removeChromiumDisabledSessionBus(daemonEnv)
   // Why cwd: detached daemons outlive dev worktrees; userData keeps process.cwd() valid after a repo/worktree is deleted.
   // Why detached/stdio: detached+unref outlives Electron; stdout 'ignore' (else blocks exit), stderr 'pipe' captures startup crashes lost in v1.4.129-rc.1.
   const childOptions: Pick<ForkSpec, 'cwd' | 'detached' | 'stdio'> = {

@@ -131,7 +131,9 @@ function giteaPullRequestScanKey(repo: GiteaRepoRef): string {
 /** Invalidate the shared /pulls scan after Orca itself creates a PR so the
  *  next worktree-card refresh sees it instead of a cached miss. */
 export function invalidateGiteaPullRequestScanForRepo(repo: GiteaRepoRef): void {
-  invalidateGiteaPullRequestScan(giteaPullRequestScanKey(repo))
+  const repoKey = giteaPullRequestScanKey(repo)
+  invalidateGiteaPullRequestScan(repoKey)
+  invalidateGiteaPullRequestScan(`${repoKey}::strict`)
 }
 
 async function getCommitStatus(

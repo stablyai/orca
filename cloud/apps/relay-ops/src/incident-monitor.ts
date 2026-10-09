@@ -121,7 +121,12 @@ export const INCIDENT_MONITOR_THRESHOLDS = {
   // real fault lands in the hundreds per window, an order of magnitude clear of
   // this bar.
   directorErrors: 15,
-  authErrors: 0,
+  // Why: 2, raised 2026-10-07 from 0. Auth answers ~58k requests per five minutes
+  // (24 h to 2026-10-07: min 44k) and logged two 5xx in that day, so a single 500 on
+  // the desktop sign-in callback froze the c13 and c28 waves with auth healthy. A real
+  // auth fault fails hundreds per window; the ratio bar keeps a near-idle auth strict.
+  authErrors: 2,
+  authErrorRatio: 0.001,
   // Why: 800 exceeded the 600 hard cap, so this could never trigger on a capped cell. 500 is
   // the ordinary admission limit a cell actually stops at (600 cap - 100 control-rebind reserve).
   cellConnections: 500,
@@ -193,6 +198,17 @@ export type IncidentFailure = {
   signal?: string
   observed?: number
   threshold?: number
+}
+
+// Keep the source/code prefix other tooling matches on, then name the signal and
+// its numbers so a frozen wave is attributable without re-reading the sample.
+export function describeIncidentFailure(failure: IncidentFailure): string {
+  const detail = [
+    failure.signal,
+    failure.observed === undefined ? null : `observed=${failure.observed}`,
+    failure.threshold === undefined ? null : `threshold=${failure.threshold}`
+  ].filter((part): part is string => part !== null && part !== undefined)
+  return [`${failure.source}/${failure.code}`, ...detail].join(' ')
 }
 
 export type IncidentEvaluation = {
@@ -426,6 +442,27 @@ function checkRule(
   }
 }
 
+// Why: a few errors are noise only against real traffic; with almost no requests they are the outage.
+function checkAuthErrorRatio(
+  failures: IncidentFailure[],
+  signals: Record<string, IncidentSignal>
+): void {
+  const errors = signals['auth.errors']?.value ?? 0
+  if (errors === 0) return
+  const requests = signals['auth.requests']
+  if (!requests) return addMissingSignal(failures, 'cloud-monitoring', 'auth.requests')
+  const ratio = requests.value > 0 ? errors / requests.value : Number.POSITIVE_INFINITY
+  if (ratio > INCIDENT_MONITOR_THRESHOLDS.authErrorRatio) {
+    failures.push({
+      code: 'threshold_max',
+      source: 'cloud-monitoring',
+      signal: 'auth.error_ratio',
+      observed: ratio,
+      threshold: INCIDENT_MONITOR_THRESHOLDS.authErrorRatio
+    })
+  }
+}
+
 function checkCell(
   failures: IncidentFailure[],
   sample: IncidentSample,
@@ -625,6 +662,8 @@ export function evaluateIncidentSample(
     const source = sample.sources[rule.source]
     if (source) checkRule(failures, rule.source, source.signals, rule)
   }
+  const monitoring = sample.sources['cloud-monitoring']
+  if (monitoring) checkAuthErrorRatio(failures, monitoring.signals)
   for (const cell of sample.cells) {
     checkCell(
       failures,

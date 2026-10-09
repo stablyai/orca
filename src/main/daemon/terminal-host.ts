@@ -1,33 +1,25 @@
 import type { Session } from './session'
-import {
-  SessionNotFoundError,
-  type SessionInfo,
-  type TakePendingOutputResult,
-  type TerminalSnapshot
-} from './types'
+import { SessionNotFoundError } from './types'
+import type { SessionInfo, TakePendingOutputResult, TerminalSnapshot } from './types'
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import type { TerminalHostOptions } from './terminal-host-options'
 import { disposeTerminalHostSessions } from './terminal-host-disposal'
 import { getAliveTerminalHostSession } from './terminal-host-session-access'
 import { TerminalSessionTeardown } from './terminal-session-teardown'
 import { ClaimedAgentPtyOwnerRegistry } from '../../shared/claimed-agent-pty-owner'
-import {
-  createOrAttachClaimedAgentSession,
-  type InternalCreateOrAttachOptions
-} from './terminal-host-agent-session-claim'
+import { createOrAttachClaimedAgentSession } from './terminal-host-agent-session-claim'
+import type { InternalCreateOrAttachOptions } from './terminal-host-agent-session-claim'
 import { TerminalHostAgentSessionGenerations } from './terminal-host-agent-session-generations'
 import { resolveTerminalHostSessionCwd } from './terminal-host-session-cwd'
 import { TerminalHostTombstones } from './terminal-host-tombstones'
 import { listLiveTerminalHostSessions } from './terminal-host-session-listing'
 import { createOrAttachTerminalSession } from './terminal-host-session-create'
 import { TerminalAttachCanceledError } from './daemon-errors'
-import { rejectOnAbort } from './terminal-attach-cancellation'
+import { waitForTerminalAttachOperation } from './terminal-attach-cancellation'
 import { randomUUID } from 'node:crypto'
 import { pruneRetiredPtyIncarnations } from '../../shared/retired-pty-incarnations'
-import {
-  inspectTerminalHostProcess,
-  type TerminalHostProcessInspection
-} from './terminal-host-process-inspection'
+import { inspectTerminalHostProcess } from './terminal-host-process-inspection'
+import type { TerminalHostProcessInspection } from './terminal-host-process-inspection'
 import {
   confirmTerminalHostForegroundProcess,
   confirmTerminalHostShellForeground,
@@ -84,7 +76,7 @@ export class TerminalHost {
       // Why: the create ahead of us can be stuck on an unreachable share for
       // minutes. Waiting unconditionally is what let one dead path strand every
       // later create and attach for the session, so a canceled caller leaves.
-      await Promise.race([inFlight, rejectOnAbort(opts.cancelSignal, opts.sessionId)])
+      await waitForTerminalAttachOperation(inFlight, opts.cancelSignal, opts.sessionId)
       this.assertCreateOrAttachAllowed(opts)
     }
     this.assertCreateOrAttachAllowed(opts)
@@ -277,6 +269,10 @@ export class TerminalHost {
     getAliveTerminalHostSession(this.sessions, sessionId).clearScrollback()
   }
 
+  resetInputModes(sessionId: string): void {
+    getAliveTerminalHostSession(this.sessions, sessionId).resetInputModes()
+  }
+
   // Why: null-not-throw — checkpoint is best-effort against a session that may have just exited.
   getSnapshot(sessionId: string, opts: { scrollbackRows?: number } = {}): TerminalSnapshot | null {
     return getTerminalHostSnapshot(this.sessions.get(sessionId), opts)
@@ -314,6 +310,15 @@ export class TerminalHost {
 
   listSessions(): SessionInfo[] {
     return listLiveTerminalHostSessions(this.sessions, this.agentSessionOwners)
+  }
+
+  hasLiveSessions(): boolean {
+    let hasLive = false
+    // Read every Session, even after a live one, to preserve the inventory's error order.
+    for (const session of this.sessions.values()) {
+      hasLive = session.isAlive || hasLive
+    }
+    return hasLive
   }
 
   dispose(): Promise<void> {

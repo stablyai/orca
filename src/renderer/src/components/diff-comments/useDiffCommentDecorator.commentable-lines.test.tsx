@@ -4,6 +4,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DecoratedDiffComment } from './decorated-diff-comment'
 import type * as ReactDomClientModule from 'react-dom/client'
 import type * as DiffCommentZoneCardModule from './diff-comment-zone-card'
+import type { NotesSendMenu } from '../editor/NotesSendMenu'
+
+const notesMenuFixture = vi.hoisted(() => ({
+  NotesSendMenu: vi.fn<typeof NotesSendMenu>(() => {
+    throw new Error('Commentable-line lifecycle must not render the agent notes menu')
+  })
+}))
+
+// Remote review-note lifecycle does not exercise saved-note delivery.
+vi.mock('../editor/NotesSendMenu', () => ({ NotesSendMenu: notesMenuFixture.NotesSendMenu }))
 
 const storeFixture = vi.hoisted(() => ({
   activeGroupIdByWorktree: {},
@@ -121,7 +131,11 @@ beforeEach(() => {
 
 afterEach(() => {
   document.body.replaceChildren()
-  vi.clearAllMocks()
+  try {
+    expect(notesMenuFixture.NotesSendMenu).not.toHaveBeenCalled()
+  } finally {
+    vi.clearAllMocks()
+  }
 })
 
 function countingCommentableLines(length: number): {

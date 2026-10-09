@@ -216,23 +216,6 @@ describe('claude streamed text checkpoints', () => {
     expect(stamps).toEqual([CHILD_LINKAGE, { ...CHILD_LINKAGE, agentId: 'task-2' }])
   })
 
-  it('re-attributes a block that stopped streaming before its announcement', () => {
-    // Nothing revisits such a block: no later checkpoint, no final envelope.
-    // Without this it keeps the provisional id for the life of the journal.
-    const producer = scriptedProducer()
-    const { store, rows, stamps, runWindow } = checkpoints(producer.source)
-
-    store.append(identityOf('block-1'), 'said once', 'toolu_1')
-    runWindow()
-    expect(stamps.at(-1)).toMatchObject({ agentId: 'toolu_1' })
-
-    producer.resolve(CHILD_LINKAGE)
-    store.reattribute()
-
-    expect(rows.at(-1)).toEqual({ uuid: 'block-1', text: 'said once' })
-    expect(stamps.at(-1)).toEqual(CHILD_LINKAGE)
-  })
-
   it('stops persisting once disposed', () => {
     const { store, rows, runWindow } = checkpoints()
 

@@ -137,19 +137,6 @@ async function runPinnedTranscriptPasses<T>(
   }
 }
 
-export async function proveClaudeTranscriptBranch(
-  input: BranchProofInput & { transcriptPath: string }
-): Promise<ClaudeTranscriptBranchProof> {
-  return runPinnedTranscriptPasses(input.transcriptPath, undefined, async (readLines) => {
-    const builder = createBranchProof(input)
-    let index = 0
-    for await (const record of readLines()) {
-      builder.add(record.line, index++, record.terminated)
-    }
-    return builder.finish()
-  })
-}
-
 /**
  * Prove the branch from the file's last transcript row back to the anchor, then
  * replay the anchor..tail records off the SAME pinned bytes. Two bounded passes

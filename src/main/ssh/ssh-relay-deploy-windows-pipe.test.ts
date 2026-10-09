@@ -1,6 +1,6 @@
 // Windows named-pipe endpoint deploys, split out of ssh-relay-deploy.test.ts: that file sits at
 // the max-lines cap, and these four share only the deploy harness with the rest of it.
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RelayRipgrepInstallModule from './ssh-relay-ripgrep-install'
 
 vi.mock('electron', () => ({
@@ -64,6 +64,9 @@ vi.mock('../ripgrep/bundled-ripgrep-path', () => ({
 // Why: the fire-and-forget ripgrep install would drain the queued exec mocks.
 // Why: the post-launch ripgrep cache GC is fire-and-forget and would drain the queued exec mocks.
 vi.mock('./ssh-relay-ripgrep-cache-gc', () => ({ gcRemoteRipgrepCache: vi.fn() }))
+vi.mock('./ssh-relay-opencode-runtime', () => ({
+  ensureRemoteOpenCodeRuntime: vi.fn().mockResolvedValue('ready')
+}))
 vi.mock('./ssh-relay-ripgrep-install', async (importOriginal) => ({
   ...(await importOriginal<typeof RelayRipgrepInstallModule>()),
   ensureRemoteBundledRipgrep: vi.fn().mockResolvedValue('present'),
@@ -143,8 +146,11 @@ function makeMockConnection(): SshConnection {
 }
 
 describe('deployAndLaunchRelay on Windows remotes', () => {
+  afterEach(() => vi.unstubAllEnvs())
   beforeEach(() => {
     vi.clearAllMocks()
+    // The host-npm path is opt-in; these cases cover it.
+    vi.stubEnv('ORCA_SSH_REMOTE_RUNTIME', 'legacy')
     vi.mocked(execCommand).mockReset().mockResolvedValue('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
     vi.mocked(waitForSentinel).mockReset().mockResolvedValue({
       write: vi.fn(),
@@ -310,6 +316,7 @@ describe('deployAndLaunchRelay on Windows remotes', () => {
       .mockResolvedValueOnce('')
       .mockResolvedValueOnce('READY')
       .mockResolvedValueOnce('') // persist active pipe A
+      .mockResolvedValueOnce('') // deferred stale-stage cleanup A
       .mockRejectedValueOnce(new Error('uname not found')) // tagged POSIX platform probe B
       .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Windows X64')
       .mockResolvedValueOnce('C:\\Users\\me user')
@@ -321,6 +328,7 @@ describe('deployAndLaunchRelay on Windows remotes', () => {
       .mockResolvedValueOnce('') // persist active pipe B
 
     await deployAndLaunchRelay(connA, undefined, 300, 'target-a')
+    await new Promise<void>((resolve) => setImmediate(resolve))
     await deployAndLaunchRelay(connB, undefined, 300, 'target-b')
 
     const markerPaths = mockExecCommand.mock.calls

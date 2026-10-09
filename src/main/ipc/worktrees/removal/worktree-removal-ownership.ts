@@ -8,6 +8,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../../worktree-removal-repo-owner'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
+import { agentHookServer } from '../../../agent-hooks/server'
 import { localhostWorktreeLabelProxy } from '../../../localhost-worktree-label-proxy'
 import { deleteWorktreeHistoryDir } from '../../../terminal-history-deletion'
 import { pruneWorktreePRRefreshAliases } from '../../../github/pr-refresh-coordinator'
@@ -88,6 +89,8 @@ export function removeWorktreeMetadataAndTransientState(
   } else {
     store.removeWorktreeMeta(worktreeId)
   }
+  // Why outside the same-id gate: retirement is per host and per pane, so a surviving owner keeps its own.
+  agentHookServer.dropStatusEntriesForRemovedWorktree(worktreeId, hostId ?? persistedHostId)
   if (!preservesSameIdOwner) {
     advertisedUrlWatcher.forgetWorktree(worktreeId)
     // Why: drop this worktree's localhost label routes so they don't accumulate in the proxy's route maps all session.

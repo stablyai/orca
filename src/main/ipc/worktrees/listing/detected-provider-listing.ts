@@ -1,3 +1,12 @@
+import {
+  projectPendingWorktreeRemovals,
+  snapshotPendingWorktreeRemovals,
+  withUnregisteredRemovalCheckouts
+} from '../../../worktree-removal-listing'
+import {
+  getRepoExecutionHostId,
+  getSshTargetIdForExecutionHost
+} from '../../../../shared/execution-host'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { Repo } from '../../../../shared/repo-types'
 import { getSshGitProvider } from '../../../providers/ssh-git-dispatch'
@@ -61,9 +70,11 @@ export async function listDetectedWorktreesForCapturedRepo(
   store: Store,
   repo: Repo,
   isCurrent: () => boolean,
-  capturedProvider = repo.connectionId ? getSshGitProvider(repo.connectionId) : undefined,
+  capturedProvider?: SshGitProvider,
   providerAbort?: { signal: AbortSignal; status: () => 'canceled' | 'timed-out' }
 ): Promise<DetectedWorktreeListResult | { providerAbortStatus: 'canceled' | 'timed-out' } | null> {
+  const connectionId = getSshTargetIdForExecutionHost(getRepoExecutionHostId(repo))
+  const provider = capturedProvider ?? (connectionId ? getSshGitProvider(connectionId) : undefined)
   const abortedResult = () =>
     providerAbort?.signal.aborted
       ? ({ providerAbortStatus: providerAbort.status() } as const)
@@ -105,7 +116,7 @@ export async function listDetectedWorktreesForCapturedRepo(
         )
       }
     }
-    if (repo.connectionId && !capturedProvider) {
+    if (connectionId && !provider) {
       const aborted = abortedResult()
       if (aborted) {
         return aborted
@@ -122,10 +133,11 @@ export async function listDetectedWorktreesForCapturedRepo(
         catalogVersion: getLocalWorktreeCatalogVersion(repo.id)
       }
     }
+    const pendingAtScan = snapshotPendingWorktreeRemovals()
     const scan = await scanUntilNotOvertaken(
       repo.id,
-      repo.connectionId && capturedProvider
-        ? () => listSshWorktreesWithMutationWitness(capturedProvider, repo, providerAbort?.signal)
+      connectionId && provider
+        ? () => listSshWorktreesWithMutationWitness(provider, repo, providerAbort?.signal)
         : () => listDetectedGitWorktrees(store, repo),
       () => isCurrent() && !providerAbort?.signal.aborted
     )
@@ -138,6 +150,9 @@ export async function listDetectedWorktreesForCapturedRepo(
       return abortedResult() ?? null
     }
     const { gitWorktrees, fresh: freshScan, sideEffectToken, metadataPrune, hygieneDue } = scan
+    const localRows = connectionId
+      ? gitWorktrees
+      : await withUnregisteredRemovalCheckouts(repo.id, gitWorktrees)
     const aborted = abortedResult()
     if (aborted) {
       return aborted
@@ -178,7 +193,15 @@ export async function listDetectedWorktreesForCapturedRepo(
       authoritative: true,
       source: 'git',
       catalogVersion: localWorktreeCatalogVersionAt(scan.generation),
-      worktrees: buildDetectedGitWorktrees(store, repo, gitWorktrees, allMeta)
+      worktrees: connectionId
+        ? buildDetectedGitWorktrees(store, repo, gitWorktrees, allMeta)
+        : // Why always marked: the desktop renderer ships with this main process.
+          projectPendingWorktreeRemovals(
+            buildDetectedGitWorktrees(store, repo, localRows, allMeta),
+            (worktree) => worktree.id,
+            true,
+            pendingAtScan
+          )
     }
   } catch (err) {
     const aborted = abortedResult()
@@ -197,7 +220,7 @@ export async function listDetectedWorktreesForCapturedRepo(
     // Why: retention alone leaves inert rows with no explanation; the cause rides with the listing.
     const unavailableReason = describeWorktreeScanFailure(err)
     const failureKind = classifyWorktreeScanFailure(unavailableReason)
-    if (repo.connectionId) {
+    if (connectionId) {
       const worktrees = listDisconnectedSshWorktrees(store, repo, sshWorktreeMetaIndex())
       return {
         repoId: repo.id,

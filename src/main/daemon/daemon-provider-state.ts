@@ -1,22 +1,25 @@
-import { readFileSync } from 'node:fs'
 import { setLocalPtyProvider } from '../ipc/pty'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
 import { getDaemonRuntimeDir as getRuntimeDir } from './daemon-launch-paths'
-import { parseDaemonPidFile, type ParsedDaemonPid } from './daemon-pid-file-parse'
-import type { DaemonProvider } from './daemon-provider-routing'
-import { DaemonPtyRouter } from './daemon-pty-router'
+import { readDaemonPidRecord as readDaemonPidRecordAt } from './daemon-endpoint-incarnation'
+import type { ParsedDaemonPid } from './daemon-pid-file-parse'
+import { listEveryDaemonGeneration, type DaemonProvider } from './daemon-provider-routing'
 import { getDaemonPidPath, getDaemonSocketPath, getDaemonTokenPath } from './daemon-spawner'
 import type { DaemonSpawner } from './daemon-spawner'
 import {
   getMacDaemonTccAttributionHealth,
   type MacDaemonTccAttributionHealth
 } from './daemon-tcc-attribution'
-import { PROTOCOL_VERSION } from './types'
+import { PROTOCOL_VERSION, type DaemonSessionInfo, type SessionInfo } from './types'
+import type { DaemonIdleRetirementResult } from './daemon-pty-runtime-state'
 
 let spawner: DaemonSpawner | null = null
 let adapter: DaemonProvider | null = null
 
-export function installDaemonProvider(newSpawner: DaemonSpawner, newAdapter: DaemonProvider): void {
+export function installDaemonProvider(
+  newSpawner: DaemonSpawner | null,
+  newAdapter: DaemonProvider
+): void {
   spawner = newSpawner
   replaceDaemonProvider(newAdapter)
 }
@@ -25,7 +28,6 @@ export function getDaemonSpawner(): DaemonSpawner | null {
   return spawner
 }
 
-// Why: a narrow getter (not a raw export) keeps the "swap on restart" invariant in one place (replaceDaemonProvider).
 /**
  * Whether the installed provider is a daemon that will own FRESH terminals too.
  *
@@ -69,17 +71,10 @@ export function getDaemonEndpointFacts(): DaemonEndpointFacts | null {
  * reported orcad's version for both would hide exactly that.
  */
 export function readDaemonPidRecord(): ParsedDaemonPid | null {
-  const facts = getDaemonEndpointFacts()
-  if (!facts) {
-    return null
-  }
-  try {
-    return parseDaemonPidFile(readFileSync(facts.pidPath, 'utf8'))
-  } catch {
-    return null
-  }
+  return readDaemonPidRecordAt(getDaemonEndpointFacts()?.pidPath ?? null)
 }
 
+// Why: a narrow getter (not a raw export) keeps the "swap on restart" invariant in one place (replaceDaemonProvider).
 export function getDaemonProvider(): DaemonProvider | null {
   return adapter
 }
@@ -92,26 +87,6 @@ export async function getCurrentDaemonMacTccAttributionHealth(): Promise<MacDaem
     runtimeDir,
     getDaemonSocketPath(runtimeDir),
     getDaemonTokenPath(runtimeDir)
-  )
-}
-
-/** Returns null unless every daemon generation supplied an authoritative inventory. */
-export async function listLiveDaemonPtyIds(): Promise<string[] | null> {
-  if (!adapter) {
-    return null
-  }
-  const adapters =
-    adapter instanceof DaemonPtyRouter || adapter instanceof DegradedDaemonPtyProvider
-      ? adapter.getAllAdapters()
-      : [adapter]
-  const inventories = await Promise.allSettled(
-    adapters.map((daemonAdapter) => daemonAdapter.listProcesses())
-  )
-  if (inventories.some((inventory) => inventory.status === 'rejected')) {
-    return null
-  }
-  return inventories.flatMap((inventory) =>
-    inventory.status === 'fulfilled' ? inventory.value.map((process) => process.id) : []
   )
 }
 
@@ -134,4 +109,54 @@ export async function shutdownDaemon(): Promise<void> {
   adapter = null
   await spawner?.shutdown()
   spawner = null
+}
+
+/** Returns null unless every daemon generation supplied an authoritative inventory. */
+export async function listLiveDaemonPtyIds(): Promise<string[] | null> {
+  return adapter
+    ? listEveryDaemonGeneration(adapter, async (a) => (await a.listProcesses()).map((p) => p.id))
+    : null
+}
+
+/** Returns null unless every daemon generation supplied an authoritative session inventory. */
+export async function listLiveDaemonSessions(): Promise<SessionInfo[] | null> {
+  const sessions = await listLiveDaemonSessionsWithProtocol()
+  return sessions?.map(({ protocolVersion: _protocolVersion, ...session }) => session) ?? null
+}
+
+/** Like listLiveDaemonSessions, with the protocol of the daemon generation owning each session. */
+export async function listLiveDaemonSessionsWithProtocol(): Promise<DaemonSessionInfo[] | null> {
+  return adapter
+    ? listEveryDaemonGeneration(adapter, async (a) =>
+        (await a.listSessions()).map((session) => ({
+          ...session,
+          protocolVersion: a.protocolVersion
+        }))
+      )
+    : null
+}
+
+/** Terminals the degraded provider ran in-process; none outside degraded mode. */
+export async function countInProcessFallbackTerminals(): Promise<number> {
+  return adapter instanceof DegradedDaemonPtyProvider
+    ? (await adapter.fallback.listProcesses()).length
+    : 0
+}
+
+/** Atomically fence new daemon terminals and retire only an idle, single-generation daemon. */
+export async function requestIdleDaemonRetirement(): Promise<DaemonIdleRetirementResult> {
+  if (!adapter) {
+    return { state: 'unverifiable' }
+  }
+  if (adapter instanceof DegradedDaemonPtyProvider) {
+    return { state: 'unverifiable' }
+  }
+  return adapter.requestIdleRetirement()
+}
+
+/** Reopens terminal admission when an idle-retirement attempt did not retire the daemon. */
+export function releaseDaemonRetirementFence(): void {
+  if (adapter && !(adapter instanceof DegradedDaemonPtyProvider)) {
+    adapter.releaseIdleRetirementFence()
+  }
 }

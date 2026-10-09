@@ -10,9 +10,12 @@ export function hostListMutationsSettled(): Promise<void> {
   return hostListMutation
 }
 
-export function enqueueHostListMutation(operation: () => Promise<void>): Promise<void> {
+export function enqueueHostListMutation<T>(operation: () => Promise<T>): Promise<T> {
   const mutation = hostListMutation.then(operation)
-  hostListMutation = mutation.catch(() => {})
+  hostListMutation = mutation.then(
+    () => {},
+    () => {}
+  )
   return mutation
 }
 

@@ -1,30 +1,33 @@
+import { agentStartedTelemetry } from '../agent-launch/agent-started-telemetry'
 import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
-import { tuiAgentToAgentKind } from '../../shared/agent-kind'
 import type { Repo } from '../../shared/repo-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
-import { launchSourceSchema } from '../../shared/telemetry-property-schemas'
 import { repoIsRemote } from '../../shared/agent-launch-remote'
 import { getRepoSshConnectionId } from '../../shared/execution-host'
-import { isTuiAgent, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import { isTuiAgent } from '../../shared/tui-agent-config'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../shared/tui-agent-selection'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
+import { planStartupWithPromptCandidate } from '../../shared/startup-line-prompt-carry'
 import {
-  markAntigravityWorkspaceTrusted,
-  markCodexProjectTrusted,
-  markCopilotFolderTrusted,
-  markCursorWorkspaceTrusted
-} from '../agent-trust-presets'
+  launchHostProvesAgentInFront,
+  nameLocalTypedLineShell
+} from './agent-launch-typed-line-shell'
 import {
   detectInstalledAgentsWithShellPathHydration,
   detectRemoteAgents
 } from '../preflight/agent-detection'
-import { markRemoteAgentWorkspaceTrusted } from '../remote-agent-trust-presets'
 import type { RuntimeStore } from './runtime-store-contract'
+import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 
 export type WorktreeStartupDraftPaste = { agent: TuiAgent; content: string }
 export type WorktreeStartupFollowup = { expectedProcess: string; prompt: string }
+
+/** A fresh agent the host builds always carries its `agent_started` record; dropping it fails to compile. */
+type AttributedWorktreeStartupLaunch = WorktreeStartupLaunch & {
+  telemetry: NonNullable<WorktreeStartupLaunch['telemetry']>
+}
 
 type StartupEnvironment = {
   repo: Repo
@@ -32,15 +35,46 @@ type StartupEnvironment = {
   getLaunchPlatform: () => NodeJS.Platform
   /** Replaces the configured arguments for this launch; `null` means none. */
   agentArgs?: string | null
+  /** An automation's saved extras, merged over the launch's arguments. */
+  extraAgentArgs?: string
   /** Caller-supplied telemetry attribution, validated leniently at the host boundary. */
   launchSource?: string
+}
+
+/** The agent a linked draft starts: the requested one, else the default, else one detected on the
+ *  host that runs it. `null` means the draft starts no agent. */
+export async function resolveWorktreeStartupDraftAgent(
+  environment: Pick<StartupEnvironment, 'repo' | 'settings'> & { requestedAgent?: TuiAgent }
+): Promise<TuiAgent | null> {
+  const { repo, settings } = environment
+  const preferredAgent = environment.requestedAgent ?? settings.defaultTuiAgent
+  // Why: `blank` is an explicit shell-only preference, so linked drafts must not auto-pick an agent.
+  if (preferredAgent === 'blank') {
+    return null
+  }
+  if (isTuiAgent(preferredAgent) && isTuiAgentEnabled(preferredAgent, settings.disabledTuiAgents)) {
+    return preferredAgent
+  }
+  let detected: string[] = []
+  // Why: detection has to run on the machine that will run the agent, and SSH ownership has two
+  // spellings — the raw field probes this client for an `executionHostId: 'ssh:*'`-only repo.
+  const sshConnectionId = getRepoSshConnectionId(repo)
+  try {
+    // Why: startup-draft fallback can run from sparse runtime launch envs too.
+    detected = sshConnectionId
+      ? await detectRemoteAgents({ connectionId: sshConnectionId })
+      : await detectInstalledAgentsWithShellPathHydration()
+  } catch {
+    detected = []
+  }
+  return pickTuiAgent(null, detected.filter(isTuiAgent), settings.disabledTuiAgents)
 }
 
 export async function buildWorktreeStartupForDraft(
   environment: StartupEnvironment & { draft: string; requestedAgent?: TuiAgent }
 ): Promise<{
   agent: TuiAgent
-  startup: WorktreeStartupLaunch
+  startup: AttributedWorktreeStartupLaunch
   draftPaste?: WorktreeStartupDraftPaste
 } | null> {
   const content = environment.draft.trim()
@@ -48,30 +82,7 @@ export async function buildWorktreeStartupForDraft(
     return null
   }
   const { repo, settings } = environment
-  const preferredAgent = environment.requestedAgent ?? settings.defaultTuiAgent
-  // Why: `blank` is an explicit shell-only preference, so linked drafts must not auto-pick an agent.
-  if (preferredAgent === 'blank') {
-    return null
-  }
-  let agent =
-    isTuiAgent(preferredAgent) && isTuiAgentEnabled(preferredAgent, settings.disabledTuiAgents)
-      ? preferredAgent
-      : null
-  if (!agent) {
-    let detected: string[] = []
-    // Why: detection has to run on the machine that will run the agent, and SSH ownership has two
-    // spellings — the raw field probes this client for an `executionHostId: 'ssh:*'`-only repo.
-    const sshConnectionId = getRepoSshConnectionId(repo)
-    try {
-      // Why: startup-draft fallback can run from sparse runtime launch envs too.
-      detected = sshConnectionId
-        ? await detectRemoteAgents({ connectionId: sshConnectionId })
-        : await detectInstalledAgentsWithShellPathHydration()
-    } catch {
-      detected = []
-    }
-    agent = pickTuiAgent(null, detected.filter(isTuiAgent), settings.disabledTuiAgents)
-  }
+  const agent = await resolveWorktreeStartupDraftAgent(environment)
   if (!agent) {
     return null
   }
@@ -83,6 +94,7 @@ export async function buildWorktreeStartupForDraft(
     isRemote: repoIsRemote(repo),
     ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {})
   })
+  const telemetry = agentStartedTelemetry(agent, environment.launchSource)
   const draftPlan = buildAgentDraftLaunchPlan({ ...launchArgs, draft: content })
   if (draftPlan) {
     return {
@@ -93,7 +105,8 @@ export async function buildWorktreeStartupForDraft(
         ...(draftPlan.startupCommandDelivery
           ? { startupCommandDelivery: draftPlan.startupCommandDelivery }
           : {}),
-        ...(draftPlan.env ? { env: draftPlan.env } : {})
+        ...(draftPlan.env ? { env: draftPlan.env } : {}),
+        telemetry
       }
     }
   }
@@ -113,7 +126,8 @@ export async function buildWorktreeStartupForDraft(
       ...(startupPlan.startupCommandDelivery
         ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
         : {}),
-      ...(startupPlan.env ? { env: startupPlan.env } : {})
+      ...(startupPlan.env ? { env: startupPlan.env } : {}),
+      telemetry
     },
     draftPaste: { agent, content }
   }
@@ -127,28 +141,53 @@ export function buildWorktreeStartupForAgent(
     toSessionOptions: (
       preferences?: AgentLaunchPreferences
     ) => Parameters<typeof buildAgentStartupPlan>[0]['sessionOptions'] | undefined
+    /** Set by a caller that delivers an uncarried prompt itself: the prompt then rides only a typed
+     *  line that can carry it, and this reports whether it did. Absent keeps the CLI's fold. */
+    onPromptCarry?: (carried: boolean) => void
   }
-): { agent: TuiAgent; startup: WorktreeStartupLaunch; followup?: WorktreeStartupFollowup } {
+): {
+  agent: TuiAgent
+  startup: AttributedWorktreeStartupLaunch
+  followup?: WorktreeStartupFollowup
+} {
   const { agent, repo, settings } = environment
   if (!isTuiAgentEnabled(agent, settings.disabledTuiAgents)) {
     throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
   }
-  const startupPlan = buildAgentStartupPlan({
-    ...resolveAgentStartupPlanInputs({
-      agent,
-      settings,
-      platform: environment.getLaunchPlatform(),
-      isRemote: repoIsRemote(repo),
-      ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {}),
-      sessionOptions: environment.toSessionOptions(environment.launchPreferences)
-    }),
-    prompt: environment.prompt ?? '',
-    allowEmptyPromptLaunch: true
+  const planInputs = resolveAgentStartupPlanInputs({
+    agent,
+    settings,
+    platform: environment.getLaunchPlatform(),
+    isRemote: repoIsRemote(repo),
+    ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {}),
+    ...(environment.extraAgentArgs ? { extraAgentArgs: environment.extraAgentArgs } : {}),
+    sessionOptions: environment.toSessionOptions(environment.launchPreferences)
   })
+  const prompt = environment.prompt ?? ''
+  let startupPlan: ReturnType<typeof buildAgentStartupPlan>
+  if (environment.onPromptCarry) {
+    const offered = planStartupWithPromptCandidate(planInputs, prompt, {
+      shellName: nameLocalTypedLineShell({
+        isRemote: repoIsRemote(repo),
+        ...(settings.terminalDefaultShell
+          ? { defaultShellSetting: settings.terminalDefaultShell }
+          : {})
+      }),
+      provesAgentInFront: launchHostProvesAgentInFront({
+        isRemote: repoIsRemote(repo),
+        launchPlatform: environment.getLaunchPlatform()
+      })
+    })
+    startupPlan = offered.plan
+    if (startupPlan && prompt.trim()) {
+      environment.onPromptCarry(offered.promptCarried)
+    }
+  } else {
+    startupPlan = buildAgentStartupPlan({ ...planInputs, prompt, allowEmptyPromptLaunch: true })
+  }
   if (!startupPlan) {
     throw new Error(`Could not build launch command for ${agent}.`)
   }
-  const telemetry = agentLaunchTelemetry(agent, environment.launchSource)
   return {
     agent,
     startup: {
@@ -158,7 +197,7 @@ export function buildWorktreeStartupForAgent(
         ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
         : {}),
       ...(startupPlan.env ? { env: startupPlan.env } : {}),
-      ...(telemetry ? { telemetry } : {})
+      telemetry: agentStartedTelemetry(agent, environment.launchSource)
     },
     ...(startupPlan.followupPrompt
       ? {
@@ -171,56 +210,27 @@ export function buildWorktreeStartupForAgent(
   }
 }
 
-function agentLaunchTelemetry(
-  agent: TuiAgent,
-  launchSource: string | undefined
-): WorktreeStartupLaunch['telemetry'] | undefined {
-  const parsed = launchSourceSchema.safeParse(launchSource)
-  return parsed.success
-    ? {
-        agent_kind: tuiAgentToAgentKind(agent),
-        launch_source: parsed.data,
-        request_kind: 'new'
-      }
-    : undefined
-}
-
-export async function markLocalWorktreeTrusted(
-  agent: TuiAgent,
-  workspacePath: string
-): Promise<void> {
-  const preset = TUI_AGENT_CONFIG[agent].preflightTrust
-  if (!preset) {
-    return
-  }
-  try {
-    if (preset === 'cursor') {
-      markCursorWorkspaceTrusted(workspacePath)
-    } else if (preset === 'copilot') {
-      markCopilotFolderTrusted(workspacePath)
-    } else if (preset === 'codex') {
-      // Why: the Codex write queues behind any in-flight hook grant, so the agent must not launch until it lands.
-      await markCodexProjectTrusted(workspacePath)
-    } else if (preset === 'antigravity') {
-      markAntigravityWorkspaceTrusted(workspacePath)
+export function resolveWorktreeCreateAgentStartup(
+  args: RuntimeManagedWorktreeCreateArgs,
+  build: (
+    agent: TuiAgent,
+    prompt: string | undefined,
+    preferences: AgentLaunchPreferences | undefined,
+    inputs: {
+      agentArgs?: string | null
+      extraAgentArgs?: string
+      launchSource?: string
+      onPromptCarry?: (carried: boolean) => void
     }
-  } catch {
-    // Best-effort: the user can still accept the agent trust prompt manually.
+  ) => { agent: TuiAgent; startup: WorktreeStartupLaunch; followup?: WorktreeStartupFollowup }
+) {
+  if (args.startup || !args.startupAgent) {
+    return null
   }
-}
-
-export async function markRemoteWorktreeTrusted(
-  agent: TuiAgent,
-  connectionId: string,
-  workspacePath: string
-): Promise<void> {
-  const preset = TUI_AGENT_CONFIG[agent].preflightTrust
-  if (!preset) {
-    return
-  }
-  try {
-    await markRemoteAgentWorkspaceTrusted({ preset, connectionId, workspacePath })
-  } catch {
-    // Best-effort: the user can still accept the remote agent trust prompt manually.
-  }
+  return build(args.startupAgent, args.startupPrompt, args.startupLaunchPreferences, {
+    ...(args.startupAgentArgs !== undefined ? { agentArgs: args.startupAgentArgs } : {}),
+    ...(args.startupExtraAgentArgs ? { extraAgentArgs: args.startupExtraAgentArgs } : {}),
+    ...(args.startupLaunchSource ? { launchSource: args.startupLaunchSource } : {}),
+    ...(args.onStartupPromptCarry ? { onPromptCarry: args.onStartupPromptCarry } : {})
+  })
 }

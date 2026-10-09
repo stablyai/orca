@@ -29,6 +29,8 @@ export const shellApi = {
 
   pickAttachment: (): Promise<string | null> => ipcRenderer.invoke('shell:pickAttachment'),
 
+  pickAttachments: (): Promise<string[]> => ipcRenderer.invoke('shell:pickAttachments'),
+
   pickImage: (): Promise<string | null> => ipcRenderer.invoke('shell:pickImage'),
 
   pickRepoIconImage: (): Promise<{ dataUrl: string; fileName: string } | null> =>

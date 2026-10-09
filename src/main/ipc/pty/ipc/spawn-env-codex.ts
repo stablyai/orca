@@ -13,7 +13,6 @@ import {
   resolveCodexHomeAfterManagedAuthReadiness,
   shouldSkipCodexHomeEnvForWindowsShell,
   shouldStripInheritedOrcaCodexHome,
-  isCodexStatusHooksEnabled,
   codexHomePathsEqual
 } from '../host-env/codex-home'
 import { promoteAgentTeamsShimPath } from '../host-env/path'
@@ -41,7 +40,7 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
         providerSession: args.resumeProviderSession,
         target: ctx.codexSelectionTarget,
         launchEnv: ctx.baseEnv,
-        workspacePath: ctx.cwd
+        ...(args.replacesPtyId ? { useSelectedAccount: true } : {})
       })
   ctx.codexResumeLaunch = codexResumePreparation
     ? await ctx.deps.resolveCodexResumeLaunch(args.command, codexResumePreparation)
@@ -56,10 +55,10 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
   // Why: declared after the strip so a local-provider spawn cannot capture the
   // pre-strip env — only the daemon branch below re-derives this from baseEnv.
   ctx.env = ctx.baseEnv
+  const launchesCodex = args.launchAgent === 'codex'
   const selectLaunchCodexHome = async (): Promise<string | null> =>
     (await ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.baseEnv, {
-      workspacePath: ctx.cwd,
-      launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
+      launchesCodex
     })) ?? null
   ctx.selectedCodexHomePath =
     !ctx.preAdoptedStablePane && !args.connectionId
@@ -85,17 +84,15 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
         getCompatibleSelectedCodexHomePath(
           ctx.codexSelectionTarget,
           (await ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.baseEnv, {
-            workspacePath: ctx.cwd,
-            launchAgent: 'codex'
+            launchesCodex
           })) ?? null
         ),
       resolveAfterUnavailable: async (unavailableManagedHomePath) =>
         getCompatibleSelectedCodexHomePath(
           ctx.codexSelectionTarget,
           (await ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.baseEnv, {
-            workspacePath: ctx.cwd,
-            launchAgent: 'codex',
-            unavailableManagedHomePath
+            unavailableManagedHomePath,
+            launchesCodex
           })) ?? null
         )
     })
@@ -148,11 +145,11 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
         stripInheritedOrcaCodexHome: ctx.stripInheritedOrcaCodexHome,
         launchCommand: ctx.launchCommand,
         launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
+        shellPath: ctx.effectiveShellOverride,
         isWsl: shouldSkipCodexHomeEnvForWindowsShell(ctx.effectiveShellOverride, ctx.cwd),
         wslDistro: ctx.codexSelectionTarget.runtime === 'wsl' ? ctx.expectedWslDistro : null,
         agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),
         disabledTuiAgents: ptySettings?.disabledTuiAgents,
-        codexStatusHooksEnabled: isCodexStatusHooksEnabled(ptySettings),
         networkProxySettings: ptySettings,
         routeBrowserOpensToClient: ctx.deps.runtime?.shouldRelayTerminalBrowserOpens?.(),
         deferGitConfigGuardToDaemon:

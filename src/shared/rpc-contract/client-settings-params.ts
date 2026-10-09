@@ -41,18 +41,21 @@ export const NativeChatSessionOptionPick = z.union([
     .strict()
 ])
 
+// Any agent Orca launches: picks are keyed by agent id, and every native chat agent remembers them.
+const NativeChatSessionOptionAgent = z.string().refine(isTuiAgent, { message: 'Unknown agent' })
+
 export const NativeChatSessionOptionsMutation = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('apply-picks'),
-      agent: z.enum(['claude', 'codex', 'gemini', 'cursor', 'grok']),
+      agent: NativeChatSessionOptionAgent,
       picks: z.array(NativeChatSessionOptionPick).min(1).max(8)
     })
     .strict(),
   z
     .object({
       type: z.literal('clear-model-if-missing'),
-      agent: z.enum(['claude', 'codex', 'gemini', 'cursor', 'grok']),
+      agent: NativeChatSessionOptionAgent,
       availableModelIds: z.array(z.string().trim().min(1).max(512)).min(1).max(256)
     })
     .strict()
@@ -115,6 +118,7 @@ export const SettingsUpdate = z
     minimaxGroupId: z.string().optional(),
     minimaxUsageModels: z.string().optional(),
     minimaxEndpoint: z.enum(['overseas', 'cn']).optional(),
+    zcodePlanSite: z.enum(['zai', 'bigmodel']).optional(),
     githubProjects: GitHubProjectSettings.optional(),
     prBotAuthorOverrides: z
       .unknown()

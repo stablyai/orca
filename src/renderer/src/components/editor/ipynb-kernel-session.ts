@@ -20,6 +20,7 @@ import {
 } from './ipynb-kernel-store'
 
 const INTERRUPT_STALL_MS = 10_000
+const sessionLifetimes = new Map<string, symbol>()
 
 /** Reports a failure in the first queued cell (a toast when nothing was queued) and drops the queue. */
 function failQueue(filePath: string, message: string, detail = ''): void {
@@ -59,34 +60,49 @@ function isOpen(filePath: string): boolean {
   return filePath in store.getState().sessions
 }
 
+const isCurrentSession = (filePath: string, lifetime: symbol): boolean =>
+  isOpen(filePath) && sessionLifetimes.get(filePath) === lifetime
+
 /** Picks the nearest Python for a notebook that has none: a workspace env, else one on PATH. */
 async function discoverEnvironment(
   filePath: string,
-  rootPath: string | null
+  rootPath: string | null,
+  lifetime: symbol
 ): Promise<PythonEnvironment | undefined> {
-  const found = await window.api.notebook.listPythonEnvironments({ filePath, rootPath })
+  const found = await window.api.notebook.listPythonEnvironments({
+    filePath,
+    rootPath,
+    runWorkspaceInterpreters: true
+  })
   const recommended = found.workspace[0] ?? found.path[0]
-  if (recommended && isOpen(filePath)) {
+  if (recommended && isCurrentSession(filePath, lifetime)) {
     setEnvironment(filePath, recommended)
   }
   return recommended
 }
 
+/** Starts the notebook's kernel; the one place a notebook's Python runs, so it refuses until trusted. */
 async function start(filePath: string, rootPath: string | null = null): Promise<void> {
+  if (!getSession(filePath).trusted) {
+    return
+  }
+  const lifetime = sessionLifetimes.get(filePath) ?? Symbol()
+  sessionLifetimes.set(filePath, lifetime)
   // Why 'starting' before discovery: a second run meanwhile must queue, not start another kernel.
   updateSession(filePath, () => ({ status: 'starting' }))
   let result: KernelStartResult | null
   try {
     const environment =
-      store.getState().environments[filePath] ?? (await discoverEnvironment(filePath, rootPath))
+      store.getState().environments[filePath] ??
+      (await discoverEnvironment(filePath, rootPath, lifetime))
     result =
-      environment && isOpen(filePath)
+      environment && isCurrentSession(filePath, lifetime)
         ? await window.api.notebook.startKernel({ filePath, python: environment.path })
         : null
   } catch (error) {
     result = { status: 'failed', detail: error instanceof Error ? error.message : String(error) }
   }
-  if (!isOpen(filePath)) {
+  if (!isCurrentSession(filePath, lifetime)) {
     return
   }
   if (!result) {
@@ -156,7 +172,7 @@ export function restartKernel(filePath: string): void {
   void start(filePath)
 }
 
-/** Switching interpreters restarts a running kernel; otherwise queued cells wait for the new one. */
+/** Switching interpreters restarts a running kernel; before trust it only records the choice. */
 export function selectEnvironment(filePath: string, environment: PythonEnvironment): void {
   setEnvironment(filePath, environment)
   // A pick replaces an open setup prompt; the new env reopens it if it lacks ipykernel too.
@@ -315,6 +331,7 @@ useAppStore.subscribe((state, previous) => {
   }
   for (const filePath of Object.keys(store.getState().sessions)) {
     if (!state.openFiles.some((file) => file.filePath === filePath)) {
+      sessionLifetimes.delete(filePath)
       void window.api.notebook.shutdownKernel({ filePath })
       store.setState(({ sessions }) => {
         const { [filePath]: _closed, ...rest } = sessions

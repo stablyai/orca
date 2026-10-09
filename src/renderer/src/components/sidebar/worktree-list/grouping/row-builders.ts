@@ -2,8 +2,7 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import { isValidResolvedWorktreeLineageEdge } from '../../../../../../shared/resolved-worktree-lineage'
-import { getProjectedWorktreeLineage } from '../../worktree-lineage-projection'
+import { getSidebarLineageParent } from '../../worktree-lineage-projection'
 import { getWorktreeLineageGroupKey } from './group-keys'
 import type { NoticeHostContext } from './host-labels'
 import type { RenderableFolderWorkspace } from './folder-workspace-lanes'
@@ -149,23 +148,13 @@ export function appendWorktreeRows(
   const childrenByParentIdentity = new Map<string, Worktree[]>()
   const childIdentities = new Set<string>()
   for (const worktree of worktrees) {
-    const projectedLineage = getProjectedWorktreeLineage(worktree, lineageById)
-    const inlineLineage = (worktree as Worktree & { lineage?: WorktreeLineage | null }).lineage
-    const lineage =
-      projectedLineage?.worktreeInstanceId === worktree.instanceId
-        ? projectedLineage
-        : inlineLineage
-    if (!lineage || cyclicLineageIds.has(worktree.id)) {
+    const parent = cyclicLineageIds.has(worktree.id)
+      ? undefined
+      : getSidebarLineageParent(worktree, lineageById, visibleByIdentity)
+    if (!parent) {
       continue
     }
-    const parentIdentity = getWorktreeHostIdentity({
-      id: lineage.parentWorktreeId,
-      hostId: worktree.hostId
-    })
-    const parent = visibleByIdentity.get(parentIdentity)
-    if (!parent || !isValidResolvedWorktreeLineageEdge(worktree, parent, lineage)) {
-      continue
-    }
+    const parentIdentity = getWorktreeHostIdentity(parent)
     const childIdentity = getWorktreeHostIdentity(worktree)
     childIdentities.add(childIdentity)
     const children = childrenByParentIdentity.get(parentIdentity) ?? []

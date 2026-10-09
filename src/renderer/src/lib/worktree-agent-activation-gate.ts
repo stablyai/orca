@@ -12,7 +12,6 @@ import {
 import { getProviderSessionClaimKey } from './sleeping-agent-pane-ownership'
 import {
   adoptLiveWorkspacePtySurfaces,
-  bindLivePtyToExactSurface,
   type LiveSurfaceAdoptionStore
 } from './worktree-agent-live-surface-adoption'
 import type { LiveTerminalSurfaceOwnerIndex } from './worktree-live-terminal-surface-owners'
@@ -129,11 +128,7 @@ function liveSleepingAgentClaims(
       keys.add(getProviderSessionClaimKey(record))
       continue
     }
-    // Packaged hydration can omit renderer bindings while main retains this session's exact TUI.
-    const structuredOwnerPtyId =
-      structuredOwner?.owner === 'tui' ? structuredOwner.terminal?.ptyId : undefined
-    const persistedPtyId =
-      layoutPtyId ?? (tabPtyIds?.length === 1 ? tabPtyIds[0] : undefined) ?? structuredOwnerPtyId
+    const persistedPtyId = layoutPtyId ?? (tabPtyIds?.length === 1 ? tabPtyIds[0] : undefined)
     if (persistedPtyId && livePtyIds.has(persistedPtyId)) {
       claimedPtyIds.add(persistedPtyId)
       keys.add(getProviderSessionClaimKey(record))
@@ -169,16 +164,7 @@ export async function runWorktreeAgentActivationGate(
   const structuredTabs = structuredInventory?.snapshot.tabs.filter(
     (tab) => tab.type === 'agent-session'
   )
-  if (
-    structuredTabs?.some((tab) => {
-      const owner = structuredInventory?.ownerBySessionId.get(tab.sessionId)
-      return (
-        !owner ||
-        (owner.owner === 'tui' &&
-          (!owner.terminal || parsePaneKey(owner.terminal.paneKey)?.tabId !== owner.terminal.tabId))
-      )
-    })
-  ) {
+  if (structuredTabs?.some((tab) => !structuredInventory?.ownerBySessionId.has(tab.sessionId))) {
     return 'blocked'
   }
   if (
@@ -206,27 +192,20 @@ export async function runWorktreeAgentActivationGate(
       sessionBelongsToWorkspace(session.id, worktreeId)
   )
   const liveWorkspacePtyIds = new Set(liveWorkspaceSessions.map((session) => session.id))
-  for (const owner of structuredInventory?.ownerBySessionId.values() ?? []) {
-    if (owner.owner !== 'tui') {
-      continue
-    }
-    if (
-      !owner.terminal ||
-      !liveWorkspacePtyIds.has(owner.terminal.ptyId) ||
-      !bindLivePtyToExactSurface(deps.getState(), worktreeId, owner.terminal)
-    ) {
-      return 'blocked'
-    }
-  }
+  // Why: a session the host is killing was closed by the user (often just before a quit); a
+  // surface for it would bring the closed pane back. It still counts as live work below.
+  const adoptablePtyIds = liveWorkspaceSessions
+    .filter((session) => session.exiting !== true)
+    .map((session) => session.id)
   let liveSurfaceAdopted = false
-  if (liveWorkspaceSessions.length > 0) {
+  if (adoptablePtyIds.length > 0) {
     // Why: an unreadable census adopts nothing and mints nothing, so reporting 'adopted'
     // would suppress the caller's seed and leave the workspace with no surface at all —
     // fail-closed must still leave the user a usable pane (STA-5701).
     const adoption = await adoptLiveWorkspacePtySurfaces(
       deps.getState,
       worktreeId,
-      [...liveWorkspacePtyIds],
+      adoptablePtyIds,
       deps.listSurfaceOwners
     )
     liveSurfaceAdopted = adoption.surfaced

@@ -1,6 +1,6 @@
 import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
+import { createCodexTurnOpenWaits } from './codex-structured-turn-open-wait'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
@@ -11,28 +11,19 @@ import type { CodexSession } from './codex-structured-session-state'
 afterEach(() => vi.useRealTimers())
 
 describe('requested-close durable turn timing', () => {
+  // The exit is observed, so a refused terminal row is the host's to settle, never a reason to
+  // keep the dead child indexed for a retry.
   it.each([true, false])(
-    'keeps the first exit receipt when retry requestedClose=%s',
+    'ends the session with its exit receipt though its terminal row is refused (requestedClose=%s)',
     async (requestedClose) => {
       vi.useFakeTimers()
       vi.setSystemTime(1_000)
-      const terminalBodies: AgentJournalItemBody[] = []
-      let refuseSettlement = true
+      // Backpressure refuses the terminal row the close's end would write.
       const sink: StructuredAgentSessionEventSink = {
         appendItem: () => {},
         appendTombstone: () => {},
         publish: () => {},
-        tryAppendLifecycleBatch: (_id, mutations) => {
-          if (refuseSettlement) {
-            return { accepted: false, reason: 'backpressure' }
-          }
-          for (const mutation of mutations) {
-            if (mutation.kind === 'item') {
-              terminalBodies.push(mutation.body)
-            }
-          }
-          return { accepted: true }
-        }
+        tryAppendLifecycleBatch: () => ({ accepted: false, reason: 'backpressure' })
       }
       const translator = createCodexJournalTranslator({
         sink,
@@ -62,38 +53,25 @@ describe('requested-close durable turn timing', () => {
         },
         backgroundTasks: new CodexBackgroundTaskTracker('thread-1'),
         ended: false,
-        requestedClose: false,
         fence: 7,
         acquisitionGeneration: 'generation-1',
         threadId: 'thread-1',
-        historyPath: null,
         prompts: new CodexPromptRegistry(),
         options: new Map(),
         reportedOptions: {},
-        fastModeTierByModel: new Map(),
         dispatchEchoes: createCodexDispatchEchoes(),
+        turnOpenWaits: createCodexTurnOpenWaits(),
         translator
       }
       const sessions = new Map([['session-1', session]])
       const onEvent = vi.fn()
 
       vi.setSystemTime(2_000)
-      await expect(closeCodexPublishedSession(sessions, 'session-1')).resolves.toBe(false)
-      expect(sessions.get('session-1')).toBe(session)
-      expect(session.ended).toBe(false)
-
-      refuseSettlement = false
-      vi.setSystemTime(60_000)
-      await expect(
-        closeCodexPublishedSession(sessions, 'session-1', onEvent, {
-          expectedAcquisitionGeneration: 'replacement-generation'
-        })
-      ).resolves.toBe(false)
-      expect(onEvent).not.toHaveBeenCalled()
       await expect(
         closeCodexPublishedSession(sessions, 'session-1', onEvent, { requestedClose })
       ).resolves.toBe(true)
       expect(sessions.has('session-1')).toBe(false)
+      expect(session.ended).toBe(true)
       expect(onEvent).toHaveBeenCalledWith(
         expect.objectContaining({
           cause: requestedClose ? 'requested-close' : 'unexpected-exit',
@@ -101,12 +79,6 @@ describe('requested-close durable turn timing', () => {
           observedAt: 2_000
         })
       )
-      expect(terminalBodies.find((body) => body.kind === 'turn')).toMatchObject({
-        kind: 'turn',
-        state: 'interrupted',
-        startedAt: 1_000,
-        completedAt: 2_000
-      })
     }
   )
 })

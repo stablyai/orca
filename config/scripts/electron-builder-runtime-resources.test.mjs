@@ -572,6 +572,23 @@ function packagedResourceDestinations(platform) {
 }
 
 describe('lazily required packages reach Resources/node_modules', () => {
+  it('excludes runtime builtins while retaining ordinary lazy dependencies', async () => {
+    const sourceDir = await mkdtemp(join(tmpdir(), 'orca-lazy-builtins-'))
+    try {
+      await writeFile(
+        join(sourceDir, 'runtime.ts'),
+        [
+          'const requireFromMain = createRequire(import.meta.url)',
+          "requireFromMain('node:fs')",
+          "requireFromMain('zod')"
+        ].join('\n')
+      )
+      expect([...collectLazyRequireSpecifiers(sourceDir).keys()]).toEqual(['zod'])
+    } finally {
+      await removeTree(sourceDir)
+    }
+  })
+
   it('copies every createRequire specifier main uses into the packaged resource plan', () => {
     const specifiers = collectLazyRequireSpecifiers(join(projectRoot, 'src', 'main'))
     expect(specifiers.size).toBeGreaterThan(0)

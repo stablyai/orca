@@ -3,8 +3,8 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { formatDiffComments } from '@/lib/diff-comments-format'
 import { describeClipboardWriteFailure } from '@/lib/clipboard-write-failure'
-import { useAppStore } from '@/store'
-import { selectWorktreeDiffCommentsOrEmpty } from '@/store/worktree-diff-comments-selector'
+import type { DiffCommentsClearOptions } from '@/store/slices/diffComments'
+import { useVisibleWorktreeDiffComments } from '../../../diff-comments/use-visible-worktree-diff-comments'
 import {
   countPendingDiffCommentsClear,
   formatPendingDiffCommentsClearDescription,
@@ -23,13 +23,15 @@ export function useSourceControlDiffCommentNotes({
   clearDiffCommentsForFile
 }: {
   activeWorktreeId: string | null
-  clearDiffComments: (worktreeId: string) => Promise<boolean>
-  clearDiffCommentsForFile: (worktreeId: string, filePath: string) => Promise<boolean>
+  clearDiffComments: (worktreeId: string, options?: DiffCommentsClearOptions) => Promise<boolean>
+  clearDiffCommentsForFile: (
+    worktreeId: string,
+    filePath: string,
+    options?: DiffCommentsClearOptions
+  ) => Promise<boolean>
 }) {
-  // Why: pass activeWorktreeId even when null so the selector returns its stable empty sentinel; an inline [] would break Zustand's Object.is and churn.
-  const diffCommentsForActive = useAppStore((s) =>
-    selectWorktreeDiffCommentsOrEmpty(s, activeWorktreeId)
-  )
+  const { comments: diffCommentsForActive, markdownReviewNotesEnabled } =
+    useVisibleWorktreeDiffComments(activeWorktreeId)
   const diffCommentCount = diffCommentsForActive.length
   // Why: compute per-file comment counts once per render so rows don't each re-filter the full list.
   const diffCommentCountByPath = useMemo(() => {
@@ -109,11 +111,12 @@ export function useSourceControlDiffCommentNotes({
       return
     }
     setIsClearingDiffComments(true)
+    const clearOptions = { keepMarkdownNotes: !markdownReviewNotesEnabled }
     try {
       const ok =
         pending.kind === 'all'
-          ? await clearDiffComments(pending.worktreeId)
-          : await clearDiffCommentsForFile(pending.worktreeId, pending.filePath)
+          ? await clearDiffComments(pending.worktreeId, clearOptions)
+          : await clearDiffCommentsForFile(pending.worktreeId, pending.filePath, clearOptions)
       if (ok) {
         setPendingDiffCommentsClear(null)
       } else {
@@ -132,6 +135,7 @@ export function useSourceControlDiffCommentNotes({
     clearDiffComments,
     clearDiffCommentsForFile,
     isClearingDiffComments,
+    markdownReviewNotesEnabled,
     resolvedPendingDiffCommentsClear,
     pendingDiffCommentsClearCount
   ])

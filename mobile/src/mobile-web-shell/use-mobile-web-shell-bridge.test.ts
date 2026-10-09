@@ -151,6 +151,7 @@ function Harness(props: {
     // Built inline on every render, as a caller writes it: the host is not rebuilt for it.
     route: { pathname: '/h/host-1' },
     safeAreaInsets: { top: 0, right: 0, bottom: 0, left: 0 },
+    keyboardInset: 0,
     pageRoutes: ['/h/[hostId]'],
     pageRouteGrants: [{ pathname: '/h/[hostId]', grants: ['navigate', 'storage'] }],
     routeGrants: [
@@ -338,7 +339,7 @@ describe('the bridge channel', () => {
 
   it("hands the page's first paint to the caller that owns the cover over the view", async () => {
     const mounted = await mount(readyState('session-one'))
-    await mounted.deliver(clientFrame({ type: 'ready', reports: [BRIDGE_PAGE_PAINTED] }))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
     expect(mounted.probe.paints).toBe(0)
     await mounted.deliver(clientFrame({ type: 'notify', name: BRIDGE_PAGE_PAINTED }))
     expect(mounted.probe.paints).toBe(1)
@@ -657,13 +658,13 @@ describe('client changes', () => {
    *
    * A client swapped under a live page is not a new document: the WebView stays mounted, the
    * session id does not move, and the page neither handshakes again nor hears that anything
-   * happened. What it declared and what it is holding therefore belong to the session, the way
+   * happened. What it is holding therefore belongs to the session, the way
    * `sessionEstablished` already does — a rebuilt host that started over would answer every press
    * with "I cannot deliver this" and pop the screen out from under an open sheet.
    */
   it('keeps delivering Back to an open sheet after the host is rebuilt under it', async () => {
     const mounted = await mount(readyState('session-one'))
-    await mounted.deliver(clientFrame({ type: 'ready', accepts: [BRIDGE_BACK_FRAME] }))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
     await mounted.deliver(
       clientFrame({ type: 'notify', name: BRIDGE_BACK_CLAIM_NOTIFY, claimed: true })
     )
@@ -681,47 +682,17 @@ describe('client changes', () => {
     expect(mounted.frames('session-one').slice(before)).toEqual([{ v: 1, type: BRIDGE_BACK_FRAME }])
   })
 
-  /** The other half of the same seed: a page that never said it takes a press is still one the
-   *  rebuilt host will not send to. An empty declaration is a declaration. */
-  it('sends nothing after a rebuild to a page that never declared the frame', async () => {
-    const mounted = await mount(readyState('session-one'))
-    await mounted.deliver(clientFrame({ type: 'ready' }))
-    doubles.client = createFakeRpcClient()
-    await mounted.update(readyState('session-one'))
-    const before = mounted.frames('session-one').length
-    expect(mounted.probe.view?.sendBack()).toBe(false)
-    expect(mounted.frames('session-one')).toHaveLength(before)
-  })
-
-  /** The seed is the session's, not the hook's. A different session id is a different document,
-   *  which has declared nothing and is holding nothing until it says so itself. */
-  it('carries nothing into a host built for a different session', async () => {
-    // Both mounts stand for an established session, so the rebuilt host's own pre-handshake gate
-    // is already open and the declaration is the only thing left that can refuse the press.
-    const mounted = await mount(readyState('session-one'), true)
-    await mounted.deliver(clientFrame({ type: 'ready', accepts: [BRIDGE_BACK_FRAME] }))
-    await mounted.deliver(
-      clientFrame({ type: 'notify', name: BRIDGE_BACK_CLAIM_NOTIFY, claimed: true })
-    )
-    // The control: the same rebuild inside the session does keep delivering.
-    doubles.client = createFakeRpcClient()
-    await mounted.update(readyState('session-one'))
-    expect(mounted.probe.view?.sendBack()).toBe(true)
-    await mounted.update(readyState('session-two'))
-    expect(mounted.probe.view?.sendBack()).toBe(false)
-  })
-
   /** A new document inside the same session still starts over: its own `ready` is what the host
    *  reads, and the seed is not a latch. */
   it('drops the carried claim when the next document says ready', async () => {
     const mounted = await mount(readyState('session-one'))
-    await mounted.deliver(clientFrame({ type: 'ready', accepts: [BRIDGE_BACK_FRAME] }))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
     await mounted.deliver(
       clientFrame({ type: 'notify', name: BRIDGE_BACK_CLAIM_NOTIFY, claimed: true })
     )
     doubles.client = createFakeRpcClient()
     await mounted.update(readyState('session-one'))
-    await mounted.deliver(clientFrame({ type: 'ready', accepts: [BRIDGE_BACK_FRAME] }))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
     expect(mounted.probe.backClaims).toEqual([true, false])
   })
 

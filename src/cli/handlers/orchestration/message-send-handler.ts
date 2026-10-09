@@ -2,6 +2,7 @@ import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
+import { readInjectedAgentSessionId } from '../../../shared/agent-session-caller-env'
 import { requireWorkerDoneSettlement } from '../orchestration-worker-settlement'
 import { getOptionalStructuredMessagePayload } from './message-payload'
 import { callOrchestrationMutation } from './mutation-request'
@@ -10,6 +11,8 @@ import {
   resolveOrchestrationTerminalHandle,
   throwNoActiveSenderTerminal
 } from './terminal-identity'
+
+const WORKER_DONE_UNAVAILABLE_RETRY_MS = 120_000
 
 type LifecycleSendResult =
   | {
@@ -75,7 +78,8 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
     if (
       (type === 'worker_done' || type === 'heartbeat') &&
       !getOptionalStringFlag(flags, 'from') &&
-      !process.env.ORCA_TERMINAL_HANDLE
+      !process.env.ORCA_TERMINAL_HANDLE &&
+      !readInjectedAgentSessionId()
     ) {
       // Why: focus isn't lifecycle authority — an identity-less subprocess must fail closed rather than guess the worker.
       throwNoActiveSenderTerminal()
@@ -94,7 +98,11 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       threadId: getOptionalStringFlag(flags, 'thread-id'),
       payload: getOptionalStructuredMessagePayload(flags),
       // Why: pane key is the remint-stable sender identity the runtime verifies lifecycle ownership against; older runtimes strip it.
-      senderPaneKey: process.env.ORCA_PANE_KEY || undefined,
+      // A session names itself by its id alone.
+      senderPaneKey:
+        from === undefined || readInjectedAgentSessionId()
+          ? undefined
+          : process.env.ORCA_PANE_KEY || undefined,
       waitForLifecycleSettlement: type === 'worker_done' ? true : undefined,
       devMode: isDevCliInvocation()
     }
@@ -104,7 +112,9 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       flags,
       'orchestration.send',
       sendParams,
-      dispatchCapability ? { orchestrationCapability: dispatchCapability } : undefined
+      dispatchCapability ? { orchestrationCapability: dispatchCapability } : undefined,
+      // Why: a worker reports once and ends its turn, so a brief app outage must delay worker_done, not drop it.
+      type === 'worker_done' ? WORKER_DONE_UNAVAILABLE_RETRY_MS : 0
     )
     await requireWorkerDoneSettlement(client, type, sendParams.payload, result.result)
     if ('lifecycle' in result.result && result.result.lifecycle?.action === 'rejected') {

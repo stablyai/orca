@@ -239,11 +239,12 @@ Fix dispatch fallback preview for normalized status prompts`
   })
 
   it('accepts custom non-empty agentType values', () => {
-    const result = parseAgentStatusPayload('{"state":"working","agentType":"cursor"}')
+    const agentType: AgentType = 'some-in-house-agent'
+    const result = parseAgentStatusPayload(JSON.stringify({ state: 'working', agentType }))
     expect(result).toEqual({
       state: 'working',
       prompt: '',
-      agentType: 'cursor'
+      agentType
     })
   })
 
@@ -306,7 +307,6 @@ Fix dispatch fallback preview for normalized status prompts`
       JSON.stringify({ state: 'waiting', interactivePrompt: long })
     )
     expect(result!.interactivePrompt).toHaveLength(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH)
-    expect(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH).toBe(16000)
   })
 
   it('leaves interactivePrompt undefined when absent or non-string', () => {
@@ -732,11 +732,6 @@ describe('WellKnownAgentType', () => {
       'rovo'
     ])
   })
-
-  it('keeps AgentType open to custom agent names', () => {
-    const custom: AgentType = 'some-in-house-agent'
-    expect(custom).toBe('some-in-house-agent')
-  })
 })
 
 describe('the main agent field on a status payload', () => {
@@ -757,6 +752,22 @@ describe('the main agent field on a status payload', () => {
         '{"state":"done","mainAgent":{"state":"done","outcome":"maybe","stateStartedAt":5}}'
       )?.mainAgent
     ).toEqual({ state: 'done', stateStartedAt: 5 })
+  })
+
+  it('admits the host-observed verdicts, and reads an arm it cannot name as no verdict', () => {
+    for (const outcome of ['interruption', 'unconfirmed'] as const) {
+      expect(
+        parseAgentStatusPayload(
+          `{"state":"done","mainAgent":{"state":"done","outcome":"${outcome}","stateStartedAt":5}}`
+        )?.mainAgent
+      ).toEqual({ state: 'done', outcome, stateStartedAt: 5 })
+    }
+    // A newer host's arm drops the verdict, never the row: the row reads today's done.
+    expect(
+      parseAgentStatusPayload(
+        '{"state":"done","prompt":"keep me","mainAgent":{"state":"done","outcome":"from-a-newer-host","stateStartedAt":5}}'
+      )
+    ).toMatchObject({ state: 'done', prompt: 'keep me', mainAgent: { state: 'done' } })
   })
 
   it('drops a malformed main agent but never the row it rides on', () => {

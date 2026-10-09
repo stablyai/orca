@@ -8,9 +8,16 @@ import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { SettingsSwitch } from './SettingsFormControls'
-import type { EditingTarget } from './ssh-target-draft'
+import type { EditingTarget, SshRemoteRuntimeChoice } from './ssh-target-draft'
 import { translate } from '@/i18n/i18n'
 
 // Why: mirror the composer's "Advanced" disclosure (ghost button + rotating chevron) so the
@@ -117,6 +124,41 @@ export function SshHostAdvancedFields({
             <div className="min-w-0 flex-1 space-y-0.5">
               <Label className="text-xs font-medium">
                 {translate(
+                  'auto.components.settings.SshTargetForm.allowRemoteCliControl',
+                  "Allow this host's orca CLI to control Orca"
+                )}
+              </Label>
+              <p className="text-muted-foreground">
+                {translate(
+                  'auto.components.settings.SshTargetForm.allowRemoteCliControlHelp',
+                  'When off, orca commands run on this host reach only its own terminals. Turn on to let them reach other hosts, orchestration, files, and integrations on this computer.'
+                )}
+              </p>
+            </div>
+            <SettingsSwitch
+              checked={form.allowRemoteCliControl}
+              disabled={disabled}
+              onChange={() =>
+                onFormChange((f) => ({
+                  ...f,
+                  allowRemoteCliControl: !f.allowRemoteCliControl
+                }))
+              }
+              ariaLabel={translate(
+                'auto.components.settings.SshTargetForm.allowRemoteCliControl',
+                "Allow this host's orca CLI to control Orca"
+              )}
+            />
+          </div>
+          <SshRemoteRuntimeField
+            value={form.remoteRuntime}
+            disabled={disabled}
+            onChange={(remoteRuntime) => onFormChange((f) => ({ ...f, remoteRuntime }))}
+          />
+          <div className="flex items-start justify-between gap-4 py-1 text-xs">
+            <div className="min-w-0 flex-1 space-y-0.5">
+              <Label className="text-xs font-medium">
+                {translate(
                   'auto.components.settings.SshTargetForm.71fc546097',
                   'Keep terminals alive until reset'
                 )}
@@ -176,5 +218,65 @@ export function SshHostAdvancedFields({
         </div>
       </CollapsibleContent>
     </Collapsible>
+  )
+}
+
+const REMOTE_RUNTIME_CHOICES: readonly SshRemoteRuntimeChoice[] = ['auto', 'pinned-node', 'legacy']
+
+function isRemoteRuntimeChoice(value: string): value is SshRemoteRuntimeChoice {
+  return REMOTE_RUNTIME_CHOICES.some((choice) => choice === value)
+}
+
+// Why three choices over two stored values: Auto stores nothing, so the host follows the
+// default when it moves to Orca-managed Node; Host Node pins today's host-npm relay.
+function SshRemoteRuntimeField({
+  value,
+  disabled,
+  onChange
+}: {
+  value: SshRemoteRuntimeChoice
+  disabled: boolean
+  onChange: (value: SshRemoteRuntimeChoice) => void
+}): React.JSX.Element {
+  const label = translate('auto.components.settings.SshTargetForm.remoteRuntime', 'Runtime')
+  return (
+    <div className="flex items-start justify-between gap-4 py-1 text-xs">
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <Label>{label}</Label>
+        <p className="text-muted-foreground">
+          {translate(
+            'auto.components.settings.SshTargetForm.remoteRuntimeHelp',
+            'Which Node.js runs Orca on this host. Orca-managed Node uploads its own and needs no npm; Host Node uses the Node.js already installed there.'
+          )}
+        </p>
+      </div>
+      <Select
+        value={value}
+        disabled={disabled}
+        onValueChange={(next) => {
+          if (isRemoteRuntimeChoice(next)) {
+            onChange(next)
+          }
+        }}
+      >
+        <SelectTrigger size="sm" className="w-[168px]" aria-label={label}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="auto">
+            {translate('auto.components.settings.SshTargetForm.remoteRuntimeAuto', 'Auto')}
+          </SelectItem>
+          <SelectItem value="pinned-node">
+            {translate(
+              'auto.components.settings.SshTargetForm.remoteRuntimePinnedNode',
+              'Orca-managed Node'
+            )}
+          </SelectItem>
+          <SelectItem value="legacy">
+            {translate('auto.components.settings.SshTargetForm.remoteRuntimeHostNode', 'Host Node')}
+          </SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
   )
 }

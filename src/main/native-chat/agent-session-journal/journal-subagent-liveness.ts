@@ -9,8 +9,9 @@
 // `unverifiable`, never a synthesized exit — see
 // `docs/reference/ssh-execution-boundary.md`.
 //
-// Reconciles JOURNAL ROWS, not roster state: nothing here seeds the producer's
-// in-process group map, so the roster's known limitation is untouched.
+// Reconciles JOURNAL ROWS, not roster state. A producer that continues a roster
+// from the journal reads these rows after this revision, so it inherits the
+// verdict rather than the dead host's `working`.
 
 import {
   agentJournalItemKey,
@@ -51,8 +52,8 @@ export function staleSubagentRosterRevisions(
 ): JournalSubagentLivenessRevision[] {
   const revisions: JournalSubagentLivenessRevision[] = []
   for (const item of items) {
-    const body = item.body
-    if (body.kind !== 'message' || !body.blocks.some(hasStaleLiveWork)) {
+    const body = lostLiveWorkJournalBody(item.body)
+    if (!body) {
       continue
     }
     // A key that will not parse cannot be re-addressed, and appending under a
@@ -61,9 +62,18 @@ export function staleSubagentRosterRevisions(
     if (!identity || agentJournalItemKey(identity) !== item.itemId) {
       continue
     }
-    revisions.push({ identity, body: { ...body, blocks: settleBlocks(body.blocks) } })
+    revisions.push({ identity, body })
   }
   return revisions
+}
+
+/** The row once the host lost the session running its live work: every working child and
+ *  in-flight background task `unverifiable`, plain-text twins restated. Null when none is live. */
+export function lostLiveWorkJournalBody(body: AgentJournalItemBody): AgentJournalItemBody | null {
+  if (body.kind !== 'message' || !body.blocks.some(hasStaleLiveWork)) {
+    return null
+  }
+  return { ...body, blocks: settleBlocks(body.blocks) }
 }
 
 function hasStaleLiveWork(block: NativeChatBlock): boolean {

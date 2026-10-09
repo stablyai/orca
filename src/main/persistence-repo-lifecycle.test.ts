@@ -1,11 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { rmSync, mkdtempSync } from 'node:fs'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
-import type { PersistedState } from '../shared/persisted-state-types'
-import type { ProjectGroup } from '../shared/project-group-types'
-import { getDefaultWorkspaceSession } from '../shared/constants'
 import {
+  closeTestStores,
   testState,
   createStore,
   writeDataFile,
@@ -14,6 +8,15 @@ import {
   makeTerminalTab,
   makeWorktreeLineage
 } from './persistence-test-harness'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { rmSync, mkdtempSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import type { PersistedState } from '../shared/persisted-state-types'
+import type { ProjectGroup } from '../shared/project-group-types'
+import { getDefaultWorkspaceSession } from '../shared/constants'
+import { makeTerminalTab as makeSessionTerminalTab } from './persistence-session-fixtures'
+
 import {
   advanceSshConnectionGeneration,
   assertSshMutationExpectation,
@@ -74,9 +77,14 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
+  it('keeps the persistence harness terminal-tab fixture as the same public function', () => {
+    expect(makeTerminalTab).toBe(makeSessionTerminalTab)
+  })
+
   // ── 5. addRepo and getRepo ──────────────────────────────────────────
 
   it('addRepo stores a repo retrievable by getRepo', async () => {
@@ -99,7 +107,7 @@ describe('Store', () => {
     expect(isLocalWorktreeScanGenerationCurrent(repoId, beforeAdd)).toBe(false)
 
     const beforeRemove = getLocalWorktreeScanGeneration(repoId)
-    store.removeProject(repoId)
+    store.removeProjectForHost(repoId, 'local')
     expect(isLocalWorktreeScanGenerationCurrent(repoId, beforeRemove)).toBe(false)
 
     const beforeReAdd = getLocalWorktreeScanGeneration(repoId)
@@ -113,7 +121,7 @@ describe('Store', () => {
     for (let index = 0; index < 200; index += 1) {
       const repoId = `scan-churn-${index}`
       store.addRepo(makeRepo({ id: repoId }))
-      store.removeProject(repoId)
+      store.removeProjectForHost(repoId, 'local')
     }
 
     expect(_getLocalWorktreeScanGenerationCacheSize()).toBe(initialCacheSize)
@@ -270,9 +278,9 @@ describe('Store', () => {
     expect(store.getRepo('nonexistent')).toBeUndefined()
   })
 
-  // ── 6. removeProject cleans up worktree meta ──────────────────────────
+  // ── 6. removeProjectForHost cleans up worktree meta ──────────────────────────
 
-  it('removeProject deletes the repo and its worktree meta', async () => {
+  it('removeProjectForHost deletes the repo and its worktree meta', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'r1' }))
     store.addRepo(makeRepo({ id: 'r2', path: '/repo2' }))
@@ -281,7 +289,7 @@ describe('Store', () => {
     store.setWorktreeMeta('r1::/path/wt2', { displayName: 'wt2' })
     store.setWorktreeMeta('r2::/other', { displayName: 'other' })
 
-    store.removeProject('r1')
+    store.removeProjectForHost('r1', 'local')
 
     expect(store.getRepo('r1')).toBeUndefined()
     expect(store.getWorktreeMeta('r1::/path/wt1')).toBeUndefined()
@@ -300,13 +308,13 @@ describe('Store', () => {
         ...store.getWorkspaceSession(),
         terminalTopologyRevisionByRepoId: { [repoId]: 1 }
       })
-      store.removeProject(repoId)
+      store.removeProjectForHost(repoId, 'local')
     }
 
     expect(store.getWorkspaceSession().terminalTopologyRevisionByRepoId).toEqual({})
   })
 
-  it('removeProject prunes the repo worktrees from workspace session state', async () => {
+  it('removeProjectForHost prunes the repo worktrees from workspace session state', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'r1' }))
     store.addRepo(makeRepo({ id: 'r2', path: '/repo2' }))
@@ -319,14 +327,14 @@ describe('Store', () => {
       lastVisitedAtByWorktreeId: { 'r1::/path/wt1': 111, 'r2::/other': 222 }
     })
 
-    store.removeProject('r1')
+    store.removeProjectForHost('r1', 'local')
 
     const session = store.getWorkspaceSession()
     expect(session.lastVisitedAtByWorktreeId?.['r1::/path/wt1']).toBeUndefined()
     expect(session.lastVisitedAtByWorktreeId?.['r2::/other']).toBe(222)
   })
 
-  it('removeProject prunes the repo worktrees from per-host workspace session partitions', async () => {
+  it('removeProjectForHost prunes the repo worktrees from per-host workspace session partitions', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'r1' }))
 
@@ -341,7 +349,7 @@ describe('Store', () => {
       hostId
     )
 
-    store.removeProject('r1')
+    store.removeProjectForHost('r1', 'local')
 
     const hostSession = store.getWorkspaceSession(hostId)
     expect(hostSession.lastVisitedAtByWorktreeId?.['r1::/path/wt1']).toBeUndefined()
@@ -362,18 +370,18 @@ describe('Store', () => {
     ])
   })
 
-  it('removeProject removes the derived project host setup compatibility record', async () => {
+  it('removeProjectForHost removes the derived project host setup compatibility record', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'r1' }))
     store.addRepo(makeRepo({ id: 'r2', path: '/repo2' }))
 
-    store.removeProject('r1')
+    store.removeProjectForHost('r1', 'local')
 
     expect(store.getProjects().map((project) => project.id)).toEqual(['repo:r2'])
     expect(store.getProjectHostSetups().map((setup) => setup.id)).toEqual(['r2'])
   })
 
-  it('removeProject deletes child and parent lineage for the repo', async () => {
+  it('removeProjectForHost deletes child and parent lineage for the repo', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'r1' }))
     store.addRepo(makeRepo({ id: 'r2', path: '/repo2' }))
@@ -400,7 +408,7 @@ describe('Store', () => {
       })
     )
 
-    store.removeProject('r1')
+    store.removeProjectForHost('r1', 'local')
 
     expect(store.getWorktreeLineage('r1::/path/child')).toBeUndefined()
     expect(store.getWorktreeLineage('r2::/other-child')).toBeUndefined()

@@ -42,6 +42,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
       isArchived: worktree.isArchived,
       isMainWorktree: worktree.isMainWorktree,
       hasHostSidebarActivity: false,
+      ...(worktree.removalError ? { removalError: worktree.removalError } : {}),
       ...(worktree.instanceId !== undefined ? { worktreeInstanceId: worktree.instanceId } : {}),
       ...(lineage?.worktreeInstanceId !== undefined
         ? { lineageWorktreeInstanceId: lineage.worktreeInstanceId }
@@ -69,6 +70,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
       unread: meta?.isUnread ?? false,
       liveTerminalCount: 0,
       hasAttachedPty: false,
+      unverifiableTerminalCount: 0,
       lastOutputAt: null,
       preview: '',
       status: 'inactive',
@@ -115,6 +117,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
       unread: worktree.isUnread,
       liveTerminalCount: 0,
       hasAttachedPty: false,
+      unverifiableTerminalCount: 0,
       lastOutputAt: null,
       preview: '',
       status: 'inactive',

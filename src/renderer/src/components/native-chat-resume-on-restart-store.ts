@@ -1,15 +1,11 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import {
-  getStructuredAgentSessionStatusFeed,
-  type StructuredAgentSessionStatusFeedOwner
-} from '@/runtime/structured-agent-session-status-feed'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
+import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
 import { useAppStore } from '../store'
+import { markNativeChatLaunchResumeDecided } from './native-chat-launch-resume-decision'
 import {
-  announceRestartDismissUnconfirmed,
   announceRestartResults,
-  announceRestartUnconfirmed,
+  restartContinuationHistory,
   type RestartContinuationOutcome
 } from './native-chat-restart-action-notifications'
 import {
@@ -17,7 +13,23 @@ import {
   type ResumeCandidate,
   type ResumeFailure
 } from './native-chat-resume-on-restart-grouping'
-import { requestNativeChatResumeOnRestartDialog } from './native-chat-resume-on-restart-dialog'
+import {
+  beginResumeRun,
+  resumeRunInFlight,
+  resumeRunPendingIds,
+  type ResumeRun
+} from './native-chat-resume-run'
+import {
+  forgetUnsentResumes,
+  markUnsentResumes,
+  withUnsentResumes
+} from './native-chat-resume-unsent-requests'
+import {
+  consumeNativeChatResumeOnRestartDialogRequest,
+  requestNativeChatResumeOnRestartDialog
+} from './native-chat-resume-on-restart-dialog'
+import { createOfferedChatWatch } from './native-chat-resume-offered-chat-watch'
+import { watchResumeRunStatus } from './native-chat-resume-run-status-watch'
 
 /**
  * Which interrupted chats the host is still offering to resume, and every action that moves that.
@@ -50,116 +62,83 @@ let launch: Promise<void> | undefined
  *  a re-read that raced it must neither pre-empt nor undo. */
 let actionsBegun = 0
 let actionsSettled = 0
+/** Memory-only history: retires after viewing and closing its finished summary, or on replacement. */
+let run: ResumeRun | null = null
+let releaseRunStatus: (() => void) | undefined
+let resuming: readonly string[] = resumeRunPendingIds(null)
 const listeners = new Set<() => void>()
 const LAUNCH_READ_RETRY_DELAYS_MS = [100, 250, 500] as const
+
+function emit(): void {
+  for (const listener of listeners) {
+    listener()
+  }
+}
 
 /** The snapshot object is replaced HERE and nowhere else — never during a render — so every
  *  `useSyncExternalStore` reader sees the same reference until a host answer or a user action
  *  actually moves the offer. */
 function publish(next: NativeChatRestartOffer): void {
   offer = next
-  syncFailedChatWatch()
-  for (const listener of listeners) {
-    listener()
+  offeredChatWatch.sync()
+  emit()
+}
+
+/** A confirmed host answer. One with nothing left also retires any open request for the dialog,
+ *  unless it is showing a run; a failed read only hides rows, so it keeps the request. */
+function publishAnswer(answer: NativeChatRestartOffer): void {
+  const next = withUnsentResumes(answer)
+  publish(next)
+  if (next.candidates.length === 0 && next.failed.length === 0 && run === null) {
+    consumeNativeChatResumeOnRestartDialogRequest()
   }
 }
 
-/**
- * Re-reads the host once a failed chat shows new activity, so a reply the user sent there retires
- * its entry here too. The host stays the judge; this only asks again.
- *
- * Held only while something failed. Keyed on status and prompt rather than every summary, so an
- * agent streaming in a failed chat costs one re-read, not one per tool call.
- */
-const FAILED_CHAT_REFRESH_DELAY_MS = 500
-let failedChatWatch: {
-  feed: StructuredAgentSessionStatusFeedOwner
-  seen: Map<string, string>
-  release: () => void
-} | null = null
-let failedChatRefresh: ReturnType<typeof setTimeout> | null = null
-
-function failedChatActivityKey(summary: AgentSessionStatusSummary): string {
-  return `${summary.status ?? ''}\u0000${summary.latestPrompt}`
+function setRun(next: ResumeRun | null): void {
+  run = next
+  const pending = resumeRunPendingIds(next)
+  // Same ids, same array, so readers of `resuming` re-render only when it changes.
+  resuming = pending.join('\0') === resuming.join('\0') ? resuming : pending
+  emit()
 }
 
-function syncFailedChatWatch(): void {
-  const failedIds = new Set(offer.failed.map((failure) => failure.sessionId))
-  if (failedIds.size === 0) {
-    releaseFailedChatWatch()
-    return
-  }
-  if (!failedChatWatch) {
-    const feed = getStructuredAgentSessionStatusFeed(LOCAL)
-    const unsubscribe = feed.subscribe(noticeFailedChatActivity)
-    const deactivate = feed.activate()
-    failedChatWatch = {
-      feed,
-      seen: new Map(),
-      release: () => {
-        unsubscribe()
-        deactivate()
-      }
+// Re-reads once an offered or failed chat shows new activity. Skipped while an action is in
+// flight: that action ends by publishing the host's answer, which a racing re-read must not undo.
+const offeredChatWatch = createOfferedChatWatch({
+  feed: () => getStructuredAgentSessionStatusFeed(LOCAL),
+  offeredIds: () => new Set([...offer.candidates, ...offer.failed].map((entry) => entry.sessionId)),
+  listedAt: () => offer.listedAt,
+  refresh: () => {
+    if (actionsBegun === actionsSettled) {
+      const issued = actionsBegun
+      void readNativeChatRestartOffer(() => actionsBegun === issued)
     }
   }
-  const { feed, seen } = failedChatWatch
-  for (const sessionId of seen.keys()) {
-    if (!failedIds.has(sessionId)) {
-      seen.delete(sessionId)
-    }
-  }
-  // What the feed already holds is what this listing answered.
-  for (const sessionId of failedIds) {
-    const summary = feed.getSnapshot().get(sessionId)
-    if (summary && !seen.has(sessionId)) {
-      seen.set(sessionId, failedChatActivityKey(summary))
-    }
-  }
-}
-
-function noticeFailedChatActivity(): void {
-  if (!failedChatWatch) {
-    return
-  }
-  const { feed, seen } = failedChatWatch
-  const snapshot = feed.getSnapshot()
-  let changed = false
-  for (const failure of offer.failed) {
-    const summary = snapshot.get(failure.sessionId)
-    if (!summary) {
-      continue
-    }
-    const key = failedChatActivityKey(summary)
-    const previous = seen.get(failure.sessionId)
-    if (previous !== key) {
-      seen.set(failure.sessionId, key)
-      // A first sighting is news only if newer than the list; a change to a known chat always is,
-      // since the host may have answered the list just before the change was delivered here.
-      changed ||= previous !== undefined || summary.updatedAt > offer.listedAt
-    }
-  }
-  if (changed && failedChatRefresh === null) {
-    failedChatRefresh = setTimeout(() => {
-      failedChatRefresh = null
-      if (actionsBegun === actionsSettled) {
-        const issued = actionsBegun
-        void readNativeChatRestartOffer(() => actionsBegun === issued)
-      }
-    }, FAILED_CHAT_REFRESH_DELAY_MS)
-  }
-}
-
-function releaseFailedChatWatch(): void {
-  if (failedChatRefresh !== null) {
-    clearTimeout(failedChatRefresh)
-    failedChatRefresh = null
-  }
-  failedChatWatch?.release()
-  failedChatWatch = null
-}
+})
 
 export function getNativeChatRestartOffer(): NativeChatRestartOffer {
   return offer
+}
+
+export function getNativeChatRestartResuming(): readonly string[] {
+  return resuming
+}
+
+export function getNativeChatRestartRun(): ResumeRun | null {
+  return run
+}
+
+/** A finished summary must be shown before closing can retire it. */
+export function markFinishedNativeChatRestartRunShown(shown: ResumeRun): void {
+  if (run === shown && !shown.inFlight && !shown.finishedViewShown) {
+    setRun({ ...shown, finishedViewShown: true })
+  }
+}
+
+export function releaseFinishedNativeChatRestartRun(): void {
+  if (run?.finishedViewShown && !resumeRunInFlight(run)) {
+    setRun(null)
+  }
 }
 
 function subscribe(listener: () => void): () => void {
@@ -201,7 +180,7 @@ async function readNativeChatRestartOffer(current = () => true): Promise<HostOff
     }
     const failed = failedFrom(offered)
     if (current()) {
-      publish({ candidates: offered.sessions, failed, listedAt: Date.now() })
+      publishAnswer({ candidates: offered.sessions, failed, listedAt: Date.now() })
     }
     return { candidates: offered.sessions, failed, available: true }
   } catch {
@@ -215,72 +194,97 @@ async function readNativeChatRestartOffer(current = () => true): Promise<HostOff
   }
 }
 
-export async function refreshNativeChatRestartOffer(): Promise<
-  Pick<HostOfferRead, 'candidates' | 'failed'>
-> {
-  const read = await readNativeChatRestartOffer()
-  return { candidates: read.candidates, failed: read.failed }
+export async function refreshNativeChatRestartOffer(): Promise<void> {
+  await readNativeChatRestartOffer()
 }
 
-/** What the failure toast can do. The dialog request is external state the toast may raise after
- *  the dialog that started the action has closed. */
-const failureToastActions = {
-  show: () => requestNativeChatResumeOnRestartDialog(),
-  dismiss: (sessionIds: readonly string[]) => {
-    void dismissNativeChatRestartOffer([...sessionIds])
+/** The status bar entry and a toast's Show: re-read, then open only over rows, since the dialog
+ *  draws nothing without them. Opening a chat from it is read-only and keeps the offer. */
+export async function reopenNativeChatRestartOffer(): Promise<void> {
+  // Mid-resume the host's answer is already on its way; a re-read racing it could undo it.
+  if (resuming.length === 0) {
+    await readNativeChatRestartOffer()
+  }
+  if (run !== null || offer.candidates.length > 0 || offer.failed.length > 0) {
+    requestNativeChatResumeOnRestartDialog()
   }
 }
 
-/**
- * Reattach the offered chats, ask each agent to carry on, then replace the offer with the host's
- * authoritative remaining list. This keeps the modal and status bar synchronized after every
- * action, even when the dialog's snapshot became stale while it was open.
- *
- * `sessionIds` is the dialog's selection. An opted-in launch names nothing, so the host acts on
- * whatever it still offers rather than on a list this side captured a moment earlier, and passes
- * `reported` instead: the chats the user was shown, which is what the toasts count.
- *
- * Never rejects. The payload is unvalidated, and a shape this side did not expect is reported as
- * an unconfirmed delivery — the message may well have gone out.
- */
-export async function continueNativeChatRestartOffer(
-  sessionIds: readonly string[] | undefined,
-  reported: readonly string[] = sessionIds ?? []
-): Promise<void> {
+/** One host action owns the selection; its status feed reports each chat before the reply. */
+export async function continueNativeChatRestartOffer(sessionIds: readonly string[]): Promise<void> {
+  const requested = [...new Set(sessionIds)]
+  if (requested.length === 0) {
+    return
+  }
   actionsBegun += 1
+  forgetUnsentResumes(requested)
+  const rows = new Map([...offer.candidates, ...offer.failed].map((row) => [row.sessionId, row]))
+  let actionRun = beginResumeRun(
+    requested.flatMap((sessionId) => rows.get(sessionId) ?? []),
+    Date.now()
+  )
+  setRun(actionRun)
+  releaseRunStatus?.()
+  const release = watchResumeRunStatus(
+    () => (run === actionRun ? actionRun : null),
+    (next) => {
+      actionRun = next
+      setRun(next)
+    }
+  )
+  releaseRunStatus = release
+  markNativeChatLaunchResumeDecided()
+  let outcome: Parameters<typeof announceRestartResults>
+  let continued: readonly RestartContinuationOutcome[] | undefined
+  let skipped = new Set<string>()
   try {
     const result = await callStructuredAgentSession<
-      HostOfferPayload & {
-        /** Which chats the host reattached. */
-        resumed?: { sessionId: string }[]
-        continued: RestartContinuationOutcome[]
-      }
-    >(LOCAL, 'agentSession.restartContinue', sessionIds ? { sessionIds } : {})
-    const failed = failedFrom(result)
-    announceRestartResults(
-      reported,
-      result.continued,
-      Array.isArray(result.failed) ? failed : undefined,
-      failureToastActions
-    )
+      HostOfferPayload & { continued?: RestartContinuationOutcome[]; skipped?: string[] }
+    >(LOCAL, 'agentSession.restartContinue', { sessionIds: requested })
+    const listed = Array.isArray(result.failed) ? failedFrom(result) : undefined
     if (Array.isArray(result.sessions)) {
-      publish({ candidates: result.sessions, failed, listedAt: Date.now() })
+      publishAnswer({ candidates: result.sessions, failed: listed ?? [], listedAt: Date.now() })
     } else {
       await refreshNativeChatRestartOffer()
     }
-  } catch {
-    await refreshNativeChatRestartOffer()
-    announceRestartUnconfirmed(reported.length)
+    skipped = new Set(result.skipped)
+    const actedOn = requested.filter((sessionId) => !skipped.has(sessionId))
+    continued = restartContinuationHistory(actedOn, result.continued, listed)
+    outcome = [actedOn, continued, listed, reopenNativeChatRestartOffer]
+  } catch (error) {
+    console.warn('[native-chat-resume] resume request failed before reaching the chats', error)
+    markUnsentResumes(requested, Date.now())
+    const read = await readNativeChatRestartOffer()
+    outcome = [
+      requested,
+      [],
+      read.available ? offer.failed : undefined,
+      reopenNativeChatRestartOffer
+    ]
   } finally {
+    release()
+    if (releaseRunStatus === release) {
+      releaseRunStatus = undefined
+    }
     actionsSettled += 1
+    // Publish the offer first: reopening must never expose the old selection as actionable.
+    if (run === actionRun) {
+      setRun({
+        ...actionRun,
+        entries: actionRun.entries.filter((entry) => !skipped.has(entry.candidate.sessionId)),
+        inFlight: false,
+        continued
+      })
+    }
   }
+  announceRestartResults(...outcome)
 }
 
 /**
  * Turning the offer down for good, which explicitly deletes the pending durable records.
  *
- * A failed write or unreachable host leaves the durable record untouched; a later read can restore
- * the offer after the host is available again.
+ * A failed write or unreachable host leaves the durable record untouched. The re-read puts it back
+ * in the status bar; if that read fails too, the entry stays hidden until the next launch reads it.
  */
 export async function dismissNativeChatRestartOffer(sessionIds?: readonly string[]): Promise<void> {
   actionsBegun += 1
@@ -288,18 +292,24 @@ export async function dismissNativeChatRestartOffer(sessionIds?: readonly string
     const result = await callStructuredAgentSession<HostOfferPayload>(
       LOCAL,
       'agentSession.restartResumableDismiss',
-      // Named only for rows the host itself listed as failures, which an older host never does,
-      // so it is never asked to understand the key.
+      // Named only for rows the dialog lists as failed: the host's own failures, or chats this side
+      // marked after a lost resume request, which the host still lists as offers. The host is this
+      // build, and it forgets named records of any state.
       sessionIds ? { sessionIds: [...sessionIds] } : {}
     )
+    // Only a dismissal the host took ends the mark; a failed one leaves the chat shown as failed.
+    forgetUnsentResumes(sessionIds)
     if (Array.isArray(result.sessions)) {
-      publish({ candidates: result.sessions, failed: failedFrom(result), listedAt: Date.now() })
+      publishAnswer({
+        candidates: result.sessions,
+        failed: failedFrom(result),
+        listedAt: Date.now()
+      })
     } else {
       await refreshNativeChatRestartOffer()
     }
   } catch {
     await refreshNativeChatRestartOffer()
-    announceRestartDismissUnconfirmed()
   } finally {
     actionsSettled += 1
   }
@@ -337,7 +347,7 @@ async function loadLaunchOffer(): Promise<void> {
     requestNativeChatResumeOnRestartDialog()
     return
   }
-  await continueNativeChatRestartOffer(undefined, allResumeSessionIds(offered))
+  await continueNativeChatRestartOffer(allResumeSessionIds(offered))
 }
 
 /**
@@ -350,16 +360,31 @@ export function useNativeChatRestartOffer(enabled: boolean): NativeChatRestartOf
   useEffect(() => {
     if (enabled) {
       // Fetched after mount, never awaited by startup: the workspace is usable first.
-      launch ??= loadLaunchOffer()
+      launch ??= loadLaunchOffer().finally(markNativeChatLaunchResumeDecided)
     }
   }, [enabled])
   return useSyncExternalStore(subscribe, getNativeChatRestartOffer, getNativeChatRestartOffer)
 }
 
+/** The chats a resume is carrying on right now, whichever surface started it. */
+export function useNativeChatRestartResuming(): readonly string[] {
+  return useSyncExternalStore(subscribe, getNativeChatRestartResuming, getNativeChatRestartResuming)
+}
+
+/** The selection and reply history a reopened progress dialog follows. */
+export function useNativeChatRestartRun(): ResumeRun | null {
+  return useSyncExternalStore(subscribe, getNativeChatRestartRun, getNativeChatRestartRun)
+}
+
 /** @internal - tests need a clean module between cases. */
 export function _resetNativeChatRestartOffer(): void {
-  releaseFailedChatWatch()
+  releaseRunStatus?.()
+  releaseRunStatus = undefined
+  offeredChatWatch.release()
   offer = EMPTY
+  forgetUnsentResumes(undefined)
+  run = null
+  resuming = resumeRunPendingIds(null)
   actionsBegun = 0
   actionsSettled = 0
   launch = undefined

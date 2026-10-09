@@ -12,6 +12,7 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { replayIntoTerminal, type ReplayingPanesRef } from './replay-guard'
 import type { RestoredViewportBlankingPanesRef } from './terminal-restored-viewport'
 import { isXtermInstanceDisposed } from '@/lib/pane-manager/xterm-instance-disposed'
+import { readSplitRatio, SPLIT_RATIO_TOLERANCE } from '@/lib/pane-manager/pane-split-ratio'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import {
   getLeftmostLeafId,
@@ -65,15 +66,10 @@ export function serializePaneTree(node: HTMLElement | null): TerminalPaneLayoutN
   // Capture the flex ratio so resized panes survive serialization round-trips.
   let ratio: number | undefined
   if (first && second) {
-    const firstGrow = Number.parseFloat(first.style.flex) || 1
-    const secondGrow = Number.parseFloat(second.style.flex) || 1
-    const total = firstGrow + secondGrow
-    if (total > 0) {
-      const r = firstGrow / total
-      // Only store if meaningfully different from 0.5 (default equal split)
-      if (Math.abs(r - 0.5) > 0.005) {
-        ratio = Math.round(r * 1000) / 1000
-      }
+    const r = readSplitRatio(first, second)
+    // Only store if meaningfully different from 0.5 (default equal split)
+    if (Math.abs(r - 0.5) > SPLIT_RATIO_TOLERANCE) {
+      ratio = Math.round(r * 1000) / 1000
     }
   }
 

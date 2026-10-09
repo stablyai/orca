@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import { toRemoteRuntimePtyId } from './runtime-terminal-stream'
 import { finalizeHostTerminalSnapshot } from './__fixtures__/web-session-terminal-host-finalization'
 import {

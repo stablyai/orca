@@ -15,6 +15,7 @@ import type { PiAgentKind } from '../../shared/pi-agent-kind'
 import { getPiAgentStatusHandlerSourceLines } from './agent-status-handler-source'
 import { getPiAgentStatusRuntimeDetectionSourceLines } from './agent-status-runtime-detection-source'
 import { getPiAgentStatusWslCurlSourceLines } from './agent-status-wsl-curl-source'
+import { getPiSubagentSnapshotSourceLines } from './agent-status-subagent-roster-source'
 
 export const ORCA_PI_AGENT_STATUS_EXTENSION_FILE = 'orca-agent-status.ts'
 
@@ -46,21 +47,21 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
           '  const sessionFile = sessionManager?.getSessionFile?.()',
           "  runtimeOmpSessionMetadata = typeof sessionId === 'string' && sessionId && typeof sessionFile === 'string' && sessionFile ? { session_id: sessionId, session_file: sessionFile } : {}",
           '  trackModelSession(runtimeOmpSessionMetadata.session_id)',
-          '  updateModelMetadata(ctx)', 
+          '  updateModelMetadata(ctx)',
           '}',
           '',
           'function getPostSessionMetadata(ompRuntime: boolean): Record<string, unknown> {',
           '  return ompRuntime ? { ...runtimeOmpSessionMetadata, ...modelMetadata } : sessionMetadata',
           '}',
           '',
-          'function getPersistedSessionMetadata(): Record<string, unknown> {',
-          '  const sessionFile = sessionMetadata.session_file',
+          'function getPersistedSessionMetadata(metadata: Record<string, unknown>): Record<string, unknown> {',
+          '  const sessionFile = metadata.session_file',
           "  if (typeof sessionFile !== 'string' || !sessionFile) return {}",
           '  try {',
           "    const fs = require('fs')",
           '    // Why: Pi publishes its planned path before creating the transcript;',
           '    // recheck on every post so the first completed turn becomes resumable.',
-          '    return fs.existsSync(sessionFile) ? sessionMetadata : {}',
+          '    return fs.existsSync(sessionFile) ? metadata : {}',
           '  } catch {',
           '    return {}',
           '  }',
@@ -75,7 +76,7 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
           '  const sessionId = sessionManager?.getSessionId?.()',
           '  const sessionFile = sessionManager?.getSessionFile?.()',
           "  sessionMetadata = typeof sessionId === 'string' && sessionId && typeof sessionFile === 'string' && sessionFile ? { session_id: sessionId, session_file: sessionFile } : {}",
-          '  trackModelSession(sessionMetadata.session_id)', 
+          '  trackModelSession(sessionMetadata.session_id)',
           '}',
           '',
           'function updateRuntimeOmpSessionMetadata(ctx: unknown): void {',
@@ -123,8 +124,8 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
   // Why: Pi resumes from an existing transcript; OMP resumes directly by session id (#8962).
   const payloadLine =
     kind !== 'omp'
-      ? '    payload: { hook_event_name: hookEventName, ...(ompRuntime ? metadata : getPersistedSessionMetadata()), ...extra },'
-      : '    payload: { hook_event_name: hookEventName, ...metadata, ...extra },'
+      ? '    payload: { hook_event_name: hookEventName, ...(ompRuntime ? metadata : getPersistedSessionMetadata(metadata)), ...(final ? {} : subagentPayload()), ...extra },'
+      : '    payload: { hook_event_name: hookEventName, ...metadata, ...(final ? {} : subagentPayload()), ...extra },'
 
   // Why: keep this string self-contained — it runs inside the pi process,
   // so it cannot import from Orca's main bundle. fs/http coords come from
@@ -140,10 +141,11 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '// critical path, and the latest-only pending slot prevents a stalled',
     '// Orca receiver from building an unbounded queue of obsolete snapshots.',
     'const HOOK_POST_TIMEOUT_MS = 1000',
-    ...getPiAgentStatusPostQueueSourceLines(),
+    ...getPiAgentStatusPostQueueSourceLines(kind),
     ...(kind === 'pi' ? ['let piUiPromptDepth = 0', 'let piTurnInFlight = false'] : []),
     ...modelMetadataSourceLines,
     '',
+    ...getPiSubagentSnapshotSourceLines(),
     ...sessionMetadataSourceLines,
     '',
     '// Why: re-reading the endpoint file on every event is cheap (small file,',
@@ -202,14 +204,23 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '',
     ...getPiAgentStatusRuntimeDetectionSourceLines(kind),
     '',
-    'function post(hookEventName: string, extra: Record<string, unknown> = {}): void {',
+    // `final` marks the last post of a session that is being closed.
+    'function post(hookEventName: string, extra: Record<string, unknown> = {}, final = false): void {',
     '  const ompRuntime = isOmpRuntime()',
-    '  cancelPostRetry()',
+    // Why: the body is built at delivery, so the session is pinned here, where the event happened.
     '  const metadata = getPostSessionMetadata(ompRuntime)',
+    '  if (final) {',
+    '    postQueue.finalPosts.push({ revision: postQueue.postRevision, attempts: 0, delivered: false, hookEventName, extra, metadata, ompRuntime, final })',
+    '    drainPosts()',
+    '    return',
+    '  }',
+    '  cancelPostRetry()',
+    // Why: a new turn supersedes a same-session completion even when /reload preserved its delivery.
+    "  if (hookEventName === 'before_agent_start' || hookEventName === 'agent_start') retireTurnCompletionPosts(metadata)",
     '// Model changes must not erase an unacknowledged completion in the latest-only slot.',
-    "  const previousCompletion = latestPost?.hookEventName === 'agent_end' && !latestPost.delivered && latestPost.metadata.session_id === metadata.session_id",
-    '  pendingPost = {',
-    '    revision: ++postRevision,',
+    "  const previousCompletion = postQueue.latestPost?.hookEventName === 'agent_end' && !postQueue.latestPost.delivered && postQueue.latestPost.metadata.session_id === metadata.session_id",
+    '  postQueue.pendingPost = {',
+    '    revision: ++postQueue.postRevision,',
     '    attempts: 0,',
     '    delivered: false,',
     "    hookEventName: ompRuntime && hookEventName === 'model_select' && previousCompletion ? 'agent_end' : hookEventName,",
@@ -220,7 +231,7 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '    metadata,',
     '    ompRuntime,',
     '  }',
-    '  latestPost = pendingPost',
+    '  postQueue.latestPost = postQueue.pendingPost',
     '  drainPosts()',
     '}',
     '',
@@ -228,7 +239,8 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '  hookEventName: string,',
     '  extra: Record<string, unknown>,',
     '  metadata: Record<string, unknown>,',
-    '  ompRuntime: boolean',
+    '  ompRuntime: boolean,',
+    '  final: boolean',
     '): Promise<void> {',
     '  const coords = resolveHookCoords()',
     '  const paneKey = process.env.ORCA_PANE_KEY',

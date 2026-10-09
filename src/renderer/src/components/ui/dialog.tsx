@@ -2,9 +2,10 @@
 
 import * as React from 'react'
 import { XIcon } from 'lucide-react'
-import { Dialog as DialogPrimitive } from 'radix-ui'
+import * as DialogPrimitive from 'radix-ui/dialog'
 
 import { cn } from '@/lib/utils'
+import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 
@@ -71,6 +72,7 @@ function DialogContent({
           className
         )}
         {...props}
+        onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
       >
         {children}
         {showCloseButton && (
@@ -125,11 +127,22 @@ function DialogFooter({
   )
 }
 
-function DialogTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>) {
+function DialogTitle({
+  className,
+  size = 'default',
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Title> & {
+  /** `display` is the large headline of the two-column feature tip dialogs. */
+  size?: 'default' | 'display'
+}) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn('text-lg leading-snug font-semibold break-words', className)}
+      data-size={size}
+      className={cn(
+        'text-lg leading-snug font-semibold break-words data-[size=display]:text-2xl data-[size=display]:leading-tight data-[size=display]:tracking-tight md:data-[size=display]:text-[1.75rem]',
+        className
+      )}
       {...props}
     />
   )

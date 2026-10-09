@@ -2,7 +2,7 @@
 // channel rm -rf'd node-pty on a healthy relay and forced a node-gyp rebuild. Verdicts are
 // ok / blocked / unverifiable — see docs/reference/ssh-execution-boundary.md.
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RelayInstallMarkerModule from './ssh-relay-install-marker'
 
 vi.mock('electron', () => ({
@@ -35,6 +35,9 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: vi.fn()
 }))
 
+vi.mock('./ssh-relay-opencode-runtime', () => ({
+  ensureRemoteOpenCodeRuntime: vi.fn().mockResolvedValue('ready')
+}))
 vi.mock('./ssh-relay-ripgrep-install', () => ({
   remoteRipgrepLayout: vi.fn().mockReturnValue(null),
   recordRemoteRipgrepReference: vi.fn().mockResolvedValue(false),
@@ -101,8 +104,11 @@ describe('native-deps repair probe verdicts', () => {
   const sftpCapture: SftpWriteCapture = { paths: [], contents: {}, execCallCountAtWrite: {} }
   let warnSpy: ReturnType<typeof vi.spyOn>
 
+  afterEach(() => vi.unstubAllEnvs())
   beforeEach(() => {
     vi.clearAllMocks()
+    // The host-npm path is opt-in; these cases cover it.
+    vi.stubEnv('ORCA_SSH_REMOTE_RUNTIME', 'legacy')
     vi.mocked(execCommand).mockReset().mockResolvedValue('')
     vi.mocked(uploadDirectory).mockResolvedValue(undefined)
     sftpCapture.paths.length = 0

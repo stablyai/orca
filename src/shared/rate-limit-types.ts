@@ -11,6 +11,32 @@ export type RateLimitWindow = {
 
 export type ProviderRateLimitStatus = 'idle' | 'fetching' | 'ok' | 'error' | 'unavailable'
 
+type ExtraUsageBalanceBase = {
+  enabled: boolean
+  disabledReason: string | null
+  resetsAt: number | null
+}
+
+type CurrencyExtraUsageBalance = ExtraUsageBalanceBase & {
+  unit: 'currency'
+  /** Null when the current balance is unavailable. */
+  balance: number | null
+  currencyCode: string
+  spent: number | null
+  spendLimit: number | null
+  spentPercent: number | null
+}
+
+type CreditExtraUsageBalance = ExtraUsageBalanceBase & {
+  unit: 'credits'
+  balance: number
+  unlimited: boolean
+}
+
+// Why: currency and unitless credits have different metadata; the discriminator
+// prevents consumers from inventing dummy currency or spend-limit values.
+export type ExtraUsageBalance = CurrencyExtraUsageBalance | CreditExtraUsageBalance
+
 export type RateLimitBucket = RateLimitWindow & {
   name: string
 }
@@ -57,15 +83,19 @@ export type ProviderRateLimits = {
     | 'minimax'
     | 'grok'
     | 'antigravity'
+    | 'cursor'
+    | 'zcode'
   /** 5-hour session window, null if not available. */
   session: RateLimitWindow | null
   /** 7-day weekly window, null if not available. */
   weekly: RateLimitWindow | null
   /** Claude Fable 7-day weekly window, null if not available. */
   fableWeekly?: RateLimitWindow | null
-  /** 30-day monthly window (OpenCode Go, Grok unified billing), null if not available. */
+  /** 30-day monthly window (OpenCode Go, Grok unified billing, Cursor plan pools), null if not available. */
   monthly?: RateLimitWindow | null
-  /** Named per-model buckets (Gemini only). */
+  /** Overage / pay-as-you-go balance the plan spends into once its windows cap. */
+  extraUsage?: ExtraUsageBalance | null
+  /** Named per-model buckets (Gemini models, Cursor plan pools). */
   buckets?: RateLimitBucket[]
   /** Available earned Codex rate-limit reset credits, if reported. */
   rateLimitResetCredits?: {
@@ -117,6 +147,17 @@ export type GrokAccountStatus = {
   error: string | null
 }
 
+export type CursorAccountStatus = {
+  signedIn: boolean
+  email: string | null
+  displayName: string | null
+  /** Which local store the session came from: the macOS Keychain, the CLI auth file, or Cursor IDE. */
+  credentialSource: 'keychain' | 'cli' | 'desktop' | null
+  planType: string | null
+  tokenFresh: boolean
+  error: string | null
+}
+
 export type RateLimitState = {
   claude: ProviderRateLimits | null
   codex: ProviderRateLimits | null
@@ -126,6 +167,8 @@ export type RateLimitState = {
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
+  cursor: ProviderRateLimits | null
+  zcode: ProviderRateLimits | null
   /**
    * True when a MiniMax session cookie is persisted on disk. The cookie lives
    * outside GlobalSettings, so this flag is the durable signal that the
@@ -149,6 +192,18 @@ export type RateLimitState = {
   opencodeGoApiKeyConfigured: boolean
   /** True when main finds a Grok CLI session file (~/.grok/auth.json or GROK_HOME). */
   grokAuthConfigured: boolean
+  /**
+   * True when main finds a Cursor session on this machine: the macOS Keychain
+   * item cursor-agent writes, its legacy auth.json, or the Cursor IDE's own
+   * stored login. The token itself never leaves main.
+   */
+  cursorAuthConfigured: boolean
+  /**
+   * True when a GLM Coding Plan API key is saved in Orca's AI Provider
+   * Accounts. The key itself never leaves main; the status bar uses this to
+   * keep the ZCode bar visible across reloads between snapshot refreshes.
+   */
+  zcodePlanApiKeyConfigured?: boolean
   claudeTarget: RateLimitRuntimeTarget
   codexTarget: RateLimitRuntimeTarget
   inactiveClaudeAccounts: InactiveAccountUsage[]

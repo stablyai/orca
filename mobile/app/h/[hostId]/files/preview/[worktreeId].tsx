@@ -9,8 +9,7 @@ import {
   shellScreenRouteKey
 } from '../../../../../src/mobile-web-shell/shell-screen-route'
 import { MobileWebShellScreen } from '../../../../../src/mobile-web-shell/MobileWebShellScreen'
-import { ShellSwitchPendingScreen } from '../../../../../src/mobile-web-shell/ShellSwitchPendingScreen'
-import { useShellSwitchDecision } from '../../../../../src/mobile-web-shell/shell-switch-decision'
+import { shellSwitchDecision } from '../../../../../src/mobile-web-shell/shell-switch-decision'
 
 /**
  * The file preview, from the desktop's bundle or from this app.
@@ -53,11 +52,8 @@ export default function MobileFilePreviewRoute() {
       })
     : null
 
-  const decision = useShellSwitchDecision(shellRoute)
+  const decision = shellSwitchDecision(shellRoute)
 
-  if (decision.kind === 'pending') {
-    return <ShellSwitchPendingScreen />
-  }
   // `route.ok` again for the compiler: `shellRoute` is built only on the ok branch, so a `shell`
   // decision already implies it.
   if (decision.kind === 'native' || !route.ok) {

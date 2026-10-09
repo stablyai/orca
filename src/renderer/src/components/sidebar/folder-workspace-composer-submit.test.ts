@@ -11,8 +11,6 @@ const mocks = vi.hoisted(() => ({
   ensureAgentStartupInTerminal: vi.fn()
 }))
 
-// Why: importOriginal keeps the real resolveStartupLaunchDraftText, so the
-// invariant test below exercises the shipped gate instead of a copy of it.
 vi.mock('@/lib/worktree-activation', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return { ...actual, activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace }
@@ -27,8 +25,6 @@ vi.mock('@/lib/new-workspace', async (importOriginal) => {
 })
 
 import { useAppStore } from '@/store'
-import { decideInitialAgentTabViewMode } from '@/lib/native-chat-initial-view-mode'
-import { resolveStartupLaunchDraftText } from '@/lib/worktree-startup-payload'
 import {
   getFolderWorkspaceAgentLaunchPlatform,
   submitFolderWorkspaceCreate
@@ -71,19 +67,11 @@ function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWo
 describe('submitFolderWorkspaceCreate', () => {
   beforeEach(() => {
     mocks.activateAndRevealFolderWorkspace.mockReturnValue({ primaryTabId: 'tab-1' })
-    Object.assign(window, {
-      api: {
-        agentTrust: {
-          markTrusted: vi.fn().mockResolvedValue(undefined)
-        }
-      }
-    })
   })
 
   afterEach(() => {
     mocks.activateAndRevealFolderWorkspace.mockReset()
     mocks.ensureAgentStartupInTerminal.mockReset()
-    Reflect.deleteProperty(window, 'api')
     vi.restoreAllMocks()
   })
 
@@ -313,10 +301,6 @@ describe('submitFolderWorkspaceCreate', () => {
     expect(startup?.command).toBe('codex')
     expect(startup?.command).not.toContain(linkedWorkItem.url)
     expect(startup?.command).not.toContain('Review this before starting')
-    expect(window.api.agentTrust?.markTrusted).toHaveBeenCalledWith({
-      preset: 'codex',
-      workspacePath: '/repo/platform/hi'
-    })
     expect(mocks.ensureAgentStartupInTerminal).toHaveBeenCalledWith({
       worktreeId: folderWorkspaceKey('folder-workspace-1'),
       primaryTabId: 'tab-1',
@@ -329,7 +313,7 @@ describe('submitFolderWorkspaceCreate', () => {
     })
   })
 
-  it('pre-marks remote linked Codex folder workspaces trusted before draft paste', async () => {
+  it('pastes the linked draft for remote Codex folder workspaces', async () => {
     const createFolderWorkspace = vi.fn(async () =>
       makeFolderWorkspace({
         connectionId: 'ssh-1',
@@ -364,11 +348,6 @@ describe('submitFolderWorkspaceCreate', () => {
       onOpenChange: vi.fn()
     })
 
-    expect(window.api.agentTrust?.markTrusted).toHaveBeenCalledWith({
-      preset: 'codex',
-      workspacePath: '/home/alice/platform/Trust remote folder draft',
-      connectionId: 'ssh-1'
-    })
     expect(mocks.ensureAgentStartupInTerminal).toHaveBeenCalledWith(
       expect.objectContaining({
         worktreeId: folderWorkspaceKey('folder-workspace-1'),
@@ -708,16 +687,12 @@ describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
   beforeEach(() => {
     mocks.activateAndRevealFolderWorkspace.mockReturnValue({ primaryTabId: 'tab-1' })
     useAppStore.setState({ nativeChatLaunchDraftByTabId: {} })
-    Object.assign(window, {
-      api: { agentTrust: { markTrusted: vi.fn().mockResolvedValue(undefined) } }
-    })
   })
 
   afterEach(() => {
     mocks.activateAndRevealFolderWorkspace.mockReset()
     mocks.ensureAgentStartupInTerminal.mockReset()
     useAppStore.setState({ nativeChatLaunchDraftByTabId: {} })
-    Reflect.deleteProperty(window, 'api')
     vi.restoreAllMocks()
   })
 
@@ -816,22 +791,17 @@ describe('folder-workspace draft: seeded set == chat-opening set', () => {
   beforeEach(() => {
     mocks.activateAndRevealFolderWorkspace.mockReturnValue({ primaryTabId: 'tab-1' })
     useAppStore.setState({ nativeChatLaunchDraftByTabId: {} })
-    Object.assign(window, {
-      api: { agentTrust: { markTrusted: vi.fn().mockResolvedValue(undefined) } }
-    })
   })
 
   afterEach(() => {
     mocks.activateAndRevealFolderWorkspace.mockReset()
     mocks.ensureAgentStartupInTerminal.mockReset()
     useAppStore.setState({ nativeChatLaunchDraftByTabId: {} })
-    Reflect.deleteProperty(window, 'api')
     vi.restoreAllMocks()
   })
 
-  // Why: `claude` takes its draft on argv, so `startupPlan.draftPrompt` stays
-  // undefined; `codex` gets a startup paste and sets it. Both must reach the
-  // view-mode gate, and both must agree with what the composer actually holds.
+  // Claude takes its draft on argv; Codex receives a startup paste. Both keep
+  // the draft available for an explicit switch to terminal chat.
   it.each([
     ['argv-prefill', 'claude' as const, '', true],
     ['argv-prefill multi-line', 'claude' as const, 'Reproduce on Windows first', true],
@@ -853,20 +823,8 @@ describe('folder-workspace draft: seeded set == chat-opening set', () => {
 
     const startup = mocks.activateAndRevealFolderWorkspace.mock.calls[0]?.[1]?.startup
     const seeded = useAppStore.getState().nativeChatLaunchDraftByTabId['tab-1'] != null
-    const draftText = resolveStartupLaunchDraftText(startup)
-    const opensInChat =
-      decideInitialAgentTabViewMode({
-        experimentalNativeChat: true,
-        openAgentTabsInChatByDefault: true,
-        agent: quickAgent,
-        ...(draftText != null
-          ? { promptDelivery: 'draft' as const, launchDraftText: draftText }
-          : {})
-      }) === 'chat'
-
     // The draft always reaches the TUI, whichever way it is delivered.
     expect(`${startup?.command ?? ''}${startup?.draftPrompt ?? ''}`).toContain(ISSUE_URL)
     expect(seeded).toBe(expectMirrored)
-    expect(opensInChat).toBe(expectMirrored)
   })
 })

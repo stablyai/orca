@@ -1,5 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('./ssh-relay-opencode-runtime', () => ({
+  ensureRemoteOpenCodeRuntime: vi.fn().mockResolvedValue('ready')
+}))
 vi.mock('./ssh-relay-ripgrep-install', () => ({
   remoteRipgrepLayout: vi.fn().mockReturnValue(null),
   recordRemoteRipgrepReference: vi.fn().mockResolvedValue(false),
@@ -64,6 +67,7 @@ vi.mock('./ssh-relay-superseded-endpoints', () => ({
   sweepSupersededRelayEndpoints: vi.fn().mockResolvedValue([])
 }))
 import { sweepSupersededRelayEndpoints } from './ssh-relay-superseded-endpoints'
+import { ensureRemoteOpenCodeRuntime } from './ssh-relay-opencode-runtime'
 import { gcOldRelayVersions } from './ssh-relay-versioned-install'
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import { execCommand, waitForSentinel } from './ssh-relay-deploy-helpers'
@@ -119,8 +123,11 @@ function launchedDaemon(conn: SshConnection): boolean {
  * probe exists to prevent: the fresh daemon loses the bind by luck, not by design.
  */
 describe('deployAndLaunchRelay honours the incumbent verdict', () => {
+  afterEach(() => vi.unstubAllEnvs())
   beforeEach(() => {
     vi.clearAllMocks()
+    // The host-npm path is opt-in; these cases cover it.
+    vi.stubEnv('ORCA_SSH_REMOTE_RUNTIME', 'legacy')
     vi.mocked(sweepSupersededRelayEndpoints).mockReset().mockResolvedValue([])
     vi.mocked(execCommand).mockReset().mockResolvedValue('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
     vi.mocked(waitForSentinel).mockReset()
@@ -198,10 +205,18 @@ describe('deployAndLaunchRelay honours the incumbent verdict', () => {
         onClose: vi.fn()
       })
       vi.mocked(sweepSupersededRelayEndpoints).mockRejectedValueOnce(error)
-      await deployAndLaunchRelay(makeMockConnection())
+      vi.mocked(ensureRemoteOpenCodeRuntime).mockResolvedValueOnce('not-needed')
+      const result = await deployAndLaunchRelay(makeMockConnection())
       await vi.waitFor(() => expect(sweepSupersededRelayEndpoints).toHaveBeenCalledOnce())
       await new Promise((resolve) => setImmediate(resolve))
       expect(gcOldRelayVersions).toHaveBeenCalledTimes(expectedGcCalls)
+      const now = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 120_000)
+      try {
+        await result.prepareOpenCodeRuntime?.(new AbortController().signal)
+        expect(ensureRemoteOpenCodeRuntime).toHaveBeenCalledTimes(expectedGcCalls + 1)
+      } finally {
+        now.mockRestore()
+      }
     }
   )
 })

@@ -15,7 +15,11 @@ import {
   applyAgentSessionReservation,
   type AgentSessionReserveRequest
 } from './agent-session-reservation-admission'
-import type { AgentSessionStoreState } from './agent-session-record-store-file'
+import type { AgentSessionStoreState } from './agent-session-store-state'
+import {
+  claudeProviderHandle,
+  codexProviderHandle
+} from '../../shared/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 const LEASE_TTL_MS = 60_000
@@ -34,7 +38,7 @@ function adoptedLink(
 ): AgentSessionProviderHandleLink {
   return {
     linkId: 'claude-1-provider-session-alpha-1-empty',
-    handle: { provider: 'claude', sessionId: 'provider-session-alpha-1', leafUuid: null },
+    handle: claudeProviderHandle('provider-session-alpha-1', null),
     origin: 'adopted',
     mintedAtFence: 1,
     observedAt: NOW,
@@ -50,7 +54,6 @@ function reserveRequest(
     location: LOCATION,
     provider: 'claude',
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/dev/.claude' },
-    runtimeKind: 'native',
     expectedFence: null,
     spawnToken: 'spawn-a',
     claimKeyId: 'key-1',
@@ -64,14 +67,11 @@ function reserveRequest(
 
 function storeState(records: readonly AgentSessionRecord[] = []): AgentSessionStoreState {
   return {
-    schemaVersion: 2,
-    hostId: 'local',
     records: new Map(records.map((record) => [record.sessionId, record])),
     operations: new Map(),
     retiredClaimKeys: [],
     unreadableRecords: new Map(),
-    visibleSessionIds: new Set(),
-    visibleSessionIdsIndexPresent: true
+    sessionTabs: null
   }
 }
 
@@ -94,6 +94,21 @@ describe('adopted handle chain seeding', () => {
     const { record } = applyAgentSessionReservation(storeState(), reserveRequest(), LEASE_TTL_MS)
 
     expect(record.providerHandleChain).toEqual([])
+  })
+})
+
+describe('floating launch directory reservation', () => {
+  it('stores the host-selected folder when the record is first reserved', () => {
+    const request = reserveRequest({ launchDirectory: '/host/first-folder' })
+    const { record, disposition } = applyAgentSessionReservation(
+      storeState(),
+      request,
+      LEASE_TTL_MS
+    )
+
+    expect(disposition).toBe('created')
+    expect(record.launchDirectory).toBe('/host/first-folder')
+    expect(record.lease.claimStatus).toBe('reserved')
   })
 })
 
@@ -120,7 +135,7 @@ describe('adopted conversation ownership', () => {
         storeState([holder]),
         reserveRequest({
           adoptedHandleLink: adoptedLink({
-            handle: { provider: 'claude', sessionId: 'provider-session-other', leafUuid: null }
+            handle: claudeProviderHandle('provider-session-other', null)
           })
         }),
         LEASE_TTL_MS
@@ -147,6 +162,7 @@ describe('adopted conversation ownership', () => {
       ),
       location: LOCATION,
       accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/dev/.claude' },
+      launchDirectory: '/original-folder',
       providerHandleChain: [link]
     }
 
@@ -154,6 +170,7 @@ describe('adopted conversation ownership', () => {
       storeState([committed]),
       reserveRequest({
         adoptedHandleLink: link,
+        launchDirectory: '/changed-folder',
         expectedFence: 1,
         handoffOperationId: 'handoff-1'
       }),
@@ -162,6 +179,7 @@ describe('adopted conversation ownership', () => {
 
     expect(disposition).toBe('retry-reservation')
     expect(record.providerHandleChain).toEqual([link])
+    expect(record.launchDirectory).toBe('/original-folder')
   })
 
   it('refuses a Codex adoption another record already holds', () => {
@@ -172,7 +190,7 @@ describe('adopted conversation ownership', () => {
       providerHandleChain: [
         {
           linkId: 'codex-1-thread-1',
-          handle: { provider: 'codex', threadId: 'thread-1' },
+          handle: codexProviderHandle('thread-1'),
           origin: 'created',
           mintedAtFence: 7,
           observedAt: NOW
@@ -189,7 +207,7 @@ describe('adopted conversation ownership', () => {
           accountHome: { variable: 'CODEX_HOME', path: '/home/dev/.codex' },
           adoptedHandleLink: adoptedLink({
             linkId: 'codex-1-thread-1-adopted',
-            handle: { provider: 'codex', threadId: 'thread-1' }
+            handle: codexProviderHandle('thread-1')
           })
         }),
         LEASE_TTL_MS
@@ -206,7 +224,8 @@ describe('re-create over a failed create', () => {
     provenHandleLinkId: null,
     ownerProcess: null,
     reservedSpawnToken: null,
-    claimStatus: 'released'
+    claimStatus: 'released',
+    deathEvidence: { kind: 'exit-observed', detail: 'the create failed', observedAt: 1 }
   })
   function failedCreate(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRecord {
     return {
@@ -232,10 +251,12 @@ describe('re-create over a failed create', () => {
   it('refuses when the record bound a conversation, or its attempt may still run', () => {
     const bound = failedCreate({ providerHandleChain: [adoptedLink()] })
     const unproven = failedCreate({
-      lease: { ...EXITED, claimStatus: 'reserved', handoffStage: 'manual-recovery' }
+      lease: { ...EXITED, claimStatus: 'reserved', handoffStage: 'recovering' }
     })
+    // Released so a send can start over, but nothing proved the attempt gone.
+    const releasedUnproven = failedCreate({ lease: { ...EXITED, deathEvidence: null } })
 
-    for (const record of [bound, unproven]) {
+    for (const record of [bound, unproven, releasedUnproven]) {
       expect(() =>
         applyAgentSessionReservation(storeState([record]), reserveRequest(), LEASE_TTL_MS)
       ).toThrow('agent_session_conflict')

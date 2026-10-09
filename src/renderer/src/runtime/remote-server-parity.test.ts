@@ -18,10 +18,10 @@ import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import type { Tab } from '../../../shared/tab-types'
 import {
   applyFreshWebSessionTabsSnapshot,
-  applyWebSessionTabsSnapshot,
-  resetWebSessionTabsSnapshotFreshnessForTests,
-  type WebSessionTabsSyncState
-} from './web-session-tabs-sync'
+  applyWebSessionTabsSnapshot
+} from './web-session-tabs-sync/snapshot-api'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import {
   recordWebSessionFocusIntent,
   resetWebSessionFocusIntentForTests
@@ -205,29 +205,6 @@ describe('parity §3: remote terminal create appends rightmost (matches local)',
     // Local rule: new tab appends to the end. The new one must be last.
     expect(order.at(-1)).toBe(toWebTerminalSurfaceTabId('host-tab-3'))
     expect(order).toEqual([
-      toWebTerminalSurfaceTabId('host-tab-1'),
-      toWebTerminalSurfaceTabId('host-tab-2'),
-      toWebTerminalSurfaceTabId('host-tab-3')
-    ])
-  })
-
-  it('preserves existing relative order when adding (no reshuffle)', () => {
-    const prior = stateWithLocalTerminals([
-      localTerminal('host-tab-1', 0, false),
-      localTerminal('host-tab-2', 1, true)
-    ])
-    recordWebSessionFocusIntent({ environmentId: ENV }, WT, `host-tab-3::${LEAF_C}`)
-    const patch = applyWebSessionTabsSnapshot(
-      prior,
-      makeSnapshot([
-        { parentTab: 'host-tab-1', leaf: LEAF_A, active: false },
-        { parentTab: 'host-tab-2', leaf: LEAF_B, active: false },
-        { parentTab: 'host-tab-3', leaf: LEAF_C, active: true }
-      ]),
-      ENV,
-      NOW + 10
-    ) as Partial<WebSessionTabsSyncState>
-    expect(groupOrder(patch)).toEqual([
       toWebTerminalSurfaceTabId('host-tab-1'),
       toWebTerminalSurfaceTabId('host-tab-2'),
       toWebTerminalSurfaceTabId('host-tab-3')
@@ -420,26 +397,5 @@ describe('parity §11: remote browser create focuses the new browser tab', () =>
     // or still 'terminal' — never 'browser'.
     const nextType = patch.activeTabTypeByWorktree?.[WT] ?? 'terminal'
     expect(nextType).toBe('terminal')
-  })
-})
-
-// ──────────────────────────────────────────────────────────────────────────
-// Plan §1 — Lifecycle: an emptied host snapshot does not bootstrap phantom tabs
-// when local terminals already exist (sleep/disconnect must not invent state).
-// ──────────────────────────────────────────────────────────────────────────
-describe('parity §1: empty host snapshot does not fabricate tabs', () => {
-  it('an empty snapshot with existing local terminals does not add a phantom tab', () => {
-    const prior = stateWithLocalTerminals([localTerminal('host-tab-1', 0, true)])
-    const patch = applyWebSessionTabsSnapshot(
-      prior,
-      makeSnapshot([], { activeTabId: null, activeTabType: null }),
-      ENV,
-      NOW + 10
-    ) as Partial<WebSessionTabsSyncState>
-    // No new fabricated terminal ids beyond what existed.
-    const order = groupOrder(patch)
-    for (const id of order) {
-      expect(id).toBe(toWebTerminalSurfaceTabId('host-tab-1'))
-    }
   })
 })

@@ -18,6 +18,10 @@ type RelayGraceLifecycleOptions = {
   hasAcceptedSocketClient: () => boolean
   ownsSocketPath: () => boolean
   disposeOwnedProcesses: () => Promise<void>
+  /** Lifts the admission fences disposal raised, for a relay that stays up after a deferral. */
+  reopenOwnedProcesses: () => void
+  /** Never rejects; runs only after nothing can defer the exit. */
+  disposeExitOnlyServices: () => Promise<void>
   disposeRuntime: () => void
 }
 
@@ -120,10 +124,13 @@ export class RelayGraceLifecycle {
     this.graceDeadlineAt = null
     this.graceReason = null
     this.graceBranch = null
-    void this.options.ptyHandler
-      .dispose()
+    // Why owned processes first: their disposal can defer, and a deferral must leave the PTYs intact,
+    // because a disposed PTY handler kills every terminal and refuses new ones.
+    void this.options
+      .disposeOwnedProcesses()
       .then(async () => {
-        await this.options.disposeOwnedProcesses()
+        await this.options.ptyHandler.dispose()
+        await this.options.disposeExitOnlyServices()
         this.stopPoolWatch()
         this.stopPoolActiveWatch()
         this.options.disposeRuntime()
@@ -131,6 +138,7 @@ export class RelayGraceLifecycle {
       })
       .catch((error) => {
         this.shutdownInFlight = false
+        this.options.reopenOwnedProcesses()
         relayLogLine(
           `[relay] Shutdown deferred: ${error instanceof Error ? error.message : String(error)}`
         )

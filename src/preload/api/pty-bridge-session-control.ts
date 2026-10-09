@@ -1,7 +1,11 @@
 import { ipcRenderer } from 'electron'
-import type { AgentSessionPtyWriteRefusal } from '../../shared/agent-session-pty-write-admission'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type {
+  TerminalLeafMoveRequest,
+  TerminalLeafMoveResult
+} from '../../shared/terminal-leaf-move'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -16,6 +20,7 @@ import type { TerminalViewAttributes } from '../../shared/terminal-view-attribut
 import type { PtyMainDeliveryDiagnostics } from '../../shared/pty-delivery-diagnostics'
 import type { AgentKind, LaunchSource, RequestKind } from '../../shared/telemetry-events'
 import type { PreloadApi } from '../api-types'
+import type { TerminalPanePlacement } from '../../shared/terminal-pane-placement'
 
 export const ptySessionControlApi = {
   spawn: (opts: {
@@ -46,6 +51,8 @@ export const ptySessionControlApi = {
     leafId?: string
     // Why: a pane with a live owner is otherwise reattached; a restart names the PTY main must stop first.
     replacesPtyId?: string
+    // Which tab and leaf a fresh PTY joins; older mains ignore it.
+    placement?: TerminalPanePlacement
     // Why: loose typing on purpose — renderer owns launch metadata, main owns whether the launch happened and validates (telemetry-plan.md §Agent launch semantics).
     telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
   }): Promise<{
@@ -72,22 +79,19 @@ export const ptySessionControlApi = {
     /** Host verdict on the shell-ready marker; absent when the execution host predates the field. */
     shellReadyArmed?: boolean
   }> => ipcRenderer.invoke('pty:spawn', opts),
-  write: (id: string, data: string): void => {
-    ipcRenderer.send('pty:write', { id, data })
+  write: (id: string, data: string, inputKind: TerminalInputKind): void => {
+    ipcRenderer.send('pty:write', { id, data, inputKind })
   },
-  writeAccepted: (id: string, data: string): Promise<boolean> =>
-    ipcRenderer.invoke('pty:writeAccepted', { id, data }),
-  onWriteUnavailable: (
-    callback: (payload: {
-      id: string
-      /** Set only when a durable agent-session lease refused the write; absent otherwise. */
-      agentSessionRefusal?: AgentSessionPtyWriteRefusal
-    }) => void
-  ): (() => void) => {
-    const handler = (
-      _event: Electron.IpcRendererEvent,
-      payload: { id: string; agentSessionRefusal?: AgentSessionPtyWriteRefusal }
-    ): void => callback(payload)
+  writeAccepted: (
+    id: string,
+    data: string,
+    inputKind: TerminalInputKind,
+    options?: { requireWriteSettlement?: true }
+  ): Promise<boolean> =>
+    ipcRenderer.invoke('pty:writeAccepted', { id, data, inputKind, ...options }),
+  onWriteUnavailable: (callback: (payload: { id: string }) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: { id: string }): void =>
+      callback(payload)
     ipcRenderer.on('pty:writeUnavailable', handler)
     return () => ipcRenderer.removeListener('pty:writeUnavailable', handler)
   },
@@ -105,6 +109,9 @@ export const ptySessionControlApi = {
   },
   clearBuffer: (id: string): void => {
     ipcRenderer.send('pty:clearBuffer', { id })
+  },
+  resetInputModes: (id: string): void => {
+    ipcRenderer.send('pty:resetInputModes', { id })
   },
   ackColdRestore: (id: string): void => {
     ipcRenderer.send('pty:ackColdRestore', { id })
@@ -160,6 +167,8 @@ export const ptySessionControlApi = {
   ): Promise<{ id: string; authoritative: boolean | null }[]> =>
     ipcRenderer.invoke('pty:getAuthoritativeBufferSnapshotCapabilities', { ids }),
   hasPty: (id: string): Promise<boolean | null> => ipcRenderer.invoke('pty:hasPty', { id }),
+  moveLeafToNewTab: (request: TerminalLeafMoveRequest): Promise<TerminalLeafMoveResult> =>
+    ipcRenderer.invoke('pty:moveLeafToNewTab', request),
   getMainBufferSnapshot: (
     id: string,
     opts?: { scrollbackRows?: number }

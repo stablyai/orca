@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Plus } from 'lucide-react'
-import { ActionButton } from './SourceControl'
+import { ActionButton } from './source-control/listing/action-button'
 import { Button } from '@/components/ui/button'
 
 type ReactElementLike = {

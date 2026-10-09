@@ -91,6 +91,8 @@ export function createStructuredAgentEnvironmentResolvers(
 ): {
   resolveCodexEnvironment: () => Promise<NodeJS.ProcessEnv>
   resolveClaudeInheritedEnv: () => Promise<Record<string, string>>
+  /** The shared base every agent's child env starts from, before its own overlay. */
+  resolveBaseEnvironment: () => Promise<Record<string, string>>
 } {
   const shellEnvironment = (sources.resolveEnvironment ?? resolveLoginShellEnvironment)()
   const resolveBase = async (): Promise<Record<string, string>> =>
@@ -105,6 +107,7 @@ export function createStructuredAgentEnvironmentResolvers(
       ...(await sources.resolveLaunchEnvOverlay?.()),
       ...sources.resolveCodexOverrides?.()
     }),
-    resolveClaudeInheritedEnv: resolveBase
+    resolveClaudeInheritedEnv: resolveBase,
+    resolveBaseEnvironment: resolveBase
   }
 }

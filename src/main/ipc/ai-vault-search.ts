@@ -35,6 +35,7 @@ import {
   getActiveSshAiVaultHostInfosResult
 } from './ai-vault'
 import { AI_VAULT_ALL_HOST_TIMEOUT_MS } from './ai-vault-all-host-timeouts'
+import { searchWithStructuredOwners } from '../ai-vault/structured-session-ownership'
 
 export type RuntimeSessionSearchCall = (
   environmentId: string,
@@ -44,6 +45,7 @@ export type RuntimeSessionSearchCall = (
 
 export type AiVaultSearchHandlerOptions = {
   callRuntimeSearch?: RuntimeSessionSearchCall
+  ensureStructuredSessionOwnership?: () => Promise<void>
 }
 
 // One wording with the session list, which refuses the same unroutable scope.
@@ -137,7 +139,7 @@ async function searchByExecutionHostScope(
   scope: ParsedExecutionHost
 ): Promise<AiVaultSearchResponse> {
   if (scope.kind === 'local') {
-    return searchSessionService(request, 'ipc')
+    return searchLocalSessions(request)
   }
   const client = remoteSearchClient(scope, handlerOptions.callRuntimeSearch)
   if (!client) {
@@ -150,6 +152,13 @@ async function searchByExecutionHostScope(
     : response
 }
 
+async function searchLocalSessions(request: AiVaultSearchRequest): Promise<AiVaultSearchResponse> {
+  return searchWithStructuredOwners(
+    searchSessionService(request, 'ipc'),
+    handlerOptions.ensureStructuredSessionOwnership
+  )
+}
+
 /**
  * Every host the session list's `all` scope would enumerate, in one leg each.
  * A broken enumerator already degrades to an empty list rather than throwing,
@@ -158,7 +167,7 @@ async function searchByExecutionHostScope(
 function allExecutionHostLegs(): SessionSearchHostLeg[] {
   const localLeg: SessionSearchHostLeg = {
     executionHostId: LOCAL_EXECUTION_HOST_ID,
-    search: (request) => searchSessionService(request, 'ipc')
+    search: searchLocalSessions
   }
   const sshLegs = getActiveSshAiVaultHostInfosResult().hostInfos.map(({ targetId }) =>
     remoteHostLeg({ kind: 'ssh', id: toSshExecutionHostId(targetId), targetId })

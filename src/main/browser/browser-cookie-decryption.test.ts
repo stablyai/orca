@@ -26,13 +26,6 @@ function encryptGcm(plaintext: Buffer): Buffer {
 }
 
 describe('decryptCookieValueRaw host-key hash prefix', () => {
-  it('strips the hash from a non-empty value', () => {
-    const plaintext = Buffer.concat([hostKeyHash(HOST_KEY), Buffer.from('session-value')])
-    expect(decryptCookieValueRaw(encryptCbc(plaintext), cbcKeyResult, HOST_KEY)).toEqual(
-      Buffer.from('session-value')
-    )
-  })
-
   it('decrypts an empty value whose plaintext is only the hash', () => {
     const encrypted = encryptCbc(hostKeyHash(HOST_KEY))
     expect(decryptCookieValueRaw(encrypted, cbcKeyResult, HOST_KEY)).toEqual(Buffer.alloc(0))

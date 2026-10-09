@@ -135,8 +135,7 @@ async function openPage({
   shellHost = SHELL_HOST,
   shellStorage = {},
   shellGrants,
-  shellPageRoutes = null,
-  shellAccepts = null
+  shellPageRoutes = null
 } = {}) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
   if (shellRoute !== undefined) {
@@ -151,8 +150,7 @@ async function openPage({
       storage: shellStorage,
       faultGrant,
       grants: shellGrants ?? [faultGrant],
-      pageRoutes: shellPageRoutes,
-      accepts: shellAccepts
+      pageRoutes: shellPageRoutes
     })
   }
   const errors = []
@@ -316,6 +314,12 @@ describe('the shell policy this page is tested under', () => {
     expect(parsed.split('; ')[0]).toBe("default-src 'none'")
     expect(parsed.split('; ').filter((entry) => entry.includes('unsafe-inline'))).toEqual([
       "style-src 'self' 'unsafe-inline'"
+    ])
+  })
+
+  it('admits only cached Blob URLs for media', () => {
+    expect(cspHeader.split('; ').filter((entry) => entry.startsWith('media-src'))).toEqual([
+      'media-src blob:'
     ])
   })
 
@@ -587,11 +591,7 @@ describeRender('the Route A page in a real browser', () => {
       })
     )
     try {
-      // The one case that advertises the report, because it is the only one asserting on it.
-      const opened = await openPage({
-        shellRoute: { pathname: HOST_ROUTE },
-        shellAccepts: [paintName]
-      })
+      const opened = await openPage({ shellRoute: { pathname: HOST_ROUTE } })
       await opened.page.goto(`${origin}/`, { waitUntil: 'load' })
       await opened.page.waitForFunction(
         () => document.documentElement.dataset.orcaWebEntry === 'mounted',
@@ -639,7 +639,6 @@ describeRender('the Route A page in a real browser', () => {
       const route = `${HOST_ROUTE}/pr/render-check-tree`
       const opened = await openPage({
         shellRoute: { pathname: route },
-        shellAccepts: [paintName],
         shellPageRoutes: [HOST_ROUTE_PATTERN, '/h/[hostId]/pr/[worktreeId]']
       })
       await opened.page.goto(`${origin}/`, { waitUntil: 'load' })

@@ -4,6 +4,7 @@ import {
   isTerminalMiddleClickActivation
 } from './terminal-link-activation'
 import type { TerminalLinkClickBehavior } from './terminal-link-click-behavior'
+import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import {
   closeLinkActionRequest,
   type LinkAction,
@@ -27,6 +28,8 @@ export type TerminalLinkActionContext = {
   focusTerminal: () => void
   plainClickBehavior?: TerminalLinkClickBehavior
   middleClickBehavior?: TerminalLinkClickBehavior
+  /** The host running the pane's shell; absent reads as not this machine. */
+  sourceOwner?: HttpLinkSourceOwner
 }
 
 export function closeTerminalLinkActionRequest(
@@ -38,7 +41,7 @@ export function closeTerminalLinkActionRequest(
 
 type LinkActionDetails = Pick<
   TerminalLinkActionRequest,
-  'destination' | 'kind' | 'primary' | 'alternate'
+  'destination' | 'kind' | 'primary' | 'alternate' | 'secondaryActions'
 >
 
 export function requestTerminalLinkAction(
@@ -50,7 +53,7 @@ export function requestTerminalLinkAction(
     !event ||
     !context ||
     !(
-      isTerminalLinkActionActivation(event) ||
+      (isTerminalLinkActionActivation(event) && context.plainClickBehavior !== 'none') ||
       (isTerminalMiddleClickActivation(event) && context.middleClickBehavior !== 'none')
     ) ||
     !context.pointerGesture.canRequestAction(event)

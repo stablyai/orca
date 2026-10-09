@@ -20,6 +20,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { createServer } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
+import { runProcess, type ProcessResult } from '../../../src/shared/child-process/run-process'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
 import { retryTransientMainEvaluate } from './electron-main-evaluate-retry'
@@ -29,28 +30,18 @@ import {
   createElectronHomeIsolation,
   type ElectronHomeIsolation
 } from './electron-home-isolation'
+import type { LaunchOptions } from './orca-restart-launch-options'
 
 type LaunchedOrca = {
   app: ElectronApplication
   page: Page
 }
 
-type LaunchOptions = {
-  /**
-   * Called for each chunk the relaunched main process writes to stderr. The
-   * listener is attached before `firstWindow()` resolves so main-process
-   * startup logs (e.g. the daemon health-check guard) can't be emitted before
-   * the test starts capturing.
-   */
-  onStderr?: (chunk: string) => void
-  /** Merged into this launch only (not baked into the session's shared env). */
-  extraEnv?: Record<string, string>
-}
-
 type RestartSession = {
   userDataDir: string
   seedCodexResumeRollout: (sessionId: string, cwd: string) => string
   launch: (options?: LaunchOptions) => Promise<LaunchedOrca>
+  launchUntilExit: (executablePath: string) => Promise<ProcessResult>
   /** Gracefully close a launch, letting beforeunload flush session state. */
   close: (app: ElectronApplication) => Promise<void>
   /** Remove the shared userDataDir after the test is done. */
@@ -175,7 +166,7 @@ export function createRestartSession(
   const launch = async (options?: LaunchOptions): Promise<LaunchedOrca> => {
     runtimeWsPort ??= await reserveRestartRuntimeWsPort()
     const app = await electron.launch({
-      args: getOrcaElectronLaunchArgs(mainPath, headful),
+      args: [...getOrcaElectronLaunchArgs(mainPath, headful), ...(options?.extraArgs ?? [])],
       env: {
         ...homeIsolation.env,
         ...options?.extraEnv,
@@ -190,21 +181,44 @@ export function createRestartSession(
     }
     try {
       const resolvedHome = await retryTransientMainEvaluate(() =>
-        app.evaluate(({ app }) => app.getPath('home'))
+        app.evaluate(({ app }) => {
+          // This fixture owns every launch; native relaunch leaves an unattached Playwright child.
+          app.relaunch = () => {}
+          return app.getPath('home')
+        })
       )
       assertElectronResolvedIsolatedHome(resolvedHome, homeIsolation)
+      await options?.beforeFirstWindow?.(app)
+      const page = await app.firstWindow({ timeout: 120_000 })
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
+      return { app, page }
     } catch (error) {
       await closeElectronAppForE2E(app)
       throw error
     }
-    const page = await app.firstWindow({ timeout: 120_000 })
-    await page.waitForLoadState('domcontentloaded')
-    await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
-    return { app, page }
   }
 
   const close = async (app: ElectronApplication): Promise<void> => {
     await closeElectronAppForE2E(app)
+  }
+
+  // Startup refusals exit before a renderer exists; capture their output from process creation.
+  const launchUntilExit = async (executablePath: string): Promise<ProcessResult> => {
+    runtimeWsPort ??= await reserveRestartRuntimeWsPort()
+    return runProcess({
+      program: executablePath,
+      args: getOrcaElectronLaunchArgs(mainPath, false),
+      env: {
+        ...homeIsolation.env,
+        ORCA_BACKGROUND_LAUNCH: '1',
+        ORCA_E2E_HEADLESS: '1',
+        ORCA_E2E_RUNTIME_WS_PORT: String(runtimeWsPort)
+      },
+      timeoutMs: 30_000,
+      detached: process.platform !== 'win32',
+      terminationBarrier: true
+    })
   }
 
   const dispose = async (): Promise<void> => {
@@ -218,7 +232,7 @@ export function createRestartSession(
     }
   }
 
-  return { userDataDir, seedCodexResumeRollout, launch, close, dispose }
+  return { userDataDir, seedCodexResumeRollout, launch, launchUntilExit, close, dispose }
 }
 
 /**

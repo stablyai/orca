@@ -8,6 +8,7 @@ import type {
 } from '../shared/runtime-types'
 import type { MemorySnapshot, WorktreeMemory } from '../shared/process-stats-types'
 import { formatListingHostScope, type WithAnnotatedHostScope } from './omitted-host-scope-selectors'
+import { formatWorktreePsTerminalFields } from './worktree-ps-terminal-verdict'
 
 export function formatMemorySnapshot(snapshot: MemorySnapshot): string {
   const topWorktrees = [...snapshot.worktrees].sort((a, b) => b.memory - a.memory).slice(0, 10)
@@ -139,7 +140,7 @@ export function formatWorktreePs(result: WithAnnotatedHostScope<RuntimeWorktreeP
   const body = result.worktrees
     .map(
       (worktree) =>
-        `${worktree.repo} ${worktree.branch}  host=${worktree.hostId ?? 'unverifiable'}  live:${worktree.liveTerminalCount}  pty:${worktree.hasAttachedPty ? 'yes' : 'no'}  unread:${worktree.unread ? 'yes' : 'no'}\n${worktree.path}${worktree.preview ? `\npreview: ${worktree.preview}` : ''}`
+        `${worktree.repo} ${worktree.branch}  host=${worktree.hostId ?? 'unverifiable'}  ${formatWorktreePsTerminalFields(worktree)}  unread:${worktree.unread ? 'yes' : 'no'}\n${worktree.path}${worktree.preview ? `\npreview: ${worktree.preview}` : ''}`
     )
     .join('\n\n')
   const bodyWithScope = `${body}\n\n${scope}`

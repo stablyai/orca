@@ -10,12 +10,14 @@ import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shar
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspace-worktree'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
 import { buildRows } from '../grouping/build-rows'
 import type { ProjectGroupingModel } from '../grouping/project-grouping'
 import type { PinnedWorktreeDisplayPolicy, Row, WorktreeGroupBy } from '../grouping/row-types'
 import { getLogicalRepoOrderRankById } from '../../project-header-drop'
 import { getEmptyProjectPlaceholderRepoIds } from '../../empty-project-placeholder-repos'
+import { deferHostSectionCollapse, scopeHostSectionCollapse } from '../../host-section-collapse'
 import { addHostSectionRows } from '../../host-section-rows'
 import { orderHostSectionOptions } from '../../host-section-order'
 import { buildSidebarHostOptions } from '../../sidebar-host-options'
@@ -54,6 +56,7 @@ function collectRenderedSidebarRowKeys(sectionRows: ReturnType<typeof addHostSec
     } else if (row.type === 'item') {
       keys.add(row.rowKey)
     } else if (row.type === 'folder-workspace') {
+      keys.add(getFolderWorkspaceHostIdentity(row.folderWorkspace))
       keys.add(folderWorkspaceKey(row.folderWorkspace.id))
     } else if (row.type === 'pending-creation') {
       keys.add(`pending:${row.creationId}`)
@@ -141,6 +144,17 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     [hostOptions]
   )
 
+  const hostScopedGroups =
+    args.workspaceHostScope !== 'all' || args.visibleWorkspaceHostIds !== null
+  // Host sections apply lane collapse after splitting the rows by owner.
+  const rowCollapsedGroups = useMemo(
+    () =>
+      hostScopedGroups
+        ? deferHostSectionCollapse(effectiveCollapsedGroups)
+        : effectiveCollapsedGroups,
+    [effectiveCollapsedGroups, hostScopedGroups]
+  )
+
   const rows: Row[] = useMemo(
     () =>
       buildRows(
@@ -148,7 +162,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         worktrees,
         repoMap,
         args.prCache,
-        effectiveCollapsedGroups,
+        rowCollapsedGroups,
         repoOrder,
         args.workspaceStatuses,
         args.projectOrderBy,
@@ -172,7 +186,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       worktrees,
       repoMap,
       args.prCache,
-      effectiveCollapsedGroups,
+      rowCollapsedGroups,
       defaultHostId,
       repoOrder,
       args.workspaceStatuses,
@@ -215,29 +229,34 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     },
     [orderedHostOptions, setWorkspaceHostOrder, workspaceHostOrder]
   )
-  const sectionRows = useMemo(
-    () =>
-      addHostSectionRows({
-        rows,
-        hostOptions: orderedHostOptions,
-        workspaceHostScope: args.workspaceHostScope,
-        visibleWorkspaceHostIds: args.visibleWorkspaceHostIds,
-        defaultHostId,
-        collapsedHostKeys: effectiveCollapsedGroups,
-        forceCollapseHosts: hostDragActive,
-        // Why: projects/workspaces are the primary sidebar object; host sections are only an explicit host-filter view.
-        preferProjectGrouping: true
-      }),
-    [
-      args.visibleWorkspaceHostIds,
-      args.workspaceHostScope,
+  const sectionRows = useMemo(() => {
+    const sectioned = addHostSectionRows({
+      rows,
+      hostOptions: orderedHostOptions,
+      workspaceHostScope: args.workspaceHostScope,
+      visibleWorkspaceHostIds: args.visibleWorkspaceHostIds,
       defaultHostId,
-      effectiveCollapsedGroups,
-      hostDragActive,
-      orderedHostOptions,
-      rows
-    ]
-  )
+      collapsedHostKeys: effectiveCollapsedGroups,
+      forceCollapseHosts: hostDragActive,
+      // Why: projects/workspaces are the primary sidebar object; host sections are only an explicit host-filter view.
+      preferProjectGrouping: true
+    })
+    return hostScopedGroups
+      ? scopeHostSectionCollapse({
+          rows: sectioned,
+          collapsedGroups: effectiveCollapsedGroups
+        })
+      : sectioned
+  }, [
+    args.visibleWorkspaceHostIds,
+    args.workspaceHostScope,
+    defaultHostId,
+    effectiveCollapsedGroups,
+    hostDragActive,
+    hostScopedGroups,
+    orderedHostOptions,
+    rows
+  ])
   const renderedSidebarRowKeys = useMemo(
     () => collectRenderedSidebarRowKeys(sectionRows),
     [sectionRows]

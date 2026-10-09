@@ -102,7 +102,7 @@ export function useTabGroupActivationCommands({
         setActiveTabType('simulator', worktreeId)
         // simulator has no editor file entity
       } else {
-        setActiveFile(item.entityId)
+        setActiveFile(item.entityId, worktreeId)
         setActiveTabType('editor', worktreeId)
       }
     },
@@ -133,7 +133,7 @@ export function useTabGroupActivationCommands({
           environmentId: runtimeEnvironmentId
         })
       }
-      setActiveBrowserTab(browserTabId)
+      setActiveBrowserTab(browserTabId, worktreeId)
       setActiveTabType('browser', worktreeId)
     },
     [activateTab, focusGroup, groupId, groupTabs, setActiveBrowserTab, setActiveTabType, worktreeId]

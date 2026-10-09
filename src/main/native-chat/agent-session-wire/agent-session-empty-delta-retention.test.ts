@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
 import { createCodexStructuredItemStreams } from '../../codex/codex-structured-item-streams'
 import { createAgentSessionDeltaCoalescer } from './agent-session-delta-coalescer'
@@ -9,7 +10,7 @@ describe('empty streamed deltas', () => {
       sink: { appendItem() {}, appendTombstone() {}, publish() {} },
       turnIdFor: () => 'turn',
       identityFor: () => ({ provider: 'codex', threadId: 'thread', turnId: 'turn', ordinal: 0 }),
-      linkageFor: () => ({}),
+      attributionFor: () => ({ turnScope: AGENT_JOURNAL_THREAD_SCOPE }),
       schedule: () => () => {}
     })
     const append = (delta: string) =>
@@ -24,15 +25,16 @@ describe('empty streamed deltas', () => {
       }
       const originalJoin = Array.prototype.join
       let retainedSlots = -1
-      const spy = vi
-        .spyOn(Array.prototype, 'join')
-        .mockImplementation(function (this: unknown[], separator) {
-          // Byte counters cannot detect empty entries retained by the stream's chunk array.
-          if (separator === '' && this[0] === prefix) {
-            retainedSlots = this.length
-          }
-          return originalJoin.call(this, separator)
-        })
+      const spy = vi.spyOn(Array.prototype, 'join').mockImplementation(function (
+        this: unknown[],
+        separator
+      ) {
+        // Byte counters cannot detect empty entries retained by the stream's chunk array.
+        if (separator === '' && this[0] === prefix) {
+          retainedSlots = this.length
+        }
+        return originalJoin.call(this, separator)
+      })
       let snapshot: ReturnType<typeof streams.snapshot>
       try {
         snapshot = streams.snapshot('thread', 'item')

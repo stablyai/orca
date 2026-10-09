@@ -12,6 +12,7 @@
  * in. Both callers run the same two halves, so orchestration gets that guarantee too.
  */
 
+import { refuse } from '../../../../shared/agent-session-wire-refusals'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
 import type {
   AgentSessionAttachResult,
@@ -26,6 +27,7 @@ import type { StructuredAgentSessionHost } from '../../../native-chat/agent-sess
 import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
 import type { StructuredAgentSessionResumeSource } from '../../../../shared/structured-agent-session-create'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { StructuredAgentId } from '../../../../shared/agent-session-provider-handle'
 import {
   resolveUncommittedStructuredCreate,
   type StructuredCreateRefused
@@ -34,8 +36,9 @@ import {
 export type PreparedStructuredAgentSessionCreate = {
   host: StructuredAgentSessionHost
   attachParams: AgentSessionAttachParams
+  hostLaunchDirectory?: string
   /** Null when the caller supplied its own location; only a resolved worktree publishes a tab. */
-  tab: { workspaceId: string; agent: 'claude' | 'codex' } | null
+  tab: { workspaceId: string; agent: StructuredAgentId } | null
 }
 
 /**
@@ -43,7 +46,7 @@ export type PreparedStructuredAgentSessionCreate = {
  * intent, not a detail of it: without it a retry of "adopt this conversation" would replay as, or
  * conflict with, a blank create. `tabId` is covered so the declared digest spans the payload, but
  * replay keys on the attach fingerprint, so a retry naming another tab is answered with the one the
- * record holds. The canonicalizer drops `undefined`, so plain creates keep the digest they had.
+ * chat's tab holds. The canonicalizer drops `undefined`, so plain creates keep the digest they had.
  */
 export function structuredAgentSessionCreateIntentFingerprint(params: {
   envelope: AgentSessionMutationEnvelope
@@ -72,15 +75,15 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   ensureHost: () => Promise<StructuredAgentSessionHost>
   envelope: AgentSessionMutationEnvelope
   worktree: string
-  agent: 'claude' | 'codex'
+  agent: StructuredAgentId
   caller: StructuredAgentSessionCaller
   resumeFrom?: StructuredAgentSessionResumeSource
   /** Replaces the seed options the host resolves from settings. Orchestration passes the
    *  `--model`/`--effort` the dispatch asked for; a chat the user opened passes nothing and keeps
    *  the saved selection. Narrowed by the caller, so `{}` never reaches the reservation. */
   options?: Readonly<Record<string, string>>
-  /** The tab id the caller reserved for this chat, so its placement is recorded before the reply;
-   *  absent records the id clients derive. Beside `options`, after the fingerprint, likewise. */
+  /** The tab id the caller reserved for this chat, taken when its tab is published; absent, the tab
+   *  gets the id clients derive. Beside `options`, after the fingerprint, likewise. */
   tabId?: string
 }): Promise<PreparedStructuredAgentSessionCreate> {
   // Adoption replay may need the record loaded from disk before source discovery can be skipped.
@@ -98,9 +101,15 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     fields: attachFingerprintFields({ ...resolved, envelope: args.envelope })
   })
   host ??= await args.ensureHost()
-  const { agent: _resolvedAgent, provider: _resolvedProvider, ...resolvedAttach } = resolved
+  const {
+    agent: _resolvedAgent,
+    provider: _resolvedProvider,
+    hostLaunchDirectory,
+    ...resolvedAttach
+  } = resolved
   return {
     host,
+    ...(hostLaunchDirectory ? { hostLaunchDirectory } : {}),
     attachParams: {
       ...resolvedAttach,
       // After the fingerprint, deliberately: `attachFingerprintFields` excludes options because
@@ -108,13 +117,13 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
       // must replay rather than conflict.
       ...(args.options ? { options: args.options } : {}),
       ...(args.tabId ? { surfaceTabId: args.tabId } : {}),
-      provider: resolved.provider as 'claude' | 'codex',
-      agent: resolved.agent as 'claude' | 'codex',
+      provider: resolved.provider,
+      agent: resolved.agent,
       envelope: { ...args.envelope, payloadFingerprint: hostFingerprint }
     },
     tab: {
       workspaceId: resolved.location.workspaceId,
-      agent: resolved.agent as 'claude' | 'codex'
+      agent: resolved.agent
     }
   }
 }
@@ -127,28 +136,41 @@ export async function commitStructuredAgentSessionCreate(args: {
   activate: boolean
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const { prepared } = args
-  const result = await prepared.host.attach(args.caller, prepared.attachParams)
+  const result = prepared.hostLaunchDirectory
+    ? await prepared.host.attach(args.caller, prepared.attachParams, {
+        hostLaunchDirectory: prepared.hostLaunchDirectory
+      })
+    : await prepared.host.attach(args.caller, prepared.attachParams)
   if (!result.ok || !prepared.tab) {
     return result
   }
+  const surfaceTabId = prepared.attachParams.surfaceTabId
   try {
     await args.runtime.publishStructuredAgentSessionTab({
       workspaceId: prepared.tab.workspaceId,
       sessionId: result.value.sessionId,
       agent: prepared.tab.agent,
-      activate: args.activate
+      activate: args.activate,
+      ...(surfaceTabId ? { tabId: surfaceTabId } : {})
     })
   } catch (error) {
-    console.warn('[agent-session] create committed before tab publication failed', error)
+    prepared.host.deps.logger.warn('publishing the tab of a created chat failed', {
+      scope: 'create-tab-publication',
+      sessionId: result.value.sessionId,
+      error
+    })
     return {
       ok: false,
-      refusal: {
-        code: 'agent_session_operation_unknown',
-        message: 'The chat may have been created, but its tab could not be confirmed.'
-      }
+      refusal: refuse(
+        'agent_session_operation_unknown',
+        { reason: 'tabUnconfirmed' },
+        'The chat may have been created, but its tab could not be confirmed.'
+      )
     }
   }
-  return result
+  // Read after publishing, which is what gives the chat its tab.
+  const tabId = prepared.host.getSessionTabId?.(result.value.sessionId)
+  return tabId ? { ...result, value: { ...result.value, tabId } } : result
 }
 
 export async function createStructuredAgentSessionForWorktree(args: {
@@ -157,7 +179,7 @@ export async function createStructuredAgentSessionForWorktree(args: {
   caller: StructuredAgentSessionCaller
   envelope: AgentSessionMutationEnvelope
   worktree: string
-  agent: 'claude' | 'codex'
+  agent: StructuredAgentId
   activate: boolean
   options?: Readonly<Record<string, string>>
   tabId?: string

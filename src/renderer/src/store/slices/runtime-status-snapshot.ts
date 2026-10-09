@@ -4,6 +4,21 @@ import type { RuntimeEnvironmentStatus } from './runtime-status-types'
 import { ensureBrowserClientHostsForRestoredPages } from '@/runtime/restored-client-hosted-browser-host-attach'
 import { replayClientHostedBrowserCloseIntents } from '@/runtime/client-hosted-browser-close-intent-replay'
 
+/**
+ * Main re-paired this environment (an update or rollback run from the CLI) and nothing told this
+ * renderer; the status it now publishes under the new revision is that notice (P1-C).
+ */
+export function snapshotOutrunsCatalog(
+  snapshot: RuntimeHostStatusSnapshot,
+  state: Pick<AppState, 'runtimeEnvironments'>
+): boolean {
+  const environment = state.runtimeEnvironments.find((entry) => entry.id === snapshot.environmentId)
+  return (
+    environment !== undefined &&
+    snapshot.pairingRevision > (environment.pairingRevision ?? environment.createdAt)
+  )
+}
+
 export function applyRuntimeHostStatusSnapshot(
   snapshot: RuntimeHostStatusSnapshot,
   state: AppState,
@@ -35,7 +50,11 @@ export function applyRuntimeHostStatusSnapshot(
     state.setRuntimeEnvironmentStatus(snapshot.environmentId, entry)
     if (previous?.status == null) {
       void ensureBrowserClientHostsForRestoredPages(state)
-      void replayClientHostedBrowserCloseIntents(snapshot.environmentId, state)
+      void replayClientHostedBrowserCloseIntents(snapshot.environmentId, {
+        clientHostedBrowserCloseIntentsByEnvironment:
+          state.clientHostedBrowserCloseIntentsByEnvironment,
+        clearClientHostedBrowserCloseIntents: state.clearClientHostedBrowserCloseIntents
+      })
     }
   } else {
     // Lost contact or a failed method observes no runtime session ending.

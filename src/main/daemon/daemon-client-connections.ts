@@ -1,9 +1,10 @@
 import type { Socket } from 'node:net'
 import { StringDecoder } from 'node:string_decoder'
+import { isDaemonRequestFrame, isHelloFrame } from './daemon-client-frame-guards'
 import type { DaemonFileLog } from './daemon-file-log'
 import type { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
 import { createNdjsonParser, encodeNdjson } from './ndjson'
-import type { DaemonRequest, HelloMessage } from './types'
+import type { DaemonRequest } from './types'
 
 // Idle time before the first probe. How long the close then takes is the OS's probe schedule, not
 // ours, which is why the producer-stall watchdog never waits on it.
@@ -108,13 +109,13 @@ export class DaemonClientConnections {
   }
 
   private handleFirstMessage(socket: Socket, message: unknown): void {
-    const hello = message as HelloMessage
-    if (hello.type !== 'hello') {
+    if (!isHelloFrame(message)) {
       this.options.log.log('client-hello-rejected', { reason: 'expected-hello' })
       socket.write(encodeNdjson({ type: 'hello', ok: false, error: 'Expected hello' }))
       socket.destroy()
       return
     }
+    const hello = message
     if (hello.version !== this.options.protocolVersion) {
       this.options.log.log('client-hello-rejected', {
         reason: 'protocol-mismatch',
@@ -175,7 +176,7 @@ export class DaemonClientConnections {
       this.options.onAuthenticatedPair()
       return
     }
-    // Parsed wire data is not made safe by the HelloMessage assertion above.
+    // The guard checks only that role is a string; anything else was answered above.
     socket.destroy()
   }
 
@@ -201,7 +202,15 @@ export class DaemonClientConnections {
   private setupControlParser(socket: Socket, clientId: string): void {
     const decoder = new StringDecoder('utf8')
     const parser = createNdjsonParser(
-      (message) => this.options.onControlRequest(socket, clientId, message as DaemonRequest),
+      (message) => {
+        if (isDaemonRequestFrame(message)) {
+          this.options.onControlRequest(socket, clientId, message)
+          return
+        }
+        // Unroutable without an id, so no reply is possible; drop only this connection.
+        this.options.log.log('client-frame-rejected', { clientId })
+        socket.destroy()
+      },
       () => {}
     )
     socket.removeAllListeners('data')

@@ -50,14 +50,14 @@ describe('armed input modes arm the unclean-death trigger', () => {
     expect(triggers(scanner, chunk)).toBe(false)
   })
 
-  it('stays one-shot until a fresh enable', () => {
+  it('re-triggers at every D until the mode is disarmed', () => {
     const scanner = new TerminalShellLifecycleScanner()
 
     expect(triggers(scanner, `${COMMAND_START}\x1b[?1004hRUN${COMMAND_DONE}`)).toBe(true)
-    // A refuted proof leaves ?1004 armed; later prompts must not pause again.
-    expect(triggers(scanner, `$ ${COMMAND_START}ls${COMMAND_DONE}`)).toBe(false)
-    expect(triggers(scanner, `$ ${COMMAND_START}ls${COMMAND_DONE}`)).toBe(false)
-    expect(triggers(scanner, `$ ${COMMAND_START}\x1b[?1000hRUN${COMMAND_DONE}`)).toBe(true)
+    // A refuted proof leaves ?1004 armed and command-owned; each later D re-asks.
+    expect(triggers(scanner, `$ ${COMMAND_START}ls${COMMAND_DONE}`)).toBe(true)
+    expect(triggers(scanner, `$ ${COMMAND_START}ls${COMMAND_DONE}`)).toBe(true)
+    expect(triggers(scanner, `\x1b[?1004l$ ${COMMAND_START}ls${COMMAND_DONE}`)).toBe(false)
   })
 
   it('treats modes the prompt armed before the command started as shell-owned', () => {
@@ -340,6 +340,25 @@ describe('Session grounds a proven normal-buffer death', () => {
     ).toBe(true)
     expect(snapshot?.modes.mouseTrackingMode).toBe('none')
     expect(snapshot?.snapshotAnsi).toContain('\x1b[?1004h')
+  })
+
+  it("grounds an agent's modes when it dies after nested shells' refuted Ds", async () => {
+    const leak = { data: `${COMMAND_START}nested\r\n${COMMAND_DONE}`, confirm: false }
+    const { snapshot, records, proofs } = await runSteps([
+      { data: `${PROMPT_START}$ ${COMMAND_START}\x1b[>1u\x1b[?1003hAGENT` },
+      ...Array.from({ length: 5 }, () => leak),
+      { data: `EXIT\r\n${COMMAND_DONE}${PROMPT_START}$ `, confirm: true },
+      { data: `${COMMAND_START}ls\r\n${COMMAND_DONE}${PROMPT_START}$ ` }
+    ])
+
+    // The confirmed ground disarms the modes: the next prompt opens no episode.
+    expect(proofs).toBe(6)
+    expect(
+      records.some(
+        (record) => record.kind === 'output' && record.data.includes(PROCESS_BOUNDARY_GROUND)
+      )
+    ).toBe(true)
+    expect(snapshot?.modes.mouseTrackingMode).toBe('none')
   })
 
   it('flushes without the ground when the proof is refuted', async () => {

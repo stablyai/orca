@@ -3,6 +3,7 @@ import { getConnectionId } from '@/lib/connection-context'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { findGithubPrWorkspaceAttachment } from '@/lib/github-work-item-workspace-attachment'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
@@ -10,7 +11,7 @@ import { planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
 import {
   pickSourceControlLaunchAgent,
   readSourceControlLaunchRecipeAgentId
-} from '@/lib/source-control-launch-agent-selection'
+} from '../../../shared/source-control-launch-agent-selection'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
@@ -140,7 +141,12 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
   const attachedWorkspace =
     args.worktreeId || !args.item
       ? null
-      : findGithubPrWorkspaceAttachment(store.allWorktrees(), args.repoId, args.item.number)
+      : findGithubPrWorkspaceAttachment(
+          store.allWorktrees(),
+          args.repoId,
+          args.item.number,
+          args.item.url
+        )
   const targetWorktreeId = args.worktreeId ?? attachedWorkspace?.id ?? null
   if (targetWorktreeId) {
     const targetWorktree = store.allWorktrees().find((worktree) => worktree.id === targetWorktreeId)
@@ -188,6 +194,7 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
     }
     let revealFailed = false
     const result = launchAgentInNewTab({
+      requestId: newAgentLaunchRequestId(),
       agent,
       worktreeId: targetWorktreeId,
       groupId: args.groupId ?? targetWorktreeId,

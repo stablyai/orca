@@ -5,6 +5,7 @@
 // the block. The frozen sentence beside it is built here too, so the twin and
 // the block can never describe the task differently.
 
+import type { AgentJournalMessageItem } from './agent-session-journal-types'
 import {
   isBackgroundTaskBlock,
   type NativeChatBackgroundTaskBlock,
@@ -111,6 +112,16 @@ export function backgroundTaskFallbackText(block: NativeChatBackgroundTaskBlock)
   }
   const verb = SETTLED_VERBS[block.state] ?? 'stopped reporting'
   return `${subject.charAt(0).toUpperCase()}${subject.slice(1)} ${verb}`
+}
+
+export function backgroundTaskJournalBody(
+  block: NativeChatBackgroundTaskBlock
+): AgentJournalMessageItem {
+  return {
+    kind: 'message',
+    role: 'system',
+    blocks: [{ type: 'text', text: backgroundTaskFallbackText(block) }, { ...block }]
+  }
 }
 
 /** The background-task rows in `blocks`. */

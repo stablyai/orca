@@ -61,7 +61,7 @@ vi.mock('./github-enterprise-repository', () => ({
   isGitHubHostAuthenticated: vi.fn().mockResolvedValue(true)
 }))
 
-import { createGitHubPullRequest } from './client'
+import { createGitHubPullRequest } from './client/create/create-github-pull-request'
 
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 

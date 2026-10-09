@@ -1,14 +1,17 @@
 export type { TerminalCreateOptions } from './runtime-terminal-contracts'
+export type { Worktree } from '../../shared/worktree/types'
 export type { RuntimeTerminalCreate } from '../../shared/runtime-types'
 export {
   createTerminalRevealWarning,
   ownerSurfacing,
   resolveTerminalPresentation
 } from './orca-runtime-core'
-export { isValidHostTerminalTabId } from '../../shared/terminal-tab-id'
-export { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
+export { makePaneKey } from '../../shared/stable-pane-id'
 export { randomUUID } from 'node:crypto'
-export { admitStablePaneAdoption } from './runtime-terminal-pane-identity'
+export {
+  admitStablePaneAdoption,
+  allocateTerminalPaneIdentity
+} from './runtime-terminal-pane-identity'
 export {
   copySleepingAgentLaunchConfig,
   inferCapturedClaudeAgentTeamsMode,
@@ -20,10 +23,11 @@ export {
   addClaudeTeammateModeInProcess
 } from '../../shared/claude-agent-teams-tmux-compat'
 export { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../shared/setup-agent-sequencing'
-export { getTerminalViewColorQueryReplyColors } from './terminal-view-attribute-store'
+export { getTerminalViewerColors, setPairedViewerColors } from './terminal-view-attribute-store'
+export { normalizeColorQueryReplyColors } from '../../shared/pty-owner-color-query-colors'
 export type { RuntimePtyController } from './runtime-pty-controller-contract'
-export { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
 export { getRuntimeDesktopSurface } from './runtime-desktop-surface'
+export { runtimeNewTabPlacement } from './runtime-terminal-spawn-placement'
 export type { IpcMainEvent } from 'electron'
 
 // Why initiallyHidden: no renderer pane exists yet, so main must answer startup queries — Muse

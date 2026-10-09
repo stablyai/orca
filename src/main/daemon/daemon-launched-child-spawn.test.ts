@@ -49,3 +49,33 @@ describe('daemon launch scope ownership', () => {
     )
   })
 })
+
+describe('daemon launch environment', () => {
+  const originalBus = process.env.DBUS_SESSION_BUS_ADDRESS
+  afterEach(() => {
+    if (originalBus === undefined) {
+      delete process.env.DBUS_SESSION_BUS_ADDRESS
+    } else {
+      process.env.DBUS_SESSION_BUS_ADDRESS = originalBus
+    }
+  })
+
+  it.each([false, true])(
+    "never hands Chromium's disabled: bus marker to the daemon (scoped=%s)",
+    (scoped) => {
+      process.env.DBUS_SESSION_BUS_ADDRESS = 'disabled:'
+      spawnDaemonChildProcess(options, scoped)
+      const spec = (scoped ? spawn : fork).mock.calls[0]?.[0]
+      expect(spec.env).not.toHaveProperty('DBUS_SESSION_BUS_ADDRESS')
+      expect(spec.env.ELECTRON_RUN_AS_NODE).toBe('1')
+    }
+  )
+
+  it('keeps a real session bus address', () => {
+    process.env.DBUS_SESSION_BUS_ADDRESS = 'unix:path=/run/user/1000/bus'
+    spawnDaemonChildProcess(options, false)
+    expect(fork.mock.calls[0]?.[0].env.DBUS_SESSION_BUS_ADDRESS).toBe(
+      'unix:path=/run/user/1000/bus'
+    )
+  })
+})

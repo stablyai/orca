@@ -92,4 +92,31 @@ describe('startRuntimeStatusProbe', () => {
     expect(calls()).toBe(3)
     cancel()
   })
+
+  it('reports each failed attempt once its retry is scheduled, and never an answer', async () => {
+    const { client } = makeClient([
+      new Error('request timed out'),
+      new LogicalClientCutoverError(),
+      ok(null)
+    ])
+    const seen: (HostStatusReply | null)[] = []
+    let failed = 0
+    const cancel = startRuntimeStatusProbe(
+      client,
+      (status) => seen.push(status),
+      () => {
+        failed += 1
+      }
+    )
+    await flushMicrotasks()
+    expect(failed).toBe(1)
+    await vi.advanceTimersByTimeAsync(1_000)
+    await flushMicrotasks()
+    expect(failed).toBe(2)
+    await vi.advanceTimersByTimeAsync(250)
+    await flushMicrotasks()
+    expect(seen).toEqual([null])
+    expect(failed).toBe(2)
+    cancel()
+  })
 })

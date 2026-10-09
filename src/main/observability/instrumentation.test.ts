@@ -219,16 +219,23 @@ describe('addWorktreeCreatePhaseAttributes', () => {
     expect(attributes['worktree.create.unattributed_ms']).toBe(200)
   })
 
-  it('records a prepared-checkout hit and whether it had to be retargeted', () => {
+  it('records a prepared-checkout hit, the reset it needed and who armed it', () => {
     const { attributes, span } = capture()
     addWorktreeCreatePhaseAttributes(span, {
       totalDurationMs: 900,
       phases: [{ phase: 'git_worktree_add', startedAtMs: 0, durationMs: 400 }],
-      preparedCheckout: { status: 'hit', retargeted: true }
+      preparedCheckout: {
+        status: 'hit',
+        reset: 'retargeted',
+        origin: 'rearm',
+        buildMs: 1,
+        idleMs: 0
+      }
     })
 
     expect(attributes['worktree.create.prepared_checkout']).toBe('hit')
-    expect(attributes['worktree.create.prepared_checkout_retargeted']).toBe(true)
+    expect(attributes['worktree.create.prepared_checkout_reset']).toBe('retargeted')
+    expect(attributes['worktree.create.prepared_checkout_origin']).toBe('rearm')
     expect(attributes['worktree.create.prepared_checkout_miss']).toBeUndefined()
     expect(attributes['worktree.create.unattributed_ms']).toBe(500)
   })
@@ -243,7 +250,7 @@ describe('addWorktreeCreatePhaseAttributes', () => {
 
     expect(attributes['worktree.create.prepared_checkout']).toBe('miss')
     expect(attributes['worktree.create.prepared_checkout_miss']).toBe('base_mismatch')
-    expect(attributes['worktree.create.prepared_checkout_retargeted']).toBeUndefined()
+    expect(attributes['worktree.create.prepared_checkout_reset']).toBeUndefined()
   })
 
   it('stays silent on paths that never consult the prepared checkout', () => {
@@ -261,8 +268,7 @@ describe('agentSession.create tracing', () => {
         totalDurationMs: 57,
         phases: [
           { phase: 'reconcile_leases', startedAtMs: 0, durationMs: 1 },
-          { phase: 'resolve_recovery', startedAtMs: 1, durationMs: 2 },
-          { phase: 'settlement_retry', startedAtMs: 3, durationMs: 3 },
+          { phase: 'resolve_recovery', startedAtMs: 1, durationMs: 5 },
           { phase: 'probe_owner', startedAtMs: 6, durationMs: 4 },
           { phase: 'reserve_owner', startedAtMs: 10, durationMs: 5 },
           { phase: 'acquire_owner', startedAtMs: 15, durationMs: 6 },

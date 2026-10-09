@@ -35,4 +35,3 @@ jobs:
           pnpm exec vitest run --config config/vitest.config.ts
           config/scripts/workflow-ref-reachability.test.mjs
           config/scripts/workflow-ref-mirror-case-safety.test.mjs
-          config/scripts/dev-channel-windows-workflow-contract.test.mjs

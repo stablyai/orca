@@ -1,14 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   BrowserScreencastOpcode,
-  type BrowserScreencastFormat,
   type BrowserScreencastFrame
 } from '../../transport/browser-screencast-protocol'
 import { isRpcResponse } from '../../transport/rpc-response-shape'
-import type { ConnectionState, ForegroundNudgeReason, RpcResponse } from '../../transport/types'
-import type { SendRequestOptions } from '../../transport/unvalidated-rpc-request-port'
-import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
 import {
   BRIDGE_MAX_MESSAGE_BYTES,
   BRIDGE_MAX_METHOD_CHARS,
@@ -23,18 +18,14 @@ import {
 } from './bridge-caps'
 import { BRIDGE_HAPTICS_KINDS, BRIDGE_HAPTICS_NOTIFY } from './bridge-haptics-notify'
 import {
-  BRIDGE_BINARY_FORMATS,
-  BRIDGE_CONNECTION_STATES,
   BRIDGE_FAULT_GRANT,
-  BRIDGE_FOREGROUND_NUDGE_REASONS,
   BRIDGE_NAVIGATE_BACK_NOTIFY,
   BRIDGE_PROTOCOL_VERSION,
   readBridgeClientMessage,
   readBridgeHostMessage,
-  type BridgeHostMessage,
-  type BridgeReplyPayload
+  type BridgeHostMessage
 } from './bridge-envelope'
-import { BRIDGE_BACK_CLAIM_NOTIFY, BRIDGE_BACK_FRAME } from './bridge-page-back'
+import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge-page-back'
 import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
 
 const ID = 'AAAAAAAAAAAAAAAAAAAAAA'
@@ -89,20 +80,12 @@ function client(fields: Record<string, unknown>): Record<string, unknown> {
 describe('client messages', () => {
   const accepted = [
     ['ready', { type: 'ready' }],
-    ['ready naming what it reports', { type: 'ready', reports: [BRIDGE_PAGE_PAINTED] }],
-    // A shell with no row for the name reads a report it will never wait on, which is what an
-    // additive field has to look like in the older direction.
-    [
-      'ready naming a report this shell does not implement',
-      { type: 'ready', reports: ['weather'] }
-    ],
     ['a page painted notify', { type: 'notify', name: BRIDGE_PAGE_PAINTED }],
     ['a back claim', { type: 'notify', name: BRIDGE_BACK_CLAIM_NOTIFY, claimed: true }],
     [
       'a back claim being let go',
       { type: 'notify', name: BRIDGE_BACK_CLAIM_NOTIFY, claimed: false }
     ],
-    ['ready naming what it takes', { type: 'ready', accepts: [BRIDGE_BACK_FRAME] }],
     ['request without params', { type: 'request', id: ID, method: 'status.get' }],
     ['request with params', { type: 'request', id: ID, method: 'status.get', params: { a: 1 } }],
     [
@@ -600,86 +583,7 @@ describe('the reply reader is the native acceptance predicate', () => {
   })
 })
 
-describe('type pins', () => {
-  it('pins the protocol version both sides send', () => {
-    expect(BRIDGE_PROTOCOL_VERSION).toBe(1)
-  })
-
-  it('closes the connection states over the transport union', () => {
-    const asTransport = (value: (typeof BRIDGE_CONNECTION_STATES)[number]): ConnectionState => value
-    const asBridge = (value: ConnectionState): (typeof BRIDGE_CONNECTION_STATES)[number] => value
-    expect(BRIDGE_CONNECTION_STATES.map(asTransport).map(asBridge)).toEqual([
-      ...BRIDGE_CONNECTION_STATES
-    ])
-  })
-
-  it('closes the foreground reasons over the transport union', () => {
-    const asTransport = (
-      value: (typeof BRIDGE_FOREGROUND_NUDGE_REASONS)[number]
-    ): ForegroundNudgeReason => value
-    const asBridge = (
-      value: ForegroundNudgeReason
-    ): (typeof BRIDGE_FOREGROUND_NUDGE_REASONS)[number] => value
-    expect(BRIDGE_FOREGROUND_NUDGE_REASONS.map(asTransport).map(asBridge)).toEqual([
-      ...BRIDGE_FOREGROUND_NUDGE_REASONS
-    ])
-  })
-
-  it('resolves a reply payload to the transport envelope the page hands its callers', () => {
-    const asRpcResponse = (value: BridgeReplyPayload): RpcResponse => value
-    const read = readHost(client({ type: 'reply', id: ID, payload: SUCCESS_PAYLOAD }))
-    const payload =
-      read.ok && read.message.type === 'reply' && 'payload' in read.message
-        ? asRpcResponse(read.message.payload)
-        : null
-    expect(payload).toEqual(SUCCESS_PAYLOAD)
-  })
-
-  it('accepts every option the raw sender declares', () => {
-    // Both directions: the literal has to satisfy the type, and the type has to have no key the
-    // literal is missing, so a new option fails to compile until the schema learns it.
-    const optionKeys: Record<keyof SendRequestOptions, true> = {
-      timeoutMs: true,
-      budgetSpansConnect: true,
-      failWhenDisconnected: true
-    }
-    const options: SendRequestOptions = {
-      timeoutMs: 1000,
-      budgetSpansConnect: true,
-      failWhenDisconnected: true
-    }
-    expect(Object.keys(optionKeys).toSorted()).toEqual(Object.keys(options).toSorted())
-    expect(readClient(client({ type: 'request', id: ID, method: 'm', options })).ok).toBe(true)
-  })
-
-  it('bounds the viewport exactly where the desktop terminal contract does', () => {
-    // A viewport the page sends is replayed on resubscribe by every stream naming that terminal,
-    // the native screens' included. One the desktop refuses there would kill a stream the page
-    // never opened, so the two bounds have to be the same number.
-    //
-    // Read rather than imported: mobile may not pull a contract *value* into its bundle, and the
-    // boundary test that enforces that scans this file too.
-    const contract = readFileSync(
-      fileURLToPath(
-        new URL('../../../../src/shared/rpc-contract/terminal-unary-params.ts', import.meta.url)
-      ),
-      'utf8'
-    )
-    const start = contract.indexOf('export const TerminalViewport')
-    expect(start).toBeGreaterThan(-1)
-    const declaration = contract.slice(start, contract.indexOf('})', start))
-    expect(declaration).toContain(`cols: z.number().int().min(1).max(${BRIDGE_MAX_VIEWPORT_COLS})`)
-    expect(declaration).toContain(`rows: z.number().int().min(1).max(${BRIDGE_MAX_VIEWPORT_ROWS})`)
-  })
-
-  it('closes the binary formats over the screencast protocol', () => {
-    const asProtocol = (value: (typeof BRIDGE_BINARY_FORMATS)[number]): BrowserScreencastFormat =>
-      value
-    const asBridge = (value: BrowserScreencastFormat): (typeof BRIDGE_BINARY_FORMATS)[number] =>
-      value
-    expect(BRIDGE_BINARY_FORMATS.map(asProtocol).map(asBridge)).toEqual([...BRIDGE_BINARY_FORMATS])
-  })
-
+describe('the screencast frame reader', () => {
   it('refuses a screencast metadata field that is not a finite number', () => {
     const keys = [
       'offsetTop',

@@ -7,26 +7,21 @@ import type {
   AgentSessionTurnActivity,
   AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
-import type { AgentJournalResetReason } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
+import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
 import type { StructuredAgentSessionTaskQueue } from './structured-agent-session-task-queue'
+import type { StructuredAgentSessionConversationOpenOptions } from './structured-agent-session-conversation-open'
 
 export type StructuredAgentSessionAttachContext = {
   deps: StructuredAgentSessionHostDeps
   runtimeState: StructuredAgentSessionHostRuntimeState
   sessions: Map<string, StructuredAgentSessionHostSession>
   subscribers: {
-    reset: (
-      sessionId: string,
-      journal: AgentSessionJournal,
-      reset: AgentJournalResetReason,
-      fence: number
-    ) => void
     snapshot: (sessionId: string, journal: AgentSessionJournal, fence: number) => void
     publish: (
       sessionId: string,
@@ -38,8 +33,13 @@ export type StructuredAgentSessionAttachContext = {
   reconcileLeases: (sessionId: string) => Promise<AgentSessionWireRefusal | null>
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   now: () => number
-  /** Paired with `sessions.delete` by `forgetStructuredAgentSession`; a failed attach that only
-   *  deleted would leave the store's row behind. */
-  forgetStatus: (sessionId: string) => void
-  publishStatus?: (sessionId: string) => void
+  publishStatus: (sessionId: string) => void
+  /** Joining a stop's close ends the child's record through the one exit handler. */
+  endExitedChild: StructuredAgentSessionLifetimeContext['endExitedChild']
+  wakeDelivery?: StructuredAgentSessionLifetimeContext['wakeDelivery']
+  /** The conversation's one open journal, opened when closed; see `conversation-open`. */
+  openConversation: (
+    sessionId: string,
+    options?: StructuredAgentSessionConversationOpenOptions
+  ) => Promise<StructuredAgentSessionHostSession | null>
 }

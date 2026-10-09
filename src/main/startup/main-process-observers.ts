@@ -9,6 +9,8 @@ import { initTelemetry, track } from '../telemetry/client'
 import { setCodexTrustGrantTelemetry } from '../codex/codex-trust-grant-telemetry'
 import { initObservability } from '../observability'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { reportPreviousHangDetection } from '../hang-watchdog/previous-hang-detection'
+import { getCanonicalUserDataPath } from '../persistence'
 import { recoverPendingSkillTransactions } from '../skills/skill-transaction-startup-recovery'
 import { initCohortClassifier } from '../telemetry/cohort-classifier'
 import { initOnboardingCohortClassifier } from '../telemetry/onboarding-cohort-classifier'
@@ -57,14 +59,14 @@ export function initializeMainProcessObservers(): void {
   }
   // Why: telemetry must init before any IPC handler/renderer can call track(); it's a no-op in dev and while TELEMETRY_ENABLED is false, so it's safe early.
   initTelemetry(store)
-  // Why: the breadcrumb alone never leaves the machine — it rides crash reports, and a hang is not
-  // a crash (the app is force-quit, so no report is ever generated). Without this the incidence
-  // number the watchdog exists to produce would sit unread on the user's disk. Must run after
-  // initTelemetry: track() drops silently until the client and store are wired.
-  if (state.hangDetection) {
-    track('main_thread_hang_detected', {
-      unresponsive_ms: Math.round(state.hangDetection.unresponsiveMs),
-      self_recovered: state.hangDetection.selfRecovered
+  const profileStateStartup = state.profileStateStartup
+  if (profileStateStartup) {
+    track('profile_state_authority_selected', {
+      backend: profileStateStartup.backend,
+      classification: profileStateStartup.classification,
+      authority_mode: 'sqlite-established',
+      runtime: profileStateStartup.runtime,
+      migrated: profileStateStartup.migrated
     })
   }
   // Why: the trust-grant module is bundled into plain-node CLI entries where
@@ -91,6 +93,13 @@ export function initializeMainProcessObservers(): void {
     packaged: app.isPackaged,
     platform: process.platform
   })
+  state.hangDetection = reportPreviousHangDetection(getCanonicalUserDataPath())
+  if (state.hangDetection) {
+    track('main_thread_hang_detected', {
+      unresponsive_ms: Math.round(state.hangDetection.unresponsiveMs),
+      self_recovered: state.hangDetection.selfRecovered
+    })
+  }
   state.skillTransactionRecovery = recoverPendingSkillTransactions(
     join(app.getPath('userData'), 'skill-installs')
   )

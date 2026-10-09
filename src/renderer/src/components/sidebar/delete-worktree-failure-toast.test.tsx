@@ -211,4 +211,22 @@ describe('showDeleteWorktreeFailureToast', () => {
     expect(body.textContent).toContain('Git reported: active agent session')
     expect(body.textContent).toContain('View')
   })
+  it('offers a persistent nested deletion review for the exact failed target', () => {
+    Object.assign(window, { api: { worktrees: { previewNestedRemoval: vi.fn() } } })
+    showDeleteWorktreeFailureToast({
+      error:
+        'Refusing to delete worktree because it contains another registered worktree: /parent/child',
+      canForceDelete: false,
+      forceDeleteReason: null,
+      onViewChanges: vi.fn(),
+      onForceDelete: vi.fn(),
+      onDeleteAnyway: vi.fn(),
+      worktreeId: 'repo::/parent',
+      worktreeName: 'parent',
+      nestedRemovalTarget: { id: 'repo::/parent', executionHostId: 'local' }
+    })
+    const body = renderToastBody('error')
+    expect(body.textContent).toContain('Delete with nested worktrees…')
+    expect(vi.mocked(toast.error).mock.calls.at(-1)?.[1]?.duration).toBe(Infinity)
+  })
 })

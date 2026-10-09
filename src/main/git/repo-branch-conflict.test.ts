@@ -7,6 +7,9 @@ describe('getBranchConflictKindViaExec', () => {
     const calls: string[][] = []
     const exec = async (argv: string[]): Promise<{ stdout: string }> => {
       calls.push(argv)
+      if (argv[0] === 'for-each-ref') {
+        return { stdout: '' }
+      }
       if (argv[0] === 'rev-parse') {
         throw new Error('local branch is absent')
       }
@@ -22,6 +25,7 @@ describe('getBranchConflictKindViaExec', () => {
     await expect(getBranchConflictKindViaExec(exec, 'feature/fix')).resolves.toBe('remote')
     expect(calls).toEqual([
       ['rev-parse', '--verify', '--quiet', 'refs/heads/feature/fix'],
+      ['for-each-ref', '--format=%(refname)', 'refs/heads/'],
       ['remote'],
       ['show-ref', '--verify', '--quiet', '--', 'refs/remotes/foo/bar/feature/fix'],
       ['show-ref', '--verify', '--quiet', '--', 'refs/remotes/origin/feature/fix']
@@ -32,6 +36,9 @@ describe('getBranchConflictKindViaExec', () => {
     const calls: string[][] = []
     const exec = async (argv: string[]): Promise<{ stdout: string }> => {
       calls.push(argv)
+      if (argv[0] === 'for-each-ref') {
+        return { stdout: '' }
+      }
       if (argv[0] === 'remote') {
         return { stdout: 'origin\n' }
       }
@@ -43,6 +50,7 @@ describe('getBranchConflictKindViaExec', () => {
     ).resolves.toBeNull()
     expect(calls).toEqual([
       ['rev-parse', '--verify', '--quiet', 'refs/heads/feature/fix'],
+      ['for-each-ref', '--format=%(refname)', 'refs/heads/'],
       ['remote']
     ])
   })
@@ -51,6 +59,9 @@ describe('getBranchConflictKindViaExec', () => {
     const calls: string[][] = []
     const exec = async (argv: string[]): Promise<{ stdout: string }> => {
       calls.push(argv)
+      if (argv[0] === 'for-each-ref') {
+        return { stdout: '' }
+      }
       if (argv[0] === 'rev-parse') {
         throw new Error('local branch is absent')
       }
@@ -77,6 +88,9 @@ describe('getBranchConflictKindViaExec', () => {
     const calls: string[][] = []
     const exec = async (argv: string[]): Promise<{ stdout: string }> => {
       calls.push(argv)
+      if (argv[0] === 'for-each-ref') {
+        return { stdout: '' }
+      }
       if (argv[0] === 'rev-parse') {
         throw new Error('local branch is absent')
       }
@@ -106,6 +120,9 @@ describe('getBranchConflictKindViaExec', () => {
     let activeProbes = 0
     let maxActiveProbes = 0
     const exec = async (argv: string[]): Promise<{ stdout: string }> => {
+      if (argv[0] === 'for-each-ref') {
+        return { stdout: '' }
+      }
       if (argv[0] === 'rev-parse') {
         throw new Error('local branch is absent')
       }
@@ -146,6 +163,9 @@ describe('getBranchConflictKindViaExec batched remote probe', () => {
   function baseExec(calls: string[][]): (argv: string[]) => Promise<{ stdout: string }> {
     return async (argv) => {
       calls.push(argv)
+      if (argv[0] === 'for-each-ref') {
+        return { stdout: '' }
+      }
       if (argv[0] === 'rev-parse') {
         throw new Error('local branch is absent')
       }
@@ -180,6 +200,7 @@ describe('getBranchConflictKindViaExec batched remote probe', () => {
     ).resolves.toBeNull()
     expect(calls).toEqual([
       ['rev-parse', '--verify', '--quiet', 'refs/heads/feature'],
+      ['for-each-ref', '--format=%(refname)', 'refs/heads/'],
       ['remote'],
       ['cat-file', '--batch-check']
     ])
@@ -208,6 +229,9 @@ describe('getBranchConflictKindViaExec batched remote probe', () => {
     const calls: string[][] = []
     const exec = async (argv: string[]): Promise<{ stdout: string }> => {
       calls.push(argv)
+      if (argv[0] === 'for-each-ref') {
+        return { stdout: '' }
+      }
       if (argv[0] === 'rev-parse') {
         throw new Error('local branch is absent')
       }
@@ -236,6 +260,9 @@ describe('getBranchConflictKindViaExec batched remote probe', () => {
     const calls: string[][] = []
     const exec = async (argv: string[]): Promise<{ stdout: string }> => {
       calls.push(argv)
+      if (argv[0] === 'for-each-ref') {
+        return { stdout: '' }
+      }
       if (argv[0] === 'rev-parse') {
         throw new Error('local branch is absent')
       }
@@ -263,6 +290,9 @@ describe('branch conflict with existing-branch adoption', () => {
 
   it('skips adoption and its commit probe for a proven missing local ref', async () => {
     const exec = vi.fn(async (argv: string[]) => {
+      if (argv[0] === 'for-each-ref') {
+        return { stdout: '' }
+      }
       if (argv[0] === 'rev-parse') {
         throw absent()
       }
@@ -273,7 +303,7 @@ describe('branch conflict with existing-branch adoption', () => {
       getBranchConflictKindViaExec(exec, 'new', undefined, {}, undefined, adopt)
     ).resolves.toBeNull()
     expect(adopt).not.toHaveBeenCalled()
-    expect(exec).toHaveBeenCalledTimes(2)
+    expect(exec).toHaveBeenCalledTimes(3)
   })
 
   it('allows an existing branch without querying remote refs', async () => {
@@ -316,9 +346,84 @@ describe('branch conflict with existing-branch adoption', () => {
       .mockResolvedValueOnce({ stdout: 'a'.repeat(40) })
       .mockRejectedValueOnce(absent())
       .mockResolvedValueOnce({ stdout: '' })
+      .mockResolvedValueOnce({ stdout: '' })
     await expect(
       getBranchConflictKindViaExec(exec, 'removed', undefined, {}, undefined, async () => false)
     ).resolves.toBeNull()
-    expect(exec).toHaveBeenCalledTimes(3)
+    expect(exec).toHaveBeenCalledTimes(4)
+  })
+})
+
+describe('portable branch-name conflicts', () => {
+  function executor(refs = '') {
+    return vi.fn(async (argv: string[]) => {
+      if (argv[0] === 'rev-parse') {
+        throw Object.assign(new Error('missing'), { code: 1, stderr: '' })
+      }
+      return { stdout: argv[0] === 'for-each-ref' ? refs : '' }
+    })
+  }
+
+  it.each([
+    ['feature', 'Feature'],
+    ['Ä', 'ä'],
+    ['K', 'K'],
+    ['ß', 'ẞ'],
+    ['ẞ', 'ß'],
+    ['ς', 'Σ'],
+    ['ﬃ', 'FFI'],
+    ['𐐀', '𐐨'],
+    ['é', 'e\u0301'],
+    ['feature/Ä', 'FEATURE/ä']
+  ])('rejects packed ref aliases %s → %s without a config probe', async (existing, candidate) => {
+    const exec = executor(`refs/heads/${existing}\n`)
+    const adopt = vi.fn(async () => false)
+    await expect(
+      getBranchConflictKindViaExec(exec, candidate, undefined, {}, undefined, adopt)
+    ).resolves.toBe('local')
+    expect(adopt).not.toHaveBeenCalled()
+    expect(exec.mock.calls.map(([argv]) => argv)).toEqual([
+      ['rev-parse', '--verify', '--quiet', `refs/heads/${candidate}`],
+      ['for-each-ref', '--format=%(refname)', 'refs/heads/']
+    ])
+  })
+
+  it('does not confuse descendants or similarly named branches with aliases', async () => {
+    const exec = executor('refs/heads/feature/child\nrefs/heads/feature-other\n')
+    await expect(getBranchConflictKindViaExec(exec, 'Feature')).resolves.toBeNull()
+  })
+
+  it.each([
+    Object.assign(new Error('SSH disconnected'), { code: 1, stderr: 'transport failed' }),
+    Object.assign(new Error('output exceeded cap'), { code: 'ENOBUFS' })
+  ])('fails closed when the bounded host listing fails: %s', async (error) => {
+    const exec = executor()
+    exec.mockImplementationOnce(async () => {
+      throw Object.assign(new Error('missing'), { code: 1, stderr: '' })
+    })
+    exec.mockImplementationOnce(async () => {
+      throw error
+    })
+    await expect(getBranchConflictKindViaExec(exec, 'Feature')).rejects.toThrow(error.message)
+    expect(exec.mock.calls.some(([argv]) => argv[0] === 'remote')).toBe(false)
+  })
+
+  it('fails closed on unexpected stdout instead of treating it as an empty listing', async () => {
+    const exec = executor('Welcome to the host\n')
+    await expect(getBranchConflictKindViaExec(exec, 'Feature')).rejects.toThrow(
+      'Cannot verify branch-name case conflicts'
+    )
+  })
+
+  it('forwards the host output and timeout bounds to the local branch listing', async () => {
+    const exec = executor()
+    await getBranchConflictKindViaExec(exec, 'new-feature', undefined, {
+      maxBuffer: 1024,
+      timeoutMs: 100
+    })
+    expect(exec).toHaveBeenCalledWith(['for-each-ref', '--format=%(refname)', 'refs/heads/'], {
+      maxBuffer: 1024,
+      timeoutMs: 100
+    })
   })
 })

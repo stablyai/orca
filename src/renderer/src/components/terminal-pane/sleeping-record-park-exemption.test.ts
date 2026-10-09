@@ -75,4 +75,22 @@ describe('selectSleepingRecordParkExemptTabIds', () => {
 
     expect([...selectSleepingRecordParkExemptTabIds(stateWith({}), 'wt-1')]).toEqual([])
   })
+
+  // Why: pins #16308's incidental effect — a finished turn's idle anchor no longer pins its hidden tab mounted.
+  it('lets a finished turn park but keeps running and interrupted turns mounted', () => {
+    const note = (tabId: string, overrides: Partial<SleepingAgentSessionRecord>) =>
+      sleepingRecord({ paneKey: `${tabId}:${LEAF_ID}`, origin: 'live', ...overrides })
+    const records = {
+      a: note('tab-idle-anchor', { state: 'done' }),
+      b: note('tab-running', { state: 'working' }),
+      c: note('tab-interrupted', { state: 'done', interrupted: true }),
+      d: note('tab-quit', { state: 'done', origin: 'quit' })
+    }
+
+    expect([...selectSleepingRecordParkExemptTabIds(stateWith(records), 'wt-1')]).toEqual([
+      'tab-running',
+      'tab-interrupted',
+      'tab-quit'
+    ])
+  })
 })

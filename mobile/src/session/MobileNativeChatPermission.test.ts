@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileNativeChatPermission } from './MobileNativeChatPermission'
+import type { MobileChatPermission } from './mobile-native-chat-permission'
 
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
@@ -11,7 +12,12 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 
-vi.mock('lucide-react-native', () => ({ ShieldQuestion: 'ShieldQuestion', X: 'X' }))
+vi.mock('lucide-react-native', () => ({
+  ChevronDown: 'ChevronDown',
+  ChevronUp: 'ChevronUp',
+  ShieldQuestion: 'ShieldQuestion',
+  X: 'X'
+}))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 
 describe('MobileNativeChatPermission', () => {
@@ -68,8 +74,6 @@ describe('MobileNativeChatPermission', () => {
   it('keeps oversized provider context in a bounded scroller above the actions', async () => {
     const description = `Workspace access ${'description '.repeat(400)}`
     const decisionReason = `Outside the allowed root ${'reason '.repeat(400)}`
-    const blockedPath = `/repo/${'nested/'.repeat(400)}secrets.txt`
-    const ruleContent = `/repo/${'**/'.repeat(400)}`
     await act(async () => {
       renderer = create(
         createElement(MobileNativeChatPermission, {
@@ -77,8 +81,6 @@ describe('MobileNativeChatPermission', () => {
             title: 'Claude wants to read secrets.txt '.repeat(400),
             description,
             decisionReason,
-            blockedPath,
-            matchedAskRule: { source: 'project', toolName: 'Read', ruleContent },
             options: [{ label: 'Allow', send: '1' }]
           },
           onRespond: vi.fn(async () => true)
@@ -104,12 +106,62 @@ describe('MobileNativeChatPermission', () => {
     expect(content.props.style).toMatchObject({ maxHeight: 240, minHeight: 0, flexShrink: 1 })
     expect(containsText(description)).toBe(true)
     expect(containsText(decisionReason)).toBe(true)
-    expect(containsText(blockedPath)).toBe(true)
-    expect(containsText(ruleContent)).toBe(true)
     expect(content.findAllByProps({ children: 'Allow' })).toHaveLength(0)
     expect(actions.findAllByProps({ children: 'Allow' })).toHaveLength(1)
     expect(actions.props.style).toMatchObject({ flexShrink: 0 })
   })
+
+  // Same card as desktop: what is asked, why, and the path it needs, never the provider's ask-rule bookkeeping.
+  it('names a blocked path the request does not show, but never the matched ask rule', async () => {
+    const fromJournal = {
+      title: 'Claude wants to run git push',
+      decisionReason: 'Pushing changes the remote',
+      blockedPath: 'C:\\qa\\demo\\.git\\config',
+      matchedAskRule: {
+        source: 'projectSettings',
+        toolName: 'Bash',
+        ruleContent: 'Bash(git push:*)'
+      },
+      detail: 'git push origin main',
+      options: [{ label: 'Allow', send: '1' }]
+    }
+    const text = await renderContentText(fromJournal)
+    expect(text).toContain('Pushing changes the remote')
+    expect(text).toContain('Needs access to: ')
+    expect(text).toContain('C:\\qa\\demo\\.git\\config')
+    for (const internal of ['Ask rule', 'Bash(git push:*)', 'projectSettings', 'Blocked path']) {
+      expect(text).not.toContain(internal)
+    }
+  })
+
+  it('does not repeat a blocked path the request already shows', async () => {
+    const blockedPath = 'C:\\qa\\demo\\notes.md'
+    const text = await renderContentText({
+      title: 'Claude wants to write notes.md',
+      blockedPath,
+      detail: JSON.stringify({ file_path: blockedPath, content: 'hi' }, null, 2),
+      options: [{ label: 'Allow', send: '1' }]
+    })
+    expect(text).toContain('notes.md')
+    expect(text).not.toContain('Needs access to')
+  })
+
+  async function renderContentText(permission: MobileChatPermission): Promise<string> {
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatPermission, {
+          permission,
+          onRespond: vi.fn(async () => true)
+        })
+      )
+    })
+    const content = renderer.root.findByProps({ testID: 'native-chat-approval-content' })
+    return content
+      .findAllByType('Text')
+      .flatMap((node) => [node.props.children].flat())
+      .filter((child): child is string => typeof child === 'string')
+      .join('')
+  }
 
   it('renders a plan as markdown inside the same bounded scroller', async () => {
     const planText = '# Release plan\n\n- Run the tests'
@@ -144,5 +196,57 @@ describe('MobileNativeChatPermission', () => {
     // A typed plan replaces the generic detail rather than rendering both.
     expect(content.findAllByProps({ children: 'raw json that must not be shown' })).toHaveLength(0)
     expect(actions.findAllByProps({ children: 'Approve plan' })).toHaveLength(1)
+  })
+
+  describe("a subject of a kind this build cannot draw: a newer Orca's", () => {
+    const NEEDS_NEWER_ORCA = 'This request needs a newer version of Orca.'
+
+    async function renderNewer(detail: string | undefined) {
+      const onRespond = vi.fn(async () => true)
+      const onCancel = vi.fn(async () => true)
+      await act(async () => {
+        renderer = create(
+          createElement(MobileNativeChatPermission, {
+            permission: {
+              title: 'Review proposed change',
+              ...(detail ? { detail } : {}),
+              // A subject kind a newer build wrote; this build draws only plans.
+              subject: JSON.parse('{"kind":"diff","path":"a.ts"}'),
+              prompt: { itemId: 'approval-1', expectedRevision: 2 },
+              options: [
+                { label: 'Approve', send: 'allow' },
+                { label: 'Deny', send: 'deny' }
+              ]
+            },
+            onRespond,
+            onCancel
+          })
+        )
+      })
+      const actions = renderer!.root.findByProps({ testID: 'native-chat-approval-actions' })
+      return { onRespond, onCancel, options: actions.findAllByType('Pressable') }
+    }
+
+    it('with no detail: says so, answers nothing, and only its cancel reaches the host', async () => {
+      const { onRespond, onCancel, options } = await renderNewer(undefined)
+      expect(
+        renderer!.root.findByProps({ testID: 'native-chat-approval-needs-newer-orca' }).props
+          .children
+      ).toBe(NEEDS_NEWER_ORCA)
+      expect(options).toHaveLength(2)
+      expect(options.every((option) => option.props.disabled === true)).toBe(true)
+      const cancel = renderer!.root.findByProps({ accessibilityLabel: 'Cancel' })
+      expect(cancel.props.disabled).toBe(false)
+      await act(async () => cancel.props.onPress())
+      expect(onCancel).toHaveBeenCalledWith({ itemId: 'approval-1', expectedRevision: 2 })
+      expect(onRespond).not.toHaveBeenCalled()
+    })
+
+    it('with a detail: shows it, and still approves nothing', async () => {
+      const { options } = await renderNewer('# Release')
+      const content = renderer!.root.findByProps({ testID: 'native-chat-approval-content' })
+      expect(content.findAllByProps({ children: '# Release' })).toHaveLength(1)
+      expect(options.every((option) => option.props.disabled === true)).toBe(true)
+    })
   })
 })

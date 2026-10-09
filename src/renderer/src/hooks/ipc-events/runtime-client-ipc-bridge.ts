@@ -3,6 +3,7 @@ import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/term
 import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
 import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat-launch-draft-runtime-resolution'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { setRuntimeEnvironmentCatalogRefresher } from '@/runtime/runtime-environment-pairing-refresh'
 import {
   applyRuntimeEnvironmentSshStateChanged,
   hydrateRuntimeEnvironmentSshState,
@@ -12,8 +13,9 @@ import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
 import { toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
-import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import { navigationTargetsClients } from '../../../../shared/runtime-navigation'
 import { useAppStore } from '../../store'
 import { createRuntimeClientEventsSync } from '../runtime-client-events-sync'
 import {
@@ -34,11 +36,21 @@ export function registerRuntimeClientIpcBridge(
   worktreeRuntime: WorktreeEventRuntime
 ): () => void {
   const { worktreeChangeRefreshQueue, activateNotifiedWorktree } = worktreeRuntime
+  let stopped = false
+  unsubs.push(() => {
+    stopped = true
+  })
   const ensureRuntimeEventRepoKnown = async (
     environmentId: string,
     repoId: string
   ): Promise<void> => {
-    if ((useAppStore.getState().repos ?? []).some((repo) => repo.id === repoId)) {
+    if (
+      (useAppStore.getState().repos ?? []).some(
+        (repo) =>
+          repo.id === repoId &&
+          getRepoExecutionHostId(repo) === toRuntimeExecutionHostId(environmentId)
+      )
+    ) {
       return
     }
     await useAppStore.getState().fetchRuntimeEnvironmentRepos(environmentId)
@@ -127,17 +139,40 @@ export function registerRuntimeClientIpcBridge(
         })
       return
     }
+    // Older hosts broadcast local/CLI activation without an address; that is not this viewer's intent.
+    if (!event.navigation || !navigationTargetsClients(event.navigation)) {
+      return
+    }
+    const runtimeGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
+    const runtimeRevision = getRuntimeEnvironmentRevision(environmentId)
+    const isCurrent = (): boolean =>
+      !stopped &&
+      generation === getEnvironmentSshStateGeneration(environmentId) &&
+      runtimeGeneration === getRuntimeEnvironmentConnectionGeneration(environmentId) &&
+      runtimeRevision === getRuntimeEnvironmentRevision(environmentId)
     void ensureRuntimeEventRepoKnown(environmentId, event.repoId)
-      .then(() => activateNotifiedWorktree(event, { allowRuntimeEnvironment: true }))
+      .then(() => {
+        return isCurrent()
+          ? activateNotifiedWorktree(event, {
+              allowRuntimeEnvironment: true,
+              executionHostId: toRuntimeExecutionHostId(environmentId),
+              isCurrent
+            })
+          : undefined
+      })
       .catch((error) => {
         console.error('Failed to activate runtime-created worktree:', error)
       })
   }
 
+  setRuntimeEnvironmentCatalogRefresher(async () => {
+    useAppStore.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
+  })
+  unsubs.push(() => setRuntimeEnvironmentCatalogRefresher(null))
   const runtimeClientEventsSync = createRuntimeClientEventsSync({
     getDesiredEnvironmentIds: () => getRuntimeClientEventEnvironmentIds(useAppStore.getState()),
     getSubscriptionKey: (environmentId) => buildRuntimeClientEventEnvironmentKey([environmentId]),
-    subscribe: (environmentId, onEvent, onError) => {
+    subscribe: (environmentId, onEvent, onError, isCurrent) => {
       const sshGeneration = getEnvironmentSshStateGeneration(environmentId)
       const runtimeGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
       const runtimeRevision = getRuntimeEnvironmentRevision(environmentId)
@@ -154,6 +189,9 @@ export function registerRuntimeClientIpcBridge(
         },
         onError,
         () => {
+          if (!isCurrent()) {
+            return
+          }
           invalidateRuntimeClientEventReplay({
             getSshStateReference: () => useAppStore.getState().sshStateByEnvironment,
             refreshRuntimeStatus: () => {

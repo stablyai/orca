@@ -79,6 +79,7 @@ jobs:
       source_ref: ${{ steps.resolve.outputs.ref }}
       source_sha: ${{ steps.resolve.outputs.sha }}
       source_short_sha: ${{ steps.resolve.outputs.short_sha }}
+      ships_orcad_template: ${{ steps.orcad-template-support.outputs.ships }}
     steps:
       # Why inlined (not m-s-abeer/update-gha-summary-with-workflow-inputs):
       # this job runs with contents:write and secret scope, so avoid executing
@@ -783,6 +784,21 @@ jobs:
             git push origin "$TAG"
           fi
 
+      # Why: a patch cut from a base older than #24155 has no orcad template to build or ship.
+      - name: Detect whether the tag ships the orcad template
+        id: orcad-template-support
+        if: steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != ''
+        env:
+          TAG: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
+        run: |
+          set -euo pipefail
+          if git cat-file -e "refs/tags/${TAG}^{commit}:config/scripts/packaged-orcad-template.cjs" 2>/dev/null; then
+            echo "ships=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "ships=false" >>"$GITHUB_OUTPUT"
+            echo "::notice::$TAG predates the orcad template; skipping its build and download."
+          fi
+
       - name: Release E2E signal summary
         if: always()
         run: |
@@ -1149,6 +1165,19 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  # Design D2: every desktop build ships the orcad template (server JS plus every target's
+  # addons), merged from the node-server lanes that qualified each slot at this tag. It needs no
+  # signing quota, so it runs beside the release gates instead of behind them.
+  orcad-template:
+    needs: cut
+    if: needs.cut.outputs.should_release == 'true' && needs.cut.outputs.ships_orcad_template == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/node-server-tests.yml
+    with:
+      ref: refs/tags/${{ needs.cut.outputs.tag }}
+      build_template: true
+
   # Why: artifact jobs submit Windows binaries to SignPath. Keep every
   # quota-consuming build behind all blocking release gates so a late test
   # failure cannot create signing requests that can never be published.
@@ -1171,12 +1200,52 @@ jobs:
       - name: Confirm blocking release gates passed
         run: echo "All blocking release gates passed; artifact builds may start."
 
+  # Why its own job: every desktop package ships Windows relays, but only a
+  # Windows runner compiles the addon that launches one outside sshd's job.
+  # Needs only cut, so it overlaps the release gates instead of extending them.
+  relay-windows-process-tree:
+    needs: cut
+    if: needs.cut.outputs.should_release == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/relay-windows-process-tree.yml
+    with:
+      ref: refs/tags/${{ needs.cut.outputs.tag }}
+
+  # Compilation can overlap the release gates; signing remains behind release-preflight.
+  release-javascript:
+    needs: cut
+    if: needs.cut.outputs.should_release == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/release-javascript.yml
+    with:
+      ref: refs/tags/${{ needs.cut.outputs.tag }}
+    secrets:
+      ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
+
   build:
     needs:
       - cut
       - create-release
+      - orcad-template
       - release-preflight
-    if: needs.cut.outputs.should_release == 'true'
+      - release-javascript
+      - relay-windows-process-tree
+    # Why not the implicit success(): a tag without the orcad template skips that job on purpose.
+    if: >-
+      !cancelled() &&
+      needs.cut.result == 'success' &&
+      needs.cut.outputs.should_release == 'true' &&
+      needs.create-release.result == 'success' &&
+      needs.release-preflight.result == 'success' &&
+      needs.release-javascript.result == 'success' &&
+      needs.relay-windows-process-tree.result == 'success' &&
+      (needs.orcad-template.result == 'success' ||
+        (needs.orcad-template.result == 'skipped' && needs.cut.outputs.ships_orcad_template == 'false'))
+    env:
+      # beforePack and afterPack fail the package when the template is absent.
+      ORCA_REQUIRE_ORCAD_TEMPLATE: '1'
     strategy:
       fail-fast: false
       matrix:
@@ -1314,6 +1383,16 @@ jobs:
           restore-keys: |
             electron-builder-${{ matrix.platform }}-
 
+      # PRs cache tools separately from Electron; identical paths preserve their cache version.
+      - name: Seed shared Linux packaging downloads
+        if: matrix.platform == 'linux-x64' && github.ref == 'refs/heads/main'
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/electron-builder
+          key: electron-builder-linux-${{ hashFiles('pnpm-lock.yaml') }}
+          # The release cache above restores the same tools, so this only needs to save on a miss.
+          lookup-only: true
+
       # Why: pnpm install triggers electron's postinstall, which downloads the
       # Electron binary from GitHub release assets. GitHub's download CDN
       # occasionally returns 504s that fail the whole release. Retry on
@@ -1371,45 +1450,67 @@ jobs:
           echo "identity=$identity" >>"$GITHUB_OUTPUT"
           echo "Classified $TAG as $identity"
 
-      # Why here and not in build:relay: only a Windows runner can compile it, and
-      # arm64 cross-compiles from this same x64 agent. Mirrors dev-channel-win-build.yml,
-      # which had it while release-cut did not — so every stable installer through
-      # v1.4.203 shipped Windows relays with no windows-process-tree.node, silently
-      # falling back to the PowerShell scan on every Windows SSH host.
-      # Why no run_attempt guard, unlike the artifact steps below: Build app is ungated,
-      # so a rerun would reach the required-addon check with nothing staged and fail.
-      - name: Build Windows process-table addon for the relay
+      # Why every leg: each package ships relays for Windows SSH hosts. v1.4.203 and
+      # earlier shipped Windows relays with no windows-process-tree.node, and mac and
+      # Linux packages shipped none until the addon moved to its own Windows job.
+      # Why no run_attempt guard: Build app is ungated, so a rerun needs it staged too.
+      - name: Collect the Windows process-table addons for the relay
+        uses: actions/download-artifact@v8
+        with:
+          name: relay-windows-process-tree
+          path: .build/windows-process-tree
+
+      # Why an explicit step rather than trusting the runner image: the packaged
+      # CLI launcher is a native Rust binary, and a Windows host without cargo
+      # fails deep inside electron-builder's native hook instead of here. Real
+      # Windows dev machines do not have it by default either.
+      - name: Ensure the Rust toolchain for the Windows CLI launcher
         if: matrix.platform == 'win'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+            rustup toolchain install stable --profile minimal
+            rustup default stable
+          }
+          cargo --version
+
+      # Consumers verify the same official build configuration before restoring the bundle.
+      - name: Download release JavaScript
+        if: needs.release-javascript.outputs.supported == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: release-javascript
+          path: .build/release-javascript
+
+      - name: Build app
         shell: bash
         run: |
-          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=x64
-          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=arm64
-
-      # Why ORCA_POSTHOG_WRITE_KEY here: this is the only build that
-      # produces a published binary, so this is the only place the secret
-      # needs to be in scope. The key is a PostHog *project* API key, not
-      # a server secret — it ships in every official binary's app.asar
-      # and is therefore extractable from any release. We still keep it
-      # in GitHub Actions secrets so the literal stays out of the repo
-      # (and out of fork CI runs / log scrapers / casual greps).
-      # Why ORCA_BUILD_IDENTITY here (not in env at the job level): the
-      # value comes from the per-tag classification above and electron-vite
-      # reads it from `process.env` during `pnpm build:release` only.
-      # Why ORCA_DIAGNOSTICS_TOKEN_URL here: official builds pin crash
-      # diagnostic uploads to Orca's endpoint at compile time, matching the
-      # telemetry gate's "official binary only" behavior.
-      - name: Build app
-        run: pnpm build:release
+          if [ "$SHARED_JAVASCRIPT" = true ]; then
+            node config/scripts/release-javascript-artifact.mjs restore
+            pnpm run build:release:host
+          else
+            pnpm run build:release
+          fi
         env:
           # Why: Vite's web build crossed Node's default old-space ceiling on
           # the macOS release runner, leaving v1.4.2-rc.8 as an incomplete draft.
           NODE_OPTIONS: --max-old-space-size=4096
           ORCA_BUILD_IDENTITY: ${{ steps.tag-classify.outputs.identity }}
+          SHARED_JAVASCRIPT: ${{ needs.release-javascript.outputs.supported }}
+          ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA: ${{ needs.release-javascript.outputs.source_sha }}
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
-          # Fail the release rather than ship a relay that silently falls back to
-          # the PowerShell scan on every Windows SSH host.
-          ORCA_REQUIRE_RELAY_NATIVE_ADDONS: ${{ matrix.platform == 'win' && 'x64,arm64' || '' }}
+          # Fail the release rather than ship a relay that cannot launch outside
+          # sshd's job for a standard user on a Windows SSH host.
+          ORCA_REQUIRE_RELAY_NATIVE_ADDONS: x64,arm64
+
+      # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
+      - name: Download the orcad deployment template
+        if: needs.cut.outputs.ships_orcad_template == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: orcad-template
+          path: out/orcad-template
 
       - name: Gate runtime file-watcher process isolation
         if: runner.os == 'Linux'
@@ -1530,6 +1631,7 @@ jobs:
           }
 
       - name: Install SignPath PowerShell module
+        id: install-signpath
         if: matrix.platform == 'win' && github.run_attempt == 1
         uses: ./.github/actions/install-signpath-module
 
@@ -1540,18 +1642,14 @@ jobs:
       # existing installer signing request below. The NSIS uninstaller rides
       # this same request (it is the MDE update cluster: old-uninstaller.exe /
       # Uninstall Orca.exe), captured through electron-builder's sign hook and
-      # swapped back in during the rebuild — no third approval wait. Every step is
-      # fail-open (continue-on-error + outcome gating): any failure ships the
-      # original installer with unsigned inner binaries, exactly like releases
-      # did before this chain existed. Rehearsed end to end in run 28988432001
-      # (.github/workflows/windows-signing-rehearsal.yml).
+      # swapped back in during the rebuild — no third approval wait. Production
+      # releases require the entire signing chain to succeed (#23383).
 
       # Why: only unsigned PE files go to SignPath. Files that already carry a
       # valid signature (Microsoft's OpenConsole.exe) must keep their signer.
       - name: Stage unsigned inner PE files for signing
         id: stage-inner
         if: matrix.platform == 'win' && github.run_attempt == 1
-        continue-on-error: true
         shell: pwsh
         run: |
           $root = Resolve-Path 'dist/win-unpacked'
@@ -1563,6 +1661,11 @@ jobs:
             Where-Object { $_.Extension -in '.exe', '.dll', '.node' } |
             ForEach-Object {
               $relative = [System.IO.Path]::GetRelativePath($root, $_.FullName)
+              # The orcad template's Linux/macOS addons are data for SSH hosts, not PE files.
+              if ($relative -match '^resources[\\/]orcad-template[\\/]targets[\\/](?!win32-)') {
+                $skipped.Add("$relative  <non-Windows orcad template payload>")
+                return
+              }
               $signature = Get-AuthenticodeSignature -FilePath $_.FullName
               if ($signature.Status -eq 'Valid') {
                 $skipped.Add("$relative  <already signed: $($signature.SignerCertificate.Subject)>")
@@ -1593,34 +1696,18 @@ jobs:
           # out of inner-signing-list.txt: that list drives the copy-back into
           # dist/win-unpacked, and the uninstaller does not live there — it is
           # re-injected through the sign hook during the rebuild instead.
-          # Why this name and not "Uninstall Orca.exe": the restore loop below
-          # matches staged files by suffix (`-like "*$relative"`) and takes the
-          # first hit, so any staged path ending in "Orca.exe" is separated from
-          # the real Orca.exe only by Get-ChildItem's enumeration order. That
-          # order happens to favour the root file today, but it is not a
-          # documented guarantee; a name that cannot suffix-match is.
-          # Why the whole block is caught rather than just Test-Path'd: this
-          # step's outcome gates the upload of every inner binary, so a locked
-          # file or a full disk here would cost all of them their signatures -
-          # worse than shipping no uninstaller signature at all.
-          try {
-            $exportedUninstaller = Join-Path $env:RUNNER_TEMP 'uninstaller-signing\unsigned\orca-uninstaller.exe'
-            if (Test-Path -LiteralPath $exportedUninstaller) {
-              $uninstallerStagePath = Join-Path $stage.FullName 'uninstaller\orca-uninstaller.exe'
-              New-Item -ItemType Directory -Force -Path (Split-Path $uninstallerStagePath) -ErrorAction Stop | Out-Null
-              Copy-Item -LiteralPath $exportedUninstaller -Destination $uninstallerStagePath -Force -ErrorAction Stop
-              Write-Host 'Staged the NSIS uninstaller for signing: uninstaller\orca-uninstaller.exe'
-            } else {
-              Write-Host "::warning::No exported NSIS uninstaller at $exportedUninstaller; this release ships an unsigned uninstaller (fail-open)."
-            }
-          } catch {
-            Write-Host "::warning::Could not stage the NSIS uninstaller ($_); this release ships an unsigned uninstaller (fail-open)."
+          $exportedUninstaller = Join-Path $env:RUNNER_TEMP 'uninstaller-signing\unsigned\orca-uninstaller.exe'
+          if (-not (Test-Path -LiteralPath $exportedUninstaller)) {
+            throw "No exported NSIS uninstaller at $exportedUninstaller."
           }
+          $uninstallerStagePath = Join-Path $stage.FullName 'uninstaller\orca-uninstaller.exe'
+          New-Item -ItemType Directory -Force -Path (Split-Path $uninstallerStagePath) -ErrorAction Stop | Out-Null
+          Copy-Item -LiteralPath $exportedUninstaller -Destination $uninstallerStagePath -Force -ErrorAction Stop
+          Write-Host 'Staged the NSIS uninstaller for signing: uninstaller\orca-uninstaller.exe'
 
       - name: Upload unsigned inner binaries for SignPath
         id: upload-unsigned-inner
         if: matrix.platform == 'win' && github.run_attempt == 1 && steps.stage-inner.outcome == 'success'
-        continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
           name: orca-windows-inner-unsigned-${{ needs.cut.outputs.tag }}
@@ -1630,7 +1717,6 @@ jobs:
       - name: Submit inner binaries signing request
         id: submit-inner-signing
         if: matrix.platform == 'win' && github.run_attempt == 1 && steps.upload-unsigned-inner.outcome == 'success'
-        continue-on-error: true
         uses: signpath/github-action-submit-signing-request@v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -1643,8 +1729,8 @@ jobs:
 
       - name: Notify Slack that inner-binary signing is waiting for approval
         id: notify-inner-signing
-        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.submit-inner-signing.outcome == 'success'
         continue-on-error: true
+        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.submit-inner-signing.outcome == 'success'
         shell: pwsh
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -1704,15 +1790,10 @@ jobs:
 
           Invoke-RestMethod -Method Post -Uri $env:SLACK_WEBHOOK_URL -ContentType 'application/json' -Body $payload
 
-      # Why gate on the notify outcome too: if nobody was told to approve,
-      # don't hold the release for the approval window — fall through and
-      # ship like today instead. The 1h wait (vs the installer's 4h) keeps
-      # both waits plus the build inside the 360-minute job cap; missing it
-      # falls through to today's unsigned-inner flow rather than blocking.
+      # Approval remains required even when the notification service is unavailable.
       - name: Download signed inner binaries from SignPath
         id: download-signed-inner
-        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.submit-inner-signing.outcome == 'success' && steps.notify-inner-signing.outcome == 'success'
-        continue-on-error: true
+        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.submit-inner-signing.outcome == 'success'
         shell: pwsh
         env:
           SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -1730,27 +1811,31 @@ jobs:
           Expand-Archive -Path signed-inner.zip -DestinationPath signed-inner -Force
 
       # Why: copy back strictly by the staged list so a layout mismatch in the
-      # returned artifact fails loudly (into fail-open) instead of silently
+      # returned artifact fails before publication instead of silently
       # shipping a mix of signed and unsigned binaries.
       - name: Restore signed inner binaries into unpacked app
         id: restore-signed-inner
         if: matrix.platform == 'win' && github.run_attempt == 1 && steps.download-signed-inner.outcome == 'success'
-        continue-on-error: true
         shell: pwsh
+        env:
+          SIGNING_POLICY: release-signing
         run: |
+          $requireValid = $env:SIGNING_POLICY -ne 'test-signing'
           $root = Resolve-Path 'dist/win-unpacked'
           $failures = New-Object System.Collections.Generic.List[string]
           foreach ($relative in Get-Content 'inner-signing-list.txt') {
-            $signed = Get-ChildItem -Path signed-inner -Recurse -File |
-              Where-Object { [System.IO.Path]::GetRelativePath((Resolve-Path 'signed-inner'), $_.FullName).TrimStart('\', '/') -like "*$relative" } |
-              Select-Object -First 1
-            if ($null -eq $signed) {
-              $failures.Add("missing from signed artifact: $relative")
+            $candidates = @(
+              (Join-Path 'signed-inner' $relative),
+              (Join-Path 'signed-inner/signing-stage' $relative)
+            ) | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf }
+            if (@($candidates).Count -ne 1) {
+              $failures.Add("missing or ambiguous signed artifact path: $relative")
               continue
             }
+            $signed = Get-Item -LiteralPath @($candidates)[0]
             $signature = Get-AuthenticodeSignature -FilePath $signed.FullName
-            if ($null -eq $signature.SignerCertificate) {
-              $failures.Add("returned without a signature: $relative")
+            if ($null -eq $signature.SignerCertificate -or ($requireValid -and ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike '*CN=SignPath Foundation*'))) {
+              $failures.Add("returned without a valid SignPath signature: $relative")
               continue
             }
             Copy-Item -Path $signed.FullName -Destination (Join-Path $root $relative) -Force
@@ -1761,25 +1846,33 @@ jobs:
             throw "Signed inner artifact did not round-trip cleanly ($($failures.Count) failures)."
           }
 
-      # Why gated separately from the inner restore above: if SignPath's
-      # windows-inner-binaries-zip artifact configuration does not (yet) cover the
-      # uninstaller/ directory, the uninstaller comes back missing. That must cost
-      # only the uninstaller signature — the rebuild below still runs and still
-      # ships the signed inner binaries, exactly as it does today.
+      # Why: SignPath rewrote the template's Windows binaries, and the client materializer checks
+      # each file against the template manifest, so it must record the signed bytes.
+      - name: Reseal the orcad template over its signed binaries
+        id: reseal-orcad-template
+        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.restore-signed-inner.outcome == 'success' && needs.cut.outputs.ships_orcad_template == 'true'
+        run: node config/scripts/packaged-orcad-template.cjs --reseal-signed dist/win-unpacked inner-signing-list.txt
+
+      # The uninstaller must return signed before rebuilding the installer.
       - name: Restore signed uninstaller for the installer rebuild
         id: restore-signed-uninstaller
         if: matrix.platform == 'win' && github.run_attempt == 1 && steps.restore-signed-inner.outcome == 'success'
-        continue-on-error: true
         shell: pwsh
+        env:
+          SIGNING_POLICY: release-signing
         run: |
-          $signed = Get-ChildItem -Path signed-inner -Recurse -File -Filter 'orca-uninstaller.exe' |
-            Select-Object -First 1
-          if ($null -eq $signed) {
-            throw 'SignPath did not return uninstaller/orca-uninstaller.exe; check the windows-inner-binaries-zip artifact configuration covers it.'
+          $requireValid = $env:SIGNING_POLICY -ne 'test-signing'
+          $candidates = @(
+            (Join-Path 'signed-inner' 'uninstaller\orca-uninstaller.exe'),
+            (Join-Path 'signed-inner/signing-stage' 'uninstaller\orca-uninstaller.exe')
+          ) | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf }
+          if (@($candidates).Count -ne 1) {
+            throw 'Missing or ambiguous uninstaller/orca-uninstaller.exe in the signed artifact; check the windows-inner-binaries-zip configuration.'
           }
+          $signed = Get-Item -LiteralPath @($candidates)[0]
           $signature = Get-AuthenticodeSignature -FilePath $signed.FullName
-          if ($null -eq $signature.SignerCertificate) {
-            throw 'The returned NSIS uninstaller carries no signature.'
+          if ($null -eq $signature.SignerCertificate -or ($requireValid -and ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike '*CN=SignPath Foundation*'))) {
+            throw 'The returned NSIS uninstaller carries no valid SignPath signature.'
           }
           $signedDir = Join-Path $env:RUNNER_TEMP 'uninstaller-signing\signed'
           New-Item -ItemType Directory -Force -Path $signedDir | Out-Null
@@ -1804,13 +1897,11 @@ jobs:
       - name: Replace cached elevate.exe with the signed copy
         id: sign-elevate-cache
         if: matrix.platform == 'win' && github.run_attempt == 1 && steps.restore-signed-inner.outcome == 'success'
-        continue-on-error: true
         shell: pwsh
         run: |
           $signed = 'dist/win-unpacked/resources/elevate.exe'
           if (-not (Test-Path $signed)) {
-            Write-Host '::warning::No elevate.exe in win-unpacked resources; nothing to protect from the rebuild clobber.'
-            exit 0
+            throw 'No elevate.exe in win-unpacked resources.'
           }
           # Why this guard stays: windows-signing-rehearsal.yml shares the
           # electron-builder-win-<lockfile hash> cache key with this workflow, so a
@@ -1818,8 +1909,7 @@ jobs:
           $signature = Get-AuthenticodeSignature -FilePath $signed
           $subject = if ($null -eq $signature.SignerCertificate) { '<none>' } else { $signature.SignerCertificate.Subject }
           if ($signature.Status -ne 'Valid' -or $subject -notlike '*CN=SignPath Foundation*') {
-            Write-Host "::warning::win-unpacked elevate.exe is not SignPath-signed ($($signature.Status), $subject); skipping cache swap."
-            exit 0
+            throw "win-unpacked elevate.exe is not SignPath-signed ($($signature.Status), $subject)."
           }
           node config/scripts/replace-cached-nsis-elevate.mjs $signed
           if ($LASTEXITCODE -ne 0) {
@@ -1837,35 +1927,16 @@ jobs:
       - name: Rebuild NSIS installer from signed unpacked app
         id: rebuild-nsis-signed
         if: matrix.platform == 'win' && github.run_attempt == 1 && steps.restore-signed-inner.outcome == 'success'
-        continue-on-error: true
         shell: pwsh
         env:
-          # Why unconditional: the sign hook keys off the file existing, which it
-          # only does when the restore step above succeeded. A missing file logs a
-          # warning and embeds the freshly built unsigned uninstaller instead.
           ORCA_WIN_UNINSTALLER_SIGNED_PATH: ${{ runner.temp }}\uninstaller-signing\signed\orca-uninstaller.exe
         run: |
-          # Why: keep the pre-rebuild artifacts so a failed rebuild can fall
-          # back to shipping them unchanged (fail-open).
-          New-Item -ItemType Directory -Path prepack-backup -Force | Out-Null
-          Copy-Item 'dist/orca-windows-setup.exe' 'prepack-backup/orca-windows-setup.exe' -Force
-          Copy-Item 'dist/latest.yml' 'prepack-backup/latest.yml' -Force
-
           pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never --prepackaged "$env:GITHUB_WORKSPACE\dist\win-unpacked"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path 'dist/orca-windows-setup.exe')) {
             throw 'electron-builder --prepackaged did not produce dist/orca-windows-setup.exe'
           }
 
-      - name: Roll back to original installer after failed rebuild
-        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.rebuild-nsis-signed.outcome == 'failure'
-        shell: pwsh
-        run: |
-          if (Test-Path 'prepack-backup/orca-windows-setup.exe') {
-            Copy-Item 'prepack-backup/orca-windows-setup.exe' 'dist/orca-windows-setup.exe' -Force
-            Copy-Item 'prepack-backup/latest.yml' 'dist/latest.yml' -Force
-            Write-Warning 'Restored pre-rebuild installer; this release ships with unsigned inner binaries.'
-          }
       # ── End Windows inner-binary signing ───────────────────────────────
       - name: Upload unsigned Windows installer for SignPath
         if: matrix.platform == 'win' && github.run_attempt == 1
@@ -1919,7 +1990,7 @@ jobs:
             $requestUrl = "https://app.signpath.io/Web/$env:SIGNPATH_ORGANIZATION_ID/SigningRequests/$env:SIGNPATH_REQUEST_ID"
           }
 
-          # Why: releases where inner signing fell through have only this one request.
+          # Keep the two approval requests distinguishable in the notification.
           $stage = if ($env:INNER_SIGNING_SUBMITTED -eq 'true') { 'installer signing request (2 of 2)' } else { 'signing request' }
           # Why: approvers need tag + source ref/commit + who cut, not only the tag.
           $sourceRef = if (-not [string]::IsNullOrWhiteSpace($env:SOURCE_REF)) { $env:SOURCE_REF } else { 'unknown' }
@@ -2026,24 +2097,18 @@ jobs:
 
       # Why: evidence gate for inner-binary signing (issue #7785, supersedes
       # PR #7170's Orca.exe-only gate — this covers every staged .exe/.dll/.node
-      # by extracting the shipped installer). Warn-only until the flow has been
-      # proven on a real release, then flip ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED
-      # to 'true' so unsigned inner binaries block the release.
+      # by extracting the shipped installer). Unsigned binaries block publication.
       - name: Verify Windows inner binary signatures
         if: matrix.platform == 'win' && github.run_attempt == 1
         shell: pwsh
         env:
-          ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED: 'false'
+          ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED: 'true'
           INNER_SIGNING_COMPLETED: ${{ steps.rebuild-nsis-signed.outcome == 'success' }}
           UNINSTALLER_SIGNING_COMPLETED: ${{ steps.restore-signed-uninstaller.outcome == 'success' }}
         run: |
           $required = $env:ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED -eq 'true'
 
-          # Why: a fail-open gate that writes nothing is indistinguishable from a
-          # gate that passed. Always leave a verdict in the evidence artifact and
-          # the job summary so a silent degradation is visible (#6487).
-          # Why best-effort: while warn-only, a disk-full or permission error
-          # writing the verdict must not become the thing that fails the release.
+          # Keep diagnostics best-effort so they cannot mask a signature failure.
           function Add-GateEvidence([string]$line) {
             try {
               Add-Content -Path 'inner-signing-evidence.txt' -Value "`n$line" -ErrorAction Stop
@@ -2071,19 +2136,14 @@ jobs:
           }
 
           if ($env:INNER_SIGNING_COMPLETED -ne 'true') {
-            $message = 'Windows inner-binary signing did not complete; this release ships unsigned inner binaries (fail-open, issue #7785).'
+            $message = 'Windows inner-binary signing did not complete; publication is blocked.'
             Write-GateVerdict "NOT VERIFIED — $message"
             if ($required) { throw $message }
             Write-Host "::warning::$message"
             exit 0
           }
 
-          # Why try/catch: while the gate is warn-only, even an unexpected
-          # script error (extraction hiccup, missing file) must not block
-          # the release — only the flip to required makes failures fatal.
-          # Why tracked separately: a required-mode signature failure must not be
-          # rewritten as ERRORED by the catch below, which would replace the
-          # per-file report with an exception string and lose the diagnostics.
+          # Keep signature failures outside the catch to preserve the per-file report.
           $policyFailure = $null
 
           try {
@@ -2105,14 +2165,19 @@ jobs:
             }
             New-Item -ItemType Directory -Path inner-evidence-extract -Force | Out-Null
             & $7za x 'dist/orca-windows-setup.exe' '-oinner-evidence-extract' -y | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'Could not extract the shipped installer payload.' }
 
             $root = Resolve-Path 'inner-evidence-extract'
+            # Verify the CLI even when a cached signed copy bypassed staging (#23383).
             # Why elevate.exe is always appended: staging skips already-signed
             # files, and the persisted electron-builder cache can carry a
             # previously signed elevate.exe — so it may be absent from the list
             # in some runs, yet it is the file most at risk of losing its
             # signature in the NSIS rebuild. Verify it in every release.
             $targets = @(Get-Content 'inner-signing-list.txt')
+            foreach ($requiredTarget in @('Orca.exe', 'resources\bin\orca.exe')) {
+              if ($targets -notcontains $requiredTarget) { $targets += $requiredTarget }
+            }
             if ($targets -notcontains 'resources\elevate.exe') {
               $targets += 'resources\elevate.exe'
             }
@@ -2147,7 +2212,7 @@ jobs:
                 }
               }
             } else {
-              Write-Host '::warning::The NSIS uninstaller was not signed on this run; it is excluded from the evidence gate (fail-open).'
+              $failures.Add('The NSIS uninstaller signing did not complete.')
             }
             foreach ($relative in $targets) {
               $path = Join-Path $root $relative
@@ -2196,6 +2261,38 @@ jobs:
 
           # Outside the catch so the FAILED evidence report survives intact.
           if ($policyFailure) { throw $policyFailure }
+
+      - name: Notify Slack when Windows signing fails
+        if: failure() && matrix.platform == 'win' && github.run_attempt == 1 && steps.install-signpath.outcome != '' && steps.install-signpath.outcome != 'skipped'
+        continue-on-error: true
+        shell: pwsh
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          TAG: ${{ needs.cut.outputs.tag }}
+          GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          INNER_REQUEST_ID: ${{ steps.submit-inner-signing.outputs.signing-request-id }}
+          INSTALLER_REQUEST_ID: ${{ steps.submit-signing-request.outputs.signing-request-id }}
+          INSTALLER_SUBMISSION_OUTCOME: ${{ steps.submit-signing-request.outcome }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SLACK_WEBHOOK_URL)) {
+            throw 'SLACK_WEBHOOK_URL is missing; cannot notify release approvers of the signing failure.'
+          }
+          $stage = 'inner-binary signing or installer rebuild'
+          if ($env:INSTALLER_SUBMISSION_OUTCOME -in @('success', 'failure')) {
+            $stage = 'installer signing or final signature verification'
+          }
+          $message = "Orca Windows release ``$($env:TAG)`` failed during $stage (including approval timeouts). Publication is blocked.`n<$($env:GITHUB_RUN_URL)|Open failed GitHub Actions run>"
+          foreach ($request in @(
+            @{ Id = $env:INNER_REQUEST_ID; Label = 'Inner-binary signing request' },
+            @{ Id = $env:INSTALLER_REQUEST_ID; Label = 'Installer signing request' }
+          )) {
+            if (-not [string]::IsNullOrWhiteSpace($request.Id)) {
+              $message += "`n<https://app.signpath.io/Web/c37aa192-a27a-4377-9c90-5d6c95912dc0/SigningRequests/$($request.Id)|$($request.Label)>"
+            }
+          }
+          $message += "`nCheck the failed step before retrying. Late SignPath approval does not resume this run; missing Windows assets require a fresh release dispatch, not Re-run failed jobs."
+          $payload = @{ text = $message } | ConvertTo-Json
+          Invoke-RestMethod -Method Post -Uri $env:SLACK_WEBHOOK_URL -ContentType 'application/json' -Body $payload
 
       - name: Upload Windows inner signing evidence
         if: always() && matrix.platform == 'win' && github.run_attempt == 1
@@ -2249,8 +2346,22 @@ jobs:
     needs:
       - cut
       - create-release
+      - orcad-template
       - release-preflight
-    if: needs.cut.outputs.should_release == 'true'
+      - release-javascript
+      # release-mac-build.yml downloads the relay addons from this run.
+      - relay-windows-process-tree
+    # Why not the implicit success(): a tag without the orcad template skips that job on purpose.
+    if: >-
+      !cancelled() &&
+      needs.cut.result == 'success' &&
+      needs.cut.outputs.should_release == 'true' &&
+      needs.create-release.result == 'success' &&
+      needs.release-preflight.result == 'success' &&
+      needs.release-javascript.result == 'success' &&
+      needs.relay-windows-process-tree.result == 'success' &&
+      (needs.orcad-template.result == 'success' ||
+        (needs.orcad-template.result == 'skipped' && needs.cut.outputs.ships_orcad_template == 'false'))
     # Why: SignPath requires every job in this signing workflow to be
     # GitHub-hosted. The actual mac build runs in release-mac-build.yml so
     # Blacksmith stays outside Windows artifact provenance.
@@ -2273,6 +2384,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_MAC_BUILD_REF: ${{ github.ref_name }}
           RELEASE_MAC_BUILD_RELEASE_RUN_ID: ${{ github.run_id }}
+          RELEASE_MAC_BUILD_JAVASCRIPT_SOURCE_SHA: ${{ needs.release-javascript.outputs.supported == 'true' && needs.release-javascript.outputs.source_sha || '' }}
           RELEASE_MAC_BUILD_TAG: ${{ needs.cut.outputs.tag }}
           RELEASE_MAC_BUILD_WORKFLOW: release-mac-build.yml
 
@@ -2284,6 +2396,15 @@ jobs:
       - skill-sharing-linux-floor-release-gate
       - skill-sharing-release-gate
       - terminal-rendering-golden
+    # Why explicit: a skipped orcad-template (tags that predate it) would skip every job after it.
+    if: >-
+      !cancelled() &&
+      needs.cut.result == 'success' &&
+      needs.build.result == 'success' &&
+      needs.build-mac.result == 'success' &&
+      needs.skill-sharing-linux-floor-release-gate.result == 'success' &&
+      needs.skill-sharing-release-gate.result == 'success' &&
+      needs.terminal-rendering-golden.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -2352,7 +2473,8 @@ jobs:
     needs:
       - cut
       - publish-release
-    if: ${{ needs.cut.outputs.tag != '' }}
+    # Why explicit: a skipped orcad-template (tags that predate it) would skip every job after it.
+    if: ${{ !cancelled() && needs.publish-release.result == 'success' && needs.cut.outputs.tag != '' }}
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -2381,7 +2503,8 @@ jobs:
     # A release created with GITHUB_TOKEN does not reliably emit a release
     # event to other workflows. Dispatch the trusted default-branch workflow;
     # it validates and checks out the released tag before deploying.
-    if: ${{ needs.cut.outputs.tag != '' }}
+    # Why explicit: a skipped orcad-template (tags that predate it) would skip every job after it.
+    if: ${{ !cancelled() && needs.publish-release.result == 'success' && needs.cut.outputs.tag != '' }}
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -2425,7 +2548,8 @@ jobs:
     needs:
       - cut
       - publish-release
-    if: ${{ needs.cut.outputs.tag != '' && startsWith(needs.cut.outputs.tag, 'v') }}
+    # Why explicit: a skipped orcad-template (tags that predate it) would skip every job after it.
+    if: ${{ !cancelled() && needs.publish-release.result == 'success' && needs.cut.outputs.tag != '' && startsWith(needs.cut.outputs.tag, 'v') }}
     uses: ./.github/workflows/homebrew-bump.yml
     with:
       tag: ${{ needs.cut.outputs.tag }}

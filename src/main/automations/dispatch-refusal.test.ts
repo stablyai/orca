@@ -59,13 +59,14 @@ function makeRunWriter(foldsRepeat: boolean): {
   const created: string[] = []
   const updated: { status: string; error?: string | null }[] = []
   const writer: AutomationRunWriter = {
-    repeatSkip: () => (foldsRepeat ? makeRun('folded') : null),
-    createRun: () => {
+    advanceNextRun: async () => brokenAutomation,
+    repeatSkip: async () => (foldsRepeat ? makeRun('folded') : null),
+    createRun: async () => {
       const run = makeRun(`run-${created.length + 1}`)
       created.push(run.id)
       return run
     },
-    updateRun: (args) => {
+    updateRun: async (args) => {
       updated.push({ status: args.status, error: args.error })
       return { ...makeRun(args.runId), status: args.status, error: args.error ?? null }
     }
@@ -78,11 +79,11 @@ describe('recordUnevaluableAutomation', () => {
     vi.restoreAllMocks()
   })
 
-  it('writes one run and logs once when the record is newly broken', () => {
+  it('writes one run and logs once when the record is newly broken', async () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
     const { writer, created, updated } = makeRunWriter(false)
 
-    recordUnevaluableAutomation({
+    await recordUnevaluableAutomation({
       runs: writer,
       automation: brokenAutomation,
       error: new Error('Invalid cron day of month.')
@@ -95,12 +96,12 @@ describe('recordUnevaluableAutomation', () => {
 
   // The record is retried every tick on purpose, so a repaired schedule resumes on its own.
   // The fold is what keeps that from writing a row, and logging, once per tick forever.
-  it('stays silent on a record it has already reported', () => {
+  it('stays silent on a record it has already reported', async () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
     const { writer, created } = makeRunWriter(true)
 
     for (let tick = 0; tick < 5; tick += 1) {
-      recordUnevaluableAutomation({
+      await recordUnevaluableAutomation({
         runs: writer,
         automation: brokenAutomation,
         error: new Error('Invalid cron day of month.')

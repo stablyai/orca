@@ -1,3 +1,4 @@
+import type { Readable } from 'node:stream'
 import type { ClientChannel } from 'ssh2'
 import type { SshConnection } from './ssh-connection'
 import { createSshOperationAbortError, type SshExecOptions } from './ssh-connection-utils'
@@ -6,6 +7,7 @@ import {
   redactRelayInstallMarkerTokens
 } from './ssh-relay-install-marker'
 import type { SystemSshCommandChannel } from './system-ssh-command'
+import { buildPosixStdoutFence } from '../../shared/posix-stdout-fence'
 
 const EXEC_TIMEOUT_MS = 30_000
 const COMMAND_CLOSE_GRACE_MS = 5_000
@@ -18,6 +20,8 @@ type ExecCommandOptions = SshExecOptions & {
   // folding stderr into stdout, where it would match the probe's own token strings.
   // On the system-ssh transport this stream also carries local OpenSSH noise; log-only.
   onStderr?: (stderr: string) => void
+  /** Streamed into the command's stdin, then EOF. A read error terminates the command. */
+  stdin?: Readable
 }
 
 type SshCommandTerminationError = Error & {
@@ -43,12 +47,38 @@ export function isUnconfirmedSshCommandTermination(
   )
 }
 
+/** A command that ran and exited nonzero; `stdout` is its own output, never the command text. */
+export type SshCommandExitError = Error & { exitCode: number; stdout: string }
+
+export function isSshCommandExitError(error: unknown): error is SshCommandExitError {
+  return (
+    error instanceof Error &&
+    'exitCode' in error &&
+    typeof error.exitCode === 'number' &&
+    'stdout' in error &&
+    typeof error.stdout === 'string'
+  )
+}
+
+export function sshCommandExitError(
+  command: string,
+  code: number,
+  stdout: string,
+  output = stdout.trim()
+): SshCommandExitError {
+  const message = `Command "${redactRelayInstallMarkerTokens(command)}" failed (exit ${code}): ${redactRelayInstallMarkerTokens(output)}`
+  return Object.assign(new Error(message), {
+    exitCode: code,
+    stdout: redactRelayInstallMarkerTokens(stdout)
+  })
+}
+
 export async function execCommand(
-  conn: SshConnection,
+  conn: Pick<SshConnection, 'exec' | 'usesSystemSshTransport'>,
   command: string,
   options?: ExecCommandOptions
 ): Promise<string> {
-  const { timeoutMs = EXEC_TIMEOUT_MS, onStderr, ...execOptions } = options ?? {}
+  const { timeoutMs = EXEC_TIMEOUT_MS, onStderr, stdin, ...execOptions } = options ?? {}
   const signal = options?.signal
   if (signal?.aborted) {
     throw createSshOperationAbortError()
@@ -56,9 +86,13 @@ export async function execCommand(
   // Why: reconnect/disconnect can flip the connection back to ssh2 before a
   // killed local OpenSSH child emits close; the channel's transport is immutable.
   const openedWithSystemSsh = conn.usesSystemSshTransport?.() === true
+  // Why: sshd runs the user's login shell before our /bin/sh wrapper, so rc-file stdout
+  // (an `echo`, a title escape) would otherwise be read as the command's answer.
+  const fence = execOptions.wrapCommand === false ? null : buildPosixStdoutFence(command, 'SSH')
+  const readPayload = (stdout: string): string => fence?.readStdout(stdout) ?? stdout
   let channel: ClientChannel
   try {
-    channel = await conn.exec(command, execOptions)
+    channel = await conn.exec(fence?.command ?? command, execOptions)
   } catch (error) {
     // Preserve identity/classifier fields while removing install-owner tokens.
     redactRelayInstallMarkerError(error)
@@ -82,6 +116,11 @@ export async function execCommand(
       channel.off('data', onStdoutData)
       channel.stderr.off('data', onStderrData)
       channel.off('close', onClose)
+      if (stdin) {
+        stdin.off('error', fail)
+        stdin.unpipe(channel.stdin)
+        stdin.destroy()
+      }
     }
     const settle = (fn: typeof resolve | typeof reject, val: string | Error): void => {
       if (settled) {
@@ -156,20 +195,14 @@ export async function execCommand(
       } else if (code !== 0) {
         // Why: on the system-ssh transport channel.stderr carries local OpenSSH
         // client noise; preferring it masks the real failure in stdout (2>&1).
-        const output = redactRelayInstallMarkerTokens(
-          [stderr.trim(), stdout.trim()].filter(Boolean).join('\n')
-        )
-        settle(
-          reject,
-          new Error(
-            `Command "${redactRelayInstallMarkerTokens(command)}" failed (exit ${code}): ${output}`
-          )
-        )
+        const payload = readPayload(stdout)
+        const output = [stderr.trim(), payload.trim()].filter(Boolean).join('\n')
+        settle(reject, sshCommandExitError(command, code, payload, output))
       } else {
         if (stderr && onStderr) {
           onStderr(redactRelayInstallMarkerTokens(stderr))
         }
-        settle(resolve, stdout)
+        settle(resolve, readPayload(stdout))
       }
     }
     const timeout = setTimeout(() => {
@@ -193,6 +226,11 @@ export async function execCommand(
     channel.on('data', onStdoutData)
     channel.stderr.on('data', onStderrData)
     channel.on('close', onClose)
+    if (stdin) {
+      stdin.on('error', fail)
+      // Why `.stdin`: ssh2 aliases it to the channel, and a system-ssh channel only ends it there.
+      stdin.pipe(channel.stdin)
+    }
     if (signal?.aborted) {
       onAbort()
     }

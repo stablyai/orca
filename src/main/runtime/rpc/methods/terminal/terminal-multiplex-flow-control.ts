@@ -1,6 +1,8 @@
 import {
+  TERMINAL_MULTIPLEX_ACK_BATCH_BYTES,
   TERMINAL_MULTIPLEX_ACK_STREAM_MAX_WINDOW_BYTES,
-  TERMINAL_MULTIPLEX_ACK_TOTAL_MAX_WINDOW_BYTES
+  TERMINAL_MULTIPLEX_ACK_TOTAL_MAX_WINDOW_BYTES,
+  TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS
 } from '../../../../../shared/terminal-multiplex-flow-control'
 import { drainTerminalMultiplexRoundRobin } from '../../terminal-multiplex-round-robin'
 import {
@@ -20,6 +22,11 @@ export function installMultiplexFlowControl(
 ): asserts build is TerminalMultiplexFlowControlStage {
   const state = build as TerminalMultiplexConnection
   const { runtime, streams } = state
+  // Why: snapshot frames bypass the ACK window, so only a drained link can afford history;
+  // a recovery on every ACK of a sustained flood would otherwise outgrow the client's intake.
+  const linkHasRoomForHistory = (stream: TerminalMultiplexStream): boolean =>
+    stream.ackInFlightBytes <= TERMINAL_MULTIPLEX_ACK_BATCH_BYTES &&
+    state.ackTotalInFlightBytes <= TERMINAL_MULTIPLEX_ACK_BATCH_BYTES
   state.sendAckRecoverySnapshot = async (stream: TerminalMultiplexStream): Promise<void> => {
     if (
       state.closed ||
@@ -32,7 +39,13 @@ export function installMultiplexFlowControl(
     stream.ackRecoverySnapshotInFlight = true
     let replacement: RemoteTerminalSourceRangeReplacementReservation | null = null
     try {
-      const serialized = await serializeBudgetedRequestedSnapshot(runtime, stream.ptyId, 0)
+      // Why history: output was dropped, so the client's own history ends before this screen and must be replaced, not kept.
+      const carriesHistory = linkHasRoomForHistory(stream)
+      const serialized = await serializeBudgetedRequestedSnapshot(
+        runtime,
+        stream.ptyId,
+        carriesHistory ? TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS : 0
+      )
       if (state.closed || streams.get(stream.streamId) !== stream || stream.outputPaused) {
         return
       }
@@ -79,6 +92,7 @@ export function installMultiplexFlowControl(
           alternateScreen: serialized.alternateScreen,
           terminalOwner: serialized.terminalOwner,
           truncatedByByteBudget: serialized.truncatedByByteBudget,
+          scrollbackRows: serialized.scrollbackRows,
           data: serialized.data
         }
       )
@@ -122,6 +136,7 @@ export function installMultiplexFlowControl(
         )
       }
       stream.ackPendingOutputOverflowed = false
+      stream.ackRecoveryHistoryOwed = !carriesHistory
     } catch (error) {
       if (replacement) {
         if (stream.sourceRangeReplacement === replacement) {
@@ -176,6 +191,15 @@ export function installMultiplexFlowControl(
         (total, pending) => total + pending.bytes.byteLength,
         0
       )
+    }
+    if (
+      stream.ackRecoveryHistoryOwed &&
+      stream.ackPendingOutput.length === 0 &&
+      linkHasRoomForHistory(stream)
+    ) {
+      // The flood settled: one recovery now replaces the screen-only image and its history.
+      stream.ackPendingOutputOverflowed = true
+      void state.sendAckRecoverySnapshot(stream)
     }
     return flushed
   }

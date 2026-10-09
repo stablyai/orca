@@ -4,13 +4,7 @@ import { worktreeIdsEqual } from '../../../shared/worktree/id'
 
 export type StructuredActivationInventory = {
   snapshot: RuntimeMobileSessionTabsResult
-  ownerBySessionId: ReadonlyMap<
-    string,
-    {
-      owner: 'native' | 'tui'
-      terminal?: { paneKey: string; ptyId: string; tabId: string }
-    }
-  >
+  ownerBySessionId: ReadonlyMap<string, { owner: 'native' }>
 }
 
 export async function readWorktreeStructuredActivationInventory(
@@ -38,13 +32,7 @@ export async function readWorktreeStructuredActivationInventory(
   if (!snapshot.tabs.some((tab) => tab.type === 'agent-session')) {
     return false
   }
-  const ownerBySessionId = new Map<
-    string,
-    {
-      owner: 'native' | 'tui'
-      terminal?: { paneKey: string; ptyId: string; tabId: string }
-    }
-  >()
+  const ownerBySessionId = new Map<string, { owner: 'native' }>()
   await Promise.all(
     snapshot.tabs.flatMap((tab) =>
       tab.type === 'agent-session'
@@ -55,27 +43,14 @@ export async function readWorktreeStructuredActivationInventory(
                 if (!statusResponse.ok) {
                   return
                 }
-                const status = statusResponse.result as {
-                  owner?: unknown
-                  terminal?: { paneKey?: unknown; ptyId?: unknown; tabId?: unknown }
-                }
-                if (status.owner === 'native') {
-                  ownerBySessionId.set(tab.sessionId, { owner: 'native' })
-                } else if (
-                  status.owner === 'tui' &&
-                  typeof status.terminal?.paneKey === 'string' &&
-                  typeof status.terminal?.ptyId === 'string' &&
-                  status.terminal.ptyId.length > 0 &&
-                  typeof status.terminal.tabId === 'string'
+                const status: unknown = statusResponse.result
+                if (
+                  typeof status === 'object' &&
+                  status !== null &&
+                  'owner' in status &&
+                  status.owner === 'native'
                 ) {
-                  ownerBySessionId.set(tab.sessionId, {
-                    owner: 'tui',
-                    terminal: {
-                      paneKey: status.terminal.paneKey,
-                      ptyId: status.terminal.ptyId,
-                      tabId: status.terminal.tabId
-                    }
-                  })
+                  ownerBySessionId.set(tab.sessionId, { owner: 'native' })
                 }
               })
           ]
