@@ -6,6 +6,7 @@ import type { MarkdownPreviewBlockRange } from './markdown-preview-types'
 import { requestMarkdownPreviewEditorRevealFrame } from './markdown-preview-editor-reveal'
 import type { MarkdownPreviewFoundation } from './use-markdown-preview-foundation'
 import type { MarkdownPreviewViewport } from './use-markdown-preview-viewport'
+import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
 
 function isMarkdownAnnotationNavigationClick(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -190,7 +191,7 @@ export function useMarkdownPreviewReviewActions({
           return
         }
         findRenderedMarkdownReviewNoteCard(comment.id)?.scrollIntoView({
-          behavior: 'smooth',
+          behavior: motionSafeScrollBehavior(),
           block: 'center',
           inline: 'nearest'
         })
@@ -226,7 +227,7 @@ export function useMarkdownPreviewReviewActions({
           break
         }
       }
-      target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      target?.scrollIntoView({ behavior: motionSafeScrollBehavior(), block: 'center' })
     },
     [rootRef, scrollToSourceLine, setActiveReviewCommentId]
   )
