@@ -40,6 +40,9 @@ export const KNOWN_LOAD_CHANGES: ReadonlySet<string> = new Set([
   'group.recentTabIds',
   'row.title',
   'row.ptyId',
+  // Transient handoffs main's minimal row mint stores; never restored.
+  'row.pendingActivationSpawn',
+  'row.recovery',
   'row.customTitle',
   'row.generatedTitle',
   ...TAB_FACTS.flatMap((field) => [`row.${field}`, `terminalEntry.${field}`, `entry.${field}`]),

@@ -424,6 +424,16 @@ describe('Loader precedence for stored data that disagrees with itself, and its 
     ])
   })
 
+  it('drops the transient spawn handoff main’s minimal row mint stores, and reports it', () => {
+    const stored = twoTabs()
+    stored.tabsByWorktree[GIT_KEY]![0]!.pendingActivationSpawn = true
+    const loaded = load(stored)
+    expect(changed(loaded)).toEqual(['row.pendingActivationSpawn'])
+    expect(saveWorkspaceLayout(loaded).tabsByWorktree[GIT_KEY]![0]).not.toHaveProperty(
+      'pendingActivationSpawn'
+    )
+  })
+
   it('carries a pane layout with no terminal tab through unchanged', () => {
     const stored = twoTabs()
     stored.terminalLayoutsByTabId['tab-gone'] = {
