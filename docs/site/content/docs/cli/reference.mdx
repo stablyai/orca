@@ -331,6 +331,16 @@ orca account add --agent codex
 
 `account add` runs `claude login` / `codex login` in **this** terminal on the host, then registers the captured credentials with the local runtime. Codex uses device authorization so the browser can finish on another machine. Run these on the machine that owns the accounts — not through a client-only remote session.
 
+Switch which account new agents launch with, then create the workspace:
+
+```bash
+orca account select --agent claude --account you@example.com   # id or email from `account list`
+orca worktree create --name task --agent claude --prompt "..."
+orca account select --agent claude --account system            # back to your own sign-in
+```
+
+Claude and Codex have one active account per host — the one the status-bar switcher shows — so a selection applies to every agent launched after it, not to a single workspace.
+
 ## Artifacts
 
 Publish HTML or Markdown through the signed-in Orca account. Viewing a public link does not require sign-in; create/list/update/delete do. **Publishing is off by default** — a human must enable **Settings → Artifacts → Allow publishing public artifact links** on the device. There is no CLI flag that grants the gate. `list`, `unshare`, and `delete` stay available so you can audit or revoke links after turning publishing off.

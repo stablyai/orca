@@ -35,9 +35,19 @@ export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['account', 'select'],
-    summary: 'Select an OpenCode or Devin profile for new agent launches',
-    usage: 'orca account select --agent opencode|devin --account <id|system> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'agent', 'account']
+    summary: 'Select the account new agent launches on this Orca host use',
+    usage:
+      'orca account select --agent claude|codex|opencode|devin --account <id|email|system> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'agent', 'account'],
+    notes: [
+      'Claude and Codex accept an account id or email from `orca account list`; OpenCode and Devin take a profile id.',
+      '`system` returns to your own sign-in outside Orca.',
+      'Claude and Codex have one active account per host, the same one the status-bar switcher sets. New agents launched afterwards (e.g. `orca worktree create --agent claude`) use it.'
+    ],
+    examples: [
+      'orca account select --agent claude --account you@example.com',
+      'orca account select --agent codex --account system'
+    ]
   },
   {
     path: ['account', 'rm'],

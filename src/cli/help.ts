@@ -180,6 +180,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'account add' && flag === 'agent') {
     return '--agent <id>           Account provider: claude, codex, opencode, or devin (default claude)'
   }
+  if (command === 'account select' && flag === 'agent') {
+    return '--agent <id>           Account provider: claude, codex, opencode, or devin'
+  }
   if (command.startsWith('account ') && flag === 'agent') {
     return '--agent <id>           Account provider: opencode or devin'
   }

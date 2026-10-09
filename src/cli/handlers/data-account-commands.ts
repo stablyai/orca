@@ -139,7 +139,9 @@ export async function mutateDataAccount(
   if ((provider !== 'opencode' && provider !== 'devin') || typeof id !== 'string' || !id) {
     throw new RuntimeClientError(
       'invalid_argument',
-      'Use --agent opencode|devin and --account <id> (system for the default selection).'
+      action === 'select'
+        ? 'Use --agent claude|codex|opencode|devin and --account <id> (system for the default selection).'
+        : 'Use --agent opencode|devin and --account <id> (system for the default selection).'
     )
   }
   await assertDataAccountsSupported(ctx)
