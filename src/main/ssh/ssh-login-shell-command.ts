@@ -1,6 +1,6 @@
 import { shellEscape } from './ssh-connection-utils'
 
-const COMMAND_ONLY_SHELLS = new Set(['sh', 'dash', 'csh', 'tcsh'])
+const COMMAND_ONLY_SHELLS = new Set(['sh', 'dash', 'csh', 'tcsh', 'nu', 'nushell'])
 
 /** Build a command using the startup mode supported by the configured login shell. */
 export function buildSshLoginShellCommand(shell: string, command: string): string {
