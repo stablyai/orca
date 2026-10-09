@@ -81,9 +81,7 @@ function modelOption(value: unknown): AgentSessionModelOption | null {
   }
 }
 
-export type CodexSessionOptionCatalog = {
-  result: AgentSessionOptionsResult & { current: { model: string } }
-}
+export type CodexSessionOptionCatalog = AgentSessionOptionsResult & { current: { model: string } }
 
 export type CodexModelCatalogListing = {
   models: AgentSessionModelOption[]
@@ -164,18 +162,16 @@ export function composeCodexSessionOptionCatalog(
   )
   const support = codexFastModeSupport(models)
   return {
-    result: {
-      models,
-      ...(support ? { fastModeSupport: support } : {}),
-      current: {
-        model,
-        ...(input.current.effort ? { effort: input.current.effort } : {}),
-        ...(serviceTier ? { serviceTier } : {}),
-        ...(fastMode !== undefined ? { fastMode } : {}),
-        ...(reportedTier !== undefined && input.current.serviceTier === undefined
-          ? { confirmed: fastMode === undefined ? ['serviceTier'] : ['serviceTier', 'fastMode'] }
-          : {})
-      }
+    models,
+    ...(support ? { fastModeSupport: support } : {}),
+    current: {
+      model,
+      ...(input.current.effort ? { effort: input.current.effort } : {}),
+      ...(serviceTier ? { serviceTier } : {}),
+      ...(fastMode !== undefined ? { fastMode } : {}),
+      ...(reportedTier !== undefined && input.current.serviceTier === undefined
+        ? { confirmed: fastMode === undefined ? ['serviceTier'] : ['serviceTier', 'fastMode'] }
+        : {})
     }
   }
 }

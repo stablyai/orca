@@ -38,8 +38,9 @@ export function nativeSessionOptionsFromReport(input: {
   for (const key of input.restoreSkipped) {
     delete restored[key]
   }
+  // A reported tier is the speed itself; the Fast it implies for older clients is not kept.
   const fastMode =
-    reported.fastMode === undefined
+    reported.fastMode === undefined || reported.serviceTier !== undefined
       ? undefined
       : encodeStructuredAgentSessionOptionValue('fastMode', reported.fastMode)
   const options: Record<string, string> = {

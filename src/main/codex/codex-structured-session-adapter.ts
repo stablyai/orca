@@ -280,7 +280,8 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   async setOption(
     input: StructuredAgentSessionSetOptionInput
   ): Promise<Readonly<Record<string, string>>> {
-    if (!isCodexTurnOptionKey(input.key)) {
+    // `fastMode` is an older client's toggle, applied as a tier; it never rides on a turn.
+    if (!isCodexTurnOptionKey(input.key) && input.key !== 'fastMode') {
       throw new Error(`codex app-server has no thread option named ${input.key}`)
     }
     return applyCodexStructuredSessionOption(this.session(input.sessionId), input.key, input.value)

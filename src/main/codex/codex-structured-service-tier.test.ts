@@ -15,6 +15,7 @@ import {
 import { agentModelCatalogSessionAccess } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 import type { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 import { CODEX_STRUCTURED_AGENT } from './codex-structured-agent-definition'
+import { nativeSessionOptionsFromReport } from '../native-chat/agent-session-wire/structured-agent-session-option-restoration'
 
 function listing(tier = 'priority') {
   return {
@@ -205,5 +206,67 @@ describe('Codex structured service tier without send-path catalog waits', () => 
     expect(
       codex.connections[0].calls.find((call) => call.method === 'turn/start')?.params
     ).toMatchObject({ model: 'gpt-next', serviceTier: 'ultrafast' })
+  })
+})
+
+describe('Codex service tier across clients and rest', () => {
+  it('applies an older client Fast toggle through the adapter as the Fast tier', async () => {
+    const codex = fakeCodex({ 'model/list': () => listing() })
+    codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-fast')
+    const modelCatalog = new AgentModelCatalogStore()
+    const access = agentModelCatalogSessionAccess(
+      modelCatalog,
+      CODEX_STRUCTURED_AGENT,
+      '/codex/home'
+    )!
+    modelCatalog.recordSuccess(
+      access.fingerprint,
+      'codex',
+      {
+        models: [
+          {
+            id: 'gpt-live',
+            label: 'GPT Live',
+            isDefault: true,
+            efforts: [],
+            serviceTiers: [{ value: 'priority', label: 'Fast' }]
+          }
+        ],
+        origin: 'probe'
+      },
+      'discovery'
+    )
+    const adapter = adapterFor(codex, { codexHome: '/codex/home' }, [], { modelCatalog })
+    await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-1' })
+
+    await expect(
+      adapter.setOption({ sessionId: 'session-1', key: 'fastMode', value: 'true', fence: 7 })
+    ).resolves.toEqual({ serviceTier: 'priority' })
+    await expect(
+      adapter.setOption({ sessionId: 'session-1', key: 'approvalPolicy', value: 'never', fence: 7 })
+    ).rejects.toThrow('no thread option named approvalPolicy')
+    await send(adapter, 'first')
+    const turn = codex.connections[0].calls.find((call) => call.method === 'turn/start')?.params
+    expect(turn).toMatchObject({ serviceTier: 'priority' })
+    expect(turn).not.toHaveProperty('fastMode')
+  })
+
+  it('takes a tier at rest but not an older client Fast toggle', () => {
+    expect(CODEX_STRUCTURED_AGENT.restingOptions?.acceptsKey('serviceTier')).toBe(true)
+    expect(CODEX_STRUCTURED_AGENT.restingOptions?.acceptsKey('fastMode')).toBe(false)
+  })
+
+  it('keeps only the reported tier, not the Fast it implies, on the record', () => {
+    expect(
+      nativeSessionOptionsFromReport({
+        reported: { model: 'gpt-live', serviceTier: 'priority', fastMode: true },
+        restoreSkipped: [],
+        priorOptions: { fastMode: 'true', serviceTier: 'ultrafast' }
+      })
+    ).toEqual({ model: 'gpt-live', serviceTier: 'priority' })
+    // An agent that reports Fast with no tier still keeps it.
+    expect(
+      nativeSessionOptionsFromReport({ reported: { fastMode: true }, restoreSkipped: [] })
+    ).toEqual({ fastMode: 'true' })
   })
 })

@@ -11,7 +11,8 @@ import {
 } from './agent-model-catalog-entry'
 import { isStructuredAgentId } from '../../../shared/agent-session-provider-handle-encoding'
 
-const SCHEMA_VERSION = 2
+// 3: Codex models carry `serviceTiers`; an older file would offer Fast with no tier to send.
+const SCHEMA_VERSION = 3
 const SAVE_COALESCE_MS = 500
 
 export type AgentModelCatalogPersistence = {

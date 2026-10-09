@@ -63,6 +63,19 @@ describe('nativeChatSessionChoiceLabel', () => {
   })
 })
 
+describe('nativeChatSessionChoiceLabel for speed', () => {
+  it('localizes Standard only inside the speed choice', () => {
+    nativeChatSessionChoiceLabel({ value: 'default', label: 'Standard' }, 'serviceTier')
+    expect(translate).toHaveBeenCalledWith(
+      'components.native-chat.composer.optionValue.standard',
+      'Standard'
+    )
+    expect(nativeChatSessionChoiceLabel({ value: 'default', label: 'Ask first' }, 'mode')).toBe(
+      'Ask first'
+    )
+  })
+})
+
 describe('nativeChatOptionsPillLabel', () => {
   function speedDescriptor(currentValue: string): SessionOptionDescriptor {
     return {

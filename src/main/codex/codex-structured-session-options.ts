@@ -78,7 +78,7 @@ export async function readCodexStructuredSessionOptions(input: {
   reportedServiceTierKnown?: boolean
   timeoutMs?: number
 }): Promise<AgentSessionOptionsResult> {
-  return (await readCodexStructuredSessionOptionCatalog(input)).result
+  return readCodexStructuredSessionOptionCatalog(input)
 }
 
 function composeLiveCodexCatalog(
@@ -112,7 +112,7 @@ function applyLiveCodexCatalog(
     session,
     listing.models.find((entry) => entry.id === model)
   )
-  return composeLiveCodexCatalog(session, listing).result
+  return composeLiveCodexCatalog(session, listing)
 }
 
 export async function readLiveCodexSessionOptions(
@@ -174,7 +174,7 @@ function applyValidatedCodexStructuredSessionOption(
   const catalog = listing
     ? composeCodexSessionOptionCatalog(listing, {
         current: priorModel ? { model: priorModel } : {}
-      }).result
+      })
     : null
   // An older client still sends its Fast toggle.
   const key = requestedKey === 'fastMode' ? 'serviceTier' : requestedKey

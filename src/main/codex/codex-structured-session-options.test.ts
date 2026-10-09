@@ -567,6 +567,38 @@ describe('Codex service tiers', () => {
   })
 })
 
+describe('Codex reported tier on a model switch', () => {
+  it('drops a tier the thread reported when the next model does not list it', async () => {
+    const session = optionSession(
+      vi.fn(async () => ({
+        data: [
+          {
+            model: 'gpt-6.1-sol',
+            supportedReasoningEfforts: [],
+            serviceTiers: [{ id: 'ultrafast', name: 'Ultrafast' }]
+          },
+          {
+            model: 'gpt-6-luna',
+            supportedReasoningEfforts: [],
+            serviceTiers: [{ id: 'priority', name: 'Fast' }]
+          }
+        ],
+        nextCursor: null
+      }))
+    )
+    session.reportedOptions = {
+      model: 'gpt-6.1-sol',
+      serviceTier: 'ultrafast',
+      serviceTierKnown: true
+    }
+    await primePicker(session)
+
+    await expect(
+      applyCodexStructuredSessionOption(session, 'model', 'gpt-6-luna')
+    ).resolves.toMatchObject({ model: 'gpt-6-luna', serviceTier: 'default' })
+  })
+})
+
 describe('Codex option picks before the model list arrives', () => {
   it('accepts launch-held model, effort and tier picks while its own listing is held', async () => {
     const pending = Promise.withResolvers<unknown>()

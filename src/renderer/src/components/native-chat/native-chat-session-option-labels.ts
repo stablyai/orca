@@ -23,7 +23,14 @@ export function nativeChatSessionOptionLabel(descriptor: SessionOptionDescriptor
   }
 }
 
-export function nativeChatSessionChoiceLabel(choice: SessionOptionSelectChoice): string {
+export function nativeChatSessionChoiceLabel(
+  choice: SessionOptionSelectChoice,
+  optionId?: string
+): string {
+  // `default` is only Standard inside a speed choice; other selects may use the value.
+  if (optionId === 'serviceTier' && choice.value === 'default') {
+    return translate('components.native-chat.composer.optionValue.standard', 'Standard')
+  }
   switch (choice.value) {
     case 'minimal':
       return translate('components.native-chat.composer.optionValue.minimal', 'Minimal')

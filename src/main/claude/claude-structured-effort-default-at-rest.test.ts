@@ -289,7 +289,7 @@ describe('Claude effort default at rest', () => {
     const resting = await readAtRest(store, record)
     const live = composeCodexSessionOptionCatalog(listing, {
       current: { model: 'gpt-unlisted', effort: 'high' }
-    }).result
+    })
 
     expect(resting.models).toEqual(live.models)
     expect(live.models.find((entry) => entry.id === 'gpt-unlisted')).toMatchObject({ efforts: [] })

@@ -83,13 +83,14 @@ export function reportedCodexThreadOptions(
   }
 }
 
-/** A picked tier the model does not list falls back to standard, so the picker never shows a
- *  value it cannot offer. Unknown tiers (no listing) are kept. */
+/** A tier the model does not list, picked or reported by the thread, falls back to standard, so
+ *  the picker never shows a value it cannot offer. Unknown tiers (no listing) are kept. */
 export function dropUnlistedCodexServiceTier(
   session: CodexSession,
   model: Pick<AgentSessionModelOption, 'serviceTiers'> | undefined
 ): void {
-  const tier = session.options.get('serviceTier')
+  const tier =
+    session.options.get('serviceTier') ?? session.reportedOptions.serviceTier ?? undefined
   if (
     tier !== undefined &&
     tier !== CODEX_DEFAULT_SERVICE_TIER &&
