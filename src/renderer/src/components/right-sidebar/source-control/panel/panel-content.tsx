@@ -28,6 +28,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     filterQuery,
     filteredBranchEntries,
     filteredGrouped,
+    gitHistoryScope,
     gitHistoryState,
     handleAbortOperationForConflict,
     handleCommitAction,
@@ -63,6 +64,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     revealInExplorer,
     selectedKeySet,
     setBaseRefDialogOpen,
+    setGitHistoryScope,
     sourceControlAiActionsVisible,
     sourceControlViewMode,
     toggleSection,
@@ -219,6 +221,8 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           <GitHistoryPanel
             state={gitHistoryState}
             collapsed={collapsedSections.has('history')}
+            scope={gitHistoryScope}
+            onScopeChange={setGitHistoryScope}
             onToggle={() => toggleSection('history')}
             onRefresh={() => void refreshGitHistory()}
             onOpenCommit={(item) => void openHistoryCommitDiff(item)}

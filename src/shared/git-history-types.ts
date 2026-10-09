@@ -23,6 +23,9 @@ export const GIT_HISTORY_LANE_COLORS: readonly GitHistoryGraphColorId[] = [
 export const GIT_HISTORY_DEFAULT_LIMIT = 50
 export const GIT_HISTORY_MAX_LIMIT = 200
 
+/** `current` walks HEAD only; `all` walks local branches, remote branches, tags and HEAD. */
+export type GitHistoryScope = 'current' | 'all'
+
 export type GitHistoryRefCategory = 'branches' | 'remote branches' | 'tags' | 'commits'
 
 export type GitHistoryItemRef = {
@@ -57,6 +60,7 @@ export type GitHistoryItem = {
 export type GitHistoryOptions = {
   limit?: number
   baseRef?: string | null
+  scope?: GitHistoryScope
 }
 
 export type GitHistoryResult = {
@@ -69,6 +73,8 @@ export type GitHistoryResult = {
   hasOutgoingChanges: boolean
   hasMore: boolean
   limit: number
+  // Why: echoed so a client can tell when an older host ignored the requested scope.
+  scope?: GitHistoryScope
 }
 
 export type GitHistoryExecutor = (

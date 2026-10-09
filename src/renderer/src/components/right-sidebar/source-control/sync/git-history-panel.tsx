@@ -4,7 +4,11 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
-import type { GitHistoryItem, GitHistoryResult } from '../../../../../../shared/git-history'
+import type {
+  GitHistoryItem,
+  GitHistoryResult,
+  GitHistoryScope
+} from '../../../../../../shared/git-history'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
 import {
   buildDefaultGitHistoryColorMap,
@@ -18,6 +22,7 @@ import {
 } from './git-history-commit-context-menu'
 import type { SourceControlRowOpenEvent } from '../listing/split-open'
 import { translate } from '@/i18n/i18n'
+import { GitHistoryScopeControl } from './git-history-scope-control'
 
 export type GitHistoryPanelState =
   | { status: 'idle' | 'loading'; result?: GitHistoryResult; error?: string }
@@ -40,9 +45,12 @@ function clampGitHistoryPanelHeight(height: number): number {
   return Math.min(MAX_GIT_HISTORY_PANEL_HEIGHT, Math.max(MIN_GIT_HISTORY_PANEL_HEIGHT, height))
 }
 
+/** Collapsible commit history dock with the branch scope toggle above the commit graph. */
 export function GitHistoryPanel({
   state,
   collapsed,
+  scope,
+  onScopeChange,
   onToggle,
   onRefresh,
   onOpenCommit,
@@ -52,6 +60,8 @@ export function GitHistoryPanel({
 }: {
   state: GitHistoryPanelState
   collapsed: boolean
+  scope: GitHistoryScope
+  onScopeChange: (scope: GitHistoryScope) => void
   onToggle: () => void
   onRefresh: () => void
   onOpenCommit?: (item: GitHistoryItem) => void
@@ -318,6 +328,7 @@ export function GitHistoryPanel({
           </Tooltip>
         </div>
       </div>
+      {!collapsed && <GitHistoryScopeControl scope={scope} onScopeChange={onScopeChange} />}
       {!collapsed && state.status === 'error' && !result && (
         <div
           className={cn(expandedBodyClassName, 'px-6 py-2 text-[11px] text-destructive')}

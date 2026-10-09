@@ -12613,7 +12613,10 @@
             "62e685d5ec": "idle",
             "111e1d0db4": "error",
             "e5e81e59a6": "Cambiar tamaño del panel de commits",
-            "6d1e0a7c3b": "No se pudieron cargar los archivos del commit"
+            "6d1e0a7c3b": "No se pudieron cargar los archivos del commit",
+            "historyScope": "Ámbito del historial de commits",
+            "currentBranch": "Rama actual",
+            "allBranches": "Todas las ramas"
           },
           "HostedReviewActions": {
             "4d5fb5a284": "Cerrar",

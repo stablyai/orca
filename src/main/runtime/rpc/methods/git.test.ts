@@ -758,6 +758,33 @@ describe('git RPC methods', () => {
     expect(runtime.getRuntimeGitHistory).not.toHaveBeenCalled()
   })
 
+  it('forwards the history scope and rejects unknown scopes', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the runtime members git.history reads are staged.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRuntimeGitHistory: vi.fn().mockResolvedValue({
+        items: [],
+        hasIncomingChanges: false,
+        hasOutgoingChanges: false,
+        hasMore: false,
+        limit: 50
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    await dispatcher.dispatch(makeRequest('git.history', { worktree: 'id:wt-1', scope: 'all' }))
+    const rejected = await dispatcher.dispatch(
+      makeRequest('git.history', { worktree: 'id:wt-1', scope: 'everywhere' })
+    )
+
+    expect(runtime.getRuntimeGitHistory).toHaveBeenCalledTimes(1)
+    expect(runtime.getRuntimeGitHistory).toHaveBeenCalledWith(
+      'id:wt-1',
+      expect.objectContaining({ scope: 'all' })
+    )
+    expect(rejected.ok).toBe(false)
+  })
+
   it('checks out a branch', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

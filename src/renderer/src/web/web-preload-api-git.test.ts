@@ -16,7 +16,7 @@ describe('web git preload API', () => {
     vi.doUnmock('./web-runtime-client')
   })
 
-  it('routes remote commit URL requests through the runtime git API', async () => {
+  it('routes remote commit URL and history scope requests through the runtime git API', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
     const worktree = {
       id: 'wt-1',
@@ -68,6 +68,20 @@ describe('web git preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+          if (method === 'git.history') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: true,
+              result: {
+                items: [],
+                hasIncomingChanges: false,
+                hasOutgoingChanges: false,
+                hasMore: false,
+                limit: 25
+              },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: false,
@@ -96,6 +110,17 @@ describe('web git preload API', () => {
       { method: 'worktree.detectedList', params: { repo: 'repo-1' } },
       { method: 'git.remoteCommitUrl', params: { worktree: 'id:wt-1', sha: TEST_COMMIT_OID } }
     ])
+
+    await globals.window.api.git.history({
+      worktreePath: '/workspace/repo',
+      limit: 25,
+      baseRef: 'origin/main',
+      scope: 'all'
+    })
+    expect(runtimeCalls.at(-1)).toEqual({
+      method: 'git.history',
+      params: { worktree: 'id:wt-1', limit: 25, baseRef: 'origin/main', scope: 'all' }
+    })
   })
 
   it('sends the branch line total merge base only when the chip asked for one', async () => {

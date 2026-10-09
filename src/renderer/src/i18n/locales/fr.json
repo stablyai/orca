@@ -12718,7 +12718,10 @@
             "62e685d5ec": "idle",
             "111e1d0db4": "error",
             "e5e81e59a6": "Redimensionner les commits",
-            "6d1e0a7c3b": "Échec du chargement des fichiers du commit"
+            "6d1e0a7c3b": "Échec du chargement des fichiers du commit",
+            "historyScope": "Portée de l'historique des commits",
+            "currentBranch": "Branche actuelle",
+            "allBranches": "Toutes les branches"
           },
           "HostedReviewActions": {
             "4d5fb5a284": "Fermer",

@@ -204,6 +204,32 @@ describe('git history loader', () => {
     expect(result.mergeBase).toBe(BASE_OID)
   })
 
+  it('walks only HEAD and reports the current scope by default', async () => {
+    const { executor, calls } = createHistoryExecutor()
+
+    const result = await loadGitHistoryFromExecutor(executor, '/repo', { limit: 50 })
+
+    const logCall = calls.find((args) => args[0] === 'log')
+    expect(logCall).not.toContain('--branches')
+    expect(result.scope).toBe('current')
+  })
+
+  it('walks branches, remotes, tags and HEAD for the all-branches scope', async () => {
+    const { executor, calls } = createHistoryExecutor()
+
+    const result = await loadGitHistoryFromExecutor(executor, '/repo', {
+      limit: 50,
+      scope: 'all'
+    })
+
+    const logCall = calls.find((args) => args[0] === 'log')
+    expect(logCall).toEqual(expect.arrayContaining(['--branches', '--remotes', '--tags', HEAD_OID]))
+    // Why: --all would pull in refs/stash and provider refs such as refs/pull/*.
+    expect(logCall).not.toContain('--all')
+    expect(calls.filter((args) => args[0] === 'log')).toHaveLength(1)
+    expect(result.scope).toBe('all')
+  })
+
   it('does not list newly fetched upstream commits in old workspace history', async () => {
     const upstreamOnlyOid = 'd'.repeat(40)
     const calls: string[][] = []

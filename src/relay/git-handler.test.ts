@@ -347,6 +347,45 @@ describe('GitHandler', () => {
     })
   })
 
+  describe('history scope', () => {
+    it('lists side-branch commits only in the all-branches scope and never stash commits', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'hello')
+      gitCommit(tmpDir, 'initial')
+      const mainBranch = execFileSync('git', ['symbolic-ref', '--short', 'HEAD'], {
+        cwd: tmpDir,
+        encoding: 'utf8'
+      }).trim()
+      execFileSync('git', ['checkout', '-q', '-b', 'side'], { cwd: tmpDir })
+      writeFileSync(path.join(tmpDir, 'side.txt'), 'side')
+      gitCommit(tmpDir, 'side only')
+      execFileSync('git', ['checkout', '-q', mainBranch], { cwd: tmpDir })
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'stashed')
+      execFileSync('git', ['stash', 'push', '-q', '-m', 'stash only'], { cwd: tmpDir })
+
+      const current = await dispatcher.callRequest('git.history', {
+        worktreePath: tmpDir,
+        limit: 10,
+        scope: 'current'
+      })
+      const all = await dispatcher.callRequest('git.history', {
+        worktreePath: tmpDir,
+        limit: 10,
+        scope: 'all'
+      })
+
+      expect(current).toMatchObject({ scope: 'current', items: [{ subject: 'initial' }] })
+      expect(all).toMatchObject({
+        scope: 'all',
+        items: expect.arrayContaining([
+          expect.objectContaining({ subject: 'initial' }),
+          expect.objectContaining({ subject: 'side only' })
+        ])
+      })
+      expect(all).toHaveProperty('items.length', 2)
+    })
+  })
+
   describe('conflictOperation', () => {
     it('returns unknown for normal repo', async () => {
       gitInit(tmpDir)

@@ -12613,7 +12613,10 @@
             "62e685d5ec": "idle",
             "111e1d0db4": "오류",
             "e5e81e59a6": "commits 크기 조정",
-            "6d1e0a7c3b": "commit 파일을 로드하지 못했습니다"
+            "6d1e0a7c3b": "commit 파일을 로드하지 못했습니다",
+            "historyScope": "커밋 기록 범위",
+            "currentBranch": "현재 브랜치",
+            "allBranches": "모든 브랜치"
           },
           "HostedReviewActions": {
             "4d5fb5a284": "닫기",

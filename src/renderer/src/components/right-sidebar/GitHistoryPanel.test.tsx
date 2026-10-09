@@ -50,6 +50,8 @@ describe('GitHistoryPanel', () => {
         <GitHistoryPanel
           state={{ status: 'ready', result }}
           collapsed={false}
+          scope="current"
+          onScopeChange={vi.fn()}
           onToggle={vi.fn()}
           onRefresh={vi.fn()}
           onOpenCommit={vi.fn()}
@@ -67,6 +69,8 @@ describe('GitHistoryPanel', () => {
       <GitHistoryPanel
         state={{ status: 'ready', result: makeHistoryResult() }}
         collapsed={false}
+        scope="current"
+        onScopeChange={vi.fn()}
         onToggle={vi.fn()}
         onRefresh={vi.fn()}
         onOpenCommit={vi.fn()}
@@ -89,6 +93,8 @@ describe('GitHistoryPanel', () => {
       <GitHistoryPanel
         state={{ status: 'ready', result }}
         collapsed={false}
+        scope="current"
+        onScopeChange={vi.fn()}
         onToggle={vi.fn()}
         onRefresh={vi.fn()}
         onOpenCommit={vi.fn()}
@@ -100,5 +106,22 @@ describe('GitHistoryPanel', () => {
     expect(markup).not.toContain('title="feature"')
     expect(markup).not.toContain('title="v1.0.0"')
     expect(markup).not.toMatch(/\stitle=/)
+  })
+
+  it('offers a labelled current/all branches scope control that marks the shown scope', () => {
+    const markup = renderToStaticMarkup(
+      <GitHistoryPanel
+        state={{ status: 'ready', result: { ...makeHistoryResult(), scope: 'all' } }}
+        collapsed={false}
+        scope="all"
+        onScopeChange={vi.fn()}
+        onToggle={vi.fn()}
+        onRefresh={vi.fn()}
+      />
+    )
+
+    expect(markup).toContain('aria-label="Commit history scope"')
+    expect(markup).toMatch(/aria-checked="false"[^>]*>Current branch</)
+    expect(markup).toMatch(/aria-checked="true"[^>]*>All branches</)
   })
 })

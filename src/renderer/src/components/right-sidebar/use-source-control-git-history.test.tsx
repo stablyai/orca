@@ -222,7 +222,7 @@ describe('useSourceControlGitHistory stale completion', () => {
     await flush()
     expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(
       expect.objectContaining({ worktreeId: 'A', worktreePath: '/a' }),
-      { limit: 50, baseRef: 'origin/main' }
+      { limit: 50, baseRef: 'origin/main', scope: 'current' }
     )
 
     await act(async () => {
@@ -232,7 +232,8 @@ describe('useSourceControlGitHistory stale completion', () => {
     expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
     expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(expect.anything(), {
       limit: 50,
-      baseRef: 'origin/dev'
+      baseRef: 'origin/dev',
+      scope: 'current'
     })
   })
 
@@ -263,6 +264,115 @@ describe('useSourceControlGitHistory stale completion', () => {
     })
     await flush()
     expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
+  })
+
+  it('drops the previous scope result and re-fetches when the scope changes', async () => {
+    mocks.getRuntimeGitHistory.mockResolvedValueOnce({
+      ...historyResult('current-only'),
+      scope: 'current'
+    })
+    const all = deferred<GitHistoryResult>()
+    mocks.getRuntimeGitHistory.mockReturnValueOnce(all.promise)
+    await mount()
+    await flush()
+    expect(latest?.gitHistoryScope).toBe('current')
+
+    act(() => latest?.setGitHistoryScope('all'))
+    await flush()
+
+    // Never label the current-branch result as all-branches while the new read runs.
+    expect(latest?.gitHistoryState).toEqual({ status: 'loading' })
+    expect(latest?.gitHistoryScope).toBe('all')
+    expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(expect.anything(), {
+      limit: 50,
+      baseRef: 'origin/main',
+      scope: 'all'
+    })
+    await act(async () => {
+      all.resolve({ ...historyResult('every-branch'), scope: 'all' })
+    })
+    await flush()
+    expect(latest?.gitHistoryScope).toBe('all')
+  })
+
+  it('shows the current scope when an older host ignores the requested scope', async () => {
+    await mount()
+    await flush()
+
+    act(() => latest?.setGitHistoryScope('all'))
+    await flush()
+
+    expect(latest?.gitHistoryState.status).toBe('ready')
+    expect(latest?.gitHistoryScope).toBe('current')
+  })
+
+  it('re-requests a scope an older host answered with a different one', async () => {
+    await mount()
+    await flush()
+    act(() => latest?.setGitHistoryScope('all'))
+    await flush()
+    expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
+
+    act(() => latest?.setGitHistoryScope('all'))
+    await flush()
+
+    expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(3)
+    expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ scope: 'all' })
+    )
+  })
+
+  it('does not re-fetch when the requested scope is already the shown scope', async () => {
+    mocks.getRuntimeGitHistory.mockResolvedValue({ ...historyResult('all'), scope: 'all' })
+    await mount()
+    await flush()
+    act(() => latest?.setGitHistoryScope('all'))
+    await flush()
+    expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
+
+    act(() => latest?.setGitHistoryScope('all'))
+    await flush()
+
+    expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
+  })
+
+  it('remembers the scope per worktree and forgets it when the worktree disappears', async () => {
+    const root = await mount({ worktreeId: 'A', worktreePath: '/a' })
+    await flush()
+    act(() => latest?.setGitHistoryScope('all'))
+    await flush()
+
+    await act(async () => {
+      root.render(<Probe worktreeId="B" worktreePath="/b" />)
+    })
+    await flush()
+    expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(
+      expect.objectContaining({ worktreeId: 'B' }),
+      expect.objectContaining({ scope: 'current' })
+    )
+
+    await act(async () => {
+      root.render(<Probe worktreeId="A" worktreePath="/a" />)
+    })
+    await flush()
+    expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(
+      expect.objectContaining({ worktreeId: 'A' }),
+      expect.objectContaining({ scope: 'all' })
+    )
+
+    const withoutA = new Map<string, unknown>([['B', {}]])
+    await act(async () => {
+      root.render(<Probe worktreeId="A" worktreePath="/a" worktreeMap={withoutA} />)
+    })
+    await act(async () => {
+      root.render(<Probe worktreeId="A" worktreePath="/a" worktreeMap={ALL_WORKTREES} />)
+    })
+    await flush()
+    expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(
+      expect.objectContaining({ worktreeId: 'A' }),
+      expect.objectContaining({ scope: 'current' })
+    )
   })
 
   it('does not shell out to git while collapsed, hidden, or on a folder workspace', async () => {
