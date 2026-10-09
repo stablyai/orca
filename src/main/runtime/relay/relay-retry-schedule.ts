@@ -1,7 +1,9 @@
+// Why: recover brief failures quickly without turning a sustained outage into auth/director load.
 const RETRY_BASE_MS = 1_000
 const RETRY_MAX_MS = 5 * 60_000
 
-export class RelayDrainRetrySchedule {
+// Full-jitter exponential backoff, floored at the server's Retry-After.
+export class RelayRetrySchedule {
   private timer: ReturnType<typeof setTimeout> | null = null
   private attempt = 0
 

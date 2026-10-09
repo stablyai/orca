@@ -345,6 +345,8 @@ describe('RelayAuthCoordinator', () => {
     await vi.waitFor(() => expect(coordinator.getActiveBroker()).toBe(brokers[1]))
     expect(brokers[0]!.closeNow).toHaveBeenCalledOnce()
     expect(statuses.at(-1)).toBe('registered')
-    expect(statuses.filter((status) => status === 'connecting')).toHaveLength(2)
+    // Replacing the dead broker is a reconnect, not a first connect.
+    expect(statuses.filter((status) => status === 'connecting')).toHaveLength(1)
+    expect(statuses.filter((status) => status === 'reconnecting')).toHaveLength(1)
   })
 })

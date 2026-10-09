@@ -128,14 +128,14 @@ describe('RelaySessionBroker lifecycle ownership', () => {
 
     const broker = await RelaySessionBroker.connect(brokerOptions({ onStatus }))
 
-    expect(onStatus.mock.calls).toContainEqual(['connecting', undefined])
+    expect(onStatus.mock.calls.map(([status]) => status)).not.toContain('connecting')
     expect(onStatus).toHaveBeenLastCalledWith('registered', 'https://relay.example.test')
 
-    // Why: the pool publishes offline while it still holds the assignment it is
-    // about to rotate; forwarding that cell leaves the UI naming a dead one.
+    // Why: the pool still holds the assignment it is about to rotate; forwarding
+    // that cell leaves the UI naming a dead one. A drop retries, so it is not offline.
     fakes.controls[0]!.options.onClose(1006)
-    expect(onStatus.mock.calls).toContainEqual(['offline', undefined])
-    expect(onStatus.mock.calls).toContainEqual(['draining', 'https://relay.example.test'])
+    expect(onStatus).toHaveBeenLastCalledWith('reconnecting', undefined)
+    expect(onStatus.mock.calls.map(([status]) => status)).not.toContain('offline')
 
     broker.closeNow()
     expect(onStatus).toHaveBeenLastCalledWith('offline')
@@ -185,7 +185,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
     expect(detachTransport).not.toHaveBeenCalled()
     transportStopped.resolve(undefined)
     await vi.waitFor(() => expect(detachTransport).toHaveBeenCalledOnce())
-    expect(statuses).toEqual(['connecting'])
+    expect(statuses).toEqual([])
   })
 
   it('fails connect when the control closes before origin activation', async () => {
@@ -211,7 +211,8 @@ describe('RelaySessionBroker lifecycle ownership', () => {
     ).rejects.toThrow('relay_control_closed_before_activation')
 
     expect(statuses).not.toContain('registered')
-    expect(statuses.at(-1)).toBe('offline')
+    // The coordinator owns a failed open's verdict (reconnecting or offline).
+    expect(statuses).not.toContain('offline')
     await vi.waitFor(() => expect(fakes.transports[0]!.stop).toHaveBeenCalled())
   })
 

@@ -6,6 +6,8 @@ import { relayStatusCellUrl } from '../../../shared/mobile-relay-status'
 import type { RelayBrokerStatus } from './relay-session-broker'
 import type { RelayAccessTokenRefresh } from './relay-session-broker-contract'
 import { RelayHttpError, shouldRetryRelayConnectionError } from './relay-http-client'
+import { RelayReconcileSignal } from './relay-reconcile-signal'
+import { RelayRetrySchedule } from './relay-retry-schedule'
 
 export type RelayAuthIdentity = {
   userId: string
@@ -57,21 +59,21 @@ function authLossCloseReason(context: RelayAuthContext | null): RelayHostCloseRe
 }
 
 export class RelayAuthCoordinator {
-  // Why: recover brief failures quickly without turning a sustained outage into auth/director load.
-  private static readonly RETRY_BASE_MS = 1_000
-  private static readonly RETRY_MAX_MS = 5 * 60_000
   private readonly options: RelayAuthCoordinatorOptions
   private authEpoch = 0
   private ownership: BrokerOwnership | null = null
   private readonly pendingOwnerships = new Set<BrokerOwnership>()
   private latestReconcile: Promise<void> = Promise.resolve()
   private lingerTimer: ReturnType<typeof setTimeout> | null = null
-  private retryTimer: ReturnType<typeof setTimeout> | null = null
-  private retryAttempt = 0
+  private readonly retry: RelayRetrySchedule
+  // Set from a retryable failure or a dead broker until the next settled outcome.
+  private recovering = false
+  private readonly reconcileStarted = new RelayReconcileSignal()
   private stopped = false
 
   constructor(options: RelayAuthCoordinatorOptions) {
     this.options = options
+    this.retry = new RelayRetrySchedule(options.random)
   }
 
   reconcile(): void {
@@ -82,10 +84,11 @@ export class RelayAuthCoordinator {
     if (this.stopped) {
       return
     }
-    this.cancelRetry()
+    // Non-resetting callers (the retry timer, ensureLive) run with no timer pending.
     if (resetRetry) {
-      this.retryAttempt = 0
+      this.retry.cancel()
     }
+    this.reconcileStarted.notify()
     const epoch = ++this.authEpoch
     this.invalidatePendingOwnerships()
     const reconcile = this.reconcileEpoch(epoch, expectedIdentityKey)
@@ -99,20 +102,25 @@ export class RelayAuthCoordinator {
   fenceAndCloseNow(hostCloseReason?: RelayHostCloseReason): void {
     ++this.authEpoch
     this.cancelLinger()
-    this.cancelRetry()
-    this.retryAttempt = 0
+    this.retry.cancel()
     this.invalidatePendingOwnerships()
     this.invalidateOwnership(hostCloseReason)
     this.publish('offline')
+    this.reconcileStarted.notify()
   }
 
   // Why derived rather than passed in: the coordinator republishes `registered`
   // after the broker already announced its cell, so a call site that forgot the
   // cell would silently blank it moments after the broker set it.
   private publish(status: RelayBrokerStatus): void {
+    if (status !== 'connecting' && status !== 'reconnecting') {
+      this.recovering = false
+    }
+    // A retry's attempt stays 'reconnecting' so the UI can time the whole outage.
+    const published = status === 'connecting' && this.recovering ? 'reconnecting' : status
     this.options.onStatus(
-      status,
-      relayStatusCellUrl(status, this.ownership?.broker?.endpoint?.cellUrl)
+      published,
+      relayStatusCellUrl(published, this.ownership?.broker?.endpoint?.cellUrl)
     )
   }
 
@@ -134,7 +142,7 @@ export class RelayAuthCoordinator {
   // dead-man's switch; it never disturbs a live broker, a scheduled retry,
   // or an open already in flight.
   ensureLive(): void {
-    if (this.stopped || this.retryTimer || this.pendingOwnerships.size > 0) {
+    if (this.stopped || this.retry.pending || this.pendingOwnerships.size > 0) {
       return
     }
     const ownership = this.ownership
@@ -144,7 +152,9 @@ export class RelayAuthCoordinator {
     this.beginReconcile(false)
   }
 
-  async waitForLiveBroker(): Promise<CoordinatedRelayBroker | null> {
+  // graceMs rides out scheduled retries; a terminal outcome still returns at once.
+  async waitForLiveBroker(graceMs = 0): Promise<CoordinatedRelayBroker | null> {
+    const deadline = Date.now() + graceMs
     while (!this.stopped) {
       const broker = this.getLiveBroker()
       if (broker) {
@@ -152,9 +162,15 @@ export class RelayAuthCoordinator {
       }
       const pending = this.latestReconcile
       await pending
-      if (pending === this.latestReconcile) {
-        return this.getLiveBroker()
+      if (pending !== this.latestReconcile) {
+        continue
       }
+      const settled = this.getLiveBroker()
+      const remainingMs = deadline - Date.now()
+      if (settled || !this.retry.pending || remainingMs <= 0) {
+        return settled
+      }
+      await this.reconcileStarted.next(remainingMs)
     }
     return null
   }
@@ -173,19 +189,19 @@ export class RelayAuthCoordinator {
       }
       if (!context || !context.relayEntitled) {
         this.cancelLinger()
-        this.retryAttempt = 0
+        this.retry.reset()
         this.invalidateOwnership(authLossCloseReason(context))
         this.publish('offline')
         return
       }
       const nextIdentityKey = identityKey(context.identity)
       if (expectedIdentityKey && nextIdentityKey !== expectedIdentityKey) {
-        this.retryAttempt = 0
+        this.retry.reset()
         this.publish('offline')
         return
       }
       if (!(this.options.hasDemand?.(context) ?? true)) {
-        this.retryAttempt = 0
+        this.retry.reset()
         if (this.ownership?.valid && this.ownership.identityKey !== nextIdentityKey) {
           this.cancelLinger()
           this.invalidateOwnership()
@@ -203,11 +219,14 @@ export class RelayAuthCoordinator {
         // recovering falls through and is replaced instead of republished.
         (this.ownership.broker?.isLive?.() ?? true)
       ) {
-        this.retryAttempt = 0
+        this.retry.reset()
         this.publish('registered')
         return
       }
       retryIdentityKey = nextIdentityKey
+      if (this.ownership?.valid && this.ownership.identityKey === nextIdentityKey) {
+        this.recovering = true
+      }
       this.invalidateOwnership()
       this.publish('connecting')
       const ownership: BrokerOwnership = {
@@ -236,7 +255,7 @@ export class RelayAuthCoordinator {
         return
       }
       this.ownership = ownership
-      this.retryAttempt = 0
+      this.retry.reset()
       this.publish('registered')
     } catch (error) {
       if (this.isEpochCurrent(epoch)) {
@@ -246,37 +265,25 @@ export class RelayAuthCoordinator {
           '[relay] broker reconcile failed:',
           error instanceof Error ? error.message : String(error)
         )
-        this.publish('offline')
         if (shouldRetryRelayConnectionError(error)) {
+          this.recovering = true
+          this.publish('reconnecting')
           const retryAfterMs = error instanceof RelayHttpError ? (error.retryAfterMs ?? 0) : 0
           this.scheduleRetry(epoch, retryIdentityKey, retryAfterMs)
+        } else {
+          this.publish('offline')
         }
       }
     }
   }
 
   private scheduleRetry(epoch: number, expectedIdentityKey?: string, retryAfterMs = 0): void {
-    if (this.retryTimer || !this.isEpochCurrent(epoch)) {
-      return
-    }
-    const exponent = Math.min(
-      this.retryAttempt,
-      Math.ceil(Math.log2(RelayAuthCoordinator.RETRY_MAX_MS / RelayAuthCoordinator.RETRY_BASE_MS))
-    )
-    const capMs = Math.min(
-      RelayAuthCoordinator.RETRY_MAX_MS,
-      RelayAuthCoordinator.RETRY_BASE_MS * 2 ** exponent
-    )
-    this.retryAttempt++
-    const random = this.options.random ?? Math.random
-    const delayMs = Math.max(Math.floor(random() * (capMs + 1)), retryAfterMs)
-    this.retryTimer = setTimeout(() => {
-      this.retryTimer = null
+    this.retry.schedule(retryAfterMs, () => {
       if (this.isEpochCurrent(epoch)) {
         // Retry still re-reads entitlement and demand; the timer grants no authority.
         this.beginReconcile(false, expectedIdentityKey)
       }
-    }, delayMs)
+    })
   }
 
   private async refreshAccessToken(
@@ -329,13 +336,6 @@ export class RelayAuthCoordinator {
     if (this.lingerTimer) {
       clearTimeout(this.lingerTimer)
       this.lingerTimer = null
-    }
-  }
-
-  private cancelRetry(): void {
-    if (this.retryTimer) {
-      clearTimeout(this.retryTimer)
-      this.retryTimer = null
     }
   }
 

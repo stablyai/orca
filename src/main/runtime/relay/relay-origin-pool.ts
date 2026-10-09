@@ -4,7 +4,7 @@ import { RelayControlOrigin } from './relay-control-origin'
 import type { RelayControlClient } from './relay-control-client'
 import type { RelayDrainMessage } from './relay-control-protocol'
 import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
-import { RelayDrainRetrySchedule } from './relay-drain-retry-schedule'
+import { RelayRetrySchedule } from './relay-retry-schedule'
 import { RelayHttpError, requestRelayAssignment, type RelayAssignment } from './relay-http-client'
 import { RelayControlRotation } from './relay-control-rotation'
 
@@ -24,11 +24,11 @@ export class RelayOriginPool {
   private relayJwt: string | null = null
   private readonly rotation: RelayControlRotation
   private rotationPromise: Promise<void> | null = null
-  private readonly drainRetry: RelayDrainRetrySchedule
+  private readonly drainRetry: RelayRetrySchedule
   private closed = false
 
   constructor(private readonly options: RelayOriginPoolOptions) {
-    this.drainRetry = new RelayDrainRetrySchedule(options.random)
+    this.drainRetry = new RelayRetrySchedule(options.random)
     this.rotation = new RelayControlRotation({
       ...options,
       current: () => this.activeOrigin,
@@ -130,7 +130,6 @@ export class RelayOriginPool {
       onPendingChanged: (origin) => this.retirement.maybeClose(origin),
       onClose: (origin) => {
         if (origin === this.activeOrigin && this.isCurrent()) {
-          this.options.onStatus('offline')
           this.handleDrain(origin, {
             type: 'drain',
             graceMs: 0,
@@ -148,7 +147,8 @@ export class RelayOriginPool {
     if (!this.retirement.adopt(origin, message)) {
       return
     }
-    this.options.onStatus('draining')
+    // A drain keeps serving through its grace; a dropped control serves nothing.
+    this.options.onStatus(origin.hasLiveControl() ? 'draining' : 'reconnecting')
     if (!this.rotationPromise && !this.drainRetry.pending) {
       this.rotationPromise = this.resolveDrainTarget(origin, message).finally(() => {
         this.rotationPromise = null

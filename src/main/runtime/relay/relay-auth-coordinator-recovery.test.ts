@@ -31,7 +31,7 @@ describe('RelayAuthCoordinator transient recovery', () => {
     coordinator.reconcile()
     await vi.advanceTimersByTimeAsync(0)
     expect(openBroker).toHaveBeenCalledOnce()
-    expect(statuses.at(-1)).toBe('offline')
+    expect(statuses.at(-1)).toBe('reconnecting')
 
     await vi.advanceTimersByTimeAsync(501)
     expect(openBroker).toHaveBeenCalledTimes(2)

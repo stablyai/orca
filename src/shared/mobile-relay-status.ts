@@ -3,6 +3,8 @@ export const MOBILE_RELAY_STATUSES = [
   'registered',
   'standby',
   'draining',
+  // A retry timer is pending or a retry attempt is in flight; 'offline' is terminal.
+  'reconnecting',
   'offline'
 ] as const
 

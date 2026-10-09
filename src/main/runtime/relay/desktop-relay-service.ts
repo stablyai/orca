@@ -20,6 +20,7 @@ import type { DeviceCredentialInstallAuthorization } from './relay-control-reque
 import { deriveRelayHostId } from './relay-http-client'
 import { RelayDemandLedger } from './relay-demand-ledger'
 import { createRelayRegionPreferenceReader } from './relay-region-preference-reader'
+import { createPairingRelayWithRetry } from './relay-pairing-invite-retry'
 
 type DesktopRelayServiceOptions = {
   authConfig: OrcaCloudAuthConfig
@@ -129,19 +130,14 @@ export class DesktopRelayService {
   async createPairingRelay(
     relayDeviceId: string
   ): Promise<{ relay: PairingRelay; binding: RelayDeviceBinding }> {
-    return await this.withTransientDemand(`pairing:${relayDeviceId}`, async () => {
-      const broker = await this.requireActiveBroker()
-      const relay = await broker.createPairingRelay(relayDeviceId)
-      return {
-        relay,
-        binding: {
-          relayHostId: broker.hostId,
-          relayDeviceId,
-          ownerIdentityKey: broker.ownerIdentityKey,
-          inviteExpiresAt: relay.inviteExpiresAt
-        }
-      }
-    })
+    return await this.withTransientDemand(`pairing:${relayDeviceId}`, () =>
+      createPairingRelayWithRetry({
+        relayDeviceId,
+        acquire: (graceMs) => this.requireActiveBroker(graceMs),
+        // A timeout can kill the control; ensureLive starts its replacement.
+        beforeRetry: () => this.coordinator.ensureLive()
+      })
+    )
   }
 
   onDeviceRevokeQueued(item: RelayRevokeOutboxItem): void {
@@ -299,13 +295,13 @@ export class DesktopRelayService {
     }
   }
 
-  private async activeBrokerForDemand(): Promise<RelaySessionBroker | null> {
-    const broker = this.coordinator.getLiveBroker() ?? (await this.coordinator.waitForLiveBroker())
+  private async activeBrokerForDemand(graceMs = 0): Promise<RelaySessionBroker | null> {
+    const broker = await this.coordinator.waitForLiveBroker(graceMs)
     return broker instanceof RelaySessionBroker ? broker : null
   }
 
-  private async requireActiveBroker(): Promise<RelaySessionBroker> {
-    const broker = await this.activeBrokerForDemand()
+  private async requireActiveBroker(graceMs = 0): Promise<RelaySessionBroker> {
+    const broker = await this.activeBrokerForDemand(graceMs)
     if (!broker) {
       throw new Error('relay_control_not_active')
     }

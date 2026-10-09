@@ -76,7 +76,8 @@ export class RelaySessionBroker {
       await broker.open(options.accessToken)
       return broker
     } catch (error) {
-      broker.closeNow()
+      // The coordinator decides whether a failed open is reconnecting or offline.
+      broker.closeNow(undefined, false)
       throw error
     }
   }
@@ -196,11 +197,10 @@ export class RelaySessionBroker {
     return result
   }
 
-  closeNow(hostCloseReason?: RelayHostCloseReason): void {
+  closeNow(hostCloseReason?: RelayHostCloseReason, publish = this.options.isCurrent()): void {
     if (this.closed) {
       return
     }
-    const publishOffline = this.options.isCurrent()
     this.closed = true
     if (this.refreshTimer) {
       clearTimeout(this.refreshTimer)
@@ -208,13 +208,13 @@ export class RelaySessionBroker {
     }
     this.originPool.closeNow(hostCloseReason)
     this.regionRefresh?.close()
-    if (publishOffline) {
+    if (publish) {
       this.options.onStatus('offline')
     }
   }
 
+  // The coordinator publishes connecting/reconnecting; only it knows which applies.
   private async open(accessToken: string): Promise<void> {
-    this.publishStatus('connecting')
     const [authorization, preferredRegion] = await Promise.all([
       exchangeRelayAuthorization({
         endpoint: this.options.authConfig.relayTokenEndpoint,

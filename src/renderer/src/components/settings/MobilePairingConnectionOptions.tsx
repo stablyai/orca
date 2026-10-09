@@ -12,7 +12,11 @@ import type {
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
 import { MobilePairingPathOption } from './MobilePairingPathOption'
 
-function relayStatusLabel(status: MobileRelayStatus): string {
+// Why: brief backend blips recover within a few seconds; only a longer outage
+// is worth telling the user Relay is unavailable.
+const RELAY_RECONNECTING_GRACE_MS = 10_000
+
+function relayStatusLabel(status: MobileRelayStatus, reconnectingOutlasted: boolean): string {
   if (status === 'registered') {
     return translate('auto.components.settings.MobilePairingConnectionOptions.ready', 'Ready')
   }
@@ -28,7 +32,7 @@ function relayStatusLabel(status: MobileRelayStatus): string {
       'Available'
     )
   }
-  if (status === 'draining') {
+  if (status === 'draining' || (status === 'reconnecting' && !reconnectingOutlasted)) {
     return translate(
       'auto.components.settings.MobilePairingConnectionOptions.reconnecting',
       'Reconnecting'
@@ -68,6 +72,7 @@ export function MobilePairingConnectionOptions({
   const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
   const [relayStatus, setRelayStatus] = useState<MobileRelayStatus>('offline')
   const [relayCellUrl, setRelayCellUrl] = useState<string | undefined>(undefined)
+  const [reconnectingOutlasted, setReconnectingOutlasted] = useState(false)
   const signedIn = authStatus?.state === 'connected'
   const reconnectRequired = authStatus?.state === 'reconnect-required'
   // Why: an unconfigured build has no Relay endpoint to sign into, so a Sign in
@@ -115,6 +120,9 @@ export function MobilePairingConnectionOptions({
     const apply = (detail: MobileRelayStatusDetail): void => {
       setRelayStatus(detail.status)
       setRelayCellUrl(detail.cellUrl)
+      if (detail.status !== 'reconnecting') {
+        setReconnectingOutlasted(false)
+      }
     }
     const unsubscribe = window.api.mobile.onRelayStatusChanged((detail) => {
       receivedEvent = true
@@ -135,6 +143,15 @@ export function MobilePairingConnectionOptions({
       unsubscribe()
     }
   }, [])
+
+  // Repeated reconnecting events leave the status unchanged, so the span keeps its start.
+  useEffect(() => {
+    if (relayStatus !== 'reconnecting') {
+      return
+    }
+    const timer = setTimeout(() => setReconnectingOutlasted(true), RELAY_RECONNECTING_GRACE_MS)
+    return () => clearTimeout(timer)
+  }, [relayStatus])
 
   return (
     <div className={cn('space-y-2', compact && 'space-y-1.5')}>
@@ -192,7 +209,7 @@ export function MobilePairingConnectionOptions({
                         'auto.components.settings.MobilePairingConnectionOptions.unavailable',
                         'Unavailable'
                       )
-                    : relayStatusLabel(relayStatus)}
+                    : relayStatusLabel(relayStatus, reconnectingOutlasted)}
               </Badge>
             ) : null
           }
