@@ -5,10 +5,32 @@ import {
   REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES,
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES,
   REMOTE_RUNTIME_MAX_SUBSCRIPTION_PARAM_BYTES,
-  serializeRemoteRuntimePayload
+  serializeRemoteRuntimePayload,
+  serializeRemoteRuntimeRpcRequest
 } from './remote-runtime-memory-limits'
 
 describe('remote runtime memory limits', () => {
+  it('preserves a declared retry through remote serialization and omits it on a first attempt', () => {
+    const args = {
+      requestId: 'rpc',
+      deviceToken: 'fixture-token',
+      method: 'orchestration.send',
+      params: {}
+    }
+    const envelope = {
+      orchestrationRequestId: 'mutation',
+      orchestrationRequestRetry: true as const
+    }
+    expect(JSON.parse(serializeRemoteRuntimeRpcRequest({ ...args, envelope }))).toMatchObject(
+      envelope
+    )
+    expect(
+      JSON.parse(
+        serializeRemoteRuntimeRpcRequest({ ...args, envelope: { orchestrationRequestId: 'fresh' } })
+      )
+    ).not.toHaveProperty('orchestrationRequestRetry')
+  })
+
   it('accepts exact outbound JSON bytes and rejects the next byte', () => {
     expect(
       serializeRemoteRuntimePayload('x'.repeat(REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES - 2))

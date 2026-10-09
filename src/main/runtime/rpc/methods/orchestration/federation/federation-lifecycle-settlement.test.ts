@@ -63,7 +63,8 @@ describe('orchestration federation lifecycle settlement', () => {
           method,
           params,
           orchestrationContractVersion: envelope?.orchestrationContractVersion,
-          orchestrationRequestId: envelope?.orchestrationRequestId
+          orchestrationRequestId: envelope?.orchestrationRequestId,
+          orchestrationRequestRetry: envelope?.orchestrationRequestRetry
         })
       }
     }

@@ -26,6 +26,7 @@ const POST_V6_COLUMNS = [
 ] as const
 
 const VERSIONED_POST_V6_COLUMNS = [
+  { version: 44, table: 'mutation_receipts', column: 'retain_from_ms' },
   { version: 27, table: 'federated_dispatches', column: 'to_home_acknowledged_sequence' },
   { version: 30, table: 'dispatch_contexts', column: 'depth' },
   { version: 30, table: 'remote_dispatch_attachments', column: 'depth' },

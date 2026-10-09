@@ -21,7 +21,7 @@
  * delivers a preamble through exactly this pair of calls.
  */
 
-import { randomUUID } from 'node:crypto'
+import { createOrchestrationRetryRequestId } from '../../../../shared/orchestration-retry-request-id'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { RuntimeTerminalWait } from '../../../../shared/runtime-terminal-contracts'
 import { isAgentPromptStalledError } from '../../agent-prompt-submission-verification'
@@ -135,7 +135,7 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
       // an `input_accepted` receipt rather than raising it. Without the id the write is verified
       // strictly and a slow first turn throws.
       acceptQueued: true,
-      requestId: randomUUID(),
+      requestId: createOrchestrationRetryRequestId(),
       // The launch reply should not wait out a turn that has already been handed over; what the
       // agent does with the text is the pane's to show, and no receipt arm claims it.
       observationTimeoutMs: 0

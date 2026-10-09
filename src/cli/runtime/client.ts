@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createOrchestrationRetryRequestId } from '../../shared/orchestration-retry-request-id'
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
 import { runtimeHostConnectionState } from '../../shared/runtime-host-connection-state'
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
@@ -99,7 +99,7 @@ export class RuntimeClient {
       await this.ensureOrchestrationContractCompatible(effectiveTimeoutMs)
     }
     const orchestrationRequestId = durableMutation
-      ? (options?.orchestrationRequestId ?? randomUUID())
+      ? (options?.orchestrationRequestId ?? createOrchestrationRetryRequestId())
       : undefined
     const originalCommand = durableMutation
       ? buildOrchestrationRecoveryCommand(method, params, this.cliExecutable, this.originalArgs)
@@ -134,6 +134,8 @@ export class RuntimeClient {
         ? ORCHESTRATION_CONTRACT_VERSION
         : undefined,
       orchestrationRequestId,
+      orchestrationRequestRetry:
+        durableMutation && options?.orchestrationRequestId ? (true as const) : undefined,
       ...compatibilityEnvelope
     }
     if (this.remotePairing) {

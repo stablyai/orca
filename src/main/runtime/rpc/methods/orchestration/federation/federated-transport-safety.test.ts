@@ -49,10 +49,13 @@ describe('federated transport safety', () => {
       'orchestration.federationRelease',
       { dispatchId: 'dispatch-worker' },
       30_000,
-      { orchestrationRequestId: 'release-request' },
+      { orchestrationRequestId: 'release-request', orchestrationRequestRetry: true },
       { expectedEnvironmentPairingRevision: server.pairingRevision }
     )
 
+    expect(call.mock.calls[1]).toContainEqual(
+      expect.objectContaining({ orchestrationRequestRetry: true })
+    )
     expect(call.mock.calls.map((entry) => entry[1])).toEqual([
       'status.get',
       'orchestration.federationRelease'
@@ -176,7 +179,8 @@ describe('federated transport safety', () => {
       server,
       federated: federatedDispatch(),
       dispatchId: 'dispatch-worker',
-      requestId: 'release-request'
+      requestId: 'release-request',
+      requestRetry: true
     })
 
     expect(result).toMatchObject({
@@ -185,6 +189,9 @@ describe('federated transport safety', () => {
       processAction: 'none',
       lastError: expect.stringContaining('invalid release receipt')
     })
+    expect(callOrchestrationWorkerServer.mock.calls[1]).toContainEqual(
+      expect.objectContaining({ orchestrationRequestRetry: true })
+    )
     expect(transitionLifecycle).not.toHaveBeenCalled()
     for (const call of callOrchestrationWorkerServer.mock.calls) {
       expect((call as unknown[])[5]).toEqual({ expectedEnvironmentPairingRevision: 73 })
@@ -289,9 +296,18 @@ describe('federated transport safety', () => {
 
     await method.handler(method.params!.parse({ dispatch: 'dispatch-worker' }), {
       runtime,
-      orchestrationMutation: { requestId: 'request-stop' }
-    } as never)
+      orchestrationMutation: {
+        callerFingerprint: 'caller',
+        method: 'orchestration.workerStop',
+        payloadHash: 'hash',
+        requestId: 'request-stop',
+        requestRetry: true
+      }
+    })
 
+    expect(callOrchestrationWorkerServer.mock.calls[1]).toContainEqual(
+      expect.objectContaining({ orchestrationRequestRetry: true })
+    )
     for (const call of callOrchestrationWorkerServer.mock.calls) {
       expect((call as unknown[])[5]).toEqual({ expectedEnvironmentPairingRevision: 73 })
     }

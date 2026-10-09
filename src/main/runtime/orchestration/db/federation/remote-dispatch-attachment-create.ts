@@ -1,6 +1,6 @@
 import type { WorkerDispatchState, RemoteDispatchAttachmentRow } from '../../types'
 import { OrchestrationError } from '../../orchestration-error'
-import { ensureMutationReceiptCapacity } from '../../mutation-receipt-capacity'
+import { insertMutationReceiptIfAbsent } from '../mutation-receipts/mutation-receipt-insert'
 import type { OrchestrationDb } from '../orchestration-db'
 import { federatedStubHomeRunId } from '../contract-constants'
 import { insertRemoteDispatchAttachmentRow } from '../dispatch-row-writer'
@@ -22,6 +22,7 @@ export function createRemoteDispatchAttachment(
       requestId: string
       method: string
       payloadHash: string
+      requestRetry?: true
     }
   }
 ): RemoteDispatchAttachmentRow {
@@ -33,16 +34,13 @@ export function createRemoteDispatchAttachment(
         'The authenticated Run-home peer does not match the attachment request.'
       )
     }
-    const existingReceipt = this.getMutationReceipt(
-      params.mutationReceipt.callerFingerprint,
-      params.mutationReceipt.requestId
-    )
-    if (existingReceipt) {
+    const inserted = insertMutationReceiptIfAbsent(this, {
+      ...params.mutationReceipt,
+      receipt: JSON.stringify({ accepted: { dispatchId: params.dispatchId } })
+    })
+    if (!inserted.inserted) {
       throw new OrchestrationError(
-        existingReceipt.method === params.mutationReceipt.method &&
-          existingReceipt.payload_hash === params.mutationReceipt.payloadHash
-          ? 'operation_unknown'
-          : 'request_mismatch',
+        inserted.reason === 'duplicate' ? 'operation_unknown' : 'request_mismatch',
         `Remote attachment request ${params.mutationReceipt.requestId} already exists.`
       )
     }
@@ -57,20 +55,6 @@ export function createRemoteDispatchAttachment(
       )
       .run(runId, `Coordinated from ${params.homePeerFingerprint}`)
     this.requireRun(runId)
-    ensureMutationReceiptCapacity(this.db)
-    this.db
-      .prepare(
-        `INSERT INTO mutation_receipts (
-           caller_fingerprint, request_id, method, payload_hash, state, receipt
-         ) VALUES (?, ?, ?, ?, 'pending', ?)`
-      )
-      .run(
-        params.mutationReceipt.callerFingerprint,
-        params.mutationReceipt.requestId,
-        params.mutationReceipt.method,
-        params.mutationReceipt.payloadHash,
-        JSON.stringify({ accepted: { dispatchId: params.dispatchId } })
-      )
     insertRemoteDispatchAttachmentRow(this.db, {
       dispatchId: params.dispatchId,
       runId,

@@ -19,6 +19,7 @@ import {
   replayStableCallerParams,
   shouldObserveCompletedMutation
 } from './orchestration-mutation-receipt'
+import { isEmptyConsumingCheck } from './orchestration-empty-check'
 
 export {
   readMutationReplayNudge,
@@ -32,6 +33,7 @@ export type DurableMutationInvocation = {
     requestId: string
     method: string
     payloadHash: string
+    requestRetry?: true
   }
   recordReceipt: (receipt: unknown) => void
   markWorkerDoneEffectFree: () => void
@@ -98,7 +100,13 @@ export class OrchestrationMutationExecutor {
             this.runtime.getTerminalPromptRequestBinding((params as { terminal: string }).terminal)
           )}`
         : basePayloadHash
-    const identity = { callerFingerprint, requestId, method: request.method, payloadHash }
+    const identity = {
+      callerFingerprint,
+      requestId,
+      method: request.method,
+      payloadHash,
+      requestRetry: request.orchestrationRequestRetry
+    }
     const atomicWorkerAcceptance =
       request.method === 'orchestration.workerStart' ||
       request.method === 'orchestration.federationAttachStart'
@@ -242,7 +250,11 @@ export class OrchestrationMutationExecutor {
     try {
       const result = await active
       const receipted = attachMutationReceipt(result, requestId, resumedPendingMutation)
-      db.completeMutationReceipt({ ...identity, receipt: JSON.stringify(receipted) })
+      if (!effectPossible && isEmptyConsumingCheck(request.method, params, result)) {
+        db.discardPendingMutationReceipt(callerFingerprint, requestId)
+      } else {
+        db.completeMutationReceipt({ ...identity, receipt: JSON.stringify(receipted) })
+      }
       return receipted
     } catch (error) {
       if (

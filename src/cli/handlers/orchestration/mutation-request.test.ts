@@ -4,6 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
+import {
+  createOrchestrationRetryRequestId,
+  orchestrationRetryRequestIssuedAtMs
+} from '../../../shared/orchestration-retry-request-id'
 import { ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { RuntimeClient, RuntimeClientError } from '../../runtime-client'
 import { callOrchestrationMutation } from './mutation-request'
@@ -19,7 +23,8 @@ const WORKER_DONE = {
 const RuntimeRequest = z.object({
   id: z.string(),
   method: z.string(),
-  orchestrationRequestId: z.string().optional()
+  orchestrationRequestId: z.string().optional(),
+  orchestrationRequestRetry: z.literal(true).optional()
 })
 
 const servers = new Set<Server>()
@@ -55,7 +60,8 @@ function unavailable(options?: CallOptions): RuntimeClientError {
     'runtime_unavailable',
     'Could not connect to the running Orca app.',
     {
-      orchestrationRequestId: options?.orchestrationRequestId,
+      orchestrationRequestId:
+        options?.orchestrationRequestId ?? createOrchestrationRetryRequestId(),
       originalCommand: ['orca', 'orchestration', 'send', '--type', 'worker_done']
     }
   )
@@ -88,8 +94,11 @@ describe('callOrchestrationMutation runtime_unavailable retry', () => {
     await vi.advanceTimersByTimeAsync(3_000)
     await expect(call).resolves.toEqual({ ok: true, result: 'sent' })
     expect(requestIds).toHaveLength(3)
-    expect(new Set(requestIds).size).toBe(1)
-    expect(requestIds[0]).toEqual(requestId)
+    expect(new Set(requestIds.slice(1)).size).toBe(1)
+    expect(requestIds[1]).toEqual(requestId)
+    if (!flags.has('retry-request')) {
+      expect(requestIds[0]).toBeUndefined()
+    }
   })
 
   it('does not retry an error other than runtime_unavailable', async () => {
@@ -136,7 +145,7 @@ describe('callOrchestrationMutation runtime_unavailable retry', () => {
     ).catch((error: unknown) => error)
     await vi.advanceTimersByTimeAsync(RETRY_MS + 30_000)
     expect(await settled).toMatchObject({
-      data: { recovery: { orchestrationRequestId: requestIds[0] } }
+      data: { recovery: { orchestrationRequestId: requestIds[1] } }
     })
   })
 
@@ -157,7 +166,7 @@ describe('callOrchestrationMutation runtime_unavailable retry', () => {
     await vi.advanceTimersByTimeAsync(RETRY_MS + 30_000)
     const error = await settled
     expect(requestIds.length).toBeGreaterThan(5)
-    expect(new Set(requestIds).size).toBe(1)
+    expect(new Set(requestIds.slice(1)).size).toBe(1)
     expect(error).toMatchObject({
       code: 'runtime_unavailable',
       data: {
@@ -169,7 +178,7 @@ describe('callOrchestrationMutation runtime_unavailable retry', () => {
             '--type',
             'worker_done',
             '--retry-request',
-            requestIds[0]
+            requestIds[1]
           ]
         }
       }
@@ -184,12 +193,14 @@ describe('callOrchestrationMutation runtime_unavailable retry', () => {
       tempDirs.add(userDataPath)
       const endpoint = join(userDataPath, 'runtime.sock')
       const sendRequestIds: string[] = []
+      const retryMarkers: (true | undefined)[] = []
       const server = createServer((socket) => {
         socket.setEncoding('utf8')
         socket.once('data', (line: string) => {
           const request = RuntimeRequest.parse(JSON.parse(line.trim()))
           if (request.method === 'orchestration.send') {
             sendRequestIds.push(String(request.orchestrationRequestId))
+            retryMarkers.push(request.orchestrationRequestRetry)
             if (sendRequestIds.length === 1) {
               // A runtime that drops the connection mid-request leaves the outcome unknown.
               socket.destroy()
@@ -234,6 +245,8 @@ describe('callOrchestrationMutation runtime_unavailable retry', () => {
       await expect(call).resolves.toMatchObject({ result: { message: { id: 'msg_1' } } })
       expect(sendRequestIds).toHaveLength(2)
       expect(sendRequestIds[1]).toBe(sendRequestIds[0])
+      expect(orchestrationRetryRequestIssuedAtMs(sendRequestIds[0] ?? '')).not.toBeNull()
+      expect(retryMarkers).toEqual([undefined, true])
     },
     15_000
   )

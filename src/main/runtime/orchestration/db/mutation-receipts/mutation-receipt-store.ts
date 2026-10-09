@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import type { MutationReceiptRow } from '../../types'
 import { OrchestrationError } from '../../orchestration-error'
-import { ensureMutationReceiptCapacity } from '../../mutation-receipt-capacity'
+import { insertMutationReceiptIfAbsent } from './mutation-receipt-insert'
 import type { OrchestrationDb } from '../orchestration-db'
 
 // ── Durable mutation receipts ──
@@ -41,6 +41,7 @@ export function beginMutationReceipt(
     requestId: string
     method: string
     payloadHash: string
+    requestRetry?: true
   }
 ):
   | { disposition: 'started'; row: MutationReceiptRow }
@@ -48,28 +49,23 @@ export function beginMutationReceipt(
   | { disposition: 'completed'; row: MutationReceiptRow } {
   this.db.exec('BEGIN IMMEDIATE')
   try {
-    const existing = this.getMutationReceipt(params.callerFingerprint, params.requestId)
-    if (existing) {
-      if (existing.method !== params.method || existing.payload_hash !== params.payloadHash) {
+    const inserted = insertMutationReceiptIfAbsent(this, params)
+    if (!inserted.inserted) {
+      if (inserted.reason === 'conflict') {
         throw new OrchestrationError(
           'request_mismatch',
           `Mutation request ${params.requestId} was already used with different input.`
         )
       }
       this.db.exec('COMMIT')
-      return { disposition: existing.state, row: existing }
+      return { disposition: inserted.existing.state, row: inserted.existing }
     }
-    ensureMutationReceiptCapacity(this.db)
-    this.db
-      .prepare(
-        `INSERT INTO mutation_receipts (
-           caller_fingerprint, request_id, method, payload_hash, state
-         ) VALUES (?, ?, ?, ?, 'pending')`
-      )
-      .run(params.callerFingerprint, params.requestId, params.method, params.payloadHash)
     const row = this.getMutationReceipt(params.callerFingerprint, params.requestId)
+    if (!row) {
+      throw new Error('Inserted mutation receipt is missing')
+    }
     this.db.exec('COMMIT')
-    return { disposition: 'started', row: row as MutationReceiptRow }
+    return { disposition: 'started', row }
   } catch (error) {
     this.db.exec('ROLLBACK')
     throw error

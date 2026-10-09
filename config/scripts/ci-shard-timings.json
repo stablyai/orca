@@ -3469,7 +3469,7 @@
       "src/main/runtime/orchestration/mailbox-pointer-stage.test.ts": 504,
       "src/main/runtime/orchestration/mailbox-pointer-submit.test.ts": 696,
       "src/main/runtime/orchestration/message-batch-atomicity.test.ts": 395,
-      "src/main/runtime/orchestration/mutation-receipt-capacity.test.ts": 400,
+      "src/main/runtime/orchestration/legacy-mutation-receipt-count.test.ts": 400,
       "src/main/runtime/orchestration/nested-worker-depth-migration.test.ts": 579,
       "src/main/runtime/orchestration/orchestration-adopted-run-binding.test.ts": 1024,
       "src/main/runtime/orchestration/orchestration-all-start-versions-migration.test.ts": 1741,

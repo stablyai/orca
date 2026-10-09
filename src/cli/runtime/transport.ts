@@ -204,6 +204,7 @@ export async function sendRequest<TResult>(
           orchestrationCapability: envelope?.orchestrationCapability,
           orchestrationContractVersion: envelope?.orchestrationContractVersion,
           orchestrationRequestId: envelope?.orchestrationRequestId,
+          orchestrationRequestRetry: envelope?.orchestrationRequestRetry,
           compatibilityInvocationId: envelope?.compatibilityInvocationId,
           orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence
         })}\n`

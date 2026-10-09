@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineMethod } from '../../../core'
 import { describeUnconfirmedAgentStop } from '../../../../../../shared/pty-liveness-verdict'
@@ -54,14 +55,19 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
                 'none'
               )
             }
-            const remote = (await runtime.callOrchestrationWorkerServer(
-              server.environmentId,
-              'orchestration.federationStop',
-              { dispatchId: params.dispatch },
-              30_000,
-              { orchestrationRequestId: orchestrationMutation.requestId },
-              { expectedEnvironmentPairingRevision: server.pairingRevision }
-            )) as RemoteStopReceipt
+            const remote = RemoteStopReceiptSchema.parse(
+              await runtime.callOrchestrationWorkerServer(
+                server.environmentId,
+                'orchestration.federationStop',
+                { dispatchId: params.dispatch },
+                30_000,
+                {
+                  orchestrationRequestId: orchestrationMutation.requestId,
+                  orchestrationRequestRetry: orchestrationMutation.requestRetry
+                },
+                { expectedEnvironmentPairingRevision: server.pairingRevision }
+              )
+            )
             if (remote.state === 'stopped') {
               const worker = db.reconcileFederatedWorkerStop(params.dispatch)
               return {
@@ -276,13 +282,13 @@ function dedupeWorkerStop(
   return started
 }
 
-type RemoteStopReceipt = {
-  state: string
-  alreadySettled: boolean
-  processAction: string
-  close?: unknown
-  lastError?: string | null
-}
+const RemoteStopReceiptSchema = z.looseObject({
+  state: z.string(),
+  alreadySettled: z.boolean(),
+  processAction: z.string(),
+  close: z.unknown().optional(),
+  lastError: z.string().nullable().optional()
+})
 
 function settledReceipt(dispatchId: string, state: string) {
   return { dispatchId, state, alreadySettled: true, processAction: 'none' }

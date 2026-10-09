@@ -45,6 +45,7 @@ export async function startFederatedWorker(args: {
     requestId: string
     method: string
     payloadHash: string
+    requestRetry?: true
   }
   /** The coordinator's resolved session, when it is one; recorded as the Dispatch creator. */
   callerSession?: OrchestrationSessionCaller
@@ -194,7 +195,10 @@ export async function startFederatedWorker(args: {
           devMode: params.devMode
         },
         budgets.attachDeadlineMs,
-        { orchestrationRequestId: orchestrationMutation.requestId },
+        {
+          orchestrationRequestId: orchestrationMutation.requestId,
+          orchestrationRequestRetry: orchestrationMutation.requestRetry
+        },
         { contractVerified: true, ...pairingFence }
       )
     )

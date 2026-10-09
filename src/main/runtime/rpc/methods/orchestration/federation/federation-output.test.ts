@@ -125,7 +125,8 @@ describe('orchestration federated worker output', () => {
           method,
           params,
           orchestrationContractVersion: envelope?.orchestrationContractVersion,
-          orchestrationRequestId: envelope?.orchestrationRequestId
+          orchestrationRequestId: envelope?.orchestrationRequestId,
+          orchestrationRequestRetry: envelope?.orchestrationRequestRetry
         })
       }
     }

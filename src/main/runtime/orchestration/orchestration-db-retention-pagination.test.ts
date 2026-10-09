@@ -7,10 +7,10 @@ import { OrchestrationDb } from './db'
 import { SCHEMA_VERSION } from './db/contract-constants'
 import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
-const MUTATION_RECEIPT_MAX_ROWS = 10_000
+const PREVIOUS_RECEIPT_LIMIT = 10_000
 
 function sqliteFor(db: OrchestrationDb): Database.Database {
-  return (db as unknown as { db: Database.Database }).db
+  return db.db
 }
 
 function insertMutationReceipts(
@@ -35,12 +35,12 @@ function insertMutationReceipts(
     .run(count, state)
 }
 
-describe('OrchestrationDb bounded mutation receipts', () => {
+describe('OrchestrationDb mutation receipt admission', () => {
   let db: OrchestrationDb | undefined
 
   afterEach(() => db?.close())
 
-  it('prunes expired completed receipts but preserves unresolved receipts', () => {
+  it('accepts receipts without pruning unrelated old receipts', () => {
     db = new OrchestrationDb(':memory:')
     const sqlite = sqliteFor(db)
     sqlite.exec(`
@@ -58,13 +58,13 @@ describe('OrchestrationDb bounded mutation receipts', () => {
       payloadHash: 'hash_new'
     })
 
-    expect(db.getMutationReceipt('caller', 'expired')).toBeUndefined()
+    expect(db.getMutationReceipt('caller', 'expired')).toMatchObject({ state: 'completed' })
     expect(db.getMutationReceipt('caller', 'unresolved')).toMatchObject({ state: 'pending' })
   })
 
-  it('caps completed receipt count while retaining the newest replay records', () => {
+  it('retains completed receipts beyond the previous count limit', () => {
     db = new OrchestrationDb(':memory:')
-    insertMutationReceipts(db, MUTATION_RECEIPT_MAX_ROWS, 'completed')
+    insertMutationReceipts(db, PREVIOUS_RECEIPT_LIMIT, 'completed')
 
     db.beginMutationReceipt({
       callerFingerprint: 'caller',
@@ -73,34 +73,30 @@ describe('OrchestrationDb bounded mutation receipts', () => {
       payloadHash: 'hash_new'
     })
 
-    const count = sqliteFor(db)
-      .prepare('SELECT COUNT(*) AS count FROM mutation_receipts')
-      .get() as { count: number }
-    expect(count.count).toBeLessThanOrEqual(MUTATION_RECEIPT_MAX_ROWS)
-    expect(db.getMutationReceipt('caller', 'request_00001')).toBeUndefined()
+    const count = sqliteFor(db).prepare('SELECT COUNT(*) AS count FROM mutation_receipts').get()
+    expect(count?.count).toBe(PREVIOUS_RECEIPT_LIMIT + 1)
+    expect(db.getMutationReceipt('caller', 'request_00001')).toMatchObject({ state: 'completed' })
     expect(db.getMutationReceipt('caller', 'request_10000')).toMatchObject({ state: 'completed' })
     expect(db.getMutationReceipt('caller', 'new')).toMatchObject({ state: 'pending' })
   })
 
-  it('fails closed when unresolved receipts alone fill the ledger', () => {
+  it('accepts fresh receipts beyond the previous pending limit', () => {
     db = new OrchestrationDb(':memory:')
-    insertMutationReceipts(db, MUTATION_RECEIPT_MAX_ROWS, 'pending')
+    insertMutationReceipts(db, PREVIOUS_RECEIPT_LIMIT + 1, 'pending')
 
-    expect(() =>
-      db!.beginMutationReceipt({
-        callerFingerprint: 'caller',
-        requestId: 'overflow',
-        method: 'orchestration.send',
-        payloadHash: 'hash_overflow'
-      })
-    ).toThrowError(expect.objectContaining({ code: 'mutation_ledger_full' }))
+    db.beginMutationReceipt({
+      callerFingerprint: 'caller',
+      requestId: 'overflow',
+      method: 'orchestration.send',
+      payloadHash: 'hash_overflow'
+    })
     expect(db.getMutationReceipt('caller', 'request_00001')).toMatchObject({ state: 'pending' })
-    expect(db.getMutationReceipt('caller', 'overflow')).toBeUndefined()
+    expect(db.getMutationReceipt('caller', 'overflow')).toMatchObject({ state: 'pending' })
   })
 
-  it('prunes completed receipts before accepting a remote attachment', () => {
+  it('accepts a remote attachment without pruning other receipts', () => {
     db = new OrchestrationDb(':memory:')
-    insertMutationReceipts(db, MUTATION_RECEIPT_MAX_ROWS, 'completed')
+    insertMutationReceipts(db, PREVIOUS_RECEIPT_LIMIT, 'completed')
 
     db.createRemoteDispatchAttachment({
       runId: 'run-home',
@@ -117,61 +113,55 @@ describe('OrchestrationDb bounded mutation receipts', () => {
       }
     })
 
-    const count = sqliteFor(db)
-      .prepare('SELECT COUNT(*) AS count FROM mutation_receipts')
-      .get() as { count: number }
-    expect(count.count).toBeLessThanOrEqual(MUTATION_RECEIPT_MAX_ROWS)
-    expect(db.getMutationReceipt('caller', 'request_00001')).toBeUndefined()
+    const count = sqliteFor(db).prepare('SELECT COUNT(*) AS count FROM mutation_receipts').get()
+    expect(count?.count).toBe(PREVIOUS_RECEIPT_LIMIT + 1)
+    expect(db.getMutationReceipt('caller', 'request_00001')).toMatchObject({ state: 'completed' })
     expect(db.getMutationReceipt('caller', 'remote_pruned')).toMatchObject({ state: 'pending' })
     expect(db.getRemoteDispatchAttachment('ctx_remote_pruned')).toBeDefined()
   })
 
-  it('rejects a remote attachment when pending receipts fill the ledger', () => {
+  it('accepts a remote attachment beyond the previous pending limit', () => {
     db = new OrchestrationDb(':memory:')
-    insertMutationReceipts(db, MUTATION_RECEIPT_MAX_ROWS, 'pending')
+    insertMutationReceipts(db, PREVIOUS_RECEIPT_LIMIT + 1, 'pending')
 
-    expect(() =>
-      db!.createRemoteDispatchAttachment({
-        runId: 'run-home',
-        dispatchId: 'ctx_remote_overflow',
-        taskId: 'task_remote_overflow',
-        homePeerFingerprint: 'caller',
-        protocolVersion: 1,
-        runtimeEpoch: 'worker_epoch',
-        mutationReceipt: {
-          callerFingerprint: 'caller',
-          requestId: 'remote_overflow',
-          method: 'orchestration.federationAttachStart',
-          payloadHash: 'hash_remote_overflow'
-        }
-      })
-    ).toThrowError(expect.objectContaining({ code: 'mutation_ledger_full' }))
+    db.createRemoteDispatchAttachment({
+      runId: 'run-home',
+      dispatchId: 'ctx_remote_overflow',
+      taskId: 'task_remote_overflow',
+      homePeerFingerprint: 'caller',
+      protocolVersion: 1,
+      runtimeEpoch: 'worker_epoch',
+      mutationReceipt: {
+        callerFingerprint: 'caller',
+        requestId: 'remote_overflow',
+        method: 'orchestration.federationAttachStart',
+        payloadHash: 'hash_remote_overflow'
+      }
+    })
     expect(db.getMutationReceipt('caller', 'request_00001')).toMatchObject({ state: 'pending' })
-    expect(db.getMutationReceipt('caller', 'remote_overflow')).toBeUndefined()
-    expect(db.getRemoteDispatchAttachment('ctx_remote_overflow')).toBeUndefined()
+    expect(db.getMutationReceipt('caller', 'remote_overflow')).toMatchObject({ state: 'pending' })
+    expect(db.getRemoteDispatchAttachment('ctx_remote_overflow')).toBeDefined()
   })
 
-  it('guards atomic worker acceptance without changing task state', () => {
+  it('accepts a worker beyond the previous pending limit', () => {
     db = new OrchestrationDb(':memory:')
     const task = db.createTask({ runId: 'run_legacy_local', spec: 'capacity check' })
-    insertMutationReceipts(db, MUTATION_RECEIPT_MAX_ROWS, 'pending')
+    insertMutationReceipts(db, PREVIOUS_RECEIPT_LIMIT + 1, 'pending')
 
-    expect(() =>
-      db!.createStartingWorkerDispatch({
-        creator: { kind: 'system' },
-        maxDepth: Number.MAX_SAFE_INTEGER,
-        taskId: task.id,
-        startOptions: {},
-        mutationReceipt: {
-          callerFingerprint: 'caller',
-          requestId: 'worker_overflow',
-          method: 'orchestration.workerStart',
-          payloadHash: 'hash_worker_overflow'
-        }
-      })
-    ).toThrowError(expect.objectContaining({ code: 'mutation_ledger_full' }))
-    expect(db.getTask(task.id)).toMatchObject({ status: 'ready' })
-    expect(db.getMutationReceipt('caller', 'worker_overflow')).toBeUndefined()
+    db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      startOptions: {},
+      mutationReceipt: {
+        callerFingerprint: 'caller',
+        requestId: 'worker_overflow',
+        method: 'orchestration.workerStart',
+        payloadHash: 'hash_worker_overflow'
+      }
+    })
+    expect(db.getTask(task.id)).toMatchObject({ status: 'dispatched' })
+    expect(db.getMutationReceipt('caller', 'worker_overflow')).toMatchObject({ state: 'pending' })
   })
 })
 

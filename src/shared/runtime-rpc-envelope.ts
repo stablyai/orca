@@ -79,6 +79,7 @@ export type RuntimeOrchestrationEnvelope = {
   orchestrationCapability?: string
   orchestrationContractVersion?: number
   orchestrationRequestId?: string
+  orchestrationRequestRetry?: true
   compatibilityInvocationId?: string
   orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
 }

@@ -7,9 +7,14 @@ import { quoteWindowsCmdArgument } from '../shared/child-process/windows-command
 import { quotePowerShellNativeArgument } from '../shared/powershell-native-argument'
 import { resolveWindowsShellStartupFamily } from '../shared/windows-terminal-shell'
 import type { AgentStartupShell } from '../shared/tui-agent-startup-shell'
+import { isRetiredMutationRetry } from './runtime/client-error-recovery'
 
 export function orchestrationMutationRecoveryError(error: unknown): unknown {
-  if (!(error instanceof RuntimeClientError) || !isUnknownMutationOutcomeCode(error.code)) {
+  if (
+    !(error instanceof RuntimeClientError) ||
+    isRetiredMutationRetry(error) ||
+    !isUnknownMutationOutcomeCode(error.code)
+  ) {
     return error
   }
   const data = objectRecord(error.data)

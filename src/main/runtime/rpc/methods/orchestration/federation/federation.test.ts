@@ -25,6 +25,7 @@ describe('orchestration federation', () => {
   let workerCapabilities: string[]
   let workerPeerFingerprint: string
   let loseNextAckResponse: boolean
+  let forwardedStarts: (true | undefined)[]
 
   beforeEach(() => {
     homeDb = new OrchestrationDb(':memory:')
@@ -38,6 +39,7 @@ describe('orchestration federation', () => {
     })
     workerCapabilities = [...(workerRuntime.getStatus().capabilities ?? [])]
     workerPeerFingerprint = 'windows_peer_fingerprint'
+    forwardedStarts = []
     loseNextAckResponse = false
     const transport: OrchestrationEnvironmentTransport = {
       resolve: () => ({
@@ -47,6 +49,9 @@ describe('orchestration federation', () => {
         pairingRevision: 73
       }),
       call: async (_selector, method, params, _timeoutMs, envelope) => {
+        if (method === 'orchestration.federationAttachStart') {
+          forwardedStarts.push(envelope?.orchestrationRequestRetry)
+        }
         if (method === 'status.get') {
           return {
             id: 'status',
@@ -55,13 +60,20 @@ describe('orchestration federation', () => {
             _meta: { runtimeId: workerRuntime.getRuntimeId() }
           }
         }
+        if (
+          method === 'orchestration.federationAck' ||
+          method === 'orchestration.federationImport'
+        ) {
+          expect(envelope?.orchestrationRequestId).toBeUndefined()
+        }
         const response = await workerDispatcher.dispatch({
           id: `remote_${method}`,
           authToken: 'run-home-device-token',
           method,
           params,
           orchestrationContractVersion: envelope?.orchestrationContractVersion,
-          orchestrationRequestId: envelope?.orchestrationRequestId
+          orchestrationRequestId: envelope?.orchestrationRequestId,
+          orchestrationRequestRetry: envelope?.orchestrationRequestRetry
         })
         if (method === 'orchestration.federationAck' && loseNextAckResponse) {
           loseNextAckResponse = false
@@ -110,6 +122,20 @@ describe('orchestration federation', () => {
     })
     workerCapabilities = [...(workerRuntime.getStatus().capabilities ?? [])]
   }
+
+  it.each([undefined, true] as const)(
+    'forwards the caller retry declaration to worker acceptance (%s)',
+    async (retry) => {
+      const task = createHomeTask()
+      expect(
+        await homeDispatcher.dispatch({
+          ...startRequest(task.id),
+          orchestrationRequestRetry: retry
+        })
+      ).toMatchObject({ ok: true })
+      expect(forwardedStarts).toEqual([retry])
+    }
+  )
 
   it('starts a remote worker while keeping authoritative Task state at home', async () => {
     const task = createHomeTask()

@@ -44,6 +44,7 @@ export async function releaseFederatedWorker(args: {
   federated: FederatedDispatchRow
   dispatchId: string
   requestId: string
+  requestRetry?: true
 }): Promise<WorkerReleaseReceipt & { remoteOutput?: unknown }> {
   const cache = getOrchestrationPeerCapabilityCache(args.runtime)
   // This capability states that the host writes a durable archive before it closes anything;
@@ -76,7 +77,7 @@ export async function releaseFederatedWorker(args: {
         'orchestration.federationRelease',
         { dispatchId: args.dispatchId },
         30_000,
-        { orchestrationRequestId: args.requestId },
+        { orchestrationRequestId: args.requestId, orchestrationRequestRetry: args.requestRetry },
         { expectedEnvironmentPairingRevision: args.server.pairingRevision }
       ),
       args.dispatchId

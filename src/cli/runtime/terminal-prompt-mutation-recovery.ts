@@ -1,4 +1,4 @@
-import { attachMutationRecovery } from './client-error-recovery'
+import { attachMutationRecovery, isRetiredMutationRetry } from './client-error-recovery'
 import { RuntimeClientError, RuntimeRpcFailureError } from './types'
 
 const INSPECT_STEP = 'Inspect the terminal output and agent state without sending input.'
@@ -9,7 +9,12 @@ export function attachDurableMutationRecovery(
   originalCommand: string[] | undefined,
   method: string
 ): unknown {
-  if (method !== 'terminal.send' || !requestId || !(error instanceof RuntimeClientError)) {
+  if (
+    method !== 'terminal.send' ||
+    !requestId ||
+    !(error instanceof RuntimeClientError) ||
+    isRetiredMutationRetry(error)
+  ) {
     return attachMutationRecovery(error, requestId, originalCommand)
   }
   const message = `${error.message} Terminal prompt request ID: ${requestId}. Re-issue the exact command with --retry-request ${requestId} --wait-submit <seconds>; do not retry it without that ID.`

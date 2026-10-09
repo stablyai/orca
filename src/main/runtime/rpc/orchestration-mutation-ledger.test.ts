@@ -1,5 +1,9 @@
 import './unused-default-rpc-methods.test-fixture'
 import { createHash } from 'node:crypto'
+import {
+  createOrchestrationRetryRequestId,
+  ORCHESTRATION_RETRY_WINDOW_MS
+} from '../../../shared/orchestration-retry-request-id'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -63,11 +67,12 @@ describe('durable orchestration mutation ledger', () => {
 
   it('replays one completed receipt without repeating the effect', async () => {
     const { db, dispatcher, effect } = createHarness()
+    const mutationId = createOrchestrationRetryRequestId()
     const first = await dispatcher.dispatch(
-      request({ rpcId: 'rpc_1', mutationId: 'mutation_1', subject: 'hello' })
+      request({ rpcId: 'rpc_1', mutationId, subject: 'hello' })
     )
     const replay = await dispatcher.dispatch(
-      request({ rpcId: 'rpc_2', mutationId: 'mutation_1', subject: 'hello' })
+      request({ rpcId: 'rpc_2', mutationId, subject: 'hello' })
     )
 
     expect(first).toMatchObject({
@@ -93,6 +98,47 @@ describe('durable orchestration mutation ledger', () => {
     )
 
     expect(mismatch).toMatchObject({ ok: false, error: { code: 'request_mismatch' } })
+    db.close()
+  })
+
+  it('accepts a fresh send after 10,001 unrelated pending receipts', async () => {
+    const { db, dispatcher, effect } = createHarness()
+    db.db.exec(`WITH RECURSIVE numbers(n) AS (
+      VALUES (1) UNION ALL SELECT n + 1 FROM numbers WHERE n < 10001
+    ) INSERT INTO mutation_receipts (caller_fingerprint, request_id, method, payload_hash, state)
+      SELECT 'other', 'pending_' || n, 'orchestration.send', 'hash', 'pending' FROM numbers`)
+    const result = await dispatcher.dispatch(
+      request({ rpcId: 'fresh', mutationId: createOrchestrationRetryRequestId(), subject: 'hello' })
+    )
+    expect(result).toMatchObject({ ok: true })
+    expect(effect).toHaveBeenCalledOnce()
+    expect(db.db.prepare('SELECT count(*) AS count FROM mutation_receipts').get()?.count).toBe(
+      10002
+    )
+    db.close()
+  })
+
+  it('does not execute or insert an absent retired request retry', async () => {
+    const { db, dispatcher, effect } = createHarness()
+    const mutationId = createOrchestrationRetryRequestId(
+      Date.now() - ORCHESTRATION_RETRY_WINDOW_MS - 1000
+    )
+    db.db.prepare('UPDATE mutation_receipt_retirement SET retired_before_ms = ?').run(Date.now())
+    const result = await dispatcher.dispatch({
+      ...request({ rpcId: 'expired', mutationId, subject: 'hello' }),
+      orchestrationRequestRetry: true
+    })
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: 'operation_unknown',
+        data: { requestId: mutationId, reason: 'retry_record_retired' }
+      }
+    })
+    expect(effect).not.toHaveBeenCalled()
+    expect(
+      db.db.prepare('SELECT 1 FROM mutation_receipts WHERE request_id = ?').get(mutationId)
+    ).toBeUndefined()
     db.close()
   })
 

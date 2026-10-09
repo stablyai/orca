@@ -2,6 +2,7 @@ import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
 import { runtimeHostConnectionState } from '../../shared/runtime-host-connection-state'
 import { projectRemoteAppStatus } from '../../shared/cli-app-status-projection'
 import { randomUUID } from 'node:crypto'
+import { createOrchestrationRetryRequestId } from '../../shared/orchestration-retry-request-id'
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
 import { readOrchestrationCompatibilityEvidence } from '../../shared/orchestration-compatibility-evidence'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
@@ -158,13 +159,15 @@ async function dispatchRemoteCli(
   const orchestrationCompatibilityEvidence = runtimeAuthority
     ? { ...inheritedEvidence, host: runtimeAuthority }
     : inheritedEvidence
+  const retryRequestId = readRemoteRetryRequestFlag(parsed.flags)
   const compatibilityEnvelope: RuntimeOrchestrationEnvelope = {
     compatibilityInvocationId: randomUUID(),
     orchestrationRequestId:
-      readRemoteRetryRequestFlag(parsed.flags) ??
+      retryRequestId ??
       (command === 'orchestration check' || command === 'orchestration ask'
-        ? randomUUID()
+        ? createOrchestrationRetryRequestId()
         : undefined),
+    orchestrationRequestRetry: retryRequestId ? true : undefined,
     orchestrationCompatibilityEvidence
   }
   const linearResponse = await tryDispatchRemoteLinearCli(dispatcher, parsed, env, stdin)
@@ -312,6 +315,7 @@ async function call(
       ? ORCHESTRATION_CONTRACT_VERSION
       : undefined,
     orchestrationRequestId: envelope?.orchestrationRequestId,
+    orchestrationRequestRetry: envelope?.orchestrationRequestRetry,
     compatibilityInvocationId:
       envelope?.orchestrationRequestId ?? envelope?.compatibilityInvocationId,
     orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence

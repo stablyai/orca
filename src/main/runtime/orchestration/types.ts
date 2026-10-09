@@ -129,6 +129,7 @@ export type QuestionRow = {
 export type MutationState = 'pending' | 'completed'
 
 export type MutationReceiptRow = {
+  retain_from_ms: number | null
   caller_fingerprint: string
   request_id: string
   method: string

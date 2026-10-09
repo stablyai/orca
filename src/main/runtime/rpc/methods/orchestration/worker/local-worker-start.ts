@@ -40,6 +40,7 @@ type WorkerStartMutation = {
   requestId: string
   method: string
   payloadHash: string
+  requestRetry?: true
 }
 
 export async function startLocalWorker(args: {

@@ -31,7 +31,8 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
           server: resolvePinnedFederatedServer(runtime, federated),
           federated,
           dispatchId: params.dispatch,
-          requestId: orchestrationMutation.requestId
+          requestId: orchestrationMutation.requestId,
+          requestRetry: orchestrationMutation.requestRetry
         })
       }
       const requested = db.requestWorkerTerminalRelease(params.dispatch)

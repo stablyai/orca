@@ -1,7 +1,6 @@
 import '../../../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protocol-version'
-import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrchestrationEnvironmentTransport } from '../../../../orchestration/environment-transport'
@@ -58,17 +57,18 @@ describe('orchestration federation control mail', () => {
             _meta: { runtimeId: workerRuntime.getRuntimeId() }
           }
         }
-        const response = (await workerDispatcher.dispatch(
+        const response = await workerDispatcher.dispatch(
           {
             id: `remote_${method}`,
             authToken: homeToken,
             method,
             params,
             orchestrationContractVersion: envelope?.orchestrationContractVersion,
-            orchestrationRequestId: envelope?.orchestrationRequestId
+            orchestrationRequestId: envelope?.orchestrationRequestId,
+            orchestrationRequestRetry: envelope?.orchestrationRequestRetry
           },
           { authenticatedCallerFingerprint: homeFingerprint }
-        )) as RuntimeRpcResponse<unknown>
+        )
         return response
       }
     }

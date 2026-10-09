@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { RuntimeClientError, type RuntimeClient } from '../../runtime-client'
 import { readRetryRequestFlag } from '../../retry-request-flag'
 import { orchestrationMutationRecoveryError } from '../../orchestration-mutation-recovery'
@@ -13,9 +12,8 @@ export async function callOrchestrationMutation<TResult>(
   options?: { timeoutMs?: number; orchestrationCapability?: string },
   unavailableRetryMs = 0
 ) {
-  // Why: every retry reuses one request id, so the host replays instead of applying the mutation twice.
-  const requestId =
-    readRetryRequestFlag(flags) ?? (unavailableRetryMs > 0 ? randomUUID() : undefined)
+  // The client mints the first identity; only a resend supplies one it already used.
+  let requestId = readRetryRequestFlag(flags)
   const deadline = Date.now() + unavailableRetryMs
   let sentError: RuntimeClientError | undefined
   for (let delayMs = 1_000; ; delayMs = Math.min(delayMs * 2, MAX_UNAVAILABLE_RETRY_DELAY_MS)) {
@@ -33,6 +31,7 @@ export async function callOrchestrationMutation<TResult>(
         error instanceof RuntimeClientError && error.code === 'runtime_unavailable'
       if (carriesRequestId(error)) {
         sentError = error
+        requestId = error.data.orchestrationRequestId
       }
       if (!unavailable || Date.now() + delayMs > deadline) {
         // Why: a later attempt can fail before its request id is attached, though an earlier one may have landed.
@@ -45,7 +44,9 @@ export async function callOrchestrationMutation<TResult>(
   }
 }
 
-function carriesRequestId(error: unknown): error is RuntimeClientError {
+function carriesRequestId(
+  error: unknown
+): error is RuntimeClientError & { data: { orchestrationRequestId: string } } {
   const data: unknown = error instanceof RuntimeClientError ? error.data : undefined
   return (
     typeof data === 'object' &&

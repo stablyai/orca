@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
-// worker_done carries a CLI-minted request id so its runtime_unavailable retries replay one mutation.
-const WORKER_DONE_REQUEST = { orchestrationRequestId: expect.any(String) }
 const getTerminalHandleMock = vi.hoisted(() => vi.fn())
 const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
 const originalPaneKey = process.env.ORCA_PANE_KEY
@@ -100,8 +98,7 @@ describe('orchestration send structured payload flags', () => {
         }),
         waitForLifecycleSettlement: true,
         devMode: false
-      },
-      WORKER_DONE_REQUEST
+      }
     )
   })
 
@@ -221,8 +218,7 @@ describe('orchestration send structured payload flags', () => {
         payload: JSON.stringify({ outcome: 'succeeded' }),
         waitForLifecycleSettlement: true,
         devMode: false
-      },
-      WORKER_DONE_REQUEST
+      }
     )
   })
 
@@ -252,8 +248,7 @@ describe('orchestration send structured payload flags', () => {
         payload: JSON.stringify({ outcome: 'succeeded' }),
         waitForLifecycleSettlement: true,
         devMode: false
-      },
-      WORKER_DONE_REQUEST
+      }
     )
   })
 
@@ -279,8 +274,7 @@ describe('orchestration send structured payload flags', () => {
       expect(callMock).toHaveBeenCalledTimes(1)
       expect(callMock).toHaveBeenCalledWith(
         'orchestration.send',
-        expect.objectContaining({ from: 'term_worker_env' }),
-        ...(type === 'worker_done' ? [WORKER_DONE_REQUEST] : [])
+        expect.objectContaining({ from: 'term_worker_env' })
       )
     }
   )
@@ -300,8 +294,7 @@ describe('orchestration send structured payload flags', () => {
 
     expect(callMock).toHaveBeenCalledWith(
       'orchestration.send',
-      expect.objectContaining({ senderPaneKey: 'tab_worker:leaf_worker' }),
-      WORKER_DONE_REQUEST
+      expect.objectContaining({ senderPaneKey: 'tab_worker:leaf_worker' })
     )
   })
 

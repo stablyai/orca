@@ -1,4 +1,4 @@
-import { migrateMutationReceiptCapacity } from '../../mutation-receipt-capacity'
+import { migrateLegacyMutationReceiptCount } from './legacy-mutation-receipt-count'
 import {
   DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL,
   REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL
@@ -140,7 +140,7 @@ export function applySchemaMigrationsV13ToV30(this: OrchestrationDb, current: nu
       `)
   }
   if (current < 26) {
-    migrateMutationReceiptCapacity(this.db)
+    migrateLegacyMutationReceiptCount(this.db)
   }
   if (current < 27 && !this.hasColumn('federated_dispatches', 'to_home_acknowledged_sequence')) {
     this.db.exec(

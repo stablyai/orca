@@ -51,6 +51,7 @@ export type RpcRequest = {
   params?: unknown
   orchestrationContractVersion?: number
   orchestrationRequestId?: string
+  orchestrationRequestRetry?: true
   compatibilityInvocationId?: string
   orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
 }
@@ -97,6 +98,7 @@ export type RpcContext = {
     requestId: string
     method: string
     payloadHash: string
+    requestRetry?: true
   }
   // Why: a prompt retry with --wait-submit observes its durable receipt instead of writing again.
   replayedMutationReceipt?: unknown

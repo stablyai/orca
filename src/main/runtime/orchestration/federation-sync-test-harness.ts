@@ -20,6 +20,7 @@ export function createIdleSyncHarness(initialSequence = 2, protocolVersion?: 1 |
     to_home_acknowledged_sequence: 0
   }
   const createDb = () =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fake exposes only the members federation sync and setOrchestrationDb call.
     ({
       getFederatedDispatch: () => federated,
       getDispatchContextById: () => ({ run_id: 'run_home', task_id: 'task_home' }),
@@ -35,7 +36,8 @@ export function createIdleSyncHarness(initialSequence = 2, protocolVersion?: 1 |
       },
       updateFederatedDispatchRuntimeEpoch: (_dispatchId: string, runtimeEpoch: string) => {
         federated.remote_runtime_epoch = runtimeEpoch
-      }
+      },
+      stopReceiptMaintenance: () => undefined
     }) as never
   const runtime = new OrcaRuntimeService()
   runtime.setOrchestrationDb(createDb())

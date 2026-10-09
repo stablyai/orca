@@ -128,6 +128,7 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
     expect(requests[0]?.method).toBe('status.get')
     expect(requests[0]?.compatibilityInvocationId).toBeUndefined()
     expect(requests[1]?.orchestrationRequestId).toBe('mutation_explicit')
+    expect(requests[1]?.orchestrationRequestRetry).toBe(true)
     expect(requests[1]?.orchestrationContractVersion).toBe(1)
     expect(requests[1]?.compatibilityInvocationId).toBe('mutation_explicit')
     expect(requests[1]?.orchestrationCompatibilityEvidence).toMatchObject({
