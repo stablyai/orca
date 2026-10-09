@@ -298,13 +298,14 @@ describe('UsageRosterPanel density picker', () => {
 
   function renderPanel(
     statusBarUsageMode: 'verbose' | 'compact',
-    onStatusBarUsageModeChange: (mode: 'verbose' | 'compact') => void
+    onStatusBarUsageModeChange: (mode: 'verbose' | 'compact') => void,
+    providers: ProviderRateLimits[] = []
   ): void {
     act(() => {
       root.render(
         <TooltipProvider>
           <UsageRosterPanel
-            providers={[]}
+            providers={providers}
             display="used"
             statusBarUsageMode={statusBarUsageMode}
             onStatusBarUsageModeChange={onStatusBarUsageModeChange}
@@ -330,6 +331,56 @@ describe('UsageRosterPanel density picker', () => {
     }
     return button as HTMLButtonElement
   }
+
+  it.each(['compact', 'verbose'] as const)(
+    'shows unlimited instead of retained windows in %s mode',
+    (mode) => {
+      const session = {
+        usedPercent: 90,
+        windowMinutes: 300,
+        resetsAt: mocks.now + 120_000,
+        resetDescription: null
+      }
+      renderPanel(mode, () => {}, [
+        {
+          ...signedOutCodex,
+          planType: 'business',
+          isUnlimited: true,
+          session,
+          weekly: { ...session, windowMinutes: 10_080 },
+          error: 'temporary refresh failure'
+        }
+      ])
+
+      expect(container.textContent).toContain('Unlimited')
+      expect(container.querySelector('[data-usage-window]')).toBeNull()
+      expect(container.textContent).not.toContain('Resets in')
+      expect(mocks.useResetCountdownClock).toHaveBeenLastCalledWith([])
+    }
+  )
+
+  it.each(['compact', 'verbose'] as const)(
+    'offers sign-in over cached unlimited usage in %s mode',
+    (mode) => {
+      renderPanel(mode, () => {}, [
+        {
+          ...signedOutCodex,
+          isUnlimited: true,
+          session: {
+            usedPercent: 90,
+            windowMinutes: 300,
+            resetsAt: null,
+            resetDescription: null
+          }
+        }
+      ])
+
+      expect(container.textContent).toContain('not signed in')
+      expect(container.textContent).toContain('Sign in')
+      expect(container.textContent).not.toContain('Unlimited')
+      expect(container.querySelector('[data-usage-window]')).toBeNull()
+    }
+  )
 
   it('offers named Detailed/Compact segments and marks the active one', () => {
     renderPanel('compact', () => {})
