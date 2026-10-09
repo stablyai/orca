@@ -13,8 +13,7 @@ import { BrowserManagerNavigation } from './browser-manager-navigation'
 
 export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavigation {
   protected installGuestPopupPolicy(guest: Electron.WebContents): () => void {
-    // Why: Electron's window-open details carry no user-activation flag, so a fresh input event in
-    // this guest is what separates a click from a page's scripted window.open loop.
+    // Why: a fresh input marks a click, which bypasses the page-initiated tab budget.
     const gesture = trackBrowserGuestInputGesture(guest)
     const handleDidCreateWindow = (window: Electron.BrowserWindow): void => {
       // Why: popup descendants inherit the opener's owner context but must not replace its primary registration.
