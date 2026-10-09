@@ -89,6 +89,7 @@ export class RuntimeProjectHostSetupController {
     if (!result) {
       throw new Error(`Project not found: ${args.projectId}`)
     }
+    this.deps.notifyReposChanged()
     return result
   }
 
@@ -139,6 +140,7 @@ export class RuntimeProjectHostSetupController {
       void prepareLocalWorktreeRootForRepo(store, result.repo)
       invalidateAuthorizedRootsCache()
     }
+    this.deps.notifyReposChanged()
     return result
   }
 
@@ -150,6 +152,11 @@ export class RuntimeProjectHostSetupController {
     const result = store.deleteProjectHostSetup(args)
     if (!result) {
       throw new Error(`Project host setup not found: ${args.setupId}`)
+    }
+    if (result.repo) {
+      this.forgetRemovedRepo(result.repo.id)
+    } else {
+      this.deps.notifyReposChanged()
     }
     return result
   }
@@ -167,13 +174,18 @@ export class RuntimeProjectHostSetupController {
         this.deps
           .getStore()
           ?.removeProjectForHost?.(initialRepo.id, getRepoExecutionHostId(initialRepo))
-        this.deps.invalidateResolvedWorktrees()
-        this.deps.invalidateWorktreeScan(initialRepo.id)
-        invalidateAuthorizedRootsCache()
-        this.deps.notifyReposChanged()
+        this.forgetRemovedRepo(initialRepo.id)
       }
       throw error
     }
+  }
+
+  // Why: removed registrations must leave resolution, authorization, and open clients' catalogs.
+  private forgetRemovedRepo(repoId: string): void {
+    this.deps.invalidateResolvedWorktrees()
+    this.deps.invalidateWorktreeScan(repoId)
+    invalidateAuthorizedRootsCache()
+    this.deps.notifyReposChanged()
   }
 
   private linkRepo(
