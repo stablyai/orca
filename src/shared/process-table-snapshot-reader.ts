@@ -1,6 +1,7 @@
 import { execFile as execFileCb } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { promisify } from 'node:util'
+import { psLocaleEnvironment } from './ps-locale-environment'
 import {
   PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS,
   PS_ARGS,
@@ -257,6 +258,7 @@ async function captureProcessTable(args: readonly string[]): Promise<string> {
   try {
     ;({ stdout } = await execFile('ps', [...args], {
       encoding: 'utf-8',
+      env: psLocaleEnvironment(),
       timeout: PS_TIMEOUT_MS,
       maxBuffer: PS_MAX_BUFFER_BYTES
     }))

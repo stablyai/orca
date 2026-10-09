@@ -1,5 +1,6 @@
 import { execFile, execFileSync } from 'node:child_process'
 import { promisify } from 'node:util'
+import { psLocaleEnvironment } from '../../shared/ps-locale-environment'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from '../startup/startup-diagnostics'
 
 const PS_IDENTITY_TIMEOUT_MS = 2_000
@@ -33,7 +34,7 @@ export function getPsProcessIdentity(
     const output = execFileSync('ps', ['-p', String(pid), '-o', 'lstart=', '-o', 'command='], {
       encoding: 'utf8',
       timeout: 2_000,
-      ...(options?.utc ? { env: { ...process.env, TZ: 'UTC', LC_ALL: 'C' } } : {})
+      env: options?.utc ? { ...process.env, TZ: 'UTC', LC_ALL: 'C' } : psLocaleEnvironment()
     })
     return parsePsProcessIdentity(output, options?.utc)
   } catch {
@@ -49,6 +50,7 @@ export async function getPsProcessIdentityAsync(pid: number): Promise<PsProcessI
         ['-p', String(pid), '-o', 'lstart=', '-o', 'command='],
         {
           encoding: 'utf8',
+          env: psLocaleEnvironment(),
           timeout: PS_IDENTITY_TIMEOUT_MS
         },
         (error, output) => {
