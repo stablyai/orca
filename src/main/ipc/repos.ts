@@ -8,6 +8,7 @@ import { registerProjectGroupHandlers } from './repos/project-group-handlers'
 import { registerFolderWorkspaceHandlers } from './repos/folder-workspace-handlers'
 import { registerNestedRepoImportHandler } from './repos/nested-repo-import-handler'
 import { registerRepoUpdateHandler } from './repos/repo-update-handler'
+import { registerRepoPathStatusHandler } from './repos/repo-path-status-handler'
 import { registerSparsePresetHandlers } from './repos/sparse-preset-handlers'
 import { registerRepoFolderPickerHandlers } from './repos/repo-folder-picker-handlers'
 import { registerRepoCloneHandlers } from './repos/repo-clone-lifecycle'
@@ -28,6 +29,7 @@ export function registerRepoHandlers(
   ipcMain.removeHandler('repos:reorder')
   ipcMain.removeHandler('repos:reorderForHost')
   ipcMain.removeHandler('repos:update')
+  ipcMain.removeHandler('repos:getPathStatuses')
   ipcMain.removeHandler('projects:list')
   ipcMain.removeHandler('projects:update')
   ipcMain.removeHandler('projectHostSetups:list')
@@ -73,7 +75,8 @@ export function registerRepoHandlers(
   registerProjectGroupHandlers(mainWindow, store)
   registerFolderWorkspaceHandlers(mainWindow, store, runtime)
   registerNestedRepoImportHandler(mainWindow, store)
-  registerRepoUpdateHandler(mainWindow, store)
+  registerRepoUpdateHandler(mainWindow, store, runtime)
+  registerRepoPathStatusHandler(runtime)
   registerSparsePresetHandlers(mainWindow, store)
   registerRepoFolderPickerHandlers(mainWindow)
   registerRepoCloneHandlers(mainWindow, store)

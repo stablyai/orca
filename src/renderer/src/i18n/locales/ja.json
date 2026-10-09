@@ -521,6 +521,12 @@
             }
           }
         }
+      },
+      "repos": {
+        "repoRelink": {
+          "serverUpdateRequired": "移動したリポジトリを再リンクするには、Orca サーバーを更新してください。",
+          "repoNotFound": "このリポジトリは登録されていません。"
+        }
       }
     },
     "lib": {
@@ -994,6 +1000,28 @@
               "launchFailed": "ファイルを表示できませんでした。"
             }
           }
+        }
+      },
+      "repoPathStatus": {
+        "title": {
+          "moved": "リポジトリが移動しました",
+          "notGitRoot": "フォルダーは Git リポジトリではなくなりました",
+          "notDirectory": "リポジトリのパスはフォルダーではありません",
+          "missing": "リポジトリのフォルダーが見つかりません"
+        },
+        "description": {
+          "moved": "{{target}} に移動しました。場所を更新しますか?",
+          "missing": "Orca は {{path}} に Git リポジトリを見つけられません。ワークツリーとタブを保持するには、フォルダーの場所を指定してください。"
+        },
+        "error": {
+          "differentRepository": "別のリポジトリのようです",
+          "identityUnverified": "Orca は同じリポジトリであることを確認できません",
+          "hostUnverifiable": "ホストに接続できません",
+          "generic": "このフォルダーは使用できません"
+        },
+        "errorDescription": {
+          "identityUnverified": "{{name}} と共通のリモートやリンクされたワークツリーがありません。同じリポジトリだと分かっている場合にのみ、このまま再リンクしてください。",
+          "differentRepository": "リモートが {{name}} と異なります。再リンクすると、このプロジェクトのワークツリー名とタブがこのリポジトリに付け替えられます。"
         }
       }
     },
@@ -6422,6 +6450,22 @@
           "title": "並べ替えが手動に変更されました",
           "description": "手動では、ドロップした場所にワークスペースが保持されます。",
           "restore": "{{label}} に戻る"
+        },
+        "RepoRelinkDialog": {
+          "relinked": "{{name}} を再リンクしました",
+          "title": "リポジトリを再リンク",
+          "description": "ワークツリーとタブを保持するには、{{name}} を新しいフォルダーに向けてください。",
+          "pathLabel": "新しい場所",
+          "previous": "以前の場所: {{path}}",
+          "browse": "場所を指定…",
+          "cancel": "キャンセル",
+          "force": "このまま再リンク",
+          "update": "場所を更新",
+          "relink": "再リンク"
+        },
+        "RepoPathStatusIndicator": {
+          "update": "場所を更新…",
+          "locate": "場所を指定…"
         }
       },
       "shared": {

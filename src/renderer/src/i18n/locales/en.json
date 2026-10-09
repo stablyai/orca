@@ -689,6 +689,12 @@
             }
           }
         }
+      },
+      "repos": {
+        "repoRelink": {
+          "serverUpdateRequired": "Update the Orca server to relink moved repositories.",
+          "repoNotFound": "This repository is no longer registered."
+        }
       }
     },
     "lib": {
@@ -1162,6 +1168,28 @@
               "launchFailed": "Could not reveal the file."
             }
           }
+        }
+      },
+      "repoPathStatus": {
+        "title": {
+          "moved": "Repository moved",
+          "notGitRoot": "Folder is no longer a Git repository",
+          "notDirectory": "Repository path is not a folder",
+          "missing": "Repository folder not found"
+        },
+        "description": {
+          "moved": "Moved to {{target}}. Update the location?",
+          "missing": "Orca cannot find a Git repository at {{path}}. Locate the folder to keep its worktrees and tabs."
+        },
+        "error": {
+          "differentRepository": "This looks like a different repository",
+          "identityUnverified": "Orca cannot confirm this is the same repository",
+          "hostUnverifiable": "Cannot reach the host",
+          "generic": "Cannot use this folder"
+        },
+        "errorDescription": {
+          "identityUnverified": "It shares no remote or linked worktree with {{name}}. Relink anyway only if you know it is the same repository.",
+          "differentRepository": "Its remotes differ from {{name}}'s. Relinking would attach this project's worktree names and tabs to it."
         }
       }
     },
@@ -6657,6 +6685,22 @@
           "title": "Sort changed to Manual",
           "description": "Manual keeps workspaces where you drop them.",
           "restore": "Back to {{label}}"
+        },
+        "RepoRelinkDialog": {
+          "relinked": "Relinked {{name}}",
+          "title": "Relink repository",
+          "description": "Point {{name}} at its new folder to keep its worktrees and tabs.",
+          "pathLabel": "New location",
+          "previous": "Previously {{path}}",
+          "browse": "Locate…",
+          "cancel": "Cancel",
+          "force": "Relink anyway",
+          "update": "Update location",
+          "relink": "Relink"
+        },
+        "RepoPathStatusIndicator": {
+          "update": "Update location…",
+          "locate": "Locate…"
         }
       },
       "shared": {

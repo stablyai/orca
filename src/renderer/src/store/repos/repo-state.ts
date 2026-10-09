@@ -1,3 +1,4 @@
+import type { RepoRelinkSlice } from './repo-relink-actions'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
 import type { GhAccountBinding } from '../../../../shared/github/account-binding'
 import type { SshRepoReadoption } from '../../../../shared/ssh-types'
@@ -147,7 +148,7 @@ export type RuntimeCatalogFetchOptions = {
   throwOnError?: boolean
 }
 
-export type RepoSlice = {
+export type RepoSlice = RepoRelinkSlice & {
   repos: readonly Repo[]
   projects: readonly Project[]
   projectHostSetups: readonly ProjectHostSetup[]

@@ -521,6 +521,12 @@
             }
           }
         }
+      },
+      "repos": {
+        "repoRelink": {
+          "serverUpdateRequired": "이동한 저장소를 다시 연결하려면 Orca 서버를 업데이트하세요.",
+          "repoNotFound": "이 저장소는 더 이상 등록되어 있지 않습니다."
+        }
       }
     },
     "lib": {
@@ -994,6 +1000,28 @@
               "launchFailed": "파일을 표시할 수 없습니다."
             }
           }
+        }
+      },
+      "repoPathStatus": {
+        "title": {
+          "moved": "저장소가 이동됨",
+          "notGitRoot": "폴더가 더 이상 Git 저장소가 아닙니다",
+          "notDirectory": "저장소 경로가 폴더가 아닙니다",
+          "missing": "저장소 폴더를 찾을 수 없습니다"
+        },
+        "description": {
+          "moved": "{{target}}(으)로 이동했습니다. 위치를 업데이트할까요?",
+          "missing": "Orca가 {{path}}에서 Git 저장소를 찾을 수 없습니다. 워크트리와 탭을 유지하려면 폴더를 찾아 지정하세요."
+        },
+        "error": {
+          "differentRepository": "다른 저장소로 보입니다",
+          "identityUnverified": "Orca가 같은 저장소인지 확인할 수 없습니다",
+          "hostUnverifiable": "호스트에 연결할 수 없습니다",
+          "generic": "이 폴더를 사용할 수 없습니다"
+        },
+        "errorDescription": {
+          "identityUnverified": "{{name}}와(과) 공유하는 원격 저장소나 연결된 워크트리가 없습니다. 같은 저장소임을 알고 있을 때만 그래도 다시 연결하세요.",
+          "differentRepository": "원격 저장소가 {{name}}와(과) 다릅니다. 다시 연결하면 이 프로젝트의 워크트리 이름과 탭이 이 저장소로 옮겨집니다."
         }
       }
     },
@@ -6422,6 +6450,22 @@
           "title": "정렬이 수동으로 변경됨",
           "description": "매뉴얼 은 워크스페이스를 드롭하는 위치에 유지합니다.",
           "restore": "{{label}} (으) 로 돌아가기"
+        },
+        "RepoRelinkDialog": {
+          "relinked": "{{name}}을(를) 다시 연결했습니다",
+          "title": "저장소 다시 연결",
+          "description": "워크트리와 탭을 유지하려면 {{name}}의 새 폴더를 지정하세요.",
+          "pathLabel": "새 위치",
+          "previous": "이전 위치: {{path}}",
+          "browse": "찾기…",
+          "cancel": "취소",
+          "force": "그래도 다시 연결",
+          "update": "위치 업데이트",
+          "relink": "다시 연결"
+        },
+        "RepoPathStatusIndicator": {
+          "update": "위치 업데이트…",
+          "locate": "찾기…"
         }
       },
       "shared": {

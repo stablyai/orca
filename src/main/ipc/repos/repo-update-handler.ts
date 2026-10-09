@@ -16,8 +16,13 @@ import {
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
 import { notifyReposChanged } from './repos-changed-notification'
+import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 
-export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Store): void {
+export function registerRepoUpdateHandler(
+  mainWindow: BrowserWindow,
+  store: Store,
+  runtime: Pick<OrcaRuntimeService, 'relinkRepo'>
+): void {
   ipcMain.handle(
     'repos:update',
     (
@@ -25,6 +30,8 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
       args: {
         repoId: string
         hostId?: ExecutionHostId
+        /** Relink even when the folder's identity cannot be confirmed. */
+        forcePath?: boolean
         updates: Partial<
           Pick<
             Repo,
@@ -55,11 +62,13 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
             | Repo['externalWorktreeDiscoverySuppressedAt']
             | null
           ghAccount?: GhAccountBinding | null
+          path?: string
         }
       }
     ) => {
+      const { path, ...settingsUpdates } = args.updates
       // Why: TS is erased at runtime, so a garbage preference would silently collapse to 'auto' in resolveIssueSource; strip it, keeping other fields.
-      const updates = { ...args.updates }
+      const updates = { ...settingsUpdates }
       if (
         'issueSourcePreference' in updates &&
         updates.issueSourcePreference !== undefined &&
@@ -218,17 +227,31 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
       if (args.hostId && !hostId) {
         return null
       }
-      const updated = hostId
-        ? store.updateRepo(args.repoId, updates, hostId)
-        : store.updateRepo(args.repoId, updates)
-      if (updated) {
-        if ('worktreeBasePath' in updates) {
-          void prepareLocalWorktreeRootForRepo(store, updated)
-          invalidateAuthorizedRootsCache()
+      const applySettingsUpdates = (): Repo | null => {
+        const updated = hostId
+          ? store.updateRepo(args.repoId, updates, hostId)
+          : store.updateRepo(args.repoId, updates)
+        if (updated) {
+          if ('worktreeBasePath' in updates) {
+            void prepareLocalWorktreeRootForRepo(store, updated)
+            invalidateAuthorizedRootsCache()
+          }
+          notifyReposChanged(mainWindow)
         }
-        notifyReposChanged(mainWindow)
+        return updated
       }
-      return updated
+      if (typeof path !== 'string' || path.length === 0) {
+        return applySettingsUpdates()
+      }
+      // Validation runs on the repo's own host; a refusal rejects with its coded message.
+      return runtime
+        .relinkRepo(args.repoId, path, {
+          force: args.forcePath === true,
+          ...(hostId ? { hostId } : {})
+        })
+        .then((relinked) =>
+          Object.keys(updates).length === 0 ? relinked.repo : applySettingsUpdates()
+        )
     }
   )
 }

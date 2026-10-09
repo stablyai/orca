@@ -37,6 +37,7 @@ import { RuntimeNestedRepoImport } from './runtime-nested-repo-import'
 import { RuntimeRepositoryRegistrationController } from './runtime-repository-registration-controller'
 import { RuntimeRepositoryCloneController } from './runtime-repository-clone-controller'
 import { RuntimeRepositorySettingsController } from './runtime-repository-settings-controller'
+import { RuntimeRepositoryRelinkController } from './runtime-repository-relink-controller'
 import { RuntimeRepositorySparsePresets } from './runtime-repository-sparse-presets'
 import { RuntimeRepositoryRefQueries } from './runtime-repository-ref-queries'
 import { RuntimeServerEnvironmentCommands } from './runtime-server-environment-commands'
@@ -320,6 +321,16 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
     forgetTerminalTopology: (repoId) => this.terminalTopologyRevisionByRepoId.delete(repoId),
     invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),
     invalidateWorktreeScan: (repoId) => this.invalidateWorktreeScanCacheForRepo(repoId),
+    notifyReposChanged: () => this.notifyReposChanged()
+  })
+
+  protected readonly repositoryRelinks = new RuntimeRepositoryRelinkController({
+    getStore: () => this.store,
+    resolveRepo: (selector) => this.resolveRepoSelector(selector),
+    invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),
+    invalidateWorktreeScan: (repoId) => this.invalidateWorktreeScanCacheForRepo(repoId),
+    notifyWorktreeFolderRenamed: (repoId, oldId, newId) =>
+      this.notifyWorktreeFolderRenamed(repoId, oldId, newId),
     notifyReposChanged: () => this.notifyReposChanged()
   })
 

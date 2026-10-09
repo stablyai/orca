@@ -125,6 +125,15 @@ export function registerRuntimeClientIpcBridge(
       void ensureRuntimeEventRepoKnown(environmentId, event.repoId).then(() =>
         worktreeChangeRefreshQueue.enqueue({
           repoId: event.repoId,
+          ...(typeof event.renamed?.oldWorktreeId === 'string' &&
+          typeof event.renamed.newWorktreeId === 'string'
+            ? {
+                renamed: {
+                  oldWorktreeId: event.renamed.oldWorktreeId,
+                  newWorktreeId: event.renamed.newWorktreeId
+                }
+              }
+            : {}),
           executionHostId: toRuntimeExecutionHostId(environmentId)
         })
       )

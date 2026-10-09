@@ -16,6 +16,7 @@ import { createRepoRemovalActions } from '../repos/repo-removal'
 import { createProjectUpdateActions } from '../projects/project-update'
 import { createRepoUpdateActions } from '../repos/repo-update'
 import { createRepoOrderingActions } from '../repos/repo-ordering'
+import { createRepoRelinkActions } from '../repos/repo-relink-actions'
 
 export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, get) => {
   const repoCatalogActions = createRepoCatalogActions(set, get)
@@ -34,6 +35,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   const repoUpdate = createRepoUpdateActions(set, get)
   const repoOrdering = createRepoOrderingActions(set, get)
   return {
+    ...createRepoRelinkActions(set, get),
     repos: [],
     projects: [],
     projectHostSetups: [],

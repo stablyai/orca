@@ -145,6 +145,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       repositoryRegistrations: this.repositoryRegistrations,
       repositoryClones: this.repositoryClones,
       repositorySettings: this.repositorySettings,
+      repositoryRelinks: this.repositoryRelinks,
       repositoryRefQueries: this.repositoryRefQueries,
       hostedReviews: this.hostedReviews,
       gitHubRepositoryQueries: this.gitHubRepositoryQueries,

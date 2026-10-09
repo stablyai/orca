@@ -521,6 +521,12 @@
             }
           }
         }
+      },
+      "repos": {
+        "repoRelink": {
+          "serverUpdateRequired": "请更新 Orca 服务器以重新链接已移动的仓库。",
+          "repoNotFound": "此仓库已不再注册。"
+        }
       }
     },
     "lib": {
@@ -994,6 +1000,28 @@
               "launchFailed": "无法显示该文件。"
             }
           }
+        }
+      },
+      "repoPathStatus": {
+        "title": {
+          "moved": "仓库已移动",
+          "notGitRoot": "该文件夹已不再是 Git 仓库",
+          "notDirectory": "仓库路径不是文件夹",
+          "missing": "未找到仓库文件夹"
+        },
+        "description": {
+          "moved": "已移动到 {{target}}。要更新位置吗？",
+          "missing": "Orca 在 {{path}} 找不到 Git 仓库。请定位该文件夹以保留其工作树和标签页。"
+        },
+        "error": {
+          "differentRepository": "这似乎是另一个仓库",
+          "identityUnverified": "Orca 无法确认这是同一个仓库",
+          "hostUnverifiable": "无法连接到主机",
+          "generic": "无法使用此文件夹"
+        },
+        "errorDescription": {
+          "identityUnverified": "它与 {{name}} 没有共同的远程仓库或关联工作树。仅在确定是同一仓库时才仍然重新链接。",
+          "differentRepository": "它的远程仓库与 {{name}} 不同。重新链接会把此项目的工作树名称和标签页挂到它上面。"
         }
       }
     },
@@ -6422,6 +6450,22 @@
           "title": "排序更改为手动",
           "description": "手动将工作区保留在您放置它们的位置。",
           "restore": "返回{{label}}"
+        },
+        "RepoRelinkDialog": {
+          "relinked": "已重新链接 {{name}}",
+          "title": "重新链接仓库",
+          "description": "将 {{name}} 指向其新文件夹，以保留其工作树和标签页。",
+          "pathLabel": "新位置",
+          "previous": "原位置：{{path}}",
+          "browse": "定位…",
+          "cancel": "取消",
+          "force": "仍然重新链接",
+          "update": "更新位置",
+          "relink": "重新链接"
+        },
+        "RepoPathStatusIndicator": {
+          "update": "更新位置…",
+          "locate": "定位…"
         }
       },
       "shared": {

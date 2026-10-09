@@ -622,6 +622,12 @@
             }
           }
         }
+      },
+      "repos": {
+        "repoRelink": {
+          "serverUpdateRequired": "Mettez à jour le serveur Orca pour relier les dépôts déplacés.",
+          "repoNotFound": "Ce dépôt n'est plus enregistré."
+        }
       }
     },
     "lib": {
@@ -1095,6 +1101,28 @@
               "launchFailed": "Impossible d’afficher le fichier."
             }
           }
+        }
+      },
+      "repoPathStatus": {
+        "title": {
+          "moved": "Dépôt déplacé",
+          "notGitRoot": "Le dossier n'est plus un dépôt Git",
+          "notDirectory": "Le chemin du dépôt n'est pas un dossier",
+          "missing": "Dossier du dépôt introuvable"
+        },
+        "description": {
+          "moved": "Déplacé vers {{target}}. Mettre à jour l'emplacement ?",
+          "missing": "Orca ne trouve pas de dépôt Git à {{path}}. Localisez le dossier pour conserver ses worktrees et onglets."
+        },
+        "error": {
+          "differentRepository": "Il semble s’agir d’un autre dépôt",
+          "identityUnverified": "Orca ne peut pas confirmer qu'il s'agit du même dépôt",
+          "hostUnverifiable": "Impossible de joindre l'hôte",
+          "generic": "Impossible d'utiliser ce dossier"
+        },
+        "errorDescription": {
+          "identityUnverified": "Il ne partage aucun dépôt distant ni worktree lié avec {{name}}. Reliez-le quand même uniquement si vous savez qu'il s'agit du même dépôt.",
+          "differentRepository": "Ses dépôts distants diffèrent de ceux de {{name}}. Le relier y rattacherait les noms de worktrees et les onglets de ce projet."
         }
       }
     },
@@ -6527,6 +6555,22 @@
           "title": "Tri modifié en Manuel",
           "description": "Manuel conserve les espaces de travail là où vous les déposez.",
           "restore": "Retour à {{label}}"
+        },
+        "RepoRelinkDialog": {
+          "relinked": "{{name}} relié",
+          "title": "Relier le dépôt",
+          "description": "Pointez {{name}} vers son nouveau dossier pour conserver ses worktrees et onglets.",
+          "pathLabel": "Nouvel emplacement",
+          "previous": "Auparavant : {{path}}",
+          "browse": "Localiser…",
+          "cancel": "Annuler",
+          "force": "Relier quand même",
+          "update": "Mettre à jour l'emplacement",
+          "relink": "Relier"
+        },
+        "RepoPathStatusIndicator": {
+          "update": "Mettre à jour l'emplacement…",
+          "locate": "Localiser…"
         }
       },
       "shared": {

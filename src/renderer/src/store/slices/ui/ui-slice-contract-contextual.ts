@@ -40,6 +40,7 @@ export type UISliceContextual = {
     | 'confirm-add-project-from-folder'
     | 'confirm-non-git-folder'
     | 'confirm-remove-folder'
+    | 'relink-repo'
     | 'add-repo'
     | 'quick-open'
     | 'worktree-palette'

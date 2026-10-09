@@ -234,7 +234,24 @@ export class RepoUpdatePersistenceOperations {
         invalidateGhAccountTokenCache(sanitizedUpdates.ghAccount)
       }
     }
+    // Why: IPC and RPC erase the type, and a raw `path` here would move the repo unvalidated.
+    Reflect.deleteProperty(sanitizedUpdates, 'path')
     Object.assign(repo, sanitizedUpdates)
+    this.bumpLocalWorktreeScanGeneration(id)
+    this.syncProjectHostSetupCompatibilityState()
+    this.scheduleSave()
+    return this.hydrateRepo(repo)
+  }
+
+  /** Kept out of updateRepo's whitelist: only the validated relink flow may move a repo. */
+  setRepoPath(id: string, hostId: ExecutionHostId, path: string): Repo | null {
+    const repo = findRepoRowForHostScopedWrite(this.state.repos, id, hostId)
+    if (!repo) {
+      return null
+    }
+    repo.path = path
+    // The folder-upgrade locator names the old checkout; a relinked repo has none.
+    delete repo.folderUpgradeGitRootPath
     this.bumpLocalWorktreeScanGeneration(id)
     this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()

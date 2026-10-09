@@ -1,7 +1,11 @@
 import type { RuntimeRepoList, RuntimeRepoSearchRefs } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
 import { formatRepoList, formatRepoRefs, formatRepoShow, printResult } from '../format'
-import { getOptionalPositiveIntegerFlag, getRequiredStringFlag } from '../flags'
+import {
+  getOptionalPositiveIntegerFlag,
+  getOptionalStringFlag,
+  getRequiredStringFlag
+} from '../flags'
 import { resolveRepoPathArgument } from '../repo-path-arguments'
 import { RuntimeClientError } from '../runtime/types'
 
@@ -23,18 +27,41 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
     })
     printResult(result, json, formatRepoShow)
   },
-  'repo set': async ({ flags, client, json }) => {
+  'repo set': async ({ flags, client, cwd, json }) => {
     const repo = getRequiredStringFlag(flags, 'repo')
-    const visibility = getRequiredStringFlag(flags, 'external-worktree-visibility')
-    if (visibility !== 'show' && visibility !== 'hide' && visibility !== 'inherit') {
+    const visibility = getOptionalStringFlag(flags, 'external-worktree-visibility')
+    const path = getOptionalStringFlag(flags, 'path')
+    if (visibility === undefined && path === undefined) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Missing required --external-worktree-visibility or --path'
+      )
+    }
+    if (
+      visibility !== undefined &&
+      visibility !== 'show' &&
+      visibility !== 'hide' &&
+      visibility !== 'inherit'
+    ) {
       throw new RuntimeClientError(
         'invalid_argument',
         '--external-worktree-visibility must be show, hide, or inherit.'
       )
     }
+    if (flags.get('force') === true && path === undefined) {
+      throw new RuntimeClientError('invalid_argument', '--force only applies with --path.')
+    }
     const result = await client.call<{ repo: Record<string, unknown> }>('repo.update', {
       repo,
-      updates: { externalWorktreeVisibility: visibility === 'inherit' ? null : visibility }
+      updates: {
+        ...(visibility !== undefined
+          ? { externalWorktreeVisibility: visibility === 'inherit' ? null : visibility }
+          : {}),
+        ...(path !== undefined
+          ? { path: resolveRepoPathArgument(path, cwd, client.isRemote, 'Remote repo relink') }
+          : {})
+      },
+      ...(flags.get('force') === true ? { forcePath: true } : {})
     })
     printResult(result, json, formatRepoShow)
   },

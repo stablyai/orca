@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from '../../shared/execution-host'
+import type { RepoPathStatusEntry } from '../../shared/repo-path-status'
 import type { GhAccountBinding } from '../../shared/github/account-binding'
 import type {
   HostRepoCatalogSnapshot,
@@ -44,6 +45,8 @@ export type RepositoryApi = {
   update: (args: {
     repoId: string
     hostId?: ExecutionHostId
+    /** Relink even when the folder's identity cannot be confirmed. */
+    forcePath?: boolean
     updates: Partial<
       Pick<
         Repo,
@@ -71,8 +74,11 @@ export type RepositoryApi = {
       sourceControlAi?: Repo['sourceControlAi'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       ghAccount?: GhAccountBinding | null
+      /** Relinks a moved repository; the host validates it first. */
+      path?: string
     }
   }) => Promise<Repo>
+  getPathStatuses: (args?: { force?: boolean }) => Promise<RepoPathStatusEntry[]>
   pickFolder: () => Promise<string | null>
   pickFolders: () => Promise<string[]>
   pickDirectory: () => Promise<string | null>

@@ -22,15 +22,20 @@ export const REPO_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['repo', 'set'],
-    summary: 'Set whether non-Orca worktrees are shown for a repo',
+    summary: "Update a repo's non-Orca worktree visibility or its folder location",
     usage:
-      'orca repo set --repo <selector> --external-worktree-visibility show|hide|inherit [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'external-worktree-visibility'],
+      'orca repo set --repo <selector> [--external-worktree-visibility show|hide|inherit] [--path <path> [--force]] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'external-worktree-visibility', 'path', 'force'],
     notes: [
       'show and hide override the global non-Orca worktree visibility default for this repo; inherit clears the override.',
-      'Per-worktree visibility rules still apply.'
+      'Per-worktree visibility rules still apply.',
+      '--path relinks a repo whose folder moved. The host checks that the path exists, is a Git top-level folder, and is the same repository, then keeps worktree names, comments and terminal tabs.',
+      '--force relinks even when Orca cannot confirm the folder is the same repository. It never skips the folder and top-level checks.'
     ],
-    examples: ['orca repo set --repo path:/path/to/repo --external-worktree-visibility show --json']
+    examples: [
+      'orca repo set --repo path:/path/to/repo --external-worktree-visibility show --json',
+      'orca repo set --repo my-repo --path /new/location/my-repo --json'
+    ]
   },
   {
     path: ['repo', 'set-base-ref'],

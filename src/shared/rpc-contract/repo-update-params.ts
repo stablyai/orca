@@ -7,7 +7,7 @@ import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
 } from '../worktree/visibility-sources'
-import { OptionalFiniteNumber, OptionalString } from './rpc-param-primitives'
+import { OptionalBoolean, OptionalFiniteNumber, OptionalString } from './rpc-param-primitives'
 
 export const RepoSourceControlAiOverrides = z
   .unknown()
@@ -43,7 +43,11 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
 ) {
   return z.object({
     ...selectorFields,
+    // Relink even when the folder's identity cannot be confirmed; never skips the path checks.
+    forcePath: OptionalBoolean,
     updates: z.object({
+      // Optional so older clients keep their behavior; the host validates it before moving the repo.
+      path: OptionalString,
       displayName: OptionalString,
       badgeColor: RepoBadgeColor,
       repoIcon: z

@@ -191,7 +191,11 @@ export class OrcaRuntimeWithRefreshRepoWorktreeScan extends OrcaRuntimeWithListK
     this.invalidateWorktreeScanCacheForRepo(repoId)
     this.notifier?.worktreesChanged(repoId, { oldWorktreeId, newWorktreeId })
     // Mirror notifyBranchRenamed so in-process onClientEvent listeners also see the rename.
-    this.emitClientEvent({ type: 'worktreesChanged', repoId })
+    this.emitClientEvent({
+      type: 'worktreesChanged',
+      repoId,
+      renamed: { oldWorktreeId, newWorktreeId }
+    })
   }
 
   notifyFolderWorkspaceChanged(): void {

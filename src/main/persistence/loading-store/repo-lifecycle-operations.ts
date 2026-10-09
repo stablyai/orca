@@ -170,6 +170,10 @@ export class RepoLifecycleOperations {
   ): Repo | null {
     return getRepoUpdateOperations(this).updateRepo(id, updates, hostId)
   }
+
+  setRepoPathForHost(id: string, hostId: ExecutionHostId, path: string): Repo | null {
+    return getRepoUpdateOperations(this).setRepoPath(id, hostId, path)
+  }
 }
 
 export function getRepoOrderOperations(

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { resolve } from 'node:path'
 import { parseArgs, validateCommandAndFlags } from '../args'
 import { dispatch } from '../dispatch'
 import { RuntimeClient } from '../runtime-client'
@@ -65,6 +66,11 @@ describe('repo set worktree visibility', () => {
     {
       args: ['--repo', 'id:repo-1', '--external-worktree-visibility', 'visible'],
       message: '--external-worktree-visibility must be show, hide, or inherit.'
+    },
+    { args: ['--repo', 'id:repo-1', '--force'], message: 'Missing required' },
+    {
+      args: ['--repo', 'id:repo-1', '--external-worktree-visibility', 'show', '--force'],
+      message: '--force only applies with --path.'
     }
   ])('rejects $args before calling the runtime', async ({ args, message }) => {
     await expect(run(args)).rejects.toMatchObject({
@@ -72,5 +78,61 @@ describe('repo set worktree visibility', () => {
       message: expect.stringContaining(message)
     })
     expect(client.call).not.toHaveBeenCalled()
+  })
+})
+
+describe('repo set --path', () => {
+  const client = new RuntimeClient('/tmp/orca-relink-test', 60_000, null, null)
+  const reply = {
+    id: 'repo-update',
+    ok: true as const,
+    result: { repo: { id: 'repo-1', displayName: 'My repo', path: '/moved/repo' } },
+    _meta: { runtimeId: 'test-runtime' }
+  }
+
+  function run(args: string[]) {
+    const parsed = parseArgs(['repo', 'set', ...args])
+    validateCommandAndFlags(CORE_COMMAND_SPECS, parsed)
+    return dispatch(parsed.commandPath, {
+      flags: parsed.flags,
+      client,
+      cwd: '/tmp/cwd',
+      json: true
+    })
+  }
+
+  beforeEach(() => {
+    vi.spyOn(client, 'call').mockResolvedValue(reply)
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('relinks with a path resolved against the CLI cwd', async () => {
+    await run(['--repo', 'id:repo-1', '--path', 'moved/repo', '--json'])
+    expect(client.call).toHaveBeenCalledExactlyOnceWith('repo.update', {
+      repo: 'id:repo-1',
+      updates: { path: resolve('/tmp/cwd', 'moved/repo') }
+    })
+  })
+
+  it('forwards --force and combines with a visibility change', async () => {
+    await run([
+      '--repo',
+      'id:repo-1',
+      '--path',
+      '/moved/repo',
+      '--force',
+      '--external-worktree-visibility',
+      'hide',
+      '--json'
+    ])
+    expect(client.call).toHaveBeenCalledExactlyOnceWith('repo.update', {
+      repo: 'id:repo-1',
+      updates: { externalWorktreeVisibility: 'hide', path: '/moved/repo' },
+      forcePath: true
+    })
   })
 })

@@ -21,6 +21,7 @@ import {
   RepoCreate,
   RepoIssueCommandWrite,
   RepoPath,
+  RepoPathStatuses,
   RepoReorder,
   RepoSearchRefs,
   RepoSetBaseRef,
@@ -165,14 +166,44 @@ export const REPO_METHODS = [
     name: 'repo.update',
     permission: 'workspace',
     params: RepoUpdate,
-    handler: async (params, context) => ({
-      repo: projectRepoVisibilityForClient(
-        await context.runtime.updateRepo(
-          params.repo,
-          params.updates as Parameters<typeof context.runtime.updateRepo>[1]
-        ),
-        context
-      )
+    handler: async (params, context) => {
+      const { path, ...settingsUpdates } = params.updates
+      const relinked =
+        path === undefined
+          ? null
+          : await context.runtime.relinkRepo(params.repo, path, {
+              force: params.forcePath === true
+            })
+      const hasSettingsUpdates = Object.values(settingsUpdates).some((value) => value !== undefined)
+      const repo =
+        relinked && !hasSettingsUpdates
+          ? relinked.repo
+          : await context.runtime.updateRepo(
+              // Why id: a `path:` selector names the old folder, which no longer resolves after a relink.
+              relinked ? `id:${relinked.repo.id}` : params.repo,
+              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the RepoUpdate schema parses exactly the settings fields RepositoryUpdates names; persistence drops `path`, which only the relink above may write.
+              params.updates as Parameters<typeof context.runtime.updateRepo>[1]
+            )
+      return {
+        repo: projectRepoVisibilityForClient(repo, context),
+        ...(relinked
+          ? {
+              relink: {
+                evidence: relinked.evidence,
+                movedWorktreeCount: relinked.movedWorktrees.length,
+                staleLinkedWorktreeCount: relinked.staleLinkedWorktreeCount
+              }
+            }
+          : {})
+      }
+    }
+  }),
+  defineMethod({
+    name: 'repo.pathStatuses',
+    permission: 'workspace',
+    params: RepoPathStatuses,
+    handler: async (params, { runtime }) => ({
+      statuses: await runtime.listRepoPathStatuses({ force: params?.force === true })
     })
   }),
   defineMethod({

@@ -8,6 +8,7 @@ import type { RuntimeRepositoryHooksCommands } from './runtime-repository-hooks-
 import type { RuntimeRepositoryIssueCommand } from './runtime-repository-issue-command'
 import type { RuntimeRepositoryRefQueries } from './runtime-repository-ref-queries'
 import type { RuntimeRepositoryRegistrationController } from './runtime-repository-registration-controller'
+import type { RuntimeRepositoryRelinkController } from './runtime-repository-relink-controller'
 import type { RuntimeRepositorySettingsController } from './runtime-repository-settings-controller'
 import type { RuntimeRepositorySparsePresets } from './runtime-repository-sparse-presets'
 import type { RuntimeServerEnvironmentCommands } from './runtime-server-environment-commands'
@@ -64,6 +65,8 @@ export type RuntimeRepositoryCommandSurface = {
   showRepo: RuntimeRepositorySettingsController['show']
   setRepoBaseRef: RuntimeRepositorySettingsController['setBaseRef']
   updateRepo: RuntimeRepositorySettingsController['update']
+  relinkRepo: RuntimeRepositoryRelinkController['relink']
+  listRepoPathStatuses: RuntimeRepositoryRelinkController['listPathStatuses']
   removeProject: RuntimeRepositorySettingsController['remove']
   reorderRepos: RuntimeRepositorySettingsController['reorder']
   getRepoBaseRefDefault: RuntimeRepositoryRefQueries['getDefault']
@@ -84,6 +87,7 @@ type RuntimeRepositoryCommandOwners = {
   repositoryRegistrations: RuntimeRepositoryRegistrationController
   repositoryClones: RuntimeRepositoryCloneController
   repositorySettings: RuntimeRepositorySettingsController
+  repositoryRelinks: RuntimeRepositoryRelinkController
   repositoryRefQueries: RuntimeRepositoryRefQueries
   hostedReviews: RuntimeHostedReviewCommands
   gitHubRepositoryQueries: RuntimeGitHubRepositoryQueryCommands
@@ -103,6 +107,7 @@ export function installRuntimeRepositoryCommandSurface(
   const registrations = owners.repositoryRegistrations
   const clones = owners.repositoryClones
   const settings = owners.repositorySettings
+  const relinks = owners.repositoryRelinks
   const refs = owners.repositoryRefQueries
   const reviews = owners.hostedReviews
   const queries = owners.gitHubRepositoryQueries
@@ -139,6 +144,8 @@ export function installRuntimeRepositoryCommandSurface(
     showRepo: settings.show.bind(settings),
     setRepoBaseRef: settings.setBaseRef.bind(settings),
     updateRepo: settings.update.bind(settings),
+    relinkRepo: relinks.relink.bind(relinks),
+    listRepoPathStatuses: relinks.listPathStatuses.bind(relinks),
     removeProject: settings.remove.bind(settings),
     reorderRepos: settings.reorder.bind(settings),
     getRepoBaseRefDefault: refs.getDefault.bind(refs),

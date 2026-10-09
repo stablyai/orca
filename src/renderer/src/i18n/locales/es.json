@@ -521,6 +521,12 @@
             }
           }
         }
+      },
+      "repos": {
+        "repoRelink": {
+          "serverUpdateRequired": "Actualice el servidor de Orca para volver a vincular repositorios movidos.",
+          "repoNotFound": "Este repositorio ya no está registrado."
+        }
       }
     },
     "lib": {
@@ -994,6 +1000,28 @@
               "launchFailed": "No se pudo mostrar el archivo."
             }
           }
+        }
+      },
+      "repoPathStatus": {
+        "title": {
+          "moved": "Repositorio movido",
+          "notGitRoot": "La carpeta ya no es un repositorio Git",
+          "notDirectory": "La ruta del repositorio no es una carpeta",
+          "missing": "No se encontró la carpeta del repositorio"
+        },
+        "description": {
+          "moved": "Se movió a {{target}}. ¿Actualizar la ubicación?",
+          "missing": "Orca no encuentra un repositorio Git en {{path}}. Localice la carpeta para conservar sus árboles de trabajo y pestañas."
+        },
+        "error": {
+          "differentRepository": "Parece ser un repositorio diferente",
+          "identityUnverified": "Orca no puede confirmar que sea el mismo repositorio",
+          "hostUnverifiable": "No se puede contactar con el host",
+          "generic": "No se puede usar esta carpeta"
+        },
+        "errorDescription": {
+          "identityUnverified": "No comparte ningún remoto ni árbol de trabajo vinculado con {{name}}. Vincúlelo de todos modos solo si sabe que es el mismo repositorio.",
+          "differentRepository": "Sus remotos son distintos de los de {{name}}. Al volver a vincularlo, los nombres de árboles de trabajo y las pestañas de este proyecto pasarían a él."
         }
       }
     },
@@ -6422,6 +6450,22 @@
           "title": "Orden cambiado a Manual",
           "description": "Manual mantiene los espacios de trabajo donde los colocas.",
           "restore": "Volver a {{label}}"
+        },
+        "RepoRelinkDialog": {
+          "relinked": "Se volvió a vincular {{name}}",
+          "title": "Volver a vincular repositorio",
+          "description": "Apunte {{name}} a su nueva carpeta para conservar sus árboles de trabajo y pestañas.",
+          "pathLabel": "Nueva ubicación",
+          "previous": "Antes: {{path}}",
+          "browse": "Localizar…",
+          "cancel": "Cancelar",
+          "force": "Vincular de todos modos",
+          "update": "Actualizar ubicación",
+          "relink": "Volver a vincular"
+        },
+        "RepoPathStatusIndicator": {
+          "update": "Actualizar ubicación…",
+          "locate": "Localizar…"
         }
       },
       "shared": {

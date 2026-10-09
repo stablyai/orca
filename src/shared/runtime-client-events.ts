@@ -11,7 +11,12 @@ import type { RuntimeNavigationTarget } from './runtime-navigation'
 
 export type RuntimeClientEvent =
   | { type: 'reposChanged' }
-  | { type: 'worktreesChanged'; repoId: string }
+  | {
+      type: 'worktreesChanged'
+      repoId: string
+      /** Optional so older clients ignore it; a renamed id must be re-keyed, not purged. */
+      renamed?: { oldWorktreeId: string; newWorktreeId: string }
+    }
   | ({ type: 'nativeChatLaunchDraftResolved' } & RuntimeNativeChatLaunchDraftResolution)
   | { type: 'terminalSideEffects'; batch: TerminalSideEffectBatch }
   // Why: SSH connections live on the runtime host; paired clients have no IPC

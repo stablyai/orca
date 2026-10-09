@@ -1,6 +1,7 @@
 import type { PreloadApi } from '../../../../preload/api-types'
 import { legacyBaseRefSearchResult } from '../../../../shared/base-ref-search-result'
 import type { Repo } from '../../../../shared/repo-types'
+import type { RepoPathStatusEntry } from '../../../../shared/repo-path-status'
 import { getDefaultCreateProjectParent } from '@/components/sidebar/create-project-defaults'
 import {
   callRuntimeResult,
@@ -34,12 +35,21 @@ export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
     reorderForHost: async () => {
       throw new Error('Host-scoped project reordering is unavailable in paired web clients.')
     },
-    update: async ({ repoId, updates }) => {
+    update: async ({ repoId, updates, forcePath }) => {
       const owned = await callRuntimeResultWithOwner<{ repo: Repo }>('repo.update', {
         repo: repoId,
-        updates
+        updates,
+        ...(forcePath ? { forcePath } : {})
       })
       return withRuntimeRepoOwner(owned.result.repo, owned.hostId)
+    },
+    getPathStatuses: async (args) => {
+      const owned = await callRuntimeResultWithOwner<{ statuses: RepoPathStatusEntry[] }>(
+        'repo.pathStatuses',
+        { force: args?.force === true }
+      )
+      // The host reports its own repos as local; this client files them under the runtime host.
+      return owned.result.statuses.map((entry) => ({ ...entry, hostId: owned.hostId }))
     },
     pickFolder: () => Promise.resolve(null),
     pickFolders: () => Promise.resolve([]),

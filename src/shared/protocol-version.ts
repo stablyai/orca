@@ -102,6 +102,8 @@ export const REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY =
 export const REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY = 'remote-runtime.shared-control.v1' as const
 export const FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY =
   'folder-workspace.path-status.v1' as const
+// Hosts without it silently drop `repo.update` `updates.path` and lack `repo.pathStatuses`.
+export const REPO_RELINK_RUNTIME_CAPABILITY = 'repo.relink.v1' as const
 export const LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY =
   'linear.issue-attribute-filter.v1' as const
 export const JIRA_USER_FIELDS_RUNTIME_CAPABILITY = 'jira.user-fields.v1' as const
@@ -364,6 +366,7 @@ export const RUNTIME_CAPABILITIES = [
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
+  REPO_RELINK_RUNTIME_CAPABILITY,
   LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY,
   JIRA_USER_FIELDS_RUNTIME_CAPABILITY,
   AI_VAULT_RUNTIME_CAPABILITY,

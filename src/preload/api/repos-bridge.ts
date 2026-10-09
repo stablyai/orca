@@ -32,6 +32,8 @@ export const reposApi = {
 
   update: (args) => ipcRenderer.invoke('repos:update', args),
 
+  getPathStatuses: (args) => ipcRenderer.invoke('repos:getPathStatuses', args),
+
   pickFolder: () => ipcRenderer.invoke('repos:pickFolder'),
 
   pickFolders: () => ipcRenderer.invoke('repos:pickFolders'),
