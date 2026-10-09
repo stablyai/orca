@@ -1,3 +1,4 @@
+import { captureTerminalWorktreeMetadataOwner } from './terminal-worktree-metadata-owner'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { parseRemoteRuntimePtyId, toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import { isTerminalTabPresent } from '../slices/terminal-tab-retirement'
@@ -280,7 +281,10 @@ export function createTerminalPtyBindingActions(
       clearWorktreeSleepIntent(worktreeId)
       // Why: activation spawns come from clicking a worktree, not work in it — skip the lastActivityAt stamp and sortEpoch bump; other spawn reasons still bump.
       if (worktreeId && !wasActivationSpawn && !isRemoteRuntimeMirror) {
-        get().bumpWorktreeActivity(worktreeId)
+        const owner = captureTerminalWorktreeMetadataOwner(get(), worktreeId, [ptyId])
+        if (owner) {
+          get().bumpWorktreeActivity(worktreeId, owner)
+        }
       }
     }
   }

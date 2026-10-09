@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/display-name-provenance'
+import { displayNameUpdateMetadata } from '../../../../shared/worktree/display-name-provenance'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { stripOrcaProvenanceMetaUpdates } from '../../../worktree-removal-safety'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
@@ -25,6 +25,7 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
       args: {
         worktreeId: string
         executionHostId?: string
+        expectedInstanceId?: string
         updates: Partial<WorktreeMeta>
       }
     ) => {
@@ -41,15 +42,17 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
           ? {
               ...validatedUpdates,
               // The host persists provenance; do not rely on renderer-authored metadata.
-              displayNameIsPinned: displayNameUpdatePinsLabel(validatedUpdates.displayName),
-              pendingFirstAgentMessageRename: false,
-              firstAgentMessageRenameError: null
+              ...displayNameUpdateMetadata(validatedUpdates.displayName)
             }
           : validatedUpdates
       const sanitizedUpdates = stripOrcaProvenanceMetaUpdates(updates)
-      const meta = executionHostId
-        ? store.setWorktreeMetaForHost(args.worktreeId, executionHostId, sanitizedUpdates)
-        : store.setWorktreeMeta(args.worktreeId, sanitizedUpdates)
+      const meta = store.updateExistingWorktreeMeta(args.worktreeId, sanitizedUpdates, {
+        executionHostId,
+        instanceId: args.expectedInstanceId
+      })
+      if (!meta) {
+        return null
+      }
       // Do NOT notify here: renderer already applied this optimistically; a notification would re-sort the sidebar (bug PR #209).
       if (args.updates.displayName !== undefined) {
         // Why: remote clients have no optimistic rename and stopped polling titles, so push a remote-only invalidation; gate on displayName so per-click isUnread updates stay event-free.
@@ -98,9 +101,12 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
       (worktreeId) => store.getWorktreeMeta(worktreeId),
       Date.now()
     )
-    for (const update of updates) {
-      store.setWorktreeMeta(update.worktreeId, { sortOrder: update.sortOrder })
-    }
+    store.updateExistingWorktreeMetaBatch(
+      updates.map((update) => ({
+        worktreeId: update.worktreeId,
+        updates: { sortOrder: update.sortOrder }
+      }))
+    )
   })
 
   ipcMain.handle(

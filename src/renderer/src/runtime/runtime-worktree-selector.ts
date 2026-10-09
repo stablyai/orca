@@ -1,10 +1,17 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../shared/ephemeral-setup-terminal-worktree-id'
+import { canonicalWorktreeIdentity, type WorktreeIdentity } from '../../../shared/worktree/identity'
 
 const RUNTIME_WORKTREE_ID_SELECTOR_PREFIX = 'id:'
 
 /** Address a raw worktree id as a runtime `id:` selector; passes through empty or already-prefixed values. */
-export function toRuntimeWorktreeSelector(worktreeId: string): string {
+export function toRuntimeWorktreeSelector(
+  worktreeId: string,
+  occupant?: Pick<WorktreeIdentity, 'executionHostId' | 'instanceId'>
+): string {
+  if (occupant) {
+    return `identity:${canonicalWorktreeIdentity({ worktreeId, ...occupant })}`
+  }
   const trimmed = worktreeId.trim()
   if (!trimmed || trimmed.startsWith(RUNTIME_WORKTREE_ID_SELECTOR_PREFIX)) {
     return trimmed

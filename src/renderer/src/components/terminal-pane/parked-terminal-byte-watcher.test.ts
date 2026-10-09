@@ -215,7 +215,7 @@ describe('startParkedTerminalByteWatcher', () => {
     emit('build finished\x07')
     flushSideEffects()
 
-    expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledWith(WORKTREE_ID)
+    expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledWith(WORKTREE_ID, workspaceOwner)
     expect(mockStoreState.markTerminalTabUnread).toHaveBeenCalledWith(TAB_ID, 'terminal-bell')
     expect(mockStoreState.markTerminalPaneUnread).not.toHaveBeenCalled()
     expect(dispatchTerminalNotification).not.toHaveBeenCalled()
@@ -343,7 +343,7 @@ describe('startParkedTerminalByteWatcher', () => {
     vi.advanceTimersByTime(NOTIFICATION_GRACE_MS * 8)
 
     // The bell still marks unread immediately; only the OS notification yields.
-    expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledWith(WORKTREE_ID)
+    expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledWith(WORKTREE_ID, null)
     expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
     expect(dispatchTerminalNotification).toHaveBeenCalledWith(
       WORKTREE_ID,
@@ -779,7 +779,7 @@ describe('startParkedTerminalByteWatcher', () => {
 
       await dispatchFacts([{ kind: 'bell' }])
 
-      expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledWith(WORKTREE_ID)
+      expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledWith(WORKTREE_ID, null)
       expect(mockStoreState.markTerminalTabUnread).toHaveBeenCalledWith(TAB_ID, 'terminal-bell')
       expect(dispatchTerminalNotification).not.toHaveBeenCalled()
 

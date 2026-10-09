@@ -1,6 +1,10 @@
 import { EventEmitter } from 'node:events'
 import { type Mock, vi } from 'vitest'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type {
+  ExistingWorktreeMetadataUpdate,
+  WorktreeMetadataExpectation
+} from '../persistence/loading-store/worktree-metadata-admission'
 
 export type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
@@ -29,6 +33,12 @@ export type TestStore = {
   captureNativeLocalWorktreeMetadataScanExpectation: StoreMock
   setWorktreeMeta: KeyedStoreWriteMock
   setWorktreeMetaForHost: StoreMock
+  updateExistingWorktreeMeta: Mock<
+    (id: string, patch: Partial<WorktreeMeta>, expectation?: WorktreeMetadataExpectation) => unknown
+  >
+  updateExistingWorktreeMetaBatch: Mock<
+    (updates: readonly ExistingWorktreeMetadataUpdate[]) => string[]
+  >
   getProjectHostSetups: StoreMock
   removeWorktreeMeta: KeyedStoreMock
   pruneSessionlessMissingLocalWorktreeMetadataForRepo: StoreMock
@@ -65,6 +75,8 @@ export const store: TestStore = {
   captureNativeLocalWorktreeMetadataScanExpectation: vi.fn(),
   setWorktreeMeta: vi.fn(),
   setWorktreeMetaForHost: vi.fn(),
+  updateExistingWorktreeMeta: vi.fn(),
+  updateExistingWorktreeMetaBatch: vi.fn(),
   getProjectHostSetups: vi.fn(),
   removeWorktreeMeta: vi.fn(),
   pruneSessionlessMissingLocalWorktreeMetadataForRepo: vi.fn(),

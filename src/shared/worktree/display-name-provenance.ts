@@ -2,3 +2,11 @@
 export function displayNameUpdatePinsLabel(displayName: string | undefined): boolean {
   return Boolean(displayName?.trim())
 }
+
+export function displayNameUpdateMetadata(displayName: string | undefined) {
+  return {
+    displayNameIsPinned: displayNameUpdatePinsLabel(displayName),
+    pendingFirstAgentMessageRename: false,
+    firstAgentMessageRenameError: null
+  }
+}
