@@ -37,7 +37,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     expect(adapter.readAcquisitionOptions({ sessionId: 'session-1', fence: 7 })).toEqual({
       model: 'gpt-saved',
       effort: 'low',
-      fastMode: 'true'
+      speed: 'fast'
     })
     expect(codex.connections[0].calls.map((call) => call.method)).toEqual([
       'thread/start',

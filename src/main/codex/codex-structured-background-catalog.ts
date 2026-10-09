@@ -4,7 +4,7 @@ import {
   type CodexModelCatalogListing
 } from './codex-structured-model-catalog'
 import type { CodexSession } from './codex-structured-session-state'
-import { reconcileCodexFastModeOption } from './codex-structured-fast-mode'
+import { codexSpeedNeedsTier, reconcileCodexSpeedOption } from './codex-structured-speed'
 
 type BackgroundCatalogInput = {
   session: CodexSession
@@ -25,11 +25,11 @@ function applyListing(session: CodexSession, listing: CodexModelCatalogListing):
     listing.models.find((entry) => entry.isDefault)?.id ??
     listing.models[0]?.id ??
     ''
-  reconcileCodexFastModeOption(session, {
-    fastModeTierByModel: listing.fastModeTierByModel,
-    currentFastMode: undefined,
+  reconcileCodexSpeedOption(session, {
+    speedTiersByModel: listing.speedTiersByModel,
+    currentSpeed: undefined,
     model,
-    modelFastModeSupport: undefined
+    modelSpeeds: undefined
   })
 }
 
@@ -40,9 +40,11 @@ async function refresh(input: BackgroundCatalogInput): Promise<void> {
   const fingerprint = access?.fingerprint
   const prior = fingerprint ? store?.get(fingerprint) : undefined
   const model = session.options.get('model') ?? session.reportedOptions.model
+  const speed = session.options.get('speed')
+  const knownTiers = model ? prior?.speedTiersByModel[model] : undefined
   const needsTier =
-    (session.options.get('fastMode') === 'true' || session.options.has('serviceTier')) &&
-    (!model || !prior?.fastModeTierByModel[model])
+    codexSpeedNeedsTier(session.options) &&
+    (!knownTiers || (speed !== undefined && !Object.hasOwn(knownTiers, speed)))
   if (
     fingerprint &&
     store &&
@@ -67,7 +69,7 @@ async function refresh(input: BackgroundCatalogInput): Promise<void> {
     if (latest && latest !== prior) {
       applyListing(session, {
         models: latest.models,
-        fastModeTierByModel: new Map(Object.entries(latest.fastModeTierByModel))
+        speedTiersByModel: new Map(Object.entries(latest.speedTiersByModel))
       })
       return
     }
@@ -78,7 +80,7 @@ async function refresh(input: BackgroundCatalogInput): Promise<void> {
         'codex',
         {
           models: listing.models,
-          fastModeTierByModel: listing.fastModeTierByModel,
+          speedTiersByModel: listing.speedTiersByModel,
           origin: 'live-session'
         },
         'discovery'

@@ -12,7 +12,8 @@ export type AgentModelCatalogSource = 'discovery' | 'live'
 export type AgentModelCatalogSuccess = {
   models: AgentSessionModelOption[]
   fastModeSupport?: AgentSessionFastModeSupport
-  fastModeTierByModel: ReadonlyMap<string, string>
+  /** Provider-advertised tier id per model and speed (`fast`, `ultrafast`). */
+  speedTiersByModel: ReadonlyMap<string, Readonly<Record<string, string>>>
   origin: 'live-session' | 'probe'
   /** A row only this session's launch added (its own `--model`): kept only once the account's
    *  catalog already lists that model. */
@@ -25,8 +26,8 @@ export type AgentModelCatalogSuccess = {
 export type AgentModelCatalogListing = {
   models: AgentSessionModelOption[]
   fastModeSupport?: AgentSessionFastModeSupport
-  /** Provider-advertised Fast tier per model id. */
-  fastModeTierByModel: Record<string, string>
+  /** Provider-advertised tier id per model and speed. */
+  speedTiersByModel: Record<string, Readonly<Record<string, string>>>
   origin: 'live-session' | 'probe'
   at: number
 }
@@ -90,7 +91,7 @@ export type AgentModelCatalogEntry = {
   // The merged view every reader uses, derived from the two listings above.
   models: AgentSessionModelOption[]
   fastModeSupport?: AgentSessionFastModeSupport
-  fastModeTierByModel: Record<string, string>
+  speedTiersByModel: Record<string, Readonly<Record<string, string>>>
   origin: 'live-session' | 'probe'
   fetchedAt: number
 }
@@ -155,9 +156,9 @@ export function agentModelCatalogEntry(
     configured,
     models: mergedModels(discovered, live, configured),
     ...(fastModeSupport ? { fastModeSupport } : {}),
-    fastModeTierByModel: {
-      ...live?.fastModeTierByModel,
-      ...discovered?.fastModeTierByModel
+    speedTiersByModel: {
+      ...live?.speedTiersByModel,
+      ...discovered?.speedTiersByModel
     },
     origin: newer.origin,
     fetchedAt: newer.at
@@ -184,7 +185,7 @@ export function agentModelCatalogEntryWithSuccess(
   const listing: AgentModelCatalogListing = {
     models: models.map((model) => ({ ...model })),
     ...(success.fastModeSupport ? { fastModeSupport: success.fastModeSupport } : {}),
-    fastModeTierByModel: Object.fromEntries(success.fastModeTierByModel.entries()),
+    speedTiersByModel: Object.fromEntries(success.speedTiersByModel.entries()),
     origin: success.origin,
     at
   }
@@ -243,7 +244,7 @@ export function agentModelCatalogListingKey(entry: AgentModelCatalogEntry): stri
       listing.origin,
       listing.models,
       listing.fastModeSupport ?? null,
-      listing.fastModeTierByModel
+      listing.speedTiersByModel
     ]
   return JSON.stringify([
     facts(entry.discovered),

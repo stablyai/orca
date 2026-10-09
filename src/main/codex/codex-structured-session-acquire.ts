@@ -33,12 +33,13 @@ import { restoredCodexSessionOptions } from './codex-structured-session-options'
 import { startBackgroundCodexCatalogRefresh } from './codex-structured-background-catalog'
 import {
   codexAcquireCatalogAccess,
-  codexAcquireFastModeCatalog
+  codexAcquireSpeedCatalog
 } from './codex-structured-acquire-catalog'
 import {
-  reconcileCodexFastModeOption,
+  codexSpeedNeedsTier,
+  reconcileCodexSpeedOption,
   reportedCodexThreadOptions
-} from './codex-structured-fast-mode'
+} from './codex-structured-speed'
 import {
   assertCodexConnectionOpen,
   codexSessionLifecycle,
@@ -222,10 +223,10 @@ export async function acquireCodexStructuredSession(input: {
     acquisitions.assertCurrent(sessionId, attempt)
     const options = restoredCodexSessionOptions(acquireInput.options)
     const catalogAccess = codexAcquireCatalogAccess(deps, launch)
-    const fastModeCatalog = codexAcquireFastModeCatalog({
+    const speedCatalog = codexAcquireSpeedCatalog({
       catalogAccess,
       opened,
-      restoreNeedsCatalog: options.get('fastMode') === 'true' || options.has('serviceTier')
+      restoreNeedsCatalog: codexSpeedNeedsTier(options)
     })
     acquisitions.assertCurrent(sessionId, attempt)
     assertCodexConnectionOpen(connection, sessionId)
@@ -256,15 +257,14 @@ export async function acquireCodexStructuredSession(input: {
         ),
       ...(unbindReadingControl ? { unbindReadingControl } : {})
     }
-    if (fastModeCatalog) {
+    if (speedCatalog) {
       // The model the next turn sends, as turn/start and the background refresh resolve it.
-      const model = options.get('model') ?? opened.model ?? fastModeCatalog.result.current.model
-      reconcileCodexFastModeOption(session, {
-        fastModeTierByModel: fastModeCatalog.fastModeTierByModel,
-        currentFastMode: true,
+      const model = options.get('model') ?? opened.model ?? speedCatalog.result.current.model
+      reconcileCodexSpeedOption(session, {
+        speedTiersByModel: speedCatalog.speedTiersByModel,
+        currentSpeed: undefined,
         model,
-        modelFastModeSupport: fastModeCatalog.result.models.find((entry) => entry.id === model)
-          ?.supportsFastMode
+        modelSpeeds: speedCatalog.result.models.find((entry) => entry.id === model)?.speeds
       })
     }
     sessions.set(sessionId, session)

@@ -273,7 +273,7 @@ describe('Claude effort default at rest', () => {
           ]
         }
       ],
-      fastModeTierByModel: new Map<string, string>()
+      speedTiersByModel: new Map()
     }
     store.recordSuccess(
       agentModelCatalogFingerprintForRecord(record),
@@ -374,7 +374,7 @@ describe('Claude effort default at rest', () => {
             ]
           }
         ],
-        fastModeTierByModel: new Map(),
+        speedTiersByModel: new Map(),
         origin: 'live-session'
       },
       'discovery'

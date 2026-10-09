@@ -17976,6 +17976,7 @@
         "model": "模型",
         "effort": "推理强度",
         "fastMode": "快速模式",
+        "speed": "速度",
         "thinking": "思考",
         "options": "选项",
         "sessionOptions": "会话选项",
@@ -17996,7 +17997,9 @@
           "high": "高",
           "xhigh": "极高",
           "max": "最大",
-          "ultra": "极致"
+          "ultra": "极致",
+          "standard": "标准",
+          "ultrafast": "超快速"
         },
         "noCommandsOrSkills": "没有匹配的命令或技能",
         "commands": "命令",

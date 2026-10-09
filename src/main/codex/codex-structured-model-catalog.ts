@@ -5,7 +5,14 @@ import type {
 } from '../../shared/agent-session-wire'
 import type { CodexAppServerConnection } from './codex-app-server-connection'
 import { structuredAgentSessionOptionModels } from '../native-chat/agent-session-wire/structured-agent-session-option-models'
-import { codexFastModeSupport, readCodexFastModeTier } from './codex-structured-fast-mode'
+import {
+  codexFastModeOfSpeed,
+  codexFastModeSupport,
+  codexSpeedOfTier,
+  readCodexSpeedTiers,
+  type CodexSpeed,
+  type CodexSpeedTiers
+} from './codex-structured-speed'
 import {
   applyCodexConfiguredLaunchDefaults,
   readCodexConfiguredLaunchDefaults
@@ -46,7 +53,7 @@ function effortChoice(value: unknown): AgentSessionOptionChoice | null {
 
 type ParsedCodexModelOption = {
   option: AgentSessionModelOption
-  fastModeTierId?: string
+  speedTiers: CodexSpeedTiers
 }
 
 function modelOption(value: unknown): ParsedCodexModelOption | null {
@@ -66,7 +73,7 @@ function modelOption(value: unknown): ParsedCodexModelOption | null {
         .map(effortChoice)
         .filter((choice): choice is AgentSessionOptionChoice => choice !== null)
     : []
-  const fastMode = readCodexFastModeTier(row)
+  const speed = readCodexSpeedTiers(row)
   return {
     option: {
       id,
@@ -75,20 +82,22 @@ function modelOption(value: unknown): ParsedCodexModelOption | null {
       isDefault: row.isDefault === true,
       ...(defaultEffort ? { defaultEffort } : {}),
       efforts,
-      ...(fastMode.supportKnown ? { supportsFastMode: Boolean(fastMode.id) } : {})
+      ...(speed.supportKnown
+        ? { supportsFastMode: Object.hasOwn(speed.tiers, 'fast'), speeds: speed.speeds }
+        : {})
     },
-    ...(fastMode.id ? { fastModeTierId: fastMode.id } : {})
+    speedTiers: speed.tiers
   }
 }
 
 export type CodexSessionOptionCatalog = {
   result: AgentSessionOptionsResult & { current: { model: string } }
-  fastModeTierByModel: Map<string, string>
+  speedTiersByModel: Map<string, CodexSpeedTiers>
 }
 
 export type CodexModelCatalogListing = {
   models: AgentSessionModelOption[]
-  fastModeTierByModel: Map<string, string>
+  speedTiersByModel: Map<string, CodexSpeedTiers>
 }
 
 /** One paginated `model/list` pass. The provider fetch and the shaping of a
@@ -137,9 +146,11 @@ export async function fetchCodexModelCatalogListing(input: {
       parsedModels.map((entry) => entry.option),
       configured
     ),
-    fastModeTierByModel: new Map(
+    speedTiersByModel: new Map(
       parsedModels.flatMap((entry) =>
-        entry.fastModeTierId ? [[entry.option.id, entry.fastModeTierId] as const] : []
+        Object.keys(entry.speedTiers).length > 0
+          ? [[entry.option.id, entry.speedTiers] as const]
+          : []
       )
     )
   }
@@ -149,7 +160,7 @@ export async function fetchCodexModelCatalogListing(input: {
 export function composeCodexSessionOptionCatalog(
   listing: CodexModelCatalogListing,
   input: {
-    current: { model?: string; effort?: string; fastMode?: boolean }
+    current: { model?: string; effort?: string; speed?: CodexSpeed }
     reportedServiceTier?: string | null
     reportedServiceTierKnown?: boolean
   }
@@ -163,15 +174,13 @@ export function composeCodexSessionOptionCatalog(
   if (!model) {
     throw new Error('codex app-server returned no available models')
   }
-  const fastModeTierByModel = new Map(listing.fastModeTierByModel)
-  const reportedFastMode = input.reportedServiceTierKnown
-    ? input.reportedServiceTier === null || input.reportedServiceTier === 'default'
-      ? false
-      : input.reportedServiceTier === fastModeTierByModel.get(model)
-        ? true
-        : undefined
+  const speedTiersByModel = new Map(listing.speedTiersByModel)
+  const reportedSpeed = input.reportedServiceTierKnown
+    ? codexSpeedOfTier(input.reportedServiceTier ?? null, speedTiersByModel.get(model))
     : undefined
-  const fastMode = input.current.fastMode ?? reportedFastMode
+  const speed = input.current.speed ?? reportedSpeed
+  // Older clients only read Fast; Ultrafast leaves their toggle unset.
+  const fastMode = codexFastModeOfSpeed(speed)
   const support = codexFastModeSupport(models)
   return {
     result: {
@@ -180,19 +189,20 @@ export function composeCodexSessionOptionCatalog(
       current: {
         model,
         ...(input.current.effort ? { effort: input.current.effort } : {}),
+        ...(speed !== undefined ? { speed } : {}),
         ...(fastMode !== undefined ? { fastMode } : {}),
-        ...(reportedFastMode !== undefined && input.current.fastMode === undefined
-          ? { confirmed: ['fastMode'] }
+        ...(reportedSpeed !== undefined && input.current.speed === undefined
+          ? { confirmed: fastMode === undefined ? ['speed'] : ['speed', 'fastMode'] }
           : {})
       }
     },
-    fastModeTierByModel
+    speedTiersByModel
   }
 }
 
 export async function readCodexStructuredSessionOptionCatalog(input: {
   connection: Pick<CodexAppServerConnection, 'request'>
-  current: { model?: string; effort?: string; fastMode?: boolean }
+  current: { model?: string; effort?: string; speed?: CodexSpeed }
   reportedServiceTier?: string | null
   reportedServiceTierKnown?: boolean
   timeoutMs?: number

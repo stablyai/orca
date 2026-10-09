@@ -395,6 +395,9 @@ export type AgentSessionModelOption = {
   efforts: AgentSessionOptionChoice[]
   /** Provider catalog fact. Absent means the host could not determine support. */
   supportsFastMode?: boolean
+  /** Speeds above Standard the provider lists for this model (`fast`, `ultrafast`). Absent means
+   *  unknown; a client that reads it shows one speed choice in place of the Fast toggle. */
+  speeds?: AgentSessionOptionChoice[]
 }
 
 export type AgentSessionFastModeState = 'off' | 'cooldown' | 'on'
@@ -493,6 +496,8 @@ export type AgentSessionOptionsResult = {
     effort?: string
     /** Canonical preference for the next turn. Explicit false is meaningful. */
     fastMode?: boolean
+    /** Next-turn speed where the model lists `speeds`: `standard` or one of those values. */
+    speed?: string
     /** Provider-reported effective routing, distinct from the next-turn preference. */
     fastModeState?: AgentSessionFastModeState
     /**

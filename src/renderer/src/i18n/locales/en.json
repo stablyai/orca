@@ -18260,6 +18260,7 @@
         "model": "Model",
         "effort": "Effort",
         "fastMode": "Fast mode",
+        "speed": "Speed",
         "thinking": "Thinking",
         "options": "Options",
         "sessionOptions": "Session options",
@@ -18280,7 +18281,9 @@
           "high": "High",
           "xhigh": "Extra high",
           "max": "Max",
-          "ultra": "Ultra"
+          "ultra": "Ultra",
+          "standard": "Standard",
+          "ultrafast": "Ultrafast"
         },
         "pendingAttachmentLimit": "Too many attachments are waiting. Finish composing before attaching more.",
         "viewAttachment": "View image",

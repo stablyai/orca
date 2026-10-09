@@ -49,7 +49,7 @@ function finishTurn(codex: ReturnType<typeof fakeCodex>, turnId: string) {
   })
 }
 
-describe('Codex structured Fast mode without send-path catalog waits', () => {
+describe('Codex structured speed without send-path catalog waits', () => {
   it('starts the chat and sends Standard when its own listing rejects', async () => {
     const codex = fakeCodex({
       'model/list': () => {
@@ -61,7 +61,7 @@ describe('Codex structured Fast mode without send-path catalog waits', () => {
 
     await acquire(adapter)
     expect(adapter.readAcquisitionOptions({ sessionId: 'session-1', fence: 7 })).toMatchObject({
-      fastMode: 'true'
+      speed: 'fast'
     })
     await send(adapter, 'first')
     expect(
@@ -83,7 +83,7 @@ describe('Codex structured Fast mode without send-path catalog waits', () => {
       'codex',
       {
         models: [{ id: 'gpt-live', label: 'GPT Live', isDefault: true, efforts: [] }],
-        fastModeTierByModel: new Map([['gpt-live', 'priority-live-v2']]),
+        speedTiersByModel: new Map([['gpt-live', { fast: 'priority-live-v2' }]]),
         origin: 'live-session'
       },
       'discovery'
@@ -120,7 +120,7 @@ describe('Codex structured Fast mode without send-path catalog waits', () => {
       '/codex/home'
     )!
     await vi.waitFor(() =>
-      expect(modelCatalog.get(access.fingerprint)?.fastModeTierByModel['gpt-live']).toBe(
+      expect(modelCatalog.get(access.fingerprint)?.speedTiersByModel['gpt-live']?.fast).toBe(
         'priority-live-v2'
       )
     )
@@ -258,7 +258,7 @@ describe('Codex structured Fast mode without send-path catalog waits', () => {
     oldListing.resolve(listing('priority-old'))
     newListing.resolve(listing('priority-new'))
     await vi.waitFor(() =>
-      expect(modelCatalog.get(access.fingerprint)?.fastModeTierByModel['gpt-live']).toBe(
+      expect(modelCatalog.get(access.fingerprint)?.speedTiersByModel['gpt-live']?.fast).toBe(
         'priority-new'
       )
     )
@@ -271,7 +271,7 @@ describe('Codex structured Fast mode without send-path catalog waits', () => {
   it('lists on its own connection while a separate store probe is still pending', async () => {
     const probe = Promise.withResolvers<{
       models: [{ id: string; label: string; isDefault: boolean; efforts: [] }]
-      fastModeTierByModel: Map<string, string>
+      speedTiersByModel: Map<string, Record<string, string>>
       origin: 'probe'
     }>()
     const modelCatalog = new AgentModelCatalogStore()
@@ -296,7 +296,7 @@ describe('Codex structured Fast mode without send-path catalog waits', () => {
     ).toMatchObject({ serviceTier: 'priority-own' })
     probe.resolve({
       models: [{ id: 'gpt-live', label: 'GPT Live', isDefault: true, efforts: [] }],
-      fastModeTierByModel: new Map([['gpt-live', 'priority-probe']]),
+      speedTiersByModel: new Map([['gpt-live', { fast: 'priority-probe' }]]),
       origin: 'probe'
     })
     await probing
@@ -323,7 +323,7 @@ describe('Codex structured Fast mode without send-path catalog waits', () => {
     pending.resolve(listing())
     await vi.waitFor(() =>
       expect(adapter.readAcquisitionOptions({ sessionId: 'session-1', fence: 7 })).toMatchObject({
-        fastMode: 'true'
+        speed: 'fast'
       })
     )
     codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'second-turn')
@@ -353,7 +353,7 @@ describe('Codex structured Fast mode without send-path catalog waits', () => {
       'codex',
       {
         models: [{ id: 'gpt-live', label: 'GPT Live', isDefault: true, efforts: [] }],
-        fastModeTierByModel: new Map([['gpt-live', 'priority-probe']]),
+        speedTiersByModel: new Map([['gpt-live', { fast: 'priority-probe' }]]),
         origin: 'probe'
       },
       'discovery'
@@ -400,7 +400,7 @@ describe('Codex structured Fast mode without send-path catalog waits', () => {
             supportsFastMode: true
           }
         ],
-        fastModeTierByModel: new Map([['gpt-next', 'priority-next']]),
+        speedTiersByModel: new Map([['gpt-next', { fast: 'priority-next' }]]),
         origin: 'live-session'
       },
       'discovery'
@@ -418,7 +418,7 @@ describe('Codex structured Fast mode without send-path catalog waits', () => {
     expect(codex.connections[0].calls.some((call) => call.method === 'thread/resume')).toBe(true)
     expect(adapter.readAcquisitionOptions({ sessionId: 'session-1', fence: 7 })).toEqual({
       model: 'gpt-next',
-      fastMode: 'true'
+      speed: 'fast'
     })
     await send(adapter, 'first')
     const turn = codex.connections[0].calls.find((call) => call.method === 'turn/start')?.params

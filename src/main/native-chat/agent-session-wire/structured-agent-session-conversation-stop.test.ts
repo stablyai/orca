@@ -222,7 +222,7 @@ describe('a Stop that names no turn', () => {
     )
     expect(await pickOption('model', 'gpt-next')).toMatchObject({
       ok: true,
-      value: { options: { model: 'gpt-next', fastMode: 'true' } }
+      value: { options: { model: 'gpt-next', speed: 'fast' } }
     })
     expect(codex.connections[0].calls.filter((call) => call.method === 'model/list')).toHaveLength(
       1

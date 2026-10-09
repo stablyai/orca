@@ -31,15 +31,41 @@ function text(value: unknown): string | null {
   return typeof value === 'string' && value ? value : null
 }
 
-function parseEffort(value: unknown): AgentSessionOptionChoice | null {
+function parseChoice(value: unknown): AgentSessionOptionChoice | null {
   const row = asRecord(value)
-  const effort = text(row?.value)
+  const choice = text(row?.value)
   const label = text(row?.label)
-  if (!effort || !label) {
+  if (!choice || !label) {
     return null
   }
   const description = text(row?.description)
-  return { value: effort, label, ...(description ? { description } : {}) }
+  return { value: choice, label, ...(description ? { description } : {}) }
+}
+
+function parseTiers(value: unknown): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(asRecord(value) ?? {}).filter(
+      (pair): pair is [string, string] => typeof pair[1] === 'string'
+    )
+  )
+}
+
+/** Tier ids per model and speed; a file saved before speeds holds only Fast's. */
+function parseSpeedTiersByModel(
+  row: Record<string, unknown>
+): Record<string, Record<string, string>> {
+  const saved = asRecord(row.speedTiersByModel)
+  if (saved) {
+    return Object.fromEntries(
+      Object.entries(saved).map(([model, tiers]) => [model, parseTiers(tiers)])
+    )
+  }
+  return Object.fromEntries(
+    Object.entries(parseTiers(row.fastModeTierByModel)).map(([model, tier]) => [
+      model,
+      { fast: tier }
+    ])
+  )
 }
 
 function parseModel(value: unknown): AgentSessionModelOption | null {
@@ -49,10 +75,15 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
   if (!row || !id || !label || !Array.isArray(row.efforts)) {
     return null
   }
-  const efforts = row.efforts.map(parseEffort)
+  const efforts = row.efforts.map(parseChoice)
   if (efforts.some((effort) => effort === null)) {
     return null
   }
+  const speeds = Array.isArray(row.speeds)
+    ? row.speeds
+        .map(parseChoice)
+        .filter((speed): speed is AgentSessionOptionChoice => speed !== null)
+    : undefined
   const description = text(row.description)
   const defaultEffort = text(row.defaultEffort)
   return {
@@ -62,7 +93,10 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
     isDefault: row.isDefault === true,
     ...(defaultEffort ? { defaultEffort } : {}),
     efforts: efforts.filter((effort): effort is AgentSessionOptionChoice => effort !== null),
-    ...(typeof row.supportsFastMode === 'boolean' ? { supportsFastMode: row.supportsFastMode } : {})
+    ...(typeof row.supportsFastMode === 'boolean'
+      ? { supportsFastMode: row.supportsFastMode }
+      : {}),
+    ...(speeds ? { speeds } : {})
   }
 }
 
@@ -81,7 +115,6 @@ function parseListing(value: unknown): AgentModelCatalogListing | null {
   if (models.some((model) => model === null)) {
     return null
   }
-  const tiers = asRecord(row.fastModeTierByModel)
   const support = asRecord(row.fastModeSupport)
   const supported = support?.supported
   const supportReason = text(support?.reason)
@@ -95,11 +128,7 @@ function parseListing(value: unknown): AgentModelCatalogListing | null {
           }
         }
       : {}),
-    fastModeTierByModel: Object.fromEntries(
-      Object.entries(tiers ?? {}).filter(
-        (pair): pair is [string, string] => typeof pair[1] === 'string'
-      )
-    ),
+    speedTiersByModel: parseSpeedTiersByModel(row),
     origin: row.origin,
     at: row.at
   }

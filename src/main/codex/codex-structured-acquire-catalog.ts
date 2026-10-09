@@ -19,8 +19,8 @@ export function codexAcquireCatalogAccess(
   return agentModelCatalogSessionAccess(deps.modelCatalog, CODEX_STRUCTURED_AGENT, launch.codexHome)
 }
 
-/** Use saved catalog knowledge for Fast restore without waiting on discovery. */
-export function codexAcquireFastModeCatalog(input: {
+/** Use saved catalog knowledge for a speed restore without waiting on discovery. */
+export function codexAcquireSpeedCatalog(input: {
   catalogAccess: CodexSessionCatalogAccess | undefined
   opened: Pick<CodexOpenedThread, 'model' | 'effort'>
   restoreNeedsCatalog: boolean
@@ -36,8 +36,7 @@ export function codexAcquireFastModeCatalog(input: {
     return composeCodexSessionOptionCatalog(listing, {
       current: {
         ...(input.opened.model ? { model: input.opened.model } : {}),
-        ...(input.opened.effort ? { effort: input.opened.effort } : {}),
-        fastMode: true
+        ...(input.opened.effort ? { effort: input.opened.effort } : {})
       }
     })
   } catch {

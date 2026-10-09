@@ -22,8 +22,8 @@ import {
   codexDispatchRejection,
   codexTurnEndRejection
 } from './codex-structured-turn-end-settlement'
-import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
-import { codexKnownFastModeTier } from './codex-structured-catalog-entry'
+import { codexKnownSpeedTier } from './codex-structured-catalog-entry'
+import { CODEX_STANDARD_SPEED } from './codex-structured-speed'
 import type { CodexSessionCatalogAccess } from './codex-structured-session-state'
 
 // Writing a Codex turn and learning which message landed where, which are not
@@ -44,6 +44,8 @@ const CODEX_TURN_OPTION_KEYS = new Set([
   'effort',
   'approvalsReviewer',
   'personality',
+  'speed',
+  // Restore-only spellings: a saved tier or Fast pick migrates to `speed`.
   'serviceTier',
   'fastMode'
 ])
@@ -84,23 +86,21 @@ function turnInputFor(body: AgentJournalMessageItem): Record<string, unknown>[] 
 
 function codexTurnOptions(host: CodexTurnHost): Record<string, string> {
   const options = Object.fromEntries(
-    [...host.options].filter(([key]) => key !== 'fastMode' && key !== 'serviceTier')
+    [...host.options].filter(
+      ([key]) => key !== 'speed' && key !== 'fastMode' && key !== 'serviceTier'
+    )
   )
-  const encodedFastMode = host.options.get('fastMode')
-  if (encodedFastMode === undefined) {
+  const speed = host.options.get('speed')
+  if (speed === undefined) {
     return host.options.has('serviceTier') ? { ...options, serviceTier: 'default' } : options
   }
-  const fastMode = decodeStructuredAgentSessionOptionValue('fastMode', encodedFastMode)
-  if (typeof fastMode !== 'boolean') {
-    throw new Error('codex fast mode must be encoded as true or false')
-  }
-  if (!fastMode) {
+  if (speed === CODEX_STANDARD_SPEED) {
     return { ...options, serviceTier: 'default' }
   }
   const model = host.options.get('model') ?? host.reportedOptions?.model
-  const tierId = model ? codexKnownFastModeTier(host.catalogAccess, model) : undefined
-  // Fast is on but nothing has named the tier for this model yet, so there is no
-  // value to route to. Deliberately Standard rather than an omission: the tier
+  const tierId = model ? codexKnownSpeedTier(host.catalogAccess, model, speed) : undefined
+  // A faster speed is picked but nothing has named its tier for this model yet, so there
+  // is no value to route to. Deliberately Standard rather than an omission: the tier
   // persists on the thread, so omitting would silently keep routing a paid tier we
   // cannot currently name, and discovery recovers the exact tier on a later turn.
   if (!tierId) {

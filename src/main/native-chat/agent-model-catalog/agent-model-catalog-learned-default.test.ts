@@ -78,7 +78,7 @@ async function afterNoPickChat(agent: string, workspacePath: string, picked = fa
         isDefault: false,
         efforts: []
       })),
-      fastModeTierByModel: new Map(),
+      speedTiersByModel: new Map(),
       origin: 'probe'
     },
     'discovery'

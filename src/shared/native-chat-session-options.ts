@@ -85,6 +85,15 @@ export function sessionOptionValueMarker(
   return descriptor.valueSource === 'unknown' ? 'unreported' : null
 }
 
+/** Like Fast off, the usual speed adds nothing to a summary pill. */
+export function isStandardSpeed(descriptor: Pick<SessionOptionDescriptor, 'id' | 'kind'>): boolean {
+  return (
+    descriptor.id === 'speed' &&
+    descriptor.kind.type === 'select' &&
+    descriptor.kind.currentValue === 'standard'
+  )
+}
+
 export type SessionOptionSetResult = {
   snapshot: SessionOptionDescriptor[]
 }

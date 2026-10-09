@@ -18011,6 +18011,7 @@
         "model": "모델",
         "effort": "추론 수준",
         "fastMode": "빠른 모드",
+        "speed": "속도",
         "thinking": "사고",
         "options": "옵션",
         "sessionOptions": "세션 옵션",
@@ -18031,7 +18032,9 @@
           "high": "높음",
           "xhigh": "매우 높음",
           "max": "최대",
-          "ultra": "울트라"
+          "ultra": "울트라",
+          "standard": "표준",
+          "ultrafast": "초고속"
         },
         "noCommandsOrSkills": "일치하는 명령어 또는 스킬이 없습니다",
         "commands": "명령어",

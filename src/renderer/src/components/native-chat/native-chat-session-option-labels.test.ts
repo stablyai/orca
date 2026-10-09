@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { translate } from '@/i18n/i18n'
 import {
   nativeChatModelPillLabel,
+  nativeChatOptionsPillLabel,
   nativeChatSessionChoiceLabel
 } from './native-chat-session-option-labels'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
@@ -59,5 +60,31 @@ describe('nativeChatSessionChoiceLabel', () => {
       'components.native-chat.composer.optionValue.ultra',
       'Ultra'
     )
+  })
+})
+
+describe('nativeChatOptionsPillLabel', () => {
+  function speedDescriptor(currentValue: string): SessionOptionDescriptor {
+    return {
+      id: 'speed',
+      label: 'Speed',
+      valueSource: 'reported',
+      transport: 'agent-session',
+      settable: true,
+      kind: {
+        type: 'select',
+        currentValue,
+        choices: [
+          { value: 'standard', label: 'Standard' },
+          { value: 'fast', label: 'Fast' },
+          { value: 'ultrafast', label: 'Ultrafast' }
+        ]
+      }
+    }
+  }
+
+  it('names a faster speed and leaves Standard out, as Fast off was', () => {
+    expect(nativeChatOptionsPillLabel([speedDescriptor('ultrafast')])).toBe('Ultrafast')
+    expect(nativeChatOptionsPillLabel([speedDescriptor('standard')])).toBe('Options')
   })
 })
