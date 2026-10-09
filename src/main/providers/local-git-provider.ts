@@ -32,8 +32,8 @@ import type { IGitProvider } from './git-provider-contract'
 
 /** Per-worktree execution options; build one provider per call and never cache it (WSL routing). */
 export type LocalGitProviderOptions = GitRuntimeOptions & {
-  /** Shared symlinks Git cannot ignore; see `getWorktreeSharedLinkPaths`. */
-  sharedLinkPaths?: readonly string[]
+  /** Shared symlinks Git cannot ignore. Lazy: only status and stage-all read the repo config. */
+  getSharedLinkPaths?: () => readonly string[]
 }
 
 /**
@@ -53,17 +53,19 @@ export type LocalGitProvider = Omit<
 
 /** Binds this machine's git free functions to the provider contract, with today's admission tiers. */
 export function createLocalGitProvider(options: LocalGitProviderOptions = {}): LocalGitProvider {
-  const { sharedLinkPaths = [], ...base } = options
+  const { getSharedLinkPaths = () => [], ...base } = options
   const interactive = { ...base, admissionTier: 'interactive' as const }
   return {
-    getStatus: (worktreePath, statusOptions) =>
-      getStatus(worktreePath, {
+    getStatus: (worktreePath, statusOptions) => {
+      // Why: shared symlinks do not match Git's directory-only ignore rules.
+      const sharedLinkPaths = getSharedLinkPaths()
+      return getStatus(worktreePath, {
         ...statusOptions,
         ...base,
         admissionTier: statusOptions?.admissionTier ?? 'status',
-        // Why: shared symlinks do not match Git's directory-only ignore rules.
         ...(sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {})
-      }),
+      })
+    },
     getSubmoduleStatus: (worktreePath, submodulePath, area = 'unstaged') =>
       getSubmoduleStatus(worktreePath, submodulePath, {
         ...interactive,
@@ -81,7 +83,10 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
     unstageFile: (worktreePath, filePath) => unstageFile(worktreePath, filePath, interactive),
     bulkStageFiles: async (worktreePath, filePaths, scope) => {
       if (scope) {
-        await stageWorktreeChanges(worktreePath, scope, { ...interactive, sharedLinkPaths })
+        await stageWorktreeChanges(worktreePath, scope, {
+          ...interactive,
+          sharedLinkPaths: getSharedLinkPaths()
+        })
         return
       }
       await bulkStageFiles(worktreePath, filePaths, interactive)

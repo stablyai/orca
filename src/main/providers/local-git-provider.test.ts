@@ -240,7 +240,10 @@ describe('createLocalGitProvider', () => {
   })
 
   it('applies shared link paths to status and scoped stage-all only', async () => {
-    const provider = createLocalGitProvider({ sharedLinkPaths: ['node_modules'] })
+    const getSharedLinkPaths = vi.fn(() => ['node_modules'])
+    const provider = createLocalGitProvider({ getSharedLinkPaths })
+    await provider.getDiff(WT, 'a', false)
+    expect(getSharedLinkPaths).not.toHaveBeenCalled()
     await provider.getStatus(WT)
     await provider.bulkStageFiles(WT, [], 'all')
     await provider.bulkStageFiles(WT, ['a'])
