@@ -6,7 +6,6 @@ import {
 } from '../../shared/browser-annotation-viewport-bridge'
 import type { BrowserViewportOverride } from '../../shared/browser-workspace-types'
 import { BrowserManagerDownloadLifecycle } from './browser-manager-download-lifecycle'
-import { getBrowserProcessUserAgentIdentity } from './browser-process-user-agent'
 import { installGuestDevToolsCloseShortcut } from './browser-guest-devtools-close-shortcut'
 import { sendGuestCdpCommand } from './guest-cdp-command'
 
