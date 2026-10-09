@@ -39,7 +39,9 @@ const marker = {
   detectedAt: 123,
   parentPid: 456,
   unresponsiveMs: 10_000,
-  selfRecovered: true
+  selfRecovered: true,
+  inFlightSpans: [{ name: 'git.exec', elapsedMs: 6_000 }],
+  droppedSpanCount: 0
 }
 
 describe('previous hang detection', () => {
@@ -61,7 +63,8 @@ describe('previous hang detection', () => {
         attributes: expect.objectContaining({
           'breadcrumb.name': 'main_thread_hang_detected',
           'breadcrumb.data': expect.objectContaining({
-            previousPid: 456
+            previousPid: 456,
+            inFlightSpans: 'git.exec:6000ms'
           })
         })
       })

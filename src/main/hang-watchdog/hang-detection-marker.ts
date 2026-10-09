@@ -1,5 +1,9 @@
 import { readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import {
+  parseHangWatchdogSpanSnapshot,
+  type HangWatchdogSpanSnapshot
+} from './hang-watchdog-active-spans'
 
 // Why: written by the watchdog worker when main-thread heartbeats stop, and rewritten if
 // they resume; consumed on the next launch to report how long the stall lasted and whether it ever
@@ -10,7 +14,7 @@ export type HangDetectionMarker = {
   parentPid: number
   unresponsiveMs: number
   selfRecovered: boolean
-}
+} & Partial<HangWatchdogSpanSnapshot>
 
 export function hangDetectionMarkerPath(userDataPath: string): string {
   return join(userDataPath, 'main-thread-hang.json')
@@ -60,7 +64,8 @@ function readAvailableHangDetectionMarker(
       parentPid: parsed.parentPid,
       unresponsiveMs: parsed.unresponsiveMs,
       // Why: a marker left by the detect leg and never rewritten means the stall never cleared.
-      selfRecovered: 'selfRecovered' in parsed && parsed.selfRecovered === true
+      selfRecovered: 'selfRecovered' in parsed && parsed.selfRecovered === true,
+      ...parseHangWatchdogSpanSnapshot(parsed)
     }
   } catch {
     return null

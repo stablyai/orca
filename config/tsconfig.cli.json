@@ -93,6 +93,7 @@
     "../src/main/crash-reporting/self-initiated-tree-kill-log.ts",
     "../src/main/observability/redactor.ts",
     "../src/main/observability/tracer.ts",
+    "../src/main/observability/span-lifecycle.ts",
     "../src/main/orca-chromium-process-pids.ts",
     "../src/main/own-chromium-tree-kill-guard.ts",
     "../src/main/providers/windows-foreground-process-rows.ts",

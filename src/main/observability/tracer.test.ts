@@ -12,6 +12,7 @@ import {
   withSpan,
   type TracerSink
 } from './tracer'
+import { subscribeSpanLifecycle } from './span-lifecycle'
 
 type CapturedSink = TracerSink & {
   records: unknown[]
@@ -41,6 +42,48 @@ beforeEach(() => {
 })
 afterEach(() => {
   _resetTracerForTests()
+})
+
+describe('span lifecycle diagnostics', () => {
+  it('announces the operation before synchronous work and releases it on failure once', async () => {
+    const events: string[] = []
+    const unsubscribe = subscribeSpanLifecycle({
+      started: (_id, name) => events.push(`start:${name}`),
+      ended: () => events.push('end')
+    })
+    try {
+      await expect(
+        withSpan('git.exec', () => {
+          events.push('work')
+          throw new Error('failed operation')
+        })
+      ).rejects.toThrow('failed operation')
+      expect(events).toEqual(['start:git.exec', 'work', 'end'])
+      unsubscribe()
+      startSpan('git.exec').end()
+      expect(events).toHaveLength(3)
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  it('keeps diagnostic observer failures and a missing sink out of operation behavior', () => {
+    const unsubscribe = subscribeSpanLifecycle({
+      started: () => {
+        throw new Error('observer failed')
+      },
+      ended: () => {
+        throw new Error('observer failed')
+      }
+    })
+    try {
+      expect(() => startSpan('git.exec').end()).not.toThrow()
+      setActiveSink(null)
+      expect(() => startSpan('git.exec').end()).not.toThrow()
+    } finally {
+      unsubscribe()
+    }
+  })
 })
 
 describe('tracer — basic span lifecycle', () => {
