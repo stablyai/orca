@@ -6,7 +6,8 @@ description: >-
   or phone on Windows, Linux, or macOS: booting AVDs, taps, swipes, typing,
   hardware buttons, rotation, app install and launch, runtime permissions, the
   accessibility tree, and logcat. For an iOS simulator use the iOS emulator
-  skill; build the APK with Gradle first.
+  skill, for HarmonyOS the HarmonyOS emulator skill; build the APK with
+  Gradle first.
 license: Apache-2.0
 ---
 

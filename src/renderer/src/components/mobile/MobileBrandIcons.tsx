@@ -27,3 +27,16 @@ export function AndroidLogo({ className }: MobileBrandIconProps = {}): React.JSX
     </svg>
   )
 }
+
+export function HarmonyOsLogo({ className }: MobileBrandIconProps = {}): React.JSX.Element {
+  return (
+    <svg
+      className={className ?? 'mp-platform-brand-icon'}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M5 3h4v6h6V3h4v18h-4v-7H9v7H5z" />
+    </svg>
+  )
+}

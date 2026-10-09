@@ -6,7 +6,8 @@ description: >-
   or phone on Windows, Linux, or macOS: booting AVDs, taps, swipes, typing,
   hardware buttons, rotation, app install and launch, runtime permissions, the
   accessibility tree, and logcat. For an iOS simulator use the iOS emulator
-  skill; build the APK with Gradle first.
+  skill, for HarmonyOS the HarmonyOS emulator skill; build the APK with
+  Gradle first.
 license: Apache-2.0
 ---
 
@@ -117,5 +118,6 @@ ORCA emulator logcat --lines 100 --json
 ORCA emulator kill --json
 ```
 
-See also: `orca-emulator` for iOS simulators, `orca-cli` for terminals, worktrees, and the
-built-in browser, and `orca-computer-use` for desktop UI outside the emulator.
+See also: `orca-emulator` for iOS simulators, `orca-emulator-harmonyos` for HarmonyOS
+devices, `orca-cli` for terminals, worktrees, and the built-in browser, and
+`orca-computer-use` for desktop UI outside the emulator.

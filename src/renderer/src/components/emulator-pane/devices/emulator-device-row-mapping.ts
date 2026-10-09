@@ -3,7 +3,7 @@ import type { SimulatorDeviceRow } from '../session/emulator-pane-types'
 export type RawEmulatorDevice = {
   id: string
   name: string
-  backend?: 'ios' | 'android'
+  backend?: 'ios' | 'android' | 'harmonyos'
   state: string
   detail?: string
   isAvailable?: boolean

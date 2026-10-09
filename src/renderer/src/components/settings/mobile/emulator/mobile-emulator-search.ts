@@ -70,7 +70,24 @@ export const getMobileEmulatorSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword(
         'auto.components.settings.mobile.emulator.search.b8ddd13195',
         'agent emulator'
-      )
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.mobile.emulator.search.1f3a5b8c02',
+        'harmonyos'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.mobile.emulator.search.6d2e9f4a71',
+        'harmony'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.mobile.emulator.search.c08b5e2f94',
+        'deveco'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.mobile.emulator.search.3a7c91d6e8',
+        'hdc'
+      ),
+      ...translateSearchKeyword('auto.components.settings.mobile.emulator.search.94b2f7e0a5', 'hap')
     ]
   },
   {

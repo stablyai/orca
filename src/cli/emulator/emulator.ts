@@ -36,7 +36,7 @@ type EmulatorGesturePoint = {
 }
 
 type EmulatorDeviceRow = {
-  backend?: 'ios' | 'android'
+  backend?: 'ios' | 'android' | 'harmonyos'
   id?: string
   name?: string
   state?: string
@@ -49,8 +49,13 @@ function formatEmulatorDevices(value: unknown): string {
   }
   return devices
     .map((device) => {
-      const platform = device.backend === 'android' ? 'Android' : 'iOS'
-      return `${platform.padEnd(8)} ${(device.state ?? '').padEnd(9)} ${device.name ?? ''}  (${device.id ?? ''})`
+      const platform =
+        device.backend === 'android'
+          ? 'Android'
+          : device.backend === 'harmonyos'
+            ? 'HarmonyOS'
+            : 'iOS'
+      return `${platform.padEnd(9)} ${(device.state ?? '').padEnd(9)} ${device.name ?? ''}  (${device.id ?? ''})`
     })
     .join('\n')
 }

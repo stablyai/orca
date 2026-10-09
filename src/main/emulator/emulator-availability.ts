@@ -17,6 +17,7 @@ export type EmulatorAvailability = EmulatorCodedMessage & {
   simctl: ToolchainCheck
   serveSim: ToolchainCheck
   android: EmulatorCodedMessage & { sdkFound: boolean; sdkPath?: string }
+  harmonyos: EmulatorCodedMessage & { sdkFound: boolean; sdkPath?: string }
 }
 
 type IosAvailability = {
@@ -49,12 +50,12 @@ async function inspectIosAvailability(bridge: EmulatorBridge): Promise<IosAvaila
   return { available: simctl.ok && serveSim.ok && devices.length > 0, devices, simctl, serveSim }
 }
 
-function toSimulatorRow(device: EmulatorDevice): SimulatorDevice {
+function toSimulatorRow(device: EmulatorDevice, runtime: string): SimulatorDevice {
   return {
     name: device.name,
     udid: device.detail === 'avd' || device.detail === 'emulator' ? device.name : device.id,
     state: device.state === 'booted' ? 'Booted' : 'Shutdown',
-    runtime: 'Android',
+    runtime,
     isAvailable: device.isAvailable
   }
 }
@@ -66,6 +67,7 @@ export async function inspectEmulatorAvailability(
   const backends = bridge.listBackends()
   const iosBackend = backends.find((backend) => backend.kind === 'ios')
   const androidBackend = backends.find((backend) => backend.kind === 'android')
+  const harmonyosBackend = backends.find((backend) => backend.kind === 'harmonyos')
 
   const ios: IosAvailability = iosBackend?.isSupportedOnHost()
     ? await inspectIosAvailability(bridge)
@@ -74,15 +76,22 @@ export async function inspectEmulatorAvailability(
   const android: BackendAvailability = androidBackend
     ? await androidBackend.checkAvailability()
     : { available: false, devices: [], message: '' }
+  const harmonyos: BackendAvailability = harmonyosBackend
+    ? await harmonyosBackend.checkAvailability()
+    : { available: false, devices: [], message: '' }
 
-  const devices = [...ios.devices, ...android.devices.map(toSimulatorRow)]
-  const available = ios.available || android.available
-  // Outside macOS, report Android setup rather than an irrelevant iOS host error.
+  const devices = [
+    ...ios.devices,
+    ...android.devices.map((device) => toSimulatorRow(device, 'Android')),
+    ...harmonyos.devices.map((device) => toSimulatorRow(device, 'HarmonyOS'))
+  ]
+  const available = ios.available || android.available || harmonyos.available
+  // Outside macOS, report a mobile toolchain setup rather than an irrelevant iOS host error.
   const summary: EmulatorCodedMessage = available
     ? { message: 'Ready' }
     : ((currentPlatform === 'darwin'
-        ? firstCodedMessage([ios.simctl, ios.serveSim, android])
-        : firstCodedMessage([android])) ?? emulatorCodedMessage('notAvailable'))
+        ? firstCodedMessage([ios.simctl, ios.serveSim, android, harmonyos])
+        : firstCodedMessage([android, harmonyos])) ?? emulatorCodedMessage('notAvailable'))
 
   return {
     platform: currentPlatform,
@@ -95,6 +104,12 @@ export async function inspectEmulatorAvailability(
       sdkPath: android.sdkPath,
       ...codedMessageFields(android),
       message: android.message || ''
+    },
+    harmonyos: {
+      sdkFound: Boolean(harmonyos.sdkPath),
+      sdkPath: harmonyos.sdkPath,
+      ...codedMessageFields(harmonyos),
+      message: harmonyos.message || ''
     },
     ...summary
   }

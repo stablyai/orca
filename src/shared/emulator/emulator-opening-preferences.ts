@@ -1,6 +1,6 @@
 export type EmulatorOpeningMode = 'last-used' | 'ask' | 'specific'
 export type EmulatorDevicePreference = {
-  backend: 'ios' | 'android'
+  backend: 'ios' | 'android' | 'harmonyos'
   kind: 'avd' | 'device'
   id: string
   name: string

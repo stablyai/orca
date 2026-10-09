@@ -340,22 +340,25 @@ See [Computer use](/docs/cli/computer-use) for the full workflow and permission 
 
 ## Mobile emulator
 
-The mobile emulator commands control iOS Simulator devices through Orca's worktree-scoped bridge. Use them instead of raw `serve-sim` or `simctl` when an agent is operating from inside Orca, so lifecycle and active-device state stay attached to the current worktree.
+The mobile emulator commands control iOS Simulators, Android emulator/device targets, and HarmonyOS emulator instances through one worktree-scoped bridge. Use them instead of raw `serve-sim`/`simctl`, `adb`, or `hdc`/`Emulator` when an agent is operating from inside Orca, so lifecycle and active-device state stay attached to the current worktree.
 
 ```bash
-orca emulator list --worktree active --json
-orca emulator attach "<device-name-or-udid>" --worktree active --json
+orca emulator devices --worktree active --json
+orca emulator attach "<device-name-udid-or-connectkey>" --worktree active --json
 orca emulator tap 0.5 0.7 --worktree active --json
 orca emulator type "hello" --worktree active --json
 orca emulator gesture '[{"type":"begin","x":0.5,"y":0.8},{"type":"move","x":0.5,"y":0.4},{"type":"end","x":0.5,"y":0.2}]' --worktree active --json
 orca emulator button home --worktree active --json
 orca emulator rotate landscape_left --worktree active --json
 orca emulator exec --command "tap 0.5 0.7" --worktree active --json
+orca emulator install ./app-debug.apk --worktree active --json   # HAP on HarmonyOS
+orca emulator launch com.acme.app --worktree active --json
+orca emulator ax --worktree active --json
 orca emulator kill --worktree active --json
 orca emulator shutdown --worktree active --json
 ```
 
-Coordinates are normalized from `0` to `1`. Prefer `tap` for single taps, and use `gesture` for drags or multi-step touch input. Pass `--device <udid-or-name>` or `--emulator <id>` when a script must target a specific simulator instead of the worktree's active emulator.
+Coordinates are normalized from `0` to `1`. Prefer `tap` for single taps, and use `gesture` for drags or multi-step touch input. Pass `--device <id>` or `--emulator <id>` when a script must target a specific device instead of the worktree's active one. `install` accepts APKs (Android) and HAPs (HarmonyOS); `permissions` and `logcat` are Android-only. HarmonyOS screen capture is snapshot polling (~7fps), since its emulator cannot record video.
 
 ## Linear
 

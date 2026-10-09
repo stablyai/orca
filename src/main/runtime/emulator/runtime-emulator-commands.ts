@@ -9,6 +9,7 @@ import {
 } from '../../emulator/emulator-availability'
 import { RuntimeEmulatorAttach, type RuntimeEmulatorAttachParams } from './runtime-emulator-attach'
 import { setConfiguredAndroidSdkPath } from '../../emulator/android/android-sdk-host-discovery'
+import { setConfiguredHarmonySdkPath } from '../../emulator/harmony/harmony-sdk-host-discovery'
 import type { EmulatorGesturePoint } from '../../emulator/emulator-gesture-sender'
 import { assertWorktreeInputNotShadowedByDeviceHub } from '../../emulator/emulator-pane-input-check'
 import type { EmulatorActiveSession, EmulatorSessionInfo } from '../../emulator/emulator-types'
@@ -21,6 +22,7 @@ type EmulatorHostSettings = Pick<
   | 'mobileEmulatorEnabled'
   | 'mobileEmulatorDefaultDeviceUdid'
   | 'androidSdkPath'
+  | 'harmonyosSdkPath'
   | 'mobileEmulatorOpeningMode'
   | 'mobileEmulatorRecentDevices'
 >
@@ -56,7 +58,10 @@ export class RuntimeEmulatorCommands {
     if (!bridge) {
       throw new EmulatorError('emulator_no_active', emulatorFailureText('noSession'))
     }
-    setConfiguredAndroidSdkPath(this.host.getSettings().androidSdkPath ?? null)
+    // Honor configured toolchain paths before the backends resolve them.
+    const settings = this.host.getSettings()
+    setConfiguredAndroidSdkPath(settings.androidSdkPath ?? null)
+    setConfiguredHarmonySdkPath(settings.harmonyosSdkPath ?? null)
     return bridge
   }
 

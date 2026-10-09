@@ -5,8 +5,8 @@ description: >-
   emulator pane. Use when driving a booted Apple Simulator on macOS: taps,
   gestures, typing, hardware buttons, rotation, and the accessibility tree, or
   when an iOS change needs simulator evidence. For an Android device or emulator
-  use the Android emulator skill; build and install the app with xcodebuild or
-  simctl first.
+  use the Android emulator skill, and for HarmonyOS the HarmonyOS emulator
+  skill; build and install the app with xcodebuild or simctl first.
 license: Apache-2.0
 ---
 
@@ -110,5 +110,6 @@ ORCA emulator exec --command "ca-debug blended on" --json
 ORCA emulator kill --device "iPhone 16 Pro" --json
 ```
 
-See also: `orca-emulator-android` for Android devices, `orca-cli` for terminals, worktrees,
-and the built-in browser, and `orca-computer-use` for desktop UI outside the simulator.
+See also: `orca-emulator-android` for Android devices, `orca-emulator-harmonyos` for
+HarmonyOS devices, `orca-cli` for terminals, worktrees, and the built-in browser, and
+`orca-computer-use` for desktop UI outside the simulator.

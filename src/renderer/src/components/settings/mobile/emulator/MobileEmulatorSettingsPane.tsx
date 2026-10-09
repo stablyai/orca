@@ -221,6 +221,11 @@ export function MobileEmulatorSettingsPane({
                   await updateSettings({ androidSdkPath: path })
                   await refreshAvailability()
                 }}
+                configuredHarmonyPath={settings.harmonyosSdkPath ?? null}
+                onSetHarmonySdkPath={async (path) => {
+                  await updateSettings({ harmonyosSdkPath: path })
+                  await refreshAvailability()
+                }}
               />
             ) : null}
           </div>

@@ -1,4 +1,5 @@
-export type EmulatorBackendKind = 'ios' | 'android'
+// Which emulator backend owns a device/session.
+export type EmulatorBackendKind = 'ios' | 'android' | 'harmonyos'
 
 export type EmulatorStreamCodec = 'mjpeg' | 'h264'
 

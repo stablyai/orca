@@ -45,7 +45,7 @@ export function resolveDeviceFrameKind(
   deviceName: string | undefined,
   screenAspectRatio: number
 ): DeviceFrameKind {
-  if (deviceName && /ipad/i.test(deviceName)) {
+  if (deviceName && /ipad|matepad/i.test(deviceName)) {
     return 'tablet'
   }
   if (deviceName && /iphone/i.test(deviceName)) {

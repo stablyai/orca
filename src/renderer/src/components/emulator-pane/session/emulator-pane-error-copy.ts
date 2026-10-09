@@ -13,7 +13,7 @@ export function emulatorStartErrorText(error: unknown): string {
     error,
     translate(
       'emulator.pane.startFailed',
-      'Could not start the emulator. Make sure Xcode (iOS) or Android Studio (Android) is set up, then try another device.'
+      'Could not start the emulator. Make sure Xcode (iOS), Android Studio (Android) or DevEco Studio (HarmonyOS) is set up, then try another device.'
     )
   )
 }
@@ -32,7 +32,7 @@ export function noEmulatorDevicesError(): Error {
   return new Error(
     translate(
       'emulator.pane.noDevices',
-      'No emulator devices found. Add an iOS Simulator in Xcode, or an Android Virtual Device in Android Studio.'
+      'No emulator devices found. Add an iOS Simulator in Xcode, an Android Virtual Device in Android Studio, or a HarmonyOS Emulator instance in DevEco Studio.'
     )
   )
 }

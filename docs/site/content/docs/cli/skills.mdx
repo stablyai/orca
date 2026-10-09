@@ -10,6 +10,7 @@ keywords:
   - orca-linear skill
   - orca-emulator skill
   - orca-emulator-android skill
+  - orca-emulator-harmonyos skill
   - orca-plugin-authoring skill
 ---
 
@@ -27,6 +28,7 @@ Use `npx skills add` with the public Orca repo and the skill name. Default agent
 | [`orca-linear`](#orca-linear)                       | `npx skills add https://github.com/stablyai/orca --skill orca-linear --global`            | Linear ticket read/write through `orca linear`.               |
 | [`orca-emulator`](#orca-emulator)                   | `npx skills add https://github.com/stablyai/orca --skill orca-emulator --global`          | iOS Simulator control.                                        |
 | [`orca-emulator-android`](#orca-emulator-android)   | `npx skills add https://github.com/stablyai/orca --skill orca-emulator-android --global`  | Android emulator/device via adb.                              |
+| [`orca-emulator-harmonyos`](#orca-emulator-harmonyos) | `npx skills add https://github.com/stablyai/orca --skill orca-emulator-harmonyos --global` | HarmonyOS emulator/device via hdc.                          |
 | [`orca-per-workspace-env`](#orca-per-workspace-env) | `npx skills add https://github.com/stablyai/orca --skill orca-per-workspace-env --global` | Per-workspace environment recipes (`orca.yaml`).              |
 | [`orca-plugin-authoring`](#orca-plugin-authoring)   | `npx skills add https://github.com/stablyai/orca --skill orca-plugin-authoring --global`  | Build, debug and publish Orca plugins.                        |
 
@@ -151,6 +153,14 @@ npx skills add https://github.com/stablyai/orca --skill orca-emulator-android --
 ```
 
 Use for adb-connected Android AVDs/devices: list/boot, tap/swipe/type, hardware buttons, install/launch, permissions, accessibility tree, logcat. Load details with `orca skills get orca-emulator-android`.
+
+## orca-emulator-harmonyos
+
+```bash
+npx skills add https://github.com/stablyai/orca --skill orca-emulator-harmonyos --global
+```
+
+Use for hdc-connected HarmonyOS emulator instances/devices from DevEco Studio: list/boot, tap/swipe/type, hardware buttons, rotation, HAP install, ability launch, accessibility tree. The live view is snapshot polling (~7fps) because the HarmonyOS emulator cannot record video. Load details with `orca skills get orca-emulator-harmonyos`.
 
 ## orca-per-workspace-env
 

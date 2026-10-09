@@ -107,8 +107,9 @@ export class RuntimeEmulatorAttach {
         selectedDevice = devices.find(
           (item) =>
             item.id === device ||
-            (item.backend === 'android' &&
-              ['avd', 'emulator'].includes(item.detail ?? '') &&
+            (((item.backend === 'android' && ['avd', 'emulator'].includes(item.detail ?? '')) ||
+              (item.backend === 'harmonyos' &&
+                ['instance', 'emulator'].includes(item.detail ?? ''))) &&
               item.name === device)
         )
         if (!selectedDevice || selectedDevice.isAvailable === false) {

@@ -27,6 +27,9 @@ export function emulatorDeviceDescription(device: SimulatorDeviceRow): string {
   if (runtimeLabel) {
     return runtimeLabel
   }
+  if (device.backend === 'harmonyos') {
+    return 'HarmonyOS'
+  }
   if (
     device.backend === 'android' ||
     ['avd', 'emulator', 'device'].includes(device.runtime ?? '')

@@ -64,8 +64,9 @@ export function resolveEmulatorOpeningPreference(
     candidate = devices.find(
       (device) =>
         device.id === target ||
-        (device.backend === 'android' &&
-          ['avd', 'emulator'].includes(device.detail ?? '') &&
+        (((device.backend === 'android' && ['avd', 'emulator'].includes(device.detail ?? '')) ||
+          (device.backend === 'harmonyos' &&
+            ['instance', 'emulator'].includes(device.detail ?? ''))) &&
           device.name === target)
     )
   } else {

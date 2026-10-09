@@ -11912,7 +11912,12 @@
               "de556a0911": "Emulator availability",
               "b8c9f903eb": "Default emulator device",
               "0d6e7dba38": "Agent CLI control",
-              "f8468700d1": "Mobile emulator"
+              "f8468700d1": "Mobile emulator",
+              "1f3a5b8c02": "harmonyos",
+              "6d2e9f4a71": "harmony",
+              "c08b5e2f94": "deveco",
+              "3a7c91d6e8": "hdc",
+              "94b2f7e0a5": "hap"
             }
           },
           "pane": {
@@ -13002,7 +13007,11 @@
           "76eb88b88e": "iOS Simulator (Xcode)",
           "c6f3ea4f12": "Ready",
           "e4f14b50d7": "Install Xcode and add an iOS Simulator runtime.",
-          "63fe73a1ea": "Could not update Android SDK folder."
+          "63fe73a1ea": "Could not update Android SDK folder.",
+          "4a1c9b5e7d": "HarmonyOS SDK (DevEco Studio)",
+          "4a1c9b5e7e": "Not found. Install DevEco Studio, then create an Emulator instance.",
+          "8e3f60b259": "Could not update HarmonyOS SDK folder.",
+          "d5f2a7c041": "Download DevEco Studio"
         },
         "AppearanceAdvancedDisclosure": {
           "advanced": "Advanced"
@@ -27368,8 +27377,8 @@
     },
     "pane": {
       "listDevicesFailed": "Could not list emulator devices.",
-      "noDevices": "No emulator devices found. Add an iOS Simulator in Xcode, or an Android Virtual Device in Android Studio.",
-      "startFailed": "Could not start the emulator. Make sure Xcode (iOS) or Android Studio (Android) is set up, then try another device.",
+      "noDevices": "No emulator devices found. Add an iOS Simulator in Xcode, an Android Virtual Device in Android Studio, or a HarmonyOS Emulator instance in DevEco Studio.",
+      "startFailed": "Could not start the emulator. Make sure Xcode (iOS), Android Studio (Android) or DevEco Studio (HarmonyOS) is set up, then try another device.",
       "shutdownFailed": "Could not shut down the emulator. Try again, or stop it from your emulator manager."
     },
     "settings": {

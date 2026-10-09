@@ -10,9 +10,10 @@ import {
   type EmulatorStartLease
 } from './emulator-start-lease-registry'
 import { listAvailableEmulatorDevices } from './emulator-device-inventory'
-import { deriveAxUrlFromStreamUrl } from './serve-sim-detached-session'
+import { readIosAccessibilityTree } from './ios-emulator-accessibility'
 import { IosEmulatorBackend } from './backends/ios-emulator-backend'
 import { AndroidEmulatorBackend } from './backends/android-emulator-backend'
+import { HarmonyEmulatorBackend } from './backends/harmony-emulator-backend'
 import type {
   EmulatorBackend,
   EmulatorBackendCapabilities,
@@ -29,6 +30,7 @@ export class EmulatorBridge {
   private readonly backends: EmulatorBackend[]
   private readonly iosBackend: IosEmulatorBackend
   private readonly androidBackend: AndroidEmulatorBackend
+  private readonly harmonyosBackend: HarmonyEmulatorBackend
 
   constructor(options: EmulatorBridgeOptions = {}) {
     this.iosBackend = new IosEmulatorBackend(
@@ -36,8 +38,9 @@ export class EmulatorBridge {
       (udid) => this.sessionRegistry.getSession(udid)?.wsUrl ?? null
     )
     this.androidBackend = new AndroidEmulatorBackend()
+    this.harmonyosBackend = new HarmonyEmulatorBackend()
     // Register all backends so explicit targets reach their own host-support errors.
-    this.backends = [this.iosBackend, this.androidBackend]
+    this.backends = [this.iosBackend, this.androidBackend, this.harmonyosBackend]
   }
 
   listBackends(): EmulatorBackend[] {
@@ -76,9 +79,10 @@ export class EmulatorBridge {
     return this.sessionRegistry.getActiveForWorktree(worktreeId)
   }
 
-  // Keep slow-booting Android devices alive across switches for fast reattachment.
+  // Keep slow-booting Android/HarmonyOS devices alive across switches for fast reattachment.
   async stopActiveForSwitch(worktreeId: string): Promise<string | null> {
-    const keepAlive = this.backendForActiveWorktree(worktreeId)?.kind === 'android'
+    const kind = this.backendForActiveWorktree(worktreeId)?.kind
+    const keepAlive = kind === 'android' || kind === 'harmonyos'
     return this.stopActiveForWorktreeInternal(worktreeId, { shutdownDevice: !keepAlive })
   }
 
@@ -197,26 +201,11 @@ export class EmulatorBridge {
   }
 
   async accessibilityTree(opts?: EmulatorTargetOpts): Promise<unknown> {
-    return this.runCapability('accessibilityTree', opts, async (backend, device) => {
-      if (backend.kind !== 'ios') {
-        return backend.accessibilityTree!(device)
-      }
-      const udid = await backend.resolveDeviceId(device)
-      const worktreeId = opts?.worktreeId
-      // Explicit device reads must work without an active workspace attachment.
-      const session =
-        (worktreeId ? this.getActiveForWorktree(worktreeId) : null) ??
-        this.sessionRegistry.getSession(udid)
-      if (worktreeId && session && session.deviceUdid !== udid) {
-        throw new EmulatorError(
-          'emulator_no_active',
-          `iOS simulator ${udid} is not active for this worktree (active: ${session.deviceUdid}); attach the requested simulator first.`
-        )
-      }
-      // Older registered sessions may lack the AX URL derived for fresh sessions.
-      const axUrl = session?.axUrl ?? deriveAxUrlFromStreamUrl(session?.streamUrl)
-      return backend.accessibilityTree!(udid, axUrl)
-    })
+    return this.runCapability('accessibilityTree', opts, async (backend, device) =>
+      backend.kind === 'ios'
+        ? readIosAccessibilityTree(backend, device, opts?.worktreeId, this.sessionRegistry)
+        : backend.accessibilityTree!(device)
+    )
   }
 
   /** Renderers name only a device; main resolves its registered helper so they cannot pick hosts. */

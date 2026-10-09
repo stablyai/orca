@@ -4,13 +4,13 @@ import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-
 export const EMULATOR_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['emulator', 'list'],
-    summary: "List the worktree's attached emulator sessions (iOS and Android)",
+    summary: "List the worktree's attached emulator sessions (iOS, Android, and HarmonyOS)",
     usage: 'orca emulator list [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree']
   },
   {
     path: ['emulator', 'devices'],
-    summary: 'List all emulator devices/AVDs across iOS and Android',
+    summary: 'List all emulator devices across iOS, Android and HarmonyOS',
     usage: 'orca emulator devices [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree']
   },
@@ -80,14 +80,14 @@ export const EMULATOR_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['emulator', 'install'],
-    summary: 'Install an APK onto the target Android device',
+    summary: 'Install an app package (Android APK, HarmonyOS HAP) onto the target device',
     usage: 'orca emulator install <apkPath> [--reinstall] [--device <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'device', 'emulator', 'worktree', 'path', 'reinstall'],
     positionalArgs: ['path']
   },
   {
     path: ['emulator', 'launch'],
-    summary: 'Launch an Android app by package (and optional activity)',
+    summary: 'Launch an app by package (Android activity / HarmonyOS ability optional)',
     usage: 'orca emulator launch <package> [--activity <name>] [--device <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'device', 'emulator', 'worktree', 'package', 'activity'],
     positionalArgs: ['package']
@@ -110,7 +110,8 @@ export const EMULATOR_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['emulator', 'ax'],
-    summary: 'Dump the accessibility tree (Android uiautomator; iOS serve-sim AX, frames 0..1)',
+    summary:
+      'Dump the accessibility tree (Android uiautomator, HarmonyOS uitest, iOS serve-sim; frames 0..1)',
     usage: 'orca emulator ax [--device <id>] [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'device', 'emulator', 'worktree']
   },

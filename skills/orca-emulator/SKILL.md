@@ -5,8 +5,8 @@ description: >-
   emulator pane. Use when driving a booted Apple Simulator on macOS: taps,
   gestures, typing, hardware buttons, rotation, and the accessibility tree, or
   when an iOS change needs simulator evidence. For an Android device or emulator
-  use the Android emulator skill; build and install the app with xcodebuild or
-  simctl first.
+  use the Android emulator skill, and for HarmonyOS the HarmonyOS emulator
+  skill; build and install the app with xcodebuild or simctl first.
 license: Apache-2.0
 ---
 
