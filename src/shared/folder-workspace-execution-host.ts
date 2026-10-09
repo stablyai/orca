@@ -119,10 +119,11 @@ export function resolveFolderWorkspaceHost(
   if (!workspace) {
     return { kind: 'missing' }
   }
-  const scopeConnectionId = normalizeConnectionId(
-    workspace.connectionId ??
-      state.projectGroups.find((entry) => entry.id === workspace.projectGroupId)?.connectionId
-  )
+  const readScopeConnectionId = (): string | null =>
+    normalizeConnectionId(
+      workspace.connectionId ??
+        state.projectGroups.find((entry) => entry.id === workspace.projectGroupId)?.connectionId
+    )
   const explicitHost = parseExecutionHostId(workspace.executionHostId)
   switch (explicitHost?.kind) {
     case 'ssh':
@@ -136,7 +137,7 @@ export function resolveFolderWorkspaceHost(
       return {
         kind: 'runtime',
         environmentId: explicitHost.environmentId,
-        sshTargetId: isOnlyOwner ? scopeConnectionId : null
+        sshTargetId: isOnlyOwner ? readScopeConnectionId() : null
       }
     }
     case 'local':
@@ -144,6 +145,7 @@ export function resolveFolderWorkspaceHost(
     case undefined:
       break
   }
+  const scopeConnectionId = readScopeConnectionId()
   const candidateRepos = findFolderWorkspaceCandidateRepos(state, folderWorkspaceId)
   let hasLocalRepo = false
   const connectionIds = new Set<string>()
