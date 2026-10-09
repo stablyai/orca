@@ -50,7 +50,7 @@ function createInput(overrides: Partial<Input> = {}): Input {
     setReuseEligibleBranch: vi.fn(),
     setReuseSelectedBranch: vi.fn(),
     setStartFromResetHint: vi.fn(),
-    smartGitHubPrStartPointSelectionRef: { current: null },
+    smartSourceSelectionRef: { current: null },
     ...overrides
   } as Input
 }

@@ -28,7 +28,7 @@ type GitHubProviderSelectionInput = Pick<
   | 'setPushTarget'
   | 'setStartFromResetHint'
   | 'settings'
-  | 'smartGitHubPrStartPointSelectionRef'
+  | 'smartSourceSelectionRef'
 >
 
 import { useCallback } from 'react'
@@ -74,11 +74,12 @@ export function useGitHubProviderSelection(input: GitHubProviderSelectionInput) 
     setPushTarget,
     setStartFromResetHint,
     settings,
-    smartGitHubPrStartPointSelectionRef
+    smartSourceSelectionRef
   } = input
 
   const handleSmartGitHubItemSelect = useCallback(
     (item: GitHubWorkItem): void => {
+      smartSourceSelectionRef.current = null
       const identity = resolveGitHubWorkItemIdentity(item)
       const normalizedItem: GitHubWorkItem = {
         ...item,
@@ -112,7 +113,6 @@ export function useGitHubProviderSelection(input: GitHubProviderSelectionInput) 
       setBranchNameOverridePreservesNameEdits(false)
       setForkPushWarning(null)
       branchAutoNameRef.current = ''
-      smartGitHubPrStartPointSelectionRef.current = null
       // Why: provider items can come from a different source host than the run host — resolve refs against the run repo, keep item metadata for provider identity.
       const runRepo = selectedRepo ?? eligibleRepos.find((repo) => repo.id === item.repoId)
       applyLinkedWorkItem(normalizedItem)
@@ -128,10 +128,11 @@ export function useGitHubProviderSelection(input: GitHubProviderSelectionInput) 
       setCompareBaseRef(undefined)
       setPushTarget(undefined)
       const startPointSelection: SmartGitHubPrStartPointSelection = {
+        kind: 'github-pr',
         repoId: runRepo.id,
         item: normalizedItem
       }
-      smartGitHubPrStartPointSelectionRef.current = startPointSelection
+      smartSourceSelectionRef.current = startPointSelection
       const itemRepoSettings = getSettingsForRepoRuntimeOwner(
         { repos: [runRepo], settings },
         runRepo.id
@@ -148,7 +149,7 @@ export function useGitHubProviderSelection(input: GitHubProviderSelectionInput) 
       })
       void resolvePrBase
         .then((result) => {
-          if (smartGitHubPrStartPointSelectionRef.current !== startPointSelection) {
+          if (smartSourceSelectionRef.current !== startPointSelection) {
             return
           }
           startPointSelection.resolved = result
@@ -164,7 +165,7 @@ export function useGitHubProviderSelection(input: GitHubProviderSelectionInput) 
           setForkPushWarning(getForkPushWarning(result))
         })
         .catch((error: unknown) => {
-          if (smartGitHubPrStartPointSelectionRef.current !== startPointSelection) {
+          if (smartSourceSelectionRef.current !== startPointSelection) {
             return
           }
           setBaseBranch(undefined)
@@ -204,7 +205,7 @@ export function useGitHubProviderSelection(input: GitHubProviderSelectionInput) 
       setName,
       setPushTarget,
       setStartFromResetHint,
-      smartGitHubPrStartPointSelectionRef
+      smartSourceSelectionRef
     ]
   )
 

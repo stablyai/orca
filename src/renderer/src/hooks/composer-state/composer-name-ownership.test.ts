@@ -12,7 +12,7 @@ import { useQuickSubmitSourcePreparation } from './quick-submit-source-preparati
 import * as decisions from './composer-decisions'
 import type {
   PendingSmartGitHubSubmitResolution,
-  SmartGitHubPrStartPointSelection
+  SmartSourceSelection
 } from './source-selection-decisions'
 
 function issue(number: number): GitHubWorkItem {
@@ -49,7 +49,7 @@ function useNameOwnership(draft?: { name: string; linkedWorkItem: LinkedWorkItem
     setLinkedWorkItem,
     lastAutoNameRef,
     branchAutoNameRef: useRef(''),
-    smartGitHubPrStartPointSelectionRef: useRef<SmartGitHubPrStartPointSelection | null>(null),
+    smartSourceSelectionRef: useRef<SmartSourceSelection | null>(null),
     selectedRepoGitHubSourceContext: null,
     branchNameOverride: undefined,
     branchNameOverridePreservesNameEdits: false,

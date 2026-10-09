@@ -33,7 +33,7 @@ function createInput(overrides: Partial<Input> = {}): Input {
     setSparseEnabled: vi.fn(),
     setSparseSelectedPresetId: vi.fn(),
     setStartFromResetHint: vi.fn(),
-    smartGitHubPrStartPointSelectionRef: { current: null },
+    smartSourceSelectionRef: { current: null },
     ...overrides
   }
 }

@@ -6,7 +6,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { GitHubRepositoryIdentity } from '../../../../shared/github/pull-request-types'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
 import type { IssueCommandReadResult } from '@/runtime/runtime-hooks-client'
-import type { SmartGitHubPrStartPointSelection } from './source-selection-decisions'
+import type { SmartSourceSelection } from './source-selection-decisions'
 
 export type ComposerAsyncModel = {
   yamlHooks: OrcaHooks | null
@@ -66,7 +66,7 @@ export type ComposerAsyncModel = {
   branchAutoNameRef: RefObject<string>
   lastAutoNoteRef: RefObject<string>
   noteRef: RefObject<string>
-  smartGitHubPrStartPointSelectionRef: RefObject<SmartGitHubPrStartPointSelection | null>
+  smartSourceSelectionRef: RefObject<SmartSourceSelection | null>
   composerRef: RefObject<HTMLDivElement | null>
   promptTextareaRef: RefObject<HTMLTextAreaElement | null>
   promptCaretFrameRef: RefObject<number | null>

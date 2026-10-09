@@ -31,7 +31,10 @@ import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { CONTEXTUAL_TOUR_ENABLE_AUTO_WORKSPACE_NAME_EVENT } from '@/components/contextual-tours/contextual-tour-composer-events'
 import type { GitHubRepositoryIdentity } from '../../../../shared/github/pull-request-types'
 import { getRepoSetupAgentStartupPolicy } from './setup-policy-decisions'
-import type { SmartGitHubPrStartPointSelection } from './source-selection-decisions'
+import type {
+  SmartGitHubPrStartPointSelection,
+  SmartSourceSelection
+} from './source-selection-decisions'
 
 export function useComposerAsyncState(input: ComposerAsyncStateInput) {
   const {
@@ -162,7 +165,7 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
         repoId: selectedRepo?.id ?? initialRepoId
       })
     )
-  const smartGitHubPrStartPointSelectionRef = useRef<SmartGitHubPrStartPointSelection | null>(
+  const smartSourceSelectionRef = useRef<SmartSourceSelection | null>(
     initialSmartGitHubPrStartPointSelection
   )
 
@@ -265,7 +268,7 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
     branchAutoNameRef,
     lastAutoNoteRef,
     noteRef,
-    smartGitHubPrStartPointSelectionRef,
+    smartSourceSelectionRef,
     composerRef,
     promptTextareaRef,
     promptCaretFrameRef,

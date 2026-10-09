@@ -27,7 +27,7 @@ type GitHubSubmitResolutionInput = Pick<
   | 'setPushTarget'
   | 'setStartFromResetHint'
   | 'settings'
-  | 'smartGitHubPrStartPointSelectionRef'
+  | 'smartSourceSelectionRef'
 >
 
 import { useCallback } from 'react'
@@ -78,13 +78,14 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
     setPushTarget,
     setStartFromResetHint,
     settings,
-    smartGitHubPrStartPointSelectionRef
+    smartSourceSelectionRef
   } = input
 
   const resolvePendingSmartGitHubSubmit =
     useCallback(async (): Promise<PendingSmartGitHubSubmitResolution> => {
       if (linkedWorkItem) {
-        const startPointSelection = smartGitHubPrStartPointSelectionRef.current
+        const reviewSelection = smartSourceSelectionRef.current
+        const startPointSelection = reviewSelection?.kind === 'github-pr' ? reviewSelection : null
         const linkedWorkItemIdentity = getGitHubLinkedWorkItemIdentity(linkedWorkItem)
         const startPointIdentity = startPointSelection
           ? resolveGitHubWorkItemIdentity(startPointSelection.item)
@@ -134,18 +135,20 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
               ? { branchNameOverride: selectedPrStartPoint.branchNameOverride }
               : {})
           }
-          setBaseBranch(selectedPrStartPoint.baseBranch)
-          setBaseBranchNamesWorkspace(true)
-          setCompareBaseRef(selectedPrStartPoint.compareBaseRef)
-          setPushTarget(selectedPrStartPoint.pushTarget)
-          if (selectedPrStartPoint.branchNameOverride) {
-            setBranchNameOverride(selectedPrStartPoint.branchNameOverride)
-            setBranchNameOverridePreservesNameEdits(true)
-          } else {
-            setBranchNameOverride(undefined)
-            setBranchNameOverridePreservesNameEdits(false)
+          if (smartSourceSelectionRef.current === startPointSelection) {
+            setBaseBranch(selectedPrStartPoint.baseBranch)
+            setBaseBranchNamesWorkspace(true)
+            setCompareBaseRef(selectedPrStartPoint.compareBaseRef)
+            setPushTarget(selectedPrStartPoint.pushTarget)
+            if (selectedPrStartPoint.branchNameOverride) {
+              setBranchNameOverride(selectedPrStartPoint.branchNameOverride)
+              setBranchNameOverridePreservesNameEdits(true)
+            } else {
+              setBranchNameOverride(undefined)
+              setBranchNameOverridePreservesNameEdits(false)
+            }
+            setForkPushWarning(getForkPushWarning(selectedPrStartPoint))
           }
-          setForkPushWarning(getForkPushWarning(selectedPrStartPoint))
           return resolution
         }
         return { kind: 'none' }
@@ -156,6 +159,8 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
         return { kind: 'none' }
       }
 
+      const submitSelection = { kind: 'github-submit-lookup', query: name } as const
+      smartSourceSelectionRef.current = submitSelection
       const item = isProjectGroupTarget
         ? (
             await Promise.all(
@@ -224,6 +229,9 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
             ...smartGitHubMetadata,
             kind: 'metadata-only'
           }
+      if (smartSourceSelectionRef.current !== submitSelection) {
+        return resolution
+      }
       // Why: Create can fire before the debounced smart field commits; commit the resolved item here so the form shows the title, not the raw URL.
       setLinkedIssue(
         resolution.linkedIssueNumber !== null ? String(resolution.linkedIssueNumber) : ''
@@ -281,7 +289,7 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
       setName,
       setPushTarget,
       setStartFromResetHint,
-      smartGitHubPrStartPointSelectionRef
+      smartSourceSelectionRef
     ])
 
   return {

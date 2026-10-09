@@ -32,7 +32,7 @@ type TargetChangeActionsInput = Pick<
   | 'setSparseEnabled'
   | 'setSparseSelectedPresetId'
   | 'setStartFromResetHint'
-  | 'smartGitHubPrStartPointSelectionRef'
+  | 'smartSourceSelectionRef'
 >
 
 import { useCallback } from 'react'
@@ -80,7 +80,7 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
     setSparseEnabled,
     setSparseSelectedPresetId,
     setStartFromResetHint,
-    smartGitHubPrStartPointSelectionRef
+    smartSourceSelectionRef
   } = input
   const { retargetGitHubPrStartPointSelection } = decisions
 
@@ -117,11 +117,12 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
       if (!options.preserveStartFrom) {
         setSelectedProjectHostSetupOverrideId(null)
       }
-      if (options.preserveStartFrom && smartGitHubPrStartPointSelectionRef.current) {
-        smartGitHubPrStartPointSelectionRef.current = retargetGitHubPrStartPointSelection(
-          smartGitHubPrStartPointSelectionRef.current,
-          value
-        )
+      if (options.preserveStartFrom && smartSourceSelectionRef.current) {
+        const selection = smartSourceSelectionRef.current
+        smartSourceSelectionRef.current =
+          selection.kind === 'github-pr'
+            ? retargetGitHubPrStartPointSelection(selection, value)
+            : null
         setBaseBranch(undefined)
         setCompareBaseRef(undefined)
         setPushTarget(undefined)
@@ -131,7 +132,7 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
         setForkPushWarning(null)
       }
       if (!options.preserveStartFrom) {
-        smartGitHubPrStartPointSelectionRef.current = null
+        smartSourceSelectionRef.current = null
         setLinkedIssue('')
         setLinkedPR(null)
         setLinkedGitLabIssue(null)
@@ -191,7 +192,7 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
       setSparseEnabled,
       setSparseSelectedPresetId,
       setStartFromResetHint,
-      smartGitHubPrStartPointSelectionRef
+      smartSourceSelectionRef
     ]
   )
 
@@ -201,7 +202,7 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
         return
       }
       setRepoId(value)
-      smartGitHubPrStartPointSelectionRef.current = null
+      smartSourceSelectionRef.current = null
       setLinkedWorkItem((current) =>
         current && !shouldPreserveWorkspaceSourceOnRepoChange(current) ? null : current
       )
@@ -223,7 +224,7 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
       setLinkedPR,
       setLinkedTaskSourceContext,
       setLinkedWorkItem,
-      smartGitHubPrStartPointSelectionRef
+      smartSourceSelectionRef
     ]
   )
 

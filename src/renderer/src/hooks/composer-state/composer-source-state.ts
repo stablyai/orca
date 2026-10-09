@@ -46,8 +46,7 @@ export function useComposerSourceState(
     setPushTarget: target.workspaceIdentityState.setPushTarget,
     setReuseEligibleBranch: target.workspaceIdentityState.setReuseEligibleBranch,
     setReuseSelectedBranch: target.workspaceIdentityState.setReuseSelectedBranch,
-    smartGitHubPrStartPointSelectionRef:
-      target.asyncComposerState.smartGitHubPrStartPointSelectionRef
+    smartSourceSelectionRef: target.asyncComposerState.smartSourceSelectionRef
   })
   const attachmentDropState = useComposerAttachmentDropState(target)
   const targetChangeActions = useTargetChangeActions({
@@ -83,8 +82,7 @@ export function useComposerSourceState(
     setSparseEnabled: target.asyncComposerState.setSparseEnabled,
     setSparseSelectedPresetId: target.asyncComposerState.setSparseSelectedPresetId,
     setStartFromResetHint: target.workspaceIdentityState.setStartFromResetHint,
-    smartGitHubPrStartPointSelectionRef:
-      target.asyncComposerState.smartGitHubPrStartPointSelectionRef
+    smartSourceSelectionRef: target.asyncComposerState.smartSourceSelectionRef
   })
   const projectTargetActions = useProjectTargetActions({
     actionableHostIds: target.composerTargetStore.actionableHostIds,
@@ -118,6 +116,7 @@ export function useComposerSourceState(
     setSparseEnabled: target.asyncComposerState.setSparseEnabled,
     setSparseSelectedPresetId: target.asyncComposerState.setSparseSelectedPresetId,
     setStartFromResetHint: target.workspaceIdentityState.setStartFromResetHint,
+    smartSourceSelectionRef: target.asyncComposerState.smartSourceSelectionRef,
     selectedWorkspaceTarget: target.runtimeTargetSelection.selectedWorkspaceTarget,
     workspaceHostScope: target.composerTargetStore.workspaceHostScope
   })
@@ -148,8 +147,7 @@ export function useComposerSourceState(
     setSparseEnabled: target.asyncComposerState.setSparseEnabled,
     setSparseSelectedPresetId: target.asyncComposerState.setSparseSelectedPresetId,
     setStartFromResetHint: target.workspaceIdentityState.setStartFromResetHint,
-    smartGitHubPrStartPointSelectionRef:
-      target.asyncComposerState.smartGitHubPrStartPointSelectionRef
+    smartSourceSelectionRef: target.asyncComposerState.smartSourceSelectionRef
   })
   const githubProviderSelection = useGitHubProviderSelection({
     baseBranchNamesWorkspace: target.workspaceIdentityState.baseBranchNamesWorkspace,
@@ -179,10 +177,10 @@ export function useComposerSourceState(
     setPushTarget: target.workspaceIdentityState.setPushTarget,
     setStartFromResetHint: target.workspaceIdentityState.setStartFromResetHint,
     settings: target.composerTargetStore.settings,
-    smartGitHubPrStartPointSelectionRef:
-      target.asyncComposerState.smartGitHubPrStartPointSelectionRef
+    smartSourceSelectionRef: target.asyncComposerState.smartSourceSelectionRef
   })
   const gitlabProviderSelection = useGitLabProviderSelection({
+    smartSourceSelectionRef: target.asyncComposerState.smartSourceSelectionRef,
     applyLinkedGitLabWorkItem: sourceIdentityActions.applyLinkedGitLabWorkItem,
     branchAutoNameRef: target.asyncComposerState.branchAutoNameRef,
     eligibleRepos: target.composerTargetStore.eligibleRepos,
@@ -227,8 +225,7 @@ export function useComposerSourceState(
     setReuseEligibleBranch: target.workspaceIdentityState.setReuseEligibleBranch,
     setReuseSelectedBranch: target.workspaceIdentityState.setReuseSelectedBranch,
     setStartFromResetHint: target.workspaceIdentityState.setStartFromResetHint,
-    smartGitHubPrStartPointSelectionRef:
-      target.asyncComposerState.smartGitHubPrStartPointSelectionRef,
+    smartSourceSelectionRef: target.asyncComposerState.smartSourceSelectionRef,
     worktreesByRepo: target.composerTargetStore.worktreesByRepo
   })
   const issueSourceActions = useIssueSourceActions({
@@ -259,8 +256,7 @@ export function useComposerSourceState(
     setReuseEligibleBranch: target.workspaceIdentityState.setReuseEligibleBranch,
     setReuseSelectedBranch: target.workspaceIdentityState.setReuseSelectedBranch,
     setStartFromResetHint: target.workspaceIdentityState.setStartFromResetHint,
-    smartGitHubPrStartPointSelectionRef:
-      target.asyncComposerState.smartGitHubPrStartPointSelectionRef
+    smartSourceSelectionRef: target.asyncComposerState.smartSourceSelectionRef
   })
   const composerNavigationActions = useComposerNavigationActions({
     closeModal: target.composerTargetStore.closeModal,

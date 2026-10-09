@@ -29,7 +29,7 @@ type SourceIdentityActionsInput = Pick<
   | 'setPushTarget'
   | 'setReuseEligibleBranch'
   | 'setReuseSelectedBranch'
-  | 'smartGitHubPrStartPointSelectionRef'
+  | 'smartSourceSelectionRef'
 >
 
 import { useCallback } from 'react'
@@ -69,13 +69,13 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
     setPushTarget,
     setReuseEligibleBranch,
     setReuseSelectedBranch,
-    smartGitHubPrStartPointSelectionRef
+    smartSourceSelectionRef
   } = input
 
   // Why: review routing prefers one provider identity — clear the opposite provider slots so stale hidden fields can't win later.
   const applyLinkedGitLabWorkItem = useCallback(
     (item: GitLabWorkItem): void => {
-      smartGitHubPrStartPointSelectionRef.current = null
+      smartSourceSelectionRef.current = null
       if (item.type === 'issue') {
         setLinkedGitLabIssue(item.number)
         setLinkedGitLabMR(null)
@@ -136,13 +136,13 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
       setLinkedTaskSourceContext,
       setLinkedWorkItem,
       setName,
-      smartGitHubPrStartPointSelectionRef
+      smartSourceSelectionRef
     ]
   )
 
   const handleSelectLinkedItem = useCallback(
     (item: GitHubWorkItem): void => {
-      smartGitHubPrStartPointSelectionRef.current = null
+      smartSourceSelectionRef.current = null
       applyLinkedWorkItem(item)
       setLinkPopoverOpen(false)
       setLinkQuery('')
@@ -155,7 +155,7 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
       setLinkDirectItem,
       setLinkPopoverOpen,
       setLinkQuery,
-      smartGitHubPrStartPointSelectionRef
+      smartSourceSelectionRef
     ]
   )
 
@@ -172,7 +172,7 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
   )
 
   const handleRemoveLinkedWorkItem = useCallback((): void => {
-    smartGitHubPrStartPointSelectionRef.current = null
+    smartSourceSelectionRef.current = null
     const removedLinearItem = isLinearLinkedWorkItem(linkedWorkItem)
     setLinkedWorkItem(null)
     setLinkedTaskSourceContext(null)
@@ -200,11 +200,14 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
     setLinkedPR,
     setLinkedTaskSourceContext,
     setLinkedWorkItem,
-    smartGitHubPrStartPointSelectionRef
+    smartSourceSelectionRef
   ])
 
   const handleNameValueChange = useCallback(
     (nextName: string): void => {
+      if (nextName !== name && smartSourceSelectionRef.current?.kind === 'github-submit-lookup') {
+        smartSourceSelectionRef.current = null
+      }
       // Why: linked items keep refreshing the suggested name only while it's auto-managed; a manual edit stops later picks from clobbering it until cleared.
       if (!nextName.trim()) {
         lastAutoNameRef.current = ''
@@ -230,12 +233,16 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
       lastAutoNameRef,
       setBranchNameOverride,
       setCreateError,
-      setName
+      setName,
+      smartSourceSelectionRef
     ]
   )
 
   const handleBranchNameOverrideChange = useCallback(
     (value: string | undefined): void => {
+      if (smartSourceSelectionRef.current?.kind === 'github-submit-lookup') {
+        smartSourceSelectionRef.current = null
+      }
       const next = resolveComposerManualBranchNameChange({
         value,
         pushTarget,
@@ -258,7 +265,8 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
       setForkPushWarning,
       setPushTarget,
       setReuseEligibleBranch,
-      setReuseSelectedBranch
+      setReuseSelectedBranch,
+      smartSourceSelectionRef
     ]
   )
 

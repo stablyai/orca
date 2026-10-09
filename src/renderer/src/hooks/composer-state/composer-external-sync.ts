@@ -97,8 +97,7 @@ export function useComposerExternalSync(target: ComposerTargetState): ComposerEx
     setPushTarget: target.workspaceIdentityState.setPushTarget,
     setStartFromResetHint: target.workspaceIdentityState.setStartFromResetHint,
     settings: target.composerTargetStore.settings,
-    smartGitHubPrStartPointSelectionRef:
-      target.asyncComposerState.smartGitHubPrStartPointSelectionRef
+    smartSourceSelectionRef: target.asyncComposerState.smartSourceSelectionRef
   })
   return {
     hostRuntimeEffects,

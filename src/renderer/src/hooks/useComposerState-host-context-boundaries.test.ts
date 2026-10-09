@@ -39,7 +39,7 @@ describe('useComposerState host-context boundaries', () => {
         },
         repoId: 'repo-1'
       })
-    ).toEqual({ repoId: 'repo-1', item })
+    ).toEqual({ kind: 'github-pr', repoId: 'repo-1', item })
     expect(
       getInitialGitHubPrStartPointSelection({
         item,
