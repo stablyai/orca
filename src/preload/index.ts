@@ -73,6 +73,7 @@ import { runtimeApi } from './api/runtime-bridge'
 import { runtimeEnvironmentsApi } from './api/runtime-environments-bridge'
 import { rateLimitsApi } from './api/rate-limits-bridge'
 import { opencodeGoCredentialsApi } from './api/opencode-go-credentials-bridge'
+import { scheduledMessagesApi } from './api/scheduled-messages-bridge'
 import { minimaxCredentialsApi } from './api/minimax-credentials-bridge'
 import { zcodePlanCredentialsApi } from './api/zcode-plan-credentials-bridge'
 import { grokAccountsApi } from './api/grok-accounts-bridge'
@@ -173,6 +174,7 @@ const api = {
   runtimeEnvironments: runtimeEnvironmentsApi,
   rateLimits: rateLimitsApi,
   opencodeGoCredentials: opencodeGoCredentialsApi,
+  scheduledMessages: scheduledMessagesApi,
   minimaxCredentials: minimaxCredentialsApi,
   zcodePlanCredentials: zcodePlanCredentialsApi,
   grokAccounts: grokAccountsApi,

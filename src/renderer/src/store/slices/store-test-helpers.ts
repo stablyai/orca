@@ -49,6 +49,7 @@ import { createTaskCreationDraftsSlice } from './task-creation-drafts'
 import { createRemoteServerUpdatesSlice } from './remote-server-updates'
 import { createTerminalQuickCommandHostsSlice } from './terminal-quick-command-hosts'
 import { createStructuredSessionLaunchDirectorySlice } from './structured-session-launch-directories'
+import { createScheduledMessagesSlice } from './scheduled-messages'
 import '@/i18n/i18n'
 import { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
 export { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
@@ -107,7 +108,8 @@ export function createTestStore() {
     ...createTaskCreationDraftsSlice(...a),
     ...createRemoteServerUpdatesSlice(...a),
     ...createTerminalQuickCommandHostsSlice(...a),
-    ...createStructuredSessionLaunchDirectorySlice(...a)
+    ...createStructuredSessionLaunchDirectorySlice(...a),
+    ...createScheduledMessagesSlice(...a)
   }))
 }
 

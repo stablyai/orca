@@ -19,6 +19,7 @@ import type { PersistedUIState } from './persisted-ui-state-types'
 import type { ProjectGroup } from './project-group-types'
 import type { Project, ProjectHostSetup } from './project-types'
 import type { Repo } from './repo-types'
+import type { ScheduledMessage } from './scheduled-message-types'
 import type { SparsePreset } from './worktree/create-types'
 import type { RetiredNameRegistry } from './worktree/retired-name-registry'
 import type { WorkspaceLineage, WorktreeLineage } from './worktree/lineage-types'
@@ -121,6 +122,11 @@ export type PersistedState = {
   orcadMigrationEvictedReceipts?: OrcadMigrationEvictedReceipt[]
   /** Catalogs staged on an orcad and not yet committed or aborted. */
   orcadMigrationStagedCatalogs?: OrcadMigrationStagedCatalog[]
+  /** One-shot messages queued for delivery into a workspace's live agent pane.
+   *  Flat and top-level rather than nested under worktreeMeta: the Automations
+   *  page lists them across every workspace, and main must be the only writer so
+   *  a renderer edit cannot race the delivery service's removal. */
+  scheduledMessages?: ScheduledMessage[]
   onboarding: OnboardingState
   /** Main-owned telemetry de-dupe marker; never exposed through PersistedUIState. */
   featureInteractionTelemetryBuckets?: FeatureInteractionTelemetryBucketState

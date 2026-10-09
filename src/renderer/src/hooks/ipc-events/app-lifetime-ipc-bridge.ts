@@ -11,6 +11,7 @@ import { registerBackgroundWorktreeRemovalBridge } from './background-worktree-r
 import { registerBrowserRequestIpcBridge } from './browser-request-ipc-bridge'
 import { registerBrowserStateIpcBridge } from './browser-state-ipc-bridge'
 import { registerContentCreationIpcBridge } from './content-creation-ipc-bridge'
+import { registerScheduledMessagesIpcBridge } from './scheduled-messages-ipc-bridge'
 import { createDirectSshBridgeRuntime } from './direct-ssh-bridge-runtime'
 import { registerDirectSshStateIpcBridge } from './direct-ssh-state-ipc-bridge'
 import { registerMobileAndTerminalCloseIpcBridge } from './mobile-terminal-close-ipc-bridge'
@@ -129,6 +130,7 @@ export function installAppLifetimeIpcEvents(
   registerBrowserRequestIpcBridge(unsubs, isRuntimeEnvironmentActive)
   registerTabLifecycleIpcBridge(unsubs)
   registerRateLimitIpcBridge(unsubs)
+  registerScheduledMessagesIpcBridge(unsubs)
   registerDirectSshStateIpcBridge(unsubs, directSshRuntime)
   registerRemoteWorkspaceIpcBridge(unsubs, directSshRuntime)
   registerZoomIpcBridge(unsubs)

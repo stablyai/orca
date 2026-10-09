@@ -23,6 +23,7 @@ import type {
 } from './slices/usage-provider-slices'
 import type { BrowserSlice } from './slices/browser'
 import type { RateLimitSlice } from './slices/rate-limits'
+import type { ScheduledMessagesSlice } from './slices/scheduled-messages'
 import type { SshSlice } from './slices/ssh'
 import type { RuntimeEnvironmentSshSlice } from './slices/runtime-environment-ssh'
 import type { AgentStatusSlice } from './slices/agent-status'
@@ -70,6 +71,7 @@ export type AppState = RepoSlice &
   MuseUsageSlice &
   BrowserSlice &
   RateLimitSlice &
+  ScheduledMessagesSlice &
   SshSlice &
   RuntimeEnvironmentSshSlice &
   AgentStatusSlice &

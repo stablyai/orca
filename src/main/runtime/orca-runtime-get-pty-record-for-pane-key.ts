@@ -380,7 +380,10 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
     }
   }
 
+  /** Emits the idle edge scheduled messages deliver on; callers, not this method,
+   *  gate liveness. */
   protected deliverPendingMessagesForLeaf(leaf: RuntimeLeafRecord): void {
     this.orchestrationMailboxNotifications.deliverForLeaf(leaf)
+    this.emitAgentIdleEdge(leaf)
   }
 }

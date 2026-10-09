@@ -109,6 +109,7 @@ export {
   tailGainedNewerBlockedReason,
   type TerminalTailWaitState
 } from './terminal-wait-tail-state'
+export type { AgentIdleEdgeEvent } from './runtime-agent-idle-edge-contracts'
 export { appendNormalizedToTailBuffer } from './terminal-tail-buffer'
 export { appendNormalizedToMultilineTailBufferUnwindowed } from './terminal-tail-redraw-buffer'
 export { buildPreview } from './terminal-tail-state'

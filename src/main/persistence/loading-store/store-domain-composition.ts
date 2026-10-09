@@ -51,6 +51,10 @@ import {
   installSparsePresetPersistenceContext
 } from './sparse-preset-persistence'
 import {
+  ScheduledMessagePersistence,
+  installScheduledMessagePersistenceContext
+} from './scheduled-message-persistence'
+import {
   PtyBindingPersistenceOperations,
   installPtyBindingPersistenceOperationsContext
 } from './pty-binding-persistence'
@@ -78,6 +82,7 @@ export type StoreDomainOperations = WriteSchedulingOperations &
   RepoLifecycleOperations &
   MobileTabSelectionPersistence &
   SparsePresetPersistence &
+  ScheduledMessagePersistence &
   AutomationPersistence &
   MetadataLineageOperations &
   ProfilePreferences &
@@ -109,6 +114,7 @@ export type StoreDomains = {
   automations: AutomationPersistence
   mobileTabSelections: MobileTabSelectionPersistence
   sparsePresets: SparsePresetPersistence
+  scheduledMessages: ScheduledMessagePersistence
   ptyBindings: PtyBindingPersistenceOperations
   sshProfiles: SshProfileOperations
   retiredWorktreeNames: RetiredWorktreeNamePersistence
@@ -124,6 +130,7 @@ export const STORE_DOMAIN_OPERATION_CLASSES = [
   RepoLifecycleOperations,
   MobileTabSelectionPersistence,
   SparsePresetPersistence,
+  ScheduledMessagePersistence,
   AutomationPersistence,
   MetadataLineageOperations,
   ProfilePreferences,
@@ -145,6 +152,7 @@ export function installStoreDomainContexts(target: Store, domains: StoreDomains)
   installRepoLifecycleOperationsContext(target, domains.repos)
   installMobileTabSelectionPersistenceContext(target, domains.mobileTabSelections)
   installSparsePresetPersistenceContext(target, domains.sparsePresets)
+  installScheduledMessagePersistenceContext(target, domains.scheduledMessages)
   installAutomationPersistenceContext(target, domains.automations)
   installMetadataLineageOperationsContext(target, domains.metadata)
   installProfilePreferencesContext(target, domains.preferences)
@@ -182,6 +190,7 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
   const automations = new AutomationPersistence(runtime, flushBarriers, preferences)
   const mobileTabSelections = new MobileTabSelectionPersistence(runtime, scheduling)
   const sparsePresets = new SparsePresetPersistence(runtime, scheduling)
+  const scheduledMessages = new ScheduledMessagePersistence(runtime, scheduling)
   const ptyBindings = new PtyBindingPersistenceOperations(runtime, sessions)
   const sshProfiles = new SshProfileOperations(runtime, scheduling, flushBarriers, repos)
   const retiredWorktreeNames = new RetiredWorktreeNamePersistence(runtime, scheduling)
@@ -210,6 +219,7 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     automations,
     mobileTabSelections,
     sparsePresets,
+    scheduledMessages,
     ptyBindings,
     sshProfiles,
     retiredWorktreeNames,

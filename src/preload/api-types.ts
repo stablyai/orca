@@ -18,6 +18,7 @@ import type {
   RateLimitsApi
 } from './api/agent-usage-api'
 import type { AiVaultApi } from './api/ai-vault-api'
+import type { ScheduledMessagesApi } from './api/scheduled-messages-api'
 import type { AppApi, E2EApi, PlatformApi } from './api/app-api'
 import type { AutomationsApi } from './api/automation-api'
 import type { BrowserApi } from './api/browser-api'
@@ -147,6 +148,7 @@ export type PreloadApi = {
     saveApiKey: (key: string) => Promise<{ apiKeyConfigured: boolean }>
     clearApiKey: () => Promise<{ apiKeyConfigured: boolean }>
   }
+  scheduledMessages: ScheduledMessagesApi
   minimaxCredentials: MinimaxCredentialsApi
   zcodePlanCredentials: ZcodePlanCredentialsApi
   grokAccounts: GrokAccountsApi

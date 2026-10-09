@@ -1,4 +1,5 @@
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
+import { ScheduledMessageComposeDialog } from '@/components/scheduled-messages/ScheduledMessageComposeDialog'
 import { WorktreeParentPickerPopover } from './WorktreeParentPickerPopover'
 import { translate } from '@/i18n/i18n'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
@@ -6,6 +7,11 @@ import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model
 export function WorktreeContextMenuOverlays({ model }: { model: WorktreeContextMenuModel }) {
   return (
     <>
+      <ScheduledMessageComposeDialog
+        open={model.scheduleDialogOpen}
+        onOpenChange={model.setScheduleDialogOpen}
+        onSubmit={model.handleScheduleMessage}
+      />
       <ProjectGroupNameDialog
         open={model.createGroupDialogOpen}
         title={translate(
