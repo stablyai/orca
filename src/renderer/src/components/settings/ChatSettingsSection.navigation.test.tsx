@@ -1,3 +1,4 @@
+import { TooltipProvider } from '../ui/tooltip'
 // @vitest-environment happy-dom
 import { useRef, useState } from 'react'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
@@ -91,21 +92,23 @@ function NavigationHarness({
     terminal as SettingsTerminalModel
   )
   return (
-    <ActiveSettingsSectionProvider value={activeSectionId}>
-      <output aria-label="Selected settings page">{activeSectionId}</output>
-      <ChatSettingsSection
-        settings={settings}
-        updateSettings={vi.fn()}
-        writeSourceControlAiSettings={async () => {}}
-        searchEntries={[
-          ...getChatAppearanceSearchEntries(),
-          getChatNamingSearchEntry(),
-          getChatInlineVisualsSearchEntry()
-        ]}
-        showDesktopOnlySettings
-        isMounted
-      />
-    </ActiveSettingsSectionProvider>
+    <TooltipProvider>
+      <ActiveSettingsSectionProvider value={activeSectionId}>
+        <output aria-label="Selected settings page">{activeSectionId}</output>
+        <ChatSettingsSection
+          settings={settings}
+          updateSettings={vi.fn()}
+          writeSourceControlAiSettings={async () => {}}
+          searchEntries={[
+            ...getChatAppearanceSearchEntries(),
+            getChatNamingSearchEntry(),
+            getChatInlineVisualsSearchEntry()
+          ]}
+          showDesktopOnlySettings
+          isMounted
+        />
+      </ActiveSettingsSectionProvider>
+    </TooltipProvider>
   )
 }
 

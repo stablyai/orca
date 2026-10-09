@@ -1,5 +1,5 @@
 import type { AgentType } from '../../../src/shared/agent-status-types'
-import type { StructuredSessionOptionPick } from '../../../src/shared/structured-agent-session-options'
+import type { StructuredSessionOptionPick } from '../../../src/shared/structured-agent-session-option-picks'
 import type { RpcClient } from '../transport/rpc-client'
 import { nativeChatSessionOptionsWrite } from './mobile-session-launch-operations'
 

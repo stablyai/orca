@@ -6,12 +6,14 @@ import type {
   StructuredAgentSessionAdapter
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { stopCurrentClaudeBackgroundTasks } from './claude-structured-control-actions'
+import { prepareClaudePermissionMode } from './claude-structured-permission-application'
 import { dispatchClaudeTurn } from './claude-structured-dispatch'
 import { claudeHoldsDispatch } from './claude-command-lifecycle'
 import { releaseClaudeAcquisition } from './claude-structured-acquisition-release'
 import { acquireClaudeSession } from './claude-structured-session-acquisition'
 import { supportsClaudeStructuredLocation } from './claude-structured-location-support'
 import { setClaudeStructuredSessionOption } from './claude-structured-options'
+import { claudePermissionModeNeedsRelaunch } from './claude-structured-permission-mode'
 import { readClaudeStructuredSessionOptions } from './claude-structured-session-options'
 import { claudeStartupSettledWithin } from './claude-structured-session-startup-state'
 import { CLAUDE_DEFAULT_REQUEST_TIMEOUT_MS } from './claude-agent-sdk-control-requests'
@@ -234,6 +236,14 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       input,
       this.deps.requestTimeoutMs
     )
+  childRelaunchRequired = (sessionId: string): boolean => {
+    const session = this.sessions.get(sessionId)
+    return session ? claudePermissionModeNeedsRelaunch(session) : false
+  }
+  prepareDispatch = (sessionId: string): Promise<void> | undefined => {
+    const session = this.sessions.get(sessionId)
+    return session ? prepareClaudePermissionMode(session, this.deps.requestTimeoutMs) : undefined
+  }
   startAnswered = (sessionId: string): boolean | undefined =>
     this.sessions.get(sessionId)?.startup.answered
   awaitOptionWritable = (sessionId: string): Promise<void> =>

@@ -7,6 +7,7 @@ import { activeProviderContext } from '../../../shared/agent-session-provider-co
 // a retried attach replays instead of reserving a second owner.
 
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
+import type { AgentChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type {
   StructuredAgentId,
@@ -63,6 +64,9 @@ export type AgentSessionAttachParams = {
   runtimeKind: 'native'
   /** Host-resolved defaults for a create-by-intent; remote attach schemas do not accept them. */
   options?: Readonly<Record<string, string>>
+  /** Host-resolved: the mode this create's seed starts the chat in. Outside the fingerprint like
+   *  `options`; kept on the record so reuse can ask where an empty chat began. */
+  initialPermissionMode?: AgentChatPermissionMode
   /** The tab id a create reserves for this chat, taken when its tab is published. Never on the
    *  attach fingerprint: which tab shows the chat is not which conversation it attaches to. */
   surfaceTabId?: string
@@ -318,6 +322,9 @@ export function reserveRequestFor(input: {
     provider: params.provider,
     accountHome: params.accountHome,
     ...(params.options ? { options: params.options } : {}),
+    ...(params.initialPermissionMode
+      ? { initialPermissionMode: params.initialPermissionMode }
+      : {}),
     ...(params.envelope.expectedRuntimeFence === null && params.surfaceTabId
       ? { surfaceTabId: params.surfaceTabId }
       : {}),

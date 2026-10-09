@@ -44,7 +44,8 @@ describe('a Claude child proving its start', () => {
     await vi.waitFor(() =>
       expect(host.deps.store.getRecord(STALLED)?.options).toEqual({
         model: 'claude-sonnet-5',
-        effort: 'high'
+        effort: 'high',
+        permissionMode: 'ask'
       })
     )
     expect(claude.child(STALLED).calls).toEqual(['get_settings'])
@@ -72,7 +73,8 @@ describe('a Claude child proving its start', () => {
     await vi.waitFor(() =>
       expect(host.deps.store.getRecord(STALLED)?.options).toEqual({
         model: 'claude-sonnet-5',
-        effort: 'high'
+        effort: 'high',
+        permissionMode: 'ask'
       })
     )
     // The other start is still where it was: reserved, with no new child.
@@ -108,6 +110,10 @@ describe('a Claude child proving its start', () => {
 
     landWrite()
     await recovery
-    expect(store.getRecord(HEALTHY)?.options).toEqual({ model: 'claude-sonnet-5', effort: 'high' })
+    expect(store.getRecord(HEALTHY)?.options).toEqual({
+      model: 'claude-sonnet-5',
+      effort: 'high',
+      permissionMode: 'ask'
+    })
   })
 })

@@ -5,6 +5,10 @@
 // replacement would be suppressed — and each attaches whole to hydrating frames.
 
 import type {
+  AgentChatPermissionMode,
+  AgentSessionPermissionFact
+} from '../../../shared/agent-chat-permission-mode'
+import type {
   AgentSessionBackgroundTaskState,
   AgentSessionSlashCommand,
   AgentSessionSubscribeEvent
@@ -14,6 +18,8 @@ import type { QueuePublication } from './structured-agent-session-queued-publica
 export type SubscriberFieldState = {
   sessionId: string
   commands?: AgentSessionSlashCommand[] | null
+  permissionRevision?: number
+  permissionMode?: AgentChatPermissionMode | null
   /** The last queue publication actually SENT. */
   queuePublication?: QueuePublication
   /** Fingerprint of the roster last SENT; absent until this subscriber's first frame. */
@@ -21,6 +27,7 @@ export type SubscriberFieldState = {
 }
 
 export type SubscriberFieldHooks = {
+  readPermissionFact?: (sessionId: string) => AgentSessionPermissionFact | undefined
   readCommands?: (sessionId: string) => AgentSessionSlashCommand[] | undefined
   readQueuePublication?: (sessionId: string) => QueuePublication | undefined
   /** Built from the host's child records, so it is read only when a frame owes it: never per token. */
@@ -29,6 +36,8 @@ export type SubscriberFieldHooks = {
 
 export type SubscriberFrame = {
   frame: AgentSessionSubscribeEvent
+  permissionRevision: number | undefined
+  permissionMode: AgentChatPermissionMode | null | undefined
   commands: AgentSessionSlashCommand[] | null
   attachedQueued: boolean
   queued: QueuePublication | undefined
@@ -48,6 +57,15 @@ export function buildSubscriberFrame(
   event: AgentSessionSubscribeEvent,
   withholdQueued: boolean
 ): SubscriberFrame {
+  const permission = hooks.readPermissionFact?.(subscriber.sessionId)
+  const permissionMode = permission?.mode
+  const permissionRevision = permission?.revision
+  const includePermission =
+    permissionMode !== undefined &&
+    event.type !== 'end' &&
+    (event.type !== 'batch' ||
+      permissionMode !== subscriber.permissionMode ||
+      permissionRevision !== subscriber.permissionRevision)
   const commands = hooks.readCommands?.(subscriber.sessionId) ?? null
   const includeCommands =
     hooks.readCommands !== undefined &&
@@ -64,6 +82,12 @@ export function buildSubscriberFrame(
   return {
     frame: {
       ...event,
+      ...(includePermission
+        ? {
+            permissionMode,
+            ...(permissionRevision !== undefined ? { permissionRevision } : {})
+          }
+        : {}),
       ...(includeCommands ? { commands: commands ?? null } : {}),
       ...(attachedQueued && queued
         ? {
@@ -75,6 +99,8 @@ export function buildSubscriberFrame(
       ...(backgroundTasks !== undefined ? { backgroundTasks } : {})
     },
     commands,
+    permissionMode: includePermission ? permissionMode : subscriber.permissionMode,
+    permissionRevision: includePermission ? permissionRevision : subscriber.permissionRevision,
     attachedQueued,
     queued,
     backgroundTasks:

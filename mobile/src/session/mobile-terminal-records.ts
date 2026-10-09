@@ -1,5 +1,6 @@
 import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import type { AgentSessionPermissionSeed } from '../../../src/shared/agent-chat-permission-mode'
 
 export type TerminalRecord = {
   handle: string
@@ -68,6 +69,7 @@ type MobileSessionTabLike =
       title?: string
       sessionId?: string
       agent?: string
+      permissionSeed?: AgentSessionPermissionSeed
       isActive?: boolean
     }
 
@@ -161,7 +163,15 @@ function mobileSessionTabEqual(
         a.canGoForward === b.canGoForward
       )
     case 'agent-session':
-      return b.type === 'agent-session' && a.sessionId === b.sessionId && a.agent === b.agent
+      return (
+        b.type === 'agent-session' &&
+        a.sessionId === b.sessionId &&
+        a.agent === b.agent &&
+        Boolean(a.permissionSeed) === Boolean(b.permissionSeed) &&
+        a.permissionSeed?.mode === b.permissionSeed?.mode &&
+        a.permissionSeed?.fence === b.permissionSeed?.fence &&
+        a.permissionSeed?.revision === b.permissionSeed?.revision
+      )
   }
 }
 

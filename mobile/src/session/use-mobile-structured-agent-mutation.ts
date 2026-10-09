@@ -3,6 +3,14 @@
 // session's error channel.
 
 import { useCallback } from 'react'
+import {
+  AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
+  type AgentSessionPermissionSeed
+} from '../../../src/shared/agent-chat-permission-mode'
+import {
+  agentSessionWriteNoticeEnglish,
+  agentSessionWriteNoticeParts
+} from '../../../src/shared/agent-session-refusal-notice'
 import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
 import type { RpcClient } from '../transport/rpc-client'
 import {
@@ -13,7 +21,8 @@ import {
 export type MobileStructuredAgentMutate = <TValue>(
   method: string,
   fingerprintMethod: string,
-  fields: Record<string, unknown>
+  fields: Record<string, unknown>,
+  permissionFence?: number | null
 ) => Promise<StructuredAgentSessionMutationResult<TValue>>
 
 export function useMobileStructuredAgentMutate(args: {
@@ -21,6 +30,7 @@ export function useMobileStructuredAgentMutate(args: {
   sessionId: string | null
   enabled: boolean
   stateRef: { readonly current: StructuredAgentSessionState }
+  permissionSeed?: AgentSessionPermissionSeed
   onSendError: (message: string) => void
 }): MobileStructuredAgentMutate {
   const { client, enabled, onSendError, sessionId, stateRef } = args
@@ -28,13 +38,15 @@ export function useMobileStructuredAgentMutate(args: {
     async <TValue>(
       method: string,
       fingerprintMethod: string,
-      fields: Record<string, unknown>
+      fields: Record<string, unknown>,
+      admittedPermissionFence?: number | null
     ): Promise<StructuredAgentSessionMutationResult<TValue>> => {
       const current = stateRef.current
-      if (!client || !sessionId || !enabled || current.fence === null) {
+      const targetFence =
+        admittedPermissionFence !== undefined ? admittedPermissionFence : current.fence
+      if (!client || !sessionId || !enabled || targetFence === null) {
         return { status: 'rejected' }
       }
-      const targetFence = current.fence
       const result = await requestStructuredAgentSessionMutation<TValue>({
         client,
         method,
@@ -47,10 +59,20 @@ export function useMobileStructuredAgentMutate(args: {
         return {
           status: 'accepted',
           value: result.value,
-          sameFence: stateRef.current.fence === targetFence
+          sameFence: admittedPermissionFence !== undefined || stateRef.current.fence === targetFence
         }
       }
       if (result.status === 'unknown') {
+        if (
+          method === 'agentSession.setOption' &&
+          fields.key === AGENT_CHAT_PERMISSION_MODE_OPTION_ID
+        ) {
+          onSendError(
+            agentSessionWriteNoticeEnglish(
+              agentSessionWriteNoticeParts({ kind: 'unconfirmed' }, 'option')
+            )
+          )
+        }
         return result
       }
       onSendError(result.message)

@@ -18058,6 +18058,19 @@
         "attachmentOwnerChanged": "이 워크스페이스는 첨부하는 동안 호스트를 변경했습니다. 파일을 다시 삭제하세요.",
         "attachmentUnreadable": "삭제된 파일을 읽을 수 없습니다.",
         "tooManyAttachments": "한 번에 {{value0}}개 이하의 파일을 첨부하세요.",
+        "permissions": "권한",
+        "permissionAsk": "승인 요청",
+        "permissionAskDescription": "설정에서 허용하지 않은 편집과 명령 전에 묻습니다",
+        "permissionAskCodexDescription": "작업 공간 샌드박스 안에서 작업하며, 범위를 벗어나기 전에 묻습니다",
+        "permissionAskSharedDescription": "Claude는 설정에서 허용하지 않으면 묻고, Codex는 워크스페이스 샌드박스를 벗어날 때 묻습니다",
+        "permissionAcceptEdits": "편집 허용",
+        "permissionAcceptEditsDescription": "파일 편집과 파일 명령은 승인하고, 나머지는 묻습니다",
+        "permissionAuto": "대신 승인",
+        "permissionAutoDescription": "승인 요청을 대신 검토합니다",
+        "permissionBypass": "전체 액세스",
+        "permissionBypassDescription": "승인 요청을 건너뜁니다. Claude 규칙과 샌드박스는 계속 적용됩니다",
+        "permissionBypassCodexDescription": "묻지 않습니다. 샌드박스 없음",
+        "permissionBypassSharedDescription": "승인 요청을 건너뜁니다. Codex는 샌드박스 없이 실행됩니다",
         "pasteFailed": "붙여넣기 실패.",
         "commandAttachmentsUnsupported": "채팅 세션 명령을 사용하기 전에 첨부 파일을 제거하세요."
       },
@@ -19527,6 +19540,9 @@
     "openFailed": "기본 앱에서 파일을 열 수 없습니다.",
     "openDefault": "기본 앱에서 열기"
   },
+  "settings.chat.permissionsTitle": "새 채팅의 권한",
+  "settings.chat.permissionsDescription": "새 채팅에만 적용됩니다. 터미널에서 여는 에이전트는 설정 → 에이전트 → 에이전트 권한을 사용합니다.",
+  "settings.agents.permissionsScope": "터미널에서 여는 에이전트에 적용됩니다. 채팅은 설정 → 채팅에 별도의 설정이 있습니다.",
   "projectBoard": {
     "noColumnField": "이 보드 보기에는 그룹화할 단일 선택 또는 반복 필드가 없어 Orca가 대신 항목을 나열합니다.",
     "noField": "{{field}} 없음"

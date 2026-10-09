@@ -1,8 +1,11 @@
 // What Claude reports at initialize, read once the session is published. The initialize answer is
-// the start: `started` follows it, and the host hands the child nothing before. The settings read
-// after it is optional and never delays that; what it reports is applied as a later options update.
+// the start: `started` follows it (and, for Auto, the capability check that needs it), and the host
+// hands the child nothing before. The settings read after it is optional and never delays that;
+// what it reports is applied as a later options update.
 // Every way the start can fail (exit, auth, a foreign session id) faults the published session
 // through its exit path; one that stops making progress is ended by the host's startup limit.
+import { claudeChatPermissionMode } from './claude-structured-permission-mode'
+import { applyClaudeStartPermissionMode } from './claude-structured-start-permission-mode'
 
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import type {
@@ -182,12 +185,9 @@ function claudeStartedReportedOptions(
   catalog: unknown[],
   readMutationSequence = session.optionMutationSequence
 ): Pick<StructuredAgentSessionStartedOptions, 'reportedOptions' | 'catalogListing'> {
-  const { current, catalogListing } = claudeStructuredSessionOptionsFrom(
-    session,
-    catalog,
-    readMutationSequence
-  )
-  const listing = catalogListing ? { catalogListing } : {}
+  const result = claudeStructuredSessionOptionsFrom(session, catalog, readMutationSequence)
+  const current = { ...result.current, permissionMode: claudeChatPermissionMode(session) }
+  const listing = result.catalogListing ? { catalogListing: result.catalogListing } : {}
   if (session.options.has('effort') || session.reportedOptions.effort !== undefined) {
     return { reportedOptions: current, ...listing }
   }
@@ -234,6 +234,10 @@ export async function settleClaudeSessionStartup(input: {
       }
     }
     applyClaudeInitializeFacts(session, initialized)
+    await applyClaudeStartPermissionMode(session, initialized)
+    if (superseded()) {
+      return
+    }
     input.report({
       type: 'started',
       // `list_models` is answered from this same initialize result, so nothing is re-read. A

@@ -1,4 +1,4 @@
-import type { EffortLevel, PermissionMode } from '@anthropic-ai/claude-agent-sdk'
+import type { EffortLevel } from '@anthropic-ai/claude-agent-sdk'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import {
@@ -12,8 +12,11 @@ import {
 } from './claude-structured-session-options'
 import type { ClaudeSession } from './claude-structured-session-state'
 import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../shared/agent-chat-permission-mode'
+import { setClaudePermissionModeOption } from './claude-structured-permission-option'
+import { matchListedModel } from './claude-structured-model-catalog'
 
-const OPTION_ORDER = ['model', 'effort', 'fastMode', 'permissionMode'] as const
+const OPTION_ORDER = ['model', 'effort', 'fastMode', AGENT_CHAT_PERMISSION_MODE_OPTION_ID] as const
 
 /**
  * Efforts the settings readback cannot report. `max` applies for the rest of the
@@ -47,7 +50,7 @@ export function isClaudeStructuredOptionKey(key: string): boolean {
 /** A client's write to a live session. */
 export function setClaudeStructuredSessionOption(
   session: ClaudeSession,
-  input: { key: string; value: string },
+  input: { key: string; value: string; signal?: AbortSignal },
   timeoutMs: number | undefined
 ): Promise<Readonly<Record<string, string>>> {
   // Each write is a control request the CLI answers only after initialize.
@@ -64,9 +67,12 @@ export function setClaudeStructuredSessionOption(
 
 export async function setClaudeStructuredOption(
   session: ClaudeSession,
-  input: { key: string; value: string },
+  input: { key: string; value: string; signal?: AbortSignal },
   timeoutMs: number | undefined
 ): Promise<Readonly<Record<string, string>>> {
+  if (input.key === AGENT_CHAT_PERMISSION_MODE_OPTION_ID) {
+    return setClaudePermissionModeOption(session, input.value, timeoutMs, input.signal)
+  }
   const fastMode =
     input.key === 'fastMode'
       ? decodeStructuredAgentSessionOptionValue('fastMode', input.value)
@@ -74,17 +80,15 @@ export async function setClaudeStructuredOption(
   const apply =
     input.key === 'model'
       ? () => session.connection.setModel(input.value, { timeoutMs })
-      : input.key === 'permissionMode'
-        ? () => session.connection.setPermissionMode(input.value as PermissionMode, { timeoutMs })
-        : input.key === 'effort'
-          ? () =>
-              session.connection.applyFlagSettings(
-                { effortLevel: input.value as EffortLevel },
-                { timeoutMs }
-              )
-          : input.key === 'fastMode' && typeof fastMode === 'boolean'
-            ? () => session.connection.applyFlagSettings({ fastMode }, { timeoutMs })
-            : null
+      : input.key === 'effort'
+        ? () =>
+            session.connection.applyFlagSettings(
+              { effortLevel: input.value as EffortLevel },
+              { timeoutMs }
+            )
+        : input.key === 'fastMode' && typeof fastMode === 'boolean'
+          ? () => session.connection.applyFlagSettings({ fastMode }, { timeoutMs })
+          : null
   if (!apply) {
     throw new AgentSessionOptionRejectedError(
       `claude stream-json has no session option named ${input.key}`
@@ -180,7 +184,6 @@ export async function setClaudeStructuredOption(
       session.confirmedOptions.delete('fastMode')
       // The requested model is already accepted; a cleanup failure cannot reject that write.
       await session.connection.applyFlagSettings({ fastMode: false }, { timeoutMs }).catch(() => {})
-      return Object.fromEntries(session.options)
     }
   } catch (error) {
     if (error instanceof ClaudeControlRequestError) {
@@ -235,6 +238,10 @@ export async function setClaudeStructuredOption(
   if (input.key === 'model') {
     session.confirmedOptions.delete('effort')
     session.confirmedOptions.delete('fastMode')
+    const model = matchListedModel(listed, input.value)
+    if (session.options.get('permissionMode') === 'auto' && model?.supportsAutoMode !== true) {
+      return setClaudePermissionModeOption(session, 'ask', timeoutMs, input.signal, true)
+    }
   }
   return Object.fromEntries(session.options)
 }

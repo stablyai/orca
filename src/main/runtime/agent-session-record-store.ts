@@ -73,6 +73,7 @@ import type { JournalHostDatabase } from '../native-chat/agent-session-journal/j
 import type { JournalOperationReceipt } from '../native-chat/agent-session-journal/journal-row-writer'
 import { loadAgentSessionStoreRows } from './agent-session-record-rows'
 import { AgentSessionStoreTransactions } from './agent-session-store-transactions'
+import { reviseAgentSessionPermission } from './agent-session-permission-revisions'
 import {
   compareAndSetAgentSessionRecordName,
   type CompareAndSetConversationName,
@@ -115,8 +116,9 @@ export class AgentSessionRecordStore {
     return this.transactions.readOnly
   }
 
-  getRecord = (sessionId: string): AgentSessionRecord | null =>
-    this.state.records.get(sessionId) ?? null
+  getRecord = (id: string): AgentSessionRecord | null => this.state.records.get(id) ?? null
+
+  permissionRevision = (id: string): number => this.transactions.permissionRevision(id)
 
   listRecords = (): AgentSessionRecord[] => [...this.state.records.values()]
 
@@ -306,9 +308,8 @@ export class AgentSessionRecordStore {
     claimAfter: ClaimAfterAdmission
   ) => this.transact((draft) => admitAndClaimAgentSessionOperationInto(draft, args, claimAfter))
 
-  async recordOperationOutcome(args: AgentSessionOperationSettlement): Promise<void> {
-    await this.transact((draft) => settleAgentSessionOperationInto(draft, args))
-  }
+  recordOperationOutcome = (args: AgentSessionOperationSettlement): Promise<void> =>
+    this.transact((draft) => settleAgentSessionOperationInto(draft, args))
 
   /** The same settlement, committed by the journal write that makes it true. It changes only the
    *  ledger, so no record listener is owed. */
@@ -318,9 +319,8 @@ export class AgentSessionRecordStore {
   replaceSessionOptions = (args: AgentSessionOptionsReplacement): Promise<AgentSessionRecord> =>
     this.mutate(args.sessionId, (record) => replaceAgentSessionRecordOptions(record, args))
 
-  async retireClaimKey(keyId: string, now: number): Promise<void> {
-    await this.transact((draft) => retireAgentSessionClaimKey(draft, keyId, now))
-  }
+  retireClaimKey = (keyId: string, now: number): Promise<void> =>
+    this.transact((draft) => retireAgentSessionClaimKey(draft, keyId, now))
 
   private async mutate(
     sessionId: string,
@@ -333,7 +333,7 @@ export class AgentSessionRecordStore {
           ? agentSessionRefusalError('execution_owner_reconciling', { reason: 'recordUnreadable' })
           : agentSessionRefusalError('agent_session_identity_required', { reason: 'recordMissing' })
       }
-      const next = apply(record)
+      const next = reviseAgentSessionPermission(record, apply(record))
       draft.records.set(sessionId, next)
       return next
     })

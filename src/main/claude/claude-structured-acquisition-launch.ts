@@ -103,7 +103,8 @@ export async function resolveClaudeAcquisitionLaunch(args: {
       savedOptions: {
         options: spawn.options,
         skipped: spawn.skipped,
-        fastModeAtStart: spawn.fastModeAtStart
+        fastModeAtStart: spawn.fastModeAtStart,
+        appliedPermissionMode: spawn.appliedPermissionMode
       }
     }
   })

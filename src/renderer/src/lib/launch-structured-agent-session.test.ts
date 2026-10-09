@@ -323,10 +323,11 @@ describe('structured agent session launch', () => {
     }
   })
 
-  it("reports a paired server's current seed from the create probe, and no local one", async () => {
+  // This machine's own chat takes only the host's starting permission mode, for its pill.
+  it("reports a paired server's current seed from the create probe, and only its mode locally", async () => {
     vi.mocked(callStructuredAgentSession).mockImplementation(async (_target, method) =>
       method === 'agentSession.createSupport'
-        ? { supported: true, seedOptions: { model: 'sonnet' } }
+        ? { supported: true, seedOptions: { model: 'sonnet', permissionMode: 'bypass' } }
         : { ok: true, replayed: false, value: { sessionId: 'claude_1', fence: 1 } }
     )
     const paired = vi.fn()
@@ -341,8 +342,8 @@ describe('structured agent session launch', () => {
       local
     )
 
-    expect(paired).toHaveBeenCalledWith({ model: 'sonnet' })
-    expect(local).not.toHaveBeenCalled()
+    expect(paired).toHaveBeenCalledWith({ model: 'sonnet', permissionMode: 'bypass' })
+    expect(local).toHaveBeenCalledWith({ permissionMode: 'bypass' })
   })
 
   it("seeds a paired chat with the server's reported selection, kept through a retry", () => {

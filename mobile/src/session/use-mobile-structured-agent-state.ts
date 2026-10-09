@@ -1,3 +1,7 @@
+import {
+  openTranscriptAfterHold,
+  isSubscribeEvent
+} from './mobile-structured-transcript-subscription'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-types'
 import { isRootAgentJournalItem } from '../../../src/shared/agent-session-journal-producer'
@@ -27,6 +31,7 @@ import {
   type MobileQueuedMessageFeed,
   type MobileQueuePause
 } from './mobile-structured-queued-message-feed'
+import type { SessionPermissionPublication } from '../../../src/shared/agent-session-permission-reducer'
 
 type QueuedFeed = { messages: MobileQueuedMessageFeed; pause: MobileQueuePause }
 const NO_QUEUED_FEED: QueuedFeed = { messages: null, pause: null }
@@ -36,41 +41,6 @@ const MAX_RETAINED_SESSION_STATES = 32
 const OLDER_PAGE_ANCHOR_ATTEMPTS = 3
 /** Bounds the pages one Load-earlier reads past that hold only subagent rows. */
 const OLDER_PAGES_PER_LOAD = 8
-
-/**
- * Opens the transcript stream once the hold settles, either way: a refused hold is an older host
- * saying it could not start the agent — which the next send does — never a reason to hide the
- * transcript. Returns what ends the stream, opened or not yet. Outside the effect so its cleanup
- * rule can see the stream is owned.
- */
-function openTranscriptAfterHold(
-  client: RpcClient,
-  sessionId: string,
-  held: Promise<unknown>,
-  onFrame: (raw: unknown) => void
-): () => void {
-  let ended = false
-  let close = (): void => {}
-  void held
-    .catch(() => undefined)
-    .then(() => {
-      if (!ended) {
-        close = client.subscribe('agentSession.subscribe', { sessionId }, onFrame)
-      }
-    })
-  return () => {
-    ended = true
-    close()
-  }
-}
-
-function isSubscribeEvent(value: unknown): value is AgentSessionSubscribeEvent {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-  const type = (value as { type?: unknown }).type
-  return type === 'snapshot' || type === 'batch' || type === 'reset' || type === 'end'
-}
 
 export function useMobileStructuredAgentState(args: {
   client: RpcClient | null
@@ -83,6 +53,7 @@ export function useMobileStructuredAgentState(args: {
 }): {
   state: StructuredAgentSessionState
   stateRef: { readonly current: StructuredAgentSessionState }
+  permissionPublication?: SessionPermissionPublication
   /** Host-held queued drafts from the live stream; null until the host claims any. */
   queuedMessages: MobileQueuedMessageFeed
   /** The whole queue's pause, published with the drafts. */
@@ -97,7 +68,7 @@ export function useMobileStructuredAgentState(args: {
     () => new Map()
   )
   const [queuedBySession, setQueuedBySession] = useState<Map<string, QueuedFeed>>(() => new Map())
-  const state =
+  const state: StructuredAgentSessionState =
     enabled && sessionKey
       ? (sessionStates.get(sessionKey) ?? EMPTY_STRUCTURED_AGENT_SESSION)
       : EMPTY_STRUCTURED_AGENT_SESSION
@@ -319,5 +290,13 @@ export function useMobileStructuredAgentState(args: {
     loadEarlier()
   }, [drawsNothingFrom, loadEarlier, loadingOlder])
 
-  return { state, stateRef, queuedMessages, queuePause: queued.pause, loadingOlder, loadEarlier }
+  return {
+    state,
+    stateRef,
+    permissionPublication: state.permissionPublication,
+    queuedMessages,
+    queuePause: queued.pause,
+    loadingOlder,
+    loadEarlier
+  }
 }

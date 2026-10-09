@@ -41,6 +41,7 @@ import { agentSessionMutationAdmitsNow } from './structured-agent-session-mutati
 import { runQueueableStructuredAgentSessionSend } from './structured-agent-session-queued-send'
 import { cancelStructuredAgentSessionPrompt } from './structured-agent-session-prompt-cancel'
 import { mutateWithChatStop } from './structured-agent-session-chat-stop'
+import { readStructuredAgentSessionPermissionFact } from './structured-agent-session-permission-fact'
 import { performSetOption } from './structured-agent-session-turns-options'
 export type { StructuredAgentSessionMutationContext } from './structured-agent-session-mutation-context'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
@@ -178,7 +179,7 @@ export async function setStructuredAgentSessionOption(
   await context.deps.adapter.awaitOptionWritable?.(params.envelope.sessionId)
   const plan = setOptionPlan(params)
   const atRest = () => !context.sessions.get(params.envelope.sessionId)?.child
-  return mutateStructuredAgentSession(
+  const result = await mutateStructuredAgentSession(
     context,
     caller,
     params.envelope,
@@ -206,6 +207,18 @@ export async function setStructuredAgentSessionOption(
     },
     openForProviderWrite(context, params.envelope)
   )
+  return result.ok
+    ? {
+        ...result,
+        value: {
+          ...result.value,
+          permissionFact: readStructuredAgentSessionPermissionFact(
+            context.deps,
+            params.envelope.sessionId
+          )
+        }
+      }
+    : result
 }
 
 export function changeStructuredAgentSessionThreadGoal(

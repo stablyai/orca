@@ -41,7 +41,8 @@ describe('the context ring after a session option write', () => {
     adoptClaudeStructuredSpawnOptions(s.session, {
       options: new Map([['model', 'opus[1m]']]),
       skipped: [],
-      fastModeAtStart: false
+      fastModeAtStart: false,
+      appliedPermissionMode: 'ask'
     })
     expect(s.respond('turn-a', 1_000)).toMatchObject({ windowTokens: 1_000_000, percentage: 10 })
   })
@@ -64,7 +65,8 @@ describe('the context ring after a session option write', () => {
     adoptClaudeStructuredSpawnOptions(skipped.session, {
       options: new Map([['model', 'sonnet[1m]']]),
       skipped: ['permissionMode'],
-      fastModeAtStart: false
+      fastModeAtStart: false,
+      appliedPermissionMode: 'ask'
     })
     expect(skipped.respond('turn-a', 1_000)).toBeNull()
   })
@@ -72,7 +74,7 @@ describe('the context ring after a session option write', () => {
   it('holds estimates after a permission-mode write even with a model written before it', async () => {
     const s = ringSession()
     await s.write('model', 'sonnet[1m]')
-    await s.write('permissionMode', 'plan')
+    await s.write('permissionMode', 'accept-edits')
     expect(s.respond('turn-a', 1_000)).toBeNull()
   })
 })

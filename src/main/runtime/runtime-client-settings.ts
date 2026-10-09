@@ -15,6 +15,7 @@ import {
   type SourceControlAiActionDefaults
 } from '../../shared/source-control-ai-actions'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import { agentChatPermissionModeFromSetting } from '../../shared/agent-chat-permission-mode'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../shared/native-chat-session-option-defaults'
 import type { NativeChatSessionOptionSettingsMutation } from '../../shared/native-chat-session-options'
 import { getHostDisplayLabelOverrides } from '../../shared/host-setting-overrides'
@@ -42,6 +43,7 @@ export type RuntimeClientSettings = Pick<
   | 'githubProjects'
   | 'experimentalNewWorktreeCardStyle'
   | 'experimentalNativeChat'
+  | 'nativeChatPermissionMode'
   | 'compactWorktreeCards'
   | 'minimaxGroupId'
   | 'minimaxUsageModels'
@@ -71,6 +73,7 @@ export type RuntimeHostDisplayLabelOverrides = Partial<
 export type RuntimeClientSettingsUpdate = Pick<
   Partial<GlobalSettings>,
   | 'agentStatusHooksEnabled'
+  | 'nativeChatPermissionMode'
   | 'defaultTuiAgent'
   | 'disabledTuiAgents'
   | 'agentDefaultArgs'
@@ -130,6 +133,9 @@ export class RuntimeClientSettingsController {
       // Older clients use this key to fall back to terminal-backed chat. Keep their default terminal.
       openAgentTabsInChatByDefault: false,
       experimentalStructuredNativeChat: settings.experimentalNativeChat === true,
+      nativeChatPermissionMode: agentChatPermissionModeFromSetting(
+        settings.nativeChatPermissionMode
+      ),
       compactWorktreeCards: settings.compactWorktreeCards === true,
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',

@@ -8,15 +8,13 @@ import type {
   StructuredAgentSessionCommandOutcome,
   StructuredAgentSessionCommandRefusalCause
 } from '../../../../shared/structured-agent-session-composer'
-import type {
-  SessionOptionDescriptor,
-  SessionOptionsSurface
-} from '../../../../shared/native-chat-session-options'
+import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import type { NativeChatAfterStopSend } from './native-chat-composer-target'
 import type { NativeChatLocalCommandAnswer } from './use-native-chat-local-command-answer'
 import type { NativeChatRecallSource } from './native-chat-sent-prompt-history'
+import type { StructuredSessionOptionsSurface } from './native-chat-permission-mode-labels'
 
 export type NativeChatComposerErrorDetail = {
   /** Error text Orca did not write, shown apart and copyable. */
@@ -47,7 +45,7 @@ export type NativeChatStructuredComposerTransport = {
   /** A send is out: Send stays disabled, and a send returns false, until it settles. */
   sendOut?: boolean
   dispatchCommand: (text: string) => Promise<StructuredAgentSessionCommandOutcome>
-  optionsSurface: SessionOptionsSurface
+  optionsSurface: StructuredSessionOptionsSurface
   optionSnapshot: SessionOptionDescriptor[]
   optionPickerRequest?: NativeChatOptionPickerRequest | null
   /** The `/` surface the running session reports. Absent keeps the curated

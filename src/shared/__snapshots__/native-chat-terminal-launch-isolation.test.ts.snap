@@ -1,0 +1,373 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`terminal launch arguments remain on the main baseline > preserves every agent under manual regardless of chat permissions 1`] = `
+{
+  "aider": {
+    "args": "",
+    "env": {},
+  },
+  "amp": {
+    "args": "",
+    "env": {},
+  },
+  "ante": {
+    "args": "",
+    "env": {},
+  },
+  "antigravity": {
+    "args": "",
+    "env": {},
+  },
+  "aug": {
+    "args": "",
+    "env": {},
+  },
+  "autohand": {
+    "args": "",
+    "env": {},
+  },
+  "claude": {
+    "args": "",
+    "env": {},
+  },
+  "claude-agent-teams": {
+    "args": "",
+    "env": {},
+  },
+  "cline": {
+    "args": "",
+    "env": {},
+  },
+  "codebuddy": {
+    "args": "",
+    "env": {},
+  },
+  "codebuff": {
+    "args": "",
+    "env": {},
+  },
+  "codex": {
+    "args": "",
+    "env": {},
+  },
+  "command-code": {
+    "args": "",
+    "env": {},
+  },
+  "continue": {
+    "args": "",
+    "env": {},
+  },
+  "copilot": {
+    "args": "",
+    "env": {},
+  },
+  "crush": {
+    "args": "",
+    "env": {},
+  },
+  "cursor": {
+    "args": "",
+    "env": {},
+  },
+  "devin": {
+    "args": "",
+    "env": {},
+  },
+  "droid": {
+    "args": "",
+    "env": {},
+  },
+  "dsh": {
+    "args": "",
+    "env": {},
+  },
+  "freebuff": {
+    "args": "",
+    "env": {},
+  },
+  "gemini": {
+    "args": "",
+    "env": {},
+  },
+  "goose": {
+    "args": "",
+    "env": {},
+  },
+  "grok": {
+    "args": "",
+    "env": {},
+  },
+  "hermes": {
+    "args": "",
+    "env": {},
+  },
+  "jcode": {
+    "args": "",
+    "env": {},
+  },
+  "kilo": {
+    "args": "",
+    "env": {},
+  },
+  "kimi": {
+    "args": "",
+    "env": {},
+  },
+  "kiro": {
+    "args": "",
+    "env": {},
+  },
+  "mimo-code": {
+    "args": "",
+    "env": {},
+  },
+  "mistral-vibe": {
+    "args": "",
+    "env": {},
+  },
+  "muse": {
+    "args": "",
+    "env": {},
+  },
+  "omp": {
+    "args": "",
+    "env": {},
+  },
+  "openclaude": {
+    "args": "",
+    "env": {},
+  },
+  "openclaw": {
+    "args": "",
+    "env": {},
+  },
+  "opencode": {
+    "args": "",
+    "env": {},
+  },
+  "opencode2": {
+    "args": "",
+    "env": {},
+  },
+  "pi": {
+    "args": "",
+    "env": {},
+  },
+  "prime-agent": {
+    "args": "",
+    "env": {},
+  },
+  "qoder": {
+    "args": "",
+    "env": {},
+  },
+  "qoder-cn": {
+    "args": "",
+    "env": {},
+  },
+  "qwen-code": {
+    "args": "",
+    "env": {},
+  },
+  "rovo": {
+    "args": "",
+    "env": {},
+  },
+  "trae": {
+    "args": "",
+    "env": {},
+  },
+  "zcode": {
+    "args": "",
+    "env": {},
+  },
+}
+`;
+
+exports[`terminal launch arguments remain on the main baseline > preserves every agent under yolo regardless of chat permissions 1`] = `
+{
+  "aider": {
+    "args": "--yes-always",
+    "env": {},
+  },
+  "amp": {
+    "args": "--dangerously-allow-all",
+    "env": {},
+  },
+  "ante": {
+    "args": "--yolo",
+    "env": {},
+  },
+  "antigravity": {
+    "args": "--dangerously-skip-permissions",
+    "env": {},
+  },
+  "aug": {
+    "args": "",
+    "env": {},
+  },
+  "autohand": {
+    "args": "--unrestricted",
+    "env": {},
+  },
+  "claude": {
+    "args": "--dangerously-skip-permissions",
+    "env": {},
+  },
+  "claude-agent-teams": {
+    "args": "--dangerously-skip-permissions",
+    "env": {},
+  },
+  "cline": {
+    "args": "--auto-approve true",
+    "env": {},
+  },
+  "codebuddy": {
+    "args": "--dangerously-skip-permissions",
+    "env": {},
+  },
+  "codebuff": {
+    "args": "",
+    "env": {},
+  },
+  "codex": {
+    "args": "--dangerously-bypass-approvals-and-sandbox",
+    "env": {},
+  },
+  "command-code": {
+    "args": "--yolo",
+    "env": {},
+  },
+  "continue": {
+    "args": "--allow "*"",
+    "env": {},
+  },
+  "copilot": {
+    "args": "--yolo",
+    "env": {},
+  },
+  "crush": {
+    "args": "--yolo",
+    "env": {},
+  },
+  "cursor": {
+    "args": "--yolo",
+    "env": {},
+  },
+  "devin": {
+    "args": "--permission-mode bypass --respect-workspace-trust false",
+    "env": {},
+  },
+  "droid": {
+    "args": "--auto high",
+    "env": {},
+  },
+  "dsh": {
+    "args": "",
+    "env": {},
+  },
+  "freebuff": {
+    "args": "",
+    "env": {},
+  },
+  "gemini": {
+    "args": "--yolo",
+    "env": {},
+  },
+  "goose": {
+    "args": "",
+    "env": {
+      "GOOSE_MODE": "auto",
+    },
+  },
+  "grok": {
+    "args": "--permission-mode bypassPermissions",
+    "env": {},
+  },
+  "hermes": {
+    "args": "--yolo",
+    "env": {},
+  },
+  "jcode": {
+    "args": "",
+    "env": {},
+  },
+  "kilo": {
+    "args": "",
+    "env": {},
+  },
+  "kimi": {
+    "args": "--yolo",
+    "env": {},
+  },
+  "kiro": {
+    "args": "--trust-all-tools",
+    "env": {},
+  },
+  "mimo-code": {
+    "args": "",
+    "env": {},
+  },
+  "mistral-vibe": {
+    "args": "--agent auto-approve",
+    "env": {},
+  },
+  "muse": {
+    "args": "--yolo",
+    "env": {},
+  },
+  "omp": {
+    "args": "",
+    "env": {},
+  },
+  "openclaude": {
+    "args": "--dangerously-skip-permissions",
+    "env": {},
+  },
+  "openclaw": {
+    "args": "",
+    "env": {},
+  },
+  "opencode": {
+    "args": "",
+    "env": {},
+  },
+  "opencode2": {
+    "args": "",
+    "env": {},
+  },
+  "pi": {
+    "args": "",
+    "env": {},
+  },
+  "prime-agent": {
+    "args": "",
+    "env": {},
+  },
+  "qoder": {
+    "args": "--dangerously-skip-permissions",
+    "env": {},
+  },
+  "qoder-cn": {
+    "args": "--dangerously-skip-permissions",
+    "env": {},
+  },
+  "qwen-code": {
+    "args": "--approval-mode yolo",
+    "env": {},
+  },
+  "rovo": {
+    "args": "--yolo",
+    "env": {},
+  },
+  "trae": {
+    "args": "--yolo",
+    "env": {},
+  },
+  "zcode": {
+    "args": "--mode yolo",
+    "env": {},
+  },
+}
+`;

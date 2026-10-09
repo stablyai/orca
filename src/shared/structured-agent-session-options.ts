@@ -15,16 +15,19 @@ import {
   setTrackedSessionOption,
   type NativeChatSessionOptionRecord
 } from './native-chat-session-option-state'
-import { STRUCTURED_LAUNCH_SEED_OPTION_IDS } from './native-chat-session-option-defaults'
+import { STRUCTURED_LAUNCH_HELD_OPTION_IDS } from './native-chat-session-option-defaults'
+import {
+  AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
+  commitAgentSessionPermissionMode,
+  parseAgentSessionPermissionModes,
+  type AgentSessionPermissionModes
+} from './agent-chat-permission-mode'
 import type { SessionOptionDescriptor, SessionOptionValue } from './native-chat-session-options'
 import type {
   AgentSessionModelCatalogResult,
   AgentSessionOptionsResult
 } from './agent-session-wire'
-import {
-  decodeStructuredAgentSessionOptionValue,
-  encodeStructuredAgentSessionOptionValue
-} from './structured-agent-session-option-codec'
+import { decodeStructuredAgentSessionOptionValue } from './structured-agent-session-option-codec'
 
 function effortOption(model: AgentSessionOptionsResult['models'][number]): CatalogOption | null {
   if (model.efforts.length <= 1) {
@@ -95,6 +98,9 @@ export type StructuredAgentSessionOptionState = {
    *  same list once the host said it has none, usable but naming nothing the host may replace. */
   catalogSource: 'seed' | 'builtin' | 'host' | 'live' | null
   record: NativeChatSessionOptionRecord
+  /** The chat's permission mode, apart from the per-model record so a model switch never drops
+   *  it; null while the host has not said it offers the picker. */
+  permission: AgentSessionPermissionModes | null
   pendingId: string | null
 }
 
@@ -108,8 +114,21 @@ export function createStructuredAgentSessionOptionState(
     catalog: seedCatalog ?? null,
     catalogSource: seedCatalog ? 'seed' : null,
     record: createNativeChatSessionOptionRecord(agent),
+    permission: null,
     pendingId: null
   }
+}
+
+/** A fence or session reset: a host answer is the account's, not the fence's, so the same
+ *  session keeps it rather than fall back to the placeholder. */
+export function reseedStructuredAgentSessionOptionState(
+  previous: StructuredAgentSessionOptionState,
+  seeded: StructuredAgentSessionOptionState,
+  sameSession: boolean
+): StructuredAgentSessionOptionState {
+  return sameSession && (previous.catalogSource === 'host' || previous.catalogSource === 'builtin')
+    ? { ...seeded, catalog: previous.catalog, catalogSource: previous.catalogSource }
+    : seeded
 }
 
 /** The host answered with no list (none saved, a failed read, or an older host): the built-in
@@ -182,7 +201,8 @@ export function applyStructuredAgentSessionOptions(
   return {
     ...state,
     catalog: structuredAgentSessionOptionCatalog(seed, result),
-    catalogSource: 'live'
+    catalogSource: 'live',
+    permission: parseAgentSessionPermissionModes(result.permissionModes)
   }
 }
 
@@ -239,6 +259,13 @@ export function canSetStructuredAgentSessionOption(
   id: string,
   value: SessionOptionValue
 ): boolean {
+  if (id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID) {
+    return (
+      state.pendingId === null &&
+      typeof value === 'string' &&
+      state.permission?.supported.some((mode) => mode === value) === true
+    )
+  }
   const descriptor = structuredAgentSessionOptionSnapshot(state).find((entry) => entry.id === id)
   return Boolean(
     state.catalog &&
@@ -255,6 +282,10 @@ export function commitStructuredAgentSessionOption(
   id: string,
   value: string
 ): StructuredAgentSessionOptionState {
+  if (id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID) {
+    const permission = commitAgentSessionPermissionMode(state.permission, state.record.agent, value)
+    return { ...state, permission, pendingId: null }
+  }
   if (!state.catalog) {
     return state
   }
@@ -276,60 +307,11 @@ export function commitStructuredAgentSessionOptionValues(
   values: Readonly<Record<string, string>>
 ): StructuredAgentSessionOptionState {
   let next = state
-  for (const id of STRUCTURED_LAUNCH_SEED_OPTION_IDS) {
+  for (const id of STRUCTURED_LAUNCH_HELD_OPTION_IDS) {
     const value = values[id]
     if (value !== undefined) {
       next = commitStructuredAgentSessionOption(next, id, value)
     }
   }
   return next
-}
-
-export type StructuredSessionOptionPick = {
-  modelId: string
-  optionId: string
-  value: SessionOptionValue
-}
-
-/**
- * The picks a mutation must remember so the next launch starts where the user left off.
- * Keyed off the same ids the launch seed reads back, so a pick this surface cannot
- * re-seed is never written.
- *
- * Model and effort travel as a pair: a launch resolves a stored effort only under a
- * stored model, so an effort-only pick adopts the model it was chosen against. Values
- * come from what the provider committed, not what was requested — it reconciles an
- * effort the newly selected model cannot run before reporting back.
- *
- * `state` may still be pre-commit: a changed model arrives in `committed`, and an
- * unchanged one is already what the record tracks, so neither reading depends on the
- * commit having landed.
- */
-export function structuredAgentSessionOptionPicks(
-  state: StructuredAgentSessionOptionState,
-  committed: Readonly<Record<string, string>>
-): StructuredSessionOptionPick[] {
-  if (!state.catalog) {
-    return []
-  }
-  const committedModel = committed.model
-  const modelId =
-    typeof committedModel === 'string' && committedModel.trim()
-      ? committedModel
-      : resolveEffectiveNativeChatModelId(state.catalog, state.catalog.models, state.record)
-  if (!modelId) {
-    return []
-  }
-  return STRUCTURED_LAUNCH_SEED_OPTION_IDS.flatMap((optionId) => {
-    const value = committed[optionId]
-    if (value === undefined) {
-      return []
-    }
-    const decoded = decodeStructuredAgentSessionOptionValue(optionId, value)
-    return decoded === null ||
-      (typeof decoded === 'string' && !decoded.trim()) ||
-      encodeStructuredAgentSessionOptionValue(optionId, decoded) === null
-      ? []
-      : [{ modelId, optionId, value: decoded }]
-  })
 }

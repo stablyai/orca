@@ -11,17 +11,17 @@ import type { StructuredAgentSessionMutationContext } from './structured-agent-s
 import { readStructuredAgentSessionOptions } from './structured-agent-session-options-read'
 import { StructuredAgentSessionTaskQueue } from './structured-agent-session-task-queue'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { record } from './structured-agent-session-restart-resume-test-harness'
 
 const SESSION = 'session-1'
 
 function restingRecord(): AgentSessionRecord {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resting read and the catalog key touch only these fields.
   return {
+    ...record({ chain: [] }),
     provider: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: '/homes/a' },
-    location: { wslDistro: null },
     options: {}
-  } as unknown as AgentSessionRecord
+  }
 }
 
 describe('options at rest', () => {
@@ -47,7 +47,7 @@ describe('options at rest', () => {
         deps: {
           adapter: {},
           agents: NO_STRUCTURED_AGENTS,
-          store: { getRecord: () => record },
+          store: { getRecord: () => record, permissionRevision: () => 0 },
           modelCatalog
         },
         serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
@@ -91,7 +91,7 @@ describe('live Codex option reads', () => {
       deps: {
         adapter: { prepareReadOptions },
         agents: NO_STRUCTURED_AGENTS,
-        store: { getRecord: () => restingRecord() }
+        store: { getRecord: () => restingRecord(), permissionRevision: () => 0 }
       },
       serialize: (sessionId: string, task: () => Promise<unknown>) =>
         queue.serialize(sessionId, task),
@@ -129,7 +129,7 @@ describe('live Codex option reads', () => {
           }
         },
         agents: NO_STRUCTURED_AGENTS,
-        store: { getRecord: () => restingRecord() }
+        store: { getRecord: () => restingRecord(), permissionRevision: () => 0 }
       },
       serialize: (sessionId: string, task: () => Promise<unknown>) =>
         queue.serialize(sessionId, task),
@@ -160,7 +160,7 @@ describe('live Codex option reads', () => {
       deps: {
         adapter: { prepareReadOptions },
         agents: NO_STRUCTURED_AGENTS,
-        store: { getRecord: () => restingRecord() }
+        store: { getRecord: () => restingRecord(), permissionRevision: () => 0 }
       },
       serialize: (sessionId: string, task: () => Promise<unknown>) =>
         queue.serialize(sessionId, task),

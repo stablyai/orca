@@ -97,6 +97,7 @@ export function useMobileNativeChatController(args: {
       resolvedAgent: activeChatResolution?.agent ?? null,
       transcriptPath: activeChatResolution?.transcriptPath ?? null,
       sessionId: activeChatSessionId,
+      permissionSeed: activeSessionTab?.permissionSeed,
       sourceIdentity,
       enabled: showNativeChat,
       connState,
@@ -248,14 +249,7 @@ export function useMobileNativeChatController(args: {
       isWorking: nativeChatAgentWorking,
       reportedModel: activeSessionTab?.agentStatus?.model ?? null,
       modelSwitchCommand: activeSessionTab?.agentStatus?.modelSwitchCommand,
-      structured: {
-        optionPickerRequest: structuredNativeChat.optionPickerRequest,
-        conversationCommands: structuredNativeChat.conversationCommands,
-        snapshot: structuredNativeChat.optionSnapshot,
-        pendingId: structuredNativeChat.pendingOptionId,
-        setOption: structuredNativeChat.setStructuredOption,
-        invokeAction: structuredNativeChat.invokeStructuredOption
-      },
+      structured: structuredNativeChat,
       toggleTabChatView,
       worktreeId
     })

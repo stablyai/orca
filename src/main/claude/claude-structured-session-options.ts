@@ -9,6 +9,7 @@ import {
   type ListedModel
 } from './claude-structured-model-catalog'
 import type { ClaudeSession } from './claude-structured-session-state'
+import { claudePermissionModesFor } from './claude-structured-permission-mode'
 import { structuredAgentSessionOptionModels } from '../native-chat/agent-session-wire/structured-agent-session-option-models'
 import {
   claudeCatalogListing,
@@ -309,6 +310,7 @@ export function claudeStructuredSessionOptionsFrom(
   return {
     models: wireClaudeModels(models),
     ...(support ? { fastModeSupport: support } : {}),
+    permissionModes: claudePermissionModesFor(session, matchListedModel(discovered, model)),
     current: {
       model,
       ...(effort ? { effort } : {}),

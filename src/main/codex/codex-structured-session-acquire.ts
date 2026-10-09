@@ -1,3 +1,4 @@
+import { adoptCodexOpenedPermissionState } from './codex-structured-permission-mode'
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import {
   CODEX_STRUCTURED_HANDLE_NAMESPACE,
@@ -242,6 +243,7 @@ export async function acquireCodexStructuredSession(input: {
       abortedTurnIds: new Set(),
       prompts: acquisition.prompts,
       options,
+      ...adoptCodexOpenedPermissionState(options, threadLaunch, opened),
       reportedOptions: reportedCodexThreadOptions(opened),
       ...(catalogAccess ? { catalogAccess } : {}),
       dispatchEchoes,

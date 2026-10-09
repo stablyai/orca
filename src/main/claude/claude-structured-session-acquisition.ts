@@ -170,9 +170,8 @@ export async function acquireClaudeSession({
     expectedProviderSessionId = launch.providerSessionId
     attempt.account = launch.account
     observedLeafUuid = launch.resumeLeafUuid
-    const open = deps.openConnection ?? openClaudeStreamJsonConnection
     const connection = await withAgentSessionCreatePhase('spawn', input.recordPhase, () =>
-      open(
+      (deps.openConnection ?? openClaudeStreamJsonConnection)(
         {
           pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
           options: launch.options,
@@ -253,6 +252,7 @@ export async function acquireClaudeSession({
       process,
       acquisitionGeneration: mintClaudeAcquisitionGeneration(deps),
       options: launch.savedOptions.options,
+      ...(launch.permissionMode ? { launchPermissionMode: launch.permissionMode } : {}),
       ...(deps.mintLinkId ? { linkId: deps.mintLinkId() } : {}),
       observedAt: deps.now?.() ?? Date.now()
     })

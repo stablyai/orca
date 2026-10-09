@@ -1,10 +1,7 @@
 import { activeProviderContext } from '../../shared/agent-session-provider-context'
 import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
-import type {
-  Options as ClaudeAgentSdkOptions,
-  PermissionMode
-} from '@anthropic-ai/claude-agent-sdk'
+import type { Options as ClaudeAgentSdkOptions } from '@anthropic-ai/claude-agent-sdk'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import { agentSessionProviderHandleRoot } from '../../shared/agent-session-provider-handle'
 import { claudeProviderHandleLeafUuid } from '../../shared/agent-session-provider-handle-encoding'
@@ -49,6 +46,9 @@ import { resolveAgentSessionLaunchDirectory } from '../runtime/agent-session-lau
 import { CLAUDE_STRUCTURED_AGENT } from './claude-structured-agent-definition'
 import { claudeSessionIdForOrcaSession } from './claude-structured-session-id'
 
+import { claudeStructuredPermissionOptions } from './claude-structured-permission-mode'
+import * as chatPermission from '../../shared/agent-chat-permission-mode'
+
 export { claudeSessionIdForOrcaSession }
 
 export const CLAUDE_DEFAULT_SETTING_SOURCES = ['user', 'project', 'local'] as const
@@ -89,18 +89,6 @@ export const CLAUDE_STRUCTURED_BASE_OPTIONS: ClaudeStructuredSdkOptions = {
   extraArgs: { 'replay-user-messages': null }
 }
 
-/**
- * Agent Permissions as query-start options.
- *
- * The owned CLI flag preserves the user-installed binary contract. The SDK's typed bypass option
- * emits a newer allow flag that older Claude binaries reject before a structured session starts.
- */
-export function claudeStructuredPermissionOptions(
-  mode: PermissionMode
-): Pick<ClaudeStructuredSdkOptions, 'extraArgs'> {
-  return mode === 'bypassPermissions' ? { extraArgs: { 'dangerously-skip-permissions': null } } : {}
-}
-
 export type ClaudeStructuredLaunch = {
   /** Always Orca's resolved user CLI: the SDK's bundled binaries are excluded from the install. */
   pathToClaudeCodeExecutable: string
@@ -117,6 +105,8 @@ export type ClaudeStructuredLaunch = {
   /** Lineage: the record's chain already heads this provider session, so the child continues it
    *  even when no transcript exists to `--resume`. Never derived from the launch mode. */
   continuesChain: boolean
+  /** Chat intent; Auto needs capability evidence before live application. */
+  permissionMode?: chatPermission.AgentChatPermissionMode
 }
 
 export type ClaudeStructuredLaunchResolverDeps = {
@@ -137,8 +127,6 @@ export type ClaudeStructuredLaunchResolverDeps = {
    * inherit a guess. Build it with claudeStructuredAuthPolicyForSettings.
    */
   resolveAuthPolicy: () => Promise<ClaudeStructuredAuthPolicy> | ClaudeStructuredAuthPolicy
-  /** The user's Agent Permissions setting, re-read per acquisition. Absent means prompting. */
-  resolvePermissionMode?: () => Promise<PermissionMode> | PermissionMode
   /** How long an in-flight account switch may hold a launch before it is refused. */
   authSwitchSettleTimeoutMs?: number
   /** Account state for the managed-account gate; null when it cannot be read, which refuses. */
@@ -283,8 +271,13 @@ export function createClaudeStructuredLaunchResolver(
       ...(deps.attachmentDirectory ? [deps.attachmentDirectory] : []),
       ...(visuals ? [visuals.visuals.folder] : [])
     ]
+    const permissionMode = chatPermission.agentChatLaunchPermissionMode(
+      'claude',
+      record.options,
+      undefined
+    )
     const permission = claudeStructuredPermissionOptions(
-      (await deps.resolvePermissionMode?.()) ?? 'default'
+      permissionMode === 'auto' ? 'ask' : permissionMode
     )
     // A start that failed before its first turn wrote no transcript, and `--resume` of an absent
     // one exits; launch that id fresh instead. With a transcript, `--session-id` would collide.
@@ -343,7 +336,8 @@ export function createClaudeStructuredLaunchResolver(
       providerSessionId,
       resumeLeafUuid: resumesTranscript ? leafUuid : null,
       resumesTranscript,
-      continuesChain
+      continuesChain,
+      permissionMode
     }
   }
 }

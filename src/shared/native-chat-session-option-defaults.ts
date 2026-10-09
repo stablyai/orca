@@ -1,4 +1,8 @@
 import type { AgentType } from './agent-status-types'
+import {
+  AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
+  isAgentChatPermissionMode
+} from './agent-chat-permission-mode'
 import { sessionOptionValueIsValid } from './agent-session-option-catalog'
 import type {
   NativeChatSessionOptionSettingsMutation,
@@ -37,6 +41,14 @@ export function resolveNativeChatSessionOptionDefaults(
  *  is the only boundary that represents the boolean Fast preference as text. */
 export const STRUCTURED_LAUNCH_SEED_OPTION_IDS = ['model', 'effort', 'fastMode'] as const
 
+/** What a launch carries before its session exists, in the order it applies them: the per-model
+ *  seed, then the chat's permission mode, which belongs to the chat rather than to a model and so
+ *  is never remembered as a launch default. */
+export const STRUCTURED_LAUNCH_HELD_OPTION_IDS = [
+  ...STRUCTURED_LAUNCH_SEED_OPTION_IDS,
+  AGENT_CHAT_PERMISSION_MODE_OPTION_ID
+] as const
+
 /** Any chosen option set narrowed to what a structured create may seed: the seedable ids only,
  *  each encoded as a bounded string. An empty result is `undefined` rather than `{}` — an empty map fails
  *  the durable record's bounded-string guard, and `agent_session_options_invalid` is not a wire
@@ -64,7 +76,8 @@ export function narrowStructuredLaunchSeedOptions(
 }
 
 /** An already-encoded seed read from another host or from storage: the seedable ids whose value
- *  decodes, or `undefined` when nothing usable remains. */
+ *  decodes, or `undefined` when nothing usable remains. A permission mode is kept only when this
+ *  build can name it; its presence is how a host says it offers the picker. */
 export function parseStructuredLaunchSeedOptions(
   value: unknown
 ): Record<string, string> | undefined {
@@ -73,12 +86,13 @@ export function parseStructuredLaunchSeedOptions(
   }
   const entries = new Map<string, unknown>(Object.entries(value))
   const parsed: Record<string, string> = {}
-  for (const id of STRUCTURED_LAUNCH_SEED_OPTION_IDS) {
+  for (const id of STRUCTURED_LAUNCH_HELD_OPTION_IDS) {
     const encoded = entries.get(id)
     if (
       typeof encoded === 'string' &&
       encoded.trim() &&
-      decodeStructuredAgentSessionOptionValue(id, encoded) !== null
+      decodeStructuredAgentSessionOptionValue(id, encoded) !== null &&
+      (id !== AGENT_CHAT_PERMISSION_MODE_OPTION_ID || isAgentChatPermissionMode(encoded))
     ) {
       parsed[id] = encoded
     }

@@ -7,6 +7,7 @@ import type { StructuredAgentSessionStatusState } from './structured-agent-sessi
 import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
 import { structuredAgentSessionProviderSessionMetadata } from './structured-agent-session-history-result'
 import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session-record-launch-directory'
+import { restingPermissionModes } from './structured-agent-session-permission-fact'
 
 export function structuredAgentSessionStatusSummary({
   sessionId,
@@ -38,6 +39,7 @@ export function structuredAgentSessionStatusSummary({
   // switch lands, so the row follows whichever is in force.
   const model = normalizeOptionalField(record?.options?.model, AGENT_MODEL_MAX_LENGTH)
   const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
+  const permissionMode = record ? restingPermissionModes(record)?.current : undefined
   return {
     sessionId,
     workspaceId: session.params.location.workspaceId,
@@ -56,6 +58,10 @@ export function structuredAgentSessionStatusSummary({
       ? { rewindBlockedReason: 'outcome-unknown' as const }
       : {}),
     ...(model ? { model } : {}),
+    ...(record?.initialPermissionMode
+      ? { initialPermissionMode: record.initialPermissionMode }
+      : {}),
+    ...(permissionMode ? { permissionMode } : {}),
     ...childWork,
     ...(providerSession ? { providerSession } : {}),
     ...(launchDirectory ? { launchDirectory } : {}),

@@ -27,6 +27,7 @@ export function createClaudeSessionPublication(input: {
   linkId?: string
   observedAt: number
   options?: ReadonlyMap<string, string>
+  launchPermissionMode?: ClaudeSession['launchPermissionMode']
 }): { acquisition: AgentSessionAcquisition; session: ClaudeSession } {
   return {
     acquisition: {
@@ -59,6 +60,7 @@ export function createClaudeSessionPublication(input: {
       dispatchSequence: 0,
       optionMutationSequence: 0,
       options: new Map(input.options),
+      ...(input.launchPermissionMode ? { launchPermissionMode: input.launchPermissionMode } : {}),
       capabilities: [],
       reportedOptions: {},
       reportedModelMutation: 0,

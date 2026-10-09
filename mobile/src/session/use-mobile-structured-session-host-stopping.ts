@@ -26,3 +26,20 @@ export function useMobileStructuredSessionHostStopping(args: {
   }
   return useSyncExternalStore(subscribe, readStopping, readStopping)
 }
+
+/** The same host startup fact desktop uses to refresh its option catalog. */
+export function useMobileStructuredSessionProviderPhase(args: {
+  client: RpcClient | null
+  sessionId: string | null
+  enabled: boolean
+}): 'starting' | 'ready' | undefined {
+  const { client, sessionId, enabled } = args
+  const feed = enabled && client && sessionId ? mobileStructuredSessionStatusFeed(client) : null
+  const subscribe = useCallback(
+    (listener: () => void) => (feed ? feed.subscribe(listener) : noSubscription()),
+    [feed]
+  )
+  const readPhase = () =>
+    feed && sessionId ? feed.getSnapshot().get(sessionId)?.hostExecutionPhase : undefined
+  return useSyncExternalStore(subscribe, readPhase, readPhase)
+}

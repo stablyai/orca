@@ -1,4 +1,5 @@
 import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat-appearance-settings'
+import { agentChatPermissionModeFromSetting } from '../../../shared/agent-chat-permission-mode'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { resolveNestedWorkerMaxDepth } from '../../../shared/nested-worker-depth'
@@ -58,6 +59,11 @@ export function updateSettings(
   options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
 ): GlobalSettings {
   const sanitizedUpdates = stripRetiredGlobalSettings(updates)
+  if ('nativeChatPermissionMode' in updates) {
+    sanitizedUpdates.nativeChatPermissionMode = agentChatPermissionModeFromSetting(
+      updates.nativeChatPermissionMode
+    )
+  }
   if ('opencodeSessionCookie' in updates && !updates.opencodeSessionCookie) {
     operations.removeRetainedBlob(PROTECTED_SECRET_SLOT.opencodeSessionCookie)
   }

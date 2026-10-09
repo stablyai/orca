@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   CLAUDE_STRUCTURED_BASE_OPTIONS,
-  claudeStructuredPermissionOptions,
   type ClaudeStructuredSdkOptions
 } from './claude-structured-launch-resolution'
+import { claudeStructuredPermissionOptions } from './claude-structured-permission-mode'
 import { claudeStructuredSpawnOptions } from './claude-structured-spawn-options'
 
 function launched(
@@ -23,7 +23,7 @@ const BYPASS_LAUNCH: ClaudeStructuredSdkOptions = {
   ...CLAUDE_STRUCTURED_BASE_OPTIONS,
   extraArgs: {
     ...CLAUDE_STRUCTURED_BASE_OPTIONS.extraArgs,
-    ...claudeStructuredPermissionOptions('bypassPermissions').extraArgs
+    ...claudeStructuredPermissionOptions('bypass').extraArgs
   }
 }
 
@@ -33,14 +33,14 @@ describe('a Claude chat launched with its saved options', () => {
       model: 'opus',
       effort: 'high',
       fastMode: 'true',
-      permissionMode: 'plan'
+      permissionMode: 'accept-edits'
     })
 
     expect(spawn.sdkOptions).toMatchObject({
       model: 'opus',
       effort: 'high',
       settings: { fastMode: true },
-      permissionMode: 'plan',
+      permissionMode: 'acceptEdits',
       // The base launch is kept whole.
       includePartialMessages: true,
       extraArgs: { 'replay-user-messages': null }
@@ -49,7 +49,7 @@ describe('a Claude chat launched with its saved options', () => {
       model: 'opus',
       effort: 'high',
       fastMode: 'true',
-      permissionMode: 'plan'
+      permissionMode: 'accept-edits'
     })
     expect(spawn.skipped).toEqual([])
   })
@@ -70,9 +70,10 @@ describe('a Claude chat launched with its saved options', () => {
     const spawn = launched({ effort: 'ludicrous', permissionMode: 'retired-mode', fastMode: 'yes' })
 
     expect(spawn.sdkOptions).not.toHaveProperty('effort')
-    expect(spawn.sdkOptions).not.toHaveProperty('permissionMode')
+    expect(spawn.sdkOptions.permissionMode).toBe('default')
+    expect(spawn.options.get('permissionMode')).toBe('ask')
     expect(spawn.sdkOptions).not.toHaveProperty('settings')
-    expect(spawn.skipped).toEqual(['effort', 'fastMode', 'permissionMode'])
+    expect(spawn.skipped).toEqual(['effort', 'fastMode'])
   })
 
   it('keeps a saved Fast on for a new conversation, for its start to apply', () => {
@@ -128,8 +129,8 @@ describe('a Claude chat launched with its saved options', () => {
     }
   )
 
-  it('launches a saved bypass under an Agent Permissions bypass with the owned bypass flag', () => {
-    const spawn = launched({ permissionMode: 'bypassPermissions' }, { base: BYPASS_LAUNCH })
+  it('launches a saved bypass on a child granted Full access with the owned bypass flag', () => {
+    const spawn = launched({ permissionMode: 'bypass' }, { base: BYPASS_LAUNCH })
 
     expect(spawn.sdkOptions.extraArgs).toEqual({
       'replay-user-messages': null,
@@ -139,27 +140,39 @@ describe('a Claude chat launched with its saved options', () => {
     expect(spawn.sdkOptions).not.toHaveProperty('allowDangerouslySkipPermissions')
   })
 
-  it('never widens the Agent Permissions setting to a saved bypass', () => {
-    const spawn = launched({ permissionMode: 'bypassPermissions' })
+  it('never widens a child lacking the bypass flag to a saved bypass', () => {
+    const spawn = launched({ permissionMode: 'bypass' })
 
     expect(spawn.sdkOptions.extraArgs).toEqual({ 'replay-user-messages': null })
     expect(spawn.sdkOptions).not.toHaveProperty('allowDangerouslySkipPermissions')
-    expect(spawn.skipped).toEqual(['permissionMode'])
+    expect(spawn.options.get('permissionMode')).toBe('ask')
+    expect(spawn.sdkOptions.permissionMode).toBe('default')
+    expect(spawn.skipped).toEqual([])
   })
 
   // Known limit: the allow flag that would keep bypass reachable is one older CLIs reject at start.
-  it('starts a saved narrower mode under an Agent Permissions bypass without any bypass flag', () => {
-    const spawn = launched({ permissionMode: 'acceptEdits' }, { base: BYPASS_LAUNCH })
+  it('starts a saved narrower mode on a child granted Full access without any bypass flag', () => {
+    const spawn = launched({ permissionMode: 'accept-edits' }, { base: BYPASS_LAUNCH })
 
     expect(spawn.sdkOptions.permissionMode).toBe('acceptEdits')
+    expect(spawn.appliedPermissionMode).toBe('accept-edits')
     expect(spawn.sdkOptions).not.toHaveProperty('allowDangerouslySkipPermissions')
     expect(spawn.sdkOptions.extraArgs).toEqual({ 'replay-user-messages': null })
   })
 
-  it('starts a saved narrower mode without the allow flag when Agent Permissions prompts', () => {
-    const spawn = launched({ permissionMode: 'plan' })
+  it('starts a saved narrower mode without the allow flag on a child without bypass', () => {
+    const spawn = launched({ permissionMode: 'accept-edits' })
 
-    expect(spawn.sdkOptions.permissionMode).toBe('plan')
+    expect(spawn.sdkOptions.permissionMode).toBe('acceptEdits')
+    expect(spawn.appliedPermissionMode).toBe('accept-edits')
     expect(spawn.sdkOptions).not.toHaveProperty('allowDangerouslySkipPermissions')
+  })
+
+  it('keeps saved Auto on Ask without account, CLI and model capability evidence', () => {
+    const spawn = launched({ model: 'sonnet', permissionMode: 'auto' })
+
+    expect(spawn.sdkOptions.permissionMode).toBe('default')
+    expect(spawn.appliedPermissionMode).toBe('ask')
+    expect(spawn.options.get('permissionMode')).toBe('auto')
   })
 })

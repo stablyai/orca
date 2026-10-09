@@ -258,6 +258,8 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
         },
         { id: 'sonnet', label: 'Sonnet', isDefault: false, efforts: [] }
       ],
+      // Sonnet's listing has no supportsAutoMode, so Approve for me is not offered.
+      permissionModes: { current: 'ask', supported: ['ask', 'accept-edits', 'bypass'] },
       current: { model: 'sonnet', effort: 'high', confirmed: ['model', 'effort'] }
     })
   })

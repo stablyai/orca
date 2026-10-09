@@ -20,9 +20,28 @@ import {
   identityFor
 } from './codex-structured-session-adapter-fixture'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { codexStructuredPermissionPolicy } from './codex-structured-permission-policy'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 
 describe('CodexStructuredSessionAdapter.acquire', () => {
+  it('persists Ask when the opening app-server cannot support an Auto default', async () => {
+    const codex = fakeCodex()
+    const adapter = adapterFor(codex, {
+      permissionMode: 'auto',
+      permissionPolicy: codexStructuredPermissionPolicy('auto')
+    })
+    await adapter.acquire({
+      identity: identityFor('session-1'),
+      fence: 7,
+      spawnToken: 'spawn-9',
+      options: { permissionMode: 'auto' }
+    })
+    expect(adapter.readAcquisitionOptions({ sessionId: 'session-1', fence: 7 })).toMatchObject({
+      permissionMode: 'ask'
+    })
+    await adapter.closeAll()
+  })
+
   it('keeps a started thread usable when its model listing never answers', async () => {
     const codex = fakeCodex({ 'model/list': () => new Promise<never>(() => {}) })
     const adapter = adapterFor(codex)

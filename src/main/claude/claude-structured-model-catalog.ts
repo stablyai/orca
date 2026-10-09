@@ -5,7 +5,11 @@ import type {
 import { CLAUDE_SESSION_OPTION_CATALOG } from '../../shared/agent-session-option-catalog-claude-codex'
 import type { CatalogModel } from '../../shared/agent-session-option-catalog-types'
 
-export type ListedModel = AgentSessionModelOption & { resolvedModel: string | null }
+export type ListedModel = AgentSessionModelOption & {
+  resolvedModel: string | null
+  /** Host-only: read for the permission picker, never published as a model field. */
+  supportsAutoMode?: boolean
+}
 
 export function record(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -48,6 +52,8 @@ export function listedModels(value: unknown): ListedModel[] {
     const description = text(row.description)
     const supportsFastMode =
       typeof row.supportsFastMode === 'boolean' ? row.supportsFastMode : undefined
+    const supportsAutoMode =
+      typeof row.supportsAutoMode === 'boolean' ? row.supportsAutoMode : undefined
     return [
       {
         id,
@@ -56,6 +62,7 @@ export function listedModels(value: unknown): ListedModel[] {
         isDefault: resolvedModel !== null && resolvedModel === defaultResolvedModel,
         efforts: listedEfforts(row),
         ...(supportsFastMode !== undefined ? { supportsFastMode } : {}),
+        ...(supportsAutoMode !== undefined ? { supportsAutoMode } : {}),
         resolvedModel
       }
     ]

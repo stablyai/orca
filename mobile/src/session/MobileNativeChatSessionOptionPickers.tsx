@@ -22,6 +22,10 @@ import {
 } from './MobileNativeChatSessionOptionRows'
 import { sortNativeChatSessionOptions } from '../../../src/shared/native-chat-session-option-snapshot'
 import type { MobileNativeChatSessionOptionsController } from './use-mobile-native-chat-session-options'
+import {
+  MobileNativeChatPermissionPicker,
+  type MobileNativeChatPermissionPickerState
+} from './MobileNativeChatPermissionPicker'
 
 export type MobileNativeChatSessionOptionPickersProps = {
   controller: MobileNativeChatSessionOptionsController
@@ -33,13 +37,16 @@ export type MobileNativeChatSessionOptionPickersProps = {
    *  window would be submitted as part of the user's prompt. The composer blocks
    *  the reverse direction on `pendingId`; this is the same guard mirrored. */
   sendInFlight?: boolean
+  /** The chat's own permission pill, rendered beside this one; absent where the host offers none. */
+  permissionPicker?: MobileNativeChatPermissionPickerState
 }
 
 /** Combined model/session-option trigger and its mobile bottom drawer. */
 export function MobileNativeChatSessionOptionPickers({
   controller,
   isWorking,
-  sendInFlight = false
+  sendInFlight = false,
+  permissionPicker
 }: MobileNativeChatSessionOptionPickersProps): React.JSX.Element | null {
   const [openDescriptorId, setOpenDescriptorId] = useState<string | null>(null)
   const [lastRequest, setLastRequest] = useState(controller.optionPickerRequest)
@@ -50,8 +57,12 @@ export function MobileNativeChatSessionOptionPickers({
   const { snapshot, pendingId } = controller
   const model = snapshot.find((descriptor) => descriptor.category === 'model')
   const options = sortNativeChatSessionOptions(snapshot)
+  // Its own pill, beside the options pill: the mode belongs to the chat, not the model.
+  const permission = permissionPicker ? (
+    <MobileNativeChatPermissionPicker picker={permissionPicker} disabled={sendInFlight} />
+  ) : null
   if (!model) {
-    return null
+    return permission
   }
   const disabled = isWorking || pendingId !== null || sendInFlight
   const activeDescriptor = snapshot.find((descriptor) => descriptor.id === openDescriptorId)
@@ -92,70 +103,73 @@ export function MobileNativeChatSessionOptionPickers({
   }
 
   return (
-    <View>
-      <Pill
-        label={pillLabel}
-        accessibleName={`Model, ${pillLabel}`}
-        disabled={disabled}
-        onPress={openPicker}
-      />
-      <BottomDrawer visible={activeDescriptor !== undefined} onClose={closePicker}>
-        {activeDescriptor ? (
-          <View style={styles.sheet}>
-            <View style={styles.sheetHeader}>
-              <Pressable
-                accessibilityLabel={modelView ? 'Close picker' : 'Back to models'}
-                accessibilityRole="button"
-                style={({ pressed }) => [styles.sheetNav, pressed && styles.pressed]}
-                onPress={modelView ? closePicker : () => setOpenDescriptorId(model.id)}
-                hitSlop={8}
-              >
-                {modelView ? (
-                  <X size={18} color={colors.textSecondary} strokeWidth={2.2} />
-                ) : (
-                  <ChevronLeft size={18} color={colors.textSecondary} strokeWidth={2.2} />
-                )}
-              </Pressable>
-              <Text style={styles.sheetTitle}>
-                {modelView ? 'Select model' : `Select ${activeDescriptor.label.toLowerCase()}`}
-              </Text>
-              <View style={styles.sheetHeaderSide}>
-                {pendingId !== null ? (
-                  <ActivityIndicator size="small" color={colors.textSecondary} />
-                ) : null}
+    <>
+      {permission}
+      <View>
+        <Pill
+          label={pillLabel}
+          accessibleName={`Model, ${pillLabel}`}
+          disabled={disabled}
+          onPress={openPicker}
+        />
+        <BottomDrawer visible={activeDescriptor !== undefined} onClose={closePicker}>
+          {activeDescriptor ? (
+            <View style={styles.sheet}>
+              <View style={styles.sheetHeader}>
+                <Pressable
+                  accessibilityLabel={modelView ? 'Close picker' : 'Back to models'}
+                  accessibilityRole="button"
+                  style={({ pressed }) => [styles.sheetNav, pressed && styles.pressed]}
+                  onPress={modelView ? closePicker : () => setOpenDescriptorId(model.id)}
+                  hitSlop={8}
+                >
+                  {modelView ? (
+                    <X size={18} color={colors.textSecondary} strokeWidth={2.2} />
+                  ) : (
+                    <ChevronLeft size={18} color={colors.textSecondary} strokeWidth={2.2} />
+                  )}
+                </Pressable>
+                <Text style={styles.sheetTitle}>
+                  {modelView ? 'Select model' : `Select ${activeDescriptor.label.toLowerCase()}`}
+                </Text>
+                <View style={styles.sheetHeaderSide}>
+                  {pendingId !== null ? (
+                    <ActivityIndicator size="small" color={colors.textSecondary} />
+                  ) : null}
+                </View>
               </View>
-            </View>
-            {sessionOptionDispatchUnconfirmed(activeDescriptor) ? (
-              <SessionOptionCaption>Sent to the agent — not confirmed</SessionOptionCaption>
-            ) : null}
-            {reason ? <SessionOptionCaption>{reason}</SessionOptionCaption> : null}
-            <View style={styles.choiceGroup}>
-              <DescriptorRows
-                descriptor={activeDescriptor}
-                disabled={disabled}
-                grouped
-                onSetOption={(value) => applyOption(activeDescriptor, value)}
-                onInvokeAction={() => invokeAction(activeDescriptor)}
-              />
-            </View>
-            {modelView && options.length > 0 ? (
-              <View style={styles.optionGroup}>
-                {options.map((descriptor, index) => (
-                  <SessionOptionSummaryRow
-                    key={descriptor.id}
-                    label={descriptor.label}
-                    value={mobileSessionOptionSummaryValue(descriptor)}
-                    disabled={disabled}
-                    divided={index < options.length - 1}
-                    onPress={() => setOpenDescriptorId(descriptor.id)}
-                  />
-                ))}
+              {sessionOptionDispatchUnconfirmed(activeDescriptor) ? (
+                <SessionOptionCaption>Sent to the agent — not confirmed</SessionOptionCaption>
+              ) : null}
+              {reason ? <SessionOptionCaption>{reason}</SessionOptionCaption> : null}
+              <View style={styles.choiceGroup}>
+                <DescriptorRows
+                  descriptor={activeDescriptor}
+                  disabled={disabled}
+                  grouped
+                  onSetOption={(value) => applyOption(activeDescriptor, value)}
+                  onInvokeAction={() => invokeAction(activeDescriptor)}
+                />
               </View>
-            ) : null}
-          </View>
-        ) : null}
-      </BottomDrawer>
-    </View>
+              {modelView && options.length > 0 ? (
+                <View style={styles.optionGroup}>
+                  {options.map((descriptor, index) => (
+                    <SessionOptionSummaryRow
+                      key={descriptor.id}
+                      label={descriptor.label}
+                      value={mobileSessionOptionSummaryValue(descriptor)}
+                      disabled={disabled}
+                      divided={index < options.length - 1}
+                      onPress={() => setOpenDescriptorId(descriptor.id)}
+                    />
+                  ))}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+        </BottomDrawer>
+      </View>
+    </>
   )
 }
 

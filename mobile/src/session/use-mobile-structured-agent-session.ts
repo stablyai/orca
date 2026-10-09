@@ -1,3 +1,4 @@
+import type { AgentSessionPermissionSeed } from '../../../src/shared/agent-chat-permission-mode'
 import { useCallback, useMemo, useRef } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
@@ -21,7 +22,10 @@ import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-r
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'
 import { useMobileStructuredStopPress } from './use-mobile-structured-stop-press'
-import { useMobileStructuredSessionHostStopping } from './use-mobile-structured-session-host-stopping'
+import {
+  useMobileStructuredSessionHostStopping,
+  useMobileStructuredSessionProviderPhase
+} from './use-mobile-structured-session-host-stopping'
 import { useMobileStructuredPromptResponses } from './use-mobile-structured-prompt-responses'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
@@ -43,6 +47,7 @@ import { useMobileStructuredBackgroundTasks } from './use-mobile-structured-back
 export function useMobileStructuredAgentSession(args: {
   client: RpcClient | null
   sessionId: string | null
+  permissionSeed?: AgentSessionPermissionSeed
   /** Host/workspace scope used to keep same provider ids isolated. */
   sourceIdentity?: string
   enabled: boolean
@@ -80,23 +85,45 @@ export function useMobileStructuredAgentSession(args: {
   // Against a host that predates the quiet repeated Stop, a Stop of a turn still being stopped joins it.
   const inFlightStopsRef = useRef(new Map<string, Promise<boolean>>())
   const stateArgs = { client, sessionId, sessionKey, enabled, connected }
-  const { state, stateRef, queuedMessages, queuePause, loadingOlder, loadEarlier } =
-    useMobileStructuredAgentState(stateArgs)
+  const {
+    state,
+    stateRef,
+    permissionPublication,
+    queuedMessages,
+    queuePause,
+    loadingOlder,
+    loadEarlier
+  } = useMobileStructuredAgentState(stateArgs)
 
   const mutate = useMobileStructuredAgentMutate({
     client,
     sessionId,
     enabled,
     stateRef,
-    onSendError
+    onSendError,
+    permissionSeed: args.permissionSeed
   })
 
+  const hostStatusArgs = {
+    client,
+    sessionId,
+    enabled: enabled && connected && hostSupport?.statusFeed === true
+  }
+  const providerPhase = useMobileStructuredSessionProviderPhase(hostStatusArgs)
   const options = useMobileStructuredAgentOptions({
     agent,
     client,
     sessionId,
+    sessionKey,
     enabled,
     fence: state.fence,
+    connected,
+    turnId: runningStructuredAgentSessionTurnId(state),
+    providerPhase,
+    permissionMode: state.permissionMode,
+    permissionPublication,
+    permissionSeed: args.permissionSeed,
+    unloadedTurnRevisions: state.unloadedTurnRevisions,
     mutate
   })
   const { conversationCommands, invokeStructuredOption, optionSnapshot, setStructuredOption } =
@@ -165,11 +192,7 @@ export function useMobileStructuredAgentSession(args: {
     connected,
     mutate
   })
-  const hostStopping = useMobileStructuredSessionHostStopping({
-    client,
-    sessionId,
-    enabled: enabled && connected && hostSupport?.statusFeed === true
-  })
+  const hostStopping = useMobileStructuredSessionHostStopping(hostStatusArgs)
   // The host's word, bridged by this phone's own press until its Stop event lands.
   const stopPress = useMobileStructuredStopPress(sessionKey)
   const stopping =

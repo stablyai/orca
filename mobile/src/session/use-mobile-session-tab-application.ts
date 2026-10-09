@@ -1,3 +1,4 @@
+import type { MobileSessionTabApplicationScope } from './mobile-session-tab-application-scope'
 import {
   pendingSelectionHandle,
   pendingSelectionTabId,
@@ -25,7 +26,7 @@ import { releaseTerminalCreateLock } from './terminal-create-lock'
 import type { MobileSessionTab, SessionTabsResult } from './mobile-session-route-types'
 import type { MobileSessionTerminalListModel } from './use-mobile-session-terminal-list'
 
-export function useMobileSessionTabApplication(scope: MobileSessionTerminalListModel) {
+export function useMobileSessionTabApplication(scope: MobileSessionTabApplicationScope) {
   const {
     setTerminals,
     terminalsRef,

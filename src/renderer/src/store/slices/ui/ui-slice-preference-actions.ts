@@ -1,4 +1,5 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
+import { settingsForRuntimeChatPermissionOwner } from '../runtime-chat-permission-setting'
 import { createAgentsViewPreferenceActions } from './ui-slice-agents-view-preference-actions'
 import {
   DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
@@ -185,7 +186,7 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       void Promise.all([
         window.api.settings.set(updates.settings).then((nextSettings) => {
           if (nextSettings) {
-            set({ settings: nextSettings })
+            set({ settings: settingsForRuntimeChatPermissionOwner(nextSettings) })
           }
         }),
         window.api.ui.set(updates.ui)

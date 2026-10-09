@@ -225,6 +225,38 @@ describe('picks made while a chat launches', () => {
     expect(lifecycle()).toBeNull()
   })
 
+  // The permission mode belongs to the chat, not the model: a model pick never drops it, and
+  // it lands after the per-model picks so it is the last thing the launch applies.
+  it('keeps a held permission mode through a model pick and applies it last', async () => {
+    const created = deferred<{ sessionId: string; fence: number }>()
+    mocks.launch.mockReturnValue(created.promise)
+    const launch = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-pm' })
+
+    const modePick = holdStructuredAgentSessionLaunchOption(SESSION_ID, 'permissionMode', 'bypass')
+    holdStructuredAgentSessionLaunchOption(SESSION_ID, 'effort', 'high')
+    holdStructuredAgentSessionLaunchOption(SESSION_ID, 'model', 'gpt-picked')
+    expect(getStructuredAgentSessionLaunchSelection(SESSION_ID)?.held).toEqual({
+      permissionMode: 'bypass',
+      model: 'gpt-picked'
+    })
+
+    created.resolve({ sessionId: SESSION_ID, fence: 3 })
+    await settle()
+    setOptionReplies[0]!.resolve(ACCEPTED)
+    await settle()
+    setOptionReplies[1]!.resolve({
+      ok: true,
+      value: { key: 'permissionMode', value: 'bypass', options: { permissionMode: 'bypass' } }
+    })
+    await launch.launchResult
+
+    expect(mutations()).toEqual([
+      { method: 'agentSession.setOption', fence: 3, key: 'model', value: 'gpt-picked' },
+      { method: 'agentSession.setOption', fence: 3, key: 'permissionMode', value: 'bypass' }
+    ])
+    await expect(modePick).resolves.toMatchObject({ kind: 'accepted' })
+  })
+
   it('applies a pick made while the earlier ones are being applied', async () => {
     mocks.launch.mockResolvedValue({ sessionId: SESSION_ID, fence: 1 })
     const launch = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-2' })

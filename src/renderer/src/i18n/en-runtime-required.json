@@ -1116,6 +1116,7 @@
         },
         "AgentsPane": {
           "9b175d0f5e": "Pre-selected agent when opening a new workspace.",
+          "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
           "c8794e622e": "Detected",
           "db9e9e5887": "Customize command",
           "df123171d1": "Not installed"

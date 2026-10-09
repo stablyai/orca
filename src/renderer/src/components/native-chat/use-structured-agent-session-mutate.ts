@@ -34,7 +34,12 @@ export type StructuredAgentSessionWriteOutcome<T> =
   /** Settled for an owner or session this pane no longer shows; there is nothing to say. */
   | { kind: 'dropped' }
 
-type WriteArgs = [method: string, fingerprintMethod: string, fields: Record<string, unknown>]
+type WriteArgs = [
+  method: string,
+  fingerprintMethod: string,
+  fields: Record<string, unknown>,
+  permissionFence?: number | null
+]
 
 export type StructuredAgentSessionWrite = <T>(
   ...args: WriteArgs
@@ -119,7 +124,12 @@ export function useStructuredAgentSessionMutate(args: {
         if (waitedOn) {
           commandInFlight.current = null
         }
-        return enabledRef.current && (stateRef.current.fence === targetFence || waitedOn)
+        return (
+          enabledRef.current &&
+          (stateRef.current.fence === targetFence ||
+            waitedOn ||
+            (method === 'agentSession.setOption' && fields.key === 'permissionMode'))
+        )
       }
       let result: AgentSessionMutationResult<T>
       try {
@@ -165,9 +175,10 @@ export function useStructuredAgentSessionMutate(args: {
     async <T>(
       method: string,
       fingerprintMethod: string,
-      fields: Record<string, unknown>
+      fields: Record<string, unknown>,
+      permissionFence?: number | null
     ): Promise<StructuredAgentSessionWriteOutcome<T>> => {
-      const pressedFence = stateRef.current.fence
+      const pressedFence = permissionFence === undefined ? stateRef.current.fence : permissionFence
       if (
         !namesWhatItStops(fingerprintMethod, fields) ||
         (await supportsStructuredAgentSessionQuietRepeatedStop(target))

@@ -41,7 +41,7 @@ function createCodexIntentRuntime(
       worktree: `id:${workspaceId}`,
       agent: 'codex'
     })
-  return { prepareCodexStructuredLaunch, createIntent }
+  return { prepareCodexStructuredLaunch, createIntent, runtime }
 }
 
 describe('structured Codex folder trust', () => {
@@ -148,7 +148,25 @@ describe('structured agent-session create intent', () => {
       variable: 'CODEX_HOME',
       path: '/accounts/selected/home'
     })
-    expect(intent.options).toEqual({ model: 'gpt-5.6-sol', effort: 'medium', fastMode: 'true' })
+    // A missing chat setting asks, independently of terminal permissions.
+    expect(intent.options).toEqual({
+      model: 'gpt-5.6-sol',
+      effort: 'medium',
+      fastMode: 'true',
+      permissionMode: 'ask'
+    })
+  })
+
+  // A new chat records its own setting, filtered for its agent.
+  it("seeds a new chat with the setting's mode for that agent", async () => {
+    const { createIntent, runtime } = createCodexIntentRuntime({
+      nativeChatPermissionMode: 'ask'
+    })
+
+    expect((await createIntent()).options).toEqual({ permissionMode: 'ask' })
+    expect(runtime.structuredAgentSessionLaunchSeedOptions('claude')).toEqual({
+      permissionMode: 'ask'
+    })
   })
 
   it('resolves the record-less catalog account home read-only, never through launch preparation', async () => {
@@ -232,9 +250,28 @@ describe('structured agent-session create intent', () => {
       variable: 'CLAUDE_CONFIG_DIR',
       path: '/configured/claude-home'
     })
-    expect(intent.options).toEqual({ model: 'opus', effort: 'high', fastMode: 'true' })
+    expect(intent.options).toEqual({
+      model: 'opus',
+      effort: 'high',
+      fastMode: 'true',
+      permissionMode: 'ask'
+    })
     // createSupport reports this same seed, so a paired client's picker shows what create runs.
     expect(runtime.structuredAgentSessionLaunchSeedOptions('claude')).toEqual(intent.options)
+    const store = runtime['store']
+    if (!store) {
+      throw new Error('missing test store')
+    }
+    for (const mode of ['accept-edits', 'auto'] as const) {
+      const inheritedSettings = { ...store.getSettings(), nativeChatPermissionMode: mode }
+      vi.spyOn(store, 'getSettings').mockReturnValue(inheritedSettings)
+      const inherited = await runtime.resolveStructuredAgentSessionCreateIntent({
+        envelope: { sessionId: 'session-middle', clientOperationId: `create-${mode}` },
+        worktree: 'id:workspace-1',
+        agent: 'claude'
+      })
+      expect(inherited.options?.permissionMode).toBe(mode)
+    }
   })
 
   it('uses the managed Claude launch home before falling back to ~/.claude', async () => {

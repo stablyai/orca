@@ -1,3 +1,4 @@
+import type { useAgentSessionPermissionState } from '../../../../shared/use-agent-session-permission-state'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AgentSessionConversationCommand } from '../../../../shared/agent-session-conversation-command'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session-wire'
@@ -9,10 +10,12 @@ import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState,
+  reseedStructuredAgentSessionOptionState,
   type StructuredAgentSessionOptionState
 } from '../../../../shared/structured-agent-session-options'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import { structuredAgentSessionHostKey } from '@/runtime/structured-agent-session-host-capability'
 import { readHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
 import {
   createCoalescedPollRunner,
@@ -49,6 +52,8 @@ export function useStructuredAgentSessionOptionState(args: {
   providerStarting: boolean
   readsBeforeStart: boolean
   turnId: string | null
+  permissionMode?: string | null
+  permissionState?: ReturnType<typeof useAgentSessionPermissionState>
   unloadedTurnRevisions: number | undefined
 }) {
   const {
@@ -64,8 +69,11 @@ export function useStructuredAgentSessionOptionState(args: {
     sessionId,
     target,
     turnId,
+    permissionState,
     worktree
   } = args
+  const beginPermissionRead = permissionState?.begin
+  const confirmPermissionRead = permissionState?.confirmRead
   const [conversationSupport, setConversationSupport] = useState<{
     sessionId: string
     commands: readonly AgentSessionConversationCommand[]
@@ -95,6 +103,8 @@ export function useStructuredAgentSessionOptionState(args: {
   const activeOptionRecordRef = useRef(optionState.record)
   const pendingOptionRef = useRef<string | null>(null)
   const optionMutationGeneration = useRef(0)
+  // Turn reads and post-write reads both land here; only the newest started read may apply.
+  const optionReadGeneration = useRef(0)
   const updateOptionState = useCallback(
     (update: (current: StructuredAgentSessionOptionState) => StructuredAgentSessionOptionState) => {
       const next = update(optionStateRef.current)
@@ -114,11 +124,7 @@ export function useStructuredAgentSessionOptionState(args: {
       seedsModel: launch.seedsModel,
       ...(launch.worktree ? { worktree: launch.worktree } : {})
     })
-    // A host answer is the account's, not the fence's: keep it rather than blank the default.
-    const next =
-      sameSession && (previous.catalogSource === 'host' || previous.catalogSource === 'builtin')
-        ? { ...seeded, catalog: previous.catalog, catalogSource: previous.catalogSource }
-        : seeded
+    const next = reseedStructuredAgentSessionOptionState(previous, seeded, sameSession)
     optionMutationGeneration.current += 1
     pendingOptionRef.current = null
     optionStateRef.current = next
@@ -127,6 +133,13 @@ export function useStructuredAgentSessionOptionState(args: {
   }, [agent, fence, identity])
 
   const optionsReadRef = useRef<CoalescedPollRunner | null>(null)
+  // Keyed by value: a caller may build the target inline, and each read's permission begin
+  // re-renders, so an identity dependency would start a read on every render.
+  const targetKey = structuredAgentSessionHostKey(target)
+  const targetRef = useRef(target)
+  useEffect(() => {
+    targetRef.current = target
+  }, [target])
   // Refresh options each turn to confirm which model the provider actually selected, and once
   // the provider starts: only then has the host read what it will run.
   useEffect(() => {
@@ -136,11 +149,16 @@ export function useStructuredAgentSessionOptionState(args: {
     let stale = false
     const runner = createCoalescedPollRunner(async () => {
       const readGeneration = optionMutationGeneration.current
+      const read = ++optionReadGeneration.current
+      const permissionRead = beginPermissionRead?.()
       const result = await callStructuredAgentSession<AgentSessionOptionsResult>(
-        target,
+        targetRef.current,
         'agentSession.options',
         { sessionId }
       )
+      if (permissionRead) {
+        confirmPermissionRead?.(permissionRead, result.permissionModes)
+      }
       if (!stale && optionMutationGeneration.current === readGeneration) {
         setConversationSupport({
           sessionId,
@@ -152,7 +170,7 @@ export function useStructuredAgentSessionOptionState(args: {
           fence
         })
         updateOptionState((current) =>
-          current.record === activeOptionRecordRef.current
+          current.record === activeOptionRecordRef.current && optionReadGeneration.current === read
             ? applyStructuredAgentSessionOptions(current, optionCatalog, result)
             : current
         )
@@ -171,10 +189,45 @@ export function useStructuredAgentSessionOptionState(args: {
     providerVisible,
     readsBeforeStart,
     sessionId,
-    target,
+    targetKey,
+    args.permissionMode,
     turnId,
-    updateOptionState
+    updateOptionState,
+    beginPermissionRead,
+    confirmPermissionRead
   ])
+
+  // A write's own read; `isCurrent` drops it once the picked record or mutation moved on.
+  const refreshOptionsAfterWrite = useCallback(
+    (targetRecord: StructuredAgentSessionOptionState['record'], isCurrent: () => boolean) => {
+      const read = ++optionReadGeneration.current
+      const permissionRead = beginPermissionRead?.()
+      void callStructuredAgentSession<AgentSessionOptionsResult>(target, 'agentSession.options', {
+        sessionId
+      })
+        .then((refreshed) => {
+          if (permissionRead) {
+            confirmPermissionRead?.(permissionRead, refreshed.permissionModes)
+          }
+          if (isCurrent() && optionReadGeneration.current === read) {
+            updateOptionState((latest) =>
+              latest.record === targetRecord && optionCatalog
+                ? applyStructuredAgentSessionOptions(latest, optionCatalog, refreshed)
+                : latest
+            )
+          }
+        })
+        .catch(() => {})
+    },
+    [
+      optionCatalog,
+      sessionId,
+      target,
+      updateOptionState,
+      beginPermissionRead,
+      confirmPermissionRead
+    ]
+  )
 
   // Reads share the session's host queue with sends and interrupts, so a burst of
   // missed revisions keeps one read in flight and at most one behind it.
@@ -193,6 +246,7 @@ export function useStructuredAgentSessionOptionState(args: {
     activeOptionRecordRef,
     pendingOptionRef,
     optionMutationGeneration,
+    refreshOptionsAfterWrite,
     updateOptionState
   }
 }

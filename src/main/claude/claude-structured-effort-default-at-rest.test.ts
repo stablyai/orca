@@ -171,7 +171,9 @@ function readAtRest(store: AgentModelCatalogStore, record: AgentSessionRecord) {
     deps: {
       adapter: {},
       agents: claudeAndCodexAgents(),
-      store: { getRecord: () => record },
+      store: { getRecord: () => record, permissionRevision: () => 0 },
+      // These partial records have no lease; the optional permission read logs and is skipped.
+      logger: { warn: () => {} },
       modelCatalog
     },
     serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
@@ -393,12 +395,13 @@ describe('Claude effort default at rest', () => {
     const started = events.find((event) => event.type === 'started')
     const reported = started?.type === 'started' ? started.reportedOptions : null
     expect(reported).not.toHaveProperty('effort')
-    // The record the start persists names the listed row the catalog learned under.
+    // The record the start persists names the listed row the catalog learned under, and the chat's
+    // own permission mode.
     const record = restingRecord(
       nativeSessionOptionsFromReport({ reported: reported!, restoreSkipped: [] })
     )
-    expect(record.options).toEqual({ model: 'opus[1m]' })
+    expect(record.options).toEqual({ model: 'opus[1m]', permissionMode: 'ask' })
     expect((await readAtRest(store, record)).current.effort).toBe('medium')
-    expect(record.options).toEqual({ model: 'opus[1m]' })
+    expect(record.options).toEqual({ model: 'opus[1m]', permissionMode: 'ask' })
   })
 })

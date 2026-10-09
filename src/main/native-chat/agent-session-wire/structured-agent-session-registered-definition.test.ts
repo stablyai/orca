@@ -78,7 +78,7 @@ function readAtRest(agents: StructuredAgentRegistry) {
     deps: {
       adapter: new StructuredAgentSessionAdapterRouter(agents, async () => {}),
       agents,
-      store: { getRecord: () => RECORD }
+      store: { getRecord: () => RECORD, permissionRevision: () => 0 }
     },
     serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
     openConversation: async () => resting,

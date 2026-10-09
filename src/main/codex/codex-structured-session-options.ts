@@ -13,17 +13,29 @@ import {
   type CodexSessionOptionCatalog
 } from './codex-structured-model-catalog'
 import { codexAcquireCatalogListing, listingFromEntry } from './codex-structured-catalog-entry'
+import {
+  AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
+  agentChatPermissionModeSupported
+} from '../../shared/agent-chat-permission-mode'
+import {
+  codexChatPermissionOptions,
+  codexPermissionModeOption,
+  codexPermissionModePickable,
+  codexPermissionModesFor
+} from './codex-structured-permission-mode'
 export { codexAcquireCatalogListing } from './codex-structured-catalog-entry'
 
 export function restoredCodexSessionOptions(
   options: Readonly<Record<string, string>> | undefined
 ): Map<string, string> {
   const restored = new Map(
-    Object.entries(options ?? {}).filter(([key, value]) => {
+    Object.entries(codexChatPermissionOptions(options)).filter(([key, value]) => {
       return (
         isCodexTurnOptionKey(key) &&
         (key !== 'fastMode' ||
-          typeof decodeStructuredAgentSessionOptionValue('fastMode', value) === 'boolean')
+          typeof decodeStructuredAgentSessionOptionValue('fastMode', value) === 'boolean') &&
+        (key !== AGENT_CHAT_PERMISSION_MODE_OPTION_ID ||
+          agentChatPermissionModeSupported('codex', value))
       )
     })
   )
@@ -131,9 +143,8 @@ function applyLiveCodexCatalog(
     )?.supportsFastMode
   })
   const fastMode = decodeCodexFastMode(session.options)
-  return fastMode === undefined
-    ? catalog.result
-    : { ...catalog.result, current: { ...catalog.result.current, fastMode } }
+  const result = { ...catalog.result, permissionModes: codexPermissionModesFor(session) }
+  return fastMode === undefined ? result : { ...result, current: { ...result.current, fastMode } }
 }
 
 export async function readLiveCodexSessionOptions(
@@ -159,7 +170,8 @@ export async function applyCodexStructuredSessionOption(
   value: string
 ): Promise<Readonly<Record<string, string>>> {
   try {
-    return applyValidatedCodexStructuredSessionOption(session, key, value)
+    const pick = codexPermissionModeOption(key, value)
+    return applyValidatedCodexStructuredSessionOption(session, pick.key, pick.value)
   } catch (error) {
     throw new AgentSessionOptionRejectedError(error)
   }
@@ -198,6 +210,15 @@ function applyValidatedCodexStructuredSessionOption(
   // report success for a value the next turn discards.
   if (key === 'serviceTier') {
     throw new Error('codex service tier is derived from Fast mode and cannot be set directly')
+  }
+  if (
+    key === AGENT_CHAT_PERMISSION_MODE_OPTION_ID &&
+    !codexPermissionModePickable(session, value)
+  ) {
+    throw new Error(`codex app-server has no permission mode named ${value}`)
+  }
+  if (key === AGENT_CHAT_PERMISSION_MODE_OPTION_ID) {
+    session.options.delete('approvalsReviewer')
   }
   if (key !== 'model' && key !== 'effort' && key !== 'fastMode') {
     session.options.set(key, value)

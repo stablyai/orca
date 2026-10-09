@@ -29,10 +29,19 @@ function mergeBatch(
   }
   // As applying both in turn would leave it, so an older host's rows still drop a stale claim.
   const latestTurn = latestTurnAfterStructuredAgentSessionBatch(left.latestTurn, right)
+  const permission = right.permissionMode !== undefined ? right : left
   return {
     type: 'batch',
     ...(right.commands !== undefined || left.commands !== undefined
       ? { commands: right.commands !== undefined ? right.commands : left.commands }
+      : {}),
+    ...(permission.permissionMode !== undefined
+      ? {
+          permissionMode: permission.permissionMode,
+          ...(permission.permissionRevision !== undefined
+            ? { permissionRevision: permission.permissionRevision }
+            : {})
+        }
       : {}),
     sessionId: right.sessionId,
     batch: {
@@ -85,6 +94,9 @@ export function createStructuredAgentSessionEventCoalescer(
       }
       if (event.type !== 'batch') {
         return
+      }
+      if (pending && pending.fence !== event.fence) {
+        flush()
       }
       pending = pending ? mergeBatch(pending, event) : event
       timer ??= setTimeout(flush, delayMs)

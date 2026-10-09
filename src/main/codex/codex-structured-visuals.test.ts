@@ -15,8 +15,11 @@ const VISUALS: NativeChatVisualsLaunch = {
   folder: '/state/native-chat-visuals/abc',
   skill: { pluginDir: '/app/native-chat-visuals', skillsRoot: '/app/native-chat-visuals/skills' }
 }
-const MANUAL = { approvalPolicy: 'on-request', sandbox: 'workspace-write' } as const
-const YOLO = { approvalPolicy: 'never', sandbox: 'danger-full-access' } as const
+const MANUAL = {
+  approvalPolicy: 'on-request',
+  sandbox: 'workspace-write',
+  approvalsReviewer: 'user'
+} as const
 
 type Call = { method: string; params?: Record<string, unknown>; timeoutMs?: number }
 
@@ -43,8 +46,7 @@ describe('setting up a Codex app-server for a chat with visuals', () => {
     })
     const config = await prepareCodexThreadForVisuals(connection, {
       cwd: '/work/repo',
-      visuals: VISUALS,
-      permissionPolicy: MANUAL
+      visuals: VISUALS
     })
     expect(config).toEqual({
       'sandbox_workspace_write.writable_roots': ['/home/me/scratch', VISUALS.folder]
@@ -85,7 +87,7 @@ describe('setting up a Codex app-server for a chat with visuals', () => {
       await expect(
         prepareCodexThreadForVisuals(
           connection,
-          { cwd: '/w', visuals: VISUALS, permissionPolicy: MANUAL },
+          { cwd: '/w', visuals: VISUALS },
           { logger, sessionId: 's-1' }
         )
       ).resolves.toBeNull()
@@ -93,16 +95,15 @@ describe('setting up a Codex app-server for a chat with visuals', () => {
     expect(logger.warn).toHaveBeenCalledTimes(3)
   })
 
-  it('asks for no writable root under full access, and still names the skill root', async () => {
-    const { calls, connection } = connectionAnswering({})
+  it('asks for the writable root without a permission policy, since a chat can leave Full access', async () => {
+    const { calls, connection } = connectionAnswering({ 'config/read': configWithRoots([]) })
     await expect(
-      prepareCodexThreadForVisuals(connection, {
-        cwd: '/w',
-        visuals: VISUALS,
-        permissionPolicy: YOLO
-      })
-    ).resolves.toBeNull()
-    expect(calls.map((call) => call.method)).toEqual(['skills/extraRoots/set'])
+      prepareCodexThreadForVisuals(connection, { cwd: '/w', visuals: VISUALS })
+    ).resolves.toEqual({ 'sandbox_workspace_write.writable_roots': [VISUALS.folder] })
+    expect(calls.map((call) => call.method).sort()).toEqual([
+      'config/read',
+      'skills/extraRoots/set'
+    ])
   })
 
   it('opens without the skill on a Codex that predates skill roots, or one that fails or hangs', async () => {

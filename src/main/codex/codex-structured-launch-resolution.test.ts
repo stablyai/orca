@@ -1,3 +1,9 @@
+import {
+  IDENTITY,
+  SESSION_ID,
+  record,
+  resolverFor
+} from './codex-structured-launch-resolution.test-fixture'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -5,9 +11,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
-import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { createCodexStructuredLaunchResolver } from './codex-structured-launch-resolution'
-import { codexStructuredPermissionPolicyForSettings } from './codex-structured-permission-policy'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const { isWindowsProcessStartTimeAvailable } = vi.hoisted(() => ({
@@ -19,11 +23,6 @@ vi.mock('../windows/windows-process-table', async (importOriginal) => ({
   isWindowsProcessStartTimeAvailable
 }))
 
-const SESSION_ID = 'session-1'
-const IDENTITY = { sessionId: SESSION_ID } as Parameters<
-  ReturnType<typeof createCodexStructuredLaunchResolver>
->[0]['identity']
-
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>): Promise<T> {
   const original = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
@@ -32,39 +31,6 @@ async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>)
   } finally {
     Object.defineProperty(process, 'platform', { configurable: true, value: original })
   }
-}
-
-function record(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRecord {
-  return {
-    sessionId: SESSION_ID,
-    provider: 'codex',
-    location: {
-      executionHostId: LOCAL_EXECUTION_HOST_ID,
-      wslDistro: null,
-      workspaceId: 'workspace-1',
-      workspaceKind: 'git-worktree'
-    },
-    accountHome: { variable: 'CODEX_HOME', path: '/home/work/.codex' },
-    providerHandleChain: [],
-    ...overrides
-  } as AgentSessionRecord
-}
-
-function resolverFor(
-  value: AgentSessionRecord | null,
-  resolveWorkspacePath: (workspaceId: string) => Promise<string> = async (id) => `/repos/${id}`,
-  resolveRollout: () => Promise<string | null> = async () => null,
-  agentDefaultArgs: Record<string, string> = { codex: '' },
-  resolveLaunchArgs?: () => string[]
-) {
-  return createCodexStructuredLaunchResolver({
-    store: { getRecord: () => value, pinLaunchDirectory: vi.fn() },
-    resolveWorkspacePath,
-    resolveCommand: () => '/usr/local/bin/codex',
-    resolveRollout,
-    resolveLaunchArgs: resolveLaunchArgs ?? (() => value?.launchArgs ?? []),
-    resolvePermissionPolicy: () => codexStructuredPermissionPolicyForSettings({ agentDefaultArgs })
-  })
 }
 
 describe('codex structured launch resolution', () => {
@@ -90,7 +56,6 @@ describe('codex structured launch resolution', () => {
         }),
         undefined,
         undefined,
-        { codex: '' },
         () => args
       )
       await expect(resolve({ identity: IDENTITY })).rejects.toThrow(/Arguments/)
@@ -165,7 +130,12 @@ describe('codex structured launch resolution', () => {
       codexHome: '/home/work/.codex',
       resumeThreadId: null,
       // Every launch now carries a posture; neither one is left for config.toml to decide.
-      permissionPolicy: { approvalPolicy: 'on-request', sandbox: 'workspace-write' }
+      permissionMode: 'ask',
+      permissionPolicy: {
+        approvalPolicy: 'on-request',
+        sandbox: 'workspace-write',
+        approvalsReviewer: 'user'
+      }
     })
   })
 
@@ -245,41 +215,6 @@ describe('codex structured launch resolution', () => {
     }
     const fresh = await resolverFor(record())({ identity: IDENTITY })
     expect(fresh).not.toHaveProperty('supersedeIfUnsaved')
-  })
-
-  // app-server owns the permission posture on the thread RPC, not process flags.
-  it('resolves the bypass posture as app-server thread policy', async () => {
-    const launch = await resolverFor(record(), undefined, undefined, {
-      codex: '--dangerously-bypass-approvals-and-sandbox --model gpt-5.6-sol'
-    })({ identity: IDENTITY })
-
-    expect(launch.args).toEqual(['app-server'])
-    expect(launch.permissionPolicy).toEqual({
-      approvalPolicy: 'never',
-      sandbox: 'danger-full-access'
-    })
-  })
-
-  it('bypasses approvals for a profile that never opened Agent settings', async () => {
-    const launch = await resolverFor(record(), undefined, undefined, {})({ identity: IDENTITY })
-
-    expect(launch.args).toEqual(['app-server'])
-    expect(launch.permissionPolicy).toEqual({
-      approvalPolicy: 'never',
-      sandbox: 'danger-full-access'
-    })
-  })
-
-  // Stated, not omitted: app-server resolves an absent field through the mirrored config.toml,
-  // so a Manual session on a home carrying `approval_policy = "never"` never prompted at all.
-  it('states the approval posture under Manual', async () => {
-    const launch = await resolverFor(record())({ identity: IDENTITY })
-
-    expect(launch.args).toEqual(['app-server'])
-    expect(launch.permissionPolicy).toEqual({
-      approvalPolicy: 'on-request',
-      sandbox: 'workspace-write'
-    })
   })
 
   // A thread opened on the configured default and then given a turn on the saved model reads to

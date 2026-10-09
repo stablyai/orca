@@ -14,13 +14,19 @@ import type {
 } from '../../../../shared/global-settings-types'
 import { normalizeWorktreeVisibilityDefaults } from '../../../../shared/external-worktree-visibility'
 import { WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  runtimeChatPermissionSetting,
+  runtimeChatPermissionOwner,
+  settingsForRuntimeChatPermissionOwner
+} from './runtime-chat-permission-setting'
 
 export type WorktreeVisibilityDefaultsByHost = Partial<
   Record<ExecutionHostId, WorktreeVisibilityDefaults | null>
 >
 
 export async function readRuntimeWorktreeVisibilityDefaults(
-  environmentId: string
+  environmentId: string,
+  permissionRead?: ReturnType<typeof runtimeChatPermissionSetting.beginRead>
 ): Promise<WorktreeVisibilityDefaults | null | undefined> {
   try {
     const result = await callRuntimeRpc<{ settings: Partial<GlobalSettings> }>(
@@ -29,17 +35,23 @@ export async function readRuntimeWorktreeVisibilityDefaults(
       undefined,
       { timeoutMs: 15_000, reuseRecentCompatibilityFailure: true }
     )
+    if (permissionRead) {
+      runtimeChatPermissionSetting.captureRead(permissionRead, result.settings)
+    }
     return normalizeWorktreeVisibilityDefaults(result.settings.worktreeVisibilityDefaults) ?? null
   } catch {
     return undefined
   }
 }
 
-export async function readRuntimeWorktreeVisibilitySnapshot(environmentId: string): Promise<{
+export async function readRuntimeWorktreeVisibilitySnapshot(
+  environmentId: string,
+  permissionRead?: ReturnType<typeof runtimeChatPermissionSetting.beginRead>
+): Promise<{
   defaults: WorktreeVisibilityDefaults | null | undefined
   sourceDefaultsSupported: boolean
 }> {
-  const defaults = await readRuntimeWorktreeVisibilityDefaults(environmentId)
+  const defaults = await readRuntimeWorktreeVisibilityDefaults(environmentId, permissionRead)
   const sourceDefaultsSupported =
     defaults !== undefined &&
     (await runtimeEnvironmentSupportsCapability(
@@ -77,9 +89,14 @@ export async function hydrateOwnerWorktreeVisibilityDefaults(
   const ownerDefaultsByHost = localDefaults
     ? { ...defaultsByHost, [LOCAL_EXECUTION_HOST_ID]: localDefaults }
     : defaultsByHost
-  const { defaults, sourceDefaultsSupported } = await readRuntimeWorktreeVisibilitySnapshot(
-    target.environmentId
+  const permissionRead = runtimeChatPermissionSetting.beginRead(
+    runtimeChatPermissionOwner(target.environmentId)
   )
+  const { defaults, sourceDefaultsSupported } = await readRuntimeWorktreeVisibilitySnapshot(
+    target.environmentId,
+    permissionRead
+  )
+  settings = settingsForRuntimeChatPermissionOwner(settings)
   if (defaults) {
     return {
       settings: { ...settings, worktreeVisibilityDefaults: defaults },

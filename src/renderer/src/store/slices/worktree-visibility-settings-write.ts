@@ -5,6 +5,10 @@ import {
 } from '../../../../shared/execution-host'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { AppState } from '../types'
+import {
+  settingsForRuntimeChatPermissionOwner,
+  writeRuntimeChatPermissionSetting
+} from './runtime-chat-permission-setting'
 
 export async function persistVisibilityAwareSettings(args: {
   normalizedUpdates: Partial<GlobalSettings>
@@ -23,6 +27,22 @@ export async function persistVisibilityAwareSettings(args: {
     set
   } = args
   const target = getActiveRuntimeTarget(currentSettings)
+  if ('nativeChatPermissionMode' in normalizedUpdates && target.kind === 'environment') {
+    const { nativeChatPermissionMode, ...otherUpdates } = normalizedUpdates
+    await writeRuntimeChatPermissionSetting(target.environmentId, { nativeChatPermissionMode })
+    try {
+      if (Object.keys(otherUpdates).length > 0) {
+        await persistVisibilityAwareSettings({ ...args, normalizedUpdates: otherUpdates })
+      }
+    } finally {
+      if (shouldPublish()) {
+        set((state) => ({
+          settings: state.settings ? settingsForRuntimeChatPermissionOwner(state.settings) : null
+        }))
+      }
+    }
+    return
+  }
   if ('worktreeVisibilityDefaults' in normalizedUpdates && target.kind === 'environment') {
     const { worktreeVisibilityDefaults, ...localUpdates } = normalizedUpdates
     if (target.environmentId !== supportedRuntimeEnvironmentId) {
@@ -64,7 +84,10 @@ export async function persistVisibilityAwareSettings(args: {
             return {
               settings:
                 stillFocused && defaults
-                  ? { ...localSettings, worktreeVisibilityDefaults: defaults }
+                  ? settingsForRuntimeChatPermissionOwner({
+                      ...localSettings,
+                      worktreeVisibilityDefaults: defaults
+                    })
                   : state.settings
             }
           })
@@ -84,7 +107,10 @@ export async function persistVisibilityAwareSettings(args: {
       const stillFocused =
         currentTarget.kind === 'environment' && currentTarget.environmentId === target.environmentId
       return {
-        settings: stillFocused ? nextSettings : state.settings,
+        settings:
+          stillFocused && nextSettings
+            ? settingsForRuntimeChatPermissionOwner(nextSettings)
+            : state.settings,
         worktreeVisibilityDefaultsByHost:
           target.environmentId === supportedRuntimeEnvironmentId &&
           nextSettings?.worktreeVisibilityDefaults
@@ -104,7 +130,8 @@ export async function persistVisibilityAwareSettings(args: {
   }
   set((state) => ({
     settings: (() => {
-      const persisted = (nextSettings as GlobalSettings | undefined) ?? state.settings
+      const saved = nextSettings ?? state.settings
+      const persisted = saved ? settingsForRuntimeChatPermissionOwner(saved) : saved
       if (!persisted || target.kind !== 'environment') {
         return persisted
       }

@@ -37,12 +37,18 @@ import type {
   AgentSessionThreadGoalChange
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionRefusalReason } from '../../../shared/agent-session-wire-refusals'
-import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
 import type {
   AgentSessionCancelOutcome,
   StructuredAgentSessionAdapterStop
 } from './structured-agent-session-adapter-stop'
 export type { AgentSessionCancelOutcome } from './structured-agent-session-adapter-stop'
+export type {
+  StructuredAgentSessionEndedEvent,
+  StructuredAgentSessionLifecycleEvent,
+  StructuredAgentSessionOptionsReportedEvent,
+  StructuredAgentSessionOptionsSkippedEvent,
+  StructuredAgentSessionStartedEvent
+} from './structured-agent-session-lifecycle-events'
 export type {
   StructuredAgentSessionChildEndCause,
   StructuredAgentSessionStopCause
@@ -207,70 +213,6 @@ export type AgentSessionDispatchOutcome =
   /** The call did not settle. Never re-send on the user's behalf. */
   | { state: 'unknown'; reason: string }
 
-export type StructuredAgentSessionEndedEvent = {
-  type: 'ended'
-  sessionId: string
-  /** Log text only; the chat's words come from `failure`. */
-  reason: string
-  /** Why it ended, as the adapter knows it: the provider's exit with its own diagnostic, or an
-   *  Orca fault. Absent reads as a provider exit with nothing to add. */
-  failure?: SubmissionRejectionFact
-  cause: 'unexpected-exit' | 'requested-close'
-  fence: number
-  acquisitionGeneration: string
-  /** Host receipt of the child exit: the end time of a turn it interrupted. */
-  observedAt?: number
-  /** The provider ended before it finished starting, so resuming it would repeat the failure. */
-  startupUnproven?: true
-  /** The provider ended before it answered its start, so it ran nothing it was handed. */
-  startupUnanswered?: true
-}
-
-/** The child a publish-first acquire handed over has now proven its start: startup facts applied.
- *  What it reports from here on is fact, not a catalog guess. */
-export type StructuredAgentSessionStartedEvent = {
-  type: 'started'
-  sessionId: string
-  fence: number
-  acquisitionGeneration: string
-  /** What the child proved, snapshotted by the adapter from what startup already read. The host
-   *  handles this inside the session's serialized step, so it must not ask the CLI. */
-  reportedOptions: AgentSessionOptionsResult['current']
-  /** Saved options the child could not take; the host drops them rather than persist them. */
-  restoreSkippedOptions: readonly string[]
-  /** Values the child showed it cannot run: a report naming the same value is not persisted. */
-  retiredOptions?: Readonly<Record<string, string>>
-  /** What the child listed at startup, saved as its account's catalog even if no view reads it. */
-  catalogListing?: AgentModelCatalogLiveListing
-  /** The attempt's `optionRevision()` as the read behind this report began: a pick the host took
-   *  since makes it out of date. An earlier report never does, whenever the host took it. */
-  optionRevision: number
-}
-
-/** A running child showed saved options it cannot run, as a model the provider reports missing.
- *  The record drops them, so the next start uses the provider's own. */
-export type StructuredAgentSessionOptionsSkippedEvent = {
-  type: 'options-skipped'
-  sessionId: string
-  fence: number
-  acquisitionGeneration: string
-  /** Each saved value the child showed it cannot run; a record holding another value keeps it. */
-  options: Readonly<Record<string, string>>
-}
-
-/** What a child that already proved its start reports later, such as an optional read that came
- *  after `started`: persisted as the start's report is. Never delays a start. */
-export type StructuredAgentSessionOptionsReportedEvent = Omit<
-  StructuredAgentSessionStartedEvent,
-  'type'
-> & { type: 'options-reported' }
-
-export type StructuredAgentSessionLifecycleEvent =
-  | StructuredAgentSessionEndedEvent
-  | StructuredAgentSessionStartedEvent
-  | StructuredAgentSessionOptionsReportedEvent
-  | StructuredAgentSessionOptionsSkippedEvent
-
 /** Whether the provider child behind an acquisition has proven its start. A publish-first
  *  acquire hands over a `starting` child, which the host gives no input until the `started`
  *  lifecycle event flips it. */
@@ -416,6 +358,12 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   setOption(
     input: StructuredAgentSessionSetOptionInput
   ): Promise<void | Readonly<Record<string, string>>>
+  /** The live child was launched in a way the chat's options have since outgrown (Claude's bypass
+   *  flag). Derived on every read; the host starts the next send on a new child when this one
+   *  owes no work. */
+  childRelaunchRequired?(sessionId: string): boolean
+  /** Permission preparation before handover; awaited outside the session lane. */
+  prepareDispatch?(sessionId: string): Promise<void> | undefined
   /** Resolves once a live session can take an option write, or after a bound; never rejects. */
   awaitOptionWritable?(sessionId: string): Promise<void>
   /** False while the live child has not answered its start, so it has run nothing it was handed.

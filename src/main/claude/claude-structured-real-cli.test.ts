@@ -402,7 +402,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
   // The contract a chat's first message depends on: saved options ride the launch, and the
   // message is written as soon as the child is published, before the CLI answers initialize.
   it.skipIf(!realClaudeAuthenticated)(
-    'runs a message written before initialize answers, under the saved options it was launched with',
+    'runs a message written before initialize answers, under saved Accept edits',
     async () => {
       const providerSessionId = randomUUID()
       const claudeConfigDir = process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
@@ -424,8 +424,9 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           identity: identity(providerSessionId),
           fence: 1,
           spawnToken: 'real-cli-saved-options',
-          options: { model: 'sonnet', permissionMode: 'plan', effort: 'low' }
+          options: { model: 'sonnet', permissionMode: 'accept-edits', effort: 'low' }
         })
+        expect(adapter.prepareDispatch('real-cli-handshake')).toBeUndefined()
         const dispatched = await adapter.dispatch({
           sessionId: 'real-cli-handshake',
           clientMessageId: 'real-cli-saved-options-1',
@@ -436,7 +437,6 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           },
           fence: 1
         })
-        // Read as the write resolves: the CLI had not answered initialize, so nothing held it.
         const answeredAtDispatch = adapter['sessions'].get('real-cli-handshake')?.startup.answered
         const startedAtDispatch = events.some((event) => event.type === 'started')
         expect(dispatched).toEqual({ state: 'admitted' })
@@ -450,10 +450,10 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
         // The echo of the message Orca wrote, then a turn that ended in success.
         expect(messages()).toContainEqual(expect.objectContaining({ type: 'user', isReplay: true }))
         expect(messages().find((m) => m.type === 'result')).toMatchObject({ is_error: false })
-        // The turn's own init names what the child was launched with.
+        // The turn's own init confirms the launched policy.
         expect(messages().find((m) => m.type === 'system' && m.subtype === 'init')).toMatchObject({
           model: 'claude-sonnet-5',
-          permissionMode: 'plan'
+          permissionMode: 'acceptEdits'
         })
       } finally {
         await adapter.closeAll()

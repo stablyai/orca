@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { TooltipProvider } from '../ui/tooltip'
 import { ChatSettingsSection } from './ChatSettingsSection'
 import { ActiveSettingsSectionProvider } from './SettingsSection'
 import { getChatInlineVisualsSearchEntry } from './chat-inline-visuals-search'
@@ -36,16 +37,18 @@ function renderChat(nativeChatInlineVisuals: boolean | undefined) {
   const updateSettings = vi.fn()
   return {
     ...render(
-      <ActiveSettingsSectionProvider value="chat">
-        <ChatSettingsSection
-          settings={settings}
-          updateSettings={updateSettings}
-          writeSourceControlAiSettings={async () => {}}
-          searchEntries={[getChatInlineVisualsSearchEntry()]}
-          showDesktopOnlySettings
-          isMounted
-        />
-      </ActiveSettingsSectionProvider>
+      <TooltipProvider>
+        <ActiveSettingsSectionProvider value="chat">
+          <ChatSettingsSection
+            settings={settings}
+            updateSettings={updateSettings}
+            writeSourceControlAiSettings={async () => {}}
+            searchEntries={[getChatInlineVisualsSearchEntry()]}
+            showDesktopOnlySettings
+            isMounted
+          />
+        </ActiveSettingsSectionProvider>
+      </TooltipProvider>
     ),
     updateSettings
   }

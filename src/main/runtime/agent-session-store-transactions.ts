@@ -7,6 +7,10 @@
 // a BEGIN, which `runJournalTransaction` does not support. The queue also keeps the FIFO order and
 // the async boundary every awaiting caller was written against.
 
+import {
+  agentSessionPermissionRevision,
+  stampAgentSessionPermissionRevisions
+} from './agent-session-permission-revisions'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 import type { JournalOperationReceipt } from '../native-chat/agent-session-journal/journal-row-writer'
 import { journalOpenRefusalError } from '../native-chat/agent-session-journal/journal-open-failure'
@@ -108,6 +112,10 @@ export class AgentSessionStoreTransactions {
     return this.journalDatabase.readOnly
   }
 
+  permissionRevision(id: string): number {
+    return agentSessionPermissionRevision(this.published.records.get(id))
+  }
+
   /**
    * `apply` changes only the draft it is given. On a database a newer Orca wrote every transaction
    * is refused, except one marked `inMemoryWhenReadOnly`: it is published without a write, for a
@@ -166,6 +174,7 @@ export class AgentSessionStoreTransactions {
     const draft = draftAgentSessionStoreState(published)
     const result = apply(draft)
     attributeAgentSessionRuntime(published, draft)
+    stampAgentSessionPermissionRevisions(published, draft)
     const writes = agentSessionStoreDraftRowWrites(published, draft)
     return {
       result,

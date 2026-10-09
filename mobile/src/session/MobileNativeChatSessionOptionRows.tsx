@@ -20,12 +20,15 @@ export function Pill({
   label,
   accessibleName,
   disabled,
-  onPress
+  onPress,
+  labelColor
 }: {
   label: string
   accessibleName: string
   disabled: boolean
   onPress: () => void
+  /** A value that warns, such as Full access, reads in that colour. */
+  labelColor?: string
 }): React.JSX.Element {
   return (
     <Pressable
@@ -38,7 +41,11 @@ export function Pill({
       hitSlop={6}
     >
       <Text
-        style={[styles.pillText, disabled && styles.pillTextDisabled]}
+        style={[
+          styles.pillText,
+          labelColor ? { color: labelColor } : null,
+          disabled && styles.pillTextDisabled
+        ]}
         numberOfLines={1}
         ellipsizeMode="tail"
       >
@@ -49,14 +56,15 @@ export function Pill({
   )
 }
 
-function ChoiceRow({
+export function ChoiceRow({
   label,
   description,
   selected,
   disabled,
   grouped,
   divided,
-  onPress
+  onPress,
+  labelColor
 }: {
   label: string
   description?: string
@@ -65,6 +73,7 @@ function ChoiceRow({
   grouped: boolean
   divided: boolean
   onPress: () => void
+  labelColor?: string
 }): React.JSX.Element {
   return (
     <Pressable
@@ -84,7 +93,7 @@ function ChoiceRow({
         {selected ? <Check size={12} color={colors.bgBase} strokeWidth={3} /> : null}
       </View>
       <View style={styles.rowBody}>
-        <Text style={styles.rowLabel}>{label}</Text>
+        <Text style={[styles.rowLabel, labelColor ? { color: labelColor } : null]}>{label}</Text>
         {description ? (
           <Text style={styles.rowDescription} numberOfLines={2}>
             {description}

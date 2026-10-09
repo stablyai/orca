@@ -2,6 +2,8 @@
 // messages to a provider child. Bundled because they share one invariant — a conversation open
 // with a message queued has a delivery loop — and the open is where a loop for leftovers wakes.
 
+import { prepareStructuredAgentSessionDispatch } from './structured-agent-session-dispatch-preparation'
+import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import { holdClosedStructuredAgentSessionSends } from './structured-agent-session-host-lifetime'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -13,6 +15,7 @@ import {
 } from './structured-agent-session-conversation-open'
 import type { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
 import { StructuredAgentSessionDeliveryLoop } from './structured-agent-session-delivery-loop'
+import { relaunchOutgrownStructuredAgentSessionChild } from './structured-agent-session-child-relaunch'
 import { structuredAgentSessionCommandRunning } from './structured-agent-session-command-turn'
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-agent-start'
 import type {
@@ -52,11 +55,14 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   sessions: Map<string, StructuredAgentSessionHostSession>
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   trackStart: <T>(start: Promise<T>) => Promise<T>
+  acquireAborts: StructuredAgentSessionAcquireAborts
   /** Starts a child for `startedFor`, the queued message at the head, if the session has none. */
   ensureProviderChild: (
     sessionId: string,
     startedFor: string
   ) => Promise<StructuredAgentSessionResumeOutcome>
+  /** Puts the session's child to rest as the idle sweep does; inside the caller's serialize. */
+  restProviderChild: (sessionId: string) => Promise<void>
   /** Stops a child that reported it is not signed in, so the start after it reads a new login. */
   stopSignedOutAgent: (sessionId: string) => Promise<void>
   clientDelivery: Pick<
@@ -71,24 +77,38 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     agents: deps.agents,
     serialize: input.serialize,
     trackStart: input.trackStart,
+    prepareDispatch: (sessionId) =>
+      prepareStructuredAgentSessionDispatch(deps.adapter, input.acquireAborts, sessionId),
     ensureProviderChild: async (sessionId, startedFor) => {
       // A send waiting on a person's Stop is not handed over yet; the step after the Stop decides.
       const session = input.clientDelivery.readStopping(sessionId)
         ? undefined
         : sessions.get(sessionId)
-      await retireSignedOutStructuredAgentSessionChild(sessionId, session, {
-        work: {
-          childWork: () => input.clientDelivery.readChildWork(sessionId),
-          hasOpenDispatch: () => {
-            const record = deps.store.getRecord(sessionId)
-            return record !== null && deps.hasOpenDispatch?.(record) === true
-          },
-          providerHoldsDispatch: () => deps.adapter.holdsDispatch?.(sessionId) === true
+      const work = {
+        childWork: () => input.clientDelivery.readChildWork(sessionId),
+        hasOpenDispatch: () => {
+          const record = deps.store.getRecord(sessionId)
+          return record !== null && deps.hasOpenDispatch?.(record) === true
         },
+        providerHoldsDispatch: () => deps.adapter.holdsDispatch?.(sessionId) === true
+      }
+      await retireSignedOutStructuredAgentSessionChild(sessionId, session, {
+        work,
         startUnavailable: () => deps.adapter.startUnavailable?.(sessionId),
         stopAgent: input.stopSignedOutAgent,
         logger: deps.logger
       })
+      // A child launched for options the chat has since outgrown is replaced before it takes a send.
+      await relaunchOutgrownStructuredAgentSessionChild(
+        {
+          session,
+          adapter: deps.adapter,
+          work,
+          restChild: () => input.restProviderChild(sessionId),
+          logger: deps.logger
+        },
+        sessionId
+      )
       return input.ensureProviderChild(sessionId, startedFor)
     },
     conversationFence: (sessionId) =>

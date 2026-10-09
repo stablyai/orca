@@ -18124,6 +18124,19 @@
         "attachmentOwnerChanged": "Cet espace de travail a changé d'hôte lors de la connexion : supprimez à nouveau les fichiers.",
         "attachmentUnreadable": "Impossible de lire les fichiers supprimés.",
         "tooManyAttachments": "Joignez {{value0}} fichiers maximum à la fois.",
+        "permissions": "Autorisations",
+        "permissionAsk": "Demander l’approbation",
+        "permissionAskDescription": "Demande avant les modifications et commandes que vos réglages n'autorisent pas",
+        "permissionAskCodexDescription": "Travaille dans le bac à sable de l’espace de travail ; demande avant d’en sortir",
+        "permissionAskSharedDescription": "Claude demande sauf si vos réglages l'autorisent ; Codex demande au-delà du bac à sable de l'espace de travail",
+        "permissionAcceptEdits": "Accepter les modifications",
+        "permissionAcceptEditsDescription": "Approuve les modifications et commandes de fichiers ; demande pour le reste",
+        "permissionAuto": "Approuver pour moi",
+        "permissionAutoDescription": "Examine les demandes d’approbation pour vous",
+        "permissionBypass": "Accès complet",
+        "permissionBypassDescription": "Ignore les demandes d'approbation ; vos règles et le bac à sable de Claude s'appliquent toujours",
+        "permissionBypassCodexDescription": "Ne demande jamais ; sans bac à sable",
+        "permissionBypassSharedDescription": "Ignore les demandes d'approbation ; Codex s'exécute aussi sans son bac à sable",
         "pasteFailed": "Échec du collage.",
         "commandAttachmentsUnsupported": "Retirez les pièces jointes avant d'utiliser une commande de session de chat."
       },
@@ -19527,6 +19540,9 @@
     "openFailed": "Impossible d’ouvrir ce fichier dans l’application par défaut.",
     "openDefault": "Ouvrir dans l’application par défaut"
   },
+  "settings.chat.permissionsTitle": "Autorisations pour les nouveaux chats",
+  "settings.chat.permissionsDescription": "S’applique uniquement aux nouveaux chats. Les agents ouverts dans un terminal utilisent Paramètres → Agents → Autorisations des agents.",
+  "settings.agents.permissionsScope": "S’applique aux agents ouverts dans un terminal. Les chats ont leur propre réglage dans Paramètres → Chat.",
   "projectBoard": {
     "noColumnField": "Cette vue Board n'a pas de champ à sélection unique ni d'itération pour regrouper les éléments ; Orca les affiche donc sous forme de liste.",
     "noField": "Aucun {{field}}"

@@ -11,9 +11,9 @@ import type {
 } from './native-chat-session-options'
 import {
   applyStructuredAgentSessionOptions,
-  createStructuredAgentSessionOptionState,
-  structuredAgentSessionOptionPicks
+  createStructuredAgentSessionOptionState
 } from './structured-agent-session-options'
+import { structuredAgentSessionOptionPicks } from './structured-agent-session-option-picks'
 
 function liveState(current: { model: string; effort?: string; fastMode?: boolean }) {
   return applyStructuredAgentSessionOptions(

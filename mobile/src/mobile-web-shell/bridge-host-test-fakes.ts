@@ -36,15 +36,25 @@ type ClientGetters = Partial<
   >
 >
 
-/** Every call the host can make, recorded; nothing settles until the test says so. */
-export function createFakeRpcClient(getters: ClientGetters = {}): FakeRpcClient {
+type SentRequestArgs = [string, unknown?, SendRequestOptions?]
+
+/** Answers a request itself, or returns undefined to leave it pending in `requests`. */
+export type FakeRpcResponder = (...args: SentRequestArgs) => Promise<RpcResponse> | undefined
+
+/** Every call the host can make, recorded; nothing settles until the test says so, unless
+ *  `respond` answers it. */
+export function createFakeRpcClient(
+  getters: ClientGetters = {},
+  respond?: FakeRpcResponder
+): FakeRpcClient {
   const requests: SentRequest[] = []
   const streams: OpenStream[] = []
   const foregroundCalls: (readonly unknown[])[] = []
   const viewports: { terminal: string; cols: number; rows: number }[] = []
   const listeners = new Set<(state: ConnectionState) => void>()
   return {
-    sendRequest: (...args: [string, unknown?, SendRequestOptions?]) =>
+    sendRequest: (...args: SentRequestArgs) =>
+      respond?.(...args) ??
       new Promise<RpcResponse>((resolve, reject) => {
         requests.push({ method: args[0], args, resolve, reject })
       }),

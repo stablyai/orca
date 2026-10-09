@@ -1,3 +1,4 @@
+import { settingsForRuntimeChatPermissionOwner } from '../../store/slices/runtime-chat-permission-setting'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
@@ -100,19 +101,32 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
       if (!store.settings) {
         return
       }
-      const { worktreeVisibilityDefaults, ...activeOwnerUpdates } = updates
+      const {
+        worktreeVisibilityDefaults,
+        nativeChatPermissionMode: _localPermission,
+        ...activeOwnerUpdates
+      } = updates
       const settingsUpdates = store.settings.activeRuntimeEnvironmentId
         ? activeOwnerUpdates
         : updates
+      const ownerChanged =
+        'activeRuntimeEnvironmentId' in updates &&
+        updates.activeRuntimeEnvironmentId !== store.settings.activeRuntimeEnvironmentId
+      const settings = {
+        ...store.settings,
+        ...settingsUpdates,
+        notifications: {
+          ...store.settings.notifications,
+          ...updates.notifications
+        }
+      }
       useAppStore.setState({
-        settings: {
-          ...store.settings,
-          ...settingsUpdates,
-          notifications: {
-            ...store.settings.notifications,
-            ...updates.notifications
-          }
-        },
+        settings: ownerChanged
+          ? settingsForRuntimeChatPermissionOwner({
+              ...settings,
+              nativeChatPermissionMode: undefined
+            })
+          : settings,
         ...(worktreeVisibilityDefaults
           ? {
               worktreeVisibilityDefaultsByHost: {
@@ -122,6 +136,9 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
             }
           : {})
       })
+      if (ownerChanged) {
+        void store.fetchSettings({ deferOwnerWorktreeVisibilityDefaults: true })
+      }
       if ('worktreeVisibilityDefaults' in updates) {
         void store.fetchAllWorktrees({ visibilityOwnerHostId: 'local' })
       }

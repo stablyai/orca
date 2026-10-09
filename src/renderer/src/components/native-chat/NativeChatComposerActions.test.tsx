@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -29,6 +29,11 @@ vi.mock('@/components/ui/tooltip', () => ({
 
 vi.mock('./NativeChatSessionOptionPickers', () => ({
   NativeChatSessionOptionPickers: () => <div data-testid="session-option-pickers" />
+}))
+
+vi.mock('./NativeChatPermissionModePicker', () => ({
+  NativeChatPermissionModePicker: ({ picker }: { picker: unknown }) =>
+    picker ? <button type="button">Permissions</button> : null
 }))
 
 import { NativeChatComposerActions } from './NativeChatComposerActions'
@@ -83,6 +88,46 @@ describe('NativeChatComposerActions', () => {
     const pickers = screen.getByTestId('session-option-pickers')
     const dictation = screen.getByRole('button', { name: 'Start dictation' })
     expect(pickers.nextElementSibling).toBe(dictation)
+  })
+
+  it('puts the permission button on the left, right after attach and before the goal chip', () => {
+    render(
+      <NativeChatComposerActions
+        attachDisabled={false}
+        dictationDisabled={false}
+        sendDisabled={false}
+        primaryAction="send"
+        isWorking={false}
+        isDictating={false}
+        isDictationHoldMode={false}
+        onAttach={vi.fn()}
+        onDictationToggle={vi.fn()}
+        onDictationHoldStart={vi.fn()}
+        onDictationHoldEnd={vi.fn()}
+        onSend={vi.fn()}
+        sessionOptionsSurface={null}
+        sessionOptionsSnapshot={[]}
+        permissionPicker={{
+          provider: 'claude',
+          current: 'bypass',
+          supported: ['ask', 'bypass'],
+          pending: false,
+          disabled: false,
+          setMode: vi.fn(async () => true)
+        }}
+        onExitGoalMode={vi.fn()}
+      />
+    )
+
+    const attach = screen.getByRole('button', { name: 'Attach file' })
+    const permission = screen.getByRole('button', { name: 'Permissions' })
+    const goal = screen.getByRole('button', { name: 'Exit goal mode' })
+    const leftGroup = attach.parentElement
+    if (!leftGroup) {
+      throw new Error('attach button has no group')
+    }
+    expect(leftGroup.contains(screen.getByTestId('session-option-pickers'))).toBe(false)
+    expect(within(leftGroup).getAllByRole('button')).toEqual([attach, permission, goal])
   })
 
   it('marks the streaming Stop control as the critical hit target', () => {

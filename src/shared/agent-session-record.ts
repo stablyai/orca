@@ -1,5 +1,6 @@
 import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
 import { isAgentSessionLaunchArgs } from './agent-session-launch-args'
+import * as permissionFacts from './agent-session-initial-permission-mode'
 import { isAgentSessionConversationName } from './agent-session-conversation-name'
 import {
   isPersistedAgentSessionHandoffStage,
@@ -143,7 +144,7 @@ export type AgentSessionLease = {
   deathEvidence: AgentSessionDeathEvidence | null
 }
 
-export type AgentSessionRecord = {
+export type AgentSessionRecord = permissionFacts.AgentSessionRecordPermissionFacts & {
   schemaVersion: typeof AGENT_SESSION_RECORD_SCHEMA_VERSION
   sessionId: string
   location: AgentSessionExecutionLocation
@@ -360,6 +361,7 @@ export function isPersistedAgentSessionRecord(
     (record.launchDirectory === undefined ||
       isBoundedString(record.launchDirectory, MAX_PATH_LENGTH)) &&
     (record.options === undefined || isAgentSessionOptions(record.options)) &&
+    permissionFacts.isAgentSessionRecordPermissionFacts(record) &&
     (record.rewind === undefined || isAgentSessionRewindRecord(record.rewind)) &&
     (record.providerContextBoundary === undefined ||
       isAgentSessionProviderContextBoundary(record.providerContextBoundary)) &&

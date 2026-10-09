@@ -164,6 +164,7 @@ export type StructuredAgentSessionHostDeps = {
    *  removed from. Both production hosts pass one — the desktop and headless `orcad`; absent,
    *  every reader of that store simply lists no structured session. */
   statusSink?: StructuredAgentSessionStatusSink
+  /** The execution host chat default; null for agents without chat permissions. */
   /** Host model catalog surface; absent means every catalog read answers `unknown`. */
   modelCatalog?: AgentModelCatalogService
 }

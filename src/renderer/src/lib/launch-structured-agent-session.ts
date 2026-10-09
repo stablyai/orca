@@ -10,6 +10,7 @@ import {
   type StructuredAgentSessionResumeSource
 } from '../../../shared/structured-agent-session-create'
 import { resolveStructuredLaunchSeedOptions } from '../../../shared/native-chat-session-option-defaults'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../shared/agent-chat-permission-mode'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../shared/agent-session-definitive-refusal'
 import { readAgentSessionRefusalReference } from '../../../shared/agent-session-wire-refusals'
@@ -61,17 +62,22 @@ export type StructuredAgentSessionLaunchIntent = {
 type LaunchSeed = Readonly<Record<string, string>> | undefined
 
 /** What create will seed: this machine's saved selection for its own chats; for a paired server's,
- *  the server's own, which it reports when it admits the chat (absent from an older server). */
+ *  the server's own, which it reports when it admits the chat (absent from an older server). The
+ *  starting permission mode is always the host's word, so the pill shows it while the agent starts. */
 function launchSeedOptions(
   state: ReturnType<typeof useAppStore.getState>,
   owner: Pick<StructuredAgentSessionLaunchIntent, 'target'>,
   agent: TuiAgent,
   hostSeedOptions: LaunchSeed
 ): { seedOptions?: Readonly<Record<string, string>> } {
-  const seedOptions =
-    owner.target.kind === 'local'
-      ? resolveStructuredLaunchSeedOptions(state.settings?.nativeChatSessionOptions, agent)
-      : hostSeedOptions
+  if (owner.target.kind !== 'local') {
+    return hostSeedOptions ? { seedOptions: hostSeedOptions } : {}
+  }
+  const local = resolveStructuredLaunchSeedOptions(state.settings?.nativeChatSessionOptions, agent)
+  const permissionMode = hostSeedOptions?.[AGENT_CHAT_PERMISSION_MODE_OPTION_ID]
+  const seedOptions = permissionMode
+    ? { ...local, [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode }
+    : local
   return seedOptions ? { seedOptions } : {}
 }
 
@@ -259,8 +265,8 @@ async function requireHostCreateSupport(
   return support.seedOptions
 }
 
-/** Told the seed a paired server says this create will use, which may differ from an earlier
- *  attempt's; a local launch reads its own settings instead. */
+/** Told the seed the host says this create will use, which may differ from an earlier attempt's;
+ *  a local launch takes only its permission mode and reads its own settings for the rest. */
 export type StructuredLaunchHostSeedListener = (seedOptions: LaunchSeed) => void
 
 export async function launchStructuredAgentSession(
@@ -268,9 +274,9 @@ export async function launchStructuredAgentSession(
   onHostSeed?: StructuredLaunchHostSeedListener
 ): Promise<Pick<AgentSessionAttachResult, 'sessionId' | 'fence'>> {
   const hostSeed = await requireHostCreateSupport(intent)
-  if (intent.target.kind !== 'local') {
-    onHostSeed?.(hostSeed)
-  }
+  onHostSeed?.(
+    launchSeedOptions(useAppStore.getState(), intent, intent.agent, hostSeed).seedOptions
+  )
   let result: AgentSessionMutationResult<AgentSessionAttachResult>
   try {
     result = await callStructuredAgentSession<AgentSessionMutationResult<AgentSessionAttachResult>>(

@@ -18290,6 +18290,19 @@
         "attachmentOwnerChanged": "This workspace changed hosts while attaching — drop the files again.",
         "attachmentUnreadable": "Couldn't read the dropped files.",
         "tooManyAttachments": "Attach {{value0}} or fewer files at a time.",
+        "permissions": "Permissions",
+        "permissionAsk": "Ask for approval",
+        "permissionAskDescription": "Asks before edits and commands your settings don't allow",
+        "permissionAskCodexDescription": "Works inside the workspace sandbox; asks before going beyond it",
+        "permissionAskSharedDescription": "Claude asks unless your settings allow it; Codex asks beyond the workspace sandbox",
+        "permissionAcceptEdits": "Accept edits",
+        "permissionAcceptEditsDescription": "Approves file edits and file commands; asks for the rest",
+        "permissionAuto": "Approve for me",
+        "permissionAutoDescription": "Reviews approval requests for you",
+        "permissionBypass": "Full access",
+        "permissionBypassDescription": "Skips approval prompts; your Claude rules and sandbox still apply",
+        "permissionBypassCodexDescription": "Never asks; no sandbox",
+        "permissionBypassSharedDescription": "Skips approval prompts; Codex also runs without its sandbox",
         "pasteFailed": "Paste failed.",
         "commandAttachmentsUnsupported": "Remove attachments before using a chat-session command."
       },
@@ -19575,6 +19588,9 @@
     "openFailed": "Could not open this file in the default app.",
     "openDefault": "Open in Default App"
   },
+  "settings.chat.permissionsTitle": "Permissions for new chats",
+  "settings.chat.permissionsDescription": "Applies to new chats only. Agents you open in a terminal use Settings → Agents → Agent Permissions.",
+  "settings.agents.permissionsScope": "Applies to agents you open in a terminal. Chats have their own setting in Settings → Chat.",
   "workspace": {
     "links": {
       "foreignReview": "This review belongs to another repository. Add reviews from this workspace’s repository.",

@@ -164,6 +164,46 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     renderer = null
   })
 
+  // The chat's mode gets its own pill beside the options pill, and stays even before a model.
+  it('renders the permission pill beside the options pill when the host offers one', () => {
+    const permissionPicker = {
+      current: 'bypass' as const,
+      supported: ['ask', 'bypass'] as const,
+      pending: false,
+      setMode: vi.fn(async () => true)
+    }
+    const controller: MobileNativeChatSessionOptionsController = {
+      snapshot: [MODEL_DESCRIPTOR],
+      pendingId: null,
+      setOption,
+      invokeAction,
+      recordCommand: vi.fn()
+    }
+    act(() => {
+      renderer = create(
+        createElement(MobileNativeChatSessionOptionPickers, {
+          controller,
+          isWorking: false,
+          permissionPicker
+        })
+      )
+    })
+    expect(pill('Permissions').props.accessibilityLabel).toBe('Permissions, Full access')
+    expect(pill('Model').props.accessibilityLabel).toBe('Model, Sonnet 5')
+
+    act(() => {
+      renderer?.unmount()
+      renderer = create(
+        createElement(MobileNativeChatSessionOptionPickers, {
+          controller: { ...controller, snapshot: [] },
+          isWorking: false,
+          permissionPicker
+        })
+      )
+    })
+    expect(pill('Permissions').props.accessibilityLabel).toBe('Permissions, Full access')
+  })
+
   it('renders nothing without a model descriptor', () => {
     mount([])
     expect(renderer!.toJSON()).toBeNull()

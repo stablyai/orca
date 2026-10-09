@@ -21,6 +21,7 @@ import type { ClaudePendingPrompt, ClaudePromptRegistry } from './claude-structu
 import { cancelProcessAcquisition } from '../../shared/child-process/cancel-process-acquisition'
 import { randomUUID } from 'node:crypto'
 import type { AgentSessionFastModeState } from '../../shared/agent-session-wire'
+import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import type { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
 import type { ClaudeChildWorkDecoder } from './claude-child-work-decoder'
@@ -168,6 +169,10 @@ export type ClaudeSession = {
   /** Once a retired waiter is evicted, legacy content-only replay matching is unsafe. */
   replayContentFallbackBlocked: boolean
   options: Map<string, string>
+  /** The chat mode this child was launched for; absent was launched without the bypass flag. */
+  launchPermissionMode?: AgentChatPermissionMode
+  /** Unknown after a permission request loses its answer. */
+  appliedPermissionMode?: AgentChatPermissionMode
   reportedOptions: { model?: string; effort?: string; fastMode?: boolean }
   /** What `get_settings` says the next request will send, after Claude's own env and settings
    *  precedence: the lowest-ranked answer, unconfirmed until a turn reports it. */

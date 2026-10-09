@@ -14,7 +14,9 @@ import { resolveCodexCommand } from '../codex-cli/command'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import { resolveAgentSessionLaunchDirectory } from '../runtime/agent-session-launch-directory'
 import type { CodexStructuredLaunch } from './codex-structured-session-adapter'
-import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import { codexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import { codexChatPermissionOptions } from './codex-structured-permission-mode'
+import { agentChatLaunchPermissionMode } from '../../shared/agent-chat-permission-mode'
 import { resolvePinnedCodexRolloutProof } from './codex-pinned-rollout-proof'
 import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
 import { CODEX_STRUCTURED_AGENT } from './codex-structured-agent-definition'
@@ -31,9 +33,6 @@ export type CodexStructuredLaunchResolverDeps = {
   /** Fresh shell/configured environment for this spawn; never written to the session record. */
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
   resolveRollout?: typeof resolvePinnedCodexRolloutProof
-  /** The user's Agent Permissions setting as thread policy, re-read per acquisition.
-   *  States both postures outright — a resume inherits the last one for any field left absent. */
-  resolvePermissionPolicy?: () => CodexStructuredPermissionPolicy
   /** This chat's visuals folder and skill; absent or null ⇒ the chat gets neither. */
   prepareVisuals?: PrepareNativeChatVisuals
 }
@@ -90,7 +89,11 @@ export function createCodexStructuredLaunchResolver(
     }
     const { command, environment } = await resolveCodexStructuredInvocation(deps)
     const args = codexStructuredLaunchArgs(await deps.resolveLaunchArgs())
-    const permissionPolicy = deps.resolvePermissionPolicy?.()
+    const permissionMode = agentChatLaunchPermissionMode(
+      'codex',
+      codexChatPermissionOptions(record.options),
+      undefined
+    )
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     // A Codex record's chain holds only Codex handles; the attach admission refuses anything else.
     const resumeThreadId = head?.handle.nativeId ?? null
@@ -109,7 +112,9 @@ export function createCodexStructuredLaunchResolver(
       // Only a thread this session created may still be one Codex never saved: a resumed,
       // forked or adopted head names a conversation Codex held.
       ...(resumeThreadId && head?.origin === 'created' ? { supersedeIfUnsaved: true } : {}),
-      ...(permissionPolicy ? { permissionPolicy } : {}),
+      // Every mode is stated outright: a resume inherits the last policy for any field left absent.
+      permissionMode,
+      permissionPolicy: codexStructuredPermissionPolicy(permissionMode),
       ...(model ? { model } : {}),
       ...(visuals ? { visuals } : {}),
       ...(resumeThreadId

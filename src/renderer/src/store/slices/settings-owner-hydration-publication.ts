@@ -3,6 +3,7 @@ import type { AppState } from '../types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { hydrateOwnerWorktreeVisibilityDefaults } from './worktree-visibility-owner-settings'
+import { settingsForRuntimeChatPermissionOwner } from './runtime-chat-permission-setting'
 
 export type SettingsStateSetter = Parameters<StateCreator<AppState, [], []>>[0]
 type SettingsStateGetter = Parameters<StateCreator<AppState, [], []>>[1]
@@ -22,7 +23,7 @@ function mergeOwnerDefaultsIntoCurrentSettings(
   const { worktreeVisibilityDefaults: _currentDefaults, ...currentWithoutDefaults } = current
   return worktreeVisibilityDefaults
     ? { ...current, worktreeVisibilityDefaults }
-    : (currentWithoutDefaults as GlobalSettings)
+    : currentWithoutDefaults
 }
 
 export type FetchSettingsOptions = {
@@ -108,7 +109,7 @@ export function startOwnerWorktreeVisibilityDefaultsHydration(args: {
 }): Promise<void> {
   if (args.deferPublication) {
     args.set((state) => ({
-      settings: args.settings,
+      settings: settingsForRuntimeChatPermissionOwner(args.settings),
       worktreeVisibilityDefaultsByHost: args.settings.worktreeVisibilityDefaults
         ? {
             ...state.worktreeVisibilityDefaultsByHost,
@@ -127,10 +128,11 @@ export function startOwnerWorktreeVisibilityDefaultsHydration(args: {
         return
       }
       args.set((state) => ({
-        settings:
+        settings: settingsForRuntimeChatPermissionOwner(
           state.settings === settingsAtHydrationStart
             ? hydrated.settings
-            : mergeOwnerDefaultsIntoCurrentSettings(state.settings, hydrated.settings),
+            : mergeOwnerDefaultsIntoCurrentSettings(state.settings, hydrated.settings)
+        ),
         worktreeVisibilityDefaultsByHost: {
           ...state.worktreeVisibilityDefaultsByHost,
           ...hydrated.defaultsByHost

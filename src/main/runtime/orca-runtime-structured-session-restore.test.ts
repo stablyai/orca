@@ -15,12 +15,13 @@ describe('structured session cold restoration', () => {
     })
     const before = await runtime.listMobileSessionTabs('id:workspace-1')
     let name: string | undefined = 'auth/login'
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: title projection reads only the record and replacement list from this host stub.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the projection reads only the record, replacement list and permission-read logger from this host stub.
     setStructuredAgentSessionHost({
       deps: {
         store: {
           getRecord: () => ({ location: { workspaceId: 'workspace-1' }, conversationName: name })
-        }
+        },
+        logger: { warn: () => {} }
       },
       conversationReplacements: () => []
     } as never)

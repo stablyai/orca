@@ -18058,6 +18058,19 @@
         "attachmentOwnerChanged": "このワークスペースは接続中にホストを変更しました。ファイルを再度ドロップしてください。",
         "attachmentUnreadable": "ドロップされたファイルを読み取れませんでした。",
         "tooManyAttachments": "一度に添付できるファイルは {{value0}} 個以下です。",
+        "permissions": "権限",
+        "permissionAsk": "承認を求める",
+        "permissionAskDescription": "設定で許可されていない編集やコマンドの前に確認します",
+        "permissionAskCodexDescription": "ワークスペースのサンドボックス内で動作し、その範囲を超える前に確認します",
+        "permissionAskSharedDescription": "Claude は設定で許可されていなければ確認します。Codex はワークスペースのサンドボックス外で確認します",
+        "permissionAcceptEdits": "編集を許可",
+        "permissionAcceptEditsDescription": "ファイルの編集とファイル操作コマンドを承認し、それ以外は確認します",
+        "permissionAuto": "代わりに承認",
+        "permissionAutoDescription": "承認リクエストを代わりに審査します",
+        "permissionBypass": "フルアクセス",
+        "permissionBypassDescription": "承認の確認を省略します。Claude のルールとサンドボックスは引き続き適用されます",
+        "permissionBypassCodexDescription": "確認しません。サンドボックスなし",
+        "permissionBypassSharedDescription": "承認の確認を省略します。Codex はサンドボックスも使いません",
         "pasteFailed": "貼り付けに失敗しました。",
         "commandAttachmentsUnsupported": "チャットセッションのコマンドを使う前に添付ファイルを削除してください。"
       },
@@ -19527,6 +19540,9 @@
     "openFailed": "既定のアプリでファイルを開けませんでした。",
     "openDefault": "既定のアプリで開く"
   },
+  "settings.chat.permissionsTitle": "新しいチャットの権限",
+  "settings.chat.permissionsDescription": "新しいチャットにのみ適用されます。ターミナルで開くAgentには、設定 → Agent → Agentの権限が適用されます。",
+  "settings.agents.permissionsScope": "ターミナルで開くAgentに適用されます。チャットには、設定 → チャットに独自の設定があります。",
   "projectBoard": {
     "noColumnField": "このボードビューにはグループ化に使える単一選択フィールドまたは反復フィールドがないため、代わりに Orca が項目を一覧表示します。",
     "noField": "{{field}} なし"

@@ -20,6 +20,7 @@ import {
   type SettingsPersistenceModel
 } from './settings-persistence-test-fixture'
 import { ActiveSettingsSectionProvider } from './SettingsSection'
+import { TooltipProvider } from '../ui/tooltip'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }))
 
@@ -36,7 +37,12 @@ function ChatPersistenceHarness({ model }: { model: SettingsPersistenceModel }) 
     view: { isSectionMounted: () => true }
   } satisfies ChatSettingsRenderContext
   const section = renderChatSettingsSection(context)
-  return <ActiveSettingsSectionProvider value="chat">{section}</ActiveSettingsSectionProvider>
+  // The app root provides tooltips; the chat permission picker needs one.
+  return (
+    <TooltipProvider>
+      <ActiveSettingsSectionProvider value="chat">{section}</ActiveSettingsSectionProvider>
+    </TooltipProvider>
+  )
 }
 
 it('passes the existing paired-web capability through the actual Chat renderer', () => {

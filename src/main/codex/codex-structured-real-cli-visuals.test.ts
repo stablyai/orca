@@ -11,7 +11,11 @@ import { openCodexAppServerConnection } from './codex-app-server-connection'
 import { withCodexVisualsThreadConfig } from './codex-structured-visuals'
 
 const enabled = process.env.ORCA_REAL_CODEX_CLI_TEST === '1'
-const MANUAL = { approvalPolicy: 'on-request', sandbox: 'workspace-write' } as const
+const MANUAL = {
+  approvalPolicy: 'on-request',
+  sandbox: 'workspace-write',
+  approvalsReviewer: 'user'
+} as const
 
 describe.skipIf(!enabled)('Codex real app-server chat visuals', () => {
   it('lists the visuals skill and grants the chat folder beside the user writable roots', async () => {

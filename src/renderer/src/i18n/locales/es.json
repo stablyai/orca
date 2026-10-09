@@ -18023,6 +18023,19 @@
         "attachmentOwnerChanged": "Este espacio de trabajo cambió de host durante la conexión; vuelve a soltar los archivos.",
         "attachmentUnreadable": "No se pudieron leer los archivos soltados.",
         "tooManyAttachments": "Adjunta {{value0}} archivos o menos a la vez.",
+        "permissions": "Permisos",
+        "permissionAsk": "Pedir aprobación",
+        "permissionAskDescription": "Pregunta antes de ediciones y comandos que tu configuración no permite",
+        "permissionAskCodexDescription": "Trabaja dentro del entorno aislado del espacio de trabajo; pregunta antes de salir de él",
+        "permissionAskSharedDescription": "Claude pregunta salvo que tu configuración lo permita; Codex pregunta fuera del sandbox del espacio de trabajo",
+        "permissionAcceptEdits": "Aceptar ediciones",
+        "permissionAcceptEditsDescription": "Aprueba ediciones y comandos de archivos; pregunta por lo demás",
+        "permissionAuto": "Aprobar por mí",
+        "permissionAutoDescription": "Revisa las solicitudes de aprobación por ti",
+        "permissionBypass": "Acceso total",
+        "permissionBypassDescription": "Omite las solicitudes de aprobación; tus reglas y sandbox de Claude siguen aplicándose",
+        "permissionBypassCodexDescription": "Nunca pregunta; sin sandbox",
+        "permissionBypassSharedDescription": "Omite las solicitudes de aprobación; Codex además se ejecuta sin su sandbox",
         "pasteFailed": "Error al pegar.",
         "commandAttachmentsUnsupported": "Quita los archivos adjuntos antes de usar un comando de la sesión de chat."
       },
@@ -19527,6 +19540,9 @@
     "openFailed": "No se pudo abrir el archivo en la aplicación predeterminada.",
     "openDefault": "Abrir en la aplicación predeterminada"
   },
+  "settings.chat.permissionsTitle": "Permisos para chats nuevos",
+  "settings.chat.permissionsDescription": "Se aplica solo a chats nuevos. Los agentes que abres en una terminal usan Configuración → Agentes → Permisos de agentes.",
+  "settings.agents.permissionsScope": "Se aplica a los agentes que abres en una terminal. Los chats tienen su propio ajuste en Configuración → Chat.",
   "projectBoard": {
     "noColumnField": "Esta vista de tablero no tiene un campo de selección única ni de iteración para agrupar, así que Orca muestra los elementos en una lista.",
     "noField": "Sin {{field}}"

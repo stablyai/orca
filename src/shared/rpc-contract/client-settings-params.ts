@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { AGENT_CHAT_PERMISSION_MODES } from '../agent-chat-permission-mode'
 import { isTaskProvider } from '../task-providers'
 import type { TaskProvider } from '../task-providers'
 import { isTuiAgent } from '../tui-agent-config'
@@ -112,6 +113,7 @@ export const SettingsUpdate = z
       .optional(),
     experimentalNewWorktreeCardStyle: z.boolean().optional(),
     agentStatusHooksEnabled: z.boolean().optional(),
+    nativeChatPermissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).optional(),
     defaultRepoSelection: z.array(z.string()).nullable().optional(),
     defaultLinearTeamSelection: z.array(z.string()).nullable().optional(),
     compactWorktreeCards: z.boolean().optional(),

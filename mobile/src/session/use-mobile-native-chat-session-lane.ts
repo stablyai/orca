@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import type { AgentSessionPermissionSeed } from '../../../src/shared/agent-chat-permission-mode'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
@@ -16,6 +17,7 @@ export function useMobileNativeChatSessionLane({
   resolvedAgent,
   transcriptPath,
   sessionId,
+  permissionSeed,
   sourceIdentity,
   hostSupport,
   appendComposerTextRef,
@@ -32,6 +34,7 @@ export function useMobileNativeChatSessionLane({
   resolvedAgent: string | null
   transcriptPath: string | null
   sessionId: string | null
+  permissionSeed?: AgentSessionPermissionSeed
   sourceIdentity: Parameters<typeof useMobileNativeChatSession>[0]['sourceIdentity']
   hostSupport: StructuredAgentSessionHostSupport | null
   /** The active pane's live composer; a queued card's Edit copies through it.
@@ -60,6 +63,7 @@ export function useMobileNativeChatSessionLane({
   const structuredSession = useMobileStructuredAgentSession({
     client,
     sessionId: structured ? sessionId : null,
+    permissionSeed: structured ? permissionSeed : undefined,
     sourceIdentity,
     hostSupport,
     appendComposerText,

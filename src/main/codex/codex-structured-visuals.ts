@@ -7,7 +7,6 @@ import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-
 import type { CodexAppServerConnection } from './codex-app-server-connection'
 import { isCodexAppServerRequestError } from './codex-app-server-request-error'
 import { isCodexMethodNotFoundError } from './codex-app-server-session'
-import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
 
 /** Why short: both requests answer from local state in milliseconds, and the user's first prompt
  *  waits behind them; past this the thread opens without whatever has not answered. */
@@ -109,14 +108,13 @@ async function writableRootsConfig(
 
 /**
  * Sets this app-server up for the chat's visuals and returns the thread config the thread open
- * carries, or null. Never throws. Full access needs no writable root: everything is writable.
+ * carries, or null. Never throws. Full access gets the writable root too: the chat can leave it.
  */
 export async function prepareCodexThreadForVisuals(
   connection: CodexVisualsConnection,
   launch: {
     cwd: string
     visuals?: NativeChatVisualsLaunch | null
-    permissionPolicy?: CodexStructuredPermissionPolicy
   },
   log?: { logger?: StructuredAgentSessionLogger; sessionId: string }
 ): Promise<Record<string, unknown> | null> {
@@ -132,11 +130,15 @@ export async function prepareCodexThreadForVisuals(
     })
   const [, threadConfig] = await Promise.all([
     setSkillRoots(connection, visuals, report),
-    launch.permissionPolicy?.sandbox === 'danger-full-access'
-      ? null
-      : writableRootsConfig(connection, { cwd: launch.cwd, folder: visuals.folder }, report)
+    writableRootsConfig(connection, { cwd: launch.cwd, folder: visuals.folder }, report)
   ])
   return threadConfig
+}
+
+/** The writable roots a thread opened with, for a turn that restates its sandbox. */
+export function codexThreadWritableRoots(threadConfig: Record<string, unknown> | undefined) {
+  const roots = threadConfig?.[WRITABLE_ROOTS_KEY]
+  return Array.isArray(roots) ? roots.filter((root) => typeof root === 'string') : undefined
 }
 
 /** `launch` carrying its visuals thread config, set up on this app-server first. Codex reads skill

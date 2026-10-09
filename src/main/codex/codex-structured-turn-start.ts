@@ -25,6 +25,11 @@ import {
 import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
 import { codexKnownFastModeTier } from './codex-structured-catalog-entry'
 import type { CodexSessionCatalogAccess } from './codex-structured-session-state'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../shared/agent-chat-permission-mode'
+import {
+  codexTurnPermissionOverrides,
+  type CodexPermissionModeState
+} from './codex-structured-permission-mode'
 
 // Writing a Codex turn and learning which message landed where, which are not
 // the same event. The answer proves admission and nothing about identity, which
@@ -37,15 +42,16 @@ import type { CodexSessionCatalogAccess } from './codex-structured-session-state
 // the turn to open and steers it.
 
 /** Keys Codex accepts as per-turn overrides. An unlisted key would otherwise
- *  become an arbitrary client-controlled `turn/start` parameter. Permission posture is owned by
- *  Agent Permissions and applied when the thread opens. */
+ *  become an arbitrary client-controlled `turn/start` parameter. The chat's permission mode is
+ *  stored under its own key and sent as the policy fields it maps to, never as itself. */
 const CODEX_TURN_OPTION_KEYS = new Set([
   'model',
   'effort',
   'approvalsReviewer',
   'personality',
   'serviceTier',
-  'fastMode'
+  'fastMode',
+  AGENT_CHAT_PERMISSION_MODE_OPTION_ID
 ])
 
 export function isCodexTurnOptionKey(key: string): boolean {
@@ -53,7 +59,7 @@ export function isCodexTurnOptionKey(key: string): boolean {
 }
 
 /** The session state one turn needs. */
-export type CodexTurnHost = {
+export type CodexTurnHost = CodexPermissionModeState & {
   account?: AgentSessionAccountKind
   connection: Pick<CodexAppServerConnection, 'request'>
   threadId: string
@@ -84,7 +90,13 @@ function turnInputFor(body: AgentJournalMessageItem): Record<string, unknown>[] 
 
 function codexTurnOptions(host: CodexTurnHost): Record<string, string> {
   const options = Object.fromEntries(
-    [...host.options].filter(([key]) => key !== 'fastMode' && key !== 'serviceTier')
+    [...host.options].filter(
+      ([key]) =>
+        key !== 'fastMode' &&
+        key !== 'serviceTier' &&
+        key !== 'approvalsReviewer' &&
+        key !== AGENT_CHAT_PERMISSION_MODE_OPTION_ID
+    )
   )
   const encodedFastMode = host.options.get('fastMode')
   if (encodedFastMode === undefined) {
@@ -172,16 +184,34 @@ export async function startCodexTurn(
   if (steered) {
     return steered
   }
-  const answer = await host.connection.request(
-    'turn/start',
-    {
-      threadId: host.threadId,
-      clientUserMessageId: input.clientMessageId,
-      input: turnInputFor(input.body),
-      ...codexTurnOptions(host)
-    },
-    { timeoutMs: input.timeoutMs }
-  )
+  const permission = codexTurnPermissionOverrides(host)
+  let answer: unknown
+  try {
+    answer = await host.connection.request(
+      'turn/start',
+      {
+        threadId: host.threadId,
+        clientUserMessageId: input.clientMessageId,
+        input: turnInputFor(input.body),
+        ...codexTurnOptions(host),
+        ...permission?.params
+      },
+      { timeoutMs: input.timeoutMs }
+    )
+  } catch (error) {
+    if (
+      permission &&
+      !isCodexAppServerRequestError(error) &&
+      !isCodexAppServerUnsupportedError(error)
+    ) {
+      // A lost reply may follow an applied policy; the next turn must establish it again.
+      delete host.threadPermissionMode
+    }
+    throw error
+  }
+  if (permission) {
+    host.threadPermissionMode = permission.mode
+  }
   return { turnId: readCodexTurnId(answer), via: 'start' }
 }
 

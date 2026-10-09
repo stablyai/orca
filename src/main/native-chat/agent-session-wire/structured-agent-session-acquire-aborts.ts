@@ -1,10 +1,9 @@
-// The acquire each session has in flight, owned by the host that runs it, or another provider wait
-// its queue is on (an option write). The queue runs one step at a time, so a session has at most
-// one; a close, a Stop admitted now, quit, or the startup limit aborts it from outside the queue
-// instead of waiting behind a provider that may never answer.
+// Acquisition and provider preparation share cancellation, including waits outside the lane: a
+// close, a Stop admitted now, quit, or the startup limit aborts them instead of waiting behind a
+// provider that may never answer.
 
 export class StructuredAgentSessionAcquireAborts {
-  private readonly inFlight = new Map<string, AbortController>()
+  private readonly inFlight = new Map<string, Set<AbortController>>()
   /** Set by quit: the host is going away, so an attach that begins after it starts aborted. */
   private quitReason: Error | null = null
 
@@ -14,11 +13,14 @@ export class StructuredAgentSessionAcquireAborts {
     if (this.quitReason) {
       controller.abort(this.quitReason)
     }
-    this.inFlight.set(sessionId, controller)
+    const waits = this.inFlight.get(sessionId) ?? new Set<AbortController>()
+    waits.add(controller)
+    this.inFlight.set(sessionId, waits)
     return {
       signal: controller.signal,
       end: () => {
-        if (this.inFlight.get(sessionId) === controller) {
+        waits.delete(controller)
+        if (waits.size === 0 && this.inFlight.get(sessionId) === waits) {
           this.inFlight.delete(sessionId)
         }
       }
@@ -27,14 +29,19 @@ export class StructuredAgentSessionAcquireAborts {
 
   /** A no-op when the session has nothing in flight. */
   abort(sessionId: string, reason: string | Error): void {
-    this.inFlight.get(sessionId)?.abort(typeof reason === 'string' ? new Error(reason) : reason)
+    const error = typeof reason === 'string' ? new Error(reason) : reason
+    for (const controller of this.inFlight.get(sessionId) ?? []) {
+      controller.abort(error)
+    }
   }
 
   /** Quit: every start under way stops, and so does any the attach drain still runs. */
   abortAll(reason: string): void {
     this.quitReason ??= new Error(reason)
-    for (const controller of this.inFlight.values()) {
-      controller.abort(this.quitReason)
+    for (const waits of this.inFlight.values()) {
+      for (const controller of waits) {
+        controller.abort(this.quitReason)
+      }
     }
   }
 }

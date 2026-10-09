@@ -1,5 +1,7 @@
-import type { AgentSessionOptionsResult } from '../../../shared/agent-session-wire'
-import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import type {
+  StructuredAgentSessionAdapter,
+  StructuredAgentSessionStartedEvent
+} from './structured-agent-session-adapter'
 import { encodeStructuredAgentSessionOptionValue } from '../../../shared/structured-agent-session-option-codec'
 
 export async function readNativeSessionOptions(input: {
@@ -14,16 +16,18 @@ export async function readNativeSessionOptions(input: {
     return undefined
   }
   return nativeSessionOptionsFromReport({
-    reported: reported.current,
+    reported: {
+      ...reported.current,
+      ...(reported.permissionModes ? { permissionMode: reported.permissionModes.current } : {})
+    },
     restoreSkipped: adapter.readOptionRestoreFailures?.(sessionId) ?? [],
     ...(priorOptions ? { priorOptions } : {})
   })
 }
 
-/** The record's options once the provider has reported: its model, effort and Fast replace the
- *  saved ones, other saved options stay, and any the child could not take are dropped. */
+/** Preserve provider narrowing so reopening cannot restore a wider saved choice. */
 export function nativeSessionOptionsFromReport(input: {
-  reported: AgentSessionOptionsResult['current']
+  reported: StructuredAgentSessionStartedEvent['reportedOptions']
   restoreSkipped: readonly string[]
   priorOptions?: Readonly<Record<string, string>>
   /** Values the child showed it cannot run: its report of the same value is not kept. */
@@ -45,6 +49,7 @@ export function nativeSessionOptionsFromReport(input: {
     ...restored,
     ...(reported.model ? { model: reported.model } : {}),
     ...(reported.effort ? { effort: reported.effort } : {}),
+    ...(reported.permissionMode ? { permissionMode: reported.permissionMode } : {}),
     ...(fastMode !== undefined && fastMode !== null ? { fastMode } : {})
   }
   for (const [key, value] of Object.entries(input.retired ?? {})) {

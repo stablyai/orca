@@ -11,6 +11,14 @@ import {
   type AgentSessionOptionsResult
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import {
+  AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
+  agentChatPermissionModeSupported
+} from '../../../shared/agent-chat-permission-mode'
+import {
+  readStructuredAgentSessionPermissionFact,
+  restingPermissionModes
+} from './structured-agent-session-permission-fact'
 import { decodeStructuredAgentSessionOptionValue } from '../../../shared/structured-agent-session-option-codec'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { journalOpenReadRefusal } from '../agent-session-journal/journal-open-failure'
@@ -22,7 +30,10 @@ import { structuredAgentSessionOptionModels } from './structured-agent-session-o
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 
-type RestingOptions = Pick<AgentSessionOptionsResult, 'models' | 'fastModeSupport' | 'current'>
+type RestingOptions = Pick<
+  AgentSessionOptionsResult,
+  'models' | 'fastModeSupport' | 'current' | 'permissionModes'
+>
 
 /** The at-rest rules of the record's agent, as this runtime registered it; null for any other. */
 function restingOptionRules(
@@ -32,8 +43,12 @@ function restingOptionRules(
   return agents.definition(record.provider)?.restingOptions ?? null
 }
 
-async function readStructuredAgentSessionOptionsAtRest(
-  deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'agents' | 'modelCatalog'>,
+export async function readStructuredAgentSessionOptionsAtRest(
+  deps: Pick<StructuredAgentSessionHostDeps, 'modelCatalog'> &
+    Partial<Pick<StructuredAgentSessionHostDeps, 'logger'>> & {
+      store: Pick<AgentSessionRecordStore, 'getRecord'>
+      agents: Pick<StructuredAgentRegistry, 'definition'>
+    },
   sessionId: string
 ): Promise<RestingOptions> {
   const record = deps.store.getRecord(sessionId)
@@ -63,8 +78,10 @@ async function readStructuredAgentSessionOptionsAtRest(
     (rules?.effortDefaultsToModel
       ? models.find((entry) => entry.id === model)?.defaultEffort
       : undefined)
+  const permissionModes = restingPermissionModes(record, deps.logger)
   return {
     models: listed ? structuredAgentSessionOptionModels(listed, model, (row) => row) : [],
+    ...(permissionModes ? { permissionModes } : {}),
     ...(catalog.origin !== 'unknown' && catalog.fastModeSupport
       ? { fastModeSupport: catalog.fastModeSupport }
       : {}),
@@ -78,7 +95,7 @@ async function readStructuredAgentSessionOptionsAtRest(
 
 /** Records a pick for the next start. Only a key the provider would accept is kept. */
 export async function recordStructuredAgentSessionOptionIntent(
-  deps: {
+  deps: Pick<StructuredAgentSessionHostDeps, 'modelCatalog'> & {
     store: Pick<AgentSessionRecordStore, 'getRecord'>
     agents: Pick<StructuredAgentRegistry, 'definition'>
   },
@@ -86,7 +103,25 @@ export async function recordStructuredAgentSessionOptionIntent(
   input: { key: string; value: string }
 ): Promise<TurnOutcome<AgentSessionOptionResult>> {
   const record = deps.store.getRecord(ctx.sessionId)
-  if (!record || !restingOptionRules(deps.agents, record)?.acceptsKey(input.key)) {
+  const rules = record ? restingOptionRules(deps.agents, record) : null
+  try {
+    input = rules?.normalizePick?.(input.key, input.value) ?? input
+  } catch (error) {
+    return {
+      ok: false,
+      refusal: refuse(
+        'agent_session_operation_invalid',
+        { reason: 'optionRejected' },
+        error instanceof Error ? error.message : String(error)
+      )
+    }
+  }
+  if (
+    !record ||
+    !rules?.acceptsKey(input.key) ||
+    (input.key === AGENT_CHAT_PERMISSION_MODE_OPTION_ID &&
+      !agentChatPermissionModeSupported(record.provider, input.value))
+  ) {
     return {
       ok: false,
       refusal: refuse(
@@ -96,7 +131,10 @@ export async function recordStructuredAgentSessionOptionIntent(
       )
     }
   }
-  const options = { ...record.options, [input.key]: input.value }
+  const options = {
+    ...(rules?.normalizeOptions?.(record.options) ?? record.options),
+    [input.key]: input.value
+  }
   await ctx.persistOptions(options)
   ctx.publish()
   return { ok: true, value: { ...input, options } }
@@ -158,10 +196,24 @@ export async function readStructuredAgentSessionOptions(
   const phase = store.getRecord(sessionId)?.rewind?.phase
   const agent = session.params.provider
   const capabilities = agents.capabilities(agent)
+  const { permissionModes, ...otherOptions } = options
+  const fact = permissionModes
+    ? readStructuredAgentSessionPermissionFact(context.deps, sessionId)
+    : undefined
   const floor = session.journal.context.floor()
   const contextFloor = floor ? { contextFloor: floor } : {}
   return {
-    ...options,
+    ...otherOptions,
+    ...(permissionModes && fact
+      ? {
+          permissionModes: {
+            ...permissionModes,
+            current: fact.mode ?? permissionModes.current,
+            fence: fact.fence,
+            revision: fact.revision
+          }
+        }
+      : {}),
     rewind:
       phase === 'prepared' || phase === 'provider-succeeded'
         ? { supported: false, reason: 'outcome-unknown' }

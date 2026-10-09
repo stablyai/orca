@@ -1,4 +1,4 @@
-import { useEffect, type MutableRefObject } from 'react'
+import { useEffect, useMemo, type MutableRefObject } from 'react'
 import type { AgentSessionModelCatalogResult } from '../../../src/shared/agent-session-wire'
 import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-session-option-catalog'
 import type { NativeChatSessionOptionRecord } from '../../../src/shared/native-chat-session-option-state'
@@ -9,6 +9,7 @@ import {
 } from '../../../src/shared/structured-agent-session-options'
 import type { RpcClient } from '../transport/rpc-client'
 import { callAgentSession } from './mobile-structured-agent-session-rpc'
+import { mobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 
 // The host answers a waiting read when its first listing lands, within its own 30s picker wait.
 const LISTING_WAIT_TIMEOUT_MS = 45_000
@@ -25,10 +26,6 @@ export function useMobileHostModelCatalogUpgrade(args: {
   client: RpcClient | null
   sessionId: string | null
   enabled: boolean
-  /** This phone created the chat, so it launches the listed default; a reopened one may not. */
-  newLaunch: boolean
-  /** Where a new chat runs: the host names no default its config could replace. */
-  worktree?: string
   fence: number | null
   optionCatalog: AgentSessionOptionCatalog | null
   activeOptionRecordRef: MutableRefObject<NativeChatSessionOptionRecord>
@@ -42,12 +39,18 @@ export function useMobileHostModelCatalogUpgrade(args: {
     client,
     enabled,
     fence,
-    newLaunch,
     optionCatalog,
     sessionId,
-    updateOptionState,
-    worktree
+    updateOptionState
   } = args
+  // A chat this phone created runs the listed default, as a desktop chat its own view launched
+  // does; where it runs names no default its config could replace. A reopened one may not.
+  const createdHere = useMemo(
+    () => (sessionId ? mobileCreatedStructuredSession(sessionId) : undefined),
+    [sessionId]
+  )
+  const newLaunch = createdHere !== undefined
+  const worktree = createdHere?.worktree
   useEffect(() => {
     if (!client || !sessionId || !enabled || !agent || !optionCatalog) {
       return

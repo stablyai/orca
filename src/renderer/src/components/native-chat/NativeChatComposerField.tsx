@@ -31,6 +31,7 @@ import type { NativeChatQueueSendConfirm } from './use-native-chat-held-queue-co
 import type { NativeChatComposerGoalMode } from './use-native-chat-composer-submit'
 import { translate } from '@/i18n/i18n'
 import { useNativeChatComposerDraftUnsaved } from './use-native-chat-draft-unsaved'
+import type { NativeChatPermissionModePickerState } from './native-chat-permission-mode-labels'
 
 export type NativeChatComposerFieldProps = {
   /** Pane identity published to the drop pipeline so a native file drop lands
@@ -85,6 +86,7 @@ export type NativeChatComposerFieldProps = {
   sessionOptionsSnapshot: SessionOptionDescriptor[]
   contextUsage?: NativeChatContextUsageSummary | null
   sessionOptionsPickerRequest?: NativeChatOptionPickerRequest | null
+  permissionPicker?: NativeChatPermissionModePickerState | null
   goalMode?: NativeChatComposerGoalMode
 }
 
@@ -170,6 +172,7 @@ export function NativeChatComposerField({
   sessionOptionsSnapshot,
   contextUsage,
   sessionOptionsPickerRequest,
+  permissionPicker,
   goalMode
 }: NativeChatComposerFieldProps): React.JSX.Element {
   const draftNotSaved = useNativeChatComposerDraftUnsaved(draftScopeKey)
@@ -380,6 +383,7 @@ export function NativeChatComposerField({
                 sessionOptionsSnapshot={sessionOptionsSnapshot}
                 contextUsage={contextUsage}
                 sessionOptionsPickerRequest={sessionOptionsPickerRequest}
+                permissionPicker={permissionPicker}
                 focusComposer={focusComposer}
                 onExitGoalMode={goalMode?.active ? goalMode.exit : undefined}
               />

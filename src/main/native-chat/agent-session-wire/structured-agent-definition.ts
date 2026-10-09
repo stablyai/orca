@@ -15,6 +15,12 @@ export type StructuredAgentDefinition = AgentSessionStoredAgent & {
   restingOptions: {
     /** Whether the agent takes a pick of this option key. */
     acceptsKey: (key: string) => boolean
+    /** Translates retired client options into the current source of intent. */
+    normalizePick?: (key: string, value: string) => { key: string; value: string }
+    /** Retires saved client options before an at-rest pick replaces their intent. */
+    normalizeOptions?: (
+      options: Readonly<Record<string, string>> | undefined
+    ) => Record<string, string>
     /** The models a running child falls back to with no catalog; null when it has none. */
     fallbackModels: () => AgentSessionModelOption[] | null
     /** An unpicked effort reads as the model's default effort, as a running child reports it. */

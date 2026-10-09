@@ -1,9 +1,13 @@
 import { useSyncExternalStore } from 'react'
 import type {
   AgentSessionMutationResult,
+  AgentSessionHistoryResult,
   AgentSessionOptionResult
 } from '../../../shared/agent-session-wire'
-import { STRUCTURED_LAUNCH_SEED_OPTION_IDS } from '../../../shared/native-chat-session-option-defaults'
+import {
+  STRUCTURED_LAUNCH_HELD_OPTION_IDS,
+  STRUCTURED_LAUNCH_SEED_OPTION_IDS
+} from '../../../shared/native-chat-session-option-defaults'
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionPayloadFingerprint
@@ -26,6 +30,7 @@ import {
   agentSessionThrownFailure,
   type AgentSessionWriteFailure
 } from '../../../shared/agent-session-write-failure'
+import type { AgentSessionPermissionFact } from '../../../shared/agent-chat-permission-mode'
 import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 
 /** The options a launch starts with, replaced whole so readers can compare by identity. */
@@ -37,7 +42,11 @@ export type StructuredLaunchSelection = {
 }
 
 export type StructuredLaunchOptionOutcome =
-  | { kind: 'accepted'; options: Readonly<Record<string, string>> }
+  | {
+      kind: 'accepted'
+      options: Readonly<Record<string, string>>
+      permissionFact?: AgentSessionPermissionFact
+    }
   | { kind: 'refused'; failure: AgentSessionWriteFailure }
   | { kind: 'superseded' }
 
@@ -55,29 +64,32 @@ function repliesFor(state: StructuredLaunchState): Map<string, OptionReply> {
 }
 
 /**
- * Records a pick made while the launch has no fence to send it against. Null once the launch
- * has published or is gone: the pick then goes through the session like any other.
+ * Holds pre-create picks; after publication, the host supplies the fence before the same write.
  */
 export function holdStructuredAgentSessionLaunchOption(
   sessionId: string,
   id: string,
-  encoded: string
+  encoded: string,
+  publishedTarget?: RuntimeClientTarget
 ): Promise<StructuredLaunchOptionOutcome> | null {
   const state = getStructuredLaunchStateBySessionId(sessionId)
-  if (!state || state.cancelled || state.callers.outcome === 'published') {
+  if (state?.cancelled) {
     return null
+  }
+  if (!state || state.callers.outcome === 'published') {
+    return publishedTarget ? setLaunchOption(publishedTarget, sessionId, null, id, encoded) : null
   }
   const replies = repliesFor(state)
   const { held } = state.selection
-  // A model pick drops picks held under the model it replaces.
-  for (const key of id === 'model' ? Object.keys(held) : [id]) {
+  // A model pick drops picks held under the model it replaces; the chat's own picks stay.
+  const perModel = new Set<string>(STRUCTURED_LAUNCH_SEED_OPTION_IDS)
+  const superseded = id === 'model' ? Object.keys(held).filter((key) => perModel.has(key)) : [id]
+  for (const key of superseded) {
     replies.get(key)?.({ kind: 'superseded' })
     replies.delete(key)
   }
-  state.selection = {
-    ...state.selection,
-    held: id === 'model' ? { model: encoded } : { ...held, [id]: encoded }
-  }
+  const kept = Object.fromEntries(Object.entries(held).filter(([key]) => !superseded.includes(key)))
+  state.selection = { ...state.selection, held: { ...kept, [id]: encoded } }
   notifyStructuredLaunchListeners()
   return new Promise((resolve) => replies.set(id, resolve))
 }
@@ -85,12 +97,23 @@ export function holdStructuredAgentSessionLaunchOption(
 async function setLaunchOption(
   target: RuntimeClientTarget,
   sessionId: string,
-  fence: number,
+  fence: number | null,
   key: string,
   value: string
 ): Promise<StructuredLaunchOptionOutcome> {
   const fields = { key, value }
   try {
+    if (fence === null) {
+      const history = await callStructuredAgentSession<AgentSessionHistoryResult>(
+        target,
+        'agentSession.history',
+        { sessionId, direction: 'tail', limit: 1 }
+      )
+      fence = history.page.fence ?? (!history.ok ? history.fence : undefined) ?? null
+      if (fence === null) {
+        throw new Error('structured session fence publication unavailable')
+      }
+    }
     const result = await callStructuredAgentSession<
       AgentSessionMutationResult<AgentSessionOptionResult>
     >(target, 'agentSession.setOption', {
@@ -107,7 +130,11 @@ async function setLaunchOption(
       ...fields
     })
     return result.ok
-      ? { kind: 'accepted', options: result.value.options ?? { [key]: value } }
+      ? {
+          kind: 'accepted',
+          options: result.value.options ?? { [key]: value },
+          permissionFact: result.value.permissionFact
+        }
       : { kind: 'refused', failure: agentSessionRefusalFailure(result.refusal) }
   } catch (error) {
     return {
@@ -158,7 +185,7 @@ export async function applyStructuredLaunchHeldOptions(
       throw new StructuredAgentSessionLaunchCancelledError()
     }
     const { held } = state.selection
-    const id = STRUCTURED_LAUNCH_SEED_OPTION_IDS.find((key) => held[key] !== undefined)
+    const id = STRUCTURED_LAUNCH_HELD_OPTION_IDS.find((key) => held[key] !== undefined)
     const encoded = id ? held[id] : undefined
     if (!id || encoded === undefined) {
       return receipt

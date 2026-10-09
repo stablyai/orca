@@ -71,7 +71,7 @@ export function normalizeLoadedProfileState(
     workspaceLineageByChildKey: normalizeWorkspaceLineageByChildKey(
       parsed.workspaceLineageByChildKey
     ),
-    settings: normalizeLoadedGlobalSettings(parsed, terminal, profile),
+    settings: normalizeLoadedGlobalSettings(parsed, terminal, profile, markNeedsSave),
     // Why: legacy 'recent' meant the smart sort; migrate once on the raw value so a fresh 'recent' default isn't remigrated.
     ui: normalizeLoadedUiState(
       parsed,

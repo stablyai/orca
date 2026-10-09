@@ -1,3 +1,5 @@
+import { AgentPermissionsSetting } from './AgentsPane'
+import { TooltipProvider } from '../ui/tooltip'
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -42,27 +44,56 @@ function renderChat(
     }
   })
   const element = (active = 'chat') => (
-    <ActiveSettingsSectionProvider value={active}>
-      <ChatSettingsSection
-        settings={settings}
-        updateSettings={updateSettings}
-        writeSourceControlAiSettings={async () => {}}
-        searchEntries={[
-          ...getChatAppearanceSearchEntries(),
-          ...(showDesktopOnlySettings
-            ? [getChatNamingSearchEntry(), getChatInlineVisualsSearchEntry()]
-            : [])
-        ]}
-        showDesktopOnlySettings={showDesktopOnlySettings}
-        isMounted
-        hasUnsavedChatPromptChanges={hasUnsavedChatPromptChanges}
-      />
-    </ActiveSettingsSectionProvider>
+    <TooltipProvider>
+      <ActiveSettingsSectionProvider value={active}>
+        <ChatSettingsSection
+          settings={settings}
+          updateSettings={updateSettings}
+          writeSourceControlAiSettings={async () => {}}
+          searchEntries={[
+            ...getChatAppearanceSearchEntries(),
+            ...(showDesktopOnlySettings
+              ? [getChatNamingSearchEntry(), getChatInlineVisualsSearchEntry()]
+              : [])
+          ]}
+          showDesktopOnlySettings={showDesktopOnlySettings}
+          isMounted
+          hasUnsavedChatPromptChanges={hasUnsavedChatPromptChanges}
+        />
+      </ActiveSettingsSectionProvider>
+    </TooltipProvider>
   )
   return { ...render(element()), element, updateSettings }
 }
 
 describe('Chat settings page', () => {
+  it('renders all four permission choices and the independent setting descriptions', async () => {
+    const { updateSettings } = renderChat(true)
+    expect(
+      screen.getByText(
+        'Applies to new chats only. Agents you open in a terminal use Settings → Agents → Agent Permissions.'
+      )
+    ).toBeTruthy()
+    const trigger = screen.getByRole('button', { name: 'Permissions Full access' })
+    expect(trigger.querySelector('.text-status-warning')).toBeTruthy()
+    fireEvent.keyDown(trigger, { key: 'Enter' })
+    for (const label of ['Ask for approval', 'Accept edits', 'Approve for me', 'Full access']) {
+      expect(await screen.findByRole('menuitemradio', { name: new RegExp(label) })).toBeTruthy()
+    }
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /Accept edits/ }))
+    expect(updateSettings).toHaveBeenCalledWith({ nativeChatPermissionMode: 'accept-edits' })
+    render(
+      <TooltipProvider>
+        <AgentPermissionsSetting mode="manual" onChange={() => {}} />
+      </TooltipProvider>
+    )
+    expect(
+      screen.getByText(
+        'Applies to agents you open in a terminal. Chats have their own setting in Settings → Chat.'
+      )
+    ).toBeTruthy()
+  })
+
   it('keeps Chat appearance on paired web without ineffective host naming controls or search results', () => {
     const { container } = renderChat(true, false)
     expect(screen.getByRole('spinbutton', { name: 'Text size' })).toBeTruthy()
@@ -139,16 +170,18 @@ describe('Chat settings page', () => {
   it('unmounts the page when the opt-in is disabled while it is selected', () => {
     const { container, rerender } = renderChat(true)
     rerender(
-      <ActiveSettingsSectionProvider value="chat">
-        <ChatSettingsSection
-          settings={{ ...getDefaultSettings('/tmp'), experimentalNativeChat: false }}
-          updateSettings={vi.fn()}
-          writeSourceControlAiSettings={async () => {}}
-          searchEntries={[]}
-          showDesktopOnlySettings
-          isMounted
-        />
-      </ActiveSettingsSectionProvider>
+      <TooltipProvider>
+        <ActiveSettingsSectionProvider value="chat">
+          <ChatSettingsSection
+            settings={{ ...getDefaultSettings('/tmp'), experimentalNativeChat: false }}
+            updateSettings={vi.fn()}
+            writeSourceControlAiSettings={async () => {}}
+            searchEntries={[]}
+            showDesktopOnlySettings
+            isMounted
+          />
+        </ActiveSettingsSectionProvider>
+      </TooltipProvider>
     )
     expect(container.querySelector('#chat')).toBeNull()
   })

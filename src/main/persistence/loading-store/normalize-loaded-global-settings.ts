@@ -1,3 +1,4 @@
+import { loadedChatPermissionSetting } from './loaded-chat-permission-setting'
 import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat-appearance-settings'
 import { getDefaultVoiceSettings } from '../../../shared/constants'
 import { normalizePRBotAuthorOverrides } from '../../../shared/pr-bot-author-overrides'
@@ -19,7 +20,8 @@ import type { PreparedLoadedProfileSettings } from './prepare-loaded-profile-set
 export function normalizeLoadedGlobalSettings(
   parsed: PersistedState,
   terminal: PreparedLoadedTerminalSettings,
-  profile: PreparedLoadedProfileSettings
+  profile: PreparedLoadedProfileSettings,
+  markNeedsSave: () => void = () => undefined
 ): PersistedState['settings'] {
   const {
     defaults,
@@ -61,6 +63,11 @@ export function normalizeLoadedGlobalSettings(
     // old default indistinguishable from a real opt-in. Preserve stored `true`; only
     // the default changed.
     ...stripRetiredGlobalSettings(parsed.settings),
+    nativeChatPermissionMode: loadedChatPermissionSetting(
+      parsed.settings?.nativeChatPermissionMode,
+      migratedAgentYoloDefaults,
+      markNeedsSave
+    ),
     nativeChatAppearance: normalizeNativeChatAppearanceSettings(
       parsed.settings?.nativeChatAppearance
     ),

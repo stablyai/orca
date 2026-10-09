@@ -5,7 +5,7 @@ import {
   openCodexAppServerConnection,
   type CodexAppServerConnection
 } from './codex-app-server-connection'
-import { codexStructuredPermissionPolicyForSettings } from './codex-structured-permission-policy'
+import { codexStructuredPermissionPolicy } from './codex-structured-permission-policy'
 import { openCodexThread } from './codex-structured-thread-open'
 
 function connectionFor(
@@ -22,7 +22,8 @@ describe('openCodexThread', () => {
     const connection = connectionFor(request)
     const permissionPolicy = {
       approvalPolicy: 'never' as const,
-      sandbox: 'danger-full-access' as const
+      sandbox: 'danger-full-access' as const,
+      approvalsReviewer: 'user' as const
     }
 
     await openCodexThread(
@@ -39,7 +40,12 @@ describe('openCodexThread', () => {
     expect(request).toHaveBeenNthCalledWith(
       1,
       'thread/start',
-      { cwd: '/workspace', approvalPolicy: 'never', sandbox: 'danger-full-access' },
+      {
+        cwd: '/workspace',
+        approvalPolicy: 'never',
+        sandbox: 'danger-full-access',
+        approvalsReviewer: 'user' as const
+      },
       { timeoutMs: 2_000 }
     )
     expect(request).toHaveBeenNthCalledWith(
@@ -50,6 +56,7 @@ describe('openCodexThread', () => {
         cwd: '/workspace',
         approvalPolicy: 'never',
         sandbox: 'danger-full-access',
+        approvalsReviewer: 'user' as const,
         excludeTurns: true
       },
       { timeoutMs: 2_000 }
@@ -64,9 +71,7 @@ describe('openCodexThread', () => {
     const request = vi.fn(async (_method: string, _params?: Record<string, unknown>) => ({
       thread: { id: 'thread-existing' }
     }))
-    const permissionPolicy = codexStructuredPermissionPolicyForSettings({
-      agentDefaultArgs: { codex: '' }
-    })
+    const permissionPolicy = codexStructuredPermissionPolicy('ask')
 
     await openCodexThread(
       connectionFor(request),
@@ -95,8 +100,73 @@ describe('openCodexThread', () => {
     ).resolves.toEqual({
       threadId: 'thread-standard',
       thread: { id: 'thread-standard' },
-      serviceTier: null
+      serviceTier: null,
+      approvalsReviewerSupported: false
     })
+  })
+
+  // The reply's reviewer is the only evidence this app-server can route approvals to auto-review.
+  it('reports reviewer support only when the app-server names a reviewer', async () => {
+    const reporting = vi.fn(async () => ({ thread: { id: 't' }, approvalsReviewer: 'user' }))
+    await expect(
+      openCodexThread(connectionFor(reporting), { cwd: '/w', resumeThreadId: null }, 2_000)
+    ).resolves.toMatchObject({ approvalsReviewerSupported: true })
+  })
+
+  it('opens without the reviewer on an app-server that refuses the field', async () => {
+    const request = vi.fn(async (method: string, params?: Record<string, unknown>) => {
+      if (params && 'approvalsReviewer' in params) {
+        throw new CodexAppServerRequestError(
+          method,
+          -32602,
+          'Invalid request: unknown field `approvalsReviewer`'
+        )
+      }
+      return { thread: { id: method === 'thread/start' ? 'created' : 'existing' } }
+    })
+    const permissionPolicy = codexStructuredPermissionPolicy('ask')
+
+    await expect(
+      openCodexThread(
+        connectionFor(request),
+        { cwd: '/w', resumeThreadId: null, permissionPolicy },
+        2_000
+      )
+    ).resolves.toMatchObject({ threadId: 'created', approvalsReviewerSupported: false })
+    await expect(
+      openCodexThread(
+        connectionFor(request),
+        { cwd: '/w', resumeThreadId: 'existing', permissionPolicy },
+        2_000
+      )
+    ).resolves.toMatchObject({ threadId: 'existing' })
+
+    const retried = request.mock.calls.filter(
+      ([, params]) => !('approvalsReviewer' in (params ?? {}))
+    )
+    expect(retried.map(([method]) => method)).toEqual(['thread/start', 'thread/resume'])
+    expect(retried[0]?.[1]).toMatchObject({
+      approvalPolicy: 'on-request',
+      sandbox: 'workspace-write'
+    })
+  })
+
+  it('does not retry an unrelated refusal', async () => {
+    const request = vi.fn(async (method: string) => {
+      throw new CodexAppServerRequestError(method, -32602, 'Invalid request: bad cwd')
+    })
+    await expect(
+      openCodexThread(
+        connectionFor(request),
+        {
+          cwd: '/w',
+          resumeThreadId: null,
+          permissionPolicy: codexStructuredPermissionPolicy('ask')
+        },
+        2_000
+      )
+    ).rejects.toThrow(/bad cwd/)
+    expect(request).toHaveBeenCalledTimes(1)
   })
 
   it('requests metadata-only state when resuming an existing thread', async () => {

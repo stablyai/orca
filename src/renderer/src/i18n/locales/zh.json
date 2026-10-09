@@ -18023,6 +18023,19 @@
         "attachmentOwnerChanged": "此工作区在附加时更改了主机 - 再次删除文件。",
         "attachmentUnreadable": "无法读取删除的文件。",
         "tooManyAttachments": "每次最多附加 {{value0}} 个文件。",
+        "permissions": "权限",
+        "permissionAsk": "请求批准",
+        "permissionAskDescription": "在设置未允许的编辑和命令前询问",
+        "permissionAskCodexDescription": "在工作区沙箱内操作，超出范围前会询问",
+        "permissionAskSharedDescription": "Claude 会询问，除非设置已允许；Codex 在超出工作区沙盒时询问",
+        "permissionAcceptEdits": "接受编辑",
+        "permissionAcceptEditsDescription": "批准文件编辑和文件命令；其余操作会询问",
+        "permissionAuto": "替我批准",
+        "permissionAutoDescription": "代你审核批准请求",
+        "permissionBypass": "完全访问",
+        "permissionBypassDescription": "跳过审批提示；你的 Claude 规则和沙盒仍然适用",
+        "permissionBypassCodexDescription": "从不询问；没有沙盒",
+        "permissionBypassSharedDescription": "跳过审批提示；Codex 还会在没有沙盒的情况下运行",
         "pasteFailed": "粘贴失败。",
         "commandAttachmentsUnsupported": "使用聊天会话命令前，请先移除附件。"
       },
@@ -19527,6 +19540,9 @@
     "openFailed": "无法在默认应用中打开此文件。",
     "openDefault": "在默认应用中打开"
   },
+  "settings.chat.permissionsTitle": "新聊天的权限",
+  "settings.chat.permissionsDescription": "仅适用于新聊天。在终端中打开的智能体使用设置 → 智能体 → 智能体权限。",
+  "settings.agents.permissionsScope": "适用于在终端中打开的智能体。聊天在设置 → 聊天中有独立的设置。",
   "projectBoard": {
     "noColumnField": "此看板视图没有可用于分组的单选或迭代字段，因此 Orca 改为列出各项。",
     "noField": "无 {{field}}"

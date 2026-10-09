@@ -1,4 +1,5 @@
 import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
+import type { AgentSessionPermissionSeed } from '../../../src/shared/agent-chat-permission-mode'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import { isRuntimeOwnedSshTargetId } from '../../../src/shared/execution-host'
 import {
@@ -35,6 +36,7 @@ export type MobileNativeChatTab = {
   launchDraftCreatedAt?: number
   sessionId?: string | null
   agent?: string | null
+  permissionSeed?: AgentSessionPermissionSeed
 }
 
 /** Resolve a session tab to the transcript identity native chat needs, or

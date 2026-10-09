@@ -9,6 +9,7 @@ import type {
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
+import type { MobileNativeChatPermissionPickerState } from './MobileNativeChatPermissionPicker'
 import {
   useMobileNativeChatSessionOptions,
   type MobileNativeChatSessionOptionsController
@@ -28,10 +29,11 @@ export function useMobileNativeChatSessionOptionController(args: {
   structured: {
     conversationCommands?: readonly AgentSessionConversationCommand[]
     optionPickerRequest?: { id: string; sequence: number } | null
-    snapshot: SessionOptionDescriptor[]
-    pendingId: string | null
-    setOption: (id: string, value: SessionOptionValue) => Promise<boolean>
-    invokeAction: (id: string) => Promise<boolean>
+    optionSnapshot: SessionOptionDescriptor[]
+    pendingOptionId: string | null
+    setStructuredOption: (id: string, value: SessionOptionValue) => Promise<boolean>
+    invokeStructuredOption: (id: string) => Promise<boolean>
+    permissionPicker?: MobileNativeChatPermissionPickerState | null
   }
   toggleTabChatView: (tabId: string) => void
   worktreeId: string
@@ -53,10 +55,10 @@ export function useMobileNativeChatSessionOptionController(args: {
     worktreeId
   } = args
   const {
-    invokeAction: invokeStructuredAction,
-    pendingId: structuredPendingId,
-    setOption: setStructuredOption,
-    snapshot: structuredSnapshot
+    invokeStructuredOption: invokeStructuredAction,
+    pendingOptionId: structuredPendingId,
+    setStructuredOption,
+    optionSnapshot: structuredSnapshot
   } = structured
 
   const handleAgentPicker = useCallback(() => {
@@ -82,7 +84,7 @@ export function useMobileNativeChatSessionOptionController(args: {
   })
   const structuredController = useMemo<MobileNativeChatSessionOptionsController | null>(
     () =>
-      activeChatStructured && structuredSnapshot.length > 0
+      activeChatStructured && (structuredSnapshot.length > 0 || structured.permissionPicker)
         ? {
             snapshot: structuredSnapshot,
             optionPickerRequest: structured.optionPickerRequest,
@@ -100,19 +102,32 @@ export function useMobileNativeChatSessionOptionController(args: {
       structuredPendingId,
       structuredSnapshot,
       structured.conversationCommands,
-      structured.optionPickerRequest
+      structured.optionPickerRequest,
+      structured.permissionPicker
     ]
   )
   const nativeChatSessionOptions = useMemo<MobileNativeChatSessionOptionPickersProps | null>(
     () =>
       activeChatStructured
         ? structuredController
-          ? { controller: structuredController, isWorking }
+          ? {
+              controller: structuredController,
+              isWorking,
+              ...(structured.permissionPicker
+                ? { permissionPicker: structured.permissionPicker }
+                : {})
+            }
           : null
         : sessionOptions.snapshot.length > 0
           ? { controller: sessionOptions, isWorking }
           : null,
-    [activeChatStructured, isWorking, sessionOptions, structuredController]
+    [
+      activeChatStructured,
+      isWorking,
+      sessionOptions,
+      structured.permissionPicker,
+      structuredController
+    ]
   )
 
   return { nativeChatSessionOptions, recordCommand: sessionOptions.recordCommand }

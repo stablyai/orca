@@ -1,5 +1,6 @@
 import type { MobileFileMedia } from '../files/mobile-file-media'
 import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
+import type { AgentSessionPermissionSeed } from '../../../src/shared/agent-chat-permission-mode'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
@@ -38,6 +39,7 @@ export type MobileSessionTab =
       title: string
       sessionId: string
       agent: AgentSessionHandleProvider
+      permissionSeed?: AgentSessionPermissionSeed
       isActive: boolean
     }
   | {

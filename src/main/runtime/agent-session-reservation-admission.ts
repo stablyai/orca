@@ -48,8 +48,13 @@ import {
 import type { AgentSessionStoreState } from './agent-session-store-state'
 import { agentSessionRecordIdentityFields } from './agent-session-record-founding'
 import { agentSessionAccountHomesEqual } from '../../shared/agent-session-account-home'
+import { reviseAgentSessionPermission } from './agent-session-permission-revisions'
+import {
+  isAgentSessionInitialPermissionMode,
+  type AgentSessionInitialPermissionMode
+} from '../../shared/agent-session-initial-permission-mode'
 
-export type AgentSessionReserveRequest = {
+export type AgentSessionReserveRequest = AgentSessionInitialPermissionMode & {
   /** Host-resolved floating directory committed with the first owner reservation. */
   launchDirectory?: string
   sessionId: string
@@ -157,7 +162,10 @@ export function applyAgentSessionReservation(
   if (request.launchArgs && !isAgentSessionLaunchArgs(request.launchArgs)) {
     throw new Error('agent_session_launch_args_invalid')
   }
-  if (request.options && !isAgentSessionOptions(request.options)) {
+  if (
+    (request.options && !isAgentSessionOptions(request.options)) ||
+    !isAgentSessionInitialPermissionMode(request)
+  ) {
     throw new Error('agent_session_options_invalid')
   }
   const reservation: AgentSessionReservation = {
@@ -281,6 +289,9 @@ function createAgentSessionRecord(
 ): AgentSessionRecord {
   return {
     ...agentSessionRecordIdentityFields(request, request.now),
+    ...(request.initialPermissionMode
+      ? { initialPermissionMode: request.initialPermissionMode }
+      : {}),
     // Fence 1 below is this record's first, and the owner probe requires the head link to carry the
     // record's current fence — so an adopted link must be minted at that same fence.
     providerHandleChain: request.adoptedHandleLink ? [request.adoptedHandleLink] : [],
@@ -339,6 +350,7 @@ export function commitAgentSessionReservation(
       return reserveWithOperationRow(state, continued, decision.row, leaseTtlMs)
     }
     const retried = admitPendingAgentSessionReservationReplay(record, request)
+    state.records.set(retried.sessionId, retried)
     return { record: retried, disposition: 'replayed', operationRow: decision.row }
   }
   return reserveWithOperationRow(state, request, decision.row, leaseTtlMs)
@@ -351,7 +363,8 @@ function reserveWithOperationRow(
   leaseTtlMs: number
 ): AgentSessionReserveResult {
   const result = applyAgentSessionReservation(state, request, leaseTtlMs)
-  state.operations.set(agentSessionOperationKey(row.callerKey, row.operationId), row)
+  result.record = reviseAgentSessionPermission(state.records.get(request.sessionId), result.record)
   state.records.set(result.record.sessionId, result.record)
+  state.operations.set(agentSessionOperationKey(row.callerKey, row.operationId), row)
   return { ...result, operationRow: row }
 }

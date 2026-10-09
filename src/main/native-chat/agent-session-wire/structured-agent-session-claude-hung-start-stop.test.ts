@@ -10,6 +10,7 @@ import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-ses
 import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/structured-agent-session-main-agent-working'
+import { ClaudeControlRequestTimeoutError } from '../../claude/claude-agent-sdk-control-requests'
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
 import {
   fakeClaude,
@@ -131,11 +132,15 @@ async function readsWorking(): Promise<boolean> {
   )
 }
 
-/** Whether the CLI was written `hello`, once the delivery loop has settled what it does with it. */
-async function helloWritten(): Promise<boolean> {
+async function settledDelivery(): Promise<void> {
   await vi.waitFor(() =>
     expect(host.collaboratorsForTests().conversationDelivery.loop.isRunning(SESSION)).toBe(false)
   )
+}
+
+/** Whether the CLI was written `hello`, once the delivery loop has settled what it does with it. */
+async function helloWritten(): Promise<boolean> {
+  await settledDelivery()
   return claude.connections[0]!.sent.some((message) => JSON.stringify(message).includes('hello'))
 }
 
@@ -223,4 +228,106 @@ it('leaves a message in doubt when the start answered and the chat closes before
   await vi.waitFor(async () =>
     expect(await submission(id)).toMatchObject({ dispatchState: 'unknown' })
   )
+})
+
+it.each(['accept-edits', 'auto'] as const)(
+  'Stop closes an inherited %s child while initialize is withheld, without sending input',
+  async (mode) => {
+    const session = adapter['sessions'].get(SESSION)
+    if (!session) {
+      throw new Error('no starting child')
+    }
+    session.launchPermissionMode = mode
+    const preparing = vi.spyOn(adapter, 'prepareDispatch')
+    const body = hostTestMessage('inherited permission')
+    await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
+    await settledDelivery()
+    // The start barrier holds the send ahead of any permission preparation.
+    expect(preparing).not.toHaveBeenCalled()
+    const [connection] = claude.connections
+    expect(connection!.sent).toEqual([])
+    const result = { settled: false }
+    const stop = host
+      .cancel(CALLER, { envelope: envelope('agentSession.cancel', {}) })
+      .then((outcome) => {
+        result.settled = true
+        return outcome
+      })
+    await vi.waitFor(() => expect(result.settled).toBe(true))
+    expect(await stop).toMatchObject({ ok: true, value: { cancelled: true } })
+    expect(connection!.closeCount).toBeGreaterThan(0)
+    expect(connection!.sent).toEqual([])
+    expect(host['sessions'].get(SESSION)?.child).toBeNull()
+    expect(await readsWorking()).toBe(false)
+  }
+)
+
+it('close can settle inherited permission preparation without an initialize answer', async () => {
+  const session = adapter['sessions'].get(SESSION)
+  if (!session) {
+    throw new Error('no starting child')
+  }
+  session.launchPermissionMode = 'accept-edits'
+  const preparing = vi.spyOn(adapter, 'prepareDispatch')
+  const body = hostTestMessage('close before permissions')
+  await host.send(CALLER, {
+    envelope: envelope('agentSession.send', { body }),
+    body,
+    userSend: true
+  })
+  await settledDelivery()
+  expect(preparing).not.toHaveBeenCalled()
+  const closed = { settled: false }
+  const close = host.close(SESSION, 'user-close').then(() => {
+    closed.settled = true
+  })
+  await vi.waitFor(() => expect(closed.settled).toBe(true))
+  await close
+  expect(claude.connections[0]!.sent).toEqual([])
+  expect(claude.connections[0]!.closeCount).toBeGreaterThan(0)
+})
+
+it('rechecks policy after a lost permission reply between acquisition and handover', async () => {
+  answerInitialize()
+  const session = adapter['sessions'].get(SESSION)
+  if (!session) {
+    throw new Error('missing child')
+  }
+  await session.startup.settled
+  session.options.set('permissionMode', 'ask')
+  let providerMode: unknown = 'default'
+  claude.routes.set_permission_mode = (params) => {
+    providerMode = params?.mode
+    if (providerMode === 'acceptEdits') {
+      throw new ClaudeControlRequestTimeoutError('set_permission_mode')
+    }
+    return {}
+  }
+  const serialize = host['serialize']
+  let inject = true
+  host['serialize'] = async (sessionId, task) => {
+    const result = await serialize(sessionId, task)
+    if (inject && result && typeof result === 'object' && 'awaited' in result) {
+      inject = false
+      await expect(
+        adapter.setOption({
+          sessionId: SESSION,
+          fence: session.fence,
+          key: 'permissionMode',
+          value: 'accept-edits'
+        })
+      ).rejects.toThrow('timed out')
+    }
+    return result
+  }
+  const body = hostTestMessage('after uncertain policy')
+  await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
+  await vi.waitFor(() => expect(claude.connections[0].sent).toHaveLength(1))
+  expect(providerMode).toBe('default')
+  expect(session.appliedPermissionMode).toBe('ask')
+  expect(
+    claude.connections[0].calls
+      .filter((call) => call.subtype === 'set_permission_mode')
+      .map((call) => call.params?.mode)
+  ).toEqual(['acceptEdits', 'default'])
 })

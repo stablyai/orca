@@ -82,14 +82,14 @@ describe('a Claude start that Orca fails while the CLI is still running', () => 
     await expect(
       host.attach(
         CALLER,
-        claude.attachParams(SESSION, null, { options: { permissionMode: 'plan' } })
+        claude.attachParams(SESSION, null, { options: { permissionMode: 'accept-edits' } })
       )
     ).resolves.toMatchObject({ ok: true })
     await vi.waitFor(() =>
       expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('ready')
     )
 
-    expect(claude.child(SESSION).launch.options.permissionMode).toBe('plan')
+    expect(claude.child(SESSION).launch.options.permissionMode).toBe('acceptEdits')
     expect(claude.child(SESSION).calls).not.toContain('set_permission_mode')
     expect(await failureRows(host)).toEqual([])
   })

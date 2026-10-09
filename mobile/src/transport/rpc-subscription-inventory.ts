@@ -102,7 +102,7 @@ export const RPC_SUBSCRIPTION_SITES: readonly RpcSubscriptionSite[] = [
   // The structured agent session's event stream. Mountable: its listener guards the payload, and
   // the hold that precedes it is a plain request. What is missing is the scenario.
   {
-    file: 'src/session/use-mobile-structured-agent-state.ts',
+    file: 'src/session/mobile-structured-transcript-subscription.ts',
     method: 'agentSession.subscribe',
     release: 'params',
     coverage: { kind: 'unwritten-scenario' }

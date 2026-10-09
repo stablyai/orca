@@ -1,10 +1,6 @@
 import type { PreloadApi } from '../../../../preload/api-types'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/auto-rename-branch-from-work-settings'
-import {
-  getDefaultSettings,
-  getDefaultUIState,
-  getWorktreeCardModeProperties
-} from '../../../../shared/constants'
+import { getDefaultSettings } from '../../../../shared/constants'
 import { normalizeWorktreeVisibilityDefaults } from '../../../../shared/external-worktree-visibility'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
@@ -20,7 +16,14 @@ import { normalizeTerminalCursorStyleDefault } from '../../../../shared/terminal
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { readStoredWebRuntimeEnvironment } from '../web-runtime-environment'
-import { mergeSettings, mergeWebUIState } from './web-preference-normalization'
+import { mergeSettings } from './web-preference-normalization'
+import {
+  captureWebChatPermissionSetting,
+  beginWebChatPermissionRead,
+  settingsForWebChatPermissionOwner,
+  webChatPermissionUpdate
+} from './web-chat-permission-setting'
+import { readWebUIStateForSettings } from './web-local-ui-state'
 import { callRuntimeResult } from './web-runtime-calls'
 import { requireActiveEnvironmentOrNull, webRuntimeState } from './web-runtime-session'
 import { zcodePlanSiteOwner, settingsForZcodePlanSiteOwner } from './web-zcode-plan-site'
@@ -85,6 +88,7 @@ export function getStoredSettings(): GlobalSettings {
     migratedStored
   )
   delete settings.zcodePlanSite
+  delete settings.nativeChatPermissionMode
   return settings
 }
 
@@ -93,6 +97,7 @@ export function writeStoredSettings(
   explicitActiveRuntimeEnvironmentId?: string | null
 ): void {
   const durable = { ...settings }
+  delete durable.nativeChatPermissionMode
   if (explicitActiveRuntimeEnvironmentId !== undefined) {
     durable.activeRuntimeEnvironmentId = explicitActiveRuntimeEnvironmentId
   } else {
@@ -110,6 +115,7 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
   const local = getStoredSettings()
   const requestedEnvironment = requireActiveEnvironmentOrNull()
   const requestedSiteOwner = zcodePlanSiteOwner(requestedEnvironment)
+  const permissionRead = beginWebChatPermissionRead()
   if (!requestedEnvironment) {
     return local
   }
@@ -120,6 +126,7 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
       15_000
     )
     const runtimeSettings: Partial<GlobalSettings> = {}
+    captureWebChatPermissionSetting(permissionRead, result.settings)
     const currentEnvironment = requireActiveEnvironmentOrNull()
     if (currentEnvironment?.id === requestedEnvironment.id) {
       const visibilityDefaults = normalizeWorktreeVisibilityDefaults(
@@ -179,7 +186,9 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
 
 export function settingsForActiveVisibilityOwner(settings: GlobalSettings): GlobalSettings {
   const environment = requireActiveEnvironmentOrNull()
-  const ownedSettings = settingsForZcodePlanSiteOwner(settings, environment)
+  const ownedSettings = settingsForWebChatPermissionOwner(
+    settingsForZcodePlanSiteOwner(settings, environment)
+  )
   if (!environment) {
     return ownedSettings
   }
@@ -201,10 +210,11 @@ export async function syncRuntimeBackedSettings(
   localNext: GlobalSettings
 ): Promise<GlobalSettings> {
   const requestedEnvironment = requireActiveEnvironmentOrNull()
+  const permissionRead = beginWebChatPermissionRead()
   if (!requestedEnvironment) {
     return localNext
   }
-  const runtimeUpdates: Partial<GlobalSettings> = {}
+  const runtimeUpdates = webChatPermissionUpdate(updates)
   const visibilityDefaults = normalizeWorktreeVisibilityDefaults(updates.worktreeVisibilityDefaults)
   if (visibilityDefaults) {
     runtimeUpdates.worktreeVisibilityDefaults = visibilityDefaults
@@ -239,6 +249,12 @@ export async function syncRuntimeBackedSettings(
       15_000
     )
     const runtimeSettings = { ...result.settings }
+    captureWebChatPermissionSetting(
+      permissionRead,
+      runtimeSettings,
+      runtimeUpdates.nativeChatPermissionMode !== undefined
+    )
+    delete runtimeSettings.nativeChatPermissionMode
     delete runtimeSettings.activeRuntimeEnvironmentId
     const updatedVisibilityDefaults = normalizeWorktreeVisibilityDefaults(
       runtimeSettings.worktreeVisibilityDefaults
@@ -255,7 +271,7 @@ export async function syncRuntimeBackedSettings(
     writeStoredSettings(next)
     return next
   } catch (error) {
-    if (visibilityDefaults) {
+    if (visibilityDefaults || runtimeUpdates.nativeChatPermissionMode !== undefined) {
       throw error
     }
     // Why: unpaired/offline web clients still need local settings persistence.
@@ -293,25 +309,6 @@ export async function updateRuntimePRBotAuthorOverride(args: {
 }
 
 export function readLocalWebUIState(): PersistedUIState {
-  const defaults = getDefaultUIState()
-  // Why settings first: getStoredSettings() runs the OSC 52 migration, which writes the
-  // notice arm into UI_STORAGE_KEY. Reading before it would snapshot a pre-arm state that
-  // every caller then writes back, erasing the arm the stamp can never raise again.
-  const storedSettings = getStoredSettings()
-  const stored = readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {})
-  const base = {
-    ...defaults,
-    // Why: mirror the main-process missing-property seed from legacy card layout mode when runtime ui.get is unavailable.
-    worktreeCardProperties: getWorktreeCardModeProperties(
-      storedSettings.compactWorktreeCards ? 'Compact' : 'Default'
-    )
-  }
-  if (typeof stored.rightSidebarOpen === 'boolean') {
-    return mergeWebUIState(base, stored)
-  }
-  return mergeWebUIState(base, {
-    ...stored,
-    // Why: web fallback lacks main-process normalization; migrate the retired setting only when local UI preference is absent.
-    rightSidebarOpen: storedSettings.rightSidebarOpenByDefault
-  })
+  // Settings migration must arm its UI notice before the UI snapshot is read.
+  return readWebUIStateForSettings(getStoredSettings())
 }

@@ -234,20 +234,20 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
     expect(adapter.readOptionRestoreFailures('session-1')).toEqual(['fastMode'])
   })
 
-  it.each([
-    ['effort', { effort: 'retired-effort' }],
-    ['permissionMode', { permissionMode: 'retired-mode' }]
-  ] as const)('self-heals a persisted %s the CLI would refuse at launch', async (key, options) => {
-    const claude = fakeClaude()
-    const adapter = adapterFor(claude)
+  it.each([['effort', { effort: 'retired-effort' }]] as const)(
+    'self-heals a persisted %s the CLI would refuse at launch',
+    async (key, options) => {
+      const claude = fakeClaude()
+      const adapter = adapterFor(claude)
 
-    await expect(
-      adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9', options })
-    ).resolves.toBeDefined()
-    expect(adapter.readOptionRestoreFailures('session-1')).toEqual([key])
-    expect(claude.connections[0].launch.options).not.toHaveProperty('effort')
-    expect(claude.connections[0].launch.options).not.toHaveProperty('permissionMode')
-  })
+      await expect(
+        adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9', options })
+      ).resolves.toBeDefined()
+      expect(adapter.readOptionRestoreFailures('session-1')).toEqual([key])
+      expect(claude.connections[0].launch.options).not.toHaveProperty('effort')
+      expect(claude.connections[0].launch.options).not.toHaveProperty('permissionMode')
+    }
+  )
 
   it('recovers a cancellable lifecycle when the replay arrives after dispatch returned', async () => {
     const claude = fakeClaude({ replayUuid: null })

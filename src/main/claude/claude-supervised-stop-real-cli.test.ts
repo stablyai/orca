@@ -10,10 +10,8 @@ import {
   openClaudeStreamJsonConnection,
   type ClaudeStreamJsonConnection
 } from './claude-stream-json-connection'
-import {
-  CLAUDE_STRUCTURED_BASE_OPTIONS,
-  claudeStructuredPermissionOptions
-} from './claude-structured-launch-resolution'
+import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resolution'
+import { claudeStructuredPermissionOptions } from './claude-structured-permission-mode'
 
 // Opt-in only: spends a real (haiku) turn per case. Run it in an isolated HOME with
 // ORCA_REAL_CLAUDE_BIN set, and ORCA_REAL_CLAUDE_SETTINGS when auth lives in a settings file.
@@ -80,7 +78,7 @@ async function until<T>(read: () => Promise<T | null> | T | null, what: string, 
 
 async function open(sessionId: string, cwd: string, resume: boolean, frames: Frame[]) {
   const settings = process.env.ORCA_REAL_CLAUDE_SETTINGS
-  const permission = claudeStructuredPermissionOptions('bypassPermissions')
+  const permission = claudeStructuredPermissionOptions('bypass')
   const connection = await openClaudeStreamJsonConnection(
     {
       pathToClaudeCodeExecutable: CLAUDE_BIN,

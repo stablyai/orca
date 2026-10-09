@@ -107,8 +107,8 @@ export function AgentPermissionsSetting({
           </span>
         }
         description={translate(
-          'auto.components.settings.AgentsPane.agentPermissionsDescription',
-          'Choose whether Orca launches agents with fewer permission prompts or with manual checks.'
+          'settings.agents.permissionsScope',
+          'Applies to agents you open in a terminal. Chats have their own setting in Settings → Chat.'
         )}
         action={
           <SettingsSegmentedControl<AgentPermissionMode>

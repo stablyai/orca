@@ -22,7 +22,7 @@ export type StructuredAgentLaunchOptions = {
   resumeFrom?: StructuredAgentSessionResumeSource
   /** The host the route decided on; read only by the caller that starts the launch. */
   executionHostId?: ExecutionHostId
-  /** The saved selection a paired host reported it will seed; read only by the starting caller. */
+  /** The saved selection the admitting host reported it will seed, permission mode included. */
   hostSeedOptions?: Readonly<Record<string, string>>
   /** The tab group the chat opens in; a request with no text reuses an empty chat only there. */
   targetGroupId?: string

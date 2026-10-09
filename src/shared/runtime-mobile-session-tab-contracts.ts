@@ -5,6 +5,7 @@ import type { TerminalColorOverrides } from './terminal-color-overrides'
 import type { TerminalLayoutSnapshot } from './terminal-tab-types'
 import type { TuiAgent } from './tui-agent'
 import type { StructuredAgentId } from './agent-session-provider-handle'
+import type { AgentSessionPermissionSeed } from './agent-chat-permission-mode'
 
 export type RuntimeMobileSessionTerminalTab = {
   type: 'terminal'
@@ -97,6 +98,7 @@ export type RuntimeMobileSessionAgentTab = {
   id: string
   title: string
   sessionId: string
+  permissionSeed?: AgentSessionPermissionSeed
   replacesSessionId?: string
   /** An agent the host registered. Beyond Claude and Codex, published only to clients advertising
    *  the registered-agents capability. */
