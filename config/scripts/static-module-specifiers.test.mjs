@@ -33,6 +33,14 @@ describe('static module specifiers', () => {
       "import { default as Module } from 'node:module'\nModule.createRequire(__filename)('child_process')"
     ],
     [
+      'a named Module constructor',
+      "import { Module } from 'node:module'\nModule.createRequire(__filename)('child_process')"
+    ],
+    [
+      'a renamed Module constructor',
+      "import { Module as HostModule } from 'module'\nHostModule.createRequire(__filename)('node:child_process')"
+    ],
+    [
       'an import-equals createRequire',
       "import Module = require('node:module')\nconst load = Module.createRequire(__filename)\nload('node:child_process')"
     ],
@@ -168,6 +176,7 @@ describe('static module specifiers', () => {
   it.each([
     "import { createRequire } from 'node:module'\nconst ELECTRON = 'electron'\ncreateRequire(__filename)(ELECTRON)",
     "import Module = require('node:module')\nModule.createRequire(__filename)('electron')",
+    "import { Module as HostModule } from 'module'\nHostModule.createRequire(__filename)('electron')",
     "import * as Module from 'node:module'\nModule['createRequire'](__filename)('electron')",
     "const { 'createRequire': make } = require('node:module')\nmake(__filename)('electron')"
   ])('applies package dependency rules to dynamically loaded specifiers: %s', (contents) => {

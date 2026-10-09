@@ -84,6 +84,7 @@ describe('process-host import boundary', () => {
   })
 
   it.each([
+    ['src/main/consumer.ts', '../packages/process-host'],
     ['src/main/consumer.ts', '../packages/process-host/src/run-process'],
     ['src/main/consumer.test.ts', '../packages/process-host/src/run-process'],
     ['config/scripts/consumer.mjs', '../../src/packages/process-host/src/run-process'],
@@ -96,6 +97,7 @@ describe('process-host import boundary', () => {
   })
 
   it.each([
+    ['src/main/consumer.ts', '..\\packages\\process-host'],
     ['src/main/consumer.ts', '..\\packages\\process-host\\src\\run-process'],
     ['src/main/consumer.ts', '..\\packages\\process-host\\dist\\run-process.js'],
     ['config/scripts/consumer.mjs', '..\\..\\src\\packages\\process-host\\src\\run-process'],

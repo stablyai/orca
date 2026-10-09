@@ -60,7 +60,11 @@ export function assessProcessHostImports(sources, manifest, baseline) {
       if (selfImport && !publicEntry(specifier, manifest)) {
         violations.push(`${file}: ${sourceSpecifier} is not a public process-host export`)
       }
-      if (!ownSource && !testCorpusImport && local?.startsWith(`${PACKAGE_DIRECTORY}/`)) {
+      if (
+        !ownSource &&
+        !testCorpusImport &&
+        (local === PACKAGE_DIRECTORY || local?.startsWith(`${PACKAGE_DIRECTORY}/`))
+      ) {
         violations.push(
           `${file}: import process-host through ${PACKAGE_NAME}, not ${sourceSpecifier}`
         )

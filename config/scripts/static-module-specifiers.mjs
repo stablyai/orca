@@ -170,13 +170,11 @@ export function collectModuleSpecifiers(file, contents) {
     }
     for (const element of named && ts.isNamedImports(named) ? named.elements : []) {
       const imported = (element.propertyName ?? element.name).text
-      if (imported === 'default') {
-        if (MODULE_BUILTINS.has(module)) {
-          moduleNamespaces.add(element.name.text)
-        }
-        if (PROCESS_BUILTINS.has(module)) {
-          processes.add(element.name.text)
-        }
+      if (MODULE_BUILTINS.has(module) && (imported === 'default' || imported === 'Module')) {
+        moduleNamespaces.add(element.name.text)
+      }
+      if (PROCESS_BUILTINS.has(module) && imported === 'default') {
+        processes.add(element.name.text)
       }
       if (MODULE_BUILTINS.has(module) && imported === 'createRequire') {
         createRequires.add(element.name.text)
