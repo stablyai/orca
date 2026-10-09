@@ -238,7 +238,7 @@ async function runCodexLoginProcess(
 
     const onError = (error: Error): void => {
       settle(() => {
-        const isEnoent = (error as NodeJS.ErrnoException).code === 'ENOENT'
+        const isEnoent = 'code' in error && error.code === 'ENOENT'
         // Why: ENOENT is ambiguous — missing codex binary or missing node in PATH; a resolved full path implies node is missing.
         const isBareCommand = spawnConfig.codexCommand === 'codex'
         const message = isEnoent
@@ -251,18 +251,22 @@ async function runCodexLoginProcess(
     }
 
     const onClose = (code: number | null): void => {
+      const exitCode = spawnConfig.interactiveLogin
+        ? spawnConfig.interactiveLogin.getExitCode()
+        : code
       settle(() => {
-        // Why: the post-auth tree kill is a success path — auth.json already
-        // exists and codex only failed to exit on its own, so the forced
-        // non-zero exit must not surface as a login failure.
-        // Why: the kill only arms after the watcher observed new credential
-        // bytes, so an unreadable auth.json here is a lock, not a failed login.
-        // Only a definitive absence may revoke that verdict — reading a lock as
-        // failure sends the caller's rollback at a home that just authenticated.
-        if (
-          code === 0 ||
-          (loginTreeKilledAfterAuth && readLoginAuthSnapshot(authJsonPath) !== null)
-        ) {
+        // The watcher proved new credentials before killing; a lock must not revoke that success.
+        if (loginTreeKilledAfterAuth && readLoginAuthSnapshot(authJsonPath) !== null) {
+          resolvePromise()
+          return
+        }
+        if (spawnConfig.interactiveLogin && exitCode === null) {
+          rejectPromise(
+            new Error('Codex sign-in did not report a completion status. Please try again.')
+          )
+          return
+        }
+        if (exitCode === 0) {
           resolvePromise()
           return
         }
@@ -271,7 +275,7 @@ async function runCodexLoginProcess(
           new Error(
             trimmedOutput
               ? `Codex login failed: ${trimmedOutput}`
-              : `Codex login exited with code ${code ?? 'unknown'}.`
+              : `Codex login exited with code ${exitCode ?? 'unknown'}.`
           )
         )
       })

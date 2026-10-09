@@ -148,8 +148,15 @@ export function runClaudeCommandProcess(
       if (terminationPending) {
         return
       }
+      const exitCode = interactiveLogin ? interactiveLogin.getExitCode() : code
       settle(() => {
-        if (code === 0 || options?.allowFailure) {
+        if (interactiveLogin && exitCode === null) {
+          rejectPromise(
+            new Error('Claude sign-in did not report a completion status. Please try again.')
+          )
+          return
+        }
+        if (exitCode === 0 || options?.allowFailure) {
           resolvePromise(output)
           return
         }
@@ -158,7 +165,7 @@ export function runClaudeCommandProcess(
           new Error(
             trimmedOutput
               ? `Claude command failed: ${trimmedOutput}`
-              : `Claude command exited with code ${code ?? 'unknown'}.`
+              : `Claude command exited with code ${exitCode ?? 'unknown'}.`
           )
         )
       })

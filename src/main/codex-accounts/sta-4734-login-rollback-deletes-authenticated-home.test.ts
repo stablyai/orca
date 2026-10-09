@@ -299,7 +299,9 @@ describe('STA-4734 a locked auth.json must not delete a just-authenticated home'
       await vi.advanceTimersByTimeAsync(6_000)
       child.emit('close', 1)
 
-      await expect(loginPromise).rejects.toThrow(/Codex login exited with code 1/)
+      await expect(loginPromise).rejects.toThrow(
+        'Codex sign-in did not report a completion status.'
+      )
     } finally {
       Object.defineProperty(process, 'platform', originalPlatform)
       vi.useRealTimers()

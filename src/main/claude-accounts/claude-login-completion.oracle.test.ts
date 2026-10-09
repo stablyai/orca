@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as WindowsLoginSpawn from '../../shared/windows-interactive-login-spawn'
 
 const processMocks = vi.hoisted(() => ({
   spawn: vi.fn()
@@ -10,6 +11,21 @@ vi.mock('node:child_process', () => ({
   execFileSync: vi.fn(),
   spawn: processMocks.spawn
 }))
+
+vi.mock('../../shared/windows-interactive-login-spawn', async () => {
+  const actual = await vi.importActual<typeof WindowsLoginSpawn>(
+    '../../shared/windows-interactive-login-spawn'
+  )
+  return {
+    ...actual,
+    buildWindowsHostInteractiveLoginSpawn: (
+      ...args: Parameters<typeof actual.buildWindowsHostInteractiveLoginSpawn>
+    ) => ({
+      ...actual.buildWindowsHostInteractiveLoginSpawn(...args),
+      getExitCode: () => 0
+    })
+  }
+})
 
 vi.mock('electron', () => ({
   app: { getPath: () => 'C:\\orca-review-11407' }

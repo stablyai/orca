@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { existsSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { getCmdExePath } from './windows-batch-spawn'
 import { buildWindowsHostInteractiveLoginSpawn } from './windows-interactive-login-spawn'
 
@@ -30,6 +30,16 @@ function pidFilePathFromSpawnArgs(args: string[]): string {
   )?.[1]
   if (!encodedPath) {
     throw new Error('PID relay path is missing')
+  }
+  return Buffer.from(encodedPath, 'base64').toString('utf8')
+}
+
+function exitFilePathFromSpawnArgs(args: string[]): string {
+  const encodedPath = decodedScript(args).match(
+    /WriteAllText\(\(Read-OrcaValue '([^']+)'\), \[string\]\$ExitCode\)/
+  )?.[1]
+  if (!encodedPath) {
+    throw new Error('Completion relay path is missing')
   }
   return Buffer.from(encodedPath, 'base64').toString('utf8')
 }
@@ -98,6 +108,65 @@ describe('buildWindowsHostInteractiveLoginSpawn', () => {
     } finally {
       spawn.cleanup()
       vi.useRealTimers()
+    }
+  })
+})
+
+describe('Windows login completion relay', () => {
+  it.each([
+    { text: undefined, code: null },
+    { text: '', code: null },
+    { text: '0', code: 0 },
+    { text: '7', code: 7 },
+    { text: '-1073741510', code: -1073741510 },
+    { text: '4294967295', code: 4294967295 },
+    { text: '7partial', code: null },
+    { text: '0\n7', code: null },
+    { text: '0.5', code: null },
+    { text: '00', code: null },
+    { text: 'NaN', code: null },
+    { text: '4294967296', code: null },
+    { text: '-2147483649', code: null }
+  ])('requires a complete Windows exit code: $text', ({ text, code }) => {
+    const spawn = withWindows(() =>
+      buildWindowsHostInteractiveLoginSpawn('C:\\Tools\\codex.exe', ['login'])
+    )
+    const pidPath = pidFilePathFromSpawnArgs(spawn.args)
+    const exitPath = exitFilePathFromSpawnArgs(spawn.args)
+    writeFileSync(pidPath, '1234')
+    if (text !== undefined) {
+      writeFileSync(exitPath, text)
+    }
+    expect(spawn.getExitCode()).toBe(code)
+    spawn.cleanup()
+    expect(spawn.getExitCode()).toBe(code)
+    expect(existsSync(pidPath)).toBe(false)
+    expect(existsSync(exitPath)).toBe(false)
+  })
+
+  it('captures completion before cleanup removes the only evidence', () => {
+    const spawn = withWindows(() =>
+      buildWindowsHostInteractiveLoginSpawn('C:\\Tools\\codex.exe', ['login'])
+    )
+    writeFileSync(exitFilePathFromSpawnArgs(spawn.args), '7')
+    spawn.cleanup()
+    expect(spawn.getExitCode()).toBe(7)
+  })
+
+  it('keeps a captured verdict when relay cleanup fails', () => {
+    const spawn = withWindows(() =>
+      buildWindowsHostInteractiveLoginSpawn('C:\\Tools\\codex.exe', ['login'])
+    )
+    const exitPath = exitFilePathFromSpawnArgs(spawn.args)
+    writeFileSync(exitPath, '7')
+    expect(spawn.getExitCode()).toBe(7)
+    rmSync(exitPath)
+    mkdirSync(exitPath)
+    try {
+      expect(() => spawn.cleanup()).not.toThrow()
+      expect(spawn.getExitCode()).toBe(7)
+    } finally {
+      rmSync(exitPath, { recursive: true, force: true })
     }
   })
 })
