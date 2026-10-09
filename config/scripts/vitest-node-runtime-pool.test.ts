@@ -3,10 +3,11 @@ import { resolve } from 'node:path'
 import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest'
 import { createVitest, type PoolOptions, type Vitest } from 'vitest/node'
 import * as processes from '@orca/process-host'
+import type { ChildProcessHandle } from '@orca/process-host/process-spec'
 import { nodeRuntimePool } from './vitest-node-runtime-pool'
 
 let context: Vitest
-const children: processes.ChildProcessHandle[] = []
+const children: ChildProcessHandle[] = []
 const spawn = processes.spawnProcess
 
 beforeAll(async () => {

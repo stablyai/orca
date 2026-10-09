@@ -29,6 +29,10 @@ describe('static module specifiers', () => {
       "import Module from 'module'\nconst load = Module.createRequire(__filename)\nload('child_process')"
     ],
     [
+      'a named default-import createRequire',
+      "import { default as Module } from 'node:module'\nModule.createRequire(__filename)('child_process')"
+    ],
+    [
       'an import-equals createRequire',
       "import Module = require('node:module')\nconst load = Module.createRequire(__filename)\nload('node:child_process')"
     ],
@@ -67,6 +71,10 @@ describe('static module specifiers', () => {
     [
       'an imported process',
       "import nodeProcess from 'node:process'\nnodeProcess.getBuiltinModule('child_process')"
+    ],
+    [
+      'a named default-import process',
+      "import { default as nodeProcess } from 'node:process'\nnodeProcess.getBuiltinModule('child_process')"
     ],
     [
       'an import-equals process',
@@ -135,12 +143,26 @@ describe('static module specifiers', () => {
           [
             'src/main/import-equals.ts',
             "import Module = require('node:module')\nconst load = Module.createRequire(__filename)\nload('node:child_process')"
+          ],
+          [
+            'src/main/named-default-module.ts',
+            "import { default as Module } from 'node:module'\nModule.createRequire(__filename)('child_process')"
+          ],
+          [
+            'src/main/named-default-process.ts',
+            "import { default as nodeProcess } from 'node:process'\nnodeProcess.getBuiltinModule('child_process')"
           ]
         ]),
         { exports: {} },
         []
       ).added
-    ).toEqual(['src/main/builtin.ts', 'src/main/bypass.ts', 'src/main/import-equals.ts'])
+    ).toEqual([
+      'src/main/builtin.ts',
+      'src/main/bypass.ts',
+      'src/main/import-equals.ts',
+      'src/main/named-default-module.ts',
+      'src/main/named-default-process.ts'
+    ])
   })
 
   it.each([

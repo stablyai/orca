@@ -47,37 +47,48 @@ export type RelocatedDaemonHost = {
 }
 
 const HOST_SUBDIR = 'daemon-host'
-const knownBuildFingerprints = new Map<string, string>()
+const observedBuilds = new Map<string, { fingerprint: string; entrySourcePath: string }>()
+
+function observedBuildKey(sources: Pick<DaemonHostSources, 'execPath' | 'resourcesPath'>): string {
+  return JSON.stringify([
+    getAppEnvironment().getVersion(),
+    sources.execPath,
+    sources.resourcesPath,
+    process.versions.electron ?? `node-${process.versions.node}`,
+    process.arch
+  ])
+}
 
 function currentBuildFingerprint(
   sources: DaemonHostSources,
   sourceFingerprint: string | null
 ): string | null {
-  const key = JSON.stringify([
-    getAppEnvironment().getVersion(),
-    sources.execPath,
-    sources.entrySourcePath,
-    process.versions.electron,
-    process.arch
-  ])
+  const key = observedBuildKey(sources)
   if (sourceFingerprint !== null) {
-    knownBuildFingerprints.set(key, sourceFingerprint)
+    observedBuilds.set(key, {
+      fingerprint: sourceFingerprint,
+      entrySourcePath: sources.entrySourcePath
+    })
+    return sourceFingerprint
   }
   // Once this process observed its build, an updater removing source files cannot select another same-version build.
-  return sourceFingerprint ?? knownBuildFingerprints.get(key) ?? null
+  const observed = observedBuilds.get(key)
+  return observed?.entrySourcePath === sources.entrySourcePath ? observed.fingerprint : null
 }
 
 // LOCAL appData (not roaming) so OneDrive/roaming never syncs this ~260MB runtime. Shared with NSIS uninstall (config/nsis/orca-installer-hooks.nsh) — keep in sync.
 const LOCAL_HOST_ROOT_NAME = 'Orca'
 
 // Mirror getDaemonEntryPath()'s resolution order so the copied entry is the exact file the in-dir fork would run.
-function resolveEntrySourcePath(resourcesPath: string): string {
+function resolveEntrySourcePath(resourcesPath: string, observedEntryPath?: string): string {
   const unpackedRoot = join(resourcesPath, 'app.asar.unpacked')
   const direct = join(unpackedRoot, 'daemon-entry.js')
   if (existsSync(direct)) {
     return direct
   }
-  return join(unpackedRoot, 'out', 'main', 'daemon-entry.js')
+  const nested = join(unpackedRoot, 'out', 'main', 'daemon-entry.js')
+  // Preserve the observed layout only when neither live entry survives the updater.
+  return existsSync(nested) ? nested : (observedEntryPath ?? nested)
 }
 
 /**
@@ -109,7 +120,8 @@ function collectDaemonHostSources(): DaemonHostSources | null {
   }
   const execPath = process.execPath
   const appDir = winPath.dirname(execPath)
-  const entrySourcePath = resolveEntrySourcePath(resourcesPath)
+  const observed = observedBuilds.get(observedBuildKey({ execPath, resourcesPath }))
+  const entrySourcePath = resolveEntrySourcePath(resourcesPath, observed?.entrySourcePath)
   return {
     appDir,
     execPath,
