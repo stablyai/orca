@@ -1,3 +1,5 @@
+import type { FetchAllCyclePrepared } from './service-full-cycle-preparation'
+import type { SettledProviderResult } from './service-sibling-provider-result'
 import { RateLimitServiceFullCyclePreparation } from './service-full-cycle-preparation'
 import { settleSiblingProviderResult } from './service-sibling-provider-result'
 import type { ProviderRateLimits } from './service-types'
@@ -25,8 +27,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       opencodeGeneration,
       miniMaxConfigChanged,
       miniMaxGeneration,
-      zcodeConfigChanged,
-      zcodeGeneration,
       claudeFetchGated,
       results: [
         claudeResult,
@@ -35,11 +35,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         opencodeGoResult,
         kimiResult,
         miniMaxResult
-      ],
-      grokResultPromise,
-      cursorResultPromise,
-      zcodeResultPromise,
-      antigravityResultPromise
+      ]
     } = prepared
     if (signal.aborted) {
       return
@@ -191,6 +187,25 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : this.state.minimax
     })
 
+    await Promise.all([
+      this.applySiblingProviderResults(prepared, signal),
+      this.applyKiroResult(prepared.kiroResultPromise, previousState.kiro, signal)
+    ])
+  }
+
+  private async applySiblingProviderResults(
+    prepared: FetchAllCyclePrepared,
+    signal: AbortSignal
+  ): Promise<void> {
+    const {
+      grokResultPromise,
+      cursorResultPromise,
+      zcodeResultPromise,
+      antigravityResultPromise,
+      zcodeGeneration,
+      zcodeConfigChanged,
+      previousState
+    } = prepared
     const [grokSettled, cursorSettled, zcodeSettled, antigravitySettled] = await Promise.all([
       grokResultPromise,
       cursorResultPromise,
@@ -241,5 +256,19 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
             : this.applyStalePolicy(zcode, previousState.zcode),
       antigravity: this.applyStalePolicy(antigravity, previousState.antigravity)
     })
+  }
+
+  private async applyKiroResult(
+    resultPromise: Promise<SettledProviderResult>,
+    previousKiro: ProviderRateLimits | null,
+    signal: AbortSignal
+  ): Promise<void> {
+    const settled = await resultPromise
+    if (signal.aborted) {
+      return
+    }
+    const kiro = settleSiblingProviderResult('kiro', settled)
+    this.trackActiveFailureStreak('kiro', kiro)
+    this.updateState({ ...this.state, kiro: this.applyStalePolicy(kiro, previousKiro) })
   }
 }

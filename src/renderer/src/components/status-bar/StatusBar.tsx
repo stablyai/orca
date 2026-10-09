@@ -25,6 +25,6 @@ export { ClaudeSwitcherMenu } from './ClaudeSwitcherMenu'
 export { CodexSwitcherMenu } from './CodexSwitcherMenu'
 export { InlineUsageBars } from './InlineProviderUsage'
 export { ProviderDetailsMenu } from './ProviderDetailsMenu'
-export { ProviderSegment } from './StatusBarProviderSegment'
+export { getProviderLetter, ProviderSegment } from './StatusBarProviderSegment'
 
 export const StatusBar = React.memo(StatusBarSurface)
