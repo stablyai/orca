@@ -103,6 +103,47 @@ describe('paired web attachment mutation compatibility', () => {
       expect.objectContaining({ linkedItems: [] })
     )
   })
+  it('retains an expected occupant when the web preload sends metadata to its host', async () => {
+    await createWorktreesApi().updateMeta({
+      worktreeId: 'repo::/workspace',
+      executionHostId: 'ssh:target-a',
+      expectedInstanceId: 'old-instance',
+      updates: { comment: 'note' }
+    })
+    expect(mocks.call).toHaveBeenCalledWith('worktree.set', {
+      worktree: 'identity:wt2:ssh%3Atarget-a:old-instance',
+      comment: 'note'
+    })
+  })
+  it.each([
+    { expectedInstanceId: 'old-instance' },
+    { executionHostId: 'ssh:target-a' as const },
+    { executionHostId: 'local' as const, expectedInstanceId: ' ' }
+  ])('refuses incomplete occupant qualification: %j', async (qualification) => {
+    await expect(
+      createWorktreesApi().updateMeta({
+        worktreeId: 'wt',
+        ...qualification,
+        updates: { comment: 'note' }
+      })
+    ).rejects.toThrow('selector_not_found')
+    expect(mocks.call).not.toHaveBeenCalled()
+  })
+  it('does not retry with a locator when an older host refuses the identity selector', async () => {
+    mocks.call.mockRejectedValueOnce(new Error('selector_not_found'))
+    await expect(
+      createWorktreesApi().updateMeta({
+        worktreeId: 'wt',
+        executionHostId: 'local',
+        expectedInstanceId: 'old-instance',
+        updates: { comment: 'note' }
+      })
+    ).rejects.toThrow('selector_not_found')
+    expect(mocks.call).toHaveBeenCalledExactlyOnceWith('worktree.set', {
+      worktree: 'identity:wt2:local:old-instance',
+      comment: 'note'
+    })
+  })
   it('keeps exact creation ownership and refuses a peer that would strip it', async () => {
     const args = { repoId: 'same-id', name: 'selected', executionHostId: 'ssh:private-b' as const }
     mocks.status.mockResolvedValue({ capabilities: [] })

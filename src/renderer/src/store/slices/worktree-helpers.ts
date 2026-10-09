@@ -1,3 +1,4 @@
+import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
 import type { WorkspaceReferenceTerminalContext } from '@/lib/workspace-attachment-terminal-origin'
 import type { CreateWorktreeCallOptions } from './worktrees/create/worktree-create-payload'
@@ -68,6 +69,10 @@ export type WorktreeFetchOptions = {
 export type DirectSshWorktreeFetchOptions = WorktreeFetchOptions & {
   executionHostId: SshExecutionHostId
   directSshAuthority: DirectSshAuthority
+}
+
+export type WorktreePassiveMetadataOwner = NotificationWorkspaceOwner & {
+  expectedInstanceId?: string
 }
 
 export type WorktreeMetaUpdateGuard = (worktree: Worktree | DetectedWorktree | undefined) => boolean
@@ -278,7 +283,7 @@ export type WorktreeSlice = {
    * their normal sidebar groups.
    */
   setWorktreesPinnedAndReveal: (worktreeIds: readonly string[], isPinned: boolean) => void
-  markWorktreeUnread: (worktreeId: string) => void
+  markWorktreeUnread: (worktreeId: string, owner?: WorktreePassiveMetadataOwner | null) => void
   observeTerminalGitHubPullRequestLink: (
     worktreeId: string,
     link: TerminalGitHubPRLink,
@@ -287,8 +292,8 @@ export type WorktreeSlice = {
   /** Clear the worktree's unread dot. Called on user interaction with any
    *  terminal pane inside the worktree (keystroke, click) — matches
    *  ghostty's "show until interact" model. Persists isUnread=false. */
-  clearWorktreeUnread: (worktreeId: string) => void
-  bumpWorktreeActivity: (worktreeId: string) => void
+  clearWorktreeUnread: (worktreeId: string, owner?: WorktreePassiveMetadataOwner | null) => void
+  bumpWorktreeActivity: (worktreeId: string, owner?: WorktreePassiveMetadataOwner | null) => void
   /**
    * Monotonic stamp of the focus-recency timestamp for a worktree. No-op if
    * the supplied (or current) timestamp is not strictly greater than the

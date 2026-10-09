@@ -39,6 +39,23 @@ describe('persistWorktreeMeta GitHub PR suppression compatibility', () => {
     vi.unstubAllGlobals()
   })
 
+  it('retains a captured SSH occupant even when its row has no canonical key', async () => {
+    await persistWorktreeMeta(
+      createGlobalSettingsFixture(),
+      'repo::/feature',
+      { comment: 'note' },
+      'ssh:target-a',
+      undefined,
+      'old:instance'
+    )
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledExactlyOnceWith(
+      mocks.target,
+      'worktree.set',
+      { worktree: 'identity:wt2:ssh%3Atarget-a:old%3Ainstance', comment: 'note' },
+      { timeoutMs: 15_000 }
+    )
+  })
+
   it.each([
     { linkedPR: 42 },
     { linkedPR: null },

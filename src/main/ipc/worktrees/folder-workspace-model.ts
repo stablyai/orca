@@ -4,6 +4,7 @@ import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../shared/workspace-statuses'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../../shared/worktree/id'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { Worktree } from '../../../shared/worktree/types'
+import { createWorktreeIdentity } from '../../../shared/worktree/identity'
 
 export function getFolderWorkspaceRootId(repo: Repo): string {
   return `${repo.id}::${repo.path}`
@@ -29,6 +30,15 @@ export function isFolderWorkspaceIdForRepo(repo: Repo, worktreeId: string): bool
 export function mergeFolderWorkspace(repo: Repo, worktreeId: string, meta: WorktreeMeta): Worktree {
   return {
     id: worktreeId,
+    ...(meta.instanceId && meta.hostId
+      ? {
+          identity: createWorktreeIdentity({
+            worktreeId,
+            executionHostId: meta.hostId,
+            instanceId: meta.instanceId
+          })
+        }
+      : {}),
     ...(meta.instanceId !== undefined ? { instanceId: meta.instanceId } : {}),
     repoId: repo.id,
     ...(meta.projectId !== undefined ? { projectId: meta.projectId } : {}),
