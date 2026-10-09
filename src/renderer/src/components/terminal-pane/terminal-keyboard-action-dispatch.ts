@@ -147,14 +147,19 @@ export function dispatchTerminalShortcutAction(
         refreshPaneSizes(true)
         persistLayoutSnapshot()
       }
-      claimSpatialPaneFocusOrWorktreeHistory(event, manager, action.direction, (historyDirection) => {
-        const store = useAppStore.getState()
-        if (historyDirection === 'back') {
-          store.goBackWorktree()
-        } else {
-          store.goForwardWorktree()
+      claimSpatialPaneFocusOrWorktreeHistory(
+        event,
+        manager,
+        action.direction,
+        (historyDirection) => {
+          const store = useAppStore.getState()
+          if (historyDirection === 'back') {
+            store.goBackWorktree()
+          } else {
+            store.goForwardWorktree()
+          }
         }
-      })
+      )
       return
     }
     const panes = manager.getPanes()

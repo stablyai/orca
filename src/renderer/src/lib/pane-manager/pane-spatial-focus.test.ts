@@ -15,13 +15,7 @@ function rect(id: number, x: number, y: number, width: number, height: number): 
   return { id, x, y, width, height }
 }
 
-function stubPaneRect(
-  el: HTMLElement,
-  x: number,
-  y: number,
-  width: number,
-  height: number
-): void {
+function stubPaneRect(el: HTMLElement, x: number, y: number, width: number, height: number): void {
   el.getBoundingClientRect = () => DOMRect.fromRect({ x, y, width, height })
 }
 
@@ -320,9 +314,9 @@ describe('claimSpatialPaneFocusOrWorktreeHistory', () => {
     const { root, event, preventDefault, manager } = splitPair()
     const navigateWorktreeHistory = vi.fn()
 
-    expect(claimSpatialPaneFocusOrWorktreeHistory(event, manager, 'right', navigateWorktreeHistory)).toBe(
-      true
-    )
+    expect(
+      claimSpatialPaneFocusOrWorktreeHistory(event, manager, 'right', navigateWorktreeHistory)
+    ).toBe(true)
     expect(manager.setActivePane).toHaveBeenCalledWith(2, { focus: true })
     expect(navigateWorktreeHistory).not.toHaveBeenCalled()
     expect(preventDefault).toHaveBeenCalledTimes(1)
@@ -333,9 +327,9 @@ describe('claimSpatialPaneFocusOrWorktreeHistory', () => {
     const { root, event, preventDefault, stopImmediatePropagation, manager } = splitPair()
     const navigateWorktreeHistory = vi.fn()
 
-    expect(claimSpatialPaneFocusOrWorktreeHistory(event, manager, 'left', navigateWorktreeHistory)).toBe(
-      true
-    )
+    expect(
+      claimSpatialPaneFocusOrWorktreeHistory(event, manager, 'left', navigateWorktreeHistory)
+    ).toBe(true)
     expect(manager.setActivePane).not.toHaveBeenCalled()
     expect(navigateWorktreeHistory).toHaveBeenCalledWith('back')
     expect(preventDefault).toHaveBeenCalledTimes(1)
@@ -354,9 +348,9 @@ describe('claimSpatialPaneFocusOrWorktreeHistory', () => {
     const { root, event, preventDefault, manager } = splitPair()
     const navigateWorktreeHistory = vi.fn()
 
-    expect(claimSpatialPaneFocusOrWorktreeHistory(event, manager, 'up', navigateWorktreeHistory)).toBe(
-      false
-    )
+    expect(
+      claimSpatialPaneFocusOrWorktreeHistory(event, manager, 'up', navigateWorktreeHistory)
+    ).toBe(false)
     expect(navigateWorktreeHistory).not.toHaveBeenCalled()
     expect(preventDefault).not.toHaveBeenCalled()
     root.remove()
