@@ -293,6 +293,9 @@
         "HermesCronOutputView": {
           "88d48157fc": "default"
         },
+        "argumentColumns": {
+          "extra": "Extra args"
+        },
         "createDestination": {
           "stale": "{host} changed while this form was open. Choose it again before saving.",
           "unavailable": "That host cannot hold a new automation yet. Choose another host to create this one on."

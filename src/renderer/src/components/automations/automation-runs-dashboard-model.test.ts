@@ -6,7 +6,8 @@ import {
   countAutomationRunOutcomes,
   filterAutomationRunsDashboardEntries,
   getAutomationRunsHostKey,
-  getAutomationRunsScope
+  getAutomationRunsScope,
+  projectAutomationRunsDashboardRun
 } from './automation-runs-dashboard-model'
 
 function row(
@@ -48,6 +49,16 @@ describe('automation runs dashboard model', () => {
   const runtime = row('runtime-row', 'Cloud runtime', {
     authority: { kind: 'runtime', environmentId: 'cloud' },
     selector: { kind: 'self' }
+  })
+
+  it('projects optional execution-host facts across old and new host payloads', () => {
+    const historical = run('old', 'a', 1, 'completed')
+    expect(projectAutomationRunsDashboardRun(historical).launchSnapshot).toBeUndefined()
+    historical.launchSnapshot = { agentId: 'claude', effectiveAgentArgs: '' }
+    expect(projectAutomationRunsDashboardRun(historical).launchSnapshot).toEqual({
+      agentId: 'claude',
+      effectiveAgentArgs: ''
+    })
   })
 
   it('keeps local, SSH, and runtime hosts in one chronologically sorted list', () => {

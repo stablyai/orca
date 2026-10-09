@@ -67,6 +67,14 @@ export async function assertAuthorityCapability(
   message: string,
   options: { cacheConfirmation?: boolean } = {}
 ): Promise<void> {
+  await assertAuthorityCapabilities(authority, [{ capability, message }], options)
+}
+
+async function assertAuthorityCapabilities(
+  authority: AutomationAuthorityRef,
+  requirements: readonly { capability: RuntimeCapability; message: string }[],
+  options: { cacheConfirmation?: boolean } = {}
+): Promise<void> {
   if (authority.kind !== 'runtime') {
     return
   }
@@ -79,7 +87,7 @@ export async function assertAuthorityCapability(
       Date.now() - confirmation.confirmedAt >= AUTHORITY_CAPABILITY_CONFIRMATION_TTL_MS
     ) {
       confirmedAuthorityCapabilities.delete(key)
-    } else if (confirmation?.capabilities.has(capability)) {
+    } else if (requirements.every(({ capability }) => confirmation?.capabilities.has(capability))) {
       return
     }
   }
@@ -87,11 +95,11 @@ export async function assertAuthorityCapability(
   const status = useCache
     ? await sharedCapabilityProbe(authority, key)
     : await startCapabilityProbe(authority)
-  if (useCache && status.capabilities?.length) {
-    rememberAuthorityCapabilities(key, new Set(status.capabilities), Date.now())
-  }
-  if (!status.capabilities?.includes(capability)) {
-    throw new AutomationHostScopeUnsupportedError(message)
+  rememberAuthorityCapabilities(key, new Set(status.capabilities ?? []), Date.now())
+  for (const { capability, message } of requirements) {
+    if (!status.capabilities?.includes(capability)) {
+      throw new AutomationHostScopeUnsupportedError(message)
+    }
   }
 }
 
@@ -124,40 +132,30 @@ function sharedCapabilityProbe(
   return started
 }
 
-export async function assertOwnerFencingSupported(
-  authority: AutomationAuthorityRef
-): Promise<void> {
-  await assertAuthorityCapability(
-    authority,
-    AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
-    AUTOMATION_OWNER_FENCING_UPDATE_REQUIRED_MESSAGE,
-    { cacheConfirmation: false }
-  )
-}
-
-export async function assertAutomationCreateIdempotencySupported(
-  authority: AutomationAuthorityRef
-): Promise<void> {
-  await assertAuthorityCapability(
-    authority,
-    AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
-    'Moving automations to this host requires a newer Orca server. Update the HUB and try again.'
-  )
-}
-
-/** Older hosts strip the field and would run without it, so nonempty extras need the capability. */
-export async function assertExtraAgentArgsSupported(
+export async function assertAutomationMutationSupported(
   authority: AutomationAuthorityRef,
-  extraAgentArgs: string | undefined
+  input: { creationKey?: string; extraAgentArgs?: string } = {}
 ): Promise<void> {
-  if (!hasExtraAgentArgs(extraAgentArgs)) {
-    return
+  const requirements: { capability: RuntimeCapability; message: string }[] = []
+  if (input.creationKey) {
+    requirements.push({
+      capability: AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+      message:
+        'Moving automations to this host requires a newer Orca server. Update the HUB and try again.'
+    })
   }
-  await assertAuthorityCapability(
-    authority,
-    AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY,
-    EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED
-  )
+  requirements.push({
+    capability: AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
+    message: AUTOMATION_OWNER_FENCING_UPDATE_REQUIRED_MESSAGE
+  })
+  if (hasExtraAgentArgs(input.extraAgentArgs)) {
+    requirements.push({
+      capability: AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY,
+      message: EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED
+    })
+  }
+  // Mutations must evaluate every requirement against the current host incarnation.
+  await assertAuthorityCapabilities(authority, requirements, { cacheConfirmation: false })
 }
 
 /** Same gate for the legacy unfenced path, which knows only the environment id. */

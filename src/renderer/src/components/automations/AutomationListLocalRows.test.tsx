@@ -236,6 +236,13 @@ describe('Automation list row selection', () => {
     expect(onSelect).not.toHaveBeenCalled()
   })
 
+  it('shows no extra arguments for external Hermes jobs', () => {
+    renderExternalRows({ onSelect: vi.fn() })
+
+    expect(screen.getByText('None')).toBeTruthy()
+    expect(screen.queryByText('Unknown')).toBeNull()
+  })
+
   it('does not open external detail when a quick-action menu item is chosen', async () => {
     const onSelect = vi.fn()
     const onRequestAction = vi.fn()

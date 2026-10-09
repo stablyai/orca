@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { buildProfileStateCutoverFixture } from '../persistence/profile-state-cutover-fixture'
 import type { AutomationRun } from '../../shared/automations-types'
-import type { HeadlessAutomationDispatchLaunch } from './headless-dispatch'
+import {
+  HeadlessAutomationDispatchError,
+  type HeadlessAutomationDispatchLaunch
+} from './headless-dispatch'
 import { runHeadlessAutomationDispatch } from './headless-dispatch-runner'
 
 function fixture(launch: HeadlessAutomationDispatchLaunch) {
@@ -34,7 +37,8 @@ const terminal = {
   workspaceId: 'launched-workspace',
   terminalSessionId: 'launched-tab',
   terminalPaneKey: 'launched-pane',
-  terminalPtyId: 'launched-pty'
+  terminalPtyId: 'launched-pty',
+  launchSnapshot: { agentId: 'claude' as const, effectiveAgentArgs: '--model opus' }
 }
 
 describe('headless automation observation during persistence', () => {
@@ -103,5 +107,23 @@ describe('headless automation observation during persistence', () => {
       error: 'shell unavailable'
     })
     expect(context.watchRun).not.toHaveBeenCalled()
+  })
+
+  it('records the workspace a failed launch created and kept', async () => {
+    const context = fixture(terminal)
+    context.dispatcher.mockRejectedValueOnce(
+      new HeadlessAutomationDispatchError('no agent terminal started', {
+        id: 'created-workspace',
+        displayName: 'Created'
+      })
+    )
+    await runHeadlessAutomationDispatch(context)
+    expect(context.runs.updateRun).toHaveBeenCalledExactlyOnceWith({
+      runId: context.run.id,
+      status: 'dispatch_failed',
+      workspaceId: 'created-workspace',
+      workspaceDisplayName: 'Created',
+      error: 'no agent terminal started'
+    })
   })
 })

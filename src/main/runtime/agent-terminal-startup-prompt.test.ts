@@ -57,6 +57,35 @@ function spawnedCommand(spawn: ReturnType<typeof vi.fn>): string {
 }
 
 describe('a terminal create that is handed a launch prompt', () => {
+  it.each([undefined, 'ssh-host'])(
+    'captures host launch arguments for local and SSH terminals (%s)',
+    async (connectionId) => {
+      const { runtime, spawn } = runtimeWithAgentLaunch({ connectionId })
+      const terminal = await runtime.createTerminal('id:wt-1', {
+        startupAgent: 'claude',
+        agentArgs: '--model opus --effort high',
+        startupPrompt: 'private prompt'
+      })
+      const snapshot = terminal.launchSnapshot
+      expect(snapshot).toEqual({
+        agentId: 'claude',
+        effectiveAgentArgs: '--model opus --effort high'
+      })
+      expect(spawnedCommand(spawn)).toContain('--model')
+      expect(snapshot?.effectiveAgentArgs).not.toContain('private prompt')
+    }
+  )
+
+  it('does not report retry arguments as launch facts for a reattached process', async () => {
+    const { runtime, spawn } = runtimeWithAgentLaunch()
+    spawn.mockResolvedValue({ id: 'pty-1', isReattach: true })
+    const terminal = await runtime.createTerminal('id:wt-1', {
+      startupAgent: 'claude',
+      agentArgs: '--model opus'
+    })
+    expect(terminal.launchSnapshot).toBeUndefined()
+  })
+
   it('folds an argv agent’s prompt into the command it spawns, and says it did', async () => {
     const { runtime, spawn } = runtimeWithAgentLaunch()
     const onStartupPromptCarry = vi.fn()

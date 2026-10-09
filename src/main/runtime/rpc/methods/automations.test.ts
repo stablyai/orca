@@ -107,10 +107,18 @@ describe('automation RPC methods', () => {
   })
 
   it('returns a cursor page when the caller requests a bounded run history', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this dispatcher only calls the two mocked runtime methods.
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       listAutomationRunsPage: vi.fn().mockReturnValue({
-        runs: [{ id: 'run-100', automationId: 'auto-1' }],
+        runs: [
+          {
+            id: 'run-100',
+            automationId: 'auto-1',
+            launchSnapshot: { agentId: 'codex', effectiveAgentArgs: '' }
+          },
+          { id: 'legacy-run', automationId: 'auto-1' }
+        ],
         nextCursor: '100'
       })
     } as unknown as OrcaRuntimeService
@@ -120,7 +128,13 @@ describe('automation RPC methods', () => {
       dispatcher.dispatch(makeRequest('automation.runs', { automationId: 'auto-1', limit: 100 }))
     ).resolves.toMatchObject({
       ok: true,
-      result: { nextCursor: '100' }
+      result: {
+        nextCursor: '100',
+        runs: [
+          { launchSnapshot: { agentId: 'codex', effectiveAgentArgs: '' } },
+          { id: 'legacy-run' }
+        ]
+      }
     })
     expect(runtime.listAutomationRunsPage).toHaveBeenCalledWith('auto-1', undefined, 100, undefined)
   })

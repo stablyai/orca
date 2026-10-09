@@ -49,7 +49,8 @@ const COLUMNS: readonly HeaderColumn[] = [
   {
     key: 'auto.components.automations.AutomationDetail.2df8970cd5',
     fallback: 'Agent'
-  }
+  },
+  { key: 'auto.components.automations.argumentColumns.extra', fallback: 'Extra args' }
 ]
 
 export function AutomationListTableHeader({
@@ -66,7 +67,7 @@ export function AutomationListTableHeader({
         const className =
           index === 0
             ? LIST_TABLE_STICKY_HEADER_CELL_CLASS
-            : index === COLUMNS.length - 1
+            : column.key === 'auto.components.automations.AutomationDetail.2df8970cd5'
               ? 'text-center'
               : undefined
         return (

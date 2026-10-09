@@ -16867,6 +16867,14 @@
           "useFreshSessions": "새 세션 사용",
           "helper": "새 세션마다 이 호스트의 기본 인수 뒤에 추가됩니다.",
           "detailLabel": "추가 인수"
+        },
+        "argumentColumns": {
+          "extra": "추가 인수",
+          "effectiveHeader": "적용된 인수",
+          "saved": "저장된 추가 인수",
+          "effective": "적용된 에이전트 인수 (호스트 기본값 + 추가 인수)",
+          "unknown": "알 수 없음",
+          "none": "없음"
         }
       },
       "agent": {

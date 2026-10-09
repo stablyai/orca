@@ -68,7 +68,7 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       'orca automations create --name "Daily review" --trigger daily --prompt "Review open changes" --provider codex',
       'orca automations create --name "Weekday triage" --trigger "0 9 * * 1-5" --prompt "Triage issues" --provider claude --repo my-repo',
       'orca automations create --name "PR review" --trigger hourly --precheck "gh pr list --json number -q .[0].number" --prompt "Review requested PRs" --provider codex',
-      'orca automations create --name "Docs pass" --trigger daily --prompt "Tidy the docs" --provider claude --extra-agent-args="--model opus --effort high --add-dir docs"'
+      'orca automations create --name "Docs pass" --trigger daily --prompt "Tidy the docs" --provider claude --extra-agent-args="--model opus --effort high --add-dir=docs"'
     ]
   },
   {

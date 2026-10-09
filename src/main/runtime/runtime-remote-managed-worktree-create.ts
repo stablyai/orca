@@ -1,3 +1,5 @@
+import { projectWorktreeStartupTerminal } from './worktree-startup-terminal'
+import type { RuntimeTerminalCreate } from '../../shared/runtime-types'
 import { paneIdentity } from './runtime-terminal-pane-identity'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { Repo } from '../../shared/repo-types'
@@ -23,12 +25,9 @@ type Dependencies = {
   createTerminal(
     selector: string,
     options: TerminalCreateOptions
-  ): Promise<{
-    handle: string
-    tabId?: string | null
-    paneKey?: string | null
-    ptyId?: string | null
-  }>
+  ): Promise<
+    Pick<RuntimeTerminalCreate, 'handle' | 'tabId' | 'paneKey' | 'ptyId' | 'launchSnapshot'>
+  >
   pasteDraft(handle: string, draft: WorktreeStartupDraftPaste): void
   sendFollowup(handle: string, followup: WorktreeStartupFollowup): void
   provision(
@@ -71,15 +70,11 @@ export async function createRuntimeRemoteManagedWorktree(
 
   const shouldActivate = args.activate === true || args.runHooks === true
   let warning = result.warning
-  let didSpawnStartup = false
   // Why: same no-double-spawn contract as the local path — once runtime
   // provisions setup, omit it from activation and the RPC result.
   let didSpawnSetup = false
   let setupTerminalHandle: string | null = null
-  let startupTerminalHandle: string | null = null
-  let startupTerminalTabId: string | null = null
-  let startupTerminalPaneKey: string | null = null
-  let startupTerminalPtyId: string | null = null
+  let startupTerminal: CreateWorktreeResult['startupTerminal']
 
   let sequencedStartup = args.startup
   let wrappedSetupCommandStr: string | undefined
@@ -122,11 +117,7 @@ export async function createRuntimeRemoteManagedWorktree(
       if (args.startupFollowup) {
         deps.sendFollowup(terminal.handle, args.startupFollowup)
       }
-      didSpawnStartup = true
-      startupTerminalHandle = terminal.handle
-      startupTerminalTabId = terminal.tabId ?? null
-      startupTerminalPaneKey = terminal.paneKey ?? null
-      startupTerminalPtyId = terminal.ptyId ?? null
+      startupTerminal = projectWorktreeStartupTerminal(terminal)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       warning = warning
@@ -135,6 +126,7 @@ export async function createRuntimeRemoteManagedWorktree(
     }
   }
 
+  const didSpawnStartup = Boolean(startupTerminal)
   if (shouldActivate) {
     const provisionInBackground = deps.provisionInBackground?.() === true
     const runtimeWillProvisionTerminals =
@@ -150,7 +142,7 @@ export async function createRuntimeRemoteManagedWorktree(
         worktreePath: result.worktree.path,
         ...(result.setup ? { setup: result.setup } : {}),
         ...(result.defaultTabs ? { defaultTabs: result.defaultTabs } : {}),
-        primaryTerminalHandle: startupTerminalHandle,
+        primaryTerminalHandle: startupTerminal?.handle ?? null,
         hasStartupTerminal: didSpawnStartup,
         setupCommandPlatform: setupPlatform(result.setup),
         observeSetupCompletion: args.observeSetupCompletion,
@@ -201,7 +193,7 @@ export async function createRuntimeRemoteManagedWorktree(
       worktreePath: result.worktree.path,
       ...(result.setup ? { setup: result.setup } : {}),
       ...(result.defaultTabs ? { defaultTabs: result.defaultTabs } : {}),
-      primaryTerminalHandle: startupTerminalHandle,
+      primaryTerminalHandle: startupTerminal?.handle ?? null,
       hasStartupTerminal: didSpawnStartup,
       setupCommandPlatform: setupPlatform(result.setup),
       observeSetupCompletion: args.observeSetupCompletion,
@@ -236,12 +228,8 @@ export async function createRuntimeRemoteManagedWorktree(
     request: args,
     ...(warning ? { warning } : {}),
     didSpawnSetup,
-    didSpawnStartup,
     ...(wrappedSetupCommandStr ? { wrappedSetupCommand: wrappedSetupCommandStr } : {}),
     setupTerminalHandle,
-    startupTerminalHandle,
-    startupTerminalTabId,
-    startupTerminalPaneKey,
-    startupTerminalPtyId
+    ...(startupTerminal ? { startupTerminal } : {})
   })
 }

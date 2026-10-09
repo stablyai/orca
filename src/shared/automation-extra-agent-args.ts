@@ -61,7 +61,8 @@ export function getExtraAgentArgsPlaceholder(agent: TuiAgent): string {
           : option.kind === 'effort'
             ? 'high'
             : 'docs'
-      return `${option.aliases[0]} ${option.valuePrefix ?? ''}${value}`
+      const separator = option.kind === 'repeatable' ? '=' : ' '
+      return `${option.aliases[0]}${separator}${option.valuePrefix ?? ''}${value}`
     })
     .join(' ')
 }
@@ -148,6 +149,7 @@ export function parseExtraAgentArgs(args: {
   const allowed = allowedOptionList(options)
   const kinds = new Set<ExtraAgentArgKind>()
   const { tokens } = tokenized
+  const normalizedTokens: string[] = []
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index]
     if (token === '--') {
@@ -182,9 +184,15 @@ export function parseExtraAgentArgs(args: {
       return { ok: false, error: `Extra arguments set the ${kind} more than once.` }
     }
     kinds.add(kind)
+    // Claude's variadic --add-dir would otherwise consume the positional prompt.
+    normalizedTokens.push(
+      ...(kind === 'repeatable'
+        ? [`${name}=${value}`]
+        : tokens.slice(index, index + match.consumed))
+    )
     index += match.consumed - 1
   }
-  return { ok: true, tokens, kinds }
+  return { ok: true, tokens: normalizedTokens, kinds }
 }
 
 function removeDefaultsFor(

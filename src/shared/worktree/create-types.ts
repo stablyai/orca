@@ -1,3 +1,4 @@
+import type { AgentLaunchSnapshot } from '../agent-launch-snapshot'
 import type { WorktreeCatalogVersion } from './catalog-version'
 import type { ExecutionHostId } from '../execution-host'
 import type { ArchiveHookOverride } from './archive-hook-removal-gate'
@@ -190,6 +191,7 @@ export type CreateWorktreeResult = {
   localBaseRefRefresh?: LocalBaseRefRefreshResult
   localBaseRefUpdateSuggestion?: LocalBaseRefUpdateSuggestion
   startupTerminal?: {
+    launchSnapshot?: AgentLaunchSnapshot
     spawned: boolean
     handle?: string
     tabId?: string

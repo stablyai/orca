@@ -87,6 +87,33 @@ describe('startRuntimeLocalWorktreeTerminals reserved startup pane', () => {
   })
 })
 
+it('carries the startup terminal launch facts alongside its identity', async () => {
+  const { createTerminal, ports } = createPorts()
+  createTerminal.mockResolvedValue({
+    handle: 'term-1',
+    worktreeId: worktree.id,
+    title: null,
+    ptyId: 'pty-1',
+    tabId: TAB_ID,
+    launchSnapshot: { agentId: 'claude', effectiveAgentArgs: '--model opus' }
+  })
+  const result = await startRuntimeLocalWorktreeTerminals({
+    request: { repoSelector: `id:${repo.id}`, name: worktree.displayName },
+    repo,
+    worktree,
+    createdWithAgent: 'claude',
+    startup: { command: 'claude' },
+    ports
+  })
+  expect(result.startupTerminal).toMatchObject({
+    spawned: true,
+    handle: 'term-1',
+    ptyId: 'pty-1',
+    tabId: TAB_ID,
+    launchSnapshot: { agentId: 'claude', effectiveAgentArgs: '--model opus' }
+  })
+})
+
 describe('startRuntimeLocalWorktreeTerminals default shell seeding', () => {
   it.each([false, true])(
     'provisions a headless activated workspace without a viewer (setup=%s)',

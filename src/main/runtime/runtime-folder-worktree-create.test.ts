@@ -69,6 +69,27 @@ describe('a folder workspace create with a startup agent', () => {
     expect(createTerminal).toHaveBeenCalledWith(`id:${result.worktree.id}`, { surfaceOwner: false })
   })
 
+  it('returns folder launch facts with the startup terminal identity', async () => {
+    const { createTerminal, deps } = createDeps()
+    createTerminal.mockResolvedValue({
+      handle: 'term-1',
+      worktreeId: 'folder-1',
+      title: null,
+      launchSnapshot: { agentId: 'claude', effectiveAgentArgs: '--model opus' }
+    })
+    const result = await createRuntimeFolderWorktree({
+      request: { repoSelector: `id:${repo.id}`, name: 'task' },
+      repo,
+      createdWithAgent: 'claude',
+      startup: { command: 'claude' },
+      deps
+    })
+    expect(result.startupTerminal).toMatchObject({
+      handle: 'term-1',
+      launchSnapshot: { agentId: 'claude', effectiveAgentArgs: '--model opus' }
+    })
+  })
+
   it('creates the startup terminal under the pane the caller reserved', async () => {
     expect(await startupTerminalOptions(`${TAB_ID}:${LEAF_ID}`)).toMatchObject({
       tabId: TAB_ID,

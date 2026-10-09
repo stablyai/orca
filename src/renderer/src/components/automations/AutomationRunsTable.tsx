@@ -1,3 +1,7 @@
+import { cn } from '@/lib/utils'
+import { AUTOMATION_RUNS_TABLE_GRID_CLASS } from './automations-table-layout'
+import { AutomationArgsCell } from './AutomationArgsCell'
+import { getAgentLabel } from './automation-draft-model'
 import React, { useEffect, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ChevronRight, Loader2 } from 'lucide-react'
@@ -57,7 +61,12 @@ export function AutomationRunsTable({
           }
         }}
       >
-        <div className="sticky top-0 z-10 grid shrink-0 grid-cols-[minmax(11rem,1.4fr)_minmax(10rem,1fr)_minmax(5rem,.55fr)_minmax(8rem,.8fr)_minmax(7rem,auto)] gap-3 border-b border-border/60 bg-card px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+        <div
+          className={cn(
+            AUTOMATION_RUNS_TABLE_GRID_CLASS,
+            'sticky top-0 z-10 shrink-0 gap-3 border-b border-border/60 bg-card px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground'
+          )}
+        >
           <div>
             {translate(
               'auto.components.automations.AutomationRunsDashboard.automation',
@@ -74,6 +83,13 @@ export function AutomationRunsTable({
             {translate('auto.components.automations.AutomationRunsDashboard.trigger', 'Trigger')}
           </div>
           <div>{translate('auto.components.automations.AutomationRunsDashboard.host', 'Host')}</div>
+          <div>{translate('auto.components.automations.AutomationDetail.2df8970cd5', 'Agent')}</div>
+          <div>
+            {translate(
+              'auto.components.automations.argumentColumns.effectiveHeader',
+              'Effective args'
+            )}
+          </div>
           <div>
             {translate('auto.components.automations.AutomationRunsDashboard.status', 'Status')}
           </div>
@@ -116,12 +132,19 @@ export function AutomationRunsTable({
                   className="absolute left-0 top-0 w-full border-b border-border/50"
                   style={{ transform: `translateY(${virtualRow.start}px)` }}
                 >
-                  <button
-                    type="button"
+                  <div
                     data-testid="automation-runs-row"
-                    className="grid w-full grid-cols-[minmax(11rem,1.4fr)_minmax(10rem,1fr)_minmax(5rem,.55fr)_minmax(8rem,.8fr)_minmax(7rem,auto)] items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                    onClick={() => onOpenRun(entry)}
+                    className={cn(
+                      AUTOMATION_RUNS_TABLE_GRID_CLASS,
+                      'relative w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground [&>div]:pointer-events-none'
+                    )}
                   >
+                    <button
+                      type="button"
+                      aria-label={`${entry.row.automation.name}, ${entry.run.title}`}
+                      className="absolute inset-0 size-full focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                      onClick={() => onOpenRun(entry)}
+                    />
                     <div className="min-w-0">
                       <div className="truncate font-medium">{entry.row.automation.name}</div>
                       <div className="mt-0.5 truncate text-xs text-muted-foreground">
@@ -141,13 +164,27 @@ export function AutomationRunsTable({
                           entry.scope === 'local' ? 'Local' : 'Remote'
                         )}
                     </div>
+                    <div className="min-w-0 truncate text-xs text-muted-foreground">
+                      {entry.run.launchSnapshot
+                        ? getAgentLabel(entry.run.launchSnapshot.agentId)
+                        : translate(
+                            'auto.components.automations.argumentColumns.unknown',
+                            'Unknown'
+                          )}
+                    </div>
+                    <div className="relative">
+                      <AutomationArgsCell
+                        value={entry.run.launchSnapshot?.effectiveAgentArgs}
+                        effective
+                      />
+                    </div>
                     <div className="flex items-center justify-between gap-2">
                       <Badge variant={getAutomationRunStatusVariant(entry.run.status)}>
                         {getAutomationRunStatusLabel(entry.run.status)}
                       </Badge>
                       <ChevronRight className="size-3.5 text-muted-foreground" />
                     </div>
-                  </button>
+                  </div>
                 </div>
               )
             })}

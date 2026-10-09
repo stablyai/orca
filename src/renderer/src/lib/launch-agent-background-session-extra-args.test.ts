@@ -97,12 +97,28 @@ describe('launchAgentBackgroundSession with automation extras', () => {
 
     expect(mockSpawn.mock.calls[0]?.[0]).toMatchObject({
       command:
-        "claude '--dangerously-skip-permissions' '--model' 'opus' '--add-dir' 'my docs' 'run the automation'",
+        "claude '--dangerously-skip-permissions' '--model' 'opus' '--add-dir=my docs' 'run the automation'",
       launchConfig: {
-        agentArgs: "'--dangerously-skip-permissions' '--model' 'opus' '--add-dir' 'my docs'"
+        agentArgs: "'--dangerously-skip-permissions' '--model' 'opus' '--add-dir=my docs'"
       }
     })
   })
+
+  it.each([false, true])(
+    'uses spawn facts only for a fresh process (reattach=%s)',
+    async (isReattach) => {
+      const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+      mockSpawn.mockResolvedValue({
+        id: 'pty-1',
+        isReattach,
+        launchConfig: { agentArgs: '--model host-model', agentEnv: {} }
+      })
+      const result = await launchAgentBackgroundSession({ agent: 'claude', worktreeId: 'wt-1' })
+      expect(result?.launchSnapshot).toEqual(
+        isReattach ? undefined : { agentId: 'claude', effectiveAgentArgs: '--model host-model' }
+      )
+    }
+  )
 
   it('fails before reserving a tab or spawning when the extras are refused', async () => {
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')

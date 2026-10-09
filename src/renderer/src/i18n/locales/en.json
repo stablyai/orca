@@ -17096,6 +17096,14 @@
           "useFreshSessions": "Use fresh sessions",
           "helper": "Added to this host's default arguments for each fresh session.",
           "detailLabel": "Extra arguments"
+        },
+        "argumentColumns": {
+          "extra": "Extra args",
+          "effectiveHeader": "Effective args",
+          "saved": "Saved extra arguments",
+          "effective": "Effective agent arguments (host defaults + extras)",
+          "unknown": "Unknown",
+          "none": "None"
         }
       },
       "agent": {

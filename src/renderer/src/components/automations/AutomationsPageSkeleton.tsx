@@ -42,6 +42,7 @@ function TableRowSkeleton({
       <SkeletonBar className={cn('h-3.5', lastRunWidthClass)} />
       <SkeletonBar className={cn('h-3.5', statusWidthClass)} />
       <SkeletonBar className="mx-auto size-4 rounded" />
+      <SkeletonBar className="h-3.5 w-20" />
       <SkeletonBar className="size-6 rounded-md" />
     </div>
   )
@@ -144,6 +145,7 @@ export function AutomationsPageSkeleton(): React.JSX.Element {
             <SkeletonBar className="h-2.5 w-16" />
             <SkeletonBar className="h-2.5 w-12" />
             <SkeletonBar className="mx-auto h-2.5 w-10" />
+            <SkeletonBar className="h-2.5 w-16" />
             <span />
           </div>
           <div className="divide-y divide-border/50">

@@ -8,9 +8,10 @@ import {
   didAutomationPrecheckPass,
   formatAutomationPrecheckFailure
 } from '../../shared/automation-precheck'
-import type {
-  HeadlessAutomationDispatcher,
-  HeadlessAutomationDispatchLaunch
+import {
+  HeadlessAutomationDispatchError,
+  type HeadlessAutomationDispatcher,
+  type HeadlessAutomationDispatchLaunch
 } from './headless-dispatch'
 import type { AutomationRunTargetResult } from './run-target-resolution'
 import type { AutomationRunWriter } from './automation-run-writer'
@@ -52,11 +53,17 @@ export async function runHeadlessAutomationDispatch(
     return runs.updateRun({
       runId: run.id,
       status: 'dispatch_failed',
-      workspaceId: automation.workspaceId,
+      ...(error instanceof HeadlessAutomationDispatchError
+        ? {
+            workspaceId: error.workspace.id,
+            workspaceDisplayName: error.workspace.displayName
+          }
+        : { workspaceId: automation.workspaceId }),
       error: describeDispatchError(error)
     })
   }
   const launchRunTarget = {
+    ...(launch.launchSnapshot ? { launchSnapshot: launch.launchSnapshot } : {}),
     workspaceId: launch.workspaceId,
     workspaceDisplayName: launch.workspaceDisplayName ?? null,
     terminalSessionId: launch.terminalSessionId,

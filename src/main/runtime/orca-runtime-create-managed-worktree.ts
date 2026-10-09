@@ -224,12 +224,8 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
       warning: terminalWarning,
       returnedSetup,
       didSpawnSetup,
-      didSpawnStartup,
       setupTerminalHandle,
-      startupTerminalHandle,
-      startupTerminalTabId,
-      startupTerminalPaneKey,
-      startupTerminalPtyId
+      startupTerminal
     } = await startRuntimeLocalWorktreeTerminals({
       request: args,
       repo,
@@ -307,18 +303,7 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
       ...(addResult.localBaseRefUpdateSuggestion
         ? { localBaseRefUpdateSuggestion: addResult.localBaseRefUpdateSuggestion }
         : {}),
-      ...(didSpawnStartup && startupTerminalHandle
-        ? {
-            startupTerminal: {
-              spawned: true,
-              handle: startupTerminalHandle,
-              ...(startupTerminalTabId ? { tabId: startupTerminalTabId } : {}),
-              ...(startupTerminalPaneKey ? { paneKey: startupTerminalPaneKey } : {}),
-              ...(startupTerminalPtyId ? { ptyId: startupTerminalPtyId } : {}),
-              surface: 'background' as const
-            }
-          }
-        : {})
+      ...(startupTerminal ? { startupTerminal } : {})
     }
   }
 }

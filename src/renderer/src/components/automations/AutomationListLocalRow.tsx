@@ -1,3 +1,4 @@
+import { AutomationArgsCell } from './AutomationArgsCell'
 import React from 'react'
 import { MoreHorizontal, Pause, Pencil, Play, Trash2 } from 'lucide-react'
 import {
@@ -272,6 +273,7 @@ export function AutomationListLocalRow({
               {agentTooltipLabel}
             </TooltipContent>
           </Tooltip>
+          <AutomationArgsCell value={automation.extraAgentArgs ?? ''} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button

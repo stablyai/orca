@@ -1,6 +1,10 @@
+import type { AutomationPrecheck, AutomationPrecheckResult } from './automation-precheck'
+import type { AgentLaunchSnapshot } from './agent-launch-snapshot'
 import type { TuiAgent } from './tui-agent'
 import type { SetupDecision } from './worktree/create-types'
 import type { TaskSourceContext, WorkspaceRunContext } from './task-source-context'
+
+export type { AutomationPrecheck, AutomationPrecheckResult } from './automation-precheck'
 
 export type AutomationWorkspaceMode = 'existing' | 'new_per_run'
 export type AutomationExecutionTargetType = 'local' | 'ssh'
@@ -69,25 +73,6 @@ export type AutomationRunOutputSnapshot = {
   truncated: boolean
 }
 
-export type AutomationPrecheck = {
-  command: string
-  timeoutSeconds: number
-}
-
-export type AutomationPrecheckResult = {
-  command: string
-  exitCode: number | null
-  timedOut: boolean
-  durationMs: number
-  stdout: string
-  stderr: string
-  stdoutTruncated: boolean
-  stderrTruncated: boolean
-  error: string | null
-  startedAt: number
-  completedAt: number
-}
-
 export type Automation = {
   id: string
   /** Optional client request key used to make cross-authority creates retry-safe. */
@@ -135,6 +120,8 @@ export type Automation = {
 }
 
 export type AutomationRun = {
+  launchSnapshot?: AgentLaunchSnapshot
+
   id: string
   automationId: string
   runContext?: WorkspaceRunContext | null
@@ -235,6 +222,8 @@ export type AutomationDispatchRequest = {
 }
 
 export type AutomationDispatchResult = {
+  launchSnapshot?: AgentLaunchSnapshot
+
   runId: string
   status: AutomationRunStatus
   workspaceId?: string | null

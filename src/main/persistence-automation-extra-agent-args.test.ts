@@ -51,6 +51,59 @@ describe('automation extra agent args persistence', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
+  it('keeps host launch facts immutable across edits, completion, and reload', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({ ...BASE, extraAgentArgs: '--model opus' })
+    const run = store.createAutomationRun(automation, Date.now())
+    expect(run.launchSnapshot).toBeUndefined()
+    const snapshot = { agentId: 'claude' as const, effectiveAgentArgs: '--verbose --model opus' }
+    store.updateAutomationRun({ runId: run.id, status: 'dispatched', launchSnapshot: snapshot })
+    snapshot.effectiveAgentArgs = 'mutated by caller'
+    const readSnapshot = store.listAutomationRuns()[0].launchSnapshot
+    if (readSnapshot) {
+      readSnapshot.effectiveAgentArgs = 'mutated by reader'
+    }
+    store.updateAutomation(automation.id, { agentId: 'codex', extraAgentArgs: '-m other' })
+    store.updateAutomationRun({
+      runId: run.id,
+      status: 'completed',
+      launchSnapshot: { agentId: 'codex', effectiveAgentArgs: 'replacement' }
+    })
+    store.flush()
+    await closeTestStores()
+    const reloaded = await createStore()
+    expect(reloaded.listAutomationRuns()[0].launchSnapshot).toEqual({
+      agentId: 'claude',
+      effectiveAgentArgs: '--verbose --model opus'
+    })
+  })
+
+  it('preserves unknown old records and known empty host arguments', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation(BASE)
+    const old = store.createAutomationRun(automation, 1)
+    store.updateAutomationRun({ runId: old.id, status: 'completed' })
+    const fresh = store.createAutomationRun(automation, 2)
+    store.updateAutomationRun({
+      runId: fresh.id,
+      status: 'dispatched',
+      launchSnapshot: { agentId: 'claude', effectiveAgentArgs: '' }
+    })
+    store.updateAutomationRun({ runId: fresh.id, status: 'completed' })
+    store.flush()
+    await closeTestStores()
+    const reloaded = await createStore()
+    expect(
+      reloaded.listAutomationRuns().find((run) => run.id === old.id)?.launchSnapshot
+    ).toBeUndefined()
+    expect(
+      reloaded.listAutomationRuns().find((run) => run.id === fresh.id)?.launchSnapshot
+        ?.effectiveAgentArgs
+    ).toBe('')
+  })
+
   it('stores the exact text and survives a reload', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())

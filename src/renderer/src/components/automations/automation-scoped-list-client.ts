@@ -38,9 +38,7 @@ import {
 } from './automation-host-client'
 import {
   assertAuthorityCapability,
-  assertExtraAgentArgsSupported,
-  assertOwnerFencingSupported,
-  assertAutomationCreateIdempotencySupported,
+  assertAutomationMutationSupported,
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
   AUTOMATION_LIST_HOST_SCOPE_UPDATE_REQUIRED_MESSAGE,
   AutomationHostScopeUnsupportedError,
@@ -218,8 +216,7 @@ async function updateFenced(
   expectedOwner: AutomationOwnerPrecondition,
   destination?: AutomationDestination
 ): Promise<Automation> {
-  await assertOwnerFencingSupported(authority)
-  await assertExtraAgentArgsSupported(authority, updates.extraAgentArgs)
+  await assertAutomationMutationSupported(authority, updates)
   const result = await callAuthority<{ automation: Automation }>(authority, 'automation.update', {
     id,
     updates: toRuntimeAutomationUpdateInput(updates),
@@ -234,7 +231,7 @@ async function deleteFenced(
   id: string,
   expectedOwner: AutomationOwnerPrecondition
 ): Promise<void> {
-  await assertOwnerFencingSupported(authority)
+  await assertAutomationMutationSupported(authority)
   await callAuthority(authority, 'automation.delete', { id, expectedOwner })
 }
 
@@ -304,7 +301,7 @@ export async function runAutomationNowForOwner(
   owner: AutomationOwnerRef,
   id: string
 ): Promise<AutomationRun> {
-  await assertOwnerFencingSupported(owner.authority)
+  await assertAutomationMutationSupported(owner.authority)
   const expectedOwner = ownerPrecondition(owner)
   const result = await callAuthority<{ run: AutomationRun }>(owner.authority, 'automation.runNow', {
     id,
@@ -318,12 +315,8 @@ export async function createAutomationForDestination(
   input: AutomationCreateInput,
   destination: AutomationDestination
 ): Promise<Automation> {
-  if (input.creationKey) {
-    await assertAutomationCreateIdempotencySupported(authority)
-  }
-  await assertOwnerFencingSupported(authority)
   // Why before create: a move is create-then-delete and must refuse before mutating anything.
-  await assertExtraAgentArgsSupported(authority, input.extraAgentArgs)
+  await assertAutomationMutationSupported(authority, input)
   const result = await callAuthority<{ automation: Automation }>(authority, 'automation.create', {
     ...toRuntimeAutomationCreateInput(input),
     destination

@@ -6,20 +6,16 @@ export function finishRuntimeRemoteWorktreeCreate(args: {
   request: RuntimeRemoteWorktreeCreateArgs
   warning?: string
   didSpawnSetup: boolean
-  didSpawnStartup: boolean
   wrappedSetupCommand?: string
   setupTerminalHandle: string | null
-  startupTerminalHandle: string | null
-  startupTerminalTabId: string | null
-  startupTerminalPaneKey: string | null
-  startupTerminalPtyId: string | null
+  startupTerminal?: CreateWorktreeResult['startupTerminal']
 }): CreateWorktreeResult {
   const returnedSetup = args.didSpawnSetup
     ? undefined
     : args.result.setup
       ? {
           ...args.result.setup,
-          ...(args.didSpawnStartup && args.wrappedSetupCommand
+          ...(args.startupTerminal && args.wrappedSetupCommand
             ? { command: args.wrappedSetupCommand }
             : {})
         }
@@ -30,20 +26,9 @@ export function finishRuntimeRemoteWorktreeCreate(args: {
         const { setup: _setup, ...resultWithoutSetup } = args.result
         return resultWithoutSetup
       })()
-  const resultWithStartupTerminal =
-    args.didSpawnStartup && args.startupTerminalHandle
-      ? {
-          ...resultForRenderer,
-          startupTerminal: {
-            spawned: true,
-            handle: args.startupTerminalHandle,
-            ...(args.startupTerminalTabId ? { tabId: args.startupTerminalTabId } : {}),
-            ...(args.startupTerminalPaneKey ? { paneKey: args.startupTerminalPaneKey } : {}),
-            ...(args.startupTerminalPtyId ? { ptyId: args.startupTerminalPtyId } : {}),
-            surface: 'background' as const
-          }
-        }
-      : resultForRenderer
+  const resultWithStartupTerminal = args.startupTerminal
+    ? { ...resultForRenderer, startupTerminal: args.startupTerminal }
+    : resultForRenderer
   const requested = args.request.runHooks ? 'run' : (args.request.setupDecision ?? 'inherit')
   const setupReceipt = {
     requested,

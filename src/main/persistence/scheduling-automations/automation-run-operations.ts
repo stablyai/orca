@@ -1,3 +1,4 @@
+import { normalizeAgentLaunchSnapshot } from '../../../shared/agent-launch-snapshot'
 import { randomUUID } from 'node:crypto'
 import { isFinalAutomationRunStatus } from '../../../shared/automations-types'
 import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
@@ -47,6 +48,7 @@ function sortedAutomationRuns(state: PersistedState, automationId?: string): Aut
   return [...(automationId ? runs.filter((run) => run.automationId === automationId) : runs)]
     .map((run) => ({
       ...run,
+      launchSnapshot: normalizeAgentLaunchSnapshot(run.launchSnapshot),
       precheckResult: normalizeAutomationPrecheckResult(run.precheckResult)
     }))
     .sort(compareAutomationRunsNewestFirst)
@@ -173,9 +175,13 @@ export function updateAutomationRun(
   const workspaceDisplayName = Object.hasOwn(result, 'workspaceDisplayName')
     ? normalizeAutomationRunWorkspaceDisplayName(result.workspaceDisplayName ?? null)
     : null
+  const launchSnapshot =
+    normalizeAgentLaunchSnapshot(current.launchSnapshot) ??
+    normalizeAgentLaunchSnapshot(result.launchSnapshot)
   const updated: AutomationRun = {
     ...current,
     status: result.status,
+    ...(launchSnapshot ? { launchSnapshot } : {}),
     workspaceId,
     workspaceDisplayName:
       workspaceDisplayName ??
@@ -212,7 +218,7 @@ export function updateAutomationRun(
   }
   touchAutomation(operations.state, updated.automationId, now)
   operations.flush()
-  return updated
+  return { ...updated, ...(launchSnapshot ? { launchSnapshot: { ...launchSnapshot } } : {}) }
 }
 
 export function snapshotAutomationRunWorkspaceDisplayName(

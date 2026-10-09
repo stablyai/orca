@@ -33,7 +33,11 @@ describe('headless automation dispatch', () => {
         tabId: 'tab-1',
         paneKey: 'tab-1:pane-1',
         ptyId: 'pty-1',
-        worktreeId: 'wt-1'
+        worktreeId: 'wt-1',
+        launchSnapshot: {
+          agentId: 'claude' as const,
+          effectiveAgentArgs: '--model opus --effort high'
+        }
       })),
       showManagedWorktree: vi.fn(async () => ({ displayName: 'repo' })),
       waitForTerminal: vi.fn(),
@@ -63,6 +67,10 @@ describe('headless automation dispatch', () => {
       target: {} as never
     })
 
+    expect(launch.launchSnapshot).toEqual({
+      agentId: 'claude',
+      effectiveAgentArgs: '--model opus --effort high'
+    })
     expect(launch.completion).toBeUndefined()
     expect(launch.terminalPaneKey).toBe('tab-1:pane-1')
     expect(runtime.launchAgentTerminal).toHaveBeenCalledWith('id:wt-1', {
@@ -90,7 +98,11 @@ describe('headless automation dispatch with extra agent args', () => {
         tabId: 'tab-1',
         paneKey: 'tab-1:pane-1',
         ptyId: 'pty-1',
-        worktreeId: 'wt-1'
+        worktreeId: 'wt-1',
+        launchSnapshot: {
+          agentId: 'claude' as const,
+          effectiveAgentArgs: '--model opus --effort high'
+        }
       })),
       showManagedWorktree: vi.fn(async () => ({ displayName: 'repo' })),
       getTerminalHandleForPaneKey: vi.fn(() => null),

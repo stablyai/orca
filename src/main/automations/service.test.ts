@@ -53,6 +53,47 @@ describe('AutomationService', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
+  it('persists dispatch launch facts without inferring missing history from terminal identity', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Launch facts',
+      prompt: 'Check',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: Date.now()
+    })
+    const old = store.createAutomationRun(automation, 1)
+    const fresh = store.createAutomationRun(automation, 2)
+    const service = new AutomationService(store)
+    const completed = await service.markDispatchResult({
+      runId: old.id,
+      status: 'completed',
+      terminalPtyId: 'recycled-pty'
+    })
+    expect(completed.launchSnapshot).toBeUndefined()
+    const dispatched = await service.markDispatchResult({
+      runId: fresh.id,
+      status: 'dispatched',
+      terminalPtyId: 'fresh-pty',
+      launchSnapshot: { agentId: 'codex', effectiveAgentArgs: '--model launch-model' }
+    })
+    expect(dispatched.launchSnapshot).toEqual({
+      agentId: 'codex',
+      effectiveAgentArgs: '--model launch-model'
+    })
+    const finished = await service.markDispatchResult({
+      runId: fresh.id,
+      status: 'completed',
+      terminalPtyId: 'fresh-pty'
+    })
+    expect(finished.launchSnapshot).toEqual(dispatched.launchSnapshot)
+  })
+
   it('dispatches an enabled automation when its next run is due', async () => {
     vi.setSystemTime(new Date('2026-05-13T08:59:00'))
     const store = await createStore()

@@ -23,6 +23,7 @@ describe('AutomationListTableHeader', () => {
     expect(screen.getByText('Last run')).toBeDefined()
     expect(screen.getByText('Status')).toBeDefined()
     expect(screen.getByText('Agent')).toBeDefined()
+    expect(screen.getByText('Extra args')).toBeDefined()
     expect(screen.getByText('Actions')).toBeDefined()
   })
 

@@ -1,5 +1,10 @@
+import { Command } from 'commander'
 import { describe, expect, it } from 'vitest'
-import { mergeExtraAgentArgs, parseExtraAgentArgs } from './automation-extra-agent-args'
+import {
+  getExtraAgentArgsPlaceholder,
+  mergeExtraAgentArgs,
+  parseExtraAgentArgs
+} from './automation-extra-agent-args'
 import { buildAgentStartupPlan } from './tui-agent-startup'
 import { tokenizeStartupCommand, type AgentStartupShell } from './tui-agent-startup-shell'
 import type { TuiAgent } from './tui-agent'
@@ -40,8 +45,7 @@ describe('mergeExtraAgentArgs', () => {
       'docs',
       '--model',
       'opus',
-      '--add-dir',
-      'tests'
+      '--add-dir=tests'
     ])
   })
 
@@ -124,8 +128,7 @@ describe('mergeExtraAgentArgs', () => {
     expect(merged('claude', '--model sonnet -- trailing', '--add-dir x')).toEqual([
       '--model',
       'sonnet',
-      '--add-dir',
-      'x',
+      '--add-dir=x',
       '--',
       'trailing'
     ])
@@ -144,6 +147,9 @@ describe('mergeExtraAgentArgs', () => {
 })
 
 describe('parseExtraAgentArgs rejections', () => {
+  it('uses a single-token directory option in the Claude placeholder', () => {
+    expect(getExtraAgentArgsPlaceholder('claude')).toBe('--model opus --effort high --add-dir=docs')
+  })
   it.each([
     ['claude', 'bad\u0007', 'control characters'],
     ['claude', '--model\u2028opus', 'control characters'],
@@ -230,8 +236,7 @@ const ROUND_TRIP_FIXTURES: Record<AgentStartupShell, readonly (readonly [string,
 describe.each(['posix', 'powershell', 'cmd'] as const)('round trip on %s', (shell) => {
   it('uses the same saved quoting for every execution shell', () => {
     expect(merged('claude', '', "--add-dir 'C:\\work\\my docs' --model opus", shell)).toEqual([
-      '--add-dir',
-      'C:\\work\\my docs',
+      '--add-dir=C:\\work\\my docs',
       '--model',
       'opus'
     ])
@@ -245,14 +250,18 @@ describe.each(['posix', 'powershell', 'cmd'] as const)('round trip on %s', (shel
         `--add-dir ${typed}`,
         shell
       )
-    ).toEqual(['--dangerously-skip-permissions', '--add-dir', 'x y', '--add-dir', token])
+    ).toEqual(['--dangerously-skip-permissions', '--add-dir', 'x y', `--add-dir=${token}`])
   })
 
-  it('builds the startup command with extras before the prompt', () => {
+  it.each([
+    ['--model opus --add-dir docs', ['docs']],
+    ['--model opus --add-dir=docs', ['docs']],
+    ["--model opus --add-dir 'a b' --add-dir=tests", ['a b', 'tests']]
+  ])('preserves the prompt with variadic CLI parsing for %s', (extraAgentArgs, directories) => {
     const agentArgs = mergeExtraAgentArgs({
       agent: 'claude',
       defaultArgs: '--dangerously-skip-permissions --model sonnet',
-      extraAgentArgs: "--model opus --add-dir 'a b'",
+      extraAgentArgs,
       shell
     })
     if (!agentArgs.ok) {
@@ -267,17 +276,17 @@ describe.each(['posix', 'powershell', 'cmd'] as const)('round trip on %s', (shel
       agentArgs: agentArgs.agentArgs
     })
     const argv = tokenizeStartupCommand(plan?.launchCommand ?? '', shell)
-    expect(argv).toMatchObject({
-      ok: true,
-      tokens: [
-        'claude',
-        '--dangerously-skip-permissions',
-        '--model',
-        'opus',
-        '--add-dir',
-        'a b',
-        'do the thing'
-      ]
-    })
+    if (!argv.ok) {
+      throw new Error(argv.error)
+    }
+    const cli = new Command()
+      .exitOverride()
+      .option('--dangerously-skip-permissions')
+      .option('--model <model>')
+      .option('--add-dir <directories...>')
+      .argument('[prompt]')
+      .parse(argv.tokens.slice(1), { from: 'user' })
+    expect(cli.opts()).toMatchObject({ model: 'opus', addDir: directories })
+    expect(cli.args).toEqual(['do the thing'])
   })
 })

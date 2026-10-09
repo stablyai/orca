@@ -16867,6 +16867,14 @@
           "useFreshSessions": "使用新会话",
           "helper": "每次新会话时附加到此主机的默认参数之后。",
           "detailLabel": "额外参数"
+        },
+        "argumentColumns": {
+          "extra": "额外参数",
+          "effectiveHeader": "实际参数",
+          "saved": "已保存的额外参数",
+          "effective": "实际代理参数（主机默认参数 + 额外参数）",
+          "unknown": "未知",
+          "none": "无"
         }
       },
       "agent": {

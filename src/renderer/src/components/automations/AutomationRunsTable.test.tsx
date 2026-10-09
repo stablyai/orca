@@ -1,5 +1,9 @@
 // @vitest-environment happy-dom
 
+import { TooltipProvider } from '@/components/ui/tooltip'
+import userEvent from '@testing-library/user-event'
+import { within } from '@testing-library/react'
+
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -70,6 +74,39 @@ describe('AutomationRunsTable virtualization', () => {
     container.remove()
   })
 
+  it('shows each snapshot without falling back to current automation settings', () => {
+    const history = entries(3)
+    history[0].row.automation.agentId = 'codex'
+    history[0].row.automation.extraAgentArgs = '-m changed'
+    history[0].run.launchSnapshot = {
+      agentId: 'claude',
+      effectiveAgentArgs: `--model opus ${'long-argument'.repeat(50)}`
+    }
+    history[1].run.launchSnapshot = { agentId: 'codex', effectiveAgentArgs: '' }
+    act(() =>
+      root.render(
+        <TooltipProvider>
+          <AutomationRunsTable
+            entries={history}
+            loading={false}
+            hasMore={false}
+            onLoadMore={() => {}}
+            onOpenRun={() => {}}
+          />
+        </TooltipProvider>
+      )
+    )
+    const rows = container.querySelectorAll('[data-testid="automation-runs-row"]')
+    expect(rows[0].textContent).toContain('Claude')
+    expect(rows[0].textContent).toContain('--model opus')
+    expect(rows[0].textContent).not.toContain('changed')
+    expect(
+      rows[0].querySelector('[aria-label^="Effective agent arguments"]')?.getAttribute('aria-label')
+    ).toContain(history[0].run.launchSnapshot.effectiveAgentArgs)
+    expect(rows[1].textContent).toContain('None')
+    expect(rows[2].textContent).toContain('Unknown')
+  })
+
   it('keeps a 10,000-run history to a bounded number of mounted rows', () => {
     act(() => {
       root.render(
@@ -108,8 +145,8 @@ describe('AutomationRunsTable rows', () => {
     act(() => root.render(node))
   }
 
-  function rows(): NodeListOf<HTMLButtonElement> {
-    return container.querySelectorAll<HTMLButtonElement>('[data-testid="automation-runs-row"]')
+  function rows(): NodeListOf<HTMLDivElement> {
+    return container.querySelectorAll<HTMLDivElement>('[data-testid="automation-runs-row"]')
   }
 
   it('fills every column of a row from the entry it stands for', () => {
@@ -159,9 +196,53 @@ describe('AutomationRunsTable rows', () => {
       />
     )
 
-    act(() => rows()[3].click())
+    act(() => within(rows()[3]).getByRole('button').click())
 
     expect(onOpenRun).toHaveBeenCalledExactlyOnceWith(rendered[3])
+  })
+
+  it('keeps run and argument actions as sibling buttons with independent keyboard activation', async () => {
+    const onOpenRun = vi.fn()
+    const history = entries(2)
+    history[0].run.launchSnapshot = { agentId: 'claude', effectiveAgentArgs: '--model opus' }
+    render(
+      <TooltipProvider>
+        <AutomationRunsTable
+          entries={history}
+          loading={false}
+          hasMore={false}
+          onLoadMore={() => {}}
+          onOpenRun={onOpenRun}
+        />
+      </TooltipProvider>
+    )
+    const row = rows()[0]
+    expect(row.hasAttribute('tabindex')).toBe(false)
+    expect(row.hasAttribute('role')).toBe(false)
+    expect(row.querySelector('button button, [role="button"] button')).toBeNull()
+    const user = userEvent.setup()
+    await act(async () => user.tab())
+    expect(document.activeElement).toBe(
+      within(row).getByRole('button', { name: 'Daily check, Run 0' })
+    )
+    await act(async () => user.keyboard('{Enter}'))
+    expect(onOpenRun).toHaveBeenCalledExactlyOnceWith(history[0])
+    onOpenRun.mockClear()
+    await act(async () => user.tab())
+    expect(document.activeElement).toBe(
+      within(row).getByRole('button', { name: /Effective agent arguments/ })
+    )
+    await act(async () => user.keyboard('{Enter}'))
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('--model opus')
+    expect(onOpenRun).not.toHaveBeenCalled()
+    await act(async () => user.keyboard('{Escape}'))
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+    await act(async () => user.tab())
+    expect(document.activeElement).toBe(
+      within(rows()[1]).getByRole('button', { name: 'Daily check, Run 1' })
+    )
+    await act(async () => user.keyboard(' '))
+    expect(onOpenRun).toHaveBeenCalledExactlyOnceWith(history[1])
   })
 
   it('shows the spinner only until the first page arrives', () => {

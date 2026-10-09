@@ -1,3 +1,4 @@
+import { projectWorktreeStartupTerminal } from './worktree-startup-terminal'
 import { paneIdentity } from './runtime-terminal-pane-identity'
 import { randomUUID } from 'node:crypto'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-lookup'
@@ -128,7 +129,6 @@ export async function createRuntimeFolderWorktree(args: {
   })
   const shouldActivate = request.activate === true || request.runHooks === true
   let warning: string | undefined
-  let didSpawnStartup = false
   let startupTerminal: CreateWorktreeResult['startupTerminal']
   if (args.startup && deps.ptySpawnAvailable) {
     try {
@@ -150,21 +150,14 @@ export async function createRuntimeFolderWorktree(args: {
       if (args.startupFollowup) {
         deps.sendFollowup(terminal.handle, args.startupFollowup)
       }
-      didSpawnStartup = true
-      startupTerminal = {
-        spawned: true,
-        handle: terminal.handle,
-        ...(terminal.tabId ? { tabId: terminal.tabId } : {}),
-        ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {}),
-        ...(terminal.ptyId ? { ptyId: terminal.ptyId } : {}),
-        surface: 'background'
-      }
+      startupTerminal = projectWorktreeStartupTerminal(terminal)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       warning = `Failed to create the startup terminal for ${worktree.path}: ${message}`
       console.warn(`[worktree-create] ${warning}`)
     }
   }
+  const didSpawnStartup = Boolean(startupTerminal)
   if (shouldActivate) {
     deps.activate(
       repo.id,

@@ -1,3 +1,4 @@
+import type { AgentLaunchSnapshot } from './agent-launch-snapshot'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -256,6 +257,8 @@ export type RuntimeTerminalCreateRequestPayload =
     })
 
 export type RuntimeTerminalCreate = {
+  launchSnapshot?: AgentLaunchSnapshot
+
   handle: string
   /** Host-owned PTY incarnation used to fence remote identity observations. */
   incarnationId?: string | null

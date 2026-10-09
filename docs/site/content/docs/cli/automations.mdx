@@ -112,7 +112,7 @@ orca automations create \
   --trigger daily \
   --prompt "Tidy the docs" \
   --provider claude \
-  --extra-agent-args="--model opus --add-dir docs"
+  --extra-agent-args="--model opus --add-dir=docs"
 ```
 
 On each fresh run, Orca starts from the host's default Arguments for that agent and appends the extras. A model or effort option in the extras replaces the one in the defaults. Pass the value with `=` because it starts with `--`.

@@ -16867,6 +16867,14 @@
           "useFreshSessions": "新しいセッションを使用",
           "helper": "新しいセッションごとに、このホストのデフォルト引数に追加されます。",
           "detailLabel": "追加の引数"
+        },
+        "argumentColumns": {
+          "extra": "追加引数",
+          "effectiveHeader": "適用された引数",
+          "saved": "保存済みの追加引数",
+          "effective": "適用された Agent 引数（ホストの既定値 + 追加引数）",
+          "unknown": "不明",
+          "none": "なし"
         }
       },
       "agent": {

@@ -94,5 +94,54 @@ describe('extra agent args capability gate', () => {
       { selector: { kind: 'self' } }
     )
     expect(callRuntimeRpc.mock.calls[0]?.[2]).toMatchObject({ extraAgentArgs: '--model opus' })
+    expect(getRuntimeEnvironmentStatus).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['create', 'update'] as const)(
+    'refuses %s after the same authority loses extras support',
+    async (mutation) => {
+      const { createAutomationForDestination, updateAutomationForOwner } = await client()
+      getRuntimeEnvironmentStatus.mockResolvedValue(CURRENT_HOST)
+      callRuntimeRpc.mockResolvedValue({ automation: { id: 'a1' } })
+      await createAutomationForDestination(
+        RUNTIME,
+        { ...INPUT, extraAgentArgs: '--model opus' },
+        { selector: { kind: 'self' } }
+      )
+      callRuntimeRpc.mockClear()
+      getRuntimeEnvironmentStatus.mockClear().mockResolvedValue(LEGACY_HOST)
+
+      const write =
+        mutation === 'create'
+          ? createAutomationForDestination(
+              RUNTIME,
+              { ...INPUT, extraAgentArgs: '--model opus' },
+              { selector: { kind: 'self' } }
+            )
+          : updateAutomationForOwner(OWNER, 'a1', { extraAgentArgs: '--model opus' })
+      await expect(write).rejects.toThrow('Update Orca on this host to use extra arguments.')
+      expect(callRuntimeRpc).not.toHaveBeenCalled()
+      expect(getRuntimeEnvironmentStatus).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('refuses a move after the same authority loses create idempotency', async () => {
+    const { createAutomationForDestination } = await client()
+    getRuntimeEnvironmentStatus.mockResolvedValue(CURRENT_HOST)
+    callRuntimeRpc.mockResolvedValue({ automation: { id: 'a1' } })
+    await createAutomationForDestination(RUNTIME, INPUT, { selector: { kind: 'self' } })
+    callRuntimeRpc.mockClear()
+    getRuntimeEnvironmentStatus.mockClear().mockResolvedValue({
+      capabilities: [
+        AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
+        AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY
+      ]
+    })
+
+    await expect(
+      createAutomationForDestination(RUNTIME, INPUT, { selector: { kind: 'self' } })
+    ).rejects.toThrow('Moving automations to this host requires a newer Orca server.')
+    expect(callRuntimeRpc).not.toHaveBeenCalled()
+    expect(getRuntimeEnvironmentStatus).toHaveBeenCalledTimes(1)
   })
 })

@@ -16972,6 +16972,14 @@
           "useFreshSessions": "Utiliser de nouvelles sessions",
           "helper": "Ajoutés aux arguments par défaut de cet hôte à chaque nouvelle session.",
           "detailLabel": "Arguments supplémentaires"
+        },
+        "argumentColumns": {
+          "extra": "Arguments supplémentaires",
+          "effectiveHeader": "Arguments effectifs",
+          "saved": "Arguments supplémentaires enregistrés",
+          "effective": "Arguments effectifs de l’agent (valeurs de l’hôte + extras)",
+          "unknown": "Inconnu",
+          "none": "Aucun"
         }
       },
       "agent": {

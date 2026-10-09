@@ -1,3 +1,4 @@
+import { AutomationArgsCell } from './AutomationArgsCell'
 import React from 'react'
 import { MoreHorizontal, Pause, Pencil, Play, Trash2 } from 'lucide-react'
 import {
@@ -144,6 +145,7 @@ export function AutomationListExternalRow({
           <span className="truncate text-center text-xs text-muted-foreground">
             {providerLabel}
           </span>
+          <AutomationArgsCell value="" />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button

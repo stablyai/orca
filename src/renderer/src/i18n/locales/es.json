@@ -16867,6 +16867,14 @@
           "useFreshSessions": "Usar sesiones nuevas",
           "helper": "Se añaden a los argumentos predeterminados de este host en cada sesión nueva.",
           "detailLabel": "Argumentos adicionales"
+        },
+        "argumentColumns": {
+          "extra": "Argumentos extra",
+          "effectiveHeader": "Argumentos efectivos",
+          "saved": "Argumentos extra guardados",
+          "effective": "Argumentos efectivos del agente (valores del host + extras)",
+          "unknown": "Desconocido",
+          "none": "Ninguno"
         }
       },
       "agent": {

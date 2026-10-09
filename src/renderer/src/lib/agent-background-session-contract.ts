@@ -1,3 +1,4 @@
+import type { AgentLaunchSnapshot } from '../../../shared/agent-launch-snapshot'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -18,6 +19,8 @@ export type LaunchAgentBackgroundSessionArgs = {
 }
 
 export type LaunchAgentBackgroundSessionResult = {
+  launchSnapshot?: AgentLaunchSnapshot
+
   tabId: string
   paneKey: string
   ptyId: string

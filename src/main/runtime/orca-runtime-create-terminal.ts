@@ -3,6 +3,7 @@ import { OrcaRuntimeWithTerminalCreateDeduplication } from './orca-runtime-termi
 import * as dependencies from './orca-runtime-create-terminal-dependencies'
 import { createDesktopTerminal } from './orca-runtime-create-terminal-desktop'
 import { buildRuntimeAgentTeamsLaunchPlan } from './orca-runtime-agent-teams-launch-plan'
+import { claimStablePaneCreate } from './runtime-stable-pane-create-claim'
 import { createPtySpawnCommitReporter } from './orca-runtime-report-pty-spawn-commit'
 import { recordPtySurface, spawnSurfaceClaimSequence } from './pty-recorded-surface-topology'
 
@@ -42,20 +43,10 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
       let preAllocatedHandle =
         launchOpts.preAllocatedHandle ?? this.createPreAllocatedTerminalHandle()
       let { tabId, leafId, paneKey } = dependencies.allocateTerminalPaneIdentity(launchOpts)
-      const claimedStablePaneCreate = this.ptyController.claimStablePaneCreate?.({
-        worktreeId: workspace.id,
-        connectionId: workspace.connectionId,
+      const releaseStablePaneCreate = claimStablePaneCreate(this.ptyController, workspace, {
         tabId,
         leafId
       })
-      let stablePaneCreateReleased = false
-      const releaseStablePaneCreate = (): void => {
-        if (stablePaneCreateReleased) {
-          return
-        }
-        stablePaneCreateReleased = true
-        claimedStablePaneCreate?.()
-      }
       try {
         if (launchOpts.signal?.aborted) {
           throw new Error('client_disconnected')
@@ -272,11 +263,20 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
         } else if (presentation !== 'background') {
           warning = dependencies.createTerminalRevealWarning(handle)
         }
+        const { launchAgent } = launchOpts
         return {
           handle,
           tabId,
           paneKey,
           ptyId: result.id,
+          ...(!adoptedStablePane && !result.isReattach && launchAgent && effectiveLaunchConfig
+            ? {
+                launchSnapshot: {
+                  agentId: launchAgent,
+                  effectiveAgentArgs: effectiveLaunchConfig.agentArgs
+                }
+              }
+            : {}),
           worktreeId: workspace.id,
           title: pty?.title ?? launchOpts.title ?? null,
           ...this.getPtyExecutionHostMetadata(result.id),

@@ -1,3 +1,4 @@
+import type { AgentLaunchSnapshot } from '../../../shared/agent-launch-snapshot'
 import { useAppStore } from '@/store'
 import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import type {
@@ -97,6 +98,7 @@ export async function launchAgentBackgroundSession(
     })
   let paneKey = makePaneKey(reservedTabId, leafId)
   const sshConnectionId = launchHost.connectionId
+  let launchSnapshot: AgentLaunchSnapshot | undefined
   let ptyId = '',
     runtimeTerminalHandle: string | null = null
   // What the local spawn answered and later steps still need: which lifetime of `ptyId` this launch
@@ -163,6 +165,7 @@ export async function launchAgentBackgroundSession(
           ...(title ? { title } : {})
         }
       })
+      launchSnapshot = created.terminal.launchSnapshot
       runtimeTerminalHandle = created.terminal.handle
       ptyId = toRemoteRuntimePtyId(runtimeTerminalHandle, runtimeTarget.environmentId)
     } else {
@@ -194,6 +197,10 @@ export async function launchAgentBackgroundSession(
           request_kind: 'new'
         }
       })
+      launchSnapshot =
+        !result.isReattach && result.launchConfig
+          ? { agentId: agent, effectiveAgentArgs: result.launchConfig.agentArgs }
+          : undefined
       ptyId = result.id
       spawned = result
     }
@@ -272,7 +279,7 @@ export async function launchAgentBackgroundSession(
       scheduleAgentBackgroundDraft(tab.id, pasteDraftAfterLaunch, agent)
     }
 
-    return { tabId: tab.id, paneKey, ptyId, startupPlan, terminalOwnership }
+    return { tabId: tab.id, paneKey, ptyId, startupPlan, terminalOwnership, launchSnapshot }
   } catch (error) {
     // Why: terminal creation and stream subscription are separate remote calls.
     // A failure between them must not strand an invisible runtime terminal.

@@ -204,6 +204,7 @@ export async function handleAutomationDispatchRequest({
         terminalSessionId: launchedTabId,
         terminalPaneKey: result.paneKey,
         terminalPtyId: result.ptyId,
+        ...(result.launchSnapshot ? { launchSnapshot: result.launchSnapshot } : {}),
         precheckResult: resolved.context.precheckResult,
         error: null
       })

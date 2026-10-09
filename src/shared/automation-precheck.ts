@@ -1,4 +1,21 @@
-import type { AutomationPrecheck, AutomationPrecheckResult } from './automations-types'
+export type AutomationPrecheck = {
+  command: string
+  timeoutSeconds: number
+}
+
+export type AutomationPrecheckResult = {
+  command: string
+  exitCode: number | null
+  timedOut: boolean
+  durationMs: number
+  stdout: string
+  stderr: string
+  stdoutTruncated: boolean
+  stderrTruncated: boolean
+  error: string | null
+  startedAt: number
+  completedAt: number
+}
 
 export const DEFAULT_AUTOMATION_PRECHECK_TIMEOUT_SECONDS = 60
 export const MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS = 600

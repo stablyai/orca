@@ -91,6 +91,29 @@ describe('a remote managed create with a startup agent', () => {
     }
   )
 
+  it('returns SSH launch facts with the startup terminal identity', async () => {
+    const { createTerminal, deps } = createDeps()
+    createTerminal.mockResolvedValue({
+      handle: 'term-1',
+      ptyId: 'ssh-pty-1',
+      launchSnapshot: { agentId: 'claude', effectiveAgentArgs: '--model opus' }
+    })
+    const result = await createRuntimeRemoteManagedWorktree(
+      repo,
+      {
+        name: 'task',
+        createdWithAgent: 'claude',
+        startup: { command: 'claude' }
+      },
+      deps
+    )
+    expect(result.startupTerminal).toMatchObject({
+      handle: 'term-1',
+      ptyId: 'ssh-pty-1',
+      launchSnapshot: { agentId: 'claude', effectiveAgentArgs: '--model opus' }
+    })
+  })
+
   it('creates the startup terminal under the pane the caller reserved', async () => {
     expect(await startupTerminalOptions(`${TAB_ID}:${LEAF_ID}`)).toMatchObject({
       tabId: TAB_ID,

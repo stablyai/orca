@@ -105,10 +105,7 @@ describe('runtime local create prepared-pool re-arm ordering', () => {
         didSpawnSetup: false,
         didSpawnStartup: false,
         setupTerminalHandle: undefined,
-        startupTerminalHandle: undefined,
-        startupTerminalTabId: undefined,
-        startupTerminalPaneKey: undefined,
-        startupTerminalPtyId: undefined
+        startupTerminal: undefined
       }
     })
   })

@@ -8,6 +8,8 @@ import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { AutomationService } from './service'
 import type { AutomationRun } from '../../shared/automations-types'
+import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
+import { projectWorktreeStartupTerminal } from '../runtime/worktree-startup-terminal'
 import { createHeadlessRunTerminalRetention } from './headless-run-terminal-retention'
 import {
   getTuiAgentDetectCommands,
@@ -15,6 +17,7 @@ import {
   TUI_AGENT_CONFIG
 } from '../../shared/tui-agent-config'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './headless-workspace-create'
+import { HeadlessAutomationDispatchError } from './headless-dispatch'
 import { createRuntimeAutomationRunTerminalObserver } from './runtime-terminal-run-observer'
 
 const MAX_REMEMBERED_LAUNCHES = 256
@@ -34,7 +37,8 @@ export function createRuntimeAutomationService(input: {
     getAgentStatusRowsForPane: (paneKey) => runtime.getAgentStatusRowsForPane(paneKey),
     agentCommandsForRun: (run) =>
       automationAgentCommands(
-        store.listAutomations().find((entry) => entry.id === run.automationId)?.agentId
+        run.launchSnapshot?.agentId ??
+          store.listAutomations().find((entry) => entry.id === run.automationId)?.agentId
       )
   })
   const service = new AutomationService(store, {
@@ -51,48 +55,40 @@ export function createRuntimeAutomationService(input: {
     allowRemoteHostScheduling: input.headless,
     headlessDispatcher: input.headless
       ? async ({ automation, run, target }) => {
-          let terminalHandle: string
-          let terminalSessionId: string | null = null
-          let terminalPaneKey: string | null = null
-          let terminalPtyId: string | null = null
+          let terminal: NonNullable<CreateWorktreeResult['startupTerminal']>
           let workspaceId: string
           let workspaceDisplayName: string | null = null
           if (automation.workspaceMode === 'new_per_run') {
             const created = await runtime.createManagedWorktree(
               buildHeadlessAutomationWorktreeCreateArgs({ automation, run, repo: target.repo })
             )
-            terminalHandle = created.startupTerminal?.handle ?? ''
-            terminalSessionId = created.startupTerminal?.tabId ?? null
-            terminalPaneKey = created.startupTerminal?.paneKey ?? null
-            terminalPtyId = created.startupTerminal?.ptyId ?? null
-            workspaceId = created.worktree.id
-            workspaceDisplayName = created.worktree.displayName ?? null
-            if (!terminalHandle) {
-              throw new Error(
+            if (!created.startupTerminal?.handle) {
+              throw new HeadlessAutomationDispatchError(
                 created.warning ||
-                  'Automation workspace was created, but no agent terminal started.'
+                  'Automation workspace was created, but no agent terminal started.',
+                { id: created.worktree.id, displayName: created.worktree.displayName ?? null }
               )
             }
+            terminal = created.startupTerminal
+            workspaceId = created.worktree.id
+            workspaceDisplayName = created.worktree.displayName ?? null
           } else {
             if (!automation.workspaceId) {
               throw new Error('The target workspace is no longer available.')
             }
-            const terminal = await runtime.launchAgentTerminal(`id:${automation.workspaceId}`, {
+            const launched = await runtime.launchAgentTerminal(`id:${automation.workspaceId}`, {
               agent: automation.agentId,
               prompt: automation.prompt,
               title: run.title,
               ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {})
             })
-            terminalHandle = terminal.handle
-            terminalSessionId = terminal.tabId ?? null
-            terminalPaneKey = terminal.paneKey ?? null
-            terminalPtyId = terminal.ptyId ?? null
-            workspaceId = terminal.worktreeId
+            terminal = projectWorktreeStartupTerminal(launched)
+            workspaceId = launched.worktreeId
             const worktree = await runtime.showManagedWorktree(`id:${workspaceId}`)
             workspaceDisplayName = worktree.displayName ?? null
           }
-          if (terminalPaneKey) {
-            launchedHandles.set(terminalPaneKey, terminalHandle)
+          if (terminal.paneKey && terminal.handle) {
+            launchedHandles.set(terminal.paneKey, terminal.handle)
             if (launchedHandles.size > MAX_REMEMBERED_LAUNCHES) {
               launchedHandles.delete(launchedHandles.keys().next().value ?? '')
             }
@@ -101,9 +97,10 @@ export function createRuntimeAutomationService(input: {
           return {
             workspaceId,
             workspaceDisplayName,
-            terminalSessionId,
-            terminalPaneKey,
-            terminalPtyId
+            terminalSessionId: terminal.tabId ?? null,
+            terminalPaneKey: terminal.paneKey ?? null,
+            terminalPtyId: terminal.ptyId ?? null,
+            ...(terminal.launchSnapshot ? { launchSnapshot: terminal.launchSnapshot } : {})
           }
         }
       : undefined
