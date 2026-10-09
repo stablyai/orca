@@ -12,10 +12,7 @@ import { tmpdir } from 'node:os'
 import { isAbsolute, join, parse } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import {
-  DEFAULT_MAX_OUTPUT_BYTES,
-  runProcessSync
-} from '../../src/shared/child-process/run-process.ts'
+import { DEFAULT_MAX_OUTPUT_BYTES, runProcessSync } from '@orca/process-host'
 import { resolveCliCommand } from '../../src/shared/node-cli-command-resolution.ts'
 import { removeTreeSync } from '../../src/shared/windows-transient-lock-removal.ts'
 import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'

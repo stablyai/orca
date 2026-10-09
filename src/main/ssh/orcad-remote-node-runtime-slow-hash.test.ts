@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { pinnedNodeRuntimeAsset } from '../../shared/node-runtime-pin'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import type { SshConnection } from './ssh-connection'
 import {
   ensureRemoteOrcadNodeRuntime,

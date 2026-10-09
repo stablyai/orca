@@ -2,8 +2,8 @@
 // one budget for the whole listing, bounded output, and a teardown awaited on every path. A probe
 // only names what to run and how to read its answer.
 
-import { createOutputSink } from '../../../shared/child-process/bounded-output-sink'
-import type { spawnProcess } from '../../../shared/child-process/run-process'
+import { createOutputSink } from '@orca/process-host/bounded-output-sink'
+import type { spawnProcess } from '@orca/process-host'
 import { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
 import type { ProviderProcessClosePolicy } from '../../provider-process/provider-process-close'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'

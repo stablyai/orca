@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RunProcessModule from '../../shared/child-process/run-process'
+import type * as RunProcessModule from '@orca/process-host'
 import type { RuntimeBrowserCommandHost } from '../runtime/orca-runtime-browser'
 
 const { spawnProcessMock } = vi.hoisted(() => ({ spawnProcessMock: vi.fn() }))
@@ -11,7 +11,7 @@ const { spawnProcessMock } = vi.hoisted(() => ({ spawnProcessMock: vi.fn() }))
 // Why wrap rather than fake: the provider must still go through the real spawn
 // path (argv/env handling, a real pid to signal); only the program is swapped
 // for a stub that speaks the sidecar's serve protocol.
-vi.mock('../../shared/child-process/run-process', async (importOriginal) => ({
+vi.mock('@orca/process-host', async (importOriginal) => ({
   ...(await importOriginal<typeof RunProcessModule>()),
   spawnProcess: spawnProcessMock
 }))
@@ -103,9 +103,7 @@ beforeEach(async () => {
   started = []
   await writeFile(logPath, '')
   await setControl({})
-  const actual = await vi.importActual<typeof RunProcessModule>(
-    '../../shared/child-process/run-process'
-  )
+  const actual = await vi.importActual<typeof RunProcessModule>('@orca/process-host')
   spawnProcessMock.mockReset()
   spawnProcessMock.mockImplementation((spec: RunProcessModule.ProcessSpec) =>
     actual.spawnProcess({

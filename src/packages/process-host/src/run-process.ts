@@ -354,7 +354,10 @@ export function runProcessSync(spec: ProcessSpec): ProcessResult {
     maxBuffer: spec.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
     encoding: 'buffer'
   })
-  if (result.error && (result.error as NodeJS.ErrnoException).code !== 'ETIMEDOUT') {
+  const timedOut = result.error
+    ? 'code' in result.error && result.error.code === 'ETIMEDOUT'
+    : false
+  if (result.error && !timedOut) {
     throw result.error
   }
   return {
@@ -370,6 +373,6 @@ export function runProcessSync(spec: ProcessSpec): ProcessResult {
     // does anything else that terminates the child, and only a timeout also
     // sets this error. Reading the signal alone reports a deliberately
     // stopped process as having timed out, which callers retry.
-    timedOut: (result.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT'
+    timedOut
   }
 }

@@ -1,4 +1,4 @@
-import type { ChildProcessHandle as ChildProcess } from '../../shared/child-process/run-process'
+import type { ChildProcessHandle as ChildProcess } from '@orca/process-host'
 
 export const PROVIDER_SIGKILL_GRACE_MS = 2_000
 

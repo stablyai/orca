@@ -4,7 +4,7 @@ import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { NODE_RUNTIME_PIN } from '../../shared/node-runtime-pin'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import {

@@ -20,7 +20,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { createServer } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
-import { runProcess, type ProcessResult } from '../../../src/shared/child-process/run-process'
+import { runProcess, type ProcessResult } from '@orca/process-host'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
 import { retryTransientMainEvaluate } from './electron-main-evaluate-retry'

@@ -2,9 +2,12 @@ import { mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { removeTreeSync } from '../windows-transient-lock-removal'
-import { parseWindowsCmdShim, resolveWindowsCmdShim } from './windows-cmd-shim-resolution'
-import { resolveSpawn } from './run-process'
+import { removeTreeSync } from '../../windows-transient-lock-removal'
+import {
+  parseWindowsCmdShim,
+  resolveWindowsCmdShim
+} from '@orca/process-host/windows-cmd-shim-resolution'
+import { resolveSpawn } from '@orca/process-host'
 import {
   REAL_AGENT_BROWSER_CMD,
   REAL_CODEX_CMD,
@@ -16,7 +19,7 @@ import {
   npmDirectShim,
   npmProgNodeShim,
   pnpmBranchedNodeShim
-} from './__fixtures__/windows-cmd-shim-bodies'
+} from '../../../packages/process-host/src/__fixtures__/windows-cmd-shim-bodies'
 
 describe('parseWindowsCmdShim', () => {
   it('reads the npm node shim MDE flagged (codex.cmd)', () => {
@@ -102,10 +105,10 @@ describe('parseWindowsCmdShim', () => {
     // Only the captured path is case-sensitive, so the case cases compare
     // against the rewritten spelling.
     const parsed = parseWindowsCmdShim(rewrite(REAL_CODEX_CMD))
-    expect(parsed?.kind).toBe('node')
-    expect((parsed as { script: string }).script.toLowerCase()).toBe(
-      'node_modules\\@openai\\codex\\bin\\codex.js'
-    )
+    if (parsed?.kind !== 'node') {
+      throw new Error('Expected a parsed Node shim')
+    }
+    expect(parsed.script.toLowerCase()).toBe('node_modules\\@openai\\codex\\bin\\codex.js')
   })
 
   it('refuses lone-CR line endings, which leave the body as one unsplit line', () => {

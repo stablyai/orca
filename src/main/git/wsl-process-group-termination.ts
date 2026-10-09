@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { ProcessTerminationBarrier } from '../../shared/child-process/run-process'
+import type { ProcessTerminationBarrier } from '@orca/process-host'
 import { quotePosixShell } from '../../shared/wsl-login-shell-command'
 import { runWslProcess } from '../wsl/wsl-runner'
 

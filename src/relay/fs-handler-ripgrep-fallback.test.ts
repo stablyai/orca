@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RunProcessModule from '../shared/child-process/run-process'
+import type * as RunProcessModule from '@orca/process-host'
 import type * as FsHandlerGitFallback from './fs-handler-git-fallback'
 import type * as FsHandlerUtils from './fs-handler-utils'
 
@@ -19,7 +19,7 @@ const {
   searchWithRgMock: vi.fn()
 }))
 
-vi.mock('../shared/child-process/run-process', async (importOriginal) => ({
+vi.mock('@orca/process-host', async (importOriginal) => ({
   ...(await importOriginal<typeof RunProcessModule>()),
   runProcess: runProcessMock
 }))

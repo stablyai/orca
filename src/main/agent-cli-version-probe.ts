@@ -3,7 +3,7 @@ import {
   isPrereleaseAppVersion,
   parseCliVersion
 } from '../shared/app-version'
-import { runProcess, type ProcessSpec } from '../shared/child-process/run-process'
+import { runProcess, type ProcessSpec } from '@orca/process-host'
 
 /** One line naming why a probe said no; the binary's own words, bounded. */
 function warnRefused(program: string, why: string, output = ''): void {

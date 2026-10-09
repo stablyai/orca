@@ -1,7 +1,7 @@
 import { isAbsolute, resolve } from 'node:path'
 import { parse, stringify } from 'devalue'
 import type { PoolOptions, PoolWorker, WorkerRequest } from 'vitest/node'
-import { spawnProcess, type ChildProcessHandle } from '../../src/shared/child-process/run-process'
+import { spawnProcess, type ChildProcessHandle } from '@orca/process-host'
 
 class NodeRuntimeWorker implements PoolWorker {
   readonly name = 'node-runtime'

@@ -1,6 +1,6 @@
 import { StringDecoder } from 'node:string_decoder'
-import type { ProcessSpec } from '../../shared/child-process/process-spec'
-import type { spawnProcess } from '../../shared/child-process/run-process'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
+import type { spawnProcess } from '@orca/process-host'
 import { ownRetainedString } from '../../shared/own-retained-string'
 
 /** The all-pipes child `spawnProcess` returns; avoids a node:child_process import. */

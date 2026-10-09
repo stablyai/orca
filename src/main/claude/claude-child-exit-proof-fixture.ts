@@ -1,5 +1,5 @@
 import type { EventEmitter } from 'node:events'
-import type { spawnProcess, SpawnedProcess } from '../../shared/child-process/run-process'
+import type { spawnProcess, SpawnedProcess } from '@orca/process-host'
 import {
   spawnManagedProviderProcess,
   type ManagedProviderProcess

@@ -3,7 +3,7 @@
 // daemon folder-access fix (STA-7948), where clearing the row is what makes macOS ask again.
 
 import { join } from 'node:path'
-import { runProcess, type ProcessResult } from '../shared/child-process/run-process'
+import { runProcess, type ProcessResult } from '@orca/process-host'
 
 /** Bounded so a wedged helper cannot hold a caller: neither binary prompts, so neither lingers. */
 const TCC_COMMAND_TIMEOUT_MS = 10_000

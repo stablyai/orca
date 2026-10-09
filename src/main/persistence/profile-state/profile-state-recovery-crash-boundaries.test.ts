@@ -90,7 +90,7 @@ const selectedJson = JSON.stringify(selectedState)
 const oldJson = JSON.stringify(oldState)
 
 beforeAll(() => {
-  bundle = buildRecoveryCrashProcess(suiteRoot)
+  bundle = buildRecoveryCrashProcess(suiteRoot).bundle
 })
 beforeEach(() => {
   setSecretStore({

@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ProcessResult } from '../shared/child-process/run-process'
+import type { ProcessResult } from '@orca/process-host'
 
 const { runProcessMock } = vi.hoisted(() => ({ runProcessMock: vi.fn() }))
-vi.mock('../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 
 import { readMacosBundleId, resetMacosTccPermission } from './macos-tcc-reset'
 

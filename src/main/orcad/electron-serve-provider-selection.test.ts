@@ -2,14 +2,14 @@ import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RunProcessModule from '../../shared/child-process/run-process'
+import type * as RunProcessModule from '@orca/process-host'
 
 const { runProcessMock, spawnProcessMock } = vi.hoisted(() => ({
   runProcessMock: vi.fn(),
   spawnProcessMock: vi.fn()
 }))
 
-vi.mock('../../shared/child-process/run-process', async (importOriginal) => ({
+vi.mock('@orca/process-host', async (importOriginal) => ({
   ...(await importOriginal<typeof RunProcessModule>()),
   runProcess: runProcessMock,
   spawnProcess: spawnProcessMock
@@ -57,9 +57,7 @@ beforeEach(async () => {
     await chmod(chromiumExecutable, 0o755)
   }
 
-  const actual = await vi.importActual<typeof RunProcessModule>(
-    '../../shared/child-process/run-process'
-  )
+  const actual = await vi.importActual<typeof RunProcessModule>('@orca/process-host')
   spawnProcessMock.mockReset()
   spawnProcessMock.mockImplementation((spec: RunProcessModule.ProcessSpec) =>
     actual.spawnProcess({

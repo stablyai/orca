@@ -18,6 +18,7 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   '@anthropic-ai/claude-agent-sdk',
   '@electron-toolkit/utils',
   '@linear/sdk',
+  '@orca/process-host',
   '@parcel/watcher',
   'electron-updater',
   'i18next',
@@ -214,7 +215,8 @@ function collectPackagedRuntimePackages(electronPlatformName = process.platform)
 function createPackagedRuntimeNodeModuleResources(electronPlatformName = process.platform) {
   return collectPackagedRuntimePackages(electronPlatformName).map(([packageName, packageDir]) => ({
     from: packageDir,
-    to: join('node_modules', ...packageName.split('/'))
+    to: join('node_modules', ...packageName.split('/')),
+    ...(packageName === '@orca/process-host' ? { filter: ['package.json', 'dist/**/*'] } : {})
   }))
 }
 

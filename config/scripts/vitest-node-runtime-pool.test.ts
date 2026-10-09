@@ -2,7 +2,7 @@ import { once } from 'node:events'
 import { resolve } from 'node:path'
 import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest'
 import { createVitest, type PoolOptions, type Vitest } from 'vitest/node'
-import * as processes from '../../src/shared/child-process/run-process'
+import * as processes from '@orca/process-host'
 import { nodeRuntimePool } from './vitest-node-runtime-pool'
 
 let context: Vitest

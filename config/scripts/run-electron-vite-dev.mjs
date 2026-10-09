@@ -17,6 +17,7 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 
 import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mjs'
+import { createElectronViteDevArguments } from './electron-vite-dev-arguments.mjs'
 import {
   DEV_BUNDLE_MARKER_FILENAME,
   getDevBundleProcessTable,
@@ -646,7 +647,7 @@ if (!userPassedPort && !isHelpOrVersion) {
   }
 }
 prepareDevWebClient()
-const forwardedArgs = ['dev', ...forwardedRaw, ...forwardedExtras]
+const forwardedArgs = createElectronViteDevArguments([...forwardedRaw, ...forwardedExtras])
 const child = spawn(process.execPath, [electronViteCli, ...forwardedArgs], {
   stdio: 'inherit',
   env: process.env,

@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
-import type { SpawnedProcess } from '../../shared/child-process/run-process'
+import type { SpawnedProcess } from '@orca/process-host'
 import type { DescendantSnapshot } from '../pty-descendant-termination'
 import { createClaudeChildTreeReaper } from './claude-agent-sdk-exit-proof'
 

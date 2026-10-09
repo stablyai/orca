@@ -1,23 +1,32 @@
 import { EventEmitter } from 'node:events'
-import type { ChildProcess } from 'node:child_process'
+import { ChildProcess } from 'node:child_process'
+import type * as ChildProcessModule from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
 
-vi.mock('node:child_process', () => ({ spawn: spawnMock }))
+vi.mock('node:child_process', async (importOriginal) => {
+  const original = await importOriginal<typeof ChildProcessModule>()
+  return { ...original, spawn: spawnMock }
+})
 
 import { forceTerminateProcessTree, signalProcessTree } from './process-tree-termination'
 import { setProcessTreeKillGate, type ProcessTreeKill } from './process-tree-kill-gate'
 import { windowsSystem32Binary } from './windows-system-binary'
 
-function mockProcess(pid: number): ChildProcess {
-  const child = new EventEmitter() as EventEmitter & {
-    pid: number
-    kill: ReturnType<typeof vi.fn>
+class StubbedChildProcess extends ChildProcess {
+  override pid: number
+  override exitCode: number | null = null
+  override kill = vi.fn((_signal?: NodeJS.Signals | number) => true)
+
+  constructor(pid: number) {
+    super()
+    this.pid = pid
   }
-  child.pid = pid
-  child.kill = vi.fn((_signal?: NodeJS.Signals | number) => true)
-  return child as unknown as ChildProcess
+}
+
+function mockProcess(pid: number): StubbedChildProcess {
+  return new StubbedChildProcess(pid)
 }
 
 async function withWindows(run: () => Promise<void>): Promise<void> {
@@ -170,7 +179,7 @@ describe('process-tree-kill breadcrumb seam', () => {
     await withWindows(async () => {
       // A reaped pid is Windows' to reissue, and this host may be the daemon or
       // relay, where the main-process own-Chromium guard cannot run.
-      const child = mockProcess(1234) as ChildProcess & { exitCode: number }
+      const child = mockProcess(1234)
       child.exitCode = 0
 
       // `false`, not `true`: a taskkill against a reaped pid already resolved to

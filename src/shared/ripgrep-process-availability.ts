@@ -1,6 +1,6 @@
 import { constants } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
-import { spawnProcess, type ChildProcessHandle } from './child-process/run-process'
+import { spawnProcess, type ChildProcessHandle } from '@orca/process-host'
 import { abortSignalReason, throwIfSignalAborted } from './abort-signal-reason'
 
 const RIPGREP_CWD_CHECK_TIMEOUT_MS = 1000

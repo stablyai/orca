@@ -2,10 +2,10 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { removeTreeSync } from '../windows-transient-lock-removal'
-import { runProcess } from './run-process'
-import { WINDOWS_ARGUMENT_CORPUS } from './__fixtures__/windows-argument-corpus'
-import { npmProgNodeShim } from './__fixtures__/windows-cmd-shim-bodies'
+import { removeTreeSync } from '../../windows-transient-lock-removal'
+import { runProcess } from '@orca/process-host'
+import { WINDOWS_ARGUMENT_CORPUS } from '../../../packages/process-host/src/__fixtures__/windows-argument-corpus'
+import { npmProgNodeShim } from '../../../packages/process-host/src/__fixtures__/windows-cmd-shim-bodies'
 
 /**
  * The resolved path has to deliver exactly what the cmd.exe path delivers, for

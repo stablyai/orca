@@ -1,24 +1,22 @@
 import { randomBytes } from 'node:crypto'
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  renameSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync } from 'node:fs'
 import { join, win32 as winPath } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 import {
   buildDaemonHostManifest,
-  daemonHostExeName,
   destPath,
   executeManifest,
   toPosixRelative,
   WINDOWS_PROCESS_TREE_REQUIRED,
   type DaemonHostSources
 } from './daemon-host-manifest'
+import {
+  collectDaemonHostBuildInventory,
+  daemonHostBuildInventoryMatches,
+  daemonHostBuildRuntimeMatches,
+  readDaemonHostBuildMarker,
+  writeDaemonHostBuildMarker
+} from './daemon-host-build-inventory'
 import type { ProcessLivenessVerdict } from './daemon-incarnation-evidence-types'
 import { parseDaemonPidFile } from './daemon-pid-file-parse'
 import { quarantineCorruptDaemonPidRecord } from './daemon-pid-record-quarantine'
@@ -44,16 +42,28 @@ export type RelocatedDaemonHost = {
 }
 
 const HOST_SUBDIR = 'daemon-host'
-const MARKER_NAME = '.materialized.json'
+const knownBuildFingerprints = new Map<string, string>()
+
+function currentBuildFingerprint(
+  sources: DaemonHostSources,
+  sourceFingerprint: string | null
+): string | null {
+  const key = JSON.stringify([
+    getAppEnvironment().getVersion(),
+    sources.execPath,
+    sources.entrySourcePath,
+    process.versions.electron,
+    process.arch
+  ])
+  if (sourceFingerprint !== null) {
+    knownBuildFingerprints.set(key, sourceFingerprint)
+  }
+  // Once this process observed its build, an updater removing source files cannot select another same-version build.
+  return sourceFingerprint ?? knownBuildFingerprints.get(key) ?? null
+}
 
 // LOCAL appData (not roaming) so OneDrive/roaming never syncs this ~260MB runtime. Shared with NSIS uninstall (config/nsis/orca-installer-hooks.nsh) — keep in sync.
 const LOCAL_HOST_ROOT_NAME = 'Orca'
-
-type MaterializeMarker = {
-  version: string
-  completedAt: string
-  entryRelPath: string
-}
 
 // Mirror getDaemonEntryPath()'s resolution order so the copied entry is the exact file the in-dir fork would run.
 function resolveEntrySourcePath(resourcesPath: string): string {
@@ -105,24 +115,6 @@ function collectDaemonHostSources(): DaemonHostSources | null {
   }
 }
 
-function readMarker(dir: string): MaterializeMarker | null {
-  try {
-    const parsed = JSON.parse(
-      readFileSync(join(dir, MARKER_NAME), 'utf8')
-    ) as Partial<MaterializeMarker>
-    if (typeof parsed.version === 'string' && typeof parsed.entryRelPath === 'string') {
-      return {
-        version: parsed.version,
-        completedAt: typeof parsed.completedAt === 'string' ? parsed.completedAt : '',
-        entryRelPath: parsed.entryRelPath
-      }
-    }
-  } catch {
-    // Missing/corrupt marker — treat as not materialized.
-  }
-  return null
-}
-
 function processTreeRelDir(sources: DaemonHostSources): string {
   return toPosixRelative(sources.appDir, sources.windowsProcessTreeDir)
 }
@@ -153,25 +145,59 @@ export function getRelocatedDaemonHost(): RelocatedDaemonHost | null {
   if (!sources) {
     return null
   }
+  const inventory = collectDaemonHostBuildInventory(sources)
+  return findRelocatedDaemonHost(
+    sources,
+    currentBuildFingerprint(sources, inventory?.fingerprint ?? null)
+  )
+}
+
+function findRelocatedDaemonHost(
+  sources: DaemonHostSources,
+  fingerprint: string | null
+): RelocatedDaemonHost | null {
+  if (fingerprint === null) {
+    return null
+  }
   const version = getAppEnvironment().getVersion()
-  const dest = join(hostRootDir(), version)
-  const marker = readMarker(dest)
-  if (!marker || marker.version !== version) {
+  const versionRoot = join(hostRootDir(), version)
+  let builds
+  try {
+    builds = readdirSync(versionRoot, { withFileTypes: true })
+  } catch {
     return null
   }
-  const execPath = join(dest, daemonHostExeName(sources.execPath))
-  const entryPath = destPath(dest, marker.entryRelPath)
-  if (!existsSync(execPath) || !existsSync(entryPath)) {
-    return null
+  const candidates = builds
+    .filter((entry) => entry.isDirectory() && entry.name.startsWith('build-'))
+    .map((entry) => ({
+      dest: join(versionRoot, entry.name),
+      marker: readDaemonHostBuildMarker(join(versionRoot, entry.name))
+    }))
+    .sort((left, right) =>
+      (right.marker?.completedAt ?? '').localeCompare(left.marker?.completedAt ?? '')
+    )
+  for (const { dest, marker } of candidates) {
+    if (
+      !marker ||
+      marker.version !== version ||
+      !daemonHostBuildRuntimeMatches(marker, sources) ||
+      marker.fingerprint !== fingerprint ||
+      !daemonHostBuildInventoryMatches(dest, marker)
+    ) {
+      continue
+    }
+    const execPath = join(dest, marker.executableName)
+    const entryPath = destPath(dest, marker.entryRelPath)
+    if (
+      !existsSync(execPath) ||
+      !existsSync(entryPath) ||
+      missingProcessTreeFiles(destPath(dest, processTreeRelDir(sources)))
+    ) {
+      continue
+    }
+    return { execPath, entryPath }
   }
-  // A mirror the daemon cannot load the addon from still runs -- it just forks a
-  // shell per snapshot (#16905) -- so treat it as unmaterialized and rebuild. Hosts
-  // from before this shipped have none of these files. Checked in the mirror, never
-  // in the install dir, which is the thing relocation exists to outlive.
-  if (missingProcessTreeFiles(destPath(dest, processTreeRelDir(sources)))) {
-    return null
-  }
-  return { execPath, entryPath }
+  return null
 }
 
 /**
@@ -179,39 +205,35 @@ export function getRelocatedDaemonHost(): RelocatedDaemonHost | null {
  * via marker; stages into a temp sibling and publishes by atomic rename, so a crash mid-copy never leaves a half-populated dest.
  */
 export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
-  const existing = getRelocatedDaemonHost()
-  if (existing) {
-    return existing
-  }
   const sources = collectDaemonHostSources()
   if (!sources) {
     return null
   }
+  const inventory = collectDaemonHostBuildInventory(sources)
+  const existing = findRelocatedDaemonHost(
+    sources,
+    currentBuildFingerprint(sources, inventory?.fingerprint ?? null)
+  )
+  if (existing) {
+    return existing
+  }
   // Checked against the source before copying: the mirror check below would refuse
   // the result anyway, and re-copying ~260MB on every launch to reach that verdict
   // is the loop this shares its list with the copy plan to prevent.
-  if (missingProcessTreeFiles(sources.windowsProcessTreeDir)) {
+  if (!inventory || missingProcessTreeFiles(sources.windowsProcessTreeDir)) {
     return null
   }
   const version = getAppEnvironment().getVersion()
   const root = hostRootDir()
-  const dest = join(root, version)
-  const staging = join(root, `${version}.staging-${randomBytes(6).toString('hex')}`)
+  const versionRoot = join(root, version)
+  const nonce = randomBytes(6).toString('hex')
+  const dest = join(versionRoot, `build-${inventory.fingerprint}-${nonce}`)
+  const staging = join(versionRoot, `.staging-${nonce}`)
   try {
-    mkdirSync(root, { recursive: true })
-    rmSync(staging, { recursive: true, force: true })
+    mkdirSync(versionRoot, { recursive: true })
     executeManifest(buildDaemonHostManifest(sources), staging)
-    // Marker written LAST so an interrupted copy leaves a marker-less staging dir the next launch discards.
-    const marker: MaterializeMarker = {
-      version,
-      completedAt: new Date().toISOString(),
-      entryRelPath: sources.entryRelPath
-    }
-    writeFileSync(join(staging, MARKER_NAME), JSON.stringify(marker))
-    // Replace any stale/partial dest, then publish atomically. Windows refuses to delete a running
-    // image, so a live daemon already hosted in THIS version's dir (same-version reinstall, or a dev
-    // channel reusing a version) throws here and materialization fails open to the install-dir host.
-    rmSync(dest, { recursive: true, force: true })
+    writeDaemonHostBuildMarker(staging, version, inventory)
+    // Publish a new immutable build; a same-version daemon may still load files from an older mirror.
     renameSync(staging, dest)
   } catch {
     try {
@@ -221,7 +243,7 @@ export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
     }
     return null
   }
-  return getRelocatedDaemonHost()
+  return findRelocatedDaemonHost(sources, inventory.fingerprint)
 }
 
 export type PinnedDaemonVersionsEvidence =

@@ -210,7 +210,12 @@ function processGroupExists(processGroupId: number): boolean {
     process.kill(-processGroupId, 0)
     return true
   } catch (error) {
-    return (error as NodeJS.ErrnoException).code !== 'ESRCH'
+    return !(
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === 'ESRCH'
+    )
   }
 }
 

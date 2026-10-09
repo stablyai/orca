@@ -330,7 +330,7 @@ describe('per-job path classification', () => {
       'config/scripts/build-mobile-web-app-bundle.mjs',
       'config/scripts/run-mobile-web-app-checks.mjs',
       'config/scripts/script-child-process.mjs',
-      'src/shared/child-process/run-process.ts',
+      'src/packages/process-host/src/run-process.ts',
       'config/scripts/mobile-web-app-route-manifest.mjs',
       'mobile/web-entry/index.tsx',
       'mobile/app/h/[hostId]/index.tsx',

@@ -12,7 +12,7 @@ import type {
 import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../shared/runtime-types'
 import { readRuntimeMetadata } from '../runtime/runtime-metadata'
-import { spawnProcess, type SpawnedProcess } from '../../shared/child-process/run-process'
+import { spawnProcess, type SpawnedProcess } from '@orca/process-host'
 import { sendOrcadSidecarRequest } from './orcad-sidecar-runtime-client'
 import {
   ElectronSidecarTabRegistry,

@@ -2,7 +2,7 @@
 import { createServer, type Server } from 'node:net'
 import { Duplex } from 'node:stream'
 import type { ClientChannel } from 'ssh2'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 
 export function spawnLocalBridgeChannel(
   program: string,

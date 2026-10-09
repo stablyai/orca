@@ -1,7 +1,7 @@
 import { ChildProcess } from 'node:child_process'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ProcessSpec, SpawnedProcess } from '../../shared/child-process/run-process'
+import type { ProcessSpec, SpawnedProcess } from '@orca/process-host'
 import { startDaemonScopeDeathWatch } from './daemon-scope-death-watch'
 
 const spawnProcess = vi.fn<(spec: ProcessSpec) => SpawnedProcess>()

@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { runProcessSync, type ProcessResult } from '../shared/child-process/run-process'
+import { runProcessSync, type ProcessResult } from '@orca/process-host'
 import { writeFileAtomically } from './codex-accounts/fs-utils'
 
 /**

@@ -104,7 +104,7 @@ async function runCheckoutProcess(
   deadline: number
 ): Promise<void> {
   // Kept lazy so plain Node 24 contention children never load Vite's TS graph.
-  const { runProcess } = await import('../../../src/shared/child-process/run-process')
+  const { runProcess } = await import('@orca/process-host')
   const result = await runProcess({
     program,
     args,

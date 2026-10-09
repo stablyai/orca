@@ -1,12 +1,12 @@
 import type { SpawnOptions as ClaudeAgentSdkSpawnOptions } from '@anthropic-ai/claude-agent-sdk'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import {
   spawnManagedProviderProcess,
   type ManagedProviderProcess
 } from '../provider-process/managed-provider-process'
 import { claudeChildClosePolicy, claudeChildCloseProven } from './claude-child-exit-proof-ladder'
 
-/** Derived rather than imported: only src/shared/child-process may name node:child_process. */
+/** Derived rather than imported: only @orca/process-host may name node:child_process. */
 type ClaudeCodeChild = ReturnType<typeof spawnProcess>
 
 export type ClaudeCodeProcessSpawn = {

@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer'
-import { GrowingByteBuffer } from '../growing-byte-buffer'
+import { GrowingByteBuffer } from './growing-byte-buffer'
 
 /**
  * Collects output up to a cap, so a chatty child cannot grow the heap.
