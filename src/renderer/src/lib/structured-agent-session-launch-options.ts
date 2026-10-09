@@ -142,6 +142,17 @@ function settleHeldOption(
     replies.delete(id)
   }
   notifyStructuredLaunchListeners()
+  state.callers.onSettled()
+}
+
+/** Selections included in the durable create are already the host's option intent. */
+export function settleStructuredLaunchCreateOptions(
+  state: StructuredLaunchState,
+  options: Readonly<Record<string, string>>
+): void {
+  for (const [id, encoded] of Object.entries(options)) {
+    settleHeldOption(state, id, encoded, { kind: 'accepted', options })
+  }
 }
 
 /**

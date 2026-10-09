@@ -4,7 +4,7 @@
 // this routes such panes through the same exit teardown an observed exit runs.
 // See design-docs/terminal-dead-pane-on-bg-exit.md.
 
-const REMOTE_PTY_ID_PREFIX = 'remote:'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 
 /**
  * A pane binding that exposes its bound transport identity plus a reconcile
@@ -42,7 +42,7 @@ export function shouldReconcileDeadSession(args: {
   if (ptyId === null || ptyId === undefined) {
     return false
   }
-  if (ptyId.startsWith(REMOTE_PTY_ID_PREFIX)) {
+  if (isRemoteRuntimePtyId(ptyId)) {
     return false
   }
   // Why: only local/daemon-backed ids (connectionId null/undefined) are

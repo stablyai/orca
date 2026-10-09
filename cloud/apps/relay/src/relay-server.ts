@@ -17,6 +17,7 @@ import { WebSocketServer } from 'ws'
 import type WebSocket from 'ws'
 import type { RawData } from 'ws'
 import { createRelayApp } from './app.js'
+import type { CellFlags } from './cell-flags.js'
 import { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayConfig } from './config.js'
 import { RelayCredentialStore } from './credential-store.js'
@@ -30,6 +31,8 @@ import { observeRelayDatabase } from './observed-relay-database.js'
 import { RelayObservability } from './relay-observability.js'
 import { combineRegionalRehomeSafety } from './regional-rehome-safety.js'
 import { RelayConnectionLedger, type RelayConnectionUpgrade } from './relay-connection-ledger.js'
+import { PlacementLoadBand } from './placement-load-band.js'
+import type { AppliedControlFlags } from './relay-control-flag-channel.js'
 import { createRelayReadiness } from './relay-readiness.js'
 import { createRelayTokenVerifier, readBearer } from './relay-token-verifier.js'
 import { closeRelayWebSocket } from './relay-websocket-close.js'
@@ -110,6 +113,7 @@ export function createRelayServer(
     random?: () => number
     connectionLedgerLimits?: { hardCap: number; controlReserve: number }
     cellIncarnation?: string
+    cellFlags?: () => AppliedControlFlags<CellFlags>
   } = {}
 ) {
   const cellIncarnation = options.cellIncarnation ?? randomUUID()
@@ -129,6 +133,7 @@ export function createRelayServer(
   const store = new RelayCredentialStore(observedDatabase, options.now)
   const assignments = new RelayAssignmentStore(observedDatabase, options.now, {
     requireLiveCells: config.role === 'director',
+    placementLoadBand: config.role === 'director' ? new PlacementLoadBand(options.random) : undefined,
     regionalRehomeCohortPercent: config.regionCorrectionCohortPercent ?? 0,
     // The director runs in the database's region; only its rehome readers use this.
     regionalRehomeDirectorRegion:
@@ -175,6 +180,8 @@ export function createRelayServer(
     },
     regionalRehomeTrustProbeHostExists: (input) => sessions.get(input) !== null,
     cellIncarnation,
+    cellSeatFeed: (sinceSeq) => sessions.seatFeed(sinceSeq),
+    cellFlags: options.cellFlags,
     isDraining: () => sessions.isDraining(),
     runtimeCounts: () => runtimeCounts(),
     regionalRehomeSafetySnapshot: () => ({

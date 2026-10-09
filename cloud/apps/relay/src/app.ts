@@ -37,6 +37,10 @@ import {
 } from './assignment-store.js'
 import { AssignmentRejectionLogWindow } from './assignment-rejection-log-window.js'
 import { CELL_ADMISSION_STATES } from './cell-admission-selector.js'
+import { registerCellSeatFeedRoute } from './cell-seat-feed-route.js'
+import type { CellSeatFeedPage } from './cell-seat-log.js'
+import type { CellFlags } from './cell-flags.js'
+import type { AppliedControlFlags } from './relay-control-flag-channel.js'
 import { RELAY_MAX_CELL_CAPACITY_REQUESTS, type RelayConfig } from './config.js'
 import type { RelayCredentialStore } from './credential-store.js'
 import { isRelayDatabaseTransientError } from './database.js'
@@ -112,6 +116,8 @@ export function createRelayApp(
     regionalRehomeFetch?: typeof fetch
     regionalRehomeTrustProbeHostExists?: (input: { userId: string; relayHostId: string }) => boolean
     cellIncarnation?: string
+    cellSeatFeed?: (sinceSeq: number | null) => CellSeatFeedPage
+    cellFlags?: () => AppliedControlFlags<CellFlags>
     isDraining?: () => boolean
     regionalRehomeSafetySnapshot?: () => RegionalRehomeSafetySnapshot
     runtimeCounts?: () => RelayRuntimeCounts
@@ -268,7 +274,9 @@ export function createRelayApp(
   app.use('/v1/admin/*', async (context, next) => {
     if (
       context.req.path === '/v1/admin/cell-heartbeat' ||
-      context.req.path === '/v1/admin/cell-rehome-status'
+      context.req.path === '/v1/admin/cell-rehome-status' ||
+      // Its own route checks the rehome identity; an admin check first would verify each poll twice.
+      context.req.path === '/v1/admin/cell-seats'
     ) {
       return await next()
     }
@@ -278,6 +286,15 @@ export function createRelayApp(
       return context.json({ error: 'invalid_token' }, 401)
     }
     return await next()
+  })
+
+  registerCellSeatFeedRoute(app, config, {
+    verifyRegionalRehomeToken,
+    cellIncarnation: operations.cellIncarnation,
+    seatFeed: operations.cellSeatFeed,
+    isDraining: operations.isDraining,
+    runtimeCounts: operations.runtimeCounts,
+    cellFlags: operations.cellFlags
   })
 
   // Not /healthz: Google Front End reserves that path before the container.
@@ -717,6 +734,8 @@ export function createRelayApp(
       imageDigest: config.imageDigest ?? null,
       draining: operations.isDraining?.() ?? false,
       regionalRehomeProtocol: config.rehomeAudience && config.rehomeDirectorServiceAccount ? 3 : 0,
+      // The flag workflow's read-back: applied switches, never the desired object.
+      ...(operations.cellFlags ? { flagsApplied: operations.cellFlags() } : {}),
       connectionCapacity:
         config.connectionHardCap === undefined
           ? null

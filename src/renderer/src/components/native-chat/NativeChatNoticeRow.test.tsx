@@ -18,6 +18,17 @@ afterEach(async () => {
   await i18n.changeLanguage('en')
 })
 
+it('keeps a skipped compaction warning truthful instead of showing the success separator', () => {
+  renderStatus({
+    kind: 'status',
+    tone: 'warning',
+    text: 'Nothing to compact (session too small)',
+    presentation: 'compaction-skipped'
+  })
+  expect(screen.getByText('Nothing to compact (session too small)')).toBeInTheDocument()
+  expect(screen.queryByText('Context compacted')).toBeNull()
+})
+
 function orcaStopView(
   hostLabel: string | null,
   continueAvailable: boolean

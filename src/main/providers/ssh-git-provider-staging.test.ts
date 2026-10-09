@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from 'vitest'
 import { SshGitProvider } from './ssh-git-provider'
 import { createMockMux, type MockMultiplexer } from './ssh-git-provider-test-harness'
+import { GIT_STAGE_WORKTREE_SCOPE_UNSUPPORTED_MESSAGE } from '../../shared/git-stage-worktree-scope'
 
 describe('SshGitProvider', () => {
   let mux: MockMultiplexer
@@ -46,6 +47,28 @@ describe('SshGitProvider', () => {
       worktreePath: '/home/user/repo',
       filePaths: ['a.ts', 'b.ts']
     })
+  })
+
+  it('bulkStageFiles forwards a whole-worktree scope and accepts the relay receipt', async () => {
+    mux.request.mockResolvedValue({ stagedScope: 'all' })
+    await provider.bulkStageFiles('/home/user/repo', [], 'all')
+    expect(mux.request).toHaveBeenCalledWith('git.bulkStage', {
+      worktreePath: '/home/user/repo',
+      filePaths: [],
+      scope: 'all'
+    })
+  })
+
+  it('bulkStageFiles rejects a scoped stage an older relay answered without a receipt', async () => {
+    // An older relay strips `scope`, stages the empty path list, and replies with nothing.
+    mux.request.mockResolvedValue(undefined)
+    await expect(provider.bulkStageFiles('/home/user/repo', [], 'all')).rejects.toThrow(
+      GIT_STAGE_WORKTREE_SCOPE_UNSUPPORTED_MESSAGE
+    )
+    mux.request.mockResolvedValue({ stagedScope: 'tracked' })
+    await expect(provider.bulkStageFiles('/home/user/repo', [], 'all')).rejects.toThrow(
+      GIT_STAGE_WORKTREE_SCOPE_UNSUPPORTED_MESSAGE
+    )
   })
 
   it('bulkUnstageFiles sends git.bulkUnstage request', async () => {

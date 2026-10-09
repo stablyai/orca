@@ -19,13 +19,11 @@ import {
   addStructuredLaunchCaller,
   createStructuredLaunchCallerGroup,
   releaseStructuredLaunchCallerAfterUnknownOutcome,
-  structuredLaunchCallersHavePendingWork,
   type StructuredAgentLaunchOptions,
   type StructuredLaunchCaller
 } from '@/lib/structured-agent-session-launch-callers'
 import * as launchDraft from './structured-agent-session-launch-draft'
 import {
-  deleteStructuredLaunchStateIfCurrent,
   getStructuredAgentSessionLaunchLifecycle,
   getStructuredLaunchStateBySessionId,
   markStructuredAgentSessionLaunchCancelled,
@@ -36,8 +34,18 @@ import {
 } from './structured-agent-session-launch-registry'
 import { restorePersistedStructuredLaunchState } from './structured-agent-session-launch-reload'
 import { getJoinableStructuredLaunchState } from './structured-agent-session-launch-holders'
-import { applyStructuredLaunchHeldOptions } from './structured-agent-session-launch-options'
-import { trackLaunchSettlement } from './structured-agent-session-launch-outcome-tracking'
+import {
+  prepareStructuredLaunchCreateMessage,
+  publishStructuredLaunchCreateOptions
+} from './structured-agent-session-launch-create-message'
+import {
+  maybeCleanupLaunchState,
+  trackLaunchSettlement
+} from './structured-agent-session-launch-outcome-tracking'
+import {
+  trackStructuredLaunchPromptOutcome,
+  trackStructuredLaunchConfirmationDeadline
+} from './structured-agent-session-launch-prompt-outcome'
 import { repeatedStructuredLaunchAttempt } from './structured-agent-session-launch-request'
 
 export type { StructuredAgentLaunchOptions, StructuredAgentLaunchReceipt }
@@ -87,25 +95,13 @@ function joinLaunchDelivery(
   return mode ? { ...rest, promptDelivery: mode } : rest
 }
 
-function cleanupLaunchState(state: StructuredLaunchState): void {
-  if (deleteStructuredLaunchStateIfCurrent(state)) {
-    notifyStructuredLaunchListeners()
-  }
-}
-
-function maybeCleanupLaunchState(state: StructuredLaunchState): void {
-  if (state.callers.outcome === 'failed' || structuredLaunchCallersHavePendingWork(state.callers)) {
-    return
-  }
-  cleanupLaunchState(state)
-}
-
 /** Every sender waits on the launch promise, so picks held during launch reach the host first. */
 function publishWithHeldOptions(
   state: StructuredLaunchState,
   created: Promise<StructuredAgentLaunchReceipt>
 ): Promise<StructuredAgentLaunchReceipt> {
-  return created.then((receipt) => applyStructuredLaunchHeldOptions(state, receipt))
+  state.intent.prepareCreate = () => prepareStructuredLaunchCreateMessage(state)
+  return created.then((receipt) => publishStructuredLaunchCreateOptions(state, receipt))
 }
 
 /** Each attempt's probe names the seed the paired server's create will use; the picker shows it. */
@@ -116,8 +112,11 @@ function adoptPairedHostSeed(
   if (JSON.stringify(seedOptions) === JSON.stringify(state.intent.seedOptions)) {
     return
   }
-  const { seedOptions: _previous, ...intent } = state.intent
-  state.intent = seedOptions ? { ...intent, seedOptions } : intent
+  if (seedOptions) {
+    state.intent.seedOptions = seedOptions
+  } else {
+    delete state.intent.seedOptions
+  }
   state.selection = { ...state.selection, seed: seedOptions }
   notifyStructuredLaunchListeners()
 }
@@ -144,6 +143,7 @@ function restartStructuredLaunchState(state: StructuredLaunchState): void {
     wasVisibilityUnknown ? reconcileUnknownLaunch(state) : launchAndReconcile(state)
   )
   trackLaunchSettlement(state, state.promise)
+  trackStructuredLaunchConfirmationDeadline(state, state.promise)
   notifyStructuredLaunchListeners()
 }
 
@@ -174,16 +174,15 @@ function joinStructuredLaunchState(
   // A re-delivery waits on the text its action staged, if any, and never stages its own.
   const { prompt: _retryPrompt, ...joinedWithoutPrompt } = joined
   const callerOptions = retrying || (repeat && !repeat.stagedPrompt) ? joinedWithoutPrompt : joined
-  return {
-    state: existing,
-    caller: addStructuredLaunchCaller({
-      group: existing.callers,
-      launchResult: existing.promise,
-      target: existing.intent.target,
-      options: callerOptions,
-      stagedPrompt
-    })
-  }
+  const caller = addStructuredLaunchCaller({
+    group: existing.callers,
+    launchResult: existing.promise,
+    target: existing.intent.target,
+    options: callerOptions,
+    stagedPrompt
+  })
+  trackStructuredLaunchPromptOutcome(existing, caller)
+  return { state: existing, caller }
 }
 
 function structuredAgentLaunchState(
@@ -236,6 +235,7 @@ function structuredAgentLaunchState(
     options,
     stagedPrompt
   })
+  trackStructuredLaunchPromptOutcome(state, caller)
   setStructuredLaunchState(state)
   notifyStructuredLaunchListeners()
   trackLaunchSettlement(state, state.promise)

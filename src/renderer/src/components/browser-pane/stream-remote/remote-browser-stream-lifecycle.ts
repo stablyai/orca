@@ -108,9 +108,7 @@ export class RemoteBrowserStreamLifecycle {
           deps.closeMissingRemotePage(tokens.remotePage)
           return
         }
-        // Why classified here too: the same condition (a host that cannot stream) reaches both this
-        // path and the restart path, and it must not read as "unreachable" here and as its own
-        // specific message there.
+        // Why classified: a host that cannot stream must read the same here as on the restart path.
         const failure = resolveRemoteBrowserStreamFailure(error, 'opening')
         if (failure.logRawError) {
           console.warn('[browser-pane] remote browser failed to open:', error)
@@ -177,9 +175,7 @@ export class RemoteBrowserStreamLifecycle {
         if (this.restartScheduler.isScheduled) {
           return
         }
-        // Why classified rather than forwarded: this was the one failure path still putting raw
-        // transport text in the UI ("Runtime environment pairing changed; refresh and try again"),
-        // which is written for logs and names our internals. The other two paths already classify.
+        // Why classified: raw transport text (e.g. "pairing changed") is for logs, not the pane.
         const failure = resolveRemoteBrowserStreamFailure(error)
         if (failure.logRawError) {
           console.warn('[browser-pane] remote stream resize failed:', error)
@@ -294,19 +290,11 @@ export class RemoteBrowserStreamLifecycle {
             this.setStatus(remoteBrowserStreamStopped(message))
             this.handleStreamClosed(token, false)
           },
-          // Why 'stopped' and not 'retrying': a transport error is NOT guaranteed to be followed by
-          // a close. The web client's notifySubscriptionsError clears its subscription map and then
-          // delivers onError only, so on that path no close ever arrives — and 'retrying' would
-          // leave the pane busy forever with no way back, worse than the bug this PR fixes. When a
-          // close does follow (the usual case) it publishes 'retrying', which replaces this within
-          // the same tick. Landing in the actionable state and being corrected is safe; the reverse
-          // is not.
-          // Why the deadline is cancelled here: this is the one stream-ending path that keeps its
-          // token, so the 'never said ready' deadline stays armed and its guard still passes. It
-          // would then fire against a stream already declared stopped and republish 'retrying' —
-          // withdrawing the reconnect control 30s after handing it over, with no user action, and
-          // reopening the strand this whole feature exists to remove. Not clear(): a close that
-          // does follow must still refill the budget for a stream that had been healthy.
+          // Why 'stopped': notifySubscriptionsError delivers onError without a close, so 'retrying'
+          // would leave the pane busy forever; a following close replaces this with 'retrying'.
+          // Why cancel the deadline: this path keeps its token, so the armed ready-deadline would
+          // later republish 'retrying' over the reconnect control. Not clear(): a following close
+          // must still refill the budget for a stream that had been healthy.
           onTransportError: () => {
             this.liveness.stopWaitingForReady()
             this.setStatus(remoteBrowserStreamStopped(remoteBrowserStreamLostNotice()))

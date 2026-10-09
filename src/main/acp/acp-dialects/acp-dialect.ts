@@ -7,7 +7,8 @@ import type {
 } from '../../../shared/native-chat-types'
 import type { ProviderTimelineRequestBody } from '../../native-chat/agent-session-timeline/provider-timeline-event'
 import type { AcpAgentError } from '../acp-errors'
-import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
+import type { AgentSessionOptionChoice } from '../../../shared/agent-session-wire'
+import type { ModelInfo, ToolCallUpdate } from '../generated/acp-protocol.generated'
 
 export type AcpRequestPresentation = {
   body: ProviderTimelineRequestBody
@@ -58,6 +59,9 @@ export type AcpDialectNotification =
       subagents?: AcpSubagentUpdate[]
     }
 
+/** How a `/compact` the agent ended normally went, read from its reply; absent compacted. */
+export type AcpCompactionReply = { outcome: 'skipped' | 'failed'; detail: string }
+
 /** Hooks interpret extensions; lifecycle and row identity stay shared. */
 export type AcpDialect = {
   subagentStop?: {
@@ -80,6 +84,8 @@ export type AcpDialect = {
   subagentSessionEnd?(method: string, params: unknown): 'completed' | 'stopped' | undefined
   notification?(method: string, params: unknown, at: number): AcpDialectNotification | undefined
   contextWindow?(models: unknown): number | undefined
+  /** A model's own effort menu and default, as the agent advertises them per model. */
+  modelEfforts?(model: ModelInfo): { efforts: AgentSessionOptionChoice[]; defaultEffort?: string }
   request?(method: string, params: unknown): AcpRequestPresentation | undefined
   /** Requests answered at once instead of shown to the person. */
   settleRequest?(method: string, params: unknown): AcpRequestSettlement | undefined
@@ -88,6 +94,8 @@ export type AcpDialect = {
   authenticationRequired?(error: AcpAgentError): boolean
   /** The row for a failed turn the provider gave no words for. */
   failedTurnText?(stopReason: string): string
+  /** An agent that ends a `/compact` it did not do as a normal turn says so in its reply. */
+  compactionReply?(text: string): AcpCompactionReply | undefined
 }
 
 export const GENERIC_ACP_DIALECT: AcpDialect = {}

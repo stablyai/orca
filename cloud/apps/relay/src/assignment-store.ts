@@ -1,5 +1,6 @@
 import { createDrainMigrationRowLookup } from './drain-migration-row-lookup.js'
 import { HeapWindowReaper } from './heap-window-reaper.js'
+import { PlacementLoadBand } from './placement-load-band.js'
 import {
   selectIdleRegionalRehomes,
   type IdleRegionalRehomeCandidate,
@@ -72,6 +73,7 @@ import {
 import type { RelayCellConfig } from './config.js'
 import type { CellLockHoldSite } from './cell-inventory-hold-samples.js'
 import { isPostgresPoolConnectFailure } from './postgres-pool-pressure.js'
+import { isPostgresReadTimeout } from './relay-database-rejection-fence.js'
 import type {
   RelayDatabase,
   RelayLockOptions,
@@ -130,6 +132,8 @@ type RelayAssignmentStoreOptions = {
   regionalRehomeDirectorRegion?: RelayRegion
   requireLiveCells?: boolean
   heartbeatTtlMs?: number
+  // Absent keeps the strict least-loaded pick (tests that assert exact cells).
+  placementLoadBand?: PlacementLoadBand
   recordControlRenewal?: (durationMs: number, outcome: ControlRenewalOutcome) => void
 }
 
@@ -565,6 +569,7 @@ export class RelayAssignmentStore {
     { failures: number; until: number }
   >()
   private readonly recordControlRenewal?: RelayAssignmentStoreOptions['recordControlRenewal']
+  private readonly placementLoadBand?: PlacementLoadBand
   private readonly admissionSelector: RelayCellAdmissionSelector
   private readonly migrationCellRegistrar: RelayMigrationCellRegistrar
   private readonly activityQueue = new AssignmentIdentityQueue()
@@ -591,6 +596,7 @@ export class RelayAssignmentStore {
     this.requireLiveCells = options.requireLiveCells ?? false
     this.heartbeatTtlMs = options.heartbeatTtlMs ?? 45_000
     this.recordControlRenewal = options.recordControlRenewal
+    this.placementLoadBand = options.placementLoadBand
     this.admissionSelector = new RelayCellAdmissionSelector(database, now)
     this.migrationCellRegistrar = new RelayMigrationCellRegistrar(database, now)
   }
@@ -4091,9 +4097,11 @@ export class RelayAssignmentStore {
           message: String((error as { message?: unknown }).message)
         })
       )
-      // No connection at all: per-host statements would only queue up behind the
-      // same saturated pool, multiplying the load that starved this flush.
-      if (isPostgresPoolConnectFailure(error)) return outcomes.fill('database_error')
+      // No connection at all, or a lost reply: per-host statements would only queue up
+      // behind the same saturated pool or stalled server, multiplying the load.
+      if (isPostgresPoolConnectFailure(error) || isPostgresReadTimeout(error)) {
+        return outcomes.fill('database_error')
+      }
       await Promise.all(
         ordered.map(async (row) => {
           try {
@@ -7796,25 +7804,25 @@ export class RelayAssignmentStore {
         connectionHeadroom.get(cellId) !== false
       )
     })
-    candidates.sort((left, right) => {
-      const leftLoad =
-        integer(left, 'reserved_requests') +
-        (runtimeLoad?.get(text(left, 'cell_id')) ?? integer(left, 'observed_requests'))
-      const rightLoad =
-        integer(right, 'reserved_requests') +
-        (runtimeLoad?.get(text(right, 'cell_id')) ?? integer(right, 'observed_requests'))
-      const loadDifference =
-        leftLoad / integer(left, 'capacity_requests') -
-        rightLoad / integer(right, 'capacity_requests')
-      return loadDifference || text(left, 'cell_id').localeCompare(text(right, 'cell_id'))
-    })
-    const preferred = candidates.filter(
-      (candidate) =>
-        (regions.get(text(candidate, 'cell_id')) ?? RELAY_DEFAULT_REGION) === preferredRegion
+    const loadRatio = (row: SqlRow) =>
+      (integer(row, 'reserved_requests') +
+        (runtimeLoad?.get(text(row, 'cell_id')) ?? integer(row, 'observed_requests'))) /
+      integer(row, 'capacity_requests')
+    const ranked = candidates
+      .map((row) => ({ row, cellId: text(row, 'cell_id'), loadRatio: loadRatio(row) }))
+      .sort(
+        (left, right) =>
+          left.loadRatio - right.loadRatio || left.cellId.localeCompare(right.cellId)
+      )
+    const preferred = ranked.filter(
+      (candidate) => (regions.get(candidate.cellId) ?? RELAY_DEFAULT_REGION) === preferredRegion
     )
-    const selected = regionMode === 'require' ? preferred[0] : (preferred[0] ?? candidates[0])
+    const pool = regionMode === 'require' || preferred.length > 0 ? preferred : ranked
+    const selected = this.placementLoadBand
+      ? this.placementLoadBand.pick(pool, this.now())
+      : pool[0]
     return selected
-      ? cell(selected, regions.get(text(selected, 'cell_id')) ?? RELAY_DEFAULT_REGION)
+      ? cell(selected.row, regions.get(selected.cellId) ?? RELAY_DEFAULT_REGION)
       : null
   }
 

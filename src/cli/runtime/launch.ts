@@ -23,6 +23,7 @@ import { RuntimeClientError } from './types'
 import { SERVE_RUNTIME_ELECTRON, SERVE_RUNTIME_ENV } from '../../shared/orcad-local-serve-selection'
 import {
   resolveLocalServeRuntime,
+  serveOptionArgs,
   serveWithOrcad,
   type ServeOrcaAppArgs
 } from './serve-orcad-launch'
@@ -151,28 +152,7 @@ function serveWithElectron(
     userDataPath
   )
   const childArgs = pinned.args
-  childArgs.push('--serve')
-  if (args.json) {
-    childArgs.push('--serve-json')
-  }
-  if (args.port) {
-    childArgs.push('--serve-port', args.port)
-  }
-  if (args.pairingAddress) {
-    childArgs.push('--serve-pairing-address', args.pairingAddress)
-  }
-  if (args.noPairing) {
-    childArgs.push('--serve-no-pairing')
-  }
-  if (args.mobilePairing) {
-    childArgs.push('--serve-mobile-pairing')
-  }
-  if (args.grantDesktopControl) {
-    childArgs.push('--serve-grant-desktop-control')
-  }
-  if (args.recipeJson && args.projectRoot) {
-    childArgs.push('--serve-recipe-json', '--serve-project-root', args.projectRoot)
-  }
+  childArgs.push('--serve', ...serveOptionArgs(args, '--serve-'))
 
   const handoffPath =
     args.recipeJson !== true && getMacAppBundlePath(executable)

@@ -23,6 +23,7 @@ vi.mock('@/lib/structured-agent-session-launch-options', () => ({
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
+import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
 
 // The host's sign-in verdict as a chat holds it: kept until the next answer replaces it, read
 // again on window focus only while it is said, and cleared by a failed read.
@@ -31,7 +32,11 @@ const LOCAL_TARGET = { kind: 'local' } as const
 const SIGNED_OUT = { reason: 'notSignedIn', account: 'system' } as const
 const HOST_CATALOG = {
   origin: 'probe',
-  models: [{ id: 'gpt-hosted', label: 'GPT Hosted', isDefault: true, efforts: [] }],
+  models: [
+    { id: 'gpt-hosted', label: 'GPT Hosted', isDefault: true, efforts: [] },
+    // The launch seed's model: a saved pick no host list names shows only the placeholder.
+    { id: 'gpt-5.5', label: 'GPT-5.5', efforts: [] }
+  ],
   fetchedAt: 1_000
 }
 
@@ -97,6 +102,14 @@ function modelChoices(snapshot: readonly SessionOptionDescriptor[]): string[] {
   return descriptor.kind.type === 'select' ? descriptor.kind.choices.map((c) => c.value) : []
 }
 
+/** The model pill is open for a pick: settable, not disabled, and offering `choice`. */
+function expectPickerUsable(snapshot: readonly SessionOptionDescriptor[], choice: string): void {
+  const model = snapshot.find((entry) => entry.id === 'model')
+  expect(model?.settable).toBe(true)
+  expect(model?.disabledReason).toBeUndefined()
+  expect(modelChoices(snapshot)).toContain(choice)
+}
+
 const focusWindow = (): Promise<void> =>
   act(async () => {
     window.dispatchEvent(new Event('focus'))
@@ -105,6 +118,7 @@ const focusWindow = (): Promise<void> =>
 describe("a chat's sign-in verdict", () => {
   beforeEach(() => {
     mocks.call.mockReset()
+    resetHostModelCatalogSnapshotsForTests()
     sessionCount += 1
     sessionId = `verdict-session-${sessionCount}`
   })
@@ -199,8 +213,7 @@ describe("a chat's sign-in verdict", () => {
     expect(reads.count()).toBe(2)
     expect(reads.params(1)).toEqual({ agent: 'codex', sessionId, waitForListing: true })
     // The catalog in hand is shown; only the notice waits on the answer.
-    const model = result.current.optionSnapshot.find((entry) => entry.id === 'model')!
-    expect(model.choicesPending).toBeUndefined()
+    expectPickerUsable(result.current.optionSnapshot, 'gpt-hosted')
     expect(result.current.unavailable).toBeNull()
     await reads.answer(1, HOST_CATALOG)
     expect(result.current.unavailable).toBeNull()
@@ -215,7 +228,7 @@ describe("a chat's sign-in verdict", () => {
     expect(result.current.unavailable).toEqual(SIGNED_OUT)
   })
 
-  it('keeps a shown reason, and the picker settled, while the host re-checks it', async () => {
+  it('keeps a shown reason, and the picker usable, while the host re-checks it', async () => {
     const reads = catalogReads()
     const { result } = renderOptions()
     await reads.answer(0, { origin: 'unknown', unavailable: SIGNED_OUT })
@@ -223,8 +236,7 @@ describe("a chat's sign-in verdict", () => {
     await reads.answer(1, { origin: 'unknown', unavailable: SIGNED_OUT, listingInProgress: true })
     expect(result.current.unavailable).toEqual(SIGNED_OUT)
     expect(reads.params(2)).toEqual({ agent: 'codex', sessionId, waitForListing: true })
-    const model = result.current.optionSnapshot.find((entry) => entry.id === 'model')!
-    expect(model.choicesPending).toBeUndefined()
+    expectPickerUsable(result.current.optionSnapshot, 'gpt-5.5')
     await reads.answer(2, { origin: 'unknown' })
     expect(result.current.unavailable).toBeNull()
   })

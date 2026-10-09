@@ -326,6 +326,8 @@ export type AgentSessionMutationResult<TValue> =
 // ─── Per-method payloads ────────────────────────────────────────────────────
 
 export type AgentSessionAttachResult = {
+  /** Create's committed opening message, even when its row is outside the returned history page. */
+  firstMessage?: AgentJournalSubmission
   sessionId: string
   fence: number
   page: AgentSessionHistoryPage
@@ -427,6 +429,12 @@ export type AgentSessionModelCatalogResult = {
       models: AgentSessionModelOption[]
       fastModeSupport?: AgentSessionFastModeSupport
       fetchedAt: number
+      /** The listed default is the model a new chat here launches with: the agent's listing names
+       *  its configured model and no workspace config can replace it. Absent from an older host. */
+      listingNamesConfiguredModel?: boolean
+      /** The named default holds in every workspace: the agent reads no project config for its
+       *  model, so an answer naming no workspace serves any new chat. Absent from an older host. */
+      defaultHoldsInEveryWorkspace?: true
     }
 )
 

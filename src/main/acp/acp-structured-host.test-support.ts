@@ -38,6 +38,7 @@ import {
 } from './acp-structured-agent-definitions'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
+import type { AgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
 import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-ownership'
 
 export const hello: AgentJournalMessageItem = {
@@ -84,6 +85,7 @@ export async function openHostRig(
     script?: (agent: AcpScriptedAgent) => void
     initialize?: Record<string, unknown>
     deps?: Partial<AcpStructuredSessionAdapterDeps>
+    modelCatalog?: AgentModelCatalogService
     statusSink?: StructuredAgentSessionStatusSink
   } = {}
 ) {
@@ -118,7 +120,8 @@ export async function openHostRig(
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     now: () => HOST_TEST_NOW,
-    statusSink: options.statusSink
+    statusSink: options.statusSink,
+    ...(options.modelCatalog ? { modelCatalog: options.modelCatalog } : {})
   })
   hosted.host = host
   replaceHostTestState({ store, host })
@@ -185,12 +188,14 @@ export const framesOf = (child: FakeAcpChild, method: string) =>
 /** A new Grok chat the host attached; Grok loads its session on a later start, counting each. */
 export async function openAttachedHostRig(
   deps: Partial<AcpStructuredSessionAdapterDeps> = {},
-  statusSink?: StructuredAgentSessionStatusSink
+  statusSink?: StructuredAgentSessionStatusSink,
+  modelCatalog?: AgentModelCatalogService
 ) {
   const count = { loads: 0 }
   let resumed = false
   const rig = await openHostRig({
     statusSink,
+    ...(modelCatalog ? { modelCatalog } : {}),
     initialize: RESUMES,
     script: (agent) =>
       agent.on('session/load', (frame) => {
