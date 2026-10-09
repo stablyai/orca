@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createServer, type ServerResponse } from 'node:http'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -50,15 +50,13 @@ vi.mock('./claude-pty', () => ({
   })
 }))
 vi.mock('../claude-accounts/keychain', () => ({
-  readActiveClaudeKeychainCredentials: vi.fn(async () => null),
-  readActiveClaudeKeychainCredentialsStrict: vi.fn(async () => null),
-  readManagedClaudeKeychainCredentials: vi.fn(async (id: string) => {
+  readActiveClaudeKeychainCredentialsStrict: vi.fn(async (configDir: string) => {
     const { readFile } = await import('node:fs/promises')
     const { join } = await import('node:path')
-    return readFile(
-      join(fixture.userData, 'claude-accounts', id, 'auth', '.credentials.json'),
-      'utf8'
-    )
+    if (!configDir.startsWith(fixture.userData)) {
+      throw new Error('Usage fixture must read its own account folder')
+    }
+    return readFile(join(configDir, '.credentials.json'), 'utf8')
   })
 }))
 vi.mock('./grok-auth', () => ({ readGrokAuthSession: () => ({ status: 'missing' }) }))
@@ -159,29 +157,21 @@ vi.mock('./antigravity-usage-fetcher', () => ({
 }))
 
 import { RateLimitService } from './service'
+import { ClaudeProfileRouter } from '../claude-accounts/claude-profile-router'
+import { installClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
 
 let activeId = 'A'
 let inactiveIds = ['A', 'B']
 let service: RateLimitService
 let restoreClock: () => void
+let router: ClaudeProfileRouter
 
 function account(id: string) {
-  return { id, managedAuthPath: join(fixture.userData, 'claude-accounts', id, 'auth') }
+  return { id }
 }
 
 function preparation(id: string) {
-  const configDir = join(fixture.userData, 'host-config')
-  writeFileSync(
-    join(configDir, '.credentials.json'),
-    readFileSync(join(account(id).managedAuthPath, '.credentials.json'))
-  )
-  return {
-    configDir,
-    runtime: 'host' as const,
-    envPatch: { CLAUDE_CONFIG_DIR: configDir },
-    stripAuthEnv: true,
-    provenance: `managed:${id}`
-  }
+  return router.accountUsagePreparation(id)
 }
 
 function reply(response: ServerResponse, status: number) {
@@ -241,9 +231,8 @@ beforeEach(async () => {
   activeId = 'A'
   inactiveIds = ['A', 'B']
   for (const id of inactiveIds) {
-    const path = account(id).managedAuthPath
+    const path = join(fixture.userData, 'claude-profiles', id, 'home')
     mkdirSync(path, { recursive: true })
-    writeFileSync(join(path, '.orca-managed-claude-auth'), `${id}\n`)
     writeFileSync(
       join(path, '.credentials.json'),
       JSON.stringify({
@@ -251,7 +240,22 @@ beforeEach(async () => {
       })
     )
   }
-  mkdirSync(join(fixture.userData, 'host-config'))
+  router = new ClaudeProfileRouter({
+    dataRoot: fixture.userData,
+    userHome: join(fixture.userData, 'user-home'),
+    env: { CLAUDE_CONFIG_DIR: join(fixture.userData, 'system-default') },
+    getSettings: () => ({
+      claudeManagedAccounts: [],
+      activeClaudeManagedAccountId: activeId,
+      activeClaudeManagedAccountIdsByRuntime: { host: activeId, wsl: {} },
+      agentStatusHooksEnabled: false,
+      disabledTuiAgents: []
+    }),
+    runSetup: async () => {
+      throw new Error('Usage fixture must not set up an account')
+    }
+  })
+  installClaudeProfileRouter(router)
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const address = server.address()
   if (!address || typeof address === 'string') {
@@ -267,6 +271,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   service.stop()
+  installClaudeProfileRouter(undefined)
   restoreClock()
   server.closeAllConnections()
   await new Promise<void>((resolve) => server.close(() => resolve()))
@@ -287,7 +292,7 @@ it('keeps A last-good usage, skips its one-hour server wait, and refreshes healt
     usageMetadata: {
       failureKind: 'rate-limited',
       retryAtMs: retryAt,
-      authProvenance: 'managed:A',
+      authProvenance: 'profile:A',
       credentialSource: process.platform === 'darwin' ? 'scoped-keychain' : 'credentials-file'
     }
   })
@@ -334,18 +339,26 @@ it('honors a deadline seeded from live active usage and preserves forced account
   expect(count('A')).toBe(4)
 })
 
-it.each([401, 503])('keeps existing inactive failure behavior for HTTP %s', async (status) => {
-  await service.fetchInactiveClaudeAccountsOnOpen()
-  const originalAt = cached('A')?.updatedAt
-  fixture.now += 61000
-  fixture.status = status
-  await service.fetchInactiveClaudeAccountsOnOpen()
-  expect(cached('A')).toMatchObject({ status: 'ok', updatedAt: originalAt })
-  expect(cached('A')?.usageMetadata?.retryAtMs).toBeUndefined()
-  fixture.now += 61000
-  await service.fetchInactiveClaudeAccountsOnOpen()
-  expect(count('A')).toBe(3)
-})
+it.each([401, 503])(
+  'preserves current profile failure metadata without a wait for HTTP %s',
+  async (status) => {
+    await service.fetchInactiveClaudeAccountsOnOpen()
+    const originalAt = cached('A')?.updatedAt
+    fixture.now += 61000
+    fixture.status = status
+    await service.fetchInactiveClaudeAccountsOnOpen()
+    expect(cached('A')).toMatchObject({
+      status: 'error',
+      updatedAt: originalAt,
+      session: { usedPercent: 21 },
+      usageMetadata: { failureKind: status === 401 ? 'stale-token' : 'server' }
+    })
+    expect(cached('A')?.usageMetadata?.retryAtMs).toBeUndefined()
+    fixture.now += 61000
+    await service.fetchInactiveClaudeAccountsOnOpen()
+    expect(count('A')).toBe(3)
+  }
+)
 
 it('does not invent a wait when a 429 has no Retry-After header', async () => {
   fixture.status = 429

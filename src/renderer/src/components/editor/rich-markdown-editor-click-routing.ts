@@ -2,7 +2,13 @@ import type { MutableRefObject } from 'react'
 import type { Editor } from '@tiptap/react'
 import type { EditorView } from '@tiptap/pm/view'
 import { toast } from 'sonner'
-import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import { httpLinkActionDestinationsFor, openRoutedHttpLink } from '@/lib/http-link-destinations'
+import { useAppStore } from '@/store'
+import {
+  canOpenWorkspaceBrowserTabOnRuntime,
+  canOpenWorkspaceBrowserTabOnSsh
+} from '@/lib/workspace-browser-tab-open'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import {
@@ -123,12 +129,13 @@ export function handleRichMarkdownEditorClick({
     return true
   }
   if (event.shiftKey) {
-    openMarkdownLinkInClientOs({
+    openShiftModifiedMarkdownLink({
       href,
       filePath,
       runtimeEnvironmentId,
       sourceOwner,
       settings,
+      worktreeId,
       worktreeRoot
     })
     return true
@@ -181,13 +188,14 @@ function getClickedLinkHref(view: EditorView, pos: number): string {
   return linkMark ? (linkMark.attrs.href as string) || '' : ''
 }
 
-function openMarkdownLinkInClientOs({
+function openShiftModifiedMarkdownLink({
   href,
   filePath,
   worktreeRoot,
   runtimeEnvironmentId,
   sourceOwner,
-  settings
+  settings,
+  worktreeId
 }: {
   href: string
   filePath: string
@@ -195,6 +203,7 @@ function openMarkdownLinkInClientOs({
   runtimeEnvironmentId?: string | null
   sourceOwner: HttpLinkSourceOwner
   settings: RichMarkdownRuntimeSettings
+  worktreeId: string
 }): void {
   if (sourceOwner.kind === 'unknown') {
     return
@@ -204,9 +213,22 @@ function openMarkdownLinkInClientOs({
     return
   }
   if (classified.kind === 'external') {
-    // Why: deliberate divergence from the preview — this path hands the link to the
-    // client OS unconditionally, so it does not follow the invert setting.
-    openHttpLink(classified.url, { forceSystemBrowser: true, sourceOwner })
+    const state = useAppStore.getState()
+    const canOpenOwnedBrowser =
+      sourceOwner.kind === 'runtime'
+        ? canOpenWorkspaceBrowserTabOnRuntime(state, worktreeId, sourceOwner.runtimeEnvironmentId)
+        : sourceOwner.kind === 'ssh' &&
+          canOpenWorkspaceBrowserTabOnSsh(state, worktreeId, sourceOwner.connectionId)
+    const destinations = httpLinkActionDestinationsFor(
+      state.settings,
+      sourceOwner,
+      canOpenOwnedBrowser
+    )
+    openRoutedHttpLink(classified.url, {
+      worktreeId,
+      sourceOwner,
+      forceDestination: destinations.alternate ?? destinations.primary
+    })
     return
   }
   if (classified.kind === 'anchor') {

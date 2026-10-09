@@ -33,9 +33,15 @@ function HostListScreen() {
   // native list this route already has.
   const route = shellScreenRoute({ pathname: `/h/${encodeURIComponent(hostId)}` })
   const decision = shellSwitchDecision(hostId === '' ? null : route)
+  // Wide: the native sidebar hosts the list, so this route's own screen is the empty detail pane.
+  const native = useResponsiveLayout().isWideLayout ? (
+    <WorkspaceDetailPlaceholder />
+  ) : (
+    <HostScreen />
+  )
 
   if (decision.kind === 'native') {
-    return <HostScreen />
+    return native
   }
   return (
     <MobileWebShellScreen
@@ -44,16 +50,10 @@ function HostListScreen() {
       key={hostId}
       hostId={hostId}
       route={decision.route}
-      fallback={<HostScreen />}
+      fallback={native}
     />
   )
 }
 
-// On wide layouts the sidebar hosts the list, so this route is just the empty detail pane.
-export default function HostWorktreeRoute() {
-  const { isWideLayout } = useResponsiveLayout()
-  if (isWideLayout) {
-    return <WorkspaceDetailPlaceholder />
-  }
-  return <HostListScreen />
-}
+// Wide: the session owns the whole host area when the page declares `canOwnHostArea`.
+export default HostListScreen

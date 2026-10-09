@@ -130,12 +130,3 @@ export class SessionSnapshotOperations {
 export function getSessionSnapshotOperationsContext(owner: SessionSnapshotOperations) {
   return owner[sessionSnapshotOperationsContext]
 }
-
-export function installSessionSnapshotOperationsContext(
-  target: SessionSnapshotOperations,
-  source: SessionSnapshotOperations
-): void {
-  Object.defineProperty(target, sessionSnapshotOperationsContext, {
-    value: source[sessionSnapshotOperationsContext]
-  })
-}

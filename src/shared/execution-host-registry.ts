@@ -2,7 +2,9 @@ import type { RuntimeEnvironmentStatus } from './runtime-host-status'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getLocalExecutionHostLabel,
+  getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId,
+  getSshTargetIdForExecutionHost,
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
@@ -278,7 +280,9 @@ export function buildExecutionHostRegistry(args: {
   }
   if (args.hostSource !== 'configured-only') {
     for (const repo of args.repos) {
-      const targetId = normalizeHostPart(repo.connectionId)
+      // Why the host, not `connectionId`: a paired-server repo's `connectionId` is the server's
+      // own SSH target, which this client cannot dial.
+      const targetId = getSshTargetIdForExecutionHost(getRepoExecutionHostId(repo))
       if (targetId && !isRuntimeOwnedSshTargetId(targetId)) {
         sshTargetIds.add(targetId)
       }

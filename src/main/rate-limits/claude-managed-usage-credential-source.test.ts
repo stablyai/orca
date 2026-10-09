@@ -1,77 +1,93 @@
-import { beforeEach, expect, it, vi } from 'vitest'
-import type { ClaudeManagedCredentialsLocation } from './claude-managed-account-credentials'
-import type { Mock } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import type * as ClaudeOAuthCredentials from './claude-oauth-credentials'
 
 type CredentialSourceFixture = {
-  location: ClaudeManagedCredentialsLocation
-  readCredentials: Mock
-  fetchUsage: Mock
+  source: ClaudeOAuthCredentials.ClaudeOAuthCredentialSource
+  readCredentials: ReturnType<typeof vi.fn>
+  fetchUsage: ReturnType<typeof vi.fn>
+  hostPreparation: ReturnType<typeof vi.fn>
+  wslPreparation: ReturnType<typeof vi.fn>
 }
 
 const fixture = vi.hoisted((): CredentialSourceFixture => ({
-  location: { kind: 'file', managedAuthPath: '/synthetic/auth' },
+  source: 'credentials-file',
   readCredentials: vi.fn(),
-  fetchUsage: vi.fn()
+  fetchUsage: vi.fn(),
+  hostPreparation: vi.fn(),
+  wslPreparation: vi.fn()
 }))
 
-vi.mock('./claude-managed-account-credentials', () => ({
-  resolveClaudeManagedCredentialsLocation: () => fixture.location,
-  readClaudeManagedCredentialsJson: fixture.readCredentials,
-  writeClaudeManagedCredentialsJson: vi.fn()
+vi.mock('./claude-oauth-credentials', async (importOriginal) => ({
+  ...(await importOriginal<typeof ClaudeOAuthCredentials>()),
+  readClaudeOAuthCredentials: fixture.readCredentials
 }))
-vi.mock('../claude-accounts/oauth-refresh', () => ({
-  isOauthTokenExpiring: () => false,
-  refreshClaudeOauthCredentials: vi.fn()
+vi.mock('../claude-accounts/claude-profile-installed-router', () => ({
+  getClaudeProfileRouter: () => ({ accountUsagePreparation: fixture.hostPreparation }),
+  getClaudeWslProfileRouter: () => ({ accountUsagePreparation: fixture.wslPreparation })
+}))
+vi.mock('../wsl-running-path-filter', () => ({
+  filterPathsToRunningWslDistrosAsync: async (paths: readonly string[]) => [...paths]
 }))
 vi.mock('./claude-oauth-usage-request', () => ({ fetchClaudeOAuthUsage: fixture.fetchUsage }))
-vi.mock('./claude-managed-usage-panel', () => ({
-  fetchClaudeManagedUsagePanelSupplement: vi.fn()
-}))
-vi.mock('./claude-pty', () => ({ fetchViaPty: vi.fn() }))
-vi.mock('electron', () => ({ app: { getPath: () => '/synthetic' } }))
 
 import { fetchInactiveClaudeAccountUsage } from './claude-managed-account-usage'
 import { OAuthUsageError } from './claude-oauth-usage-error'
 
+const configDir = join(tmpdir(), 'synthetic-claude-profile-A')
+const now = 1800000000000
+
 beforeEach(() => {
   vi.clearAllMocks()
-  fixture.readCredentials.mockResolvedValue(
-    JSON.stringify({ claudeAiOauth: { accessToken: 'synthetic-token', expiresAt: 1900000000000 } })
-  )
+  vi.spyOn(Date, 'now').mockReturnValue(now)
+  fixture.readCredentials.mockImplementation(async () => ({
+    token: 'synthetic-token',
+    hasRefreshableCredentials: false,
+    source: fixture.source
+  }))
   fixture.fetchUsage.mockRejectedValue(new OAuthUsageError('Synthetic wait', 429, true, 3600000))
 })
 
-it('identifies the managed scoped Keychain in a classified 429', async () => {
-  fixture.location = { kind: 'keychain', accountId: 'A', managedAuthPath: '/synthetic/auth' }
+afterEach(() => vi.restoreAllMocks())
+
+it.each([
+  ['host', 'scoped-keychain'],
+  ['host', 'credentials-file'],
+  ['wsl', 'credentials-file']
+] as const)('keeps %s profile 429 metadata from %s', async (runtime, source) => {
+  fixture.source = source
+  const provenance = runtime === 'wsl' ? 'wsl:SyntheticDistro:profile:A' : 'profile:A'
+  const preparation = {
+    configDir,
+    envPatch: { CLAUDE_CONFIG_DIR: configDir },
+    provenance
+  }
+  fixture.hostPreparation.mockReturnValue(preparation)
+  fixture.wslPreparation.mockResolvedValue(preparation)
   const result = await fetchInactiveClaudeAccountUsage({
     id: 'A',
-    managedAuthPath: '/synthetic/auth'
+    managedAuthRuntime: runtime,
+    wslDistro: runtime === 'wsl' ? 'SyntheticDistro' : null
   })
 
   expect(result.usageMetadata).toMatchObject({
-    credentialSource: 'scoped-keychain',
-    authProvenance: 'managed:A',
-    failureKind: 'rate-limited'
+    credentialSource: source,
+    authProvenance: provenance,
+    failureKind: 'rate-limited',
+    retryAtMs: now + 3600000
   })
-  expect(fixture.readCredentials).toHaveBeenCalledWith(fixture.location)
-})
-
-it.each(['host', 'wsl'] as const)(
-  'keeps %s managed-file 429 metadata file-scoped',
-  async (runtime) => {
-    fixture.location = { kind: 'file', managedAuthPath: '/synthetic/auth' }
-    const result = await fetchInactiveClaudeAccountUsage({
-      id: 'A',
-      managedAuthPath: '/synthetic/auth',
-      managedAuthRuntime: runtime,
-      wslDistro: runtime === 'wsl' ? 'SyntheticDistro' : null
-    })
-
-    expect(result.usageMetadata).toMatchObject({
-      credentialSource: 'credentials-file',
-      authProvenance: runtime === 'wsl' ? 'managed:A:wsl:SyntheticDistro' : 'managed:A',
-      failureKind: 'rate-limited'
-    })
-    expect(fixture.readCredentials).toHaveBeenCalledWith(fixture.location)
+  expect(fixture.readCredentials).toHaveBeenCalledWith({
+    credentialsFileConfigDir: configDir,
+    keychainConfigDir: configDir,
+    unsuffixedKeychainFallback: false
+  })
+  expect(fixture.fetchUsage).toHaveBeenCalledWith('synthetic-token', undefined)
+  if (runtime === 'wsl') {
+    expect(fixture.wslPreparation).toHaveBeenCalledWith('SyntheticDistro', 'A')
+    expect(fixture.hostPreparation).not.toHaveBeenCalled()
+  } else {
+    expect(fixture.hostPreparation).toHaveBeenCalledWith('A')
+    expect(fixture.wslPreparation).not.toHaveBeenCalled()
   }
-)
+})

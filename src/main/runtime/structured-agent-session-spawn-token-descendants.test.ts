@@ -143,7 +143,7 @@ describe('a process that inherited a spawn token', () => {
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => stateDirectory,
       resolveLaunchArgs: () => [],
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
       resolveEnvironment: async () => ({})
     })
     // The installed host reads the record the seed wrote, so the check below has a lease to act on.
