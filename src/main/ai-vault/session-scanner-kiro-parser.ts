@@ -111,7 +111,8 @@ function createKiroAccumulator(
   const accumulator = createAccumulator({
     agent: 'kiro',
     file,
-    sessionId: extractString(metadata.session_id) ?? basename(file.path, '.json'),
+    // The scanner only admits UUID file names, so the basename is the safe resume id.
+    sessionId: basename(file.path, '.json'),
     messages
   })
   accumulator.cwd = extractString(metadata.cwd)

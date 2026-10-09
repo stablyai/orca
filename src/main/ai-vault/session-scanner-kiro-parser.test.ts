@@ -99,6 +99,13 @@ describe('Kiro session parser', () => {
     expect(await parseKiroSessionFile(fileAt(path), 'linux')).toBeNull()
   })
 
+  it('resumes by the validated file name, not a mismatched metadata session_id', async () => {
+    const path = await writeSession(metadata({ session_id: "x' && rm -rf ~" }))
+    const session = await parseKiroSessionFile(fileAt(path), 'linux')
+    expect(session?.sessionId).toBe(SESSION_ID)
+    expect(session?.resumeCommand).toContain(`--resume-id '${SESSION_ID}'`)
+  })
+
   it('parses streamed remote lines the same way', async () => {
     const session = await parseKiroSessionContent(
       fileAt(`/home/u/.kiro/sessions/cli/${SESSION_ID}.json`),
