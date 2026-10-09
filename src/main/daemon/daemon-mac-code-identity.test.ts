@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const { runProcessMock } = vi.hoisted(() => ({ runProcessMock: vi.fn() }))
 vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
 
-import { classifyCodesignDisplayOutput, getDaemonMacCodeIdentity } from './daemon-mac-code-identity'
+import {
+  classifyCodesignDisplayOutput,
+  getDaemonMacCodeIdentity,
+  inspectMacProcessCodeIdentity
+} from './daemon-mac-code-identity'
 
 const HELPER_PATH =
   '/Applications/Orca.app/Contents/Frameworks/Orca Helper.app/Contents/MacOS/Orca Helper'
@@ -69,6 +73,22 @@ describe('classifyCodesignDisplayOutput', () => {
 })
 
 describe('getDaemonMacCodeIdentity', () => {
+  it('shares the resolved path inspection with telemetry without another process', async () => {
+    codesignReturns(`Executable=${PARKED_PATH}\n`, 0)
+    await expect(
+      Promise.all([inspectMacProcessCodeIdentity(3337), getDaemonMacCodeIdentity(3337)])
+    ).resolves.toEqual([{ identity: 'parked', executablePath: PARKED_PATH }, 'parked'])
+    expect(runProcessMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('withholds a partial path from a timed-out inspection', async () => {
+    codesignReturns(`Executable=${HELPER_PATH}\n`, null, true)
+    await expect(inspectMacProcessCodeIdentity(3337)).resolves.toEqual({
+      identity: 'probe-failed',
+      executablePath: null
+    })
+  })
+
   it('asks codesign to display the running pid and reads its stderr', async () => {
     codesignReturns(`Executable=${HELPER_PATH}\n`, 0)
     await expect(getDaemonMacCodeIdentity(3337)).resolves.toBe('resolved')

@@ -9,6 +9,7 @@ import {
   nodeRuntimeHeadersUrl,
   nodeRuntimeReleaseUrl
 } from '../../src/shared/node-runtime-pin.ts'
+import { isDirectInvocation } from './script-entry-detection.mjs'
 import { download, extract, sha256File } from './update-node-runtime-pin.mjs'
 
 const ROOT = resolve(import.meta.dirname, '..', '..')
@@ -90,4 +91,11 @@ export async function ensurePinnedNodeExecutable({ target, cacheDir = pinnedNode
     chmodSync(executable, 0o755)
   }
   return executable
+}
+
+// Usage: node config/scripts/pinned-node-downloads.mjs <target>... — warms the cache before packaging.
+if (isDirectInvocation(import.meta.url, process.argv[1])) {
+  for (const target of process.argv.slice(2)) {
+    console.log(await ensurePinnedNodeExecutable({ target }))
+  }
 }

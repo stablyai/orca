@@ -437,6 +437,13 @@ describe('DaemonServer', () => {
       expect(['healthy', 'unhealthy', 'unknown']).toContain(result.health)
     })
 
+    it('probes Full Disk Access in the owning daemon', async () => {
+      await startServer()
+      const c = await connectClient()
+      const result = await c.request<{ status: unknown }>('fullDiskAccessStatus', undefined)
+      expect(['granted', 'denied', 'unknown', 'unsupported']).toContain(result.status)
+    })
+
     it('handles resize', async () => {
       await startServer()
       const c = await connectClient()

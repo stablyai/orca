@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process'
 import dgram from 'node:dgram'
 import { ipcMain, shell, systemPreferences } from 'electron'
 import { getMacosFullDiskAccessStatus } from '../macos-full-disk-access-status'
+import { getTerminalHostsFullDiskAccessStatus } from '../daemon/daemon-full-disk-access-status'
 import { testLocalNetworkConnection } from './local-network-connection-test'
 import type {
   DeveloperPermissionId,
@@ -153,7 +154,13 @@ async function getPermissionState(id: DeveloperPermissionId): Promise<DeveloperP
     case 'accessibility':
       return { id, status: getAccessibilityStatus() }
     case 'full-disk-access':
-      return { id, status: await getMacosFullDiskAccessStatus() }
+      return {
+        id,
+        status: await getMacosFullDiskAccessStatus(),
+        ...(process.platform === 'darwin'
+          ? { terminalHostStatus: await getTerminalHostsFullDiskAccessStatus() }
+          : {})
+      }
     // Why 'unknown' and not a probe: macOS reports no per-app Files-and-Folders grant, and the
     // only caller opens the pane rather than reading a status.
     case 'files-and-folders':

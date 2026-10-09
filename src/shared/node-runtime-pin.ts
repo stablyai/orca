@@ -149,6 +149,12 @@ export const NODE_RUNTIME_COMPAT_ASSETS: Record<CompatServerTarget, NodeRuntimeA
 }
 // @generated-end
 
+/**
+ * The pinned darwin Node's `LC_BUILD_VERSION minos`, and so the floor of the macOS terminal host.
+ * Packaging fails when a pin bump changes it; below it the desktop forks the daemon instead.
+ */
+export const NODE_RUNTIME_DARWIN_MINIMUM_OS = '13.5'
+
 export function isCompatServerTarget(target: string): target is CompatServerTarget {
   return COMPAT_SERVER_TARGETS.some((known) => known === target)
 }

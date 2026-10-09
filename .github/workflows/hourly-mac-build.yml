@@ -181,6 +181,18 @@ jobs:
             pnpm-lock.yaml
             mobile/pnpm-lock.yaml
 
+      # Why: packaging bundles the pinned Node into the macOS terminal host. Keyed on the pin alone
+      # with no restore-keys, so a pin bump starts empty instead of carrying old archives forward.
+      - name: Locate the pinned Node runtime cache
+        shell: bash
+        run: echo "ORCA_NODE_RUNTIME_CACHE_DIR=$HOME/Library/Caches/orca-node-runtime" >>"$GITHUB_ENV"
+
+      - name: Cache the pinned Node runtime
+        uses: actions/cache@v5
+        with:
+          path: ~/Library/Caches/orca-node-runtime
+          key: orca-node-runtime-mac-${{ hashFiles('src/shared/node-runtime-pin.ts') }}
+
       - name: Cache electron-builder downloads
         uses: actions/cache@v5
         with:
@@ -353,7 +365,7 @@ jobs:
           timeout_minutes: 45
           max_attempts: 2
           retry_wait_seconds: 30
-          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_HOURLY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
+          command: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/pinned-node-downloads.mjs darwin-arm64 darwin-x64 && node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_HOURLY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
         env:
           # Why: electron-builder's github publisher targets the repo named in the
           # config; the token must therefore carry write access to orca-hourly.

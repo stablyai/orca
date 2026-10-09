@@ -4,6 +4,7 @@
 
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 import {
   classifyDaemonPtyCwd,
@@ -17,6 +18,7 @@ import type { EventProps } from '../../shared/telemetry-events'
 import { track } from '../telemetry/client'
 import { readDaemonPidRecord } from './daemon-endpoint-incarnation'
 import { getDaemonMacCodeIdentity } from './daemon-mac-code-identity'
+import { getMacDaemonBundleRoot } from './macos-daemon-bundle'
 import { enumerateDirectoryOnce } from './directory-enumeration-probe'
 import type { ParsedDaemonPid } from './daemon-pid-file-parse'
 import type { MacDaemonTccAttributionHealth } from './daemon-tcc-attribution'
@@ -31,6 +33,14 @@ export type DaemonAdoptionOrigin = Pick<
   'app_version_match' | 'code_identity' | 'spawner_path_class'
 >
 
+function stableCopyPrefix(): string | null {
+  try {
+    return join(getMacDaemonBundleRoot(getAppEnvironment().getPath('userData')), 'runtime-')
+  } catch {
+    return null
+  }
+}
+
 /** Classifies the adopted daemon's pid record against the running app; enum-only by construction. */
 export async function classifyDaemonAdoptionOrigin(
   pidRecord: ParsedDaemonPid | null
@@ -42,7 +52,8 @@ export async function classifyDaemonAdoptionOrigin(
       : 'different'
   const spawnerPathClass: DaemonSpawnerPathClass = classifyDaemonSpawnerPath(
     pidRecord?.spawnerExecPath ?? null,
-    existsSync
+    existsSync,
+    stableCopyPrefix()
   )
   return {
     app_version_match: appVersionMatch,
