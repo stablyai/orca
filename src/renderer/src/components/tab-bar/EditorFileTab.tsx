@@ -95,11 +95,13 @@ export default function EditorFileTab({
     ? ShieldAlert
     : isCheckDetails
       ? ListChecks
-      : isDiff
-        ? GitCompareArrows
-        : isMarkdownPreviewTab
-          ? Eye
-          : FileIcon
+      : isChatVisual
+        ? ChartColumn
+        : isDiff
+          ? GitCompareArrows
+          : isMarkdownPreviewTab
+            ? Eye
+            : FileIcon
   // Why: only deleted/renamed mean the file is gone from its path, which is
   // what strikethrough conveys. 'changed' keeps a normal label — its surface
   // is the changed-on-disk banner inside the editor.
@@ -280,24 +282,12 @@ export default function EditorFileTab({
         <ShieldAlert
           className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-orange-400' : 'text-orange-400/70'}`}
         />
-      ) : isCheckDetails ? (
-        <ListChecks
-          className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
-        />
-      ) : isChatVisual ? (
-        <ChartColumn
-          className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
-        />
-      ) : isDiff ? (
-        <GitCompareArrows
-          className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
-        />
       ) : isMarkdownPreviewTab ? (
         <Eye
           className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
         />
       ) : (
-        createElement(FileIcon, {
+        createElement(HoverIcon, {
           className: `w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`
         })
       )}
