@@ -103,6 +103,8 @@ orca worktree rm --worktree id:<worktreeId> --force --json
 
 When `worktree create` runs from inside an Orca-managed worktree, Orca records the new worktree as a child when it can infer the relationship. Pass `--parent-worktree active` to be explicit, or `--no-parent` when the new work is independent.
 
+Pass `--branch DAT-111-fix-login` to choose the exact Git branch name and bypass the configured branch prefix. `--name` still sets the workspace name; `--base-branch` selects the starting ref. The execution host validates the branch using the existing worktree creation rules.
+
 `worktree set --unread` puts the unread dot on the workspace in the sidebar, the same one Orca shows when an agent finishes; `--read` clears it.
 
 Agent startup flags:

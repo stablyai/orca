@@ -175,6 +175,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   'worktree create': async ({ flags, client, cwd, json }) => {
     assertWorktreeParentFlagsCompatible(flags)
     assertWorkspaceTargetFlagsCompatible(flags)
+    const branchNameOverride = getPresentStringFlag(flags, 'branch')
     const reviewLinks = getReviewTargetLinkFlags(flags)
     const callerTerminalHandle =
       typeof process.env.ORCA_TERMINAL_HANDLE === 'string' &&
@@ -218,6 +219,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         displayName: name,
         displayNameKind: 'user',
         baseBranch: getOptionalStringFlag(flags, 'base-branch'),
+        ...(branchNameOverride !== undefined ? { branchNameOverride } : {}),
         ...reviewLinks,
         ...linearIssueLink,
         comment: getOptionalStringFlag(flags, 'comment'),

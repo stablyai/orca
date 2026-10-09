@@ -55,6 +55,72 @@ describe('orca cli worktree awareness', () => {
     spawnMock
   })
 
+  it('passes an exact branch separately from the workspace name and base ref', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_create', {
+        worktree: buildWorktree('/tmp/repo/task', 'DAT-111-fix', 'abc', 'repo-1')
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'Fix login',
+        '--branch',
+        'DAT-111-fix',
+        '--base-branch',
+        'origin/main',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+    expect(callMock).toHaveBeenCalledWith(
+      'worktree.create',
+      expect.objectContaining({
+        name: 'Fix login',
+        displayName: 'Fix login',
+        branchNameOverride: 'DAT-111-fix',
+        baseBranch: 'origin/main'
+      })
+    )
+  })
+
+  it.each([['--branch'], ['--branch', '']])(
+    'rejects a missing branch value: %j',
+    async (...branchFlags) => {
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const priorExitCode = process.exitCode
+      try {
+        await main(
+          [
+            'worktree',
+            'create',
+            '--repo',
+            'id:repo-1',
+            '--name',
+            'task',
+            '--no-parent',
+            '--json',
+            ...branchFlags
+          ],
+          '/tmp/repo'
+        )
+        expect(callMock).not.toHaveBeenCalled()
+        expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain('--branch')
+        expect(process.exitCode).toBe(1)
+      } finally {
+        process.exitCode = priorExitCode
+      }
+    }
+  )
+
   it('passes explicit activation through worktree.create', async () => {
     queueFixtures(
       callMock,
@@ -137,6 +203,8 @@ describe('orca cli worktree awareness', () => {
         'github:stablyai/orca',
         '--host',
         'runtime:gpu',
+        '--branch',
+        'DAT-111-remote',
         '--name',
         'feature',
         '--no-parent',
@@ -150,6 +218,7 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
       repo: 'id:repo-gpu',
       name: 'feature',
+      branchNameOverride: 'DAT-111-remote',
       displayName: 'feature',
       displayNameKind: 'user',
       baseBranch: undefined,
