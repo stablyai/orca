@@ -21,6 +21,14 @@ const POOL_CONNECT_TIMEOUT_MESSAGES = [
 // pg raises this whenever a socket ends early, during the handshake and mid
 // statement alike, so only the acquire boundary can tell the two apart.
 const CONNECTION_TERMINATED_MESSAGE = 'Connection terminated unexpectedly'
+// The socket to Postgres (or its proxy) failed before a client existed, e.g. a Cloud SQL restart.
+const ACQUIRE_SOCKET_ERRNOS = new Set([
+  'EPIPE',
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'ETIMEDOUT',
+  'EHOSTUNREACH'
+])
 
 // Membership is tracked beside the error rather than on it: an error object may
 // be frozen, and a mutated one would leak the marker into logs.
@@ -49,9 +57,10 @@ export function isPostgresPoolConnectTimeout(error: unknown): boolean {
 // outcome is unknown is not safe.
 export function isPostgresPoolConnectFailure(error: unknown): boolean {
   if (isPostgresPoolConnectTimeout(error)) return true
+  if (!isPostgresPoolAcquireFailure(error)) return false
   return (
-    errorMessage(error).includes(CONNECTION_TERMINATED_MESSAGE) &&
-    isPostgresPoolAcquireFailure(error)
+    errorMessage(error).includes(CONNECTION_TERMINATED_MESSAGE) ||
+    ACQUIRE_SOCKET_ERRNOS.has(errorCode(error))
   )
 }
 

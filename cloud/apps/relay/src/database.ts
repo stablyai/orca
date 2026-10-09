@@ -1114,6 +1114,7 @@ export function isRelayDatabaseTransientError(error: unknown): boolean {
   if (
     isRelayDatabaseLayerError(error) &&
     (code === 'ECONNRESET' ||
+      code === 'EPIPE' ||
       String((error as { message?: unknown }).message).startsWith('Connection terminated'))
   ) {
     return true

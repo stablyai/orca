@@ -4,13 +4,13 @@ import { PostgresPoolPressure } from './postgres-pool-pressure.js'
 
 // The only way to mark an error as an acquire failure is to fail a real
 // acquire, so the gated cases go through the pressure wrapper the pool uses.
-async function failedAcquire(message: string): Promise<unknown> {
+async function failedAcquire(failure: string | Error): Promise<unknown> {
   const pool = {
     totalCount: 0,
     idleCount: 0,
     waitingCount: 0,
     connect: vi.fn(async () => {
-      throw new Error(message)
+      throw typeof failure === 'string' ? new Error(failure) : failure
     })
   }
   return await new PostgresPoolPressure(pool as never).connect().catch((error: unknown) => error)
@@ -79,13 +79,38 @@ describe('relay database transient errors', () => {
     ).toBe(true)
   })
 
+  // Staging B1 re-test: a Cloud SQL restart failed the transaction's acquire with `write EPIPE`.
+  it.each(['EPIPE', 'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'EHOSTUNREACH'])(
+    'classifies an acquire that failed with %s, but not the bare errno',
+    async (code) => {
+      const failure = (): Error => Object.assign(new Error(`connect ${code}`), { code })
+      expect(isRelayDatabaseTransientError(await failedAcquire(failure()))).toBe(true)
+      expect(isRelayDatabaseTransientError(failure())).toBe(false)
+    }
+  )
+
+  it('classifies an EPIPE from the transaction acquire', async () => {
+    const database = new PostgresDatabase({
+      totalCount: 0,
+      idleCount: 0,
+      waitingCount: 0,
+      connect: async () => {
+        throw Object.assign(new Error('write EPIPE'), { code: 'EPIPE' })
+      }
+    } as never)
+    const error = await database.transaction(async () => 'unreached').catch((e: unknown) => e)
+    expect(error).toMatchObject({ code: 'EPIPE' })
+    expect(isRelayDatabaseTransientError(error)).toBe(true)
+  })
+
   // Staging B1: pg_terminate_backend mid-request answered /v1/assign with 500. A dropped
   // connection is 503 + Retry-After, as 08006 always was; transaction() still never retries it,
   // since the commit outcome is unknown.
-  it('classifies a connection dropped mid-statement, but only from the database layer', async () => {
+  it('classifies a mid-statement drop only from the database layer', async () => {
     const failures = [
       (): Error => new Error('Connection terminated unexpectedly'),
-      (): Error => Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' })
+      (): Error => Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' }),
+      (): Error => Object.assign(new Error('write EPIPE'), { code: 'EPIPE' })
     ]
     for (const failure of failures) {
       expect(isRelayDatabaseTransientError(await failedQuery(failure()))).toBe(true)
