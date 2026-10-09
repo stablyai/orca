@@ -199,11 +199,13 @@ export async function launchMacDaemonFromStableBundle(
     }
     return await holdDaemonAdoptionLease(
       { shutdown },
-      options.socketPath,
-      options.tokenPath,
-      client,
-      identity,
-      options.pidPath
+      {
+        socketPath: options.socketPath,
+        tokenPath: options.tokenPath,
+        pidPath: options.pidPath,
+        connectedClient: client,
+        expectedIdentity: identity
+      }
     )
   } catch (error) {
     client.disconnect()
