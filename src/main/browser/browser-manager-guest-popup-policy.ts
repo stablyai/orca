@@ -21,24 +21,19 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       this.attachGuestPolicies(window.webContents, this.resolvePopupOwnerContext(guest.id))
     }
     guest.on('did-create-window', handleDidCreateWindow)
-    guest.setWindowOpenHandler(({ url, frameName, disposition, features }) => {
+    guest.setWindowOpenHandler(({ url, frameName, disposition }) => {
+      // Why: as in Chrome, every open spends the click, so a popup's click cannot fund a later tab.
+      const clicked = gesture.consume()
       const ownerContext = this.resolvePopupOwnerContext(guest.id)
       const browserTabId = ownerContext?.browserTabId ?? null
       const browserUrl = normalizeBrowserNavigationUrl(url)
       const externalUrl = normalizeExternalBrowserUrl(url)
       // Why: one rule for every link and window.open; opener-dependent shapes are excluded by
       // isNewBrowserTabPopupIntent and still get a real child window below.
-      if (
-        ownerContext &&
-        externalUrl &&
-        isNewBrowserTabPopupIntent({ frameName, disposition, features })
-      ) {
+      if (ownerContext && externalUrl && isNewBrowserTabPopupIntent({ frameName, disposition })) {
         // Why: one activation lets a page loop window.open, and each routed tab persists into
         // workspace session state, so only opens beyond the observed clicks draw on the budget.
-        if (
-          !gesture.consume() &&
-          !this.tryConsumePageInitiatedTab(ownerContext.rootGuestWebContentsId)
-        ) {
+        if (!clicked && !this.tryConsumePageInitiatedTab(ownerContext.rootGuestWebContentsId)) {
           this.forwardOrQueuePopupEvent(guest.id, {
             origin: safeOrigin(externalUrl),
             action: 'blocked'

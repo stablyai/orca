@@ -40,7 +40,10 @@ vi.mock('./popup-origin-bar-window', () => ({
 }))
 
 import { browserManager } from './browser-manager'
-import { MAX_PAGE_INITIATED_TABS_PER_WINDOW } from './browser-page-initiated-tab-budget'
+import {
+  MAX_PAGE_INITIATED_TABS_PER_WINDOW,
+  PAGE_INITIATED_TAB_WINDOW_MS
+} from './browser-page-initiated-tab-budget'
 import {
   rendererWebContentsId,
   resetBrowserManagerMocks,
@@ -299,7 +302,7 @@ describe('browserManager', () => {
     expect(shellOpenExternalMock).not.toHaveBeenCalled()
   })
 
-  it('opens window.open whose features only cut the opener as a tab, as Chrome does', () => {
+  it('opens unnamed window.open with only opener features as a tab, as Chrome does', () => {
     const rendererSendMock = vi.fn()
     const guest = {
       id: 143,
@@ -334,12 +337,11 @@ describe('browserManager', () => {
       features: string
       disposition: string
     }) => { action: 'allow' | 'deny' }
-    // The page gets null back from each of these in Chrome too, so no flow can depend on the handle.
+    // Chromium reports these as tabs: noopener and noreferrer are not window features.
     const openerlessOpens = [
       { frameName: '', features: 'noopener,noreferrer' },
-      { frameName: '', features: 'noopener=0' },
-      { frameName: 'docs', features: 'noopener' },
-      { frameName: 'docs', features: 'noreferrer = yes' }
+      { frameName: '', features: 'noopener' },
+      { frameName: '', features: 'noopener=0' }
     ]
     for (const open of openerlessOpens) {
       expect(
@@ -419,6 +421,23 @@ describe('browserManager', () => {
       open(clicks + index)
     }
     expect(routedTabCount()).toBe(clicks + 1 + MAX_PAGE_INITIATED_TABS_PER_WINDOW)
+
+    // A click spent on a popup window cannot fund a later scripted tab.
+    vi.advanceTimersByTime(PAGE_INITIATED_TAB_WINDOW_MS)
+    inputEventHandler({}, { type: 'mouseUp' })
+    expect(
+      handler({
+        url: 'https://sso.example.com/auth',
+        frameName: 'sso',
+        features: 'width=500,height=600',
+        disposition: 'new-window'
+      })
+    ).toMatchObject({ action: 'allow' })
+    const tabsBeforeScriptedLoop = routedTabCount()
+    for (let index = 0; index < MAX_PAGE_INITIATED_TABS_PER_WINDOW * 2; index++) {
+      open(clicks * 2 + index)
+    }
+    expect(routedTabCount()).toBe(tabsBeforeScriptedLoop + MAX_PAGE_INITIATED_TABS_PER_WINDOW)
     expect(rendererSendMock).toHaveBeenCalledWith('browser:popup', {
       browserPageId: 'browser-1',
       origin: 'https://docs.example.com',
