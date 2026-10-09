@@ -18,7 +18,7 @@ export function commandReceiptScope(
   return operationIdScope === 'global' ? { kind: 'global' } : { kind: 'caller', callerKey }
 }
 
-/** The pointer locates the result; if its row is gone, the command stays spent: read what remains, else unknown, never rerun. */
+/** What a replay answers from: a pointer (if its row is gone the command stays spent: read what remains, else unknown, never rerun), or the outcome itself. */
 export const commandReceiptResultSchema = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('journal-row'),

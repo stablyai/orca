@@ -2,7 +2,8 @@
 // answer is rebuilt on a replay.
 //
 // A plan with `commandReceipt` proves acceptance by that receipt, the rest by their ledger row. A
-// prompt answer replays from its receipt alone; the journal projects the others' current answer.
+// prompt answer's replay answers from the resolution its receipt keeps; the journal projects the
+// others' current answer.
 
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import {
