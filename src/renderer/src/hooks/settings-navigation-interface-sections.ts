@@ -1,6 +1,7 @@
 import { getAppearancePaneSearchEntries } from '@/components/settings/appearance-search'
 import { getChatAppearanceSearchEntries } from '@/components/settings/chat-appearance-search'
 import { getChatNamingSearchEntry } from '@/components/settings/chat-naming-search'
+import { getChatInlineVisualsSearchEntry } from '@/components/settings/chat-inline-visuals-search'
 import { getInputPaneSearchEntries } from '@/components/settings/input-search'
 import { getNotificationsPaneSearchEntries } from '@/components/settings/notifications-search'
 import { getShortcutsPaneSearchEntries } from '@/components/settings/shortcuts-search'
@@ -14,7 +15,7 @@ export function buildInterfaceSettingsSections({
   isMac,
   isWindows,
   isWebClient,
-  experimentalStructuredNativeChat,
+  nativeChatEnabled,
   managedBrowserCreationEnabled,
   mobileEmulatorCreationEnabled
 }: SettingsNavigationBuildOptions): SettingsNavSection[] {
@@ -35,19 +36,21 @@ export function buildInterfaceSettingsSections({
       }),
       group: 'interface'
     },
-    ...(experimentalStructuredNativeChat
+    ...(nativeChatEnabled
       ? [
           {
             id: 'chat',
             title: translate('settings.appearance.chat.title', 'Chat'),
             description: translate(
               'settings.chat.description',
-              'Choose how chats look and get their names.'
+              'Choose how chats look and behave.'
             ),
             icon: MessageSquare,
             searchEntries: [
               ...getChatAppearanceSearchEntries(),
-              ...(showDesktopOnlySettings ? [getChatNamingSearchEntry()] : [])
+              ...(showDesktopOnlySettings
+                ? [getChatNamingSearchEntry(), getChatInlineVisualsSearchEntry()]
+                : [])
             ],
             group: 'interface'
           }

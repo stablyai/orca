@@ -1,12 +1,9 @@
-import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import { promisify } from 'node:util'
 import { pathToFileURL } from 'node:url'
 
-const execFileAsync = promisify(execFile)
 const EN_CATALOG_PATH = path.join('src', 'renderer', 'src', 'i18n', 'locales', 'en.json')
 const PLACEHOLDER_RE = /\{\{[^}]+\}\}/g
 
@@ -82,17 +79,50 @@ async function extractToTemporaryCatalog(root, tempDir) {
   const outputPattern = path.join(tempDir, '{{language}}.json')
   // Why: extraction output is evidence for this check, not another committed
   // catalog that feature authors must keep synchronized.
-  await execFileAsync(
-    process.execPath,
-    [cliPath, '--config', 'config/i18next.config.ts', 'extract', '--sync-primary', '--quiet'],
-    {
+  const { runProcessSync, describeProcessFailure } = await import('./script-child-process.mjs')
+  let program = process.execPath
+  try {
+    const version = (await fs.readFile(path.join(root, 'config', '.bun-version'), 'utf8')).trim()
+    const probe = runProcessSync({
+      program: 'bun',
+      args: [
+        '-e',
+        'console.log(JSON.stringify({ version: process.versions.bun, executable: process.execPath }))'
+      ],
       cwd: root,
-      env: {
-        ...process.env,
-        ORCA_I18N_EXTRACTION_OUTPUT: outputPattern.split(path.sep).join('/')
-      }
+      env: process.env,
+      timeoutMs: 2000,
+      maxOutputBytes: 4096
+    })
+    const identity = JSON.parse(probe.stdout)
+    if (
+      probe.code === 0 &&
+      !probe.signal &&
+      !probe.timedOut &&
+      !probe.outputTruncated &&
+      identity.version === version &&
+      typeof identity.executable === 'string' &&
+      path.isAbsolute(identity.executable)
+    ) {
+      program = identity.executable
     }
-  )
+  } catch {
+    // Missing or unusable optional Bun keeps the existing parent runtime.
+  }
+  const result = runProcessSync({
+    program,
+    args: [cliPath, '--config', 'config/i18next.config.ts', 'extract', '--sync-primary', '--quiet'],
+    cwd: root,
+    env: {
+      ...process.env,
+      ORCA_I18N_EXTRACTION_OUTPUT: outputPattern.split(path.sep).join('/')
+    },
+    timeoutMs: null,
+    maxOutputBytes: 1024 * 1024
+  })
+  if (result.code !== 0 || result.signal || result.timedOut || result.outputTruncated) {
+    throw new Error(`Localization extraction failed: ${describeProcessFailure(result)}`)
+  }
   return JSON.parse(await fs.readFile(path.join(tempDir, 'en.json'), 'utf8'))
 }
 

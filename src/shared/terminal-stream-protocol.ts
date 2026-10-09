@@ -32,7 +32,32 @@ export enum TerminalStreamOpcode {
   // Negotiated per stream; older hosts reject unknown opcodes, so clients send only after capability confirmation.
   SetOutputPaused = 16,
   // Negotiated per stream because older clients reject unknown opcodes.
-  WriteUnavailable = 17
+  WriteUnavailable = 17,
+  // Host->client; `seq` is the cumulative input sequence the host applied (see encodeTerminalInputAck). Sent only after `inputAck` negotiation.
+  InputAck = 18
+}
+
+export type TerminalInputAckKind = 'applied' | 'delivery-unknown' | 'resend'
+
+const INPUT_ACK_FLAGS: Record<TerminalInputAckKind, number> = {
+  applied: 0,
+  // The write at `seq` may have reached the terminal; the client must not resend it.
+  'delivery-unknown': 1,
+  // A refusal or gap: the host needs everything after `seq` sent again, in order.
+  resend: 2
+}
+
+/** InputAck payload; `seq` is the host's cumulative applied input sequence. */
+export function encodeTerminalInputAck(kind: TerminalInputAckKind): Uint8Array {
+  return kind === 'applied' ? new Uint8Array() : Uint8Array.of(INPUT_ACK_FLAGS[kind])
+}
+
+export function decodeTerminalInputAck(payload: Uint8Array): TerminalInputAckKind {
+  return payload[0] === INPUT_ACK_FLAGS.resend
+    ? 'resend'
+    : payload[0] === INPUT_ACK_FLAGS['delivery-unknown']
+      ? 'delivery-unknown'
+      : 'applied'
 }
 
 export type TerminalStreamFrame = {
@@ -122,6 +147,7 @@ function isTerminalStreamOpcode(value: number): value is TerminalStreamOpcode {
     value === TerminalStreamOpcode.ClaimViewport ||
     value === TerminalStreamOpcode.OutputSpan ||
     value === TerminalStreamOpcode.SetOutputPaused ||
-    value === TerminalStreamOpcode.WriteUnavailable
+    value === TerminalStreamOpcode.WriteUnavailable ||
+    value === TerminalStreamOpcode.InputAck
   )
 }

@@ -92,12 +92,6 @@ describe('renderer web client projection', () => {
     expect(output.nM()).toBe(3)
   })
 
-  it('keeps the build-only manifest out of packaged apps', () => {
-    const builderConfig = readFileSync(resolve('config/electron-builder.config.cjs'), 'utf8')
-
-    expect(builderConfig).toContain("'!out/renderer/.vite{,/**/*}'")
-  })
-
   it('copies and minifies only the web dependency closure', async () => {
     const root = createRendererFixture()
     const result = await projectFixture(root)

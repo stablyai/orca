@@ -8,6 +8,7 @@ import {
 } from './pty-ipc-mock-registry'
 import { posixOnlyIt, makeDisposable } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
+import * as livePtyGate from '../claude-accounts/live-pty-gate'
 import { registerPtyHandlers, setLocalPtyProvider, getLocalPtyProvider } from './pty'
 import { join } from 'node:path'
 // Why resolved rather than hardcoded: the wrapper tree is content-addressed.
@@ -366,6 +367,7 @@ describe('registerPtyHandlers', () => {
     }
     spawnMock.mockReturnValue(proc)
     const isRecoveryReloadInFlight = vi.fn(() => true)
+    const markClaudePtyExitedSpy = vi.spyOn(livePtyGate, 'markClaudePtyExited')
 
     registerPtyHandlers(
       mainWindow as never,
@@ -394,8 +396,11 @@ describe('registerPtyHandlers', () => {
 
     expect(killSpy).not.toHaveBeenCalled()
     expect(runtime.onPtyExit).not.toHaveBeenCalled()
+    expect(markClaudePtyExitedSpy).not.toHaveBeenCalled()
     const listed = await getLocalPtyProvider().listProcesses()
     expect(listed.some((info) => info.id === spawnResult.id)).toBe(true)
+
+    markClaudePtyExitedSpy.mockRestore()
   })
   // Why: guard against over-suppression — with no recovery reload in flight the sweep MUST still reclaim genuinely orphaned local PTYs.
   it('still sweeps orphaned local PTYs when no recovery reload is in flight', async () => {

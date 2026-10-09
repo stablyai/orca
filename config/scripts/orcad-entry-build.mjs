@@ -1,7 +1,7 @@
 import { build } from 'esbuild'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { ORCAD_SERVER_ENTRY_FILENAME } from '../../src/shared/orcad-artifacts.ts'
 
 const root = join(import.meta.dirname, '..', '..')
@@ -14,7 +14,13 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
   writer: 'src/main/persistence/profile-state/profile-state-writer-worker-entry.ts',
   backup: 'src/main/persistence/profile-state/profile-state-backup-worker-entry.ts',
   foreignSqliteReader: 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry.ts',
-  portScanCommandWorker: 'src/main/ports/port-scan-command-worker-entry.ts'
+  portScanCommandWorker: 'src/main/ports/port-scan-command-worker-entry.ts',
+  sessionScanner: 'src/main/ai-vault/session-scanner-service-entry.ts'
+}
+
+/** Each child ships flat beside orcad.js under its source basename; the runtime resolvers look there. */
+export function orcadChildOutputFilename(entryPoint) {
+  return basename(entryPoint).replace(/\.ts$/, '.js')
 }
 
 export const ORCAD_EXTERNAL_MODULES = ['electron', 'node-pty', '@parcel/watcher', 'fsevents']
@@ -51,6 +57,21 @@ export function buildOrcadEntry(outfile) {
     minify: true,
     sourcemap: false,
     define: { 'process.env.NODE_ENV': '"production"' },
+    logLevel: 'error'
+  })
+}
+
+export function buildOrcadCli(outfile) {
+  return build({
+    entryPoints: [join(root, 'src/cli/index.ts')],
+    bundle: true,
+    platform: 'node',
+    target: 'node18',
+    format: 'cjs',
+    outfile,
+    metafile: true,
+    minify: true,
+    sourcemap: false,
     logLevel: 'error'
   })
 }

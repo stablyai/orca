@@ -23,6 +23,7 @@ import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-conte
 import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
 import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-preferences'
 import type { AgentLaunchParams } from './agent-launch-schemas'
+import { agentLaunchFolderWorkspaceCreator } from './agent-launch-folder-workspace-creation'
 import { agentLaunchMovesHostWindow } from './agent-launch-tab-publication'
 
 type WorktreeCreateParams = Extract<
@@ -37,6 +38,7 @@ export function agentLaunchWorkspaceFactory(
   agent: TuiAgent
 ): AgentLaunchWorkspaceFactory {
   return {
+    createFolderWorkspace: agentLaunchFolderWorkspaceCreator(context, agent),
     createWorktree: async ({
       create,
       startupAgent,

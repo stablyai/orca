@@ -176,6 +176,7 @@ patchedDependencies:
   i18next-cli@1.74.2: 7955b89d3aa229f477408608d331f78c85148a85a85913729f89fac65ad8b207
   lint-staged@16.4.0: 7333b3837f80a7fbd045964db6d76ba4fc118e49134bdbabb00585b6b7b60673
   node-pty@1.1.0: 92c95cffab383d86b3b13a460c75a08074468ebf1f3911db8e874e083201f192
+  ws@8.22.0: 9393e04dd9a90b01eb7aa35fcd5b1431b5038ce999fbbd82651136193ba51f14
 
 importers:
 
@@ -255,7 +256,7 @@ importers:
         version: 1.0.3
       ws:
         specifier: ^8.22.0
-        version: 8.22.0
+        version: 8.22.0(patch_hash=9393e04dd9a90b01eb7aa35fcd5b1431b5038ce999fbbd82651136193ba51f14)
       yaml:
         specifier: ^2.9.1
         version: 2.9.1
@@ -575,6 +576,9 @@ importers:
       remark-rehype:
         specifier: 11.1.2
         version: 11.1.2
+      remend:
+        specifier: 1.4.0
+        version: 1.4.0
       shadcn:
         specifier: ^4.13.1
         version: 4.13.1(supports-color@7.2.0)(typescript@7.0.2)
@@ -7007,6 +7011,9 @@ packages:
 
   remark-stringify@11.0.0:
     resolution: {integrity: sha512-1OSmLd3awB/t8qdoEOMazZkNsfVTeY4fTsgzcQFdXNq8ToTN4ZGwrMnlda4K6smTFKD+GRV6O48i6Z4iKgPPpw==}
+
+  remend@1.4.0:
+    resolution: {integrity: sha512-mHiYhhwphs1IgIZmkToKLwJn0U99IjPXuutkA2acrNcG0vlEq2G4TGnd2eT0saIHwh2KjaCpvleHcsd5SAz96A==}
 
   require-directory@2.1.1:
     resolution: {integrity: sha512-fGxEI7+wsG9xrvdjsrlmL22OMTTiHRwAMroiEeMgq8gzoLC/PQr7RsRDSTLUg/bZAZtF+TVIkHc6/4RIKrui+Q==}
@@ -14588,6 +14595,8 @@ snapshots:
       mdast-util-to-markdown: 2.1.2
       unified: 11.0.5
 
+  remend@1.4.0: {}
+
   require-directory@2.1.1: {}
 
   require-from-string@2.0.2: {}
@@ -14757,7 +14766,7 @@ snapshots:
     dependencies:
       inspect-webkit: 0.0.5(typescript@7.0.2)
       sonner: 2.0.8(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      ws: 8.22.0
+      ws: 8.22.0(patch_hash=9393e04dd9a90b01eb7aa35fcd5b1431b5038ce999fbbd82651136193ba51f14)
     transitivePeerDependencies:
       - '@types/react'
       - bufferutil
@@ -15406,7 +15415,7 @@ snapshots:
 
   ws@8.21.3: {}
 
-  ws@8.22.0: {}
+  ws@8.22.0(patch_hash=9393e04dd9a90b01eb7aa35fcd5b1431b5038ce999fbbd82651136193ba51f14): {}
 
   wsl-utils@0.3.1:
     dependencies:

@@ -74,6 +74,8 @@ export type JournalLifecycleBatchInput = {
   mutations: readonly JournalLifecycleMutationInput[]
   fence: number
   recovered?: true
+  /** Submission verdicts belonging to this settlement, committed before its item rows. */
+  dispatches?: readonly ResolveDispatchInput[]
   /** Rejects the sends still queued with this first, in the same append: a failed start's row
    *  follows the messages it failed, and no reader meets one without the other. With none still
    *  queued, the batch is not written either. */
@@ -82,7 +84,7 @@ export type JournalLifecycleBatchInput = {
 
 export type JournalResolvedLifecycleBatchInput = Omit<
   JournalLifecycleBatchInput,
-  'mutations' | 'rejectsQueued'
+  'mutations' | 'rejectsQueued' | 'dispatches'
 > & {
   /** Read from the fold with every earlier write landed; may return none. */
   resolve: () => readonly JournalLifecycleMutationInput[]

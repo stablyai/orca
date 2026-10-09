@@ -300,13 +300,21 @@ export const ModelCatalogParams = z.strictObject({
   agent: StructuredAgent,
   sessionId: SessionId.optional(),
   worktree: Identifier('Invalid worktree selector').optional(),
-  waitForListing: z.boolean().optional()
+  waitForListing: z.boolean().optional(),
+  // Answer only from what the host has saved; never start a listing. Sent only to a host advertising
+  // the saved-only capability: an older one refuses the unknown key.
+  savedOnly: z.boolean().optional()
 })
 
 export const ConversationCommandParams = z
   .object({
     envelope: MutationEnvelope,
-    command: z.enum(['clear', 'compact'])
+    command: z.enum(['clear', 'compact']),
+    /** A /compact while the agent is working waits as a host-held card, like a queued send.
+     *  Strict object, so an older host refuses it: clients send it only when
+     *  `agent-session.queued-commands.v1` is advertised. A /clear never waits: its operation
+     *  fingerprints no `delivery`, so one sent with it is refused as a conflict. */
+    delivery: z.literal('queue-if-active').optional()
   })
   .strict()
 

@@ -23,11 +23,20 @@ vi.mock('../persistence', () => ({
   getCanonicalUserDataPath: () => '/tmp/orca-user-data',
   migrateMobilePairingDataToCanonicalUserDataPath: vi.fn()
 }))
+const launchOrder = vi.hoisted((): string[] => [])
 vi.mock('../runtime/runtime-rpc', () => ({
   OrcaRuntimeRpcServer: class {
-    start = vi.fn(async () => {})
+    start = vi.fn(async () => {
+      launchOrder.push('rpc-start')
+    })
     setOnUnpairedDeviceAuthFailure = vi.fn()
   }
+}))
+vi.mock('../runtime/headless-runtime-graph', () => ({ publishHeadlessRuntimeGraph: vi.fn() }))
+vi.mock('./headless-serve-ssh-registration', () => ({
+  registerHeadlessServeSshHandlers: vi.fn(() => {
+    launchOrder.push('ssh-registered')
+  })
 }))
 vi.mock('../ipc/mobile', () => ({ registerMobileHandlers: vi.fn() }))
 vi.mock('../ipc/pty', () => ({
@@ -66,6 +75,7 @@ vi.mock('./windows-install-dir-acl-recovery', () => ({
   })
 }))
 vi.mock('./serve-signal-handlers', () => ({ registerServeSignalHandlers: vi.fn() }))
+vi.mock('./serve-native-quit-guard', () => ({ installServeNativeQuitGuard: vi.fn() }))
 vi.mock('../runtime/runtime-rpc-startup-failure', () => ({
   recordRuntimeRpcStartFailure: vi.fn(),
   showRuntimeRpcStartupFailureDialog: vi.fn()
@@ -104,6 +114,11 @@ const { mainProcessState: state } = await import('./main-process-state')
 const { createServeDesktopActivationGate } = await import('./serve-desktop-activation')
 const { focusExistingMainWindow } = await import('../window/focus-existing-window')
 const { AGENT_LAUNCH_RECORD_WARMUP_DELAY_MS } = await import('./agent-launch-record-warmup')
+const { getServeOptions } = await import('./main-process-serve')
+const { registerServeSignalHandlers } = await import('./serve-signal-handlers')
+const { installServeNativeQuitGuard } = await import('./serve-native-quit-guard')
+const { quitProcess } = await import('./process-quit-request')
+const { quitFromUserCommand } = await import('./main-window-actions')
 
 type FakeWindow = {
   id: number
@@ -255,5 +270,41 @@ describe('desktop startup activation', () => {
 
     expect(windows).toHaveLength(0)
     expect(state.desktopActivationGate).toBeNull()
+  })
+
+  it('loads SSH targets on a windowless serve before paired clients can connect (#25886)', async () => {
+    launchOrder.length = 0
+    state.isServeMode = true
+    vi.mocked(getServeOptions).mockReturnValueOnce({
+      json: false,
+      pairingAddress: null,
+      noPairing: true,
+      mobilePairing: false,
+      grantDesktopControl: false,
+      recipeJson: false,
+      projectRoot: null
+    })
+    Object.assign(state.runtime!, {
+      refreshRestoredOrchestrationAuthority: vi.fn(async () => {}),
+      reconcileLegacyWorkerTerminals: vi.fn(async () => {})
+    })
+
+    await initializeMainProcessReady({
+      openMainWindow: () => {
+        throw new Error('serve must not open a window')
+      },
+      handleMacAppActivation: vi.fn()
+    })
+
+    expect(windows).toHaveLength(0)
+    expect(launchOrder).toEqual(['ssh-registered', 'rpc-start'])
+    // Signals mark their quit, so the macOS native-quit guard lets them through (#15537).
+    expect(registerServeSignalHandlers).toHaveBeenCalledWith(process, quitProcess)
+    expect(installServeNativeQuitGuard).toHaveBeenCalledWith(
+      expect.objectContaining({
+        platform: process.platform,
+        closeDesktopWindows: quitFromUserCommand
+      })
+    )
   })
 })

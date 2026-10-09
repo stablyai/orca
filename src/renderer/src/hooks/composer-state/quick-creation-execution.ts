@@ -33,7 +33,6 @@ type QuickCreationExecutionInput = Pick<
 >
 
 import { useCallback } from 'react'
-import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { useAppStore } from '@/store'
@@ -85,8 +84,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
       requestedAgent: TuiAgent | null,
       workspaceNameSeed: string,
       workspaceRunContext: WorktreeCreationRequest['workspaceRunContext'],
-      repoId: string,
-      selectedRepo: Repo
+      repoId: string
     ): Promise<void> => {
       const prepared = await prepareQuickSubmit(
         smartGitHubResolution,
@@ -134,7 +132,6 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         prompt: quickPrompt,
         draftPrompt: quickDraftPrompt,
         settings,
-        repoConnectionId: selectedRepo.connectionId,
         platform: selectedRepoAgentLaunchPlatform,
         shell: selectedRepoStartupShell,
         isRemote: selectedRepoIsRemote,
@@ -188,8 +185,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
                 : (workspaceRunContext?.hostId ?? selectedRepoExecutionHostId ?? undefined)
             },
             prompt: quickDraftPrompt ?? quickPrompt,
-            promptDelivery,
-            initialSessionOptions: startupPlan?.sessionOptions
+            promptDelivery
           })
         : 'terminal-tui'
       const structuredLaunch = agentLaunchRoute === 'structured-native-chat'

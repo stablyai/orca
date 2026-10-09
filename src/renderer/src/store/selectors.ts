@@ -17,6 +17,7 @@ import {
   getIndexedWorktreeMap as getCachedWorktreeMap,
   getIndexedWorktreesById as getCachedWorktreesById
 } from './worktree-repo-index'
+import { findKnownWorktreeById } from './slices/worktrees/listing/detected-worktree-meta'
 
 export { getProjectHostSetupProjectionFromState } from './project-host-setup-selector'
 export {
@@ -228,18 +229,41 @@ export const useWorktreesForRepo = (repoId: string | null) =>
   useAppStore((s) => (repoId ? (s.worktreesByRepo[repoId] ?? EMPTY_WORKTREES) : EMPTY_WORKTREES))
 export const useAllWorktrees = () => useAppStore((s) => getCachedAllWorktrees(s.worktreesByRepo))
 export const useWorktreeMap = () => useAppStore((s) => getCachedWorktreeMap(s.worktreesByRepo))
-export const useWorktreeById = (worktreeId: string | null, executionHostId?: ExecutionHostId) =>
-  useAppStore((s) =>
-    worktreeId
-      ? (s.getKnownWorktreeById(
-          worktreeId,
-          executionHostId ??
-            (worktreeId === s.activeWorktreeId
-              ? (s.activeWorkspaceExecutionHostId ?? undefined)
-              : undefined)
-        ) ?? null)
-      : null
+type WorktreeLookupHostState = Pick<AppState, 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'>
+
+// Why: worktree ids repeat across hosts, so the active id must resolve on the host the user selected.
+function getWorktreeLookupHostId(
+  state: WorktreeLookupHostState,
+  worktreeId: string,
+  executionHostId?: ExecutionHostId
+): ExecutionHostId | undefined {
+  return (
+    executionHostId ??
+    (worktreeId === state.activeWorktreeId
+      ? (state.activeWorkspaceExecutionHostId ?? undefined)
+      : undefined)
   )
+}
+
+/** Catalog row (including folder and floating workspaces) read from this snapshot. */
+export function selectKnownWorktreeById(
+  state: WorktreeLookupHostState & Parameters<typeof findKnownWorktreeById>[0],
+  worktreeId: string | null,
+  executionHostId?: ExecutionHostId
+): NonNullable<ReturnType<typeof findKnownWorktreeById>> | null {
+  return worktreeId
+    ? (findKnownWorktreeById(
+        state,
+        worktreeId,
+        getWorktreeLookupHostId(state, worktreeId, executionHostId)
+      ) ?? null)
+    : null
+}
+export const useWorktreeById = (worktreeId: string | null, executionHostId?: ExecutionHostId) =>
+  useAppStore((s) => selectKnownWorktreeById(s, worktreeId, executionHostId))
+// File-list callers resolve operation ownership separately from the UI's active host.
+export const useKnownWorktreeById = (worktreeId: string | null) =>
+  useAppStore((s) => (worktreeId ? (findKnownWorktreeById(s, worktreeId) ?? null) : null))
 export const useActiveWorktree = () => {
   const activeWorktreeId = useActiveWorktreeId()
   return useAppStore((s) =>

@@ -75,6 +75,7 @@ type NativeChatAttachmentOwnerState = Pick<
   | 'settings'
   | 'sshConnectionStates'
   | 'tabsByWorktree'
+  | 'unifiedTabsByWorktree'
   | 'worktreesByRepo'
 >
 

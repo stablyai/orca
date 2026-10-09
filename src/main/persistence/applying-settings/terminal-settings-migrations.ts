@@ -64,6 +64,8 @@ type RetiredGlobalSettings = {
   experimentalManagedServers?: unknown
   // Why: #22551 kept this key in settings; it now lives in a main-owned store and must never ride along.
   opencodeGoApiKey?: unknown
+  experimentalStructuredNativeChat?: unknown
+  openAgentTabsInChatByDefault?: unknown
 }
 
 export function stripRetiredGlobalSettings(
@@ -75,6 +77,8 @@ export function stripRetiredGlobalSettings(
     showAgentsSidebar: _legacyShowAgentsSidebar,
     experimentalManagedServers: _retiredManagedServersExperiment,
     opencodeGoApiKey: _legacyOpenCodeGoApiKey,
+    experimentalStructuredNativeChat: _legacyStructuredNativeChat,
+    openAgentTabsInChatByDefault: _legacyChatDefaultView,
     ...rest
   } = (settings ?? {}) as Partial<GlobalSettings> & RetiredGlobalSettings
   void _legacyScrollbackBytes
@@ -82,6 +86,8 @@ export function stripRetiredGlobalSettings(
   void _legacyShowAgentsSidebar
   void _retiredManagedServersExperiment
   void _legacyOpenCodeGoApiKey
+  void _legacyStructuredNativeChat
+  void _legacyChatDefaultView
   return rest
 }
 

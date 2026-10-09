@@ -65,3 +65,16 @@ export function hostCanStartRecord(
     agentDrivesSession(deps.agents, record)
   )
 }
+
+/** Saved chats can outlive their registration; both vocabularies bound a client's audience. */
+export function knownAgentIds(deps: {
+  agents: Pick<StructuredAgentRegistry, 'definitions'>
+  store: { listRecords: () => readonly Pick<AgentSessionRecord, 'provider'>[] }
+}): readonly string[] {
+  return [
+    ...new Set([
+      ...deps.agents.definitions().map(({ agent }) => agent),
+      ...deps.store.listRecords().map(({ provider }) => provider)
+    ])
+  ]
+}

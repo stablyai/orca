@@ -184,10 +184,23 @@ describe('hostileHostCellViolations', () => {
       target: 'linux-x64-glibc',
       unavailableReason: 'home_noexec',
       deployError: 'home directory is mounted noexec',
-      refusals: [{ step: 'A', reason: 'noexec' }],
+      refusals: [
+        { step: 'A', reason: 'noexec' },
+        { step: 'legacy', reason: 'host_node_missing' }
+      ],
       forbiddenToolCalls: []
     }
     expect(hostileHostCellViolations(noexec, observed)).toEqual([])
+    // The fallback's read-only npm probe is allowed; an install is not.
+    expect(
+      hostileHostCellViolations(noexec, { ...observed, forbiddenToolCalls: ['npm --version'] })
+    ).toEqual([])
+    expect(
+      hostileHostCellViolations(noexec, {
+        ...observed,
+        forbiddenToolCalls: ['npm --version', 'npm ci --omit=dev']
+      })
+    ).toEqual(['toolchain invoked: npm ci --omit=dev'])
     expect(
       hostileHostCellViolations(noexec, {
         ...observed,
@@ -198,7 +211,7 @@ describe('hostileHostCellViolations', () => {
         ]
       })
     ).toEqual([
-      'refusals A:noexec > C:noexec, expected A:noexec',
+      'refusals A:noexec > C:noexec, expected A:noexec > legacy:host_node_missing',
       'rung D reason no_runtime, expected home_noexec'
     ])
   })
@@ -221,11 +234,11 @@ describe('hostileHostCellViolations', () => {
           { step: 'B', reason: 'artifacts_unavailable' },
           { step: 'C', reason: 'libc_floor' }
         ],
-        forbiddenToolCalls: ['npm --version']
+        forbiddenToolCalls: ['npm --version', 'npm install', 'make BUILDTYPE=Release -C build']
       })
     ).toEqual([
       'refusals A:libc_floor > B:artifacts_unavailable > C:libc_floor, expected A:libc_floor',
-      'toolchain invoked: npm --version',
+      'toolchain invoked: npm install; make BUILDTYPE=Release -C build',
       'deploy failed: Node.js was not found on the remote host',
       'settled on nothing, expected B'
     ])

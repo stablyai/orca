@@ -7,7 +7,7 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionTurnActivity } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
+import type { JournalLifecycleIdentityMutationInput } from '../agent-session-journal/journal-row-builders'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
 import { structuredAgentSessionJournalAppendOptions } from './structured-agent-session-journal-append-options'
@@ -150,12 +150,12 @@ export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSi
   journalStopDecidesTurn?(turnId: string, endedAt: number): boolean
   appendLifecycleBatch?(
     settlementId: string,
-    mutations: readonly JournalLifecycleMutationInput[],
+    mutations: readonly JournalLifecycleIdentityMutationInput[],
     options?: StructuredAgentSessionAppendOptions
   ): StructuredAgentSessionSinkAdmission | void
   tryAppendLifecycleBatch?(
     settlementId: string,
-    mutations: readonly JournalLifecycleMutationInput[],
+    mutations: readonly JournalLifecycleIdentityMutationInput[],
     options?: StructuredAgentSessionAppendOptions
   ): StructuredAgentSessionSinkAdmission
   tryPublish?(options?: StructuredAgentSessionPublishOptions): StructuredAgentSessionSinkAdmission
@@ -235,7 +235,7 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
 
   const appendLifecycleBatch = (
     settlementId: string,
-    mutations: readonly JournalLifecycleMutationInput[],
+    mutations: readonly JournalLifecycleIdentityMutationInput[],
     options: StructuredAgentSessionAppendOptions = {}
   ): StructuredAgentSessionSinkAdmission =>
     queue.submit(

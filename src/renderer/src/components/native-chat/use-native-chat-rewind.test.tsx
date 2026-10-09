@@ -101,6 +101,43 @@ describe('structured chat rewind', () => {
     expect(toastError).not.toHaveBeenCalled()
   })
 
+  it('offers rewind only after the clear, including when its divider is off the loaded page', async () => {
+    const props = input()
+    const clear = {
+      ...item('clear', 11),
+      body: {
+        kind: 'status' as const,
+        text: 'Context cleared',
+        contextClear: { operationId: 'clear', afterFence: 1, clearedAt: 1 }
+      }
+    }
+    const view = render({
+      ...props,
+      state: { ...props.state, items: [item('user', 10), clear, item('later', 12)] }
+    })
+    expect([...(view.result.current.surface?.eligibleItemIds ?? [])]).toEqual(['later'])
+    const confirm = vi.fn().mockResolvedValue(true)
+    await act(() => view.result.current.request('user', confirm))
+    expect(confirm).not.toHaveBeenCalled()
+    view.rerender({ ...props, contextFloor: { epoch: 'old', sequence: 11 } })
+    expect([...(view.result.current.surface?.eligibleItemIds ?? [])]).toEqual(['later'])
+  })
+
+  it('awaits the suffix sequence in the same epoch before unblocking', async () => {
+    const props = input()
+    props.send.mockResolvedValue({
+      kind: 'done',
+      value: { itemId: 'user', epoch: 'old', sequence: 15 }
+    })
+    const view = render(props)
+    await act(() => view.result.current.request('user', vi.fn().mockResolvedValue(true)))
+    expect(view.result.current.pending).toBe(true)
+    expect(view.result.current.blockedRef.current).toBe(true)
+    view.rerender({ ...props, state: { ...props.state, cursor: { epoch: 'old', sequence: 15 } } })
+    expect(view.result.current.pending).toBe(false)
+    expect(view.result.current.blockedRef.current).toBe(false)
+  })
+
   it('offers nothing for a row the journal does not hold as a user message', async () => {
     const props = input()
     const confirm = vi.fn()

@@ -15,13 +15,14 @@ const PNG = Buffer.from([0, 1, 2, 3])
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp') },
   clipboard: {
+    availableFormats: () => ['image/png'],
     readImage: () => ({
       getSize: () => ({ height: 1, width: 1 }),
       isEmpty: () => false,
       toPNG: () => PNG
     }),
     readText: vi.fn(),
-    readBuffer: vi.fn(),
+    readBuffer: vi.fn(() => Buffer.alloc(0)),
     writeText: vi.fn(),
     writeImage: vi.fn(),
     writeBuffer: vi.fn()

@@ -15,6 +15,7 @@ export async function runQueueableStructuredAgentSessionSend(
     body: AgentJournalMessageItem
     delivery?: 'queue-if-active'
     userSend?: true
+    personsMessage?: true
   },
   immediate: () => Promise<TurnOutcome<AgentSessionSendResult>>
 ): Promise<TurnOutcome<AgentSessionSendResult>> {

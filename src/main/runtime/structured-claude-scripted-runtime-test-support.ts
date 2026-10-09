@@ -74,12 +74,17 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
     releaseStalls = resolve
   })
   let root: string | null = null
+  let host: StructuredAgentSessionHost | null = null
   let operations = 0
 
   const openConnection: typeof openClaudeStreamJsonConnection = async (launch, handlers = {}) => {
     const providerSessionId = String(launch.options.sessionId ?? launch.options.resume)
     const sessionId = sessionIds.find(
-      (candidate) => claudeSessionIdForOrcaSession(candidate) === providerSessionId
+      (candidate) =>
+        claudeSessionIdForOrcaSession(
+          candidate,
+          host?.deps.store.getRecord(candidate)?.providerContextBoundary?.operationId
+        ) === providerSessionId
     )
     if (!sessionId) {
       throw new Error(`no scripted Claude session for ${providerSessionId}`)
@@ -228,7 +233,7 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
       root = await mkdtemp(join(tmpdir(), 'orca-scripted-claude-runtime-'))
       await mkdir(join(root, 'claude-home'), { recursive: true })
       const directory = root
-      return ensureStructuredAgentSessionHost({
+      host = await ensureStructuredAgentSessionHost({
         logger: createStructuredAgentSessionLogger(),
         stateDirectory: directory,
         hostId: 'local',
@@ -240,6 +245,7 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
         openClaudeConnection: openConnection,
         readProcessStartTime
       })
+      return host
     },
     attachParams: (
       sessionId: string,

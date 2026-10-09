@@ -47,7 +47,7 @@ export function trackLaunchSettlement(
         }
         return
       }
-      // The host's message is for the log; the chat's Retry line alone says the failure.
+      // The chat's Retry line owns the failed start's guidance.
       console.warn('[native-chat] structured launch failed', error)
       const failure = structuredLaunchFailure(error)
       if (failure) {

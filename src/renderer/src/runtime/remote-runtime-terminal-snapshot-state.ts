@@ -97,6 +97,7 @@ export function decodeSnapshotInfo(
     kittyKeyboardFlags?: unknown
     alternateScreen?: unknown
     terminalOwner?: unknown
+    scrollbackRows?: unknown
   }>(payload)
   if (!raw) {
     return null
@@ -116,6 +117,12 @@ export function decodeSnapshotInfo(
     requestId: typeof raw.requestId === 'number' ? raw.requestId : undefined,
     truncated: raw.truncated === true,
     unavailable: parseTerminalSnapshotUnavailableReason(raw.unavailable),
+    scrollbackRows:
+      typeof raw.scrollbackRows === 'number' &&
+      Number.isSafeInteger(raw.scrollbackRows) &&
+      raw.scrollbackRows >= 0
+        ? raw.scrollbackRows
+        : undefined,
     pendingEscapeTailAnsi:
       typeof raw.pendingEscapeTailAnsi === 'string' ? raw.pendingEscapeTailAnsi : undefined
   }

@@ -23,6 +23,7 @@ describe('feature tip modal state', () => {
       cliInstalled: false,
       modalData: { tipId: 'voice-dictation' },
       seenTipIds: ['voice-dictation'],
+      inNativeChatUpgradeTipAudience: false,
       featureInteractions: {},
       settings: makeSettings(),
       webClient: false
@@ -36,6 +37,7 @@ describe('feature tip modal state', () => {
       cliInstalled: false,
       modalData: {},
       seenTipIds: [],
+      inNativeChatUpgradeTipAudience: false,
       featureInteractions: {},
       settings: makeSettings(),
       webClient: false
@@ -49,6 +51,7 @@ describe('feature tip modal state', () => {
       cliInstalled: false,
       modalData: {},
       seenTipIds: ['voice-dictation'],
+      inNativeChatUpgradeTipAudience: false,
       featureInteractions: {},
       settings: makeSettings(),
       webClient: false
@@ -62,6 +65,7 @@ describe('feature tip modal state', () => {
       cliInstalled: true,
       modalData: {},
       seenTipIds: ['orca-cli'],
+      inNativeChatUpgradeTipAudience: false,
       featureInteractions: {},
       settings: makeSettings(),
       webClient: false
@@ -75,6 +79,7 @@ describe('feature tip modal state', () => {
       cliInstalled: false,
       modalData: {},
       seenTipIds: ['voice-dictation', 'orca-cli', 'cmd-j-palette'],
+      inNativeChatUpgradeTipAudience: false,
       featureInteractions: {},
       settings: makeSettings(),
       webClient: false
@@ -88,6 +93,7 @@ describe('feature tip modal state', () => {
       cliInstalled: true,
       modalData: {},
       seenTipIds: ['voice-dictation', 'cmd-j-palette'],
+      inNativeChatUpgradeTipAudience: false,
       featureInteractions: {},
       settings: makeSettings(),
       webClient: false
@@ -101,9 +107,54 @@ describe('feature tip modal state', () => {
       cliInstalled: true,
       modalData: {},
       seenTipIds: ['cmd-j-palette'],
+      inNativeChatUpgradeTipAudience: false,
       featureInteractions: {
         'voice-dictation': { firstInteractedAt: 100, interactionCount: 1 }
       },
+      settings: makeSettings(),
+      webClient: false
+    })
+
+    expect(tip).toBeNull()
+  })
+
+  it('refuses the native chat upgrade tip by id for any profile outside its audience', () => {
+    for (const inNativeChatUpgradeTipAudience of [false, null]) {
+      expect(
+        getFeatureTipForModal({
+          cliInstalled: true,
+          modalData: { tipId: 'native-chat-upgrade' },
+          seenTipIds: [],
+          inNativeChatUpgradeTipAudience,
+          featureInteractions: {},
+          settings: makeSettings(),
+          webClient: false
+        })
+      ).toBeNull()
+    }
+  })
+
+  it('renders the native chat upgrade tip by id for its audience', () => {
+    const tip = getFeatureTipForModal({
+      cliInstalled: true,
+      modalData: { tipId: 'native-chat-upgrade' },
+      seenTipIds: ['native-chat-upgrade'],
+      inNativeChatUpgradeTipAudience: true,
+      featureInteractions: {},
+      settings: makeSettings(),
+      webClient: false
+    })
+
+    expect(tip?.id).toBe('native-chat-upgrade')
+  })
+
+  it('never falls back to the native chat upgrade tip outside its audience', () => {
+    const tip = getFeatureTipForModal({
+      cliInstalled: true,
+      modalData: {},
+      seenTipIds: ['voice-dictation', 'cmd-j-palette'],
+      inNativeChatUpgradeTipAudience: false,
+      featureInteractions: {},
       settings: makeSettings(),
       webClient: false
     })

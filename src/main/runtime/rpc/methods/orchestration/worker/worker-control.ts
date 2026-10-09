@@ -26,6 +26,7 @@ import {
 export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
   defineMethod({
     name: 'orchestration.workerShow',
+    permission: 'workspace',
     params: WorkerDispatchParams,
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
@@ -79,6 +80,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
   }),
   defineMethod({
     name: 'orchestration.workerRead',
+    permission: 'workspace',
     params: WorkerReadParams,
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
@@ -199,6 +201,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
   }),
   defineMethod({
     name: 'orchestration.workerAbandon',
+    permission: 'workspace',
     params: WorkerDispatchParams,
     handler: (params, { runtime, orchestrationCaller }) => {
       const db = runtime.getOrchestrationDb()

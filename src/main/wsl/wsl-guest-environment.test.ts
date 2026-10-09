@@ -14,8 +14,8 @@ import {
 function respondWithPayload(payload: string, code = 0): void {
   runProcessMock.mockImplementation(async (spec: { args: string[] }) => {
     const script = spec.args.at(-1) ?? ''
-    const begin = /__ORCA_WSL_CAPTURE_BEGIN_[a-z0-9]+__/.exec(script)?.[0] ?? ''
-    const end = /__ORCA_WSL_CAPTURE_END_[a-z0-9]+__/.exec(script)?.[0] ?? ''
+    const begin = (/__ORCA_WSL_CAPTURE_BEGIN_ [a-z0-9]+__/.exec(script)?.[0] ?? '').replace(' ', '')
+    const end = (/__ORCA_WSL_CAPTURE_END_ [a-z0-9]+__/.exec(script)?.[0] ?? '').replace(' ', '')
     return {
       code,
       signal: null,

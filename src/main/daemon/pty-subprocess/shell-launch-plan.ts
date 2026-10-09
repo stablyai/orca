@@ -34,10 +34,6 @@ import {
   type RecognizedAgentProcess
 } from '../../../shared/agent-process-recognition'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../../shared/hermes-startup-query'
-import {
-  CLAUDE_INJECTED_CONFIG_DIR_ENV,
-  CLAUDE_PROFILE_POINTER_ENV
-} from '../../../shared/claude-profile-routing'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/windows-terminal-shell'
 import { getShellLaunchConfig, resolvePtyShellPath } from '../shell-ready'
 import { resolveWslSessionContext } from '../wsl-session-context'
@@ -173,8 +169,8 @@ export function createPtyShellLaunchPlan(
       if (env.CLAUDE_CONFIG_DIR) {
         addWslEnvKeys(env, ['CLAUDE_CONFIG_DIR'])
       }
-      if (env[CLAUDE_PROFILE_POINTER_ENV]) {
-        addWslEnvKeys(env, [CLAUDE_PROFILE_POINTER_ENV, CLAUDE_INJECTED_CONFIG_DIR_ENV])
+      if (env.ORCA_CLAUDE_PROFILE_POINTER) {
+        addWslEnvKeys(env, ['ORCA_CLAUDE_PROFILE_POINTER', 'ORCA_CLAUDE_INJECTED_CONFIG_DIR'])
       }
       if (env[ORCA_HERMES_STARTUP_QUERY_ENV] !== undefined) {
         addWslEnvKeys(env, [ORCA_HERMES_STARTUP_QUERY_ENV])

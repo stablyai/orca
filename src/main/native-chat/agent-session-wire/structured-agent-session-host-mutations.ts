@@ -199,6 +199,8 @@ export async function setStructuredAgentSessionOption(
           return await performSetOption(ctx, params, wait.signal)
         } finally {
           wait.end()
+          // Whatever the write's outcome, the child may hold what it asked for now.
+          context.optionRevisions.advance(params.envelope.sessionId)
         }
       }
     },

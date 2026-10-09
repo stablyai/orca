@@ -175,6 +175,7 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
     deletedSshConfigAliases: [],
     sshRemotePtyLeases: [],
     sshPtyConsumerRecoveries: [],
+    claudeLivePtySessionIds: [],
     migrationUnsupportedPtyEntries: [],
     legacyPaneKeyAliasEntries: [],
     automations: [],
@@ -268,6 +269,7 @@ export function getDefaultUIState(): PersistedUIState {
     projectOrderManualDefaultNoticeDismissed: true,
     // Why: only upgraded profiles saw the old default, so only they get the one-time change notice.
     usagePercentageDisplayChangeNoticeDismissed: true,
+    statusBarCompactChangeNoticeDismissed: true,
     workspaceCleanup: { dismissals: {} },
     featureTipsSeenIds: [],
     featureInteractions: {},

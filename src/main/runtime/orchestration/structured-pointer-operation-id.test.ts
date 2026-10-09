@@ -67,6 +67,32 @@ describe('structured pointer operation id', () => {
     expect(second.operationId).toBe(first.operationId)
   })
 
+  it('re-mints an unresolved batch once for a fresh context in the same conversation', () => {
+    const db = fakeDb()
+    const input = {
+      db,
+      mailboxHandle: 'dispatch:d1',
+      sessionId: 's1',
+      messageIds: ['m1'],
+      now: 1_000
+    }
+    const before = resolveId(input)
+    const cleared = {
+      ...input,
+      contextClearOperationId: 'clear-1',
+      submissions: [
+        {
+          clientMessageId: before.operationId,
+          dispatchState: 'pending' as const,
+          submittedAt: 1_000
+        }
+      ]
+    }
+    const fresh = resolveId(cleared)
+    expect(fresh.operationId).not.toBe(before.operationId)
+    expect(resolveId(cleared).operationId).toBe(fresh.operationId)
+  })
+
   it('re-mints when the batch grows', () => {
     const db = fakeDb()
     const first = resolveId({

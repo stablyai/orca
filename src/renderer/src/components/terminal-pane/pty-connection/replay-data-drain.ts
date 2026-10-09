@@ -105,7 +105,8 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
         terminalOwner,
         snapshotCols,
         snapshotRows,
-        carriesNormalBuffer
+        carriesNormalBuffer,
+        carriesHistory
       } = payload
       session.pendingReplayData = null
       const isCurrentPayload = (): boolean =>
@@ -131,7 +132,11 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
           if (!isCurrentPayload()) {
             continue
           }
-          const image = buildFoldedImageReplayWrites(data, session.isPaneOnAlternateScreen())
+          const image = buildFoldedImageReplayWrites(
+            data,
+            session.isPaneOnAlternateScreen(),
+            carriesHistory === true
+          )
           replayPayload = image.payload
           await session.writeReplayDataAsync(image.preamble)
         } else {

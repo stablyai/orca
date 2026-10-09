@@ -20,6 +20,7 @@ import {
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { translate } from '@/i18n/i18n'
+import { NativeChatUpgradeTipDialog } from './NativeChatUpgradeTipDialog'
 import { SessionSearchTipDialog } from './SessionSearchTipDialog'
 import { useSessionSearchTipSetup } from './use-session-search-tip-setup'
 import { VoiceDictationTipDialog } from './VoiceDictationTipDialog'
@@ -33,6 +34,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
   const updateSettings = useAppStore((s) => s.updateSettings)
   const seenTipIds = useAppStore((s) => s.featureTipsSeenIds)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
+  const inNativeChatUpgradeTipAudience = useAppStore((s) => s.inNativeChatUpgradeTipAudience)
   const markFeatureTipsSeen = useAppStore((s) => s.markFeatureTipsSeen)
   const modalData = useAppStore((s) => s.modalData)
   const showAiVaultSearch = useAppStore((s) => s.showAiVaultSearch)
@@ -47,6 +49,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
     modalData,
     seenTipIds,
     featureInteractions,
+    inNativeChatUpgradeTipAudience,
     settings,
     webClient: isWebClientLocation()
   })
@@ -111,6 +114,17 @@ export default function FeatureTipsModal(): JSX.Element | null {
     openSettingsPage()
   }
 
+  const openNativeChatSettings = (): void => {
+    markCurrentTipSeen()
+    closeModal()
+    openSettingsTarget({
+      pane: 'experimental',
+      repoId: null,
+      sectionId: 'experimental-native-chat'
+    })
+    openSettingsPage()
+  }
+
   const enableOrchestrationSkillSetup = (): void => {
     localStorage.setItem(ORCHESTRATION_ENABLED_STORAGE_KEY, '1')
     localStorage.removeItem(ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY)
@@ -124,6 +138,10 @@ export default function FeatureTipsModal(): JSX.Element | null {
 
     markFeatureTipsSeen([currentTip.id])
     switch (currentTip.action) {
+      case 'learn-native-chat-upgrade': {
+        closeModal()
+        break
+      }
       case 'learn-cmd-j-palette': {
         // Why: passive education tip — acknowledging just dismisses; the rebind
         // path lives in Settings and is reachable from the palette itself.
@@ -272,6 +290,19 @@ export default function FeatureTipsModal(): JSX.Element | null {
         onPrimaryAction={() => void handlePrimaryAction()}
         onSkip={handleSkip}
         onRebindClick={openShortcutsSettings}
+      />
+    )
+  }
+
+  if (currentTip.action === 'learn-native-chat-upgrade') {
+    return (
+      <NativeChatUpgradeTipDialog
+        open={isOpen}
+        tip={currentTip}
+        primaryBusy={primaryBusy}
+        onOpenChange={handleOpenChange}
+        onPrimaryAction={() => void handlePrimaryAction()}
+        onSettingsClick={openNativeChatSettings}
       />
     )
   }

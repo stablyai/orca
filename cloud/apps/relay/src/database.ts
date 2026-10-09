@@ -706,7 +706,14 @@ export const POSTGRES_SCHEMA_MIGRATIONS = [
   // Deferrable for the same reason, though SHARE UPDATE EXCLUSIVE blocks only vacuum and DDL: it
   // buys nothing until the drop lands, so a boot that deferred the drop should defer this too.
   `-- schema-deferrable: buys nothing until the drop above lands
-   ALTER TABLE relay_assignment_activity_leases SET (fillfactor = 70)`
+   ALTER TABLE relay_assignment_activity_leases SET (fillfactor = 70)`,
+  // Why: each reservations autovacuum read its ~5.5 GB of indexes in ~3 min, about hourly, evicting
+  // the cache of the Cloud SQL instance shared with auth. 20 ms per 200 cost units spreads a run
+  // over ~15 min. Deferrable: a running vacuum holds the same lock, and nothing at boot needs this.
+  `-- schema-deferrable: a running vacuum holds the lock this needs
+   ALTER TABLE relay_control_connection_reservations SET (autovacuum_vacuum_cost_delay = 20)`,
+  `-- schema-deferrable: a running vacuum holds the lock this needs
+   ALTER TABLE relay_control_connection_reservations SET (autovacuum_vacuum_cost_limit = 200)`
 ]
 
 // The exact statement list a Postgres boot applies, in order, so the lock-target census can read

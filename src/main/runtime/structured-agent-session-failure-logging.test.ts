@@ -111,7 +111,8 @@ describe('failures the desktop host used to drop', () => {
       fence: 1,
       acquisitionGeneration: 'generation-1',
       reportedOptions: { model: 'gpt-5' },
-      restoreSkippedOptions: []
+      restoreSkippedOptions: [],
+      optionRevision: 0
     })
     lifecycle.deliver({
       type: 'ended',

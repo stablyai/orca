@@ -111,6 +111,19 @@ export class OrcadManagedTunnelManager {
     return operation
   }
 
+  /** Forwards anew to the port the server bound now; a redeploy can bind another port. */
+  async rebuild(
+    environment: KnownRuntimeEnvironment,
+    resolveCurrent: () => KnownRuntimeEnvironment | null = () => environment
+  ): Promise<void> {
+    await this.inFlight.get(environment.id)?.catch(() => undefined)
+    const active = this.active.get(environment.id)
+    if (active) {
+      await dropActiveOrcadTunnel(this.active, this.forwards, environment.id, active)
+    }
+    await this.ensure(environment, resolveCurrent)
+  }
+
   async start(
     environmentId: string,
     target: SshTarget,
@@ -289,7 +302,15 @@ export class OrcadManagedTunnelManager {
       targetId: target.id,
       transportGeneration
     })
-    if ((await this.checkServing(environment)).rebind && !rebound) {
+    const recorded = this.active.get(environment.id)
+    const serving = await this.checkServing(environment)
+    if (!stillOwned() || connection.getConnectGeneration() !== transportGeneration) {
+      if (recorded) {
+        await dropActiveOrcadTunnel(this.active, this.forwards, environment.id, recorded)
+      }
+      throw supersededTunnelError()
+    }
+    if (serving.rebind && !rebound) {
       await this.ensureManagedTunnel(environment, resolveCurrent, true)
     }
   }

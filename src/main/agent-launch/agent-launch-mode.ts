@@ -26,7 +26,7 @@ import type {
 import { RUNTIME_CAPABILITIES } from '../../shared/protocol-version'
 import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from '../runtime/structured-agent-runtime-registrations'
 import {
-  prefersStructuredNativeChatByDefault,
+  isNativeChatEnabled,
   resolveStructuredNativeChatSupport,
   type NativeChatDefaultSettings,
   type StructuredNativeChatBlocker
@@ -130,6 +130,8 @@ const HOST_SUPPORT_REASON: Record<
 export function decideAgentLaunchMode(args: {
   placement: AgentLaunchModePlacement
   settings: AgentLaunchModeSettings | null | undefined
+  /** Host-internal: the caller's contract is a terminal handle, so the chat default cannot apply. */
+  terminalOnly?: boolean
   vocabulary?: AgentLaunchModeVocabulary
   /** Registered agents (beyond Claude and Codex) this surface can open as structured; defaults to
    *  every agent this host registers. */
@@ -137,7 +139,7 @@ export function decideAgentLaunchMode(args: {
 }): AgentLaunchModeReceipt {
   const { placement, settings } = args
   const vocabulary = args.vocabulary ?? DEFAULT_LAUNCH_VOCABULARY
-  if (!prefersStructuredNativeChatByDefault(settings)) {
+  if (args.terminalOnly || !isNativeChatEnabled(settings)) {
     return {
       mode: 'terminal',
       preferred: 'terminal',

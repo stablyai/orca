@@ -326,6 +326,7 @@ it('fails closed on corrupt recovery storage while an ordinary send still works'
   expect(await host.restartResume.continueAfterRestart([SESSION], 'modal')).toEqual({
     resumed: [],
     continued: [],
+    skipped: [SESSION],
     sessions: [],
     failed: []
   })

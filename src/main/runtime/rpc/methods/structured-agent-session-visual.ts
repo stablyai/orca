@@ -19,6 +19,7 @@ import { requireInstalledStructuredHost } from './structured-agent-session-gate'
 export const STRUCTURED_AGENT_SESSION_VISUAL_METHODS = [
   defineMethod({
     name: 'agentSession.readVisual',
+    permission: 'workspace',
     params: ReadVisualParams,
     handler: async (params, ctx): Promise<AgentSessionReadVisualResult> => {
       const host = await requireInstalledStructuredHost(ctx)

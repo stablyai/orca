@@ -551,7 +551,9 @@ describe('RateLimitService', () => {
 
   it('does not cache host Claude usage under an outgoing WSL account', async () => {
     const service = new RateLimitService()
-    service.setInactiveClaudeAccountsResolver(() => [{ id: 'wsl-account-1' }])
+    service.setInactiveClaudeAccountsResolver(() => [
+      { id: 'wsl-account-1', managedAuthPath: '/tmp/account-1/auth' }
+    ])
     service.setClaudeAuthPreparationResolver(async (target) => ({
       configDir:
         target?.runtime === 'wsl'

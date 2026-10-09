@@ -32,6 +32,8 @@ import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
 import { codexProviderHandle } from '../../../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
+import { getDefaultPersistedState } from '../../../../shared/constants'
+import { RuntimeClientSettingsController } from '../../runtime-client-settings'
 
 const CONNECTION = 'connection-1'
 const CLIENT = {
@@ -109,12 +111,14 @@ beforeEach(async () => {
   setStructuredAgentSessionHost(host)
   runtime = new OrcaRuntimeService()
   // The structured surface is settings-gated for every caller, in-process included.
-  vi.spyOn(runtime, 'getClientSettings').mockImplementation(
-    () =>
-      ({ experimentalStructuredNativeChat: structuredNativeChatEnabled }) as ReturnType<
-        OrcaRuntimeService['getClientSettings']
-      >
-  )
+  const clientSettings = new RuntimeClientSettingsController({
+    getSettings: () => ({
+      ...getDefaultPersistedState(root).settings,
+      experimentalNativeChat: structuredNativeChatEnabled
+    }),
+    updateSettings: () => undefined
+  }).get()
+  vi.spyOn(runtime, 'getClientSettings').mockImplementation(() => clientSettings)
   dispatcher = new RpcDispatcher({ runtime, methods: STRUCTURED_AGENT_SESSION_METHODS })
   expect(await host.attach({ callerKey: 'client-1' }, hostTestAttachParams(null))).toMatchObject({
     ok: true

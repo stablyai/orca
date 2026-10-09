@@ -1,4 +1,5 @@
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import type {
   AgentJournalAnsweredTurnIdentity,
   AgentJournalItemIdentity,
@@ -86,6 +87,7 @@ export type CodexStructuredSessionEvent =
   | { type: 'ended'; sessionId: string; reason: string; observedAt?: number }
 
 export type CodexStructuredSessionAdapterDeps = {
+  resolveAccountKind?: (home: string) => AgentSessionAccountKind | undefined
   resolveLaunch: (input: {
     identity: AgentSessionJournalIdentity
   }) => Promise<CodexStructuredLaunch>
@@ -119,6 +121,7 @@ export type CodexStructuredSessionAdapterDeps = {
 }
 
 export type CodexSession = {
+  account?: AgentSessionAccountKind
   connection: CodexAppServerConnection
   ended: boolean
   /** First observed child exit survives rejected settlement admission. */

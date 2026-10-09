@@ -34,6 +34,7 @@ export function resetComputerSessionsForTest(): void {
 export const COMPUTER_METHODS = [
   defineMethod({
     name: 'computer.capabilities',
+    permission: 'workspace',
     params: ComputerCapabilitiesParams,
     handler: async () => {
       return await callComputerSidecarCapabilities()
@@ -41,6 +42,7 @@ export const COMPUTER_METHODS = [
   }),
   defineMethod({
     name: 'computer.listApps',
+    permission: 'desktop-control',
     params: ListApps,
     handler: async () => {
       return await callComputerSidecarListApps()
@@ -48,6 +50,7 @@ export const COMPUTER_METHODS = [
   }),
   defineMethod({
     name: 'computer.permissions',
+    permission: 'desktop-control',
     params: ComputerPermissions,
     handler: async (params) => {
       const { openComputerUsePermissions } =
@@ -57,6 +60,7 @@ export const COMPUTER_METHODS = [
   }),
   defineMethod({
     name: 'computer.permissionsStatus',
+    permission: 'workspace',
     params: ComputerPermissionsStatusParams,
     handler: async () => {
       const { getComputerUsePermissionStatus } =
@@ -66,6 +70,7 @@ export const COMPUTER_METHODS = [
   }),
   defineMethod({
     name: 'computer.listWindows',
+    permission: 'desktop-control',
     params: ListWindows,
     handler: async (params) => {
       return await callComputerSidecarListWindows(params)
@@ -73,6 +78,7 @@ export const COMPUTER_METHODS = [
   }),
   defineMethod({
     name: 'computer.getAppState',
+    permission: 'desktop-control',
     params: ComputerObserveTarget,
     handler: async (params) => {
       return await callComputerSidecarSnapshot(params)
@@ -80,6 +86,7 @@ export const COMPUTER_METHODS = [
   }),
   defineMethod({
     name: 'computer.click',
+    permission: 'desktop-control',
     params: Click,
     handler: async (params) => {
       return await callComputerSidecarAction('click', params)
@@ -87,6 +94,7 @@ export const COMPUTER_METHODS = [
   }),
   defineMethod({
     name: 'computer.performSecondaryAction',
+    permission: 'desktop-control',
     params: PerformSecondaryAction,
     handler: async (params) => {
       return await callComputerSidecarAction('performSecondaryAction', params)
@@ -94,6 +102,7 @@ export const COMPUTER_METHODS = [
   }),
   defineMethod({
     name: 'computer.scroll',
+    permission: 'desktop-control',
     params: Scroll,
     handler: async (params) => {
       return await callComputerSidecarAction('scroll', params)
@@ -101,6 +110,7 @@ export const COMPUTER_METHODS = [
   }),
   defineMethod({
     name: 'computer.drag',
+    permission: 'desktop-control',
     params: Drag,
     handler: async (params) => {
       return await callComputerSidecarAction('drag', params)
@@ -108,6 +118,7 @@ export const COMPUTER_METHODS = [
   }),
   defineMethod({
     name: 'computer.typeText',
+    permission: 'desktop-control',
     params: TypeText,
     handler: async (params) => {
       return await callComputerSidecarAction('typeText', params)
@@ -115,6 +126,7 @@ export const COMPUTER_METHODS = [
   }),
   defineMethod({
     name: 'computer.pressKey',
+    permission: 'desktop-control',
     params: PressKey,
     handler: async (params) => {
       return await callComputerSidecarAction('pressKey', params)
@@ -122,6 +134,7 @@ export const COMPUTER_METHODS = [
   }),
   defineMethod({
     name: 'computer.hotkey',
+    permission: 'desktop-control',
     params: Hotkey,
     handler: async (params) => {
       return await callComputerSidecarAction('hotkey', params)
@@ -129,6 +142,7 @@ export const COMPUTER_METHODS = [
   }),
   defineMethod({
     name: 'computer.pasteText',
+    permission: 'desktop-control',
     params: PasteText,
     handler: async (params) => {
       return await callComputerSidecarAction('pasteText', params)
@@ -136,6 +150,7 @@ export const COMPUTER_METHODS = [
   }),
   defineMethod({
     name: 'computer.setValue',
+    permission: 'desktop-control',
     params: SetValue,
     handler: async (params) => {
       return await callComputerSidecarAction('setValue', params)

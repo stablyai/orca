@@ -17,7 +17,8 @@ import type {
 } from './runtime-worktree-agent-startup'
 import {
   buildWorktreeStartupForAgent,
-  buildWorktreeStartupForDraft
+  buildWorktreeStartupForDraft,
+  resolveWorktreeStartupDraftAgent
 } from './runtime-worktree-agent-startup'
 import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
 import type { Worktree } from '../../shared/worktree/types'
@@ -131,6 +132,19 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
     return { repoId: repo.id, worktreeId: worktree.id, activated: true, sleepingAgentWake }
   }
 
+  /** The agent a create's linked draft starts, chosen as `buildStartupForDraft` chooses it, so a
+   *  launch can name the agent before the create runs. */
+  async resolveStartupDraftAgent(repo: Repo, requestedAgent?: TuiAgent): Promise<TuiAgent | null> {
+    if (!this.store) {
+      return null
+    }
+    return resolveWorktreeStartupDraftAgent({
+      repo,
+      settings: this.store.getSettings(),
+      ...(requestedAgent ? { requestedAgent } : {})
+    })
+  }
+
   protected async buildStartupForDraft(
     repo: Repo,
     draft: string,
@@ -161,6 +175,7 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
     launchPreferences?: AgentLaunchPreferences,
     launchInputs?: {
       agentArgs?: string | null
+      extraAgentArgs?: string
       launchSource?: string
       onPromptCarry?: (carried: boolean) => void
     }
@@ -174,6 +189,7 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
       ...(prompt !== undefined ? { prompt } : {}),
       ...(launchPreferences ? { launchPreferences } : {}),
       ...(launchInputs?.agentArgs !== undefined ? { agentArgs: launchInputs.agentArgs } : {}),
+      ...(launchInputs?.extraAgentArgs ? { extraAgentArgs: launchInputs.extraAgentArgs } : {}),
       ...(launchInputs?.launchSource ? { launchSource: launchInputs.launchSource } : {}),
       ...(launchInputs?.onPromptCarry ? { onPromptCarry: launchInputs.onPromptCarry } : {}),
       settings: this.store.getSettings(),

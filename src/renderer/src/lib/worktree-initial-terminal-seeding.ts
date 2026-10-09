@@ -11,19 +11,12 @@ import { agentKindToTuiAgent } from '../../../shared/agent-kind'
 import { useAppStore } from '@/store'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed-delivery'
 import { resolveWorkspaceTerminalHostAuthority } from '@/lib/workspace-terminal-host-authority'
-import { initialAgentTabViewModeProps } from './native-chat-initial-view-mode'
-import { getConnectionId } from '@/lib/connection-context'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import type {
   InitialTerminalOptions,
   WorktreeActivationStore
 } from '@/lib/worktree-activation-store-contract'
-import {
-  draftViewModeProps,
-  resolveStartupLaunchDraftText,
-  type WorktreeStartupPayload
-} from '@/lib/worktree-startup-payload'
+import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import {
   queueSetupAndIssueCommands,
   type IssueCommandLaunch
@@ -259,20 +252,7 @@ export function ensureWorktreeHasInitialTerminal(
       : undefined)
   const terminalTab = store.createTab(worktreeId, undefined, undefined, {
     pendingActivationSpawn: true,
-    ...(launchAgent
-      ? {
-          launchAgent,
-          ...initialAgentTabViewModeProps(store.settings ?? null, {
-            agent: launchAgent,
-            // Why: argv-prefill launches carry the draft in `command` and set no
-            // draftPrompt, so gating on draftPrompt alone misses them entirely.
-            ...draftViewModeProps(resolveStartupLaunchDraftText(sequencedStartup)),
-            nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-              getConnectionId(worktreeId)
-            )
-          })
-        }
-      : {}),
+    ...(launchAgent ? { launchAgent } : {}),
     ...(opts?.activateCreatedTabs === false ? { activate: false } : {})
   })
   if (opts?.activateCreatedTabs !== false) {

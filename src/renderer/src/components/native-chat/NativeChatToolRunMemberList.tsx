@@ -85,6 +85,7 @@ export function NativeChatToolRunMemberList({
                   : undefined
               }
               onReveal={onRevealDiff}
+              onLinkClick={onLinkClick}
               disclosureKey={
                 disclosureId === undefined
                   ? undefined

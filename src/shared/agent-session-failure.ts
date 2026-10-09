@@ -6,6 +6,7 @@
 // value the provider wrote — never recovered from a string afterwards, since by then nothing can
 // tell a provider's sentence from Orca's.
 
+import type { AgentSessionAccountKind } from './agent-session-availability'
 import {
   readAgentSessionArgumentProblem,
   type AgentSessionArgumentProblem
@@ -25,14 +26,14 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   /** A start that did not land, with no one to blame: Orca's fault, a failed spawn, a close. */
   'startFailed',
   'notSignedIn',
+  /** The agent's CLI is not installed where the chat runs: its spawn found no such file. */
+  'cliMissing',
   'historyTooLarge',
   'managedAccountEnvOverride',
   'accountSwitchInProgress',
   'managedAccountUnsupported',
   'launchFolderMissing',
   'historyInOtherAccount',
-  'claudeAccountFolderMissing',
-  'claudeAccountSetupFailed',
   'agentCommandNotRunnable',
   'providerExited',
   'restartFailed',
@@ -143,6 +144,7 @@ export type AgentSessionProviderRetry = {
 
 export type AgentSessionFailureFact = {
   kind: AgentSessionFailureKind
+  account?: AgentSessionAccountKind
   /** Provider-authored only; absent whenever Orca wrote the words. */
   detail?: ProviderDiagnostic
   /** On `restartFailed` and `startFailed`: the refusal that kept the agent from starting. On
@@ -181,6 +183,7 @@ export function providerDiagnostic(
 export function agentSessionFailureFact<TKind extends AgentSessionFailureKind>(
   kind: TKind,
   extra: {
+    account?: AgentSessionAccountKind
     detail?: ProviderDiagnostic
     refusal?: AgentSessionRefusalReference
     attachment?: AgentSessionAttachmentProblem
@@ -194,6 +197,7 @@ export function agentSessionFailureFact<TKind extends AgentSessionFailureKind>(
     : undefined
   return {
     kind,
+    ...(extra.account ? { account: extra.account } : {}),
     ...(detail ? { detail } : {}),
     ...(extra.refusal ? { refusal: extra.refusal } : {}),
     ...(extra.attachment ? { attachment: extra.attachment } : {}),
@@ -268,6 +272,9 @@ export function readAgentSessionFailureFact(value: unknown): AgentSessionFailure
   const retry = readProviderRetry(value.retry)
   const argumentProblem = readAgentSessionArgumentProblem(value.argumentProblem)
   return agentSessionFailureFact(value.kind, {
+    ...(value.account === 'managed' || value.account === 'system'
+      ? { account: value.account }
+      : {}),
     ...(isProviderDiagnostic(value.detail) ? { detail: value.detail } : {}),
     ...(refusal ? { refusal } : {}),
     ...(attachment ? { attachment } : {}),

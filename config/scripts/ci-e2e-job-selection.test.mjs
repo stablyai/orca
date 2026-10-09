@@ -13,9 +13,58 @@ import {
 } from './ci-e2e-job-selection.mjs'
 import { selectPrE2eSpecs } from './pr-e2e-source-routing.mjs'
 
+it.each([
+  'src/main/runtime/runtime-browser-commands-factory.ts',
+  'src/main/runtime/orca-runtime-get-status.ts',
+  'src/main/orcad/orcad-browser-startup.ts'
+])('routes the managed browser capability oracle from %s', (path) => {
+  expect(selectPrE2eSpecs([path])).toContain('tests/e2e/ssh-orcad-browser-capabilities.spec.ts')
+})
+
+it.each(['errors', 'status', 'lifecycle', 'restart-attempt'])(
+  'routes the real browser service status check from %s changes',
+  (name) => {
+    expect(
+      selectPrE2eSpecs([
+        `src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-${name}.ts`
+      ])
+    ).toContain('tests/e2e/ssh-orcad-browser-service-status.spec.ts')
+  }
+)
+
+it.each([
+  'src/renderer/src/lib/ssh-workspace-browser-route-eligibility.ts',
+  'src/renderer/src/components/browser-pane/use-ssh-workspace-browser-route.ts',
+  'src/main/browser/local-ssh-browser-route.ts',
+  'src/renderer/src/store/repos/converted-ssh-browser-pages.ts',
+  'src/renderer/src/store/slices/browser/browser-tab-actions.ts',
+  'src/renderer/src/hooks/ipc-events/ssh-managed-server-state-effects.ts'
+])('routes the managed browser routing oracle from %s', (path) => {
+  expect(selectPrE2eSpecs([path])).toContain('tests/e2e/ssh-orcad-browser-routing.spec.ts')
+})
+
 const workflow = parse(readFileSync('.github/workflows/e2e.yml', 'utf8'))
 const prWorkflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
 const classify = (specs, ssh = 'false') => classifyE2eJobs(JSON.stringify(specs), ssh)
+
+it('runs real browser file-drop ownership in the template-building Docker job', () => {
+  const spec = 'tests/e2e/ssh-orcad-browser-drop-owner.spec.ts'
+  expect(classify([spec])).toEqual({ e2e_run_changed: false, e2e_needs_build: true })
+  const job = workflow.jobs['orcad-auto-convert-docker']
+  expect(job.if).toContain(spec)
+  expect(
+    job.steps.some((step) => step.run?.includes(spec) && step.env?.ORCA_E2E_SSH_DOCKER === '1')
+  ).toBe(true)
+  for (const source of [
+    'src/renderer/src/lib/file-preview.ts',
+    'src/renderer/src/lib/workspace-file-drag.ts',
+    'src/renderer/src/components/browser-pane/navigate/use-browser-page-navigation-downloads.ts',
+    'src/renderer/src/components/right-sidebar/FileExplorerRow.tsx',
+    'tests/e2e/helpers/browser-split-guest-probes.ts'
+  ]) {
+    expect(selectPrE2eSpecs([source]), source).toContain(spec)
+  }
+})
 
 it('skips the general consumer only when every requested spec has a dedicated owner', () => {
   for (const spec of DEDICATED_E2E_SPECS) {
@@ -23,7 +72,10 @@ it('skips the general consumer only when every requested spec has a dedicated ow
   }
   expect(classify(DEDICATED_E2E_SPECS).e2e_run_changed).toBe(false)
   const future = 'tests/e2e/future-unclassified.spec.ts'
-  expect(classify([future])).toEqual({ e2e_run_changed: true, e2e_needs_build: true })
+  expect(classify([future])).toEqual({
+    e2e_run_changed: true,
+    e2e_needs_build: true
+  })
   expect(selectGeneralE2eSpecs([...DEDICATED_E2E_SPECS, future])).toEqual([future])
   expect(classify([...DEDICATED_E2E_SPECS, future]).e2e_run_changed).toBe(true)
 })
@@ -144,4 +196,110 @@ it('runs remaining SSH tests after real failures and stops them when a run is ca
   for (const step of steps.filter((step) => step.name?.startsWith('Keep '))) {
     expect(step.if).toContain('always()')
   }
+})
+
+it.each([
+  'src/renderer/src/runtime/web-session-tabs-sync/mirrored-editor-file-identity.ts',
+  'src/renderer/src/runtime/web-session-tabs-sync/tab-builders.ts',
+  'src/renderer/src/runtime/web-session-tabs-sync/apply-preparation-browser.ts',
+  'src/renderer/src/runtime/web-session-existing-tab-index.ts'
+])('routes %s to the template-building editor ownership lane', (file) => {
+  const spec = 'tests/e2e/ssh-orcad-editor-ownership.spec.ts'
+  expect(selectPrE2eSpecs([file])).toContain(spec)
+  expect(classify([spec])).toEqual({
+    e2e_run_changed: false,
+    e2e_needs_build: true
+  })
+  const job = workflow.jobs['orcad-auto-convert-docker']
+  expect(job.if).toContain(spec)
+  expect(job.steps.find((step) => step.name === 'Convert a relay-era Docker host').run).toContain(
+    spec
+  )
+})
+
+const MARKDOWN_CONVERSION_SPEC = 'tests/e2e/ssh-orcad-markdown-conversion.spec.ts'
+const MARKDOWN_LINK_REFRESH_SPEC = 'tests/e2e/ssh-orcad-markdown-link-refresh.spec.ts'
+const MARKDOWN_LIVE_DOCUMENTS_SPEC = 'tests/e2e/ssh-orcad-markdown-live-documents.spec.ts'
+
+it.each([
+  ['src/renderer/src/components/editor/useMarkdownDocuments.ts', MARKDOWN_CONVERSION_SPEC],
+  [
+    'src/renderer/src/components/editor/restored-editor-workspace-runtime-owner.ts',
+    MARKDOWN_CONVERSION_SPEC
+  ],
+  [
+    'src/renderer/src/components/editor/migrate-restored-editor-file-owner.ts',
+    MARKDOWN_CONVERSION_SPEC
+  ],
+  ['src/renderer/src/components/editor/rich-markdown-doc-link.ts', MARKDOWN_LINK_REFRESH_SPEC],
+  [
+    'src/renderer/src/components/editor/useRichMarkdownProgrammaticSync.ts',
+    MARKDOWN_LINK_REFRESH_SPEC
+  ],
+  ['src/renderer/src/components/editor/useMarkdownDocuments.ts', MARKDOWN_LIVE_DOCUMENTS_SPEC],
+  [
+    'src/renderer/src/components/editor/use-markdown-document-watch-refresh.ts',
+    MARKDOWN_LIVE_DOCUMENTS_SPEC
+  ],
+  [
+    'src/renderer/src/components/editor/markdown-document-list-request.ts',
+    MARKDOWN_LIVE_DOCUMENTS_SPEC
+  ]
+])('routes %s to the template-building Markdown lane %s', (file, spec) => {
+  expect(selectPrE2eSpecs([file])).toContain(spec)
+  expect(classify([spec])).toEqual({
+    e2e_run_changed: false,
+    e2e_needs_build: true
+  })
+  const job = workflow.jobs['orcad-auto-convert-docker']
+  expect(job.if).toContain(spec)
+  expect(job.steps.find((step) => step.name === 'Convert a relay-era Docker host').run).toContain(
+    spec
+  )
+})
+
+it.each([
+  'src/renderer/src/hooks/useEditorExternalWatch.ts',
+  'src/renderer/src/hooks/editor-runtime-file-watch.ts'
+])('routes %s to the template-building editor watch recovery lane', (file) => {
+  const spec = 'tests/e2e/ssh-orcad-editor-watch-recovery.spec.ts'
+  expect(selectPrE2eSpecs([file])).toContain(spec)
+  expect(classify([spec])).toEqual({ e2e_run_changed: false, e2e_needs_build: true })
+  const job = workflow.jobs['orcad-auto-convert-docker']
+  expect(job.if).toContain(spec)
+  expect(job.steps.find((step) => step.name === 'Convert a relay-era Docker host').run).toContain(
+    spec
+  )
+})
+
+it.each([
+  'src/renderer/src/components/right-sidebar/useFileExplorerWatch.ts',
+  'src/renderer/src/hooks/worktree-file-change-event.ts'
+])('routes %s to the template-building explorer watch recovery lane', (file) => {
+  const spec = 'tests/e2e/ssh-orcad-explorer-watch-recovery.spec.ts'
+  expect(selectPrE2eSpecs([file])).toContain(spec)
+  expect(classify([spec])).toEqual({ e2e_run_changed: false, e2e_needs_build: true })
+  const job = workflow.jobs['orcad-auto-convert-docker']
+  expect(job.if).toContain(spec)
+  expect(job.steps.find((step) => step.name === 'Convert a relay-era Docker host').run).toContain(
+    spec
+  )
+})
+
+it.each([
+  'src/renderer/src/components/right-sidebar/useFileExplorerWatch.ts',
+  'src/renderer/src/components/right-sidebar/file-explorer-operation-owner.ts',
+  'src/renderer/src/components/right-sidebar/FileExplorer.tsx',
+  'src/renderer/src/hooks/editor-external-watch-targets.ts',
+  'src/renderer/src/components/right-sidebar/useFileExplorerTree.ts',
+  'src/renderer/src/components/right-sidebar/use-file-explorer-tree-load-effects.ts'
+])('routes %s to the template-building selected-host explorer lane', (file) => {
+  const spec = 'tests/e2e/ssh-orcad-explorer-selected-host.spec.ts'
+  expect(selectPrE2eSpecs([file])).toContain(spec)
+  expect(classify([spec])).toEqual({ e2e_run_changed: false, e2e_needs_build: true })
+  const job = workflow.jobs['orcad-auto-convert-docker']
+  expect(job.if).toContain(spec)
+  expect(job.steps.find((step) => step.name === 'Convert a relay-era Docker host').run).toContain(
+    spec
+  )
 })

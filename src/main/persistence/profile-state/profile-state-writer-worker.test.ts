@@ -2,7 +2,7 @@ import { build } from 'esbuild'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { ProfileStateRevisionConflictError } from './profile-state-document-validation'
 import { openProfileStateDatabase } from './profile-state-database'
@@ -58,9 +58,12 @@ function fixture() {
 function clientFor(
   initialization: ReturnType<typeof fixture>['initialization'],
   path = workerPath,
-  timeoutMs = 5000
+  slowWarningMs = 5000
 ) {
-  const client = new ProfileStateWriteWorkerClient(initialization, { workerPath: path, timeoutMs })
+  const client = new ProfileStateWriteWorkerClient(initialization, {
+    workerPath: path,
+    slowWarningMs
+  })
   clients.push(client)
   return client
 }
@@ -206,6 +209,35 @@ describe('persistent profile state write worker', () => {
     })
   })
 
+  it('accepts a commit acknowledged after the slow warning and keeps the same worker', async () => {
+    const f = fixture()
+    const delayed = script(
+      f.root,
+      `
+      const { MessagePort } = require('node:worker_threads')
+      const send = MessagePort.prototype.postMessage
+      MessagePort.prototype.postMessage = function(value, ...rest) {
+        if (value?.id === 1 && value.ok) { setTimeout(() => send.call(this, value, ...rest), 200); return }
+        return send.call(this, value, ...rest)
+      }
+      require(${JSON.stringify(workerPath)})
+    `
+    )
+    const client = clientFor(f.initialization, delayed, 20)
+    await client.ready
+    expect(
+      await client.writeSerializedDomains([{ domain: 'settings', payload: '{"delayed":true}' }])
+    ).toBe(2)
+    expect(await client.writeSerializedDomains([{ domain: 'ui', payload: '{"after":true}' }])).toBe(
+      3
+    )
+    await client.close()
+    expect(readState(f.path, f.profileId)).toEqual({
+      settings: { delayed: true },
+      ui: { after: true }
+    })
+  })
+
   it('waits for actual worker exit after receiving its close acknowledgement', async () => {
     const f = fixture()
     const marker = join(f.root, 'worker-exited.txt')
@@ -254,7 +286,7 @@ describe('persistent profile state write worker', () => {
     expect(readState(f.path, f.profileId)).toEqual({ settings: { committed: true } })
   })
 
-  it.each(['mismatch', 'timeout', 'exit'])(
+  it.each(['mismatch', 'exit'])(
     'fails closed after a dispatched %s and awaits actual exit',
     async (mode) => {
       const f = fixture()
@@ -271,24 +303,10 @@ describe('persistent profile state write worker', () => {
       )
       const client = clientFor(f.initialization, broken)
       await client.ready
-      if (mode === 'timeout') {
-        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-      }
-      try {
-        const failure = client
-          .writeSerializedDomains([{ domain: 'settings', payload: '{}' }])
-          .catch((error: unknown) => error)
-        if (mode === 'timeout') {
-          await vi.advanceTimersByTimeAsync(5000)
-        }
-        const observedFailure = await failure
-        expect(profileStateWriterFailureOutcome(observedFailure)).toBe('indeterminate')
-        if (mode === 'timeout') {
-          expect(observedFailure).toMatchObject({ code: 'profile-state-writer-timeout' })
-        }
-      } finally {
-        vi.useRealTimers()
-      }
+      const failure = await client
+        .writeSerializedDomains([{ domain: 'settings', payload: '{}' }])
+        .catch((error: unknown) => error)
+      expect(profileStateWriterFailureOutcome(failure)).toBe('indeterminate')
       await client.close()
       expect(readState(f.path, f.profileId)).toEqual({ settings: { theme: 'dark' } })
       rmSync(f.root, { recursive: true })

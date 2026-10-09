@@ -84,6 +84,10 @@ export async function forwardToVerifiedOrcad(
     const identity = args.verify
       ? await args.verify(forward.localPort)
       : ({ verdict: 'verified' } as const)
+    if (!args.stillCurrent()) {
+      await args.forwards.removeForwardAndWait(forward.id)
+      return null
+    }
     if (identity.verdict !== 'foreign') {
       if (identity.verdict === 'unreachable') {
         // Why not fail: a server that is down or still starting is not a wrong server.

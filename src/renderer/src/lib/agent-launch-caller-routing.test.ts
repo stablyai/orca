@@ -78,9 +78,7 @@ function serverReports(capabilities: readonly string[] | null): void {
 }
 
 const CHAT_DEFAULT_SETTINGS = {
-  experimentalNativeChat: true,
-  experimentalStructuredNativeChat: true,
-  openAgentTabsInChatByDefault: true
+  experimentalNativeChat: true
 }
 
 const cases = callerProfileCases()

@@ -28,6 +28,7 @@ function listRegisteredSshTargetSummaries(): SshTargetSummary[] {
 export const SSH_METHODS = [
   defineMethod({
     name: 'ssh.getState',
+    permission: 'workspace',
     params: SshTarget,
     handler: (params) => ({
       state: getPublicSshState(getRegisteredSshState(params.targetId) ?? null)
@@ -35,6 +36,7 @@ export const SSH_METHODS = [
   }),
   defineMethod({
     name: 'ssh.connect',
+    permission: 'host-admin',
     params: SshTarget,
     handler: async (params) => {
       try {
@@ -47,18 +49,21 @@ export const SSH_METHODS = [
   }),
   defineMethod({
     name: 'ssh.listTargets',
+    permission: 'workspace',
     params: null,
     // Why: legacy clients can call this method directly, so it must preserve the same HUB-private secret boundary.
     handler: () => ({ targets: listRegisteredSshTargetSummaries() })
   }),
   defineMethod({
     name: 'ssh.listTargetSummaries',
+    permission: 'workspace',
     params: null,
     // Why: paired clients need display identity only; SSH addresses, jump chains, and credentials remain HUB-private.
     handler: () => ({ targets: listRegisteredSshTargetSummaries() })
   }),
   defineMethod({
     name: 'ssh.listRemovedTargetLabels',
+    permission: 'workspace',
     params: null,
     handler: () => ({ labels: listRegisteredRemovedSshTargetLabels() })
   })

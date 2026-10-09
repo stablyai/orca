@@ -44,7 +44,8 @@ export async function printServeReady(options: ServeOptions): Promise<void> {
     : runtimeRpc.createPairingOffer({
         address: options.pairingAddress,
         name: `${options.mobilePairing ? 'Mobile' : 'CLI'} ${new Date().toLocaleDateString()}`,
-        scope: options.mobilePairing ? 'mobile' : 'runtime'
+        scope: options.mobilePairing ? 'mobile' : 'runtime',
+        grants: options.grantDesktopControl ? ['desktop-control'] : []
       })
   const pairingQr =
     pairing.available && options.mobilePairing

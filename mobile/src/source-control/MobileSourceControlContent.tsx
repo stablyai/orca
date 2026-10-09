@@ -42,6 +42,7 @@ export function MobileSourceControlContent({ state }: Props) {
     openingBranchPath,
     sections,
     hasVisibleChanges,
+    status,
     stageablePaths,
     unstageablePaths,
     stagedCount,
@@ -56,6 +57,8 @@ export function MobileSourceControlContent({ state }: Props) {
     runGitAction
   } = state
   const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
+  // Why: a capped listing can hide unstaged rows behind an all-staged prefix.
+  const canStageAll = stageablePaths.length > 0 || status?.didHitLimit === true
   const shouldShowGenerateButton = stagedCount > 0 || generatingMessage
   const createPrHeroActive =
     createPrAction.visible && !createPrAction.disabled && !createPrAction.pushFirst
@@ -117,11 +120,11 @@ export function MobileSourceControlContent({ state }: Props) {
           <Pressable
             style={({ pressed }) => [
               styles.bulkButton,
-              (stageablePaths.length === 0 || ioBusy) && styles.bulkButtonDisabled,
+              (!canStageAll || ioBusy) && styles.bulkButtonDisabled,
               pressed && styles.bulkButtonPressed
             ]}
             onPress={() => void stageAll()}
-            disabled={ioBusy || stageablePaths.length === 0}
+            disabled={ioBusy || !canStageAll}
           >
             {busyAction === 'stage-all' ? (
               <ActivityIndicator size="small" color={colors.textPrimary} />

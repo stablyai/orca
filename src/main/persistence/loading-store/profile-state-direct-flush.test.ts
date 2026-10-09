@@ -93,6 +93,16 @@ describe('SQLite durability barriers with another selective write pending', () =
     })
   })
 
+  it('commits Claude live-PTY admission before returning', () => {
+    const state = fixture()
+    state.pendSession()
+    state.store.addClaudeLivePtySessionId('claude-session')
+    expect(state.read('claudeLivePtySessionIds')).toMatchObject({
+      kind: 'value',
+      value: ['claude-session']
+    })
+  })
+
   it('commits SSH lease admission before returning', () => {
     const state = fixture()
     state.pendSession()

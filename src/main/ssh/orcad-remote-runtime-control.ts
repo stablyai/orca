@@ -138,7 +138,11 @@ export async function launchOrcadAndAwaitReadiness(
         orcadReadinessWaitCommand(target.host, spec.remoteInstallDir, waitSeconds)
       )
     } catch (error) {
-      if (isUnconfirmedSshCommandTermination(error) || error instanceof OrcadFenceLostError) {
+      if (
+        (error instanceof Error && error.name === 'AbortError') ||
+        isUnconfirmedSshCommandTermination(error) ||
+        error instanceof OrcadFenceLostError
+      ) {
         throw error
       }
       // Why retry: a failed read (a refused channel, a timed-out wait) says nothing about the
@@ -148,6 +152,7 @@ export async function launchOrcadAndAwaitReadiness(
       await sleep(READINESS_RETRY_PAUSE_MS)
       continue
     }
+    target.signal?.throwIfAborted()
     lastWaitError = undefined
     last = parseOrcadReadinessWaitOutput(target.host, output)
     if (last.state !== 'pending') {

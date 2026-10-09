@@ -15,6 +15,7 @@ import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environ
 import { setSecretStore, type SecretStore } from '../../shared/secret-store'
 import type { ServeReadiness } from '../server/serve-readiness'
 import { resolveOrcadInstallRoot, resolveOrcadPath, resolveUserDataPath } from './orcad-app-paths'
+import { getOrcadCliLauncherPath, prepareOrcadCliLauncher } from './orcad-cli-launcher'
 import { describeOrcadBindExposure, resolveOrcadBindHost } from './orcad-bind-address'
 import {
   flushOrcadProfileStoreForShutdown,
@@ -66,6 +67,7 @@ function createNodeAppEnvironment(): AppEnvironment {
     // posture. Layout questions must ask whether the app root is an asar archive
     // instead (see parcel-watcher-entry-path.ts).
     isPackaged: () => true,
+    getCliLauncherPath: getOrcadCliLauncherPath,
     onWillQuit: (handler) => quitHandlers.push(handler),
     exit: (code = 0) => process.exit(code),
     // Why []: there are no Chromium processes on this host to measure.
@@ -104,6 +106,8 @@ export type OrcadOptions = {
   pairingAddress?: string
   /** Desktop `orca serve` parity: a mobile-scoped offer with a terminal QR. */
   mobilePairing?: boolean
+  /** Lets the paired runtime client drive this machine's desktop (computer.*). */
+  grantDesktopControl?: boolean
   /** Desktop `orca serve` parity: print only the ephemeral-VM recipe line. */
   recipeJson?: boolean
   projectRoot?: string
@@ -197,6 +201,10 @@ async function startOrcadRuntime(
   const { resolvePushGatewayOrigin } = await import('../runtime/push/push-gateway-origin')
 
   const runtimeUserDataPath = getAppEnvironment().getPath('userData')
+  // A missing `orca` command must never keep the server from starting.
+  await prepareOrcadCliLauncher().catch((error: unknown) => {
+    console.warn('[orcad] Could not prepare the profile CLI launcher', error)
+  })
   const idleExitStartup = beginOrcadIdleExit(runtimeUserDataPath)
   const { store: profileStore, authority: profileStateAuthority } =
     await createOrcadProfileStateStartup(runtimeUserDataPath)

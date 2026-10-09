@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode, type Ref } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -15,15 +15,27 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 export function WorktreeForceDeleteButton({
   toastId,
   onForceDelete,
-  onAlwaysForceDelete
+  onAlwaysForceDelete,
+  onSavingChange,
+  size = 'sm',
+  disabled = false,
+  buttonRef,
+  children
 }: {
-  toastId: string
+  toastId?: string
   onForceDelete: () => void
   onAlwaysForceDelete?: () => Promise<void>
+  onSavingChange?: (saving: boolean) => void
+  size?: 'sm' | 'default'
+  disabled?: boolean
+  buttonRef?: Ref<HTMLButtonElement>
+  children?: ReactNode
 }): React.JSX.Element {
   const [isSaving, setIsSaving] = useState(false)
   const forceDelete = (): void => {
-    toast.dismiss(toastId)
+    if (toastId) {
+      toast.dismiss(toastId)
+    }
     onForceDelete()
   }
   const alwaysForceDelete = async (): Promise<void> => {
@@ -31,15 +43,18 @@ export function WorktreeForceDeleteButton({
       return
     }
     setIsSaving(true)
+    onSavingChange?.(true)
     try {
       await onAlwaysForceDelete()
     } catch (error) {
-      setIsSaving(false)
       toast.error(
         translate('workspaceDeletion.preferenceSaveFailed', 'Could not save deletion preference'),
         { description: error instanceof Error ? error.message : String(error) }
       )
       return
+    } finally {
+      setIsSaving(false)
+      onSavingChange?.(false)
     }
     forceDelete()
   }
@@ -57,21 +72,23 @@ export function WorktreeForceDeleteButton({
         }}
       >
         <Button
+          ref={buttonRef}
           type="button"
           variant="destructive"
-          size="sm"
-          disabled={isSaving}
+          size={size}
+          disabled={disabled || isSaving}
           onClick={forceDelete}
         >
-          {translate('auto.components.sidebar.delete.worktree.flow.2b20ce87b3', 'Force Delete')}
+          {children ??
+            translate('auto.components.sidebar.delete.worktree.flow.2b20ce87b3', 'Force Delete')}
         </Button>
         {onAlwaysForceDelete ? (
           <DropdownMenuTrigger asChild>
             <Button
               type="button"
               variant="destructive"
-              size="icon-sm"
-              disabled={isSaving}
+              size={size === 'sm' ? 'icon-sm' : 'icon'}
+              disabled={disabled || isSaving}
               aria-label={translate('workspaceDeletion.moreActions', 'More force delete options')}
             >
               <ChevronDown className="size-3.5" />

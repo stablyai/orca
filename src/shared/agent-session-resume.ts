@@ -286,4 +286,4 @@ export function extractAgentProviderSession(
 }
 
 // Re-exported so the 18 existing call sites keep one import path.
-export { getAgentResumeArgv } from './agent-resume-argv'
+export { getAgentForkArgv, getAgentResumeArgv } from './agent-resume-argv'

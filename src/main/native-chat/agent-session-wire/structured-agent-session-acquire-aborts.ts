@@ -1,7 +1,7 @@
 // The acquire each session has in flight, owned by the host that runs it, or another provider wait
 // its queue is on (an option write). The queue runs one step at a time, so a session has at most
-// one; a close, a Stop admitted now, or quit aborts it from outside the queue instead of waiting
-// behind a provider that may never answer.
+// one; a close, a Stop admitted now, quit, or the startup limit aborts it from outside the queue
+// instead of waiting behind a provider that may never answer.
 
 export class StructuredAgentSessionAcquireAborts {
   private readonly inFlight = new Map<string, AbortController>()
@@ -26,8 +26,8 @@ export class StructuredAgentSessionAcquireAborts {
   }
 
   /** A no-op when the session has nothing in flight. */
-  abort(sessionId: string, reason: string): void {
-    this.inFlight.get(sessionId)?.abort(new Error(reason))
+  abort(sessionId: string, reason: string | Error): void {
+    this.inFlight.get(sessionId)?.abort(typeof reason === 'string' ? new Error(reason) : reason)
   }
 
   /** Quit: every start under way stops, and so does any the attach drain still runs. */

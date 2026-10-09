@@ -3,6 +3,7 @@
 
 import { vi, type Mock } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { activeProviderContext } from '../../../shared/agent-session-provider-context'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
@@ -13,6 +14,8 @@ import {
 } from './structured-agent-session-host-test-data'
 
 export type QueuedRigProviderOptions = {
+  rewind?: NonNullable<StructuredAgentSessionAdapter['rewind']>
+  recoverRewind?: NonNullable<StructuredAgentSessionAdapter['recoverRewind']>
   /** A child started for a chat whose chain already names a thread resumes it, so a chat whose
    *  child closed or died can start another. */
   restartable?: true
@@ -36,6 +39,7 @@ export function createQueuedRigProvider(
   // Every start the host asks for; one `holdNextStart` holds stays in its spawn until released.
   const starts: Mock<() => void> = vi.fn()
   let startHold: Promise<void> | null = null
+  let startFailure: Error | null = null
   // The provider's receipt of a /compact; its end arrives later, as `finishCompact` writes it.
   const compact: Mock<NonNullable<StructuredAgentSessionAdapter['compact']>> = vi.fn(async () => ({
     state: 'accepted' as const,
@@ -55,10 +59,18 @@ export function createQueuedRigProvider(
       const hold = startHold
       startHold = null
       await hold
+      const failure = startFailure
+      startFailure = null
+      if (failure) {
+        throw failure
+      }
       events = sink
-      const resumes =
-        options.restartable === true &&
-        (store.getRecord(identity.sessionId)?.providerHandleChain.length ?? 0) > 0
+      const record = store.getRecord(identity.sessionId)
+      const context = record ? activeProviderContext(record) : null
+      const resumes = options.restartable === true && context?.head != null
+      const thread = context?.pendingClear
+        ? `${THREAD}-context-${record!.providerContextBoundary!.operationId}`
+        : (context?.head?.handle.nativeId ?? THREAD)
       return {
         process: {
           hostId: 'local',
@@ -70,7 +82,7 @@ export function createQueuedRigProvider(
         ...(options.starting ? { providerChildPhase: 'starting' as const } : {}),
         link: {
           linkId: `link-${fence}`,
-          handle: codexProviderHandle(THREAD),
+          handle: codexProviderHandle(thread),
           origin: resumes ? ('resumed' as const) : ('created' as const),
           mintedAtFence: fence,
           observedAt: NOW
@@ -85,7 +97,11 @@ export function createQueuedRigProvider(
     ...(options.stopEndsSession ? { stopEndsSession: () => true } : {}),
     ...(options.startUnanswered ? { startAnswered: () => false } : {}),
     answerPrompt: vi.fn(async () => undefined),
-    setOption: vi.fn(async () => undefined)
+    setOption: vi.fn(async () => undefined),
+    ...(options.rewind
+      ? { rewind: options.rewind, rewindSupport: () => ({ supported: true as const }) }
+      : {}),
+    ...(options.recoverRewind ? { recoverRewind: options.recoverRewind } : {})
   }
 
   /** What the provider's translator writes when a /compact's turn ends, as a success. */
@@ -112,6 +128,11 @@ export function createQueuedRigProvider(
     return () => release()
   }
 
+  /** Fails the next start in its spawn, as an agent that cannot start does. */
+  function failNextStart(error: Error): void {
+    startFailure = error
+  }
+
   /** The event sink the provider writes through. */
   function providerEvents(): StructuredAgentSessionEventSink {
     if (!events) {
@@ -125,6 +146,7 @@ export function createQueuedRigProvider(
     dispatch,
     starts,
     holdNextStart,
+    failNextStart,
     compact,
     cancelTurn,
     closeSession,

@@ -176,25 +176,24 @@ export function createClaudeAccountActionRunner(
       await syncClaudeAccounts(next)
       recordFeatureInteraction('claude-account-switching')
       const nextActiveAccountId = getProviderAccountActiveIdForView(next, actionRuntime)
-      // Why: switching reaches the next `claude` started in any terminal, so nothing restarts.
-      if (action === 'adding' || previousActiveAccountId !== nextActiveAccountId) {
+      const shouldPromptRestart =
+        action === 'adding' ||
+        previousActiveAccountId !== nextActiveAccountId ||
+        (action.startsWith('reauth:') &&
+          nextActiveAccountId !== null &&
+          action === `reauth:${nextActiveAccountId}`)
+      if (shouldPromptRestart) {
         toast.info(
           translate('auto.components.settings.AccountsPane.f921d32606', 'Claude account updated.'),
           {
-            description:
-              previousActiveAccountId === nextActiveAccountId
-                ? translate(
-                    'accounts.claude.added',
-                    'Account added. Select it to use it for the next Claude you start.'
-                  )
-                : translate(
-                    'accounts.claude.nextLaunch',
-                    '{{value0}} → {{value1}}. The next Claude you start uses it. Running sessions keep their account.',
-                    {
-                      value0: getClaudeAccountLabel(claudeAccounts, previousActiveAccountId),
-                      value1: getClaudeAccountLabel(next, nextActiveAccountId)
-                    }
-                  )
+            description: translate(
+              'auto.components.settings.AccountsPane.b15ce90870',
+              '{{value0}} -> {{value1}}. Restart live Claude terminals before continuing old sessions.',
+              {
+                value0: getClaudeAccountLabel(claudeAccounts, previousActiveAccountId),
+                value1: getClaudeAccountLabel(next, nextActiveAccountId)
+              }
+            )
           }
         )
       }

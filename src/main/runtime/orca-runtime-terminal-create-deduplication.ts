@@ -147,7 +147,7 @@ export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithC
 
   async launchAgentTerminal(
     worktreeSelector: string,
-    opts: { agent: TuiAgent; prompt: string; title?: string }
+    opts: { agent: TuiAgent; prompt: string; title?: string; extraAgentArgs?: string }
   ): Promise<RuntimeTerminalCreate> {
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     // Why: `getRepo(id)` is host-blind; the same repo id on two hosts must build the launch for the
@@ -160,8 +160,14 @@ export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithC
     if (!repo) {
       throw new Error('Repository for the selected workspace is no longer available.')
     }
-    const startup = this.buildStartupForAgent(repo, opts.agent, opts.prompt)
-    return await this.createTerminal(`id:${worktree.id}`, {
+    const startup = this.buildStartupForAgent(
+      repo,
+      opts.agent,
+      opts.prompt,
+      undefined,
+      opts.extraAgentArgs ? { extraAgentArgs: opts.extraAgentArgs } : undefined
+    )
+    const terminal = await this.createTerminal(`id:${worktree.id}`, {
       command: startup.startup.command,
       env: startup.startup.env,
       ...(startup.startup.launchConfig ? { launchConfig: startup.startup.launchConfig } : {}),
@@ -170,6 +176,11 @@ export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithC
       telemetry: startup.startup.telemetry,
       title: opts.title
     })
+    // Why: agents that read the prompt after they start get it typed in, not on argv.
+    if (startup.followup) {
+      this.sendStartupFollowupWhenReady(terminal.handle, startup.followup)
+    }
+    return terminal
   }
 
   // Why: dedupes a worktree.create whose response was lost when a mobile

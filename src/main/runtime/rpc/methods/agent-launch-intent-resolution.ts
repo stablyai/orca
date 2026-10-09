@@ -24,8 +24,8 @@ async function agentLaunchTarget(
   params: AgentLaunchParams,
   runtime: Pick<OrcaRuntimeService, 'showTerminalWorkspaceLaunchScope'>
 ): Promise<AgentLaunchTarget> {
-  if (params.target.kind === 'create-worktree') {
-    return { kind: 'create-worktree', create: { ...params.target.create } }
+  if (params.target.kind !== 'existing') {
+    return { kind: params.target.kind, create: { ...params.target.create } }
   }
   const workspace = await runtime.showTerminalWorkspaceLaunchScope(params.target.worktree)
   return {

@@ -1,3 +1,4 @@
+import { makePaneKey } from '../../../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { bindPanePtyId, getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
@@ -133,7 +134,12 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
         onPrLink: (link) =>
           useAppStore
             .getState()
-            .observeTerminalGitHubPullRequestLink(session.deps.worktreeId, link),
+            .observeTerminalGitHubPullRequestLink(session.deps.worktreeId, link, {
+              tabId: session.deps.tabId,
+              paneKey: makePaneKey(session.deps.tabId, session.pane.leafId),
+              ptyId: session.transport.getPtyId(),
+              executionHostId: session.transport.getExecutionHostId?.() ?? undefined
+            }),
         // Why: the Command Code settle policy stays here — the done settle
         // timer must consult the live store row (which hook events and
         // renderer seeds also write), so main only emits scrape facts.

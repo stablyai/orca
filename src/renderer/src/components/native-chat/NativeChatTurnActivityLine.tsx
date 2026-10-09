@@ -86,6 +86,7 @@ export function NativeChatTurnActivityLine({
             markdown={reasoning.markdown}
             onLinkClick={onLinkClick}
             allowFileUriLinks={allowFileUriLinks}
+            streaming
           />
         </CollapsibleContent>
       ) : null}

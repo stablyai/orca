@@ -8,6 +8,7 @@ import { defineMethod, type RpcContext } from '../core'
 export const ORCAD_MIGRATION_METHODS = [
   defineMethod({
     name: 'orcad.migration.stageCatalog',
+    permission: 'host-admin',
     params: OrcadMigrationCatalogParams,
     handler: async (params, context) => {
       requireMigrationRuntimeClient(context)
@@ -18,6 +19,7 @@ export const ORCAD_MIGRATION_METHODS = [
   }),
   defineMethod({
     name: 'orcad.migration.commitCatalog',
+    permission: 'host-admin',
     params: OrcadMigrationCatalogParams,
     handler: async (params, context) => {
       requireMigrationRuntimeClient(context)
@@ -28,6 +30,7 @@ export const ORCAD_MIGRATION_METHODS = [
   }),
   defineMethod({
     name: 'orcad.migration.stageSnapshotChunk',
+    permission: 'host-admin',
     params: OrcadMigrationSnapshotChunkRequestSchema,
     handler: async (params, context) => {
       requireMigrationRuntimeClient(context)
@@ -36,6 +39,7 @@ export const ORCAD_MIGRATION_METHODS = [
   }),
   defineMethod({
     name: 'orcad.migration.abortCatalog',
+    permission: 'host-admin',
     params: OrcadMigrationCatalogParams,
     handler: async (params, context) => {
       requireMigrationRuntimeClient(context)
@@ -46,6 +50,7 @@ export const ORCAD_MIGRATION_METHODS = [
   }),
   defineMethod({
     name: 'orcad.migration.catalogState',
+    permission: 'host-admin',
     params: OrcadMigrationCatalogParams,
     handler: async (params, context) => {
       requireMigrationRuntimeClient(context)

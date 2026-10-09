@@ -1,9 +1,7 @@
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { fetchActiveClaudeRateLimits } from './claude-active-usage-fetch'
-import {
-  fetchInactiveClaudeAccountUsage,
-  type InactiveClaudeAccount
-} from './claude-managed-account-usage'
+import type { InactiveClaudeAccount } from './claude-managed-account-credentials'
+import { fetchInactiveClaudeAccountUsage } from './claude-managed-account-usage'
 import type {
   ClaudeManagedAccountUsageOptions,
   ClaudeRateLimitFetchOptions

@@ -13,17 +13,22 @@ import { browserManager } from '../browser/browser-manager'
 import { loadAgentSessionClaimSigner } from '../runtime/agent-session-claim-identity'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { prepareCodexAiVaultSessionResume } from '../codex/codex-ai-vault-session-resume'
+import { prepareCodexPinnedLaunchHome } from './codex-session-resume-launch'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { getDaemonProvider } from '../daemon/daemon-init'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { OrchestrationEnvironmentTransport } from '../runtime/orchestration/environment-transport'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
+import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
 import { getPreferredPairingOffer } from '../../shared/runtime-environments'
 import { fingerprintOrchestrationPeer } from '../runtime/orchestration/environment-transport'
 import { callRuntimeEnvironment } from '../ipc/runtime-environment-transport-routing'
 import { mainProcessState as state } from './main-process-state'
-import { prepareCodexRuntimeHomeForLaunch } from './codex-launch-preparation'
+import {
+  codexStructuredLaunchHomeResolvers,
+  prepareCodexRuntimeHomeForLaunch
+} from './codex-launch-preparation'
 import type { RuntimeDesktopWindowStatus } from '../../shared/runtime-types'
 import { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
 import { SkillCloudService } from '../skills/skill-cloud-service'
@@ -138,19 +143,15 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     prepareAiVaultSessionResume: (args) =>
       prepareCodexAiVaultSessionResume(args, {
         runtimeHome: state.codexRuntimeHome,
-        systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings())
+        systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings()),
+        preparePinnedLaunchHome: (home) => prepareCodexPinnedLaunchHome(home)
       }),
-    prepareCodexStructuredLaunch: ({ launchEnv }) =>
-      prepareCodexRuntimeHomeForLaunch(undefined, launchEnv),
-    // Why throw like prepare does: a null from an uninitialized service would
-    // map to the system home and key a catalog read to the wrong account.
-    resolveCodexStructuredLaunchHome: ({ launchEnv }) => {
-      const runtimeHome = state.codexRuntimeHome
-      if (!runtimeHome) {
-        throw new Error('Codex runtime home service is not initialized')
-      }
-      return runtimeHome.resolveHostCodexHomePathForLaunchReadOnly(launchEnv)
-    },
+    ...codexStructuredLaunchHomeResolvers,
+    prepareCodexCatalogProbeHome: (homePath) =>
+      state.codexRuntimeHome?.prepareHostCodexHomeForReadOnlyAppServer(
+        homePath,
+        resolveTuiAgentLaunchEnv('codex', store.getSettings().agentDefaultEnv)
+      ),
     buildAgentHookPtyEnv: () =>
       isAgentStatusHooksEnabled(state.store?.getSettings()) ? agentHookServer.buildPtyEnv() : {},
     orchestrationEnvironmentTransport,

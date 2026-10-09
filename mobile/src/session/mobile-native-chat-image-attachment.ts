@@ -1,6 +1,5 @@
 import { saveMobileClipboardImageAsTempFile } from './mobile-clipboard-image'
 import type { MobileClipboardImageRpcSender } from './mobile-clipboard-image-operations'
-import { structuredAgentSessionDomainFingerprint } from '../../../src/shared/structured-agent-session-mutation'
 // Type-only import so this module (and its unit test) stays free of the expo/
 // react-native picker chain; the concrete `pickImage` is injected by the hook.
 import type { MobileImageSource, PickedMobileImage } from './mobile-image-source-picker'
@@ -12,18 +11,6 @@ export type PendingNativeChatImage = {
   readonly id: string
   readonly path: string
   readonly previewUri: string
-  /** Stable across repeat uploads of the same bytes; never contains the image. */
-  readonly contentFingerprint?: string
-}
-
-export const MOBILE_NATIVE_CHAT_IMAGE_FINGERPRINT_DOMAIN = 'mobile.nativeChat.image'
-
-export function mobileNativeChatImageContentFingerprint(base64: string): string {
-  return structuredAgentSessionDomainFingerprint({
-    domain: MOBILE_NATIVE_CHAT_IMAGE_FINGERPRINT_DOMAIN,
-    sessionId: '',
-    fields: { base64 }
-  })
 }
 
 export function appendPendingNativeChatImages(
@@ -50,7 +37,6 @@ export type UploadNativeChatImagesDeps = {
     | Iterable<PickedMobileImage>
     | AsyncIterable<PickedMobileImage>
     | Promise<Iterable<PickedMobileImage> | AsyncIterable<PickedMobileImage>>
-  readonly fingerprintImage?: (base64: string) => string | Promise<string>
   // Fired once the user has picked an image and the host upload is about to start —
   // lets the UI show the attach spinner only for the transfer, not the picker.
   readonly onUploadStart?: () => void
@@ -69,7 +55,6 @@ export async function uploadMobileNativeChatImages(
     client,
     getConnectionId,
     pickImages,
-    fingerprintImage = mobileNativeChatImageContentFingerprint,
     onUploadStart,
     onImageUploaded
   }: UploadNativeChatImagesDeps
@@ -86,11 +71,9 @@ export async function uploadMobileNativeChatImages(
     // Prefer the picker's local URI for the thumbnail; fall back to an inline data
     // URI when the source omitted one (RN <Image> renders both).
     const previewUri = image.uri ?? `data:image/png;base64,${image.base64}`
-    const fingerprint = fingerprintImage(image.base64)
     const result = {
       path,
-      previewUri,
-      contentFingerprint: typeof fingerprint === 'string' ? fingerprint : await fingerprint
+      previewUri
     }
     uploaded.push(result)
     onImageUploaded?.(result)

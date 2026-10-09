@@ -39,6 +39,7 @@ function renderSession(session: AiVaultSession, blocked = false, searchHit?: AiV
   const buildResumeStartup = vi.fn(() => ({ command: session.resumeCommand }))
   const onCopyResume = vi.fn()
   const onResume = vi.fn()
+  const onResumeInNewCli = vi.fn()
   render(
     <TooltipProvider>
       <AiVaultVirtualRow
@@ -73,6 +74,7 @@ function renderSession(session: AiVaultSession, blocked = false, searchHit?: AiV
         onResume={onResume}
         onContinueInNewSession={vi.fn()}
         onResumeInNewChat={vi.fn()}
+        onResumeInNewCli={onResumeInNewCli}
         onCopyResume={onCopyResume}
         onCopyId={vi.fn()}
         onCopyPath={vi.fn()}
@@ -83,7 +85,7 @@ function renderSession(session: AiVaultSession, blocked = false, searchHit?: AiV
       />
     </TooltipProvider>
   )
-  return { buildResumeStartup, onCopyResume, onResume }
+  return { buildResumeStartup, onCopyResume, onResume, onResumeInNewCli }
 }
 
 describe('AiVaultVirtualRow resume command actions', () => {
@@ -167,5 +169,42 @@ describe('AiVaultVirtualRow resume command actions', () => {
     fireEvent.contextMenu(screen.getByText('Paired native chat'))
     await user.click(await screen.findByRole('menuitem', { name: 'Resume in New Tab' }))
     expect(onResume).toHaveBeenCalledExactlyOnceWith(session, 'worktree-1')
+  })
+})
+
+describe('AiVaultVirtualRow Resume in New CLI', () => {
+  const owner = { sessionId: 'chat-1', workspaceId: 'worktree-1' }
+
+  it.each(['claude', 'codex'] as const)(
+    'offers the fork on a chat-owned %s row from both menus',
+    async (agent) => {
+      const session: AiVaultSession = { ...cliSession, agent, structuredSession: owner }
+      const { onResumeInNewCli, onResume } = renderSession(session)
+      const user = userEvent.setup()
+
+      await user.click(screen.getByTestId('ai-vault-session-more-actions'))
+      await user.click(await screen.findByRole('menuitem', { name: 'Resume in New CLI' }))
+      expect(onResumeInNewCli).toHaveBeenCalledExactlyOnceWith(session, 'worktree-1')
+
+      fireEvent.contextMenu(screen.getByText('CLI session'))
+      await user.click(await screen.findByRole('menuitem', { name: 'Resume in New CLI' }))
+      expect(onResumeInNewCli).toHaveBeenCalledTimes(2)
+      expect(onResume).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([
+    { name: 'a terminal row', session: cliSession },
+    {
+      name: 'a chat-owned row of an agent that cannot fork',
+      session: { ...cliSession, agent: 'gemini' as const, structuredSession: owner }
+    }
+  ])('does not offer the fork on $name', async ({ session }) => {
+    renderSession(session)
+    const user = userEvent.setup()
+
+    await user.click(screen.getByTestId('ai-vault-session-more-actions'))
+    await screen.findByRole('menu')
+    expect(screen.queryByRole('menuitem', { name: 'Resume in New CLI' })).toBeNull()
   })
 })

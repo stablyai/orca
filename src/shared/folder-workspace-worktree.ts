@@ -1,7 +1,8 @@
 import type { FolderWorkspace } from './folder-workspace-types'
 import type { Worktree } from './worktree/types'
 import { folderWorkspaceKey } from './workspace-scope'
-import { parseExecutionHostId, toSshExecutionHostId } from './execution-host'
+import { parseExecutionHostId, toSshExecutionHostId, type ExecutionHostId } from './execution-host'
+import { composeWorktreeHostIdentity } from './worktree/host-qualified-identity'
 import { normalizeWorkspaceCreatorProvenance } from './workspace-creator-provenance'
 import { getWorkspaceAttachments } from './workspace-attachments'
 import { normalizeWorkspaceAttachment } from './workspace-attachment-normalization'
@@ -28,6 +29,24 @@ export function projectGroupIdFromRepoId(repoId: string | null | undefined): str
   return projectGroupId === '' ? null : projectGroupId
 }
 
+function getFolderWorkspaceWorktreeHostId(
+  workspace: Pick<FolderWorkspace, 'executionHostId' | 'connectionId'>
+): ExecutionHostId {
+  return (
+    workspace.executionHostId ??
+    (workspace.connectionId ? toSshExecutionHostId(workspace.connectionId) : 'local')
+  )
+}
+
+export function getFolderWorkspaceHostIdentity(
+  workspace: Pick<FolderWorkspace, 'id' | 'executionHostId' | 'connectionId'>
+): string {
+  return composeWorktreeHostIdentity(
+    getFolderWorkspaceWorktreeHostId(workspace),
+    folderWorkspaceKey(workspace.id)
+  )
+}
+
 export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Worktree {
   const linkedTask = folderWorkspace.linkedTask
   const selectedTask = linkedTask
@@ -36,9 +55,7 @@ export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Wor
         linkedItems: folderWorkspace.linkedItems
       }).find((item) => item.type === 'issue')
   const creatorProvenance = normalizeWorkspaceCreatorProvenance(folderWorkspace.creatorProvenance)
-  const hostId =
-    folderWorkspace.executionHostId ??
-    (folderWorkspace.connectionId ? toSshExecutionHostId(folderWorkspace.connectionId) : 'local')
+  const hostId = getFolderWorkspaceWorktreeHostId(folderWorkspace)
   const parsedHost = parseExecutionHostId(hostId)
   return {
     id: folderWorkspaceKey(folderWorkspace.id),

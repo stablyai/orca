@@ -265,6 +265,7 @@ describe("useMobileStructuredAgentSession and the host's Stopping", () => {
         promptCancel: false,
         questionAnswers: false,
         queuedMessages: false,
+        queuedCommands: false,
         quietRepeatedStop: false,
         statusFeed
       },

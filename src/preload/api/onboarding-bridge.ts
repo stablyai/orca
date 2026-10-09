@@ -8,5 +8,7 @@ export const onboardingApi = {
     updates: Partial<Omit<OnboardingState, 'checklist'>> & {
       checklist?: Partial<OnboardingState['checklist']>
     }
-  ): Promise<OnboardingState> => ipcRenderer.invoke('onboarding:update', updates)
+  ): Promise<OnboardingState> => ipcRenderer.invoke('onboarding:update', updates),
+  isInNativeChatUpgradeTipAudience: (): Promise<boolean> =>
+    ipcRenderer.invoke('onboarding:isInNativeChatUpgradeTipAudience')
 } satisfies PreloadApi['onboarding']

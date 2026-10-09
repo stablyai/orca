@@ -16,6 +16,7 @@ import type { AgentSessionRecordStore } from '../../runtime/agent-session-record
 import { journalOpenReadRefusal } from '../agent-session-journal/journal-open-failure'
 import type { StructuredAgentDefinition } from './structured-agent-definition'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
+import type { StructuredAgentSessionLiveOptions } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import { structuredAgentSessionOptionModels } from './structured-agent-session-option-models'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
@@ -55,8 +56,7 @@ async function readStructuredAgentSessionOptionsAtRest(
   // account's default; a built-in list's default is a guess, so with none the client keeps its own.
   const model =
     saved.model ??
-    (catalog.origin === 'unknown' ? undefined : models.find((entry) => entry.isDefault)?.id) ??
-    ''
+    (catalog.origin === 'unknown' ? undefined : models.find((entry) => entry.isDefault)?.id)
   // As a live child answers: the pick, else the model's default where the agent reports that.
   const effort =
     saved.effort ??
@@ -69,7 +69,7 @@ async function readStructuredAgentSessionOptionsAtRest(
       ? { fastModeSupport: catalog.fastModeSupport }
       : {}),
     current: {
-      model,
+      ...(model ? { model } : {}),
       ...(effort ? { effort } : {}),
       ...(typeof fastMode === 'boolean' ? { fastMode } : {})
     }
@@ -131,7 +131,7 @@ export async function readStructuredAgentSessionOptions(
       options: await adapter.readOptions({ sessionId, fence: child.fence })
     }
   })
-  const live =
+  const live: StructuredAgentSessionLiveOptions | null =
     started.kind === 'live'
       ? started.options
       : started.kind === 'prepared'
@@ -142,12 +142,24 @@ export async function readStructuredAgentSessionOptions(
             })
           )
         : null
-  const options = live ?? (await readStructuredAgentSessionOptionsAtRest(context.deps, sessionId))
+  let options: Omit<AgentSessionOptionsResult, 'rewind'>
+  if (live) {
+    const { catalogListing, ...answer } = live
+    if (catalogListing) {
+      // What a running child listed is its account's catalog too, so the next chat opens warm.
+      context.deps.modelCatalog?.recordLiveListing(sessionId, catalogListing)
+    }
+    options = answer
+  } else {
+    options = await readStructuredAgentSessionOptionsAtRest(context.deps, sessionId)
+  }
   // Re-acquired after the reads above: the handle they saw may have closed and reopened since.
   const session = await context.conversation(sessionId)
   const phase = store.getRecord(sessionId)?.rewind?.phase
   const agent = session.params.provider
   const capabilities = agents.capabilities(agent)
+  const floor = session.journal.context.floor()
+  const contextFloor = floor ? { contextFloor: floor } : {}
   return {
     ...options,
     rewind:
@@ -158,9 +170,11 @@ export async function readStructuredAgentSessionOptions(
             reason: 'unsupported'
           }),
     conversationCommands: capabilities?.compact ? ['clear', 'compact'] : ['clear'],
-    ...(capabilities?.threadGoal ? { threadGoal: { current: session.journal.threadGoal() } } : {}),
+    ...(capabilities?.threadGoal
+      ? { threadGoal: { current: session.journal.threadGoal(), ...contextFloor } }
+      : {}),
     ...(capabilities?.contextUsage
-      ? { contextUsage: { current: session.journal.contextUsage() } }
+      ? { contextUsage: { current: session.journal.contextUsage(), ...contextFloor } }
       : {})
   }
 }

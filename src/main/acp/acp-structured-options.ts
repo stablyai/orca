@@ -11,6 +11,8 @@ import type {
 import { isAcpStructuredOptionKey } from './acp-structured-agent-definitions'
 import { AcpRpcError } from './acp-errors'
 import type { AcpStructuredConnection } from './acp-structured-connection'
+import type { AcpDialect } from './acp-dialects/acp-dialect'
+import type { AgentModelCatalogConfiguredChoice } from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
 import {
   SessionConfigSelectGroupSchema,
   SessionConfigSelectOptionSchema,
@@ -48,17 +50,31 @@ function isSelect(option: SessionConfigOption): option is SelectOption {
 }
 
 export class AcpStructuredOptions {
+  constructor(private readonly dialect: Pick<AcpDialect, 'modelEfforts'> = {}) {}
+
   private configOptions: SessionConfigOption[] = []
   private models: SessionModelState | null = null
   private commands: AgentSessionSlashCommand[] | undefined
+  // A loaded session keeps the model it ran; only a new one resolves the agent's own config.
+  private resolvesConfig = false
+  private readonly picked = new Set<string>()
 
   /** The session state a new, load or resume response reported. */
-  adoptSession(response: {
-    configOptions?: SessionConfigOption[] | null
-    models?: SessionModelState | null
-  }): void {
+  adoptSession(
+    response: {
+      configOptions?: SessionConfigOption[] | null
+      models?: SessionModelState | null
+    },
+    origin: 'new' | 'loaded' = 'loaded'
+  ): void {
     this.configOptions = response.configOptions ?? []
     this.models = response.models ?? null
+    this.resolvesConfig = origin === 'new'
+  }
+
+  /** Orca sent `key` to the session, or the chat's saved options hold a value for it. */
+  notePick(key: string): void {
+    this.picked.add(key)
   }
 
   adoptConfigOptions(configOptions: SessionConfigOption[] | null | undefined): void {
@@ -102,17 +118,22 @@ export class AcpStructuredOptions {
     return null
   }
 
+  /**
+   * The agent's models and what this session runs. A model's effort menu and default are catalog
+   * facts: the dialect's per-model menu when the agent advertises one, else the session's effort
+   * option for the model it runs now only. The session's current values are never a default.
+   */
   read(): Pick<AgentSessionOptionsResult, 'models' | 'current'> {
     const modelOption = this.select('model')
     const effortOption = this.select('thought_level')
-    const efforts: AgentSessionOptionChoice[] = effortOption
+    const sessionEfforts: AgentSessionOptionChoice[] = effortOption
       ? selectChoices(effortOption).map((choice) => ({
           value: choice.value,
           label: choice.name,
           ...(choice.description ? { description: choice.description } : {})
         }))
       : []
-    const currentModel = modelOption?.currentValue ?? this.models?.currentModelId ?? ''
+    const currentModel = (modelOption?.currentValue ?? this.models?.currentModelId) || undefined
     const listed: { id: string; label: string; description?: string }[] = modelOption
       ? selectChoices(modelOption).map((choice) => ({
           id: choice.value,
@@ -124,20 +145,46 @@ export class AcpStructuredOptions {
           label: model.name,
           ...(model.description ? { description: model.description } : {})
         })) ?? [])
-    const models: AgentSessionModelOption[] = listed.map((model) => ({
-      ...model,
-      isDefault: model.id === currentModel,
-      efforts,
-      ...(effortOption ? { defaultEffort: effortOption.currentValue } : {})
-    }))
+    const models: AgentSessionModelOption[] = listed.map((model) => {
+      const info = this.models?.availableModels.find((entry) => entry.modelId === model.id)
+      const advertised = info ? this.dialect.modelEfforts?.(info) : undefined
+      const sessionMenu = { efforts: model.id === currentModel ? sessionEfforts : [] }
+      return {
+        ...model,
+        isDefault: false,
+        // An empty advertised menu is no menu: the running model keeps the one its session offers.
+        ...(advertised && advertised.efforts.length > 0 ? advertised : sessionMenu)
+      }
+    })
     const confirmed = [...(currentModel ? ['model'] : []), ...(effortOption ? ['effort'] : [])]
     return {
       models,
       current: {
-        model: currentModel,
+        ...(currentModel ? { model: currentModel } : {}),
         ...(effortOption ? { effort: effortOption.currentValue } : {}),
         confirmed
       }
+    }
+  }
+
+  /** With no model sent since a new session began, what it runs is the agent's own config
+   *  resolution: that scope's configured default. Null when that names no listed model; undefined
+   *  when this session can't say. */
+  configuredDefault(): AgentModelCatalogConfiguredChoice | null | undefined {
+    if (!this.resolvesConfig || this.picked.has('model')) {
+      return undefined
+    }
+    const { models, current } = this.read()
+    if (!current.model) {
+      return undefined
+    }
+    if (!models.some((model) => model.id === current.model)) {
+      return null
+    }
+    return {
+      modelId: current.model,
+      // An effort this session picked is its own and says nothing of the config's.
+      ...(this.picked.has('effort') ? {} : { effort: current.effort ?? null })
     }
   }
 
@@ -207,8 +254,11 @@ export async function restoreAcpSessionOptions(
 ): Promise<string[]> {
   const skipped: string[] = []
   for (const [key, value] of Object.entries(saved ?? {})) {
-    const reported = options.reported()
-    if (!isAcpStructuredOptionKey(key) || reported[key] === value) {
+    if (!isAcpStructuredOptionKey(key)) {
+      continue
+    }
+    options.notePick(key)
+    if (options.reported()[key] === value) {
       continue
     }
     const write = options.write(key, value)

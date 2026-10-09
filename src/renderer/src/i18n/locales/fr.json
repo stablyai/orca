@@ -1,5 +1,9 @@
 {
   "app": {
+    "saving": {
+      "delayedTitle": "Le stockage du profil prend plus de temps que d’habitude",
+      "delayedDescription": "Les prochains enregistrements peuvent être retardés jusqu’à la fin de cette opération."
+    },
     "recoverableError": {
       "rootTitle": "Orca a rencontré une erreur de rendu.",
       "rootDescription": "Le shell de l'application n'a pas pu terminer son rendu. Réessayez pour le remonter, ou relancez Orca si l'erreur persiste.",
@@ -265,6 +269,7 @@
     "reportCrash": "Signaler un plantage...",
     "file": "Fichier",
     "exit": "Quitter",
+    "quitApp": "Quitter {{appName}}",
     "edit": "Édition",
     "appearance": "Apparence",
     "toggleLeftSidebar": "Basculer la barre latérale gauche",
@@ -3438,7 +3443,7 @@
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "Reconnexion au runtime distant",
             "disconnectedTitle": "Runtime distant déconnecté",
-            "retryingBody": "Orca réessaiera pendant une minute au maximum. Ce terminal reprendra si la connexion revient.",
+            "retryingBody": "Orca réessaie automatiquement. Ce terminal reprendra si la connexion revient.",
             "disconnectedBody": "Les tentatives automatiques sont interrompues. Reconnectez-vous pour reprendre cette session de terminal.",
             "reconnectButton": "Reconnecter"
           },
@@ -3834,6 +3839,7 @@
             "54e8d6bb2d": "Fable",
             "d79c3362c4": "5 h",
             "a79c64f87e": "Fable",
+            "8295903d17": "Redémarrez les terminaux Claude actifs avant de reprendre d'anciennes conversations après un changement de compte.",
             "c98ea88392": "Aucun autre compte",
             "9332ba8684": "Basculer vers",
             "d450654fa2": "Compte Claude",
@@ -4085,6 +4091,10 @@
             "used": "{{value0}} % utilisé",
             "remaining": "{{value0}} % restants"
           },
+          "StatusBarUsageChangeNotices": {
+            "compactTitle": "L’affichage de l’utilisation est désormais compact",
+            "compactBody": "Une mesure principale par fournisseur. Choisissez <detailed>Détaillé</detailed> dans le menu Utilisation pour afficher plus de limites."
+          },
           "UsagePercentageDisplayChangeNotice": {
             "title": "L'utilisation affiche désormais le pourcentage consommé",
             "body": "Vous préférez le restant ? Changez ce choix dans les paramètres.",
@@ -4177,11 +4187,9 @@
             "checkAriaOne": "1 chat à vérifier après la reprise. Cliquez pour plus de détails.",
             "checkAria": "{{value0}} chats à vérifier après la reprise. Cliquez pour plus de détails.",
             "checkTooltip": "Chats qu'Orca n'a pas pu reprendre, ou dont il n'a pas pu confirmer la reprise, après le redémarrage. Cliquez pour plus de détails.",
-            "resumingLabelOne": "Reprise d’1 conversation",
-            "resumingLabel": "Reprise de {{value0}} conversations",
-            "resumingAriaOne": "Reprise d’1 conversation. Cliquez pour voir les détails.",
-            "resumingAria": "Reprise de {{value0}} conversations. Cliquez pour voir les détails.",
-            "resumingTooltip": "Restauration des conversations interrompues et demande de poursuite…"
+            "resumingTooltip": "Restauration des conversations interrompues et demande de poursuite…",
+            "resumingProgressLabel": "Reprise des discussions {{value0}}/{{value1}}",
+            "resumingProgressAria": "Reprise des discussions, {{value0}} sur {{value1}} terminées. Cliquez pour voir les détails."
           },
           "provider": {
             "extra": {
@@ -6609,6 +6617,7 @@
         "AccountsPane": {
           "c2d2751587": "Supprimer le compte",
           "dbb9626ed1": "Annuler",
+          "854ebbcc45": "Orca supprimera l'authentification Claude gérée pour ce compte enregistré. S'il est actuellement actif, Orca revient à la connexion Claude par défaut du système.",
           "63843e37e2": "Supprimer le compte Claude ?",
           "380a7736cc": "La suppression de ce compte efface définitivement son home Codex géré, y compris tout l'historique de sessions Codex et les connexions MCP stockés dedans. Cette action est irréversible. Si le compte est actuellement actif, Orca revient à la connexion Codex par défaut du système.",
           "0d47394635": "Supprimer le compte Codex ?",
@@ -6656,10 +6665,12 @@
           "3fe7862418": "Aucun compte Claude géré pour {{value0}}. Orca utilisera la connexion Claude par défaut du système de cet environnement jusqu'à ce que vous en ajoutiez un ici.",
           "3455cf43fa": " Claude.",
           "fcc4093fc1": "Utilisez votre connexion Codex {{value0}} actuelle.",
+          "79e484c3b2": "Sélecteur de comptes facultatif pour les fichiers d'authentification Claude partagés.",
           "8bbfd74556": "Comptes Claude",
           "72b36ea174": "Facultatif. Orca peut utiliser votre connexion Claude habituelle ; ajoutez des comptes seulement si vous voulez changer rapidement sans déplacer les sessions de chat.",
           "26ef4b55be": "Claude",
           "2743cdc0af": "Échec de la mise à jour du compte Claude.",
+          "b15ce90870": "{{value0}} -> {{value1}}. Redémarrez les terminaux Claude actifs avant de poursuivre les anciennes sessions.",
           "f921d32606": "Compte Claude mis à jour.",
           "5bf8764953": "Échec de la mise à jour du compte Codex.",
           "9baf45d071": "Cet appareil",
@@ -7295,14 +7306,7 @@
           "0e89a574ae": "Compagnon animé flottant dans le coin inférieur droit.",
           "nativeChat": {
             "title": "Chat UI",
-            "description": "Prévisualisez la surface de chat de bureau pour les sessions de terminal d'agents prises en charge.",
-            "copy": "Ajoute une vue Chat UI accessible depuis les volets de terminal d'agents pris en charge. Expérimental pendant que nous peaufinons la fidélité de la transcription, le streaming et la parité avec le terminal.",
             "toggleLabel": "Activer Chat UI",
-            "defaultTitle": "Vue par défaut",
-            "defaultCopy": "Choisissez comment s'ouvrent les nouveaux onglets de terminal d'agents pris en charge.",
-            "defaultViewLabel": "Vue Chat UI par défaut",
-            "defaultViewTerminal": "Chat dans le terminal",
-            "defaultViewNative": "Chat UI",
             "shellEnvNamesLabel": "Variables à transmettre depuis votre shell",
             "shellEnvNamePlaceholder": "Nom de la variable",
             "shellEnvNameAdd": "Ajouter",
@@ -7312,10 +7316,6 @@
             "shellEnvTitle": "Utiliser l'environnement de votre shell",
             "shellEnvCopy": "Les chats Codex et Claude démarrent avec toutes les variables exportées par votre shell de connexion, comme un terminal. Désactivez pour choisir celles qu'ils reçoivent.",
             "shellEnvToggleLabel": "Activer l'utilisation de l'environnement de votre shell",
-            "structuredTitle": "Utiliser le chat natif structuré mis à jour",
-            "structuredCopy": "Ouvre les nouveaux agents sous forme de discussions structurées lorsque c'est possible. Désactivé, ils s'ouvrent dans le chat basé sur le terminal. Les discussions existantes restent telles quelles.",
-            "structuredScope": "Fonctionne sur cette machine et sur les serveurs Orca appairés dont la version le prend en charge ; les serveurs plus anciens conservent le chat du terminal. WSL et les hôtes SSH continuent d'utiliser le chat du terminal.",
-            "structuredToggleLabel": "Basculer le chat natif structuré mis à jour",
             "resumeTitle": "Reprendre automatiquement les discussions de travail après un redémarrage",
             "resumeCopy": "Lorsqu'Orca quitte ou installe une mise à jour, les discussions en cours reprennent automatiquement à la réouverture d'Orca.",
             "resumeToggleLabel": "Activer la reprise automatique après un redémarrage"
@@ -9806,7 +9806,6 @@
             "87d99e634b": "Compagnon",
             "nativeChat": {
               "title": "Chat UI",
-              "description": "Prévisualisez la surface de chat de bureau pour les sessions de terminal d'agents prises en charge.",
               "grok": "grok",
               "native": "indigène",
               "chat": "chat",
@@ -12417,7 +12416,11 @@
             "confirmRestore": "Restaurer l'instantané et redémarrer",
             "keepState": "Conserver l'état",
             "statusUnknown": "Statut inconnu",
-            "checking": "Vérification…"
+            "checking": "Vérification…",
+            "forget": "Oublier…",
+            "confirmForget": "Oublier sur ce poste",
+            "keepLinked": "Garder lié",
+            "forgetDescription": "Dissocie ce serveur ici sans contacter son hôte. Si l'hôte revient, le serveur y tourne peut-être encore."
           },
           "title": "Serveurs gérés",
           "description": "Orca installe et exécute un serveur sur un hôte SSH vide, et le maintient à jour.",
@@ -12485,6 +12488,7 @@
           },
           "loadFailed": "Orca n'a pas pu charger les hôtes SSH et les déplacements inachevés. Rouvrez les Paramètres pour réessayer.",
           "outcome": {
+            "activeServer": "Non effectué : choisissez un autre Serveur actif dans Avancé avant d’arrêter ce serveur.",
             "live": "Non effectué : des terminaux sont encore en cours sur ce serveur. Fermez-les et réessayez.",
             "unverifiable": "Non effectué : Orca n'a pas pu confirmer ce qui tourne sur ce serveur. Réessayez lorsque l'hôte est joignable.",
             "migration": "Non effectué : un déplacement vers ce serveur est inachevé. Reprenez-le d'abord.",
@@ -12501,7 +12505,7 @@
           "connecting": "Connexion au serveur Orca géré…",
           "updating": "Mise à jour du serveur géré…",
           "starting": "Démarrage du serveur géré…",
-          "notServing": "Le serveur Orca géré n'est pas démarré et n'a pas pu être démarré.",
+          "notServing": "Orca n’a pas pu confirmer que le serveur géré répond.",
           "hostNewer": "Exécute un serveur Orca géré issu d'une version plus récente d'Orca ; il conserve cette version.",
           "terminalsLive": "Exécute le relais jusqu'à la fermeture de ses {{count}} terminaux ouverts, puis bascule vers un serveur géré.",
           "terminalsLive_one": "Exécute le relais jusqu'à la fermeture de son {{count}} terminal ouvert, puis bascule vers un serveur géré.",
@@ -13758,7 +13762,9 @@
             "sessionDeleteFailed": "Impossible de supprimer la session",
             "resumeInChatConflict": "Un autre chat tient déjà cette conversation.",
             "resumeInChatTranscriptMissing": "L'historique de cette conversation n'a pas pu être chargé, elle ne peut donc pas être reprise dans le chat.",
-            "resumeInChatFailed": "Impossible de reprendre cette session dans un nouveau chat."
+            "resumeInChatFailed": "Impossible de reprendre cette session dans un nouveau chat.",
+            "resumeInNewCliUnavailable": "Impossible d'ouvrir cette session dans la CLI.",
+            "resumeInNewCliHostTooOld": "Mettez à jour Orca sur l'hôte qui exécute ce chat pour le reprendre dans une nouvelle CLI."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Analyse des sessions",
@@ -13894,7 +13900,10 @@
             "deleteReasonNonLocalHost": "Seules les sessions de cet appareil peuvent être supprimées.",
             "deleteReasonSyntheticPath": "Cette session ne peut pas être supprimée depuis Orca.",
             "deleteReasonUnsupportedAgent": "{{value0}} sessions ne peuvent pas être supprimées depuis Orca.",
-            "resumeInNewChat": "Reprendre dans une nouvelle discussion"
+            "resumeInNewNativeChat": "Reprendre dans un nouveau chat natif",
+            "resumeInNewCli": "Reprendre dans une nouvelle CLI",
+            "resumeInNewCliTooltipFork": "Forke cette conversation dans une nouvelle session CLI.",
+            "resumeInNewCliTooltipChat": "Le chat natif reste tel quel."
           },
           "AiVaultSessionDeleteDialog": {
             "title": "Supprimer cette session ?",
@@ -14997,6 +15006,7 @@
                 "d90d2e1f6d": "Suivez l'utilisation par session et par semaine.",
                 "8919321417": "Échec de la connexion Codex.",
                 "c7b90c140b": "Compte Codex ajouté.",
+                "4e71d72912": "Échec de la connexion Claude.",
                 "9ddeb558f9": "Compte Claude ajouté.",
                 "29d0653961": "Se connecter",
                 "945865332e": "Connexion en cours",
@@ -16254,7 +16264,6 @@
             "deb5293610": "Annotations du navigateur indisponibles dans un runtime distant",
             "90d021f2ad": "Ajouter",
             "0cb3bd6221": "Intention d'annotation",
-            "8f87e6c2e5": "Intention",
             "532bac48c5": "Décrivez ce que l'agent doit modifier ici...",
             "d2a7092e6e": "Commentaire d'annotation",
             "b472c5fe03": "Ajouter une annotation au navigateur",
@@ -16953,6 +16962,16 @@
         "AutomationsPageBreadcrumb": {
           "ariaLabel": "Fil d'Ariane des automatisations",
           "runDetails": "Détails de l'exécution"
+        },
+        "extraAgentArgs": {
+          "advanced": "Avancé",
+          "clear": "Effacer les arguments",
+          "unsupported": "Cet agent ne prend pas encore en charge les arguments supplémentaires.",
+          "label": "Arguments supplémentaires de l'agent",
+          "needsFreshSession": "Les arguments supplémentaires exigent une nouvelle session à chaque exécution.",
+          "useFreshSessions": "Utiliser de nouvelles sessions",
+          "helper": "Ajoutés aux arguments par défaut de cet hôte à chaque nouvelle session.",
+          "detailLabel": "Arguments supplémentaires"
         }
       },
       "agent": {
@@ -17664,7 +17683,8 @@
         "collapseNode": "Réduire {{value0}}",
         "expandNode": "Développer {{value0}}",
         "selectMachine": "Sélectionner toutes les discussions sur {{value0}}",
-        "sshHost": "SSH"
+        "sshHost": "SSH",
+        "done": "Terminé"
       },
       "linear-issue-attribute-filter-coverage-notice": {
         "statusPartialTeamCoverage": "Filtrage des statuts des équipes {{value0}} sur {{value1}} : les problèmes des équipes restantes ne sont pas inclus.",
@@ -17745,6 +17765,32 @@
             "hostOnly": "Les détails de connexion Cursor ne sont lisibles que sur l'ordinateur qui exécute Orca."
           }
         }
+      },
+      "NativeChatResumeRunPanel": {
+        "resumedTitle": "{{value0}} discussions sur {{value1}} reprises",
+        "resumedTitleOne": "{{value0}} discussion sur 1 reprise",
+        "resumingTitleOne": "Reprise d’une discussion",
+        "resumingTitle": "Reprise de {{value0}} discussions",
+        "description": "Chaque discussion est restaurée avec tout son contexte, et l’agent vérifie où il s’était arrêté. Vous pouvez fermer cette fenêtre ; la barre d’état suit la progression."
+      },
+      "NativeChatResumeRunStatusIcon": {
+        "waitingForReply": "En attente de réponse",
+        "starting": "Démarrage",
+        "waitingToStart": "En attente de démarrage",
+        "inFlight": "{{value0}} · {{value1}}",
+        "resumed": "Reprise"
+      },
+      "NativeChatResumeRunSummary": {
+        "done": "{{value0}} sur {{value1}} terminées",
+        "starting": "{{value0}} en démarrage",
+        "waitingForReply": "{{value0}} en attente de réponse",
+        "waitingToStart": "{{value0}} en attente de démarrage",
+        "all": "Toutes",
+        "inProgress": "En cours",
+        "resumed": "Reprises",
+        "attention": "À traiter",
+        "running": "En cours depuis {{value0}}",
+        "filter": "Afficher les discussions"
       }
     },
     "i18n": {
@@ -17851,7 +17897,12 @@
         "couldNotStart": "{{agent}} n'a pas pu démarrer.",
         "editSavedArguments": "Modifiez-les dans Paramètres > Agents > Arguments.",
         "couldNotRestart": "{{agent}} n'a pas pu redémarrer.",
-        "notSignedIn": "{{agent}} n'est pas connecté avec le compte sélectionné.",
+        "notSignedIn": "{{agent}} n’est pas connecté.",
+        "claudeSystemNotSignedIn": "Claude n’est pas connecté. Exécutez `{{loginCommand}}`, ou choisissez un compte dans les paramètres des Comptes Claude.",
+        "claudeManagedNotSignedIn": "Ce compte Claude n’est pas connecté. Reconnectez-vous dans les paramètres des Comptes Claude.",
+        "codexSystemNotSignedIn": "Codex n’est pas connecté. Exécutez `{{loginCommand}}`.",
+        "codexManagedNotSignedIn": "Ce compte Codex n’est pas connecté. Reconnectez-vous dans les paramètres des Comptes Codex.",
+        "cliMissing": "{{agent}} est introuvable sur l’ordinateur qui exécute cette conversation. Installez-le ou vérifiez sa Commande dans Paramètres → Agents.",
         "signInFirst": "Connectez-vous d'abord.",
         "signInThenRunCommand": "Connectez-vous, puis relancez /{{command}}.",
         "signInThenSend": "Connectez-vous, puis renvoyez votre message.",
@@ -17861,8 +17912,6 @@
         "managedAccountUnsupported": "Tant qu'un compte Claude est ajouté dans WSL, les chats Claude nécessitent un compte Claude Windows.",
         "launchFolderMissing": "Le dossier dans lequel ce chat s'exécutait n'existe plus. Restaurez-le pour poursuivre ce chat.",
         "historyInOtherAccount": "L'historique de ce chat se trouve dans un autre compte Claude. Revenez à ce compte pour le poursuivre.",
-        "claudeAccountFolderMissing": "Le dossier du compte Claude sélectionné est introuvable. Reconnectez-vous à ce compte ou choisissez-en un autre.",
-        "claudeAccountSetupFailed": "Le compte Claude sélectionné n'a pas pu être configuré. Réessayez ou choisissez un autre compte.",
         "agentCommandNotRunnable": "{{agent}} : la Commande dans Paramètres → Agents doit être le chemin ou le nom d'un programme qu'Orca peut trouver, sans arguments ni variables. Modifiez-la ou réinitialisez-la.",
         "chooseClaudeAccount": "Choisissez-en un ou ajoutez-en un dans les paramètres Comptes Claude.",
         "chooseClaudeAccountThenRunCommand": "Choisissez-en un ou ajoutez-en un dans les paramètres Comptes Claude, puis relancez /{{command}}.",
@@ -17915,6 +17964,13 @@
         "providerRetryNumberOf": "Nouvelle tentative {{attempt}} sur {{maxRetries}}.",
         "providerRetryLastError": "Dernière erreur : {{detail}}.",
         "previousExitUnverifiable": "Impossible d'arrêter l'exécution précédente de {{agent}}.",
+        "sessionNotRestored": "{{agent}} n'a pas pu rouvrir sa session précédente, cette discussion continue donc dans une nouvelle. {{agent}} ne se souvient pas des messages précédents.",
+        "agentCommandNotSignedIn": "Connectez-vous à {{agent}} avec `{{loginCommand}}` sur l’ordinateur qui exécute ce chat.",
+        "interactiveAgentNotSignedIn": "Connectez-vous à {{agent}} en exécutant `{{loginCommand}}` puis en utilisant `{{slashCommand}}` sur l’ordinateur qui exécute ce chat.",
+        "agentNotSignedIn": "Connectez-vous à {{agent}}.",
+        "thenSendAgain": "Puis envoyez à nouveau votre message.",
+        "runCommandWhenDone": "Lancez /{{command}} quand il aura terminé.",
+        "commandAfterAnswer": "Répondez à la question ou à la demande d'approbation de l'agent, puis lancez /{{command}}.",
         "sessionNotRestored": "{{agent}} n'a pas pu rouvrir sa session précédente, cette discussion continue donc dans une nouvelle. {{agent}} ne se souvient pas des messages précédents."
       },
       "writeNotice": {
@@ -17930,7 +17986,7 @@
         "notDoneCommand": "La commande n'a pas été exécutée.",
         "notDoneGoal": "L'objectif n'a pas été modifié.",
         "restartFailed": "L'agent n'a pas pu redémarrer.",
-        "capacity": "Orca a reçu trop de requêtes au cours de la dernière journée.",
+        "capacity": "Orca sur l'ordinateur qui exécute ce chat a atteint une limite de requêtes. Mettez à jour Orca sur cet ordinateur, puis réessayez.",
         "outcomeUnknown": "Orca n'a pas pu confirmer ce qui s'est passé. Vérifiez le chat.",
         "sendOutcomeLost": "Orca n'a pas pu confirmer que votre message est parvenu à l'agent. Vérifiez le chat, puis renvoyez-le si nécessaire.",
         "questionChanged": "Cette question a déjà reçu une réponse ou a changé.",
@@ -17963,6 +18019,8 @@
         "waitForBackgroundTasks": "Attendez la fin des tâches en arrière-plan.",
         "messagesUnsettled": "Un message que vous avez envoyé plus tôt n'est pas encore confirmé.",
         "settleEarlierMessage": "Attendez que votre message précédent soit transmis, ou renvoyez-le.",
+        "queueTooLarge": "Trop de texte est en attente dans la file.",
+        "shrinkQueue": "Supprimez un message de la file, ou attendez qu'un message soit transmis, puis réessayez.",
         "optionRejected": "L'agent n'a pas accepté ce réglage.",
         "goalsUnsupported": "Cet agent ne prend pas en charge les objectifs.",
         "agentRefused": "L'agent l'a refusé.",
@@ -17975,7 +18033,16 @@
         "recordUnreadable": "Orca n'a pas pu lire l'état enregistré de ce chat.",
         "chatNotFound": "Orca ne trouve pas ce chat.",
         "startNewChat": "Démarrez un nouveau chat pour continuer.",
-        "tryAgain": "Réessayez."
+        "tryAgain": "Réessayez.",
+        "agentStillWorking": "L'agent est encore en train de travailler.",
+        "runClearWhenDone": "Lancez /clear quand il aura terminé.",
+        "clearAfterAnswer": "Répondez à la question ou à la demande d'approbation de l'agent, puis lancez /clear.",
+        "runCompactWhenDone": "Lancez /compact quand il aura terminé.",
+        "compactAfterAnswer": "Répondez à la question ou à la demande d'approbation de l'agent, puis lancez /compact.",
+        "clearAfterRetry": "Réessayez votre message précédent, puis lancez /clear.",
+        "compactAfterRetry": "Réessayez votre message précédent, puis lancez /compact.",
+        "clearAfterSending": "Votre message précédent est encore en cours d'envoi. Lancez /clear une fois qu'il est parti.",
+        "compactAfterSending": "Votre message précédent est encore en cours d'envoi. Lancez /compact une fois qu'il est parti."
       },
       "composer": {
         "imageUnsupported": "Le collage d'image n'est pas pris en charge pour cet agent.",
@@ -17996,6 +18063,7 @@
         "skills": "Skills",
         "loadingSkills": "Chargement des skills...",
         "skillsLoaded": "Skills chargées",
+        "clearDescription": "Effacer le contexte de la conversation",
         "skillsUnavailableHost": "Les skills ne peuvent pas être listées dans les chats SSH",
         "skillsLoadFailed": "Impossible de charger les skills",
         "retrySkills": "Réessayer",
@@ -18171,6 +18239,13 @@
         "toggleDetails": "Basculer les détails du tour"
       },
       "jumpToLatest": "Aller au dernier message",
+      "find": {
+        "label": "Rechercher dans le chat",
+        "noResults": "Aucun résultat",
+        "previousMatch": "Correspondance précédente",
+        "nextMatch": "Correspondance suivante",
+        "close": "Fermer"
+      },
       "transcriptLabel": "Conversation",
       "toggle": {
         "showTerminal": "Afficher le terminal",
@@ -18263,6 +18338,7 @@
         "cancelledBy": "Annulé le {{device}}"
       },
       "notices": {
+        "contextCleared": "Contexte effacé",
         "compaction": "Contexte compacté",
         "details": "Détails",
         "plan": "Plan",
@@ -18421,6 +18497,8 @@
         "delete": "Supprimer",
         "moreActions": "Plus d'actions",
         "editMessage": "Modifier le message",
+        "showFullMessage": "Afficher le message complet",
+        "showLess": "Afficher moins",
         "turnOffQueueing": "Désactiver la file d'attente",
         "withdrawnHold": "Arrêté avant l'envoi",
         "pausedSendFailed": "Envoi impossible. Appuyez sur Envoyer pour réessayer.",
@@ -18434,7 +18512,8 @@
         "sendConfirmBody_other": "Vous êtes sur le point d'envoyer un message. Voulez-vous effacer les {{count}} messages déjà en file d'attente ?",
         "sendConfirmClear": "Vider la file d'attente",
         "sendConfirmSend": "Envoyer le message",
-        "from": "De {{names}}"
+        "fromSender": "De",
+        "pausedSendFailedWaiting": "Envoi impossible. Quand l'agent aura terminé, appuyez sur Envoyer pour réessayer."
       },
       "thought": "A réfléchi",
       "thoughtForDuration": "A réfléchi pendant {{duration}}",
@@ -18749,8 +18828,8 @@
       }
     },
     "agentSessionContinuation": {
-      "continueInNewSession": "Continuer dans une nouvelle session…",
-      "dialogTitle": "Continuer dans une nouvelle session",
+      "handOffToAnotherAgent": "Transférer à un autre Agent",
+      "dialogTitle": "Transférer à un autre Agent",
       "dialogDescription": "Démarrez une nouvelle session d'Agent depuis ce point d'arrêt. La session d'origine reste inchangée.",
       "untitledSession": "Session actuelle",
       "originalAgent": "Agent d'origine : {{agent}}",
@@ -18983,6 +19062,16 @@
     }
   },
   "featureTips": {
+    "nativeChatUpgrade": {
+      "eyebrow": "Nouveau",
+      "title": "Le chat natif évolue",
+      "intro": "Les nouveaux chats des agents compatibles utilisent la vue améliorée. Pour alterner entre chat et CLI, ouvrez {{panel}} (barre latérale droite) :",
+      "resumeInNativeChat": "{{action}} ouvre une conversation CLI compatible dans le chat natif.",
+      "resumeInCli": "{{action}} copie un chat Claude/Codex dans une CLI neuve ; l'original reste intact.",
+      "settingsInstruction": "Gérez Chat UI dans",
+      "settingsLink": "Paramètres → Expérimental",
+      "gotIt": "Compris"
+    },
     "voice": {
       "demoPrompt": "Relisez ce diff à la recherche de cas limites et ajoutez des tests pour tout ce que vous trouvez.",
       "startDictation": "Démarrer la dictée",
@@ -19354,6 +19443,9 @@
       "oldTerminalDialogRisk": "Les sessions Codex qui partagent un serveur peuvent se terminer ensemble et le statut de l'agent peut être erroné.",
       "oldTerminalDialogCause": "Les terminaux plus anciens partagent toujours un serveur Codex. Ouvrez un nouveau terminal pour exécuter Codex sur un serveur distinct.",
       "fix": "Réparer",
+      "openNewTerminal": "Ouvrir un nouveau terminal",
+      "dontShowAgain": "Ne plus montrer",
+      "dismiss": "Rejeter",
       "dialogTitle": "Donnez à chaque onglet du Codex son propre serveur",
       "dialogDescription": "Les sessions Codex démarrées directement dans un terminal partagent un serveur en arrière-plan. Orca conserve les sessions Codex qu'il démarre séparément. Lorsque des sessions partagent un serveur, la fermeture de l'une peut mettre fin aux autres et le statut de l'agent peut être erroné.",
       "copy": "Copie",
@@ -19364,6 +19456,7 @@
       "step2Title": "Arrêtez le serveur partagé en cours d'exécution",
       "undo": "Pour annuler, exécutez codex features enable daemon_auto_start.",
       "step2Warning": "Ferme toutes les sessions Codex ouvertes qui partagent le serveur",
+      "learnMore": "Apprendre encore plus",
       "turnOff": "Éteindre",
       "turningOff": "Éteindre…",
       "turnedOff": "Éteint",
@@ -19379,12 +19472,6 @@
     },
     "paneMove": {
       "failed": "Impossible de déplacer le volet vers un nouvel onglet."
-    },
-    "paneTopBanner": {
-      "openNewTerminal": "Ouvrir un nouveau terminal",
-      "learnMore": "Apprendre encore plus",
-      "dontShowAgain": "Ne plus montrer",
-      "dismiss": "Rejeter"
     }
   },
   "fileSearch": {

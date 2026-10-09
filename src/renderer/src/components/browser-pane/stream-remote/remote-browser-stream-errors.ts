@@ -1,8 +1,11 @@
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
+import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../../../../shared/runtime-session-contracts'
 import {
   remoteBrowserStreamLostNotice,
   remoteBrowserStreamRestartFailedNotice,
-  remoteBrowserStreamUnsupportedNotice
+  remoteBrowserStreamUnsupportedNotice,
+  remoteBrowserStreamUnreachableNotice,
+  remoteBrowserServiceUnavailableNotice
 } from './remote-browser-stream-status'
 
 // Why: a runtime lacking browser.screencast.v1 will not grow it while this connection lives, so
@@ -44,7 +47,7 @@ function readErrorCode(error: unknown): string | null {
   if (!error || typeof error !== 'object' || !('code' in error)) {
     return null
   }
-  const code = (error as { code: unknown }).code
+  const code = error.code
   return typeof code === 'string' ? code : null
 }
 
@@ -68,7 +71,7 @@ export function isPermanentRemoteBrowserStreamFailure(error: unknown): boolean {
   )
 }
 
-export type RemoteBrowserStreamRestartFailure = {
+export type RemoteBrowserStreamFailure = {
   /** What the pane shows. */
   message: string
   /** False once the failure is proven unrecoverable on this connection. */
@@ -89,9 +92,18 @@ export type RemoteBrowserStreamRestartFailure = {
 // is what stranded the pane in the first place. `selector_not_found` already had to be walked back
 // out of the permanent set once (08260a54bf) — proof this classification can be wrong — so a
 // misjudgement here must stay recoverable by hand.
-export function resolveRemoteBrowserStreamRestartFailure(
-  error: unknown
-): RemoteBrowserStreamRestartFailure {
+export function resolveRemoteBrowserStreamFailure(
+  error: unknown,
+  phase: 'opening' | 'restart' = 'restart'
+): RemoteBrowserStreamFailure {
+  // Browser setup can recover without the server connection changing.
+  if (readErrorCode(error) === BROWSER_UNAVAILABLE_ERROR_CODE) {
+    return {
+      message: remoteBrowserServiceUnavailableNotice(),
+      shouldRetry: true,
+      logRawError: true
+    }
+  }
   if (isPermanentRemoteBrowserStreamFailure(error)) {
     return {
       message: error instanceof Error ? error.message : remoteBrowserStreamRestartFailedNotice(),
@@ -99,5 +111,12 @@ export function resolveRemoteBrowserStreamRestartFailure(
       logRawError: false
     }
   }
-  return { message: remoteBrowserStreamLostNotice(), shouldRetry: true, logRawError: true }
+  return {
+    message:
+      phase === 'opening'
+        ? remoteBrowserStreamUnreachableNotice()
+        : remoteBrowserStreamLostNotice(),
+    shouldRetry: true,
+    logRawError: true
+  }
 }

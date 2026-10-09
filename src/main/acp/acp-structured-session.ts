@@ -20,6 +20,7 @@ export type AcpStructuredSession = {
   fence: number
   acquisitionGeneration: string
   spec: AcpLaunchSpec
+  subagentStopSupported?: boolean
   /** The agent's process and its protocol, one owner. */
   connection: AcpStructuredConnection
   lane: AcpStructuredLane
