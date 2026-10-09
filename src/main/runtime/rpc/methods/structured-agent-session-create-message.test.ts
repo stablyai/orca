@@ -111,7 +111,8 @@ it.each([
           firstMessage: {
             clientMessageId: input.firstMessage?.clientMessageId,
             dispatchState: 'rejected',
-            rejection: { kind: 'cancelled' }
+            rejection: { kind: 'cancelled' },
+            keptAsQueuedMessageId: input.firstMessage?.clientMessageId
           }
         }
       }
