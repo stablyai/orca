@@ -4,9 +4,11 @@
 //
 // Each chat goes to its reconciliation worker with its startup share owed
 // (`structured-agent-session-reconciliation-pass.ts`): the worker takes a background slot outside
-// the chat's action lane, opens and publishes the journal, and enters the lane only for the short
+// the chat's action lane, replays a closed chat's journal as its own read (published to no status
+// surface: only a chat a reader or the restorer opens is), and enters the lane only for the short
 // recheck and its writes. So a send, a start or a read of a chat late in the scan never waits
-// behind its share. A share that fails is not done: the worker retries it.
+// behind its share, and a chat a reader opens moves ahead of the rest. A share that fails is not
+// done: the worker retries it, up to its bound.
 
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionReconciliation } from './structured-agent-session-reconciliation-worker'

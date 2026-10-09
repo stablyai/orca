@@ -245,7 +245,9 @@ describe('a write that ends nothing', () => {
     expect(ended).toEqual([])
   })
 
-  it('hands on, once, the proof a reservation clears from a released lease, for the generation it judges', async () => {
+  // Design §9.8: that generation was told at its release; the reservation's clearing of the
+  // release's proof is no second end.
+  it('tells no one for a reservation over a lease an observed exit released with its proof', async () => {
     const first = await liveOwner()
     await releaseStoredStructuredAgentSessionOwnerAfterExit({
       store,
@@ -256,16 +258,9 @@ describe('a write that ends nothing', () => {
     })
     ended = []
 
-    const { fence } = await liveOwner()
+    await liveOwner()
 
-    expect(fence).toBe(first.fence + 2)
     expect(store.getRecord(SESSION)?.lease.deathEvidence).toBeNull()
-    expect(ended).toEqual([
-      {
-        sessionId: SESSION,
-        endedFence: first.fence,
-        evidence: expect.objectContaining({ kind: 'exit-observed', ownerFence: first.fence })
-      }
-    ])
+    expect(ended).toEqual([])
   })
 })

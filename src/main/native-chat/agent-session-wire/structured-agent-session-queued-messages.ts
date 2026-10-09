@@ -233,9 +233,6 @@ export type QueuedMessageDrainDeps = {
   currentWork: (sessionId: string) => StructuredAgentSessionCurrentWork | null
   /** The consumed submission is ordinary #22821 work from here on. */
   wakeDelivery: (sessionId: string) => void
-  /** Nothing sends on its own yet: the chat's startup reopen mark has not landed. Its landing
-   *  wakes the drain again. */
-  held?: (sessionId: string) => boolean
   logger: StructuredAgentSessionLogger
 }
 
@@ -262,7 +259,7 @@ export class StructuredAgentSessionQueuedMessageDrain {
 
   schedule(sessionId: string): void {
     const journal = this.disposed ? undefined : this.deps.sessions.get(sessionId)?.journal
-    if (!journal || this.deps.held?.(sessionId)) {
+    if (!journal) {
       return
     }
     // Cheap pre-check so token streams do not pay a serialized step per delta.
@@ -301,7 +298,7 @@ export class StructuredAgentSessionQueuedMessageDrain {
 
   private async step(sessionId: string): Promise<void> {
     const session = this.deps.sessions.get(sessionId)
-    if (this.disposed || !session || this.deps.held?.(sessionId)) {
+    if (this.disposed || !session) {
       return
     }
     const journal = session.journal

@@ -150,6 +150,12 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         COPY.providerExitedRejection,
         values
       ),
+    providerExitedAnswer: (values) =>
+      translate(
+        'components.native-chat.failureWords.providerExitedAnswer',
+        COPY.providerExitedAnswer,
+        values
+      ),
     providerRejected: () =>
       translate('components.native-chat.failureWords.providerRejected', COPY.providerRejected),
     providerRejectedQuoted: (values) =>

@@ -239,11 +239,26 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
       ...(unrunRejection ? { unrunRejection } : {})
     }
   } finally {
-    // The root's exit was observed, so the owner is released first, writing the proof and ending
-    // the generation; then what it left is settled at the new fence. A release or a settlement
-    // that cannot commit stays owed: the chat's reconciliation worker retries it.
+    // What the exited child left is settled first, at its own fence, as its own closing tail lands:
+    // a row its closed sink still delivers lands too, and wakes the chat's worker to settle it once
+    // the release below moves the fence. A settlement or a release that cannot commit stays owed:
+    // the chat's reconciliation worker retries it.
     let released = false
     let owed: StructuredAgentSessionExitSettlement | null = null
+    if (settlement) {
+      const settled = await settleStructuredAgentSessionLeftovers({
+        store: context.store,
+        sessionId,
+        journal: session.journal,
+        exit: settlement,
+        // Ended whether or not the release lands: the host saw the root go.
+        ended: { fence: child.fence, rootGone: true }
+      })
+      if (!settled.ok) {
+        owed = settlement
+        logExitFailure(context, sessionId, 'exit-settlement', settled.error)
+      }
+    }
     try {
       await releaseStoredStructuredAgentSessionOwnerAfterExit({
         store: context.store,
@@ -256,20 +271,6 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
       released = true
     } catch (error) {
       logExitFailure(context, sessionId, 'exit-owner-release', error)
-    }
-    if (settlement) {
-      const settled = await settleStructuredAgentSessionLeftovers({
-        store: context.store,
-        sessionId,
-        journal: session.journal,
-        exit: settlement,
-        // Ended whether or not the release landed: the host saw the root go.
-        ended: { fence: child.fence, rootGone: true }
-      })
-      if (!settled.ok) {
-        owed = settlement
-        logExitFailure(context, sessionId, 'exit-settlement', settled.error)
-      }
     }
     if (context.route) {
       const { runtimeState, acknowledgeRelease } = context.route

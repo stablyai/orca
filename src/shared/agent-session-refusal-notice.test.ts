@@ -451,6 +451,12 @@ describe('the notice for every reason a host names', () => {
       }
       const notDone = parts.filter((part) => typeof part === 'string' && part.startsWith('notDone'))
       const answeredAway = write === 'answer' && parts.includes('questionChanged')
+      // "...so your answer was not sent" is that sentence's own.
+      const ownerStopped =
+        write === 'answer' &&
+        parts.some(
+          (part) => typeof part === 'object' && 'surface' in part && part.surface === 'answer'
+        )
       const unsupported =
         failure.code === 'structured_agent_session_unsupported' &&
         failure.details?.reason !== 'hostUnsupported' &&
@@ -467,7 +473,9 @@ describe('the notice for every reason a host names', () => {
         ] as const
       ).some((sentence) => parts.includes(sentence))
       expect(notDone, cell).toEqual(
-        answeredAway || unsupported || saysNotDone || clearWhileWorking ? [] : [NOT_DONE[write]]
+        answeredAway || ownerStopped || unsupported || saysNotDone || clearWhileWorking
+          ? []
+          : [NOT_DONE[write]]
       )
     }
   })
@@ -530,7 +538,7 @@ describe('the notice for every reason a host names', () => {
       'agent_session_operation_invalid',
       'promptOwnerEnded',
       'answer',
-      'Your answer was not sent. The agent stopped while this response was in progress. You can continue in this conversation.'
+      'The agent has stopped, so your answer was not sent. Send a message to continue.'
     ],
     [
       'agent_session_checkpoint_stale',
@@ -542,6 +550,19 @@ describe('the notice for every reason a host names', () => {
     expect(
       agentSessionRefusalNotice({ code, message: HOST_TEXT, details: { reason } }, write)
     ).toBe(expected)
+  })
+})
+
+describe('an answer to a prompt whose agent stopped', () => {
+  it('names the agent the client knows, on the phone and on desktop alike', () => {
+    const refusal = {
+      code: 'agent_session_operation_invalid' as const,
+      message: HOST_TEXT,
+      details: { reason: 'promptOwnerEnded' as const }
+    }
+    expect(agentSessionRefusalNotice(refusal, 'answer', { agentName: 'Codex' })).toBe(
+      'Codex has stopped, so your answer was not sent. Send a message to continue.'
+    )
   })
 })
 

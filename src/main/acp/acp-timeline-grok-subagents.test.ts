@@ -62,6 +62,7 @@ describe('Grok subagents through the shared timeline', () => {
       {
         id: 'subagent-1',
         label: 'Count note lines',
+        ownerFence: 1,
         state: 'completed',
         tokens: 13778,
         startedAt: expect.any(Number),

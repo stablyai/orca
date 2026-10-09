@@ -224,11 +224,11 @@ describe('the warning row of a replacement whose attach failed', () => {
     const { host, store, fence, warnings } = opened
     expect(await host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
     await host.close(SESSION, 'user-close')
-    // The journal's open fails after the fresh session's link is durable, before its row is written:
-    // the start's leftover settlement meets it first and goes on, then the attach's own open.
-    vi.spyOn(AgentSessionJournal.prototype, 'open')
-      .mockRejectedValueOnce(new Error('journal path unavailable'))
-      .mockRejectedValueOnce(new Error('journal path unavailable'))
+    // The journal's open fails after the fresh session's link is durable, before its row is written.
+    // A start settles nothing, so the attach's own open is the only one.
+    vi.spyOn(AgentSessionJournal.prototype, 'open').mockRejectedValueOnce(
+      new Error('journal path unavailable')
+    )
     await expect(host.attach(CALLER, attachParams(fence()))).rejects.toThrow(
       'journal path unavailable'
     )

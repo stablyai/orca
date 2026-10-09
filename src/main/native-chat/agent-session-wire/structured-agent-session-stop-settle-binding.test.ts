@@ -66,7 +66,7 @@ function openedTurn() {
 
 function nothingRuns(): boolean {
   return !isStructuredAgentSessionMainAgentWorking(
-    journal().activeTurnId(),
+    journal().runningTurn()?.turnId ?? null,
     journal().submissions()
   )
 }

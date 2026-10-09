@@ -422,7 +422,7 @@ describe('already-wedged profiles become usable on load', () => {
     })
   })
 
-  it('settles an observed-exit latch through attach before the boot sweep', async () => {
+  it('an attach that beats the boot sweep clears the latch; the sweep then settles the turn unverifiable', async () => {
     const record = wedgedRecord({ claimStatus: 'released', handoffStage: 'recovering' })
     // The settlement latch an older build wrote; this build derives the settlement instead.
     const olderBuildLatch = {
@@ -443,17 +443,17 @@ describe('already-wedged profiles become usable on load', () => {
     openHost()
 
     expect(await host.attach(CALLER, hostTestAttachParams(13))).toMatchObject({ ok: true })
-    // The reservation cleared the release's proof and handed it to the chat's worker.
+    // Acquiring a released lease ends nothing (design §9.8): the boot sweep settles what it left.
+    host.collaboratorsForTests().reconciliation.signal(SESSION, { startup: true })
     await reconciled()
 
     expect(acquire).toHaveBeenCalledOnce()
     expect(activeStructuredAgentSessionTurnId(restoredJournal().snapshot().items)).toBe(null)
-    // The exit was observed, so its proof is the turn's end.
-    expect(turnLifecycle('turn-1')).toEqual({
+    // The reservation cleared the release's proof before the sweep ran: less specific, never wrong.
+    expect(turnLifecycle('turn-1')).toMatchObject({
       turnId: 'turn-1',
-      state: 'interrupted',
+      state: 'unverifiable',
       startedAt: NOW - 5_000,
-      completedAt: NOW - 1_000,
       recovered: true
     })
     expect(store.getRecord(SESSION)?.lease).toMatchObject({

@@ -7,30 +7,37 @@
 // operational revision, the published view, the queued-card drain), then wakes the worker.
 //
 // The worker coalesces: a chat has at most one attempt running and one timer waiting, and every
-// attempt re-derives everything owed (`runStructuredAgentSessionReconciliationPass`). An attempt
-// that finds the chat closed replays its journal in one of a few background slots outside the
-// chat's lane, and publishes it; only the publish and the pass take the lane, as separate steps, so
-// a send that arrived meanwhile goes first. A failure backs off from 1 s to 30 s, in memory only.
-// The worker retires once a pass finds nothing owed and wrote nothing, when the chat's record is
-// gone, when the database is read-only, or at shutdown. A conversation it opened itself, or one the
-// idle sweep left to it, it closes again on retiring. Nothing a person does (send, start, open,
-// Stop, answer) ever waits on it.
+// attempt re-derives everything owed (`runStructuredAgentSessionReconciliationPass`). A chat nobody
+// has open is replayed in one of a few background slots outside its lane, as the worker's own read
+// (`structured-agent-session-reconciliation-load.ts`): never the chat's conversation, so nothing it
+// writes is published and nothing it closes was anyone's. Only the pass takes the lane, so a send
+// that arrived meanwhile goes first; a chat a reader opens moves ahead of the rest of the scan.
+// A failure backs off from 1 s to 30 s, in memory only, and is given up after a bounded run of
+// them: the next signal or the next startup derives whatever is still owed again. The worker
+// retires once a pass finds nothing owed and wrote nothing, when the chat's record is gone or its
+// journal can never load, when the database is read-only, or at shutdown. Nothing a person does
+// (send, start, open, Stop, answer) ever waits on it.
 
-import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import type { AgentSessionGenerationEnd } from '../../runtime/agent-session-generation-end'
-import { PrioritySemaphore } from '../../../shared/priority-semaphore'
-import type { OpenedStructuredAgentSessionConversation } from './structured-agent-session-conversation-open'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionExitSettlement } from './structured-agent-session-leftover-settlement'
-import { restoreStructuredAgentSessionRead } from './structured-agent-session-read-restore'
 import {
   runStructuredAgentSessionReconciliationPass,
   type StructuredAgentSessionReconciliationDebts,
   type StructuredAgentSessionReconciliationPassContext
 } from './structured-agent-session-reconciliation-pass'
+import {
+  loadStructuredAgentSessionForReconciliation,
+  structuredAgentSessionJournalIsCurrent
+} from './structured-agent-session-reconciliation-load'
+import {
+  StructuredAgentSessionReconciliationSlots,
+  type StructuredAgentSessionReconciliationSlotWaiter
+} from './structured-agent-session-reconciliation-slots'
 
-const BACKGROUND_SLOTS = 4
 export const RECONCILIATION_BACKOFF_MS = { first: 1_000, max: 30_000 } as const
+/** Consecutive failed attempts after which the worker gives up (about three minutes of backoff). */
+export const RECONCILIATION_MAX_FAILED_ATTEMPTS = 10
 
 export type StructuredAgentSessionReconciliationSignal = {
   /** Proof the lease no longer holds (`AgentSessionGenerationEnd.evidence`). */
@@ -50,17 +57,17 @@ export type StructuredAgentSessionReconciliationContext =
     serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
     /** Lets a quit wait for an attempt already writing. */
     track: <T>(operation: Promise<T>) => Promise<T>
-    /** Indexes and publishes a journal this worker opened. */
-    adopt: (sessionId: string, opened: OpenedStructuredAgentSessionConversation) => Promise<void>
     /** Publishes what is current now and wakes the queued-card drain. */
     publishGenerationEnded: (sessionId: string, options?: { restate?: boolean }) => void
     /** Exits a lease latched in recovery when present-time evidence permits; a no-op otherwise. */
     resolveRecovery: (sessionId: string) => Promise<unknown>
-    /** Closes a conversation that is only a cache, as the idle sweep does; takes the lane. */
-    closeAtRest: (sessionId: string) => Promise<unknown>
   }
 
-type ChatWorker = {
+/** `done`: a pass found nothing owed, unless a signal came meanwhile; `retire`: nothing this
+ *  worker can do, whatever came meanwhile (a later signal starts a new one). */
+type Outcome = 'done' | 'retire' | 'again' | 'failed'
+
+type ChatWorker = StructuredAgentSessionReconciliationSlotWaiter & {
   debts: StructuredAgentSessionReconciliationDebts
   running: boolean
   /** A signal arrived while an attempt ran: the next attempt follows at once. */
@@ -69,15 +76,14 @@ type ChatWorker = {
   timer: ReturnType<typeof setTimeout> | 'soon' | null
   failures: number
   attempted: (() => void)[]
-  /** Closed at rest when this worker retires, if still open: one it opened, or one the idle sweep
-   *  would have closed but for it. */
-  closeOnRetire?: StructuredAgentSessionHostSession
+  /** The worker's own read of the chat while nobody has it open; closed when it retires. */
+  loaded?: StructuredAgentSessionHostSession
 }
 
 export class StructuredAgentSessionReconciliation {
   private readonly workers = new Map<string, ChatWorker>()
-  private readonly slots = new PrioritySemaphore(BACKGROUND_SLOTS)
   private disposed = false
+  private readonly slots = new StructuredAgentSessionReconciliationSlots(() => this.disposed)
   private readonly unsubscribe: () => void
 
   constructor(private readonly context: StructuredAgentSessionReconciliationContext) {
@@ -103,7 +109,7 @@ export class StructuredAgentSessionReconciliation {
       worker.debts.exit = signal.exit
     }
     if (signal.startup && !worker.debts.startupShare) {
-      worker.debts.startupShare = { reopenMarked: false, leaseSettled: false }
+      worker.debts.startupShare = { leaseSettled: false }
     }
     if (worker.running) {
       worker.dirty = true
@@ -121,32 +127,22 @@ export class StructuredAgentSessionReconciliation {
     }
   }
 
+  /** A reader opened the chat: whatever its worker still waits a slot for goes ahead of the scan. */
+  prioritize = (sessionId: string): void => {
+    const worker = this.workers.get(sessionId)
+    if (worker) {
+      this.slots.prioritize(worker)
+    }
+  }
+
   /** Resolves once the chat's next attempt finished, or at once when it has no worker. */
   attempted = (sessionId: string): Promise<void> => {
     const worker = this.workers.get(sessionId)
     return worker ? new Promise((resolve) => worker.attempted.push(resolve)) : Promise.resolve()
   }
 
-  /** The chat's startup share has not yet written its reopen mark: the queue sends nothing on its
-   *  own until it has, so every card the earlier process left waits for a turn first. */
-  awaitingReopenMark = (sessionId: string): boolean => {
-    const share = this.workers.get(sessionId)?.debts.startupShare
-    return share !== undefined && !share.reopenMarked
-  }
-
   /** Whether the chat has a worker: something was owed at its last attempt. */
   owes = (sessionId: string): boolean => this.workers.has(sessionId)
-
-  /** The idle sweep's close of a chat this worker still owes: deferred to its retirement, so the
-   *  worker does not open it again. False when nothing is owed and the close can go ahead. */
-  deferCloseAtRest = (sessionId: string): boolean => {
-    const worker = this.workers.get(sessionId)
-    if (!worker) {
-      return false
-    }
-    worker.closeOnRetire = this.context.sessions.get(sessionId)
-    return true
-  }
 
   /** Resolves once the chat's worker retired, or is waiting out a backoff. */
   idle = async (sessionId: string): Promise<void> => {
@@ -159,11 +155,13 @@ export class StructuredAgentSessionReconciliation {
     }
   }
 
-  /** Shutdown: every timer stops; an attempt already writing finishes, tracked. */
+  /** Shutdown: every timer stops and every slot wait ends; an attempt already writing finishes,
+   *  tracked, and one that has not started work starts none. */
   dispose = (): void => {
     this.disposed = true
     this.unsubscribe()
     for (const [sessionId, worker] of this.workers) {
+      worker.slotWait?.abort()
       this.retire(sessionId, worker)
     }
   }
@@ -171,7 +169,15 @@ export class StructuredAgentSessionReconciliation {
   private workerFor(sessionId: string): ChatWorker {
     let worker = this.workers.get(sessionId)
     if (!worker) {
-      worker = { debts: {}, running: false, dirty: false, timer: null, failures: 0, attempted: [] }
+      worker = {
+        debts: {},
+        running: false,
+        dirty: false,
+        timer: null,
+        failures: 0,
+        attempted: [],
+        urgent: false
+      }
       this.workers.set(sessionId, worker)
     }
     return worker
@@ -190,51 +196,110 @@ export class StructuredAgentSessionReconciliation {
       .then((outcome) => this.afterAttempt(sessionId, worker, outcome))
   }
 
-  private async runAttempt(
-    sessionId: string,
-    worker: ChatWorker
-  ): Promise<'retire' | 'again' | 'failed'> {
+  private async runAttempt(sessionId: string, worker: ChatWorker): Promise<Outcome> {
     try {
       const { store } = this.context.deps
       if (this.disposed || store.readOnly || !store.getRecord(sessionId)) {
         return 'retire'
       }
       const share = worker.debts.startupShare
-      // Once per startup share, before it publishes: a lease latched in recovery is decided first,
-      // as the restore decides it, so no reader sees a gone owner's turn as running.
+      // Once per startup share, before its pass: a lease latched in recovery is decided first, as
+      // the restore decides it, so the pass judges what is current.
       if (share && !share.leaseSettled) {
-        await this.inSlot(() => this.context.resolveRecovery(sessionId)).catch((error: unknown) =>
-          this.warn(sessionId, error)
+        const resolved = await this.slots.run(worker, () =>
+          this.context.resolveRecovery(sessionId).catch((error: unknown) => {
+            this.warn(sessionId, error)
+          })
         )
+        if (!resolved) {
+          return 'retire'
+        }
         share.leaseSettled = true
       }
-      // Replayed in a background slot outside the chat's lane, and published before the pass: a
-      // reader or a send never waits on the replay, and the lane is held only to publish and for
-      // the pass's recheck and writes.
-      if (!this.context.sessions.has(sessionId) && !(await this.load(sessionId, worker))) {
-        return 'retire'
+      if (!this.context.sessions.has(sessionId) && !worker.loaded) {
+        const stop = await this.load(sessionId, worker)
+        if (stop) {
+          return stop
+        }
       }
-      const held = this.awaitingReopenMark(sessionId)
-      const pass = await this.context.serialize(sessionId, () =>
-        runStructuredAgentSessionReconciliationPass(this.context, sessionId, worker.debts)
-      )
-      if (held && !this.awaitingReopenMark(sessionId)) {
-        // The queue may send on its own again.
-        this.context.publishGenerationEnded(sessionId)
-      }
-      // Closed while this attempt waited for the lane: the next one opens it again.
-      if (pass.absent) {
-        return 'again'
-      }
-      if (pass.failed.length > 0) {
-        this.warn(sessionId, pass.failed[0])
-        return 'failed'
-      }
-      return pass.wrote ? 'again' : 'retire'
+      return await this.context.serialize(sessionId, () => this.runPass(sessionId, worker))
     } catch (error) {
       this.warn(sessionId, error)
       return 'failed'
     }
+  }
+
+  /** The pass, inside the chat's lane, on the conversation a reader holds or the worker's own. */
+  private async runPass(sessionId: string, worker: ChatWorker): Promise<Outcome> {
+    if (this.disposed) {
+      return 'retire'
+    }
+    const session = this.sessionFor(sessionId, worker)
+    // Closed, or written by another handle, since this attempt began: the next one reads it again.
+    if (!session) {
+      return 'again'
+    }
+    const pass = await runStructuredAgentSessionReconciliationPass(
+      this.context,
+      sessionId,
+      session,
+      worker.debts
+    )
+    if (pass.failed.length > 0) {
+      this.warn(sessionId, pass.failed[0])
+      return 'failed'
+    }
+    return pass.wrote ? 'again' : 'done'
+  }
+
+  private sessionFor(
+    sessionId: string,
+    worker: ChatWorker
+  ): Pick<StructuredAgentSessionHostSession, 'journal' | 'lastEndedChild'> | undefined {
+    const open = this.context.sessions.get(sessionId)
+    if (open) {
+      this.dropLoaded(worker)
+      return open
+    }
+    const { loaded } = worker
+    if (
+      loaded &&
+      !structuredAgentSessionJournalIsCurrent(this.context.deps, sessionId, loaded.journal)
+    ) {
+      this.dropLoaded(worker)
+      return undefined
+    }
+    return loaded
+  }
+
+  /** Replays the journal in a background slot as the worker's own read; null to go on to the pass,
+   *  else how the attempt ends. */
+  private async load(sessionId: string, worker: ChatWorker): Promise<Outcome | null> {
+    const result = await this.slots.run(worker, () =>
+      loadStructuredAgentSessionForReconciliation(
+        this.context.deps,
+        sessionId,
+        () => this.disposed || this.context.sessions.has(sessionId)
+      )
+    )
+    const loaded = result?.value
+    if (!loaded || this.disposed) {
+      if (loaded?.kind === 'loaded') {
+        void loaded.session.journal.close()
+      }
+      return 'retire'
+    }
+    if (loaded.kind === 'loaded') {
+      worker.loaded = loaded.session
+    }
+    // Skipped: a reader opened it meanwhile, and the pass uses their conversation.
+    return loaded.kind === 'nothing' ? 'retire' : null
+  }
+
+  private dropLoaded(worker: ChatWorker): void {
+    const journal = worker.loaded?.journal
+    worker.loaded = undefined
+    void journal?.close()
   }
 
   private warn(sessionId: string, error: unknown): void {
@@ -245,56 +310,26 @@ export class StructuredAgentSessionReconciliation {
     })
   }
 
-  private async inSlot<T>(task: () => Promise<T>): Promise<T> {
-    const release = await this.slots.acquire(0)
-    try {
-      return await task()
-    } finally {
-      release()
-    }
-  }
-
-  /** Replays the journal in a background slot, then publishes it; false when it has none. */
-  private async load(sessionId: string, worker: ChatWorker): Promise<boolean> {
-    const opened = await this.inSlot(async () => {
-      // A replay is synchronous SQLite: a macrotask before each keeps a send or a read from waiting
-      // behind a whole scan's worth of them.
-      await yieldToEventLoop()
-      return this.context.sessions.has(sessionId)
-        ? null
-        : restoreStructuredAgentSessionRead(this.context.deps, sessionId)
-    })
-    if (!opened) {
-      // Open already, or no journal: nothing was ever written, so nothing is owed.
-      return this.context.sessions.has(sessionId)
-    }
-    const replayed = opened
-    // Published under the lane, so it never replaces a conversation a reader or a send opened
-    // meanwhile; theirs is the conversation, and this replay is dropped.
-    await this.context.serialize(sessionId, async () => {
-      if (this.context.sessions.has(sessionId)) {
-        await replayed.session.journal.close()
-        return
-      }
-      await this.context.adopt(sessionId, replayed)
-      worker.closeOnRetire = this.context.sessions.get(sessionId)
-    })
-    return true
-  }
-
-  private afterAttempt(
-    sessionId: string,
-    worker: ChatWorker,
-    outcome: 'retire' | 'again' | 'failed'
-  ): void {
+  private afterAttempt(sessionId: string, worker: ChatWorker, outcome: Outcome): void {
     worker.running = false
     const attempted = worker.attempted.splice(0)
     attempted.forEach((resolve) => resolve())
     if (this.workers.get(sessionId) !== worker || this.disposed) {
+      // Retired while this attempt ran: its own read closes now that nothing writes through it.
+      this.dropLoaded(worker)
       return
     }
     if (outcome === 'failed') {
       worker.failures += 1
+      if (worker.failures >= RECONCILIATION_MAX_FAILED_ATTEMPTS) {
+        this.context.deps.logger.warn("gave up settling a gone agent's leftover work for now", {
+          scope: 'reconciliation',
+          sessionId,
+          error: new Error(`${worker.failures} attempts failed`)
+        })
+        this.retire(sessionId, worker)
+        return
+      }
       const delay = Math.min(
         RECONCILIATION_BACKOFF_MS.max,
         RECONCILIATION_BACKOFF_MS.first * 2 ** (worker.failures - 1)
@@ -303,17 +338,11 @@ export class StructuredAgentSessionReconciliation {
       return
     }
     worker.failures = 0
-    if (outcome === 'again' || worker.dirty) {
+    if (outcome === 'again' || (outcome === 'done' && worker.dirty)) {
       this.schedule(sessionId, worker, 0)
       return
     }
     this.retire(sessionId, worker)
-    // Only while it is still that conversation: a reader's reopen is theirs.
-    if (worker.closeOnRetire && this.context.sessions.get(sessionId) === worker.closeOnRetire) {
-      void this.context
-        .closeAtRest(sessionId)
-        .catch((error: unknown) => this.warn(sessionId, error))
-    }
   }
 
   private schedule(sessionId: string, worker: ChatWorker, delay: number): void {
@@ -335,6 +364,7 @@ export class StructuredAgentSessionReconciliation {
     worker.timer = null
     this.workers.delete(sessionId)
     if (!worker.running) {
+      this.dropLoaded(worker)
       worker.attempted.splice(0).forEach((resolve) => resolve())
     }
   }

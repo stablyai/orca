@@ -2,9 +2,7 @@
 // supersedes a generation that could still act. A release of any kind (exit, surface, failed
 // acquisition, eviction, unproven, restart adjudication) moves the fence and leaves no owner; a
 // reservation granted over an owner a probe proved gone supersedes it directly. Reserving a lease
-// already released ends nothing new, but when the write drops the proof the release kept, that
-// proof is handed on once more for the generation it judges, so nothing the store forgets is lost
-// to the settlement still owed for it.
+// already released ends nothing new: that generation was told at its release.
 
 import {
   agentSessionDeathEvidenceFromProbe,
@@ -61,13 +59,8 @@ export function agentSessionGenerationEnds(
     if (!prior || prior === lease) {
       continue
     }
+    // A released lease's generation ended at its release; acquiring it again ends nothing.
     if (prior.claimStatus === 'released') {
-      const proof = prior.deathEvidence
-      if (proof && !sameProof(proof, lease.deathEvidence)) {
-        // A proof from before fences were recorded on it judges everything the lease fenced.
-        const ownerFence = proof.ownerFence ?? prior.runtimeFence
-        ends.push({ sessionId, endedFence: ownerFence, evidence: { ...proof, ownerFence } })
-      }
       continue
     }
     const released = lease.claimStatus === 'released'
@@ -81,13 +74,4 @@ export function agentSessionGenerationEnds(
     })
   }
   return ends
-}
-
-function sameProof(proof: AgentSessionDeathEvidence, other: AgentSessionDeathEvidence | null) {
-  return (
-    other !== null &&
-    other.kind === proof.kind &&
-    other.observedAt === proof.observedAt &&
-    other.ownerFence === proof.ownerFence
-  )
 }

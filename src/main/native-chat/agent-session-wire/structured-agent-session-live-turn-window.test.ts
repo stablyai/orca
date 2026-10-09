@@ -116,7 +116,7 @@ describe('a running turn whose record is older than the loaded page', () => {
     await runLongTurn('turn-1', 250)
     const state = hydrate()
 
-    expect(journal.activeTurnId()).toBe('turn-1')
+    expect(journal.runningTurn()?.turnId ?? null).toBe('turn-1')
     expect(state.hasOlder).toBe(true)
     // What every client read before: the record is off the page, so the loaded rows said idle.
     expect(activeStructuredAgentSessionTurnId(state.items)).toBeNull()

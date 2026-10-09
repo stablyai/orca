@@ -2912,6 +2912,7 @@
         "notSignedIn": "{{agent}} is not signed in.",
         "previousExitUnverifiable": "Couldn't stop {{agent}} from before.",
         "providerExitedRejection": "{{agent}} stopped before this message was sent.",
+        "providerExitedAnswer": "{{agent}} has stopped, so your answer was not sent. Send a message to continue.",
         "providerExitedRow": "{{agent}} stopped while this response was in progress. You can continue in this conversation.",
         "providerRateLimited": "{{agent}} is rate-limited and retrying.",
         "providerRejected": "The provider did not accept this message.",

@@ -10,6 +10,8 @@ import { AgentSessionPromptUnavailableError } from './structured-agent-session-a
 import type { StructuredAgentSessionChatStopRun } from './structured-agent-session-chat-stop'
 import {
   answerCancelOfSettledPrompt,
+  dismissEndedGenerationPrompt,
+  isEndedGenerationPrompt,
   validatePendingPrompt,
   type PendingPromptValidation
 } from './structured-agent-session-prompt-state'
@@ -30,6 +32,9 @@ export async function cancelStructuredAgentSessionPrompt(
   const validated = validatePendingPrompt(ctx, input.prompt)
   if (!validated.ok) {
     return answerCancelOfSettledPrompt(ctx, input, validated)
+  }
+  if (isEndedGenerationPrompt(ctx, validated)) {
+    return cancelEndedGenerationPrompt(ctx, input, validated, routes.stop)
   }
   const route = ctx.adapter.routePromptCancel?.({
     sessionId: ctx.sessionId,
@@ -62,6 +67,26 @@ export async function cancelStructuredAgentSessionPrompt(
   // takes the provider's request with it; a Stop that ends nothing must answer the request itself.
   const dismissed = await dismissPrompt(ctx, validated, !stopped.endsSession)
   return dismissed.ok ? cancelled : dismissed
+}
+
+/** A card an ended generation raised: no live provider holds it, so it is dismissed in the journal
+ *  alone and the live turn is not this card's. A request that also names the live turn (an older
+ *  phone's Stop carries the card it shows) is that turn's Stop as well. */
+async function cancelEndedGenerationPrompt(
+  ctx: AgentSessionTurnContext,
+  input: { turnId?: string },
+  pending: PendingPrompt,
+  stop: () => Promise<StructuredAgentSessionChatStopRun>
+): Promise<CancelOutcome> {
+  const dismissed = await dismissEndedGenerationPrompt(ctx, pending)
+  if (!dismissed.ok) {
+    return dismissed
+  }
+  const liveTurnId = contextStructuredAgentSessionCurrentWork(ctx).activeTurnId()
+  if (input.turnId !== undefined && input.turnId === liveTurnId) {
+    return (await stop()).outcome
+  }
+  return { ok: true, value: { ...(input.turnId ? { turnId: input.turnId } : {}), cancelled: true } }
 }
 
 function raisedByLiveTurn(ctx: AgentSessionTurnContext, pending: PendingPrompt): boolean {

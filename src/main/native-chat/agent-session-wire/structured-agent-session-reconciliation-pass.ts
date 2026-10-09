@@ -5,8 +5,10 @@
 //
 // The steps stay apart, so one never retires another's debt:
 //  (a) lease-release repair: an exit this host observed whose release write failed;
-//  (b) the startup share: the cards' repair and prune, an earlier host process's unsent sends kept
-//      as cards, the queue's reopen mark after them, and a rewind it left in doubt;
+//  (b) the startup share: the cards' repair and prune, and an earlier host process's unsent sends
+//      kept as cards; then, best effort, the queue's reopen mark after them and a rewind it left in
+//      doubt (neither is owed: the pause is derived from where the handle opened, and a rewind only
+//      its provider can prove waits for the next acquisition);
 //  (c) item settlement (`settleStructuredAgentSessionLeftovers`), one planned batch.
 // An empty item plan says nothing of (a) or (b).
 
@@ -22,7 +24,10 @@ import {
   settleStructuredAgentSessionLeftovers,
   type StructuredAgentSessionExitSettlement
 } from './structured-agent-session-leftover-settlement'
-import { structuredAgentSessionHostInstance } from './structured-agent-session-queued-pause'
+import {
+  markStructuredQueueReopen,
+  structuredAgentSessionHostInstance
+} from './structured-agent-session-queued-pause'
 import { recoverStructuredRewind } from './structured-rewind-recovery'
 
 export type StructuredAgentSessionReconciliationPassContext = Pick<
@@ -37,7 +42,7 @@ export type StructuredAgentSessionReconciliationDebts = {
    *  later release replaces it with its own. */
   evidence?: AgentSessionDeathEvidence[]
   /** This process has not yet finished the chat's startup share. */
-  startupShare?: { reopenMarked: boolean; leaseSettled: boolean }
+  startupShare?: { leaseSettled: boolean }
 }
 
 export type StructuredAgentSessionReconciliationPass = {
@@ -45,29 +50,27 @@ export type StructuredAgentSessionReconciliationPass = {
   failed: unknown[]
   /** Rows were written, so the next pass verifies nothing is left. */
   wrote: boolean
-  /** The conversation closed before this pass took the lane: nothing was checked. */
-  absent?: true
 }
 
+/** `session`: the chat's open conversation, or the worker's own read of a closed one. */
 export async function runStructuredAgentSessionReconciliationPass(
   context: StructuredAgentSessionReconciliationPassContext,
   sessionId: string,
+  session: Pick<StructuredAgentSessionHostSession, 'journal' | 'lastEndedChild'>,
   debts: StructuredAgentSessionReconciliationDebts
 ): Promise<StructuredAgentSessionReconciliationPass> {
   const pass: StructuredAgentSessionReconciliationPass = { failed: [], wrote: false }
-  const session = context.sessions.get(sessionId)
-  if (!session) {
-    return { ...pass, absent: true }
-  }
   if (
     structuredAgentSessionEndedChildHoldsLease(context, sessionId) &&
     (await releaseLeaseOfEndedStructuredAgentSessionChild(context, sessionId))
   ) {
     pass.failed.push(new Error('agent_session_exit_release_owed'))
   }
-  if (debts.startupShare) {
+  // Only once the lease's recovery was decided (the worker's step before the lane): a share signalled
+  // mid-attempt waits for the next one.
+  if (debts.startupShare?.leaseSettled) {
     const failedBefore = pass.failed.length
-    await runStartupShare(context, sessionId, session, debts.startupShare, pass)
+    await runStartupShare(context, sessionId, session.journal, pass)
     // Done only once every step landed; a failed conversion or repair is owed still.
     if (pass.failed.length === failedBefore) {
       delete debts.startupShare
@@ -124,8 +127,7 @@ function heldProofs(
 async function runStartupShare(
   context: StructuredAgentSessionReconciliationPassContext,
   sessionId: string,
-  { journal }: StructuredAgentSessionHostSession,
-  share: NonNullable<StructuredAgentSessionReconciliationDebts['startupShare']>,
+  journal: StructuredAgentSessionHostSession['journal'],
   pass: StructuredAgentSessionReconciliationPass
 ): Promise<void> {
   const fence = context.deps.store.getRecord(sessionId)?.lease.runtimeFence
@@ -149,14 +151,20 @@ async function runStartupShare(
       hold: { cause: 'hostRestarted' }
     })
   )
-  // Once, after every card the earlier process left: it starts where this handle opened, so a
-  // card this process queued is never held by it.
-  if (converted && !share.reopenMarked) {
+  // After every card the earlier process left, from where this handle opened, so a card this
+  // process queued is never held by it. Reported, never owed: the pause starts there anyway.
+  if (converted) {
     const opened = journal.openedAt()
     const since = opened.epoch === journal.cursor().epoch ? opened.sequence + 1 : undefined
-    share.reopenMarked = await attempt(() => journal.markQueueReopen(fence, since))
+    await markStructuredQueueReopen(sessionId, journal, fence, context.deps.logger, since)
   }
-  // A rewind the earlier process left prepared refuses every send until settled; one only its
-  // provider can prove stays for the next acquisition.
-  await attempt(() => recoverStructuredRewind(context.deps, sessionId, journal, fence))
+  // A rewind the earlier process left prepared refuses every send until settled. With no provider
+  // here, one only its provider can prove stays for the next acquisition, which recovers it.
+  await recoverStructuredRewind(context.deps, sessionId, journal, fence).catch((error: unknown) =>
+    context.deps.logger.warn('recovering a rewind an earlier process left did not finish', {
+      scope: 'reconciliation-rewind',
+      sessionId,
+      error
+    })
+  )
 }

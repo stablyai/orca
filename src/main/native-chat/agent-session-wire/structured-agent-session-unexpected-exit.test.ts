@@ -370,16 +370,17 @@ describe('provider-exit settlement', () => {
       acquisitionGeneration: GENERATION
     })
 
-    // Written at the fence the exit's release moved to, as is every row its settlement writes.
+    // Written at the exited child's own fence, before its release moves it, as is every row its
+    // settlement writes.
     expect(appendLifecycleBatch).toHaveBeenCalledWith(
       expect.objectContaining({
-        fence: 8,
+        fence: 7,
         dispatches: [
           {
             clientMessageId: 'client-1',
             state: 'unknown',
             reason: 'provider_exited_before_acknowledgement',
-            fence: 8,
+            fence: 7,
             recovered: true
           }
         ],

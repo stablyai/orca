@@ -1,10 +1,11 @@
 // Which rows wait at the tail, after the live turn's activity line, rather than in the transcript.
 
 import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
+import type { AgentSessionLatestTurn } from './agent-session-wire'
 import { readAgentJournalTurn } from './agent-session-turn-record'
 import type { NativeChatRole } from './native-chat-types'
 import { isStructuredAgentSessionCommandTurn } from './structured-agent-session-command-entry'
-import { liveStructuredAgentSessionTurnScope } from './structured-agent-session-live-turn'
+import { runningStructuredAgentSessionTurnScope } from './structured-agent-session-live-turn'
 import { structuredAgentSessionOpeningSendIn } from './structured-agent-session-opening-send'
 
 /**
@@ -30,7 +31,10 @@ export function nativeChatMessagesWaitingBehindLiveTurn(
   }[],
   items: readonly AgentJournalRenderItem[] | null | undefined,
   stopping = false,
-  submissions?: readonly AgentJournalSubmission[]
+  submissions?: readonly AgentJournalSubmission[],
+  /** The host's view of current work (`latestTurn`, `working`): an ended generation's running turn
+   *  or unanswered send holds nothing. Absent from an older host, whose rows are read instead. */
+  host: { latestTurn?: AgentSessionLatestTurn | null; working?: boolean } = {}
 ): ReadonlySet<string> {
   const waits = (message: (typeof messages)[number]): boolean =>
     message.queued === true || (stopping && message.sentWhileStopping === true)
@@ -45,9 +49,11 @@ export function nativeChatMessagesWaitingBehindLiveTurn(
   if (candidates.length === 0 || !items) {
     return new Set()
   }
-  const behindHold = stopping || commandTurnRunning(items)
+  const behindHold = stopping || commandTurnRunning(items, host.latestTurn)
   const behindOpening =
-    submissions !== undefined && structuredAgentSessionOpeningSendIn(items, submissions) !== null
+    host.working !== false &&
+    submissions !== undefined &&
+    structuredAgentSessionOpeningSendIn(items, submissions) !== null
   return new Set(
     candidates
       .filter(
@@ -59,8 +65,14 @@ export function nativeChatMessagesWaitingBehindLiveTurn(
   )
 }
 
-function commandTurnRunning(items: readonly AgentJournalRenderItem[]): boolean {
-  const running = liveStructuredAgentSessionTurnScope(items)
+function commandTurnRunning(
+  items: readonly AgentJournalRenderItem[],
+  latestTurn: AgentSessionLatestTurn | null | undefined
+): boolean {
+  const running = runningStructuredAgentSessionTurnScope({
+    items,
+    ...(latestTurn !== undefined ? { latestTurn } : {})
+  })
   const bodyOf = (itemId: string) => items.find((item) => item.itemId === itemId)?.body
   return (
     running.kind === 'turn' &&

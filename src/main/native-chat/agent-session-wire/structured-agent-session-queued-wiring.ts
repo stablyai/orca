@@ -35,7 +35,6 @@ export function wireStructuredAgentSessionQueuedMessages(
     currentWork: (sessionId) =>
       hostStructuredAgentSessionCurrentWork({ store: context().deps.store, sessions }, sessionId),
     wakeDelivery: (sessionId) => context().wakeDelivery(sessionId),
-    held: (sessionId) => context().awaitingReopenMark?.(sessionId) === true,
     // Read lazily, like the rest of this wiring: the host's deps are not assigned yet.
     logger: deferredStructuredAgentSessionLogger(() => context().deps.logger)
   })

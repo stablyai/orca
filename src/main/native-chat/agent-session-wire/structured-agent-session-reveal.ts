@@ -74,7 +74,6 @@ export function createStructuredAgentSessionHostRestore(
       tasks: Pick<StructuredAgentSessionTaskQueue, 'trackAttach'>
       clientDelivery: Pick<StructuredAgentSessionReconciliationContext, 'publishGenerationEnded'>
     }
-    closeAtRest: StructuredAgentSessionReconciliationContext['closeAtRest']
   }
 ): {
   reconcileRestartLeases: () => Promise<void>
@@ -83,7 +82,7 @@ export function createStructuredAgentSessionHostRestore(
   restoreReadableSessions: (sessionIds?: readonly string[]) => Promise<void>
   reconciliation: StructuredAgentSessionReconciliation
 } {
-  const { reconcileLeases, resolveRecovery, startup, closeAtRest, ...rest } = wiring
+  const { reconcileLeases, resolveRecovery, startup, ...rest } = wiring
   const failures = reportEachFailureOnce(deps.logger)
   const reconcile = createReaderReconcile(reconcileLeases, failures)
   const reconciliation = new StructuredAgentSessionReconciliation({
@@ -93,15 +92,11 @@ export function createStructuredAgentSessionHostRestore(
     serialize: rest.serialize,
     // Tracked like a start, so a quit waits for an attempt before it closes what it writes to.
     track: (operation) => startup.tasks.trackAttach(operation),
-    adopt: async (sessionId, opened) => {
-      await rest.onReadable(sessionId, opened)
-    },
     publishGenerationEnded: (sessionId, options) =>
       startup.clientDelivery.publishGenerationEnded(sessionId, options),
-    // A lease latched in recovery is decided before the share publishes the chat, as the restore
-    // decides it; a failure is the worker's to report, and the next attach or send resolves it.
-    resolveRecovery,
-    closeAtRest
+    // A lease latched in recovery is decided before the share's pass, as the restore decides it;
+    // a failure is the worker's to report, and the next attach or send resolves it.
+    resolveRecovery
   })
   let startupSettled: Promise<void> = Promise.resolve()
   const restorer = new StructuredAgentSessionReadableRestorer({

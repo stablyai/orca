@@ -248,7 +248,7 @@ describe('a Stop pressed before its send opened a turn binds only the turn it st
     expect(laterTurnEndRows()).toEqual([
       expect.objectContaining({ state: 'interrupted', outcome: 'cancellation' })
     ])
-    expect(journal().activeTurnId()).toBeNull()
+    expect(journal().runningTurn()?.turnId ?? null).toBeNull()
   })
 
   it('binds no turn that opens after a Stop that stopped nothing', async () => {
@@ -346,7 +346,7 @@ describe("a Stop's settle that ends the turn its interrupt took", () => {
     expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
 
     expect(await laterTurn()).toMatchObject({ state: 'interrupted', outcome: 'cancellation' })
-    expect(journal().activeTurnId()).toBeNull()
+    expect(journal().runningTurn()?.turnId ?? null).toBeNull()
   })
 })
 

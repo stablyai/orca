@@ -218,6 +218,22 @@ describe('resolution receipts', () => {
     expect(screen.queryByText('1 grouped question from Claude')).toBeNull()
   })
 
+  it('reports, without breathing, a question whose agent ended (the host says nobody waits)', () => {
+    const body: AgentJournalQuestionItem = {
+      kind: 'question',
+      question: 'Which branch?',
+      options: [],
+      resolution: { ...approval.resolution, state: 'pending', selectedOptionId: null }
+    }
+
+    const { rerender } = render(<NativeChatResolutionReceipt body={body} />)
+    expect(screen.getByText('Awaiting user input:')).toHaveClass('animate-pulse')
+    rerender(<NativeChatResolutionReceipt body={body} awaiting={false} />)
+    expect(screen.queryByText('Awaiting user input:')).toBeNull()
+    expect(screen.getByText('Asked:')).not.toHaveClass('animate-pulse')
+    expect(screen.getByText('Which branch?')).toBeInTheDocument()
+  })
+
   it('keeps an opened question open once it is answered', () => {
     const scrollWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollWidth')
     Object.defineProperty(HTMLElement.prototype, 'scrollWidth', {

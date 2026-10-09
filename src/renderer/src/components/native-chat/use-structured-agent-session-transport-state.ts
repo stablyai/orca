@@ -16,6 +16,13 @@ const NO_JOURNAL_ITEMS: StructuredAgentSessionState['items'] = []
 const NO_SUBMISSIONS: StructuredAgentSessionState['submissions'] = []
 const NO_SUBAGENT_ROSTER: StructuredAgentSubagentRoster = new Map()
 
+/** The host's prompts still waiting on the person and its working answer; empty from an older
+ *  host, whose readers derive both from the rows. */
+export type StructuredAgentSessionHostWork = {
+  actionablePromptIds?: readonly string[]
+  working?: boolean
+}
+
 export function useStructuredAgentSessionTransportState(
   state: StructuredAgentSessionState,
   enabled: boolean
@@ -64,10 +71,18 @@ export function useStructuredAgentSessionTransportState(
       structuredSessionForegroundCommands(roster, { items: journalItems, latestTurn })
     )
   }, [enabled, journalItems, latestTurn, state.backgroundTasks, turnId])
+  const hostWork = useMemo<StructuredAgentSessionHostWork>(
+    () => ({
+      ...(actionablePromptIds ? { actionablePromptIds } : {}),
+      ...(hostWorking !== undefined ? { working: hostWorking } : {})
+    }),
+    [actionablePromptIds, hostWorking]
+  )
   return {
     journalItems,
     latestTurn,
     actionablePromptIds,
+    hostWork,
     subagentRoster,
     submissions,
     fence,

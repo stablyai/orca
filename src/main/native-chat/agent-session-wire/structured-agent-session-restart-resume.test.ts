@@ -42,17 +42,7 @@ function markersAtTeardown(
   }
 ) {
   return [...input.sessions].flatMap(([sessionId, session]) => {
-    // Teardown runs while this host's child still holds the lease.
-    const getRecord = (id: string) => {
-      const held = input.getRecord(id)
-      return held && { ...held, lease: { ...held.lease, claimStatus: 'live' as const } }
-    }
-    const recorded = structuredAgentSessionWorkingAtStop({
-      ...input,
-      getRecord,
-      sessionId,
-      session
-    })
+    const recorded = structuredAgentSessionWorkingAtStop({ ...input, sessionId, session })
     return recorded ? [recorded] : []
   })
 }

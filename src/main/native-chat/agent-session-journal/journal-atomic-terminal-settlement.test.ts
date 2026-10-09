@@ -209,7 +209,7 @@ describe('atomic terminal settlement', () => {
       expect(frames.at(-1)).toMatchObject({ type: 'batch', batch: { cursor: settled.cursor } })
       const frameCount = frames.length
       expect(settled.submissions[0]).toMatchObject({ dispatchState: 'unknown', recovered: true })
-      expect(journal.activeTurnId()).toBeNull()
+      expect(journal.runningTurn()?.turnId ?? null).toBeNull()
       const calls = settled.items.filter((item) => item.body.kind === 'tool-call')
       expect(calls).toHaveLength(201)
       expect(

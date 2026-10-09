@@ -110,7 +110,8 @@ export class AgentSessionSubscribers {
         },
         subscriber,
         input.journal,
-        hostNow
+        hostNow,
+        this.hooks.readCurrentWork?.(input.sessionId, input.journal)
       )
     } else {
       const work = this.hooks.readCurrentWork?.(input.sessionId, input.journal)

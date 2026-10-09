@@ -73,6 +73,7 @@ export async function openStructuredAgentSessionConversationJournal(
   })
   const identity = journalIdentityFor(record, params)
   const journal = await openAgentSessionJournal({ identity, database: deps.journalDatabase })
+  journal.holdReopenFromOpen()
   return { session: { journal, params, child: null } }
 }
 

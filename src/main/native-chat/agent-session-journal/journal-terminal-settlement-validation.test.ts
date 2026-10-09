@@ -117,7 +117,7 @@ it.each([
       turnId: 'old',
       state: 'interrupted'
     })
-    expect(journal.activeTurnId()).toBeNull()
+    expect(journal.runningTurn()?.turnId ?? null).toBeNull()
     const ended = journal.snapshot()
     await settle(observedAt, lastProvenAliveAt)
     expect(journal.snapshot()).toEqual(ended)
@@ -145,7 +145,7 @@ it.each([{ kind: 'tool-call' }, { providerTurnId: '' }])(
       state: 'interrupted',
       completedAt: 1_000
     })
-    expect(journal.activeTurnId()).toBeNull()
+    expect(journal.runningTurn()?.turnId ?? null).toBeNull()
     await expectSendStillWritable()
   }
 )
@@ -329,7 +329,7 @@ it.each([
     }
     expect(journal.itemBody('orca:extension-7')).toHaveProperty('laterField', { kind: 'tool-call' })
     expect(journal.itemBody('orca:extension-6')).toHaveProperty('contextUsage', laterContextUsage)
-    expect(journal.activeTurnId()).toBeNull()
+    expect(journal.runningTurn()?.turnId ?? null).toBeNull()
     expect(journal.snapshot().items).toHaveLength(inputs.length + 1)
     const ended = journal.snapshot()
     await settle(observedAt, lastProvenAliveAt)

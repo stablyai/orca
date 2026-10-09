@@ -113,8 +113,8 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     sessionId: string,
     opened: OpenedStructuredAgentSessionConversation
   ): Promise<void> => {
-    // Indexing a chat writes nothing and wakes nothing: what an earlier process left queued is
-    // startup's to hold, and the loop's next wake holds whatever that missed before any hand-over.
+    // Indexing a chat writes nothing: the loop never hands over a send an earlier process left
+    // (`StructuredAgentSessionCurrentWork.handsOver`), and keeping one as a card is startup's.
     sessions.set(sessionId, opened.session)
     input.clientDelivery.publishRestored(sessionId)
   }

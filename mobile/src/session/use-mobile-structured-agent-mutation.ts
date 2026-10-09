@@ -22,8 +22,10 @@ export function useMobileStructuredAgentMutate(args: {
   enabled: boolean
   stateRef: { readonly current: StructuredAgentSessionState }
   onSendError: (message: string) => void
+  /** The chat's agent, which a refusal about it names. */
+  agentName?: string
 }): MobileStructuredAgentMutate {
-  const { client, enabled, onSendError, sessionId, stateRef } = args
+  const { agentName, client, enabled, onSendError, sessionId, stateRef } = args
   return useCallback(
     async <TValue>(
       method: string,
@@ -41,7 +43,8 @@ export function useMobileStructuredAgentMutate(args: {
         fingerprintMethod,
         sessionId,
         expectedRuntimeFence: targetFence,
-        fields
+        fields,
+        ...(agentName ? { agentName } : {})
       })
       if (result.status === 'accepted') {
         return {
@@ -56,6 +59,6 @@ export function useMobileStructuredAgentMutate(args: {
       onSendError(result.message)
       return { status: 'rejected' }
     },
-    [client, enabled, onSendError, sessionId, stateRef]
+    [agentName, client, enabled, onSendError, sessionId, stateRef]
   )
 }

@@ -91,7 +91,8 @@ export function useMobileStructuredAgentSession(args: {
     sessionId,
     enabled,
     stateRef,
-    onSendError
+    onSendError,
+    ...(agent ? { agentName: tuiAgentDisplayName(agent) ?? agent } : {})
   })
 
   const options = useMobileStructuredAgentOptions({

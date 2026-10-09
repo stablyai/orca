@@ -16,6 +16,8 @@ import {
 } from './structured-agent-session-command-turn'
 import {
   answerCancelOfSettledPrompt,
+  dismissEndedGenerationPrompt,
+  isEndedGenerationPrompt,
   validatePendingPrompt
 } from './structured-agent-session-prompt-state'
 import {
@@ -96,12 +98,23 @@ type StopSettleBinding = {
 
 export async function performCancel(
   ctx: AgentSessionTurnContext,
-  input: PerformCancelInput
+  given: PerformCancelInput
 ): Promise<TurnOutcome<AgentSessionCancelResult>> {
+  let input = given
   if (input.prompt) {
     const validated = validatePendingPrompt(ctx, input.prompt)
     if (!validated.ok) {
       return answerCancelOfSettledPrompt(ctx, { ...input, prompt: input.prompt }, validated)
+    }
+    // A card an ended generation raised reaches no provider: dismissed in the journal, and the
+    // call is a plain Stop of what runs now, so an older client's Stop still stops it.
+    if (isEndedGenerationPrompt(ctx, validated)) {
+      const dismissed = await dismissEndedGenerationPrompt(ctx, validated)
+      if (!dismissed.ok) {
+        return dismissed
+      }
+      input = { ...input }
+      delete input.prompt
     }
   }
   // A person's Stop that named no turn binds what ends while it settles (`beginJournalStopSettle`).

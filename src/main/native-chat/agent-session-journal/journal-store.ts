@@ -1,6 +1,7 @@
 // Append-only journal store for one agent session. It owns the chat's fold and write queue, and no
 // connection: every statement goes through the host's one journal database.
 
+import { queuedMessageReopenFloor } from './queued-message-reopen-floor'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import { randomUUID } from 'node:crypto'
 import type {
@@ -169,15 +170,21 @@ export class AgentSessionJournal {
   /** Where this handle opened the journal (`wroteBeforeOpen`). */
   openedAt = (): AgentJournalCursor => this.openedThrough
 
-  /** Where the reopen's pause begins when this handle could not write its mark: where the mark
-   *  would have gone. Null once a mark is written. Per handle, so the next open marks again. */
-  reopenFloor(): AgentJournalCursor | null {
-    return this.reopenUnmarked
-  }
+  /** Where the reopen's pause begins while no mark holds it: where this handle's mark would go.
+   *  Null once a mark is written. Per handle, so the next open derives it again. */
+  reopenFloor = (): AgentJournalCursor | null => this.reopenUnmarked
 
   async open(): Promise<void> {
     await this.restore()
     this.openedThrough = this.cursor()
+  }
+
+  /** A conversation's open, which always follows the chat stopping (a quit, a crash or a close):
+   *  a card it finds waits for a turn from where this handle opened, derived with nothing written,
+   *  unless an earlier mark already holds it. The mark that follows records the same start. */
+  holdReopenFromOpen(): void {
+    this.reopenUnmarked =
+      queuedMessageReopenFloor(this.queuedMessages, this.openedThrough) ?? this.reopenUnmarked
   }
 
   /** Refuses every later write and resolves once the admitted ones have landed. Holds no
@@ -224,12 +231,9 @@ export class AgentSessionJournal {
     }
   }
 
-  /** The turn this journal records as running, whichever generation opened it — the same read a
-   *  client's snapshot gives, without materialising one. Whether it is current work is the host
-   *  projection's to say (`structuredAgentSessionCurrentWork`). */
-  activeTurnId = (): string | null => this.runningTurn()?.turnId ?? null
-
-  /** That turn with its record's item. */
+  /** The turn this journal records as running, with its record's item, whichever generation
+   *  opened it — the same read a client's snapshot gives, without materialising one. Whether it is
+   *  current work is the host projection's to say (`structuredAgentSessionCurrentWork`). */
   runningTurn = (): { item: AgentJournalRenderItem; turnId: string } | null =>
     runningStructuredAgentSessionTurnItemBySequence(this.state.items.values())
 

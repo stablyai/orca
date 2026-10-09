@@ -274,7 +274,7 @@ describe('a Stop that failed before the turn it meant to stop opened', () => {
     expect(await rig.stop()).toMatchObject({ ok: true })
     // A Stop that ends its session ends the child on the session's next step.
     await rig.host['tasks'].serialize(HOST_TEST_SESSION, async () => {})
-    expect(journal().activeTurnId()).toBeNull()
+    expect(journal().runningTurn()?.turnId ?? null).toBeNull()
     return { sent, status }
   }
 
@@ -289,7 +289,7 @@ describe('a Stop that failed before the turn it meant to stop opened', () => {
 
       await rig.settleAccepted(sent, 'sent')
       await turn('turn-1', sent, 'running')
-      await eventually(() => expect(journal().activeTurnId()).toBe('turn-1'))
+      await eventually(() => expect(journal().runningTurn()?.turnId ?? null).toBe('turn-1'))
       expect(status()).toMatchObject({ status: 'working', stopping: true })
       await turn('turn-1', sent, 'interrupted')
       await eventually(() => expect(status()?.status).toBe('idle'))
@@ -357,7 +357,7 @@ describe('a Stop pressed before its send opened a turn', () => {
   it('ends the turn its interrupt took at the settle, and Stopping with it', async () => {
     const { status } = await stopAsTheTurnOpens({ cancelled: true, turnId: 'turn-1' })
 
-    expect(journal().activeTurnId()).toBeNull()
+    expect(journal().runningTurn()?.turnId ?? null).toBeNull()
     await eventually(() => expect(status()?.status).toBe('idle'))
     expect(status()).not.toHaveProperty('stopping')
   })
@@ -396,7 +396,7 @@ describe('a Stop pressed before its send opened a turn', () => {
     expect(status()).not.toHaveProperty('stopping')
     await rig.settleAccepted(sent, 'sent')
     await turn('turn-1', sent, 'running')
-    await eventually(() => expect(journal().activeTurnId()).toBe('turn-1'))
+    await eventually(() => expect(journal().runningTurn()?.turnId ?? null).toBe('turn-1'))
     expect(status()).not.toHaveProperty('stopping')
   })
 

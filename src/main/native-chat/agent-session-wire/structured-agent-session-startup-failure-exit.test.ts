@@ -168,8 +168,8 @@ describe('a provider that ends before it finished starting', () => {
             clientMessageId: 'compact-1',
             state: 'rejected',
             reason: text,
-            // At the fence the exit's release moved to.
-            fence: 8,
+            // At the exited child's own fence, before its release moves it.
+            fence: 7,
             recovered: true
           })
         ],

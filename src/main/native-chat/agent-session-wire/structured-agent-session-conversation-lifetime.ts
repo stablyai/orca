@@ -44,8 +44,6 @@ export function createStructuredAgentSessionConversationLifetime(host: {
   closeStatus: (sessionId: string, options: { listed: boolean }) => void
   /** The session's child records, the host's one read of them. */
   readChildWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
-  /** `StructuredAgentSessionReconciliation.deferCloseAtRest`. */
-  deferCloseAtRest: (sessionId: string) => boolean
 }) {
   let disposed = false
   const { sessions, serialize } = host
@@ -59,10 +57,6 @@ export function createStructuredAgentSessionConversationLifetime(host: {
   const closeConversation = async (sessionId: string, atRest = false): Promise<boolean> => {
     // The handle carries the proof that releases a lease its child's wind-down could not.
     if (await releaseLeaseOfEndedStructuredAgentSessionChild(host.context(), sessionId)) {
-      return false
-    }
-    // At rest it waits for the chat's reconciliation, which would only open it again.
-    if (atRest && host.deferCloseAtRest(sessionId)) {
       return false
     }
     const closed = await closeStructuredAgentSessionConversationUnderSerialize(
@@ -112,9 +106,6 @@ export function createStructuredAgentSessionConversationLifetime(host: {
 
   return {
     idleSweep,
-    /** The idle sweep's close, for a conversation only the reconciliation worker opened. */
-    closeAtRest: (sessionId: string): Promise<boolean> =>
-      serialize(sessionId, () => closeConversation(sessionId, true)),
     stopAgent,
     /** A host stop of the child the expired attempt published, if it is still that one and still
      *  starting: its end fails what is queued, as the idle sweep's stop of a start does. */

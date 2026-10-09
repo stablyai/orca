@@ -286,14 +286,14 @@ describe('a stale prompt', () => {
     if (refused.ok) {
       throw new Error('expected the answer refused')
     }
-    // Plain words: what did not happen, that the agent stopped, and how to go on.
+    // One sentence: the agent stopped, the answer was not sent, and how to go on.
     const words = agentSessionWriteNoticeEnglish(
       agentSessionWriteNoticeParts(agentSessionRefusalFailure(refused.refusal), 'answer', {
         agentName: 'Codex'
       })
     )
     expect(words).toBe(
-      'Your answer was not sent. Codex stopped while this response was in progress. You can continue in this conversation.'
+      'Codex has stopped, so your answer was not sent. Send a message to continue.'
     )
     expect(current.answerPrompt).not.toHaveBeenCalled()
 

@@ -65,7 +65,11 @@ export class StructuredAgentSessionHost {
     },
     deliverSettleEdge: (id, journal) => this.conversationDelivery.afterSettleEdge(id, journal),
     logger: sessionLogger.deferredStructuredAgentSessionLogger(() => this.deps.logger),
-    onOpened: (sessionId) => this.queued.drain.schedule(sessionId),
+    onOpened: (sessionId) => {
+      this.queued.drain.schedule(sessionId)
+      // A reader holds it now: its settlement goes ahead of the rest of the startup scan.
+      this.restore.reconciliation.prioritize(sessionId)
+    },
     now: () => this.now()
   })
   private readonly queued = wireQueuedMessages(this.sessions, () => this.mutationContext())
@@ -135,7 +139,6 @@ export class StructuredAgentSessionHost {
       // `hasSession` inside the same serialized step as this `set`.
       onReadable: this.conversationDelivery.adoptOpened,
       onUnopened: (sessionId) => this.tabs.markUnopened(sessionId),
-      closeAtRest: (sessionId) => this.lifetime.closeAtRest(sessionId),
       startup: { sessions: this.sessions, tasks: this.tasks, clientDelivery: this.clientDelivery }
     })
     this.eventRecovery = new StructuredAgentSessionEventRecovery({
@@ -162,8 +165,7 @@ export class StructuredAgentSessionHost {
       open: (sessionId) => this.conversationDelivery.open(sessionId),
       deliveryActive: (sessionId) => this.conversationDelivery.loop.isRunning(sessionId),
       closeStatus: (sessionId, options) => this.clientDelivery.closeSession(sessionId, options),
-      readChildWork: this.clientDelivery.readChildWork,
-      deferCloseAtRest: (sessionId) => this.restore.reconciliation.deferCloseAtRest(sessionId)
+      readChildWork: this.clientDelivery.readChildWork
     })
     this.runtimeState.startLeaseRenewal()
     this.lifetime.idleSweep.start()
@@ -291,7 +293,6 @@ export class StructuredAgentSessionHost {
       wakeDelivery: (sessionId) => this.conversationDelivery.loop.wake(sessionId),
       stopAgent: (sessionId, ending) => this.lifetime.stopAgent(sessionId, ending),
       wakeQueuedDrain: (sessionId) => this.queued.drain.schedule(sessionId),
-      awaitingReopenMark: (sessionId) => this.restore.reconciliation.awaitingReopenMark(sessionId),
       acquireAborts: this.runtimeState.acquireAborts,
       optionRevisions: this.runtimeState.optionRevisions,
       now: () => this.now()

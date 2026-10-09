@@ -46,9 +46,6 @@ export type StructuredAgentSessionMutationContext = {
    *  journal commit (a conversation command). Draft-table changes need no call:
    *  the draft store notifies through the journal's own commit listener. */
   wakeQueuedDrain?: (sessionId: string) => void
-  /** The queue sends nothing on its own before the chat's startup reopen mark
-   *  (`StructuredAgentSessionReconciliation.awaitingReopenMark`). */
-  awaitingReopenMark?: (sessionId: string) => boolean
   /** The provider wait each session's serialize is on (a start, an option write), which a caller
    *  outside that serialize aborts. */
   acquireAborts: Pick<StructuredAgentSessionAcquireAborts, 'abort' | 'begin'>

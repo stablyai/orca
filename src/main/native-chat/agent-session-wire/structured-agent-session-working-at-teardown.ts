@@ -52,10 +52,7 @@ import {
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { isUnansweredHandedOverSubmission } from '../agent-session-journal/journal-unsent-send-hold'
 import { structuredAgentSessionShownStatus } from './structured-agent-session-shown-work'
-import {
-  structuredAgentSessionCurrentWork,
-  type StructuredAgentSessionWorkEvidence
-} from './structured-agent-session-current-work'
+import { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import type { StructuredAgentSessionWorkScope } from '../../../shared/structured-agent-session-main-agent-working'
 
 /** A send Orca journaled that the provider has neither opened a turn for nor refused. Mirrors the
@@ -180,7 +177,6 @@ type WorkingCandidateSession = {
   journal: AgentSessionJournal
   /** Only this host generation's own child counts. A restored-for-reading journal has none. */
   child: { fence: number } | null
-  lastEndedChild?: StructuredAgentSessionWorkEvidence['ended']
 }
 
 /** The offer one session is owed, taken right before teardown stops its provider child; null when
@@ -214,10 +210,8 @@ export function structuredAgentSessionWorkingAtStop(input: {
   )
   const childWork = input.childWork(sessionId)
   const record = input.getRecord(sessionId)
-  const { scope } = structuredAgentSessionCurrentWork(session.journal, {
-    record,
-    ...(session.lastEndedChild ? { ended: session.lastEndedChild } : {})
-  })
+  // The live generation is this host's own child, read first-hand like the rest, never the lease.
+  const { scope } = new StructuredAgentSessionCurrentWork(session.journal, session.child.fence)
   const status = structuredAgentSessionShownStatus(
     { items: current.items, submissions: handedOver },
     childWork,

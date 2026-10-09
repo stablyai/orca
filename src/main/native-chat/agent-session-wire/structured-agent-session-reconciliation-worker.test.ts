@@ -2,13 +2,30 @@
 // has written anything.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
+  type AgentJournalItemIdentity
+} from '../../../shared/agent-session-journal-types'
+import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
-import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
+import {
+  liveTestJournalRows,
+  openTestJournalHostDatabase,
+  updateTestJournalRowJson
+} from '../agent-session-journal/journal-host-database-test-support'
+import { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import {
+  HOST_TEST_SESSION as SESSION,
+  HOST_TEST_THREAD as THREAD
+} from './structured-agent-session-host-test-data'
 import {
   createQueuedMessageTestRig,
+  eventually,
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
+import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 import { settleStructuredAgentSessionLeftovers } from './structured-agent-session-leftover-settlement'
 import {
   currentJournal,
@@ -159,5 +176,119 @@ describe('an observed exit whose release write failed', () => {
       deathEvidence: { kind: 'exit-observed', ownerFence: fence }
     })
     unsubscribe()
+  })
+})
+
+describe('a journal no retry can load', () => {
+  it.each([
+    ['damaged', '}{'],
+    ['saved by a newer Orca', null]
+  ] as const)(
+    '%s: the startup worker retires instead of replaying it again',
+    async (_why, json) => {
+      rig = await createQueuedMessageTestRig({ restartable: true })
+      const current = rig
+      await current.settleAccepted(await current.workingSend(), 'work')
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      let opens = 0
+      await current.crashReloadHostProcess(() => {
+        const { db } = openTestJournalHostDatabase(current.root)
+        const epochRow = liveTestJournalRows(db, SESSION).find((row) => row.seq === 1)!
+        const newer = {
+          ...JSON.parse(epochRow.rowJson),
+          v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION + 1
+        }
+        updateTestJournalRowJson(db, SESSION, 1, json ?? JSON.stringify(newer))
+        const open = AgentSessionJournal.prototype.open
+        vi.spyOn(AgentSessionJournal.prototype, 'open').mockImplementation(async function (
+          this: AgentSessionJournal
+        ) {
+          opens += 1
+          return open.call(this)
+        })
+      })
+
+      expect(worker(current).owes(SESSION)).toBe(false)
+      await new Promise((resolve) => setTimeout(resolve, 1_200))
+      expect(opens).toBe(1)
+    }
+  )
+})
+
+describe("the startup share's reopen mark", () => {
+  // Bookkeeping, reported and never owed: the pause starts where the handle opened either way.
+  it.each([false, true])(
+    'never holds the queue past the turn that lifts it (its write fails: %s)',
+    async (failMark) => {
+      rig = await createQueuedMessageTestRig()
+      const current = rig
+      await current.workingSend()
+      const queued = await current.send('queued before the crash', 'queue-if-active').result
+      if (!queued.ok || !('queued' in queued.value)) {
+        throw new Error('expected a queued receipt')
+      }
+      const draftId = queued.value.queued.messageId
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      await current.crashRestartHostProcess(() => {
+        if (failMark) {
+          vi.spyOn(AgentSessionJournal.prototype, 'appendQueueReopen').mockRejectedValue(
+            new Error('persistent storage failure')
+          )
+        }
+      })
+      const journal = currentJournal(current)
+      // Held from the open, before any mark could land.
+      expect(structuredQueuePauses(journal).map((pause) => pause.reason)).toEqual(['restarted'])
+
+      const next = current.send('sent after the restart')
+      await next.result
+      await current.settleAccepted(next.id, 'next')
+
+      await eventually(async () => expect(await current.handoff(draftId)).toBeDefined())
+      await reconciled(current)
+    }
+  )
+})
+
+describe("an ended generation's closing tail", () => {
+  it('lands at its own fence after the exit settled, and its worker settles what it left running', async () => {
+    rig = await createQueuedMessageTestRig({ restartable: true })
+    const current = rig
+    await current.workingSend()
+    // A running turn is left, so the exit's settlement writes rows.
+    await leaveUnfinishedWork(current)
+    const deadFence = current.store.getRecord(SESSION)?.lease.runtimeFence ?? 0
+    await exitChild(current)
+    await reconciled(current)
+    const tail = (ordinal: number): AgentJournalItemIdentity => ({
+      provider: 'codex',
+      threadId: THREAD,
+      turnId: 'late',
+      ordinal
+    })
+    const late = { fence: deadFence, ownerFence: deadFence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+
+    // What the closed sink had already taken, delivered after the exit: it lands.
+    await currentJournal(current).appendItem(
+      tail(1),
+      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'final answer' }] },
+      late
+    )
+    await currentJournal(current).appendItem(
+      tail(2),
+      { kind: 'turn', turnId: 'late', state: 'running' },
+      late
+    )
+
+    expect(currentJournal(current).itemBody(agentJournalItemKey(tail(1)))).not.toBeNull()
+    // Below the moved fence, so its commit woke the worker, which settles it by the exit's proof.
+    await vi.waitFor(() =>
+      expect(
+        readAgentJournalTurn(
+          currentJournal(current).itemBody(agentJournalItemKey(tail(2))) ?? undefined
+        )?.state
+      ).toBe('interrupted')
+    )
+    await reconciled(current)
   })
 })
