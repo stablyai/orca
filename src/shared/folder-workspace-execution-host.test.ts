@@ -290,6 +290,18 @@ describe('folder workspace execution host', () => {
         'fw-1'
       )
     ).toEqual({ kind: 'runtime', environmentId: 'env-1', sshTargetId: 'server-box' })
+    // A same-id copy on another host leaves the selected one unknown here, so no target is named.
+    expect(
+      resolveFolderWorkspaceHost(
+        state({
+          folderWorkspaces: [
+            workspace({ executionHostId: 'runtime:env-1', connectionId: 'server-box' }),
+            workspace({ executionHostId: 'local' })
+          ]
+        }),
+        'fw-1'
+      )
+    ).toEqual({ kind: 'runtime', environmentId: 'env-1', sshTargetId: null })
   })
 
   // The candidate FILTER decides which rows reach the resolver, and it read `repo.connectionId` raw

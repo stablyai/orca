@@ -127,12 +127,18 @@ export function resolveFolderWorkspaceHost(
   switch (explicitHost?.kind) {
     case 'ssh':
       return { kind: 'ssh', targetId: explicitHost.targetId }
-    case 'runtime':
+    case 'runtime': {
+      // Why: another host may hold a folder with this id, and this lookup cannot tell which one is
+      // selected, so the server's target is named only when the id is unambiguous.
+      const isOnlyOwner = state.folderWorkspaces.every(
+        (entry) => entry.id !== folderWorkspaceId || entry === workspace
+      )
       return {
         kind: 'runtime',
         environmentId: explicitHost.environmentId,
-        sshTargetId: scopeConnectionId
+        sshTargetId: isOnlyOwner ? scopeConnectionId : null
       }
+    }
     case 'local':
       return { kind: 'local' }
     case undefined:

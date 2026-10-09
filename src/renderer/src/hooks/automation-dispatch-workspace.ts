@@ -17,7 +17,6 @@ import {
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
-  toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from '../../../shared/execution-host'
 import { resolveFolderWorkspaceHost } from '../../../shared/folder-workspace-execution-host'
@@ -81,11 +80,9 @@ export async function prepareAutomationDispatchWorkspace(args: {
     folderWorkspaceHost && automationWorktree
       ? folderWorkspaceConnectionId
         ? toSshExecutionHostId(folderWorkspaceConnectionId)
-        : folderWorkspaceHost.kind === 'runtime'
-          ? toRuntimeExecutionHostId(folderWorkspaceHost.environmentId)
-          : folderWorkspaceHost.kind === 'local'
-            ? getResolvedExecutionHostIdForWorktree(state, automationWorktree.id)
-            : null
+        : folderWorkspaceHost.kind === 'local' || folderWorkspaceHost.kind === 'runtime'
+          ? getResolvedExecutionHostIdForWorktree(state, automationWorktree.id)
+          : null
       : null
   const runHostId =
     parseExecutionHostId(automation.runContext?.hostId)?.id ?? getRepoExecutionHostId(repo)
