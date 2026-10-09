@@ -18925,7 +18925,9 @@
     "settingsLabel": "智能体仪表盘设置",
     "settings": {
       "showIdle": "显示空闲智能体",
-      "showIdleCopy": "包括已安静 30 分钟且未报告完成的智能体。默认隐藏。"
+      "showIdleCopy": "包括已安静 30 分钟且未报告完成的智能体。默认隐藏。",
+      "escapeClosesTerminal": "按 Esc 关闭终端视图",
+      "escapeClosesTerminalCopy": "按 Esc 会关闭智能体的终端视图，而不是发送给智能体。包括输入在内的其他按键仍会发送给智能体。默认关闭。"
     },
     "host": {
       "sshNamed": "SSH 主机·{{host}}",

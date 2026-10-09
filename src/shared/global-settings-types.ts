@@ -31,6 +31,7 @@ import type { TuiAgent } from './tui-agent'
 import type { ZcodePlanSite } from './zcode-plan-sites'
 import type {
   AgentDashboardMode,
+  AgentDashboardTerminalEscape,
   BranchPrefixStrategy,
   FloatingTerminalTriggerLocation,
   LeftSidebarAppearanceMode,
@@ -484,6 +485,8 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   experimentalAgentDashboardMode?: AgentDashboardMode
   /** Includes stale quiet agents as a fourth Agent Dashboard column. */
   experimentalAgentDashboardShowIdle?: boolean
+  /** Esc in the Agent Dashboard terminal dialog: sent to the agent (default) or closes the dialog. */
+  experimentalAgentDashboardTerminalEscape?: AgentDashboardTerminalEscape
   /** One-shot migration guard for defaulting the Agents view off; later explicit opt-ins persist normally. */
   experimentalActivityDefaultedOffForAllUsers?: boolean
   /** Experimental: persistent terminal-pane attention ring for bell + agent-completion events. Opt-in while tuning signal/noise. */

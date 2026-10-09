@@ -18925,7 +18925,9 @@
     "settingsLabel": "Agent ダッシュボード設定",
     "settings": {
       "showIdle": "アイドル状態の Agent を表示",
-      "showIdleCopy": "完了を報告せずに30分間停止している Agent を含めます。デフォルトでは非表示です。"
+      "showIdleCopy": "完了を報告せずに30分間停止している Agent を含めます。デフォルトでは非表示です。",
+      "escapeClosesTerminal": "Esc でターミナル表示を閉じる",
+      "escapeClosesTerminalCopy": "Esc を Agent に送信する代わりに、Agent のターミナル表示を閉じます。入力を含むその他のキーは引き続き Agent に送信されます。デフォルトではオフです。"
     },
     "host": {
       "sshNamed": "SSH ホスト · {{host}}",

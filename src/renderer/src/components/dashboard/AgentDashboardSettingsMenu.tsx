@@ -22,14 +22,18 @@ type AgentDashboardSettingsMenuProps = {
 }
 
 /** Board-header settings for the in-window Agent Dashboard, mirroring the
- *  workspace board's settings menu. In-window only — the pop-out renderer has
- *  no store access, so it never mounts this. */
+ *  workspace board's settings menu. In-window only; the pop-out has no menu. It
+ *  reads the Esc setting from its own synced store and gets show-idle via the
+ *  dashboard snapshot. */
 export function AgentDashboardSettingsMenu({
   onSwitchToPopout,
   onOpenChange
 }: AgentDashboardSettingsMenuProps): React.JSX.Element {
   const mode = useAppStore((s) => s.settings?.experimentalAgentDashboardMode ?? 'in-window')
   const showIdle = useAppStore((s) => s.settings?.experimentalAgentDashboardShowIdle === true)
+  const terminalEscape = useAppStore(
+    (s) => s.settings?.experimentalAgentDashboardTerminalEscape ?? 'send-to-agent'
+  )
   const updateSettings = useAppStore((s) => s.updateSettings)
 
   const handleModeChange = (next: AgentDashboardMode): void => {
@@ -125,6 +129,36 @@ export function AgentDashboardSettingsMenu({
               void updateSettings({ experimentalAgentDashboardShowIdle: !showIdle })
             }}
             ariaLabel={translate('dashboardPopout.settings.showIdle', 'Show idle agents')}
+          />
+        </div>
+        <DropdownMenuSeparator />
+        <div className="flex items-start justify-between gap-3 rounded-md px-1.5 py-1.5">
+          <span className="min-w-0 space-y-0.5">
+            <span className="block text-[12px] font-medium leading-4 text-foreground">
+              {translate(
+                'dashboardPopout.settings.escapeClosesTerminal',
+                'Close terminal view with Esc'
+              )}
+            </span>
+            <span className="block text-[11px] leading-4 text-muted-foreground">
+              {translate(
+                'dashboardPopout.settings.escapeClosesTerminalCopy',
+                "Esc closes an agent's terminal view instead of being sent to the agent. Other keys, including typing, still reach the agent. Off by default."
+              )}
+            </span>
+          </span>
+          <SettingsSwitch
+            checked={terminalEscape === 'close-dialog'}
+            onChange={() => {
+              void updateSettings({
+                experimentalAgentDashboardTerminalEscape:
+                  terminalEscape === 'close-dialog' ? 'send-to-agent' : 'close-dialog'
+              })
+            }}
+            ariaLabel={translate(
+              'dashboardPopout.settings.escapeClosesTerminal',
+              'Close terminal view with Esc'
+            )}
           />
         </div>
       </DropdownMenuContent>

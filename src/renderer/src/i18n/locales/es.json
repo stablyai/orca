@@ -18925,7 +18925,9 @@
     "settingsLabel": "Configuración del Panel de agentes",
     "settings": {
       "showIdle": "Mostrar agentes inactivos",
-      "showIdleCopy": "Incluye agentes que han permanecido inactivos durante 30 minutos sin informar que finalizaron. Ocultos de forma predeterminada."
+      "showIdleCopy": "Incluye agentes que han permanecido inactivos durante 30 minutos sin informar que finalizaron. Ocultos de forma predeterminada.",
+      "escapeClosesTerminal": "Cerrar la vista de terminal con Esc",
+      "escapeClosesTerminalCopy": "Esc cierra la vista de terminal de un agente en lugar de enviarse al agente. Las demás teclas, incluida la escritura, siguen llegando al agente. Desactivado de forma predeterminada."
     },
     "host": {
       "ssh": "Anfitrión SSH",
