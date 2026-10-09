@@ -281,22 +281,22 @@ describe('PR workflow parallelism', () => {
     expect(packageJson.scripts['build:release']).toContain('pnpm run build:web-from-renderer')
   })
 
-  it('smokes managed-hook companions under their supported Node 18 runtime', () => {
-    const steps = workflow.jobs.managed_hook_node18.steps
+  it('smokes managed-hook companions under their supported Node 24 runtime', () => {
+    const steps = workflow.jobs.managed_hook_node24.steps
     const installIndex = steps.findIndex(
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
     const buildIndex = steps.findIndex((step) => step.run === 'pnpm run build:relay')
-    const node18Index = steps.findIndex(
-      (step) => step.uses === 'actions/setup-node@v6' && step.with['node-version'] === '18'
+    const node24Index = steps.findIndex(
+      (step) => step.uses === 'actions/setup-node@v6' && step.with['node-version'] === '24'
     )
     const smokeIndex = steps.findIndex(
-      (step) => step.run === 'node config/scripts/smoke-managed-hook-runtime-node18.mjs'
+      (step) => step.run === 'node config/scripts/smoke-managed-hook-runtime-node24.mjs'
     )
 
     expect(installIndex).toBeLessThan(buildIndex)
-    expect(buildIndex).toBeLessThan(node18Index)
-    expect(node18Index).toBeLessThan(smokeIndex)
+    expect(buildIndex).toBeLessThan(node24Index)
+    expect(node24Index).toBeLessThan(smokeIndex)
   })
 
   it('restores the pnpm store before dependency installation', () => {
@@ -574,15 +574,15 @@ describe('PR workflow parallelism', () => {
       'orcad_browser',
       'mobile_web_app',
       'cross-version-wire',
-      'managed_hook_node18',
+      'managed_hook_node24',
       'package',
       'package_windows'
     ])
     const verifyStep = workflow.jobs.verify.steps.find(
       (step) => step.name === 'Require successful checks'
     )
-    expect(verifyStep.env.MANAGED_HOOK_NODE18).toBe('${{ needs.managed_hook_node18.result }}')
-    expect(verifyStep.run).toContain('"$MANAGED_HOOK_NODE18"')
+    expect(verifyStep.env.MANAGED_HOOK_NODE24).toBe('${{ needs.managed_hook_node24.result }}')
+    expect(verifyStep.run).toContain('"$MANAGED_HOOK_NODE24"')
     // Why assert this one too: the browser provider test skips itself without
     // ORCA_BROWSER_EXECUTABLE, so it only guards anything if verify actually reads it.
     expect(verifyStep.env.ORCAD_BROWSER).toBe('${{ needs.orcad_browser.result }}')

@@ -17,12 +17,12 @@ afterEach(() => {
 })
 
 describe('WSL browser network relay launch', () => {
-  it('builds a shell-valid exact-version launcher with a Node 18 floor', () => {
+  it('builds a shell-valid exact-version launcher with a Node 24 floor', () => {
     const script = buildWslBrowserNetworkGuestLaunchScript('0.1.0+abc123')
 
     execFileSync('sh', ['-n'], { input: script })
     expect(script).toContain('.orca-wsl/browser-network/0.1.0+abc123')
-    expect(script).toContain('Number(process.versions.node.split(".")[0])>=18')
+    expect(script).toContain('Number(process.versions.node.split(".")[0])>=24')
     expect(script).toContain('wsl-browser-network-relay.js')
     expect(() => buildWslBrowserNetworkGuestLaunchScript("bad'version")).toThrow(
       'browser_tunnel_execution_host_unavailable'

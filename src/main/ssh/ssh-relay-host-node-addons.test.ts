@@ -36,7 +36,7 @@ afterEach(() => {
 
 const hostNode = {
   nodePath: '/usr/bin/node',
-  facts: { version: { major: 20, minor: 11 }, napi: 9 }
+  facts: { version: { major: 24, minor: 11 }, napi: 9 }
 }
 
 describe('planHostNodeAddonRelay (rung C)', () => {

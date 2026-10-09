@@ -33,7 +33,7 @@ export const WSL_RELAY_TRANSIENT_RETRY_DELAY_MS = 2_000
 // Restart/cooldown policy for the manager's state machine.
 export const FAILURE_COOLDOWN_BASE_MS = 60_000
 export const FAILURE_COOLDOWN_MAX_MS = 10 * 60_000
-// Why: a distro without node >= 18 will not grow one mid-session; probe
+// Why: a distro without node >= 24 will not grow one mid-session; probe
 // rarely instead of once per PTY spawn.
 export const NO_NODE_COOLDOWN_MS = 10 * 60_000
 // Why: a previously-healthy relay dying mid-session (mux protocol error, WSL

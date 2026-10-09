@@ -287,14 +287,14 @@ function throwWindowsNodeNotFound(options?: RemoteNodeResolutionOptions): never 
   throwIfAborted(options)
   throw new RemoteNodeNotFoundError(
     [
-      'Node.js not found on remote host. Orca relay requires Node.js 18+ and npm.',
+      'Node.js not found on remote host. Orca relay requires Node.js 24+ and npm.',
       '',
-      'Install Node.js 18+ on the remote host, then reconnect:',
+      'Install Node.js 24+ on the remote host, then reconnect:',
       '  winget install OpenJS.NodeJS.LTS',
       '  choco install nodejs-lts',
       '',
       'Verify the remote runtime before reconnecting:',
-      '  node --version  # must be v18 or newer',
+      '  node --version  # must be v24 or newer',
       '  npm --version',
       '',
       'If those package managers are unavailable, install an LTS release from https://nodejs.org/.'

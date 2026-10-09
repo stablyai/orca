@@ -19,9 +19,9 @@ const PLATFORMS = [
 const ROOT = fileURLToPath(new URL('../..', import.meta.url))
 const require = createRequire(import.meta.url)
 
-assert.match(process.versions.node, /^18\./, 'This smoke test must run under Node 18')
+assert.match(process.versions.node, /^24\./, 'This smoke test must run under Node 24')
 
-const home = await mkdtemp(join(tmpdir(), 'orca-managed-hook-node18-'))
+const home = await mkdtemp(join(tmpdir(), 'orca-managed-hook-node24-'))
 const originalHome = process.env.HOME
 const originalUserProfile = process.env.USERPROFILE
 const originalGetuid = process.getuid
@@ -61,4 +61,4 @@ try {
   await rm(home, { recursive: true, force: true })
 }
 
-console.log('Node 18 managed-hook runtime smoke passed for all relay platforms.')
+console.log('Node 24 managed-hook runtime smoke passed for all relay platforms.')

@@ -46,7 +46,7 @@ jobs:
       test: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.test }}
       orcad_browser: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.orcad_browser }}
       cross-version-wire: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.cross-version-wire }}
-      managed_hook_node18: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.managed_hook_node18 }}
+      managed_hook_node24: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.managed_hook_node24 }}
       package: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.package }}
       package_windows: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.package_windows }}
       e2e_should_run: ${{ steps.e2e_filter.outputs.should_run }}
@@ -979,15 +979,15 @@ jobs:
       - name: Old/new client and server compatibility journeys
         run: pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/
 
-  managed_hook_node18:
-    name: managed hooks on Node 18
+  managed_hook_node24:
+    name: managed hooks on Node 24
     needs: [code_paths, preflight]
     if: >-
       !cancelled() &&
       needs.code_paths.result == 'success' &&
-      needs.code_paths.outputs.managed_hook_node18 == 'true' &&
+      needs.code_paths.outputs.managed_hook_node24 == 'true' &&
       needs.preflight.result == 'success'
-    # Why ARM: Node 18 publishes linux-arm64; the per-platform runtime files are read as data.
+    # Why ARM: Node 24 publishes linux-arm64; the per-platform runtime files are read as data.
     runs-on: ubuntu-24.04-arm
 
     steps:
@@ -1001,13 +1001,13 @@ jobs:
       - name: Build relay companions
         run: pnpm run build:relay
 
-      - name: Setup Node 18 runtime
+      - name: Setup Node 24 runtime
         uses: actions/setup-node@v6
         with:
-          node-version: '18'
+          node-version: '24'
 
       - name: Smoke managed-hook companions
-        run: node config/scripts/smoke-managed-hook-runtime-node18.mjs
+        run: node config/scripts/smoke-managed-hook-runtime-node24.mjs
 
   package:
     name: package
@@ -1410,7 +1410,7 @@ jobs:
       - orcad_browser
       - mobile_web_app
       - cross-version-wire
-      - managed_hook_node18
+      - managed_hook_node24
       - package
       - package_windows
     # Evaluating job results only needs the lightweight container runner.
@@ -1448,8 +1448,8 @@ jobs:
           MOBILE_WEB_APP_SHOULD_RUN: ${{ needs.code_paths.outputs.mobile_web_app }}
           CROSS_VERSION_WIRE: ${{ needs.cross-version-wire.result }}
           CROSS_VERSION_WIRE_SHOULD_RUN: ${{ needs.code_paths.outputs.cross-version-wire }}
-          MANAGED_HOOK_NODE18: ${{ needs.managed_hook_node18.result }}
-          MANAGED_HOOK_NODE18_SHOULD_RUN: ${{ needs.code_paths.outputs.managed_hook_node18 }}
+          MANAGED_HOOK_NODE24: ${{ needs.managed_hook_node24.result }}
+          MANAGED_HOOK_NODE24_SHOULD_RUN: ${{ needs.code_paths.outputs.managed_hook_node24 }}
           PACKAGE: ${{ needs.package.result }}
           PACKAGE_SHOULD_RUN: ${{ needs.code_paths.outputs.package }}
           PACKAGE_WINDOWS: ${{ needs.package_windows.result }}
@@ -1486,7 +1486,7 @@ jobs:
           check_job orcad_browser "$ORCAD_BROWSER" "$ORCAD_BROWSER_SHOULD_RUN"
           check_job mobile_web_app "$MOBILE_WEB_APP" "$MOBILE_WEB_APP_SHOULD_RUN"
           check_job cross-version-wire "$CROSS_VERSION_WIRE" "$CROSS_VERSION_WIRE_SHOULD_RUN"
-          check_job managed_hook_node18 "$MANAGED_HOOK_NODE18" "$MANAGED_HOOK_NODE18_SHOULD_RUN"
+          check_job managed_hook_node24 "$MANAGED_HOOK_NODE24" "$MANAGED_HOOK_NODE24_SHOULD_RUN"
           check_job package "$PACKAGE" "$PACKAGE_SHOULD_RUN"
           check_job package_windows "$PACKAGE_WINDOWS" "$PACKAGE_WINDOWS_SHOULD_RUN"
           exit "$failed"

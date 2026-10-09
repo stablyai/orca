@@ -201,8 +201,8 @@ function hostNodePlan(): HostNodeAddonRelayPlan {
     glibc: { major: 2, minor: 31 },
     fullVersion: HOST_NODE_VERSION,
     addons: { dir: '/tmp/host-addons', digest: 'd', dispose: vi.fn().mockResolvedValue(undefined) },
-    nodePath: '/opt/node18/bin/node',
-    hostNode: { version: { major: 18, minor: 20 }, napi: 9 }
+    nodePath: '/opt/node24/bin/node',
+    hostNode: { version: { major: 24, minor: 20 }, napi: 9 }
   }
 }
 
@@ -317,7 +317,7 @@ describe('deployAndLaunchRelay on the pinned Node runtime', () => {
   })
 
   it('launches from the runtime-folded version dir with the pinned Node and no host Node probe', async () => {
-    const conn = makeConnection('pinned-node')
+    const conn = makeConnection()
     queueInstalledPinnedLaunch()
 
     const result = await deployAndLaunchRelay(conn, undefined, undefined, 'target-1')
@@ -426,7 +426,7 @@ describe('deployAndLaunchRelay on the pinned Node runtime', () => {
     })
     vi.mocked(planHostNodeAddonRelay)
       .mockReset()
-      .mockRejectedValueOnce(new PinnedRelayFallbackError('host_node_missing', 'no Node 18+'))
+      .mockRejectedValueOnce(new PinnedRelayFallbackError('host_node_missing', 'no Node 24+'))
     vi.mocked(resolveRemoteNodePath).mockRejectedValueOnce(
       new RemoteNodeNotFoundError('Node.js not found on remote host.')
     )
@@ -473,7 +473,7 @@ describe('deployAndLaunchRelay on the pinned Node runtime', () => {
 
     expect(failure).toBeInstanceOf(RemoteRuntimeUnavailableError)
     expect(String(failure)).toContain('Windows host')
-    expect(String(failure)).toContain('install Node.js 18+')
+    expect(String(failure)).toContain('install Node.js 24+')
     expect(String(failure)).not.toContain('mounted noexec')
     expect(terminalUnavailableCauseFromError(failure)).toMatchObject({
       reason: 'no_runtime',
@@ -706,15 +706,15 @@ describe('deployAndLaunchRelay on the pinned Node runtime', () => {
     expect(resolveRemoteNodePath).not.toHaveBeenCalled()
     expect(ensurePinnedRelayRuntime).not.toHaveBeenCalled()
     expect(result.serverBuildId).toBe(HOST_NODE_VERSION)
-    expect(result.nodePath).toBe('/opt/node18/bin/node')
-    expect(detachedLaunchCommand(conn)).toContain("'/opt/node18/bin/node' relay.js --detached")
+    expect(result.nodePath).toBe('/opt/node24/bin/node')
+    expect(detachedLaunchCommand(conn)).toContain("'/opt/node24/bin/node' relay.js --detached")
     expect(plan.addons.dispose).toHaveBeenCalledOnce()
     expect(track).toHaveBeenCalledWith(
       'ssh_remote_runtime_resolved',
       expect.objectContaining({
         rung: 'c',
         first_refusal: 'artifacts_unavailable',
-        host_node_major: '18',
+        host_node_major: '24',
         host_libc: 'glibc',
         glibc_minor: '31'
       })
@@ -814,7 +814,7 @@ describe('deployAndLaunchRelay on the pinned Node runtime', () => {
     answerHostNodeLaunchByCommand()
     vi.mocked(planHostNodeAddonRelay)
       .mockReset()
-      .mockRejectedValueOnce(new PinnedRelayFallbackError('host_node_missing', 'no Node 18+'))
+      .mockRejectedValueOnce(new PinnedRelayFallbackError('host_node_missing', 'no Node 24+'))
 
     const result = await deployAndLaunchRelay(makeConnection(), undefined, undefined, 'target-1')
 

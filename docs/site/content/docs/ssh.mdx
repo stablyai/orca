@@ -82,18 +82,13 @@ You do not flip a separate “Kerberos mode” switch for config-imported hosts 
 
 Hardware-backed OpenSSH identities (`ed25519-sk`, `ecdsa-sk`, including agent-backed security keys) also use **system OpenSSH** rather than the built-in ssh2 client. Orca detects the key type from your identity files and hands the connection to the OS OpenSSH binary so the touch / PIN prompt works as usual. Regular Ed25519, ECDSA, and RSA keys stay on the built-in transport. If OpenSSH is not available on the machine, those FIDO2 targets cannot authenticate until it is installed and on `PATH` (or in the usual Windows/macOS/Linux locations).
 
-## Linux hosts without a C/C++ toolchain
+## Remote runtime requirements
 
-On first connect, Orca installs a small relay on the remote. Remote terminals need a native `node-pty` module. Linux packages often compile on the host; macOS/Windows relays use prebuilds.
+Orca installs its bundled Node.js 24 runtime and native modules on the remote host by default. You do not need to install Node.js, npm, or a C/C++ toolchain for this path. The host must allow Orca's uploaded executable and native modules to run.
 
-If the remote is missing **make**, a **C++ compiler**, and **python3**, Orca still finishes connect for **files, git, and the editor**, but **remote terminals will not work** until build tools are installed. Example install hints Orca may surface:
+If the bundled runtime cannot run, Orca can use a host-installed **Node.js 24 or newer**. Node.js 18, 20, and 22 are no longer supported for running Orca's relay. They can remain installed for your projects; Orca uses its own runtime when available.
 
-- Debian/Ubuntu: `sudo apt-get install -y build-essential python3`
-- Fedora/RHEL: `sudo dnf install -y make gcc gcc-c++ python3`
-- Alpine: `sudo apk add build-base python3`
-- Arch: `sudo pacman -S --needed base-devel python`
-
-Install the tools, then reconnect so the relay can install native modules.
+The host-runtime fallback first tries Orca's prebuilt native modules. If those cannot be used, the older installation path requires npm and may require **make**, a **C++ compiler**, and **python3** on Linux. An explicitly configured host runtime has the same Node.js 24 minimum. Install Node.js 24+ and any required build tools, then reconnect.
 
 ## Port forwarding
 

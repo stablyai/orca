@@ -18,9 +18,7 @@ import { sessionSearchSqliteAvailable } from './session-search-sqlite-support'
  * this one, and it is the only writer, so the two-process rebuild race the
  * desktop rule avoids cannot arise here.
  *
- * Returns null on a runtime with no `node:sqlite`: both hosts are built for a
- * Node 18 floor, and a host that cannot hold an index registers nothing rather
- * than answering `disabled` for a reason that is not consent.
+ * A runtime without SQLite registers no search service.
  */
 export function installInProcessSessionSearchService(args: {
   dataRoot: string

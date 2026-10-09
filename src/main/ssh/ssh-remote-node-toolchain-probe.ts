@@ -3,7 +3,7 @@ import { shellEscape } from './ssh-connection-utils'
 import { powerShellLiteral } from './ssh-remote-powershell'
 
 /** The host-Node floor for both the npm path and rung C (design D6). */
-export const MIN_HOST_NODE_MAJOR = 18
+export const MIN_HOST_NODE_MAJOR = 24
 const NODE_VERSION_MARKER = '__ORCA_NODE_VERSION__'
 const NPM_VERSION_MARKER = '__ORCA_NPM_VERSION__'
 const NAPI_VERSION_MARKER = '__ORCA_NAPI_VERSION__'

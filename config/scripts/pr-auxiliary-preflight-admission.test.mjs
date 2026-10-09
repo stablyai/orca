@@ -12,7 +12,7 @@ const routes = [
   ['shell_contracts', 'src/main/pty/pty-manager.ts'],
   ['orcad_browser', 'src/main/orcad/orcad-browser-provider.ts'],
   ['cross-version-wire', 'src/shared/orchestration-rpc-contract.ts'],
-  ['managed_hook_node18', 'src/shared/agent-hook-status.ts']
+  ['managed_hook_node24', 'src/shared/agent-hook-status.ts']
 ]
 
 function evaluate(expression, context) {

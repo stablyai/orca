@@ -48,7 +48,7 @@ export function buildOrcadEntry(outfile) {
     entryPoints: [join(root, ORCAD_ENTRY_POINT)],
     bundle: true,
     platform: 'node',
-    target: 'node18',
+    target: 'node24',
     format: 'cjs',
     outfile,
     external: ORCAD_EXTERNAL_MODULES,

@@ -121,6 +121,6 @@ describe('RelayRuntimeLadderRun', () => {
     const run = new RelayRuntimeLadderRun('ssh-1', null, true)
     run.refused('A', 'libc_floor')
     run.refused('C', 'host_node_missing')
-    expect(remoteRuntimeUnavailableError(run).message).toContain('Install Node.js 18+')
+    expect(remoteRuntimeUnavailableError(run).message).toContain('Install Node.js 24+')
   })
 })

@@ -216,6 +216,7 @@ function makeConnection(capture: Capture, options: ConnectionOptions = {}): SshC
   }
 
   const conn: Record<string, unknown> = {
+    getTarget: () => ({ id: 'legacy-target', remoteRuntime: 'legacy' }),
     canRunConcurrentExecCommands: vi.fn().mockReturnValue(false),
     exec: vi.fn().mockResolvedValue({
       on: vi.fn(),

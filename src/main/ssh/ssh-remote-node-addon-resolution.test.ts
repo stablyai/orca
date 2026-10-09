@@ -21,25 +21,30 @@ describe('resolveRemoteHostNodeForAddons (rung C)', () => {
   it('accepts a Node without npm and reports its version and N-API level', async () => {
     execCommandMock
       .mockResolvedValueOnce('/usr/bin/node\n')
-      .mockResolvedValueOnce(facts('v18.20.4', '9'))
+      .mockResolvedValueOnce(facts('v24.0.0', '9'))
 
     await expect(resolveRemoteHostNodeForAddons(conn, 8)).resolves.toEqual({
       nodePath: '/usr/bin/node',
-      facts: { version: { major: 18, minor: 20 }, napi: 9 }
+      facts: { version: { major: 24, minor: 0 }, napi: 9 }
     })
     expect(execCommandMock.mock.calls[1]![1]).not.toContain('npm')
     expect(execCommandMock.mock.calls[1]![1]).toContain('-p process.versions.napi')
   })
 
-  it('skips a Node below 18 or below the addons N-API level', async () => {
+  it('skips a Node below 24 or below the addons N-API level', async () => {
     execCommandMock
-      .mockResolvedValueOnce('/usr/bin/node\n/opt/n18/bin/node\n/opt/n20/bin/node\n')
+      .mockResolvedValueOnce(
+        '/usr/bin/node\n/opt/n18/bin/node\n/opt/n20/bin/node\n/opt/n22/bin/node\n/opt/n24-low-napi/bin/node\n/opt/n24/bin/node\n'
+      )
       .mockResolvedValueOnce(facts('v16.20.2', '8'))
-      .mockResolvedValueOnce(facts('v18.0.0', '7'))
-      .mockResolvedValueOnce(facts('v20.11.1', '9'))
+      .mockResolvedValueOnce(facts('v18.0.0', '9'))
+      .mockResolvedValueOnce(facts('v20.0.0', '9'))
+      .mockResolvedValueOnce(facts('v22.0.0', '10'))
+      .mockResolvedValueOnce(facts('v24.0.0', '7'))
+      .mockResolvedValueOnce(facts('v24.0.0', '9'))
 
     await expect(resolveRemoteHostNodeForAddons(conn, 8)).resolves.toMatchObject({
-      nodePath: '/opt/n20/bin/node'
+      nodePath: '/opt/n24/bin/node'
     })
   })
 

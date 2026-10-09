@@ -6,6 +6,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { MIN_HOST_NODE_MAJOR } from '../ssh/ssh-remote-node-toolchain-probe'
 import { relayBundleCandidates } from '../ssh/relay-bundle-paths'
 
 import type { MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
@@ -41,7 +42,8 @@ export function resolveWslHookRelayBundle(): WslHookRelayBundle | null {
       // Why: the version lands inside single-quoted guest shell text and in
       // a guest path segment — refuse anything outside the safe alphabet.
       if (/^[A-Za-z0-9+.-]+$/.test(version)) {
-        return { jsPath, version }
+        // Invalidate cached launchers when the runtime floor changes.
+        return { jsPath, version: `${version}-node${MIN_HOST_NODE_MAJOR}` }
       }
     }
   }
@@ -59,7 +61,7 @@ function guestRelayDirExpr(version: string): string {
  *  written last by the installer, so the check rejects partial installs;
  *  node resolution probes each candidate's version because `sh -c` does not
  *  source interactive profiles (an apt node 12 on PATH must not shadow an
- *  nvm node 20 off PATH). */
+ *  nvm node 24 off PATH). */
 export function buildGuestLaunchScript(version: string): string {
   const dir = guestRelayDirExpr(version)
   return [
@@ -70,7 +72,7 @@ export function buildGuestLaunchScript(version: string): string {
     'n=""',
     'for c in "$(command -v node 2>/dev/null || true)" "$HOME/.nvm/versions/node"/*/bin/node /usr/local/bin/node /usr/bin/node "$HOME/.local/bin/node"; do',
     '  [ -n "$c" ] && [ -x "$c" ] || continue',
-    `  if "$c" -e 'process.exit(Number(process.versions.node.split(".")[0])>=18?0:1)' 2>/dev/null; then`,
+    `  if "$c" -e 'process.exit(Number(process.versions.node.split(".")[0])>=${MIN_HOST_NODE_MAJOR}?0:1)' 2>/dev/null; then`,
     '    n="$c"',
     '    break',
     '  fi',
@@ -181,7 +183,7 @@ export type WslRelayLaunchIo = {
 /** Spawn → sentinel → connect, with the guest-install/retry policy: stale or
  *  missing installs get exactly one streamed reinstall, wsl.exe's transient
  *  "Catastrophic failure (E_UNEXPECTED)" gets a bounded retry, a distro
- *  without node >= 18 reports through `onNoNode`. Terminal failures report
+ *  without node >= 24 reports through `onNoNode`. Terminal failures report
  *  through `onFailure`; non-startup errors propagate to the caller. */
 export async function launchWslRelayWithInstall(options: {
   distro: string

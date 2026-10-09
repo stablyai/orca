@@ -37,7 +37,6 @@ export class RelayStreamRegistry {
     if (this.disposed) {
       throw new Error('relay_file_stream_shutdown_fenced')
     }
-    // Why: no Promise.withResolvers — the relay bundle still targets Node 18 hosts.
     let resolve!: () => void
     const pending = new Promise<void>((settle) => {
       resolve = settle

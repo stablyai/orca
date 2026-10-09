@@ -56,9 +56,9 @@ function formatNodeInstallHints(detectedBin: string | null): string {
     ? NODE_PACKAGE_MANAGER_HINTS.find((hint) => hint.bin === detectedBin)
     : null
   const lines = [
-    'Node.js not found on remote host. Orca relay requires Node.js 18+ and npm.',
+    'Node.js not found on remote host. Orca relay requires Node.js 24+ and npm.',
     '',
-    'Install Node.js 18+ with npm on the remote host, then reconnect:'
+    'Install Node.js 24+ with npm on the remote host, then reconnect:'
   ]
   if (tailored) {
     lines.push(`  ${tailored.label}: ${tailored.install}`)
@@ -70,10 +70,10 @@ function formatNodeInstallHints(detectedBin: string | null): string {
   lines.push(
     '',
     'Verify the remote runtime before reconnecting:',
-    '  node --version  # must be v18 or newer',
+    '  node --version  # must be v24 or newer',
     '  npm --version',
     '',
-    'If your distro package is older than Node 18, install an LTS release from https://nodejs.org/.'
+    'If your distro package is older than Node 24, install an LTS release from https://nodejs.org/.'
   )
   return lines.join('\n')
 }

@@ -1,6 +1,6 @@
 /**
  * Rung C of the relay runtime ladder (design D6): the relay runs on the host's own Node
- * (>= 18) with Orca's prebuilt N-API addons uploaded beside it. No npm, no compiler.
+ * (>= 24) with Orca's prebuilt N-API addons uploaded beside it. No npm, no compiler.
  */
 import { ORCAD_ADDON_NAPI_VERSION } from '../../shared/orcad-artifacts'
 import type { ServerTarget } from '../../shared/node-runtime-pin'
@@ -67,7 +67,7 @@ export async function planHostNodeAddonRelay(options: {
   if (!hostNode) {
     throw new PinnedRelayFallbackError(
       'host_node_missing',
-      `no host Node.js 18+ with N-API ${ORCAD_ADDON_NAPI_VERSION} was found`
+      `no host Node.js 24+ with N-API ${ORCAD_ADDON_NAPI_VERSION} was found`
     )
   }
   let addons: PinnedRelayAddons

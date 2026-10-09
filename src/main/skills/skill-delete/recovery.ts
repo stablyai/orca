@@ -162,9 +162,7 @@ export async function recoverSkillDeleteTransaction(
     // retry it alongside the already-idempotent staged removals.
     await removeSkillInstallReceipt(stateDirectory, canonicalPath)
   } else {
-    // Roll back in reverse of staging order, so a restored alias never points at
-    // a canonical directory that does not exist yet. Indexed rather than
-    // `toReversed()`: this module reaches the Node 18 relay bundle.
+    // Restore canonical directories before aliases that point to them.
     let restoredEvery = true
     for (let index = staged.length - 1; index >= 0; index -= 1) {
       const move = staged[index]

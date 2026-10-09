@@ -716,6 +716,10 @@ jobs:
         run: |
           # Bare shells install Pi extensions only for an existing agent home.
           mkdir -p "$HOME/.pi/agent"
+          # sshd login shells do not inherit setup-node's toolcache PATH.
+          mkdir -p "$HOME/.local/bin"
+          ln -sf "$(command -v node)" "$HOME/.local/bin/node"
+          ln -sf "$(command -v npm)" "$HOME/.local/bin/npm"
           fixture="$RUNNER_TEMP/orca-localhost-sshd"
           mkdir -p "$fixture"
           ssh-keygen -q -t ed25519 -N '' -f "$fixture/host_key"

@@ -183,7 +183,7 @@ export type RelayRuntimeFallbackReason =
   | 'artifacts_unavailable'
   /** No runtime exists for this rung and host (rung B before a compat build ships). */
   | 'runtime_unavailable'
-  /** Rung C found no host Node >= 18 with the addons' N-API level. */
+  /** Rung C found no host Node >= 24 with the addons' N-API level. */
   | 'host_node_missing'
   /** The host answered a rung's install, self-test or launch with an unclassified failure. */
   | 'install_failed'

@@ -318,7 +318,7 @@ async function build() {
       const newer = findPostBaselineNodeApiNames(readFileSync(destination))
       if (newer.length > 0) {
         throw new Error(
-          `[orcad-prebuilds] ${slot}/${relative} imports ${newer.join(', ')}, above N-API ${SLOT_NAPI_VERSION}; host Node 18 could not load it`
+          `[orcad-prebuilds] ${slot}/${relative} imports ${newer.join(', ')}, above N-API ${SLOT_NAPI_VERSION}; the slot ABI would change`
         )
       }
     }

@@ -244,20 +244,20 @@ describe('bundled Orca runtime handoff', () => {
 })
 
 describe('server runtime admission', () => {
-  it.each(['14.21.3', '16.20.2'])('refuses host Node %s before loading profile state', (node) => {
-    fixture.exists.mockReturnValue(false)
-    vi.spyOn(process, 'versions', 'get').mockReturnValue({ ...process.versions, node })
-    expect(() => assertOrcadServerRuntime()).toThrow('requires Node.js 18')
-  })
-
-  it.each(['18.20.8', '20.19.0', '22.14.0', '23.0.0', '24.0.0', '26.0.0'])(
-    'accepts unpackaged host Node %s',
+  it.each(['18.20.8', '20.19.0', '22.14.0', '23.0.0'])(
+    'refuses host Node %s before loading profile state',
     (node) => {
       fixture.exists.mockReturnValue(false)
       vi.spyOn(process, 'versions', 'get').mockReturnValue({ ...process.versions, node })
-      expect(() => assertOrcadServerRuntime()).not.toThrow()
+      expect(() => assertOrcadServerRuntime()).toThrow('requires Node.js 24')
     }
   )
+
+  it.each(['24.0.0', '26.0.0'])('accepts unpackaged host Node %s', (node) => {
+    fixture.exists.mockReturnValue(false)
+    vi.spyOn(process, 'versions', 'get').mockReturnValue({ ...process.versions, node })
+    expect(() => assertOrcadServerRuntime()).not.toThrow()
+  })
 
   it('refuses host Node 24 for a packaged slot that owns a bundled runtime', () => {
     vi.spyOn(process, 'versions', 'get').mockReturnValue({ ...process.versions, node: '24.0.0' })

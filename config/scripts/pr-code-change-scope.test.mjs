@@ -24,7 +24,7 @@ const expensiveJobs = [
   'test',
   'orcad_browser',
   'cross-version-wire',
-  'managed_hook_node18',
+  'managed_hook_node24',
   'package',
   'package_windows'
 ]

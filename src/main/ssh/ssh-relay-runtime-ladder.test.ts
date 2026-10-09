@@ -146,7 +146,7 @@ describe('relay runtime ladder (design D6)', () => {
     expect(remoteRuntimeUnavailable(linuxD)).toEqual({
       reason: 'no_runtime',
       message: expect.stringContaining(
-        "Install Node.js 18+ and npm on the host, then reconnect. (Orca's Node: missing_lib)"
+        "Install Node.js 24+ and npm on the host, then reconnect. (Orca's Node: missing_lib)"
       )
     })
     const noexec = remoteRuntimeUnavailable({ ...linuxD, firstRefusal: 'noexec', noexec: 'proved' })
@@ -171,6 +171,7 @@ describe('relay runtime ladder (design D6)', () => {
       firstRefusal: 'artifacts_unavailable'
     })
     expect(message).toContain('this copy of Orca could not prepare its bundled')
+    expect(message).toContain('24+ and npm')
     expect(message).toContain("(Orca's Node: artifacts_unavailable)")
   })
 
@@ -199,6 +200,7 @@ describe('relay runtime ladder (design D6)', () => {
     })
     expect(reason).toBe('no_runtime')
     expect(message).toContain('Windows host')
+    expect(message).toContain('install Node.js 24+')
     expect(message).toContain("Orca's Node.js through security software")
     expect(message).toContain("(Orca's Node: noexec)")
     expect(message).not.toContain('mounted')

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Package the server separately from its compatibility launcher.
+// Package the Node 24 server separately from its older-Node compatibility launcher.
 import { fork, spawnSync } from 'node:child_process'
 import { build } from 'esbuild'
 import {
@@ -107,7 +107,7 @@ async function stageParcelWatcher(target) {
     },
     bundle: true,
     platform: 'node',
-    target: 'node18',
+    target: 'node24',
     format: 'cjs',
     outfile: join(OUT_DIR, ORCAD_PARCEL_WATCHER_ENTRY),
     external: ['./watcher.node'],
@@ -198,7 +198,7 @@ function buildForkedChild(entryPoint, outfile) {
     entryPoints: [entryPoint],
     bundle: true,
     platform: 'node',
-    target: 'node18',
+    target: 'node24',
     format: 'cjs',
     outfile,
     external: ORCAD_EXTERNAL_MODULES,

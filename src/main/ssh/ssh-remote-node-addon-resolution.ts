@@ -1,6 +1,6 @@
 /**
  * Rung C's host Node lookup (design D6): the same candidates as the npm path, but the
- * check asks only for Node >= 18 and the addons' N-API level, never npm.
+ * check asks only for Node >= 24 and the addons' N-API level, never npm.
  */
 import type { SshConnection } from './ssh-connection'
 import type { RemoteNodeResolutionOptions } from './ssh-remote-node-install-guidance'

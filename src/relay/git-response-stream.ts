@@ -152,7 +152,6 @@ export class GitResponseStreamRegistry {
     const chunks = encodeChunks(payload, Math.min(GIT_RESPONSE_CHUNK_SIZE, sinkChunkBytes))
     // Why: kick the pump off the response task so the client sees the sentinel
     // (and can subscribe/reassemble) before the first chunk frame arrives.
-    // Why: no Promise.withResolvers — the relay bundle still targets Node 18 hosts.
     let finish!: () => void
     const completion = new Promise<void>((resolve) => {
       finish = () => {

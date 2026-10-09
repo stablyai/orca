@@ -115,7 +115,6 @@ function chooseGroupActiveTab(
   if (group.activeTabId && retainedTabIds.has(group.activeTabId)) {
     return group.activeTabId
   }
-  // Node 18 is the orcad floor and does not provide Array.prototype.toReversed.
   let recent: string | undefined
   for (let index = (group.recentTabIds?.length ?? 0) - 1; index >= 0; index -= 1) {
     const tabId = group.recentTabIds?.[index]

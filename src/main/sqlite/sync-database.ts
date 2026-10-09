@@ -30,7 +30,7 @@ function isStatementCacheable(sql: string): boolean {
   return !PRAGMA_STATEMENT.test(sql) && !sql.replace(AGGREGATE_STAR, '').includes('*')
 }
 
-// Why: SSH companions target Node 18 and import this adapter without opening SQLite.
+// Load SQLite only when a caller opens a database.
 function loadDatabaseSync(): typeof DatabaseSync {
   if (typeof process.getBuiltinModule !== 'function') {
     throw new Error('node:sqlite is unavailable in this Node.js runtime')
