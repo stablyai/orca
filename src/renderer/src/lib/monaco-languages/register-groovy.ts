@@ -21,8 +21,8 @@ export const groovyLanguageConfiguration: Monaco.languages.LanguageConfiguration
     { open: '{', close: '}' },
     { open: '[', close: ']' },
     { open: '(', close: ')' },
-    { open: '"', close: '"' },
-    { open: "'", close: "'" }
+    { open: '"', close: '"', notIn: ['string', 'comment'] },
+    { open: "'", close: "'", notIn: ['string', 'comment'] }
   ],
   surroundingPairs: [
     { open: '{', close: '}' },
