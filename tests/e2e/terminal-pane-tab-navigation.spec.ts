@@ -94,7 +94,10 @@ test('cycles visual pane order across tab boundaries and returns to the last pan
   }
 
   await testInfo.attach('at-tab-boundary', {
-    body: await orcaPage.screenshot({ mask: [orcaPage.locator('.xterm-screen')] }),
+    body: await orcaPage.screenshot({
+      mask: [orcaPage.locator('.xterm-screen')],
+      maskColor: '#d0d0d0'
+    }),
     contentType: 'image/png'
   })
   await orcaPage.keyboard.press(`${modifier}+Alt+ArrowRight`)
@@ -106,7 +109,10 @@ test('cycles visual pane order across tab boundaries and returns to the last pan
     )
     .not.toBe(firstLeaves.at(-1))
   await testInfo.attach('boundary-result', {
-    body: await orcaPage.screenshot({ mask: [orcaPage.locator('.xterm-screen')] }),
+    body: await orcaPage.screenshot({
+      mask: [orcaPage.locator('.xterm-screen')],
+      maskColor: '#d0d0d0'
+    }),
     contentType: 'image/png'
   })
   await expect(tab(orcaPage, second)).toHaveAttribute('data-active', 'true')
