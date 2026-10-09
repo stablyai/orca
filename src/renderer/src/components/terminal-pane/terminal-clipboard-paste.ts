@@ -2,6 +2,8 @@ import {
   isClipboardTextTooLargeError,
   type ReadClipboardTextOptions
 } from '../../../../shared/clipboard-text'
+import { IMAGE_FILE_MIME_TYPES } from '../../../../shared/image-file-extensions'
+import { isWindowsUserAgent } from './pane-helpers'
 import {
   TERMINAL_PASTE_MAX_BYTES,
   type TerminalPasteTextOptions
@@ -14,6 +16,8 @@ type SaveClipboardImageAsTempFile = (args?: {
 
 type PasteTerminalClipboardDeps = {
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
+  readClipboardFilePaths?: () => Promise<string[]>
+  pasteFilePaths?: (paths: string[]) => Promise<void>
   saveClipboardImageAsTempFile: SaveClipboardImageAsTempFile
   pasteText: (
     text: string,
@@ -28,7 +32,7 @@ type PasteTerminalClipboardDeps = {
 }
 
 export type TerminalClipboardPasteResult =
-  | { status: 'pasted'; kind: 'image-path' | 'text' }
+  | { status: 'pasted'; kind: 'file-path' | 'image-path' | 'text' }
   | {
       status: 'skipped'
       reason:
@@ -40,8 +44,16 @@ export type TerminalClipboardPasteResult =
         | 'text-too-large'
     }
 
+// Why: Explorer-copied PNG/JPEG files keep the Windows clipboard image flow (#9640).
+function isWindowsClipboardImageFile(filePath: string): boolean {
+  const mimeType = IMAGE_FILE_MIME_TYPES[filePath.slice(filePath.lastIndexOf('.')).toLowerCase()]
+  return isWindowsUserAgent() && (mimeType === 'image/png' || mimeType === 'image/jpeg')
+}
+
 export async function pasteTerminalClipboard({
   readClipboardText,
+  readClipboardFilePaths,
+  pasteFilePaths,
   saveClipboardImageAsTempFile,
   pasteText,
   connectionId,
@@ -51,6 +63,21 @@ export async function pasteTerminalClipboard({
   onTextPasteError,
   onImagePasteError
 }: PasteTerminalClipboardDeps): Promise<TerminalClipboardPasteResult> {
+  // Why: a file copied in Finder/Explorer exposes only its display name as text,
+  // so copied files must be resolved before the text flavor is consulted.
+  if (readClipboardFilePaths && pasteFilePaths) {
+    let filePaths: string[] = []
+    try {
+      filePaths = await readClipboardFilePaths()
+    } catch {
+      // Why: an unreadable file flavor must not block ordinary text paste.
+    }
+    if (filePaths.length > 0 && !filePaths.some(isWindowsClipboardImageFile)) {
+      await pasteFilePaths(filePaths)
+      return { status: 'pasted', kind: 'file-path' }
+    }
+  }
+
   let text = ''
   try {
     text = await readClipboardText({ maxBytes: TERMINAL_PASTE_MAX_BYTES })
