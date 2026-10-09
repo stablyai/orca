@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { RelayAssignmentStore } from './assignment-store.js'
 import { openInMemoryRelayDatabase } from './database.js'
 import {
-  readSeatFeedCells,
   SHADOW_SEAT_RECENTLY_LEFT_MAX_HOSTS,
   ShadowSeatDirectory,
   startShadowSeatPoller,
@@ -16,12 +15,14 @@ const CELLS: SeatFeedCell[] = [
     cellId: 'cell-a',
     cellUrl: 'https://cell-a.example.test',
     region: 'us-central1',
+    heartbeatExpiresAt: 2_000_000_000_000,
     requiredForComplete: true
   },
   {
     cellId: 'cell-b',
     cellUrl: 'https://cell-b.example.test',
     region: 'asia-east2',
+    heartbeatExpiresAt: 2_000_000_000_000,
     requiredForComplete: true
   }
 ]
@@ -436,22 +437,30 @@ describe('startShadowSeatPoller', () => {
   })
 })
 
-describe('readSeatFeedCells', () => {
-  it('requires only live, unisolated cells with capacity among the enabled ones', async () => {
+describe('RelayAssignmentStore.seatFeedCells', () => {
+  it('lists every cell, and requires only live, unisolated cells with capacity', async () => {
     const database = await openInMemoryRelayDatabase()
-    const store = new RelayAssignmentStore(database, () => 100_000)
+    const store = new RelayAssignmentStore(database, () => 100_000, {
+      requireLiveCells: true,
+      heartbeatTtlMs: 45_000
+    })
     await store.reconcileCells(
-      ['cell-live', 'cell-stale', 'cell-isolated', 'cell-empty', 'cell-nobeat'].map((id) => ({
-        id,
-        url: `https://${id}.example.test`,
-        capacityRequests: id === 'cell-empty' ? 0 : 10
-      }))
+      ['cell-live', 'cell-stale', 'cell-isolated', 'cell-empty', 'cell-nobeat', 'cell-off'].map(
+        (id) => ({
+          id,
+          url: `https://${id}.example.test`,
+          capacityRequests: id === 'cell-empty' ? 0 : 10
+        })
+      )
     )
+    // Existing-only: no new hosts, but it still seats the ones it has.
+    await database.query(`UPDATE relay_cells SET enabled = 0 WHERE cell_id = ?`, ['cell-off'])
     for (const [cellId, heartbeatAt] of [
       ['cell-live', 90_000],
       ['cell-stale', 10_000],
       ['cell-isolated', 90_000],
-      ['cell-empty', 90_000]
+      ['cell-empty', 90_000],
+      ['cell-off', 90_000]
     ] as const) {
       await database.query(
         `INSERT INTO relay_cell_runtime
@@ -466,14 +475,17 @@ describe('readSeatFeedCells', () => {
       [50_000, 'cell-isolated']
     )
 
-    const cells = await readSeatFeedCells(database, 100_000)
+    const cells = await store.seatFeedCells()
 
-    expect(cells.map((cell) => [cell.cellId, cell.requiredForComplete])).toEqual([
-      ['cell-empty', false],
-      ['cell-isolated', false],
-      ['cell-live', true],
-      ['cell-nobeat', false],
-      ['cell-stale', false]
+    expect(
+      cells.map((cell) => [cell.cellId, cell.heartbeatExpiresAt, cell.requiredForComplete])
+    ).toEqual([
+      ['cell-empty', 135_000, false],
+      ['cell-isolated', 135_000, false],
+      ['cell-live', 135_000, true],
+      ['cell-nobeat', null, false],
+      ['cell-off', 135_000, true],
+      ['cell-stale', 55_000, false]
     ])
   })
 })

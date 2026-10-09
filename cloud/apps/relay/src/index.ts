@@ -23,7 +23,6 @@ import { jitteredSweepIntervalMs } from './relay-sweep-schedule.js'
 import { observedRelayRequests } from './relay-observability.js'
 import { startRegionalRehomeWorker } from './regional-rehome-worker.js'
 import { createRelayServer } from './relay-server.js'
-import { readSeatFeedCells, startShadowSeatPoller } from './shadow-seat-directory.js'
 import {
   formatRegisteredMigrationInventory,
   readRegisteredMigrationInventory
@@ -47,7 +46,8 @@ const {
   runtimeCounts,
   connectionSnapshot,
   ready,
-  cellIncarnation
+  cellIncarnation,
+  shadowSeatPoller
 } = createRelayServer(config, database)
 // Same owner as the assignment sweep: the cleanup only expires credentials that every reader
 // already re-checks at read time, so running it in all 23 cells multiplied one table scan by 23
@@ -119,9 +119,6 @@ const regionalRehomeWorker = startRegionalRehomeWorker(config, assignments, {
     ...observability.regionalRehomeRuntimeSafety(),
     ...readRelayDatabasePoolPressure(database)
   })
-})
-const shadowSeatPoller = startShadowSeatPoller(config, {
-  listCells: () => readSeatFeedCells(database, Date.now())
 })
 const heartbeat = startCellHeartbeat(config, {
   ready,

@@ -1,11 +1,6 @@
-import {
-  RELAY_DEFAULT_REGION,
-  RelayRegionSchema,
-  type RelayRegion
-} from '@orca-cloud/relay-contract'
+import type { RelayRegion } from '@orca-cloud/relay-contract'
 import { z } from 'zod'
 import type { RelayConfig } from './config.js'
-import type { RelayDatabase } from './database.js'
 import { googleMetadataIdentityToken } from './google-metadata-identity-token.js'
 
 // Step 3: each director polls every cell's seat feed and keeps who is seated
@@ -20,8 +15,6 @@ const RECENTLY_LEFT_PER_HOST = 4
 // Google identity tokens live an hour; one per poll would be 26 metadata reads a second.
 const IDENTITY_TOKEN_REUSE_MS = 10 * 60_000
 const SUMMARY_INTERVAL_MS = 60_000
-// The assignment store's default heartbeat freshness.
-const SHADOW_SEAT_HEARTBEAT_TTL_MS = 45_000
 const CELL_LIST_RETRY_BASE_MS = 1_000
 const CELL_LIST_RETRY_MAX_MS = SHADOW_SEAT_CELL_LIST_REFRESH_MS
 // A drain backlog drains over a few polls rather than holding one slot indefinitely.
@@ -77,7 +70,9 @@ export type SeatFeedCell = {
   cellId: string
   cellUrl: string
   region: RelayRegion
-  // Heartbeat-fresh, with capacity, and not roll-isolated: completeness waits only on these.
+  // When placement's liveness rule stops calling this cell live; null when not ready.
+  heartbeatExpiresAt: number | null
+  // Live, with capacity, and not roll-isolated: completeness waits only on these.
   requiredForComplete: boolean
 }
 
@@ -382,37 +377,6 @@ export class ShadowSeatDirectory {
       this.recentlyLeft.delete(oldestKey)
     }
   }
-}
-
-export async function readSeatFeedCells(
-  database: RelayDatabase,
-  now: number,
-  heartbeatTtlMs: number = SHADOW_SEAT_HEARTBEAT_TTL_MS
-): Promise<SeatFeedCell[]> {
-  // Every enabled cell in any admission state: a draining cell still seats hosts.
-  const rows = await database.query(
-    `SELECT cell.cell_id, cell.cell_url, cell.capacity_requests, region.region,
-            admission.roll_isolated_at, runtime.ready, runtime.last_heartbeat_at
-     FROM relay_cells cell
-     LEFT JOIN relay_cell_regions region ON region.cell_id = cell.cell_id
-     LEFT JOIN relay_cell_admission admission ON admission.cell_id = cell.cell_id
-     LEFT JOIN relay_cell_runtime runtime ON runtime.cell_id = cell.cell_id
-     WHERE cell.enabled = 1
-     ORDER BY cell.cell_id ASC`
-  )
-  return rows.map((row) => {
-    const region = RelayRegionSchema.safeParse(row.region)
-    return {
-      cellId: String(row.cell_id),
-      cellUrl: String(row.cell_url),
-      region: region.success ? region.data : RELAY_DEFAULT_REGION,
-      requiredForComplete:
-        Number(row.capacity_requests) > 0 &&
-        (row.roll_isolated_at === null || row.roll_isolated_at === undefined) &&
-        Number(row.ready) === 1 &&
-        Number(row.last_heartbeat_at) > now - heartbeatTtlMs
-    }
-  })
 }
 
 export type ShadowSeatPollerOptions = {
