@@ -259,6 +259,12 @@ export function sameRouteView(a: RouteViewFacts, b: RouteViewFacts): boolean {
   )
 }
 
+/** Whether `href` is this host's own host route, whatever its search. */
+export function isHostRouteOf(href: string, hostId: string): boolean {
+  const [path] = href.split(/[?#]/)
+  return path === `/h/${hostId}` || path === `/h/${encodeURIComponent(hostId)}`
+}
+
 /** The `/h/<host>` route a pathname sits under, or null outside a host. */
 function hostAreaRoot(pathname: string): string | null {
   const [empty, h, host] = pathname.split('/')

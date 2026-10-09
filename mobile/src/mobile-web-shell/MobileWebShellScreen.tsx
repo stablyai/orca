@@ -32,6 +32,7 @@ import { useShellStackPop } from './use-shell-stack-pop'
 import { useMobileWebShellSession } from './use-mobile-web-shell-session'
 import { usePageHostSnapshot } from './use-page-host-snapshot'
 import { useReportedHostAreaServing } from './host-area-serving'
+import { isHostRouteOf } from './page-route-policy'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { storageReadParamsSchema, type BridgeNativeVerb } from './bridge/bridge-native-verbs'
 import { SHELL_OPENING_LABEL, ShellPageCover, ShellWaitingFrame } from './ShellWaitingFrame'
@@ -283,6 +284,12 @@ export function MobileWebShellScreen({
     // Pushed, never replaced: the page stays mounted underneath, so Back reveals it with no
     // download and no second `init`.
     onNavigate: (href: string) => {
+      // Wide, this host's route is the area-owning session below: back to it, or in place of this
+      // one from a cold deep link, never a second on top. `dismissTo` takes the href's params.
+      if (isWideLayout && isHostRouteOf(href, hostId)) {
+        router.dismissTo(href)
+        return
+      }
       router.push(href)
     },
     // Answered on this device and never forwarded; the host holds it to the verb table first.
