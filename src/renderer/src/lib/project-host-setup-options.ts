@@ -1,4 +1,8 @@
 import {
+  getProjectHostSetupOwnerKey,
+  getProjectHostSetupExecutionOwnerKey
+} from '../store/projects/project-compatibility-core'
+import {
   getExecutionHostLabel,
   isRuntimeOwnedSshTargetId,
   LOCAL_EXECUTION_HOST_ID,
@@ -120,6 +124,15 @@ function buildReadySetupOptions({
   hosts
 }: BuildReadySetupOptionsInput): ReadyProjectHostSetupOption[] {
   const eligibleRepoIds = new Set(eligibleRepos.map((repo) => repo.id))
+  const seenIds = new Set<string>()
+  const duplicatedIds = new Set<string>()
+  for (const setup of projectHostSetups) {
+    if (seenIds.has(setup.id)) {
+      duplicatedIds.add(setup.id)
+    }
+    seenIds.add(setup.id)
+  }
+  const seenOwners = new Set<string>()
   const hostById = new Map(hosts.map((host) => [host.id, host]))
   return projectHostSetups
     .filter((setup) => {
@@ -130,11 +143,12 @@ function buildReadySetupOptions({
         eligibleRepoIds.has(setup.repoId) &&
         Boolean(host) &&
         !isEphemeralVmProjectHost(host) &&
-        !isRuntimeOwnedSshSetupHost(setup.hostId)
+        !isRuntimeOwnedSshSetupHost(setup.hostId) &&
+        admitSetupOwner(setup, seenOwners)
       )
     })
     .map((setup) => ({
-      id: setup.id,
+      id: duplicatedIds.has(setup.id) ? getProjectHostSetupOwnerKey(setup) : setup.id,
       kind: 'ready' as const,
       projectId: setup.projectId,
       hostId: setup.hostId,
@@ -143,23 +157,15 @@ function buildReadySetupOptions({
       detail: setup.displayName,
       path: setup.path
     }))
-    .filter(dedupeByHost())
 }
 
-// Why: a project resolves to at most one setup per host — resolveWorkspaceCreationTarget takes the
-// first project+host match and ignores the rest, so extra same-host setups are unreachable. Legacy
-// profiles can still hold them (a linked worktree added as its own project projects a second local
-// setup), which rendered as repeated identical "Local Mac" rows. Keep the first in input order so
-// the row shown is the one workspace creation actually uses.
-function dedupeByHost(): (option: ReadyProjectHostSetupOption) => boolean {
-  const seenHosts = new Set<ExecutionHostId>()
-  return (option) => {
-    if (seenHosts.has(option.hostId)) {
-      return false
-    }
-    seenHosts.add(option.hostId)
-    return true
+function admitSetupOwner(setup: ProjectHostSetup, seenOwners: Set<string>): boolean {
+  const owner = getProjectHostSetupExecutionOwnerKey(setup)
+  if (seenOwners.has(owner)) {
+    return false
   }
+  seenOwners.add(owner)
+  return true
 }
 
 function buildNeedsSetupOptions({

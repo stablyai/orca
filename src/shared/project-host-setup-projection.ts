@@ -295,6 +295,10 @@ function createSetupFromRepo(repo: Repo, projectId: string): ProjectHostSetup {
     ...(repo.kind ? { kind: repo.kind } : {}),
     ...(repo.connectionId !== undefined ? { connectionId: repo.connectionId } : {}),
     ...(repo.executionHostId !== undefined ? { executionHostId: repo.executionHostId } : {}),
+    ...(repo.authoritativeExecutionHostId
+      ? { authoritativeExecutionHostId: repo.authoritativeExecutionHostId }
+      : {}),
+    ...(repo.catalogOwnerHostId ? { catalogOwnerHostId: repo.catalogOwnerHostId } : {}),
     ...(repo.worktreeBasePath ? { worktreeBasePath: repo.worktreeBasePath } : {}),
     ...(repo.hookSettings ? { hookSettings: repo.hookSettings } : {}),
     ...(repo.gitUsername ? { gitUsername: repo.gitUsername } : {}),

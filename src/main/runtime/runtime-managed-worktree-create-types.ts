@@ -1,4 +1,5 @@
 import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
 import type {
   AutomationWorkspaceProvenance,
@@ -17,6 +18,8 @@ import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 
 export type RuntimeManagedWorktreeCreateArgs = {
   repoSelector: string
+  /** Captured authoritative host; absent preserves unique legacy selectors. */
+  executionHostId?: ExecutionHostId
   name: string
   nameWasGenerated?: boolean
   navigation?: RuntimeNavigationTarget

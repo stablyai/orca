@@ -1,12 +1,12 @@
+import {
+  getProjectHostSetupOwnerKey,
+  getProjectHostSetupRepoOwnerKey
+} from '../../store/projects/project-compatibility-core'
+import { getRepoHostIdentity } from '../../store/slices/repo-host-identity'
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
-import {
-  getRepoExecutionHostId,
-  LOCAL_EXECUTION_HOST_ID,
-  type ExecutionHostId
-} from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
-import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import {
   buildProjectGroupingIndex,
@@ -54,7 +54,13 @@ export function getSettingsEntryHostSelection(
     }
     const hostId = hostSelection[key]
     const setupId = setupSelection[key]
-    if (setups.some((setup) => setup.hostId === hostId && (!setupId || setup.id === setupId))) {
+    if (
+      setups.some(
+        (setup) =>
+          setup.hostId === hostId &&
+          (!setupId || setup.id === setupId || getProjectHostSetupOwnerKey(setup) === setupId)
+      )
+    ) {
       return { hostId, setupId }
     }
   }
@@ -168,7 +174,7 @@ export function buildSettingsProjectList(
 }
 
 function getSettingsSetupCheckoutKey(setup: ProjectHostSetup): string {
-  return `${getRepoHostIdentityForParts(setup.repoId, setup.hostId)}\0${normalizeRuntimePathForComparison(setup.path.trim())}`
+  return `${getProjectHostSetupRepoOwnerKey(setup)}\0${normalizeRuntimePathForComparison(setup.path.trim())}`
 }
 
 /**
@@ -306,18 +312,23 @@ export function getSettingsProjectHostRepo(
   if (!effectiveHostId) {
     return undefined
   }
+  const selected = selectedSetupId
+    ? settingsProject.setups.filter(
+        (setup) =>
+          setup.hostId === effectiveHostId &&
+          (setup.id === selectedSetupId || getProjectHostSetupOwnerKey(setup) === selectedSetupId)
+      )
+    : []
+  if (selectedSetupId && selected.length !== 1) {
+    return undefined
+  }
   const effectiveSetup =
-    settingsProject.setups.find(
-      (setup) => setup.id === selectedSetupId && setup.hostId === effectiveHostId
-    ) ??
-    settingsProject.setups.find((setup) => setup.hostId === effectiveHostId) ??
-    settingsProject.setups[0]
-  return (
-    repos.find(
-      (repo) =>
-        repo.id === effectiveSetup.repoId && getRepoExecutionHostId(repo) === effectiveHostId
-    ) ??
-    repos.find((repo) => repo.id === effectiveSetup.repoId) ??
-    repos.find((repo) => repo.id === settingsProject.representativeRepoId)
+    selected[0] ?? settingsProject.setups.find((setup) => setup.hostId === effectiveHostId)
+  if (!effectiveSetup) {
+    return undefined
+  }
+  const matching = repos.filter(
+    (repo) => getRepoHostIdentity(repo) === getProjectHostSetupRepoOwnerKey(effectiveSetup)
   )
+  return matching.length === 1 ? matching[0] : undefined
 }

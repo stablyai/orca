@@ -73,7 +73,8 @@ export function createRemovePendingWorktreeCreation(
       return
     }
     void cleanupFailedEphemeralVmWorkspace(removedEntry.request, {
-      deleteProjectHostSetup: (setupId) => get().deleteProjectHostSetup({ setupId }),
+      deleteProjectHostSetup: (setupId, hostId) =>
+        get().deleteProjectHostSetup({ setupId, ownerHostId: hostId }),
       cleanupRuntime: (runtimeId) => window.api.ephemeralVm.cleanup({ runtimeId }),
       reportSetupError: (error) =>
         console.error('Failed to remove cancelled provisioned-root project setup:', error),

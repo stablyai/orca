@@ -1,3 +1,4 @@
+import { getRepoHostIdentity } from '../slices/repo-host-identity'
 import type { AppState } from '../types'
 import type { SshRepoReadoption } from '../../../../shared/ssh-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
@@ -8,13 +9,13 @@ import type { SshRepoReconciliation } from '../slices/superseded-ssh-repo-rows'
 import { reconcileReadoptedSshWorktreesByRepo } from '../slices/readopted-ssh-worktree-rows'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import type { getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { RepoSlice } from './repo-state'
 import { repoWithFetchedOwner } from './owner-routing'
 import { getRuntimeTargetHostId } from '../runtime-target-host'
 import { fetchProjectHostSetupCompatibility } from '../projects/project-host-routing'
 import { mergeFetchedReposForHost } from './repo-catalog-identity'
 import {
+  getProjectHostSetupRepoOwnerKey,
   mergeProjectHostSetupCompatibility,
   projectCompatibilityFromRepos
 } from '../projects/project-compatibility-core'
@@ -73,13 +74,11 @@ export function filterSetupsForPrunedRepoRows(
   mergedRepos: readonly Repo[],
   reconciledRepos: readonly Repo[]
 ): readonly ProjectHostSetup[] {
-  const survivingOwners = new Set(
-    reconciledRepos.map((repo) => `${getRepoExecutionHostId(repo)}:${repo.id}`)
-  )
+  const survivingOwners = new Set(reconciledRepos.map(getRepoHostIdentity))
   const prunedOwners = new Set(
     mergedRepos
-      .filter((repo) => !survivingOwners.has(`${getRepoExecutionHostId(repo)}:${repo.id}`))
-      .map((repo) => `${getRepoExecutionHostId(repo)}:${repo.id}`)
+      .filter((repo) => !survivingOwners.has(getRepoHostIdentity(repo)))
+      .map(getRepoHostIdentity)
   )
   // Why: this result feeds the compat merge as `previous`, so an unconditional copy would discard
   // the identity that merge is about to try to preserve.
@@ -87,7 +86,7 @@ export function filterSetupsForPrunedRepoRows(
     return setups
   }
   const filtered = setups.filter(
-    (setup) => !setup.repoId || !prunedOwners.has(`${setup.hostId}:${setup.repoId}`)
+    (setup) => !setup.repoId || !prunedOwners.has(getProjectHostSetupRepoOwnerKey(setup))
   )
   return filtered.length === setups.length ? setups : filtered
 }

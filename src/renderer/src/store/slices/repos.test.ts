@@ -112,7 +112,14 @@ describe('repo slice runtime routing', () => {
 
     await store.getState().fetchRepos()
 
-    expect(store.getState().repos).toEqual([{ ...remoteRepo, executionHostId: 'runtime:env-1' }])
+    expect(store.getState().repos).toEqual([
+      {
+        ...remoteRepo,
+        executionHostId: 'runtime:env-1',
+        authoritativeExecutionHostId: 'local',
+        catalogOwnerHostId: 'runtime:env-1'
+      }
+    ])
     expect(store.getState().projects).toEqual([
       expect.objectContaining({ id: 'repo:remote-repo', sourceRepoIds: ['remote-repo'] })
     ])
@@ -143,7 +150,13 @@ describe('repo slice runtime routing', () => {
     await store.getState().fetchRepos()
 
     expect(store.getState().repos).toEqual([
-      { ...remoteRepo, connectionId: 'ssh-1', executionHostId: 'runtime:env-1' }
+      {
+        ...remoteRepo,
+        connectionId: 'ssh-1',
+        executionHostId: 'runtime:env-1',
+        authoritativeExecutionHostId: 'ssh:ssh-1',
+        catalogOwnerHostId: 'runtime:env-1'
+      }
     ])
   })
 
@@ -206,10 +219,19 @@ describe('repo slice runtime routing', () => {
 
     await expect(store.getState().addRepoPath('/srv/project', 'folder')).resolves.toEqual({
       ...remoteRepo,
-      executionHostId: 'runtime:env-1'
+      executionHostId: 'runtime:env-1',
+      authoritativeExecutionHostId: 'local',
+      catalogOwnerHostId: 'runtime:env-1'
     })
 
-    expect(store.getState().repos).toEqual([{ ...remoteRepo, executionHostId: 'runtime:env-1' }])
+    expect(store.getState().repos).toEqual([
+      {
+        ...remoteRepo,
+        executionHostId: 'runtime:env-1',
+        authoritativeExecutionHostId: 'local',
+        catalogOwnerHostId: 'runtime:env-1'
+      }
+    ])
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'repo.add',
@@ -347,10 +369,17 @@ describe('repo slice runtime routing', () => {
         ...setup,
         hostId: 'runtime:env-1',
         executionHostId: 'runtime:env-1',
+        authoritativeExecutionHostId: 'local',
+        catalogOwnerHostId: 'runtime:env-1',
         runtimeOwnerEnvironmentId: 'env-1',
         connectionId: null
       },
-      repo: { ...remoteRepo, executionHostId: 'runtime:env-1' }
+      repo: {
+        ...remoteRepo,
+        executionHostId: 'runtime:env-1',
+        authoritativeExecutionHostId: 'local',
+        catalogOwnerHostId: 'runtime:env-1'
+      }
     })
 
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
@@ -523,10 +552,17 @@ describe('repo slice runtime routing', () => {
         ...setup,
         hostId: 'runtime:env-1',
         executionHostId: 'runtime:env-1',
+        authoritativeExecutionHostId: 'local',
+        catalogOwnerHostId: 'runtime:env-1',
         runtimeOwnerEnvironmentId: 'env-1',
         connectionId: null
       },
-      repo: { ...clonedRepo, executionHostId: 'runtime:env-1' }
+      repo: {
+        ...clonedRepo,
+        executionHostId: 'runtime:env-1',
+        authoritativeExecutionHostId: 'local',
+        catalogOwnerHostId: 'runtime:env-1'
+      }
     })
 
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
@@ -618,13 +654,26 @@ describe('repo slice runtime routing', () => {
     const store = createTestStore()
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-      repos: [{ ...remoteRepo, executionHostId: 'runtime:env-1' }]
+      repos: [
+        {
+          ...remoteRepo,
+          executionHostId: 'runtime:env-1',
+          authoritativeExecutionHostId: 'local',
+          catalogOwnerHostId: 'runtime:env-1'
+        }
+      ]
     })
 
     await expect(store.getState().moveProjectToGroup(remoteRepo.id, 'group-1')).resolves.toBe(true)
 
     expect(store.getState().repos).toEqual([
-      { ...remoteRepo, projectGroupId: 'group-1', executionHostId: 'runtime:env-1' }
+      {
+        ...remoteRepo,
+        projectGroupId: 'group-1',
+        executionHostId: 'runtime:env-1',
+        authoritativeExecutionHostId: 'local',
+        catalogOwnerHostId: 'runtime:env-1'
+      }
     ])
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',

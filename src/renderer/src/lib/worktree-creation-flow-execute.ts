@@ -95,6 +95,7 @@ export async function executeWorktreeCreation(
         preparedRequest.linkedGiteaPR,
         preparedRequest.compareBaseRef,
         {
+          authoritativeExecutionHostId: preparedRequest.authoritativeExecutionHostId,
           executionHostId:
             preparedRequest.workspaceRunContext?.hostId ?? preparedRequest.executionHostId,
           ...(preparedRequest.nameWasGenerated ? { nameWasGenerated: true } : {}),

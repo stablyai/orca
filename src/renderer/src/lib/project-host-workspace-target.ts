@@ -1,4 +1,8 @@
 import {
+  getProjectHostSetupOwnerKey,
+  getProjectHostSetupExecutionOwnerKey
+} from '../store/projects/project-compatibility-core'
+import {
   ALL_EXECUTION_HOSTS_SCOPE,
   getRepoExecutionHostId,
   type ExecutionHostId,
@@ -40,6 +44,7 @@ type ProjectHostWorkspaceTargetInput = {
   activeRepoId?: string | null
   projectId?: string | null
   hostId?: ExecutionHostId | null
+  authoritativeExecutionHostId?: ExecutionHostId | null
   projectHostSetupId?: string | null
   focusedHostScope?: ExecutionHostScope | null
   actionableHostIds?: ReadonlySet<ExecutionHostId>
@@ -83,9 +88,17 @@ function createTarget(
   reposById: ReadonlyMap<string, readonly Repo[]>
 ): WorkspaceCreationTarget | null {
   const candidates = reposById.get(setup.repoId) ?? []
-  const repo =
-    candidates.find((candidate) => getRepoExecutionHostId(candidate) === setup.hostId) ??
-    (candidates.length === 1 ? candidates[0] : null)
+  const matching = candidates.filter(
+    (candidate) =>
+      getRepoExecutionHostId(candidate) === setup.hostId &&
+      (!setup.authoritativeExecutionHostId ||
+        (candidate.authoritativeExecutionHostId ?? getRepoExecutionHostId(candidate)) ===
+          setup.authoritativeExecutionHostId) &&
+      (!setup.catalogOwnerHostId ||
+        (candidate.catalogOwnerHostId ?? getRepoExecutionHostId(candidate)) ===
+          setup.catalogOwnerHostId)
+  )
+  const repo = matching.length === 1 ? matching[0] : null
   if (!repo) {
     return null
   }
@@ -138,7 +151,16 @@ export function resolveWorkspaceCreationTarget(
     : allSetups
 
   if (projectHostSetupId) {
-    const setup = allSetups.find((entry) => entry.id === projectHostSetupId)
+    const matching = allSetups.filter(
+      (entry) =>
+        (entry.id === projectHostSetupId ||
+          getProjectHostSetupOwnerKey(entry) === projectHostSetupId) &&
+        (!hostId || entry.hostId === hostId) &&
+        (!input.authoritativeExecutionHostId ||
+          (entry.authoritativeExecutionHostId ?? entry.hostId) ===
+            input.authoritativeExecutionHostId)
+    )
+    const setup = matching.length === 1 ? matching[0] : undefined
     if (!setup) {
       return { status: 'unavailable', reason: 'setup-not-found' }
     }
@@ -158,7 +180,10 @@ export function resolveWorkspaceCreationTarget(
       findReadySetupTarget(
         setups,
         reposById,
-        (entry) => entry.projectId === setup.projectId && entry.hostId === setup.hostId
+        (entry) =>
+          entry.projectId === setup.projectId &&
+          getProjectHostSetupExecutionOwnerKey(entry) ===
+            getProjectHostSetupExecutionOwnerKey(setup)
       ) ?? createTarget(setup, reposById)
     if (canonical) {
       return { status: 'ready', target: canonical }

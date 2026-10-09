@@ -1,3 +1,4 @@
+import { getProjectHostSetupOwnerKey } from '../../store/projects/project-compatibility-core'
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Download, FolderOpen } from 'lucide-react'
 import {
@@ -168,7 +169,7 @@ function SetProjectLocationDialogBody({
         displayName: projectName
       })
       if (result && !abandoned.current) {
-        onReady(result.setup.id)
+        onReady(getProjectHostSetupOwnerKey(result.setup))
       }
     } finally {
       setIsSubmitting(false)
@@ -189,7 +190,7 @@ function SetProjectLocationDialogBody({
         displayName: projectName
       })
       if (result && !abandoned.current) {
-        onReady(result.setup.id)
+        onReady(getProjectHostSetupOwnerKey(result.setup))
       }
     } finally {
       setIsSubmitting(false)

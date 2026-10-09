@@ -92,8 +92,17 @@ export async function resolveProjectCreateTarget(
     throw error
   }
   const ready = result.result.setups.filter((candidate) => candidate.setupState === 'ready')
+  const named = ready.filter(
+    (candidate) =>
+      candidate.id === projectHostSetupId &&
+      (!host || hostFilterMatchesHostId(host, candidate.hostId))
+  )
+  const exact = host ? named.filter((candidate) => candidate.hostId === host.id) : named
+  const matching = exact.length ? exact : named
   const setup = projectHostSetupId
-    ? ready.find((candidate) => candidate.id === projectHostSetupId)
+    ? matching.length === 1
+      ? matching[0]
+      : undefined
     : findReadySetupOnHost(ready, projectId, host)
   if (!setup) {
     throw new RuntimeClientError(

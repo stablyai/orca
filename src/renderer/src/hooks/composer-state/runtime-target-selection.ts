@@ -1,3 +1,4 @@
+import { getProjectHostSetupOwnerKey } from '../../store/projects/project-compatibility-core'
 import type { ComposerRuntimeTargetSelectionInput } from './composer-target-input-contracts'
 
 import { useEffect, useMemo, useRef } from 'react'
@@ -164,7 +165,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     ? `project-group:${selectedProjectGroup.id}`
     : selectedRepoProjectId
 
-  const selectedProjectHostSetupId =
+  const selectedPublishedProjectHostSetupId =
     !selectedProjectGroup && selectedWorkspaceTarget.status === 'ready'
       ? selectedWorkspaceTarget.target.projectHostSetupId
       : null
@@ -179,6 +180,14 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
       }),
     [eligibleRepos, hostOptions, projectHostSetups, selectedRepoProjectId]
   )
+
+  const selectedProjectHostSetupId =
+    selectedWorkspaceTarget.status === 'ready' &&
+    projectHostSetupOptions.some(
+      (option) => option.id === getProjectHostSetupOwnerKey(selectedWorkspaceTarget.target.setup)
+    )
+      ? getProjectHostSetupOwnerKey(selectedWorkspaceTarget.target.setup)
+      : selectedPublishedProjectHostSetupId
 
   const projectOptions = useMemo(
     () =>

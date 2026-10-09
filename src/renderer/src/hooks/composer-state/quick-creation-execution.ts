@@ -84,7 +84,8 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
       requestedAgent: TuiAgent | null,
       workspaceNameSeed: string,
       workspaceRunContext: WorktreeCreationRequest['workspaceRunContext'],
-      repoId: string
+      repoId: string,
+      authoritativeExecutionHostId?: WorktreeCreationRequest['authoritativeExecutionHostId']
     ): Promise<void> => {
       const prepared = await prepareQuickSubmit(
         smartGitHubResolution,
@@ -192,6 +193,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
 
       const request = buildQuickCreationRequest({
         repoId,
+        authoritativeExecutionHostId,
         ephemeralVmRecipe,
         indeterminateProgress:
           Boolean(activeEphemeralVmRecipeId) ||

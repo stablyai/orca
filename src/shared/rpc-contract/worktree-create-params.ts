@@ -17,11 +17,13 @@ import {
   AutomationWorkspaceProvenanceRequest,
   CliWorkspaceProvenanceRequest,
   OptionalTuiAgent,
+  OptionalExecutionHostId,
   assertLinkedWorkItemSourceContextMatch
 } from './worktree-params'
 
 export const WorktreeCreate = z
   .object({
+    executionHostId: OptionalExecutionHostId,
     repo: z
       .unknown()
       .transform((v) => (typeof v === 'string' ? v : ''))

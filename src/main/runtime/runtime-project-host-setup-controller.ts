@@ -13,6 +13,7 @@ import type {
   ProjectUpdateArgs
 } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
+import { getRepoHostIdentityForParts } from '../../shared/repo-host-identity'
 import {
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost,
@@ -99,7 +100,11 @@ export class RuntimeProjectHostSetupController {
       throw new Error('runtime_unavailable')
     }
     const kind = args.kind === 'folder' ? 'folder' : 'git'
-    const knownRepoIds = new Set(this.deps.listRepos().map((repo) => repo.id))
+    const knownRepoOwners = new Set(
+      this.deps
+        .listRepos()
+        .map((repo) => getRepoHostIdentityForParts(repo.id, getRepoExecutionHostId(repo)))
+    )
     // Why route rather than refuse: this process owns the SSH connection, and its own IPC handler
     // already registers `ssh:*` hosts correctly. Refusing here only made the CLI and runtime RPC
     // disagree with the desktop app about what the same process can do.
@@ -112,17 +117,25 @@ export class RuntimeProjectHostSetupController {
           kind
         })
       : await this.deps.addRepo(args.path, kind, args.hostId)
-    return this.completeSetup(args, repo, !knownRepoIds.has(repo.id))
+    return this.completeSetup(
+      args,
+      repo,
+      !knownRepoOwners.has(getRepoHostIdentityForParts(repo.id, getRepoExecutionHostId(repo)))
+    )
   }
 
   async setupClone(args: ProjectHostSetupCloneArgs): Promise<ProjectHostSetupResult> {
     assertCloneHostIsSupported(args.hostId)
-    const knownRepoIds = new Set(this.deps.listRepos().map((repo) => repo.id))
+    const knownRepoOwners = new Set(
+      this.deps
+        .listRepos()
+        .map((repo) => getRepoHostIdentityForParts(repo.id, getRepoExecutionHostId(repo)))
+    )
     const repo = await this.deps.cloneRepo(args.url, args.destination, args.hostId)
     return this.completeSetup(
       { ...args, path: repo.path, kind: 'git', setupMethod: 'cloned' },
       repo,
-      !knownRepoIds.has(repo.id)
+      !knownRepoOwners.has(getRepoHostIdentityForParts(repo.id, getRepoExecutionHostId(repo)))
     )
   }
 
@@ -192,13 +205,17 @@ export class RuntimeProjectHostSetupController {
       if (!identity || getProjectIdForProviderIdentity(identity) !== args.projectId) {
         throw new Error('Imported folder does not match the selected project identity.')
       }
-      const updated = store.updateRepo(repo.id, {
-        upstream: {
-          owner: identity.owner,
-          repo: identity.repo,
-          ...(identity.host ? { host: identity.host } : {})
-        }
-      })
+      const updated = store.updateRepo(
+        repo.id,
+        {
+          upstream: {
+            owner: identity.owner,
+            repo: identity.repo,
+            ...(identity.host ? { host: identity.host } : {})
+          }
+        },
+        getRepoExecutionHostId(repo)
+      )
       if (!updated) {
         throw new Error(`Project setup repo disappeared before it could be linked: ${repo.id}`)
       }
@@ -206,7 +223,11 @@ export class RuntimeProjectHostSetupController {
       setup = getProjectHostSetupForRepo(this.listSetups(), repo)
     }
     const setupMethod = args.setupMethod ?? 'imported-existing-folder'
-    const updated = store.updateRepo(repo.id, { projectHostSetupMethod: setupMethod })
+    const updated = store.updateRepo(
+      repo.id,
+      { projectHostSetupMethod: setupMethod },
+      getRepoExecutionHostId(repo)
+    )
     if (!updated) {
       throw new Error(
         `Project setup repo disappeared before setup metadata could be linked: ${repo.id}`

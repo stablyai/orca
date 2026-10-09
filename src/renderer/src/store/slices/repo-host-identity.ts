@@ -9,10 +9,21 @@ import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identi
 
 export { getRepoHostIdentityForParts }
 
-type RepoIdentityParts = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
+type RepoIdentityParts = Pick<
+  Repo,
+  'id' | 'connectionId' | 'executionHostId' | 'authoritativeExecutionHostId' | 'catalogOwnerHostId'
+>
 
 export function getRepoHostIdentity(repo: RepoIdentityParts): string {
-  return getRepoHostIdentityForParts(repo.id, getRepoExecutionHostId(repo))
+  const hostId = getRepoExecutionHostId(repo)
+  return (repo.authoritativeExecutionHostId && repo.authoritativeExecutionHostId !== hostId) ||
+    (repo.catalogOwnerHostId && repo.catalogOwnerHostId !== hostId)
+    ? JSON.stringify([
+        repo.catalogOwnerHostId ?? hostId,
+        repo.authoritativeExecutionHostId ?? hostId,
+        repo.id
+      ])
+    : getRepoHostIdentityForParts(repo.id, hostId)
 }
 
 export function repoMatchesHostIdentity(

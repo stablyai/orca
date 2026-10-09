@@ -167,7 +167,7 @@ describe('SSH repo host reconciliation', () => {
     })
 
     await store.getState().fetchReposForAllHosts({ remoteHosts: 'skip' })
-    expect(store.getState().repos).toEqual([staleRepo, liveRepo])
+    expect(store.getState().repos).toEqual([liveRepo])
 
     store.getState().recordSshRepoReadoptions([readoption])
 

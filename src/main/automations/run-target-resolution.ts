@@ -93,9 +93,13 @@ export function resolveAutomationRunTarget(
     return { ok: false, error: CAPTURED_HOST_REFUSALS[hostIssue] }
   }
 
-  const setup = store
+  const setups = store
     .getProjectHostSetups()
-    .find((candidate) => candidate.id === context.projectHostSetupId)
+    .filter(
+      (candidate) =>
+        candidate.id === context.projectHostSetupId && candidate.hostId === context.hostId
+    )
+  const setup = setups.length === 1 ? setups[0] : undefined
   if (!setup) {
     return {
       ok: false,
@@ -118,7 +122,13 @@ export function resolveAutomationRunTarget(
     }
   }
 
-  const repo = store.getRepo(context.repoId)
+  const repos = store
+    .getRepos()
+    .filter(
+      (candidate) =>
+        candidate.id === context.repoId && getRepoExecutionHostId(candidate) === context.hostId
+    )
+  const repo = repos.length === 1 ? repos[0] : undefined
   if (!repo) {
     return {
       ok: false,

@@ -121,6 +121,7 @@ describe('orca cli worktree awareness', () => {
           }
         ]
       }),
+      okFixture('status', { capabilities: ['worktree.create.execution-host.v1'] }),
       okFixture('req_create', {
         worktree: buildWorktree('/srv/orca/feature', 'feature', 'abc', 'repo-gpu'),
         lineage: null,
@@ -147,8 +148,9 @@ describe('orca cli worktree awareness', () => {
 
     expect(runtimeClientConstructorMock).toHaveBeenCalledWith(null, 'gpu')
     expect(callMock).toHaveBeenNthCalledWith(1, 'projectHostSetup.list')
-    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+    expect(callMock).toHaveBeenNthCalledWith(3, 'worktree.create', {
       repo: 'id:repo-gpu',
+      executionHostId: 'runtime:gpu',
       name: 'feature',
       displayName: 'feature',
       displayNameKind: 'user',
@@ -183,6 +185,7 @@ describe('orca cli worktree awareness', () => {
           }
         ]
       }),
+      okFixture('status', { capabilities: ['worktree.create.execution-host.v1'] }),
       okFixture('req_create', {
         worktree: buildWorktree('/srv/orca/feature', 'feature', 'abc', 'repo-gpu'),
         lineage: null,
@@ -206,10 +209,52 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       'worktree.create',
-      expect.objectContaining({ repo: 'id:repo-gpu' })
+      expect.objectContaining({ repo: 'id:repo-gpu', executionHostId: 'runtime:gpu' })
     )
+  })
+
+  it('refuses selected project creation on a peer that would strip execution ownership', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('setups', {
+        setups: [
+          {
+            id: 'same-id',
+            projectId: 'project',
+            hostId: 'ssh:private',
+            repoId: 'same-id',
+            path: '/receiver',
+            displayName: 'SSH',
+            setupState: 'ready'
+          }
+        ]
+      }),
+      okFixture('status', { capabilities: [] })
+    )
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+    await main(
+      [
+        'worktree',
+        'create',
+        '--project-host-setup',
+        'same-id',
+        '--name',
+        'selected',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+    expect(callMock.mock.calls.map(([method]) => method)).toEqual([
+      'projectHostSetup.list',
+      'status.get'
+    ])
+    expect([...error.mock.calls, ...log.mock.calls].flat().join('\n')).toContain('Update Orca')
+    process.exitCode = priorExitCode
   })
 
   it('rejects mixing repo and project target flags on worktree.create', async () => {

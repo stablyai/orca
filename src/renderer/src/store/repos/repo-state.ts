@@ -183,10 +183,10 @@ export type RepoSlice = {
     args: ProjectHostSetupCreateArgs
   ) => Promise<ProjectHostSetupCreateResult | null>
   updateProjectHostSetup: (
-    args: ProjectHostSetupUpdateArgs
+    args: ProjectHostSetupUpdateArgs & { owner?: ProjectHostSetup; ownerHostId?: ExecutionHostId }
   ) => Promise<ProjectHostSetupUpdateResult | null>
   deleteProjectHostSetup: (
-    args: ProjectHostSetupDeleteArgs
+    args: ProjectHostSetupDeleteArgs & { owner?: ProjectHostSetup; ownerHostId?: ExecutionHostId }
   ) => Promise<ProjectHostSetupDeleteResult | null>
   setupProjectClone: (args: ProjectHostSetupCloneArgs) => Promise<ProjectHostSetupResult | null>
   addNonGitFolder: (path: string, options?: AddRepoPathOptions) => Promise<Repo | null>

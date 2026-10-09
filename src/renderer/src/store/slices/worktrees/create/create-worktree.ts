@@ -1,6 +1,9 @@
 import { runtimeTargetForExecutionHostId } from '@/runtime/runtime-client-target'
 import { repoHostId } from '../listing/worktree-host-ownership'
-import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  toRuntimeExecutionHostId
+} from '../../../../../../shared/execution-host'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { CreateWorktreeResult } from '../../../../../../shared/worktree/create-types'
@@ -15,7 +18,10 @@ import {
   callRuntimeRpc,
   getActiveRuntimeTarget
 } from '../../../../runtime/runtime-rpc-client'
-import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
+import {
+  WORKTREE_CREATE_EXECUTION_HOST_RUNTIME_CAPABILITY,
+  WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY
+} from '../../../../../../shared/protocol-version'
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
 import { requestWorktreeBaseFallbackNotice } from '@/components/worktree-base-fallback-notice'
 import { showLocalBaseRefRefreshToast } from './local-base-ref-refresh-toast'
@@ -172,15 +178,43 @@ export function createCreateWorktree(
       }
       // Why: manual sort is user-authored order; stamp new workspaces at the top rather than relying on sortOrder fallback.
       const manualOrder = get().sortBy === 'manual' ? Date.now() : undefined
-      // Direct SSH still uses desktop IPC; paired runtimes use their captured environment.
+      const owners =
+        options?.executionHostId === undefined
+          ? []
+          : get().repos.filter(
+              (repo) =>
+                repo.id === repoId &&
+                getRepoExecutionHostId(repo) === options?.executionHostId &&
+                (options?.authoritativeExecutionHostId === undefined ||
+                  (repo.authoritativeExecutionHostId ?? getRepoExecutionHostId(repo)) ===
+                    options?.authoritativeExecutionHostId)
+            )
+      if (options?.executionHostId !== undefined && owners.length !== 1) {
+        throw new Error('Selected workspace execution host is missing or ambiguous.')
+      }
+      const capturedRepo = owners[0]
+      // Publishing ownership chooses the transport; the exact raw stamp stays in the request.
       const target = options?.executionHostId
-        ? (runtimeTargetForExecutionHostId(options.executionHostId) ?? { kind: 'local' as const })
+        ? (runtimeTargetForExecutionHostId(
+            capturedRepo?.catalogOwnerHostId ?? options.executionHostId
+          ) ?? { kind: 'local' as const })
         : getActiveRuntimeTarget(settingsForRepoOwner(get(), repoId))
       const creationHostId =
         options?.executionHostId ??
         (target.kind === 'environment'
           ? toRuntimeExecutionHostId(target.environmentId)
           : repoHostId(get(), repoId))
+      if (options?.executionHostId !== undefined) {
+        request.executionHostId =
+          capturedRepo.authoritativeExecutionHostId ?? getRepoExecutionHostId(capturedRepo)
+        if (target.kind === 'environment') {
+          await assertRuntimeEnvironmentCapability(
+            target.environmentId,
+            WORKTREE_CREATE_EXECUTION_HOST_RUNTIME_CAPABILITY,
+            'Update Orca on the server to safely create a workspace on its selected execution host.'
+          )
+        }
+      }
       if (
         target.kind === 'environment' &&
         (options?.linkedWorkItem?.provider === 'jira' ||

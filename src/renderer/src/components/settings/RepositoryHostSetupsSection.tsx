@@ -11,6 +11,11 @@ import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { useAppStore } from '../../store'
 import { getProjectHostSetupProjectionFromState } from '../../store/selectors'
+import {
+  getProjectHostSetupOwnerKey,
+  getProjectHostSetupExecutionOwnerKey
+} from '../../store/projects/project-compatibility-core'
+import { getProjectHostSetupForRepo } from '../../../../shared/project-host-setup-lookup'
 import { cn } from '../../lib/utils'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
@@ -47,12 +52,8 @@ function setupsByOwnedExecutionHost(
 ): ProjectHostSetup[] {
   const byHost = new Map<string, ProjectHostSetup>()
   for (const setup of setups) {
-    const key = JSON.stringify([
-      setup.hostId,
-      setup.executionHostId ?? setup.hostId,
-      setup.runtimeOwnerEnvironmentId ?? null
-    ])
-    if (!byHost.has(key) || setup.id === selectedSetupId) {
+    const key = getProjectHostSetupExecutionOwnerKey(setup)
+    if (!byHost.has(key) || getProjectHostSetupOwnerKey(setup) === selectedSetupId) {
       byHost.set(key, setup)
     }
   }
@@ -110,14 +111,14 @@ export function RepositoryHostSetupsSection({
   const projectHostSetupProjection = useAppStore((state) =>
     getProjectHostSetupProjectionFromState(state)
   )
-  const repoProjectHostSetup = projectHostSetupProjection.setups.find(
-    (setup) => setup.repoId === repo.id
-  )
+  const repoProjectHostSetup = getProjectHostSetupForRepo(projectHostSetupProjection.setups, repo)
   const selectedProjectHostSetup =
     projectHostSetupProjection.setups.find(
       (setup) =>
-        setup.id === selectedProjectSetupId &&
+        (setup.id === selectedProjectSetupId ||
+          getProjectHostSetupOwnerKey(setup) === selectedProjectSetupId) &&
         setup.repoId === repo.id &&
+        getProjectHostSetupOwnerKey(setup) === getProjectHostSetupOwnerKey(repoProjectHostSetup) &&
         setup.projectId === repoProjectHostSetup?.projectId
     ) ?? repoProjectHostSetup
   const allProjectHostSetups = selectedProjectHostSetup
@@ -132,12 +133,12 @@ export function RepositoryHostSetupsSection({
       (setup) =>
         !settingsEntryRepoIds || !setup.repoId.trim() || settingsEntryRepoIds.has(setup.repoId)
     ),
-    selectedProjectHostSetup?.id ?? ''
+    selectedProjectHostSetup ? getProjectHostSetupOwnerKey(selectedProjectHostSetup) : ''
   )
   const openableProjectHostSetups = projectHostSetups.filter((setup) => setup.repoId.trim())
   const switchableProjectHostSetups = setupsByOwnedExecutionHost(
     openableProjectHostSetups,
-    selectedProjectHostSetup?.id ?? ''
+    selectedProjectHostSetup ? getProjectHostSetupOwnerKey(selectedProjectHostSetup) : ''
   )
   const setupHostOptions = buildSetupHostOptions({
     projectHostSetups: allProjectHostSetups,
@@ -156,7 +157,11 @@ export function RepositoryHostSetupsSection({
   }
   const selectSetup = (setup: ProjectHostSetup) => {
     if (selectionKey) {
-      setSettingsProjectHostSelection(selectionKey, setup.hostId, setup.id)
+      setSettingsProjectHostSelection(
+        selectionKey,
+        setup.hostId,
+        getProjectHostSetupOwnerKey(setup)
+      )
     }
   }
   if (
@@ -188,13 +193,20 @@ export function RepositoryHostSetupsSection({
                 {translate('auto.components.settings.RepositoryPane.viewingHost', 'Viewing host')}
               </span>
               <Select
-                value={selectedProjectHostSetup?.id}
+                value={
+                  selectedProjectHostSetup
+                    ? getProjectHostSetupOwnerKey(selectedProjectHostSetup)
+                    : undefined
+                }
                 onValueChange={(setupId) => {
-                  if (setupId === selectedProjectHostSetup?.id) {
+                  if (
+                    selectedProjectHostSetup &&
+                    setupId === getProjectHostSetupOwnerKey(selectedProjectHostSetup)
+                  ) {
                     return
                   }
                   const setup = switchableProjectHostSetups.find(
-                    (candidate) => candidate.id === setupId
+                    (candidate) => getProjectHostSetupOwnerKey(candidate) === setupId
                   )
                   if (setup) {
                     selectSetup(setup)
@@ -206,7 +218,10 @@ export function RepositoryHostSetupsSection({
                 </SelectTrigger>
                 <SelectContent>
                   {switchableProjectHostSetups.map((setup) => (
-                    <SelectItem key={setup.id} value={setup.id}>
+                    <SelectItem
+                      key={getProjectHostSetupOwnerKey(setup)}
+                      value={getProjectHostSetupOwnerKey(setup)}
+                    >
                       <span className="block min-w-0 truncate">
                         {hostOptionById.get(setup.executionHostId ?? setup.hostId)?.label ??
                           getExecutionHostLabel(setup.executionHostId ?? setup.hostId)}
@@ -315,12 +330,15 @@ export function RepositoryHostSetupsSection({
                   }
                 )
               : (hostOptionById.get(setup.hostId)?.label ?? getExecutionHostLabel(setup.hostId))
-          const isCurrentSetup = setup.id === selectedProjectHostSetup?.id
+          const setupKey = getProjectHostSetupOwnerKey(setup)
+          const isCurrentSetup =
+            selectedProjectHostSetup &&
+            setupKey === getProjectHostSetupOwnerKey(selectedProjectHostSetup)
           const canOpenSetup = setup.repoId.trim().length > 0
-          const canRemoveSetup = !canOpenSetup && deletingSetupId !== setup.id
+          const canRemoveSetup = !canOpenSetup && deletingSetupId !== setupKey
           return (
             <div
-              key={setup.id}
+              key={setupKey}
               data-current={isCurrentSetup ? 'true' : undefined}
               className={cn(
                 'flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors',
@@ -376,8 +394,8 @@ export function RepositoryHostSetupsSection({
                   variant="outline"
                   size="sm"
                   onClick={async () => {
-                    setDeletingSetupId(setup.id)
-                    await deleteProjectHostSetup({ setupId: setup.id })
+                    setDeletingSetupId(setupKey)
+                    await deleteProjectHostSetup({ setupId: setup.id, owner: setup })
                     setDeletingSetupId(null)
                   }}
                 >

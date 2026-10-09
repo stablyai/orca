@@ -56,6 +56,10 @@ export type ProjectHostSetup = {
   executionHostId?: ExecutionHostId | null
   /** Renderer projection of the paired runtime that owns this setup's transport. */
   runtimeOwnerEnvironmentId?: string
+  /** Exact host stamp before renderer transport adoption. */
+  authoritativeExecutionHostId?: ExecutionHostId
+  /** Renderer catalog publisher, separate from the execution host. */
+  catalogOwnerHostId?: ExecutionHostId
   worktreeBasePath?: string
   hookSettings?: RepoHookSettings
   gitUsername?: string
@@ -100,6 +104,7 @@ export type ProjectHostSetupCloneArgs = {
 
 export type ProjectHostSetupUpdateArgs = {
   setupId: string
+  executionHostId?: ExecutionHostId
   updates: Partial<
     Pick<
       ProjectHostSetup,
@@ -116,6 +121,7 @@ export type ProjectHostSetupUpdateArgs = {
 
 export type ProjectHostSetupDeleteArgs = {
   setupId: string
+  executionHostId?: ExecutionHostId
 }
 
 export type ProjectHostSetupResult = {

@@ -143,7 +143,11 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
           requestedAgent,
           workspaceNameSeed,
           workspaceRunContext,
-          repoId
+          repoId,
+          selectedWorkspaceTarget.status === 'ready'
+            ? (selectedWorkspaceTarget.target.setup.authoritativeExecutionHostId ??
+                selectedWorkspaceTarget.target.setup.hostId)
+            : undefined
         )
       } catch (error) {
         if (isSubmissionCancelled()) {

@@ -13,6 +13,7 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
 import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../../shared/execution-host'
 import { normalizeProjectRuntimePreference } from '../../../shared/project-execution-runtime'
+import { findProjectHostSetup } from '../../../shared/project-host-setup-lookup'
 import { makeProjectHostSetupId } from './project-host-compatibility'
 import { repoGitUsernameCacheKey } from './repo-hydration'
 
@@ -147,7 +148,7 @@ export class ProjectHostPersistenceOperations {
   }
 
   updateProjectHostSetup(args: ProjectHostSetupUpdateArgs): ProjectHostSetupUpdateResult | null {
-    const setup = this.state.projectHostSetups.find((entry) => entry.id === args.setupId)
+    const setup = findProjectHostSetup(this.state.projectHostSetups, args)
     if (!setup) {
       return null
     }
@@ -156,7 +157,9 @@ export class ProjectHostPersistenceOperations {
       return null
     }
     const repo = setup.repoId
-      ? this.state.repos.find((entry) => entry.id === setup.repoId)
+      ? this.state.repos.find(
+          (entry) => entry.id === setup.repoId && getRepoExecutionHostId(entry) === setup.hostId
+        )
       : undefined
     if (repo) {
       const updated = this.updateRepoBackedProjectHostSetup(setup, repo, args.updates)
@@ -172,7 +175,7 @@ export class ProjectHostPersistenceOperations {
   }
 
   deleteProjectHostSetup(args: ProjectHostSetupDeleteArgs): ProjectHostSetupDeleteResult | null {
-    const setup = this.state.projectHostSetups.find((entry) => entry.id === args.setupId)
+    const setup = findProjectHostSetup(this.state.projectHostSetups, args)
     if (!setup) {
       return null
     }
@@ -192,9 +195,7 @@ export class ProjectHostPersistenceOperations {
       this.removeProjectForHost(repo.id, setup.hostId)
       return { project, setup, repo: this.hydrateRepo(repo) }
     }
-    this.state.projectHostSetups = this.state.projectHostSetups.filter(
-      (entry) => entry.id !== setup.id
-    )
+    this.state.projectHostSetups = this.state.projectHostSetups.filter((entry) => entry !== setup)
     this.scheduleSave()
     return { project, setup }
   }

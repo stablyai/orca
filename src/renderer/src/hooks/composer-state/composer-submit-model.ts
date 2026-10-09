@@ -46,7 +46,8 @@ export type ComposerSubmitModel = {
     requestedAgent: TuiAgent | null,
     workspaceNameSeed: string,
     workspaceRunContext: WorktreeCreationRequest['workspaceRunContext'],
-    repoId: string
+    repoId: string,
+    authoritativeExecutionHostId?: WorktreeCreationRequest['authoritativeExecutionHostId']
   ) => Promise<void>
   prepareQuickSubmit: (
     resolution: PendingSmartGitHubSubmitResolution,

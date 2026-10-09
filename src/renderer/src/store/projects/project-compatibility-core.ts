@@ -1,3 +1,5 @@
+import { getRepoHostIdentity } from '../slices/repo-host-identity'
+import { getRepoCatalogOwnerHostId } from './project-catalog-owner'
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import {
@@ -108,7 +110,7 @@ export function getSourceRepoIdsOutsideHost(
 ): string[] {
   return project.sourceRepoIds.filter((repoId) => {
     const repos = reposById.get(repoId) ?? []
-    return repos.some((repo) => getRepoExecutionHostId(repo) !== hostId)
+    return repos.some((repo) => getRepoCatalogOwnerHostId(repo) !== hostId)
   })
 }
 
@@ -208,14 +210,30 @@ export function mergeProjectHostSetupCompatibility(
 }
 
 export function getRepoDerivedSetupKey(setup: ProjectHostSetup): string {
-  // Why: authoritative routing provenance may be absent from the repo-derived fallback it replaces.
-  return JSON.stringify([setup.hostId, setup.repoId || setup.id])
+  return getProjectHostSetupRepoOwnerKey(setup)
+}
+
+export function getProjectHostSetupRepoOwnerKey(setup: ProjectHostSetup): string {
+  return getRepoHostIdentity({
+    id: setup.repoId,
+    executionHostId: setup.hostId,
+    authoritativeExecutionHostId: setup.authoritativeExecutionHostId,
+    catalogOwnerHostId: setup.catalogOwnerHostId
+  })
+}
+
+export function getProjectHostSetupExecutionOwnerKey(setup: ProjectHostSetup): string {
+  return JSON.stringify([
+    setup.catalogOwnerHostId ?? setup.hostId,
+    setup.authoritativeExecutionHostId ?? setup.executionHostId ?? setup.hostId,
+    setup.runtimeOwnerEnvironmentId ?? null
+  ])
 }
 
 export function getProjectHostSetupOwnerKey(setup: ProjectHostSetup): string {
   return JSON.stringify([
-    setup.hostId,
-    setup.executionHostId ?? setup.hostId,
+    setup.catalogOwnerHostId ?? setup.hostId,
+    setup.authoritativeExecutionHostId ?? setup.executionHostId ?? setup.hostId,
     setup.runtimeOwnerEnvironmentId ?? null,
     setup.repoId || setup.id
   ])

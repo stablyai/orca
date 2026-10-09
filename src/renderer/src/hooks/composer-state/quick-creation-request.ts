@@ -10,6 +10,7 @@ import { toFolderWorkspaceLinkedTask } from '@/components/sidebar/folder-workspa
 
 export type QuickCreationRequestInput = {
   repoId: string
+  authoritativeExecutionHostId?: WorktreeCreationRequest['authoritativeExecutionHostId']
   ephemeralVmRecipe: WorktreeCreationRequest['ephemeralVmRecipe']
   indeterminateProgress: boolean
   taskSourceContext: TaskSourceContext | null
@@ -58,6 +59,9 @@ export function buildQuickCreationRequest(
 ): WorktreeCreationRequest {
   return {
     repoId: input.repoId,
+    ...(input.authoritativeExecutionHostId
+      ? { authoritativeExecutionHostId: input.authoritativeExecutionHostId }
+      : {}),
     ...(input.ephemeralVmRecipe ? { ephemeralVmRecipe: input.ephemeralVmRecipe } : {}),
     worktreeCreateProgressMode: input.indeterminateProgress ? 'indeterminate' : 'stepped',
     ...(input.taskSourceContext ? { taskSourceContext: input.taskSourceContext } : {}),

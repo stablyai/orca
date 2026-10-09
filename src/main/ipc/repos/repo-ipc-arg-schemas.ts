@@ -1,3 +1,4 @@
+import { OptionalExecutionHostId } from '../../../shared/rpc-contract/worktree-params'
 import { z } from 'zod'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { TaskSourceContextSchema } from '../../../shared/task-source-context-schema'
@@ -89,6 +90,7 @@ export const ProjectHostSetupCreateIpcArgs = z.object({
 })
 
 export const ProjectHostSetupUpdateIpcArgs = z.object({
+  executionHostId: OptionalExecutionHostId,
   setupId: z.string().min(1),
   updates: z.object({
     displayName: z.string().optional(),
@@ -104,6 +106,7 @@ export const ProjectHostSetupUpdateIpcArgs = z.object({
 })
 
 export const ProjectHostSetupDeleteIpcArgs = z.object({
+  executionHostId: OptionalExecutionHostId,
   setupId: z.string().min(1)
 })
 

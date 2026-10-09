@@ -75,6 +75,36 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('requires host-qualified setup support before forwarding --host', async () => {
+    queueFixtures(callMock, okFixture('status', { capabilities: ['project-host-setup.v1'] }))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    await main(
+      ['project', 'setup-delete', '--setup', 'dup', '--host', 'local', '--json'],
+      '/tmp/repo'
+    )
+    expect(callMock).toHaveBeenCalledWith('status.get')
+    expect(callMock).not.toHaveBeenCalledWith('projectHostSetup.delete', expect.anything())
+  })
+
+  it('forwards an exact host qualifier to a supporting runtime', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('status', { capabilities: ['project-host-setup.execution-host.v1'] }),
+      okFixture('delete', {
+        result: { project: { id: 'p' }, setup: { id: 'dup', hostId: 'local' } }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await main(
+      ['project', 'setup-delete', '--setup', 'dup', '--host', 'local', '--json'],
+      '/tmp/repo'
+    )
+    expect(callMock).toHaveBeenCalledWith('projectHostSetup.delete', {
+      setupId: 'dup',
+      executionHostId: 'local'
+    })
+  })
+
   it('lists projects through the project-first runtime API', async () => {
     queueFixtures(
       callMock,
