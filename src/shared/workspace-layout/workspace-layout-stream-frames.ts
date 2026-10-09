@@ -10,7 +10,8 @@ export type WorkspaceLayoutEvent =
 export type WorkspaceLayoutSnapshotEntry = { key: string; layout: PublishedWorkspaceLayout }
 
 export type WorkspaceLayoutStreamFrame =
-  | { type: 'snapshot'; subscriptionId: string; workspaces: WorkspaceLayoutSnapshotEntry[] }
+  // subscriptionId names the stream for `layout.unsubscribe`; a reader must not need it.
+  | { type: 'snapshot'; subscriptionId?: string; workspaces: WorkspaceLayoutSnapshotEntry[] }
   | WorkspaceLayoutEvent
   | { type: 'end' }
 
@@ -45,11 +46,12 @@ export function readWorkspaceLayoutStreamFrame(value: unknown): WorkspaceLayoutS
   }
   switch (value.type) {
     case 'snapshot':
-      return isKey(value.subscriptionId) &&
-        Array.isArray(value.workspaces) &&
-        value.workspaces.every(isSnapshotEntry)
+      if (!Array.isArray(value.workspaces) || !value.workspaces.every(isSnapshotEntry)) {
+        return null
+      }
+      return isKey(value.subscriptionId)
         ? { type: 'snapshot', subscriptionId: value.subscriptionId, workspaces: value.workspaces }
-        : null
+        : { type: 'snapshot', workspaces: value.workspaces }
     case 'workspace':
       return isKey(value.key) && isPublishedWorkspaceLayout(value.layout)
         ? { type: 'workspace', key: value.key, layout: value.layout }

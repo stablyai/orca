@@ -2,6 +2,7 @@
 // (design 3.3). `applyFromRuntime` is its only writer; nothing edits, merges or saves it.
 // Not wired to the store yet: the switch makes it a slice and derives today's fields from it.
 
+import { stableJson } from '../../../shared/workspace-layout/workspace-layout-load-report'
 import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-published'
 import type { WorkspaceLayoutStreamFrame } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
 
@@ -9,14 +10,18 @@ export type WorkspaceLayoutCache = Readonly<Record<string, PublishedWorkspaceLay
 
 export const EMPTY_WORKSPACE_LAYOUT_CACHE: WorkspaceLayoutCache = {}
 
-/** Replaces one workspace's layout with the runtime's, or drops it for null. */
+/** Replaces one workspace's layout with the runtime's, or drops it for null. An equal layout keeps
+ *  the cached object, so a reconnect snapshot with unchanged data re-renders nothing. */
 export function applyFromRuntime(
   cache: WorkspaceLayoutCache,
   key: string,
   layout: PublishedWorkspaceLayout | null
 ): WorkspaceLayoutCache {
   if (layout) {
-    return cache[key] === layout ? cache : { ...cache, [key]: layout }
+    const cached = cache[key]
+    return cached && (cached === layout || stableJson(cached) === stableJson(layout))
+      ? cache
+      : { ...cache, [key]: layout }
   }
   if (!(key in cache)) {
     return cache

@@ -29,6 +29,7 @@ describe('workspace layout cache', () => {
     expect(applyFromRuntime(replaced, 'a', null)).toEqual({ b })
     expect(applyFromRuntime(replaced, 'missing', null)).toBe(replaced)
     expect(applyFromRuntime(replaced, 'b', b)).toBe(replaced)
+    expect(applyFromRuntime(replaced, 'b', layout('b'))).toBe(replaced)
   })
 
   it('a snapshot replaces the whole cache: absent workspaces go, nothing is merged', () => {
@@ -42,6 +43,18 @@ describe('workspace layout cache', () => {
       ]
     })
     expect(next).toEqual({ a: layout('a', ['t2']), c: layout('c') })
+  })
+
+  it('a snapshot equal by value keeps the cache and every entry', () => {
+    const cache = { a: layout('a', ['t1']), b: layout('b') }
+    const next = applyLayoutFrame(cache, {
+      type: 'snapshot',
+      workspaces: [
+        { key: 'a', layout: layout('a', ['t1']) },
+        { key: 'b', layout: layout('b') }
+      ]
+    })
+    expect(next).toBe(cache)
   })
 
   it('workspace and removed frames change only their workspace', () => {

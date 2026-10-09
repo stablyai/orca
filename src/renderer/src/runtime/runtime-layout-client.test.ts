@@ -18,7 +18,7 @@ type FakeStream = {
   params: unknown
   unsubscribed: boolean
   send: (result: unknown) => void
-  fail: (message: string) => void
+  fail: (message: string, code?: string) => void
   /** The stream is gone: the local runtime ends it with a frame, a remote transport closes. */
   drop: () => void
 }
@@ -53,8 +53,8 @@ function installFakeHost(target: RuntimeClientTarget): FakeHost {
       params,
       unsubscribed: false,
       send: (result) => onResponse({ id: 's', ok: true, result, _meta: meta }),
-      fail: (message) =>
-        onResponse({ id: 's', ok: false, error: { code: 'internal_error', message }, _meta: meta }),
+      fail: (message, code = 'internal_error') =>
+        onResponse({ id: 's', ok: false, error: { code, message }, _meta: meta }),
       drop: target.kind === 'local' ? () => stream.send({ type: 'end' }) : onClose
     }
     host.streams.push(stream)
@@ -128,12 +128,14 @@ const targets: [string, RuntimeClientTarget][] = [
 describe.each(targets)('runtime layout client over the %s transport', (_name, target) => {
   let host: FakeHost
   let cache: WorkspaceLayoutCache
+  let statuses: string[]
 
   beforeEach(() => {
     vi.useFakeTimers()
     clearRuntimeCompatibilityCacheForTests()
     host = installFakeHost(target)
     cache = EMPTY_WORKSPACE_LAYOUT_CACHE
+    statuses = []
   })
 
   afterEach(() => {
@@ -146,7 +148,8 @@ describe.each(targets)('runtime layout client over the %s transport', (_name, ta
       { workspaces },
       (frame) => {
         cache = applyLayoutFrame(cache, frame)
-      }
+      },
+      (status) => statuses.push(status.state)
     )
   }
 
@@ -213,6 +216,24 @@ describe.each(targets)('runtime layout client over the %s transport', (_name, ta
     expect(cache).toEqual({ a: layout('a', ['t2']) })
   })
 
+  it('a reconnect snapshot with unchanged data keeps every cached entry', async () => {
+    subscribe()
+    const first = await opened(1)
+    const workspaces = [
+      { key: 'a', layout: layout('a', ['t1']) },
+      { key: 'b', layout: layout('b') }
+    ]
+    first.send({ type: 'snapshot', subscriptionId: 'layout-1', workspaces })
+    const before = cache
+    first.drop()
+    await vi.advanceTimersByTimeAsync(250)
+    const second = await opened(2)
+    second.send(JSON.parse(JSON.stringify({ type: 'snapshot', workspaces })))
+    expect(cache).toBe(before)
+    expect(cache.a).toBe(before.a)
+    expect(cache.b).toBe(before.b)
+  })
+
   it('treats an error frame or a failed subscribe as a lost stream, with growing delays', async () => {
     host.rejectNextSubscribe()
     vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -232,7 +253,27 @@ describe.each(targets)('runtime layout client over the %s transport', (_name, ta
     // A snapshot proves the host is back, so the next loss starts from the first delay again.
     await vi.advanceTimersByTimeAsync(250)
     await opened(3)
+    expect(statuses).toEqual(['retrying', 'retrying', 'live', 'retrying'])
   })
+
+  it.each(['method_not_found', 'forbidden'])(
+    'stops for good when the host refuses the stream (%s)',
+    async (code) => {
+      const subscription = subscribe()
+      const stream = await opened(1)
+      stream.fail('no layout stream here', code)
+      expect(stream.unsubscribed).toBe(true)
+      expect(subscription.status()).toEqual({
+        state: 'refused',
+        code,
+        message: 'no layout stream here'
+      })
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(host.streams).toHaveLength(1)
+      subscription.close()
+      expect(subscription.status().state).toBe('refused')
+    }
+  )
 
   it('close unsubscribes, stops retrying and ignores later frames', async () => {
     const subscription = subscribe()

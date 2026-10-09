@@ -22,6 +22,7 @@ describe('readWorkspaceLayoutStreamFrame', () => {
     const frames = [
       { type: 'snapshot', subscriptionId: 'layout-1', workspaces: [{ key: GIT_KEY, layout }] },
       { type: 'workspace', key: GIT_KEY, layout },
+      { type: 'snapshot', workspaces: [{ key: GIT_KEY, layout }] },
       { type: 'removed', key: GIT_KEY },
       { type: 'end' }
     ]

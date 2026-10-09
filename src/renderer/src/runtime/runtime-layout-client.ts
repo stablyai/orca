@@ -28,35 +28,64 @@ export function runtimeLayoutTransport(target: RuntimeClientTarget): RuntimeLayo
   }
 }
 
-export type RuntimeLayoutSubscription = { close: () => void }
+/** `refused`: the host answered that it will never serve this stream, so the client stopped. */
+export type RuntimeLayoutStreamStatus =
+  | { state: 'connecting' | 'live' | 'retrying' | 'closed' }
+  | { state: 'refused'; code: string; message: string }
+
+export type RuntimeLayoutSubscription = {
+  status: () => RuntimeLayoutStreamStatus
+  close: () => void
+}
 
 export type RuntimeLayoutClient = {
   command: (method: `layout.${string}`, params: unknown) => Promise<unknown>
   /**
    * Opens the stream and keeps it open: after a lost stream it resubscribes, and the new snapshot
-   * replaces the cache. `onFrame` gets a snapshot first, then that stream's changes.
+   * replaces the cache. `onFrame` gets a snapshot first, then that stream's changes. A refusal
+   * stops it for good.
    */
   subscribe: (
     params: { workspaces?: 'all' | string[] },
-    onFrame: (frame: WorkspaceLayoutCacheFrame) => void
+    onFrame: (frame: WorkspaceLayoutCacheFrame) => void,
+    onStatus?: (status: RuntimeLayoutStreamStatus) => void
   ) => RuntimeLayoutSubscription
 }
 
 const RETRY_BASE_MS = 250
 const RETRY_MAX_MS = 5000
+// An older host without the method, or a caller scope denied it: a retry gets the same answer.
+const REFUSAL_CODES: ReadonlySet<string> = new Set(['method_not_found', 'forbidden'])
+
+function readRefusal(error: unknown): { code: string; message: string } | null {
+  if (typeof error !== 'object' || error === null) {
+    return null
+  }
+  const code = 'code' in error ? error.code : undefined
+  const message = 'message' in error ? error.message : undefined
+  return typeof code === 'string' && REFUSAL_CODES.has(code)
+    ? { code, message: typeof message === 'string' ? message : code }
+    : null
+}
 
 export function createRuntimeLayoutClient(transport: RuntimeLayoutTransport): RuntimeLayoutClient {
   return {
     command: (method, params) => transport.call(method, params),
-    subscribe: (params, onFrame) => openLayoutStream(transport, params, onFrame)
+    subscribe: (params, onFrame, onStatus) => openLayoutStream(transport, params, onFrame, onStatus)
   }
 }
 
 function openLayoutStream(
   transport: RuntimeLayoutTransport,
   params: { workspaces?: 'all' | string[] },
-  onFrame: (frame: WorkspaceLayoutCacheFrame) => void
+  onFrame: (frame: WorkspaceLayoutCacheFrame) => void,
+  onStatus?: (status: RuntimeLayoutStreamStatus) => void
 ): RuntimeLayoutSubscription {
+  let status: RuntimeLayoutStreamStatus = { state: 'connecting' }
+  const setStatus = (next: RuntimeLayoutStreamStatus): void => {
+    status = next
+    onStatus?.(next)
+  }
   let closed = false
   // Fences frames from a stream this client already gave up on.
   let generation = 0
@@ -71,9 +100,16 @@ function openLayoutStream(
     generation += 1
     handle?.unsubscribe()
     handle = null
+    const refusal = readRefusal(error)
+    if (refusal) {
+      closed = true
+      setStatus({ state: 'refused', ...refusal })
+      return
+    }
     if (error !== undefined) {
       console.warn('[workspace-layout] layout stream lost:', error)
     }
+    setStatus({ state: 'retrying' })
     const delay = Math.min(RETRY_BASE_MS * 2 ** failures, RETRY_MAX_MS)
     failures += 1
     retryTimer = setTimeout(() => {
@@ -101,6 +137,7 @@ function openLayoutStream(
     if (frame.type === 'snapshot') {
       state.awaitingSnapshot = false
       failures = 0
+      setStatus({ state: 'live' })
     } else if (state.awaitingSnapshot) {
       // The host sends the snapshot first; a change before it has nothing to replace.
       return
@@ -130,11 +167,13 @@ function openLayoutStream(
 
   void open()
   return {
+    status: () => status,
     close: () => {
       if (closed) {
         return
       }
       closed = true
+      setStatus({ state: 'closed' })
       generation += 1
       if (retryTimer !== null) {
         clearTimeout(retryTimer)
