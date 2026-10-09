@@ -173,6 +173,8 @@ export type PersistedUIState = {
   projectOrderManualDefaultNoticeDismissed?: boolean
   /** One-shot notice that usage meters show percent used, not remaining; absent resolves on load (new profiles dismissed, upgraded see it once). */
   usagePercentageDisplayChangeNoticeDismissed?: boolean
+  /** One-time Compact notice; load decides eligibility before filling missing preferences. */
+  statusBarCompactChangeNoticeDismissed?: boolean
   /** User-hidden empty-state usage CTA; permanently hides the "Connect AI accounts" prompt even if providers are later disconnected. */
   usageEmptyStateDismissed?: boolean
   /** One-shot toast announcing per-terminal Codex servers; set when shown, so absent means not yet seen. */

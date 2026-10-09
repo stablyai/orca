@@ -227,6 +227,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               node={n}
               isExpanded={expanded.has(n.path)}
               isLoading={n.isDirectory && loadingDirPaths.has(n.path)}
+              loadError={n.isDirectory ? (dirCache?.[n.path]?.error ?? null) : null}
               isSelected={selectedPaths.has(n.path) || activeFileId === n.path}
               selectedPaths={selectedPaths}
               isFlashing={flashingPath === n.path}

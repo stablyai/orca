@@ -167,7 +167,7 @@ export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithC
       undefined,
       opts.extraAgentArgs ? { extraAgentArgs: opts.extraAgentArgs } : undefined
     )
-    return await this.createTerminal(`id:${worktree.id}`, {
+    const terminal = await this.createTerminal(`id:${worktree.id}`, {
       command: startup.startup.command,
       env: startup.startup.env,
       ...(startup.startup.launchConfig ? { launchConfig: startup.startup.launchConfig } : {}),
@@ -176,6 +176,11 @@ export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithC
       telemetry: startup.startup.telemetry,
       title: opts.title
     })
+    // Why: agents that read the prompt after they start get it typed in, not on argv.
+    if (startup.followup) {
+      this.sendStartupFollowupWhenReady(terminal.handle, startup.followup)
+    }
+    return terminal
   }
 
   // Why: dedupes a worktree.create whose response was lost when a mobile

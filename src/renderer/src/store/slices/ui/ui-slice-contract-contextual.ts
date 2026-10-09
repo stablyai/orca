@@ -55,6 +55,9 @@ export type UISliceContextual = {
   closeModal: () => void
   featureTipsSeenIds: FeatureTipId[]
   markFeatureTipsSeen: (ids: FeatureTipId[]) => void
+  /** Main's once-decided native chat upgrade tip audience; null until read. */
+  inNativeChatUpgradeTipAudience: boolean | null
+  setInNativeChatUpgradeTipAudience: (inAudience: boolean) => void
   featureInteractions: FeatureInteractionState
   recordFeatureInteraction: (id: FeatureInteractionId) => Promise<void>
   contextualToursSeenIds: ContextualTourId[]
@@ -112,6 +115,8 @@ export type UISliceContextual = {
   dismissProjectOrderManualDefaultNotice: () => void
   usagePercentageDisplayChangeNoticeDismissed: boolean
   dismissUsagePercentageDisplayChangeNotice: () => void
+  statusBarCompactChangeNoticeDismissed: boolean
+  dismissStatusBarCompactChangeNotice: () => void
   usageEmptyStateDismissed: boolean
   dismissUsageEmptyState: () => void
   codexTerminalServerIsolationNoticeSeen: boolean

@@ -589,10 +589,12 @@ describe('worktree RPC methods', () => {
   })
 
   it('forwards task startup drafts to runtime worktree creation', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture implements every runtime method a draft create reaches, including the draft agent's choice.
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       dedupeWorktreeCreate: passthroughDedupe,
       showRepo: vi.fn().mockResolvedValue(repo),
+      resolveStartupDraftAgent: vi.fn().mockResolvedValue('codex'),
       createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })

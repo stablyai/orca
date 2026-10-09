@@ -130,6 +130,7 @@ export const browserPageInteractionAndSessionsApi = {
   sessionListProfiles: () => ipcRenderer.invoke('browser:session:listProfiles'),
   prepareSshWorkspacePartition: (args: {
     targetId: string
+    expectedSshTargetGeneration?: number
     browserProfileId?: string
     skipProbe?: boolean
   }): Promise<{ partition: string }> =>

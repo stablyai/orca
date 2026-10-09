@@ -18,7 +18,7 @@ const EFFORT_COMMAND: SlashCommandSuggestion = {
 }
 
 const CONVERSATION_COMMANDS: readonly SlashCommandSuggestion[] = [
-  { name: 'clear', description: 'Start a fresh conversation' },
+  { name: 'clear', description: 'Clear conversation context' },
   { name: 'compact', description: 'Compact conversation context' }
 ]
 

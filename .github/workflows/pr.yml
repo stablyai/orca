@@ -1295,6 +1295,7 @@ jobs:
           src/relay/windows-port-scan.win32.test.ts
           src/main/ssh/ssh-relay-upload-stage-windows-identity.test.ts
           src/main/ssh/remote-node-runtime-store-windows.test.ts
+          config/scripts/node-pty-windows-pty-teardown-patch.test.mjs
 
       # Why the :parallel variant: identical to build:release except the three
       # electron-vite targets overlap instead of running back to back. The Linux package

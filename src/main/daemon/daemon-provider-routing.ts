@@ -28,3 +28,20 @@ export function disposeProviderSubscriptionsOnly(provider: DaemonProvider): void
     provider.disposeProviderOnly()
   }
 }
+
+export function getAllDaemonAdapters(provider: DaemonProvider): readonly DaemonPtyAdapter[] {
+  return provider instanceof DaemonPtyRouter || provider instanceof DegradedDaemonPtyProvider
+    ? provider.getAllAdapters()
+    : [provider]
+}
+
+// Why: an inventory is authoritative only if every generation answered; otherwise unverifiable.
+export async function listEveryDaemonGeneration<T>(
+  provider: DaemonProvider,
+  list: (adapter: DaemonPtyAdapter) => Promise<T[]>
+): Promise<T[] | null> {
+  const results = await Promise.allSettled(getAllDaemonAdapters(provider).map(list))
+  return results.every((r) => r.status === 'fulfilled')
+    ? results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
+    : null
+}

@@ -44,7 +44,8 @@ export async function runStructuredCompaction(
   context: StructuredAgentSessionMutationContext,
   host: Pick<StructuredAgentSessionHost, 'waitForSendSettlement'>,
   caller: StructuredAgentSessionCaller,
-  params: ConversationCommandParams
+  params: ConversationCommandParams,
+  arrival: { clearInFlight?: boolean } = {}
 ): Promise<AgentSessionMutationResult<AgentSessionConversationCommandResult>> {
   const { sessionId, clientOperationId } = params.envelope
   // An older build ran this operation id and recorded it on the session: answered, never rerun.
@@ -61,7 +62,13 @@ export async function runStructuredCompaction(
           ...conversationCommandFailure(agentSessionFailureFact('compactionUnconfirmed'))
         }
   }
-  const accepted = await acceptStructuredConversationCommand(context, caller, params, priorRecord)
+  const accepted = await acceptStructuredConversationCommand(
+    context,
+    caller,
+    params,
+    priorRecord,
+    arrival
+  )
   if (!accepted.ok) {
     return accepted
   }
@@ -131,7 +138,8 @@ function acceptStructuredConversationCommand(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
   params: ConversationCommandParams,
-  priorRecord: () => AgentSessionConversationCommandResult | null
+  priorRecord: () => AgentSessionConversationCommandResult | null,
+  arrival: { clearInFlight?: boolean }
 ): Promise<AgentSessionMutationResult<ConversationCommandAcceptance>> {
   const plan = conversationCommandPlan({
     envelope: params.envelope,
@@ -189,6 +197,6 @@ function acceptStructuredConversationCommand(
         return accepted
       }
     },
-    sendPreparation(context, params.envelope)
+    sendPreparation(context, params.envelope, arrival)
   )
 }

@@ -3978,6 +3978,10 @@
             "used": "{{value0}}% usado",
             "remaining": "{{value0}}% restante"
           },
+          "StatusBarUsageChangeNotices": {
+            "compactTitle": "La visualización del uso ahora es compacta",
+            "compactBody": "Una métrica principal por proveedor. Elige «<detailed>Detailed</detailed>» en el menú «Usage» para ver más límites."
+          },
           "UsagePercentageDisplayChangeNotice": {
             "title": "Usage now shows % used",
             "body": "Prefer remaining? Change it in Settings.",
@@ -12307,7 +12311,11 @@
             "confirmRestore": "Restaurar instantánea y reiniciar",
             "keepState": "Conservar estado",
             "statusUnknown": "Estado desconocido",
-            "checking": "Comprobando…"
+            "checking": "Comprobando…",
+            "forget": "Olvidar…",
+            "confirmForget": "Olvidar en este escritorio",
+            "keepLinked": "Mantener vinculado",
+            "forgetDescription": "Desvincula este servidor aquí sin contactar con su host. Si el host vuelve, es posible que el servidor siga ejecutándose allí."
           },
           "title": "Servidores gestionados",
           "description": "Orca instala y ejecuta un servidor en un host SSH vacío y lo mantiene actualizado.",
@@ -12375,6 +12383,7 @@
           },
           "loadFailed": "Orca no pudo cargar los hosts SSH ni los movimientos sin terminar. Vuelve a abrir Ajustes e inténtalo de nuevo.",
           "outcome": {
+            "activeServer": "No se hizo: elige otro Servidor activo en Avanzado antes de detener este servidor.",
             "live": "No se hizo: los terminales de este servidor siguen en ejecución. Ciérralos e inténtalo de nuevo.",
             "unverifiable": "No se hizo: Orca no pudo confirmar qué se ejecuta en este servidor. Inténtalo de nuevo cuando el host esté disponible.",
             "migration": "No se hizo: un movimiento a este servidor quedó sin terminar. Reanúdalo primero.",
@@ -12391,7 +12400,7 @@
           "connecting": "Conectando al servidor Orca gestionado…",
           "updating": "Actualizando el servidor gestionado…",
           "starting": "Iniciando el servidor gestionado…",
-          "notServing": "El servidor Orca gestionado no está en ejecución y no se pudo iniciar.",
+          "notServing": "Orca no pudo confirmar que el servidor gestionado esté respondiendo.",
           "hostNewer": "Ejecuta un servidor Orca gestionado de una versión más reciente de Orca; conserva esa versión.",
           "terminalsLive": "Ejecuta el relé hasta que se cierren sus {{count}} terminales abiertos y luego se mueve a un servidor gestionado.",
           "terminalsLive_one": "Ejecuta el relé hasta que se cierre su {{count}} terminal abierto y luego se mueve a un servidor gestionado.",
@@ -17997,6 +18006,7 @@
         "commands": "Comandos",
         "skills": "Habilidades",
         "loadingSkills": "Cargando habilidades…",
+        "clearDescription": "Borrar el contexto de la conversación",
         "skillsUnavailableHost": "Las habilidades no se pueden listar en los chats SSH",
         "skillsLoadFailed": "No se pudieron cargar las habilidades",
         "retrySkills": "Reintentar",
@@ -18128,6 +18138,13 @@
         "toggleDetails": "Alternar detalles del turno"
       },
       "jumpToLatest": "Saltar a lo último",
+      "find": {
+        "label": "Buscar en el chat",
+        "noResults": "Sin resultados",
+        "previousMatch": "Coincidencia anterior",
+        "nextMatch": "Siguiente coincidencia",
+        "close": "Cerrar"
+      },
       "transcriptLabel": "Conversación",
       "toggle": {
         "showTerminal": "Mostrar terminal",
@@ -18242,6 +18259,8 @@
         "delete": "Eliminar",
         "moreActions": "Más acciones",
         "editMessage": "Editar mensaje",
+        "showFullMessage": "Mostrar el mensaje completo",
+        "showLess": "Mostrar menos",
         "turnOffQueueing": "Desactivar la cola",
         "withdrawnHold": "Detenido antes de enviarse",
         "pausedSendFailed": "No se pudo enviar. Pulsa Enviar para reintentar.",
@@ -18255,7 +18274,7 @@
         "sendConfirmBody_other": "Estás a punto de enviar un mensaje. ¿Quieres borrar los {{count}} mensajes que había en cola?",
         "sendConfirmClear": "Vaciar cola",
         "sendConfirmSend": "Enviar mensaje",
-        "from": "De {{names}}",
+        "fromSender": "De",
         "pausedSendFailedWaiting": "No se pudo enviar. Cuando el agente termine, pulsa Enviar para reintentar."
       },
       "thought": "Pensó",
@@ -18337,6 +18356,7 @@
         "recorded": "Totales de las ediciones registradas en este turno."
       },
       "notices": {
+        "contextCleared": "Contexto borrado",
         "compaction": "Contexto compactado",
         "details": "Detalles",
         "plan": "Plan",
@@ -19066,6 +19086,16 @@
     }
   },
   "featureTips": {
+    "nativeChatUpgrade": {
+      "eyebrow": "Nuevo",
+      "title": "El chat nativo mejora",
+      "intro": "Los chats nuevos de agentes compatibles usan la vista de chat mejorada. Para alternar entre chat y CLI, abre {{panel}} (barra lateral derecha):",
+      "resumeInNativeChat": "{{action}} abre una conversación de CLI compatible en el chat nativo.",
+      "resumeInCli": "{{action}} copia un chat de Claude/Codex a una CLI nueva sin tocar el original.",
+      "settingsInstruction": "Administra Chat UI en",
+      "settingsLink": "Ajustes → Experimental",
+      "gotIt": "Entendido"
+    },
     "sessionSearch": {
       "ageHours": "2 h",
       "ageMinutes": "12 min",

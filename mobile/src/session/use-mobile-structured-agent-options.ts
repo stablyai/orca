@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
-import { getAgentSessionOptionCatalog } from '../../../src/shared/agent-session-option-catalog'
+import { structuredAgentSessionSeedCatalog } from '../../../src/shared/structured-agent-session-seed-catalog'
 import type {
   AgentSessionOptionResult,
   AgentSessionOptionsResult
@@ -26,6 +26,11 @@ import {
   type StructuredAgentSessionMutate
 } from './mobile-structured-agent-session-rpc'
 import { persistMobileStructuredOptionPicks } from './mobile-native-chat-session-option-persistence'
+import { useMobileHostModelCatalogUpgrade } from './use-mobile-host-model-catalog-upgrade'
+import {
+  forgetMobileCreatedStructuredSession,
+  mobileCreatedStructuredSession
+} from './mobile-created-structured-sessions'
 import { encodeStructuredAgentSessionOptionValue } from '../../../src/shared/structured-agent-session-option-codec'
 
 type StructuredOptionsController = {
@@ -47,8 +52,13 @@ export function useMobileStructuredAgentOptions(args: {
   mutate: StructuredAgentSessionMutate
 }): StructuredOptionsController {
   const { agent, client, enabled, fence, mutate, sessionId } = args
+  // Every agent's seed, as on the desktop: a built-in list or the provider-default pill.
+  const optionCatalog = useMemo(
+    () => (agent ? structuredAgentSessionSeedCatalog(agent) : null),
+    [agent]
+  )
   const [optionState, setOptionState] = useState(() =>
-    createStructuredAgentSessionOptionState(agent ?? 'codex')
+    createStructuredAgentSessionOptionState(agent ?? 'codex', optionCatalog)
   )
   const optionStateRef = useRef(optionState)
   const activeOptionRecordRef = useRef(optionState.record)
@@ -70,19 +80,43 @@ export function useMobileStructuredAgentOptions(args: {
     sessionId: string
     commands: readonly AgentSessionConversationCommand[]
   } | null>(null)
-  const optionCatalog = useMemo(
-    () => (agent === 'claude' || agent === 'codex' ? getAgentSessionOptionCatalog(agent) : null),
-    [agent]
-  )
 
+  const optionIdentityRef = useRef(`${agent}:${sessionId}`)
   useEffect(() => {
-    const next = createStructuredAgentSessionOptionState(agent ?? 'codex')
+    const identity = `${agent}:${sessionId}`
+    const sameSession = optionIdentityRef.current === identity
+    optionIdentityRef.current = identity
+    const previous = optionStateRef.current
+    const seeded = createStructuredAgentSessionOptionState(agent ?? 'codex', optionCatalog)
+    // A host answer is the account's, not the fence's: keep it rather than fall back to the placeholder.
+    const next =
+      sameSession && (previous.catalogSource === 'host' || previous.catalogSource === 'builtin')
+        ? { ...seeded, catalog: previous.catalog, catalogSource: previous.catalogSource }
+        : seeded
     optionMutationGeneration.current += 1
     pendingOptionRef.current = null
     optionStateRef.current = next
     activeOptionRecordRef.current = next.record
     setOptionState(next)
-  }, [agent, enabled, fence, sessionId])
+  }, [agent, enabled, fence, optionCatalog, sessionId])
+
+  // A chat this phone created runs the listed default, as a desktop chat its own view launched does.
+  const createdHere = useMemo(
+    () => (sessionId ? mobileCreatedStructuredSession(sessionId) : undefined),
+    [sessionId]
+  )
+  useMobileHostModelCatalogUpgrade({
+    agent,
+    client,
+    sessionId,
+    enabled,
+    fence,
+    newLaunch: createdHere !== undefined,
+    ...(createdHere ? { worktree: createdHere.worktree } : {}),
+    optionCatalog,
+    activeOptionRecordRef,
+    updateOptionState
+  })
 
   useEffect(() => {
     if (!client || !sessionId || !enabled || !optionCatalog) {
@@ -92,6 +126,8 @@ export function useMobileStructuredAgentOptions(args: {
     const readGeneration = optionMutationGeneration.current
     void callAgentSession<AgentSessionOptionsResult>(client, 'agentSession.options', { sessionId })
       .then((result) => {
+        // This view keeps its latch; a later one may run a model picked here.
+        forgetMobileCreatedStructuredSession(sessionId)
         if (!stale && optionMutationGeneration.current === readGeneration) {
           setConversationSupport({ sessionId, commands: result.conversationCommands ?? [] })
           updateOptionState((current) =>
@@ -152,7 +188,7 @@ export function useMobileStructuredAgentOptions(args: {
           // Only an accepted pick: an `unknown` outcome commits optimistically to the
           // visible record, and remembering one the provider refused would seed a
           // launch the user never chose.
-          if (agent === 'claude' || agent === 'codex') {
+          if (agent) {
             void persistMobileStructuredOptionPicks({
               client,
               agent,

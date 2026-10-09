@@ -316,6 +316,7 @@
     "remark-math": "^6.0.0",
     "remark-parse": "^11.0.0",
     "remark-rehype": "11.1.2",
+    "remend": "1.4.0",
     "shadcn": "^4.13.1",
     "sonner": "2.0.7",
     "tailwind-merge": "^3.7.0",

@@ -15,7 +15,7 @@ import {
   shouldOpenStatusBarContextMenu
 } from './status-bar-context-menu-policy'
 import { StatusBarUsageEmptyCta } from './StatusBarUsageEmptyCta'
-import { UsagePercentageDisplayChangeNotice } from './UsagePercentageDisplayChangeNotice'
+import { StatusBarUsageChangeNotices } from './StatusBarUsageChangeNotices'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { SkillUpdateStatusSegment } from './SkillUpdateStatusSegment'
 import { NativeChatResumeStatusSegment } from './NativeChatResumeStatusSegment'
@@ -126,7 +126,7 @@ export function StatusBarSurface({
             ) : null
           ) : hasVisibleUsageMeters ? (
             // Consolidated roster pill → opens the all-agents Usage popover (mock parity).
-            <UsagePercentageDisplayChangeNotice hasVisibleUsageMeters={hasVisibleUsageMeters}>
+            <StatusBarUsageChangeNotices hasVisibleUsageMeters={hasVisibleUsageMeters}>
               <DropdownMenu
                 open={usageMenuOpen}
                 onOpenChange={handleUsageMenuOpenChange}
@@ -161,6 +161,7 @@ export function StatusBarSurface({
                     ))}
                     {collapseUsage ? (
                       <UsageOverflowChip
+                        providerCount={rosterProviders.length}
                         hidden={rosterProviders.filter((p) =>
                           collapsedUsageProviders.includes(p.provider)
                         )}
@@ -236,7 +237,7 @@ export function StatusBarSurface({
                   />
                 </DropdownMenuContent>
               </DropdownMenu>
-            </UsagePercentageDisplayChangeNotice>
+            </StatusBarUsageChangeNotices>
           ) : null}
           {anyVisible && !isEmptyUsageState && (
             <Tooltip>

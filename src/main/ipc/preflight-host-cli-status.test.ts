@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as LocalCommandResolver from './command-path-resolver'
+import type { ProcessSpec } from '../../shared/child-process/process-spec'
 
 const {
   handleMock,
@@ -50,6 +51,19 @@ vi.mock('child_process', () => {
     spawn: vi.fn()
   }
 })
+
+vi.mock('../../shared/child-process/run-process', () => ({
+  runProcess: async (spec: ProcessSpec) => ({
+    ...(await execFileAsyncMock(spec.program, spec.args, {
+      encoding: 'utf-8',
+      timeout: spec.timeoutMs,
+      windowsHide: true,
+      ...(spec.env ? { env: spec.env } : {})
+    })),
+    code: 0,
+    timedOut: false
+  })
+}))
 
 // WSL commands now route through the runner, not execFile('wsl.exe', ...).
 vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
@@ -681,6 +695,63 @@ describe('preflight', () => {
     expect(execFileAsyncMock).toHaveBeenCalledTimes(10)
   })
 
+  it.each(['linux', 'darwin'])(
+    'waits for the %s shell PATH before detecting and caching GitHub CLI status',
+    async (platform) => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+      let finishHydration: ((result: { ok: true; segments: string[] }) => void) | undefined
+      hydrateShellPathMock.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            finishHydration = resolve
+          })
+      )
+      let merged = false
+      mergePathSegmentsMock.mockImplementation(() => {
+        merged = true
+      })
+      execFileAsyncMock.mockImplementation(async () => {
+        if (!merged) {
+          throw Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' })
+        }
+        return { stdout: 'version fixture', stderr: '' }
+      })
+
+      const check = runPreflightCheck()
+      await Promise.resolve()
+      expect(execFileAsyncMock).not.toHaveBeenCalled()
+      expect(finishHydration).toBeDefined()
+      finishHydration?.({ ok: true, segments: ['/home/user/.local/share/mise/shims'] })
+
+      await expect(check).resolves.toMatchObject({ gh: { installed: true, authenticated: true } })
+      await expect(runPreflightCheck()).resolves.toMatchObject({ gh: { installed: true } })
+      expect(hydrateShellPathMock).toHaveBeenCalledOnce()
+    }
+  )
+
+  it('refreshes the POSIX shell PATH on Re-check after a CLI install', async () => {
+    execFileAsyncMock.mockRejectedValue(
+      Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' })
+    )
+    await expect(runPreflightCheck()).resolves.toMatchObject({ gh: { installed: false } })
+    hydrateShellPathMock.mockResolvedValue({ ok: true, segments: ['/new/cli/bin'] })
+    mergePathSegmentsMock.mockImplementation(() => {
+      execFileAsyncMock.mockResolvedValue({ stdout: 'version fixture', stderr: '' })
+    })
+
+    await expect(runPreflightCheck(true)).resolves.toMatchObject({ gh: { installed: true } })
+    expect(hydrateShellPathMock).toHaveBeenLastCalledWith({ force: true })
+    expect(mergePathSegmentsMock).toHaveBeenCalledWith(['/new/cli/bin'])
+  })
+
+  it('uses the inherited PATH when POSIX shell hydration fails', async () => {
+    hydrateShellPathMock.mockResolvedValue({ ok: false, segments: [], failureReason: 'timeout' })
+    execFileAsyncMock.mockResolvedValue({ stdout: 'version fixture', stderr: '' })
+
+    await expect(runPreflightCheck()).resolves.toMatchObject({ gh: { installed: true } })
+    expect(mergePathSegmentsMock).not.toHaveBeenCalled()
+  })
+
   it('awaits the persisted Windows Path refresh before a forced host CLI preflight', async () => {
     Object.defineProperty(process, 'platform', {
       configurable: true,
@@ -753,6 +824,7 @@ describe('preflight', () => {
     })
 
     expect(mergePersistedWindowsPathAsyncMock).not.toHaveBeenCalled()
+    expect(hydrateShellPathMock).not.toHaveBeenCalled()
   })
 
   it('registers the preflight handler', async () => {

@@ -495,39 +495,47 @@ describe('a /compact that waits in line', () => {
     expect(await rig.submission(id)).toMatchObject({ dispatchState: 'rejected' })
   })
 
-  it('a /clear drops a waiting command card instead of carrying it to the new chat', async () => {
+  it('a /clear withdraws a waiting command and keeps ordinary cards paused in order', async () => {
     const working = await rig.workingSend()
-    await queuedCompact()
-    const draft = await rig.send('carried draft', 'queue-if-active').result
-    if (!draft.ok || !('queued' in draft.value)) {
-      throw new Error('expected a queued receipt')
-    }
+    const first = rig.send('first draft', 'queue-if-active')
+    await first.result
+    const compactId = await queuedCompact()
+    const last = rig.send('last draft', 'queue-if-active')
+    await last.result
     await rig.stop()
     await rig.settleAccepted(working, 'a')
-    const cleared = await clear()
-    const replacementId = cleared.ok ? cleared.value.replacementSessionId : undefined
-    if (!replacementId) {
-      throw new Error('expected a replacement session')
-    }
-    expect(await rig.drafts()).toEqual([])
-    expect(await rig.drafts(replacementId)).toEqual([
-      { messageId: draft.value.queued.messageId, state: 'waiting' }
+    expect(await clear()).toMatchObject({
+      ok: true,
+      value: { command: 'clear', state: 'completed' }
+    })
+    expect(await rig.drafts()).toEqual([
+      { messageId: first.id, state: 'waiting' },
+      { messageId: last.id, state: 'waiting' }
     ])
+    expect(
+      rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal.queuedMessages.get(compactId)
+    ).toMatchObject({ state: 'withdrawn' })
+    expect(await rig.queuePause()).toBeNull()
+    expect(
+      rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal.queuedMessages.pauses()
+    ).toContainEqual(
+      expect.objectContaining({ reason: 'cleared', messageIds: [first.id, last.id] })
+    )
+    expect(await rig.handoff(first.id)).toBeUndefined()
+    expect(await rig.handoff(last.id)).toBeUndefined()
     expect(rig.compact).not.toHaveBeenCalled()
   })
 
-  it('a /clear with only a command card waiting opens no replacement conversation for it', async () => {
+  it('a /clear with only a waiting command keeps the same chat with no queue pause', async () => {
     const working = await rig.workingSend()
     await queuedCompact()
     await rig.stop()
     await rig.settleAccepted(working, 'a')
-    const cleared = await clear()
-    const replacementId = cleared.ok ? cleared.value.replacementSessionId : undefined
-    if (!replacementId) {
-      throw new Error('expected a replacement session')
-    }
+    expect(await clear()).toMatchObject({ ok: true })
     expect(await rig.drafts()).toEqual([])
-    expect(rig.host.collaboratorsForTests().sessions.has(replacementId)).toBe(false)
+    expect(await rig.queuePause()).toBeNull()
+    expect(rig.host.collaboratorsForTests().sessions.has(SESSION)).toBe(true)
+    expect(rig.store.listRecords()).toHaveLength(1)
   })
 })
 

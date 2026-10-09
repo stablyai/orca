@@ -9,10 +9,9 @@ import type {
 } from 'pdfjs-dist/web/pdf_viewer.mjs'
 import 'pdfjs-dist/web/pdf_viewer.css'
 import PdfFind from './PdfFind'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
-import { keybindingMatchesAction } from '../../../../shared/keybindings'
+import { usePdfViewerFindShortcut } from './use-pdf-viewer-find-shortcut'
 
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { translate } from '@/i18n/i18n'
@@ -60,6 +59,7 @@ function PdfDocumentViewer({
   preferenceKey = null,
   scrollCacheKey = null
 }: PdfViewerProps): JSX.Element {
+  const rootRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerDivRef = useRef<HTMLDivElement>(null)
   const loaderRef = useRef<PdfDocumentLoader | null>(null)
@@ -184,23 +184,13 @@ function PdfDocumentViewer({
     )
   }, [isCommandOwner, stepZoom, zoomReset])
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent): void => {
-      const platform = getShortcutPlatform()
-      if (keybindingMatchesAction('editor.find', e, platform, keybindings)) {
-        e.preventDefault()
-        e.stopPropagation()
-        setFindOpen(true)
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown, true)
-    return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [keybindings])
+  const openFind = useCallback(() => setFindOpen(true), [])
+  usePdfViewerFindShortcut({ rootRef, ownsCommands: isCommandOwner, keybindings, openFind })
 
   const zoomPercent = Math.round(scale * 100)
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div ref={rootRef} className="flex h-full min-h-0 flex-col">
       <div className="relative flex flex-1 flex-col overflow-hidden">
         <PdfFind isOpen={findOpen} onClose={closeFindBar} eventBusRef={eventBusRef} />
         {/* Why: PDFViewer requires its container to be position:absolute.

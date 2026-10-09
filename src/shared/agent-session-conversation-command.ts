@@ -64,7 +64,7 @@ export function isAgentSessionConversationCommandRecord(
   return (
     (row.phase === 'prepared' || row.phase === 'committed') &&
     (row.runtimeFence === undefined ||
-      (Number.isSafeInteger(row.runtimeFence) && row.runtimeFence > 0)) &&
+      (Number.isSafeInteger(row.runtimeFence) && row.runtimeFence >= 0)) &&
     typeof row.operationId === 'string' &&
     row.operationId.length > 0 &&
     row.operationId.length <= 512 &&

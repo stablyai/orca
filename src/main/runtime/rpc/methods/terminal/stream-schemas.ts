@@ -23,9 +23,12 @@ export const TerminalMultiplexSubscribeFrame = TerminalHandle.extend({
       ackOutputSourceRanges: z.literal(1).optional(),
       desktopViewportClaims: z.literal(1).optional(),
       outputPause: z.literal(1).optional(),
-      writeUnavailable: z.literal(1).optional()
+      writeUnavailable: z.literal(1).optional(),
+      inputAck: z.literal(1).optional()
     })
-    .optional()
+    .optional(),
+  // Why: names the client's input sequence space; it survives stream replacement so replays dedupe.
+  inputSessionId: z.string().min(1).max(128).optional()
 })
 
 export const TerminalMultiplexLegacyAckFrame = z

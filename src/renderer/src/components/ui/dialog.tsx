@@ -127,11 +127,22 @@ function DialogFooter({
   )
 }
 
-function DialogTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>) {
+function DialogTitle({
+  className,
+  size = 'default',
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Title> & {
+  /** `display` is the large headline of the two-column feature tip dialogs. */
+  size?: 'default' | 'display'
+}) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn('text-lg leading-snug font-semibold break-words', className)}
+      data-size={size}
+      className={cn(
+        'text-lg leading-snug font-semibold break-words data-[size=display]:text-2xl data-[size=display]:leading-tight data-[size=display]:tracking-tight md:data-[size=display]:text-[1.75rem]',
+        className
+      )}
       {...props}
     />
   )

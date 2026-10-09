@@ -1,11 +1,5 @@
-// Queued drafts across conversation commands: a /compact is a queued message
-// and then a turn, so a capable send during it becomes a card that waits for it
-// like any turn, while Delete and Send-now answer at once; a /clear in flight
-// admits no draft onto the source it is superseding; and a draft /clear carries
-// to its replacement is fingerprinted for the replacement, so the provider's
-// echo folds into its sent bubble.
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { activeProviderContext } from '../../../shared/agent-session-provider-context'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import {
   createQueuedMessageTestRig,
@@ -14,7 +8,7 @@ import {
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import {
-  HOST_TEST_THREAD as THREAD,
+  HOST_TEST_SESSION as SESSION,
   hostTestMessage,
   hostTestOperationId
 } from './structured-agent-session-host-test-data'
@@ -97,122 +91,107 @@ describe('a /compact in flight', () => {
 })
 
 describe('/clear', () => {
-  it('in flight, refuses a capable send as today: no card lands on the source it supersedes', async () => {
-    const commit = rig.store.commitConversationClear
+  it('refuses a send arriving while clear is stopping the context', async () => {
     let release: (() => void) | undefined
     const released = new Promise<void>((resolve) => {
       release = resolve
     })
-    const committing = vi.fn()
-    const spy = vi
-      .spyOn(rig.store, 'commitConversationClear')
-      .mockImplementationOnce(async (clear) => {
-        committing()
-        await released
-        return commit(clear)
-      })
+    const stopping = vi.fn()
+    const spy = rig.closeSession.mockImplementationOnce(async () => {
+      stopping()
+      await released
+      return true
+    })
     try {
       const cleared = command('clear')
-      await eventually(() => expect(committing).toHaveBeenCalledOnce())
-      // Judged on arrival, answered on its turn: behind the clear.
+      await eventually(() => expect(stopping).toHaveBeenCalledOnce())
       const sent = rig.send('sent while clearing', 'queue-if-active').result
       release?.()
       expect(await sent).toEqual(WAIT_REFUSAL)
-      const done = await cleared
-      const replacementId = done.ok ? done.value.replacementSessionId : undefined
-      if (!replacementId) {
-        throw new Error('expected a replacement session')
-      }
+      expect(await cleared).toMatchObject({ ok: true, value: { command: 'clear' } })
       expect(await rig.drafts()).toHaveLength(0)
-      expect(await rig.drafts(replacementId)).toHaveLength(0)
     } finally {
-      spy.mockRestore()
+      release?.()
+      spy.mockResolvedValue(true)
     }
   })
 
-  it('carries drafts to a replacement no agent has started, before it answers; the first send starts the agent ahead of them', async () => {
+  it('keeps waiting card identities and starts a fresh context ahead of their drain', async () => {
     const working = await rig.workingSend()
     const firstId = await queuedId(rig.send('first draft', 'queue-if-active').result)
     const secondId = await queuedId(rig.send('second draft', 'queue-if-active').result)
     await rig.stop()
     await rig.settleAccepted(working, 'a')
-    const cleared = await command('clear')
-    const replacementId = cleared.ok ? cleared.value.replacementSessionId : undefined
-    if (!replacementId) {
-      throw new Error('expected a replacement session')
-    }
-    // The clear started nothing, yet the drafts had already moved when it answered.
-    expect(rig.store.getRecord(replacementId)).toMatchObject({
-      providerHandleChain: [],
-      lease: { claimStatus: 'released' }
-    })
-    expect(rig.host.collaboratorsForTests().sessions.get(replacementId)?.child ?? null).toBeNull()
-    expect(await rig.drafts()).toHaveLength(0)
-    expect(await rig.drafts(replacementId)).toEqual([
+    expect(await command('clear')).toMatchObject({ ok: true })
+    expect(rig.store.getRecord(SESSION)?.providerHandleChain).toEqual([])
+    expect(rig.host.collaboratorsForTests().sessions.get(SESSION)?.child ?? null).toBeNull()
+    expect(await rig.drafts()).toEqual([
       { messageId: firstId, state: 'waiting' },
       { messageId: secondId, state: 'waiting' }
     ])
-    // Held, unshown: nothing runs in the fresh conversation.
-    expect(await rig.queuePause(replacementId)).toBeNull()
-
-    const body = hostTestMessage('first in the new chat')
-    const fields = { body, delivery: 'queue-if-active' as const }
-    const sentId = hostTestOperationId()
-    expect(
-      await rig.host.send(CALLER, {
-        envelope: rig.envelope(fields, 'agentSession.send', sentId, replacementId),
-        ...fields
-      })
-    ).toMatchObject({ ok: true, value: { submission: expect.anything() } })
+    expect(await rig.handoff(firstId)).toBeUndefined()
+    const sent = rig.send('first in the new context', 'queue-if-active')
+    expect(await sent.result).toMatchObject({ ok: true, value: { submission: expect.anything() } })
     await eventually(() =>
-      expect(rig.store.getRecord(replacementId)?.providerHandleChain).toHaveLength(1)
+      expect(rig.store.getRecord(SESSION)?.providerHandleChain).toHaveLength(1)
     )
+    await eventually(() =>
+      expect(activeProviderContext(rig.store.getRecord(SESSION)!).head).not.toBeNull()
+    )
+    const thread = activeProviderContext(rig.store.getRecord(SESSION)!).head!.handle.nativeId
     await rig.host.settleLateDispatch({
-      sessionId: replacementId,
-      clientMessageId: sentId,
-      providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-first', ordinal: 0 }
+      sessionId: SESSION,
+      clientMessageId: sent.id,
+      providerIdentity: { provider: 'codex', threadId: thread, turnId: 'turn-first', ordinal: 0 }
     })
-    await eventually(async () =>
-      expect(
-        (await rig.host.journalSnapshot(replacementId)).submissions.map((entry) =>
-          entry.clientMessageId === sentId ? 'sent' : entry.queuedMessageId
-        )
-      ).toEqual(['sent', firstId])
-    )
-    expect(await rig.queuePause(replacementId)).toBeNull()
+    await eventually(async () => expect(await rig.handoff(firstId)).toBeDefined())
+    expect(await rig.queuePause()).toBeNull()
   })
 
-  it("a carried draft sent on the replacement: the provider's echo folds into its one bubble", async () => {
+  it('compacts the new context without removing clear ancestry or its divider', async () => {
+    expect(await command('clear')).toMatchObject({ ok: true })
+    const boundary = rig.store.getRecord(SESSION)!.providerContextBoundary
+    expect(await command('compact')).toMatchObject({ ok: true })
+    await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
+    expect(activeProviderContext(rig.store.getRecord(SESSION)!).head?.replaces).toBeUndefined()
+    expect(rig.store.getRecord(SESSION)!.providerHandleChain).toHaveLength(1)
+    rig.finishCompact()
+    const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    await eventually(() =>
+      expect(rig.store.getRecord(SESSION)?.conversationCommand?.state).toBe('completed')
+    )
+    expect(rig.store.getRecord(SESSION)!.providerContextBoundary).toEqual(boundary)
+    expect(journal.context.floor()).not.toBeNull()
+  })
+
+  it('a waiting card sent after clear gets one provider echo bubble in that context', async () => {
     const working = await rig.workingSend()
-    const draftId = await queuedId(rig.send('carried text', 'queue-if-active').result)
+    const draftId = await queuedId(rig.send('waiting text', 'queue-if-active').result)
     await rig.stop()
     await rig.settleAccepted(working, 'a')
-    const cleared = await command('clear')
-    const replacementId = cleared.ok ? cleared.value.replacementSessionId : undefined
-    if (!replacementId) {
-      throw new Error('expected a replacement session')
-    }
-    expect(await rig.sendNow(draftId, hostTestOperationId(), replacementId)).toMatchObject({
-      ok: true,
-      value: { submission: expect.anything() }
-    })
-    const journal = rig.host.collaboratorsForTests().sessions.get(replacementId)?.journal
-    const sent = journal?.submissions().findLast((entry) => entry.queuedMessageId === draftId)
-    if (!journal || !sent) {
-      throw new Error('expected the carried draft sent on the replacement')
-    }
+    expect(await command('clear')).toMatchObject({ ok: true })
+    expect(await rig.sendNow(draftId, hostTestOperationId())).toMatchObject({ ok: true })
+    await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
+    const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    const sent = journal.submissions().findLast((entry) => entry.queuedMessageId === draftId)!
+    await eventually(() =>
+      expect(activeProviderContext(rig.store.getRecord(SESSION)!).head).not.toBeNull()
+    )
+    const thread = activeProviderContext(rig.store.getRecord(SESSION)!).head!.handle.nativeId
     await journal.appendItem(
-      { provider: 'codex', threadId: THREAD, turnId: 'turn-echo', ordinal: 0 },
-      hostTestMessage('carried text'),
+      { provider: 'codex', threadId: thread, turnId: 'turn-echo', ordinal: 0 },
+      hostTestMessage('waiting text'),
       { fence: sent.fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
-    const snapshot = await rig.host.journalSnapshot(replacementId)
-    const userBubbles = snapshot.items.filter(
-      (item) => item.body.kind === 'message' && item.body.role === 'user'
-    )
-    expect(userBubbles).toHaveLength(1)
-    expect(snapshot.submissions.find((entry) => entry.queuedMessageId === draftId)).toMatchObject({
-      dispatchState: 'accepted'
-    })
+    const floor = journal.context.floor()!.sequence
+    expect(
+      journal
+        .snapshot()
+        .items.filter(
+          (item) =>
+            item.sequence > floor && item.body.kind === 'message' && item.body.role === 'user'
+        )
+    ).toHaveLength(1)
+    expect(journal.submission(sent.clientMessageId)?.dispatchState).toBe('accepted')
   })
 })

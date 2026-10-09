@@ -139,7 +139,8 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     expected &&
     exit.startupUnanswered &&
     close?.cause !== 'host-stop' &&
-    close?.cause !== 'user-stop'
+    close?.cause !== 'user-stop' &&
+    close?.cause !== 'context-clear'
       ? close?.quit
         ? ('hostRestarted' as const)
         : ('chatClosed' as const)

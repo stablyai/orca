@@ -8,6 +8,7 @@ import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
 import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
 import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/display-name-provenance'
+import { createWorktreeWithStartupAgent } from '../../../agent-launch/startup-agent-worktree-create'
 import { defineMethod } from '../core'
 import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
 import { resolvePairedCallerHostId } from './paired-caller-host-id'
@@ -102,7 +103,8 @@ export const WORKTREE_METHODS = [
         // Why: provenance tokens are reserved before creation so retries can recover,
         // but failed create attempts must release the reservation for a safe retry.
         try {
-          const result = await runtime.createManagedWorktree(
+          const result = await createWorktreeWithStartupAgent(
+            runtime,
             buildManagedWorktreeCreateArgs(
               params,
               {

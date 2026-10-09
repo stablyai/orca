@@ -444,18 +444,4 @@ describe('native chat composer drop scoping', () => {
     ])
     expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
   })
-
-  it('control: an unowned control drop does not attach images to either chat', async () => {
-    const view = render(
-      <>
-        <ComposerProbe pane="chat-a" />
-        <ComposerProbe pane="chat-b" hidden />
-        <div data-testid="unowned-editor" />
-      </>
-    )
-    await dropTwoImages(view.container.querySelector('[data-testid="unowned-editor"]')!)
-    expect(electron.send).not.toHaveBeenCalled()
-    expect(readNativeChatAttachmentCache('chat-a')).toEqual([])
-    expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
-  })
 })

@@ -25,6 +25,27 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('MermaidBlock rendering', () => {
+  it('keeps the displayed source in place until the SVG is ready', async () => {
+    const pending = Promise.withResolvers<{ svg: string }>()
+    mermaid.render.mockReturnValueOnce(pending.promise)
+    const { container } = render(
+      <MermaidBlock
+        content={complete}
+        isDark={false}
+        className="diagram-frame"
+        pendingContent={<pre data-testid="pending-source">{complete}</pre>}
+      />
+    )
+    await waitFor(() => expect(mermaid.render).toHaveBeenCalledTimes(1))
+    expect(screen.getByTestId('pending-source').textContent).toBe(complete)
+    expect(container.querySelector('.diagram-frame')).toBeNull()
+    expect(container.querySelector('.mermaid-block')).toBeNull()
+
+    await act(async () => pending.resolve({ svg: diagram }))
+    expect(container.querySelector('.diagram-frame svg')).toHaveTextContent('Sync with main once')
+    expect(screen.queryByTestId('pending-source')).toBeNull()
+  })
+
   it('replaces an invalid partial source error with the completed diagram', async () => {
     mermaid.render.mockRejectedValueOnce(new Error('Parse error on line 2'))
     const { container, rerender } = render(<MermaidBlock content={partial} isDark={false} />)

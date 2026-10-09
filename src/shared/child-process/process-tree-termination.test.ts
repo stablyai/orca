@@ -8,6 +8,7 @@ vi.mock('node:child_process', () => ({ spawn: spawnMock }))
 
 import { forceTerminateProcessTree, signalProcessTree } from './process-tree-termination'
 import { setProcessTreeKillGate, type ProcessTreeKill } from './process-tree-kill-gate'
+import { windowsSystem32Binary } from './windows-system-binary'
 
 function mockProcess(pid: number): ChildProcess {
   const child = new EventEmitter() as EventEmitter & {
@@ -33,6 +34,7 @@ describe('forceTerminateProcessTree', () => {
   afterEach(() => {
     spawnMock.mockReset()
     vi.restoreAllMocks()
+    vi.unstubAllEnvs()
     vi.useRealTimers()
   })
 
@@ -50,7 +52,7 @@ describe('forceTerminateProcessTree', () => {
       await Promise.resolve()
       expect(settled).toBe(false)
       expect(spawnMock).toHaveBeenCalledWith(
-        'taskkill',
+        windowsSystem32Binary('taskkill.exe'),
         ['/pid', '1234', '/t', '/f'],
         expect.objectContaining({ shell: false, windowsHide: true })
       )
@@ -58,6 +60,26 @@ describe('forceTerminateProcessTree', () => {
       taskkill.emit('close', 0)
       await expect(pending).resolves.toBe(true)
       expect(child.kill).not.toHaveBeenCalled()
+    })
+  })
+
+  it.each(['', 'D:\\shadow'])('uses System32 taskkill when PATH is %j', async (path) => {
+    await withWindows(async () => {
+      vi.stubEnv('SystemRoot', 'D:\\Windows')
+      vi.stubEnv('PATH', path)
+      vi.stubEnv('Path', path)
+      const taskkill = mockProcess(5678)
+      spawnMock.mockReturnValue(taskkill)
+
+      const pending = forceTerminateProcessTree(mockProcess(1234))
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'D:\\Windows\\System32\\taskkill.exe',
+        ['/pid', '1234', '/t', '/f'],
+        expect.objectContaining({ shell: false, windowsHide: true })
+      )
+      taskkill.emit('close', 0)
+      await expect(pending).resolves.toBe(true)
     })
   })
 

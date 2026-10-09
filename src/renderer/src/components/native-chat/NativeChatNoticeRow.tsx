@@ -46,8 +46,11 @@ export function NativeChatNoticeRow({
 }): React.JSX.Element {
   useTranslation()
   const orcaStopView = useNativeChatOrcaStopView()
-  if (block.presentation === 'compaction') {
-    const label = translate('components.native-chat.notices.compaction', 'Context compacted')
+  if (block.presentation === 'compaction' || block.presentation === 'context-cleared') {
+    const label =
+      block.presentation === 'context-cleared'
+        ? translate('components.native-chat.notices.contextCleared', 'Context cleared')
+        : translate('components.native-chat.notices.compaction', 'Context compacted')
     return (
       <div
         role="separator"

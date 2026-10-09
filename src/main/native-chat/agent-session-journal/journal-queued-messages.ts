@@ -47,6 +47,8 @@ import {
 import { AgentSessionJournalError, assertJournalWritable } from './journal-write-guards'
 import type { JournalAttachmentClaim } from './journal-submission-hook'
 import type { JournalWriteBody, JournalWriteResult } from './journal-write-queue'
+import { QueuedMessageNotConsumableError } from './queued-message-consume-error'
+export { QueuedMessageNotConsumableError } from './queued-message-consume-error'
 
 /** Tombstones must outlive the window in which their operation id could still be admitted as new. */
 export const QUEUED_MESSAGE_REPLAY_WINDOW_MS =
@@ -111,18 +113,13 @@ export class JournalQueuedMessages {
     return queuedMessagesSettledByOp(this.deps.database().db, this.deps.sessionId, settledByOp)
   }
 
-  /** `carriedFrom`: a /clear's carry. The card is its own 'cleared' pause, so it lands paused;
-   *  `holdReason` carries a hold of its own over with it.
-   *  `requireAttachments`: a client's own draft, refused whole when an attachment it names is no
-   *  longer stored; the host's own writes (the carry) claim best effort.
-   *  `receipt`: the send's ledger answer, committed with the draft only when this inserts it. */
+  /** Attachments and the send receipt commit with the card. */
   insert(
     input: {
       messageId: string
       body: AgentJournalMessageItem
       fingerprint: string
       hostInstance: string
-      carriedFrom?: string
       requireAttachments?: true
       holdReason?: QueuedMessageHoldReason
     },
@@ -240,6 +237,21 @@ export class JournalQueuedMessages {
         }),
       (withdrawn) => withdrawn.length > 0
     )
+  }
+
+  /** Withdraw commands with the clear's divider and receipt on the same connection. */
+  withdrawInTransaction(
+    db: Database.Database,
+    input: { messageIds: readonly string[]; settledByOp: string }
+  ): void {
+    if (this.deps.database().db !== db) {
+      throw new AgentSessionJournalError('journal_closed', 'withdraw crossed database handles')
+    }
+    this.changeRevision += withdrawQueuedMessages(db, {
+      ...input,
+      sessionId: this.deps.sessionId,
+      now: this.deps.now()
+    }).length
   }
 
   /** One standalone draft-table transaction on the journal's queue; one that
@@ -367,15 +379,5 @@ export class JournalQueuedMessages {
       },
       (changed) => changed > 0
     ).then(() => undefined)
-  }
-}
-
-export class QueuedMessageNotConsumableError extends Error {
-  constructor(
-    readonly messageId: string,
-    readonly expected: 'waiting' | 'returned'
-  ) {
-    super(`queued message ${messageId} is no longer ${expected}`)
-    this.name = 'QueuedMessageNotConsumableError'
   }
 }

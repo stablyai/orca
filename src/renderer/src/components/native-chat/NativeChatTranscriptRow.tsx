@@ -123,7 +123,8 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           inSubagentSection={slot.depth > 0}
           runtimeContext={context.runtimeContext}
           rewind={
-            nativeChatRowOffersRewind(message, slot, deliveryNotice !== undefined)
+            nativeChatRowOffersRewind(message, slot, deliveryNotice !== undefined) &&
+            (!rewind?.eligibleItemIds || rewind.eligibleItemIds.has(message.id))
               ? rewind
               : undefined
           }

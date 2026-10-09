@@ -1,7 +1,7 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
 // A chat worker's coordinator mail lands in its Dispatch's mailbox. When the pointer to it was held
 // (the provider died before taking it), the chat's next idle edge points it again, after a restart
-// or in the session a /clear continued the chat in, as it does for a chat's own mail.
+// or in the same chat after /clear, as it does for a chat's own mail.
 
 import { describe, expect, it, vi } from 'vitest'
 import { formatOrcaSessionAddress } from '../../shared/orca-session-address'
@@ -79,11 +79,12 @@ describe("a chat worker's held Dispatch mail is pointed again", () => {
     expect(turnText(revived.turns[1]!)).toMatch(POINTER)
   })
 
-  it('in the session a /clear continued the chat in', async () => {
+  it('in the same chat after /clear', async () => {
     await heldDispatchMail()
-    const successor = await clearChat(PEER_CHAT)
+    const cleared = await clearChat(PEER_CHAT)
+    expect(cleared).toBe(PEER_CHAT)
 
-    const revived = await nextTurn(successor)
+    const revived = await nextTurn(cleared)
 
     await vi.waitFor(() => expect(revived.turns).toHaveLength(2), WAIT)
     expect(turnText(revived.turns[1]!)).toMatch(POINTER)

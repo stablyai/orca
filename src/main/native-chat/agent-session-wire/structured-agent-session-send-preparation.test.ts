@@ -199,7 +199,7 @@ describe('a send with no live owner', () => {
     expect(acquire).not.toHaveBeenCalled()
   })
 
-  it('does not restart an owner for a send the session refuses anyway', async () => {
+  it('restarts an independently retained old-build clear source', async () => {
     await loseOwner()
     await store.transitionHandoff(SESSION, (current) => ({
       ...current,
@@ -213,12 +213,10 @@ describe('a send with no live owner', () => {
       }
     }))
 
-    await expect(host.send(CALLER, sendParams('into a cleared chat'))).resolves.toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_invalid' }
+    await expect(host.send(CALLER, sendParams('into the retained chat'))).resolves.toMatchObject({
+      ok: true
     })
-
-    expect(acquire).not.toHaveBeenCalled()
+    await eventually(() => expect(acquire).toHaveBeenCalledOnce())
   })
 
   it('restarts an owner that exited while the session stayed readable', async () => {

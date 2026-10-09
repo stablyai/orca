@@ -24,7 +24,8 @@ import type {
 } from '../../shared/agent-launch-intent'
 import { agentPromptRidesLaunchCommand } from '../../shared/tui-agent-startup'
 import type { AgentLaunchModeReceipt } from './agent-launch-mode'
-import type { AgentLaunchExecution, CreatedSurface } from './agent-launch-executor'
+import type { CreatedSurface } from './agent-launch-executor'
+import type { AgentLaunchSurfaceExecution } from './agent-launch-execution'
 import type { AgentLaunchStructuredSurface } from './agent-launch-surface-factories'
 
 export const HANDED_TO_TERMINAL: AgentLaunchPromptDisposal = { outcome: 'handed-to-terminal' }
@@ -49,7 +50,7 @@ export function settledAtCreation(
 
 /** Each surface delivers its own way, so the disposal is decided where the surface is known. */
 export async function settleLaunchPromptDisposal(
-  execution: AgentLaunchExecution,
+  execution: AgentLaunchSurfaceExecution,
   created: CreatedSurface
 ): Promise<AgentLaunchPromptDisposal> {
   if (created.structured) {
@@ -69,7 +70,7 @@ export async function settleLaunchPromptDisposal(
  * `draft` is excluded: a structured draft belongs in the composer, and the host has none.
  */
 async function deliverStructuredLaunchPrompt(
-  execution: AgentLaunchExecution,
+  execution: AgentLaunchSurfaceExecution,
   structured: AgentLaunchStructuredSurface
 ): Promise<string | null> {
   const { intent, surfaces } = execution
@@ -98,7 +99,7 @@ async function deliverStructuredLaunchPrompt(
  * composer accepted it, so a receipt claiming delivery would be a guess.
  */
 export async function deliverTerminalLaunchPrompt(
-  execution: AgentLaunchExecution,
+  execution: AgentLaunchSurfaceExecution,
   handle: string,
   { freshLaunch }: { freshLaunch: boolean }
 ): Promise<AgentLaunchPromptDisposal> {
@@ -146,8 +147,10 @@ export function launchCommandPrompt(
  * reachable only from a committed message id, `handed-to-terminal` only from a launch command that
  * carried the text or a PTY write that returned, and everything else under-claims as
  * `not-delivered`. A live answer has no "maybe": `unconfirmed` is written only into the record
- * before delivery runs (`settledAtCreation`), and is read back only by a replay. Dispatch doubt is
- * not this tier's to report: the submission row carries it.
+ * before delivery runs (`settledAtCreation`), and is read back only by a replay. The one live
+ * exception never reaches the wire: a `legacy-host` create's unawaited post-start send
+ * (agent-launch-legacy-host.ts). Dispatch doubt is not this tier's to report: the submission row
+ * carries it.
  */
 export function promptReceipt(
   intent: AgentLaunchIntent,

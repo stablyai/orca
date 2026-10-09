@@ -12,6 +12,7 @@ import type {
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
 import { NativeChatMessageList } from './NativeChatMessageList'
+import { transcriptRowOffset } from './native-chat-window-test-layout'
 import type { NativeChatRailOutlineEntry } from './native-chat-message-rail-items'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
 import {
@@ -177,7 +178,7 @@ describe('jumping from the rail while following the end', () => {
           if (this.hasAttribute('data-native-chat-window')) {
             return layout.aboveTranscriptPx
           }
-          return this.dataset.index === undefined ? 0 : Number.parseFloat(this.style.top) || 0
+          return this.dataset.index === undefined ? 0 : transcriptRowOffset(this)
         }
       }),
       overrideLayoutProperty('offsetParent', {
@@ -263,7 +264,7 @@ describe('jumping from the rail while following the end', () => {
     if (!row) {
       throw new Error(`${prompt} has no mounted row`)
     }
-    return layout.aboveTranscriptPx + Number.parseFloat(row.style.top) - scroller().scrollTop
+    return layout.aboveTranscriptPx + row.offsetTop - scroller().scrollTop
   }
 
   it.each([

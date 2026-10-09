@@ -560,3 +560,29 @@ describe('Pi RPC session ownership and delivery', () => {
     expect(await other.adapter.closeSession(sessionId)).toBe(false)
   })
 })
+
+describe('Pi RPC start without a model', () => {
+  it('reports a start that listed no model as signed out, for that child only', async () => {
+    const h = await setup()
+    expect(h.adapter.startUnavailable(sessionId)).toBeUndefined()
+    await h.adapter.closeSession(sessionId)
+    h.openConnection.mockImplementationOnce((_launch, handlers) => {
+      const connection = new FakeConnection(handlers)
+      // What a signed-out Pi lists (captured from Pi 1.0.4 in __fixtures__/signed-out.jsonl).
+      connection.requestOverride = (command) =>
+        command === 'get_available_models' ? Promise.resolve({ models: [] }) : undefined
+      h.connections.push(connection)
+      return connection
+    })
+    await h.adapter.acquire({ ...h.input, fence: 8 })
+    expect(h.adapter.startUnavailable(sessionId)).toEqual({ reason: 'notSignedIn' })
+    // Its root gone while its output still drains: that child says nothing more.
+    const child = h.connections.at(-1)!
+    child.rootVerdict = 'exited'
+    expect(child.closed).toBe(false)
+    expect(h.adapter.startUnavailable(sessionId)).toBeUndefined()
+    child.rootVerdict = 'live'
+    await h.adapter.closeSession(sessionId)
+    expect(h.adapter.startUnavailable(sessionId)).toBeUndefined()
+  })
+})

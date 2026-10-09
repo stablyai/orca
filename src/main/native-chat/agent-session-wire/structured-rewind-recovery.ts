@@ -14,6 +14,8 @@ import type { StructuredAgentSessionAdapter } from './structured-agent-session-a
 import { AGENT_SESSION_HISTORY_MAX_PAGE_BYTES } from './agent-session-history-page-bounds'
 import { rewindRefusal } from './structured-rewind-refusal'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 
 type RewindRecoveryDeps = { store: AgentSessionRecordStore; logger: StructuredAgentSessionLogger }
 
@@ -71,7 +73,12 @@ export async function recoverStructuredRewind(
   journal: AgentSessionJournal,
   fence: number,
   adapter?: StructuredAgentSessionAdapter,
-  now: () => number = Date.now
+  now: () => number = Date.now,
+  receipt?: (
+    rewind: AgentSessionRewindRecord,
+    fence: number,
+    cursor: AgentJournalCursor
+  ) => JournalOperationReceipt
 ): Promise<void> {
   const { store } = deps
   let rewind = store.getRecord(sessionId)?.rewind
@@ -147,6 +154,26 @@ export async function recoverStructuredRewind(
     return
   }
   const replacement = rewind.retained.map(retainedRowReplacement)
+  if (rewind.contextClearOperationId && rewind.contextClearSequence) {
+    if (
+      store.getRecord(sessionId)?.providerContextBoundary?.operationId !==
+        rewind.contextClearOperationId ||
+      journal.cursor().epoch !== rewind.expectedEpoch ||
+      journal.context.floor()?.sequence !== rewind.contextClearSequence
+    ) {
+      throw new Error('agent_session_rewind:stale-context')
+    }
+    const completed = rewind
+    await journal.context.rewind(
+      { epoch: completed.expectedEpoch, sequence: completed.contextClearSequence! },
+      fence,
+      replacement,
+      (cursor) =>
+        receipt?.(completed, fence, cursor) ??
+        store.conversationReceipts.rewind(sessionId, fence, completed, cursor)
+    )
+    return
+  }
   // A crash after the journal transaction must settle its existing epoch, not replace it twice.
   const alreadyReplaced = journal.cursor().epoch !== rewind.expectedEpoch
   if (

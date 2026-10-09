@@ -101,6 +101,31 @@ describe('runQuickCommandInNewTab', () => {
     )
   })
 
+  it('appends the new terminal after editor and browser tabs in the stored tab order', () => {
+    mockState.openFiles = [{ id: 'file-1', worktreeId: 'wt-1' }]
+    mockState.browserTabsByWorktree = { 'wt-1': [{ id: 'browser-1' }] }
+    mockState.tabBarOrderByWorktree = { 'wt-1': ['file-1', 'tab-existing'] }
+
+    runQuickCommandInNewTab({
+      command: {
+        id: 'status',
+        label: 'Status',
+        action: 'terminal-command',
+        command: 'git status',
+        appendEnter: true
+      },
+      worktreeId: 'wt-1',
+      groupId: 'group-1'
+    })
+
+    expect(mockState.setTabBarOrder).toHaveBeenCalledWith('wt-1', [
+      'file-1',
+      'tab-existing',
+      'browser-1',
+      'tab-new'
+    ])
+  })
+
   it('keeps single-line quick commands unchanged', () => {
     runQuickCommandInNewTab({
       command: {

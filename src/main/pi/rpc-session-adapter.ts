@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
+import type { AgentSessionUnavailable } from '../../shared/agent-session-availability'
 import { agentSessionFailureFact } from '../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
 import {
@@ -19,6 +20,7 @@ import { piRpcProviderLink, type PiRpcResolvedLaunch } from './rpc-launch-resolu
 import { PiRpcSession, type PiRpcSessionDeps, type PiRpcConnection } from './rpc-session'
 import { PiRpcPromptError, preparePiRpcPrompt } from './rpc-prompt'
 import { applyPiRpcSessionOption, readPiRpcSessionOptions } from './rpc-options'
+import { withLiveCatalogListing } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { supportsSupervisedProviderChildLocation } from '../provider-process/supervised-provider-child-location'
 import { ClaudeDispatchContentError } from '../claude/claude-structured-dispatch-content'
 
@@ -224,14 +226,27 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
     const session = this.session(input.sessionId, input.fence)
     return applyPiRpcSessionOption(session.connection, session.selected, input.key, input.value)
   }
-  readOptions: NonNullable<StructuredAgentSessionAdapter['readOptions']> = (input) =>
-    readPiRpcSessionOptions(this.session(input.sessionId, input.fence).connection)
+  readOptions: NonNullable<StructuredAgentSessionAdapter['readOptions']> = async (input) =>
+    withLiveCatalogListing(
+      await readPiRpcSessionOptions(this.session(input.sessionId, input.fence).connection)
+    )
   readCommands = (id: string) => this.sessions.get(id)?.commands
   readOptionRestoreFailures(id: string): readonly string[] {
     return this.sessions.get(id)?.skipped ?? []
   }
   holdsDispatch(id: string): boolean {
     return this.sessions.get(id)?.turns.holdsDispatch ?? false
+  }
+  /** Started with no model listed: Pi keeps a placeholder, so every prompt this child takes fails
+   *  as not signed in, even after a sign-in, which only a new Pi reads. */
+  startUnavailable(id: string): AgentSessionUnavailable | undefined {
+    const session = this.sessions.get(id)
+    return session &&
+      !session.connection.closed &&
+      session.connection.rootVerdict !== 'exited' &&
+      session.options?.models.length === 0
+      ? { reason: 'notSignedIn' }
+      : undefined
   }
 
   async closeSession(id: string, requested = true): Promise<boolean> {

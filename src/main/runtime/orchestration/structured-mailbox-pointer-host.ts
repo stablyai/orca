@@ -55,7 +55,16 @@ async function readPointerSessionFacts(
   sessionId: string
 ): Promise<StructuredPointerSessionFacts | null> {
   const snapshot = await readSessionJournal(sessionId)
-  return snapshot ? { submissions: snapshot.submissions } : null
+  if (!snapshot) {
+    return null
+  }
+  const boundary =
+    getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)?.providerContextBoundary
+  return {
+    submissions: boundary
+      ? snapshot.submissions.filter((submission) => submission.fence > boundary.afterFence)
+      : snapshot.submissions
+  }
 }
 
 async function readSessionJournal(sessionId: string): Promise<AgentJournalSnapshot | null> {
@@ -85,6 +94,11 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
       return (
         getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? null
       )
+    },
+
+    currentContextClearOperationId(sessionId) {
+      return getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)
+        ?.providerContextBoundary?.operationId
     },
 
     async send(input) {

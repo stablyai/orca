@@ -1,3 +1,7 @@
+import {
+  expectSupersededRewindReplay,
+  expectRetainedPrefixRewindReplay
+} from './structured-agent-session-rewind-replay.test-fixture'
 import { expectRawStopNoteRewindRecovery } from './structured-agent-session-rewind-stop-note.test-fixture'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -190,6 +194,9 @@ async function params(itemId: string, epoch?: string) {
 const LATE = { provider: 'codex' as const, threadId: HOST_TEST_THREAD, turnId: 'late', ordinal: 0 }
 
 describe('host rewind', () => {
+  it('replays the original ordinary rewind after another rewind replaces its record', () =>
+    expectSupersededRewindReplay({ host, store, rewind, recoverRewind, seed, params }))
+
   it('retains the raw Stop failure and recovers a committed rewind against raw bodies', async () => {
     await expectRawStopNoteRewindRecovery({ host, store, rewind })
   })
@@ -266,18 +273,8 @@ describe('host rewind', () => {
     expect(await second).toMatchObject({ ok: false, refusal: { rewindReason: 'stale-epoch' } })
     expect(rewind).toHaveBeenCalledTimes(1)
   })
-  it('replaces the epoch with the retained prefix and replays without another provider call', async () => {
-    const target = await seed()
-    const request = await params(target)
-    const result = await host.rewind(caller, request)
-    expect(result).toMatchObject({ ok: true })
-    expect((await host.journalSnapshot(HOST_TEST_SESSION)).items).toHaveLength(1)
-    expect((await host.journalSnapshot(HOST_TEST_SESSION)).cursor.epoch).not.toBe(
-      request.expectedEpoch
-    )
-    expect(await host.rewind(caller, request)).toMatchObject({ ok: true, replayed: true })
-    expect(rewind).toHaveBeenCalledTimes(1)
-  })
+  it('replaces the epoch with the retained prefix and replays without another provider call', () =>
+    expectRetainedPrefixRewindReplay({ host, rewind, seed, params }))
   it('keeps when each kept message was first seen, not when the rewind re-read it', async () => {
     const target = await seed()
     const kept = (await host.journalSnapshot(HOST_TEST_SESSION)).items[0]!

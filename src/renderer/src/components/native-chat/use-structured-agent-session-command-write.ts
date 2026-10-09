@@ -10,12 +10,7 @@ import type {
 } from './use-structured-agent-session-mutate'
 import { holdStructuredAgentSessionSends } from './structured-agent-session-pending-sends'
 
-/**
- * Sends a conversation command. A /clear keeps the chat's sends out while it runs, as its host
- * refuses them, so text typed meanwhile stays in the box. Once it moves the chat to a new
- * conversation, the old one, which its host also refuses, takes nothing until this view leaves it.
- * Either way the hold ends by the command's deadline: the local call has none of its own.
- */
+/** Holds sends during clear; an older host's replacement keeps the hold until the view leaves. */
 export function useStructuredAgentSessionCommandWrite(
   sessionId: string,
   write: StructuredAgentSessionWrite

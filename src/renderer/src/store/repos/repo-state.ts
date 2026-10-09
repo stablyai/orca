@@ -141,7 +141,11 @@ export type AddRepoPathOptions = {
   displayName?: string
 }
 
-export type RuntimeCatalogFetchOptions = { runtimeEnvironmentId?: string | null }
+export type RuntimeCatalogFetchOptions = {
+  runtimeEnvironmentId?: string | null
+  /** Conversion must retain its source rows until every destination catalog loads. */
+  throwOnError?: boolean
+}
 
 export type RepoSlice = {
   repos: readonly Repo[]

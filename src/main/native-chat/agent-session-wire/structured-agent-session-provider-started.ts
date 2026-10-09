@@ -66,6 +66,9 @@ export async function settleStructuredAgentSessionProviderStarted(
     context.runtimeState.startupAttempts.ready(event.sessionId, child)
     const delivered = context.wakeDelivery(event.sessionId)
     noteStructuredAgentSessionProviderStarted(context.deps, event.sessionId)
+    if (event.catalogListing) {
+      context.deps.modelCatalog?.recordLiveListing(event.sessionId, event.catalogListing)
+    }
     context.publishStatus?.(event.sessionId)
     return { delivered }
   })

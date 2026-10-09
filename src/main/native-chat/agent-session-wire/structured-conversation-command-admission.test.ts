@@ -166,7 +166,7 @@ describe('conversationCommandBlocked for a command sent at rest (C6, B3)', () =>
     expect(conversationCommandBlocked(contextWith(undefined), record, [])).toBeNull()
   })
 
-  it('refuses on a committed clear', () => {
+  it('does not permanently refuse an old-build clear source', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the admission reads only the lease and the command record.
     const record = {
       lease: {},
@@ -177,10 +177,7 @@ describe('conversationCommandBlocked for a command sent at rest (C6, B3)', () =>
         replacementSessionId: 'clear-replacement'
       }
     } as unknown as AgentSessionRecord
-    expect(conversationCommandBlocked(contextWith(undefined), record, [])).toMatchObject({
-      code: 'agent_session_operation_invalid',
-      details: { reason: 'conversationCleared' }
-    })
+    expect(conversationCommandBlocked(contextWith(undefined), record, [])).toBeNull()
   })
 
   it('at handover, lets the command itself and messages queued behind it wait', () => {

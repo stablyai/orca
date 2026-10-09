@@ -9,11 +9,14 @@ import { NativeChatMarkdown } from './NativeChatMarkdown'
 export function NativeChatReasoningBody({
   markdown,
   onLinkClick,
-  allowFileUriLinks
+  allowFileUriLinks,
+  streaming = false
 }: {
   markdown: string
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
+  /** The block is still arriving under the live activity line. */
+  streaming?: boolean
 }): React.JSX.Element {
   return (
     <div
@@ -28,6 +31,7 @@ export function NativeChatReasoningBody({
         onLinkClick={onLinkClick}
         allowFileUriLinks={allowFileUriLinks}
         linkifyFilePaths={onLinkClick !== undefined}
+        streaming={streaming}
       />
     </div>
   )

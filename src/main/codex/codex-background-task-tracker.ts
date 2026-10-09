@@ -12,7 +12,7 @@ import { CodexBackgroundCommandTracker } from './codex-background-command-tracke
 import { CodexChildWorkEvidence } from './codex-child-work-evidence'
 import type { CodexAbandonedCommand } from './codex-prompt-registry'
 import type { CodexStructuredSessionAdapterDeps } from './codex-structured-session-state'
-import { boundSubagentField } from './codex-subagent-group-body'
+import { boundSubagentField } from '../native-chat/agent-session-journal/journal-subagent-group-body'
 
 /** Where a session's child-work evidence goes, and the host clock that stamps it. */
 export type CodexChildWorkSink = {

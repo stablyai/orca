@@ -3549,7 +3549,7 @@
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "Reconnecting to remote runtime",
             "disconnectedTitle": "Remote runtime disconnected",
-            "retryingBody": "Orca will retry for up to one minute. This terminal will resume if the connection returns.",
+            "retryingBody": "Orca is retrying automatically. This terminal will resume if the connection returns.",
             "disconnectedBody": "Automatic retries stopped. Reconnect to resume this terminal session.",
             "reconnectButton": "Reconnect"
           },
@@ -4312,6 +4312,10 @@
             "resumingTooltip": "Restoring interrupted chats and asking them to carry on…",
             "resumingProgressLabel": "Resuming chats {{value0}}/{{value1}}",
             "resumingProgressAria": "Resuming chats, {{value0}} of {{value1}} done. Click to open details."
+          },
+          "StatusBarUsageChangeNotices": {
+            "compactTitle": "Usage display is now compact",
+            "compactBody": "One headline metric per provider. Choose <detailed>Detailed</detailed> in the Usage menu to show more limits."
           }
         }
       },
@@ -12489,7 +12493,11 @@
             "confirmRestore": "Restore snapshot and restart",
             "keepState": "Keep state",
             "statusUnknown": "Status unknown",
-            "checking": "Checking…"
+            "checking": "Checking…",
+            "forget": "Forget…",
+            "confirmForget": "Forget on this desktop",
+            "keepLinked": "Keep linked",
+            "forgetDescription": "Unlinks this server here without contacting its host. If the host comes back, the server may still be running there."
           },
           "title": "Managed servers",
           "description": "Orca installs and runs a server on an empty SSH host and keeps it up to date.",
@@ -12557,6 +12565,7 @@
           },
           "loadFailed": "Orca couldn’t load SSH hosts and unfinished moves. Reopen Settings to try again.",
           "outcome": {
+            "activeServer": "Not done: choose another Active Server in Advanced before stopping this server.",
             "live": "Not done: terminals on this server are still running. Close them and try again.",
             "unverifiable": "Not done: Orca couldn’t confirm what is running on this server. Try again when the host is reachable.",
             "migration": "Not done: a move onto this server is unfinished. Resume it first.",
@@ -12573,7 +12582,7 @@
           "connecting": "Connecting to the managed Orca server…",
           "updating": "Updating managed server…",
           "starting": "Starting managed server…",
-          "notServing": "The managed Orca server isn’t running and couldn’t be started.",
+          "notServing": "Orca couldn’t confirm that the managed server is answering.",
           "hostNewer": "Runs a managed Orca server from a newer Orca; it keeps that version.",
           "terminalsLive": "Runs the relay until its {{count}} open terminals are closed, then moves to a managed server.",
           "terminalsLive_one": "Runs the relay until its {{count}} open terminal is closed, then moves to a managed server.",
@@ -17648,6 +17657,7 @@
       "BrowserPane": {
         "streamConnectionLost": "Lost connection to the remote server.",
         "streamConnectionUnreachable": "Cannot reach the remote server.",
+        "streamBrowserUnavailable": "The remote browser is unavailable. Check its setup on the server.",
         "streamRestartFailed": "Failed to restart remote browser stream.",
         "streamCapabilityUnsupported": "The selected runtime does not support remote browser streaming."
       },
@@ -18186,6 +18196,7 @@
         "cancelledBy": "Cancelled on {{device}}"
       },
       "notices": {
+        "contextCleared": "Context cleared",
         "compaction": "Context compacted",
         "details": "Details",
         "plan": "Plan",
@@ -18218,6 +18229,7 @@
         "skills": "Skills",
         "loadingSkills": "Loading skills...",
         "skillsLoaded": "Skills loaded",
+        "clearDescription": "Clear conversation context",
         "skillsUnavailableHost": "Skills can't be listed in SSH chats",
         "skillsLoadFailed": "Couldn't load skills",
         "retrySkills": "Retry",
@@ -18442,6 +18454,13 @@
         "groupTasks": "Tasks"
       },
       "jumpToLatest": "Jump to latest",
+      "find": {
+        "label": "Find in chat",
+        "noResults": "No results",
+        "previousMatch": "Previous match",
+        "nextMatch": "Next match",
+        "close": "Close"
+      },
       "transcriptLabel": "Conversation",
       "toggle": {
         "showTerminal": "Show terminal",
@@ -18627,6 +18646,8 @@
         "delete": "Delete",
         "moreActions": "More actions",
         "editMessage": "Edit message",
+        "showFullMessage": "Show full message",
+        "showLess": "Show less",
         "turnOffQueueing": "Turn off queueing",
         "listLabel": "Queued messages",
         "alreadySent": "This message was already sent.",
@@ -18643,7 +18664,7 @@
         "sendConfirmBody_other": "You are about to send a message. Do you want to clear the {{count}} messages previously queued?",
         "sendConfirmClear": "Clear queue",
         "sendConfirmSend": "Send message",
-        "from": "From {{names}}",
+        "fromSender": "From",
         "pausedSendFailedWaiting": "Couldn't send — press Send to retry once the agent finishes."
       },
       "thought": "Thought",
@@ -19126,6 +19147,16 @@
     }
   },
   "featureTips": {
+    "nativeChatUpgrade": {
+      "eyebrow": "New",
+      "title": "Native chat got an upgrade",
+      "intro": "New chats with supported agents now open in the upgraded chat view. To move between chat and CLI, open {{panel}} in the right sidebar:",
+      "resumeInNativeChat": "{{action}} opens a supported CLI conversation in native chat.",
+      "resumeInCli": "{{action}} copies a Claude or Codex chat into a new CLI session. The original chat stays as it is.",
+      "settingsInstruction": "Manage Chat UI in",
+      "settingsLink": "Settings → Experimental",
+      "gotIt": "Got it"
+    },
     "voice": {
       "demoPrompt": "Review this diff for edge cases and add tests for anything you find.",
       "startDictation": "Start dictation",
@@ -19622,5 +19653,10 @@
       "updateRuntime": "Update the remote runtime to change workspace links",
       "updateRuntimeSafely": "Update the remote runtime to safely change workspace links"
     }
+  },
+  "tabHoverCard": {
+    "browser": "Browser",
+    "editor": "Editor",
+    "terminal": "Terminal"
   }
 }

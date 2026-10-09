@@ -320,6 +320,7 @@ describe('optional notice metadata', () => {
   it.each([
     {},
     { presentation: 'compaction' },
+    { presentation: 'compaction-skipped', tone: 'warning' },
     { presentation: 'plan-document' },
     { tone: 'warning' },
     { tone: 'error' },

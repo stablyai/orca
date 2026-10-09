@@ -118,17 +118,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       await ensureHostInstalled(ctx)
       const host = requireSessionHost(ctx, params.envelope.sessionId)
       await host.revealSession(params.envelope.sessionId)
-      const result = await host.conversationCommand(callerFor(ctx), { ...params, userSend: true })
-      if (result.ok && result.value.command === 'clear' && result.value.replacementSessionId) {
-        const replacement = host
-          .conversationReplacements()
-          .find((entry) => entry.sourceSessionId === params.envelope.sessionId)
-        if (replacement) {
-          ctx.runtime.replaceStructuredAgentSessionTab(replacement)
-        }
-        await host.close(params.envelope.sessionId, 'user-close')
-      }
-      return result
+      return host.conversationCommand(callerFor(ctx), { ...params, userSend: true })
     }
   }),
   defineMethod({

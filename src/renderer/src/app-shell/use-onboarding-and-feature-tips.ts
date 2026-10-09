@@ -32,11 +32,13 @@ export function useOnboardingAndFeatureTips() {
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const featureTipsSeenIds = useAppStore((s) => s.featureTipsSeenIds)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
+  const inNativeChatUpgradeTipAudience = useAppStore((s) => s.inNativeChatUpgradeTipAudience)
   const contextualToursAutoEligible = useAppStore((s) => s.contextualToursAutoEligible)
   const actions = useAppStore(
     useShallow((s) => ({
       openModal: s.openModal,
       markFeatureTipsSeen: s.markFeatureTipsSeen,
+      setInNativeChatUpgradeTipAudience: s.setInNativeChatUpgradeTipAudience,
       setContextualToursAutoEligible: s.setContextualToursAutoEligible,
       setContextualToursOnboardingVisible: s.setContextualToursOnboardingVisible
     }))
@@ -91,11 +93,37 @@ export function useOnboardingAndFeatureTips() {
   }, [persistedUIReady])
 
   useEffect(() => {
+    if (!persistedUIReady) {
+      return
+    }
+
+    let cancelled = false
+    void window.api.onboarding
+      .isInNativeChatUpgradeTipAudience()
+      .then((inAudience) => {
+        if (!cancelled) {
+          actions.setInNativeChatUpgradeTipAudience(inAudience)
+        }
+      })
+      .catch(() => {
+        // Why: fail closed, and never hold the other tips behind a failed read.
+        if (!cancelled) {
+          actions.setInNativeChatUpgradeTipAudience(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [actions, persistedUIReady])
+
+  useEffect(() => {
     const featureTipsDecision = getFeatureTipsAppOpenDecision({
       activeModal,
       cliInstalled: featureTipCliInstalled,
       featureTipsSeenIds,
       featureInteractions,
+      inNativeChatUpgradeTipAudience,
       onboarding,
       persistedUIReady,
       promptedThisSession: promptedThisSessionRef.current,
@@ -132,6 +160,7 @@ export function useOnboardingAndFeatureTips() {
     featureTipCliInstalled,
     featureInteractions,
     featureTipsSeenIds,
+    inNativeChatUpgradeTipAudience,
     onboarding,
     persistedUIReady,
     settings

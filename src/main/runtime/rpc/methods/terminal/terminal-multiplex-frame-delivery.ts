@@ -1,5 +1,6 @@
 import {
   TerminalStreamOpcode,
+  encodeTerminalInputAck,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
@@ -66,6 +67,18 @@ export function installMultiplexFrameDelivery(
       return
     }
     state.sendFrame(stream.streamId, TerminalStreamOpcode.WriteUnavailable)
+  }
+  state.sendInputAck = (stream, appliedSeq, kind): void => {
+    // Why: a detached stream's client already resends on its successor, which acks again.
+    if (state.closed || streams.get(stream.streamId) !== stream || stream.inputSessionId === null) {
+      return
+    }
+    state.sendFrame(
+      stream.streamId,
+      TerminalStreamOpcode.InputAck,
+      encodeTerminalInputAck(kind),
+      appliedSeq
+    )
   }
   state.sendResizedFrame = (
     stream: TerminalMultiplexStream,

@@ -17,7 +17,7 @@ import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
 import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
-import type * as RewindModule from './use-native-chat-rewind'
+import type * as RewindModule from './use-structured-agent-session-rewind'
 
 const mocks = vi.hoisted(() => ({
   call: vi.fn(),
@@ -53,7 +53,7 @@ vi.mock('./use-structured-agent-session-read', () => ({
 }))
 
 // The real rewind hook, with only its in-flight latch forced when a test says so.
-vi.mock('./use-native-chat-rewind', async (importOriginal) => {
+vi.mock('./use-structured-agent-session-rewind', async (importOriginal) => {
   const actual = await importOriginal<typeof RewindModule>()
   return {
     ...actual,

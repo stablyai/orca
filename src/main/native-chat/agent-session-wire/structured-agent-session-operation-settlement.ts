@@ -28,10 +28,11 @@ export async function runSettledAgentSessionMutation<TValue>(input: {
   ) => input.store.recordOperationOutcome({ ...operation, outcome })
   const receipt = input.plan.settlesWithWrite
     ? observedReceipt(
-        input.store.operationOutcomeReceipt({
-          ...operation,
-          outcome: { status: 'succeeded', sessionId: input.envelope.sessionId }
-        })
+        input.plan.successReceipt?.() ??
+          input.store.operationOutcomeReceipt({
+            ...operation,
+            outcome: { status: 'succeeded', sessionId: input.envelope.sessionId }
+          })
       )
     : undefined
   const context = receipt ? { ...input.context, operationReceipt: receipt } : input.context

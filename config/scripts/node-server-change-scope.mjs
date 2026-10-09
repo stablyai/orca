@@ -106,6 +106,14 @@ export async function collectNodeServerInputs({ root = ROOT, entryPoints } = {})
   )
 }
 
+function isSourceUnitTest(file) {
+  return (
+    /^src\/(?:[^/]+\/)*[^/]+\.test\.(?:ts|tsx)$/.test(file) &&
+    !file.includes('/../') &&
+    !file.includes('/./')
+  )
+}
+
 export async function classifyNodeServerChanges(
   changedFiles,
   collect = collectNodeServerInputs,
@@ -118,7 +126,7 @@ export async function classifyNodeServerChanges(
   const forced = changedFiles.find(
     (file) =>
       ALWAYS_FILES.has(file) ||
-      ALWAYS_PREFIXES.some((prefix) => file.startsWith(prefix)) ||
+      (ALWAYS_PREFIXES.some((prefix) => file.startsWith(prefix)) && !isSourceUnitTest(file)) ||
       selectors.some((selector) => file.includes(selector))
   )
   if (forced) {

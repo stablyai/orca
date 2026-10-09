@@ -155,6 +155,51 @@ describe('claude structured launch resolution', () => {
     expect(first.env).toMatchObject({ [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1' })
   })
 
+  it.each([false, true])(
+    'starts only the clear context, recovering its saved transcript: %s',
+    async (saved) => {
+      const boundary = { operationId: 'clear-one', afterFence: 2, clearedAt: 100 }
+      const value = record({
+        providerContextBoundary: boundary,
+        providerHandleChain: []
+      })
+      const hasTranscript = vi.fn(async () => saved)
+      const launch = await resolverFor(
+        value,
+        undefined,
+        false,
+        undefined,
+        hasTranscript
+      )({ identity: identityAt('old-leaf') })
+      const expected = claudeSessionIdForOrcaSession(SESSION_ID, boundary.operationId)
+      expect(launch.providerSessionId).toBe(expected)
+      expect(expected).not.toBe(claudeSessionIdForOrcaSession(SESSION_ID))
+      expect(launch.continuesChain).toBe(false)
+      expect(launch.resumeLeafUuid).toBeNull()
+      expect(launch.resumesTranscript).toBe(saved)
+      expect(launch.options).toMatchObject(saved ? { resume: expected } : { sessionId: expected })
+      expect(hasTranscript).toHaveBeenCalledWith(
+        expect.objectContaining({ providerSessionId: expected })
+      )
+      const retry = await resolverFor(
+        value,
+        undefined,
+        false,
+        undefined,
+        hasTranscript
+      )({ identity: IDENTITY })
+      expect(retry.providerSessionId).toBe(expected)
+      const next = await resolverFor(
+        { ...value, providerContextBoundary: { ...boundary, operationId: 'clear-two' } },
+        undefined,
+        false,
+        undefined,
+        async () => false
+      )({ identity: IDENTITY })
+      expect(next.providerSessionId).not.toBe(expected)
+    }
+  )
+
   it('resumes the durable chain head by session id and carries its leaf as bookkeeping', async () => {
     const launch = await resolverFor(
       record({

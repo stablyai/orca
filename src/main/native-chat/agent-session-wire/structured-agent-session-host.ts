@@ -316,7 +316,6 @@ export class StructuredAgentSessionHost {
 
   conversationCommand = (...args: Parameters<StructuredConversationCommandController['run']>) =>
     this.conversationCommands.run(...args)
-  conversationReplacements = () => this.conversationCommands.replacements()
   /** Undefined means unavailable; an empty array is an authoritative catalog. */
   readCommands = (sessionId: string) => ({ commands: this.clientDelivery.readCommands(sessionId) })
 

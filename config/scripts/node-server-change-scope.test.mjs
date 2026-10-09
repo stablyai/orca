@@ -96,6 +96,95 @@ it.each([
   expect((await classifyNodeServerChanges([file], async () => new Set())).shouldRun).toBe(true)
 })
 
+it('checks ordinary source unit files against actual imports before skipping the matrix', async () => {
+  const reachable = 'src/main/persistence/example/used.test.ts'
+  const unrelated = 'src/main/persistence/example/unrelated.test.tsx'
+  const removed = 'src/main/persistence/example/removed.test.ts'
+  const root = moduleTree({
+    'entry.ts': `import './${reachable}'; throw Error('never execute')`,
+    [reachable]: 'export const value = 1',
+    [unrelated]: 'throw Error("never execute unrelated test")'
+  })
+  const inputs = await collectNodeServerInputs({ root, entryPoints: ['entry.ts'] })
+  expect(inputs.has(reachable)).toBe(true)
+  expect(inputs.has(unrelated)).toBe(false)
+  expect((await classifyNodeServerChanges([reachable], async () => inputs)).shouldRun).toBe(true)
+  expect((await classifyNodeServerChanges([unrelated], async () => inputs)).shouldRun).toBe(false)
+  expect((await classifyNodeServerChanges([removed], async () => inputs)).shouldRun).toBe(false)
+})
+
+it('retains qualification when a removed ordinary unit file breaks an actual import', async () => {
+  const removed = 'src/main/persistence/example/removed.test.ts'
+  const root = moduleTree({ 'entry.ts': `import './${removed}'` })
+  const result = await classifyNodeServerChanges([removed], () =>
+    collectNodeServerInputs({ root, entryPoints: ['entry.ts'] })
+  )
+  expect(result.shouldRun).toBe(true)
+  expect(result.graphUnavailable).toBe(true)
+  expect(result.reason).toContain('Dependency graph unavailable')
+  expect(result.reason).toContain('removed.test.ts')
+})
+
+it('requests the graph for an ordinary source unit edit before dependencies are installed', async () => {
+  const result = await classifyNodeServerChanges(
+    ['src/main/persistence/example/unrelated.test.ts'],
+    async () => {
+      throw new Error('graph must not run before installation')
+    },
+    { deferGraph: true }
+  )
+  expect(result.graphRequired).toBe(true)
+  expect(result.shouldRun).toBeUndefined()
+})
+
+it.each([
+  'src/main/persistence/profile-state/removed.test.ts',
+  'src/main/sqlite/removed.test.ts',
+  'src/main/orcad/orcad-entry.test.ts',
+  'src/main/daemon/pty-subprocess/removed.test.ts',
+  'src/main/providers/agent-foreground-process-git-bash.win32.test.ts',
+  'config/scripts/node-server-change-scope.test.mjs'
+])('forces explicitly protected tests without relying on graph discovery: %s', async (file) => {
+  const result = await classifyNodeServerChanges([file], async () => {
+    throw new Error('protected test must not require graph analysis')
+  })
+  expect(result.shouldRun).toBe(true)
+  expect(result.graphUnavailable).toBeUndefined()
+  expect(result.reason).toBe(`Build or CI input changed: ${file}`)
+})
+
+it.each([
+  'src/main/persistence/example/worker.ts',
+  'src/main/persistence/example/state.fixture.ts',
+  'src/main/persistence/example/state.test.ts.fixture',
+  'src/main/persistence/example/state.spec.ts',
+  'src/main/persistence/example/../state.test.ts',
+  'src/main/persistence/example/./state.test.ts',
+  '.github/actions/prepare-native-runtime/cache.test.ts'
+])(
+  'retains prefix protection for production, fixtures and other file conventions: %s',
+  async (file) => {
+    const result = await classifyNodeServerChanges([file], async () => {
+      throw new Error('protected input must not require graph analysis')
+    })
+    expect(result.shouldRun).toBe(true)
+    expect(result.graphUnavailable).toBeUndefined()
+    expect(result.reason).toBe(`Build or CI input changed: ${file}`)
+  }
+)
+
+it('retains a production force when an unrelated unit test changes in the same diff', async () => {
+  const result = await classifyNodeServerChanges(
+    ['src/main/persistence/example/unrelated.test.ts', 'src/main/persistence/example/worker.ts'],
+    async () => {
+      throw new Error('production input must not require graph analysis')
+    }
+  )
+  expect(result.shouldRun).toBe(true)
+  expect(result.graphUnavailable).toBeUndefined()
+  expect(result.reason).toBe('Build or CI input changed: src/main/persistence/example/worker.ts')
+})
+
 it('defers uncertain paths without issuing a qualification verdict', async () => {
   const result = await classifyNodeServerChanges(
     ['src/renderer/src/example.ts'],
@@ -190,6 +279,7 @@ describe('the actual Bun build and profile-test dependency graph', () => {
     'src/renderer/src/components/terminal/pty-running-work-probe.ts',
     'src/renderer/src/runtime/runtime-terminal-inspection.ts',
     'src/main/ssh/ssh-relay-upload-stage-commands.test.ts',
+    'src/main/persistence/terminal-topology/terminal-topology-boundary-ratchet.test.ts',
     'src/main/menu/register-app-menu.ts'
   ])('skips unrelated work: %s', async (file) => {
     expect((await classifyNodeServerChanges([file], async () => inputs)).shouldRun).toBe(false)
