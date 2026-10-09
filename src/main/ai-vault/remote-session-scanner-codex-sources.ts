@@ -23,7 +23,7 @@ export function remoteCodexSources(
       'codex-runtime-home',
       'home'
     )
-  ].map((codexHome) => {
+  ].flatMap((codexHome) => {
     const parse = (
       file: FileWithMtime,
       content: RemoteSessionContent,
@@ -39,13 +39,15 @@ export function remoteCodexSources(
         signal: context.signal,
         readIndexedTitle: remoteCodexIndexedTitleReader(codexHome, context)
       })
-    return {
-      agent: 'codex',
-      rootDir: joinRemotePath(hostPlatform, codexHome, 'sessions'),
+    // Why: the Codex App and `codex resume --archive` move finished rollouts into
+    // archived_sessions; both dirs use the same rollout format and index.
+    return (['sessions', 'archived_sessions'] as const).map((historyDirName) => ({
+      agent: 'codex' as const,
+      rootDir: joinRemotePath(hostPlatform, codexHome, historyDirName),
       codexHome,
       extensions: ['.jsonl'],
       parse,
       parseLines: parse
-    }
+    }))
   })
 }

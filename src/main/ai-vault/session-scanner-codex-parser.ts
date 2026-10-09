@@ -145,10 +145,9 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
   // Codex keeps the first session_meta canonical; a fork copies its parent's in after it, and
   // such a later one is ignored below like any other record type this parser does not read.
   if (record.type === 'session_meta' && payload && !state.sawSessionMeta) {
+    // Still extract the meta fields: a user-named worker thread is rescued at
+    // finalize through the session index and keeps this transcript's context.
     state.nonUserOrigin = readCodexNonUserOrigin(payload)
-    if (state.nonUserOrigin) {
-      return
-    }
     state.sawSessionMeta = true
     state.historyMode = extractString(payload.history_mode)
     const sessionId = extractString(payload.id)
@@ -245,19 +244,21 @@ async function finalizeCodexParseState(
     executionHostPlatform?: NodeJS.Platform | null
   }
 ): Promise<AiVaultSession | null> {
-  if (state.nonUserOrigin) {
-    return null
-  }
   // Finalize a snapshot: the live state keeps accumulating appended lines.
   const snapshot = cloneCodexParseState(state)
+  const indexedTitle = snapshot.sawSessionMeta
+    ? await args.titleReader?.(snapshot.accumulator.sessionId)
+    : null
+  if (snapshot.nonUserOrigin && !indexedTitle) {
+    // Why: unnamed worker/sub-agent rollouts stay hidden. A session_index
+    // thread_name means the user kept the window (for example ads: Brand).
+    return null
+  }
   // Why: Codex names threads lazily in session_index.jsonl, so the lookup runs
   // per finalize (the index read is signature-cached) — a title that appears
   // after the transcript was first parsed must still replace the raw prompt.
-  if (snapshot.sawSessionMeta && snapshot.titleSource !== 'meta') {
-    const indexedTitle = await args.titleReader?.(snapshot.accumulator.sessionId)
-    if (indexedTitle) {
-      snapshot.accumulator.title = indexedTitle
-    }
+  if (indexedTitle && (snapshot.nonUserOrigin || snapshot.titleSource !== 'meta')) {
+    snapshot.accumulator.title = indexedTitle
   }
   return finalizeSession(snapshot.accumulator, platform, {
     codexHome: args.codexHome,
@@ -322,8 +323,9 @@ async function parseCodexSessionLines(args: {
   for await (const line of args.lines) {
     consumeCodexRecordLine(state, line)
     if (state.nonUserOrigin) {
-      // Worker transcripts are excluded outright; stop reading early.
-      return null
+      // Stop reading early; finalize still consults the session index in case
+      // the user named this worker thread.
+      break
     }
   }
   return finalizeCodexParseState(state, args.platform, {

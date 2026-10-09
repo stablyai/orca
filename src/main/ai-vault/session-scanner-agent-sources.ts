@@ -5,7 +5,10 @@ import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type { AiVaultDeletableAgent } from '../../shared/ai-vault-session-deletion'
 import { resolveGrokSessionsDir } from '../../shared/grok-session-paths'
-import { uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
+import {
+  siblingCodexArchivedSessionsDir,
+  uniqueCodexSessionsDirs
+} from './session-scanner-codex-paths'
 import {
   clineMessagesPathForMetadata,
   isClineSessionMetadataPath
@@ -138,16 +141,18 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
   },
   codex: {
     rootDirs: (options, wslHomeDirs) =>
-      uniqueCodexSessionsDirs([
-        options.codexSessionsDir ?? CODEX_SESSIONS_DIR,
-        ...wslHomeDirs.map((homeDir) => join(homeDir, '.codex', 'sessions')),
-        // Why: Orca-launched WSL Codex sessions use an Orca-owned CODEX_HOME,
-        // not the user's default ~/.codex history root.
-        ...wslHomeDirs.map((homeDir) =>
-          join(homeDir, '.local', 'share', 'orca', 'codex-runtime-home', 'home', 'sessions')
-        ),
-        ...(options.additionalCodexSessionsDirs ?? [])
-      ]),
+      uniqueCodexSessionsDirs(
+        [
+          options.codexSessionsDir ?? CODEX_SESSIONS_DIR,
+          ...wslHomeDirs.map((homeDir) => join(homeDir, '.codex', 'sessions')),
+          // Why: Orca-launched WSL Codex sessions use an Orca-owned CODEX_HOME,
+          // not the user's default ~/.codex history root.
+          ...wslHomeDirs.map((homeDir) =>
+            join(homeDir, '.local', 'share', 'orca', 'codex-runtime-home', 'home', 'sessions')
+          ),
+          ...(options.additionalCodexSessionsDirs ?? [])
+        ].flatMap((sessionsDir) => [sessionsDir, siblingCodexArchivedSessionsDir(sessionsDir)])
+      ),
     extensions: ['.jsonl']
   },
   gemini: {
