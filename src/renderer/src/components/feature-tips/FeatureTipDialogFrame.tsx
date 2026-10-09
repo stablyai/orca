@@ -23,8 +23,9 @@ export function FeatureTipDialogFrame({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        surface="feature-tip"
         className={cn(
-          '!flex max-h-[calc(100vh-2rem)] flex-col gap-0 overflow-hidden bg-[color-mix(in_srgb,var(--foreground)_8%,var(--background))] p-0 dark:bg-[color-mix(in_srgb,var(--foreground)_16%,var(--background))] sm:max-w-4xl md:!flex-row',
+          '!flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-w-4xl md:!flex-row',
           tall ? 'md:!h-[min(33rem,calc(100vh-2rem))]' : 'md:!h-[min(27rem,calc(100vh-2rem))]'
         )}
         showCloseButton

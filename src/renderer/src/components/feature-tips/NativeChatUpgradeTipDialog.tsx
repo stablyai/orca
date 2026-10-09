@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type JSX } from 'react'
+import { useId, useRef, type JSX } from 'react'
 import { MessagesSquare, SquareTerminal, type LucideIcon } from 'lucide-react'
 import type { FeatureTip } from '../../../../shared/feature-tips'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -63,8 +63,8 @@ function ChatModeSwitch({
 }): JSX.Element {
   const switchId = useId()
   return (
-    <div className="mt-3 space-y-2 text-sm leading-relaxed text-muted-foreground">
-      <p>
+    <div className="mt-3 space-y-2 text-sm leading-relaxed">
+      <p className="text-muted-foreground">
         {translate(
           'featureTips.nativeChatUpgrade.chatModeNote',
           'New agent tabs still open in the terminal, as before.'
@@ -72,10 +72,10 @@ function ChatModeSwitch({
       </p>
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 space-y-1">
-          <Label htmlFor={switchId} className="text-foreground">
+          <Label htmlFor={switchId}>
             {translate('featureTips.nativeChatUpgrade.chatModeLabel', 'Turn on chat mode')}
           </Label>
-          <p className="text-xs">
+          <p className="text-xs text-muted-foreground">
             {translate(
               'featureTips.nativeChatUpgrade.chatModeHint',
               'New agent tabs open as chat instead.'
@@ -92,6 +92,7 @@ export function NativeChatUpgradeTipDialog({
   open,
   tip,
   primaryBusy,
+  offerChatMode,
   chatModeOn,
   onOpenChange,
   onPrimaryAction,
@@ -101,6 +102,8 @@ export function NativeChatUpgradeTipDialog({
   open: boolean
   tip: FeatureTip
   primaryBusy: boolean
+  /** From the saved tip audience: new agent tabs opened in the terminal before the upgrade. */
+  offerChatMode: boolean
   /** Live Chat UI setting. */
   chatModeOn: boolean
   onOpenChange: (open: boolean) => void
@@ -109,8 +112,6 @@ export function NativeChatUpgradeTipDialog({
   onSettingsClick: () => void
 }): JSX.Element {
   const primaryButtonRef = useRef<HTMLButtonElement>(null)
-  // Why: decided once on open, so flipping the switch here doesn't make it vanish.
-  const [offerChatMode] = useState(!chatModeOn)
 
   return (
     <FeatureTipDialogFrame
