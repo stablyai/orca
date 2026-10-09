@@ -3,6 +3,7 @@ import {
   hasAdmissionCapacity,
   HostDataAuthSchema,
   parseRelayHostCapabilities,
+  RELAY_ASSIGNMENT_LEASE_HEADER,
   RELAY_ADMISSION_BUDGETS,
   RELAY_HOST_CAPABILITIES_HEADER,
   RELAY_CLOSE_CODE,
@@ -13,10 +14,13 @@ import {
 import type { IncomingMessage } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
+import { createRemoteJWKSet } from 'jose'
 import { WebSocketServer } from 'ws'
 import type WebSocket from 'ws'
 import type { RawData } from 'ws'
 import { createRelayApp } from './app.js'
+import type { CellFlags } from './cell-flags.js'
+import { AssignmentLeaseShadow } from './assignment-lease-shadow.js'
 import { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayConfig } from './config.js'
 import { RelayCredentialStore } from './credential-store.js'
@@ -31,6 +35,8 @@ import { RelayObservability } from './relay-observability.js'
 import { combineRegionalRehomeSafety } from './regional-rehome-safety.js'
 import { RelayConnectionLedger, type RelayConnectionUpgrade } from './relay-connection-ledger.js'
 import { PlacementLoadBand } from './placement-load-band.js'
+import type { AppliedControlFlags } from './relay-control-flag-channel.js'
+import { createRelayLocalReadiness } from './relay-local-readiness.js'
 import { createRelayReadiness } from './relay-readiness.js'
 import { createRelayTokenVerifier, readBearer } from './relay-token-verifier.js'
 import { closeRelayWebSocket } from './relay-websocket-close.js'
@@ -83,6 +89,10 @@ function guardSocketErrors(socket: WebSocket, kind: string): void {
   })
 }
 
+function firstHeader(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value
+}
+
 function admissionSource(request: IncomingMessage): string {
   const forwarded = request.headers['x-forwarded-for']
   const chain = (Array.isArray(forwarded) ? forwarded.join(',') : (forwarded ?? ''))
@@ -114,6 +124,7 @@ export function createRelayServer(
     connectionLedgerLimits?: { hardCap: number; controlReserve: number }
     cellIncarnation?: string
     shadowSeats?: ShadowSeatDirectory
+    cellFlags?: () => AppliedControlFlags<CellFlags>
   } = {}
 ) {
   const cellIncarnation = options.cellIncarnation ?? randomUUID()
@@ -129,7 +140,8 @@ export function createRelayServer(
     perMessageDeflate: false,
     maxPayload: 1024 * 1024
   })
-  const verifyRelayToken = createRelayTokenVerifier(config)
+  const relayJwks = createRemoteJWKSet(new URL(config.jwksUrl))
+  const verifyRelayToken = createRelayTokenVerifier(config, relayJwks)
   const store = new RelayCredentialStore(observedDatabase, options.now)
   const assignments = new RelayAssignmentStore(observedDatabase, options.now, {
     requireLiveCells: config.role === 'director',
@@ -161,7 +173,12 @@ export function createRelayServer(
     observability,
     options.now,
     options.random,
-    cellIncarnation
+    cellIncarnation,
+    new AssignmentLeaseShadow({
+      enabled: () => options.cellFlags?.().flags.ticketCheck === 'shadow',
+      key: config.assignmentSigningKey,
+      cellId: config.cellId
+    })
   )
   const app = createRelayApp(config, {
     store,
@@ -183,6 +200,8 @@ export function createRelayServer(
     },
     regionalRehomeTrustProbeHostExists: (input) => sessions.get(input) !== null,
     cellIncarnation,
+    cellSeatFeed: (sinceSeq) => sessions.seatFeed(sinceSeq),
+    cellFlags: options.cellFlags,
     isDraining: () => sessions.isDraining(),
     runtimeCounts: () => runtimeCounts(),
     regionalRehomeSafetySnapshot: () => ({
@@ -191,6 +210,12 @@ export function createRelayServer(
     }),
     ready,
     readinessDegradation: () => readiness.degradedDependencies(),
+    readinessLocal: () => options.cellFlags?.().flags.readinessLocal ?? false,
+    localReadiness: createRelayLocalReadiness({
+      listening: () => server.listening,
+      keys: relayJwks,
+      failingDependencies: () => readiness.failingDependencies()
+    }),
     recordAssignmentAdmission: (outcome) => observability.recordAssignmentAdmission?.(outcome),
     recordAssignmentRejectionReason: (lane, reason) =>
       observability.recordAssignmentRejectionReason?.(lane, reason),
@@ -581,7 +606,8 @@ export function createRelayServer(
             webSocket,
             identity,
             controlUpgrade?.inclusionWatermark,
-            parseRelayHostCapabilities(request.headers[RELAY_HOST_CAPABILITIES_HEADER])
+            parseRelayHostCapabilities(request.headers[RELAY_HOST_CAPABILITIES_HEADER]),
+            firstHeader(request.headers[RELAY_ASSIGNMENT_LEASE_HEADER])
           )
         })
       } catch {
