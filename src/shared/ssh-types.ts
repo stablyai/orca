@@ -283,7 +283,7 @@ export type SshManagedServerUpdateNote = {
   detail?: string
 }
 
-/** A managed server that is down and could not be started, with why (and orcad.log's tail). */
+/** A managed server that did not answer and was not proven serving, with why (and orcad.log's tail). */
 export type SshManagedServerServingNote = { state: 'unverifiable'; detail: string }
 
 export const SSH_MANAGED_SERVER_RELAY_REASONS = [
@@ -303,7 +303,7 @@ export type SshManagedServerStatus =
       kind: 'managed'
       environmentId: string
       update?: SshManagedServerUpdateNote
-      /** Set when the server was not running and could not be started; never a terminal verdict. */
+      /** Set when the server did not answer and no start brought it up; never a terminal verdict. */
       serving?: SshManagedServerServingNote
     }
   | { kind: 'setting-up'; phase: (typeof SSH_MANAGED_SERVER_PHASES)[number] }

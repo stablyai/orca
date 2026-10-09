@@ -33,6 +33,17 @@ vi.mock('../daemon/daemon-init', () => ({
   getDaemonProvider: () => getDaemonProviderMock()
 }))
 
+// Why hoisted: routing recognizes adapter groups by class, and the class must survive resetModules.
+const { FakeDaemonPtyRouter } = vi.hoisted(() => ({
+  FakeDaemonPtyRouter: class {
+    constructor(private readonly adapters: unknown[]) {}
+    getAllAdapters(): unknown[] {
+      return this.adapters
+    }
+  }
+}))
+vi.mock('../daemon/daemon-pty-router', () => ({ DaemonPtyRouter: FakeDaemonPtyRouter }))
+
 const getLocalProjectWorktreeGitOptionsMock = vi.fn()
 vi.mock('../project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: (store: unknown, repo: unknown) =>
@@ -93,10 +104,8 @@ function makeProvider(sessions: SessionInfo[]): Pick<DaemonPtyAdapter, 'listSess
   }
 }
 
-function makeProviderGroup(adapters: Pick<DaemonPtyAdapter, 'listSessions'>[]): {
-  getAllAdapters: () => Pick<DaemonPtyAdapter, 'listSessions'>[]
-} {
-  return { getAllAdapters: () => adapters }
+function makeProviderGroup(adapters: Pick<DaemonPtyAdapter, 'listSessions'>[]): unknown {
+  return new FakeDaemonPtyRouter(adapters)
 }
 
 function makeLocalSessions(repoId: string, worktreePath: string, count: number): SessionInfo[] {

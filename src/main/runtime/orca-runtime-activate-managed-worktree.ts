@@ -17,7 +17,8 @@ import type {
 } from './runtime-worktree-agent-startup'
 import {
   buildWorktreeStartupForAgent,
-  buildWorktreeStartupForDraft
+  buildWorktreeStartupForDraft,
+  resolveWorktreeStartupDraftAgent
 } from './runtime-worktree-agent-startup'
 import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
 import type { Worktree } from '../../shared/worktree/types'
@@ -129,6 +130,19 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
       }
     }
     return { repoId: repo.id, worktreeId: worktree.id, activated: true, sleepingAgentWake }
+  }
+
+  /** The agent a create's linked draft starts, chosen as `buildStartupForDraft` chooses it, so a
+   *  launch can name the agent before the create runs. */
+  async resolveStartupDraftAgent(repo: Repo, requestedAgent?: TuiAgent): Promise<TuiAgent | null> {
+    if (!this.store) {
+      return null
+    }
+    return resolveWorktreeStartupDraftAgent({
+      repo,
+      settings: this.store.getSettings(),
+      ...(requestedAgent ? { requestedAgent } : {})
+    })
   }
 
   protected async buildStartupForDraft(

@@ -198,6 +198,23 @@ describe('ACP process-owning connection', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
+  it('ends notification draining at the bounded close result even when exit remains unproven', async () => {
+    vi.useFakeTimers()
+    const onExtensionNotification = vi.fn()
+    const { connection, agent } = fixture({ onExtensionNotification }, { exitOnEnd: false })
+    await connection.start(start)
+    const closing = connection.close()
+    expect(connection.closed).toBe(true)
+    agent.notify('_x.ai/session/update', { outcome: 'before-exit' })
+    expect(onExtensionNotification).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(grace + 1_000)
+    expect(await closing).toBe(false)
+    expect(connection.rootVerdict).toBe('live')
+    agent.notify('_x.ai/session/update', { outcome: 'after-unproven-close' })
+    expect(onExtensionNotification).toHaveBeenCalledOnce()
+    expect(agent.stdout.listenerCount('data')).toBe(0)
+  })
+
   it.each(['live', 'unverifiable'] as const)(
     'retains %s tree evidence when root exits between completed close attempts',
     async (tree) => {

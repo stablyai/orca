@@ -14,7 +14,7 @@
  */
 import type { ServeReadiness } from '../server/serve-readiness'
 
-export type OrcadActivationRejectCode =
+type OrcadActivationRejectCode =
   | 'orcad_activation_no_readiness'
   | 'orcad_activation_no_health'
   | 'orcad_activation_build_mismatch'

@@ -3549,7 +3549,7 @@
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "Reconnecting to remote runtime",
             "disconnectedTitle": "Remote runtime disconnected",
-            "retryingBody": "Orca will retry for up to one minute. This terminal will resume if the connection returns.",
+            "retryingBody": "Orca is retrying automatically. This terminal will resume if the connection returns.",
             "disconnectedBody": "Automatic retries stopped. Reconnect to resume this terminal session.",
             "reconnectButton": "Reconnect"
           },
@@ -4314,8 +4314,8 @@
             "resumingProgressAria": "Resuming chats, {{value0}} of {{value1}} done. Click to open details."
           },
           "StatusBarUsageChangeNotices": {
-            "compactTitle": "Usage is now compact",
-            "compactBody": "One headline metric per provider. Choose Detailed in the Usage menu to show more limits."
+            "compactTitle": "Usage display is now compact",
+            "compactBody": "One headline metric per provider. Choose <detailed>Detailed</detailed> in the Usage menu to show more limits."
           }
         }
       },
@@ -12493,7 +12493,11 @@
             "confirmRestore": "Restore snapshot and restart",
             "keepState": "Keep state",
             "statusUnknown": "Status unknown",
-            "checking": "Checking…"
+            "checking": "Checking…",
+            "forget": "Forget…",
+            "confirmForget": "Forget on this desktop",
+            "keepLinked": "Keep linked",
+            "forgetDescription": "Unlinks this server here without contacting its host. If the host comes back, the server may still be running there."
           },
           "title": "Managed servers",
           "description": "Orca installs and runs a server on an empty SSH host and keeps it up to date.",
@@ -12561,6 +12565,7 @@
           },
           "loadFailed": "Orca couldn’t load SSH hosts and unfinished moves. Reopen Settings to try again.",
           "outcome": {
+            "activeServer": "Not done: choose another Active Server in Advanced before stopping this server.",
             "live": "Not done: terminals on this server are still running. Close them and try again.",
             "unverifiable": "Not done: Orca couldn’t confirm what is running on this server. Try again when the host is reachable.",
             "migration": "Not done: a move onto this server is unfinished. Resume it first.",
@@ -12577,7 +12582,7 @@
           "connecting": "Connecting to the managed Orca server…",
           "updating": "Updating managed server…",
           "starting": "Starting managed server…",
-          "notServing": "The managed Orca server isn’t running and couldn’t be started.",
+          "notServing": "Orca couldn’t confirm that the managed server is answering.",
           "hostNewer": "Runs a managed Orca server from a newer Orca; it keeps that version.",
           "terminalsLive": "Runs the relay until its {{count}} open terminals are closed, then moves to a managed server.",
           "terminalsLive_one": "Runs the relay until its {{count}} open terminal is closed, then moves to a managed server.",
@@ -18659,7 +18664,7 @@
         "sendConfirmBody_other": "You are about to send a message. Do you want to clear the {{count}} messages previously queued?",
         "sendConfirmClear": "Clear queue",
         "sendConfirmSend": "Send message",
-        "from": "From {{names}}",
+        "fromSender": "From",
         "pausedSendFailedWaiting": "Couldn't send — press Send to retry once the agent finishes."
       },
       "thought": "Thought",
@@ -19648,5 +19653,10 @@
       "updateRuntime": "Update the remote runtime to change workspace links",
       "updateRuntimeSafely": "Update the remote runtime to safely change workspace links"
     }
+  },
+  "tabHoverCard": {
+    "browser": "Browser",
+    "editor": "Editor",
+    "terminal": "Terminal"
   }
 }

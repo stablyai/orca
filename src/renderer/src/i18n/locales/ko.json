@@ -3980,7 +3980,7 @@
           },
           "StatusBarUsageChangeNotices": {
             "compactTitle": "사용량이 이제 간략하게 표시됩니다",
-            "compactBody": "공급자별로 주요 지표 하나를 표시합니다. 더 많은 한도를 보려면 사용량 메뉴에서 상세를 선택하세요."
+            "compactBody": "공급자별로 주요 지표 하나를 표시합니다. 더 많은 한도를 보려면 사용량 메뉴에서 <detailed>상세</detailed>를 선택하세요."
           },
           "UsagePercentageDisplayChangeNotice": {
             "title": "사용량이 이제 사용된 %로 표시됩니다",
@@ -12311,7 +12311,11 @@
             "confirmRestore": "스냅샷 복원 및 다시 시작",
             "keepState": "상태 유지",
             "statusUnknown": "상태 알 수 없음",
-            "checking": "확인 중…"
+            "checking": "확인 중…",
+            "forget": "잊기…",
+            "confirmForget": "이 데스크톱에서 잊기",
+            "keepLinked": "연결 유지",
+            "forgetDescription": "호스트에 연결하지 않고 여기서 이 서버의 연결을 해제합니다. 호스트가 다시 살아나면 서버가 그곳에서 계속 실행 중일 수 있습니다."
           },
           "title": "관리형 서버",
           "description": "Orca는 빈 SSH 호스트에 서버를 설치하고 실행하며 최신 상태로 유지합니다.",
@@ -12379,6 +12383,7 @@
           },
           "loadFailed": "Orca가 SSH 호스트와 미완료 이동을 불러오지 못했습니다. 설정을 다시 열어 시도하세요.",
           "outcome": {
+            "activeServer": "완료되지 않음: 이 서버를 중지하기 전에 고급에서 다른 활성 서버를 선택하세요.",
             "live": "완료되지 않음: 이 서버의 터미널이 아직 실행 중입니다. 닫고 다시 시도하세요.",
             "unverifiable": "완료되지 않음: Orca가 이 서버에서 무엇이 실행 중인지 확인하지 못했습니다. 호스트에 연결할 수 있을 때 다시 시도하세요.",
             "migration": "완료되지 않음: 이 서버로의 이동이 끝나지 않았습니다. 먼저 재개하세요.",
@@ -12395,7 +12400,7 @@
           "connecting": "관리형 Orca 서버에 연결 중…",
           "updating": "관리형 서버 업데이트 중…",
           "starting": "관리형 서버 시작 중…",
-          "notServing": "관리형 Orca 서버가 실행 중이 아니며 시작할 수도 없었습니다.",
+          "notServing": "Orca가 관리형 서버의 응답 여부를 확인하지 못했습니다.",
           "hostNewer": "더 새로운 Orca의 관리형 Orca 서버를 실행합니다. 해당 버전을 유지합니다.",
           "terminalsLive": "열린 터미널 {{count}}개가 닫힐 때까지 릴레이를 실행한 다음 관리형 서버로 이동합니다.",
           "terminalsLive_one": "열린 터미널 {{count}}개가 닫힐 때까지 릴레이를 실행한 다음 관리형 서버로 이동합니다.",
@@ -18441,7 +18446,7 @@
         "sendConfirmBody_other": "메시지를 보내려고 합니다. 대기열에 있는 메시지 {{count}}개를 지울까요?",
         "sendConfirmClear": "대기열 지우기",
         "sendConfirmSend": "메시지 보내기",
-        "from": "보낸 사람: {{names}}",
+        "fromSender": "보낸 사람:",
         "pausedSendFailedWaiting": "보낼 수 없습니다. 에이전트가 끝나면 보내기를 눌러 다시 시도하세요."
       },
       "thought": "생각함",

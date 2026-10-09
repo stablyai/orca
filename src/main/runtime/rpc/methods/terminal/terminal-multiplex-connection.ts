@@ -1,6 +1,7 @@
 import type { z } from 'zod'
 import type { RpcContext } from '../../core'
 import type {
+  TerminalInputAckKind,
   TerminalStreamFrame,
   TerminalStreamOpcode
 } from '../../../../../shared/terminal-stream-protocol'
@@ -49,6 +50,12 @@ export type TerminalMultiplexFrameDelivery = {
   notifyStreamWriteUnavailable: (
     stream: TerminalMultiplexStream,
     outcome: 'delivered' | 'rejected' | 'failed'
+  ) => void
+  /** Cumulative ack of sequenced input through `appliedSeq`; `resend` also asks for everything after it. */
+  sendInputAck: (
+    stream: TerminalMultiplexStream,
+    appliedSeq: number,
+    kind: TerminalInputAckKind
   ) => void
   sendResizedFrame: (
     stream: TerminalMultiplexStream,

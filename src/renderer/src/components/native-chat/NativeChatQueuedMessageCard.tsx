@@ -30,7 +30,7 @@ import {
   queuedMessageCardSteers,
   type QueuedMessageCard
 } from './structured-agent-session-queued-cards'
-import { queuedCardSenderLine } from './native-chat-agent-message-sender-label'
+import { NativeChatAgentMessageSenders } from './NativeChatAgentMessageSenders'
 import { useNativeChatClippedLine } from './use-native-chat-clipped-line'
 import { agentSessionFailureStatedByStartRow } from './structured-agent-session-delivery-notices'
 import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
@@ -130,6 +130,7 @@ export function queuedMessageCardSendNow(card: QueuedMessageCard): {
 
 export function NativeChatQueuedMessageCard({
   card,
+  chatWorktreeId,
   agentName,
   statedFailures,
   showsSteerShortcut,
@@ -140,6 +141,8 @@ export function NativeChatQueuedMessageCard({
   onTurnOffQueueing
 }: {
   card: QueuedMessageCard
+  /** The chat's worktree, whose host its sender is found on; null shows the sender unlinked. */
+  chatWorktreeId: string | null
   agentName?: string
   statedFailures?: readonly AgentSessionFailureFact[]
   /** Only the newest card answers Cmd/Ctrl+Enter; only it may show the chord. */
@@ -175,9 +178,11 @@ export function NativeChatQueuedMessageCard({
         )}
         <div className="min-w-0 flex-1">
           {card.from ? (
-            <p className="truncate text-xs text-muted-foreground">
-              {queuedCardSenderLine(card.from)}
-            </p>
+            <NativeChatAgentMessageSenders
+              from={card.from}
+              chatWorktreeId={chatWorktreeId}
+              queued
+            />
           ) : null}
           {expanded ? null : (
             <p ref={measureLine} className="truncate text-sm" title={card.text}>

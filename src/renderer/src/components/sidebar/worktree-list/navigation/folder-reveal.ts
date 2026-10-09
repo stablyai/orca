@@ -1,8 +1,18 @@
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
-import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import {
+  folderWorkspaceToWorktree,
+  getFolderWorkspaceHostIdentity
+} from '../../../../../../shared/folder-workspace-worktree'
+import {
+  normalizeWorkspaceSessionKeyToWorkspaceId,
+  parseWorkspaceKey
+} from '../../../../../../shared/workspace-scope'
+import {
+  composeWorktreeHostIdentity,
+  getExecutionHostIdFromWorktreeHostIdentity
+} from '../../../../../../shared/worktree/host-qualified-identity'
 import { getProjectGroupHeaderKey } from '../grouping/group-keys'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getFolderWorkspaceLaneKey } from '../grouping/folder-workspace-lanes'
@@ -12,13 +22,22 @@ import { getHostSectionCollapseKey } from '../../host-section-collapse'
 
 function findFolderWorkspaceByKey(
   worktreeId: string,
-  folderWorkspaces: readonly FolderWorkspace[]
+  folderWorkspaces: readonly FolderWorkspace[],
+  executionHostId?: ExecutionHostId | null
 ): FolderWorkspace | null {
   const scope = parseWorkspaceKey(worktreeId)
   if (scope?.type !== 'folder') {
     return null
   }
-  return folderWorkspaces.find((workspace) => workspace.id === scope.folderWorkspaceId) ?? null
+  return (
+    folderWorkspaces.find(
+      (workspace) =>
+        workspace.id === scope.folderWorkspaceId &&
+        (!executionHostId ||
+          getFolderWorkspaceHostIdentity(workspace) ===
+            composeWorktreeHostIdentity(executionHostId, worktreeId))
+    ) ?? null
+  )
 }
 
 export function getKnownSidebarWorktreeById(
@@ -28,15 +47,17 @@ export function getKnownSidebarWorktreeById(
   worktrees?: readonly Worktree[],
   executionHostId?: ExecutionHostId | null
 ): Worktree | null {
-  const worktree = executionHostId
+  const workspaceId = normalizeWorkspaceSessionKeyToWorkspaceId(worktreeId)
+  const ownerHostId = getExecutionHostIdFromWorktreeHostIdentity(worktreeId) ?? executionHostId
+  const worktree = ownerHostId
     ? (worktrees?.find(
-        (candidate) => candidate.id === worktreeId && candidate.hostId === executionHostId
+        (candidate) => candidate.id === workspaceId && candidate.hostId === ownerHostId
       ) ?? null)
-    : worktreeMap.get(worktreeId)
+    : worktreeMap.get(workspaceId)
   if (worktree) {
     return worktree
   }
-  const folderWorkspace = findFolderWorkspaceByKey(worktreeId, folderWorkspaces)
+  const folderWorkspace = findFolderWorkspaceByKey(workspaceId, folderWorkspaces, ownerHostId)
   return folderWorkspace ? folderWorkspaceToWorktree(folderWorkspace) : null
 }
 
@@ -55,7 +76,7 @@ export function sidebarWorkspaceStillExists(
   ) {
     return true
   }
-  return findFolderWorkspaceByKey(worktreeId, folderWorkspaces) !== null
+  return findFolderWorkspaceByKey(worktreeId, folderWorkspaces, executionHostId) !== null
 }
 
 export function getFolderWorkspaceRevealGroupKeys(

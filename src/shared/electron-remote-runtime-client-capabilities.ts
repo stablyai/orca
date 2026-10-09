@@ -12,6 +12,7 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY
 } from './protocol-version'
+import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from './agent-session-optional-model-capability'
 
 // Electron clients can decode client-hosted page placement; becoming a page
 // host still requires the separate authenticated browser-client lease.
@@ -22,6 +23,7 @@ export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   // The renderer that reads a paired host's structured chats is the one that reads its own.
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY,
   // Same renderer: it reads each host's `agentSession.agents` and renders any agent listed there.
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
   PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,

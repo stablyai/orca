@@ -123,8 +123,10 @@ export class AgentSessionJournal {
         this.adoptLoadedJournal(loaded)
         this.onCommitted?.()
       },
-      commit: (row) => {
-        applyJournalRow(this.state, row)
+      commit: (rows) => {
+        for (const row of rows) {
+          applyJournalRow(this.state, row)
+        }
         this.onCommitted?.()
       },
       notifyCommitted: () => this.onCommitted?.(),

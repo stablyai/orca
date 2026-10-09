@@ -225,7 +225,7 @@ describe('planPinnedNodeRelay', () => {
         targetId: 't',
         materializeOrcad: () => Promise.reject(new Error('template has no win32-x64'))
       })
-    ).resolves.toEqual({ kind: 'host-node', fallbackReason: 'artifacts_unavailable' })
+    ).rejects.toMatchObject({ reason: 'artifacts_unavailable', remembered: false })
   })
 
   it('refuses a glibc below the pinned Node floor without uploading anything', async () => {
@@ -239,7 +239,7 @@ describe('planPinnedNodeRelay', () => {
         targetId: 't',
         materializeOrcad
       })
-    ).resolves.toEqual({ kind: 'host-node', fallbackReason: 'libc_floor' })
+    ).rejects.toMatchObject({ reason: 'libc_floor', remembered: false })
     expect(materializeOrcad).not.toHaveBeenCalled()
   })
 
@@ -252,7 +252,7 @@ describe('planPinnedNodeRelay', () => {
         baseVersion: base,
         targetId: 't'
       })
-    ).resolves.toEqual({ kind: 'host-node', fallbackReason: 'target_unresolved' })
+    ).rejects.toMatchObject({ reason: 'target_unresolved', remembered: false })
   })
 
   it('does not descend when the libc probe itself is lost', async () => {
@@ -277,7 +277,7 @@ describe('planPinnedNodeRelay', () => {
         targetId: 't',
         materializeOrcad: () => Promise.reject(new Error('template missing'))
       })
-    ).resolves.toEqual({ kind: 'host-node', fallbackReason: 'artifacts_unavailable' })
+    ).rejects.toMatchObject({ reason: 'artifacts_unavailable', remembered: false })
   })
 
   it('remembers a host refusal for the session', async () => {
@@ -292,7 +292,7 @@ describe('planPinnedNodeRelay', () => {
         targetId: 't',
         materializeOrcad
       })
-    ).resolves.toEqual({ kind: 'host-node', fallbackReason: 'noexec', remembered: true })
+    ).rejects.toMatchObject({ reason: 'noexec', remembered: true })
     expect(materializeOrcad).not.toHaveBeenCalled()
   })
 
@@ -308,7 +308,7 @@ describe('planPinnedNodeRelay', () => {
           targetId: 't',
           materializeOrcad: async (target) => fakeOrcadSlot(target)
         })
-      await expect(plan()).resolves.toMatchObject({ remembered: true })
+      await expect(plan()).rejects.toMatchObject({ remembered: true })
       vi.advanceTimersByTime(MUTABLE_PINNED_REFUSAL_REPLAY_MS)
       await expect(plan()).resolves.toMatchObject({ kind: 'pinned-node', target: 'win32-x64' })
     } finally {
@@ -330,7 +330,7 @@ describe('planPinnedNodeRelay', () => {
           targetId: 't',
           materializeOrcad: vi.fn()
         })
-      ).resolves.toMatchObject({ fallbackReason: 'illegal_instruction', remembered: true })
+      ).rejects.toMatchObject({ reason: 'illegal_instruction', remembered: true })
     } finally {
       vi.useRealTimers()
     }
@@ -398,7 +398,7 @@ describe('planPinnedNodeRelay', () => {
           compat,
           materializeOrcad: vi.fn()
         })
-      ).resolves.toEqual({ kind: 'host-node', fallbackReason: 'libc_floor' })
+      ).rejects.toMatchObject({ reason: 'libc_floor', remembered: false })
     })
 
     it('remembers compat refusals apart from the default runtime', async () => {
@@ -414,7 +414,7 @@ describe('planPinnedNodeRelay', () => {
           compat,
           materializeOrcad: vi.fn()
         })
-      ).resolves.toEqual({ kind: 'host-node', fallbackReason: 'missing_lib', remembered: true })
+      ).rejects.toMatchObject({ reason: 'missing_lib', remembered: true })
     })
   })
 })

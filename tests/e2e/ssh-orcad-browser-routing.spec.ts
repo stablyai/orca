@@ -3,7 +3,7 @@ import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { createRestartSession } from './helpers/orca-restart'
-import { waitForSessionReady } from './helpers/store'
+import { waitForSessionReady, waitForStartupWorktreeRefresh } from './helpers/store'
 import {
   cleanupDockerSshRelayTarget,
   startDockerSshRelayTarget
@@ -36,7 +36,7 @@ async function guestMarker(page: Page, tabId: string): Promise<unknown> {
   }, tabId)
 }
 
-test('new browser tabs keep SSH routing and login cookies after managed conversion', async (// oxlint-disable-next-line no-empty-pattern -- Owns app launch.
+test('retained and new browser tabs keep SSH routing and login cookies after managed conversion', async (// oxlint-disable-next-line no-empty-pattern -- Owns app launch.
 {}, testInfo) => {
   test.setTimeout(5 * 60_000)
   const target = startDockerSshRelayTarget(testInfo)
@@ -127,6 +127,26 @@ test('new browser tabs keep SSH routing and login cookies after managed conversi
       return tab?.id ?? null
     }, remote.worktreeId)
     expect(retained).toBe(tabId)
+    await expect.poll(() => guestMarker(page, tabId), { timeout: 30_000 }).toBe(cookieMarker)
+    await navigateGuest(page, tabId, `${SSH_REMOTE_ONLY_ORIGIN}/echo/retained`)
+    await expect.poll(() => guestMarker(page, tabId), { timeout: 30_000 }).toBe(cookieMarker)
+    expect(readSshRemoteOnlyRequests(target)).toContainEqual({
+      path: '/echo/retained',
+      cookie: `${SSH_REMOTE_ONLY_COOKIE_NAME}=${SSH_REMOTE_ONLY_COOKIE_VALUE}`
+    })
+    expect(
+      await page
+        .locator(`[data-browser-overlay-tab-id="${tabId}"] webview`)
+        .getAttribute('partition')
+    ).toBe(partitionBefore)
+    await page.keyboard.press('Escape')
+    await page.evaluate(() => {
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur()
+      }
+    })
+    await expect(page.locator('[data-slot="popover-content"]')).toHaveCount(0)
+    await page.screenshot({ path: testInfo.outputPath('browser-retained-after-conversion.png') })
     await page.evaluate(
       async ({ worktreeId, url }) => {
         const state = window.__store?.getState()
@@ -190,6 +210,24 @@ test('new browser tabs keep SSH routing and login cookies after managed conversi
       path: '/echo/reconnect',
       cookie: `${SSH_REMOTE_ONLY_COOKIE_NAME}=${SSH_REMOTE_ONLY_COOKIE_VALUE}`
     })
+    await page.evaluate(
+      ({ worktreeId, tabId }) => {
+        const state = window.__store?.getState()
+        const pageId = state?.browserTabsByWorktree[worktreeId]?.find(
+          (tab) => tab.id === tabId
+        )?.activePageId
+        if (pageId) {
+          state?.focusBrowserTabInWorktree(worktreeId, pageId, { surfacePane: true })
+        }
+      },
+      { worktreeId: remote.worktreeId, tabId }
+    )
+    await navigateGuest(page, tabId, `${SSH_REMOTE_ONLY_ORIGIN}/echo/retained-reconnect`)
+    await expect.poll(() => guestMarker(page, tabId), { timeout: 30_000 }).toBe(cookieMarker)
+    expect(readSshRemoteOnlyRequests(target)).toContainEqual({
+      path: '/echo/retained-reconnect',
+      cookie: `${SSH_REMOTE_ONLY_COOKIE_NAME}=${SSH_REMOTE_ONLY_COOKIE_VALUE}`
+    })
     console.log(
       '[managed-browser-route]',
       JSON.stringify({
@@ -205,7 +243,49 @@ test('new browser tabs keep SSH routing and login cookies after managed conversi
       }
     })
     await expect(page.locator('[data-slot="popover-content"]')).toHaveCount(0)
-    await page.screenshot({ path: testInfo.outputPath('browser-new-tab-after.png') })
+    await page.screenshot({ path: testInfo.outputPath('browser-retained-after-reconnect.png') })
+    await session.close(app)
+    app = null
+    const restarted = await session.launch()
+    app = restarted.app
+    await waitForSessionReady(restarted.page)
+    await waitForStartupWorktreeRefresh(restarted.page)
+    console.log(
+      '[retained-browser-restored]',
+      JSON.stringify(
+        await restarted.page.evaluate(() => {
+          const state = window.__store?.getState()
+          return {
+            tabs: state?.browserTabsByWorktree,
+            pages: state?.browserPagesByWorkspace,
+            active: state?.activeWorktreeId,
+            host: state?.activeWorkspaceExecutionHostId
+          }
+        })
+      )
+    )
+    await restarted.page.evaluate(
+      ({ worktreeId, environmentId, tabId }) => {
+        const state = window.__store?.getState()
+        state?.setActiveWorktree(worktreeId, `runtime:${environmentId}`)
+        const pageId = state?.browserTabsByWorktree[worktreeId]?.find(
+          (tab) => tab.id === tabId
+        )?.activePageId
+        if (pageId) {
+          state?.focusBrowserTabInWorktree(worktreeId, pageId, { surfacePane: true })
+        }
+      },
+      { worktreeId: remote.worktreeId, environmentId: environment.id, tabId }
+    )
+    await expect
+      .poll(() => guestMarker(restarted.page, tabId), { timeout: 60_000 })
+      .toBe(cookieMarker)
+    await navigateGuest(restarted.page, tabId, `${SSH_REMOTE_ONLY_ORIGIN}/echo/retained-restart`)
+    expect(readSshRemoteOnlyRequests(target)).toContainEqual({
+      path: '/echo/retained-restart',
+      cookie: `${SSH_REMOTE_ONLY_COOKIE_NAME}=${SSH_REMOTE_ONLY_COOKIE_VALUE}`
+    })
+    console.log('[retained-browser-restart]', JSON.stringify(readSshRemoteOnlyRequests(target)))
   } finally {
     if (app) {
       await session.close(app)

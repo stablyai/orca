@@ -6,12 +6,12 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { parseArgs } from './orcad-entry'
 import {
   ORCAD_EXIT_CONFIGURATION,
   ORCAD_EXIT_FAILED,
-  parseArgs,
   resolveOrcadExitCode
-} from './orcad-entry'
+} from './orcad-exit-code'
 import { startOrcadWithLifecycle } from './orcad-lifecycle'
 import {
   beginAgentSessionRuntimeRecord,

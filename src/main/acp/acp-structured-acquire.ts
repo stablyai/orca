@@ -8,8 +8,6 @@
 // (Close, Stop, quit) stops it at any point.
 
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/tui-agent-display-names'
-import { isTuiAgent } from '../../shared/tui-agent-config'
 import {
   AgentSessionPreSpawnError,
   type AgentSessionAcquisition,
@@ -31,8 +29,9 @@ import {
 } from './acp-session-reopen-failure'
 import type { AcpSessionEvent } from './acp-session-runtime'
 import type { AcpStructuredConnection } from './acp-structured-connection'
-import { ACP_HANDLE_TRANSPORT } from './acp-structured-agent-definitions'
-import { AcpStructuredLane } from './acp-structured-lane'
+import { ACP_HANDLE_TRANSPORT, acpAgentName } from './acp-structured-agent-definitions'
+import { AcpStructuredLane, acpLaneChildWorkDelivery } from './acp-structured-lane'
+import { probeAcpChildStop } from './acp-structured-child-stop'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
 import { AcpStructuredOptions, restoreAcpSessionOptions } from './acp-structured-options'
 import { AcpStructuredPrompts } from './acp-structured-prompts'
@@ -44,12 +43,11 @@ import {
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 import { AcpStructuredTurns, type AcpStructuredTurnsDeps } from './acp-structured-turns'
 import { RequestPermissionResponseSchema } from './generated/acp-protocol.generated'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 /** Frames an agent may send before its session exists; past this they are dropped. */
 const MAX_EARLY_FRAMES = 2_048
-export function acpAgentName(agent: string): string {
-  return isTuiAgent(agent) ? TUI_AGENT_DISPLAY_NAMES[agent] : agent
-}
+export { acpAgentName } from './acp-structured-agent-definitions'
 
 export async function acquireAcpStructuredSession(input: {
   acquire: StructuredAgentSessionAcquireInput
@@ -96,7 +94,7 @@ export async function acquireAcpStructuredSession(input: {
     lane: null,
     reattaching: false
   }
-  const options = new AcpStructuredOptions()
+  const options = new AcpStructuredOptions(launch.spec.dialect)
   // Only Orca's own prompt may ask the person, as with permissions: a turn the agent began itself
   // has nobody waiting on it. What a settled request carries still shows in that turn.
   const prompts = new AcpStructuredPrompts(
@@ -187,6 +185,7 @@ export async function acquireAcpStructuredSession(input: {
     deps.readProcessStartTime
   )
   /** `attaching`: the lane opens inside the attach window, before any frame queued so far. */
+  let subagentStopSupported = false
   const makeLane = (providerSessionId: string, attaching = false): AcpStructuredLane => {
     const lane = new AcpStructuredLane({
       sink,
@@ -196,6 +195,10 @@ export async function acquireAcpStructuredSession(input: {
       generation,
       providerSessionId,
       dialect: spec.dialect,
+      now,
+      canStopSubagents: () => subagentStopSupported,
+      ...acpLaneChildWorkDelivery(deps, sessionId),
+      logger: deps.logger ?? createStructuredAgentSessionLogger(),
       onInputAccepted: (clientMessageId) => session?.turns.accept(clientMessageId),
       onFailed: () => input.forceClose(sessionId)
     })
@@ -258,7 +261,8 @@ export async function acquireAcpStructuredSession(input: {
       started = await connection.start({ cwd: launch.cwd, mcpServers: [], ...auth })
       liveLane = makeLane(started.sessionId)
     }
-    options.adoptSession(started.response)
+    subagentStopSupported = await probeAcpChildStop(connection, spec.dialect)
+    options.adoptSession(started.response, started.kind === 'new' ? 'new' : 'loaded')
     liveLane.apply(liveLane.translator.contextModels(started.response.models, now()))
     const restoreSkipped = await restoreAcpSessionOptions(connection, options, acquire.options)
     const process = await identity.read(pid)
@@ -276,6 +280,7 @@ export async function acquireAcpStructuredSession(input: {
       fence: acquire.fence,
       acquisitionGeneration: generation,
       spec,
+      subagentStopSupported,
       connection,
       lane: liveLane,
       prompts,

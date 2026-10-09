@@ -51,6 +51,8 @@ export function useStructuredAgentSession(args: {
   transportEnabled?: boolean
   /** The host has published the session but its provider has not answered startup yet. */
   providerStarting?: boolean
+  /** The host runs the session's provider, started or not. */
+  providerRunning?: boolean
   /** This view started the session; only then does the stored selection name what it runs. */
   launch?: StructuredAgentSessionLaunchView
   /** The composer Edit copies a card's text into. */
@@ -108,6 +110,7 @@ export function useStructuredAgentSession(args: {
     isVisible,
     providerVisible,
     providerStarting,
+    ...(args.providerRunning ? { providerRunning: true } : {}),
     fence: state.fence,
     turnId: transportState.turnId,
     unloadedTurnRevisions: state.unloadedTurnRevisions,

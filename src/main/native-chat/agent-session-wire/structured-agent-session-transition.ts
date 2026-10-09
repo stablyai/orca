@@ -61,6 +61,8 @@ export type StructuredAgentSessionTransition = {
   finalTail?: true
   /** Announce the writes once they land, when any step wrote. */
   publish: boolean
+  /** Host-internal delivery after these writes and their parent publication, in queue order. */
+  onPublished?: () => void
 }
 
 const STEP_OVERFLOW = 'structured agent-session transition step exceeded its reserved size'
@@ -124,6 +126,7 @@ function transitionAppend(
         if (transition.publish && wrote.includes(true)) {
           bound.publish()
         }
+        transition.onPublished?.()
       }
     })
 }

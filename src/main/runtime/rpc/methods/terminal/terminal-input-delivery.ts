@@ -1,4 +1,5 @@
 import { InvalidArgumentError } from '../../core'
+import type { RuntimeTerminalSend } from '../../../../../shared/runtime-terminal-send-contract'
 import type { DriverState, OrcaRuntimeService } from '../../../orca-runtime'
 import {
   TERMINAL_INPUT_MAX_BYTES,
@@ -59,18 +60,25 @@ export async function sendTerminalStreamInput(
     text: string
     client: TerminalViewportClient | undefined
     isMobile: boolean
+    /** Waits for the provider's handoff; one that may have written is `failed`, not `rejected`. */
+    requireWriteSettlement?: boolean
   }
 ): Promise<TerminalStreamInputOutcome> {
   const action = { text: args.text, enter: false, interrupt: false }
   const clientId = args.isMobile ? args.client?.id : undefined
   const floorClaim: MobileInputFloorClaimHolder = { current: null }
+  const settlement = args.requireWriteSettlement ? { requireWriteSettlement: true as const } : {}
   try {
     if (!clientId) {
-      const result = await runtime.sendTerminal(args.terminal, action, { inputKind: 'driving' })
-      return result.accepted ? 'delivered' : 'rejected'
+      const result = await runtime.sendTerminal(args.terminal, action, {
+        inputKind: 'driving',
+        ...settlement
+      })
+      return streamInputOutcome(result)
     }
     const result = await runtime.sendTerminal(args.terminal, action, {
       inputKind: 'driving',
+      ...settlement,
       reserveWrite: (writePtyId) => {
         const claim = runtime.beginMobileInputFloor(writePtyId, clientId)
         if (!claim) {
@@ -80,15 +88,23 @@ export async function sendTerminalStreamInput(
       },
       afterWrite: () => commitMobileInputFloorClaim(floorClaim)
     })
-    if (!result.accepted) {
+    const outcome = streamInputOutcome(result)
+    if (outcome === 'rejected') {
       floorClaim.current?.rollback()
-      return 'rejected'
     }
-    return 'delivered'
+    return outcome
   } catch (error) {
     floorClaim.current?.rollback()
     return isTerminalStreamInputRejection(error) ? 'rejected' : 'failed'
   }
+}
+
+function streamInputOutcome(result: RuntimeTerminalSend): TerminalStreamInputOutcome {
+  if (result.writeSettlement?.outcome === 'unverifiable') {
+    // Why: only bytes that may already be in flight are ambiguous; the rest are a proven refusal.
+    return result.writeSettlement.bytesHandedToTransport ? 'failed' : 'rejected'
+  }
+  return result.accepted ? 'delivered' : 'rejected'
 }
 
 export type MobileInputFloorClaimHolder = {

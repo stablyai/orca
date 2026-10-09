@@ -24,6 +24,7 @@ function measureAnchorPosition(anchor: HTMLElement): AnchorPosition {
 /** Portals above the usage meters without taking focus or obscuring their menus. */
 export function StatusBarUsageChangeNoticeCard({
   children,
+  noticeKey,
   eligible,
   dismiss,
   title,
@@ -31,30 +32,31 @@ export function StatusBarUsageChangeNoticeCard({
   action
 }: {
   children: ReactNode
+  noticeKey: string
   eligible: boolean
   dismiss: () => void
   title: string
-  description: string
+  description: ReactNode
   action?: { label: string; onClick: () => void }
 }): React.JSX.Element {
-  const [delayElapsed, setDelayElapsed] = useState(false)
+  const [elapsedNoticeKey, setElapsedNoticeKey] = useState<string | null>(null)
   const anchorRef = useRef<HTMLDivElement>(null)
   const [anchorPosition, setAnchorPosition] = useState<AnchorPosition | null>(null)
 
   useEffect(() => {
+    setElapsedNoticeKey(null)
     if (!eligible) {
-      setDelayElapsed(false)
       return
     }
     const timer = window.setTimeout(() => {
-      setDelayElapsed(true)
+      setElapsedNoticeKey(noticeKey)
     }, SHOW_DELAY_MS)
     return () => {
       window.clearTimeout(timer)
     }
-  }, [eligible])
+  }, [eligible, noticeKey])
 
-  const open = eligible && delayElapsed
+  const open = eligible && elapsedNoticeKey === noticeKey
 
   useLayoutEffect(() => {
     if (!open) {
@@ -144,7 +146,7 @@ export function StatusBarUsageChangeNoticeCard({
                 <X className="size-3.5" />
               </Button>
             </div>
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 flex justify-end gap-2">
               {action ? (
                 <Button
                   variant="default"
@@ -155,7 +157,7 @@ export function StatusBarUsageChangeNoticeCard({
                   {action.label}
                 </Button>
               ) : null}
-              <Button variant="ghost" size="sm" onClick={dismiss}>
+              <Button variant={action ? 'secondary' : 'default'} size="sm" onClick={dismiss}>
                 {translate(
                   'auto.components.status.bar.UsagePercentageDisplayChangeNotice.gotIt',
                   'Got it'

@@ -71,7 +71,7 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
         ? await this.buildStartupForDraft(
             repo,
             args.startupDraft,
-            requestedAgent,
+            args.startupDraftAgent ?? requestedAgent,
             args.startupLaunchSource
           )
         : null

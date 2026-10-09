@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshConnection } from './ssh-connection'
 import {
   ensureRemoteOrcadNodeRuntime,
+  NODE_RUNTIME_PROMOTE_TIMEOUT_MS,
   REMOTE_NODE_RUNTIME_MISSING,
   REMOTE_NODE_RUNTIME_READY
 } from './orcad-remote-node-runtime'
@@ -27,6 +28,7 @@ beforeEach(() => {
   local = mkdtempSync(join(tmpdir(), 'runtime-promotion-'))
   writeFileSync(join(local, 'node.tar.gz'), 'archive')
   commands = []
+  vi.mocked(execCommand).mockClear()
 })
 afterEach(() => {
   rmSync(local, { recursive: true, force: true })
@@ -74,14 +76,31 @@ describe('ensureRemoteOrcadNodeRuntime promotion lock', () => {
     expect(released).toBeGreaterThan(promoted)
   })
 
-  it('skips promotion when a sibling published the pin while this client uploaded', async () => {
-    answer((count) => (count === 1 ? REMOTE_NODE_RUNTIME_MISSING : REMOTE_NODE_RUNTIME_READY))
+  it('re-hashes and promotes in one host command that the host lock release covers', async () => {
+    answer(() => REMOTE_NODE_RUNTIME_MISSING)
     await ensure()
-    expect(indexOf('tar -xzf')).toBe(-1)
-    expect(lastIndexOf(`rm -rf '${lock}'`)).toBeGreaterThan(indexOf(`mkdir '${lock}' 2>/dev/null`))
+    // Why one command: a re-hash the client stops waiting on must not orphan the lock (HH-3).
+    const locked = commands.filter((c) => c.includes('sha256sum'))
+    expect(locked).toHaveLength(2)
+    const [, recheck] = locked
+    expect(recheck.indexOf('sha256sum')).toBeLessThan(recheck.indexOf('tar -xzf'))
+    expect(recheck.lastIndexOf(`rm -rf '${lock}'`)).toBeGreaterThan(recheck.indexOf('tar -xzf'))
   })
 
-  it('keeps the lock when promotion ends in an unconfirmed termination', async () => {
+  it('gives every full hash and the promote the slow-storage bound, not the 30 s exec default', async () => {
+    answer(() => REMOTE_NODE_RUNTIME_MISSING)
+    await ensure()
+    const calls = vi
+      .mocked(execCommand)
+      .mock.calls.filter(([, command]) => command.includes('sha256sum'))
+    expect(calls).toHaveLength(2)
+    for (const call of calls) {
+      expect(call[2]).toMatchObject({ timeoutMs: NODE_RUNTIME_PROMOTE_TIMEOUT_MS })
+    }
+    expect(NODE_RUNTIME_PROMOTE_TIMEOUT_MS).toBeGreaterThan(30_000)
+  })
+
+  it('leaves the lock to the host release when promotion ends in an unconfirmed termination', async () => {
     answer(() => REMOTE_NODE_RUNTIME_MISSING)
     const lost = Object.assign(new Error('lost'), { sshChannelCloseConfirmed: false })
     const base = vi.mocked(execCommand).getMockImplementation()
@@ -93,6 +112,10 @@ describe('ensureRemoteOrcadNodeRuntime promotion lock', () => {
       return base!(c, command, options)
     })
     await expect(ensure()).rejects.toBe(lost)
-    expect(indexOf(`rm -rf '${lock}'`)).toBe(-1)
+    // The promote itself frees the lock on the host when its work exits; the client sends no release.
+    const releases = commands.filter((c) => c.includes(`rm -rf '${lock}'`))
+    expect(releases).toHaveLength(1)
+    expect(releases[0]).toContain('tar -xzf')
+    expect(releases[0].indexOf(`rm -rf '${lock}'`)).toBeGreaterThan(releases[0].indexOf('tar -xzf'))
   })
 })

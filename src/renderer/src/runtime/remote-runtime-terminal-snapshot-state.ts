@@ -128,16 +128,6 @@ export function decodeSnapshotInfo(
   }
 }
 
-/**
- * Whether a pushed (initial or recovery) image leaves the pane's history alone.
- * Absent counts as none: hosts that predate the field pushed desktop images screen-only (#14593).
- */
-export function pushedSnapshotKeepsLocalScrollback(
-  info: RemoteRuntimeSnapshotInfo | null
-): boolean {
-  return (info?.scrollbackRows ?? 0) === 0
-}
-
 export function retryWorthySnapshotOutcome(
   cause: RemoteRuntimeSnapshotRetryCause
 ): RemoteRuntimeSnapshotOutcome {

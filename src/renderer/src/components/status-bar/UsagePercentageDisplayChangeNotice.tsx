@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { ComponentProps, ReactNode } from 'react'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { shouldShowUsagePercentageDisplayChangeNotice } from '../../../../shared/usage-percentage-display-change-notice'
@@ -17,13 +17,9 @@ function openUsagePercentageSettings(): void {
   })
 }
 
-export function UsagePercentageDisplayChangeNotice({
-  children,
-  hasVisibleUsageMeters
-}: {
-  children: ReactNode
+export function useUsagePercentageDisplayChangeNotice(
   hasVisibleUsageMeters: boolean
-}): React.JSX.Element {
+): Omit<ComponentProps<typeof StatusBarUsageChangeNoticeCard>, 'children'> {
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const dismissed = useAppStore((s) => s.usagePercentageDisplayChangeNoticeDismissed)
   const dismiss = useAppStore((s) => s.dismissUsagePercentageDisplayChangeNotice)
@@ -37,30 +33,38 @@ export function UsagePercentageDisplayChangeNotice({
     activeModal
   })
 
-  return (
-    <StatusBarUsageChangeNoticeCard
-      eligible={eligible}
-      dismiss={dismiss}
-      title={translate(
-        'auto.components.status.bar.UsagePercentageDisplayChangeNotice.title',
-        'Usage now shows % used'
-      )}
-      description={translate(
-        'auto.components.status.bar.UsagePercentageDisplayChangeNotice.body',
-        'Prefer remaining? Change it in Settings.'
-      )}
-      action={{
-        label: translate(
-          'auto.components.status.bar.UsagePercentageDisplayChangeNotice.openSettings',
-          'Open Settings'
-        ),
-        onClick: () => {
-          dismiss()
-          openUsagePercentageSettings()
-        }
-      }}
-    >
-      {children}
-    </StatusBarUsageChangeNoticeCard>
-  )
+  return {
+    noticeKey: 'percentage',
+    eligible,
+    dismiss,
+    title: translate(
+      'auto.components.status.bar.UsagePercentageDisplayChangeNotice.title',
+      'Usage now shows % used'
+    ),
+    description: translate(
+      'auto.components.status.bar.UsagePercentageDisplayChangeNotice.body',
+      'Prefer remaining? Change it in Settings.'
+    ),
+    action: {
+      label: translate(
+        'auto.components.status.bar.UsagePercentageDisplayChangeNotice.openSettings',
+        'Open Settings'
+      ),
+      onClick: () => {
+        dismiss()
+        openUsagePercentageSettings()
+      }
+    }
+  }
+}
+
+export function UsagePercentageDisplayChangeNotice({
+  children,
+  hasVisibleUsageMeters
+}: {
+  children: ReactNode
+  hasVisibleUsageMeters: boolean
+}): React.JSX.Element {
+  const notice = useUsagePercentageDisplayChangeNotice(hasVisibleUsageMeters)
+  return <StatusBarUsageChangeNoticeCard {...notice}>{children}</StatusBarUsageChangeNoticeCard>
 }

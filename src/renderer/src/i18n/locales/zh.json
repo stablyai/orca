@@ -3979,8 +3979,8 @@
             "remaining": "剩余 {{value0}}%"
           },
           "StatusBarUsageChangeNotices": {
-            "compactTitle": "用量现以紧凑模式显示",
-            "compactBody": "每个服务提供商显示一个主要指标。在用量菜单中选择“详细”即可查看更多限额。"
+            "compactTitle": "用量显示现已精简",
+            "compactBody": "每个服务提供商显示一个主要指标。在用量菜单中选择“<detailed>详细</detailed>”即可查看更多限额。"
           },
           "UsagePercentageDisplayChangeNotice": {
             "title": "用量现在显示已用百分比",
@@ -12311,7 +12311,11 @@
             "confirmRestore": "恢复快照并重新启动",
             "keepState": "保留状态",
             "statusUnknown": "状态未知",
-            "checking": "正在检查…"
+            "checking": "正在检查…",
+            "forget": "忘记…",
+            "confirmForget": "在此桌面上忘记",
+            "keepLinked": "保持关联",
+            "forgetDescription": "在此处取消关联此服务器，而不联系其主机。如果主机恢复，服务器可能仍在那里运行。"
           },
           "title": "受管服务器",
           "description": "Orca 会在空的 SSH 主机上安装并运行服务器，并使其保持最新。",
@@ -12379,6 +12383,7 @@
           },
           "loadFailed": "Orca 无法加载 SSH 主机和未完成的迁移。请重新打开设置以重试。",
           "outcome": {
+            "activeServer": "未完成：请先在“高级”中选择另一个活动服务器，再停止此服务器。",
             "live": "未完成：此服务器上的终端仍在运行。请关闭它们后重试。",
             "unverifiable": "未完成：Orca 无法确认此服务器上正在运行什么。请在主机可访问时重试。",
             "migration": "未完成：迁移到此服务器的操作尚未完成。请先继续该操作。",
@@ -12395,7 +12400,7 @@
           "connecting": "正在连接到受管的 Orca 服务器…",
           "updating": "正在更新受管服务器…",
           "starting": "正在启动受管服务器…",
-          "notServing": "受管的 Orca 服务器未运行，且无法启动。",
+          "notServing": "Orca 无法确认受管服务器是否正在响应。",
           "hostNewer": "运行来自较新版本 Orca 的受管 Orca 服务器；它会保留该版本。",
           "terminalsLive": "在其 {{count}} 个打开的终端全部关闭前运行中继，然后迁移到受管服务器。",
           "terminalsLive_one": "在其 {{count}} 个打开的终端关闭前运行中继，然后迁移到受管服务器。",
@@ -18406,7 +18411,7 @@
         "sendConfirmBody_other": "你即将发送一条消息。是否清除之前排队的 {{count}} 条消息？",
         "sendConfirmClear": "清空队列",
         "sendConfirmSend": "发送消息",
-        "from": "来自 {{names}}",
+        "fromSender": "来自",
         "pausedSendFailedWaiting": "无法发送。智能体完成后，点按发送以重试。"
       },
       "thought": "已思考",
