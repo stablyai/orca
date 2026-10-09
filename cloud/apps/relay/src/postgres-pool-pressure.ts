@@ -34,7 +34,7 @@ function errorCode(error: unknown): string {
   return String((error as { code?: unknown } | null)?.code)
 }
 
-function isPostgresPoolAcquireFailure(error: unknown): boolean {
+export function isPostgresPoolAcquireFailure(error: unknown): boolean {
   return typeof error === 'object' && error !== null && poolAcquireFailures.has(error)
 }
 
