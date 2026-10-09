@@ -1,0 +1,25 @@
+name: Set up isolated Bun typechecker
+description: Install an immutable Bun build for typechecking without replacing the test or localization runtime.
+
+outputs:
+  path:
+    description: Absolute path to the typechecker executable.
+    value: ${{ steps.install.outputs.path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install Bun typechecker
+      id: install
+      shell: bash
+      run: |
+        set -euo pipefail
+        test "$RUNNER_OS" = Linux
+        test "$RUNNER_ARCH" = ARM64
+        version="$(cat config/.bun-typecheck-version)"
+        destination="$RUNNER_TEMP/orca-bun-typecheck"
+        npm install --prefix "$destination" --ignore-scripts --no-audit --no-fund --package-lock=false --save=false "@oven/bun-linux-aarch64@$version"
+        executable="$destination/node_modules/@oven/bun-linux-aarch64/bin/bun"
+        "$executable" --revision
+        "$executable" check --help
+        printf 'path=%s\n' "$executable" >> "$GITHUB_OUTPUT"

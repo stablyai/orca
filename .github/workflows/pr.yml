@@ -410,17 +410,15 @@ jobs:
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: pnpm verify:macos-entitlements
 
-      # Why: every project is `composite`, so tsc already writes a .tsbuildinfo that lets
-      # the next run skip unchanged files. Share one cache entry across commits while the
-      # PR base stays stable; actions/cache keeps the first successful graph and the
-      # compiler still invalidates stale files from its content hashes.
+      # Immutable entries need a new key per head; prefix-only restores avoid stale exact hits.
       - name: Cache TypeScript incremental state
         if: needs.code_paths.outputs.typecheck == 'true'
         uses: actions/cache@v5
         with:
           path: config/*.tsbuildinfo
-          key: tsbuildinfo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json') }}-${{ github.event.pull_request.base.sha }}
+          key: tsbuildinfo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json') }}-pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.base.sha }}-${{ github.event.pull_request.head.sha }}
           restore-keys: |
+            tsbuildinfo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json') }}-pr-${{ github.event.pull_request.number }}-
             tsbuildinfo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json') }}-
 
       # Planning shares setup and stays off the compiler's critical path.

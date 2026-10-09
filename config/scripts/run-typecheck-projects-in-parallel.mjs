@@ -1,6 +1,6 @@
-import { spawn } from 'node:child_process'
 import { availableParallelism, totalmem } from 'node:os'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { spawnProcess } from './script-child-process.mjs'
 
 const BYTES_PER_GIB = 1024 ** 3
 
@@ -55,19 +55,42 @@ export function planTypecheckBatches(projects, { budgetGib, parallelism }) {
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
 const tsc = fileURLToPath(new URL('../../node_modules/typescript/bin/tsc', import.meta.url))
 
-function checkProject(project) {
+export function typecheckInvocation(project, bunPath = process.env.ORCA_TYPECHECK_BUN) {
+  const config = `config/${project}`
+  return bunPath
+    ? {
+        program: bunPath,
+        args: ['check', '-p', config, '--threads', String(availableParallelism())]
+      }
+    : { program: process.execPath, args: [tsc, '--noEmit', '-p', config] }
+}
+
+export function checkProject(project, startCompiler = spawnProcess) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [tsc, '--noEmit', '-p', `config/${project}`], {
+    const child = startCompiler({
+      ...typecheckInvocation(project),
       cwd: repoRoot,
-      stdio: 'inherit'
+      env: process.env
     })
+    let streamFailure
+    for (const stream of [child.stdin, child.stdout, child.stderr]) {
+      // Keep the batch occupied until close even when a compiler pipe fails.
+      stream.on('error', (error) => {
+        streamFailure ??= error
+      })
+    }
+    child.stdout.pipe(process.stdout)
+    child.stderr.pipe(process.stderr)
+    child.stdin.end()
 
     child.on('error', reject)
-    child.on('exit', (code, signal) => {
-      if (signal) {
-        reject(new Error(`tsc ${project} exited with signal ${signal}`))
+    child.on('close', (code, signal) => {
+      if (streamFailure) {
+        reject(streamFailure)
+      } else if (signal) {
+        reject(new Error(`typecheck ${project} exited with signal ${signal}`))
       } else if (code !== 0) {
-        reject(new Error(`tsc ${project} exited with code ${code}`))
+        reject(new Error(`typecheck ${project} exited with code ${code}`))
       } else {
         resolve()
       }
@@ -75,7 +98,7 @@ function checkProject(project) {
   })
 }
 
-async function runTypecheckProjects() {
+export async function runTypecheckProjects(check = checkProject) {
   const batches = planTypecheckBatches(TYPECHECK_PROJECTS, {
     budgetGib: admissibleHeapGib(totalmem()),
     parallelism: availableParallelism()
@@ -84,7 +107,7 @@ async function runTypecheckProjects() {
   // Every batch runs even after one fails, so a single broken project still reports the rest.
   const failures = []
   for (const batch of batches) {
-    const results = await Promise.allSettled(batch.map((project) => checkProject(project.config)))
+    const results = await Promise.allSettled(batch.map((project) => check(project.config)))
     for (const result of results) {
       if (result.status === 'rejected') {
         failures.push(result.reason)

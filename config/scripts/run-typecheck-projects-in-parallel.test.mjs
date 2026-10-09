@@ -1,8 +1,13 @@
+import { EventEmitter } from 'node:events'
+import { PassThrough } from 'node:stream'
 import { describe, expect, it } from 'vitest'
 import {
   TYPECHECK_PROJECTS,
   admissibleHeapGib,
-  planTypecheckBatches
+  checkProject,
+  planTypecheckBatches,
+  runTypecheckProjects,
+  typecheckInvocation
 } from './run-typecheck-projects-in-parallel.mjs'
 
 const CI_RUNNER = { totalBytes: 16 * 1024 ** 3, parallelism: 4 }
@@ -70,5 +75,68 @@ describe('typecheck project admission', () => {
     // A single project over budget runs anyway, so this is the ceiling the pool cannot rescue.
     const heaviest = Math.max(...TYPECHECK_PROJECTS.map((project) => project.heapGib))
     expect(heaviest).toBeLessThanOrEqual(admissibleHeapGib(CI_RUNNER.totalBytes))
+  })
+})
+
+describe('typecheck compiler execution', () => {
+  it.each(['stdin', 'stdout', 'stderr'])('waits for exit after a %s pipe error', async (name) => {
+    const child = new EventEmitter()
+    child.stdin = new PassThrough()
+    child.stdout = new PassThrough()
+    child.stderr = new PassThrough()
+    const failure = new Error('compiler pipe failed')
+    let settled = false
+    const checking = checkProject('tsconfig.node.json', () => child)
+    checking.then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      }
+    )
+    try {
+      child[name].emit('error', failure)
+      await Promise.resolve()
+      expect(settled).toBe(false)
+      child.emit('close', 0, null)
+      await expect(checking).rejects.toBe(failure)
+    } finally {
+      child.stdout.unpipe(process.stdout)
+      child.stderr.unpipe(process.stderr)
+      for (const stream of [child.stdin, child.stdout, child.stderr]) {
+        stream.destroy()
+      }
+    }
+  })
+
+  it('keeps incremental TypeScript as the default for every project', () => {
+    for (const { config } of TYPECHECK_PROJECTS) {
+      const invocation = typecheckInvocation(config, '')
+      expect(invocation.program).toBe(process.execPath)
+      expect(invocation.args.slice(1)).toEqual(['--noEmit', '-p', `config/${config}`])
+    }
+  })
+
+  it('uses the isolated Bun executable for all complete projects', () => {
+    for (const { config } of TYPECHECK_PROJECTS) {
+      const invocation = typecheckInvocation(config, '/isolated/bun')
+      expect(invocation.program).toBe('/isolated/bun')
+      expect(invocation.args.slice(0, 4)).toEqual(['check', '-p', `config/${config}`, '--threads'])
+      expect(Number(invocation.args[4])).toBeGreaterThan(0)
+    }
+  })
+
+  it('still checks every project after a compiler failure', async () => {
+    const seen = []
+    const failure = new Error('type error')
+    const failures = await runTypecheckProjects(async (config) => {
+      seen.push(config)
+      if (config === 'tsconfig.node.json') {
+        throw failure
+      }
+    })
+    expect(seen.sort()).toEqual(TYPECHECK_PROJECTS.map(({ config }) => config).sort())
+    expect(failures).toEqual([failure])
   })
 })

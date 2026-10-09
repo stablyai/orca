@@ -499,7 +499,7 @@ describe('PR workflow parallelism', () => {
     expect(dependencyAction.inputs['cache-electron-package'].default).toBe('false')
   })
 
-  it('reuses TypeScript incremental state across typecheck runs', () => {
+  it('refreshes TypeScript state per PR head and prefers that PR’s latest checked graph', () => {
     const steps = workflow.jobs.preflight.steps
     const cacheIndex = steps.findIndex((step) => step.name === 'Cache TypeScript incremental state')
     const checkIndex = steps.findIndex((step) => step.run === 'pnpm run typecheck')
@@ -507,14 +507,22 @@ describe('PR workflow parallelism', () => {
     expect(cacheIndex).toBeGreaterThanOrEqual(0)
     expect(cacheIndex).toBeLessThan(checkIndex)
     expect(steps[cacheIndex].with.path).toBe('config/*.tsbuildinfo')
-    // Why restore-keys matter here: the base SHA key is shared by every commit in a PR,
-    // but actions/cache keeps the first successful graph until the base or config changes.
+    // Prefix restores still let a new head reuse the previous head's immutable entry.
     expect(steps[cacheIndex].with['restore-keys']).toBeTruthy()
     // The buildinfo is only reusable while the compiler options that produced it hold.
     expect(steps[cacheIndex].with.key).toContain(
       "hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json')"
     )
     expect(steps[cacheIndex].with.key).toContain('github.event.pull_request.base.sha')
+    expect(steps[cacheIndex].with.key).toContain('github.event.pull_request.number')
+    expect(steps[cacheIndex].with.key).toContain('github.event.pull_request.head.sha')
+    const restoreKeys = steps[cacheIndex].with['restore-keys'].trim().split('\n')
+    expect(restoreKeys[0]).toContain('github.event.pull_request.number')
+    expect(restoreKeys[0]).not.toContain('github.event.pull_request.head.sha')
+    expect(restoreKeys[0]).not.toContain('github.event.pull_request.base.sha')
+    expect(restoreKeys[1]).not.toContain('github.event.pull_request.base.sha')
+    expect(restoreKeys).toHaveLength(2)
+    expect(steps[checkIndex].env?.ORCA_TYPECHECK_BUN).toBeUndefined()
     expect(steps[cacheIndex].with['restore-keys']).not.toContain('tsbuildinfo-${{ runner.os }}-\n')
   })
 

@@ -1,0 +1,58 @@
+name: Typecheck comparison
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit or branch to compare.
+        required: true
+        default: main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: typecheck-comparison-${{ inputs.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref }}
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          node-version: '24'
+      - uses: ./.github/actions/setup-bun-typecheck
+        id: bun
+      - name: Restore recent TypeScript incremental state
+        id: typescript-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: config/*.tsbuildinfo
+          key: tsbuildinfo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json') }}-${{ github.sha }}
+          restore-keys: |
+            tsbuildinfo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json') }}-
+      - name: Compare full-project typechecks
+        env:
+          TYPECHECK_BUN_PATH: ${{ steps.bun.outputs.path }}
+          TYPECHECK_RESTORED_CACHE_KEY: ${{ steps.typescript-cache.outputs.cache-matched-key }}
+        run: node config/scripts/ci-typecheck-benchmark.mjs --bun "$TYPECHECK_BUN_PATH"
+      - name: Publish comparison summary
+        if: always()
+        run: |
+          if [ -f .build/typecheck-benchmark/comparison.md ]; then
+            cat .build/typecheck-benchmark/comparison.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: typecheck-comparison-${{ github.run_attempt }}
+          path: .build/typecheck-benchmark/
+          retention-days: 14
