@@ -159,9 +159,10 @@ export function resetWebSessionCloseIntentForTests(): void {
 const userEmptiedWorktreeIds = new Set<string>()
 
 export function rememberUserEmptiedWorktree(worktreeId: string): void {
-  const trimmed = worktreeId.trim()
-  if (trimmed) {
-    userEmptiedWorktreeIds.add(trimmed)
+  // Why the exact ID: snapshot application checks and clears the marker with
+  // the ID it was given, so a trimmed key would never match a padded one.
+  if (worktreeId.trim()) {
+    userEmptiedWorktreeIds.add(worktreeId)
   }
 }
 

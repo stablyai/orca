@@ -8,6 +8,7 @@ import { hasRuntimeRpcErrorCode, unwrapRuntimeRpcResult } from './runtime-rpc-cl
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import {
   clearWebSessionCloseIntent,
+  forgetUserEmptiedWorktree,
   makeWebSessionCloseIntentDurable,
   recordWebSessionCloseIntent,
   rememberUserEmptiedWorktree
@@ -167,6 +168,8 @@ async function callWebRuntimeSessionTabMethod(
         // only when it republished; dead-leaf refusals must stay suppressed.
         clearWebSessionCloseIntent(intentOwner, args.worktreeId, immediateHostTabId)
         clearWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId)
+        // Why: the live PTY means this close did not empty the workspace.
+        forgetUserEmptiedWorktree(args.worktreeId)
         const { acceptReplayedWebSessionTabsSnapshot } = await import('./web-session-tabs-sync')
         acceptReplayedWebSessionTabsSnapshot(environmentId, args.worktreeId)
       }
@@ -194,6 +197,10 @@ async function callWebRuntimeSessionTabMethod(
       } else {
         clearWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId)
       }
+    }
+    if (isClose && !hostHasNoSuchTab) {
+      // Why: a "not now" failure leaves the terminal alive, so the workspace was not emptied.
+      forgetUserEmptiedWorktree(args.worktreeId)
     }
     if (isLifecycleClose) {
       const { acceptReplayedWebSessionTabsSnapshot } = await import('./web-session-tabs-sync')
