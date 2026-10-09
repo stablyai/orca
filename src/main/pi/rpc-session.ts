@@ -62,8 +62,7 @@ export class PiRpcSession {
   readonly turns: PiRpcTurns
   readonly dialogs: PiRpcDialogCallbacks
   readonly selected = new Map<string, string>()
-  /** What this child listed at its start, with what its config resolved; the host saves it once. */
-  startListing?: AgentModelCatalogLiveListing
+  private startCatalogListing?: AgentModelCatalogLiveListing
   readonly skipped: string[] = []
   commands?: AgentSessionSlashCommand[]
   options?: AgentSessionOptionsResult
@@ -172,7 +171,7 @@ export class PiRpcSession {
       }
     }
     this.options = await readPiRpcSessionOptions(this.connection)
-    this.startListing = withLiveCatalogListing(
+    this.startCatalogListing = withLiveCatalogListing(
       this.options,
       unpickedSessionConfiguredChoice({
         resolvesConfig: this.resolvesConfig,
@@ -190,6 +189,11 @@ export class PiRpcSession {
       })
     }
     return state.sessionFile
+  }
+
+  /** What this child listed at its start, with what its config resolved; the host saves it once. */
+  get startListing(): AgentModelCatalogLiveListing | undefined {
+    return this.startCatalogListing
   }
 
   /** What the child reports now; only the start says what its config resolved. */

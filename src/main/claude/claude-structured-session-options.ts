@@ -265,7 +265,7 @@ export function claudeResolvedCatalogListing(
   const listing = claudeCatalogListing(
     session,
     listedModels(catalog ? { models: catalog } : null),
-    true
+    { withConfiguredDefault: true }
   )
   return listing ? { catalogListing: listing } : {}
 }
