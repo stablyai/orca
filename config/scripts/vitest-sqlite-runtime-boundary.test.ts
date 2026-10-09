@@ -9,6 +9,7 @@ const sqliteHarnesses = new Set([
   'persistence-test-harness',
   'agent-session-record-store-test-harness',
   'structured-agent-session-rest-test-rig',
+  'runtime-session-owner.test-fixture',
   'journal-host-database-test-support'
 ])
 const sqliteModules = new Set([
@@ -56,6 +57,10 @@ function importsSqliteRuntime(file: string, source: string): boolean {
 it.each([
   ['import { createRestTestRig } from "./structured-agent-session-rest-test-rig"', true],
   ['import type { RestTestRig } from "./structured-agent-session-rest-test-rig"', false],
+  ['import { createSessionOwnerFixture } from "./runtime-session-owner.test-fixture"', true],
+  ['import "./runtime-session-owner.test-fixture"', true],
+  ['import type { SessionOwnerFixture } from "./runtime-session-owner.test-fixture"', false],
+  ['import { type SessionOwnerFixture } from "./runtime-session-owner.test-fixture"', false],
   ['import Database, { type Options } from "./sync-database"', true],
   ['import {} from "./sync-database"', true],
   ['import "./sync-database"', true],
