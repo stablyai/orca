@@ -22,7 +22,7 @@ import {
   installOrcadShutdownSignals,
   startOrcadWithHost
 } from './orcad-lifecycle'
-import { parseArgs } from './orcad-command-arguments'
+import { ORCAD_USAGE, parseArgs } from './orcad-command-arguments'
 import type { OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
 import { installOrcadStopRequestListeners } from './orcad-stop-request-listener'
 import { prepareOrcadManagedStop } from './orcad-managed-stop-admission'
@@ -102,6 +102,8 @@ export function installOrcadHostAdapters(): void {
 export type OrcadOptions = {
   port?: number
   json?: boolean
+  /** `--help`/`-h`: print ORCAD_USAGE and exit before booting. */
+  help?: boolean
   noPairing?: boolean
   pairingAddress?: string
   /** Desktop `orca serve` parity: a mobile-scoped offer with a terminal QR. */
@@ -418,7 +420,12 @@ export {
 export { ORCAD_SHUTDOWN_DEADLINE_MS } from './orcad-lifecycle'
 
 export async function main(argv: string[] = process.argv.slice(2)): Promise<void> {
-  const startup = startOrcad(parseArgs(argv))
+  const options = parseArgs(argv)
+  if (options.help) {
+    console.log(ORCAD_USAGE)
+    return
+  }
+  const startup = startOrcad(options)
   const requestShutdown = installOrcadShutdownSignals(async () => (await startup).stop())
   const handle = await startup
   // Why after startup: a managed request must name the runtime and instance this run became.

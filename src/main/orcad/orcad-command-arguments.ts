@@ -1,5 +1,31 @@
 import type { OrcadOptions } from './orcad-entry'
 
+export const ORCAD_USAGE = `orcad — the Orca runtime served without Electron.
+
+Usage: orcad [options]
+
+Options:
+  --port <n>               Port to listen on; 0 picks a free one (default 0).
+  --bind <ip>              Interface to bind. Defaults to 127.0.0.1 (this machine
+                           only); pass 0.0.0.0 or a LAN/Tailscale address to reach
+                           orcad from other machines — including mobile clients.
+  --pairing-address <addr> Address advertised in pairing offers when it differs
+                           from the bind address (e.g. a public hostname).
+  --json                   Print the one-line orca_server_ready JSON to stdout
+                           once listening (machine-readable boot payload).
+  --no-pairing             Do not mint a runtime pairing offer at boot.
+  --mobile-pairing         Mint a mobile-scoped pairing offer (terminal QR).
+  --grant-desktop-control  Widen the default runtime offer so the pairing client
+                           may drive desktop control.
+  --recipe-json            Print only the ephemeral-VM recipe line; requires
+                           --project-root.
+  --project-root <dir>     Project root for --recipe-json.
+  --help, -h               Print this text and exit.
+
+Environment:
+  ORCA_USER_DATA           Data directory for this instance's profile and state.
+`
+
 /**
  * orcad's flags. A value-taking flag consumes the next token whatever it looks
  * like, so `--bind --json` binds to the literal `--json`; only a missing token
@@ -9,7 +35,9 @@ export function parseArgs(argv: string[]): OrcadOptions {
   const options: OrcadOptions = {}
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
-    if (arg === '--port') {
+    if (arg === '--help' || arg === '-h') {
+      options.help = true
+    } else if (arg === '--port') {
       const raw = argv[i + 1]
       const port = Number(raw)
       if (!Number.isInteger(port) || port < 0 || port > 65535) {

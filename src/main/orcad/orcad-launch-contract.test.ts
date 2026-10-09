@@ -12,6 +12,7 @@ import {
   parseArgs,
   resolveOrcadExitCode
 } from './orcad-entry'
+import { ORCAD_USAGE } from './orcad-command-arguments'
 import { startOrcadWithLifecycle } from './orcad-lifecycle'
 import {
   beginAgentSessionRuntimeRecord,
@@ -55,6 +56,14 @@ describe('parseArgs', () => {
   it('rejects --bind with no value rather than silently binding the default', () => {
     expect(() => parseArgs(['--bind'])).toThrow('--bind expects a value')
     expect(() => parseArgs(['--bind', '--json'])).not.toThrow()
+  })
+
+  it('treats --help and -h as a request for usage, not an unknown flag', () => {
+    expect(parseArgs(['--help'])).toEqual({ help: true })
+    expect(parseArgs(['-h'])).toEqual({ help: true })
+    expect(parseArgs(['--help', '--json'])).toEqual({ help: true, json: true })
+    expect(ORCAD_USAGE).toContain('--bind')
+    expect(ORCAD_USAGE).toContain('--port')
   })
 })
 
