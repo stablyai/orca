@@ -76,6 +76,7 @@ function fixture(accounts: ClaudeManagedAccount[] = [account('a'), account('b')]
       options?: ClaudeCommandOptions
     ) => Promise<string>
   >(async () => '')
+  const openLink = vi.fn(async (_link: string) => {})
   const service = new ClaudeAccountService(
     {
       getSettings: () => settings,
@@ -88,9 +89,20 @@ function fixture(accounts: ClaudeManagedAccount[] = [account('a'), account('b')]
       refreshForClaudeAccountChange: vi.fn().mockResolvedValue(undefined)
     },
     runtimeAuth,
-    runLogin
+    runLogin,
+    openLink
   )
-  return { root, home, service, runtimeAuth, runLogin, signIn, covered, settings: () => settings }
+  return {
+    root,
+    home,
+    service,
+    runtimeAuth,
+    runLogin,
+    openLink,
+    signIn,
+    covered,
+    settings: () => settings
+  }
 }
 
 // The id the last sign-in prepared a folder for.
@@ -209,6 +221,51 @@ describe('ClaudeAccountService', () => {
       managedAuthPath: f.home(newId(f))
     })
     expect(f.runtimeAuth.removeAccountFolder).not.toHaveBeenCalled()
+  })
+
+  describe.skipIf(process.platform === 'win32')('the sign-in link Claude hands BROWSER', () => {
+    const LINK =
+      'https://claude.com/cai/oauth/authorize?redirect_uri=http%3A%2F%2Flocalhost%3A5000%2Fcallback'
+    // Stands in for Claude running BROWSER, then finishing once the browser signs in.
+    const browseThenSignIn = (f: ReturnType<typeof fixture>) =>
+      f.runLogin.mockImplementationOnce(async (_args, _config, _timeoutMs, options) => {
+        writeFileSync(`${options!.browser}.link`, LINK)
+        await vi.waitFor(() => expect(f.openLink.mock.calls.length + copied.length).toBe(1))
+        f.signIn(newId(f), 'new@example.test')
+        return ''
+      })
+    let copied: string[] = []
+    afterEach(() => {
+      copied = []
+    })
+
+    it('opens the default browser at that link by default', async () => {
+      const f = fixture()
+      browseThenSignIn(f)
+      await f.service.addAccount({ runtime: 'host' })
+      expect(f.openLink).toHaveBeenCalledWith(LINK)
+      expect(existsSync(join(f.home(newId(f)), '.orca-sign-in-browser'))).toBe(false)
+    })
+
+    it('hands that link to Settings and opens nothing when asked to copy it', async () => {
+      const f = fixture()
+      browseThenSignIn(f)
+      const adding = f.service.addAccount({ runtime: 'host' }, { copyLink: true })
+      const link = await f.service.waitForSignInLink()
+      copied.push(link!)
+      await adding
+      expect(link).toBe(LINK)
+      expect(f.openLink).not.toHaveBeenCalled()
+      await expect(f.service.waitForSignInLink()).resolves.toBeNull()
+    })
+
+    it('reports no link when the sign-in ends before Claude hands one over', async () => {
+      const f = fixture()
+      f.runLogin.mockRejectedValueOnce(new Error('Claude sign-in was cancelled.'))
+      const adding = f.service.reauthenticateAccount('b', { copyLink: true })
+      await expect(f.service.waitForSignInLink()).resolves.toBeNull()
+      await expect(adding).rejects.toThrow('cancelled')
+    })
   })
 
   it('runs a WSL login against the guest folder', async () => {

@@ -106,6 +106,11 @@ export type ClaudeSignInRequest = {
   wslDistro?: string | null
 }
 
+export type ClaudeSignInOptions = {
+  /** Copy the sign-in link instead of opening the default browser. */
+  copyLink?: boolean
+}
+
 /** A sign-in in progress: `configDir` is the CLAUDE_CONFIG_DIR `claude auth login` runs against. */
 export type ClaudeAccountSignIn = {
   accountId: string

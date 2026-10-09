@@ -1,6 +1,7 @@
 import type {
   ClaudeAccountSignIn,
   ClaudeRateLimitAccountsState,
+  ClaudeSignInOptions,
   ClaudeSignInRequest
 } from '../../shared/managed-account-types'
 import { ClaudeAccountRegistration } from './claude-account-registration'
@@ -18,6 +19,7 @@ import type { ClaudeAccountSelectionTarget } from './runtime-selection'
 export class ClaudeAccountService {
   private mutationQueue: Promise<unknown> = Promise.resolve()
   private cancelPendingClaudeLogin: (() => boolean) | null = null
+  private pendingSignInLink: Promise<string | null> | null = null
   private readonly selection: ClaudeAccountSelection
   private readonly registration: ClaudeAccountRegistration
 
@@ -26,7 +28,8 @@ export class ClaudeAccountService {
     rateLimits: ClaudeAccountUsage,
     private readonly runtimeAuth: ClaudeAccountRuntime &
       Pick<ClaudeRuntimeAuthService, 'getRuntimeConfigDir'>,
-    private readonly runLoginCommand = runClaudeCommandProcess
+    private readonly runLoginCommand = runClaudeCommandProcess,
+    private readonly openSignInLink: (signInLink: string) => Promise<void> = async () => {}
   ) {
     this.selection = new ClaudeAccountSelection(store, rateLimits, runtimeAuth)
     this.registration = new ClaudeAccountRegistration({
@@ -42,12 +45,23 @@ export class ClaudeAccountService {
   }
 
   /** A hidden `claude auth login` opens the browser and writes into the new account's folder. */
-  addAccount(target: ClaudeAccountSelectionTarget = {}): Promise<ClaudeRateLimitAccountsState> {
-    return this.signInHidden({ runtime: target.runtime, wslDistro: target.wslDistro })
+  addAccount(
+    target: ClaudeAccountSelectionTarget = {},
+    options: ClaudeSignInOptions = {}
+  ): Promise<ClaudeRateLimitAccountsState> {
+    return this.signInHidden({ runtime: target.runtime, wslDistro: target.wslDistro }, options)
   }
 
-  reauthenticateAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
-    return this.signInHidden({ accountId })
+  reauthenticateAccount(
+    accountId: string,
+    options: ClaudeSignInOptions = {}
+  ): Promise<ClaudeRateLimitAccountsState> {
+    return this.signInHidden({ accountId }, options)
+  }
+
+  /** The latest hidden sign-in's link once Claude hands it over; null if it ends without one. */
+  waitForSignInLink(): Promise<string | null> {
+    return this.pendingSignInLink ?? Promise.resolve(null)
   }
 
   cancelPendingLogin(): boolean {
@@ -91,18 +105,40 @@ export class ClaudeAccountService {
     return this.runtimeAuth.getRuntimeConfigDir(target)
   }
 
-  private signInHidden(request: ClaudeSignInRequest): Promise<ClaudeRateLimitAccountsState> {
+  private signInHidden(
+    request: ClaudeSignInRequest,
+    options: ClaudeSignInOptions
+  ): Promise<ClaudeRateLimitAccountsState> {
     this.supersedePendingLogin()
-    return this.serializeMutation(() =>
-      this.registration.signIn(request, (folder) =>
-        runClaudeLoginSession(folder, {
-          runCommand: this.runLoginCommand,
-          setCancel: (cancel) => {
-            this.cancelPendingClaudeLogin = cancel
-          }
-        })
-      )
-    )
+    let settleLink: (signInLink: string | null) => void = () => {}
+    // Why set before queueing: the renderer asks for the link right after starting the sign-in.
+    const signInLink = new Promise<string | null>((resolve) => {
+      settleLink = resolve
+    })
+    this.pendingSignInLink = signInLink
+    return this.serializeMutation(async () => {
+      try {
+        return await this.registration.signIn(request, (folder) =>
+          runClaudeLoginSession(
+            folder,
+            {
+              runCommand: this.runLoginCommand,
+              setCancel: (cancel) => {
+                this.cancelPendingClaudeLogin = cancel
+              },
+              openLink: this.openSignInLink
+            },
+            { copyLink: options.copyLink === true, onLink: settleLink }
+          )
+        )
+      } finally {
+        // Why here too: a sign-in that fails before Claude starts never reaches the session.
+        settleLink(null)
+        if (this.pendingSignInLink === signInLink) {
+          this.pendingSignInLink = null
+        }
+      }
+    })
   }
 
   // Why before the queue, not inside it: the abandoned login owns the queue slot every later
