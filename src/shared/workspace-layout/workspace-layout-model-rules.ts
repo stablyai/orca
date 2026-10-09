@@ -97,7 +97,8 @@ function checkWorkspace(
       new Set([...treeIds, ...groupIds]).size === groupIds.length
     : groupIds.length <= 1
   if (!treeMatches) {
-    breach('group_tree_mismatch', treeIds, `group tree [${treeIds}] but groups [${groupIds}]`)
+    const detail = `group tree [${treeIds.join(', ')}] but groups [${groupIds.join(', ')}]`
+    breach('group_tree_mismatch', treeIds, detail)
   }
   const paneIds = new Set(
     workspace.tabs.flatMap((tab) =>
