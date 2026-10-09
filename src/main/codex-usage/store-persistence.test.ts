@@ -19,6 +19,7 @@ vi.mock('../usage/usage-scan-worker-spawn', () => ({
 }))
 
 import { CodexUsageStore, normalizePersistedState } from './store'
+import { CODEX_USAGE_SCHEMA_VERSION } from './codex-usage-provider'
 import { scanCodexUsageFilesViaWorker } from '../usage/usage-scan-worker-spawn'
 
 describe('CodexUsageStore', () => {
@@ -81,7 +82,7 @@ describe('CodexUsageStore', () => {
     } as unknown as CodexUsagePersistedState)
 
     expect(normalized).toEqual({
-      schemaVersion: 6,
+      schemaVersion: CODEX_USAGE_SCHEMA_VERSION,
       worktreeFingerprint: null,
       processedFiles: [],
       sessions: [],
@@ -102,7 +103,7 @@ describe('CodexUsageStore', () => {
       size: 10,
       sessions: [],
       dailyAggregates: [],
-      ownedEventKeys: [],
+      ownedEventKeyDigests: '',
       hasDeferredClaims: false,
       parseResumeState: null
     }
@@ -128,5 +129,41 @@ describe('CodexUsageStore', () => {
     scanMock.mockClear()
     await new CodexUsageStore({ getRepos: () => [], getAllWorktreeMeta: () => ({}) }).refresh(false)
     expect(scanMock).toHaveBeenLastCalledWith([], [])
+  })
+
+  it('drops a v6 cache that still persists raw ownership keys', async () => {
+    const cacheFile = join(storeEnv.tempUserData, 'orca-codex-usage.json')
+    const rawKey = '2026-05-26T12:00:00.000Z|10,0,1,0,11|10,0,1,0,11'
+    writeFileSync(
+      cacheFile,
+      JSON.stringify({
+        schemaVersion: 6,
+        worktreeFingerprint: null,
+        processedFiles: [
+          {
+            path: '/codex/sessions/rollout-1.jsonl',
+            mtimeMs: 1,
+            size: 10,
+            sessions: [],
+            dailyAggregates: [],
+            ownedEventKeys: [rawKey],
+            hasDeferredClaims: false,
+            parseResumeState: null
+          }
+        ],
+        sessions: [],
+        dailyAggregates: [],
+        scanState: {
+          enabled: true,
+          lastScanStartedAt: 1,
+          lastScanCompletedAt: 2,
+          lastScanError: null
+        }
+      })
+    )
+    const scanMock = vi.mocked(scanCodexUsageFilesViaWorker)
+    await new CodexUsageStore({ getRepos: () => [], getAllWorktreeMeta: () => ({}) }).refresh(false)
+    expect(scanMock).toHaveBeenLastCalledWith([], [])
+    expect(readFileSync(cacheFile, 'utf-8')).not.toContain(rawKey)
   })
 })

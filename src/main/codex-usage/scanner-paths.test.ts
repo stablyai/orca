@@ -38,6 +38,12 @@ import {
   listCodexSessionFiles
 } from './codex-session-file-discovery'
 import { scanCodexUsageFiles } from './scanner'
+import type { CodexUsagePersistedFile } from './types'
+import { countPackedUsageEventKeyDigests } from '../usage/usage-event-key-digest'
+
+function countOwnedEvents(file: CodexUsagePersistedFile | undefined): number {
+  return countPackedUsageEventKeyDigests(file?.ownedEventKeyDigests ?? '')
+}
 
 const originalCodexHome = process.env.CODEX_HOME
 let fakeHomeDir: string
@@ -461,8 +467,8 @@ describe('listCodexSessionFiles', () => {
     expect(
       result.dailyAggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
     ).toBe(22)
-    expect(result.processedFiles[0]?.ownedEventKeys).toHaveLength(2)
-    expect(result.processedFiles[1]?.ownedEventKeys).toHaveLength(1)
+    expect(countOwnedEvents(result.processedFiles[0])).toBe(2)
+    expect(countOwnedEvents(result.processedFiles[1])).toBe(1)
     expect(result.processedFiles[1]?.hasDeferredClaims).toBe(true)
   })
 
@@ -516,7 +522,7 @@ describe('listCodexSessionFiles', () => {
     expect(
       first.dailyAggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
     ).toBe(15)
-    expect(first.processedFiles[0]?.ownedEventKeys).toHaveLength(2)
+    expect(countOwnedEvents(first.processedFiles[0])).toBe(2)
 
     // A fork appears later while the original stays unchanged (cache reuse).
     writeFileSync(forkPath, `${copiedPrefix}${usageRecord('2026-05-26T12:02:00.000Z', 7, 22)}`)
@@ -525,7 +531,7 @@ describe('listCodexSessionFiles', () => {
     expect(
       second.dailyAggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
     ).toBe(22)
-    expect(second.processedFiles.map((file) => file.ownedEventKeys.length)).toEqual([2, 1])
+    expect(second.processedFiles.map(countOwnedEvents)).toEqual([2, 1])
 
     // Rescanning with the full cache stays stable.
     const third = await scanCodexUsageFiles([], second.processedFiles)
@@ -554,9 +560,9 @@ describe('listCodexSessionFiles', () => {
     expect(
       first.dailyAggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
     ).toBe(22)
-    expect(first.processedFiles[0]?.ownedEventKeys).toHaveLength(2)
+    expect(countOwnedEvents(first.processedFiles[0])).toBe(2)
     expect(first.processedFiles[0]?.hasDeferredClaims).toBe(false)
-    expect(first.processedFiles[1]?.ownedEventKeys).toHaveLength(1)
+    expect(countOwnedEvents(first.processedFiles[1])).toBe(1)
     expect(first.processedFiles[1]?.hasDeferredClaims).toBe(true)
 
     // Deleting the owner must reparse deferred forks so they can re-claim the
@@ -568,7 +574,7 @@ describe('listCodexSessionFiles', () => {
       second.dailyAggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
     ).toBe(22)
     expect(second.processedFiles).toHaveLength(1)
-    expect(second.processedFiles[0]?.ownedEventKeys).toHaveLength(3)
+    expect(countOwnedEvents(second.processedFiles[0])).toBe(3)
   })
 
   it('keeps unrelated cached rollouts when a different owner file is deleted', async () => {
@@ -601,7 +607,7 @@ describe('listCodexSessionFiles', () => {
     const first = await scanCodexUsageFiles([], [])
     const unrelatedBefore = first.processedFiles.find((file) => file.path === unrelatedPath)
     expect(unrelatedBefore?.hasDeferredClaims).toBe(false)
-    expect(unrelatedBefore?.ownedEventKeys).toHaveLength(1)
+    expect(countOwnedEvents(unrelatedBefore)).toBe(1)
 
     unlinkSync(originalPath)
 
