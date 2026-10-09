@@ -6,6 +6,8 @@ import {
 } from '@/components/terminal-pane/terminal-parked-watcher-registry'
 import { serializePaneTree } from '@/components/terminal-pane/layout-serialization'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
+import { indexTerminalTabExecutionHosts } from '@/lib/terminal-tab-execution-hosts'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeRendererSyncWindowGraph
@@ -15,7 +17,7 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { applyNativeChatLaunchDraftResolved } from '../native-chat-launch-draft-runtime-resolution'
 import { resolveTerminalLayoutRoot } from '../remote-terminal-layout-resolution'
 import { buildMobileSessionTabSnapshots } from './mobile-session-snapshots'
-import { isWebOnlyMirroredTerminalTab } from './mobile-session-surfaces'
+import { isRemoteRuntimeTerminalTab } from './mobile-session-surfaces'
 import { resolveRuntimeTerminalTitle } from './sync-projections'
 import {
   collectAmbiguousTerminalTabIds,
@@ -34,7 +36,12 @@ export async function syncRuntimeGraph(): Promise<void> {
   const systemPrefersDark = getSystemPrefersDark()
   const ambiguousTerminalTabIds = collectAmbiguousTerminalTabIds(state.tabsByWorktree)
   const terminalTabsByWorktree = new Map<string, Map<string, TerminalTab>>()
+  const terminalHostsByWorktree = new Map<string, ReadonlyMap<string, ExecutionHostId | null>>()
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
+    terminalHostsByWorktree.set(
+      worktreeId,
+      indexTerminalTabExecutionHosts(state.unifiedTabsByWorktree[worktreeId] ?? [])
+    )
     const tabsById = new Map<string, TerminalTab>()
     for (const tab of tabs) {
       // Duplicate ids in one worktree are malformed persisted state; don't
@@ -70,7 +77,13 @@ export async function syncRuntimeGraph(): Promise<void> {
     if (!tab) {
       continue
     }
-    if (isWebOnlyMirroredTerminalTab(tab, state.terminalLayoutsByTabId[registeredTab.tabId])) {
+    if (
+      isRemoteRuntimeTerminalTab(
+        tab,
+        state.terminalLayoutsByTabId[registeredTab.tabId],
+        terminalHostsByWorktree.get(registeredTab.worktreeId)?.get(tab.id)
+      )
+    ) {
       continue
     }
     const manager = registeredTab.getManager()
@@ -129,7 +142,11 @@ export async function syncRuntimeGraph(): Promise<void> {
       const layout = state.terminalLayoutsByTabId[tab.id]
       if (
         findRegisteredTerminalTab(tab.id, worktreeId) !== null ||
-        isWebOnlyMirroredTerminalTab(tab, layout)
+        isRemoteRuntimeTerminalTab(
+          tab,
+          layout,
+          terminalHostsByWorktree.get(worktreeId)?.get(tab.id)
+        )
       ) {
         continue
       }

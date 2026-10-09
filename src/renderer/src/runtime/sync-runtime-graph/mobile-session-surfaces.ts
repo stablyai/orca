@@ -1,5 +1,7 @@
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
 import type { AppState } from '@/store/types'
+import { getOpenFileExecutionHostId } from '@/lib/unified-tab-host-ownership'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { isClaudeManagementTitle } from '../../../../shared/agent-detection'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
@@ -20,19 +22,22 @@ export function isRemoteRuntimePtyId(ptyId: string | null | undefined): boolean 
   return typeof ptyId === 'string' && parseRemoteRuntimePtyId(ptyId) !== null
 }
 
-export function isWebOnlyMirroredTerminalTab(
+export function isRemoteRuntimeTerminalTab(
   tab: Pick<NonNullable<AppState['tabsByWorktree'][string]>[number], 'id' | 'ptyId'>,
-  layout: AppState['terminalLayoutsByTabId'][string] | undefined
+  layout: AppState['terminalLayoutsByTabId'][string] | undefined,
+  executionHostId?: ExecutionHostId | null
 ): boolean {
-  if (!isWebTerminalSurfaceTabId(tab.id)) {
-    return false
+  if (executionHostId === null || parseExecutionHostId(executionHostId)?.kind === 'runtime') {
+    return true
   }
   const layoutPtyIds = Object.values(layout?.ptyIdsByLeafId ?? {})
   const ptyIds = [tab.ptyId, ...layoutPtyIds].filter(
     (ptyId): ptyId is string => typeof ptyId === 'string' && ptyId.length > 0
   )
-  // Only-remote/no-PTY tabs are web mirrors; legacy local-PTY tabs still publish.
-  return ptyIds.every(isRemoteRuntimePtyId)
+  // Remote handles belong to the paired host even when a legacy tab has no mirror prefix.
+  return (
+    ptyIds.some(isRemoteRuntimePtyId) || (isWebTerminalSurfaceTabId(tab.id) && ptyIds.length === 0)
+  )
 }
 
 export function getRuntimeLeafIdsForTerminal(
@@ -82,6 +87,14 @@ export function isMobileFileDiffSource(
 }
 
 export function isMobilePublishableOpenFile(file: AppState['openFiles'][number]): boolean {
+  const captured = file.operationProvenance?.generation.route
+  const environmentId = captured ? captured.runtimeEnvironmentId : file.runtimeEnvironmentId
+  if (
+    environmentId?.trim() ||
+    parseExecutionHostId(getOpenFileExecutionHostId(file))?.kind === 'runtime'
+  ) {
+    return false
+  }
   // Combined diff tabs use display labels as paths and need the desktop renderer.
   return !(
     file.diffSource === 'combined-all' ||

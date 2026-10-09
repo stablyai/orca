@@ -1,4 +1,6 @@
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
+import { indexTerminalTabExecutionHosts } from '@/lib/terminal-tab-execution-hosts'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { AppState } from '@/store/types'
 import type {
   RuntimeMobileSessionSnapshotTab,
@@ -21,7 +23,7 @@ import { getMobileTerminalTheme } from './mobile-terminal-theme'
 import {
   isMobilePublishableBrowserWorkspace,
   isMobilePublishableOpenFile,
-  isWebOnlyMirroredTerminalTab
+  isRemoteRuntimeTerminalTab
 } from './mobile-session-surfaces'
 import {
   appendFallbackEditorTabsToGroups,
@@ -91,15 +93,31 @@ export function buildMobileSessionTabSnapshots(
       inputs.browserWorkspaces.map((workspace) => [workspace.id, workspace])
     )
     const unifiedTabById = new Map(inputs.unifiedTabs.map((tab) => [tab.id, tab]))
+    const terminalHostById = indexTerminalTabExecutionHosts(inputs.unifiedTabs)
+    const foreignEditorFileIds = new Set(
+      inputs.unifiedTabs
+        .filter(
+          (tab) =>
+            (tab.contentType === 'editor' || tab.contentType === 'diff') &&
+            parseExecutionHostId(tab.executionHostId)?.kind === 'runtime'
+        )
+        .map((tab) => tab.entityId)
+    )
+    const isPublishableFile = (file: AppState['openFiles'][number]): boolean =>
+      !foreignEditorFileIds.has(file.id) && isMobilePublishableOpenFile(file)
     const openFilesForWorktree = inputs.openFilesById
     const editorIds = inputs.openFileIds.filter((fileId) => {
       const file = openFilesForWorktree?.get(fileId)
-      return file ? isMobilePublishableOpenFile(file) : false
+      return file ? isPublishableFile(file) : false
     })
     const terminalIds = [...terminalTabById.values()]
       .filter(
         (terminal) =>
-          !isWebOnlyMirroredTerminalTab(terminal, inputs.terminalLayoutByTabId.get(terminal.id))
+          !isRemoteRuntimeTerminalTab(
+            terminal,
+            inputs.terminalLayoutByTabId.get(terminal.id),
+            terminalHostById.get(terminal.id)
+          )
       )
       .map((terminal) => terminal.id)
     const groupProjection = buildMobileSessionGroupProjection(inputs, {
@@ -118,14 +136,18 @@ export function buildMobileSessionTabSnapshots(
         const terminal = terminalTabById.get(item.id)
         if (
           !terminal ||
-          isWebOnlyMirroredTerminalTab(terminal, inputs.terminalLayoutByTabId.get(terminal.id))
+          isRemoteRuntimeTerminalTab(
+            terminal,
+            inputs.terminalLayoutByTabId.get(terminal.id),
+            terminalHostById.get(terminal.id)
+          )
         ) {
           continue
         }
         tabs.push(...buildMobileTerminalSurfaceTabs(inputs, terminal, item.tabId))
       } else if (item.type === 'editor') {
         const file = openFilesForWorktree?.get(item.id)
-        if (!file || !isMobilePublishableOpenFile(file)) {
+        if (!file || !isPublishableFile(file)) {
           continue
         }
         const unifiedTab = item.tabId ? unifiedTabById.get(item.tabId) : undefined
@@ -161,7 +183,7 @@ export function buildMobileSessionTabSnapshots(
           continue
         }
         const file = openFilesForWorktree.get(unifiedTab.entityId)
-        if (!file || !isMobilePublishableOpenFile(file)) {
+        if (!file || !isPublishableFile(file)) {
           continue
         }
         const fallbackTab =
@@ -172,7 +194,7 @@ export function buildMobileSessionTabSnapshots(
         emittedEditorTabIds.add(unifiedTab.id)
       }
       for (const file of openFilesForWorktree.values()) {
-        if (!isMobilePublishableOpenFile(file) || emittedEditorFileIds.has(file.id)) {
+        if (!isPublishableFile(file) || emittedEditorFileIds.has(file.id)) {
           continue
         }
         if (unifiedEditorFileIds.has(file.id)) {
