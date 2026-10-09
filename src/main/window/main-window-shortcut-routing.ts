@@ -1,3 +1,4 @@
+import { matchesSpatialPaneFocusShortcut } from '../../shared/spatial-pane-shortcut-policy'
 import type { BrowserWindow } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import {
@@ -6,6 +7,7 @@ import {
 } from '../../shared/modifier-double-tap-detector'
 import {
   normalizeTerminalShortcutPolicy,
+  keybindingMatchesAction,
   type KeybindingMatchOptions
 } from '../../shared/keybindings'
 import {
@@ -35,6 +37,7 @@ export function installMainWindowShortcutRouting(args: {
     event: Electron.Event,
     action: WindowShortcutAction,
     options: {
+      spatialPaneConflict?: boolean
       isAutoRepeat: boolean
       focusedShortcutContext: KeybindingMatchOptions
     }
@@ -61,12 +64,11 @@ export function installMainWindowShortcutRouting(args: {
       return false
     }
 
-    // Why: terminal.focusPaneLeft/Right default to the same Mod+Alt+Arrow chords
-    // as worktree history. Yield in a focused terminal so the renderer can move
-    // to an adjacent pane, or leave the chord unclaimed at a layout edge.
+    // Yield only physical chords the terminal can own as spatial navigation.
     if (
       action.type === 'worktreeHistoryNavigate' &&
-      focusedShortcutContext.context === 'terminal'
+      focusedShortcutContext.context === 'terminal' &&
+      options.spatialPaneConflict
     ) {
       return false
     }
@@ -231,6 +233,15 @@ export function installMainWindowShortcutRouting(args: {
     }
 
     dispatchResolvedWindowShortcutAction(event, action, {
+      spatialPaneConflict: matchesSpatialPaneFocusShortcut((actionId) =>
+        keybindingMatchesAction(
+          actionId,
+          input,
+          process.platform,
+          keybindings,
+          terminalShortcutContext
+        )
+      ),
       isAutoRepeat: Boolean(input.isAutoRepeat),
       focusedShortcutContext: terminalShortcutContext
     })

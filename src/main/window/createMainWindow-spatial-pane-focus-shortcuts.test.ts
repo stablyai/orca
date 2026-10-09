@@ -1,3 +1,4 @@
+import type { KeybindingOverrides } from '../../shared/keybindings'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', async () =>
@@ -40,7 +41,10 @@ function emitBeforeInput(
   handler?.({ preventDefault }, input)
 }
 
-function mountMainWindow(): {
+function mountMainWindow(
+  keybindings?: KeybindingOverrides,
+  terminalShortcutPolicy: 'orca-first' | 'terminal-first' = 'orca-first'
+): {
   windowHandlers: Record<string, (...args: unknown[]) => void>
   webContents: { send: ReturnType<typeof vi.fn> }
 } {
@@ -74,7 +78,13 @@ function mountMainWindow(): {
   browserWindowMock.mockImplementation(function () {
     return browserWindowInstance
   })
-  createMainWindow(null)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: window setup reads only these store methods in this mocked harness.
+  const store = {
+    getUI: () => ({}),
+    getSettings: () => ({ terminalShortcutPolicy }),
+    updateUI: vi.fn()
+  } as unknown as NonNullable<Parameters<typeof createMainWindow>[0]>
+  createMainWindow(store, { getKeybindings: () => keybindings ?? {} })
   return { windowHandlers, webContents }
 }
 
@@ -108,5 +118,85 @@ describe('createMainWindow spatial pane focus shortcuts', () => {
 
     expect(preventDefault).not.toHaveBeenCalled()
     expect(webContents.send).not.toHaveBeenCalledWith('ui:worktreeHistoryNavigate', 'back')
+  })
+  it.each([{ 'terminal.focusPaneLeft': [] }, { 'terminal.focusPaneLeft': ['Ctrl+H'] }])(
+    'keeps history when spatial focus no longer matches: %j',
+    (bindings) => {
+      const { windowHandlers, webContents } = mountMainWindow(bindings)
+      const listener = vi
+        .mocked(ipcMain.on)
+        .mock.calls.find(([channel]) => channel === 'ui:setTerminalInputFocused')?.[1]
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked focus listener only reads sender identity.
+      listener?.({ sender: webContents } as unknown as Electron.IpcMainEvent, true)
+      const preventDefault = vi.fn()
+      emitBeforeInput(windowHandlers['before-input-event'], preventDefault, historyBackInput())
+      expect(preventDefault).toHaveBeenCalledOnce()
+      expect(webContents.send).toHaveBeenCalledWith('ui:worktreeHistoryNavigate', 'back')
+    }
+  )
+
+  it('yields a history conflict with a rebound vertical action, including held repeats', () => {
+    const { windowHandlers, webContents } = mountMainWindow({
+      'terminal.focusPaneLeft': [],
+      'terminal.focusPaneUp': ['Mod+Alt+ArrowLeft']
+    })
+    const listener = vi
+      .mocked(ipcMain.on)
+      .mock.calls.find(([channel]) => channel === 'ui:setTerminalInputFocused')?.[1]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked focus listener only reads sender identity.
+    listener?.({ sender: webContents } as unknown as Electron.IpcMainEvent, true)
+    for (const isAutoRepeat of [false, true]) {
+      const preventDefault = vi.fn()
+      emitBeforeInput(windowHandlers['before-input-event'], preventDefault, {
+        ...historyBackInput(),
+        isAutoRepeat
+      })
+      expect(preventDefault).not.toHaveBeenCalled()
+    }
+    expect(webContents.send).not.toHaveBeenCalledWith('ui:worktreeHistoryNavigate', 'back')
+  })
+  it.each([false, true])('respects terminal-first history policy (floating=%s)', (floating) => {
+    const { windowHandlers, webContents } = mountMainWindow(
+      { 'terminal.focusPaneLeft': [] },
+      'terminal-first'
+    )
+    const listener = vi
+      .mocked(ipcMain.on)
+      .mock.calls.find(
+        ([channel]) => channel === (floating ? 'ui:setFloatingFocus' : 'ui:setTerminalInputFocused')
+      )?.[1]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked focus listener only reads sender identity.
+    const focusEvent = { sender: webContents } as unknown as Electron.IpcMainEvent
+    listener?.(focusEvent, floating ? { panelFocused: true, terminalFocused: true } : true)
+    const preventDefault = vi.fn()
+    emitBeforeInput(windowHandlers['before-input-event'], preventDefault, historyBackInput())
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(webContents.send).not.toHaveBeenCalledWith('ui:worktreeHistoryNavigate', 'back')
+  })
+
+  it('retains main-process double-tap history ownership inside a terminal', () => {
+    const { windowHandlers, webContents } = mountMainWindow({
+      'worktree.history.back': ['DoubleTap+Shift'],
+      'terminal.focusPaneLeft': ['DoubleTap+Shift']
+    })
+    const listener = vi
+      .mocked(ipcMain.on)
+      .mock.calls.find(([channel]) => channel === 'ui:setTerminalInputFocused')?.[1]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked focus listener only reads sender identity.
+    listener?.({ sender: webContents } as unknown as Electron.IpcMainEvent, true)
+    const preventDefault = vi.fn()
+    for (const type of ['keyDown', 'keyUp', 'keyDown']) {
+      emitBeforeInput(windowHandlers['before-input-event'], preventDefault, {
+        type,
+        code: 'ShiftLeft',
+        key: 'Shift',
+        shift: true,
+        meta: false,
+        control: false,
+        alt: false
+      })
+    }
+    expect(preventDefault).toHaveBeenCalledOnce()
+    expect(webContents.send).toHaveBeenCalledWith('ui:worktreeHistoryNavigate', 'back')
   })
 })

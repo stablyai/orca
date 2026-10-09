@@ -7,7 +7,6 @@ import { useExpandCollapseActions } from './expand-collapse'
 import { useTerminalKeyboardShortcuts } from './keyboard-handlers'
 
 type ExpandCollapseHookState = Parameters<typeof useExpandCollapseActions>[0]
-type KeyboardHandlersDeps = Parameters<typeof useTerminalKeyboardShortcuts>[0]
 
 // Field identities are stable across renders (refs, setState, store actions,
 // useCallback); TerminalPane rebuilds only the wrapping object literal.
@@ -30,7 +29,7 @@ afterEach(() => {
 })
 
 describe('useExpandCollapseActions render stability', () => {
-  it('keeps all five action identities across rerenders that rebuild the state object', () => {
+  it('keeps all six action identities across rerenders that rebuild the state object', () => {
     const fields = createStableFields()
     const hook = renderHook(() => useExpandCollapseActions({ ...fields, tabId: 'tab-1' }))
     const first = hook.result.current
@@ -39,7 +38,7 @@ describe('useExpandCollapseActions render stability', () => {
     hook.rerender()
 
     const actionNames = Object.keys(first) as (keyof typeof first)[]
-    expect(actionNames).toHaveLength(5)
+    expect(actionNames).toHaveLength(6)
     for (const name of actionNames) {
       expect(Object.is(hook.result.current[name], first[name])).toBe(true)
     }
@@ -109,10 +108,11 @@ describe('terminal keyboard effect registration stability', () => {
         ...stableDeps,
         setExpandedPane: actions.setExpandedPane,
         restoreExpandedLayout: actions.restoreExpandedLayout,
+        readUnexpandedLayout: actions.readUnexpandedLayout,
         refreshPaneSizes: actions.refreshPaneSizes,
         persistLayoutSnapshot: fields.persistLayoutSnapshot,
         toggleExpandPane: actions.toggleExpandPane
-      } as KeyboardHandlersDeps)
+      })
     })
     expect(countBeforeinputAdds()).toBe(1)
 

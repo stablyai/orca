@@ -312,7 +312,7 @@ describe('claimSpatialPaneFocusOrWorktreeHistory', () => {
 
   it('moves to a neighbor without navigating worktree history', () => {
     const { root, event, preventDefault, manager } = splitPair()
-    const navigateWorktreeHistory = vi.fn()
+    const navigateWorktreeHistory = vi.fn(() => true)
 
     expect(
       claimSpatialPaneFocusOrWorktreeHistory(event, manager, 'right', navigateWorktreeHistory)
@@ -325,13 +325,13 @@ describe('claimSpatialPaneFocusOrWorktreeHistory', () => {
 
   it('dispatches worktree history at a layout edge for left/right', () => {
     const { root, event, preventDefault, stopImmediatePropagation, manager } = splitPair()
-    const navigateWorktreeHistory = vi.fn()
+    const navigateWorktreeHistory = vi.fn(() => true)
 
     expect(
       claimSpatialPaneFocusOrWorktreeHistory(event, manager, 'left', navigateWorktreeHistory)
     ).toBe(true)
     expect(manager.setActivePane).not.toHaveBeenCalled()
-    expect(navigateWorktreeHistory).toHaveBeenCalledWith('back')
+    expect(navigateWorktreeHistory).toHaveBeenCalledWith()
     expect(preventDefault).toHaveBeenCalledTimes(1)
     expect(stopImmediatePropagation).toHaveBeenCalledTimes(1)
 
@@ -340,18 +340,18 @@ describe('claimSpatialPaneFocusOrWorktreeHistory', () => {
     expect(
       claimSpatialPaneFocusOrWorktreeHistory(event, manager, 'right', navigateWorktreeHistory)
     ).toBe(true)
-    expect(navigateWorktreeHistory).toHaveBeenCalledWith('forward')
+    expect(navigateWorktreeHistory).toHaveBeenCalledWith()
     root.remove()
   })
 
-  it('does not dispatch worktree history for up/down at an edge', () => {
+  it('leaves an edge unclaimed when history is unavailable', () => {
     const { root, event, preventDefault, manager } = splitPair()
-    const navigateWorktreeHistory = vi.fn()
+    const navigateWorktreeHistory = vi.fn(() => false)
 
     expect(
       claimSpatialPaneFocusOrWorktreeHistory(event, manager, 'up', navigateWorktreeHistory)
     ).toBe(false)
-    expect(navigateWorktreeHistory).not.toHaveBeenCalled()
+    expect(navigateWorktreeHistory).toHaveBeenCalledTimes(1)
     expect(preventDefault).not.toHaveBeenCalled()
     root.remove()
   })

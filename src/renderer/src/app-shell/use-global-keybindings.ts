@@ -245,12 +245,11 @@ export function useGlobalKeybindings(args: {
       ) {
         return
       }
-      // Why: terminal owns Mod+Alt+Arrow. After isActive remount the global
-      // capture listener can be first, so skip history here; the terminal
-      // handler moves to a neighbor or dispatches history at a layout edge.
+      // The terminal resolves shared chords before history, regardless of listener order.
       if (
         dispatchGlobalPluginAliasActions({
           context,
+          isPhysicalKey: input.doubleTapModifier === undefined,
           matchShortcut,
           runAction: (actionId) => handlers.get(actionId)?.() ?? false
         })

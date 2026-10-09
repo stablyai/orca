@@ -19,9 +19,7 @@ export type SpatialPaneSource = {
   container: HTMLElement
 }
 
-// Why: leaf rects come from getBoundingClientRect, so a divider sits between
-// neighbors. Default hit-area is 10px; slack covers thicker custom dividers
-// without jumping over a real pane.
+// Default for callers without applied pane styles; production passes the current divider size.
 export const PANE_ADJACENCY_MAX_GAP_PX = getDividerHitSize({}) + 6
 
 export function isSpatialFocusDirection(
@@ -112,48 +110,53 @@ export type SpatialFocusPaneManager = {
   setActivePane(paneId: number, opts: { focus: boolean }): void
 }
 
-// Why: claim the chord only when a neighbor exists so Mod+Alt+ArrowLeft/Right
-// can still reach worktree history at a layout edge.
+export type SpatialFocusOptions = {
+  maxSharedBorderGap?: number
+  readLayout?: (find: () => number | null) => number | null
+  beforeFocus?: () => void
+}
+
+// Query before committing layout or focus changes.
 export function applySpatialPaneFocusKey(
   event: SpatialFocusKeyEvent,
   manager: SpatialFocusPaneManager,
-  direction: SpatialFocusDirection
+  direction: SpatialFocusDirection,
+  options: SpatialFocusOptions = {}
 ): boolean {
   const panes = manager.getPanes()
   const activeId = manager.getActivePane()?.id ?? panes[0]?.id
   if (activeId === undefined) {
     return false
   }
-  const neighborId = findSpatiallyAdjacentPaneId(activeId, panes, direction)
+  const findNeighbor = () =>
+    findSpatiallyAdjacentPaneId(activeId, panes, direction, options.maxSharedBorderGap)
+  const neighborId = options.readLayout ? options.readLayout(findNeighbor) : findNeighbor()
   if (neighborId === null) {
     return false
   }
   event.preventDefault()
   event.stopImmediatePropagation()
+  options.beforeFocus?.()
   manager.setActivePane(neighborId, { focus: true })
   return true
 }
 
-export type WorktreeHistoryNavigateDirection = 'back' | 'forward'
-
-// Why: global capture may run before the terminal listener after an isActive
-// remount. Terminal owns left/right: move if a neighbor exists, otherwise
-// navigate worktree history itself so the chord is never handled twice.
+// Keep ownership in the terminal even when global capture runs first.
 export function claimSpatialPaneFocusOrWorktreeHistory(
   event: SpatialFocusKeyEvent,
   manager: SpatialFocusPaneManager,
   direction: SpatialFocusDirection,
-  navigateWorktreeHistory: (direction: WorktreeHistoryNavigateDirection) => void
+  navigateWorktreeHistory: () => boolean,
+  options: SpatialFocusOptions = {}
 ): boolean {
-  if (applySpatialPaneFocusKey(event, manager, direction)) {
+  if (applySpatialPaneFocusKey(event, manager, direction, options)) {
     return true
   }
-  if (direction !== 'left' && direction !== 'right') {
+  if (!navigateWorktreeHistory()) {
     return false
   }
   event.preventDefault()
   event.stopImmediatePropagation()
-  navigateWorktreeHistory(direction === 'left' ? 'back' : 'forward')
   return true
 }
 

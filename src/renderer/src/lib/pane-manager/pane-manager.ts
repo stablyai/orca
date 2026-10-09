@@ -10,6 +10,7 @@ import type {
 import type { SplitPaneAroundLeafIdsOptions } from './pane-subtree-split'
 import type { PaneManagerHost } from './pane-manager-host'
 import {
+  getDividerHitSize,
   applyDividerStyles,
   applyPaneOpacity,
   applyRootBackground,
@@ -192,10 +193,7 @@ export class PaneManager {
   }
 
   getActivePane(): ManagedPane | null {
-    if (this.activePaneId === null) {
-      return null
-    }
-    const pane = this.panes.get(this.activePaneId)
+    const pane = this.activePaneId === null ? undefined : this.panes.get(this.activePaneId)
     return pane ? toPublicPane(pane) : null
   }
 
@@ -244,6 +242,8 @@ export class PaneManager {
       this.options.onActivePaneChange?.(toPublicPane(pane))
     }
   }
+
+  readonly getPaneDividerHitSize = (): number => getDividerHitSize(this.styleOptions)
 
   setPaneStyleOptions(opts: PaneStyleOptions): void {
     this.styleOptions = { ...opts }
