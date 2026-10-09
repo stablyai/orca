@@ -26,6 +26,7 @@ import {
 } from '../../shared/structured-agent-session-projection'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { isOrcaSessionId, type OrcaSessionId } from '../../shared/orca-session-address'
+import type { TuiAgent } from '../../shared/tui-agent'
 import {
   STRUCTURED_WORKER_HANDLE_PREFIX,
   isStructuredWorkerHandle
@@ -50,7 +51,7 @@ export type StructuredWorkerIdentity = {
    */
   sessionId: string
   /** Null when the entry was rehydrated from the durable row, which does not carry the provider. */
-  agent: 'claude' | 'codex' | null
+  agent: TuiAgent | null
   paneKey: string
   processIncarnation: string
   worktreeId: string

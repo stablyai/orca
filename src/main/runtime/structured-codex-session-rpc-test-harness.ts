@@ -214,7 +214,7 @@ export async function openStructuredCodexRpcHarness(
     resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
     resolveCodexCommand: () => '/usr/local/bin/codex',
     resolveLaunchArgs: () => [],
-    resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+    resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
     resolveEnvironment: async () => ({
       PATH: '/shell/bin:/usr/bin',
       EXAMPLE_GATEWAY_TOKEN: 'shell-exported',

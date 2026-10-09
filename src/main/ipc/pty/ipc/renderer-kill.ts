@@ -4,10 +4,13 @@ import type { Store } from '../../../persistence'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { TerminalIntentionalStopKind } from '../../../runtime/terminal-intentional-stops'
 import type { IPtyProvider } from '../../../providers/types'
-import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
 import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../../shared/pty-liveness-verdict'
-import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
-import { getProviderForPty, sshProviders, tryGetProviderForPty } from '../provider/registry'
+import { ptyIncarnationById } from '../provider/ownership-state'
+import {
+  getProviderForPty,
+  getPtySshConnectionId,
+  tryGetProviderForPty
+} from '../provider/registry'
 import { finishPtyShutdown, isPtyAlreadyGoneError } from '../provider/liveness'
 import { recordUndeliveredSshPtyKill } from '../runtime/undelivered-ssh-kill'
 
@@ -86,9 +89,7 @@ async function stopRendererOwnedPtyProcess(
     sendPtyExitToRenderer
   } = deps
   runtime?.markPtyStopRequested?.(args.id)
-  const ownedConnectionId = ptyOwnership.get(args.id)
-  const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
-  const connectionId = ownedConnectionId ?? parsedSshId?.connectionId
+  const connectionId = getPtySshConnectionId(args.id)
   // Why: wait for daemon startup before selecting the local provider, else a fallback shutdown falsely succeeds and orphans a restored daemon PTY (#7742).
   const startupPromise = getLocalPtyProviderStartupPromise(connectionId)
   if (startupPromise) {
@@ -98,7 +99,7 @@ async function stopRendererOwnedPtyProcess(
   // hibernation, and only hibernation passes keepHistory. Recording a replayable kill for a
   // hibernating pane would destroy it on the next handshake.
   const reversible = args.keepHistory === true
-  const provider = connectionId ? sshProviders.get(connectionId) : tryGetProviderForPty(args.id)
+  const provider = tryGetProviderForPty(args.id)
   if (!provider && connectionId) {
     // Why: detached SSH PTYs intentionally keep ownership after their
     // provider is unregistered; hydrated app-scoped ids can also arrive

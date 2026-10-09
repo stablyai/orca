@@ -2806,7 +2806,7 @@ export class SshRelaySession {
           return
         }
       } else {
-        setPtyOwnership(appPtyId, this.targetId)
+        setPtyOwnership(appPtyId, toSshExecutionHostId(this.targetId))
       }
       attachedLeaseIds.add(ptyId)
       pendingReattach.activated = true
@@ -3056,7 +3056,7 @@ export class SshRelaySession {
         this.store.markSshRemotePtyLease(this.targetId, appPtyId, 'expired')
         return 'missing-surface'
       }
-      setPtyOwnership(appPtyId, this.targetId)
+      setPtyOwnership(appPtyId, toSshExecutionHostId(this.targetId))
       restorePtyIncarnation(appPtyId, incarnationId)
       this.runtime?.registerPty(appPtyId, lease.worktreeId, this.targetId, {
         tabId,
@@ -3065,7 +3065,7 @@ export class SshRelaySession {
       })
       return 'restored'
     }
-    setPtyOwnership(appPtyId, this.targetId)
+    setPtyOwnership(appPtyId, toSshExecutionHostId(this.targetId))
     restorePtyIncarnation(appPtyId, incarnationId)
     this.runtime?.onPtySpawned(appPtyId, incarnationId, { awaitsRegistration: false })
     return 'restored'
@@ -3109,7 +3109,7 @@ export class SshRelaySession {
         return true
       }
     } else {
-      setPtyOwnership(appPtyId, this.targetId)
+      setPtyOwnership(appPtyId, toSshExecutionHostId(this.targetId))
     }
     args.attachedLeaseIds.add(args.ptyId)
     this.forwardReattachReplay(appPtyId, result.replay ?? '')

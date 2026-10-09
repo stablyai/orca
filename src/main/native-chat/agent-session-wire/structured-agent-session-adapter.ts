@@ -149,6 +149,8 @@ export type AgentSessionPreSpawnReason = Extract<
   | 'managedAccountUnsupported'
   | 'launchFolderMissing'
   | 'historyInOtherAccount'
+  | 'claudeAccountFolderMissing'
+  | 'claudeAccountSetupFailed'
   | 'agentCommandNotRunnable'
 >
 
@@ -379,12 +381,14 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
      *  start a new goal rather than rewrite that one's objective in place. */
     replacesGoal: boolean
   }): Promise<{ ok: true } | { ok: false; rejected: string }>
-  /** Stops exactly the tasks `taskIds` names, which the host resolves from its child records. */
+  /** Stops exactly the tasks `taskIds` names, which the host resolves from its child records.
+   *  `stillRunning` is the provider's own answer that one survived its stop; a throw leaves the
+   *  effect unknown. */
   stopBackgroundTasks?(input: {
     sessionId: string
     fence: number
     taskIds: readonly string[]
-  }): Promise<{ cancelled: boolean }>
+  }): Promise<{ cancelled: boolean; stillRunning?: true }>
   /** The stops this provider honours for a live session's background work; undefined when the
    *  adapter holds no live session for it. */
   backgroundTaskStops?(sessionId: string): AgentSessionBackgroundTaskStops | undefined

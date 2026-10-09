@@ -234,7 +234,6 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
         prepareForClaudeLaunch: async () => ({
           configDir: '/home/me/.claude',
           envPatch: {},
-          stripAuthEnv: false,
           provenance: 'system'
         })
       })
@@ -242,20 +241,19 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
       expect(result).toEqual({ ok: true, env: shellBase })
     })
 
-    it('lets the selected Claude account override the shell environment', async () => {
+    it('lets the selected Claude account set its folder and keeps the shell auth', async () => {
       const result = await prepareLocalCommitMessageAgentEnv('claude', {
         resolveBaseEnvironment: async () => shellBase,
         prepareForClaudeLaunch: async () => ({
           configDir: '/managed/claude',
           envPatch: { CLAUDE_CONFIG_DIR: '/managed/claude' },
-          stripAuthEnv: true,
           provenance: 'managed:account-1'
         })
       })
 
       const env = envOf(result)
       expect(env?.CLAUDE_CONFIG_DIR).toBe('/managed/claude')
-      expect(env?.ANTHROPIC_AUTH_TOKEN).toBeUndefined()
+      expect(env?.ANTHROPIC_AUTH_TOKEN).toBe('shell-token')
       expect(env?.PATH).toBe('/shell/bin')
     })
 

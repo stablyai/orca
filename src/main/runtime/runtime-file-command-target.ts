@@ -4,6 +4,12 @@ import {
   ExecutionHostNotDispatchableError,
   resolveFilesystemRouteForHost
 } from '../providers/execution-host-provider-dispatch'
+import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
+import type {
+  createLocalFilesystemProvider,
+  LocalFilesystemProvider,
+  LocalFilesystemProviderOptions
+} from '../providers/local-filesystem-provider'
 import { SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE } from '../providers/ssh-filesystem-dispatch'
 import type { IFilesystemProvider } from '../providers/types'
 
@@ -39,7 +45,7 @@ export type RuntimeFileExplorerPath = {
  * in the wrong namespace, so it throws rather than routing.
  */
 export type RuntimeFileRoute =
-  | { kind: 'local' }
+  | { kind: 'local'; createProvider: typeof createLocalFilesystemProvider }
   /** `provider: null` is "remote and currently unreachable" — never "read it here". */
   | { kind: 'ssh'; connectionId: string; provider: IFilesystemProvider | null }
 
@@ -52,7 +58,7 @@ export function runtimeFileRouteForTarget(target: {
   const route = resolveFilesystemRouteForHost(target.executionHostId)
   switch (route.kind) {
     case 'local':
-      return { kind: 'local' }
+      return { kind: 'local', createProvider: route.createProvider }
     case 'ssh':
       return { kind: 'ssh', connectionId: route.connectionId, provider: route.provider }
     case 'runtime':
@@ -60,17 +66,30 @@ export function runtimeFileRouteForTarget(target: {
   }
 }
 
+/** What a runtime command supplies for local work; path authorization is always the store's. */
+export type RuntimeLocalFileHost = Omit<LocalFilesystemProviderOptions, 'resolveAuthorizedPath'>
+
 /**
- * `null` means exactly one thing: the host is `local`, and this command reads and writes here. An
- * unreachable SSH host and a `runtime:` host both throw.
+ * A provider for the target's own host. Local authorizes against `host`'s store; an unreachable SSH
+ * host and a `runtime:` host both throw.
  */
-export function requireRuntimeFileProvider(target: {
-  executionHostId: ExecutionHostId
-}): IFilesystemProvider | null {
-  const route = runtimeFileRouteForTarget(target)
-  if (route.kind === 'local') {
-    return null
+export function requireRuntimeFileProvider(
+  target: { executionHostId: ExecutionHostId },
+  host: RuntimeLocalFileHost,
+  route: RuntimeFileRoute = runtimeFileRouteForTarget(target)
+): LocalFilesystemProvider {
+  if (route.kind === 'ssh') {
+    return requireSshRuntimeFileProvider(route)
   }
+  return route.createProvider({
+    requireStore: () => host.requireStore(),
+    resolveAuthorizedPath,
+    onTextSearchSpawn: host.onTextSearchSpawn
+  })
+}
+
+/** For the commands whose local arm keeps its own limits or result shape. */
+export function requireSshRuntimeFileProvider(route: RuntimeFileSshRoute): IFilesystemProvider {
   if (!route.provider) {
     throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
   }

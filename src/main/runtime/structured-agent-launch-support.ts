@@ -3,7 +3,6 @@ import type { StructuredAgentId } from '../../shared/agent-session-provider-hand
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
-import type { ClaudeManagedAccountGateSettings } from '../native-chat/claude-structured-managed-account-support'
 import {
   resolveStructuredAgentSessionCreateSupport,
   warnStructuredAgentSessionCreateUnsupported,
@@ -47,13 +46,12 @@ export async function structuredAgentSupportsLaunch(
 
 /** `agentSession.createSupport` on this host: every refusal it can know before spawning. The
  *  agent's location rule and installed-agent check from its registration, without installing the
- *  host, then Claude's managed-account gate. A refusal logs which check said no. */
+ *  host. A refusal logs which check said no. */
 export async function resolveHostStructuredAgentCreateSupport(input: {
   agent: StructuredAgentId
   worktreeSelector: string
   location: AgentSessionExecutionLocation
   runtime: LaunchSupportRuntime
-  getSettings: () => ClaudeManagedAccountGateSettings
 }): Promise<StructuredAgentSessionCreateSupport> {
   const { agent, location } = input
   const supportsLocation =
@@ -62,15 +60,13 @@ export async function resolveHostStructuredAgentCreateSupport(input: {
     supportsLocation &&
     (await structuredAgentSupportsLaunch(agent, input.worktreeSelector, input.runtime))
   const support = resolveStructuredAgentSessionCreateSupport({
-    agent,
     location,
-    adapterSupportsCreate: supportsLaunch,
-    getSettings: input.getSettings
+    adapterSupportsCreate: supportsLaunch
   })
   warnStructuredAgentSessionCreateUnsupported(
     agent,
     support,
-    !supportsLocation ? 'location' : !supportsLaunch ? 'installed-agent' : 'managed-account'
+    supportsLocation ? 'installed-agent' : 'location'
   )
   return support
 }

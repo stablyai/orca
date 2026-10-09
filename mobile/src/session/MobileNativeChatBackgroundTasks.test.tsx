@@ -49,13 +49,23 @@ function view(id: string, overrides: Partial<AgentChildWorkView> = {}): AgentChi
 }
 
 type Props = Parameters<typeof MobileNativeChatBackgroundTasks>[0]
+type StopResult = Awaited<ReturnType<Props['tasks']['stop']>>
+
+const REJECTED: StopResult = { status: 'rejected' }
+const UNCONFIRMED: StopResult = { status: 'unknown' }
+const STOPPED: StopResult = { status: 'accepted', value: { cancelled: true }, sameFence: true }
+const NOTHING_STOPPED: StopResult = {
+  status: 'accepted',
+  value: { cancelled: false },
+  sameFence: true
+}
 
 function tasksFor(
   state: AgentSessionBackgroundTaskState | null,
   options: {
     streamLive?: boolean
     hostClockOffsetMs?: number
-    stop?: (taskId?: string) => Promise<unknown>
+    stop?: Props['tasks']['stop']
   } = {}
 ): Props['tasks'] {
   return {
@@ -65,7 +75,7 @@ function tasksFor(
       options.hostClockOffsetMs ?? 0
     ),
     sessionKey: 'session-a',
-    stop: options.stop ?? vi.fn(async () => undefined)
+    stop: options.stop ?? vi.fn(async () => REJECTED)
   }
 }
 
@@ -264,8 +274,8 @@ describe('MobileNativeChatBackgroundTasks', () => {
   })
 
   it('stops one row by its provider id and holds its button while the Stop is on its way', async () => {
-    let finish: () => void = () => {}
-    const stop = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)))
+    let finish: (result: StopResult) => void = () => {}
+    const stop = vi.fn(() => new Promise<StopResult>((resolve) => (finish = resolve)))
     const mounted = mount(
       tasksFor(
         {
@@ -284,13 +294,65 @@ describe('MobileNativeChatBackgroundTasks', () => {
     expect(stop).toHaveBeenCalledTimes(1)
     expect(stop).toHaveBeenCalledWith('task-a')
     expect(stopButtons(mounted)[0]!.props.disabled).toBe(true)
-    await act(async () => finish())
+    // Unconfirmed: the row is the verdict, so its Stop is offered again.
+    await act(async () => finish(UNCONFIRMED))
     expect(stopButtons(mounted)[0]!.props.disabled).toBe(false)
   })
 
+  it('keeps a confirmed Stop held until its row leaves, and offers it again if the row comes back', async () => {
+    let finish: (result: StopResult) => void = () => {}
+    const stop = vi.fn(() => new Promise<StopResult>((resolve) => (finish = resolve)))
+    const running = { state: 'monitoring' as const, supportsTaskStop: true }
+    const mounted = mount(tasksFor({ ...running, children: [view('a'), view('b')] }, { stop }))
+    const show = (children: AgentChildWorkView[]) =>
+      act(() => {
+        mounted.update(
+          createElement(MobileNativeChatBackgroundTasks, {
+            tasks: tasksFor({ ...running, children }, { stop })
+          })
+        )
+      })
+    expand(mounted)
+    act(() => stopButtons(mounted)[0]!.props.onPress())
+    await act(async () => finish(STOPPED))
+    expect(stopButtons(mounted).map((button) => button.props.disabled)).toEqual([true, false])
+    show([view('b')])
+    show([view('a'), view('b')])
+    expect(stopButtons(mounted).map((button) => button.props.disabled)).toEqual([false, false])
+    act(() => stopButtons(mounted)[0]!.props.onPress())
+    await act(async () => finish(NOTHING_STOPPED))
+    expect(stopButtons(mounted)[0]!.props.disabled).toBe(false)
+  })
+
+  it('stops a backgrounded Codex command by its own id, and offers none on the subagent beside it', () => {
+    const stop = vi.fn(async () => REJECTED)
+    const mounted = mount(
+      tasksFor(
+        {
+          state: 'monitoring',
+          supportsTaskStop: true,
+          children: [
+            view('agent', { providerId: 'codex-agent:child-1', stoppable: false }),
+            view('cmd', {
+              kind: 'command',
+              providerId: 'codex-command:exec-1',
+              description: 'pnpm dev'
+            })
+          ]
+        },
+        { stop }
+      )
+    )
+    expand(mounted)
+    const buttons = stopButtons(mounted)
+    expect(buttons.map((button) => button.props.accessibilityLabel)).toEqual(['Stop pnpm dev'])
+    act(() => buttons[0]!.props.onPress())
+    expect(stop).toHaveBeenCalledWith('codex-command:exec-1')
+  })
+
   it('offers Stop all only to a host with no per-row stop that still accepts one', async () => {
-    let finish: () => void = () => {}
-    const stop = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)))
+    let finish: (result: StopResult) => void = () => {}
+    const stop = vi.fn(() => new Promise<StopResult>((resolve) => (finish = resolve)))
     const fallback = mount(tasksFor({ state: 'monitoring', children: [view('a')] }, { stop }))
     expand(fallback)
     expect(stopButtons(fallback).map((button) => button.props.accessibilityLabel)).toEqual([
@@ -305,7 +367,7 @@ describe('MobileNativeChatBackgroundTasks', () => {
     expect(stop).toHaveBeenCalledTimes(1)
     expect(stop).toHaveBeenCalledWith(undefined)
     expect(stopButtons(fallback)[0]!.props.disabled).toBe(true)
-    await act(async () => finish())
+    await act(async () => finish(STOPPED))
     expect(stopButtons(fallback)[0]!.props.disabled).toBe(false)
     const none = mount(
       tasksFor({ state: 'monitoring', supportsStopAll: false, children: [view('a')] })

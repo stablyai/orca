@@ -145,3 +145,10 @@ function normalizeWslDistro(wslDistro: string | null | undefined): string | null
   const trimmed = wslDistro?.trim()
   return trimmed ? trimmed : null
 }
+
+export function findClaudeAccount(
+  settings: Pick<GlobalSettings, 'claudeManagedAccounts'>,
+  accountId: string
+): ClaudeManagedAccount | undefined {
+  return settings.claudeManagedAccounts.find((account) => account.id === accountId)
+}

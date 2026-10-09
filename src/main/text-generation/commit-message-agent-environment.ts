@@ -160,9 +160,7 @@ export async function prepareLocalCommitMessageAgentEnv(
 
     if (agentId === 'claude' && resolvers.prepareForClaudeLaunch) {
       const preparation = await resolvers.prepareForClaudeLaunch(target)
-      const env = applyClaudeEnvPatch({ ...base }, preparation.envPatch, {
-        stripAuthEnv: preparation.stripAuthEnv
-      })
+      const env = applyClaudeEnvPatch({ ...base }, preparation.envPatch)
       return { ok: true, env }
     }
   } catch (error) {

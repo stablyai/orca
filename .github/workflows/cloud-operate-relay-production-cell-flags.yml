@@ -1,0 +1,111 @@
+name: Operate Relay Production Cell Flags
+
+# Writes one cell's runtime switch object and waits for the cell to report it applied.
+# One cell per run; never fleet-wide. dry-run writes nothing.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: dry-run prints the change; write applies it
+        required: true
+        default: dry-run
+        type: choice
+        options: [dry-run, write]
+      cell-id:
+        description: Exact cell id, e.g. production-gce-c26
+        required: true
+        type: string
+      readiness-local:
+        description: /ready answers from the cell alone (local readiness)
+        required: true
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      ticket-check:
+        description: Shadow-check the director's assignment lease on host hellos
+        required: true
+        default: 'off'
+        type: choice
+        options: ['off', 'shadow']
+      expected-generation:
+        description: Exact current object generation from a dry run, or 0 if none exists
+        required: true
+        type: string
+      confirmation:
+        description: Required for write, exactly "WRITE_RELAY_CELL_FLAGS <cell-id>"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+# One write at a time across the fleet keeps the audit trail in order.
+concurrency:
+  group: relay-production-cell-flags
+  cancel-in-progress: false
+
+defaults:
+  run:
+    # Explicit bash runs with pipefail, so the script's exit code survives the tee.
+    shell: bash
+    working-directory: cloud
+
+jobs:
+  operate:
+    if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      MODE: ${{ inputs.mode }}
+      CELL_ID: ${{ inputs.cell-id }}
+      READINESS_LOCAL: ${{ inputs.readiness-local }}
+      TICKET_CHECK: ${{ inputs.ticket-check }}
+      EXPECTED_GENERATION: ${{ inputs.expected-generation }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+      GCP_PROJECT_ID: onorca-cloud
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - id: google-auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Write or preview the cell's switch object
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          [[ "${CELL_ID}" =~ ^production-gce-c[0-9]{1,3}$ ]]
+          ORCA_RELAY_CONTROL_ACCESS_TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::${ORCA_RELAY_CONTROL_ACCESS_TOKEN}"
+          export ORCA_RELAY_CONTROL_ACCESS_TOKEN
+          node dev/scripts/operate-relay-cell-flags.mjs \
+            --mode "${MODE}" --cell-id "${CELL_ID}" \
+            --cell-origin "https://${CELL_ID#production-gce-}.relay.onorca.dev" \
+            --project-id "${GCP_PROJECT_ID}" \
+            --readiness-local "${READINESS_LOCAL}" --ticket-check "${TICKET_CHECK}" \
+            --expected-generation "${EXPECTED_GENERATION}" --confirmation "${CONFIRMATION}" \
+            | tee "${RUNNER_TEMP}/relay-cell-flags.jsonl"
+
+      - name: Audit summary
+        if: ${{ always() }}
+        run: |
+          {
+            echo "### Relay cell flags: ${MODE} ${CELL_ID}"
+            echo "Triggered by: ${GITHUB_TRIGGERING_ACTOR}, run ${GITHUB_RUN_ID} attempt ${GITHUB_RUN_ATTEMPT}"
+            echo '```json'
+            cat "${RUNNER_TEMP}/relay-cell-flags.jsonl" 2>/dev/null || echo '(no output)'
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
