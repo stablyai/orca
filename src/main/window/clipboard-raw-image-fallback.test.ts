@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { NativeImage } from 'electron'
 
+import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../shared/clipboard-image'
 import { readClipboardRawImageAsPng } from './clipboard-raw-image-fallback'
 
 function makeClipboard(formats: string[], buffers: Record<string, Buffer>) {
@@ -54,6 +55,44 @@ describe('readClipboardRawImageAsPng', () => {
           }) as never
       })
     ).toThrow('Clipboard image is too large')
+  })
+
+  it('refuses an oversized flavor buffer before decoding', () => {
+    const oversized = Buffer.alloc(CLIPBOARD_IMAGE_MAX_SOURCE_BYTES + 1)
+    const clipboard = makeClipboard(['image/png'], { 'image/png': oversized })
+    const decode = vi.fn(() => decodableImage(() => Buffer.from([1])))
+    expect(() => readClipboardRawImageAsPng(clipboard, { createImageFromBuffer: decode })).toThrow(
+      'Clipboard image is too large'
+    )
+    expect(decode).not.toHaveBeenCalled()
+  })
+
+  it('rejects a pixel bomb from encoded metadata before the decoder allocates', () => {
+    // PNG header declaring 32768x1025 (over the 32M pixel budget) in 24 bytes.
+    const bomb = Buffer.alloc(24)
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bomb, 0)
+    bomb.writeUInt32BE(13, 8)
+    bomb.write('IHDR', 12, 'ascii')
+    bomb.writeUInt32BE(32768, 16)
+    bomb.writeUInt32BE(1025, 20)
+    const clipboard = makeClipboard(['image/png'], { 'image/png': bomb })
+    const decode = vi.fn(() => decodableImage(() => Buffer.from([1])))
+    expect(() => readClipboardRawImageAsPng(clipboard, { createImageFromBuffer: decode })).toThrow(
+      'Clipboard image is too large'
+    )
+    expect(decode).not.toHaveBeenCalled()
+  })
+
+  it('still decodes a TIFF flavor that has no encoded dimensions', () => {
+    const tiff = Buffer.from([0x49, 0x49, 0x2a, 0x00, 8, 0, 0, 0])
+    const png = Buffer.from([7, 8, 9])
+    const clipboard = makeClipboard(['image/tiff'], { 'image/tiff': tiff })
+    expect(
+      readClipboardRawImageAsPng(clipboard, {
+        createImageFromBuffer: (buffer) =>
+          buffer === tiff ? decodableImage(() => png) : emptyImage()
+      })
+    ).toBe(png)
   })
 })
 

@@ -1,5 +1,9 @@
 import { nativeImage, type NativeImage } from 'electron'
-import { assertClipboardImageDimensionsWithinLimit } from '../../shared/clipboard-image'
+import {
+  assertClipboardImageByteLengthWithinLimit,
+  assertClipboardImageDimensionsWithinLimit
+} from '../../shared/clipboard-image'
+import { readRasterImageDimensions } from '../../shared/raster-image-dimensions'
 import type { ClipboardImageReader } from './clipboard-image-source'
 
 type ClipboardRawImageDeps = {
@@ -27,6 +31,15 @@ export function readClipboardRawImageAsPng(
     const buffer = clipboard.readBuffer(format)
     if (buffer.byteLength === 0) {
       continue
+    }
+    assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
+    // Why: reject pixel bombs from encoded metadata before NativeImage allocates
+    // the decoded pixels, mirroring the Windows file fallback. Flavors whose
+    // bytes carry no parsable header (TIFF) skip this and stay covered by the
+    // byte-length cap and the decoded-dimensions check below.
+    const encodedDimensions = readRasterImageDimensions(buffer)
+    if (encodedDimensions) {
+      assertClipboardImageDimensionsWithinLimit(encodedDimensions)
     }
     let image: NativeImage
     try {
