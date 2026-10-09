@@ -4,6 +4,7 @@ import {
   createSsh2Module,
   emitSshEvent,
   eventHandlers,
+  nextSshAuthentication,
   resetSshConnectionMocks,
   VALID_ED25519_HOST_KEY,
   ssh2Mock
@@ -282,10 +283,7 @@ describe('SshConnection', () => {
   describe('keyboard-interactive MFA', () => {
     it('completes password + keyboard-interactive MFA auth and forwards the prompt', async () => {
       vi.stubEnv('SSH_AUTH_SOCK', '')
-      ssh2Mock.connectSequence = [
-        new Error('All configured authentication methods failed'),
-        'silent'
-      ]
+      ssh2Mock.connectSequence = ['silent']
       const onCredentialRequest = vi.fn(async (_targetId: string, kind: string) =>
         kind === 'password' ? 'password-123' : '1'
       )
@@ -294,8 +292,12 @@ describe('SshConnection', () => {
       const connectPromise = conn.connect()
       await vi.waitFor(() => {
         expect(eventHandlers.get('keyboard-interactive')?.size ?? 0).toBeGreaterThan(0)
-        expect(clientInstances).toHaveLength(2)
+        expect(clientInstances).toHaveLength(1)
       })
+      await nextSshAuthentication()
+      const passwordAttempt = await nextSshAuthentication(['password'])
+      expect(passwordAttempt).toMatchObject({ type: 'password', password: 'password-123' })
+      await nextSshAuthentication(['keyboard-interactive'], true)
       const finish = vi.fn()
       emitSshEvent(
         'keyboard-interactive',
@@ -310,10 +312,7 @@ describe('SshConnection', () => {
       await connectPromise
 
       expect(conn.getState().status).toBe('connected')
-      expect(clientInstances[1].lastConnectConfig).toMatchObject({
-        tryKeyboard: true,
-        password: 'password-123'
-      })
+      expect(clientInstances[0].lastConnectConfig).toMatchObject({ tryKeyboard: true })
       expect(onCredentialRequest).toHaveBeenCalledWith(
         'target-1',
         'password',
@@ -332,18 +331,19 @@ describe('SshConnection', () => {
 
     it('auto-answers a keyboard-interactive password prompt with the cached password (echo=false)', async () => {
       vi.stubEnv('SSH_AUTH_SOCK', '')
-      ssh2Mock.connectSequence = [
-        new Error('All configured authentication methods failed'),
-        'silent'
-      ]
+      ssh2Mock.connectSequence = ['silent']
       const onCredentialRequest = vi.fn(async () => 'password-123')
       const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
 
       const connectPromise = conn.connect()
       await vi.waitFor(() => {
         expect(eventHandlers.get('keyboard-interactive')?.size ?? 0).toBeGreaterThan(0)
-        expect(clientInstances).toHaveLength(2)
+        expect(clientInstances).toHaveLength(1)
       })
+      await nextSshAuthentication()
+      const passwordAttempt = await nextSshAuthentication(['password'])
+      expect(passwordAttempt).toMatchObject({ type: 'password', password: 'password-123' })
+      await nextSshAuthentication(['keyboard-interactive'], true)
       const finish = vi.fn()
       emitSshEvent(
         'keyboard-interactive',

@@ -1,12 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  utils,
-  type AnyAuthMethod,
-  type AuthenticationType,
-  type AuthHandlerMiddleware,
-  type ConnectConfig,
-  type ParsedKey
-} from 'ssh2'
+import type { AnyAuthMethod, AuthenticationType, AuthHandlerMiddleware, ConnectConfig } from 'ssh2'
 
 vi.mock('os', () => ({
   homedir: () => '/home/testuser',
@@ -22,7 +15,6 @@ vi.mock('fs', () => ({
 }))
 
 import { buildConnectConfig } from './ssh-connection-utils'
-import { getPassphrasePrivateKeyPath } from './ssh-private-key-authentication'
 import { buildSshArgs } from './system-ssh-args'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
@@ -68,7 +60,10 @@ function nextAuth(
   let result: AuthenticationType | AnyAuthMethod | false | undefined
   const handler = config.authHandler as AuthHandlerMiddleware
   handler(
-    (firstAttempt ? null : ['publickey']) as unknown as AuthenticationType[],
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ssh2 supplies null initially; subsequent arrays contain supported method names.
+    (firstAttempt
+      ? null
+      : ['publickey', 'password', 'keyboard-interactive']) as AuthenticationType[],
     false,
     (attempt) => {
       result = attempt
@@ -148,8 +143,8 @@ describe('ordered SSH private-key authentication', () => {
       includePrivateKey: true
     })
 
-    expect(manual.privateKey).toEqual(Buffer.from('/keys/manual'))
-    expect(unresolvedImport.privateKey).toEqual(Buffer.from('/keys/stale-imported'))
+    expect(manual.privateKey).toBeUndefined()
+    expect(unresolvedImport.privateKey).toBeUndefined()
     // Single-key targets are still ordered by Orca's handler so an MFA host reaches
     // keyboard-interactive once per stage rather than once per connection.
     expect(nextAuth(manual, true)).toMatchObject({ type: 'none' })
@@ -240,26 +235,6 @@ describe('ordered SSH private-key authentication', () => {
       key: Buffer.from('/keys/unauthorized-first')
     })
     expect(mockReadFileSync).toHaveBeenCalledTimes(readsAfterResolution)
-  })
-
-  it('keeps encrypted-key prompts tied to the matching fresh identity path', () => {
-    vi.spyOn(utils, 'parseKey').mockImplementation((key) => {
-      if (
-        Buffer.from(key as Buffer)
-          .toString()
-          .includes('encrypted-second')
-      ) {
-        return new Error('Encrypted private OpenSSH key detected, but no passphrase given')
-      }
-      return { isPrivateKey: () => true } as ParsedKey
-    })
-    const config = buildConnectConfig(
-      makeTarget(),
-      makeResolved({ identityFile: ['/keys/first', '/keys/encrypted-second'] }),
-      { includeAgent: false, includePrivateKey: true }
-    )
-
-    expect(getPassphrasePrivateKeyPath(config)).toBe('/keys/encrypted-second')
   })
 
   it('leaves config-host key authority to system OpenSSH', () => {

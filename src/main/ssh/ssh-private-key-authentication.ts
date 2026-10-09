@@ -1,84 +1,243 @@
-import type { AnyAuthMethod, AuthenticationType, ConnectConfig, NextAuthHandler } from 'ssh2'
-import type { PrivateKeyFile } from './ssh-auth-resolution'
+import {
+  utils,
+  type AnyAuthMethod,
+  type AuthenticationType,
+  type ConnectConfig,
+  type NextAuthHandler
+} from 'ssh2'
+import { isPrivateKeyPassphraseError, type PrivateKeyFile } from './ssh-auth-resolution'
 
-const passphraseKeyPaths = new WeakMap<ConnectConfig, string>()
-
-// Bounds an `AuthenticationMethods a,b,c` ladder so a host that keeps replying
-// "partial success" cannot keep the client prompting forever.
 const MAX_PARTIAL_SUCCESS_STAGES = 4
 
-function authMethodName(attempt: AuthenticationType | AnyAuthMethod): AuthenticationType {
-  const type = typeof attempt === 'string' ? attempt : attempt.type
-  // Agent identities are signed as publickey; a server's method list never names 'agent'.
-  return type === 'agent' ? 'publickey' : type
+type AuthenticationAttempt = AuthenticationType | AnyAuthMethod | false
+type Candidate =
+  | AuthenticationAttempt
+  | { type: 'key-file'; file: PrivateKeyFile }
+  | { type: 'prompt-password' }
+
+export type SshAuthenticationSession = {
+  isCurrent: () => boolean
+  requestCredential: (
+    kind: 'passphrase' | 'password',
+    detail: string
+  ) => Promise<string | null | undefined>
+  getPassphrase: (path: string) => string | undefined
+  setPassphrase: (path: string, value: string | undefined) => void
+  getPassword: () => string | null
+  setPassword: (value: string | null) => void
+  onPromptStart: () => void
+  onPromptEnd: () => void
+  onError: (error: unknown) => void
 }
 
-function buildAuthQueue(
+type AuthenticationState = {
+  session?: SshAuthenticationSession
+  lastAttempt?: AuthenticationAttempt
+}
+
+const authenticationStates = new WeakMap<ConnectConfig, AuthenticationState>()
+
+function methodName(candidate: Candidate): AuthenticationType {
+  if (candidate === false) {
+    return 'none'
+  }
+  const type = typeof candidate === 'object' ? candidate.type : candidate
+  if (type === 'agent' || type === 'key-file') {
+    return 'publickey'
+  }
+  return type === 'prompt-password' ? 'password' : type
+}
+
+function sendAttempt(next: NextAuthHandler, attempt: AuthenticationAttempt): void {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ssh2 documents false to end authentication; its typings omit it.
+  next(attempt as Parameters<NextAuthHandler>[0])
+}
+
+function acceptPassword(state: AuthenticationState): void {
+  const attempt = state.lastAttempt
+  if (
+    attempt &&
+    typeof attempt === 'object' &&
+    attempt.type === 'password' &&
+    typeof attempt.password === 'string'
+  ) {
+    state.session?.setPassword(attempt.password)
+  }
+}
+
+export function bindSshAuthenticationSession(
   config: ConnectConfig,
-  keys: PrivateKeyFile[]
-): (AuthenticationType | AnyAuthMethod)[] {
-  const username = config.username ?? ''
-  const queue: (AuthenticationType | AnyAuthMethod)[] = [{ type: 'none', username }]
-  if (config.password != null) {
-    queue.push({ type: 'password', username, password: config.password })
+  session: SshAuthenticationSession
+): void {
+  const state = authenticationStates.get(config)
+  if (state) {
+    state.session = session
   }
-  for (const key of keys) {
-    queue.push({
-      type: 'publickey',
-      username,
-      key: key.contents,
-      passphrase: config.passphrase
-    })
+}
+
+export function acceptSshAuthentication(config: ConnectConfig): void {
+  const state = authenticationStates.get(config)
+  if (state) {
+    acceptPassword(state)
   }
-  if (config.agent) {
-    queue.push({ type: 'agent', username, agent: config.agent })
-  }
-  if (config.tryKeyboard) {
-    queue.push('keyboard-interactive')
-  }
-  return queue
 }
 
 export function configurePrivateKeyAuthentication(
   config: ConnectConfig,
-  keys: PrivateKeyFile[],
-  passphraseKeyPath?: string
+  keys: PrivateKeyFile[]
 ): void {
-  const firstKey = keys[0]
-  if (firstKey) {
-    config.privateKey = firstKey.contents
-    if (passphraseKeyPath) {
-      passphraseKeyPaths.set(config, passphraseKeyPath)
+  const state: AuthenticationState = {}
+  authenticationStates.set(config, state)
+  let queue: Candidate[] = []
+  let stagesLeft = MAX_PARTIAL_SUCCESS_STAGES
+  let passwordPrompted = false
+  const promptedKeys = new Set<string>()
+
+  const buildQueue = (): Candidate[] => {
+    const username = config.username ?? ''
+    const candidates: Candidate[] = [{ type: 'none', username }]
+    const password = state.session ? state.session.getPassword() : config.password
+    if (password != null) {
+      candidates.push({ type: 'password', username, password })
+    }
+    if (config.agent) {
+      candidates.push({ type: 'agent', username, agent: config.agent })
+    }
+    for (const file of keys) {
+      candidates.push({ type: 'key-file', file })
+    }
+    if (config.tryKeyboard) {
+      candidates.push('keyboard-interactive')
+    }
+    candidates.push({ type: 'prompt-password' })
+    return candidates
+  }
+
+  const request = async (
+    kind: 'passphrase' | 'password',
+    detail: string
+  ): Promise<string | null | undefined> => {
+    const session = state.session
+    if (!session?.isCurrent()) {
+      return undefined
+    }
+    session.onPromptStart()
+    try {
+      return await session.requestCredential(kind, detail)
+    } finally {
+      if (session.isCurrent()) {
+        session.onPromptEnd()
+      }
     }
   }
 
-  // Why this replaces ssh2's own handler for every target, not just multi-key ones: ssh2 walks one
-  // flat method list exactly once, so keyboard-interactive can only ever be offered a single time.
-  // An MFA host running `AuthenticationMethods keyboard-interactive,keyboard-interactive` (or any
-  // ladder whose last stage is a second challenge) partial-succeeds the first stage and then finds
-  // the list exhausted — reported to the user as "All configured authentication methods failed".
-  let queue: (AuthenticationType | AnyAuthMethod)[] = []
-  let partialSuccessStagesLeft = MAX_PARTIAL_SUCCESS_STAGES
-  config.authHandler = (authsLeft, partialSuccess, next) => {
-    if (authsLeft == null) {
-      queue = buildAuthQueue(config, keys)
-      partialSuccessStagesLeft = MAX_PARTIAL_SUCCESS_STAGES
-    } else if (partialSuccess && partialSuccessStagesLeft > 0) {
-      // A stage was accepted and the host now demands another method. Restart from a fresh queue
-      // narrowed to what it still offers: re-offering keys it has stopped accepting is what
-      // exhausts MaxAuthTries before the challenge is ever shown.
-      partialSuccessStagesLeft -= 1
-      const offered = Array.isArray(authsLeft) ? authsLeft : []
-      queue = buildAuthQueue(config, keys).filter((attempt) => {
-        const method = authMethodName(attempt)
-        return method !== 'none' && offered.includes(method)
+  const prepareKey = async (file: PrivateKeyFile): Promise<AuthenticationAttempt> => {
+    const session = state.session
+    if (!session?.isCurrent()) {
+      return false
+    }
+    let passphrase = session.getPassphrase(file.path)
+    let parsed = utils.parseKey(file.contents, passphrase)
+    if (parsed instanceof Error && isPrivateKeyPassphraseError(parsed)) {
+      session.setPassphrase(file.path, undefined)
+      if (promptedKeys.has(file.path)) {
+        return false
+      }
+      promptedKeys.add(file.path)
+      passphrase = (await request('passphrase', file.path)) ?? undefined
+      if (!passphrase || !session.isCurrent()) {
+        return false
+      }
+      parsed = utils.parseKey(file.contents, passphrase)
+    }
+    if (!session.isCurrent() || parsed instanceof Error) {
+      return false
+    }
+    const privateKey = Array.isArray(parsed) ? parsed.find((key) => key.isPrivateKey()) : parsed
+    if (!privateKey?.isPrivateKey()) {
+      return false
+    }
+    // A decrypted key is reusable even when this host does not authorize it.
+    if (passphrase) {
+      session.setPassphrase(file.path, passphrase)
+    }
+    return { type: 'publickey', username: config.username ?? '', key: privateKey }
+  }
+
+  const prepareNext = async (): Promise<AuthenticationAttempt> => {
+    while (queue.length && state.session?.isCurrent()) {
+      const candidate = queue.shift()!
+      if (typeof candidate === 'object' && candidate.type === 'key-file') {
+        const key = await prepareKey(candidate.file)
+        if (key) {
+          return key
+        }
+      } else if (typeof candidate === 'object' && candidate.type === 'prompt-password') {
+        if (passwordPrompted) {
+          continue
+        }
+        passwordPrompted = true
+        const password = await request('password', config.host ?? '')
+        if (password != null && state.session?.isCurrent()) {
+          return { type: 'password', username: config.username ?? '', password }
+        }
+      } else {
+        return candidate
+      }
+    }
+    return false
+  }
+
+  config.authHandler = (methodsLeft, partialSuccess, next) => {
+    if (methodsLeft == null) {
+      queue = buildQueue()
+      stagesLeft = MAX_PARTIAL_SUCCESS_STAGES
+      passwordPrompted = false
+      promptedKeys.clear()
+      state.lastAttempt = undefined
+    } else {
+      if (partialSuccess) {
+        acceptPassword(state)
+        if (stagesLeft-- <= 0) {
+          sendAttempt(next, false)
+          return
+        }
+        queue = buildQueue()
+      } else if (
+        state.lastAttempt &&
+        typeof state.lastAttempt === 'object' &&
+        state.lastAttempt.type === 'password'
+      ) {
+        state.session?.setPassword(null)
+      }
+      // Only offer credentials useful to the current authentication stage.
+      queue = queue.filter((candidate) => methodsLeft.includes(methodName(candidate)))
+    }
+    if (state.session) {
+      void prepareNext().then(
+        (attempt) => {
+          if (!state.session?.isCurrent()) {
+            return
+          }
+          state.lastAttempt = attempt
+          sendAttempt(next, attempt)
+        },
+        (error: unknown) => state.session?.onError(error)
+      )
+      return
+    }
+    const candidate = queue.shift() ?? false
+    if (typeof candidate === 'object' && candidate.type === 'key-file') {
+      next({
+        type: 'publickey',
+        username: config.username ?? '',
+        key: candidate.file.contents,
+        passphrase: config.passphrase
       })
+    } else if (typeof candidate === 'object' && candidate.type === 'prompt-password') {
+      sendAttempt(next, false)
+    } else {
+      sendAttempt(next, candidate)
     }
-    const attempt = queue.shift()
-    next((attempt ?? false) as Parameters<NextAuthHandler>[0])
   }
-}
-
-export function getPassphrasePrivateKeyPath(config: ConnectConfig): string | undefined {
-  return passphraseKeyPaths.get(config)
 }

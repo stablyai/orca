@@ -40,7 +40,6 @@ import {
   SSH_CREDENTIAL_TIMEOUT_MS,
   isTransientError,
   isAuthError,
-  isAgentFallbackError,
   isSystemSshFallbackError,
   isGssapiSystemSshFallbackCandidate,
   isPassphraseError,
@@ -83,7 +82,10 @@ import {
 } from './ssh-reconnect-error-classification'
 import { SshReconnectLadder } from './ssh-reconnect-ladder'
 import { mayUserSshConfigClaimAlias } from './ssh-config-alias-claim'
-import { getPassphrasePrivateKeyPath } from './ssh-private-key-authentication'
+import {
+  acceptSshAuthentication,
+  bindSshAuthenticationSession
+} from './ssh-private-key-authentication'
 import {
   requiresSystemSshForSecurityKey,
   shouldUseSystemSshTransport
@@ -106,7 +108,7 @@ const HOST_KEY_SOURCE_READ_TIMEOUT_MS = 5_000
 // Counts every INFO_REQUEST of the handshake, so it must cover each partial-success stage the auth
 // queue will answer (MAX_PARTIAL_SUCCESS_STAGES) times the rounds a PAM stack spends per stage.
 const SSH_KEYBOARD_INTERACTIVE_MAX_ROUNDS = 8
-const SSH_KEYBOARD_INTERACTIVE_READY_TIMEOUT_MS = SSH_CREDENTIAL_TIMEOUT_MS + 5_000
+const SSH_CREDENTIAL_READY_TIMEOUT_MS = SSH_CREDENTIAL_TIMEOUT_MS + 5_000
 const SSH_KEYBOARD_INTERACTIVE_MAX_PROMPTS = 8
 
 function cloneResolvedConfig(config: SshResolvedConfig | null): SshResolvedConfig | null {
@@ -166,15 +168,7 @@ export class SshConnection {
   private systemSshResolvedConfig: SshResolvedConfig | null = null
   /** Set by attemptConnect so doSsh2Connect can build a verifier without threading it through. */
   private hostKeyResolvedConfig: SshResolvedConfig | null = null
-  /**
-   * The trust sources for ONE connect attempt, keyed by its generation.
-   *
-   * doSsh2Connect runs up to five times per attemptConnect as the credential ladder advances, and
-   * each run re-read every known_hosts file, re-read the store, and on the -F path re-scanned the
-   * system config. The answer cannot change between rungs of the same attempt — nothing writes these
-   * while a handshake is in flight — so it is read once. Keyed by generation rather than cleared,
-   * because a superseded attempt must never hand its sources to the live one.
-   */
+  // Generation ownership prevents stale attempts from supplying the live one's trust sources.
   private hostKeyTrustSources: {
     generation: number
     sources: Promise<HostKeyTrustSources>
@@ -190,7 +184,7 @@ export class SshConnection {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private readonly reconnectLadder = new SshReconnectLadder()
   private disposed = false
-  private cachedPassphrase: string | null = null
+  private readonly cachedPassphrases = new Map<string, string>()
   private cachedPassword: string | null = null
   private keyboardInteractiveCancelled = false
   // A rejected cached password must reach the user on the next round.
@@ -267,7 +261,7 @@ export class SshConnection {
 
   // Why: lets ssh:needsPassphrasePrompt skip redundant passphrase prompts on reconnect when the credential is already cached in-memory.
   hasCachedCredential(): boolean {
-    return this.cachedPassphrase != null || this.cachedPassword != null
+    return this.cachedPassphrases.size > 0 || this.cachedPassword != null
   }
 
   async exec(cmd: string, options?: SshExecOptions): Promise<ClientChannel> {
@@ -460,17 +454,7 @@ export class SshConnection {
     throw finalError
   }
 
-  // Why: callers claim the generation so their catch can tell their own failure from a superseded one.
-  /**
-   * A credential prompt, unless this attempt has already been superseded.
-   *
-   * Gated here rather than at each ladder rung because every rung ends in this one call, and the
-   * rungs below the first are exactly where the generation check was missing: a superseded attempt
-   * is denied by the verifier WITHOUT a recorded decision (deliberate — a dead attempt must not
-   * clobber the live one's outcome), so `isHostKeyVerificationError` reads false and the fallback
-   * runs on. The user then gets a passphrase dialog for a connection nobody is waiting on, possibly
-   * racing the live attempt's own. Returning undefined drops each rung through to its throw.
-   */
+  // Superseded connections must not open credential dialogs for the live attempt.
   private async requestCredential(
     kind: SshCredentialKind,
     detail: string,
@@ -558,11 +542,11 @@ export class SshConnection {
       return
     }
     // Why: ssh2 lacks gssapi-with-mic; GSSAPIAuthentication hosts try Kerberos SSO via system OpenSSH first, then fall through to key/credential auth.
-    if (
+    const triedGssapi =
       isOpenSshConfigBackedTarget(this.target) && resolved
         ? resolved.gssapiAuthentication === true
-        : this.target.gssapiAuthentication === true
-    ) {
+        : (this.target.gssapiAuthentication ?? resolved?.gssapiAuthentication) === true
+    if (triedGssapi) {
       try {
         await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved, true)
         return
@@ -586,13 +570,6 @@ export class SshConnection {
       const proxy = spawnProxyCommand(effectiveProxy, config.host!, config.port!, config.username!)
       this.proxyProcess = proxy.process
       config.sock = proxy.sock
-    }
-
-    if (this.cachedPassphrase) {
-      config.passphrase = this.cachedPassphrase
-    }
-    if (this.cachedPassword) {
-      config.password = this.cachedPassword
     }
 
     try {
@@ -651,72 +628,8 @@ export class SshConnection {
         }
       }
 
-      let authError = err
-      let passphrasePromptHandled = false
-      let credentialRetryConfig = config
-
-      // Why: ssh2 parses encrypted privateKey before agent auth; when an agent exists, let it try first and fall back to direct key parsing only if it fails.
-      if (isAgentFallbackError(authError) && config.agent && !config.privateKey) {
-        const keyConfig = buildConnectConfig(this.target, resolved, {
-          includeAgent: false,
-          includePrivateKey: true
-        })
-        // Why: if the agent path failed, password/passphrase retries must not reuse the same agent-only config.
-        credentialRetryConfig = keyConfig
-        if (this.cachedPassphrase) {
-          keyConfig.passphrase = this.cachedPassphrase
-        }
-        if (this.cachedPassword) {
-          keyConfig.password = this.cachedPassword
-        }
-        if (keyConfig.privateKey || keyConfig.password) {
-          this.respawnProxy(keyConfig, effectiveProxy)
-          try {
-            await this.doSsh2Connect(keyConfig, connectGeneration)
-            return
-          } catch (keyErr) {
-            // Same reason as above: the retry re-runs the handshake, so it can be the attempt that
-            // denies the key, and the passphrase prompt is directly below.
-            if (!(keyErr instanceof Error) || isHostKeyVerificationError(keyErr)) {
-              this.proxyProcess?.kill()
-              this.proxyProcess = null
-              throw keyErr
-            }
-            // Key fallback must honor the same cancellation boundary.
-            if (this.keyboardInteractiveCancelled) {
-              this.proxyProcess?.kill()
-              this.proxyProcess = null
-              throw keyErr
-            }
-            authError = keyErr
-            const passphraseKeyPath = getPassphrasePrivateKeyPath(keyConfig)
-            // Why: with GSSAPI enabled, let the reactive system-ssh probe try a Kerberos ticket before prompting for the passphrase; the prompt still runs if it fails.
-            if (
-              (isPassphraseError(authError) || passphraseKeyPath) &&
-              !this.cachedPassphrase &&
-              !isGssapiSystemSshFallbackCandidate(authError, this.target, resolved)
-            ) {
-              passphrasePromptHandled = true
-              const detail =
-                passphraseKeyPath ||
-                this.target.identityFile ||
-                resolved?.identityFile?.[0] ||
-                '(unknown)'
-              const val = await this.requestCredential('passphrase', detail, connectGeneration)
-              if (val) {
-                this.cachedPassphrase = val
-                keyConfig.passphrase = val
-                this.respawnProxy(keyConfig, effectiveProxy)
-                await this.doSsh2Connect(keyConfig, connectGeneration)
-                return
-              }
-            }
-          }
-        }
-      }
-
-      // Why: a Kerberos ticket may authenticate where keys did not; try the system ssh binary before falling back to interactive prompts.
-      if (isGssapiSystemSshFallbackCandidate(authError, this.target, resolved)) {
+      // A Kerberos ticket may authenticate when the server refuses other methods.
+      if (!triedGssapi && isGssapiSystemSshFallbackCandidate(err, this.target, resolved)) {
         this.proxyProcess?.kill()
         this.proxyProcess = null
         try {
@@ -734,51 +647,9 @@ export class SshConnection {
         }
       }
 
-      if (!this.callbacks.onCredentialRequest) {
-        this.proxyProcess?.kill()
-        this.proxyProcess = null
-        throw authError
-      }
-
-      // Why: prompt for passphrase on encrypted-key error, then retry with a fresh proxy socket (ssh2 may have destroyed the original).
-      const passphraseKeyPath = getPassphrasePrivateKeyPath(credentialRetryConfig)
-      if (
-        (isPassphraseError(authError) || passphraseKeyPath) &&
-        !this.cachedPassphrase &&
-        !passphrasePromptHandled
-      ) {
-        const detail =
-          passphraseKeyPath ||
-          this.target.identityFile ||
-          resolved?.identityFile?.[0] ||
-          '(unknown)'
-        const val = await this.requestCredential('passphrase', detail, connectGeneration)
-        if (val) {
-          this.cachedPassphrase = val
-          credentialRetryConfig.passphrase = val
-          this.respawnProxy(credentialRetryConfig, effectiveProxy)
-          await this.doSsh2Connect(credentialRetryConfig, connectGeneration)
-          return
-        }
-      }
-      // Why: an agent socket failure can still be recovered by password auth, but the retry must use the no-agent config selected above.
-      if (isAgentFallbackError(authError) && !this.cachedPassword) {
-        const val = await this.requestCredential(
-          'password',
-          config.host || this.target.label,
-          connectGeneration
-        )
-        if (val) {
-          this.cachedPassword = val
-          credentialRetryConfig.password = val
-          this.respawnProxy(credentialRetryConfig, effectiveProxy)
-          await this.doSsh2Connect(credentialRetryConfig, connectGeneration)
-          return
-        }
-      }
       this.proxyProcess?.kill()
       this.proxyProcess = null
-      throw authError
+      throw err
     }
   }
 
@@ -1088,20 +959,6 @@ export class SshConnection {
     return options
   }
 
-  // Why: ssh2 may destroy the proxy socket on auth failure, so credential retries need a fresh proxy process and Duplex stream.
-  private respawnProxy(
-    config: ConnectConfig,
-    proxy: ReturnType<typeof resolveEffectiveProxy> | null | undefined
-  ): void {
-    if (!proxy) {
-      return
-    }
-    this.proxyProcess?.kill()
-    const p = spawnProxyCommand(proxy, config.host!, config.port!, config.username!)
-    this.proxyProcess = p.process
-    config.sock = p.sock
-  }
-
   /** Reads known_hosts, our store and the site policy once per connect attempt. */
   private loadHostKeyTrustSources(
     connectGeneration: number,
@@ -1297,14 +1154,14 @@ export class SshConnection {
           finish([])
           return
         }
-        rearmStartupTimer(SSH_KEYBOARD_INTERACTIVE_READY_TIMEOUT_MS)
+        rearmStartupTimer(SSH_CREDENTIAL_READY_TIMEOUT_MS)
         void this.answerKeyboardInteractive(
           config.host || this.target.label,
           name,
           instructions,
           prompts,
           connectGeneration,
-          () => rearmStartupTimer(SSH_KEYBOARD_INTERACTIVE_READY_TIMEOUT_MS)
+          () => rearmStartupTimer(SSH_CREDENTIAL_READY_TIMEOUT_MS)
         ).then(
           (responses) => {
             // Settle cancellation immediately, but still answer ssh2’s pending callback.
@@ -1363,6 +1220,7 @@ export class SshConnection {
           return
         }
         settled = true
+        acceptSshAuthentication(config)
         this.client = client
         this.proxyProcess = null
         this.setupDisconnectHandler(client)
@@ -1381,6 +1239,10 @@ export class SshConnection {
 
       const onStartupError = (err: Error): void => {
         if (settled) {
+          return
+        }
+        // ssh2 reports agent failure, then continues to the next credential itself.
+        if ('level' in err && err.level === 'agent') {
           return
         }
         guardStartupDestroy()
@@ -1410,6 +1272,34 @@ export class SshConnection {
       client.on('ready', onReady)
       client.on('error', onStartupError)
       client.on('close', onStartupClose)
+      const isCurrent = (): boolean =>
+        !settled && !this.disposed && connectGeneration === this.connectGeneration
+      bindSshAuthenticationSession(config, {
+        isCurrent,
+        requestCredential: (kind, detail) =>
+          this.requestCredential(kind, detail, connectGeneration),
+        getPassphrase: (path) => this.cachedPassphrases.get(path),
+        setPassphrase: (path, value) => {
+          if (!isCurrent()) {
+            return
+          }
+          if (value === undefined) {
+            this.cachedPassphrases.delete(path)
+          } else {
+            this.cachedPassphrases.set(path, value)
+          }
+        },
+        getPassword: () => this.cachedPassword,
+        setPassword: (value) => {
+          if (!this.disposed && connectGeneration === this.connectGeneration) {
+            this.cachedPassword = value
+          }
+        },
+        onPromptStart: () => rearmStartupTimer(SSH_CREDENTIAL_READY_TIMEOUT_MS),
+        onPromptEnd: () => rearmStartupTimer(CONNECT_TIMEOUT_MS),
+        onError: (error) =>
+          onStartupError(error instanceof Error ? error : new Error(String(error)))
+      })
       rearmStartupTimer(config.readyTimeout ?? CONNECT_TIMEOUT_MS)
       client.connect({ ...config, readyTimeout: 0 })
     })
@@ -1597,7 +1487,7 @@ export class SshConnection {
       clearTimeout(this.reconnectTimer)
     }
     this.reconnectTimer = null
-    this.cachedPassphrase = null
+    this.cachedPassphrases.clear()
     this.cachedPassword = null
     this.credentialAbortController.abort()
     this.closePendingSsh2Clients()

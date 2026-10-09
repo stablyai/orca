@@ -2,11 +2,10 @@ import type { ConnectConfig } from 'ssh2'
 import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
 import {
-  findEncryptedPrivateKeyPath,
+  isPrivateKeyPassphraseError as isPassphraseError,
   resolveAgentConfigValue,
   resolveAgentSocket,
-  resolvePrivateKeys,
-  resolveUnencryptedExplicitPrivateKeys
+  resolvePrivateKeys
 } from './ssh-auth-resolution'
 import { configurePrivateKeyAuthentication } from './ssh-private-key-authentication'
 import { isOpenSshConfigBackedTarget } from './system-ssh-args'
@@ -28,10 +27,7 @@ export type SshConnectionCallbacks = {
   ) => Promise<string | null>
 }
 
-export function isPassphraseError(err: Error): boolean {
-  const msg = err.message.toLowerCase()
-  return msg.includes('passphrase') || msg.includes('encrypted key') || msg.includes('bad decrypt')
-}
+export { isPassphraseError }
 
 export const INITIAL_RETRY_ATTEMPTS = 5
 export const INITIAL_RETRY_DELAY_MS = 2000
@@ -184,9 +180,7 @@ type BuildConnectConfigOptions = {
   includePrivateKey?: boolean
 }
 
-// Why: ssh2 tries privateKey before agent, but parses encrypted privateKey
-// values before any agent auth can run. Keep unencrypted explicit keys first
-// while deferring encrypted keys until the post-agent passphrase path.
+// Top-level privateKey is parsed before negotiation, so keys belong in authHandler.
 export function buildConnectConfig(
   target: SshTarget,
   resolved: SshResolvedConfig | null,
@@ -199,7 +193,7 @@ export function buildConnectConfig(
       ? (resolved.user ?? target.username)
       : target.username || resolved?.user || ''
 
-  const config: Record<string, unknown> = {
+  const config: ConnectConfig = {
     host: effectiveHost,
     port: effectivePort,
     username: effectiveUser,
@@ -223,17 +217,10 @@ export function buildConnectConfig(
     config.agentForward = true
   }
 
-  const keys =
-    (options.includePrivateKey ?? !agent)
-      ? resolvePrivateKeys(target, resolved)
-      : resolveUnencryptedExplicitPrivateKeys(target, resolved)
-  configurePrivateKeyAuthentication(
-    config as ConnectConfig,
-    keys,
-    findEncryptedPrivateKeyPath(keys)
-  )
+  const keys = options.includePrivateKey === false ? [] : resolvePrivateKeys(target, resolved)
+  configurePrivateKeyAuthentication(config, keys)
 
-  return config as ConnectConfig
+  return config
 }
 
 function resolveEffectiveHost(target: SshTarget, resolved: SshResolvedConfig | null): string {

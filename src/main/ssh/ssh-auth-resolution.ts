@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { utils, type BaseAgent, type ParsedKey } from 'ssh2'
+import type { BaseAgent } from 'ssh2'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
 import { createIdentityFilteredAgent } from './ssh-agent-identity-filter'
@@ -18,11 +18,16 @@ const DEFAULT_IDENTITY_PATHS = [...DEFAULT_KEY_NAMES, ...DEFAULT_SECURITY_KEY_NA
 )
 const WINDOWS_OPENSSH_AGENT_PIPE = '\\\\.\\pipe\\openssh-ssh-agent'
 
-// Why: resolved IdentityFile paths are expanded before auth resolution, so they
-// won't match the ~/... form in DEFAULT_KEY_PATHS.
-const EXPANDED_DEFAULT_KEY_PATHS = DEFAULT_IDENTITY_PATHS.map(resolveSshConfigHomePath)
-
 export type PrivateKeyFile = { path: string; contents: Buffer }
+
+export function isPrivateKeyPassphraseError(err: Error): boolean {
+  const message = err.message.toLowerCase()
+  return (
+    message.includes('passphrase') ||
+    message.includes('encrypted key') ||
+    message.includes('bad decrypt')
+  )
+}
 
 export function listDefaultIdentityFilePaths(): string[] {
   return [...DEFAULT_IDENTITY_PATHS]
@@ -89,22 +94,6 @@ export function resolveAgentSocket(
   return resolveDefaultAgentSocket()
 }
 
-function resolveExplicitPrivateKeyPaths(
-  target: SshTarget,
-  resolved: SshResolvedConfig | null
-): string[] {
-  const resolvedIdentities = (resolved?.identityFile ?? []).filter(
-    (identityFile) => !EXPANDED_DEFAULT_KEY_PATHS.includes(identityFile)
-  )
-  if (isOpenSshConfigBackedTarget(target) && resolved) {
-    return resolvedIdentities
-  }
-  if (target.identityFile) {
-    return [target.identityFile]
-  }
-  return resolvedIdentities
-}
-
 export function resolveIdentityFilePaths(
   target: SshTarget,
   resolved: Pick<SshResolvedConfig, 'identityFile'> | null
@@ -138,13 +127,6 @@ function readPrivateKeys(keyPaths: string[]): PrivateKeyFile[] {
   return keys
 }
 
-function resolveExplicitPrivateKeys(
-  target: SshTarget,
-  resolved: SshResolvedConfig | null
-): PrivateKeyFile[] {
-  return readPrivateKeys(resolveExplicitPrivateKeyPaths(target, resolved))
-}
-
 export function resolvePrivateKeys(
   target: SshTarget,
   resolved: SshResolvedConfig | null
@@ -155,34 +137,6 @@ export function resolvePrivateKeys(
   }
   const defaultKey = findDefaultKeyFile()
   return defaultKey ? [defaultKey] : []
-}
-
-function isUnencryptedPrivateKey(contents: Buffer): boolean {
-  const parsed = utils.parseKey(contents) as ParsedKey | ParsedKey[] | Error
-  if (parsed instanceof Error) {
-    return false
-  }
-  const keys = Array.isArray(parsed) ? parsed : [parsed]
-  return keys.some((key) => key && typeof key.isPrivateKey === 'function' && key.isPrivateKey())
-}
-
-export function resolveUnencryptedExplicitPrivateKeys(
-  target: SshTarget,
-  resolved: SshResolvedConfig | null
-): PrivateKeyFile[] {
-  return resolveExplicitPrivateKeys(target, resolved).filter((key) =>
-    isUnencryptedPrivateKey(key.contents)
-  )
-}
-
-export function findEncryptedPrivateKeyPath(keys: PrivateKeyFile[]): string | undefined {
-  for (const key of keys) {
-    const parsed = utils.parseKey(key.contents) as ParsedKey | ParsedKey[] | Error
-    if (parsed instanceof Error && /passphrase|encrypted key|bad decrypt/i.test(parsed.message)) {
-      return key.path
-    }
-  }
-  return undefined
 }
 
 export function resolveAgentConfigValue(

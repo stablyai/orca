@@ -1,11 +1,16 @@
 import { vi } from 'vitest'
+import type { AuthenticationType } from 'ssh2'
 import { createSystemCommandChannel, createSystemSshProcess } from './ssh-connection-test-fixtures'
 import type { SshConnection } from './ssh-connection'
 import type { MockSystemCommandChannel, MockSystemSshProcess } from './ssh-connection-test-fixtures'
 import type { SshResolvedConfig } from './ssh-config-parser'
 import type { SystemSshBuildArgsOptions } from './system-ssh-args'
 import type { SshTarget } from '../../shared/ssh-types'
-import { resetSsh2ClientState, ssh2Mock } from './__tests__/ssh-connection-test-client'
+import {
+  clientInstances,
+  resetSsh2ClientState,
+  ssh2Mock
+} from './__tests__/ssh-connection-test-client'
 export {
   clientInstances,
   connectAttempts,
@@ -60,6 +65,23 @@ export function nextSshClientCreation(): Promise<void> {
   return new Promise((resolve) => {
     ssh2Mock.notifyClientCreated = resolve
   })
+}
+
+export function nextSshAuthentication(
+  methodsLeft: AuthenticationType[] | null = null,
+  partialSuccess = false
+): Promise<unknown> {
+  const config = clientInstances.at(-1)?.lastConnectConfig
+  if (
+    !config ||
+    typeof config !== 'object' ||
+    !('authHandler' in config) ||
+    typeof config.authHandler !== 'function'
+  ) {
+    throw new Error('Missing authentication handler')
+  }
+  const handler = config.authHandler
+  return new Promise((resolve) => handler(methodsLeft, partialSuccess, resolve))
 }
 
 export async function connectWithFakeTimers(conn: SshConnection): Promise<void> {

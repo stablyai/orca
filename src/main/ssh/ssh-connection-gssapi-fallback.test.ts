@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   clientInstances,
+  nextSshAuthentication,
   resetSshConnectionMocks,
   spawnSystemSshCommandMock,
   ssh2Mock
@@ -131,7 +132,7 @@ describe('SshConnection', () => {
     expect(spawnSystemSshCommandMock).not.toHaveBeenCalled()
   })
 
-  it('falls back to system SSH after an ssh2 auth failure when resolved config enables GSSAPI', async () => {
+  it('tries resolved GSSAPI before ssh2 authentication', async () => {
     ssh2Mock.connectBehavior = 'error'
     ssh2Mock.connectErrorMessage = 'All configured authentication methods failed'
     vi.mocked(resolveWithSshG).mockResolvedValue(
@@ -149,6 +150,7 @@ describe('SshConnection', () => {
     expect(conn.usesSystemSshTransport()).toBe(true)
     expect(conn.getHostKeyFingerprint()).toBeUndefined()
     expect(onCredentialRequest).not.toHaveBeenCalled()
+    expect(clientInstances).toHaveLength(0)
   })
 
   it('connects through the GSSAPI fallback without credential callbacks (headless)', async () => {
@@ -165,14 +167,8 @@ describe('SshConnection', () => {
     expect(conn.usesSystemSshTransport()).toBe(true)
   })
 
-  it('keeps prompting for credentials when the GSSAPI fallback probe fails', async () => {
-    // Why: identityAgent 'none' makes resolveAgentSocket return undefined on
-    // every platform (SSH_AUTH_SOCK='' alone leaves the Windows agent pipe), so
-    // ssh2's first connect carries any default key directly and the agent
-    // fallback retry never consumes the second ssh2Mock.connectSequence entry —
-    // deterministic on dev machines with both ~/.ssh/id_* and a live agent.
-    vi.stubEnv('SSH_AUTH_SOCK', '')
-    ssh2Mock.connectSequence = [new Error('All configured authentication methods failed'), 'ready']
+  it('negotiates password after the GSSAPI probe fails', async () => {
+    ssh2Mock.connectSequence = ['silent']
     spawnSystemSshCommandMock.mockImplementation(() =>
       createFailingSystemCommandChannel(255, 'Permission denied (gssapi-with-mic,password)')
     )
@@ -183,24 +179,20 @@ describe('SshConnection', () => {
         identityAgent: 'none'
       })
     )
-    const onCredentialRequest = vi.fn(async () => 'password-123')
+    const request = vi.fn(async () => 'password-123')
     const conn = new SshConnection(
       createTarget({ configHost: 'krb-host' }),
-      createCallbacks({ onCredentialRequest })
+      createCallbacks({ onCredentialRequest: request })
     )
-
-    await conn.connect()
-
-    expect(conn.getState().status).toBe('connected')
-    expect(conn.usesSystemSshTransport()).toBe(false)
-    // Why: proves the reactive GSSAPI probe actually ran before prompting, so
-    // the test fails if the reactive fallback block is removed.
-    expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
-      expect.objectContaining({ configHost: 'krb-host' }),
-      'echo ORCA-SYSTEM-SSH-OK',
-      expect.objectContaining({ wrapCommand: false })
-    )
-    expect(onCredentialRequest).toHaveBeenCalledWith(
+    const connected = conn.connect()
+    await vi.waitFor(() => expect(clientInstances).toHaveLength(1))
+    await nextSshAuthentication()
+    const password = await nextSshAuthentication(['password'])
+    expect(password).toMatchObject({ type: 'password', password: 'password-123' })
+    clientInstances[0].emit('ready')
+    await connected
+    expect(spawnSystemSshCommandMock).toHaveBeenCalledOnce()
+    expect(request).toHaveBeenCalledWith(
       'target-1',
       'password',
       'example.com',
@@ -209,11 +201,23 @@ describe('SshConnection', () => {
     )
   })
 
+  it('does not repeat a failed GSSAPI probe after ssh2 refuses authentication', async () => {
+    ssh2Mock.connectSequence = [new Error('All configured authentication methods failed')]
+    spawnSystemSshCommandMock.mockImplementation(() =>
+      createFailingSystemCommandChannel(255, 'Permission denied (gssapi-with-mic,password)')
+    )
+    vi.mocked(resolveWithSshG).mockResolvedValue(
+      createResolvedConfig({ proxyUseFdpass: false, gssapiAuthentication: true })
+    )
+    const conn = new SshConnection(createTarget({ configHost: 'krb-host' }), createCallbacks())
+
+    await expect(conn.connect()).rejects.toThrow('All configured authentication methods failed')
+    expect(spawnSystemSshCommandMock).toHaveBeenCalledOnce()
+    expect(clientInstances).toHaveLength(1)
+  })
+
   it('tries the GSSAPI probe before prompting for an encrypted key passphrase', async () => {
-    // Why: a valid Kerberos ticket should connect silently before the user is
-    // ever asked for the key passphrase. Agent auth fails, the explicit-key
-    // retry fails with a passphrase error, and resolved GSSAPI is on — so the
-    // reactive probe must run before onCredentialRequest.
+    // A valid Kerberos ticket should avoid requesting the key's passphrase.
     vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
     const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-key-'))
     const keyPath = join(tempDir, 'id_ed25519')
@@ -294,16 +298,13 @@ describe('SshConnection', () => {
     expect(clientInstances).toHaveLength(1)
   })
 
-  it('keeps disconnected state when a disconnect cancels the reactive GSSAPI probe', async () => {
+  it('keeps disconnected state when a disconnect cancels the GSSAPI probe', async () => {
     ssh2Mock.connectBehavior = 'error'
     ssh2Mock.connectErrorMessage = 'All configured authentication methods failed'
     vi.mocked(resolveWithSshG).mockResolvedValue(
       createResolvedConfig({ proxyUseFdpass: false, gssapiAuthentication: true })
     )
-    // Why: a probe channel that stays open until close() leaves the reactive
-    // fallback pending, so we can disconnect mid-probe; disconnect() then calls
-    // close() (bumping the generation first), which settles the probe as a
-    // cancellation rather than a probe failure.
+    // Keep the probe pending until disconnect closes its channel.
     let pendingChannel: ReturnType<typeof createSystemCommandChannel> | null = null
     spawnSystemSshCommandMock.mockImplementation(() => {
       const channel = new EventEmitter() as ReturnType<typeof createSystemCommandChannel>
@@ -320,7 +321,6 @@ describe('SshConnection', () => {
     )
 
     const connectPromise = conn.connect()
-    // Wait until the reactive probe has spawned its (never-closing) channel.
     await vi.waitFor(() => expect(pendingChannel).not.toBeNull())
 
     await conn.disconnect()

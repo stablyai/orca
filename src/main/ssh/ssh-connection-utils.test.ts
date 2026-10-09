@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
 import { join } from 'node:path'
-import { BaseAgent, utils, type ParsedKey } from 'ssh2'
+import {
+  BaseAgent,
+  utils,
+  type ConnectConfig,
+  type AnyAuthMethod,
+  type AuthenticationType
+} from 'ssh2'
 
 vi.mock('os', () => ({
   homedir: () => '/home/testuser'
@@ -379,6 +385,29 @@ function makeResolved(overrides?: Partial<SshResolvedConfig>): SshResolvedConfig
   }
 }
 
+function configuredKeyAttempts(config: ConnectConfig): AnyAuthMethod[] {
+  const handler = config.authHandler
+  if (typeof handler !== 'function') {
+    throw new Error('Missing authentication handler')
+  }
+  const attempts: AnyAuthMethod[] = []
+  const methods: AuthenticationType[] = ['publickey', 'password', 'keyboard-interactive']
+  for (let index = 0; index < 20; index += 1) {
+    let finished = false
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ssh2 passes null initially; its typings omit it.
+    handler((index === 0 ? null : methods) as AuthenticationType[], false, (attempt) => {
+      if (typeof attempt === 'object' && attempt.type === 'publickey') {
+        attempts.push(attempt)
+      }
+      finished = !attempt
+    })
+    if (finished) {
+      break
+    }
+  }
+  return attempts
+}
+
 describe('buildConnectConfig', () => {
   const originalEnv = process.env.SSH_AUTH_SOCK
 
@@ -587,24 +616,24 @@ describe('buildConnectConfig', () => {
     )
 
     expect(config.agent).toBeUndefined()
-    expect(config.privateKey).toEqual(Buffer.from('not-a-key'))
+    expect(configuredKeyAttempts(config)[0]).toMatchObject({
+      type: 'publickey',
+      key: Buffer.from('not-a-key')
+    })
   })
 
   it('includes unencrypted target.identityFile auth when an agent is available', () => {
-    vi.spyOn(utils, 'parseKey').mockReturnValue({
-      isPrivateKey: () => true
-    } as ParsedKey)
     mockReadFileSync.mockReturnValue(Buffer.from('key'))
     const config = buildConnectConfig(makeTarget({ identityFile: '/home/user/.ssh/custom' }), null)
     expect(config.agent).toBe('/tmp/agent.sock')
-    expect(config.privateKey).toEqual(Buffer.from('key'))
+    expect(configuredKeyAttempts(config)[0]).toMatchObject({
+      type: 'publickey',
+      key: Buffer.from('key')
+    })
     expect(mockReadFileSync).toHaveBeenCalledWith('/home/user/.ssh/custom')
   })
 
   it('defers encrypted target.identityFile auth when an agent is available', () => {
-    vi.spyOn(utils, 'parseKey').mockReturnValue(
-      new Error('Encrypted private OpenSSH key detected, but no passphrase given')
-    )
     mockReadFileSync.mockReturnValue(Buffer.from('encrypted-key'))
     const config = buildConnectConfig(makeTarget({ identityFile: '/home/user/.ssh/custom' }), null)
     expect(config.agent).toBe('/tmp/agent.sock')
@@ -621,7 +650,10 @@ describe('buildConnectConfig', () => {
         makeTarget({ identityFile: '/home/user/.ssh/custom' }),
         null
       )
-      expect(config.privateKey).toEqual(Buffer.from('key'))
+      expect(configuredKeyAttempts(config)[0]).toMatchObject({
+        type: 'publickey',
+        key: Buffer.from('key')
+      })
       expect(config.agent).toBeUndefined()
     } finally {
       platformSpy.mockRestore()
@@ -640,7 +672,10 @@ describe('buildConnectConfig', () => {
       { includeAgent: false, includePrivateKey: true }
     )
 
-    expect(config.privateKey).toEqual(Buffer.from('/home/user/.ssh/current'))
+    expect(configuredKeyAttempts(config)[0]).toMatchObject({
+      type: 'publickey',
+      key: Buffer.from('/home/user/.ssh/current')
+    })
     expect(mockReadFileSync).toHaveBeenCalledWith('/home/user/.ssh/current')
   })
 
@@ -650,41 +685,44 @@ describe('buildConnectConfig', () => {
       includeAgent: false,
       includePrivateKey: true
     })
-    expect(config.privateKey).toEqual(Buffer.from('key'))
+    expect(configuredKeyAttempts(config)[0]).toMatchObject({
+      type: 'publickey',
+      key: Buffer.from('key')
+    })
     expect(mockReadFileSync).toHaveBeenCalledWith(testHomePath('.ssh', 'custom'))
   })
 
   it('includes unencrypted resolved identityFile auth when an agent is available', () => {
-    vi.spyOn(utils, 'parseKey').mockReturnValue({
-      isPrivateKey: () => true
-    } as ParsedKey)
     mockReadFileSync.mockReturnValue(Buffer.from('custom-key'))
     const config = buildConnectConfig(
       makeTarget(),
       makeResolved({ identityFile: ['/home/user/.ssh/work_key'] })
     )
     expect(config.agent).toBe('/tmp/agent.sock')
-    expect(config.privateKey).toEqual(Buffer.from('custom-key'))
+    expect(configuredKeyAttempts(config)[0]).toMatchObject({
+      type: 'publickey',
+      key: Buffer.from('custom-key')
+    })
   })
 
-  it('uses agent auth without probing when resolved identityFile is a default path (expanded)', () => {
+  it('resolves default identity files for later authentication alongside the agent', () => {
     const config = buildConnectConfig(
       makeTarget(),
       makeResolved({ identityFile: [testHomePath('.ssh', 'id_ed25519')] })
     )
     expect(config.agent).toBe('/tmp/agent.sock')
     expect(config.privateKey).toBeUndefined()
-    expect(mockReadFileSync).not.toHaveBeenCalled()
+    expect(mockReadFileSync).toHaveBeenCalledWith(testHomePath('.ssh', 'id_ed25519'))
   })
 
-  it('does not probe default key files before agent auth', () => {
+  it('resolves default keys without putting them in the top-level SSH configuration', () => {
     mockExistsSync.mockImplementation(
       (p: unknown) => String(p) === testHomePath('.ssh', 'id_ed25519')
     )
     const config = buildConnectConfig(makeTarget(), null)
     expect(config.agent).toBe('/tmp/agent.sock')
     expect(config.privateKey).toBeUndefined()
-    expect(mockExistsSync).not.toHaveBeenCalled()
+    expect(mockExistsSync).toHaveBeenCalledWith(testHomePath('.ssh', 'id_ed25519'))
   })
 
   it('provides fallback key when no agent is available', () => {
@@ -697,13 +735,16 @@ describe('buildConnectConfig', () => {
     try {
       const config = buildConnectConfig(makeTarget(), null)
       expect(config.agent).toBeUndefined()
-      expect(config.privateKey).toEqual(Buffer.from('fallback'))
+      expect(configuredKeyAttempts(config)[0]).toMatchObject({
+        type: 'publickey',
+        key: Buffer.from('fallback')
+      })
     } finally {
       platformSpy.mockRestore()
     }
   })
 
-  it('can force private key inclusion for the post-agent fallback path', () => {
+  it('can configure key authentication without an agent', () => {
     mockReadFileSync.mockReturnValue(Buffer.from('key'))
     const config = buildConnectConfig(
       makeTarget({ identityFile: '/home/user/.ssh/custom' }),
@@ -711,7 +752,24 @@ describe('buildConnectConfig', () => {
       { includeAgent: false, includePrivateKey: true }
     )
     expect(config.agent).toBeUndefined()
-    expect(config.privateKey).toEqual(Buffer.from('key'))
+    expect(configuredKeyAttempts(config)[0]).toMatchObject({
+      type: 'publickey',
+      key: Buffer.from('key')
+    })
+  })
+
+  it('excludes even valid explicit keys when private-key authentication is disabled', () => {
+    const key = utils.generateKeyPairSync('ecdsa', { bits: 256 }).private
+    mockReadFileSync.mockReturnValue(Buffer.from(key))
+    const config = buildConnectConfig(
+      makeTarget({ identityFile: '/home/user/.ssh/custom' }),
+      null,
+      { includePrivateKey: false }
+    )
+
+    expect(config.agent).toBe('/tmp/agent.sock')
+    expect(configuredKeyAttempts(config)).toEqual([])
+    expect(mockReadFileSync).not.toHaveBeenCalled()
   })
 })
 
