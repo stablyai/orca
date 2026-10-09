@@ -1,3 +1,8 @@
+import {
+  admitsWebRuntimeSessionWorktreeSnapshot,
+  isCurrentWebRuntimeSessionWorktreeOwner
+} from '../web-runtime-session-worktree-owner'
+import type { WorktreeSelectionOwner } from '../../../../shared/worktree-selection-owner'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { isRuntimeSubscriptionReplayResponse } from '../../../../shared/runtime-subscription-replay'
@@ -52,6 +57,7 @@ export type ActiveSubscriptionArgs = {
   activeWorktreeRuntimeEnvironmentId: string | null | undefined
   activeWorktreeRuntimeConnectionGeneration: number
   activeWorktreeRuntimePairingRevision: number | undefined
+  activeWorkspaceOwner?: WorktreeSelectionOwner | null
   workspaceSessionReady: boolean
   visibilitySnapshotReceipt: Ref<SessionTabsSnapshotHandler<void>>
   visibilitySnapshotApply: Ref<SessionTabsSnapshotHandler<boolean>>
@@ -64,6 +70,7 @@ export function installActiveSessionTabsSubscription({
   activeWorktreeRuntimeEnvironmentId,
   activeWorktreeRuntimeConnectionGeneration,
   activeWorktreeRuntimePairingRevision,
+  activeWorkspaceOwner,
   workspaceSessionReady,
   visibilitySnapshotReceipt,
   visibilitySnapshotApply,
@@ -81,6 +88,18 @@ export function installActiveSessionTabsSubscription({
   ) {
     return undefined
   }
+  if (
+    activeWorkspaceOwner &&
+    (!activeWorkspaceOwner.instanceId ||
+      !isCurrentWebRuntimeSessionWorktreeOwner(
+        useAppStore.getState(),
+        environmentId,
+        activeWorkspaceOwner
+      ))
+  ) {
+    return undefined
+  }
+  const expectedOwner = activeWorkspaceOwner ?? undefined
   const expectedTrackingGeneration = getWebSessionTabsTrackingGeneration(environmentId)
   let requestedInitialTerminal = false
   let requestedRespawnAfterWake = false
@@ -92,6 +111,16 @@ export function installActiveSessionTabsSubscription({
     receivedFrame: number,
     runtimeId?: string
   ): Promise<HostSessionMirrorSettle | null> => {
+    if (
+      !admitsWebRuntimeSessionWorktreeSnapshot(
+        useAppStore.getState(),
+        environmentId,
+        event,
+        expectedOwner
+      )
+    ) {
+      return null
+    }
     const recovered = await recoverWebSessionTerminalOrphansBeforeApply(
       useAppStore.getState(),
       event,
@@ -104,6 +133,12 @@ export function installActiveSessionTabsSubscription({
     if (
       !isCurrent() ||
       !recovered ||
+      !admitsWebRuntimeSessionWorktreeSnapshot(
+        useAppStore.getState(),
+        environmentId,
+        recovered,
+        expectedOwner
+      ) ||
       !shouldApplyRecoveredWebSessionTabsSnapshot(
         environmentId,
         recovered,
@@ -118,7 +153,12 @@ export function installActiveSessionTabsSubscription({
       acceptReplayedWebSessionTabsSnapshot(environmentId, recovered.worktree)
     }
     const recoveredEvent: SessionTabsStreamEvent = { ...recovered, type: event.type }
-    const decision = decideWebSessionTabsSnapshot(recovered, environmentId, runtimeId)
+    const decision = decideWebSessionTabsSnapshot(
+      recovered,
+      environmentId,
+      runtimeId,
+      useAppStore.getState()
+    )
     const syncState = useAppStore.getState()
     const localTabs = syncState.tabsByWorktree[activeWorktreeId] ?? []
     const localTerminalCount = localTabs.length
@@ -212,7 +252,17 @@ export function installActiveSessionTabsSubscription({
           {
             selector: environmentId,
             method: 'session.tabs.subscribe',
-            params: { worktree: toRuntimeWorktreeSelector(activeWorktreeId) },
+            params: {
+              worktree: toRuntimeWorktreeSelector(
+                activeWorktreeId,
+                expectedOwner?.instanceId
+                  ? {
+                      executionHostId: expectedOwner.executionHostId,
+                      instanceId: expectedOwner.instanceId
+                    }
+                  : undefined
+              )
+            },
             timeoutMs: 15_000,
             expectedEnvironmentPairingRevision: activeWorktreeRuntimePairingRevision
           },
@@ -231,6 +281,16 @@ export function installActiveSessionTabsSubscription({
               }
               const event = response.result as SessionTabsStreamEvent
               if (event.type !== 'snapshot' && event.type !== 'updated') {
+                return
+              }
+              if (
+                !admitsWebRuntimeSessionWorktreeSnapshot(
+                  useAppStore.getState(),
+                  environmentId,
+                  event,
+                  expectedOwner
+                )
+              ) {
                 return
               }
               const runtimeId = getSessionTabsRuntimeIdFromResponse(response)

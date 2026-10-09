@@ -54,6 +54,22 @@ const PROFILES: [string, ExecutionHostId, () => WorkspaceSessionState][] = [
 ]
 
 describe('workspace layout Loader and Serializer', () => {
+  it('retains the captured workspace owner as view state through a round trip', () => {
+    const stored = localDesktopSession()
+    if (!stored.activeWorktreeId) {
+      throw new Error('Missing active fixture workspace')
+    }
+    stored.activeWorkspaceOwner = {
+      worktreeId: stored.activeWorktreeId,
+      publisherHostId: 'local',
+      executionHostId: 'local',
+      instanceId: 'selected-instance'
+    }
+    const { loaded, saved } = roundTrip(LOCAL_EXECUTION_HOST_ID, stored)
+    expect(saved.activeWorkspaceOwner).toEqual(stored.activeWorkspaceOwner)
+    expect(JSON.stringify(loaded.layout)).not.toContain('activeWorkspaceOwner')
+  })
+
   it.each(PROFILES)(
     '%s: save(load(stored)) writes exactly what was stored',
     (_name, hostId, build) => {

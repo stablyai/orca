@@ -1,3 +1,4 @@
+import { admitsWebRuntimeSessionWorktreeSnapshot } from '../web-runtime-session-worktree-owner'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { useAppStore } from '../../store'
@@ -61,11 +62,18 @@ export function loadInitialWebSessionTabs({
         console.warn('[web-session-tabs-sync] initial listAll failed:', response.error.message)
         return
       }
-      const result = response.result
-      if (!isSessionTabsListAllResult(result)) {
+      const payload = response.result
+      if (!isSessionTabsListAllResult(payload)) {
         console.warn('[web-session-tabs-sync] initial listAll returned an invalid payload')
         return
       }
+      const admitted = payload.snapshots.filter((snapshot) =>
+        admitsWebRuntimeSessionWorktreeSnapshot(useAppStore.getState(), environmentId, snapshot)
+      )
+      const result =
+        admitted.length === payload.snapshots.length
+          ? payload
+          : { ...payload, snapshots: admitted, authoritative: false }
       const runtimeId = getSessionTabsRuntimeIdFromResponse(response)
       const latestReceivedFrame =
         latestReceivedSessionTabsFrameByEnvironment.get(environmentId) ?? 0
@@ -121,7 +129,7 @@ export function loadInitialWebSessionTabs({
           )
       )
       const decisions = applicable.map((snapshot) =>
-        decideWebSessionTabsSnapshot(snapshot, environmentId, runtimeId)
+        decideWebSessionTabsSnapshot(snapshot, environmentId, runtimeId, useAppStore.getState())
       )
       const freshSnapshots = applicable.filter((_snapshot, index) => decisions[index]!.apply)
       const initialInventoryStillCurrent =

@@ -229,7 +229,8 @@ export function activateAndRevealWorktree(
     // Why: paired web clients own only local selection, so the desktop host publishes session surfaces without treating it as a nav command.
     void activateWebRuntimeSessionWorktree({
       worktreeId,
-      environmentId: ownerRuntimeEnvironmentId
+      environmentId: ownerRuntimeEnvironmentId,
+      ...(selectedOwner ? { owner: selectedOwner } : {})
     })
   }
 
