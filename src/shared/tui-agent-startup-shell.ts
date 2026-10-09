@@ -39,7 +39,8 @@ function hasOddBackslashRun(value: string, quoteIndex: number): boolean {
 
 function tokenizeWindowsStartupCommand(
   value: string,
-  shell: WindowsStartupShell
+  shell: WindowsStartupShell,
+  options?: { requireSingleCommand?: boolean }
 ): StartupCommandTokens {
   const tokens: string[] = []
   const spans: CommandTokenSpan[] = []
@@ -50,8 +51,14 @@ function tokenizeWindowsStartupCommand(
   let tokenStarted = false
   for (let index = 0; index < value.length; index += 1) {
     const char = value[index]
+    if (options?.requireSingleCommand && !quote && (char === '\n' || char === '\r')) {
+      return { ok: false, error: 'Unquoted line separator in command.' }
+    }
     const escape = shell === 'cmd' ? '^' : '`'
     if (char === escape && index + 1 < value.length) {
+      if (options?.requireSingleCommand && /[\r\n]/.test(value[index + 1])) {
+        return { ok: false, error: 'Unmodeled line continuation in command.' }
+      }
       // Why: cmd strips `^` and hands the bare byte to the child's parser,
       // which re-splits on whitespace and reopens a quote, and keeps the caret
       // literal inside double quotes — either way the token stops matching
@@ -146,12 +153,16 @@ function tokenizeWindowsStartupCommand(
     tokens.push(token)
     spans.push({ start: tokenStart, end: value.length, divergesFromShell })
   }
+  if (options?.requireSingleCommand && tokens.length === 0) {
+    return { ok: false, error: 'Command is empty.' }
+  }
   return { ok: true, tokens, spans }
 }
 
 export function tokenizeStartupCommand(
   value: string,
-  shell: AgentStartupShell
+  shell: AgentStartupShell,
+  options?: { requireSingleCommand?: boolean }
 ): StartupCommandTokens {
   // Why one Unix parse: the input is a string the user typed into an Orca
   // settings field, and the shell never parses it — every token is re-quoted by
@@ -159,8 +170,8 @@ export function tokenizeStartupCommand(
   // would make the same setting mean different things in different workspaces.
   // (Windows is genuinely different: cmd/PowerShell re-parse the built line.)
   return isWindowsStartupShell(shell)
-    ? tokenizeWindowsStartupCommand(value, shell)
-    : tokenizeCustomCommandTemplate(value)
+    ? tokenizeWindowsStartupCommand(value, shell, options)
+    : tokenizeCustomCommandTemplate(value, 'escape', options)
 }
 
 export function resolveStartupShell(

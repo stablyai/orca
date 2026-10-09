@@ -1,4 +1,3 @@
-import { prepareAntigravityPtySpawnTarget } from '../antigravity-account-spawn-target'
 import { mkdirSync } from 'node:fs'
 import {
   isTerminalLeafId,
@@ -182,13 +181,4 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
   ctx.validatedLeafId = ctx.verifiedLeafId ?? ctx.metadataLeafId
   ctx.spawnTiming.mark('pane_env')
   await assemblePtyIpcSpawnCodexEnv(ctx)
-  await prepareAntigravityPtySpawnTarget(ctx, {
-    launchAgent: args.launchAgent,
-    command: args.command ?? args.launchConfig?.agentCommand,
-    connectionId: args.connectionId,
-    isWsl: ctx.codexSelectionTarget.runtime === 'wsl',
-    wslDistro: ctx.expectedWslDistro,
-    env: ctx.spawnEnv ?? ctx.baseEnv,
-    envToDelete: args.envToDelete
-  })
 }

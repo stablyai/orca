@@ -1,4 +1,5 @@
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { AntigravityAccountOperation } from '../antigravity/native-account-operation'
 import type { AgentWorkspaceTrustSpawnRequest } from '../../shared/agent-workspace-trust-spawn-request'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
@@ -115,6 +116,8 @@ export type PtySpawnOptions = {
   onPtySpawnCommitted?: () => void
   /** Cancels only before physical dispatch; operation identity fences later ambiguity. */
   signal?: AbortSignal
+  /** In-process preparation budget, retained by fallback; transport payloads omit it. */
+  antigravityAccountOperation?: AntigravityAccountOperation
 }
 
 export type { PtyProcessInfo, PtySpawnResult }

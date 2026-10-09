@@ -160,16 +160,31 @@ it.each([
   expect(prepareForLaunch).not.toHaveBeenCalled()
 })
 
-it.each(['agy; HOME=/other agy', 'agy $(HOME=/other agy)', 'agy && sudo agy'])(
-  'rejects executable shell syntax in a selected WSL launch: %s',
-  async (command) => {
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-    await expect(
-      prepareAntigravityAccountForLaunch({ launchAgent: 'antigravity', isWsl: true, command })
-    ).rejects.toThrow('credential authority')
-    expect(prepareForLaunch).not.toHaveBeenCalled()
-  }
-)
+it.each([
+  'agy; HOME=/other agy',
+  'agy $(HOME=/other agy)',
+  'agy && sudo agy',
+  'agy --version\nHOME=/other agy',
+  'agy --version\nsudo -u other agy',
+  'agy --version\r\nHOME=/other agy',
+  'agy --version\\\nHOME=/other agy'
+])('rejects executable shell syntax in a selected WSL launch: %s', async (command) => {
+  vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+  await expect(
+    prepareAntigravityAccountForLaunch({ launchAgent: 'antigravity', isWsl: true, command })
+  ).rejects.toThrow('credential authority')
+  expect(prepareForLaunch).not.toHaveBeenCalled()
+})
+
+it('permits a quoted multiline conversation without treating prompt text as shell syntax', async () => {
+  vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+  await prepareAntigravityAccountForLaunch({
+    launchAgent: 'antigravity',
+    isWsl: true,
+    command: "agy --conversation 'first line\nHOME=/other agy'"
+  })
+  expect(prepareForLaunch).toHaveBeenCalledOnce()
+})
 
 it.each([
   'ORCA_ORIG_ZDOTDIR',

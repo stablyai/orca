@@ -21,6 +21,7 @@ import {
   reserveLocalPtySpawn
 } from './local-pty-spawn-state'
 import { loadLocalPtyRuntimeSpawn } from './local-pty-runtime-spawn'
+import { prepareLocalPtyAntigravityAccount } from './local-pty-antigravity-account'
 import { destroyPtyProcess } from './local-pty-termination'
 import { updateHistoryEnvForFallback } from '../terminal-history'
 import type { PtySpawnOptions, PtySpawnResult } from './types'
@@ -109,6 +110,9 @@ export async function spawnLocalPty(
       if (concurrentWinner) {
         return concurrentWinner
       }
+      const spawnSignal = args.signal ? AbortSignal.any([args.signal, cancellation]) : cancellation
+      await prepareLocalPtyAntigravityAccount(args, plan, finalEnv, spawnSignal)
+      checkCanceled()
       const pendingSpawn = spawn({
         shellPath: plan.shellPath,
         shellArgs: plan.shellArgs,
@@ -117,7 +121,7 @@ export async function spawnLocalPty(
         cwd: plan.effectiveCwd,
         env: finalEnv,
         termName: finalEnv.TERM,
-        signal: args.signal ? AbortSignal.any([args.signal, cancellation]) : cancellation,
+        signal: spawnSignal,
         getShellReadyConfig: plan.getFallbackShellReadyConfig,
         preLaunchEnv: plan.primaryPreLaunchEnv,
         // Why: on zsh→bash fallback HISTFILE still points to zsh_history; update before spawn so the child inherits it (design doc §8).

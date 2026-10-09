@@ -8,7 +8,7 @@ import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-
 import { addWslEnvKeys } from '../wsl-env'
 import { parseWslPath } from '../wsl'
 import { isWindowsGitBashShellPath } from '../git-bash'
-import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
+import { pinLocalPtyWslLaunchDistro, type LocalPtyLaunchPlan } from './local-pty-launch-plan'
 import {
   ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
   resolveWindowsShellLaunchArgs
@@ -33,19 +33,7 @@ export function finalizeWindowsLocalPtySpawnEnvironment(args: {
         // Why: wsl.exe only imports non-default env vars named in WSLENV.
         addWslEnvKeys(env, ['CODEX_HOME', 'ORCA_CODEX_HOME'])
         if (!plan.launchWslDistro) {
-          const resolved = resolveWindowsShellLaunchArgs(
-            plan.shellPath,
-            plan.cwd,
-            plan.defaultCwd,
-            {
-              distro: codexHomeWslInfo.distro
-            }
-          )
-          plan.shellArgs = resolved.shellArgs
-          plan.effectiveCwd = resolved.effectiveCwd
-          plan.validationCwd = resolved.validationCwd
-          plan.startupCommandDeliveredInShellArgs =
-            resolved.startupCommandDeliveredInShellArgs === true
+          pinLocalPtyWslLaunchDistro(plan, spawn, codexHomeWslInfo.distro)
         }
       }
     } else if (isHostCodexHomeForWsl(env.CODEX_HOME)) {

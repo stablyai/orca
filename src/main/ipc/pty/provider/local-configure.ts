@@ -20,7 +20,6 @@ import { isCurrentPtyExit, ptyOwnership } from './ownership-state'
 import { localProvider } from './registry'
 import { clearProviderPtyState } from './state-cleanup'
 import { awaitExplicitPiOmpGuestReadiness } from '../../../agent-hooks/wsl-pi-omp-guest-readiness'
-import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
 
 export function configureLocalPtyProvider(args: {
   runtime?: OrcaRuntimeService
@@ -41,22 +40,6 @@ export function configureLocalPtyProvider(args: {
       getSettings ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto') : undefined,
     pwshAvailable: () => isPwshAvailableAsync(),
     buildSpawnEnv: async (id, baseEnv, ctx) => {
-      const preparedAccount = await prepareAntigravityAccountForLaunch({
-        launchAgent: ctx?.launchAgent,
-        command: ctx?.command,
-        isWsl: ctx?.isWsl,
-        wslDistro: ctx?.wslDistro,
-        envToDelete: ctx?.envToDelete,
-        env: baseEnv,
-        envIsComplete: true
-      })
-      if (preparedAccount) {
-        if (!ctx?.pinWslDistro) {
-          throw new Error('The prepared WSL account cannot be bound to this terminal')
-        }
-        ctx.pinWslDistro(preparedAccount.wslDistro)
-        ctx.wslDistro = preparedAccount.wslDistro
-      }
       const codexSelectionTarget: CodexAccountSelectionTarget =
         ctx?.isWsl === true
           ? { runtime: 'wsl', wslDistro: ctx.wslDistro ?? null }

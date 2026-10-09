@@ -1,4 +1,3 @@
-import { prepareAntigravityPtySpawnTarget } from '../antigravity-account-spawn-target'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import { getLegacyOpenCodeEnvKeysToDelete } from '../../../opencode/legacy-shared-config-dir'
 import type { IPtyProvider, PtySpawnResult } from '../../../providers/types'
@@ -96,15 +95,7 @@ export async function buildRuntimePtySpawnOptions(
     ctx.spawnOptions.envToDelete = removeCodexHomeDeletionRequests(ctx.spawnOptions.envToDelete)
   }
   deleteRequestedEnvKeys(ctx.env, ctx.spawnOptions.envToDelete)
-  await prepareAntigravityPtySpawnTarget(ctx, {
-    launchAgent: args.launchAgent,
-    command: ctx.launchCommand,
-    connectionId: args.connectionId,
-    isWsl: ctx.codexSelectionTarget.runtime === 'wsl',
-    wslDistro: ctx.expectedWslDistro,
-    env: ctx.env,
-    envToDelete: ctx.spawnOptions.envToDelete
-  })
+
   const openCodeLaunch = await prepareOpenCodePtyLaunch({
     command: ctx.launchCommand,
     agent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,

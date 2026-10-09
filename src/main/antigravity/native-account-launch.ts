@@ -1,4 +1,7 @@
-import { withAntigravityAccountOperation } from './native-account-service'
+import {
+  withAntigravityAccountOperation,
+  type AntigravityAccountOperation
+} from './native-account-operation'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
@@ -21,6 +24,7 @@ export async function prepareAntigravityAccountForLaunch(args: {
   env?: NodeJS.ProcessEnv
   envIsComplete?: boolean
   envToDelete?: readonly string[]
+  operation?: AntigravityAccountOperation
 }): Promise<{ wslDistro: string; authorityId: string } | void> {
   const agent =
     args.launchAgent ??
@@ -36,12 +40,14 @@ export async function prepareAntigravityAccountForLaunch(args: {
     if (process.platform !== 'win32') {
       throw new Error('WSL account preparation requires Windows')
     }
-    const authority = await withAntigravityAccountOperation((operation) =>
-      prepareAntigravityAccountTargetForLaunch(
-        { runtime: 'wsl', wslDistro: args.wslDistro ?? null },
-        operation,
-        () => assertWslLaunchAuthority(args)
-      )
+    const authority = await withAntigravityAccountOperation(
+      (operation) =>
+        prepareAntigravityAccountTargetForLaunch(
+          { runtime: 'wsl', wslDistro: args.wslDistro ?? null },
+          operation,
+          () => assertWslLaunchAuthority(args)
+        ),
+      args.operation
     )
     if (authority) {
       return { wslDistro: authority.distro, authorityId: authority.authorityId }
@@ -52,28 +58,29 @@ export async function prepareAntigravityAccountForLaunch(args: {
   if (!existsSync(path)) {
     return
   }
-  if (
-    !(await Promise.resolve(createEncryptedAntigravityAccountStore(path).read())).selectedAccountId
-  ) {
-    return
-  }
-  const env = args.envIsComplete ? { ...args.env } : { ...process.env, ...args.env }
-  for (const key of args.envToDelete ?? []) {
-    delete env[key]
-  }
-  const home = env.HOME ?? env.USERPROFILE
-  if (
-    args.envToDelete?.some((key) => ['HOME', 'USERPROFILE'].includes(key)) ||
-    (home && resolve(home) !== resolve(getAppEnvironment().getPath('home'))) ||
-    isAntigravityFileStorageHost(env) !== isAntigravityFileStorageHost(process.env)
-  ) {
-    throw new Error(
-      'This agy launch uses a different credential authority from the selected Antigravity account.'
-    )
-  }
-  await withAntigravityAccountOperation((operation) =>
-    prepareAntigravityAccountTargetForLaunch({ runtime: 'host' }, operation)
-  )
+  await withAntigravityAccountOperation(async (operation) => {
+    if (
+      !(await Promise.resolve(createEncryptedAntigravityAccountStore(path).read(operation)))
+        .selectedAccountId
+    ) {
+      return
+    }
+    const env = args.envIsComplete ? { ...args.env } : { ...process.env, ...args.env }
+    for (const key of args.envToDelete ?? []) {
+      delete env[key]
+    }
+    const home = env.HOME ?? env.USERPROFILE
+    if (
+      args.envToDelete?.some((key) => ['HOME', 'USERPROFILE'].includes(key)) ||
+      (home && resolve(home) !== resolve(getAppEnvironment().getPath('home'))) ||
+      isAntigravityFileStorageHost(env) !== isAntigravityFileStorageHost(process.env)
+    ) {
+      throw new Error(
+        'This agy launch uses a different credential authority from the selected Antigravity account.'
+      )
+    }
+    await prepareAntigravityAccountTargetForLaunch({ runtime: 'host' }, operation)
+  }, args.operation)
 }
 
 function assertWslLaunchAuthority(args: {
@@ -104,7 +111,9 @@ function assertWslLaunchAuthority(args: {
   const transportedAuthority = (env.WSLENV ?? '')
     .split(':')
     .some((entry) => authorityKeys.has(entry.split('/')[0]))
-  const command = args.command ? tokenizeStartupCommand(args.command, 'posix') : null
+  const command = args.command
+    ? tokenizeStartupCommand(args.command, 'posix', { requireSingleCommand: true })
+    : null
   const unverifiedCommand =
     command &&
     (!command.ok ||

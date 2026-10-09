@@ -17,6 +17,7 @@ describe('real WSL terminal lane', () => {
     'src/main/antigravity/native-wsl-accounts.wsl.test.ts',
     'src/main/ipc/pty/antigravity-account-spawn-target.ts',
     'src/main/providers/local-pty-launch-plan.ts',
+    'src/main/providers/local-pty-antigravity-account.ts',
     'src/shared/secure-file-publication.ts',
     'src/shared/secure-path-windows-acl.ts',
     'src/shared/windows-current-user-sid.ts',
