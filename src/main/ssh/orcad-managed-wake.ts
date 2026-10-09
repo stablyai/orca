@@ -9,12 +9,11 @@ import { readOrcadActivationRecord } from './orcad-activation-record-store'
 import { randomUUID } from 'node:crypto'
 import {
   orcadActivationFenceExists,
-  orcadActivationTransactionRoot,
   releaseOrcadActivationFence,
   withOrcadActivationLock
 } from './orcad-activation-lock'
 import { readBoundedOrcadRemoteRecord } from './orcad-remote-record-file'
-import { RELAY_INSTALL_LOCK_NAME } from './ssh-relay-install-lock'
+import { orcadActivationFenceLockDir } from './orcad-activation-transaction'
 import { joinRemotePath } from './ssh-remote-platform'
 
 import { readOrcadActivationTransaction } from './orcad-activation-transaction-store'
@@ -148,8 +147,7 @@ const interruptedWakes = new Map<string, string>()
 function wakeOwnerPath(options: OrcadSlotOptions): string {
   return joinRemotePath(
     options.host,
-    orcadActivationTransactionRoot(options.host, options.remoteHome),
-    RELAY_INSTALL_LOCK_NAME,
+    orcadActivationFenceLockDir(options.host, options.remoteHome),
     ORCAD_FENCE_OWNER_FILENAME
   )
 }

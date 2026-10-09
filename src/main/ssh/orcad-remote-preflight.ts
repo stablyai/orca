@@ -8,9 +8,8 @@ import {
 } from '../../shared/orcad-profile-preflight'
 import { assertPosixOrcadHost } from './orcad-remote-host-support'
 import {
-  orcadWindowsBaseDir,
-  orcadWindowsHostOpCommand,
   orcadWindowsNodeCommandLine,
+  orcadWindowsSlotOpCommand,
   readOrcadWindowsEncodedAnswer
 } from './orcad-remote-windows-node'
 import { readWindowsOrcadSlotEntry } from './orcad-remote-launch-windows'
@@ -75,9 +74,7 @@ async function windowsOrcadProfilePreflightCommand(
   const { host, remoteInstallDir } = options
   const slotAnswer = await execCommand(
     options.conn,
-    orcadWindowsHostOpCommand(host, orcadWindowsBaseDir(host, remoteInstallDir), 'slot-runtime', [
-      remoteInstallDir
-    ]),
+    orcadWindowsSlotOpCommand(host, remoteInstallDir, 'slot-runtime', [remoteInstallDir]),
     { signal: options.signal, wrapCommand: false }
   )
   const runtime = readOrcadWindowsEncodedAnswer(slotAnswer, ORCAD_WINDOWS_RUNTIME_MARKER)
