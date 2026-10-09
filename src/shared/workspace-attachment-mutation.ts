@@ -1,7 +1,7 @@
-import { getWorkspaceReferenceIdentity } from './workspace-reference-identity'
 import { rebaseWorkspaceAttachmentOrigins } from './workspace-attachment-origins'
 import type { WorkspaceAttachment } from './worktree/types'
 import {
+  getWorkspaceAttachmentDedupeKey,
   matchesWorkspaceAttachmentIdentity,
   normalizeWorkspaceAttachments
 } from './workspace-attachment-normalization'
@@ -17,9 +17,9 @@ export function mergeWorkspaceAttachmentMutation(
   current: readonly WorkspaceAttachment[],
   requested: readonly WorkspaceAttachment[]
 ): WorkspaceAttachment[] {
-  const currentKeys = new Set(current.map(getWorkspaceReferenceIdentity))
+  const currentKeys = new Set(current.map(getWorkspaceAttachmentDedupeKey))
   const baseKey = (item: WorkspaceAttachment): string => {
-    const key = getWorkspaceReferenceIdentity(item)
+    const key = getWorkspaceAttachmentDedupeKey(item)
     if (currentKeys.has(key)) {
       return key
     }
@@ -38,12 +38,12 @@ export function mergeWorkspaceAttachmentMutation(
             matchesWorkspaceAttachmentIdentity(candidate, matches[0])
         ))
     ) {
-      return getWorkspaceReferenceIdentity(matches[0])
+      return getWorkspaceAttachmentDedupeKey(matches[0])
     }
     return key
   }
   const mutationKey = (item: WorkspaceAttachment): string => {
-    const key = getWorkspaceReferenceIdentity(item)
+    const key = getWorkspaceAttachmentDedupeKey(item)
     if (currentKeys.has(key)) {
       return key
     }
@@ -59,11 +59,11 @@ export function mergeWorkspaceAttachmentMutation(
   const requestedByKey = new Map(requested.map((item) => [mutationKey(item), item]))
   const retained = current
     .filter((item) => {
-      const key = getWorkspaceReferenceIdentity(item)
+      const key = getWorkspaceAttachmentDedupeKey(item)
       return !baseByKey.has(key) || requestedByKey.has(key)
     })
     .map((item) => {
-      const key = getWorkspaceReferenceIdentity(item)
+      const key = getWorkspaceAttachmentDedupeKey(item)
       const changed = requestedByKey.get(key)
       if (!changed || JSON.stringify(baseByKey.get(key)) === JSON.stringify(changed)) {
         return item
@@ -113,5 +113,5 @@ export function mergeWorkspaceAttachmentMutation(
     const key = mutationKey(item)
     return !baseByKey.has(key) && !currentKeys.has(key)
   })
-  return normalizeWorkspaceAttachments([...retained, ...additions], { preserveSources: true })
+  return normalizeWorkspaceAttachments([...retained, ...additions])
 }

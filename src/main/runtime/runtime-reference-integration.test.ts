@@ -19,7 +19,7 @@ const linear = 'https://linear.app/acme/issue/STA-1234'
 
 afterEach(() => vi.restoreAllMocks())
 
-function setup() {
+function setup(Runtime: typeof OrcaRuntimeService = OrcaRuntimeService) {
   const base = store.getAllWorktreeMeta()[TEST_WORKTREE_ID]
   const linkedItems = [parseWorkspaceReferenceUrl(linear)]
   const runtimeStore = {
@@ -36,7 +36,7 @@ function setup() {
   vi.mocked(listWorktrees).mockClear()
   vi.mocked(listWorktreesStrict).mockClear()
   vi.mocked(listWorktreesSharedStrict).mockClear()
-  return new OrcaRuntimeService(runtimeStore)
+  return new Runtime(runtimeStore)
 }
 
 describe('reference find runtime integration', () => {
@@ -67,5 +67,23 @@ describe('reference find runtime integration', () => {
     expect(listWorktrees).not.toHaveBeenCalled()
     expect(listWorktreesStrict).not.toHaveBeenCalled()
     expect(listWorktreesSharedStrict).not.toHaveBeenCalled()
+  })
+
+  it('warms the worktree cache when a branch selector misses cold metadata', async () => {
+    const discovered = {
+      path: '/tmp/worktree-a',
+      head: 'abc',
+      branch: 'refs/heads/feat',
+      isBare: false,
+      isMainWorktree: false
+    }
+    class ScannedRuntime extends OrcaRuntimeService {
+      protected override async listRepoWorktreesForResolution(repo: { id: string }) {
+        return { ok: true as const, worktrees: repo.id === 'repo-2' ? [] : [discovered] }
+      }
+    }
+    const runtime = setup(ScannedRuntime)
+    const result = await runtime.findWorkspaceReferences({ query: linear, worktree: 'branch:feat' })
+    expect(result.matches.map(({ workspace }) => workspace.id)).toEqual([TEST_WORKTREE_ID])
   })
 })

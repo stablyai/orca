@@ -5,10 +5,10 @@ const FILE_OPEN_FOCUS_HELP =
 /** Per-command flag help, kept out of the shared help chain it would crowd. */
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   'reference add': {
-    url: '--url <url>            Full review or issue URL; repeat to attach several'
+    url: '--url <url>            Full review or issue URL; pass all URLs positionally or all as repeated --url'
   },
   'reference remove': {
-    url: '--url <url>            Full review or issue URL; repeat to detach several',
+    url: '--url <url>            Full review or issue URL; pass all URLs positionally or all as repeated --url',
     key: '--key <key>            Opaque key from reference list; repeat for several'
   },
   'reference find': {

@@ -67,7 +67,10 @@ describe('stored reference lookup', () => {
         sessionId: 'provider-session'
       }
     ]
-    linked.linkedItems[1].origins = [{ kind: 'observed', tabId: 'tab', paneKey: 'pane' }]
+    linked.linkedItems[1].origins = [
+      { kind: 'observed', tabId: 'tab', paneKey: 'pane' },
+      { kind: 'observed', hostId: 'local', tabId: 'tab', paneKey: 'pane', agent: 'codex' }
+    ]
     const agents: ReferenceAgentCandidate[] = [
       {
         agent: 'codex',
@@ -93,6 +96,36 @@ describe('stored reference lookup', () => {
     expect(result.matches[0].agents.map(({ linked }) => linked)).toEqual([true, false, false])
     expect(result.matches[1].agents.every(({ linked }) => !linked)).toBe(true)
     expect(result.matches[0].agents[0]).not.toHaveProperty('sessionIds')
+  })
+
+  it('does not link a later agent that reused the origin pane', async () => {
+    const linked = workspace('one', [linear])
+    linked.linkedItems[0].origins = [
+      { kind: 'observed', hostId: 'local', tabId: 'tab', paneKey: 'pane', sessionId: 'first' }
+    ]
+    const later: ReferenceAgentCandidate = {
+      agent: 'claude',
+      hostId: 'local',
+      paneKey: 'pane',
+      terminal: 'handle',
+      liveness: 'live'
+    }
+    const result = await findWorkspaceReferences(
+      { query: linear },
+      { workspaces: [linked], agents: () => new Map([['local|one', [later]]]) }
+    )
+    expect(result.matches[0].agents[0].linked).toBe(false)
+  })
+
+  it('searches an explicitly named archived workspace', async () => {
+    const source = {
+      workspaces: [{ ...workspace('old', [linear]), isArchived: true }],
+      agents: () => new Map()
+    }
+    expect((await findWorkspaceReferences({ query: linear }, source)).matches).toEqual([])
+    expect(
+      (await findWorkspaceReferences({ query: linear, worktree: 'name:old' }, source)).matches
+    ).toHaveLength(1)
   })
 
   it('keeps identical workspace IDs on different hosts isolated', async () => {

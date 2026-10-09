@@ -27,13 +27,8 @@ function originMatchesAgent(
   if (origin.hostId !== agent.hostId || (origin.agent && origin.agent !== agent.agent)) {
     return false
   }
-  if (origin.sessionId && !agent.sessionIds?.includes(origin.sessionId)) {
-    return false
-  }
-  return Boolean(
-    (origin.paneKey && origin.paneKey === agent.paneKey) ||
-    (agent.sessionId && origin.sessionId && agent.sessionIds?.includes(origin.sessionId))
-  )
+  // Why: pane keys are reused by later agents in the same pane, so only a session id proves the link.
+  return Boolean(origin.sessionId && agent.sessionIds?.includes(origin.sessionId))
 }
 
 export async function findWorkspaceReferences(
@@ -61,7 +56,8 @@ export async function findWorkspaceReferences(
   let truncated = false
   const workspaceKeys = new Set<string>()
   for (const workspace of source.workspaces) {
-    if (workspace.isArchived && !params.includeArchived) {
+    // Why: an explicitly named workspace is wanted even when archived.
+    if (workspace.isArchived && !params.includeArchived && !params.worktree) {
       continue
     }
     const references = (workspace.linkedItems ?? []).filter((item) =>

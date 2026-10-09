@@ -9,6 +9,7 @@ import {
 } from '../../../../shared/task-source-context'
 import {
   getWorkspaceAttachmentUrlScope,
+  matchesWorkspaceAttachmentIdentity,
   normalizeWorkspaceAttachments
 } from '../../../../shared/workspace-attachment-normalization'
 
@@ -65,12 +66,41 @@ export function isWorkspaceAttachmentLinked(
   candidate: WorkspaceAttachment
 ): boolean {
   const identity = getWorkspaceReferenceIdentity(candidate)
-  return items.some((item) => getWorkspaceReferenceIdentity(item) === identity)
+  return items.some((item) => {
+    if (
+      getWorkspaceReferenceIdentity(item) === identity ||
+      matchesWorkspaceAttachmentIdentity(candidate, item) ||
+      matchesWorkspaceAttachmentIdentity(item, candidate)
+    ) {
+      return true
+    }
+    const sameReference =
+      item.provider === candidate.provider &&
+      item.type === candidate.type &&
+      item.number === candidate.number &&
+      (item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier) ===
+        (candidate.identifier ?? candidate.linearIdentifier ?? candidate.jiraIdentifier)
+    const scope = getWorkspaceAttachmentUrlScope(item)
+    if (!sameReference || !scope || scope !== getWorkspaceAttachmentUrlScope(candidate)) {
+      return false
+    }
+    const oldContext = item.taskSourceContext
+    const newContext = candidate.taskSourceContext
+    return (
+      !oldContext ||
+      !newContext ||
+      (oldContext.hostId === newContext.hostId &&
+        oldContext.projectId === newContext.projectId &&
+        (!oldContext.accountLabel ||
+          !newContext.accountLabel ||
+          oldContext.accountLabel === newContext.accountLabel))
+    )
+  })
 }
 
 export function appendWorkspaceAttachment(
   items: readonly WorkspaceAttachment[],
   item: WorkspaceAttachment
 ): WorkspaceAttachment[] {
-  return normalizeWorkspaceAttachments([...items, item], { preserveSources: true })
+  return normalizeWorkspaceAttachments([...items, item])
 }

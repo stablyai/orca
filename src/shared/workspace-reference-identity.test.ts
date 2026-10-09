@@ -17,7 +17,7 @@ describe('reference URLs', () => {
       'github',
       'pr',
       5123,
-      'https://github.com/acme/api/pull/5123'
+      'https://github.com/ACME/api/pull/5123'
     ],
     [
       'https://github.com/acme/api/issues/42',
@@ -127,6 +127,39 @@ describe('reference identity', () => {
   })
 
   it.each([
+    ['https://www.github.com/acme/api/pull/42', 'https://github.com/acme/api/pull/42'],
+    [
+      'https://gitlab.com/Group/Api/-/merge_requests/42',
+      'https://gitlab.com/group/api/-/merge_requests/42'
+    ],
+    ['https://codeberg.org/Acme/Api/pulls/42', 'https://codeberg.org/acme/api/pulls/42']
+  ])('treats case-insensitive host routes as one source: %s vs %s', (a, b) => {
+    expect(identity(a)).toBe(identity(b))
+  })
+
+  it.each([
+    'https://github.com/ACME/Api/pull/42',
+    'https://git.example/Root/Group/Api/-/merge_requests/42',
+    'https://codeberg.org/Acme/Api/pulls/42'
+  ])('stores %s with its original path casing', (url) => {
+    expect(parseWorkspaceReferenceUrl(url).url).toBe(url)
+    expect(identity(url)).toBe(identity(url.toLowerCase()))
+  })
+
+  it('does not read git-host /browse/ paths as Jira issues', () => {
+    expect(
+      parseWorkspaceReferenceUrl('https://git.example/acme/api/issues/42', 'github').provider
+    ).toBe('github')
+    expect(() =>
+      parseWorkspaceReferenceUrl('https://git.example/acme/api/browse/STA-1', 'github')
+    ).toThrow()
+    expect(() => parseWorkspaceReferenceUrl('https://github.com/acme/browse/STA-1')).toThrow()
+    expect(() =>
+      parseWorkspaceReferenceUrl('https://git.example/projects/P/repos/api/browse/STA-1')
+    ).toThrow()
+  })
+
+  it.each([
     ['https://github.com/acme/api/pull/42', 'https://github.com/acme/other/pull/42'],
     ['https://github.com/acme/api/pull/42', 'https://github.com/acme/api/issues/42'],
     ['https://git.example:8443/acme/api/pull/42', 'https://git.example:9443/acme/api/pull/42'],
@@ -224,6 +257,26 @@ describe('reference queries', () => {
         query
       )
     ).toBe(false)
+  })
+
+  it('finds a self-hosted issue URL whose provider the URL alone cannot prove', () => {
+    const url = 'https://git.example/Acme/Api/issues/42'
+    expect(() => parseWorkspaceReferenceUrl(url)).toThrow()
+    const query = parseWorkspaceReferenceQuery(url)
+    for (const provider of ['github', 'gitea'] as const) {
+      expect(matchesWorkspaceReferenceQuery(parseWorkspaceReferenceUrl(url, provider), query)).toBe(
+        true
+      )
+    }
+    expect(
+      matchesWorkspaceReferenceQuery(
+        parseWorkspaceReferenceUrl('https://git.example/acme/api/issues/43', 'gitea'),
+        query
+      )
+    ).toBe(false)
+    expect(() =>
+      parseWorkspaceReferenceQuery('https://git.example/acme/api/pull-requests/42')
+    ).toThrow()
   })
 
   it.each(['1234', '#1234', 'github:pr:1234'])('rejects %s', (query) => {

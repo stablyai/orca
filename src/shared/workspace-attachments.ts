@@ -25,7 +25,7 @@ export function getWorkspaceAttachments(
   if (!meta) {
     return []
   }
-  const items = normalizeWorkspaceAttachments(meta.linkedItems, { preserveSources: true })
+  const items = normalizeWorkspaceAttachments(meta.linkedItems)
   for (const legacy of legacyWorkspaceAttachments(meta)) {
     const identity = getWorkspaceReferenceIdentity(legacy)
     if (
@@ -134,7 +134,7 @@ export function normalizeWorkspaceAttachmentUpdate(
   if (updates.linkedItems !== undefined) {
     const items =
       linkedItemsBase === undefined
-        ? normalizeWorkspaceAttachments(updates.linkedItems, { preserveSources: true })
+        ? normalizeWorkspaceAttachments(updates.linkedItems)
         : mergeWorkspaceAttachmentMutation(
             linkedItemsBase,
             getWorkspaceAttachments(existing),
@@ -189,7 +189,7 @@ export function normalizeWorkspaceAttachmentUpdate(
   }
   const result: WorkspaceAttachmentMetadata = {
     ...updates,
-    linkedItems: normalizeWorkspaceAttachments(items, { preserveSources: true })
+    linkedItems: normalizeWorkspaceAttachments(items)
   }
   const selectedReviewSlot = WORKSPACE_ATTACHMENT_NUMBER_SLOTS.find(
     ([slot, , type]) => type !== 'issue' && typeof updates[slot] === 'number'

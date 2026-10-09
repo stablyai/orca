@@ -74,6 +74,20 @@ describe('reference metadata catalog', () => {
     expect(() => selectReferenceWorkspace(rows, `id:${id}`)).toThrow('selector_ambiguous')
     expect(selectReferenceWorkspace(rows, 'current', '/repo').hostId).toBe('local')
   })
+  it('collapses duplicate same-host path registrations but not cross-host ones', () => {
+    const [row] = catalog()
+    const duplicate = { ...row, id: 'repo-copy::/repo' }
+    expect(selectReferenceWorkspace([row, duplicate], `path:${row.path}`).id).toBe(row.id)
+    expect(selectReferenceWorkspace([row, duplicate], 'current', '/repo/src').id).toBe(row.id)
+    expect(() =>
+      selectReferenceWorkspace([row, { ...duplicate, hostId: 'ssh:build' }], `path:${row.path}`)
+    ).toThrow('selector_ambiguous')
+  })
+  it('does not match issue:null against unlinked workspaces', () => {
+    const [row] = catalog()
+    expect(() => selectReferenceWorkspace([row], 'issue:null')).toThrow('selector_not_found')
+    expect(selectReferenceWorkspace([{ ...row, linkedIssue: 42 }], 'issue:42').id).toBe(row.id)
+  })
   it('does not attribute unqualified legacy metadata to colliding hosts', () => {
     const rows = listReferenceWorkspaces({
       getRepos: () => [repo, { ...repo, connectionId: 'server' }],

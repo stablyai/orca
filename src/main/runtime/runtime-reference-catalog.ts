@@ -173,7 +173,9 @@ export function selectReferenceWorkspace(
       (row) => row.branch && branchSelectorMatches(row.branch, selector.slice(7))
     )
   } else if (selector.startsWith('issue:')) {
-    matches = workspaces.filter((row) => String(row.linkedIssue) === selector.slice(6))
+    matches = workspaces.filter(
+      (row) => typeof row.linkedIssue === 'number' && String(row.linkedIssue) === selector.slice(6)
+    )
   } else {
     matches = workspaces.filter(
       (row) =>
@@ -181,6 +183,14 @@ export function selectReferenceWorkspace(
         runtimePathsEqual(row.path, selector) ||
         (row.branch && branchSelectorMatches(row.branch, selector))
     )
+  }
+  // Why: duplicate registrations on one host describe one path; identical paths on different hosts do not.
+  if (
+    (selector === 'current' || selector.startsWith('path:')) &&
+    matches.length > 1 &&
+    new Set(matches.map((row) => row.hostId)).size === 1
+  ) {
+    return matches[0]
   }
   if (matches.length !== 1) {
     throw new Error(matches.length ? 'selector_ambiguous' : 'selector_not_found')

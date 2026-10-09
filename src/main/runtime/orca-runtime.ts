@@ -25,40 +25,38 @@ import type { RuntimeReferenceFindParams } from '../../shared/runtime-reference-
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 
 class OrcaRuntimeService extends OrcaRuntimeWithMigrationCatalog {
-  async listWorkspaceReferences(selector: string, cwd?: string) {
+  private async selectReferenceCatalogWorkspace(selector: string, cwd?: string) {
     const catalog = listReferenceWorkspaces(
       this.requireStore(),
       this.resolvedWorktrees.peek()?.worktrees
     )
     try {
-      return listWorkspaceReferences(selectReferenceWorkspace(catalog, selector, cwd))
+      return selectReferenceWorkspace(catalog, selector, cwd)
     } catch (error) {
       if (!(error instanceof Error) || error.message !== 'selector_not_found') {
         throw error
       }
-      // A first link may target a discovered worktree with no saved metadata yet.
-      const discovered = await this.listResolvedWorktrees()
-      return listWorkspaceReferences(
-        selectReferenceWorkspace(
-          listReferenceWorkspaces(this.requireStore(), discovered),
-          selector,
-          cwd
-        )
+      // Why: unsaved worktrees and cold-cache branches only resolve after a worktree scan.
+      const warmed = listReferenceWorkspaces(
+        this.requireStore(),
+        await this.listResolvedWorktrees()
       )
+      return selectReferenceWorkspace(warmed, selector, cwd)
     }
+  }
+
+  async listWorkspaceReferences(selector: string, cwd?: string) {
+    return listWorkspaceReferences(await this.selectReferenceCatalogWorkspace(selector, cwd))
   }
 
   async findWorkspaceReferences(params: RuntimeReferenceFindParams) {
     if (params.worktree && params.repo) {
       throw new Error('--repo and --worktree cannot be combined')
     }
-    let workspaces = listReferenceWorkspaces(
-      this.requireStore(),
-      this.resolvedWorktrees.peek()?.worktrees
-    )
-    if (params.worktree) {
-      workspaces = [selectReferenceWorkspace(workspaces, params.worktree, params.cwd)]
-    } else if (params.repo) {
+    let workspaces = params.worktree
+      ? [await this.selectReferenceCatalogWorkspace(params.worktree, params.cwd)]
+      : listReferenceWorkspaces(this.requireStore(), this.resolvedWorktrees.peek()?.worktrees)
+    if (params.repo) {
       const repo = await this.resolveRepoSelector(params.repo)
       workspaces = workspaces.filter(
         (row) =>

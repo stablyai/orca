@@ -163,9 +163,6 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   },
   'worktree create': async ({ flags, client, cwd, json }) => {
     const linkedItems = getCreateReferences(flags)
-    if (linkedItems) {
-      await assertReferenceWritesSupported(client)
-    }
     assertWorktreeParentFlagsCompatible(flags)
     assertWorkspaceTargetFlagsCompatible(flags)
     const reviewLinks = getReviewTargetLinkFlags(flags)
@@ -204,6 +201,9 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const name = getRequiredStringFlag(flags, 'name')
     const repo = await getCreateRepoSelector(flags, cwdParentWorktree, client)
     await assertGitLabLinkFlagProjectsMatch(flags, client, { repo })
+    if (linkedItems) {
+      await assertReferenceWritesSupported(client)
+    }
     const result = await withSetupDecisionRecovery(
       client.call<RuntimeWorktreeCreateResult>('worktree.create', {
         repo,

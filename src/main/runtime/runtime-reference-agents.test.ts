@@ -8,6 +8,10 @@ import {
   referenceConnectionHosts,
   type ReferenceAgentSource
 } from './runtime-reference-agents'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../shared/structured-agent-session-projection'
 
 const observations = vi.hoisted<{ status: 'live' | 'exited' | 'unverifiable'; reachable: boolean }>(
   () => ({
@@ -201,6 +205,28 @@ describe('reference agent discovery', () => {
     const index = createReferenceAgentIndex(runtime([]), null, sessionStore([record]))
     expect(index.get('local|workspace-1')?.[0].liveness).toBe('exited')
     expect(index.get('local|workspace-1')?.[0]).not.toHaveProperty('mailbox')
+  })
+
+  it('skips native records whose chat tab was closed', () => {
+    const open = agentSessionRecordFixture()
+    const closed = { ...agentSessionRecordFixture(), sessionId: 'closed-session' }
+    const store = {
+      ...sessionStore([open, closed]),
+      getVisibleSessionTabIndex: () => ({ present: true, sessionIds: [open.sessionId] })
+    }
+    const fleet = evidence()
+    fleet.activity.paneKey = structuredAgentSessionPaneKey(
+      structuredAgentSessionTabId(closed.sessionId),
+      closed.sessionId
+    )
+    const candidates = createReferenceAgentIndex(runtime([fleet]), null, store).get(
+      'local|workspace-1'
+    )
+    // The closed record's pane is not claimed, so a terminal agent there still surfaces.
+    expect(candidates?.map((candidate) => candidate.sessionId ?? candidate.terminal)).toEqual([
+      open.sessionId,
+      'term_exact'
+    ])
   })
 
   it('does not claim authority over WSL or remote native records', () => {

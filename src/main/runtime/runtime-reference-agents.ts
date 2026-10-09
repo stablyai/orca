@@ -63,9 +63,12 @@ export function createReferenceAgentIndex(
     entries.push(candidate)
     index.set(key, entries)
   }
+  const visible = sessions?.getVisibleSessionTabIndex?.()
   for (const record of sessions?.listRecords() ?? []) {
     if (
       clearedInto(record) ||
+      // Why: records outlive their chat tab; a closed chat is not an agent on the workspace.
+      (visible?.present && !visible.sessionIds.includes(record.sessionId)) ||
       (workspaceKeys &&
         !workspaceKeys.has(
           composeWorktreeHostIdentity(record.location.executionHostId, record.location.workspaceId)

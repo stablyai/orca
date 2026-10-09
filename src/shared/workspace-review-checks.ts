@@ -23,9 +23,7 @@ export function summarizeWorkspaceReviewChecks(
   attachments: readonly WorkspaceAttachment[],
   details: Readonly<Record<string, WorkspaceReviewCheckDetails | undefined>>
 ): WorkspaceReviewChecksSummary {
-  const reviews = normalizeWorkspaceAttachments(attachments, { preserveSources: true }).filter(
-    (item) => item.type !== 'issue'
-  )
+  const reviews = normalizeWorkspaceAttachments(attachments).filter((item) => item.type !== 'issue')
   const summary: WorkspaceReviewChecksSummary = {
     state: 'none',
     total: reviews.length,

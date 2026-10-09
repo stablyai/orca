@@ -16,7 +16,27 @@ import {
 } from '../flags'
 import { printResult } from '../format'
 import { assertReferenceWritesSupported, parseReferenceUrls } from '../reference-input'
-import { RuntimeClientError } from '../runtime-client'
+import { RuntimeClientError, type RuntimeRpcSuccess } from '../runtime-client'
+
+// Why: hosts from before reference.* still advertise the linked-items delta capability, so the
+// raw method_not_found would read as an Orca bug rather than a version gap.
+async function callReference<TResult>(
+  client: HandlerContext['client'],
+  method: 'reference.list' | 'reference.find',
+  params: unknown
+): Promise<RuntimeRpcSuccess<TResult>> {
+  try {
+    return await client.call<TResult>(method, params)
+  } catch (error) {
+    if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        'This Orca host does not support reference commands yet. Update Orca on the execution host.'
+      )
+    }
+    throw error
+  }
+}
 
 function workspaceTarget({ flags, client, cwd }: HandlerContext, required = true) {
   const selector = required
@@ -79,12 +99,17 @@ async function mutateReferences(context: HandlerContext, operation: 'add' | 'rem
     )
   }
   await assertReferenceWritesSupported(client)
-  const before = await client.call<RuntimeReferenceListResult>('reference.list', target)
-  const base = before.result.references.map(({ key: _key, selected: _selected, ...item }) => item)
-  const byKey = new Map(base.map((item) => [getWorkspaceReferenceIdentity(item), item]))
+  const before = await callReference<RuntimeReferenceListResult>(client, 'reference.list', target)
+  const stored = before.result.references.map(({ key, selected: _selected, ...item }) => ({
+    item,
+    // Why: --key values come from the host's `reference list`; the CLI may be a different build.
+    keys: new Set([key, getWorkspaceReferenceIdentity(item)])
+  }))
+  const base = stored.map(({ item }) => item)
+  const isLinked = (key: string) => stored.some(({ keys }) => keys.has(key))
   const requestedKeys = new Set([...input.map(getWorkspaceReferenceIdentity), ...keys])
   const changes = [...requestedKeys].map((key) => {
-    const changed = operation === 'add' ? !byKey.has(key) : byKey.has(key)
+    const changed = operation === 'add' ? !isLinked(key) : isLinked(key)
     return {
       key,
       operation,
@@ -93,21 +118,28 @@ async function mutateReferences(context: HandlerContext, operation: 'add' | 'rem
     }
   })
   if (changes.some((change) => change.changed)) {
+    // Why: storage may hold same-URL twins with different source contexts; derive from `base`
+    // so the host's delta merge never sees an unrequested twin as removed.
+    let linkedItems: WorkspaceAttachment[]
     if (operation === 'add') {
-      for (const item of input) {
+      const seen = new Set<string>()
+      const added = input.filter((item) => {
         const key = getWorkspaceReferenceIdentity(item)
-        if (!byKey.has(key)) {
-          byKey.set(key, item)
+        if (seen.has(key) || isLinked(key)) {
+          return false
         }
-      }
+        seen.add(key)
+        return true
+      })
+      linkedItems = [...base, ...added]
     } else {
-      for (const key of requestedKeys) {
-        byKey.delete(key)
-      }
+      linkedItems = stored
+        .filter(({ keys }) => ![...keys].some((key) => requestedKeys.has(key)))
+        .map(({ item }) => item)
     }
     const updates = {
       linkedItemsBase: base,
-      linkedItems: [...byKey.values()],
+      linkedItems,
       linkedItemsSelectionChanged: false
     }
     const { worktree } = before.result
@@ -122,7 +154,7 @@ async function mutateReferences(context: HandlerContext, operation: 'add' | 'rem
         }))
   }
   const workspace = before.result.worktree
-  const result = await client.call<RuntimeReferenceListResult>('reference.list', {
+  const result = await callReference<RuntimeReferenceListResult>(client, 'reference.list', {
     worktree: workspace.identity ? `identity:${workspace.identity.key}` : `id:${workspace.id}`
   })
   printResult({ ...result, result: { ...result.result, changes } }, json, () =>
@@ -134,7 +166,8 @@ async function mutateReferences(context: HandlerContext, operation: 'add' | 'rem
 
 export const REFERENCE_HANDLERS: Record<string, CommandHandler> = {
   'reference list': async (context) => {
-    const result = await context.client.call<RuntimeReferenceListResult>(
+    const result = await callReference<RuntimeReferenceListResult>(
+      context.client,
       'reference.list',
       workspaceTarget(context)
     )
@@ -157,13 +190,17 @@ export const REFERENCE_HANDLERS: Record<string, CommandHandler> = {
     if (target.worktree && repo) {
       throw new RuntimeClientError('invalid_argument', 'Pass --worktree or --repo, not both.')
     }
-    const result = await context.client.call<RuntimeReferenceFindResult>('reference.find', {
-      query,
-      ...target,
-      repo,
-      includeArchived: context.flags.get('include-archived') === true,
-      limit: getOptionalPositiveIntegerFlag(context.flags, 'limit')
-    })
+    const result = await callReference<RuntimeReferenceFindResult>(
+      context.client,
+      'reference.find',
+      {
+        query,
+        ...target,
+        repo,
+        includeArchived: context.flags.get('include-archived') === true,
+        limit: getOptionalPositiveIntegerFlag(context.flags, 'limit')
+      }
+    )
     printResult(result, context.json, formatFind)
   }
 }

@@ -119,11 +119,11 @@ describe('attachment source conversion', () => {
       })
     ).toBe(false)
   })
-  it('keeps an unknown-source reference when adding a same-number URL', () => {
+  it('enriches a legacy review without adding a duplicate', () => {
     const bare: WorkspaceAttachment = { provider: 'github', type: 'pr', number: 7 }
     const result = appendWorkspaceAttachment([bare], review)
-    expect(result).toEqual([bare, review])
-    expect(isWorkspaceAttachmentLinked([bare], review)).toBe(false)
+    expect(result).toEqual([review])
+    expect(isWorkspaceAttachmentLinked([bare], review)).toBe(true)
   })
   it.each(['issue', 'mr'] as const)(
     'keeps a bare GitLab %s distinct from the same-number other type',

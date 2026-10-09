@@ -176,6 +176,69 @@ describe('reference CLI', () => {
     )
   })
 
+  const localTwin = {
+    ...parsedPR,
+    title: 'Local',
+    taskSourceContext: {
+      kind: 'task-source' as const,
+      provider: 'github' as const,
+      projectId: 'p1',
+      hostId: 'local' as const
+    }
+  }
+  const remoteTwin = {
+    ...parsedPR,
+    title: 'Remote',
+    taskSourceContext: {
+      ...localTwin.taskSourceContext,
+      hostId: 'runtime:other' as const
+    }
+  }
+
+  it('keeps same-URL twins with different source contexts on an unrelated add', async () => {
+    mockCalls(listResult([localTwin, remoteTwin]))
+    await main(['reference', 'add', TASK, '--worktree', 'name:api'], '/tmp/api')
+    expect(callMock).toHaveBeenCalledWith(
+      'worktree.set',
+      expect.objectContaining({
+        linkedItemsBase: [localTwin, remoteTwin],
+        linkedItems: [localTwin, remoteTwin, parsedTask]
+      })
+    )
+  })
+
+  it('removing a URL removes every twin that shares its identity', async () => {
+    mockCalls(listResult([localTwin, parsedTask, remoteTwin]), listResult([parsedTask]))
+    await main(['reference', 'remove', PR, '--worktree', 'name:api'], '/tmp/api')
+    expect(callMock).toHaveBeenCalledWith(
+      'worktree.set',
+      expect.objectContaining({
+        linkedItemsBase: [localTwin, parsedTask, remoteTwin],
+        linkedItems: [parsedTask]
+      })
+    )
+  })
+
+  it('removes by the host-provided key even when the local identity differs', async () => {
+    const before = listResult([parsedPR, parsedTask])
+    before.references[0].key = 'host-v2:pr-key'
+    mockCalls(before, listResult([parsedTask]))
+    await main(
+      ['reference', 'remove', '--key', 'host-v2:pr-key', '--worktree', 'name:api', '--json'],
+      '/tmp/api'
+    )
+    expect(callMock).toHaveBeenCalledWith(
+      'worktree.set',
+      expect.objectContaining({
+        linkedItemsBase: [parsedPR, parsedTask],
+        linkedItems: [parsedTask]
+      })
+    )
+    expect(JSON.parse(vi.mocked(console.log).mock.calls[0][0]).result.changes).toEqual([
+      { key: 'host-v2:pr-key', operation: 'remove', changed: true }
+    ])
+  })
+
   it('removing an absent URL is a no-op', async () => {
     mockCalls()
     await main(['reference', 'remove', TASK, '--worktree', 'name:api', '--json'], '/tmp/api')
@@ -301,4 +364,39 @@ describe('reference CLI', () => {
       expect(callMock).not.toHaveBeenCalled()
     }
   )
+
+  // Why: hosts built before reference.* still advertise the delta capability.
+  it.each([
+    [['reference', 'list', '--worktree', 'name:api']],
+    [['reference', 'find', '--query', 'STA-1234']],
+    [['reference', 'add', TASK, '--worktree', 'name:api']]
+  ])('names the version gap when the host lacks reference RPCs: %j', async (argv) => {
+    mockCalls()
+    const { RuntimeClientError } = await import('./runtime/types.js')
+    const base = callMock.getMockImplementation()
+    callMock.mockImplementation(async (method: string, ...rest: unknown[]) => {
+      if (method.startsWith('reference.')) {
+        throw new RuntimeClientError('method_not_found', `Unknown method: ${method}`)
+      }
+      return base?.(method, ...rest)
+    })
+    const priorExitCode = process.exitCode
+    await main(argv, '/tmp/api')
+    const printed = vi.mocked(console.error).mock.calls.flat().join('\n')
+    expect(printed).toContain('Update Orca on the execution host')
+    expect(printed).not.toContain('Unknown method')
+    expect(process.exitCode).toBe(1)
+    process.exitCode = priorExitCode
+  })
+
+  it('validates create flags locally before probing reference capability', async () => {
+    mockCalls()
+    await main(
+      ['worktree', 'create', '--repo', 'id:repo', '--no-parent', '--reference', PR],
+      '/tmp/api'
+    )
+    expect(callMock).not.toHaveBeenCalledWith('status.get', expect.anything())
+    expect(callMock).not.toHaveBeenCalledWith('status.get')
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('--name'))
+  })
 })

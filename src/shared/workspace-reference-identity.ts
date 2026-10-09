@@ -5,7 +5,24 @@ import type { WorkspaceAttachment } from './worktree/types'
 
 export type WorkspaceReferenceQuery =
   | { kind: 'url'; identity: string }
+  // Self-hosted /owner/repo/issues/N cannot prove GitHub vs Gitea, so match type+host+path only.
+  | { kind: 'issue-url'; route: string }
   | { kind: 'issue-key'; identifier: string }
+
+const HOST_PROVIDERS: Readonly<Record<string, WorkspaceAttachment['provider']>> = {
+  'github.com': 'github',
+  'gitlab.com': 'gitlab',
+  'linear.app': 'linear',
+  'codeberg.org': 'gitea',
+  'bitbucket.org': 'bitbucket',
+  'dev.azure.com': 'azure-devops'
+}
+
+const CASE_INSENSITIVE_PATH_PROVIDERS: ReadonlySet<WorkspaceAttachment['provider']> = new Set([
+  'github',
+  'gitlab',
+  'gitea'
+])
 
 function referenceUrl(input: string): URL {
   let url: URL
@@ -20,6 +37,9 @@ function referenceUrl(input: string): URL {
   url.search = ''
   url.hash = ''
   url.pathname = url.pathname.replace(/\/+$/, '')
+  if (url.hostname.startsWith('www.') && HOST_PROVIDERS[url.hostname.slice(4)]) {
+    url.hostname = url.hostname.slice(4)
+  }
   return url
 }
 
@@ -36,15 +56,6 @@ function numberedReference(
   }
   url.pathname = `${path}/${number}`
   return { provider, type, number, url: url.href }
-}
-
-const HOST_PROVIDERS: Readonly<Record<string, WorkspaceAttachment['provider']>> = {
-  'github.com': 'github',
-  'gitlab.com': 'gitlab',
-  'linear.app': 'linear',
-  'codeberg.org': 'gitea',
-  'bitbucket.org': 'bitbucket',
-  'dev.azure.com': 'azure-devops'
 }
 
 export function parseWorkspaceReferenceUrl(
@@ -80,7 +91,11 @@ function parseReferenceRoute(
       url: url.href
     }
   }
-  const jira = parseJiraIssueUrl(url.href)
+  // Git hosts (and Bitbucket Server /repos/ file views) also serve /browse/KEY-1 paths.
+  const jira =
+    (!providerHint || providerHint === 'jira') && !url.pathname.includes('/repos/')
+      ? parseJiraIssueUrl(url.href)
+      : null
   if (jira) {
     url.pathname = `${jira.sitePath}/browse/${jira.issueKey}`
     return {
@@ -132,12 +147,11 @@ function parseReferenceRoute(
       ) {
         throw new Error('The reference URL does not match its provider.')
       }
-      const path = provider === 'github' ? git[1].toLowerCase() : git[1]
       return numberedReference(
         url,
         provider,
         git[2] === 'issues' ? 'issue' : 'pr',
-        `${path}/${git[2]}`,
+        `${git[1]}/${git[2]}`,
         git[3]
       )
     }
@@ -175,7 +189,8 @@ function externalUrl(item: WorkspaceAttachment): string | undefined {
   }
 }
 
-export function getWorkspaceReferenceIdentity(item: WorkspaceAttachment): string {
+/** Provider-proven external identity, or undefined when the source cannot be proven. */
+export function getProvenWorkspaceReferenceIdentity(item: WorkspaceAttachment): string | undefined {
   const candidate = externalUrl(item)
   if (candidate) {
     try {
@@ -189,23 +204,34 @@ export function getWorkspaceReferenceIdentity(item: WorkspaceAttachment): string
           : parsed.number === item.number)
       ) {
         const url = new URL(parsed.url!)
-        return JSON.stringify([parsed.provider, parsed.type, url.host, url.pathname])
+        // These hosts route case-insensitively; stored URLs keep the user's casing.
+        const path = CASE_INSENSITIVE_PATH_PROVIDERS.has(parsed.provider)
+          ? url.pathname.toLowerCase()
+          : url.pathname
+        return JSON.stringify([parsed.provider, parsed.type, url.host, path])
       }
     } catch {
       // Legacy links without a provable source remain removable by their opaque key.
     }
   }
-  return JSON.stringify([
-    'legacy',
-    item.provider,
-    item.type,
-    item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier ?? item.number,
-    item.taskSourceContext ? getTaskSourceCacheScope(item.taskSourceContext) : '',
-    item.repoId ?? '',
-    item.linearWorkspaceId ?? '',
-    item.linearOrganizationUrlKey ?? '',
-    item.url ?? ''
-  ])
+  return undefined
+}
+
+export function getWorkspaceReferenceIdentity(item: WorkspaceAttachment): string {
+  return (
+    getProvenWorkspaceReferenceIdentity(item) ??
+    JSON.stringify([
+      'legacy',
+      item.provider,
+      item.type,
+      item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier ?? item.number,
+      item.taskSourceContext ? getTaskSourceCacheScope(item.taskSourceContext) : '',
+      item.repoId ?? '',
+      item.linearWorkspaceId ?? '',
+      item.linearOrganizationUrlKey ?? '',
+      item.url ?? ''
+    ])
+  )
 }
 
 export function parseWorkspaceReferenceQuery(input: string): WorkspaceReferenceQuery {
@@ -214,7 +240,30 @@ export function parseWorkspaceReferenceQuery(input: string): WorkspaceReferenceQ
   if (JIRA_ISSUE_KEY_PATTERN.test(value) || (linear && !value.includes('://'))) {
     return { kind: 'issue-key', identifier: value.toUpperCase() }
   }
-  return { kind: 'url', identity: getWorkspaceReferenceIdentity(parseWorkspaceReferenceUrl(value)) }
+  try {
+    return {
+      kind: 'url',
+      identity: getWorkspaceReferenceIdentity(parseWorkspaceReferenceUrl(value))
+    }
+  } catch (error) {
+    let route: string | undefined
+    try {
+      const issue = parseWorkspaceReferenceUrl(value, 'github')
+      route = issue.type === 'issue' ? referenceRoute(issue) : undefined
+    } catch {
+      throw error
+    }
+    if (!route) {
+      throw error
+    }
+    return { kind: 'issue-url', route }
+  }
+}
+
+function referenceRoute(item: WorkspaceAttachment): string | undefined {
+  const identity = getProvenWorkspaceReferenceIdentity(item)
+  const parsed: unknown = identity ? JSON.parse(identity) : undefined
+  return Array.isArray(parsed) ? JSON.stringify(parsed.slice(1)) : undefined
 }
 
 export function matchesWorkspaceReferenceQuery(
@@ -223,6 +272,12 @@ export function matchesWorkspaceReferenceQuery(
 ): boolean {
   if (query.kind === 'url') {
     return getWorkspaceReferenceIdentity(item) === query.identity
+  }
+  if (query.kind === 'issue-url') {
+    return (
+      (item.provider === 'github' || item.provider === 'gitea') &&
+      referenceRoute(item) === query.route
+    )
   }
   return (
     item.type === 'issue' &&

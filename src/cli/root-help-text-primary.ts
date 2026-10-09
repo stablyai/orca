@@ -15,7 +15,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  agent-context             Print the machine-readable command schema for agents',
   '',
   'References:',
-  '  reference list            List a workspace’s linked reviews and issues',
+  "  reference list            List a workspace's linked reviews and issues",
   '  reference add             Attach review or issue URLs to a workspace',
   '  reference remove          Detach review or issue URLs from a workspace',
   '  reference find            Find workspaces and agents by URL or issue key',
