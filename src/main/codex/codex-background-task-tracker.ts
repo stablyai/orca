@@ -87,6 +87,18 @@ export class CodexBackgroundTaskTracker {
     return this.stopsTerminals ? this.commands.backgroundProcesses(taskIds) : []
   }
 
+  /** The run each named sub-agent is working on: its row's providerId is its thread id. */
+  subagentTurns(taskIds: readonly string[]): { threadId: string; turnId: string }[] {
+    const named = new Set(taskIds)
+    return this.executions
+      .workingChildren()
+      .flatMap(({ agentThreadId, execution }) =>
+        execution && named.has(agentThreadId)
+          ? [{ threadId: agentThreadId, turnId: execution.turnId }]
+          : []
+      )
+  }
+
   get state(): AgentSessionBackgroundTaskState | null {
     // Journal admission precedes observe; readers must not see its pending facts.
     return this.publishedState

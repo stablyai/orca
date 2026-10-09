@@ -43,7 +43,7 @@ import { changeCodexThreadGoal } from './codex-structured-thread-goal'
 import {
   codexBackgroundTaskStops,
   startCodexTerminalStopProbe,
-  stopCodexBackgroundCommands
+  stopCodexBackgroundTasks
 } from './codex-background-terminals'
 import {
   answerCodexStructuredPrompt,
@@ -194,7 +194,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
 
   stopBackgroundTasks: NonNullable<StructuredAgentSessionAdapter['stopBackgroundTasks']> = (
     input
-  ) => stopCodexBackgroundCommands(this.sessions, input, this.deps.requestTimeoutMs)
+  ) => stopCodexBackgroundTasks(this.sessions, input, this.deps.requestTimeoutMs)
 
   bindPromptItemId = (
     sessionId: string,
