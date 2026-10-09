@@ -128,9 +128,9 @@ export class RelayAuthCoordinator {
     return broker && (broker.isLive?.() ?? true) ? broker : null
   }
 
-  // Why: some broker deaths end with no retry timer — an auth refresh that
-  // fails past token expiry (laptop sleep), or a transient context read that
-  // returned null at open. Periodic/power-resume callers use this as a
+  // Why: some broker deaths end with no retry timer — a transient context
+  // read that returned null at open, or a broker that closed after renewal ran
+  // past expiry. Periodic/power-resume/expiry callers use this as a
   // dead-man's switch; it never disturbs a live broker, a scheduled retry,
   // or an open already in flight.
   ensureLive(): void {

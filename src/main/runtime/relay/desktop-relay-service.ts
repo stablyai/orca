@@ -44,8 +44,8 @@ export function pairingAuthorizationForContext(
     : null
 }
 
-// Why: a broker that died without arming a retry (sleep past token expiry,
-// transient auth read) must not stay dead until the user clicks Retry. The
+// Why: a broker that died without arming a retry (e.g. a transient auth
+// read) must not stay dead until the user clicks Retry. The
 // cadence is slow because it is a safety net, not the primary retry path.
 const RELAY_LIVENESS_INTERVAL_MS = 5 * 60_000
 
@@ -88,6 +88,7 @@ export class DesktopRelayService {
           mobileSocketWiring,
           isCurrent,
           refreshAccessToken,
+          onExpired: () => this.ensureLive(),
           resolvePreferredRegion: regionPreference.resolvePreferredRegion,
           measureRegionDecision: regionPreference.measureRegionDecision,
           onAssignedCellActive: regionPreference.noteAssignedCell,

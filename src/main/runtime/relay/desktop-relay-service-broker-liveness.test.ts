@@ -2,10 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 import type { OrcaCloudAuthConfig } from '../../orca-profiles/profile-cloud-auth-config'
 import type { OrcaRuntimeRpcServer } from '../runtime-rpc'
 
-const fakes = vi.hoisted(() => ({
-  readRelayAuthContext: vi.fn(),
-  brokers: [] as { live: boolean }[]
-}))
+const fakes = vi.hoisted(() => {
+  const brokers: { live: boolean }[] = []
+  const connectOptions: { onExpired?: () => void }[] = []
+  return { readRelayAuthContext: vi.fn(), brokers, connectOptions }
+})
 
 vi.mock('./relay-auth-context', () => ({ readRelayAuthContext: fakes.readRelayAuthContext }))
 
@@ -28,7 +29,8 @@ vi.mock('./relay-session-broker', () => {
       }
       return { v: 1, relayHostId: this.hostId, relayDeviceId, inviteExpiresAt: 0 }
     }
-    static connect = vi.fn(async () => {
+    static connect = vi.fn(async (options: { onExpired?: () => void }) => {
+      fakes.connectOptions.push(options)
       const broker = new RelaySessionBroker()
       fakes.brokers.push(broker)
       return broker
@@ -38,24 +40,29 @@ vi.mock('./relay-session-broker', () => {
 })
 
 import { DesktopRelayService } from './desktop-relay-service'
+import { deriveRelayHostId } from './relay-http-client'
 
-function service(): DesktopRelayService {
+const HOST_PUBLIC_KEY = new Uint8Array(32).fill(7)
+
+function service(devices: unknown[] = []): DesktopRelayService {
   fakes.brokers.length = 0
+  fakes.connectOptions.length = 0
   fakes.readRelayAuthContext.mockResolvedValue({
     identity: { userId: 'user-1', profileId: 'profile-1', organizationId: 'org-1' },
     accessToken: 'access-1',
     relayEntitled: true
   })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these tests exercise only the runtime members this fake provides.
   const runtimeRpc = {
     getE2EEKeypair: () => ({
-      publicKey: new Uint8Array(32).fill(7),
+      publicKey: HOST_PUBLIC_KEY,
       secretKey: new Uint8Array(32).fill(9),
       publicKeyB64: 'x'
     }),
     getMobileSocketWiring: () => ({ attachTransport: () => () => {} }),
     getRelayRevokeOutbox: () => ({ pendingFor: () => [], remove: vi.fn() }),
     getDeviceRegistry: () => ({
-      listDevices: () => [],
+      listDevices: () => devices,
       getDevice: () => ({ deviceId: 'device-1', scope: 'mobile' }),
       getMobilePairingConnectionMode: () => 'automatic'
     })
@@ -101,6 +108,32 @@ describe('DesktopRelayService broker liveness', () => {
       await relayService.createPairingRelay('device-1')
       await relayService.createPairingRelay('device-2')
       expect(fakes.brokers).toHaveLength(1)
+    } finally {
+      relayService.stop()
+    }
+  })
+
+  it('reconnects as soon as a broker closes after its renewal ran past expiry', async () => {
+    const relayService = service([
+      {
+        deviceId: 'device-1',
+        scope: 'mobile',
+        relayBinding: {
+          ownerIdentityKey: 'user-1\0profile-1\0org-1',
+          relayHostId: deriveRelayHostId(HOST_PUBLIC_KEY)
+        }
+      }
+    ])
+    try {
+      relayService.start()
+      await vi.waitFor(() => expect(fakes.brokers).toHaveLength(1))
+
+      // The broker closes itself; no liveness tick or user action follows.
+      fakes.brokers[0]!.live = false
+      fakes.connectOptions[0]!.onExpired?.()
+
+      await vi.waitFor(() => expect(fakes.brokers).toHaveLength(2))
+      expect(fakes.brokers[1]!.live).toBe(true)
     } finally {
       relayService.stop()
     }

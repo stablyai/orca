@@ -288,17 +288,17 @@ export class RelaySessionBroker {
       this.regionRefresh?.checkDeadline()
       this.scheduleRefresh()
     } catch {
-      const expiry = this.authorization?.expiresAt ?? 0
       const now = (this.options.now ?? Date.now)()
-      if (!this.closed && this.options.isCurrent() && now <= expiry + 60_000) {
-        const random = this.options.random ?? Math.random
-        this.refreshTimer = setTimeout(
-          () => void this.refreshAuthorization(),
-          5_000 + Math.floor(random() * 10_001)
-        )
+      const current = this.isCurrent()
+      if (current && now <= (this.authorization?.expiresAt ?? 0) + 60_000) {
+        const delayMs = 5_000 + Math.floor((this.options.random ?? Math.random)() * 10_001)
+        this.refreshTimer = setTimeout(() => void this.refreshAuthorization(), delayMs)
         return
       }
       this.closeNow()
+      if (current) {
+        this.options.onExpired?.()
+      }
     }
   }
 
