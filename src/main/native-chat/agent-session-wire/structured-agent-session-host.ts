@@ -65,8 +65,9 @@ export class StructuredAgentSessionHost {
     },
     deliverSettleEdge: (id, journal) => this.conversationDelivery.afterSettleEdge(id, journal),
     logger: sessionLogger.deferredStructuredAgentSessionLogger(() => this.deps.logger),
-    onOpened: (sessionId) => {
+    onOpened: (sessionId, journal) => {
       this.queued.drain.schedule(sessionId)
+      this.restore.reconciliation.noteOpened(sessionId, journal)
       // A reader holds it now: its settlement goes ahead of the rest of the startup scan.
       this.restore.reconciliation.prioritize(sessionId)
     },

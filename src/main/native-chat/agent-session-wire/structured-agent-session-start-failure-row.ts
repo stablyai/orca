@@ -62,7 +62,7 @@ export async function recordStructuredAgentSessionStartFailure(
     recovered: true,
     mutations: [structuredAgentSessionStartFailureRow(startKey, failure)],
     rejectsQueued: { reason: failure.reason, rejection: failure.rejection },
-    // The start was for this process's sends; an earlier process's is the startup share's to keep.
+    // The start was for this process's sends; an earlier process's is the reconciliation pass's to keep.
     rejectsQueuedOnly: (submission) => structuredAgentSessionHandsOver(journal, submission)
   })
 }

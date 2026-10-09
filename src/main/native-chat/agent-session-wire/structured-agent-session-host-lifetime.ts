@@ -73,7 +73,7 @@ type ConversationCloseDeps = Pick<StructuredAgentSessionHostDeps, 'logger'> & {
 
 /** What is still queued when the chat closes will not be handed over: a person's message is kept
  *  as a card that waits for the chat's next turn, the rest rejected (`journal-unsent-send-hold.ts`).
- *  A quit is not a close: what it left, the next process's startup share keeps as cards. The chat
+ *  A quit is not a close: what it left, the next process's reconciliation pass keeps as cards. The chat
  *  stops running, so the reopen mark follows (`markStructuredQueueReopen`): on every `close`, or
  *  only once it settled a send, for a later re-check of the same close, which must never mark past
  *  a new send. `which` narrows it to the messages a close that did not complete closed. Best

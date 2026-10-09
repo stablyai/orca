@@ -233,11 +233,13 @@ export async function createQueuedMessageTestRig(
 
   /** A host process that dies with no close: a new process loads the same state directory, its
    *  records with it, and runs its startup as the runtime does before any client reaches it: the
-   *  restart reconcile and its settlement, then the restore of the chat's tab. */
+   *  restart reconcile and its settlement, then the restore of the chat's tab, which decides a
+   *  lease latched in recovery; that decision's release wakes the chat's worker once more. */
   async function crashRestartHostProcess(beforeStartup?: () => unknown): Promise<void> {
     await crashReloadHostProcess(beforeStartup)
     await host.restoreReadableSessions([SESSION])
     await host.startupSettled()
+    await host.collaboratorsForTests().reconciliation.idle(SESSION)
   }
 
   /** The same crash, with only the restart reconcile and its settlement: no tab is restored.

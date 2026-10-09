@@ -23,8 +23,9 @@ import type { QueuedMessagePositionMove } from './queued-message-positions'
 
 /** Why the host can no longer hand a send over, which also says which sends it is. */
 export type UnsentSendHold =
-  /** At open, and the delivery loop's first step: what an earlier host process accepted. */
-  | { cause: 'hostRestarted' }
+  /** What an earlier host process accepted: by default, what was on disk when this handle opened;
+   *  `which` names it for a handle opened after this process accepted sends of its own. */
+  | { cause: 'hostRestarted'; which?: (submission: AgentJournalSubmission) => boolean }
   /** A close of the chat; `which` narrows it to what a close that did not complete closed. */
   | { cause: 'chatClosed'; which?: (submission: AgentJournalSubmission) => boolean }
 
@@ -96,9 +97,10 @@ export async function holdUnsentSends(
       input.unrun
         ? isUnansweredHandedOverSubmission(entry)
         : isQueuedAgentJournalSubmission(entry) &&
-          (hold.cause === 'hostRestarted'
-            ? journal.wroteBeforeOpen(entry.acceptedSequence)
-            : (hold.which?.(entry) ?? true))
+          (hold.which?.(entry) ??
+            (hold.cause === 'hostRestarted'
+              ? journal.wroteBeforeOpen(entry.acceptedSequence)
+              : true))
     )
     .sort((a, b) => (a.acceptedSequence ?? 0) - (b.acceptedSequence ?? 0))
   if (unsent.length === 0) {

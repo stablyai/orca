@@ -150,14 +150,16 @@ function openHost(overrides: Partial<StructuredAgentSessionHostDeps> = {}): void
   })
 }
 
-/** Startup as the runtime runs it: the restart reconcile, every chat's share in the background,
- *  and the boot sweep that opens each chat for its readers once that share closed it again. */
+/** Startup as the runtime runs it: the restart reconcile, every chat's worker in the background,
+ *  and the boot sweep that opens each chat for its readers once that worker closed it again. A
+ *  lease latched in recovery is decided by the sweep, whose release wakes the worker again. */
 async function startUp(): Promise<void> {
   await host.reconcileRestartLeases()
   await host.startupSettled()
   await reconciled()
   await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
   await host.restoreReadableSessions()
+  await reconciled()
 }
 
 /** The chat's reconciliation worker has retired, or waits out a backoff. */
@@ -444,7 +446,7 @@ describe('already-wedged profiles become usable on load', () => {
 
     expect(await host.attach(CALLER, hostTestAttachParams(13))).toMatchObject({ ok: true })
     // Acquiring a released lease ends nothing (design §9.8): the boot sweep settles what it left.
-    host.collaboratorsForTests().reconciliation.signal(SESSION, { startup: true })
+    host.collaboratorsForTests().reconciliation.signal(SESSION)
     await reconciled()
 
     expect(acquire).toHaveBeenCalledOnce()

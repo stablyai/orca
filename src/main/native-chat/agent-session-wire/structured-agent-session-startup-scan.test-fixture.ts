@@ -11,6 +11,7 @@ import { openTestJournalHostDatabase } from '../agent-session-journal/journal-ho
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import { HOST_TEST_LOCATION as LOCATION } from './structured-agent-session-host-test-data'
 import {
   createStructuredAgentSessionLogger,
@@ -124,7 +125,7 @@ export function openScanHost(
   options: {
     logger?: StructuredAgentSessionLogger
     statusSink?: StructuredAgentSessionStatusSink
-  } = {}
+  } & Partial<Pick<StructuredAgentSessionHostDeps, 'probeOwner' | 'stopOwnerProcess'>> = {}
 ): StructuredAgentSessionHost {
   return new StructuredAgentSessionHost({
     agents: NO_STRUCTURED_AGENTS,
@@ -141,7 +142,8 @@ export function openScanHost(
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     ...(options.statusSink ? { statusSink: options.statusSink } : {}),
-    probeOwner: async () => ({ outcome: 'pid-absent' }),
+    ...(options.stopOwnerProcess ? { stopOwnerProcess: options.stopOwnerProcess } : {}),
+    probeOwner: options.probeOwner ?? (async () => ({ outcome: 'pid-absent' })),
     now: () => SCAN_NOW
   })
 }

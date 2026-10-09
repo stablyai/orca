@@ -66,6 +66,17 @@ async function settleUnsupportedClaudeRewind(
   }
 }
 
+/** A rewind in doubt that only its provider's history can settle: an unverified Codex revert. */
+export function structuredRewindNeedsProvider(
+  rewind: AgentSessionRewindRecord | undefined
+): boolean {
+  if (rewind?.phase !== 'provider-succeeded' && rewind?.phase !== 'prepared') {
+    return false
+  }
+  const target = parseAgentJournalItemKey(rewind.providerItemId ?? rewind.itemId)
+  return target?.provider === 'codex' && !rewind.hydrationVerified
+}
+
 /** Recovery observes provider state; it never repeats an ambiguous native mutation. */
 export async function recoverStructuredRewind(
   deps: RewindRecoveryDeps,

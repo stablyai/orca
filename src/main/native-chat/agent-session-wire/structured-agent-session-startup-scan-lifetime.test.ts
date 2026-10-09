@@ -17,6 +17,7 @@ import {
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import {
@@ -53,14 +54,15 @@ async function seed(sessionIds: readonly string[], extra: Parameters<typeof reco
   store = await openTestAgentSessionRecordStore(root)
 }
 
-/** Counts every journal open from now on. */
-function countOpens(): { opens: number } {
+/** Counts every journal open from now on; each waits for `hold` first. */
+function countOpens(hold: () => Promise<void> = async () => undefined): { opens: number } {
   const counter = { opens: 0 }
   const open = AgentSessionJournal.prototype.open
   vi.spyOn(AgentSessionJournal.prototype, 'open').mockImplementation(async function (
     this: AgentSessionJournal
   ) {
     counter.opens += 1
+    await hold()
     return open.call(this)
   })
   return counter
@@ -89,27 +91,20 @@ describe('a quit during the startup scan', () => {
     const current = openHost()
     let release: () => void = () => undefined
     const gate = new Promise<void>((resolve) => (release = resolve))
-    const { runtimeState } = current.collaboratorsForTests()
-    const resolve = runtimeState.resolveRecovery.bind(runtimeState)
-    let recoveries = 0
-    vi.spyOn(runtimeState, 'resolveRecovery').mockImplementation(async (sessionId) => {
-      recoveries += 1
-      await gate
-      return resolve(sessionId)
-    })
+    const counter = countOpens(() => gate)
+    const passes = vi.spyOn(JournalQueuedMessages.prototype, 'repairAndPrune')
     await current.reconcileRestartLeases()
-    await vi.waitFor(() => expect(recoveries).toBe(4))
-    const counter = countOpens()
+    await vi.waitFor(() => expect(counter.opens).toBe(4))
 
     const quit = current.flushAllStreamedEvents()
     release()
     await quit
     host = undefined
 
-    // The four already recovering finished that step and went no further; the six still waiting
+    // The four already reading finished that read and went no further; the six still waiting
     // for a slot never started.
-    expect(recoveries).toBe(4)
-    expect(counter.opens).toBe(0)
+    expect(counter.opens).toBe(4)
+    expect(passes).not.toHaveBeenCalled()
   })
 })
 
@@ -191,7 +186,7 @@ describe('a startup worker whose step cannot succeed', () => {
     expect(warnings).toContain("a chat's history cannot be loaded, so nothing is settled")
   })
 
-  it('leaves a rewind only its provider can prove for the next acquisition, and retires', async () => {
+  it('leaves a rewind only its provider can prove for the next acquisition, quietly, and retires', async () => {
     const rewind = {
       operationId: 'op-rewind',
       callerKey: 'caller',
@@ -213,7 +208,8 @@ describe('a startup worker whose step cannot succeed', () => {
 
     expect(store.getRecord(CHAT)?.rewind?.phase).toBe('prepared')
     expect(current.collaboratorsForTests().sessions.has(CHAT)).toBe(false)
-    expect(warnings).toEqual(['recovering a rewind an earlier process left did not finish'])
+    // Not tried here at all: without its provider it cannot succeed.
+    expect(warnings).toEqual([])
     expect(await turnState(current, CHAT)).toBe('unverifiable')
   })
 })

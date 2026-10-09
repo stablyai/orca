@@ -60,7 +60,7 @@ export async function revealStructuredAgentSession(
 
 /** The host's startup and its reconciliation: reconcile, then hand every chat to its reconciliation
  *  worker in the background (no chat's tab or send waits on it), and the readable-restore sweep
- *  that resolves and opens each chat. Its lease bookkeeping is a reader's, which never fails a read
+ *  that resolves and opens each visible chat. Its lease bookkeeping is a reader's, which never fails a read
  *  or startup; startup shares it. */
 export function createStructuredAgentSessionHostRestore(
   deps: StructuredAgentSessionHostDeps,
@@ -93,10 +93,7 @@ export function createStructuredAgentSessionHostRestore(
     // Tracked like a start, so a quit waits for an attempt before it closes what it writes to.
     track: (operation) => startup.tasks.trackAttach(operation),
     publishGenerationEnded: (sessionId, options) =>
-      startup.clientDelivery.publishGenerationEnded(sessionId, options),
-    // A lease latched in recovery is decided before the share's pass, as the restore decides it;
-    // a failure is the worker's to report, and the next attach or send resolves it.
-    resolveRecovery
+      startup.clientDelivery.publishGenerationEnded(sessionId, options)
   })
   let startupSettled: Promise<void> = Promise.resolve()
   const restorer = new StructuredAgentSessionReadableRestorer({

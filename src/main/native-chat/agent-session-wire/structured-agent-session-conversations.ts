@@ -31,7 +31,7 @@ export class StructuredAgentSessionConversations extends Map<
       deliverSettleEdge?: (sessionId: string, journal: AgentSessionJournal) => void
       logger: StructuredAgentSessionLogger
       /** A conversation became held: state that waited on it (queued drafts) re-derives. */
-      onOpened?: (sessionId: string) => void
+      onOpened?: (sessionId: string, journal: AgentSessionJournal) => void
       now: () => number
     }
   ) {
@@ -86,7 +86,7 @@ export class StructuredAgentSessionConversations extends Map<
     })
     this.activity.set(sessionId, this.delivery.now())
     const adopted = super.set(sessionId, session)
-    this.delivery.onOpened?.(sessionId)
+    this.delivery.onOpened?.(sessionId, session.journal)
     return adopted
   }
 

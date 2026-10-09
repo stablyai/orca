@@ -186,7 +186,11 @@ describe('a journal no retry can load', () => {
   ] as const)(
     '%s: the startup worker retires instead of replaying it again',
     async (_why, json) => {
-      rig = await createQueuedMessageTestRig({ restartable: true })
+      // The owner is proven gone at the restart, so no recovery waits on a person's attach.
+      rig = await createQueuedMessageTestRig({
+        restartable: true,
+        probeOwner: async () => ({ outcome: 'pid-absent' })
+      })
       const current = rig
       await current.settleAccepted(await current.workingSend(), 'work')
       vi.spyOn(console, 'warn').mockImplementation(() => undefined)
@@ -215,7 +219,7 @@ describe('a journal no retry can load', () => {
   )
 })
 
-describe("the startup share's reopen mark", () => {
+describe('the reopen mark after a restart', () => {
   // Bookkeeping, reported and never owed: the pause starts where the handle opened either way.
   it.each([false, true])(
     'never holds the queue past the turn that lifts it (its write fails: %s)',

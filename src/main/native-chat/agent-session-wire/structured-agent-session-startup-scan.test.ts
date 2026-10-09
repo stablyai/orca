@@ -15,6 +15,7 @@ import {
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
   openScanHost,
@@ -36,9 +37,39 @@ function openHost(): StructuredAgentSessionHost {
   return host
 }
 
-/** Whose journal a call ran on: the scan's own read is no conversation the host indexed. */
-function journalSession(journal: AgentSessionJournal): string {
-  return journal.snapshot().sessionId
+/** The chats each pass ran on, in order: every pass repairs the cards an earlier handle left. */
+function watchPasses(): string[] {
+  const passes: string[] = []
+  const repair = JournalQueuedMessages.prototype.repairAndPrune
+  vi.spyOn(JournalQueuedMessages.prototype, 'repairAndPrune').mockImplementation(function (
+    this: JournalQueuedMessages
+  ) {
+    passes.push(this.sessionId)
+    return repair.call(this)
+  })
+  return passes
+}
+
+/** Holds the first four journal opens (every background slot); `opened` lists each chat whose
+ *  open began, in order. */
+function gateFirstOpens(): { opened: string[]; releaseOne: () => void; release: () => void } {
+  const held: (() => void)[] = []
+  const opened: string[] = []
+  const open = AgentSessionJournal.prototype.open
+  vi.spyOn(AgentSessionJournal.prototype, 'open').mockImplementation(async function (
+    this: AgentSessionJournal
+  ) {
+    opened.push(this.queuedMessages.sessionId)
+    if (opened.length <= 4) {
+      await new Promise<void>((resolve) => held.push(resolve))
+    }
+    return open.call(this)
+  })
+  return {
+    opened,
+    releaseOne: () => held.shift()?.(),
+    release: () => held.splice(0).forEach((resolve) => resolve())
+  }
 }
 
 beforeEach(async () => {
@@ -61,20 +92,7 @@ describe('the startup scan', () => {
       await seedScanJournal(root, sessionId)
     }
     store = await openTestAgentSessionRecordStore(root)
-    // The first opens the scan makes hold every background slot until the test lets them go.
-    let release: () => void = () => undefined
-    const gate = new Promise<void>((resolve) => (release = resolve))
-    const open = AgentSessionJournal.prototype.open
-    let gated = 0
-    vi.spyOn(AgentSessionJournal.prototype, 'open').mockImplementation(async function (
-      this: AgentSessionJournal
-    ) {
-      gated += 1
-      if (gated <= 4) {
-        await gate
-      }
-      return open.call(this)
-    })
+    const { opened, release } = gateFirstOpens()
     const current = openHost()
     const indexed: string[] = []
     const { sessions, serialize } = current.collaboratorsForTests()
@@ -83,18 +101,10 @@ describe('the startup scan', () => {
       indexed.push(sessionId)
       return set(sessionId, session)
     })
-    const shares: string[] = []
-    const mark = AgentSessionJournal.prototype.markQueueReopen
-    vi.spyOn(AgentSessionJournal.prototype, 'markQueueReopen').mockImplementation(async function (
-      this: AgentSessionJournal,
-      ...args
-    ) {
-      shares.push(journalSession(this))
-      return mark.apply(this, args)
-    })
+    const shares = watchPasses()
 
     await current.reconcileRestartLeases()
-    await vi.waitFor(() => expect(gated).toBe(4))
+    await vi.waitFor(() => expect(opened).toHaveLength(4))
 
     // The person's own actions on the late chat run now, ahead of its share.
     const order: string[] = []
@@ -125,31 +135,23 @@ describe('the startup scan', () => {
       await seedScanJournal(root, sessionId)
     }
     store = await openTestAgentSessionRecordStore(root)
+    const { opened, releaseOne, release } = gateFirstOpens()
     const current = openHost()
-    // The first four chats' recovery holds every background slot until the test lets it go.
-    let release: () => void = () => undefined
-    const gate = new Promise<void>((resolve) => (release = resolve))
-    const { runtimeState } = current.collaboratorsForTests()
-    const resolve = runtimeState.resolveRecovery.bind(runtimeState)
-    const resolved: string[] = []
-    vi.spyOn(runtimeState, 'resolveRecovery').mockImplementation(async (sessionId) => {
-      resolved.push(sessionId)
-      if (resolved.length <= 4) {
-        await gate
-      }
-      return resolve(sessionId)
-    })
+    const passes = watchPasses()
 
     await current.reconcileRestartLeases()
-    await vi.waitFor(() => expect(resolved).toHaveLength(4))
-    expect(resolved).not.toContain(LATE)
+    await vi.waitFor(() => expect(opened).toHaveLength(4))
+    expect(opened).not.toContain(LATE)
     // The person opens the late chat while two chats still wait for a slot, it among them.
     expect(await turnState(current, LATE)).toBe('running')
 
+    // One slot comes free: the late chat takes it ahead of the chat queued before it.
+    releaseOne()
+    await vi.waitFor(() => expect(passes).toContain(LATE))
     release()
     await current.startupSettled()
     await idle(current, all)
-    expect(resolved.slice(4)).toEqual([LATE, CHATS[4]])
+    expect(passes.indexOf(LATE)).toBeLessThan(passes.indexOf(CHATS[4]!))
     expect(await turnState(current, LATE)).toBe('unverifiable')
   })
 

@@ -4,7 +4,12 @@
 // Signals: every committed revocation or supersession of a generation (the record store's
 // `onGenerationEnded`), an exit this host observed (whether or not its release landed), a row an
 // ended generation committed late, and startup. Each one re-derives what readers see at once (the
-// operational revision, the published view, the queued-card drain), then wakes the worker.
+// operational revision, the published view, the queued-card drain), then wakes the worker. Startup
+// carries no debt: it only wakes every chat, since every pass derives what is owed.
+//
+// A lease latched in recovery is left alone: deciding it signals a process that may still run, so
+// only a person's view or action on the chat does (the visible-tab restore, a start, an attach),
+// and that decision's release is itself the signal that settles what the owner left.
 //
 // The worker coalesces: a chat has at most one attempt running and one timer waiting, and every
 // attempt re-derives everything owed (`runStructuredAgentSessionReconciliationPass`). A chat nobody
@@ -18,7 +23,9 @@
 // journal can never load, when the database is read-only, or at shutdown. Nothing a person does
 // (send, start, open, Stop, answer) ever waits on it.
 
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionGenerationEnd } from '../../runtime/agent-session-generation-end'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionExitSettlement } from './structured-agent-session-leftover-settlement'
 import {
@@ -46,8 +53,6 @@ export type StructuredAgentSessionReconciliationSignal = {
   exit?: StructuredAgentSessionExitSettlement
   /** Readers re-baseline at the moved fence (`publishGenerationEnded`). */
   restate?: boolean
-  /** This process owes the chat its startup share. */
-  startup?: true
 }
 
 export type StructuredAgentSessionReconciliationContext =
@@ -59,8 +64,6 @@ export type StructuredAgentSessionReconciliationContext =
     track: <T>(operation: Promise<T>) => Promise<T>
     /** Publishes what is current now and wakes the queued-card drain. */
     publishGenerationEnded: (sessionId: string, options?: { restate?: boolean }) => void
-    /** Exits a lease latched in recovery when present-time evidence permits; a no-op otherwise. */
-    resolveRecovery: (sessionId: string) => Promise<unknown>
   }
 
 /** `done`: a pass found nothing owed, unless a signal came meanwhile; `retire`: nothing this
@@ -82,6 +85,9 @@ type ChatWorker = StructuredAgentSessionReconciliationSlotWaiter & {
 
 export class StructuredAgentSessionReconciliation {
   private readonly workers = new Map<string, ChatWorker>()
+  /** Where this host first opened each chat's journal: every send at or before it was accepted
+   *  by an earlier host process, and every one after it by this one. */
+  private readonly firstOpened = new Map<string, AgentJournalCursor>()
   private disposed = false
   private readonly slots = new StructuredAgentSessionReconciliationSlots(() => this.disposed)
   private readonly unsubscribe: () => void
@@ -108,9 +114,6 @@ export class StructuredAgentSessionReconciliation {
     if (signal.exit) {
       worker.debts.exit = signal.exit
     }
-    if (signal.startup && !worker.debts.startupShare) {
-      worker.debts.startupShare = { leaseSettled: false }
-    }
     if (worker.running) {
       worker.dirty = true
     } else if (worker.failures === 0 && !worker.timer) {
@@ -124,6 +127,13 @@ export class StructuredAgentSessionReconciliation {
     const fence = this.context.deps.store.getRecord(sessionId)?.lease.runtimeFence
     if (lowestFence !== null && fence !== undefined && lowestFence < fence) {
       this.signal(sessionId)
+    }
+  }
+
+  /** A handle this host opened on the chat's journal; only its first one marks the boundary. */
+  noteOpened = (sessionId: string, journal: Pick<AgentSessionJournal, 'openedAt'>): void => {
+    if (!this.firstOpened.has(sessionId)) {
+      this.firstOpened.set(sessionId, journal.openedAt())
     }
   }
 
@@ -199,22 +209,13 @@ export class StructuredAgentSessionReconciliation {
   private async runAttempt(sessionId: string, worker: ChatWorker): Promise<Outcome> {
     try {
       const { store } = this.context.deps
-      if (this.disposed || store.readOnly || !store.getRecord(sessionId)) {
+      const record = store.getRecord(sessionId)
+      if (this.disposed || store.readOnly || !record) {
         return 'retire'
       }
-      const share = worker.debts.startupShare
-      // Once per startup share, before its pass: a lease latched in recovery is decided first, as
-      // the restore decides it, so the pass judges what is current.
-      if (share && !share.leaseSettled) {
-        const resolved = await this.slots.run(worker, () =>
-          this.context.resolveRecovery(sessionId).catch((error: unknown) => {
-            this.warn(sessionId, error)
-          })
-        )
-        if (!resolved) {
-          return 'retire'
-        }
-        share.leaseSettled = true
+      // Nothing owed until its recovery is decided, whose release signals again: no journal read.
+      if (record.lease.handoffStage === 'recovering') {
+        return 'done'
       }
       if (!this.context.sessions.has(sessionId) && !worker.loaded) {
         const stop = await this.load(sessionId, worker)
@@ -243,7 +244,8 @@ export class StructuredAgentSessionReconciliation {
       this.context,
       sessionId,
       session,
-      worker.debts
+      worker.debts,
+      this.firstOpened.get(sessionId) ?? session.journal.openedAt()
     )
     if (pass.failed.length > 0) {
       this.warn(sessionId, pass.failed[0])
@@ -291,6 +293,7 @@ export class StructuredAgentSessionReconciliation {
     }
     if (loaded.kind === 'loaded') {
       worker.loaded = loaded.session
+      this.noteOpened(sessionId, loaded.session.journal)
     }
     // Skipped: a reader opened it meanwhile, and the pass uses their conversation.
     return loaded.kind === 'nothing' ? 'retire' : null

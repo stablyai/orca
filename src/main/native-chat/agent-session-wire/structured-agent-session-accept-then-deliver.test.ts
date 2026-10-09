@@ -253,6 +253,9 @@ async function writeAsEarlierProcess(
   })
   await write(journal, record.lease.runtimeFence)
   await journal.close()
+  // The next host is a new process, which has not opened the chat yet.
+  await host.flushAllStreamedEvents()
+  await startHost()
 }
 
 function earlierSubmission(id: string, text: string, handoverRecorded?: true) {
@@ -582,8 +585,6 @@ describe('what an earlier host process left behind', () => {
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       })
     })
-    await host.flushAllStreamedEvents()
-    await startHost()
     await startUpHost(host)
 
     expect(await submission('legacy')).toMatchObject({ dispatchState: 'unknown', recovered: true })
