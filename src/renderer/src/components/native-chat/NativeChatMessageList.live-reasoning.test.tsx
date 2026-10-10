@@ -277,12 +277,7 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
           inTurn('wake')
         )
       ]
-      render(
-        list([], {
-          session: sessionOf([asked, done, woke]),
-          journalItems: items
-        })
-      )
+      render(list([], { session: sessionOf([asked, done, woke]), journalItems: items }))
       expect(screen.getByText(/Working for/)).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /Reasoning/ })).toBeNull()
       fireEvent.click(screen.getByRole('button', { name: 'Thinking' }))
