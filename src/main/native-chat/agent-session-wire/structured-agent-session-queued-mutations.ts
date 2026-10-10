@@ -23,10 +23,12 @@ import {
 import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
 import { structuredQueueHold } from './structured-agent-session-queued-messages'
+import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import {
   resumeStructuredQueue,
   structuredAgentSessionHostInstance
 } from './structured-agent-session-queued-pause'
+import { unsettledQueuedMessages } from './structured-agent-session-queued-stop'
 import {
   mutateStructuredAgentSession,
   type StructuredAgentSessionMutationContext
