@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  demotionLosers,
-  demotionWinner,
   mintEpoch,
   ReservePlacer,
   type PlacementCell
@@ -169,51 +167,9 @@ describe('reserve placer under concurrent placements', () => {
   })
 })
 
-describe('epoch mint and demotion winner', () => {
+describe('epoch mint', () => {
   it('mints one above every known epoch', () => {
     expect(mintEpoch([])).toBe(1)
     expect(mintEpoch([3, 9, 4])).toBe(10)
-  })
-
-  it('picks the higher epoch, then the newest join, then the lower cell id', () => {
-    // A rebind on a stale seat joins later but keeps its old epoch: it must not win.
-    expect(
-      demotionWinner([
-        { cellId: 'b', epoch: 2, joinedAt: 10 },
-        { cellId: 'a', epoch: 1, joinedAt: 20 }
-      ])?.cellId
-    ).toBe('b')
-    expect(
-      demotionWinner([
-        { cellId: 'a', epoch: 3, joinedAt: 10 },
-        { cellId: 'b', epoch: 3, joinedAt: 20 }
-      ])?.cellId
-    ).toBe('b')
-    const tie = [
-      { cellId: 'b', epoch: 3, joinedAt: 10 },
-      { cellId: 'a', epoch: 3, joinedAt: 10 }
-    ]
-    expect(demotionWinner(tie)?.cellId).toBe('a')
-    expect(demotionWinner([...tie].reverse())?.cellId).toBe('a')
-  })
-
-  it('demotes a seat once it has been outranked for the grace period, never the top one', () => {
-    const seats = [
-      { cellId: 'a', epoch: 3, joinedAt: 0 },
-      { cellId: 'b', epoch: 5, joinedAt: 4_000 },
-      { cellId: 'c', epoch: 6, joinedAt: 9_000 }
-    ]
-    expect(demotionLosers(seats, 13_999, 10_000)).toEqual([])
-    expect(demotionLosers(seats, 14_000, 10_000).map((seat) => seat.cellId)).toEqual(['a'])
-    // A host flapping onto a third cell does not keep the first seat alive.
-    expect(demotionLosers(seats, 19_000, 10_000).map((seat) => seat.cellId)).toEqual(['a', 'b'])
-    expect(demotionLosers([seats[0]!], 99_000, 10_000)).toEqual([])
-    // A stale seat that rebinds after the newer one joined is outranked from its rebind.
-    const rebound = [
-      { cellId: 'a', epoch: 3, joinedAt: 20_000 },
-      { cellId: 'b', epoch: 5, joinedAt: 4_000 }
-    ]
-    expect(demotionLosers(rebound, 29_999, 10_000)).toEqual([])
-    expect(demotionLosers(rebound, 30_000, 10_000).map((seat) => seat.cellId)).toEqual(['a'])
   })
 })

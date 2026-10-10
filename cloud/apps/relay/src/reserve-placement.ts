@@ -239,39 +239,3 @@ export function mintEpoch(knownEpochs: Iterable<number>): number {
   for (const epoch of knownEpochs) highest = Math.max(highest, epoch)
   return highest + 1
 }
-
-export type DuplicateSeat = { cellId: string; epoch: number; joinedAt: number }
-
-// The higher epoch wins (every move mints a higher one, so a rebind on a stale seat cannot
-// win), then the newest cell-reported join, then the lower cell id. Every director computes
-// it from the same reports, so no two pick different winners.
-function outranks(left: DuplicateSeat, right: DuplicateSeat): boolean {
-  if (left.epoch !== right.epoch) return left.epoch > right.epoch
-  if (left.joinedAt !== right.joinedAt) return left.joinedAt > right.joinedAt
-  return left.cellId < right.cellId
-}
-
-export function demotionWinner<Seat extends DuplicateSeat>(seats: readonly Seat[]): Seat | null {
-  let winner: Seat | null = null
-  for (const seat of seats) if (!winner || outranks(seat, winner)) winner = seat
-  return winner
-}
-
-// A seat is demoted once it has been outranked for the grace period, so a host flapping
-// between cells cannot keep an old seat alive. The top seat is never demoted.
-export function demotionLosers<Seat extends DuplicateSeat>(
-  seats: readonly Seat[],
-  now: number,
-  graceMs: number
-): Seat[] {
-  return seats.filter((seat) => {
-    let outrankedSince: number | null = null
-    for (const other of seats) {
-      if (other === seat || !outranks(other, seat)) continue
-      // Outranked from when both seats existed: a stale seat's later rebind starts its own clock.
-      const since = Math.max(other.joinedAt, seat.joinedAt)
-      outrankedSince = outrankedSince === null ? since : Math.min(outrankedSince, since)
-    }
-    return outrankedSince !== null && now - outrankedSince >= graceMs
-  })
-}
