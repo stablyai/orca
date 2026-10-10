@@ -43,8 +43,9 @@ const RESERVE_MODE_CENSUS: Record<string, string> = {
   abortUnarrivedRegionalRehomes: 'follows-a-refused-start',
   beginCellDrainSend: 'follows-a-refused-start',
   commitIdleRegionalRehome: 'follows-a-refused-start',
-  completeEvacuation: 'follows-a-refused-start',
-  completeEvacuationFromDeadSource: 'follows-a-refused-start',
+  // A reserve source keeps no activity rows, so its "no source units" check proves nothing.
+  completeEvacuation: 'refuses-reserve-cells',
+  completeEvacuationFromDeadSource: 'refuses-reserve-cells',
   completeReadyEvacuations: 'follows-a-refused-start',
   completeReadyRegionalRehomes: 'follows-a-refused-start',
   prepareCellDrainRecovery: 'follows-a-refused-start',
@@ -61,6 +62,7 @@ const RESERVE_MODE_CENSUS: Record<string, string> = {
   adoptLegacyCellFence: 'cell-level',
   applyCellAdmissionSelector: 'cell-level',
   applyRegionalRehomeControl: 'cell-level',
+  cellAdmitMode: 'cell-level',
   attestCellFence: 'cell-level',
   attestCellFenceAttempt: 'cell-level',
   bindCellFencePlanGeneration: 'cell-level',
@@ -76,6 +78,7 @@ const RESERVE_MODE_CENSUS: Record<string, string> = {
   pruneReleasedControlReservations: 'cell-level',
   reconcileCells: 'cell-level',
   reconcileCellsAtStartup: 'cell-level',
+  reserveModeCells: 'cell-level',
   recordCellFenceOperation: 'cell-level',
   recordCellHeartbeat: 'cell-level',
   recordCellRegionalRehomeStatus: 'cell-level',
@@ -85,6 +88,7 @@ const RESERVE_MODE_CENSUS: Record<string, string> = {
   releaseExpiredRegionPreferences: 'cell-level',
   seatFeedCells: 'cell-level',
   setCellAdmissionState: 'cell-level',
+  setCellAdmitMode: 'cell-level',
   setCellEnabled: 'cell-level',
   startCellFenceApply: 'cell-level'
 }
@@ -108,51 +112,70 @@ describe('reserve-mode census', () => {
     expect(Object.keys(RESERVE_MODE_CENSUS).filter((name) => !methods.includes(name))).toEqual([])
   })
 
-  async function setup(now: () => number, reserve: () => ReadonlySet<string> | null) {
+  async function setup(now: () => number, reserve: string[] = []) {
     database = await openInMemoryRelayDatabase()
-    const store = new RelayAssignmentStore(database, now, { reserveModeCells: reserve })
+    const store = new RelayAssignmentStore(database, now)
     await store.reconcileCells(CELLS)
+    await setReserve(store, reserve)
     return store
+  }
+
+  async function setReserve(store: RelayAssignmentStore, reserve: string[]) {
+    for (const cell of CELLS) {
+      await store.setCellAdmitMode(cell.id, reserve.includes(cell.id) ? 'reserve' : 'db')
+    }
+  }
+
+  // A store that has never read the set: the table is unreadable.
+  async function unknownSet(now: () => number) {
+    const unknown = new RelayAssignmentStore(database!, now)
+    await database!.query('ALTER TABLE relay_cell_admit_modes RENAME TO relay_cell_admit_modes_gone')
+    return {
+      unknown,
+      restore: async () =>
+        await database!.query('ALTER TABLE relay_cell_admit_modes_gone RENAME TO relay_cell_admit_modes')
+    }
   }
 
   it('lets no expiry sweep touch a reserve-mode cell, and runs none while the set is unknown', async () => {
     let now = 1_000
-    let reserve: ReadonlySet<string> | null = new Set(['cell-a'])
-    const store = await setup(() => now, () => reserve)
+    const store = await setup(() => now)
     const onA = { userId: 'user-a', relayHostId: 'host000000000001' }
-    reserve = new Set()
     expect((await store.assign(onA)).cellId).toBe('cell-a')
     await store.acquireActivity(onA, { activityId: 'invite:one', kind: 'invite', cellId: 'cell-a' })
-    reserve = new Set(['cell-a'])
+    await setReserve(store, ['cell-a'])
     now += ASSIGNMENT_LIMITS.activityLeaseMs + 1
     expect(await store.releaseExpiredActivityLeases()).toBe(0)
     expect(await store.releaseExpiredActivity()).toBe(0)
-    reserve = null
-    expect(await store.releaseExpiredActivityLeases()).toBe(0)
-    reserve = new Set()
+    const { unknown, restore } = await unknownSet(() => now)
+    expect(await unknown.reserveModeCells()).toBeNull()
+    expect(await unknown.releaseExpiredActivityLeases()).toBe(0)
+    expect(await unknown.evacuateDeadCells()).toBe(0)
+    await restore()
+    await setReserve(store, [])
     expect(await store.releaseExpiredActivityLeases()).toBeGreaterThan(0)
   })
 
   it('keeps an idle host sticky on a reserve-mode cell where today it would be re-placed', async () => {
     let now = 1_000
-    let reserve: ReadonlySet<string> | null = new Set()
-    const store = await setup(() => now, () => reserve)
+    const store = await setup(() => now)
     const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
     const first = await store.assign(identity)
     await store.changeActivity(identity, 'control', -1)
     now += ASSIGNMENT_LIMITS.activityLeaseMs + ASSIGNMENT_LIMITS.dormantTtlMs + 1
-    reserve = new Set([first.cellId])
+    await setReserve(store, [first.cellId])
     expect(await store.assign(identity)).toMatchObject({
       cellId: first.cellId,
       assignmentEpoch: first.assignmentEpoch
     })
-    // Not yet knowing which cells are switched on is treated the same way.
-    reserve = null
-    expect((await store.assign(identity)).assignmentEpoch).toBe(first.assignmentEpoch)
+    // Not knowing which cells are switched on is treated the same way.
+    const { unknown, restore } = await unknownSet(() => now)
+    expect((await unknown.assign(identity)).assignmentEpoch).toBe(first.assignmentEpoch)
+    await restore()
   })
 
   it('never places a fresh host on a reserve-mode cell through the database', async () => {
-    const store = await setup(() => 1_000, () => new Set(['cell-a']))
+    const store = await setup(() => 1_000, ['cell-a'])
     for (let index = 0; index < 4; index += 1) {
       const placed = await store.assign({
         userId: `user-${index}`,
@@ -163,7 +186,7 @@ describe('reserve-mode census', () => {
   })
 
   it('refuses drains, evacuations and status reads that would treat a reserve-mode cell as empty', async () => {
-    const store = await setup(() => 1_000, () => new Set(['cell-a']))
+    const store = await setup(() => 1_000, ['cell-a'])
     await expect(store.cellDeploymentStatus('cell-a')).rejects.toBeInstanceOf(
       RelayCellInReserveModeError
     )
@@ -183,6 +206,26 @@ describe('reserve-mode census', () => {
       })
     ).rejects.toThrow('cell_in_reserve_mode')
     expect((await store.cellDeploymentStatus('cell-b')).cellId).toBe('cell-b')
+    // Unknown refuses too, with a retryable error.
+    const { unknown, restore } = await unknownSet(() => 1_000)
+    await expect(unknown.cellDeploymentStatus('cell-b')).rejects.toThrow('reserve_mode_unknown')
+    await restore()
+  })
+
+  it('refuses the flip to reserve while a migration names the cell', async () => {
+    const store = await setup(() => 1_000)
+    await database!.query(
+      `INSERT INTO relay_assignment_migrations
+       (user_id, relay_host_id, source_cell_id, target_cell_id, previous_epoch, assignment_epoch,
+        source_request_units, target_reserved_units, expires_at, created_at, updated_at)
+       VALUES ('user-a', 'host000000000001', 'cell-b', 'cell-a', 1, 2, 0, 1, 9999, 1000, 1000)`
+    )
+    await expect(store.setCellAdmitMode('cell-a', 'reserve')).rejects.toThrow('cell_has_open_migration')
+    expect(await store.cellAdmitMode('cell-a')).toMatchObject({ admitMode: 'db' })
+    await store.setCellAdmitMode('cell-a', 'db')
+    await database!.query(`UPDATE relay_assignment_migrations SET aborted_at = 1001`)
+    await store.setCellAdmitMode('cell-a', 'reserve')
+    expect(await store.cellAdmitMode('cell-a')).toMatchObject({ admitMode: 'reserve', updatedAt: 1_000 })
   })
 })
 

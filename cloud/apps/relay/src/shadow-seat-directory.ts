@@ -11,8 +11,6 @@ export const SHADOW_SEAT_POLL_TIMEOUT_MS = 2_000
 export const SHADOW_SEAT_CELL_LIST_REFRESH_MS = 30_000
 export const SHADOW_SEAT_RECENTLY_LEFT_TTL_MS = 24 * 60 * 60 * 1_000
 export const SHADOW_SEAT_RECENTLY_LEFT_MAX_HOSTS = 100_000
-// How long a starting director waits for every live cell before acting on what it has.
-export const SHADOW_SEAT_STARTUP_GRACE_MS = 30_000
 const RECENTLY_LEFT_PER_HOST = 4
 // Google identity tokens live an hour; one per poll would be 26 metadata reads a second.
 const IDENTITY_TOKEN_REUSE_MS = 10 * 60_000
@@ -134,8 +132,6 @@ export class ShadowSeatDirectory {
   // Per host, the newest database epoch seen and when: stands in for the grant time.
   private readonly databaseEpochs = new Map<string, { epoch: number; firstSeenAt: number }>()
 
-  constructor(private readonly createdAt = Date.now()) {}
-
   // Cells no longer listed are forgotten with their seats; new ones start pending.
   // `required` defaults to every listed cell.
   setCells(
@@ -236,18 +232,6 @@ export class ShadowSeatDirectory {
     if (expiresAt === undefined) return 'unlive'
     if (expiresAt > now) return 'live'
     return expiresAt > this.heartbeats.readAt ? 'unknown' : 'unlive'
-  }
-
-  // Cells whose applied switch says admitMode=reserve, as last reported. Null until every live
-  // cell has answered once, since a cell not yet heard from may be one of them; after the
-  // startup grace a cell that never answers is treated as off, so sweeps cannot stall on it.
-  reserveModeCells(now = Date.now()): ReadonlySet<string> | null {
-    if (!this.isComplete() && now - this.createdAt < SHADOW_SEAT_STARTUP_GRACE_MS) return null
-    const cells = new Set<string>()
-    for (const cursor of this.cells.values()) {
-      if (cursor.flagsApplied?.flags.admitMode === 'reserve') cells.add(cursor.cellId)
-    }
-    return cells
   }
 
   // When this director first saw the host at this database epoch, if it has.
@@ -485,7 +469,7 @@ export function startShadowSeatPoller(
   const tokenProvider =
     options.identityToken ??
     ((tokenAudience: string) => googleMetadataIdentityToken(tokenAudience, fetchImpl))
-  const directory = new ShadowSeatDirectory(now())
+  const directory = new ShadowSeatDirectory()
   const inFlight = new Set<string>()
   let cells: SeatFeedCell[] = []
   let cellsReadAt: number | undefined

@@ -41,9 +41,7 @@ import { createRelayReadiness } from './relay-readiness.js'
 import { createRelayTokenVerifier, readBearer } from './relay-token-verifier.js'
 import { closeRelayWebSocket } from './relay-websocket-close.js'
 import { ShadowDirectoryCompare } from './shadow-directory-compare.js'
-import { startShadowSeatPoller, type ShadowSeatDirectory } from './shadow-seat-directory.js'
-
-const NO_RESERVE_MODE_CELLS: ReadonlySet<string> = new Set()
+import { startShadowSeatPoller } from './shadow-seat-directory.js'
 import { ProcessQueuedByteBudget } from './splice-forwarder.js'
 
 // A malformed percent-escape in the request target must be a client error, never a URIError
@@ -144,12 +142,8 @@ export function createRelayServer(
   const relayJwks = createRemoteJWKSet(new URL(config.jwksUrl))
   const verifyRelayToken = createRelayTokenVerifier(config, relayJwks)
   const store = new RelayCredentialStore(observedDatabase, options.now)
-  // Late-bound: the poller lists cells through the store it informs.
-  let shadowSeatDirectory: ShadowSeatDirectory | undefined
   const assignments = new RelayAssignmentStore(observedDatabase, options.now, {
     requireLiveCells: config.role === 'director',
-    // Without the poller this director cannot see a cell's switch, so none is treated as on.
-    reserveModeCells: () => shadowSeatDirectory?.reserveModeCells() ?? NO_RESERVE_MODE_CELLS,
     placementLoadBand: config.role === 'director' ? new PlacementLoadBand(options.random) : undefined,
     regionalRehomeCohortPercent: config.regionCorrectionCohortPercent ?? 0,
     // The director runs in the database's region; only its rehome readers use this.
@@ -168,7 +162,6 @@ export function createRelayServer(
   const shadowSeatPoller = startShadowSeatPoller(config, {
     listCells: () => assignments.seatFeedCells()
   })
-  shadowSeatDirectory = shadowSeatPoller?.directory
   const shadowCompare = shadowSeatPoller
     ? new ShadowDirectoryCompare(shadowSeatPoller.directory, options.now)
     : undefined

@@ -29,6 +29,7 @@ import {
 } from './admin-token-verifier.js'
 import {
   RelayAssignmentRowBusyError,
+  RelayCellInReserveModeError,
   RelayHomeCellUnavailableError,
   type CellFenceAttemptEvidence,
   type RelayAssignment,
@@ -284,7 +285,9 @@ export function createRelayApp(
     error: unknown,
     status: 404 | 409
   ): Response => {
-    if (!isRelayDatabaseTransientError(error)) {
+    // The reserve-mode set could not be read: retry, as for a database blip.
+    const unknownReserveSet = error instanceof RelayCellInReserveModeError && error.cellId === null
+    if (!isRelayDatabaseTransientError(error) && !unknownReserveSet) {
       return context.json({ error: operationError(error) }, status)
     }
     context.header('Retry-After', String(config.publicAssignmentRetryAfterSeconds))
@@ -1133,6 +1136,32 @@ export function createRelayApp(
       return rejectAdminOperation(context, error, 409)
     }
   })
+  // Step 5: the flag workflow's record of a cell's admitMode, which every sweep reads. Without
+  // `admitMode` it only reads; reserve is refused while a drain, migration or rehome is open.
+  app.post('/v1/admin/cell-admit-mode', async (context) => {
+    const bearer = readBearer(context.req.header('authorization'))
+    if (config.role !== 'director') return context.json({ error: 'director_only' }, 404)
+    if (!bearer || !(await verifyAdminToken(bearer))) {
+      return context.json({ error: 'invalid_token' }, 401)
+    }
+    if (requestTooLarge(context.req.header('content-length'))) {
+      return context.json({ error: 'request_too_large' }, 413)
+    }
+    const body = AdminCellAdmitModeSchema.safeParse(await context.req.json().catch(() => null))
+    if (!body.success) return context.json({ error: 'invalid_request' }, 400)
+    try {
+      if (body.data.admitMode) {
+        await operations.assignments.setCellAdmitMode(body.data.cellId, body.data.admitMode)
+      }
+      return context.json({
+        v: 1,
+        cellId: body.data.cellId,
+        ...(await operations.assignments.cellAdmitMode(body.data.cellId))
+      })
+    } catch (error) {
+      return rejectAdminOperation(context, error, 409)
+    }
+  })
   app.post('/v1/admin/cell-fence-adopt-legacy', async (context) => {
     const bearer = readBearer(context.req.header('authorization'))
     if (config.role !== 'director') return context.json({ error: 'director_only' }, 404)
@@ -1954,6 +1983,10 @@ const AdminAdmissionSelectorAddMigrationCellsSchema = z
       new Set(cells.map(({ cellId }) => cellId)).size === cells.length &&
       new Set(cells.map(({ cellUrl }) => cellUrl)).size === cells.length
   )
+
+const AdminCellAdmitModeSchema = z
+  .object({ v: z.literal(1), cellId: CellIdSchema, admitMode: z.enum(['db', 'reserve']).optional() })
+  .strict()
 
 const AdminCellStateSchema = z.union([
   z.object({ v: z.literal(1), cellId: CellIdSchema, enabled: z.boolean() }).strict(),
