@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
 import ts from 'typescript'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RelayAssignmentStore, RelayCellInReserveModeError } from './assignment-store.js'
 import type { RelayCellConfig } from './config.js'
 import { openInMemoryRelayDatabase, type RelayDatabase } from './database.js'
@@ -65,6 +65,7 @@ const RESERVE_MODE_CENSUS: Record<string, string> = {
   applyCellAdmissionSelector: 'cell-level',
   applyRegionalRehomeControl: 'cell-level',
   cellAdmitMode: 'cell-level',
+  cellHeartbeatFresh: 'cell-level',
   commitCellReservationDelta: 'cell-level',
   attestCellFence: 'cell-level',
   attestCellFenceAttempt: 'cell-level',
@@ -157,6 +158,55 @@ describe('reserve-mode census', () => {
     await restore()
     await setReserve(store, [])
     expect(await store.releaseExpiredActivityLeases()).toBeGreaterThan(0)
+  })
+
+  it('logs an unreadable reserve-mode set at most once a minute', async () => {
+    let now = 1_000
+    await setup(() => now)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const clock = vi.spyOn(performance, 'now')
+    let at = 1_000_000
+    clock.mockImplementation(() => at)
+    const { unknown, restore } = await unknownSet(() => now)
+    try {
+      for (let read = 0; read < 3; read += 1) {
+        expect(await unknown.reserveModeCells()).toBeNull()
+        at += 10_000
+      }
+      at += 60_000
+      expect(await unknown.reserveModeCells()).toBeNull()
+      const lines = warn.mock.calls.filter(([line]) => String(line).includes('orca_relay_reserve_mode_read_failed'))
+      expect(lines).toHaveLength(2)
+    } finally {
+      await restore()
+      clock.mockRestore()
+      warn.mockRestore()
+    }
+  })
+
+  it('tells break glass whether a cell is still heartbeating', async () => {
+    let now = 1_000
+    const store = await setup(() => now)
+    expect(await store.cellHeartbeatFresh('cell-a')).toBe(false)
+    await store.reconcileCells([{ ...CELLS[0]!, connectionHardCap: 600, connectionUnobservedBound: 50 }, CELLS[1]!])
+    await store.recordCellHeartbeat({
+      cellId: 'cell-a',
+      cellUrl: CELLS[0]!.url,
+      cellIncarnation: '11111111-1111-4111-8111-111111111111',
+      startedAt: 50,
+      ready: false,
+      observedRequests: 0,
+      totalConnections: 0,
+      inFlightConnections: 0,
+      reservedConnectionUnits: 0,
+      enforcedConnectionUnits: 0,
+      connectionHardCap: 600,
+      connectionUnobservedBound: 50
+    })
+    // Not ready is still alive: break glass is for a cell that has gone silent.
+    expect(await store.cellHeartbeatFresh('cell-a')).toBe(true)
+    now += 45_001
+    expect(await store.cellHeartbeatFresh('cell-a')).toBe(false)
   })
 
   it('keeps an idle host sticky on a reserve-mode cell where today it would be re-placed', async () => {

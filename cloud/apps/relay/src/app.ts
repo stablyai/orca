@@ -1191,7 +1191,9 @@ export function createRelayApp(
       return context.json({
         v: 1,
         cellId: body.data.cellId,
-        ...(await operations.assignments.cellAdmitMode(body.data.cellId))
+        ...(await operations.assignments.cellAdmitMode(body.data.cellId)),
+        // The break-glass flip refuses a cell that is still heartbeating.
+        heartbeatFresh: await operations.assignments.cellHeartbeatFresh(body.data.cellId)
       })
     } catch (error) {
       return rejectAdminOperation(context, error, 409)

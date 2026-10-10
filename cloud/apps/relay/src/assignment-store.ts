@@ -152,6 +152,7 @@ export class RelayCellInReserveModeError extends Error {
 // and reader skips reserve cells, and does nothing while the set is unknown.
 const RESERVE_MODE_CACHE_MS = 5_000
 const RESERVE_MODE_STALE_MS = 60_000
+const RESERVE_MODE_FAILURE_LOG_MS = 60_000
 
 type ControlActivationInput = {
   cellId: string
@@ -612,6 +613,7 @@ export class RelayAssignmentStore {
   >()
   private readonly recordControlRenewal?: RelayAssignmentStoreOptions['recordControlRenewal']
   private reserveModeRead: { cells: ReadonlySet<string>; readAt: number } | null = null
+  private reserveModeFailureLoggedAt = Number.NEGATIVE_INFINITY
   private readonly placementLoadBand?: PlacementLoadBand
   private readonly admissionSelector: RelayCellAdmissionSelector
   private readonly migrationCellRegistrar: RelayMigrationCellRegistrar
@@ -658,11 +660,31 @@ export class RelayAssignmentStore {
         `SELECT cell_id FROM relay_cell_admit_modes WHERE admit_mode <> 'db'`
       )
       this.reserveModeRead = { cells: new Set(rows.map((row) => text(row, 'cell_id'))), readAt: at }
-    } catch {
-      // Keep the last read until it is stale.
+    } catch (error) {
+      // Keep the last read until it is stale. Logged at most once a minute: while it fails,
+      // sweeps soon stop and admin operations are refused, so the cause must be on the record.
+      if (at - this.reserveModeFailureLoggedAt >= RESERVE_MODE_FAILURE_LOG_MS) {
+        this.reserveModeFailureLoggedAt = at
+        console.warn(
+          JSON.stringify({
+            event: 'orca_relay_reserve_mode_read_failed',
+            reason: error instanceof Error ? error.message : 'unknown',
+            lastReadAgeMs: this.reserveModeRead ? Math.round(at - this.reserveModeRead.readAt) : null
+          })
+        )
+      }
     }
     const read = this.reserveModeRead
     return read && at - read.readAt <= RESERVE_MODE_STALE_MS ? read.cells : null
+  }
+
+  // Break glass flips only a cell that has stopped heartbeating, ready or not.
+  async cellHeartbeatFresh(cellId: string): Promise<boolean> {
+    const rows = await this.database.query(
+      `SELECT cell_id FROM relay_cell_runtime WHERE cell_id = ? AND last_heartbeat_at > ?`,
+      [cellId, this.now() - this.heartbeatTtlMs]
+    )
+    return rows.length === 1
   }
 
   private async liveReserveCell(

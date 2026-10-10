@@ -78,6 +78,7 @@ describePostgres('reserve-mode census on PostgreSQL', () => {
     await store.reconcileCells([cellA, cellB], false)
     await heartbeat(store, cellA)
     await heartbeat(store, cellB)
+    expect(await store.cellHeartbeatFresh(cellA.id)).toBe(true)
     const identity = { userId: USER, relayHostId: 'host000000000001' }
     await database.query(
       `INSERT INTO relay_assignments
@@ -102,6 +103,7 @@ describePostgres('reserve-mode census on PostgreSQL', () => {
     // cellA stops heartbeating: a dead cell holds no duplicate, so the host is re-placed.
     now += 60_000
     await heartbeat(store, cellB)
+    expect(await store.cellHeartbeatFresh(cellA.id)).toBe(false)
     expect((await store.assign(identity)).cellId).toBe(cellB.id)
     await store.setCellAdmitMode(cellA.id, 'db')
   })
