@@ -68,6 +68,101 @@ describe('groupLinearIssues', () => {
     )
     expect(sections.map((section) => section.key)).toEqual(['status:Todo', 'status:Done'])
   })
+
+  it('orders status sections by workflow type, not by the newest issue in each', () => {
+    const sections = groupLinearIssues(
+      [
+        issue({
+          id: '1',
+          identifier: 'COR-1',
+          updatedAt: '2026-01-05T00:00:00.000Z',
+          state: { name: 'Canceled', type: 'canceled', color: '#0' }
+        }),
+        issue({
+          id: '2',
+          identifier: 'COR-2',
+          updatedAt: '2026-01-04T00:00:00.000Z',
+          state: { name: 'Done', type: 'completed', color: '#1' }
+        }),
+        issue({
+          id: '3',
+          identifier: 'COR-3',
+          updatedAt: '2026-01-03T00:00:00.000Z',
+          state: { name: 'In Progress', type: 'started', color: '#2' }
+        }),
+        issue({
+          id: '4',
+          identifier: 'COR-4',
+          updatedAt: '2026-01-02T00:00:00.000Z',
+          state: { name: 'Todo', type: 'unstarted', color: '#3' }
+        }),
+        issue({
+          id: '5',
+          identifier: 'COR-5',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+          state: { name: 'Backlog', type: 'backlog', color: '#4' }
+        })
+      ],
+      'status',
+      'updated'
+    )
+    expect(sections.map((section) => section.label)).toEqual([
+      'Backlog',
+      'Todo',
+      'In Progress',
+      'Done',
+      'Canceled'
+    ])
+  })
+
+  it('puts triage before backlog, unknown state types last, and breaks type ties by name', () => {
+    const sections = groupLinearIssues(
+      [
+        issue({ id: '1', identifier: 'COR-1', state: { name: 'Mystery', type: 'x', color: '#0' } }),
+        issue({
+          id: '2',
+          identifier: 'COR-2',
+          state: { name: 'Review', type: 'started', color: '#1' }
+        }),
+        issue({
+          id: '3',
+          identifier: 'COR-3',
+          state: { name: 'In Progress', type: 'started', color: '#2' }
+        }),
+        issue({
+          id: '4',
+          identifier: 'COR-4',
+          state: { name: 'Backlog', type: 'backlog', color: '#3' }
+        }),
+        issue({
+          id: '5',
+          identifier: 'COR-5',
+          state: { name: 'Triage', type: 'triage', color: '#4' }
+        })
+      ],
+      'status',
+      'identifier'
+    )
+    expect(sections.map((section) => section.label)).toEqual([
+      'Triage',
+      'Backlog',
+      'In Progress',
+      'Review',
+      'Mystery'
+    ])
+  })
+
+  it('keeps first-seen order for non-status groupings', () => {
+    const sections = groupLinearIssues(
+      [
+        issue({ id: '1', identifier: 'COR-1', team: { id: 't-2', name: 'Web', key: 'WEB' } }),
+        issue({ id: '2', identifier: 'COR-2', team: { id: 't-1', name: 'Core', key: 'COR' } })
+      ],
+      'team',
+      'identifier'
+    )
+    expect(sections.map((section) => section.label)).toEqual(['Web', 'Core'])
+  })
 })
 
 describe('getLinearStatusSectionState', () => {
