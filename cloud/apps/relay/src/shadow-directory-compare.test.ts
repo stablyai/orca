@@ -60,7 +60,7 @@ describe('classifyShadowSeat', () => {
       [directoryWith({ 'cell-a': [seat(3)] }), at('cell-a', 3), 'agree', true],
       [directoryWith({ 'cell-a': [] }), null, 'agree-absent', true],
       [directoryWith({ 'cell-a': [seat(3)] }), null, 'map-only', false],
-      [directoryWith({ 'cell-a': [] }, ['cell-b']), at('cell-b', 3), 'cell-unpolled', true],
+      [directoryWith({ 'cell-a': [] }, ['cell-b']), at('cell-b', 3), 'cell-no-feed', true],
       [directoryWith({ 'cell-a': [] }), at('cell-z', 3), 'cell-unpolled', true],
       [directoryWith({ 'cell-a': [] }), at('cell-a', 3), 'db-only-unseen', true],
       [
@@ -151,6 +151,18 @@ describe('classifyShadowSeat', () => {
       class: 'cell-unpolled',
       explained: true
     })
+  })
+
+  it('keeps a cell without a feed out of the coverage count, on either side of the compare', () => {
+    // cell-b reported a seat, then rolled back to an image without the feed.
+    const directory = directoryWith({ 'cell-b': [seat(2)], 'cell-a': [] })
+    directory.markNoFeed('cell-b', 20)
+    for (const answer of [at('cell-a', 3), at('cell-b', 2)]) {
+      expect(classifyShadowSeat(directory, IDENTITY, answer, 30)).toEqual({
+        class: 'cell-no-feed',
+        explained: true
+      })
+    }
   })
 
   it('reads a null answer on a cell whose heartbeat ran out after the list read as pending', () => {

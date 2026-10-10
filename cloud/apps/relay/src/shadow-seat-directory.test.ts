@@ -362,6 +362,45 @@ describe('startShadowSeatPoller', () => {
     expect(cell.directory.isComplete()).toBe(true)
   })
 
+  it('forgets the switches a cell reported once its image no longer has the feed', async () => {
+    let rolledBack = false
+    const cell = poller({
+      'cell-a': () => json(feed({ seq: 1, full: [] })),
+      'cell-b': () =>
+        rolledBack
+          ? new Response('Not Found', { status: 404 })
+          : json(
+              feed({
+                cellId: 'cell-b',
+                seq: 1,
+                full: [],
+                flagsApplied: { generation: 3, flags: { readinessLocal: true } }
+              })
+            )
+    })
+    await cell.tick()
+    expect(cell.directory.cellState('cell-b')?.flagsApplied?.generation).toBe(3)
+    rolledBack = true
+    await cell.tick()
+    cell.stop()
+    expect(cell.directory.cellState('cell-b')).toMatchObject({ status: 'no-feed' })
+    expect(cell.directory.cellState('cell-b')?.flagsApplied).toBeUndefined()
+  })
+
+  it('keeps a reserve switch through a 404 until a feed says db or the process is replaced', () => {
+    const directory = new ShadowSeatDirectory()
+    directory.setCells(['cell-b'])
+    const reserve = { generation: 4, flags: { admitMode: 'reserve' } }
+    directory.apply('cell-b', feed({ cellId: 'cell-b', seq: 1, full: [], flagsApplied: reserve }), 10)
+    directory.markNoFeed('cell-b', 20, INCARNATION)
+    expect(directory.cellState('cell-b')?.flagsApplied).toEqual(reserve)
+    directory.markNoFeed('cell-b', 30)
+    expect(directory.cellState('cell-b')?.flagsApplied).toEqual(reserve)
+    // relay_cell_runtime names another process: the one that reported reserve is gone.
+    directory.markNoFeed('cell-b', 40, '33333333-3333-4333-8333-333333333333')
+    expect(directory.cellState('cell-b')?.flagsApplied).toBeUndefined()
+  })
+
   it('completes without a cell that is dead, empty or isolated', async () => {
     const cell = poller({ 'cell-a': () => json(feed({ seq: 1, full: [] })) }, 'all', async () => [
       CELLS[0]!,
