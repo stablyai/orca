@@ -104,7 +104,8 @@ export class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRunt
       sendTerminal: (handle, action, options) => this.sendTerminal(handle, action, options),
       focusTerminal: (handle) => this.focusTerminal(handle),
       closeTerminal: (handle) => this.closeTerminal(handle),
-      showTerminal: (handle) => this.showTerminal(handle)
+      showTerminal: (handle) => this.showTerminal(handle),
+      resolveTerminalHandleForPaneKey: (paneKey) => this.getTerminalHandleForPaneKey(paneKey)
     })
   }
 
@@ -119,6 +120,7 @@ export class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRunt
     }
     return await this.prepareClaudeAgentTeamsLeaderForHandle({
       handle,
+      paneKey: args.paneKey,
       baseEnv: args.baseEnv,
       prepareAuth: args.prepareAuth
     })
@@ -126,6 +128,7 @@ export class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRunt
 
   async prepareClaudeAgentTeamsLeaderForHandle(args: {
     handle: string
+    paneKey?: string
     baseEnv?: Record<string, string>
     prepareAuth?: boolean
   }): Promise<{ env: Record<string, string>; envToDelete?: string[] }> {
@@ -141,6 +144,7 @@ export class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRunt
     const shimBin = resolveClaudeAgentTeamsShimBin(baseEnv)
     const launch = this.claudeAgentTeams.createLaunchEnv({
       leaderHandle: args.handle,
+      leaderPaneKey: args.paneKey,
       baseEnv,
       shimDir,
       shimBin
