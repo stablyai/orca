@@ -74,10 +74,15 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
 
     requestRunningTerminalCloseConfirm: (request) => {
       const visible = get().runningTerminalCloseConfirm
-      // Why: the probe is async, so a second click on the same tab arrives before the
-      // dialog opens. One prompt, but both closes still resolve.
       if (visible?.terminalTabId === request.terminalTabId) {
+        // Why: closing the same tab again while its prompt is up means "I'm sure"
+        // (Cmd+W x2, #21603) — fold both closes, then confirm instead of waiting for
+        // a click. confirmRunningTerminalClose still honors the inter-request guard,
+        // so a press that lands on a freshly revealed *other* tab's prompt can't kill
+        // it unseen. A duplicate that arrives before the first probe resolves still
+        // lands here once the prompt is up, via its own probe.
         set({ runningTerminalCloseConfirm: mergeRequests(visible, request) })
+        get().confirmRunningTerminalClose()
         return
       }
       const queuedIndex = queuedRequests.findIndex(

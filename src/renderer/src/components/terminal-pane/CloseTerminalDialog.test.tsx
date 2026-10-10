@@ -44,6 +44,23 @@ function clickButton(label: string): void {
   button.click()
 }
 
+// Mirrors the platform detection inside CloseTerminalDialog so the test presses the
+// chord the component actually matches on this runtime.
+function pressCloseChord(extra: Partial<KeyboardEventInit> = {}): void {
+  const isMac = navigator.userAgent.includes('Mac')
+  window.dispatchEvent(
+    new KeyboardEvent('keydown', {
+      key: 'w',
+      code: 'KeyW',
+      bubbles: true,
+      cancelable: true,
+      metaKey: isMac,
+      ctrlKey: !isMac,
+      ...extra
+    })
+  )
+}
+
 describe('CloseTerminalDialog', () => {
   afterEach(async () => {
     await act(async () => {
@@ -108,6 +125,44 @@ describe('CloseTerminalDialog', () => {
     })
 
     expect(onConfirm).toHaveBeenCalledWith(true)
+  })
+
+  // Why: a second close chord while the prompt is open means "I'm sure" (Cmd+W x2,
+  // #21603) — the dialog confirms instead of making the user reach for the mouse.
+  it('confirms when the close chord is pressed again while open', async () => {
+    const onConfirm = vi.fn()
+
+    await renderDialog({ copyKind: 'agent', onConfirm })
+    expect(document.body.textContent).toContain('Stop this agent?')
+
+    pressCloseChord()
+
+    expect(onConfirm).toHaveBeenCalledWith(false)
+  })
+
+  it('carries the opt-out tick when the close chord confirms', async () => {
+    const onConfirm = vi.fn()
+
+    await renderDialog({ copyKind: 'agent', onConfirm })
+    const checkbox = document.body.querySelector<HTMLButtonElement>('[role="checkbox"]')
+    await act(async () => {
+      checkbox?.click()
+    })
+
+    pressCloseChord()
+
+    expect(onConfirm).toHaveBeenCalledWith(true)
+  })
+
+  it('ignores repeats and unrelated keys while open', async () => {
+    const onConfirm = vi.fn()
+
+    await renderDialog({ copyKind: 'agent', onConfirm })
+
+    pressCloseChord({ repeat: true })
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', code: 'KeyX' }))
+
+    expect(onConfirm).not.toHaveBeenCalled()
   })
 
   it('resets the skip preference when the dialog closes and reopens', async () => {
