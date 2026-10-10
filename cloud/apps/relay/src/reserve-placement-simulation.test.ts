@@ -234,9 +234,10 @@ describe('step 5 deterministic simulation', () => {
     durationMs: 25 * 60_000,
     oldDirectors: 1
   })
-  // Demote, re-assign, converge: without the floor the re-assign lands level with the row.
-  const rowAheadWithoutFloor = (): SimulationConfig => ({
-    ...mixed({ noDemoteFloor: true }),
+  // Demote, re-assign, converge: a placement that never mints above the row is demoted again
+  // and again behind the same row.
+  const rowAheadNeverRises = (): SimulationConfig => ({
+    ...mixed({ mintAtFloor: true }),
     durationMs: 25 * 60_000,
     oldDirectors: 1
   })
@@ -254,16 +255,28 @@ describe('step 5 deterministic simulation', () => {
     // A director restart mid-queue loses its booked joins' rows until its boot reconcile.
     [5, restartedMidQueue()],
     [8, rowAheadLeftAlone()],
-    [8, rowAheadWithoutFloor()],
+    [8, rowAheadNeverRises()],
     [7, mixed({ noEpochFloor: true })]
   ] as const)('invariant %i fires when its rule is broken', async (invariant, config) => {
     const report = await runReservePlacementSimulation(config)
     expect(report.violations.map((violation) => violation.invariant)).toContain(invariant)
   }, 120_000)
 
-  it('re-places a host demoted behind its row above that row, so the repair converges', async () => {
-    const report = await runReservePlacementSimulation({ ...mixed({}), durationMs: 25 * 60_000, oldDirectors: 1 })
+  it('repairs a seat behind its row within two demotions, and reports re-seats that miss', async () => {
+    const config = { ...mixed({}), durationMs: 25 * 60_000, oldDirectors: 1 }
+    const report = await runReservePlacementSimulation(config)
     expect(report.rowAheadDemotions).toBeGreaterThan(0)
     expect(report.violations.filter((violation) => violation.invariant === 8)).toEqual([])
-  }, 120_000)
+    expect(report.rowAheadDemotionsPerHost.max).toBeLessThanOrEqual(2)
+    // A director whose map has not seen the leave yet may re-place level with the row; the
+    // WRONG_CELL row read keeps that a small share (the rest are repaired by one more reconcile).
+    expect(report.badFirstReseats / report.rowAheadDemotions).toBeLessThan(0.1)
+    const withoutRead = await runReservePlacementSimulation({ ...config, faults: { noWrongCellRowRead: true } })
+    process.stderr.write(
+      `row_ahead_repair ${JSON.stringify({
+        withRead: { demotions: report.rowAheadDemotions, badFirstReseats: report.badFirstReseats, perHost: report.rowAheadDemotionsPerHost },
+        withoutRead: { demotions: withoutRead.rowAheadDemotions, badFirstReseats: withoutRead.badFirstReseats, perHost: withoutRead.rowAheadDemotionsPerHost }
+      })}\n`
+    )
+  }, 240_000)
 })

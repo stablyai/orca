@@ -86,7 +86,7 @@ function before(left: Event, right: Event): boolean {
 type CellSeat = { epoch: number; joinedAt: number; reservedBy?: string; demoted: boolean; leased?: boolean }
 type CellLogEntry =
   | { kind: 'join'; host: string; epoch: number; joinedAt: number; reservedBy?: string }
-  | { kind: 'leave'; host: string; epoch: number; at: number }
+  | { kind: 'leave'; host: string; epoch: number; at: number; wrongCell: boolean }
   | { kind: 'reserve'; host: string; epoch: number }
   | { kind: 'demoted'; host: string; epoch: number }
 
@@ -116,8 +116,10 @@ export type SimulationFaults = {
   noBootReconcile?: boolean
   // The reconcile leaves a seat whose row is ahead of it alone.
   noRowAheadDemote?: boolean
-  // A director that demoted a seat behind its row does not mint that host above the row.
-  noDemoteFloor?: boolean
+  // Directors do not read the row after a WRONG_CELL leave (only the demoting one has a floor).
+  noWrongCellRowRead?: boolean
+  // Reserve placement re-uses the floor epoch instead of minting above it.
+  mintAtFloor?: boolean
   unguardedLedger?: boolean
   noEpochFloor?: boolean
 }
@@ -270,7 +272,7 @@ class SimCell {
     if (!seat) return
     this.seats.delete(host)
     if (!seat.demoted) this.recent.set(host, { epoch: seat.epoch, at: this.clock.now })
-    this.log.push({ kind: 'leave', host, epoch: seat.epoch, at: this.clock.now })
+    this.log.push({ kind: 'leave', host, epoch: seat.epoch, at: this.clock.now, wrongCell: seat.demoted })
   }
 
   // The cell's own check: only the seat named by epoch and join, and only in reserve mode.
@@ -366,6 +368,10 @@ export type SimulationReport = {
   supersedes: number
   directorRestarts: number
   rowAheadDemotions: number
+  // Row-ahead demotions per demoted host: a repair that converges needs one.
+  rowAheadDemotionsPerHost: { max: number; p99: number }
+  // First seats after a row-ahead demotion that land behind (or level with) the row again.
+  badFirstReseats: number
   intakeRefusals: number
   stickyReserves: number
   stickyAnswers: number
@@ -377,7 +383,10 @@ export type SimulationReport = {
 class SimDirector {
   placer!: ReservePlacer
   views = new Map<string, DirectorCellView>()
-  recentlyLeft = new Map<string, { cellId: string; epoch: number; at: number; incarnation: number }>()
+  recentlyLeft = new Map<
+    string,
+    { cellId: string; epoch: number; at: number; incarnation: number; wrongCell?: boolean }
+  >()
   reserveEpochs = new Map<string, number>()
   // Row epochs this director demoted a host's seat behind: its next mint for the host clears them.
   rowFloors = new Map<string, number>()
@@ -477,6 +486,8 @@ export async function runReservePlacementSimulation(
     supersedes: 0,
     directorRestarts: 0,
     rowAheadDemotions: 0,
+    rowAheadDemotionsPerHost: { max: 0, p99: 0 },
+    badFirstReseats: 0,
     intakeRefusals: 0,
     stickyReserves: 0,
     stickyAnswers: 0,
@@ -635,7 +646,8 @@ export async function runReservePlacementSimulation(
           cellId: cell.cellId,
           epoch: change.epoch,
           at: change.at,
-          incarnation: view.incarnation ?? 0
+          incarnation: view.incarnation ?? 0,
+          wrongCell: change.wrongCell
         })
       }
     } else {
@@ -680,6 +692,10 @@ export async function runReservePlacementSimulation(
   // desktop was answered the old seat from memory), or level with it on another cell, is gone
   // by the next reconcile, and the director that demoted it re-places the host above the row.
   const behindRow = new Map<string, number>()
+  const rowAheadDemotionsByHost = new Map<string, number>()
+  const demotedBehindRow = new Map<string, number>()
+  // A host demoted behind its row: its next answer, from any director, is that row or above it.
+  const reassignAbove = new Map<string, { cellId: string; epoch: number }>()
   function reconcileLedger(director: SimDirector): void {
     if (!database.up || director.old) return
     for (const [cellId, view] of director.views) {
@@ -696,6 +712,14 @@ export async function runReservePlacementSimulation(
           if (faults.noRowAheadDemote) continue
           report.rowAheadDemotions += 1
           director.rowFloors.set(host, Math.max(row.epoch, director.rowFloors.get(host) ?? 0))
+          rowAheadDemotionsByHost.set(host, (rowAheadDemotionsByHost.get(host) ?? 0) + 1)
+          // A director that had not seen the leave may re-place level with the row once; a later
+          // divergence (a newer row) may demote the host again. One row never takes a third.
+          const sameRow = `${host}\u0000${row.cellId}\u0000${row.epoch}`
+          const behindThisRow = (demotedBehindRow.get(sameRow) ?? 0) + 1
+          demotedBehindRow.set(sameRow, behindThisRow)
+          if (behindThisRow > 2) violate(8, `${host} demoted ${behindThisRow} times behind its row ${row.cellId}@${row.epoch}`)
+          reassignAbove.set(host, { ...row })
           const cell = cellById.get(cellId)!
           clock.schedule(config.rttMs(cell.region), () =>
             cell.demote(host, seat.epoch, seat.joinedAt, () => onSeatClosed(host, cellId, seat.epoch))
@@ -755,10 +779,14 @@ export async function runReservePlacementSimulation(
     if (!director.complete(cells)) return { kind: 'retry', afterMs: 1_000, calls: 0 }
     const now = clock.now
     const rowFloor = director.rowFloors.get(host.id)
-    const known = [...director.knownEpochs(host.id), ...(rowFloor === undefined || faults.noDemoteFloor ? [] : [rowFloor])]
+    const known = [...director.knownEpochs(host.id), ...(rowFloor === undefined ? [] : [rowFloor])]
     let floor: number
     if (known.length > 0) {
       floor = Math.max(...known)
+      // A WRONG_CELL leave, seen in the cell's feed by every director: read the row too.
+      if (director.recentlyLeft.get(host.id)?.wrongCell && !faults.noWrongCellRowRead && database.up) {
+        floor = Math.max(floor, database.rows.get(host.id)?.epoch ?? 0)
+      }
     } else {
       if (!database.up) return { kind: 'retry', afterMs: 2_000, calls: 0 }
       floor = database.rows.get(host.id)?.epoch ?? 0
@@ -766,7 +794,7 @@ export async function runReservePlacementSimulation(
     if (reconnect) {
       const found = stickyFromMemory(director, host, now)
       // The seat the reconcile demoted (or one level with its row) is never answered again.
-      const sticky = found && !faults.noDemoteFloor && rowFloor !== undefined && found.epoch <= rowFloor ? null : found
+      const sticky = found && rowFloor !== undefined && found.epoch <= rowFloor ? null : found
       if (sticky) {
         const cell = cellById.get(sticky.cellId)!
         // The map's own view of the cell's incarnation: a restart not yet polled answers stale,
@@ -791,16 +819,13 @@ export async function runReservePlacementSimulation(
     const result = await director.placer.place({
       cells: placements,
       region: host.region,
-      epoch: mintEpoch([floor]),
+      epoch: faults.mintAtFloor ? Math.max(1, floor) : mintEpoch([floor]),
       reserve: (cellId, epoch) => reserveCall(director, cellById.get(cellId)!, host.id, epoch, false)
     })
     report.reserveCalls += result.calls
     if (result.calls > RESERVE_MAX_TRIES) violate(6, `${result.calls} reserve calls in one request`)
     if (result.kind === 'placed') {
       report.reservePlacements += 1
-      if (rowFloor !== undefined && result.epoch <= rowFloor) {
-        violate(8, `${host.id} re-placed @${result.epoch}, not above the row @${rowFloor} it was demoted behind`)
-      }
       supersede(director, host.id, result.cellId, result.epoch)
       return { kind: 'cell', cellId: result.cellId, epoch: result.epoch, calls: result.calls }
     }
@@ -825,7 +850,8 @@ export async function runReservePlacementSimulation(
     }
     if (top) return null
     const left = director.recentlyLeft.get(host.id)
-    if (left && now - left.at <= RECENT_SEAT_MS) {
+    // A seat closed WRONG_CELL may not rejoin from memory.
+    if (left && !left.wrongCell && now - left.at <= RECENT_SEAT_MS) {
       const view = director.views.get(left.cellId)
       if (view && stickyCell(director, view, now, false)) {
         return { cellId: left.cellId, epoch: left.epoch, incarnation: left.incarnation }
@@ -891,6 +917,13 @@ export async function runReservePlacementSimulation(
     }
     report.placements += 1
     report.arrivalsByCell[cellId] = (report.arrivalsByCell[cellId] ?? 0) + 1
+    // Reported, not a violation: the first seat after a demotion behind the row lands on that
+    // row or above it, unless the answering director's map had not yet seen the leave.
+    const above = reassignAbove.get(host.id)
+    if (above !== undefined) {
+      reassignAbove.delete(host.id)
+      if (epoch < above.epoch || (epoch === above.epoch && cellId !== above.cellId)) report.badFirstReseats += 1
+    }
     host.current = { cellId, epoch }
     scheduleLeave(host)
   }
@@ -1090,5 +1123,10 @@ export async function runReservePlacementSimulation(
     }
   }
   report.seatedAtEnd = cells.reduce((sum, cell) => sum + cell.seats.size, 0)
+  const perHost = [...rowAheadDemotionsByHost.values()].sort((left, right) => left - right)
+  report.rowAheadDemotionsPerHost = {
+    max: perHost.at(-1) ?? 0,
+    p99: perHost[Math.min(perHost.length - 1, Math.floor(perHost.length * 0.99))] ?? 0
+  }
   return report
 }
