@@ -56,8 +56,9 @@ export function collectSleepingAgentSessionRecordsForWorktree(
       }
       // Why: Pi identity is resumable with no turn row and while idle after done, so manual
       // sleep must promote both instead of deleting the checkpoint.
+      const { resumeScope: _resumeScope, ...worktreeRecord } = existing
       records[existing.paneKey] = {
-        ...existing,
+        ...worktreeRecord,
         state: 'working',
         capturedAt,
         updatedAt: capturedAt,

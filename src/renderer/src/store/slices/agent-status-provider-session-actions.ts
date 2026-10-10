@@ -115,7 +115,8 @@ export function createAgentStatusProviderSessionActions(
               : {}),
           ...(launchConfig ? { launchConfig: copyLaunchConfig(launchConfig) } : {}),
           ...(preservesCompletedRecoveryRecord ? agentVerdictFields(existingRecord) : {}),
-          origin: preservesQuitOrigin ? 'quit' : 'live'
+          origin: preservesQuitOrigin ? 'quit' : 'live',
+          ...(agent === 'pi' && !preservesQuitOrigin ? { resumeScope: 'pane' as const } : {})
         }
         removedLiveStatus = existingStatus !== undefined
         const nextLive = removedLiveStatus ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
