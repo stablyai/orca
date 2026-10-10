@@ -9,7 +9,10 @@ import { getStructuredChatWorktreeIds } from '@/components/sidebar/visible-workt
 import { isDefaultBranchWorkspace } from '@/components/sidebar/default-branch-workspace'
 import { sortWorktreesSmart } from '@/components/sidebar/smart-sort'
 import { buildWorktreeChecksReviewIndex } from '@/components/cmd-j/worktree-checks-review-index'
-import { getLiveAgentStatusByWorktreeId, isInactiveWorkspace } from '@/lib/worktree-activity-state'
+import {
+  getLiveAgentStatusByWorktreeId,
+  isHiddenBySleepFilter
+} from '@/lib/worktree-activity-state'
 import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
 import {
   getWorktreePaletteSearchScope,
@@ -118,11 +121,13 @@ export function useWorktreeJumpPaletteWorktrees({
         ) {
           return false
         }
+        // Keep a slept workspace listed while it has a pending notification so
+        // the Hide-sleeping filter can't bury an unread agent completion.
         if (
-          !showSleepingWorkspaces &&
           !isSleepingSweepExemptWorkspace(worktree, alwaysShowDefaultBranchWorkspace) &&
-          isInactiveWorkspace(
-            worktree.id,
+          isHiddenBySleepFilter(
+            worktree,
+            showSleepingWorkspaces,
             tabsByWorktree,
             ptyIdsByTabId,
             browserTabsByWorktree,

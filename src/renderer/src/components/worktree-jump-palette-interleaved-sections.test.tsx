@@ -11,6 +11,8 @@ import type { Worktree } from '../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { encodePaletteIdentity } from '@/lib/palette-match/palette-ranking'
+import { getPaletteWorktreeIdentity } from '@/lib/palette-repo-resolution'
+import * as worktreeMetaPersistence from '@/store/slices/worktrees/metadata/worktree-meta-persist'
 import {
   layoutMultiPrimaryPaletteSections,
   orderMultiPrimaryPaletteItems
@@ -351,6 +353,71 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     })
     document.body.replaceChildren()
     useAppStore.setState(initialAppState, true)
+  })
+
+  it('lists unread sleeping workspaces in visit order and removes them after marking read', async () => {
+    const current = makeWorktree('wt-current', 'Current workspace', { isUnread: true })
+    const unread = makeWorktree('repo-1::/tmp/unread', 'Unread sleeping workspace', {
+      isUnread: true,
+      lastActivityAt: 10_000
+    })
+    const remote = makeWorktree('wt-remote', 'Remote unread workspace', {
+      hostId: 'ssh:remote',
+      isUnread: true
+    })
+    const entryPoint = makeWorktree('wt-main', 'Main workspace', { isMainWorktree: true })
+    const read = makeWorktree('wt-read', 'Read sleeping workspace')
+    const archived = makeWorktree('wt-archived', 'Archived unread workspace', {
+      isArchived: true,
+      isUnread: true
+    })
+    const detached = makeWorktree('wt-detached', 'Detached unread workspace', {
+      branch: '',
+      isUnread: true
+    })
+    const cliCreated = makeWorktree('wt-cli', 'CLI unread workspace', {
+      isUnread: true,
+      cliProvenance: { kind: 'created-by-cli', createdAt: 0 }
+    })
+    const persist = vi.spyOn(worktreeMetaPersistence, 'persistWorktreeMeta').mockResolvedValue()
+    const rowId = (worktree: Worktree) =>
+      encodePaletteIdentity(['worktree', getPaletteWorktreeIdentity(worktree)])
+    const worktreeRowIds = () =>
+      getPrimaryRowsBySectionHeader()
+        .filter((row) => isWorktreeItemId(row.rowId))
+        .map((row) => row.rowId)
+
+    try {
+      await renderPalette({
+        worktreesByRepo: {
+          'repo-1': [current, entryPoint, unread, read, archived, detached, cliCreated, remote]
+        },
+        activeWorktreeId: current.id,
+        showSleepingWorkspaces: false,
+        hideDetachedHeadWorkspaces: true,
+        hideCliCreatedWorkspaces: true,
+        lastVisitedAtByWorktreeId: {
+          [getPaletteWorktreeIdentity(remote)]: 200,
+          [unread.id]: 100
+        }
+      })
+
+      expect(worktreeRowIds()).toEqual([remote, unread, entryPoint].map(rowId))
+
+      await act(async () => {
+        useAppStore.getState().clearWorktreeUnread(unread.id)
+      })
+      await flushEffects()
+
+      expect(
+        useAppStore.getState().worktreesByRepo['repo-1'].find((w) => w.id === unread.id)
+      ).toMatchObject({ isUnread: false })
+      expect(persist).toHaveBeenCalledWith(expect.anything(), unread.id, { isUnread: false })
+      expect(useAppStore.getState().activeWorktreeId).toBe(current.id)
+      expect(worktreeRowIds()).toEqual([remote, entryPoint].map(rowId))
+    } finally {
+      persist.mockRestore()
+    }
   })
 
   it('keeps every interleaved row under its own section header', async () => {
