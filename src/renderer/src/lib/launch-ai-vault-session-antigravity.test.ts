@@ -12,6 +12,11 @@ const runtimeMocks = vi.hoisted(() => ({
   isWebRuntimeSessionActive: vi.fn(() => false)
 }))
 
+const tabsByWorktree: Record<string, { id: string }[]> = {}
+const openFiles: { id: string; worktreeId: string }[] = []
+const browserTabsByWorktree: Record<string, { id: string }[]> = {}
+const tabBarOrderByWorktree: Record<string, string[]> = {}
+
 const mockState = {
   createTab: mockCreateTab,
   createEmptySplitGroup: mockCreateEmptySplitGroup,
@@ -19,10 +24,10 @@ const mockState = {
   queueTabStartupCommand: mockQueueTabStartupCommand,
   setActiveTabType: mockSetActiveTabType,
   setTabBarOrder: mockSetTabBarOrder,
-  tabsByWorktree: {} as Record<string, { id: string }[]>,
-  openFiles: [] as { id: string; worktreeId: string }[],
-  browserTabsByWorktree: {} as Record<string, { id: string }[]>,
-  tabBarOrderByWorktree: {} as Record<string, string[]>
+  tabsByWorktree,
+  openFiles,
+  browserTabsByWorktree,
+  tabBarOrderByWorktree
 }
 
 vi.mock('@/store', () => ({

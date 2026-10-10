@@ -14,15 +14,27 @@ const mocks = vi.hoisted(() => ({
 // Why: CLIENT_PLATFORM reads the user agent at import; pin posix quoting for the startup plan.
 vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Orca' })
 
+type StoreSettings = {
+  agentCmdOverrides: Record<string, string>
+  agentDefaultArgs: Record<string, string>
+  agentDefaultEnv: Record<string, Record<string, string>>
+  activeRuntimeEnvironmentId: string | null
+}
+const initialSettings: StoreSettings = {
+  agentCmdOverrides: {},
+  agentDefaultArgs: {},
+  agentDefaultEnv: {},
+  activeRuntimeEnvironmentId: 'web-runtime'
+}
+const initialTabs: { id: string; launchAgent?: string }[] = [{ id: 'tab-1' }]
+const openFiles: { id: string; worktreeId: string }[] = []
+const browserTabsByWorktree: Record<string, { id: string }[]> = {}
+const tabBarOrderByWorktree: Record<string, string[]> = {}
+
 const store = {
   activeRepoId: 'repo-1',
   activeWorktreeId: 'wt-1',
-  settings: {
-    agentCmdOverrides: {} as Record<string, string>,
-    agentDefaultArgs: {} as Record<string, string>,
-    agentDefaultEnv: {} as Record<string, Record<string, string>>,
-    activeRuntimeEnvironmentId: 'web-runtime' as string | null
-  },
+  settings: initialSettings,
   projects: [{ id: 'repo-1', localWindowsRuntimePreference: { kind: 'inherit-global' as const } }],
   repos: [{ id: 'repo-1', connectionId: null, path: '/repo' }],
   worktreesByRepo: {
@@ -36,10 +48,10 @@ const store = {
       }
     ]
   },
-  tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] as { id: string; launchAgent?: string }[] },
-  openFiles: [] as { id: string; worktreeId: string }[],
-  browserTabsByWorktree: {} as Record<string, { id: string }[]>,
-  tabBarOrderByWorktree: {} as Record<string, string[]>,
+  tabsByWorktree: { 'wt-1': initialTabs },
+  openFiles,
+  browserTabsByWorktree,
+  tabBarOrderByWorktree,
   terminalLayoutsByTabId: {},
   ptyIdsByTabId: {},
   sshConnectionStates: new Map(),

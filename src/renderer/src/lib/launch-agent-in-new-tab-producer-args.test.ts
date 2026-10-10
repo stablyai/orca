@@ -5,30 +5,37 @@ import { buildAgentSessionForkPrompt } from '@/lib/agent-session-fork-context'
 const UUID = expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
-const mocks = vi.hoisted(() => ({
-  launchAgentInNewTab: vi.fn(),
-  activateAndRevealWorktree: vi.fn(),
-  createWorktree: vi.fn(),
-  toast: { error: vi.fn(), message: vi.fn(), success: vi.fn(), warning: vi.fn() },
-  connectionId: { value: null as string | null }
-}))
+const mocks = vi.hoisted(() => {
+  const connectionId: { value: string | null } = { value: null }
+  return {
+    launchAgentInNewTab: vi.fn(),
+    activateAndRevealWorktree: vi.fn(),
+    createWorktree: vi.fn(),
+    toast: { error: vi.fn(), message: vi.fn(), success: vi.fn(), warning: vi.fn() },
+    connectionId
+  }
+})
+
+type StoreRepo = { id: string; kind?: 'git' | 'folder'; connectionId?: string | null }
+const initialRepos: StoreRepo[] = []
+const noDisabledAgents: string[] = []
+const agentStatusByPaneKey: Record<string, { agentType?: string }> = {
+  [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }
+}
 
 const store = {
   activeRepoId: 'repo-1',
   activeWorktreeId: 'wt-1',
   projects: [{ id: 'repo-1', sourceRepoIds: ['repo-1'] }],
-  repos: [] as { id: string; kind?: 'git' | 'folder'; connectionId?: string | null }[],
+  repos: initialRepos,
   settings: {
     localWindowsRuntimeDefault: { kind: 'windows-host' as const },
-    disabledTuiAgents: [] as string[]
+    disabledTuiAgents: noDisabledAgents
   },
   worktreesByRepo: {
     'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: 'C:\\repo', projectId: 'repo-1' }]
   },
-  agentStatusByPaneKey: { [`tab-1:${LEAF_ID}`]: { agentType: 'codex' } } as Record<
-    string,
-    { agentType?: string }
-  >,
+  agentStatusByPaneKey,
   tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
   getKnownWorktreeById: vi.fn(),
   createWorktree: mocks.createWorktree,
