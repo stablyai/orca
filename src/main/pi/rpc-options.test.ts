@@ -70,8 +70,8 @@ describe('Pi RPC session options', () => {
       effort: 'high'
     })
     expect(rpc.request.mock.calls).toEqual([
-      ['set_model', { provider: 'openai-codex', modelId: 'gpt-6.1-sol' }],
-      ['set_thinking_level', { level: 'high' }]
+      ['set_model', { provider: 'openai-codex', modelId: 'gpt-6.1-sol' }, {}],
+      ['set_thinking_level', { level: 'high' }, {}]
     ])
     expect(() => parsePiModelOptionId('openai-codex')).toThrow()
     await expect(applyPiRpcSessionOption(rpc, selected, 'model', '/gpt-6.1-sol')).rejects.toThrow()

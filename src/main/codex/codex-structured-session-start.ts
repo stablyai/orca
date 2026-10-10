@@ -28,6 +28,7 @@ import {
   type CodexStructuredSessionAdapterDeps
 } from './codex-structured-session-state'
 import type { CodexStructuredSessionTeardown } from './codex-structured-session-teardown'
+import { STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS } from '../native-chat/agent-session-wire/structured-agent-session-startup-attempt-contract'
 
 type CodexStartInput = {
   input: StructuredAgentSessionAcquireInput
@@ -62,7 +63,12 @@ export async function startCodexStructuredSession(start: CodexStartInput): Promi
     }
   }
   try {
-    await initializeCodexAppServerConnection(connection)
+    // The host's startup attempt is this start's only deadline (60 s silent, 10 min at most); a
+    // request the start cannot go on without waits as long as that attempt does.
+    await initializeCodexAppServerConnection(
+      connection,
+      STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS
+    )
     child.initializeAnswered = true
     current()
     const threadLaunch = await withCodexVisualsThreadConfig(connection, launch, {
@@ -71,7 +77,11 @@ export async function startCodexStructuredSession(start: CodexStartInput): Promi
     })
     current()
     const optionRevision = input.optionRevision?.() ?? 0
-    const opened = await openCodexThread(connection, threadLaunch, deps.requestTimeoutMs)
+    const opened = await openCodexThread(
+      connection,
+      threadLaunch,
+      STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS
+    )
     current()
     start.setPrimaryThreadId(opened.threadId)
     const restored = translator?.restoreThread(opened.threadId, opened.thread ?? {})

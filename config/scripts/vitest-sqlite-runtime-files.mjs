@@ -237,6 +237,7 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/runtime/structured-agent-session-codex-interrupt-order.test.ts',
   'src/main/runtime/structured-agent-session-codex-opening-send-hold.test.ts',
   'src/main/runtime/structured-agent-session-codex-scripted-child.test.ts',
+  'src/main/runtime/structured-agent-session-codex-start-deadline.test.ts',
   'src/main/runtime/structured-agent-session-codex-settlement-order.test.ts',
   'src/main/runtime/structured-agent-session-integration-replay.test.ts',
   'src/main/runtime/structured-agent-session-integration.test.ts',

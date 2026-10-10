@@ -92,17 +92,18 @@ export async function applyPiRpcSessionOption(
   rpc: PiRpcRequester,
   selected: Map<string, string>,
   key: string,
-  value: string
+  value: string,
+  options: { timeoutMs?: number | null } = {}
 ): Promise<Readonly<Record<string, string>>> {
   if (key === 'model') {
     const model = parsePiModelOptionId(value)
     modelSchema.parse({ provider: model.provider, id: model.modelId })
-    await rpc.request('set_model', model)
+    await rpc.request('set_model', model, options)
   } else if (key === 'effort') {
     if (!THINKING_LEVELS.some((level) => level === value)) {
       throw new Error(`Unsupported Pi thinking level: ${value}`)
     }
-    await rpc.request('set_thinking_level', { level: value })
+    await rpc.request('set_thinking_level', { level: value }, options)
   } else {
     throw new Error(`Unsupported Pi option: ${key}`)
   }

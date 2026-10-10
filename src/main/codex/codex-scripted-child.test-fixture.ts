@@ -4,6 +4,7 @@ import type {
   openCodexAppServerConnection
 } from './codex-app-server-connection'
 import { CodexAppServerRequestError } from './codex-app-server-connection'
+import { CodexAppServerTimeoutError } from './codex-app-server-session'
 import { codexTurnLifecycleFake } from './codex-turn-lifecycle-fake'
 
 export const CODEX_SCRIPTED_THREAD = 'scripted-codex-thread'
@@ -14,6 +15,26 @@ type ScriptedCodexRoute = (params: Record<string, unknown> | undefined) => unkno
 export type ScriptedCodexChild = ScriptedAgentChild & {
   /** Every request any spawn received, in order. */
   requests(): readonly { method: string; params?: Record<string, unknown> }[]
+}
+
+/** A held answer gives up on the request's own deadline, as the real connection's does (30 s when
+ *  the caller names none). */
+function heldAnswer(
+  answer: Promise<unknown>,
+  method: string,
+  timeoutMs = 30_000
+): Promise<unknown> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timedOut = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(
+      () =>
+        reject(
+          new CodexAppServerTimeoutError(`codex app-server ${method} exceeded ${timeoutMs}ms`)
+        ),
+      timeoutMs
+    )
+  })
+  return Promise.race([answer, timedOut]).finally(() => clearTimeout(timer))
 }
 
 /** `routes` answers methods the script does not, such as the history reads a rewind makes. */
@@ -43,13 +64,13 @@ export const codexScriptedChild = (
       get closed() {
         return ended
       },
-      request: async (method, params) => {
+      request: async (method, params, options) => {
         if (ended) {
           throw new Error('scripted Codex child closed')
         }
         requests.push({ method, ...(params ? { params } : {}) })
         if (method === 'initialize') {
-          return holdHandshakes ? gate.promise : {}
+          return holdHandshakes ? heldAnswer(gate.promise, method, options?.timeoutMs) : {}
         }
         const route = routes[method]
         if (method === 'thread/resume') {

@@ -20,6 +20,11 @@ import {
 } from './rpc-options'
 import { piRpcStateSchema, type PiRpcState } from './rpc-protocol'
 import type { PiRpcConnection, PiRpcSessionDeps } from './rpc-session'
+import { STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS } from '../native-chat/agent-session-wire/structured-agent-session-startup-attempt-contract'
+
+/** What the start cannot go on without waits as long as the host's startup attempt does, its only
+ *  deadline; the optional reads keep their own bound and never fail the start. */
+const START_REQUEST = { timeoutMs: STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS }
 
 export class PiRpcSessionStartup {
   started = false
@@ -46,7 +51,7 @@ export class PiRpcSessionStartup {
 
   async run(launch: PiRpcResolvedLaunch): Promise<void> {
     const optionRevision = this.input.optionRevision?.() ?? 0
-    const answer = await this.wait(this.connection.request('get_state'))
+    const answer = await this.wait(this.connection.request('get_state', {}, START_REQUEST))
     this.answered = true
     this.assertLive()
     const state = piRpcStateSchema.parse(answer)
@@ -74,7 +79,9 @@ export class PiRpcSessionStartup {
       picked.add(key)
       try {
         this.assertLive()
-        await this.wait(applyPiRpcSessionOption(this.connection, this.selected, key, value))
+        await this.wait(
+          applyPiRpcSessionOption(this.connection, this.selected, key, value, START_REQUEST)
+        )
         current[key] = value
       } catch (error) {
         if (!(error instanceof JsonlRpcResponseError)) {
