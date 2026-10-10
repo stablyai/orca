@@ -4,6 +4,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   classifyPublicHttpsOrigin,
+  describeUntrustedText,
   isPublicIpAddress,
   parseArgs,
   parseBoundedInteger,
@@ -165,15 +166,68 @@ describe('classifyPublicHttpsOrigin', () => {
     ['https://169.254.169.254/latest/meta-data', 'loopback, link-local, or private'],
     ['https://10.1.2.3', 'loopback, link-local, or private'],
     ['not a url', 'not a URL'],
+    ['https://[64:ff9b::7f00:1]/', 'loopback, link-local, or private'],
+    ['https://[64:ff9b::a9fe:a9fe]/', 'loopback, link-local, or private'],
+    ['https://[64:ff9b:1::7f00:1]/', 'loopback, link-local, or private'],
+    ['https://[64:ff9b:1:808:8:800::]/', 'loopback, link-local, or private'],
+    ['https://[64:ff9b:1:a00:0:100:808:808]/', 'loopback, link-local, or private'],
+    ['https://[2002:7f00:1::]/', 'loopback, link-local, or private'],
+    ['https://[2002:c0a8:101::1]/', 'loopback, link-local, or private'],
+    ['https://[2001:0:4136:e378:8000:63bf:3fff:fdd2]/', 'loopback, link-local, or private'],
     ['', 'missing origin']
   ])('refuses %s', (value, reason) => {
     const verdict = classifyPublicHttpsOrigin(value)
     expect(verdict.ok).toBe(false)
     expect(verdict.reason).toContain(reason)
   })
+
+  it('accepts transition addresses that embed a public v4 address', () => {
+    expect(classifyPublicHttpsOrigin('https://[64:ff9b::808:808]/').ok).toBe(true)
+    expect(classifyPublicHttpsOrigin('https://[2002:808:808::]/').ok).toBe(true)
+    // A 2001: address outside the Teredo /32 is ordinary global unicast.
+    expect(classifyPublicHttpsOrigin('https://[2001:db8::1]/').ok).toBe(true)
+  })
+
+  it('never echoes control bytes from a refused value, since the desktop chose it', () => {
+    const verdict = classifyPublicHttpsOrigin('\u001b[2Jnot a url\u0007')
+    expect(verdict.ok).toBe(false)
+    expect(verdict.reason).not.toContain('\u001b')
+    expect(verdict.reason).toContain('unprintable')
+  })
+})
+
+describe('describeUntrustedText', () => {
+  it('passes short printable ASCII through', () => {
+    expect(describeUntrustedText('credential_expired')).toBe('credential_expired')
+  })
+
+  it.each([
+    ['\u001b]0;pwned\u0007', 'ESC'],
+    ['\u202eevil', 'bidi override'],
+    ['\u0085next line', 'C1 control'],
+    ['x'.repeat(121), 'over length']
+  ])('names rather than prints %s (%s)', (value) => {
+    const out = describeUntrustedText(value)
+    expect(out).toMatch(/^unprintable \(\d+ chars\)$/)
+  })
+
+  it('names the type of a non-string', () => {
+    expect(describeUntrustedText({ toString: () => '\u001b[31m' })).toBe('non-string (object)')
+    expect(describeUntrustedText(undefined)).toBe('unknown')
+    expect(describeUntrustedText('')).toBe('empty')
+  })
 })
 
 describe('resolvesToPublicAddress', () => {
+  it('reports a lookup failure by code, never by its message', async () => {
+    const lookup = vi
+      .fn()
+      .mockRejectedValue(Object.assign(new Error('\u001b[2Jbad'), { code: 'ENOTFOUND' }))
+    const verdict = await resolvesToPublicAddress('https://relay.example', { lookup })
+    expect(verdict.ok).toBe(false)
+    expect(verdict.reason).toBe('cannot resolve relay.example: ENOTFOUND')
+  })
+
   it('skips the lookup for a literal address', async () => {
     const lookup = vi.fn()
     await expect(resolvesToPublicAddress('https://8.8.8.8', { lookup })).resolves.toEqual({

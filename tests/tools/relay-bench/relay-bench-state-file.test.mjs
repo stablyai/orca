@@ -61,6 +61,26 @@ describe('writeSecretFile', () => {
     expect(readFileSync(target, 'utf8')).toBe('target contents')
   })
 
+  it.runIf(posix)('creates the parent directory closed to other users', () => {
+    const path = join(dir, 'nested', 'state.json')
+    writeSecretFile(path, 'x')
+    expect(modeOf(join(dir, 'nested'))).toBe(0o700)
+  })
+
+  it.runIf(posix)('leaves a refused file untouched instead of truncating it first', () => {
+    // A writable file owned by someone else must be refused before its contents are destroyed.
+    const path = join(dir, 'state.json')
+    writeFileSync(path, 'previous contents')
+    const realGetuid = process.getuid
+    process.getuid = () => realGetuid() + 1
+    try {
+      expect(() => writeSecretFile(path, 'secret')).toThrow(/owned by another user/)
+    } finally {
+      process.getuid = realGetuid
+    }
+    expect(readFileSync(path, 'utf8')).toBe('previous contents')
+  })
+
   it('truncates rather than appending to a longer previous file', () => {
     const path = join(dir, 'state.json')
     writeSecretFile(path, '{"a":"aaaaaaaaaaaaaaaaaaaa"}')
