@@ -205,4 +205,101 @@ describe('tab title resolution', () => {
       )
     ).toBe('Run build')
   })
+
+  it('replaces raw agent launch command lines with the clean agent name', () => {
+    expect(
+      resolveTerminalTabTitle(
+        { customTitle: null, title: "agy '--dangerously-s ~/C/orca" },
+        false,
+        "agy '--dangerously-s ~/C/orca"
+      )
+    ).toBe('Antigravity')
+
+    expect(
+      resolveTerminalTabTitle(
+        { customTitle: null, title: "agy '--dangerously-skip-permissions' ~/Codes/orca" },
+        false,
+        "agy '--dangerously-skip-permissions' ~/Codes/orca"
+      )
+    ).toBe('Antigravity')
+
+    expect(resolveTerminalTabTitle({ customTitle: null, title: 'agy' }, false, 'agy')).toBe(
+      'Antigravity'
+    )
+
+    expect(
+      resolveTerminalTabTitle(
+        { customTitle: null, title: 'claude --dangerously-skip-permissions' },
+        false
+      )
+    ).toBe('Claude')
+
+    expect(resolveTerminalTabTitle({ customTitle: null, title: 'codex --full-auto' }, false)).toBe(
+      'Codex'
+    )
+  })
+
+  it('allows generated titles to take precedence over agent launch command lines', () => {
+    expect(
+      resolveTerminalTabTitle(
+        {
+          customTitle: null,
+          generatedTitle: 'Fix intake flow',
+          title: "agy '--dangerously-s ~/C/orca"
+        },
+        true,
+        "agy '--dangerously-s ~/C/orca"
+      )
+    ).toBe('Fix intake flow')
+  })
+
+  it('preserves ordinary terminal commands in liveTitle and fallback', () => {
+    expect(resolveTerminalTabTitle({ customTitle: null, title: 'vim src/index.ts' }, false)).toBe(
+      'vim src/index.ts'
+    )
+
+    expect(resolveTerminalTabTitle({ customTitle: null, title: 'pnpm test' }, false)).toBe(
+      'pnpm test'
+    )
+  })
+
+  it('replaces raw agent launch command lines in unified tab labels', () => {
+    expect(
+      resolveUnifiedTabLabel(
+        { customLabel: null, label: "agy '--dangerously-s ~/C/orca" },
+        false,
+        "agy '--dangerously-s ~/C/orca"
+      )
+    ).toBe('Antigravity')
+
+    expect(
+      resolveUnifiedTabLabel(
+        {
+          customLabel: null,
+          generatedLabel: 'Fix intake flow',
+          label: "agy '--dangerously-s ~/C/orca"
+        },
+        true,
+        "agy '--dangerously-s ~/C/orca"
+      )
+    ).toBe('Fix intake flow')
+  })
+
+  it('cleans an agent command supplied only as a fallback', () => {
+    expect(
+      resolveTerminalTabTitle(
+        { customTitle: null, title: '', defaultTitle: '' },
+        false,
+        'agy --dangerously-skip-permissions'
+      )
+    ).toBe('Antigravity')
+
+    expect(
+      resolveUnifiedTabLabel(
+        { customLabel: null, label: '' },
+        false,
+        'agy --dangerously-skip-permissions'
+      )
+    ).toBe('Antigravity')
+  })
 })
