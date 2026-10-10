@@ -189,6 +189,24 @@ describe('SubagentTracker', () => {
     expect(h.row('outside-turn')?.map((entry) => entry.id)).toEqual(['a', 'b'])
   })
 
+  it('releases settled rows an earlier run journaled even when only a lookup reached them', () => {
+    const h = harness({
+      groupOf: (id) => (id.startsWith('old-') ? `old-turn-${id.slice(4)}` : null),
+      claimGroup: (groupId) => ({
+        entries: [
+          { id: `old-${groupId.slice(9)}`, label: 'Old', state: 'completed', startedAt: 1, settledAt: 2 }
+        ],
+        placement: groupId
+      })
+    })
+    for (let index = 0; index < 100; index++) {
+      h.tracker.locate(`old-${index}`)
+    }
+    h.report('turn-new', { id: 'fresh', state: 'completed' })
+    expect(h.tracker.locate('fresh')).not.toBeNull()
+    expect(h.tracker.sizes().groups).toBeLessThanOrEqual(32)
+  })
+
   it('ends only foreground children with their turn, and every child with the session', () => {
     const h = harness()
     h.report('turn', { id: 'fg' })

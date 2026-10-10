@@ -156,6 +156,8 @@ export class SubagentTrackerGroups<Placement> {
       })
     }
     this.groups.set(groupId, group)
+    // Counted as settled history now, even if only a lookup reached it; released by a later trim.
+    this.retention.trim([group], () => true)
     return group
   }
 }
