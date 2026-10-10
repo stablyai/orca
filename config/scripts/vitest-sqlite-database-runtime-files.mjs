@@ -18,6 +18,7 @@ export const SQLITE_DATABASE_RUNTIME_INCLUDE = [
   'src/main/native-chat/transcript-opencode-semantic-fidelity.test.ts',
   'src/main/native-chat/transcript-opencode-sqlite-query.test.ts',
   'src/main/native-chat/transcript-opencode-subscribe.test.ts',
+  'src/main/native-chat/transcript-zcode.test.ts',
   'src/main/native-chat/transcript-opencode2-sqlite.test.ts',
   'src/main/opencode-usage/cache-read-reproduction.test.ts',
   'src/main/opencode-usage/opencode2-session-usage.test.ts',
