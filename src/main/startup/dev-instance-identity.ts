@@ -1,9 +1,12 @@
 import { createHash } from 'node:crypto'
 import path from 'node:path'
-import type { AppIdentity } from '../../shared/app-identity'
+import {
+  DEV_APP_BUNDLE_ID_SUFFIX,
+  getAppBundleId,
+  type AppIdentity
+} from '../../shared/app-identity'
 
 const BASE_APP_NAME = 'Orca'
-const BASE_APP_USER_MODEL_ID = 'com.stablyai.orca'
 const MAX_LABEL_LENGTH = 80
 
 export type DevInstanceIdentity = AppIdentity & {
@@ -55,10 +58,10 @@ function formatLabel(branch: string | null, worktreeName: string | null): string
 
 function createDevAppUserModelId(identityKey: string | null): string {
   if (!identityKey) {
-    return BASE_APP_USER_MODEL_ID
+    return getAppBundleId()
   }
   const hash = createHash('sha1').update(identityKey).digest('hex').slice(0, 10)
-  return `${BASE_APP_USER_MODEL_ID}.dev.${hash}`
+  return `${getAppBundleId()}${DEV_APP_BUNDLE_ID_SUFFIX}.${hash}`
 }
 
 export function getDevInstanceIdentity(
@@ -75,7 +78,7 @@ export function getDevInstanceIdentity(
       devWorktreeName: null,
       devRepoRoot: null,
       dockBadgeLabel: null,
-      appUserModelId: BASE_APP_USER_MODEL_ID
+      appUserModelId: getAppBundleId()
     }
   }
 

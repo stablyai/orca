@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setAppBundleId } from '../shared/app-identity'
 import {
   MacosTccPromptWatch,
   type LogStreamChild,
@@ -65,6 +66,24 @@ describe('isOrcaAttributedPrompt', () => {
           responsibleIdentifier: id
         })
       ).toBe(true)
+    }
+  })
+
+  it("counts a rebranded build's own dialogs, not Orca's", () => {
+    const prompt = (responsibleIdentifier: string): boolean =>
+      isOrcaAttributedPrompt({
+        service: 'kTCCServiceSystemPolicyAppData',
+        accessingIdentifier: 'find',
+        responsibleIdentifier
+      })
+    setAppBundleId('com.example.rebrand')
+    try {
+      expect(prompt('com.example.rebrand')).toBe(true)
+      expect(prompt('com.example.rebrand.helper')).toBe(true)
+      expect(prompt('com.example.rebrand.dev.helper')).toBe(true)
+      expect(prompt('com.stablyai.orca')).toBe(false)
+    } finally {
+      setAppBundleId(null)
     }
   })
 

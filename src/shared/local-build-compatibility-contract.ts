@@ -1,6 +1,9 @@
+import { ORCA_APP_BUNDLE_ID } from './app-identity'
+
+// Why a JSON twin: packaging scripts are CommonJS and read the JSON; a test keeps both equal.
 export const LOCAL_BUILD_COMPATIBILITY_CONTRACT = {
   formatVersion: 1,
-  appId: 'com.stablyai.orca',
+  appId: ORCA_APP_BUNDLE_ID,
   stateSchemaVersion: 1,
   readableStateSchemaVersions: [1],
   daemonProtocolVersion: 44,
