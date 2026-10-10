@@ -282,8 +282,6 @@ export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
   return findRelocatedDaemonHost(sources, inventory.fingerprint)
 }
 
-export { reclaimUnownedDaemonHostDir } from './daemon-host-reclaim'
-
 export type PinnedDaemonVersionsEvidence =
   | { status: 'complete'; versionLiveness: ReadonlyMap<string, ProcessLivenessVerdict> }
   | { status: 'unverifiable'; reason: string }

@@ -72,4 +72,34 @@ describe('runClaudeCommandProcess', () => {
     )
     expect(spec.env?.CLAUDE_CONFIG_DIR).toBe(process.env.CLAUDE_CONFIG_DIR)
   })
+
+  it('hands BROWSER to a host login', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    await runClaudeCommandProcess(
+      ['auth', 'login', '--claudeai'],
+      { windowsPath: '/data/a/home', linuxPath: null, wslDistro: null },
+      1000,
+      { browser: '/data/a/home/.orca-sign-in-browser' }
+    )
+    expect(spawned.specs[0].env?.BROWSER).toBe('/data/a/home/.orca-sign-in-browser')
+  })
+
+  it('makes the BROWSER helper executable inside the distro before a WSL login', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    await runClaudeCommandProcess(
+      ['auth', 'login', '--claudeai'],
+      {
+        windowsPath: '\\\\wsl.localhost\\Ubuntu\\home\\u\\a',
+        linuxPath: '/home/u/a',
+        wslDistro: 'Ubuntu'
+      },
+      1000,
+      { browser: '/home/u/a/.orca-sign-in-browser' }
+    )
+    expect(spawned.specs[0].args?.[5]).toBe(
+      buildWslLoginShellCommand(
+        `chmod 700 '/home/u/a/.orca-sign-in-browser'; exec env CLAUDE_CONFIG_DIR='/home/u/a' BROWSER='/home/u/a/.orca-sign-in-browser' claude 'auth' 'login' '--claudeai'`
+      )
+    )
+  })
 })

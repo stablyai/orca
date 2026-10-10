@@ -99,6 +99,18 @@ const EnvSchema = z.object({
   ORCA_RELAY_PUBLIC_ASSIGNMENTS_ENABLED: EnvironmentBooleanSchema,
   ORCA_RELAY_REGIONAL_PLACEMENT_ENABLED: EnvironmentBooleanSchema,
   ORCA_RELAY_REGION_CORRECTION_COHORT_PERCENT: z.coerce.number().int().min(0).max(100).default(0),
+  // Step 3 shadow directory: unset or empty polls no cell; `all` or a comma list of cell ids.
+  ORCA_RELAY_SHADOW_SEAT_FEED_CELLS: z
+    .string()
+    .default('')
+    .transform((value) =>
+      value.trim() === 'all'
+        ? ('all' as const)
+        : value
+            .split(',')
+            .map((cellId) => cellId.trim())
+            .filter((cellId) => cellId.length > 0)
+    ),
   ORCA_RELAY_PUBLIC_ASSIGNMENT_CONCURRENCY: z.coerce.number().int().positive().max(100).default(2),
   ORCA_RELAY_PUBLIC_STICKY_CONCURRENCY: z.coerce.number().int().positive().max(100).default(1),
   ORCA_RELAY_PUBLIC_STICKY_QUEUE_MAX: z.coerce.number().int().positive().max(4_096).default(64),
@@ -205,6 +217,7 @@ export type RelayConfig = {
   fenceBrokerServiceAccount?: string
   rehomeDirectorServiceAccount?: string
   rehomeAudience?: string
+  shadowSeatFeedCells?: 'all' | string[]
   runtimeServiceAccount: string
   directorUrl?: string
   heartbeatAudience?: string
@@ -354,6 +367,7 @@ export function loadRelayConfig(env: NodeJS.ProcessEnv = process.env): RelayConf
     fenceBrokerServiceAccount: parsed.ORCA_RELAY_FENCE_BROKER_SERVICE_ACCOUNT,
     rehomeDirectorServiceAccount: parsed.ORCA_RELAY_REHOME_DIRECTOR_SERVICE_ACCOUNT,
     rehomeAudience: parsed.ORCA_RELAY_REHOME_AUDIENCE,
+    shadowSeatFeedCells: parsed.ORCA_RELAY_SHADOW_SEAT_FEED_CELLS,
     runtimeServiceAccount:
       parsed.ORCA_RELAY_RUNTIME_SERVICE_ACCOUNT ?? parsed.ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT,
     directorUrl,

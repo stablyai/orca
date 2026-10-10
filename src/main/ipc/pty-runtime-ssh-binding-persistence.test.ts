@@ -500,7 +500,7 @@ describe('registerPtyHandlers', () => {
     }
 
     try {
-      setPtyOwnership(appPtyId, 'ssh-expired-runtime')
+      setPtyOwnership(appPtyId, 'ssh:ssh-expired-runtime')
       registerPtyHandlers(
         mainWindow as never,
         runtime as never,
@@ -608,7 +608,7 @@ describe('registerPtyHandlers', () => {
     }
 
     try {
-      setPtyOwnership(appPtyId, 'ssh-live-runtime')
+      setPtyOwnership(appPtyId, 'ssh:ssh-live-runtime')
       registerPtyHandlers(
         mainWindow as never,
         runtime as never,

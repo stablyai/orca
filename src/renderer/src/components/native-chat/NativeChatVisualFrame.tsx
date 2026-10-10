@@ -13,6 +13,7 @@ import {
 import type { NativeChatVisualDocument } from './native-chat-visual-read-client'
 import { createNativeChatVisualHeightGovernor } from '../../../../shared/native-chat-visual-height-governor'
 import { useNativeChatVisualTheme } from './use-native-chat-visual-theme'
+import { useWebviewDragPassthroughActive } from '../browser-pane/host-guest/use-webview-drag-passthrough-active'
 
 /** Height reserved before a visual reports its own, so the reply below does not jump far. */
 export const NATIVE_CHAT_VISUAL_RESERVED_HEIGHT = 160
@@ -49,6 +50,8 @@ export function NativeChatVisualFrame({
 }): React.JSX.Element {
   const frameRef = useRef<HTMLIFrameElement | null>(null)
   const theme = useNativeChatVisualTheme(themeScope)
+  // Why: a frame takes the pointer stream from Orca's document, so a tab dragged over it could not drop here.
+  const dragPassthrough = useWebviewDragPassthroughActive()
   // The latest theme for the next document build and the load-time post, without rebuilding on it.
   const themeRef = useRef(theme)
   useLayoutEffect(() => {
@@ -174,7 +177,10 @@ export function NativeChatVisualFrame({
         sandbox="allow-scripts"
         referrerPolicy="no-referrer"
         className="block size-full border-0 bg-transparent"
-        style={{ colorScheme: theme.colorScheme }}
+        style={{
+          colorScheme: theme.colorScheme,
+          pointerEvents: dragPassthrough ? 'none' : undefined
+        }}
         onLoad={() => {
           loadsRef.current += 1
           const frameWindow = frameRef.current?.contentWindow

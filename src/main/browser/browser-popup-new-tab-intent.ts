@@ -1,17 +1,18 @@
 /**
- * Whether a `window.open()` asks for a new tab rather than a popup window.
+ * Whether a new-window request from a page should open an Orca tab rather than a popup window.
  *
- * Orca answers a tab by denying, which hands the page `null`, so named and featured opens — whose
- * flow may use that handle — stay popups.
+ * Chromium's disposition already carries Chrome's answer: new-tab links, Cmd/Ctrl/middle clicks, and
+ * `window.open` without window features (`noopener` and `noreferrer` are not features) arrive as a
+ * tab, while size/position features and Shift-click arrive as `new-window`. Orca answers a tab by
+ * denying, which hands the page `null`, so a named open — whose flow may use that handle, as OAuth
+ * does — stays a child window.
  */
 export function isNewBrowserTabPopupIntent(details: {
   frameName: string
   disposition: string
-  features: string
 }): boolean {
   return (
     details.frameName === '' &&
-    details.features.trim() === '' &&
     (details.disposition === 'foreground-tab' || details.disposition === 'background-tab')
   )
 }

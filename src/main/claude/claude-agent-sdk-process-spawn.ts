@@ -7,14 +7,11 @@ import {
 } from '../provider-process/managed-provider-process'
 import { claudeChildClosePolicy, claudeChildCloseProven } from './claude-child-exit-proof-ladder'
 
-/** Derived rather than imported: only @orca/process-host may name node:child_process. */
-type ClaudeCodeChild = PipedChildProcess
-
 export type ClaudeCodeProcessSpawn = {
   /** Pass as the SDK's `spawnClaudeCodeProcess`; the SDK never learns the pid because it never owns it. */
-  spawn: (options: ClaudeAgentSdkSpawnOptions) => ClaudeCodeChild
+  spawn: (options: ClaudeAgentSdkSpawnOptions) => PipedChildProcess
   /** The retained child, so Orca keeps its own tree-kill and exit-proof ladder. Null until the SDK spawns. */
-  readonly child: ClaudeCodeChild | null
+  readonly child: PipedChildProcess | null
   readonly managed: ManagedProviderProcess | null
   /**
    * Ownership proof: the durable lease adjudicates on this pid plus start time plus the spawn

@@ -101,8 +101,17 @@ export function structuredSessionNotices({
   })
   return [
     ...(availability ? [availability] : []),
-    ...(launchNotice ? [launchNotice] : []),
-    ...(sessionError ? [{ key: 'session', kind: 'error' as const, text: sessionError }] : []),
+    ...(launchNotice && !sessionError ? [launchNotice] : []),
+    ...(sessionError
+      ? [
+          {
+            key: 'session',
+            kind: 'error' as const,
+            text: sessionError,
+            ...(launchNotice ? { action: launchNotice.action } : {})
+          }
+        ]
+      : []),
     ...(composerError ? [{ key: 'composer-error', kind: 'error' as const, ...composerError }] : [])
   ]
 }

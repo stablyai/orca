@@ -17,11 +17,12 @@ import {
 } from '../host-env/fresh-spawn-routing'
 import { getAppPtyId, getProvider, getRelayPtyId } from '../provider/registry'
 import type { PtyIpcSpawnState } from './spawn-state'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 
 export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
   // Establish daemon identity before the first await so hidden delivery is gated before byte zero.
-  ctx.provider = getProvider(args.connectionId)
+  ctx.provider = getProvider(getConnectionExecutionHostId(args.connectionId))
   ctx.isDaemonHostSpawn =
     !args.connectionId &&
     !(ctx.provider instanceof LocalPtyProvider) &&

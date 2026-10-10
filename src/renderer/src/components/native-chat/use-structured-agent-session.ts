@@ -3,9 +3,10 @@ import { useStructuredAgentSessionSends } from './use-structured-agent-session-s
 import { useStructuredAgentSessionCommandWrite } from './use-structured-agent-session-command-write'
 import { structuredAgentSessionNewSendsQueue } from './structured-agent-session-queue-request'
 import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentSessionCancelResult } from '../../../../shared/agent-session-wire'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
-import { takeBackStructuredLaunchPrompts } from '@/lib/structured-agent-session-launch-prompt'
+import { useStructuredLegacyLaunchStop } from '@/lib/structured-agent-session-legacy-launch-stop'
 import { supportsStructuredAgentSessionPromptCancel } from '@/runtime/structured-agent-session-client'
 import {
   useStructuredAgentSessionHostQueuesCommands,
@@ -92,6 +93,7 @@ export function useStructuredAgentSession(args: {
     enabled: transportEnabled
   })
   const commandPending = useRef(false)
+  const legacyLaunchStop = useStructuredLegacyLaunchStop(sessionId)
   const transportState = useStructuredAgentSessionTransportState(state, transportEnabled)
   const {
     conversationCommands,
@@ -274,12 +276,12 @@ export function useStructuredAgentSession(args: {
     turnId: transportState.turnId,
     ...structuredAgentSessionStopControl({
       published: transportEnabled,
+      ...legacyLaunchStop,
       host: stopControl,
       transportState,
       sends: {
         sending,
-        stopSends: sends.stopSends,
-        takeBackLaunchText: () => takeBackStructuredLaunchPrompts(sessionId)
+        stopSends: sends.stopSends
       }
     }),
     stopPressed: stopControl.pressed,
@@ -298,7 +300,7 @@ export function useStructuredAgentSession(args: {
       })
     },
     stopBackgroundTask: (taskId?: string) =>
-      mutate('agentSession.cancel', 'agentSession.cancel', {
+      mutate<AgentSessionCancelResult>('agentSession.cancel', 'agentSession.cancel', {
         turnId: 'background-tasks',
         scope: 'background-tasks',
         ...(taskId ? { taskId } : {})

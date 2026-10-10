@@ -4,11 +4,11 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import {
   assessProcessHostImports,
-  collectModuleSpecifiers,
   collectProcessHostSources,
   main,
   readProcessHostBaseline
 } from './check-process-host-imports.mjs'
+import { collectModuleSpecifiers } from './static-module-specifiers.mjs'
 
 const PACKAGE_SOURCE = 'src/packages/process-host/src/'
 const manifest = {

@@ -17,6 +17,7 @@ import {
   type WireClaudeModel
 } from './claude-structured-catalog-listing'
 import type { StructuredAgentSessionLiveOptions } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { AgentModelCatalogLiveListing } from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
 import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
 
 /**
@@ -253,6 +254,20 @@ function observeClaudeSettingsReadback(
       session.fastModePerSessionOptIn = perSessionOptIn
     }
   }
+}
+
+/** The account listing with what the start's settings readback resolved, for the host to save
+ *  once; empty when the listing names no model. */
+export function claudeResolvedCatalogListing(
+  session: ClaudeSession,
+  catalog: unknown[] | null
+): { catalogListing?: AgentModelCatalogLiveListing } {
+  const listing = claudeCatalogListing(
+    session,
+    listedModels(catalog ? { models: catalog } : null),
+    { withConfiguredDefault: true }
+  )
+  return listing ? { catalogListing: listing } : {}
 }
 
 /** The options as main already holds them, over `catalog`; asks the CLI nothing. Startup's

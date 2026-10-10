@@ -1,8 +1,9 @@
 /**
  * The one place an agent launch is sequenced — for the surfaces moved onto it: `agent.launch`,
  * `worktree.create` (CLI and mobile create) through `createWorktreeWithStartupAgent`, whose
- * `legacy-host` create still starts the agent itself, and orchestration workers, local and
- * federated. The desktop agent tab still starts agents its own way; moving it here is later work.
+ * `legacy-host` create still starts the agent itself, orchestration workers, local and
+ * federated, and server-run automations. The desktop agent tab still starts agents its own way;
+ * moving it here is later work.
  *
  * The mode decision is shared, not copied: `agent-launch-mode` owns it, and
  * `orchestration-worker-start-mode` is a thin adapter over it supplying orchestration's receipt

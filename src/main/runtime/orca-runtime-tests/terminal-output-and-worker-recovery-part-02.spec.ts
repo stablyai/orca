@@ -212,7 +212,7 @@ describe('OrcaRuntimeService', () => {
       paneKey: makePaneKey('tab-agent', HEADLESS_LEAF_ID)
     })
     expect(listProcesses).toHaveBeenCalledTimes(inventoryCount + 1)
-    expect(listProcesses).toHaveBeenLastCalledWith(null, LIST_PROVIDER_DEADLINE)
+    expect(listProcesses).toHaveBeenLastCalledWith('local', LIST_PROVIDER_DEADLINE)
     expect(
       (await runtime.listTerminals()).terminals.find((terminal) => terminal.ptyId === 'pty-agent')
     ).toMatchObject({

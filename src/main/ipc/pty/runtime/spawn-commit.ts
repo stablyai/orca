@@ -1,5 +1,9 @@
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
-import { ptyOwnership, ptyIncarnationById } from '../provider/ownership-state'
+import {
+  ptyOwnership,
+  ptyIncarnationById,
+  setAdoptedPtyOwnership
+} from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
 import { commitRuntimePtySize } from './spawn-commit-pty-size'
 import {
@@ -23,7 +27,10 @@ import {
   isNativeWindowsLocalPtySpawn,
   markNativeWindowsConptyPty
 } from '../../../runtime/terminal-model-query-authority'
-import { toSshExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getConnectionExecutionHostId,
+  toSshExecutionHostId
+} from '../../../../shared/execution-host'
 import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared/terminal-session-state-save-failure'
 import { resolvePaneSpawnReservation } from '../pane/spawn-reservation'
 import { admitProviderReattachLaunchIdentity } from '../pane/launch-authority'
@@ -101,7 +108,7 @@ async function commitReservedRuntimePtySpawn(ctx: RuntimePtySpawnState) {
       ctx.result,
       ctx.hostSessionBinding?.expectedSourceBinding
     )
-    ptyOwnership.set(ctx.result.id, args.connectionId ?? ptyOwnership.get(ctx.result.id) ?? null)
+    setAdoptedPtyOwnership(ctx.result.id, args.connectionId)
     ctx.deps.runtime?.registerPreAllocatedHandleForPty(ctx.result.id, owner.surface.terminalHandle)
     if (ctx.result.incarnationId) {
       ptyIncarnationById.set(ctx.result.id, ctx.result.incarnationId)
@@ -207,7 +214,7 @@ async function commitReservedRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   if (args.preAllocatedHandle && !ctx.stablePaneOwner?.handle) {
     ctx.deps.runtime?.registerPreAllocatedHandleForPty(ctx.result.id, args.preAllocatedHandle)
   }
-  ptyOwnership.set(ctx.result.id, args.connectionId ?? null)
+  ptyOwnership.set(ctx.result.id, getConnectionExecutionHostId(args.connectionId))
   if (ctx.result.incarnationId) {
     ptyIncarnationById.set(ctx.result.id, ctx.result.incarnationId)
   }

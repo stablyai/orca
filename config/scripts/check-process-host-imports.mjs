@@ -5,8 +5,6 @@ import { pathToFileURL } from 'node:url'
 import { collectModuleSpecifiers } from './static-module-specifiers.mjs'
 import { isTestOnlySourcePath } from './test-only-source-path.mjs'
 
-export { collectModuleSpecifiers }
-
 const ROOT = path.resolve(import.meta.dirname, '..', '..')
 const PACKAGE_NAME = '@orca/process-host'
 const PACKAGE_DIRECTORY = 'src/packages/process-host'

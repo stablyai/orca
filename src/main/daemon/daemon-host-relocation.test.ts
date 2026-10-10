@@ -46,9 +46,9 @@ import {
   getDaemonHostRootDir,
   getRelocatedDaemonHost,
   materializeRelocatedDaemonHost,
-  pruneOldDaemonHosts,
-  reclaimUnownedDaemonHostDir
+  pruneOldDaemonHosts
 } from './daemon-host-relocation'
+import { reclaimUnownedDaemonHostDir } from './daemon-host-reclaim'
 import type { ProcessLivenessVerdict } from './daemon-incarnation-evidence-types'
 
 let tempDir: string

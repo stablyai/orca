@@ -58,6 +58,7 @@ export {
 } from './agent-session-resume-runtime-capabilities'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from './agent-session-background-task-child-views-capability'
 import { AGENT_SESSION_STOP_RUNTIME_CAPABILITIES } from './agent-session-stop-capabilities'
+import { AGENT_SESSION_CREATE_RUNTIME_CAPABILITIES } from './agent-session-create-capabilities'
 import { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
 import { SKILL_RUNTIME_CAPABILITIES } from './skill-install-capability'
 import {
@@ -332,16 +333,11 @@ export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
 export const ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY =
   'git.antigravity-configured-model.v1' as const
 
-// Why: `agentSession.create` is a strict object, so an older host refuses a payload carrying the
-// reserved `tabId` rather than ignoring it. A client sends the field only to a host advertising this.
-export const AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY =
-  'agentSession.create.tab-id.v1' as const
-
 export const RUNTIME_CAPABILITIES = [
   ...ORCAD_RUNTIME_CAPABILITIES,
   QODER_OWNED_TERMINAL_CREATE_CAPABILITY,
   ...AGENT_SESSION_STOP_RUNTIME_CAPABILITIES,
-  AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY,
+  ...AGENT_SESSION_CREATE_RUNTIME_CAPABILITIES,
   ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY,
   'files.pathsExist',
   'runtime.status.compat.v1',

@@ -75,4 +75,17 @@ describe('launchAgentTerminal startup follow-up', () => {
     expect(createTerminal).toHaveBeenCalledTimes(1)
     expect(sendFollowup).not.toHaveBeenCalled()
   })
+
+  // Headless automations launch a post-start agent bare and let the launch executor deliver.
+  it('sends no follow-up for a post-start agent launched without a prompt', async () => {
+    const { runtime, createTerminal, sendFollowup } = makeRuntime()
+
+    await runtime.launchAgentTerminal('id:repo-1::/home/me/app-feature', {
+      agent: 'aider',
+      prompt: ''
+    })
+
+    expect(createTerminal).toHaveBeenCalledTimes(1)
+    expect(sendFollowup).not.toHaveBeenCalled()
+  })
 })

@@ -100,7 +100,7 @@ async function syncCompiledOutput(stagingDir, distDir, assertLockHeld) {
     result.written += 1
   }
   // Outputs of renamed or deleted sources would otherwise ship and stay importable.
-  for (const file of listFiles(distDir)) {
+  for (const file of existing) {
     if (!stagedSet.has(file)) {
       assertLockHeld()
       rmSync(join(distDir, file), { force: true })
