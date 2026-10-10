@@ -46,7 +46,9 @@ export function createRecentlyClosedEditorTabs(
         reopenId,
         ...(ORCA_LAYOUT_OWNER_IS_MAIN && position?.groupIndex !== undefined
           ? { groupIndex: position.groupIndex }
-          : {})
+          : {}),
+        // Why: replay of a layout that already existed — restoring must not rearrange it.
+        placementFixed: true
       })
       restoreRecentlyClosedTabPosition(get, worktreeId, restoredFileId, position)
       return true

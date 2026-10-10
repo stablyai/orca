@@ -59,6 +59,9 @@ export type TabsSlice = {
         recordInteraction: boolean
         /** With activate false: still the tab its pane shows, without becoming the active pane. */
         showInGroup: boolean
+        /** This call's placement is already decided — replay of a layout that existed, or an
+         *  explicit drop target. Never redirect it beside a lone pane. */
+        placementFixed: boolean
       }
     >
   ) => Tab
@@ -151,7 +154,7 @@ export type TabsSlice = {
     worktreeId: string,
     sourceGroupId: string,
     direction: TabSplitDirection,
-    opts?: { activate?: boolean }
+    opts?: { activate?: boolean; recordInteraction?: boolean }
   ) => string | null
   moveUnifiedTabToGroup: (
     tabId: string,

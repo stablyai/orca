@@ -1,6 +1,6 @@
 import { vi, type Mock } from 'vitest'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { Tab, TabGroup } from '../../../../shared/tab-types'
+import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
 
 export type TerminalLinkStoreSettings = {
   openLinksInApp?: boolean
@@ -35,6 +35,10 @@ export type TerminalLinkStoreState = {
     }[]
   >
   folderWorkspaces: []
+  repos?: { id: string; displayName: string }[]
+  layoutByWorktree: Record<string, TabGroupLayoutNode | undefined>
+  activeGroupIdByWorktree: Record<string, string | undefined>
+  createEmptySplitGroup: Mock
 }
 
 export type TerminalLinkTestDoubles = {
@@ -51,6 +55,7 @@ export type TerminalLinkTestDoubles = {
   createBrowserTabMock: Mock
   setPendingEditorRevealMock: Mock
   setMarkdownViewModeMock: Mock
+  createEmptySplitGroupMock: Mock
   deps: { worktreeId: string; worktreePath: string }
   storeState: TerminalLinkStoreState
 }
@@ -69,6 +74,7 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
   const createBrowserTabMock = vi.fn()
   const setPendingEditorRevealMock = vi.fn()
   const setMarkdownViewModeMock = vi.fn()
+  const createEmptySplitGroupMock = vi.fn(() => 'g2')
 
   const deps = { worktreeId: 'wt-1', worktreePath: '/tmp' }
   // Adapt legacy openFile assertions while recording the opened view for guarded reveal.
@@ -108,7 +114,10 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
     unifiedTabsByWorktree: {},
     groupsByWorktree: {},
     worktreesByRepo: {},
-    folderWorkspaces: []
+    folderWorkspaces: [],
+    layoutByWorktree: {},
+    activeGroupIdByWorktree: {},
+    createEmptySplitGroup: createEmptySplitGroupMock
   }
 
   return {
@@ -125,6 +134,7 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
     createBrowserTabMock,
     setPendingEditorRevealMock,
     setMarkdownViewModeMock,
+    createEmptySplitGroupMock,
     deps,
     storeState
   }

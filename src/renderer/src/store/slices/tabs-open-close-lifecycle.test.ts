@@ -10,7 +10,8 @@ import {
   makeOpenFile,
   makeTab,
   makeTabGroup,
-  makeUnifiedTab
+  makeUnifiedTab,
+  seedThreePaneLayout
 } from './store-test-helpers'
 import { makeBrowserTab } from './store-session-test-harness'
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
@@ -60,6 +61,125 @@ describe('TabsSlice', () => {
 
   beforeEach(() => {
     store = createTestStore()
+  })
+
+  describe('createUnifiedTab', () => {
+    it('opens the second pane beside the first, in a new right-hand group', () => {
+      const first = store.getState().createUnifiedTab(WT, 'terminal')
+      const second = store.getState().createUnifiedTab(WT, 'editor', {
+        id: '/tmp/feature/src/main.ts',
+        label: 'main.ts'
+      })
+
+      const state = store.getState()
+      expect(second.groupId).not.toBe(first.groupId)
+      expect(state.groupsByWorktree[WT].map((group) => group.id)).toEqual([
+        first.groupId,
+        second.groupId
+      ])
+      expect(state.layoutByWorktree[WT]).toEqual({
+        type: 'split',
+        direction: 'horizontal',
+        ratio: 0.5,
+        first: { type: 'leaf', groupId: first.groupId },
+        second: { type: 'leaf', groupId: second.groupId }
+      })
+      expect(state.activeGroupIdByWorktree[WT]).toBe(second.groupId)
+      expect(state.groupsByWorktree[WT][1]).toMatchObject({
+        activeTabId: second.id,
+        tabOrder: [second.id]
+      })
+    })
+
+    it('never opens a third pane: the third tab opens opposite the focused pane', () => {
+      const first = store.getState().createUnifiedTab(WT, 'terminal')
+      const second = store.getState().createUnifiedTab(WT, 'terminal')
+      const third = store.getState().createUnifiedTab(WT, 'browser')
+
+      const state = store.getState()
+      expect(state.groupsByWorktree[WT]).toHaveLength(2)
+      // Why: both sides show a terminal, so it opens opposite the focused (second) pane.
+      expect(third.groupId).toBe(first.groupId)
+      expect(state.layoutByWorktree[WT]).toMatchObject({
+        type: 'split',
+        first: { type: 'leaf', groupId: first.groupId },
+        second: { type: 'leaf', groupId: second.groupId }
+      })
+      expect(state.groupsByWorktree[WT][0].tabOrder).toEqual([first.id, third.id])
+    })
+
+    it('re-arms once the area collapses back to one pane', () => {
+      const first = store.getState().createUnifiedTab(WT, 'terminal')
+      const second = store.getState().createUnifiedTab(WT, 'terminal')
+      store.getState().closeUnifiedTab(second.id)
+      expect(store.getState().layoutByWorktree[WT]).toEqual({
+        type: 'leaf',
+        groupId: first.groupId
+      })
+
+      const third = store.getState().createUnifiedTab(WT, 'terminal')
+      expect(third.groupId).not.toBe(first.groupId)
+      expect(store.getState().groupsByWorktree[WT]).toHaveLength(2)
+    })
+
+    it('opens beside without focusing when activate is false', () => {
+      const first = store.getState().createUnifiedTab(WT, 'terminal')
+      const second = store.getState().createUnifiedTab(WT, 'browser', { activate: false })
+
+      const state = store.getState()
+      expect(second.groupId).not.toBe(first.groupId)
+      expect(state.activeGroupIdByWorktree[WT]).toBe(first.groupId)
+      expect(state.groupsByWorktree[WT][0]).toMatchObject({
+        activeTabId: first.id,
+        recentTabIds: [first.id]
+      })
+      // Why: the new group still needs its own active tab or the right pane renders nothing.
+      expect(state.groupsByWorktree[WT][1]).toMatchObject({ activeTabId: second.id })
+    })
+
+    it('carries the caller metadata through the split', () => {
+      store.getState().createUnifiedTab(WT, 'terminal')
+      const second = store.getState().createUnifiedTab(WT, 'editor', {
+        id: 'tab-id-from-caller',
+        entityId: '/tmp/feature/src/main.ts',
+        label: 'main.ts'
+      })
+
+      expect(second.id).toBe('tab-id-from-caller')
+      expect(second.entityId).toBe('/tmp/feature/src/main.ts')
+      expect(second.label).toBe('main.ts')
+    })
+
+    it('skips the rule when the caller has already decided placement', () => {
+      const first = store.getState().createUnifiedTab(WT, 'terminal')
+      const second = store.getState().createUnifiedTab(WT, 'browser', { placementFixed: true })
+
+      expect(second.groupId).toBe(first.groupId)
+      expect(store.getState().layoutByWorktree[WT]).toEqual({
+        type: 'leaf',
+        groupId: first.groupId
+      })
+    })
+
+    it('does not record a pane-split interaction for an automatic split', () => {
+      // Why: the user did not split anything; feature discovery must stay honest.
+      const recordSpy = vi.spyOn(store.getState(), 'recordFeatureInteraction')
+      store.getState().createUnifiedTab(WT, 'terminal')
+      store.getState().createUnifiedTab(WT, 'editor', { id: '/a.ts' })
+
+      const recorded = recordSpy.mock.calls.map(([id]) => id)
+      expect(recorded).not.toContain('tab-splits')
+      expect(recorded).not.toContain('terminal-panes')
+      expect(recorded).toContain('terminal-tabs')
+    })
+
+    it('reuses the existing group once the area is split', () => {
+      seedThreePaneLayout(store, WT)
+      store.getState().createUnifiedTab(WT, 'terminal')
+      store.getState().createUnifiedTab(WT, 'editor', { id: 'f.ts', label: 'f.ts' })
+
+      expect(store.getState().groupsByWorktree[WT]).toHaveLength(3)
+    })
   })
 
   describe('closeUnifiedTab', () => {
