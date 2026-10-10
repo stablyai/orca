@@ -86,6 +86,7 @@ export type EditorFilesSlice = {
   reorderFiles: (fileIds: string[]) => void
   markFileDirty: (fileId: string, dirty: boolean) => void
   setExternalMutation: (fileId: string, mutation: 'deleted' | 'renamed' | 'changed' | null) => void
+  requestDiffContentReload: (fileId: string) => void
   setLastKnownDiskSignature: (fileId: string, signature: string) => void
   clearPendingDiskBaselineVerification: (fileId: string) => void
   setPendingDiskBaselineVerification: (fileId: string, value: boolean) => void

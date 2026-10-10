@@ -177,17 +177,41 @@ describe('createEditorSlice openDiff', () => {
     expect(store.getState().activeFileId).toBe('wt-1::diff::staged::file.ts')
   })
 
-  it('bumps diffContentReloadNonce when re-opening an existing diff tab', () => {
+  it('bumps diffContentRefreshNonce when re-opening an existing diff tab', () => {
     const store = createEditorStore()
 
     store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false)
+    expect(store.getState().openFiles[0]?.diffContentRefreshNonce).toBeUndefined()
+
+    store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false)
+    expect(store.getState().openFiles[0]?.diffContentRefreshNonce).toBe(1)
+
+    store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false)
+    expect(store.getState().openFiles[0]?.diffContentRefreshNonce).toBe(2)
+  })
+
+  it('leaves diffContentReloadNonce alone when re-opening an existing diff tab', () => {
+    const store = createEditorStore()
+
+    store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false)
+    store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false)
+
     expect(store.getState().openFiles[0]?.diffContentReloadNonce).toBeUndefined()
+  })
 
+  it('increments diffContentReloadNonce for an external replacement request', () => {
+    const store = createEditorStore()
     store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false)
+    const fileId = store.getState().openFiles[0]?.id
+
+    if (!fileId) {
+      throw new Error('expected an open diff tab')
+    }
+    store.getState().requestDiffContentReload(fileId)
+
     expect(store.getState().openFiles[0]?.diffContentReloadNonce).toBe(1)
-
-    store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false)
-    expect(store.getState().openFiles[0]?.diffContentReloadNonce).toBe(2)
+    expect(() => store.getState().requestDiffContentReload('missing-file')).not.toThrow()
+    expect(store.getState().openFiles[0]?.diffContentReloadNonce).toBe(1)
   })
 
   it('bumps fileContentReloadNonce when re-opening an existing clean file with reload requested', () => {

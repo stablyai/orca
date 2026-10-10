@@ -357,7 +357,7 @@ describe('useEditorPanelContentState visibility', () => {
     expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(2)
   })
 
-  it('invalidates a hidden diff nonce without reading until reveal', async () => {
+  it('invalidates a hidden diff refresh without reading until reveal', async () => {
     const file = makeFile('diff-nonce', { mode: 'diff', diffSource: 'unstaged' })
     const staleDiff = createDeferred<DiffContent>()
     const freshDiff = createDeferred<DiffContent>()
@@ -368,7 +368,7 @@ describe('useEditorPanelContentState visibility', () => {
     await act(async () => root.render(<Probe activeFile={file} />))
     await vi.waitFor(() => expect(mocks.getRuntimeGitDiff).toHaveBeenCalledOnce())
 
-    const changed = { ...file, diffContentReloadNonce: 1 }
+    const changed = { ...file, diffContentRefreshNonce: 1 }
     await act(async () => root.render(<Probe activeFile={changed} isVisible={false} />))
     expect(mocks.getRuntimeGitDiff).toHaveBeenCalledOnce()
     await act(async () => {
