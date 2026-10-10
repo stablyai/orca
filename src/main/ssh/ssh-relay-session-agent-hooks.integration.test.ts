@@ -306,6 +306,51 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     })
   })
 
+  it("adopts the relay's pane owner, including its exit", async () => {
+    relay = createFakeRelay()
+    vi.mocked(deployAndLaunchRelay).mockResolvedValue({
+      transport: relay.transport,
+      serverBuildId: 'test-relay-build',
+      platform: 'linux-x64'
+    })
+    const events: CapturedStatus[] = []
+    captureAgentStatuses(events)
+    session = createSession('conn-owner')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Mocked deployment never reads the connection.
+    await session.establish({} as SshConnection)
+    const owner = {
+      agent: 'claude',
+      process: { pid: 4001, platform: 'linux' as const, startTime: 'boot:1' },
+      session: 'claude-a'
+    }
+    const base = {
+      source: 'claude' as const,
+      agentPresence: owner,
+      providerSession: { key: 'session_id' as const, id: 'claude-a' }
+    }
+    relay.notifyAgentHook(
+      makeEnvelope({
+        ...base,
+        payload: { state: 'working', prompt: 'remote task', agentType: 'claude' }
+      })
+    )
+    await waitForStatusCount(events, 1)
+    const paneKey = `tab-ssh:${SSH_LEAF_ID}`
+    const live = () => agentHookServer.getStatusSnapshot().find((row) => row.paneKey === paneKey)
+    expect(live()).toMatchObject({ state: 'working', agentType: 'claude' })
+    relay.notifyAgentHook(
+      makeEnvelope({
+        ...base,
+        hookEventName: 'AgentProcessExit',
+        providerSessionOnly: true,
+        agentPresence: { ...owner, ended: true },
+        payload: { state: 'working', prompt: 'remote task', agentType: 'claude' }
+      })
+    )
+    await vi.waitFor(() => expect(live()?.providerSessionOnly).toBe(true))
+    expect(live()?.providerSession).toEqual({ key: 'session_id', id: 'claude-a' })
+  })
+
   it('preserves tmux evidence age and unavailable across the real notification adapter', async () => {
     relay = createFakeRelay()
     vi.mocked(deployAndLaunchRelay).mockResolvedValue({

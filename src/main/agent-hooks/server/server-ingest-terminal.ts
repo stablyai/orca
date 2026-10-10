@@ -5,6 +5,10 @@ import { terminalStatusPayloadMatchesHook } from '../../../shared/agent-terminal
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { isAgentStatusHeldOpenByChildWork } from '../../../shared/agent-lead-status-fold'
+import {
+  classifyTerminalSignal,
+  withOwnerAgentType
+} from '../../../shared/agent-hook-presence-transition'
 import { AgentHookServerIngestNormalization } from './server-ingest-normalization'
 
 export abstract class AgentHookServerIngestTerminal extends AgentHookServerIngestNormalization {
@@ -104,8 +108,14 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       event.yieldsToHookSince !== undefined &&
       previous?.observation?.origin === 'hook' &&
       previous.receivedAt >= event.yieldsToHookSince
+    // Why: main cannot check a remote owner; its relay does.
+    const signal = classifyTerminalSignal(previous, event.payload.agentType, connectionId === null)
+    if (signal.kind === 'yield' && signal.probe) {
+      this.paneOwnerProbes.probe(paneKey, signal.probe)
+    }
     if (
       hookOwnsCommand ||
+      signal.kind === 'yield' ||
       (previous?.payload.agentType === 'claude' &&
         event.payload.agentType === 'claude' &&
         isAgentStatusHeldOpenByChildWork(previous.payload) &&
@@ -164,19 +174,26 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       (claimedAgentType === undefined || claimedAgentType === previous.payload.agentType)
         ? previous.payload.mainAgent
         : undefined
+    const owner = signal.kind === 'write' ? signal.owner : undefined
+    // Why: a terminal signal that names no model leaves the owner's.
+    const preservedModel = owner && !event.payload.model ? previous?.payload.model : undefined
+    const row = {
+      paneKey,
+      tabId,
+      worktreeId,
+      connectionId,
+      agentPresence: owner,
+      ...(preservedProviderSession ? { providerSession: preservedProviderSession } : {}),
+      ...(terminalHandle ? { terminalHandle } : {}),
+      payload: {
+        ...event.payload,
+        ...(preservedMainAgent ? { mainAgent: preservedMainAgent } : {}),
+        ...(preservedModel ? { model: preservedModel } : {})
+      }
+    }
     // Why: OSC status is a runtime observation, not a prompt boundary; keep prompt-sent telemetry tied to native hooks.
     this.applyNormalizedStatus(
-      {
-        paneKey,
-        tabId,
-        worktreeId,
-        connectionId,
-        ...(preservedProviderSession ? { providerSession: preservedProviderSession } : {}),
-        ...(terminalHandle ? { terminalHandle } : {}),
-        payload: preservedMainAgent
-          ? { ...event.payload, mainAgent: preservedMainAgent }
-          : event.payload
-      },
+      owner ? withOwnerAgentType(row, owner) : row,
       undefined,
       event.origin ?? 'osc',
       undefined,

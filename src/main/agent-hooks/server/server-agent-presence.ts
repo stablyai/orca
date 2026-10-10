@@ -1,10 +1,8 @@
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
-import {
-  isSameAgentProcess,
-  type AgentProcessVerdict
-} from '../../../shared/agent-process-presence'
+import type { AgentProcessVerdict } from '../../../shared/agent-process-presence'
 import { probeAgentProcessPresence } from '../../../shared/agent-process-presence-probe'
 import { AgentHookServerLifecycle } from './server-lifecycle'
+import { currentOwner } from '../../../shared/agent-hook-presence-transition'
 
 export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecycle {
   private readonly presenceChecks = new WeakMap<
@@ -12,28 +10,24 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
     Promise<AgentProcessVerdict | null>
   >()
 
-  /** A live hook proves its own process alive; only another process's hook casts doubt on the owner. */
-  checkAgentPresenceAfterHook(event: AgentHookEventPayload, row: AgentHookEventPayload): void {
-    const sender = event.agentPresence?.process
-    const owner = row.agentPresence
-    if (sender && owner?.process && !owner.ended && !isSameAgentProcess(sender, owner.process)) {
-      void this.checkAgentPresence(row.paneKey)
-    }
-  }
-
   /** Whether this pane's owner carries a process identity that its execution host can check. */
   hasVerifiableAgentProcess(paneKey: string): boolean {
-    const presence = this.state.lastStatusByPaneKey.get(
-      this.resolvePaneKeyAlias(paneKey)
-    )?.agentPresence
-    return presence?.process !== undefined && !presence.ended
+    return (
+      currentOwner(this.state.lastStatusByPaneKey.get(this.resolvePaneKeyAlias(paneKey)))
+        ?.process !== undefined
+    )
   }
 
   checkAgentPresence(paneKey: string): Promise<AgentProcessVerdict | null> {
+    return this.paneOwnerProbes.check(paneKey)
+  }
+
+  protected probeOwnerProcess(paneKey: string): Promise<AgentProcessVerdict | null> {
     const resolved = this.resolvePaneKeyAlias(paneKey)
     const row = this.state.lastStatusByPaneKey.get(resolved)
+    const presence = currentOwner(row)
     // Why: an ended owner already published its exit, and an owner no hook identified cannot be checked.
-    if (!row?.agentPresence?.process || row.agentPresence.ended) {
+    if (!row || !presence?.process) {
       return Promise.resolve(null)
     }
     if (row.connectionId !== null) {
@@ -43,13 +37,9 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
     if (pending) {
       return pending
     }
-    const presence = row.agentPresence
     const check = probeAgentProcessPresence(presence.process)
       .then((verdict) => {
-        if (
-          this.state.lastStatusByPaneKey.get(resolved) !== row ||
-          row.agentPresence !== presence
-        ) {
+        if (this.state.lastStatusByPaneKey.get(resolved) !== row) {
           return 'unverifiable' as const
         }
         if (verdict === 'exited') {

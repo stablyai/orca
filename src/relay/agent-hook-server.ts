@@ -15,7 +15,11 @@ export type {
   RelayHookServerStartOptions
 } from './agent-hook-server-contract'
 import { handleRelayHookRequest } from './agent-hook-request'
+import { listenOnLoopback } from './agent-hook-loopback-listener'
 import { RelayAgentPresence } from './relay-agent-presence'
+import { PaneOwnerProbes } from '../shared/agent-pane-owner-probes'
+import { currentOwner } from '../shared/agent-hook-presence-transition'
+import type { AgentProcessVerdict } from '../shared/agent-process-presence'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
@@ -72,7 +76,20 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
   private fixedToken: string | undefined
   private preferredPort: number
   private portFallbackApplied = false
-  private readonly presenceChecks = new RelayAgentPresence()
+  private readonly presenceChecks = new RelayAgentPresence({
+    current: (paneKey) => this.state.lastStatusByPaneKey.get(paneKey),
+    publish: (paneKey, event) => {
+      const meta = this.lastEnvelopeMetaByPaneKey.get(paneKey)
+      return (
+        meta !== undefined &&
+        this.applyEvent(event, meta.source, meta.env, meta.version) !== undefined
+      )
+    }
+  })
+  private readonly ownerProbes = new PaneOwnerProbes({
+    ownerOf: (paneKey) => currentOwner(this.state.lastStatusByPaneKey.get(paneKey))?.process,
+    checkOwner: (paneKey) => this.presenceChecks.check(paneKey)
+  })
   private retryScheduler: AgentHookResultRetryScheduler
   readonly claudeTerminalInterrupts = createRelayClaudeTerminalInterrupts(this.state, () =>
     this.relayInterruptHost()
@@ -103,7 +120,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
       env: this.env,
       isListening: () => this.server !== null,
       applyEvent: (event, source, env, version) => {
-        this.applyEvent(event, source, env, version, { checkPresence: false })
+        this.applyEvent(event, source, env, version)
       }
     })
   }
@@ -137,30 +154,15 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
     return this.portFallbackApplied
   }
 
-  private listenOn(port: number): Promise<void> {
+  private async listenOn(port: number): Promise<void> {
     this.server = createServer((req, res) => this.handleRequest(req, res))
-    return new Promise<void>((resolve, reject) => {
-      const onStartupError = (err: Error): void => {
-        this.server?.off('listening', onListening)
-        // Why: clear failed server refs so later start() calls can retry.
-        this.server = null
-        reject(err)
-      }
-      const onListening = (): void => {
-        this.server?.off('error', onStartupError)
-        this.server?.on('error', (err) => {
-          process.stderr.write(`[relay-hook-server] server error: ${err.message}\n`)
-        })
-        const address = this.server!.address()
-        if (address && typeof address === 'object') {
-          this.port = address.port
-        }
-        resolve()
-      }
-      this.server!.once('error', onStartupError)
-      // Why: loopback only — reachable by the in-box agent CLI (127.0.0.1), not from outside the box.
-      this.server!.listen(port, '127.0.0.1', onListening)
-    })
+    try {
+      this.port = (await listenOnLoopback(this.server, port)) ?? this.port
+    } catch (err) {
+      // Why: clear failed server refs so later start() calls can retry.
+      this.server = null
+      throw err
+    }
   }
 
   publishEndpointFile(): boolean {
@@ -223,8 +225,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
       getAgentLaunchToken: this.getAgentLaunchToken,
       isPaneBlocked: (paneKey) =>
         this.isCanonicalPane(paneKey) || this.isPaneSurfaceRetired(paneKey),
-      apply: (event, meta) =>
-        this.applyEvent(event, meta.source, meta.env, meta.version, { checkPresence: false }),
+      apply: (event, meta) => this.applyEvent(event, meta.source, meta.env, meta.version),
       armExpiry: (paneKey, meta) =>
         this.retryScheduler.armClaudeOwedNotificationExpiry(
           meta.source,
@@ -235,18 +236,8 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
     }
   }
 
-  checkAgentPresence(paneKey: string): Promise<void> {
-    const row = this.state.lastStatusByPaneKey.get(paneKey)
-    const meta = this.lastEnvelopeMetaByPaneKey.get(paneKey)
-    return this.presenceChecks.check(
-      row,
-      () => this.state.lastStatusByPaneKey.get(paneKey),
-      (event) => {
-        if (meta) {
-          this.applyEvent(event, meta.source, meta.env, meta.version)
-        }
-      }
-    )
+  checkAgentPresence(paneKey: string): Promise<AgentProcessVerdict | null> {
+    return this.ownerProbes.check(paneKey)
   }
 
   /** Drop a paneKey's cached entries on PTY exit so a terminated pane can't resurface as a ghost event on reconnect. */
@@ -298,7 +289,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
     source: AgentHookSource,
     env?: string,
     version?: string,
-    options: { isReplay?: boolean; checkPresence?: boolean } = {}
+    options: { isReplay?: boolean } = {}
   ): AgentHookEventPayload | undefined {
     return applyRelayHookEvent(
       {
@@ -310,7 +301,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
         clearAssistantMessageRetry: (paneKey) =>
           this.retryScheduler.clearAssistantMessageRetry(paneKey),
         forward: this.forward,
-        checkAgentPresence: (paneKey) => this.checkAgentPresence(paneKey)
+        ownerProbes: this.ownerProbes
       },
       incoming,
       source,

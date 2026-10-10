@@ -279,10 +279,7 @@ export abstract class AgentHookServerState {
   ): EnrichedAgentHookEventPayload | null
   protected abstract hasLiveClaimsForPaneKey(paneKey: string): boolean
   abstract checkAgentPresence(paneKey: string): Promise<AgentProcessVerdict | null>
-  abstract checkAgentPresenceAfterHook(
-    event: AgentHookEventPayload,
-    row: AgentHookEventPayload
-  ): void
+  protected abstract probeOwnerProcess(paneKey: string): Promise<AgentProcessVerdict | null>
 
   abstract reconcileEndedProcessForPaneKeys(
     paneKeys: Iterable<string>,

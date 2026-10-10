@@ -143,7 +143,6 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           this.recordCurrentAuthorityObservation(event)
           const enriched = this.applyNormalizedStatus(event, normalized.onAccepted)
           if (enriched) {
-            this.checkAgentPresenceAfterHook(event, enriched)
             this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
             this.scheduleTranscriptPoll(source, aliasedBody, enriched)
           }

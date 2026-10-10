@@ -98,7 +98,7 @@ export function hasUnsafeProviderSessionIdChars(value: string): boolean {
   return false
 }
 
-function normalizeSessionId(value: unknown): string | null {
+export function normalizeSessionId(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null
   }

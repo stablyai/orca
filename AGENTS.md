@@ -98,7 +98,7 @@ All changes must consider folder workspaces as well as git worktrees. Don't assu
 
 ## Agent Status
 
-The execution host owns agent status in one store, the hook server's, and every reader (sidebar, `worktree ps`, mobile, dashboard) subscribes to it. New producers write into that store, and readers keep only presentation policy.
+The execution host owns agent status in one store, the hook server's, and every reader (sidebar, `worktree ps`, mobile, dashboard) subscribes to it. New producers write into that store, and readers keep only presentation policy. Each pane's row has one owner (`agentPresence`), decided by `transitionHookPresence` on the execution host (main for local panes, the relay for SSH/WSL; main adopts relayed rows as given): only the owner's hook events write the row, a different agent's events are guests that leave it unchanged, and ownership ends only on the owner's exit, a host check that it `exited`, or the freshness fallback for an owner the host cannot check.
 
 ## Agent Terminal Screens
 

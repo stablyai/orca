@@ -1,5 +1,5 @@
 import { transitionHookPresence } from '../shared/agent-hook-presence-transition'
-import { isSameAgentProcess } from '../shared/agent-process-presence'
+import type { PaneOwnerProbes } from '../shared/agent-pane-owner-probes'
 import { cacheRelayLegacyAgentStatus } from '../shared/agent-status-legacy-relay-cache'
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
@@ -20,7 +20,7 @@ type RelayHookAdmissionHost = {
   clearPaneState: (paneKey: string) => void
   clearAssistantMessageRetry: (paneKey: string) => void
   forward: RelayHookForward
-  checkAgentPresence: (paneKey: string) => Promise<void>
+  ownerProbes: PaneOwnerProbes
 }
 
 export function applyRelayHookEvent(
@@ -29,7 +29,7 @@ export function applyRelayHookEvent(
   source: AgentHookSource,
   env?: string,
   version?: string,
-  options: { isReplay?: boolean; checkPresence?: boolean } = {}
+  options: { isReplay?: boolean } = {}
 ): AgentHookEventPayload | undefined {
   if (host.isCanonicalPane(incoming.paneKey)) {
     return undefined
@@ -39,10 +39,29 @@ export function applyRelayHookEvent(
   if (cancellation.hold) {
     return previous
   }
-  const transitioned = transitionHookPresence(cancellation.event, previous)
-  if (!transitioned) {
-    return undefined
-  }
+  // Why: the relay decides for its panes and forwards only rows, so a guest event forwards nothing.
+  return host.ownerProbes.admit(
+    incoming.paneKey,
+    transitionHookPresence(cancellation.event, previous, previous?.hostEvidenceObservedAt),
+    {
+      write: (transitioned) =>
+        writeRelayRow(host, previous, transitioned, source, env, version, options),
+      reapply: () => {
+        applyRelayHookEvent(host, incoming, source, env, version, options)
+      }
+    }
+  )
+}
+
+function writeRelayRow(
+  host: RelayHookAdmissionHost,
+  previous: AgentHookEventPayload | undefined,
+  transitioned: AgentHookEventPayload,
+  source: AgentHookSource,
+  env: string | undefined,
+  version: string | undefined,
+  options: { isReplay?: boolean }
+): AgentHookEventPayload | undefined {
   const event = withRelayClaudeTurnRevision(
     previous,
     transitioned.agentPresence?.ended
@@ -74,18 +93,6 @@ export function applyRelayHookEvent(
   host.metadata.delete(event.paneKey)
   host.metadata.set(event.paneKey, { source, env, version })
   host.forward(buildRelayHookEnvelope(event, source, env, version, options))
-  const sender = incoming.agentPresence?.process
-  const owner = event.agentPresence
-  // Why: a live hook proves its own process alive; only another process's hook casts doubt on the owner.
-  if (
-    options.checkPresence !== false &&
-    sender &&
-    owner?.process &&
-    !owner.ended &&
-    !isSameAgentProcess(sender, owner.process)
-  ) {
-    void host.checkAgentPresence(event.paneKey)
-  }
   // Why: retries compare against the cached row by identity, so they must hold that exact row.
   return host.state.lastStatusByPaneKey.get(event.paneKey)
 }

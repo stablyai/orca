@@ -1,3 +1,4 @@
+import { normalizeSessionId } from './agent-session-resume'
 import { AGENT_TYPE_MAX_LENGTH } from './agent-status-field-normalization'
 import type { AgentType } from './agent-status-types'
 
@@ -11,8 +12,17 @@ export type AgentProcessIdentity = {
 export type AgentProcessPresence = {
   agent: AgentType
   process?: AgentProcessIdentity
+  /** Provider session the owner holds now. */
+  session?: string
+  /** Sessions the owner held before (e.g. across Claude `/clear`), newest first. */
+  heldSessions?: string[]
   ended?: true
 }
+
+export const MAX_OWNER_HELD_SESSIONS = 4
+
+/** An agent session a producer runs inside, read from the env markers its parent exported. */
+export type NestedAgentSession = { agent: AgentType; session: string }
 
 export type AgentProcessVerdict = 'live' | 'unverifiable' | 'exited'
 
@@ -58,9 +68,19 @@ export function readAgentProcessPresence(value: unknown): AgentProcessPresence |
     return undefined
   }
   const process = 'process' in value ? readAgentProcessIdentity(value.process) : undefined
+  const session = 'session' in value ? normalizeSessionId(value.session) : null
+  const heldSessions =
+    'heldSessions' in value && Array.isArray(value.heldSessions)
+      ? value.heldSessions
+          .slice(0, MAX_OWNER_HELD_SESSIONS)
+          .map(normalizeSessionId)
+          .filter((held): held is string => held !== null)
+      : []
   return {
     agent: value.agent,
     ...(process ? { process } : {}),
+    ...(session ? { session } : {}),
+    ...(heldSessions.length > 0 ? { heldSessions } : {}),
     ...('ended' in value && value.ended === true ? { ended: true as const } : {})
   }
 }

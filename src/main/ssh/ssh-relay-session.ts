@@ -1771,6 +1771,8 @@ export class SshRelaySession {
       agentHookServer.ingestRemote(
         {
           paneKey: envelope.paneKey,
+          // Why: the relay decides the pane's owner; ingestRemote validates and adopts it.
+          agentPresence: envelope.agentPresence,
           hostTurnRevision: envelope.hostTurnRevision,
           launchToken: typeof envelope.launchToken === 'string' ? envelope.launchToken : undefined,
           tabId: typeof envelope.tabId === 'string' ? envelope.tabId : undefined,

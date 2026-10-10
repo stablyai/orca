@@ -194,131 +194,41 @@ describe('AgentHookServer ingestRemote', () => {
     )
   })
 
-  it('preserves active pane identity when a nested remote hook reports another agent', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    try {
-      const server = new AgentHookServer()
-      const listener = vi.fn()
-      server.setListener(listener)
-      server.ingestRemote(
-        {
-          paneKey: PANE,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          hasExplicitPrompt: true,
-          payload: { state: 'working', prompt: 'parent codex', agentType: 'codex' }
-        },
-        'conn-1'
-      )
-
-      vi.setSystemTime(1_100)
-      server.ingestRemote(
-        {
-          paneKey: PANE,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          hasExplicitPrompt: true,
-          payload: {
-            state: 'working',
-            prompt: 'nested claude',
-            agentType: 'claude',
-            toolName: 'Read',
-            toolInput: '00-review-context.md'
-          }
-        },
-        'conn-1'
-      )
-
-      expect(server.getStatusSnapshot()).toEqual([
-        expect.objectContaining({
-          paneKey: PANE,
-          state: 'working',
-          prompt: 'nested claude',
-          agentType: 'codex',
-          toolName: 'Read',
-          toolInput: '00-review-context.md',
-          receivedAt: 1_100
-        })
-      ])
-      expect(listener).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          payload: expect.objectContaining({
-            prompt: 'nested claude',
-            agentType: 'codex'
-          })
-        })
-      )
-      expect(trackMock).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('ignores nested remote done while the parent pane agent is still active', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    try {
-      const server = new AgentHookServer()
-      const listener = vi.fn()
-      server.setListener(listener)
-      server.ingestRemote(
-        {
-          paneKey: PANE,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          hasExplicitPrompt: true,
-          payload: { state: 'working', prompt: 'parent codex', agentType: 'codex' }
-        },
-        'conn-1'
-      )
-
-      vi.setSystemTime(1_100)
-      server.ingestRemote(
-        {
-          paneKey: PANE,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          hasExplicitPrompt: true,
-          payload: {
-            state: 'done',
-            prompt: 'nested claude',
-            agentType: 'claude',
-            toolName: 'Read',
-            toolInput: '00-review-context.md',
-            lastAssistantMessage: 'child finished'
-          }
-        },
-        'conn-1'
-      )
-
-      const snapshot = server.getStatusSnapshot()
-      expect(snapshot).toHaveLength(1)
-      expect(snapshot[0]).toMatchObject({
+  // Why: the relay classifies its panes' producers (a nested agent is a guest there and never
+  // forwarded), so main adopts every relayed row as given and never re-guesses its identity.
+  it('adopts a relayed row as its relay built it', () => {
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.setListener(listener)
+    server.ingestRemote(
+      {
         paneKey: PANE,
-        state: 'working',
-        prompt: 'parent codex',
-        agentType: 'codex',
-        receivedAt: 1_000,
-        stateStartedAt: 1_000
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        agentPresence: { agent: 'codex', session: 'codex-a' },
+        payload: { state: 'working', prompt: 'parent codex', agentType: 'codex' }
+      },
+      'conn-1'
+    )
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        agentPresence: { agent: 'claude', session: 'claude-a' },
+        payload: { state: 'working', prompt: 'claude now', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({ state: 'working', prompt: 'claude now', agentType: 'claude' })
+    ])
+    expect(listener).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        agentPresence: { agent: 'claude', session: 'claude-a' },
+        payload: expect.objectContaining({ agentType: 'claude' })
       })
-      expect(snapshot[0].toolName).toBeUndefined()
-      expect(snapshot[0].toolInput).toBeUndefined()
-      expect(snapshot[0].lastAssistantMessage).toBeUndefined()
-      expect(listener).toHaveBeenCalledTimes(1)
-      expect(listener).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          payload: expect.objectContaining({
-            state: 'working',
-            prompt: 'parent codex',
-            agentType: 'codex'
-          })
-        })
-      )
-      expect(trackMock).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
+    )
   })
 
   it('allows remote pane identity to change after the prior turn is done', () => {

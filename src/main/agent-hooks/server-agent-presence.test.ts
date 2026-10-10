@@ -104,20 +104,6 @@ describe('host-owned hook presence', () => {
     expect(visible(server)).toBe(false)
   })
 
-  it('keeps the pane owned by its agent while a nested agent in it starts and ends', async () => {
-    const server = await createServer()
-    await hook(server, 'SessionStart', 'outer')
-    await hook(server, 'UserPromptSubmit', 'outer')
-    await hook(server, 'SessionStart', 'nested', undefined, 4002)
-    await hook(server, 'UserPromptSubmit', 'nested', undefined, 4002)
-    await hook(server, 'SessionEnd', 'nested', 'other', 4002)
-    expect(visible(server)).toBe(true)
-    await hook(server, 'PostToolUse', 'outer')
-    expect(state(server)).toBe('working')
-    await hook(server, 'SessionEnd', 'outer', 'other')
-    expect(visible(server)).toBe(false)
-  })
-
   it('never ends a pane from a SessionEnd without a process identity', async () => {
     const server = await createServer()
     await hook(server, 'SessionStart', 'outer', undefined, null)
@@ -140,61 +126,70 @@ describe('host-owned hook presence', () => {
     expect(await server.checkAgentPresence(PANE)).toBeNull()
   })
 
-  it('does not let a Claude started inside a working Codex turn end the pane', async () => {
+  it('adopts a relayed owner verdict as given, including its exit', async () => {
     const server = await createServer()
     const base = { paneKey: PANE, tabId: 'tab-1', worktreeId: 'wt-1' }
+    const owner = {
+      agent: 'claude',
+      process: { pid: 4002, platform: 'linux', startTime: 'boot:1' }
+    }
     server.ingestRemote(
       {
         ...base,
-        source: 'codex',
+        source: 'claude',
         hookEventName: 'UserPromptSubmit',
-        payload: { state: 'working', prompt: 'codex task', agentType: 'codex' }
+        agentPresence: owner,
+        payload: { state: 'working', prompt: 'remote task', agentType: 'claude' }
       },
       'ssh-1'
     )
-    // The relay has no identity resolution, so it can hand the nested Claude ownership.
+    // Why: the relay decided this exit; main never re-checks it against its own copy of the owner.
     server.ingestRemote(
       {
         ...base,
         source: 'claude',
         hookEventName: 'SessionEnd',
         providerSessionOnly: true,
-        agentPresence: {
-          agent: 'claude',
-          process: { pid: 4002, platform: 'linux', startTime: 'boot:1' },
-          ended: true
-        },
+        agentPresence: { ...owner, ended: true },
         payload: { state: 'done', prompt: '', agentType: 'claude' }
       },
       'ssh-1'
     )
-    expect(state(server)).toBe('working')
+    expect(visible(server)).toBe(false)
   })
 
-  it.each([
-    ['working', []],
-    ['idle', ['Stop']]
-  ])('keeps a %s Codex pane when a Claude run inside it ends', async (_label, codexTail) => {
+  const codex = async (server: AgentHookServer, event: string): Promise<void> => {
+    const response = await postHookEvent(
+      server,
+      buildBody({ hook_event_name: event, session_id: 'codex-a', prompt: 'task' }),
+      '/hook/codex'
+    )
+    expect(response.status).toBe(204)
+  }
+
+  it('keeps a working Codex pane when a Claude run inside it ends', async () => {
     const server = await createServer()
-    const codex = async (event: string) => {
-      const response = await postHookEvent(
-        server,
-        buildBody({ hook_event_name: event, session_id: 'codex-a', prompt: 'task' }),
-        '/hook/codex'
-      )
-      expect(response.status).toBe(204)
-    }
-    await codex('UserPromptSubmit')
-    for (const event of codexTail) {
-      await codex(event)
-    }
-    const before = state(server)
+    await codex(server, 'UserPromptSubmit')
     await hook(server, 'SessionStart', 'nested', undefined, 4002)
     await hook(server, 'UserPromptSubmit', 'nested', undefined, 4002)
     await hook(server, 'SessionEnd', 'nested', 'other', 4002)
-    expect(visible(server)).toBe(true)
-    expect(before).not.toBeNull()
+    const row = server.getStatusSnapshot().find((entry) => entry.paneKey === PANE)
+    expect(row).toMatchObject({ state: 'working', agentType: 'codex', prompt: 'task' })
     expect(await server.checkAgentPresence(PANE)).toBeNull()
+  })
+
+  // Why: Codex hooks report no process yet, so an idle Codex owner falls back to the freshness rule.
+  it('lets another agent take an idle owner the host cannot check', async () => {
+    const server = await createServer()
+    await codex(server, 'UserPromptSubmit')
+    await codex(server, 'Stop')
+    await hook(server, 'UserPromptSubmit', 'next', undefined, 4002)
+    expect(server.getStatusSnapshot().find((entry) => entry.paneKey === PANE)).toMatchObject({
+      state: 'working',
+      agentType: 'claude'
+    })
+    await hook(server, 'SessionEnd', 'next', 'prompt_input_exit', 4002)
+    expect(visible(server)).toBe(false)
   })
 
   it.each(['devin', 'qoder', 'codebuddy', 'copilot'])(
