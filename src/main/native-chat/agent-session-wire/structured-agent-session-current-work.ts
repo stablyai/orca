@@ -85,10 +85,11 @@ export class StructuredAgentSessionCurrentWork {
     readonly revision = 0
   ) {}
 
-  /** What a reader that published this answer compares to learn it may have changed with no row:
-   *  the live generation and the revision of what this host saw end. */
+  /** What a reader that published this answer compares to learn it changed with no row: the live
+   *  generation, since every answer here is the journal read through it. Not the revision, which
+   *  moves on every generation-end signal: an end that changed nothing is published once. */
   viewKey(): string {
-    return `${this.liveFence}:${this.revision}`
+    return `${this.liveFence}`
   }
 
   /** Whether the live generation's execution produced this item. */

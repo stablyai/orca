@@ -58,6 +58,8 @@ export type StructuredAgentSessionVisitHost = {
   /** The chat leaves the owed set. */
   settle: (sessionId: string, chat: StructuredAgentSessionOwedChat) => 'settled'
   warn: (sessionId: string, error: unknown) => void
+  /** The round's one-at-a-time turn for a chat's writes; null once the round stopped. */
+  inTurn: <T>(run: () => Promise<T>) => Promise<T | null>
 }
 
 type Chat = StructuredAgentSessionOwedChat
@@ -67,7 +69,7 @@ export async function visitStructuredAgentSessionOwedChat(
   host: StructuredAgentSessionVisitHost,
   sessionId: string,
   chat: Chat
-): Promise<Visit> {
+): Promise<Visit | null> {
   const { context } = host
   try {
     const { store } = context.deps
@@ -94,23 +96,32 @@ export async function visitStructuredAgentSessionOwedChat(
         return host.settle(sessionId, chat)
       }
     }
-    const visit = await context.serialize(sessionId, () => pass(host, sessionId, chat))
-    if (visit !== 'settled' && visit !== 'parked') {
-      return visit
-    }
-    // (d) once nothing else of the chat is due: the send it owes, and the card named again.
-    if (chat.send) {
-      if ((await context.sendQueued(sessionId)) === 'contended') {
-        return 'contended'
-      }
-      delete chat.send
-      context.publishGenerationEnded(sessionId)
-    }
+    const visit = await host.inTurn(() => write(host, sessionId, chat))
     return visit === 'settled' ? host.settle(sessionId, chat) : visit
   } catch (error) {
     host.warn(sessionId, error)
     return isSqliteContentionFailure(error) ? 'contended' : 'failed'
   }
+}
+
+/** The chat's writes, in its lane: the pass, then (d) once nothing else of it is due, the send it
+ *  owes, with the card named again. */
+async function write(
+  host: StructuredAgentSessionVisitHost,
+  sessionId: string,
+  chat: Chat
+): Promise<Visit> {
+  const { context } = host
+  const visit = await context.serialize(sessionId, () => pass(host, sessionId, chat))
+  if ((visit !== 'settled' && visit !== 'parked') || !chat.send) {
+    return visit
+  }
+  if ((await context.sendQueued(sessionId)) === 'contended') {
+    return 'contended'
+  }
+  delete chat.send
+  context.publishGenerationEnded(sessionId)
+  return visit
 }
 
 /** Where this process first opened the chat, if this is the first. */

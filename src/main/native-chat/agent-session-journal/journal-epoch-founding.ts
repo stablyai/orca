@@ -7,6 +7,7 @@ import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-
 import { agentSessionJournalProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import type Database from '../../sqlite/sync-database'
 import type { JournalLoad } from './journal-open'
+import { journalOpenRefusalError } from './journal-open-failure'
 import { applyJournalRow, createJournalReducerState } from './journal-reducer'
 import { insertJournalRow, publishJournalSessionEpoch } from './journal-row-table'
 import type { JournalRow } from './journal-row-schema'
@@ -40,11 +41,17 @@ export class JournalEpochFounding {
     return this.pending !== null
   }
 
-  /** First inside a transaction that writes the chat's rows: a rollback takes the epoch with it. */
+  /** First inside a transaction that writes the chat's rows: a rollback takes the epoch with it.
+   *  Its own failure is the journal's open failing, as an eager open's would have been. */
   inTransaction(db: Database.Database): void {
-    if (this.pending) {
+    if (!this.pending) {
+      return
+    }
+    try {
       insertJournalRow(db, this.identity.sessionId, this.pending)
       publishJournalSessionEpoch(db, this.identity, this.pending.epoch)
+    } catch (error) {
+      throw journalOpenRefusalError(error)
     }
   }
 

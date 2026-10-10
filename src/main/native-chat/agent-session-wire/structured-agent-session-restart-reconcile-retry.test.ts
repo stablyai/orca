@@ -22,6 +22,7 @@ import {
   scanRecord,
   seedScanJournal
 } from './structured-agent-session-startup-scan.test-fixture'
+import * as reconciliationPass from './structured-agent-session-reconciliation-pass'
 
 let root: string
 let store: AgentSessionRecordStore
@@ -103,5 +104,47 @@ describe('a failed startup reconcile, retried by every chat that waits on it', (
       () => expect(store.listRecords().some((record) => record.lease.unreconciled)).toBe(false),
       { timeout: 10_000 }
     )
+  })
+})
+
+describe('a round of the retry', () => {
+  it("visits one chat at a time: a person's operation on a later chat runs before its visit", async () => {
+    const chats = await seedChats(3, true)
+    const order: string[] = []
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    const pass = reconciliationPass.runStructuredAgentSessionReconciliationPass
+    vi.spyOn(reconciliationPass, 'runStructuredAgentSessionReconciliationPass').mockImplementation(
+      async (...args) => {
+        order.push(`visit:${args[1]}`)
+        if (order.length === 1) {
+          await gate
+        }
+        return pass(...args)
+      }
+    )
+    host = openScanHost(root, store)
+    await host.reconcileRestartLeases()
+    await vi.waitFor(() => expect(order.length).toBeGreaterThan(0), { timeout: 10_000 })
+
+    // A chat the round has not reached: a person's operation on its lane, as a send runs.
+    const later = chats.find((id) => !order.includes(`visit:${id}`))
+    if (!later) {
+      release()
+      throw new Error('every chat was visited at once')
+    }
+    const person = host
+      .collaboratorsForTests()
+      .serialize(later, async () => void order.push(`person:${later}`))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    release()
+    const waited = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("the person's operation waited behind the round")), 5_000)
+    )
+    await Promise.race([person, waited])
+    await vi.waitFor(() => expect(order).toContain(`visit:${later}`), { timeout: 10_000 })
+
+    expect(order.indexOf(`person:${later}`)).toBeLessThan(order.indexOf(`visit:${later}`))
+    expect(new Set(order.filter((entry) => entry.startsWith('visit:'))).size).toBe(3)
   })
 })

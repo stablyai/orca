@@ -15,6 +15,29 @@ export function queuedMessageReopenFloor(
     : null
 }
 
+/** This handle's floor while no mark holds the pause (`AgentSessionJournal.reopenFloor`). */
+export class QueuedMessageReopenFloor {
+  private unmarked: AgentJournalCursor | null = null
+
+  constructor(private readonly queue: Parameters<typeof queuedMessageReopenFloor>[0]) {}
+
+  get = (): AgentJournalCursor | null => this.unmarked
+
+  holdFromOpen(opened: AgentJournalCursor): void {
+    this.unmarked = queuedMessageReopenFloor(this.queue, opened) ?? this.unmarked
+  }
+
+  /** Marks the reopen when a card waits or is mid-hand-off (it may come back to waiting); a failed
+   *  write leaves `at`, where the mark would have gone, as the pause's start, and throws. */
+  async mark(at: AgentJournalCursor, append: () => Promise<unknown>): Promise<void> {
+    if (this.queue.awaitReopenMark()) {
+      this.unmarked = at
+      await append()
+      this.unmarked = null
+    }
+  }
+}
+
 /** Where the reopen mark of what an earlier host process left starts: this handle's unmarked
  *  floor, else just past where this process first opened the chat; null when neither is in the
  *  journal's current epoch, since a mark from now would hold cards this process queued since. */

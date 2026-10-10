@@ -192,7 +192,14 @@ async function settleEarlierProcess(
   const floor = journal.reopenFloor()
   const since = queuedMessageReopenMarkStart(floor, processOpened, journal.cursor().epoch)
   if ((converted || floor !== null) && since !== null) {
-    await markStructuredQueueReopen(sessionId, journal, fence, context.deps.logger, since)
+    await markStructuredQueueReopen(
+      sessionId,
+      journal,
+      fence,
+      context.deps.logger,
+      since,
+      BACKGROUND
+    )
   }
   // A rewind left prepared refuses every send until settled. With no provider here, one only its
   // provider can prove stays, quietly, for the next acquisition, which recovers it.

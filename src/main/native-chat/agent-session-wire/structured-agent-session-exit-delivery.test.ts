@@ -5,6 +5,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
@@ -133,6 +134,47 @@ describe('an exit that settles and releases cleanly', () => {
     // Inside one turn of the chat's lane: no retry round, no backoff.
     expect(Date.now() - started).toBeLessThan(250)
     expect(current.host.collaboratorsForTests().reconciliation.owes(SESSION)).toBe(false)
+  })
+})
+
+/** What a client shows, without the host clock every frame carries. */
+function readView(state: typeof EMPTY_STRUCTURED_AGENT_SESSION): string {
+  return JSON.stringify(state, (key, value: unknown) => (key === 'hostNow' ? undefined : value))
+}
+
+describe('each exit', () => {
+  // Two generation-end signals reach readers per exit: its death at once, and its outcome once
+  // settled. The second may restate; it never repeats a frame the first published.
+  it.each([
+    ['its release lands', false],
+    ['its release keeps failing', true]
+  ])('publishes each frame once when %s', async (_name, refuse) => {
+    // No card behind it: a card's own start is a later generation, with frames of its own.
+    rig = await createQueuedMessageTestRig({ restartable: true })
+    const current = rig
+    await current.workingSend()
+    await leaveUnfinishedWork(current, { prompt: true })
+    if (refuse) {
+      refuseReleases(current)
+    }
+    const events: AgentSessionSubscribeEvent[] = []
+    await current.host.subscribe({ id: 'chat', sessionId: SESSION, emit: (e) => events.push(e) })
+    const before = events.length
+
+    await exitChild(current)
+    await current.host.collaboratorsForTests().reconciliation.attempted(SESSION)
+
+    // Every frame changes what a client reads: none repeats a view it already has.
+    let state = EMPTY_STRUCTURED_AGENT_SESSION
+    const repeats: string[] = []
+    for (const [index, event] of events.entries()) {
+      const next = reduceStructuredAgentSession(state, { type: 'event', event })
+      if (index >= before && readView(next) === readView(state)) {
+        repeats.push(event.type)
+      }
+      state = next
+    }
+    expect(repeats).toEqual([])
   })
 })
 

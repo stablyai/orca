@@ -6,9 +6,11 @@
 // `onGenerationEnded`), an exit this host observed (whether or not its release landed), a row an
 // ended generation committed late, a queue send that met contention, and startup. Each one
 // re-derives what readers see at once (the operational revision, the published view, the queued-
-// card drain) and marks the chat owed. A round visits every owed chat, in the few background slots
-// with a reader's open chat first: (a) the store-wide restart reconcile, once, while any lease is
-// unreconciled; then per chat, in its lane, (b) release repair, (c) settlement and what an earlier
+// card drain) and marks the chat owed. A round visits every owed chat: closed ones load side by
+// side in the few background slots, a reader's first, and each writes in its turn, one chat at a
+// time with a yield between (`inTurn`):
+// (a) the store-wide restart reconcile, once, while any lease is unreconciled; then per chat, in
+// its lane, (b) release repair, (c) settlement and what an earlier
 // process left (`runStructuredAgentSessionReconciliationPass`), (d) the queue's next send. Every
 // write is background (`JournalWriteOptions`): another connection's lock fails it at once and ends
 // the round, since contention is connection-wide.
@@ -19,6 +21,7 @@
 // recovery is never decided here: its proofs wait in the set for its decision's signal.
 
 import type { AgentSessionGenerationEnd } from '../../runtime/agent-session-generation-end'
+import { setImmediate as yieldToEvents } from 'node:timers/promises'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionExitSettlement } from './structured-agent-session-leftover-settlement'
@@ -66,6 +69,9 @@ export class StructuredAgentSessionRetry {
   /** The last round failed on another connection's lock, which a commit here proves gone. */
   private contended = false
   private disposed = false
+  /** The round's chain of chat turns (`inTurn`), and whether contention stopped the round. */
+  private turn: Promise<unknown> = Promise.resolve()
+  private stopped = false
   private readonly visitHost: StructuredAgentSessionVisitHost
 
   constructor(private readonly context: StructuredAgentSessionRetryContext) {
@@ -74,7 +80,8 @@ export class StructuredAgentSessionRetry {
       disposed: () => this.disposed,
       firstOpened: this.firstOpened,
       settle: (sessionId, chat) => this.settle(sessionId, chat),
-      warn: (sessionId, error) => this.warn(sessionId, error)
+      warn: (sessionId, error) => this.warn(sessionId, error),
+      inTurn: (run) => this.inTurn(run)
     }
     this.unsubscribe = context.deps.store.onGenerationEnded((ended) =>
       this.signal(ended.sessionId, { evidence: ended.evidence })
@@ -196,11 +203,11 @@ export class StructuredAgentSessionRetry {
     }
     this.running = true
     this.again = false
+    this.stopped = false
     let failed = false
-    let contended = false
     const end = (visit: Visit) => {
       failed ||= visit === 'failed' || visit === 'contended'
-      contended ||= visit === 'contended'
+      this.stopped ||= visit === 'contended'
       this.again ||= visit === 'again'
     }
     if (this.context.deps.store.listRecords().some((record) => record.lease.unreconciled)) {
@@ -212,14 +219,14 @@ export class StructuredAgentSessionRetry {
     const due = [...this.owed].filter(([, chat]) => chat.due)
     await Promise.all(
       due.map(async ([sessionId, chat]) => {
-        const visit = contended ? null : await this.visitInSlot(sessionId, chat, () => contended)
+        const visit = this.stopped ? null : await this.visitInSlot(sessionId, chat)
         if (visit) {
           end(visit)
         }
       })
     )
     this.running = false
-    this.roundEnded(failed, contended)
+    this.roundEnded(failed, this.stopped)
     // After the round's outcome is set, so a waiter reads its backoff, never a round still running.
     for (const [, chat] of due) {
       chat.attempted.splice(0).forEach((resolve) => resolve())
@@ -261,17 +268,13 @@ export class StructuredAgentSessionRetry {
   }
 
   /** An open chat goes straight to its lane; a closed one is replayed in a background slot. */
-  private async visitInSlot(
-    sessionId: string,
-    chat: OwedChat,
-    stopped: () => boolean
-  ): Promise<Visit | null> {
+  private async visitInSlot(sessionId: string, chat: OwedChat): Promise<Visit | null> {
     if (this.context.sessions.has(sessionId) || chat.loaded) {
       return this.context.track(this.visit(sessionId, chat))
     }
     // The replay yields a macrotask first (`loadStructuredAgentSessionForReconciliation`).
     const result = await this.slots.run(chat, async () => {
-      if (stopped() || this.disposed) {
+      if (this.disposed) {
         return null
       }
       return this.context.track(this.visit(sessionId, chat))
@@ -279,8 +282,20 @@ export class StructuredAgentSessionRetry {
     return result?.value ?? null
   }
 
-  private visit(sessionId: string, chat: OwedChat): Promise<Visit> {
+  private visit(sessionId: string, chat: OwedChat): Promise<Visit | null> {
     return visitStructuredAgentSessionOwedChat(this.visitHost, sessionId, chat)
+  }
+
+  /** Chats load in the slots side by side, but write one at a time, in the order they are ready (a
+   *  reader's open chat first), yielding between chats: each visit's writes stay bounded, and a
+   *  person's operation queued meanwhile runs before the next chat's turn takes its lane. */
+  private inTurn<T>(run: () => Promise<T>): Promise<T | null> {
+    const next = this.turn.then(() => (this.stopped || this.disposed ? null : run()))
+    this.turn = next.then(
+      () => yieldToEvents(),
+      () => yieldToEvents()
+    )
+    return next
   }
 
   private settle(sessionId: string, chat: OwedChat): 'settled' {

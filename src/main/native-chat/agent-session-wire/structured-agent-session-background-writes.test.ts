@@ -136,6 +136,44 @@ describe("another connection's write lock", () => {
   })
 })
 
+describe("the pass's reopen mark", () => {
+  it('is background: under a real lock it fails at once, ends the round, and lands once the lock lifts', async () => {
+    rig = await createQueuedMessageTestRig()
+    const current = rig
+    await current.workingSend()
+    await current.send('queued before the crash', 'queue-if-active').result
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const mark = AgentSessionJournal.prototype.markQueueReopen
+    const tried: { options: unknown; failed: boolean; ms: number }[] = []
+    vi.spyOn(AgentSessionJournal.prototype, 'markQueueReopen').mockImplementation(async function (
+      this: AgentSessionJournal,
+      ...args: Parameters<AgentSessionJournal['markQueueReopen']>
+    ) {
+      // The first mark meets another connection's lock, taken after the pass's earlier writes.
+      if (tried.length === 0) {
+        await holdWriteLock(current.root, 1_000)
+      }
+      const started = performance.now()
+      try {
+        await mark.apply(this, args)
+        tried.push({ options: args[2], failed: false, ms: performance.now() - started })
+      } catch (error) {
+        const ms = performance.now() - started
+        tried.push({ options: args[2], failed: isSqliteContentionFailure(error), ms })
+        throw error
+      }
+    })
+    await current.crashRestartHostProcess()
+
+    await vi.waitFor(() => expect(tried.some((attempt) => !attempt.failed)).toBe(true), {
+      timeout: 8_000
+    })
+    expect(tried[0]).toMatchObject({ options: { background: true }, failed: true })
+    expect(tried[0]!.ms).toBeLessThan(150)
+    expect(tried.at(-1)).toMatchObject({ options: { background: true }, failed: false })
+  })
+})
+
 describe('an episode the retry gives up', () => {
   /** Lets every visit a fired timer began run to its end, with no fake time passing. */
   async function settleTurns(): Promise<void> {
