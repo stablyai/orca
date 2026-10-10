@@ -12,6 +12,8 @@ import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rp
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 
+const LOCAL_OWNER = { runtimeEnvironmentId: null }
+
 const remoteRepo: Repo = {
   id: 'remote-repo',
   path: '/remote',
@@ -121,7 +123,7 @@ describe('project group store routing', () => {
     projectGroupsCreate.mockResolvedValue(projectGroup)
     const store = createTestStore()
 
-    await expect(store.getState().createProjectGroup('Platform')).resolves.toEqual({
+    await expect(store.getState().createProjectGroup('Platform', 'local')).resolves.toEqual({
       ...projectGroup,
       executionHostId: 'local'
     })
@@ -139,7 +141,7 @@ describe('project group store routing', () => {
     projectGroupsList.mockResolvedValue([folderGroup])
     const store = createTestStore()
 
-    await store.getState().fetchProjectGroups()
+    await store.getState().fetchProjectGroups(LOCAL_OWNER)
 
     expect(store.getState().projectGroups).toEqual([{ ...folderGroup, executionHostId: 'local' }])
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
@@ -160,7 +162,7 @@ describe('project group store routing', () => {
     const store = createTestStore()
     store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
 
-    await store.getState().fetchProjectGroups()
+    await store.getState().fetchProjectGroups({ runtimeEnvironmentId: 'env-1' })
 
     expect(store.getState().projectGroups).toEqual([
       { ...folderGroup, executionHostId: 'runtime:env-1' }
@@ -178,7 +180,7 @@ describe('project group store routing', () => {
     const store = createTestStore()
     store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
 
-    await store.getState().fetchProjectGroups()
+    await store.getState().fetchProjectGroups({ runtimeEnvironmentId: 'env-1' })
 
     expect(store.getState().projectGroups).toEqual([
       { ...folderGroup, executionHostId: 'runtime:env-1' }
@@ -215,9 +217,11 @@ describe('project group store routing', () => {
       })
     ).resolves.toEqual({ path: '/workspace/platform', exists: true })
 
-    expect(store.getState().getFolderWorkspacePathStatusCacheKey(request)).toBe(
-      `environment:wrong-env:project-group:${folderGroup.id}`
-    )
+    expect(
+      store
+        .getState()
+        .getFolderWorkspacePathStatusCacheKey(request, { runtimeEnvironmentId: 'wrong-env' })
+    ).toBe(`environment:wrong-env:project-group:${folderGroup.id}`)
     expect(
       store
         .getState()
@@ -342,11 +346,12 @@ describe('project group store routing', () => {
     const store = createTestStore()
 
     await expect(
-      store.getState().createFolderWorkspace({
-        projectGroupId: projectGroup.id,
-        name: 'Refund fix',
-        linkedTask
-      })
+      store
+        .getState()
+        .createFolderWorkspace(
+          { projectGroupId: projectGroup.id, name: 'Refund fix', linkedTask },
+          LOCAL_OWNER
+        )
     ).resolves.toEqual({ ...folderWorkspace, executionHostId: 'local' })
     await expect(
       store.getState().updateFolderWorkspace(folderWorkspace.id, { comment: 'Ready' })
@@ -380,20 +385,24 @@ describe('project group store routing', () => {
     store.setState({ projectGroups: [folderGroup] })
 
     await expect(
-      store.getState().fetchFolderWorkspacePathStatus({
-        scope: 'project-group',
-        projectGroupId: folderGroup.id
-      })
+      store
+        .getState()
+        .fetchFolderWorkspacePathStatus(
+          { scope: 'project-group', projectGroupId: folderGroup.id },
+          LOCAL_OWNER
+        )
     ).resolves.toEqual({
       path: '/workspace/platform',
       exists: false,
       reason: 'missing'
     })
 
-    const cacheKey = store.getState().getFolderWorkspacePathStatusCacheKey({
-      scope: 'project-group',
-      projectGroupId: folderGroup.id
-    })
+    const cacheKey = store
+      .getState()
+      .getFolderWorkspacePathStatusCacheKey(
+        { scope: 'project-group', projectGroupId: folderGroup.id },
+        LOCAL_OWNER
+      )
     expect(store.getState().folderWorkspacePathStatuses[cacheKey]?.status).toEqual({
       path: '/workspace/platform',
       exists: false,
@@ -415,7 +424,7 @@ describe('project group store routing', () => {
       projectGroups: [{ ...projectGroup, parentPath: '/workspace/old-platform' }]
     })
     const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
-    const statusPromise = store.getState().fetchFolderWorkspacePathStatus(request)
+    const statusPromise = store.getState().fetchFolderWorkspacePathStatus(request, LOCAL_OWNER)
 
     store.setState({
       projectGroups: [{ ...projectGroup, parentPath: '/workspace/new-platform' }]
@@ -423,7 +432,7 @@ describe('project group store routing', () => {
     resolveStatus({ path: '/workspace/old-platform', exists: true })
     await statusPromise
 
-    const cacheKey = store.getState().getFolderWorkspacePathStatusCacheKey(request)
+    const cacheKey = store.getState().getFolderWorkspacePathStatusCacheKey(request, LOCAL_OWNER)
     expect(store.getState().folderWorkspacePathStatuses[cacheKey]).toBeUndefined()
   })
 
@@ -441,7 +450,7 @@ describe('project group store routing', () => {
       repos: [{ ...remoteRepo, id: 'local-repo', path: '/workspace/platform/api' }]
     })
     const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
-    const statusPromise = store.getState().fetchFolderWorkspacePathStatus(request)
+    const statusPromise = store.getState().fetchFolderWorkspacePathStatus(request, LOCAL_OWNER)
 
     store.setState({
       repos: [
@@ -456,7 +465,7 @@ describe('project group store routing', () => {
     resolveStatus({ path: '/workspace/platform', exists: true })
     await statusPromise
 
-    const cacheKey = store.getState().getFolderWorkspacePathStatusCacheKey(request)
+    const cacheKey = store.getState().getFolderWorkspacePathStatusCacheKey(request, LOCAL_OWNER)
     expect(store.getState().folderWorkspacePathStatuses[cacheKey]).toBeUndefined()
   })
 
@@ -468,16 +477,16 @@ describe('project group store routing', () => {
         projectGroups: [{ ...projectGroup, parentPath: '/workspace/platform' }]
       })
       const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
-      await store.getState().fetchFolderWorkspacePathStatus(request)
+      await store.getState().fetchFolderWorkspacePathStatus(request, LOCAL_OWNER)
 
-      expect(store.getState().getFreshFolderWorkspacePathStatus(request)).toEqual({
+      expect(store.getState().getFreshFolderWorkspacePathStatus(request, LOCAL_OWNER)).toEqual({
         path: '/workspace/platform',
         exists: true
       })
 
       vi.setSystemTime(Date.now() + 10_001)
 
-      expect(store.getState().getFreshFolderWorkspacePathStatus(request)).toBeNull()
+      expect(store.getState().getFreshFolderWorkspacePathStatus(request, LOCAL_OWNER)).toBeNull()
     } finally {
       vi.useRealTimers()
     }
@@ -492,9 +501,9 @@ describe('project group store routing', () => {
       sshConnectionStates: new Map([['ssh-1', makeSshConnectionState('connected')]])
     })
     const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
-    await store.getState().fetchFolderWorkspacePathStatus(request)
+    await store.getState().fetchFolderWorkspacePathStatus(request, LOCAL_OWNER)
 
-    expect(store.getState().getFreshFolderWorkspacePathStatus(request)).toEqual({
+    expect(store.getState().getFreshFolderWorkspacePathStatus(request, LOCAL_OWNER)).toEqual({
       path: '/workspace/platform',
       exists: true
     })
@@ -503,7 +512,7 @@ describe('project group store routing', () => {
       sshConnectionStates: new Map([['ssh-1', makeSshConnectionState('disconnected')]])
     })
 
-    expect(store.getState().getFreshFolderWorkspacePathStatus(request)).toBeNull()
+    expect(store.getState().getFreshFolderWorkspacePathStatus(request, LOCAL_OWNER)).toBeNull()
   })
 
   it('ignores stale folder path status responses after SSH connection state changes', async () => {
@@ -522,14 +531,16 @@ describe('project group store routing', () => {
       sshConnectionStates: new Map([['ssh-1', makeSshConnectionState('connected')]])
     })
     const request = { scope: 'project-group' as const, projectGroupId: projectGroup.id }
-    const connectedStatusPromise = store.getState().fetchFolderWorkspacePathStatus(request)
+    const connectedStatusPromise = store
+      .getState()
+      .fetchFolderWorkspacePathStatus(request, LOCAL_OWNER)
 
     store.setState({
       sshConnectionStates: new Map([['ssh-1', makeSshConnectionState('disconnected')]])
     })
     const disconnectedStatusPromise = store
       .getState()
-      .fetchFolderWorkspacePathStatus(request, { force: true })
+      .fetchFolderWorkspacePathStatus(request, { force: true, ...LOCAL_OWNER })
 
     resolvers[1]?.({
       path: '/workspace/platform',
@@ -540,7 +551,7 @@ describe('project group store routing', () => {
     resolvers[0]?.({ path: '/workspace/platform', exists: true })
     await connectedStatusPromise
 
-    const cacheKey = store.getState().getFolderWorkspacePathStatusCacheKey(request)
+    const cacheKey = store.getState().getFolderWorkspacePathStatusCacheKey(request, LOCAL_OWNER)
     expect(store.getState().folderWorkspacePathStatuses[cacheKey]?.status).toEqual({
       path: '/workspace/platform',
       exists: false,
@@ -685,21 +696,16 @@ describe('project group store routing', () => {
     reposList.mockResolvedValue([importedRepo])
     const store = createTestStore()
 
-    await expect(
-      store.getState().importNestedRepos({
-        parentPath: '/platform',
-        groupName: 'Platform',
-        projectPaths: [importedRepo.path],
-        mode: 'group'
-      })
-    ).resolves.toEqual(result)
-
-    expect(projectGroupsImportNested).toHaveBeenCalledWith({
+    const importArgs = {
       parentPath: '/platform',
       groupName: 'Platform',
       projectPaths: [importedRepo.path],
-      mode: 'group'
-    })
+      mode: 'group' as const,
+      ...LOCAL_OWNER
+    }
+    await expect(store.getState().importNestedRepos(importArgs)).resolves.toEqual(result)
+
+    expect(projectGroupsImportNested).toHaveBeenCalledWith(importArgs)
     expect(projectGroupsList).toHaveBeenCalled()
     expect(folderWorkspacesList).toHaveBeenCalled()
     expect(reposList).toHaveBeenCalled()
@@ -736,6 +742,7 @@ describe('project group store routing', () => {
 
     await expect(
       store.getState().scanNestedRepos('/platform', undefined, {
+        ...LOCAL_OWNER,
         scanId: 'scan-1',
         onProgress: progressCallback
       })
@@ -759,6 +766,7 @@ describe('project group store routing', () => {
 
     await expect(
       store.getState().scanNestedRepos('/platform', undefined, {
+        ...LOCAL_OWNER,
         scanId: 'scan-1',
         onProgress: vi.fn()
       })
@@ -771,7 +779,7 @@ describe('project group store routing', () => {
     projectGroupsCancelNestedScan.mockResolvedValue(true)
     const store = createTestStore()
 
-    await expect(store.getState().cancelNestedRepoScan('scan-1')).resolves.toBe(true)
+    await expect(store.getState().cancelNestedRepoScan('scan-1', LOCAL_OWNER)).resolves.toBe(true)
 
     expect(projectGroupsCancelNestedScan).toHaveBeenCalledWith({ scanId: 'scan-1' })
   })
@@ -780,7 +788,9 @@ describe('project group store routing', () => {
     const store = createTestStore()
     store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
 
-    await expect(store.getState().cancelNestedRepoScan('scan-1')).resolves.toBe(false)
+    await expect(
+      store.getState().cancelNestedRepoScan('scan-1', { runtimeEnvironmentId: 'env-1' })
+    ).resolves.toBe(false)
 
     expect(projectGroupsCancelNestedScan).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
@@ -854,10 +864,12 @@ describe('project group store routing', () => {
     const store = createTestStore()
 
     await expect(
-      store.getState().createFolderWorkspace({
-        projectGroupId: projectGroup.id,
-        name: 'Broken folder'
-      })
+      store
+        .getState()
+        .createFolderWorkspace(
+          { projectGroupId: projectGroup.id, name: 'Broken folder' },
+          LOCAL_OWNER
+        )
     ).rejects.toThrow(
       'Folder not found. Orca cannot find /srv/app. Remove and re-import the folder.'
     )

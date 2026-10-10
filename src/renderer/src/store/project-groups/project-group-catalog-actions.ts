@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import { getActiveRuntimeTarget, settingsForRuntimeOwner } from '../../runtime/runtime-rpc-client'
+import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
 import type { FetchedProjectGroupCatalog } from './project-group-catalog'
 import type { HostCatalogFence } from '../host-catalog-fencing'
 import type { RepoSlice } from '../repos/repo-state'
@@ -19,9 +19,7 @@ export function createProjectGroupCatalogActions(
   return {
     fetchProjectGroups: async (options) => {
       try {
-        const target = getActiveRuntimeTarget(
-          settingsForRuntimeOwner(get().settings, options?.runtimeEnvironmentId)
-        )
+        const target = runtimeTargetForOwnerEnvironment(options.runtimeEnvironmentId)
         const fence = claimHostCatalogFence(get, 'project-groups', target)
         const catalog = await fetchProjectGroupCatalogForTarget(target)
         if (!isHostCatalogFenceCurrent(get, fence)) {
@@ -42,7 +40,7 @@ export function createProjectGroupCatalogActions(
         })
       } catch (err) {
         console.error('Failed to fetch project groups:', err)
-        if (options?.throwOnError) {
+        if (options.throwOnError) {
           throw err
         }
       }

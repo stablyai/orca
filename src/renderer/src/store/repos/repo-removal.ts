@@ -6,11 +6,8 @@ import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { getWorktreeIdFromVisitKey, getWorktreeVisitKey } from '@/lib/worktree-visit-recency'
 import { omitSparsePresetsForRepos } from '../slices/sparse-presets'
 import { repoMatchesHostIdentity } from '../slices/repo-host-identity'
-import {
-  callRuntimeRpc,
-  getActiveRuntimeTarget,
-  hasRuntimeRpcErrorCode
-} from '../../runtime/runtime-rpc-client'
+import { callRuntimeRpc, hasRuntimeRpcErrorCode } from '../../runtime/runtime-rpc-client'
+import { runtimeTargetForOwnerHostId } from '../../runtime/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
 import {
@@ -22,7 +19,6 @@ import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime
 import type { RepoSlice } from './repo-state'
 import { ERROR_TOAST_DURATION } from './repo-state'
 import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-identity'
-import { settingsForRepoOwner } from './owner-routing'
 import {
   captureWorkspaceChatDraftKeys,
   deleteWorkspaceChatDrafts
@@ -109,7 +105,10 @@ export function createRepoRemovalActions(
           }
         }
         // Why: derive the target from the owner row's host so an SSH host removal never routes repo.rm to the focused runtime.
-        const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId, ownerHostId))
+        const target = runtimeTargetForOwnerHostId(ownerHostId)
+        if (!target) {
+          throw new Error('The project host is unresolved. Refresh and retry.')
+        }
         // Why before the host call: its announcement can start a listing refresh that drops these tabs.
         const chatDraftKeys = captureWorkspaceChatDraftKeys(
           get(),

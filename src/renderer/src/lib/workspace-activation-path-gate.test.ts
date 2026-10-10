@@ -70,7 +70,7 @@ async function seedFolderWorkspace(
     .getState()
     .fetchFolderWorkspacePathStatus(
       { scope: 'folder-workspace', folderWorkspaceId: folderWorkspace.id },
-      { force: true }
+      { force: true, runtimeEnvironmentId: null }
     )
 }
 

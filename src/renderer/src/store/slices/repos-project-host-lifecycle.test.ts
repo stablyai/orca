@@ -271,7 +271,7 @@ describe('repo slice project host setup lifecycle', () => {
     const store = createTestStore()
     store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
 
-    await store.getState().fetchRepos()
+    await store.getState().fetchRepos(catalogOwner(store))
 
     expect(store.getState().projectHostSetups).toEqual(
       expect.arrayContaining([
@@ -284,3 +284,10 @@ describe('repo slice project host setup lifecycle', () => {
     )
   })
 })
+
+// The catalog these tests read is the one the focused host would have shown.
+function catalogOwner(store: {
+  getState: () => { settings: { activeRuntimeEnvironmentId?: string | null } | null }
+}): { runtimeEnvironmentId: string | null } {
+  return { runtimeEnvironmentId: store.getState().settings?.activeRuntimeEnvironmentId ?? null }
+}

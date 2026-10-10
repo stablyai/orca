@@ -12,7 +12,7 @@ import type { ProjectGroup } from '../../../../shared/project-group-types'
 export function useFolderWorkspaceComposerPathStatus(
   projectGroup: ProjectGroup | null,
   open: boolean,
-  runtimeEnvironmentId?: string | null
+  runtimeEnvironmentId: string | null
 ): {
   pathStatusBlocksCreate: boolean
   pathStatusProjectError: string | null
@@ -48,10 +48,7 @@ export function useFolderWorkspaceComposerPathStatus(
   const [completedPathStatusRefreshKeys, setCompletedPathStatusRefreshKeys] = useState<
     ReadonlySet<string>
   >(() => new Set())
-  const pathStatusRouteOptions = useMemo(
-    () => ({ runtimeEnvironmentId: runtimeEnvironmentId ?? null }),
-    [runtimeEnvironmentId]
-  )
+  const pathStatusRouteOptions = useMemo(() => ({ runtimeEnvironmentId }), [runtimeEnvironmentId])
   const pathStatusCacheKey = pathStatusRequest
     ? getFolderWorkspacePathStatusCacheKey(pathStatusRequest, pathStatusRouteOptions)
     : null

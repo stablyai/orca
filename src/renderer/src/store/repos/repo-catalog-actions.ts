@@ -9,7 +9,7 @@ import {
   reconcileReadoptedSshRepoRows
 } from '../slices/superseded-ssh-repo-rows'
 import { getRepoHostIdentity } from '../slices/repo-host-identity'
-import { getActiveRuntimeTarget, settingsForRuntimeOwner } from '../../runtime/runtime-rpc-client'
+import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { isRemovedRuntimeHostId } from '../slices/stale-runtime-host-rows'
@@ -88,9 +88,7 @@ export function createRepoCatalogActions(
       }),
 
     fetchRepos: async (options) => {
-      const target = getActiveRuntimeTarget(
-        settingsForRuntimeOwner(get().settings, options?.runtimeEnvironmentId)
-      )
+      const target = runtimeTargetForOwnerEnvironment(options.runtimeEnvironmentId)
       const settleLocalCatalog: (outcome: LocalRepoCatalogFetchOutcome) => void =
         target.kind === 'local' ? startLocalRepoCatalogFetch(get) : () => undefined
       let localCatalogOutcome: LocalRepoCatalogFetchOutcome = { status: 'fulfilled' }
@@ -156,7 +154,7 @@ export function createRepoCatalogActions(
       } catch (err) {
         localCatalogOutcome = { status: 'rejected', reason: err }
         console.error('Failed to fetch repos:', err)
-        if (options?.throwOnError) {
+        if (options.throwOnError) {
           throw err
         }
       } finally {

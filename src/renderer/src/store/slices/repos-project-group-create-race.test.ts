@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
@@ -67,16 +68,18 @@ function setup(runtimeEnvironmentId: string | null) {
     settings: { ...getDefaultSettings('/test'), activeRuntimeEnvironmentId: runtimeEnvironmentId },
     projectGroups: [otherHostGroup]
   })
-  const ownerHostId = runtimeEnvironmentId ? `runtime:${runtimeEnvironmentId}` : 'local'
+  const ownerHostId: ExecutionHostId = runtimeEnvironmentId
+    ? `runtime:${runtimeEnvironmentId}`
+    : 'local'
   return { store, created, createStarted, ownerHostId }
 }
 
 describe.each([null, 'env-1'])('project group creation on host %s', (runtimeEnvironmentId) => {
   it('keeps the refreshed row without notifying subscribers when refresh finishes first', async () => {
     const { store, created, createStarted, ownerHostId } = setup(runtimeEnvironmentId)
-    const pendingCreate = store.getState().createProjectGroup('Platform')
+    const pendingCreate = store.getState().createProjectGroup('Platform', ownerHostId)
     await createStarted.promise
-    await store.getState().fetchProjectGroups()
+    await store.getState().fetchProjectGroups(catalogOwner(store))
     const refreshedState = store.getState()
     const listener = vi.fn()
     const unsubscribe = store.subscribe(listener)
@@ -99,26 +102,26 @@ describe.each([null, 'env-1'])('project group creation on host %s', (runtimeEnvi
 
   it('inserts beside another host with the same ID, then accepts the later refresh', async () => {
     const { store, created, ownerHostId } = setup(runtimeEnvironmentId)
-    const pendingCreate = store.getState().createProjectGroup('Platform')
+    const pendingCreate = store.getState().createProjectGroup('Platform', ownerHostId)
     created.resolve(projectGroup)
     await pendingCreate
     expect(store.getState().projectGroups).toEqual([
       otherHostGroup,
       { ...projectGroup, executionHostId: ownerHostId }
     ])
-    await store.getState().fetchProjectGroups()
+    await store.getState().fetchProjectGroups(catalogOwner(store))
     expect(store.getState().projectGroups).toEqual([
       otherHostGroup,
       { ...refreshedGroup, executionHostId: ownerHostId }
     ])
     const groups = store.getState().projectGroups
-    await store.getState().fetchProjectGroups()
+    await store.getState().fetchProjectGroups(catalogOwner(store))
     expect(store.getState().projectGroups).toBe(groups)
   })
 
   it('keeps the original owner when the focused host changes during creation', async () => {
     const { store, created, createStarted, ownerHostId } = setup(runtimeEnvironmentId)
-    const pendingCreate = store.getState().createProjectGroup('Platform')
+    const pendingCreate = store.getState().createProjectGroup('Platform', ownerHostId)
     await createStarted.promise
     store.setState({
       settings: { ...getDefaultSettings('/test'), activeRuntimeEnvironmentId: 'other' }
@@ -133,11 +136,11 @@ describe.each([null, 'env-1'])('project group creation on host %s', (runtimeEnvi
   })
 
   it('does not roll back a successful refresh if the create response fails', async () => {
-    const { store, created, createStarted } = setup(runtimeEnvironmentId)
+    const { store, created, createStarted, ownerHostId } = setup(runtimeEnvironmentId)
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    const pendingCreate = store.getState().createProjectGroup('Platform')
+    const pendingCreate = store.getState().createProjectGroup('Platform', ownerHostId)
     await createStarted.promise
-    await store.getState().fetchProjectGroups()
+    await store.getState().fetchProjectGroups(catalogOwner(store))
     const refreshedState = store.getState()
     created.reject(new Error('Create response lost'))
     await expect(pendingCreate).resolves.toBeNull()
@@ -146,21 +149,21 @@ describe.each([null, 'env-1'])('project group creation on host %s', (runtimeEnvi
 })
 
 it('recognizes an unstamped local group without conflating an SSH catalog row', async () => {
-  const { store, created } = setup(null)
+  const { store, created, ownerHostId } = setup(null)
   const sshGroup = { ...projectGroup, connectionId: 'server' }
   store.setState({ projectGroups: [sshGroup, refreshedGroup] })
   const state = store.getState()
-  const pendingCreate = state.createProjectGroup('Platform')
+  const pendingCreate = state.createProjectGroup('Platform', ownerHostId)
   created.resolve(projectGroup)
   await pendingCreate
   expect(store.getState()).toBe(state)
 })
 
 it('does not suppress a local group whose ID matches a direct SSH group', async () => {
-  const { store, created } = setup(null)
+  const { store, created, ownerHostId } = setup(null)
   const sshGroup = { ...projectGroup, connectionId: 'server' }
   store.setState({ projectGroups: [sshGroup] })
-  const pendingCreate = store.getState().createProjectGroup('Platform')
+  const pendingCreate = store.getState().createProjectGroup('Platform', ownerHostId)
   created.resolve(projectGroup)
   await pendingCreate
   expect(store.getState().projectGroups).toEqual([
@@ -168,3 +171,10 @@ it('does not suppress a local group whose ID matches a direct SSH group', async 
     { ...projectGroup, executionHostId: 'local' }
   ])
 })
+
+// The catalog these tests read is the one the focused host would have shown.
+function catalogOwner(store: {
+  getState: () => { settings: { activeRuntimeEnvironmentId?: string | null } | null }
+}): { runtimeEnvironmentId: string | null } {
+  return { runtimeEnvironmentId: store.getState().settings?.activeRuntimeEnvironmentId ?? null }
+}

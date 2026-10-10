@@ -4,7 +4,9 @@ import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getRepoHostIdentity } from '../slices/repo-host-identity'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
+import { defaultCreationHost } from '@/lib/default-creation-host'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { translate } from '@/i18n/i18n'
 import {
@@ -14,11 +16,7 @@ import {
 } from '../../../../shared/execution-host'
 import type { RepoSlice } from './repo-state'
 import { ERROR_TOAST_DURATION } from './repo-state'
-import {
-  fetchRuntimeAddProjectPathStatus,
-  getAddRepoPathRouteSettings,
-  getRuntimeEnvironmentDisplayName
-} from './owner-routing'
+import { fetchRuntimeAddProjectPathStatus, getRuntimeEnvironmentDisplayName } from './owner-routing'
 import { adoptFromEndpoint } from '../adopt-from-endpoint'
 import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-identity'
 import { warnIfProjectKnownInAnotherProfile } from '../projects/project-profile-presence'
@@ -31,7 +29,11 @@ export function createRepoAddActions(
   return {
     addRepoPath: async (path, kind = 'git', options) => {
       try {
-        const target = getActiveRuntimeTarget(getAddRepoPathRouteSettings(options, get().settings))
+        // Why: a new project has no row yet; without a picked host it goes to the default host.
+        const target =
+          options && 'runtimeEnvironmentId' in options
+            ? runtimeTargetForOwnerEnvironment(options.runtimeEnvironmentId ?? null)
+            : defaultCreationHost(get().settings)
         const displayName = options?.displayName?.trim() || undefined
         let repo: Repo
         try {
@@ -144,7 +146,8 @@ export function createRepoAddActions(
     },
 
     addRepo: async () => {
-      const target = getActiveRuntimeTarget(get().settings)
+      // Why: the OS folder picker adds a new project on the default host; there is no row yet.
+      const target = defaultCreationHost(get().settings)
       if (target.kind !== 'local') {
         // Why: OS folder pickers return client-local paths; remote environments need an explicit host path (Add Project dialog).
         toast.error(

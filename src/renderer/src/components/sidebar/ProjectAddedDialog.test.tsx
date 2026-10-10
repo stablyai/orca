@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
     closeModal: vi.fn(),
     repos: [] as Repo[],
     worktreesByRepo: {} as Record<string, unknown[]>,
-    fetchRepos: vi.fn(),
+    fetchReposForAllHosts: vi.fn(),
     fetchWorktrees: vi.fn(),
     setHideDefaultBranchWorkspace: vi.fn()
   },
@@ -68,7 +68,7 @@ describe('ProjectAddedDialog', () => {
     mocks.state.modalData = { repoId: 'repo-1' }
     mocks.state.repos = [makeRepo()]
     mocks.state.worktreesByRepo = {}
-    mocks.state.fetchRepos.mockResolvedValue(undefined)
+    mocks.state.fetchReposForAllHosts.mockResolvedValue(undefined)
     mocks.state.fetchWorktrees.mockResolvedValue(true)
   })
 
@@ -166,7 +166,7 @@ describe('ProjectAddedDialog', () => {
 
   it('refreshes repos before closing a stale repo id', async () => {
     mocks.state.repos = []
-    mocks.state.fetchRepos.mockImplementation(async () => {
+    mocks.state.fetchReposForAllHosts.mockImplementation(async () => {
       mocks.state.repos = []
     })
     const { default: ProjectAddedDialog } = await import('./ProjectAddedDialog')
@@ -174,13 +174,13 @@ describe('ProjectAddedDialog', () => {
     renderToStaticMarkup(<ProjectAddedDialog />)
     await flushPromises()
 
-    expect(mocks.state.fetchRepos).toHaveBeenCalledTimes(1)
+    expect(mocks.state.fetchReposForAllHosts).toHaveBeenCalledTimes(1)
     expect(mocks.state.closeModal).toHaveBeenCalledTimes(1)
   })
 
-  it('waits for repo hydration and does not close when fetchRepos supplies the repo', async () => {
+  it('waits for repo hydration and does not close when fetchReposForAllHosts supplies the repo', async () => {
     mocks.state.repos = []
-    mocks.state.fetchRepos.mockImplementation(async () => {
+    mocks.state.fetchReposForAllHosts.mockImplementation(async () => {
       mocks.state.repos = [makeRepo()]
     })
     const { default: ProjectAddedDialog } = await import('./ProjectAddedDialog')
@@ -188,7 +188,7 @@ describe('ProjectAddedDialog', () => {
     renderToStaticMarkup(<ProjectAddedDialog />)
     await flushPromises()
 
-    expect(mocks.state.fetchRepos).toHaveBeenCalledTimes(1)
+    expect(mocks.state.fetchReposForAllHosts).toHaveBeenCalledTimes(1)
     expect(mocks.state.closeModal).not.toHaveBeenCalled()
     expect(mocks.finishProjectAddWithDefaultCheckout).not.toHaveBeenCalled()
   })

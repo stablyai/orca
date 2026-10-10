@@ -124,7 +124,7 @@ describe('fetchReposForAllHosts generation', () => {
     store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
 
     const startup = store.getState().fetchReposForAllHosts({ remoteHosts: 'skip' })
-    const remoteRefresh = store.getState().fetchRepos()
+    const remoteRefresh = store.getState().fetchRepos(catalogOwner(store))
     let remoteSettled = false
     void remoteRefresh.then(() => {
       remoteSettled = true
@@ -525,3 +525,10 @@ describe('fetchReposForAllHosts generation', () => {
     expect(store.getState().repos.map((repo) => repo.id)).toEqual(['local-repo', 'remote-repo'])
   })
 })
+
+// The catalog these tests read is the one the focused host would have shown.
+function catalogOwner(store: {
+  getState: () => { settings: { activeRuntimeEnvironmentId?: string | null } | null }
+}): { runtimeEnvironmentId: string | null } {
+  return { runtimeEnvironmentId: store.getState().settings?.activeRuntimeEnvironmentId ?? null }
+}

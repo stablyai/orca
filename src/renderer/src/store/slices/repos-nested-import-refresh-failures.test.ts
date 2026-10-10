@@ -65,6 +65,7 @@ describe('nested import partial catalog refresh failures', () => {
           parentPath: '/workspace',
           groupName: 'Workspace',
           projectPaths: [],
+          runtimeEnvironmentId: null,
           mode: 'group'
         })
       ).resolves.toEqual(result)
