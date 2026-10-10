@@ -7,7 +7,12 @@ import process from 'node:process'
 import ts from 'typescript-api'
 
 import { canonicalGenericRenderings } from './locale-generic-ui-terms.mjs'
-import { repairTranslatedValue } from './locale-translation-policy.mjs'
+import {
+  INTERPOLATION_PLACEHOLDER_RE,
+  collectInterpolationVariables,
+  repairTranslatedValue,
+  setLeaf
+} from './locale-translation-policy.mjs'
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts'])
 const SKIP_PATH_PARTS = new Set(['.git', 'dist', 'node_modules', 'out', '__snapshots__', 'assets'])
@@ -17,7 +22,6 @@ const LOCALIZATION_FUNCTION_NAMES = new Set([
   'translateMain',
   'translateSearchKeyword'
 ])
-const PLACEHOLDER_RE = /\{\{[^}]+\}\}/g
 const LOCALES_RELATIVE_DIR = path.join('src', 'renderer', 'src', 'i18n', 'locales')
 export const LOCALIZATION_SOURCE_ROOTS = [
   path.join('src', 'renderer', 'src'),
@@ -197,17 +201,6 @@ function collectInconsistentFallbackVariables(references) {
     .filter(({ uniqueFallbackVariableCount }) => uniqueFallbackVariableCount > 1)
 }
 
-function collectInterpolationVariables(value) {
-  if (typeof value === 'string') {
-    const matches = value.match(PLACEHOLDER_RE) ?? []
-    return [...matches].sort()
-  }
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return []
-  }
-  return Object.values(value).flatMap((child) => collectInterpolationVariables(child))
-}
-
 function flattenCatalogEntries(value, prefix = '', entries = new Map()) {
   if (typeof value === 'string') {
     entries.set(prefix, value)
@@ -224,18 +217,6 @@ function flattenCatalogEntries(value, prefix = '', entries = new Map()) {
 
 function getCatalogEntry(catalog, key) {
   return key.split('.').reduce((cursor, part) => cursor?.[part], catalog)
-}
-
-function setCatalogEntry(catalog, key, value) {
-  const parts = key.split('.')
-  let cursor = catalog
-  for (const part of parts.slice(0, -1)) {
-    if (typeof cursor[part] !== 'object' || cursor[part] === null || Array.isArray(cursor[part])) {
-      cursor[part] = {}
-    }
-    cursor = cursor[part]
-  }
-  cursor[parts.at(-1)] = value
 }
 
 function collectLocaleParityIssues(enCatalog, localeCatalog) {
@@ -286,7 +267,7 @@ function applyMissingEnglishEntries(catalog, missing) {
     if (getCatalogEntry(catalog, key) !== undefined) {
       continue
     }
-    setCatalogEntry(catalog, key, fallback)
+    setLeaf(catalog, key, fallback)
     changed += 1
   }
 
@@ -312,7 +293,7 @@ export function collectGenericTermRegressions(enEntries, localeEntries, localeNa
       continue
     }
     // Why: {{agent}} is an interpolation name, not English copy the reader sees.
-    const repairedCopy = repaired.replace(PLACEHOLDER_RE, '')
+    const repairedCopy = repaired.replace(INTERPOLATION_PLACEHOLDER_RE, '')
     for (const { form, terms } of renderings) {
       if (!localeValue.includes(form) || repaired.includes(form)) {
         continue
