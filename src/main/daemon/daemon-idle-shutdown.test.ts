@@ -221,6 +221,21 @@ describe('current daemon lifecycle retirement', () => {
     await waitFor(() => onIdleShutdown.mock.calls.length === 1)
   })
 
+  it('still exits when disposing resources hangs past the shutdown deadline', async () => {
+    // Why: its token is already unlinked, so a daemon stuck here could never be reached again.
+    await startServer()
+    const daemon = server as unknown as DaemonServerInternals
+    const dispose = vi.spyOn(daemon.host, 'dispose').mockReturnValue(new Promise(() => {}))
+
+    clock.advanceBy(100)
+    await waitFor(() => dispose.mock.calls.length === 1)
+    expect(onIdleShutdown).not.toHaveBeenCalled()
+
+    clock.advanceBy(5_000)
+    await waitFor(() => onIdleShutdown.mock.calls.length === 1)
+    expect(clock.pendingCount).toBe(0)
+  })
+
   it('retires immediately after an authenticated clean disconnect proves it is empty', async () => {
     await startServer()
     const client = new DaemonClient({ socketPath, tokenPath })

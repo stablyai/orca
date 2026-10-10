@@ -54,6 +54,86 @@ export type StaleDaemonKillOutcome = {
   liveOwnerSurvived: boolean
 }
 
+export type DaemonTerminationOutcome = {
+  exited: boolean
+  liveOwnerSurvived: boolean
+}
+
+/** SIGTERM, then SIGKILL only after re-proving identity; the caller must already have matched it. */
+export async function terminateIdentifiedDaemon(
+  pid: number,
+  startedAtMs: number | null,
+  socketPath: string,
+  tokenPath: string,
+  probeEndpoint: (socketPath: string) => Promise<SocketProbeOutcome> = probeSocketConnect
+): Promise<DaemonTerminationOutcome> {
+  let liveOwnerSurvived = false
+  try {
+    process.kill(pid, 'SIGTERM')
+  } catch (error) {
+    // Why: ESRCH means it is already gone. Anything else (EPERM from a daemon owned by
+    // another user) means it is alive and we cannot stop it — falling through to the
+    // blanket catch would report "nothing alive" and authorize a duplicate beside it.
+    if (!isNoSuchProcessError(error)) {
+      return { exited: false, liveOwnerSurvived: true }
+    }
+  }
+  const deadline = Date.now() + KILL_WAIT_MS
+  let exited = false
+  while (Date.now() < deadline) {
+    try {
+      process.kill(pid, 0)
+    } catch {
+      exited = true
+      break
+    }
+    await new Promise((resolve) => setTimeout(resolve, KILL_POLL_MS))
+  }
+  if (!exited) {
+    // Why: re-check process identity before SIGKILL. The SIGTERM-then-wait
+    // window is long enough for the pid to be recycled if the original
+    // daemon died during the wait. Without this, we'd SIGKILL an unrelated
+    // process that happens to now own the same pid.
+    const recheck = await inspectDaemonProcessIdentity(pid, socketPath, tokenPath, startedAtMs)
+    if (recheck === 'mismatch') {
+      // Why: the pid provably no longer belongs to our daemon, so it is gone regardless
+      // of what the endpoint says.
+      console.warn('[daemon] Skipping SIGKILL for stale daemon: reason=pid_recycled')
+      exited = true
+    } else if (recheck === 'unknown') {
+      // Why: the inspection failed under load. Only an endpoint that proves nothing is
+      // serving may license reclaiming — a timed-out probe is not a second opinion.
+      if (endpointIsProvenDead(await probeEndpoint(socketPath))) {
+        console.warn('[daemon] Skipping SIGKILL for stale daemon: reason=pid_recycled')
+        exited = true
+      } else {
+        console.warn(
+          '[daemon] Preserving daemon that could not be identified: reason=identity_probe_failed'
+        )
+        liveOwnerSurvived = true
+      }
+    } else {
+      try {
+        process.kill(pid, 'SIGKILL')
+      } catch {
+        // Already dead
+        exited = true
+      }
+      // Why: issuing SIGKILL is not proof of death — a process blocked in an
+      // uninterruptible syscall only dies once it returns. Claiming the kill without
+      // confirming it is what let the endpoint be reclaimed out from under a daemon
+      // that was still alive and still serving.
+      exited = exited || (await waitForProcessExit(pid, SIGKILL_CONFIRM_WAIT_MS))
+      if (!exited) {
+        console.warn('[daemon] Daemon survived SIGKILL: reason=unconfirmed_exit')
+      }
+    }
+  }
+  // Why: SIGTERM and SIGKILL both failed to produce an exit, so the daemon is still out
+  // there holding the endpoint. Treat it as the owner rather than racing it.
+  return { exited, liveOwnerSurvived: liveOwnerSurvived || !exited }
+}
+
 export async function killStaleDaemon(
   runtimeDir: string,
   socketPath: string,
@@ -95,72 +175,15 @@ export async function killStaleDaemon(
       return { killed: false, liveOwnerSurvived: true }
     }
     if (parsedPid && identity === 'match') {
-      const { pid, startedAtMs } = parsedPid
-      try {
-        process.kill(pid, 'SIGTERM')
-      } catch (error) {
-        // Why: ESRCH means it is already gone. Anything else (EPERM from a daemon owned by
-        // another user) means it is alive and we cannot stop it — falling through to the
-        // blanket catch would report "nothing alive" and authorize a duplicate beside it.
-        if (!isNoSuchProcessError(error)) {
-          return { killed: false, liveOwnerSurvived: true }
-        }
-      }
-      const deadline = Date.now() + KILL_WAIT_MS
-      let exited = false
-      while (Date.now() < deadline) {
-        try {
-          process.kill(pid, 0)
-        } catch {
-          exited = true
-          break
-        }
-        await new Promise((resolve) => setTimeout(resolve, KILL_POLL_MS))
-      }
-      if (!exited) {
-        // Why: re-check process identity before SIGKILL. The SIGTERM-then-wait
-        // window is long enough for the pid to be recycled if the original
-        // daemon died during the wait. Without this, we'd SIGKILL an unrelated
-        // process that happens to now own the same pid.
-        const recheck = await inspectDaemonProcessIdentity(pid, socketPath, tokenPath, startedAtMs)
-        if (recheck === 'mismatch') {
-          // Why: the pid provably no longer belongs to our daemon, so it is gone regardless
-          // of what the endpoint says.
-          console.warn('[daemon] Skipping SIGKILL for stale daemon: reason=pid_recycled')
-          exited = true
-        } else if (recheck === 'unknown') {
-          // Why: the inspection failed under load. Only an endpoint that proves nothing is
-          // serving may license reclaiming — a timed-out probe is not a second opinion.
-          if (endpointIsProvenDead(await probeEndpoint(socketPath))) {
-            console.warn('[daemon] Skipping SIGKILL for stale daemon: reason=pid_recycled')
-            exited = true
-          } else {
-            console.warn(
-              '[daemon] Preserving daemon that could not be identified: reason=identity_probe_failed'
-            )
-            liveOwnerSurvived = true
-          }
-        } else {
-          try {
-            process.kill(pid, 'SIGKILL')
-          } catch {
-            // Already dead
-            exited = true
-          }
-          // Why: issuing SIGKILL is not proof of death — a process blocked in an
-          // uninterruptible syscall only dies once it returns. Claiming the kill without
-          // confirming it is what let the endpoint be reclaimed out from under a daemon
-          // that was still alive and still serving.
-          exited = exited || (await waitForProcessExit(pid, SIGKILL_CONFIRM_WAIT_MS))
-          if (!exited) {
-            console.warn('[daemon] Daemon survived SIGKILL: reason=unconfirmed_exit')
-          }
-        }
-      }
-      killedDaemon = exited
-      // Why: SIGTERM and SIGKILL both failed to produce an exit, so the daemon is still out
-      // there holding the endpoint. Treat it as the owner rather than racing it.
-      liveOwnerSurvived = liveOwnerSurvived || !exited
+      const outcome = await terminateIdentifiedDaemon(
+        parsedPid.pid,
+        parsedPid.startedAtMs,
+        socketPath,
+        tokenPath,
+        probeEndpoint
+      )
+      killedDaemon = outcome.exited
+      liveOwnerSurvived = outcome.liveOwnerSurvived
     }
   } catch {
     // PID file missing or process already dead

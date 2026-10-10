@@ -1,4 +1,5 @@
 import { vi } from 'vitest'
+import { missingFileError } from './daemon-init-fresh-import'
 import { PROTOCOL_VERSION } from './types'
 import type { Mock } from 'vitest'
 import type {
@@ -164,7 +165,14 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
   return {
     fs: () => ({
       mkdirSync: vi.fn<(...args: unknown[]) => void>(),
-      existsSync: (p: string) => probeSocketExistsMock(p) || p.includes('.pid'),
+      existsSync: (p: string) =>
+        probeSocketExistsMock(p) || p.includes('.pid') || p.includes('.token'),
+      lstatSync: (p: string) => {
+        if (!probeSocketExistsMock(p)) {
+          throw missingFileError()
+        }
+        return {}
+      },
       unlinkSync: unlinkSyncMock,
       readFileSync: readFileSyncMock,
       writeFileSync: writeFileSyncMock
@@ -194,7 +202,8 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
       getProcessStartedAtMs: getProcessStartedAtMsMock
     }),
     daemonPidFileParse: () => ({
-      parseDaemonPidFile: parseDaemonPidFileMock
+      parseDaemonPidFile: parseDaemonPidFileMock,
+      salvagePidFromCorruptDaemonRecord: () => null
     }),
     client: () => ({
       DaemonClient: daemonClientMock
@@ -216,7 +225,16 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
         `/fake/daemon/daemon-v${version ?? PROTOCOL_VERSION}.pid`,
       serializeDaemonPidFile: (obj: unknown) => JSON.stringify(obj),
       replaceDaemonPidFile: replaceDaemonPidFileMock,
-      unlinkOwnedDaemonPidFile: unlinkOwnedDaemonPidFileMock
+      unlinkOwnedDaemonPidFile: unlinkOwnedDaemonPidFileMock,
+      // Why: route fenced unlinks through unlinkSyncMock so suites keep asserting on one seam.
+      unlinkDaemonPidFileWhen: (path: string) => {
+        unlinkSyncMock(path)
+        return true
+      },
+      unlinkOwnedDaemonTokenFile: (path: string) => {
+        unlinkSyncMock(path)
+        return true
+      }
     }),
     daemonPtyAdapter: () => ({
       DaemonPtyAdapter: MockDaemonPtyAdapter
@@ -242,21 +260,24 @@ export function createNetConnectStubs(state: DaemonInitMockState): NetConnectStu
     probeSocketExistsMock.mockReturnValue(false)
     netConnectMock.mockReset()
     netConnectMock.mockImplementation((): MockProbeSocket => {
-      const handlers: Record<string, (() => void)[]> = {
+      const handlers: Record<string, ((error?: unknown) => void)[]> = {
         connect: [],
         error: []
       }
       return {
-        on(event: string, cb: () => void) {
+        on(event: string, cb: (error?: unknown) => void) {
           handlers[event]?.push(cb)
           if (event === 'error') {
-            queueMicrotask(() => cb())
+            queueMicrotask(() => cb(missingFileError()))
           }
           return this
         },
         removeListener(event: string, cb: () => void) {
           handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
           return this
+        },
+        off(event: string, cb: () => void) {
+          return this.removeListener(event, cb)
         },
         destroy() {}
       }
@@ -266,18 +287,21 @@ export function createNetConnectStubs(state: DaemonInitMockState): NetConnectStu
   function mockOnlyDaemonSocketAlive(socketSuffix: string): void {
     netConnectMock.mockImplementation((options?: { path?: string }): MockProbeSocket => {
       const live = options?.path?.endsWith(socketSuffix) ?? false
-      const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
+      const handlers: Record<string, ((error?: unknown) => void)[]> = { connect: [], error: [] }
       return {
-        on(event: string, callback: () => void) {
+        on(event: string, callback: (error?: unknown) => void) {
           handlers[event]?.push(callback)
           if ((live && event === 'connect') || (!live && event === 'error')) {
-            queueMicrotask(() => callback())
+            queueMicrotask(() => callback(live ? undefined : missingFileError()))
           }
           return this
         },
         removeListener(event: string, callback: () => void) {
           handlers[event] = handlers[event]?.filter((handler) => handler !== callback) ?? []
           return this
+        },
+        off(event: string, callback: () => void) {
+          return this.removeListener(event, callback)
         },
         destroy() {}
       }

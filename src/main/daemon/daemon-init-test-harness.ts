@@ -4,7 +4,7 @@ import {
   createDaemonInitModuleFactories,
   createNetConnectStubs
 } from './daemon-init-dependency-mocks'
-import { importFreshDaemonInit } from './daemon-init-fresh-import'
+import { importFreshDaemonInit, missingFileError } from './daemon-init-fresh-import'
 import type {
   DaemonInitMockState,
   EnsureRunningOverride,
@@ -40,27 +40,30 @@ function createDaemonInitMockState(): DaemonInitMockState {
 
   const probeSocketExistsMock = vi.fn((_path?: string) => false)
   const writeFileSyncMock = vi.fn()
-  // Why: readFileSync throws by default so legacyDaemonProcessMayBeAlive treats every legacy pid file as unreadable (pre-fix cleanup behavior).
-  const readFileSyncMock = vi.fn((): string => {
-    throw new Error('ENOENT')
+  // Why: readFileSync throws ENOENT by default so every legacy daemon reads as having no pid record.
+  const readFileSyncMock = vi.fn((_path?: unknown): string => {
+    throw missingFileError()
   })
   const unlinkSyncMock = vi.fn()
   const forkMock = vi.fn()
   const netConnectMock = vi.fn((): MockProbeSocket => {
     // Why: stub the socket so probeSocket's 'error' path fires and cleanupDaemonForProtocol's alive=false branch runs without side effects.
-    const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
+    const handlers: Record<string, ((error?: unknown) => void)[]> = { connect: [], error: [] }
     return {
-      on(event: string, cb: () => void) {
+      on(event: string, cb: (error?: unknown) => void) {
         handlers[event]?.push(cb)
         if (event === 'error') {
           // Fire after microtask so destroy()/resolve ordering matches real net
-          queueMicrotask(() => cb())
+          queueMicrotask(() => cb(missingFileError()))
         }
         return this
       },
       removeListener(event: string, cb: () => void) {
         handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
         return this
+      },
+      off(event: string, cb: () => void) {
+        return this.removeListener(event, cb)
       },
       destroy() {}
     }
