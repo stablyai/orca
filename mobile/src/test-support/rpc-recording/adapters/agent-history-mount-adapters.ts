@@ -1,7 +1,10 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import type { OperationExposure, operationModuleLoader } from '../operation-module-loader'
+import { loadHostClientContext } from '../host-client-context-exposure'
+import { mountFixture } from '../recorder-fixture-shape'
+import type { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter, MountContext } from '../recording-scenario'
+import type { RpcClientContextValue } from '../../../transport/rpc-client-context-contract'
 
 const HOST_ID = 'host-1'
 const WORKTREE_ID = 'worktree-1'
@@ -14,19 +17,9 @@ const WORKTREES = [
 /** Hoisted for the same reason, and empty because an unloaded list has nothing in it yet. */
 const UNLOADED_WORKTREES: typeof WORKTREES = []
 
-/**
- * The history hook reaches its client through the shared per-host context rather than a parameter,
- * so the context object is the mounting boundary. Exposing the provider is what lets the real hook
- * run against the scripted client; reimplementing `useHostClient` would put acquisition and
- * connection-state policy in the adapter, which is exactly what these recordings exist to observe.
- */
-export const agentHistoryMountExposures: readonly OperationExposure[] = [
-  ['transport/client-context.tsx', '\nexports.RecordingHostClientContext = Ctx;']
-]
-
 /** A connected single-host context: one client, one state, no acquisition or reconnect behaviour. */
 function hostClientContext(client: MountContext['client'], effect: MountContext['effect']) {
-  return {
+  return mountFixture<RpcClientContextValue>({
     acquire: () => client,
     release: () => {},
     releaseAndCloseIfUnused: () => {},
@@ -51,7 +44,7 @@ function hostClientContext(client: MountContext['client'], effect: MountContext[
     getAllClients: () => [{ hostId: HOST_ID, client }],
     subscribeAllHosts: () => () => {},
     primeHosts: () => {}
-  }
+  })
 }
 
 export function agentHistoryMountAdapters(
@@ -62,9 +55,7 @@ export function agentHistoryMountAdapters(
       const useHistory = modules.load<
         typeof import('../../../agent-history/use-mobile-agent-history-state')
       >('mobile/src/agent-history/use-mobile-agent-history-state.ts').useMobileAgentHistoryState
-      const { RecordingHostClientContext } = modules.load<{
-        RecordingHostClientContext: React.Context<unknown>
-      }>('mobile/src/transport/client-context.tsx')
+      const recordingHostClientContext = loadHostClientContext(modules)
       const context = hostClientContext(client, effect)
       // A holder rather than a bare binding: the harness is a component, and a component may not
       // assign a variable declared outside it.
@@ -86,7 +77,7 @@ export function agentHistoryMountAdapters(
       }
       const element = () =>
         createElement(
-          RecordingHostClientContext.Provider,
+          recordingHostClientContext.Provider,
           { value: context },
           createElement(Harness)
         )
