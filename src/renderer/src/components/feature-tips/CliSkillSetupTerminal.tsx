@@ -3,6 +3,8 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { OnboardingInlineCommandTerminal } from '@/components/onboarding/OnboardingInlineCommandTerminal'
+import { InlineSetupTerminalStallNotice } from '@/components/onboarding/InlineSetupTerminalStallNotice'
+import { useInlineSetupTerminalStall } from '@/components/onboarding/use-inline-setup-terminal-stall'
 import {
   buildSkillCommandForRuntime,
   buildSkillSetupTerminalCommand
@@ -13,6 +15,7 @@ import { translate } from '@/i18n/i18n'
 
 export function CliSkillSetupTerminal(): React.JSX.Element {
   const activeSkillRuntime = useActiveProjectSkillRuntime()
+  const setupStalled = useInlineSetupTerminalStall(true)
   // Why: a repair-required runtime resolves to a WSL distro that is missing, so
   // drop back to the host runtime. This terminal auto-pastes with no install
   // gate, and repair-required only happens on Windows, so it still needs the
@@ -76,6 +79,7 @@ export function CliSkillSetupTerminal(): React.JSX.Element {
           </TooltipContent>
         </Tooltip>
       </div>
+      <InlineSetupTerminalStallNotice stalled={setupStalled} />
       <OnboardingInlineCommandTerminal
         command={skillCommand}
         prepareCommandForShell={prepareCommandForShell}
@@ -89,7 +93,7 @@ export function CliSkillSetupTerminal(): React.JSX.Element {
         )}
         description={translate(
           'auto.components.feature.tips.CliSkillSetupTerminal.1953e90447',
-          'Press Enter to install the Orca CLI orchestration skill for your agents.'
+          'Press Enter to install, then answer the prompts for which agents to install into and whether to symlink or copy.'
         )}
         terminalHeightPx={280}
         terminalTopMarginPx={8}
