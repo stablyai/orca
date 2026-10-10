@@ -9,7 +9,9 @@ import { ptyIncarnationById } from '../provider/ownership-state'
 import {
   getProviderForPty,
   getPtySshConnectionId,
-  tryGetProviderForPty
+  resolvePtyExecutionHost,
+  tryGetProviderForPty,
+  type ResolvedPtyHost
 } from '../provider/registry'
 import { finishPtyShutdown, isPtyAlreadyGoneError } from '../provider/liveness'
 import { recordUndeliveredSshPtyKill } from '../runtime/undelivered-ssh-kill'
@@ -17,7 +19,7 @@ import { recordUndeliveredSshPtyKill } from '../runtime/undelivered-ssh-kill'
 export type PtyKillIpcDeps = {
   store?: Store
   runtime?: OrcaRuntimeService
-  getLocalPtyProviderStartupPromise: (connectionId?: string | null) => Promise<void> | undefined
+  getLocalPtyProviderStartupPromise: (hostId?: ResolvedPtyHost) => Promise<void> | undefined
   shutdownProviderAndDetectExit: (
     provider: IPtyProvider,
     id: string,
@@ -91,7 +93,7 @@ async function stopRendererOwnedPtyProcess(
   runtime?.markPtyStopRequested?.(args.id)
   const connectionId = getPtySshConnectionId(args.id)
   // Why: wait for daemon startup before selecting the local provider, else a fallback shutdown falsely succeeds and orphans a restored daemon PTY (#7742).
-  const startupPromise = getLocalPtyProviderStartupPromise(connectionId)
+  const startupPromise = getLocalPtyProviderStartupPromise(resolvePtyExecutionHost(args.id))
   if (startupPromise) {
     await startupPromise
   }

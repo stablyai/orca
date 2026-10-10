@@ -66,7 +66,7 @@ export function registeredPtyProviders(): RegisteredPtyProvider[] {
 }
 
 export class PtyHostNotDispatchableError extends Error {
-  constructor(readonly hostId: ExecutionHostId | 'foreign') {
+  constructor(readonly hostId: ResolvedPtyHost) {
     // Why: a paired runtime drives its own PTYs over runtime RPC; this process has no provider for them.
     super(`PTY host "${hostId}" is not dispatchable from this process`)
     this.name = 'PtyHostNotDispatchableError'
@@ -93,9 +93,11 @@ export function getProvider(hostId: ExecutionHostId): IPtyProvider {
   return provider
 }
 
-/** The host that runs a PTY: its recorded owner, else the host its id names. 'foreign' = off this
- *  machine but unnameable. */
-export function resolvePtyExecutionHost(ptyId: string): ExecutionHostId | 'foreign' {
+/** 'foreign' = a PTY that runs off this machine on a host its id cannot name. */
+export type ResolvedPtyHost = ExecutionHostId | 'foreign'
+
+/** The host that runs a PTY: its recorded owner, else the host its id names. */
+export function resolvePtyExecutionHost(ptyId: string): ResolvedPtyHost {
   const owner = ptyOwnership.get(ptyId)
   if (owner !== undefined) {
     return owner
@@ -117,7 +119,7 @@ export function getPtySshConnectionId(ptyId: string): string | null {
 }
 
 /** Whether this process can hold a provider for the host at all (this machine or an SSH relay). */
-export function isDispatchablePtyHost(hostId: ExecutionHostId | 'foreign'): boolean {
+export function isDispatchablePtyHost(hostId: ResolvedPtyHost): boolean {
   return (
     hostId === LOCAL_EXECUTION_HOST_ID ||
     (hostId !== 'foreign' && getSshTargetIdForExecutionHost(hostId) !== null)

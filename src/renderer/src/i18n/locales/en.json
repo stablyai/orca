@@ -4228,7 +4228,8 @@
           },
           "usagePercentageLabel": {
             "used": "{{value0}}% used",
-            "remaining": "{{value0}}% left"
+            "remaining": "{{value0}}% left",
+            "bare": "{{value0}}%"
           },
           "UsagePercentageDisplayChangeNotice": {
             "title": "Usage now shows % used",
@@ -4329,6 +4330,10 @@
           "StatusBarUsageChangeNotices": {
             "compactTitle": "Usage display is now compact",
             "compactBody": "One headline metric per provider. Choose <detailed>Detailed</detailed> in the Usage menu to show more limits."
+          },
+          "usageUnitLabel": {
+            "used": "Used",
+            "remaining": "Remaining"
           }
         }
       },
