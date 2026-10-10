@@ -128,7 +128,43 @@ export function mapBackendRateLimitResetCredits(
 function hasCompleteRateLimitResetCredits(
   credits: RateLimitResetCredits | null | undefined
 ): boolean {
-  return Boolean(credits && (credits.availableCount === 0 || credits.nextExpiresAt != null))
+  // Completeness gates re-verification against the dedicated backend endpoint. A zero
+  // is only trustworthy when confirmed by an explicitly empty details list: the
+  // app-server falls back to a possibly-stale usage count when its detailed fetch
+  // fails, so a zero with an expiry but no credit details must be re-verified (#22781).
+  if (!credits) {
+    return false
+  }
+  if (credits.availableCount === 0) {
+    return credits.credits?.length === 0
+  }
+  return credits.nextExpiresAt != null
+}
+
+export function isConfirmedZeroRateLimitResetCredits(
+  credits: RateLimitResetCredits | null | undefined
+): boolean {
+  // A zero confirmed by an explicitly empty details list is trustworthy: the app-server
+  // only emits an empty list when its detailed fetch succeeded (#22781). A confirmed
+  // zero must never be merged over by a positive fallback count.
+  return Boolean(credits && credits.availableCount === 0 && credits.credits?.length === 0)
+}
+
+export function mergeRateLimitResetCredits(
+  existing: RateLimitResetCredits | null | undefined,
+  backend: RateLimitResetCredits
+): RateLimitResetCredits {
+  // The backend supplement fills gaps (missing expiry/details), never clobbers: a fallback
+  // 0 must not overwrite a count the app-server already reported (#22781).
+  if (!existing) {
+    return backend
+  }
+  return {
+    availableCount: Math.max(existing.availableCount, backend.availableCount),
+    totalEarnedCount: existing.totalEarnedCount ?? backend.totalEarnedCount,
+    nextExpiresAt: existing.nextExpiresAt ?? backend.nextExpiresAt,
+    credits: existing.credits ?? backend.credits
+  }
 }
 
 async function fetchBackendRateLimitResetCredits(
@@ -169,7 +205,15 @@ export async function supplementCodexRateLimitResetCredits(
   }
   try {
     const rateLimitResetCredits = await fetchBackendRateLimitResetCredits(request, options)
-    return rateLimitResetCredits === null ? limits : { ...limits, rateLimitResetCredits }
+    return rateLimitResetCredits === null
+      ? limits
+      : {
+          ...limits,
+          rateLimitResetCredits: mergeRateLimitResetCredits(
+            limits.rateLimitResetCredits,
+            rateLimitResetCredits
+          )
+        }
   } catch {
     return limits
   }
