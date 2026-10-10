@@ -77,6 +77,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const sortBy = useAppStore((s) => s.sortBy)
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
   const openModal = useAppStore((s) => s.openModal)
+  const updateRepo = useAppStore((s) => s.updateRepo)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const activeView = useAppStore((s) => s.activeView)
@@ -120,7 +121,8 @@ const WorktreeList = React.memo(function WorktreeList({
     repoMap,
     worktreeLineageById,
     defaultHostId,
-    agentSendTargetWorktreeId
+    agentSendTargetWorktreeId,
+    activeWorktreeId
   })
   const effectiveCollapsedGroups = useEffectiveCollapsedGroups({
     hostScopedGroups:
@@ -215,6 +217,16 @@ const WorktreeList = React.memo(function WorktreeList({
       openModal('worktree-visibility', { repoId: repo.id, hostId: getRepoExecutionHostId(repo) })
     },
     [openModal]
+  )
+  const handleToggleHideWhenIdle = useCallback(
+    (repo: Repo) => {
+      void updateRepo(
+        repo.id,
+        { hideWhenIdle: !repo.hideWhenIdle },
+        { hostId: getRepoExecutionHostId(repo) }
+      )
+    },
+    [updateRepo]
   )
   const handleRemoveProject = useCallback(
     (repo: Repo) => {
@@ -316,6 +328,7 @@ const WorktreeList = React.memo(function WorktreeList({
         handleCreateGroupFromRepo={projectGroupDialogs.handleCreateGroupFromRepo}
         handleMoveProjectToGroup={projectGroupDialogs.handleMoveProjectToGroup}
         handleRemoveProjectFromGroup={projectGroupDialogs.handleRemoveProjectFromGroup}
+        handleToggleHideWhenIdle={handleToggleHideWhenIdle}
         handleRenameProjectGroup={projectGroupDialogs.handleRenameProjectGroup}
         handleDeleteProjectGroup={projectGroupDialogs.handleDeleteProjectGroup}
         handleCreateFolderWorkspace={handleCreateFolderWorkspace}

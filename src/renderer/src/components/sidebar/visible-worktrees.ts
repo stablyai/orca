@@ -48,6 +48,7 @@ import {
   computeRenderedSidebarWorktrees
 } from './rendered-sidebar-worktree-order'
 import { isWorkspaceFromOtherDevice } from './workspace-creator-visibility'
+import { isHiddenWhileIdle, isOpenHideWhenIdleWorkspace } from './repo-idle-visibility'
 import { isDefaultBranchWorkspace } from './default-branch-workspace'
 import { getLineageAncestorIndex, getSortedWorktreeRankIndex } from './visible-worktree-indexes'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
@@ -87,6 +88,8 @@ export type VisibleWorktreeOptions = {
   injectLineageAncestors?: boolean
   preserveLineageParentOrder?: boolean
   forcedVisibleWorktreeIds?: readonly string[]
+  /** Exempts the open workspace from the per-repo "Hide when idle" sweep. */
+  activeWorktreeId?: string | null
 }
 
 export function computeVisibleWorktrees(
@@ -146,12 +149,15 @@ export function computeVisibleWorktrees(
     all = all.filter((w) => selectedRepoIds.has(w.repoId))
   }
 
+  all = all.filter((w) => !isHiddenWhileIdle(w, opts))
+
   if (!opts.showSleepingWorkspaces) {
     // Why no !hideDefaultBranchWorkspace term: that filter already ran above, so
     // an explicit hide still wins over the exemption.
     all = all.filter(
       (w) =>
         isSleepingSweepExemptWorkspace(w, opts.alwaysShowDefaultBranchWorkspace) ||
+        isOpenHideWhenIdleWorkspace(w, opts) ||
         !isInactiveWorkspace(
           w.id,
           opts.tabsByWorktree,

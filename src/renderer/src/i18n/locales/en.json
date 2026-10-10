@@ -6017,7 +6017,9 @@
           "groupRenameFailedDesc": "Orca could not confirm the new name with the group's host. Recheck the group after reconnecting.",
           "failedNestWorkspace": "Failed to nest workspace",
           "sidebarRowMissing": "Target no longer exists",
-          "failedUnnestWorkspace": "Failed to unnest workspace"
+          "failedUnnestWorkspace": "Failed to unnest workspace",
+          "hideWhenIdle": "Hide when idle",
+          "showWhenIdle": "Always show in sidebar"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -8350,7 +8352,9 @@
           "show": "Show",
           "hide": "Hide",
           "externalWorktreesGlobal": "Global default: {{value0}}",
-          "useGlobal": "Use global"
+          "useGlobal": "Use global",
+          "hideWhenIdle": "Hide when idle",
+          "hideWhenIdleDescription": "Hide this project from the sidebar and board while none of its workspaces has a terminal, agent or browser tab. Jump to workspace still finds it."
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Command template",

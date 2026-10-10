@@ -601,6 +601,39 @@ describe('Store', () => {
     expect(store.getRepos()[0]!.forkSyncMode).toBeUndefined()
   })
 
+  it('updateRepo persists hideWhenIdle and lets it be turned back off', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    expect(store.updateRepo('r1', { hideWhenIdle: true })!.hideWhenIdle).toBe(true)
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.hideWhenIdle).toBe(true)
+
+    expect(reloaded.updateRepo('r1', { hideWhenIdle: false })!.hideWhenIdle).toBe(false)
+  })
+
+  it('updateRepo ignores a non-boolean hideWhenIdle', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ hideWhenIdle: true }))
+
+    // Why JSON: a malformed renderer/RPC patch arrives untyped, with no assertion needed to build it.
+    const updated = store.updateRepo('r1', JSON.parse('{"hideWhenIdle":"yes"}'))
+
+    expect(updated!.hideWhenIdle).toBe(true)
+  })
+
+  it('getRepo does not expose an invalid persisted hideWhenIdle', async () => {
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      repos: [{ ...makeRepo(), ...JSON.parse('{"hideWhenIdle":"yes"}') }]
+    })
+
+    const store = await createStore()
+
+    expect(store.getRepo('r1')!.hideWhenIdle).toBeUndefined()
+  })
+
   it('updateRepo with issueSourcePreference=undefined clears the preference', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ issueSourcePreference: 'origin' }))
