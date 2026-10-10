@@ -6,13 +6,6 @@ type ImeKeyboardEvent = {
   nativeEvent?: { isComposing?: boolean; keyCode?: number }
 }
 
-type ImeModifierGestureEvent = ImeKeyboardEvent & {
-  altKey?: boolean
-  ctrlKey?: boolean
-  metaKey?: boolean
-  shiftKey?: boolean
-}
-
 /** True when the IME, rather than Orca, owns a keyboard event. Generic so synthetic, native, and
  * gesture events each pass their own richer shape. */
 export function isImeOwnedKeyboardEvent<KeyEvent extends ImeKeyboardEvent>(
@@ -24,16 +17,6 @@ export function isImeOwnedKeyboardEvent<KeyEvent extends ImeKeyboardEvent>(
     event.nativeEvent?.isComposing === true ||
     event.nativeEvent?.keyCode === 229
   )
-}
-
-export function resolveImeModifierGesture(
-  active: boolean,
-  event: ImeModifierGestureEvent
-): { active: boolean; carried: boolean; owned: boolean } {
-  const hasModifier = Boolean(event.altKey || event.ctrlKey || event.metaKey || event.shiftKey)
-  const marked = isImeOwnedKeyboardEvent(event)
-  const owned = active || (hasModifier && marked)
-  return { active: owned && hasModifier, carried: active && !marked, owned }
 }
 
 type ImeEnterGestureEvent = Pick<
@@ -53,6 +36,7 @@ export function useImeEnterGestureOwnership(): {
   isComposing: () => boolean
   ownsKeyDown: (event: ImeEnterGestureEvent) => boolean
   onKeyUp: (event: ImeEnterGestureEvent) => void
+  onCompositionEnd: () => void
   reset: () => void
   setComposing: (active: boolean) => void
 } {
@@ -65,6 +49,16 @@ export function useImeEnterGestureOwnership(): {
     const reset = (): void => {
       stateRef.current = { composing: false, pendingEnter: null }
     }
+    const expirePendingEnter = (): void => {
+      const pendingEnter = stateRef.current.pendingEnter
+      if (pendingEnter) {
+        requestAnimationFrame(() => {
+          if (stateRef.current.pendingEnter === pendingEnter) {
+            stateRef.current.pendingEnter = null
+          }
+        })
+      }
+    }
     // Shift+Enter is a newline, never a submit — it must never be owned or swallowed.
     const isPlainEnter = (event: ImeEnterGestureEvent): boolean =>
       event.key === 'Enter' && event.keyCode === 13 && !event.shiftKey
@@ -76,13 +70,21 @@ export function useImeEnterGestureOwnership(): {
       isComposing: () => stateRef.current.composing,
       ownsKeyDown: (event: ImeEnterGestureEvent): boolean => {
         const markedEnter =
-          (event.nativeEvent.isComposing || stateRef.current.composing) &&
+          (isImeOwnedKeyboardEvent(event) || stateRef.current.composing) &&
           (isPlainEnter(event) ||
             (event.key === 'Enter' && event.keyCode === 229) ||
             (event.key === 'Process' && event.keyCode === 229))
         if (markedEnter) {
           stateRef.current.pendingEnter = {}
           return true
+        }
+        // Continued typing ends the confirmation even when hidden renderers delay the frame.
+        if (
+          !stateRef.current.composing &&
+          !isImeOwnedKeyboardEvent(event) &&
+          !['Enter', 'Shift', 'Control', 'Alt', 'Meta'].includes(event.key)
+        ) {
+          stateRef.current.pendingEnter = null
         }
         if (
           stateRef.current.pendingEnter &&
@@ -100,25 +102,17 @@ export function useImeEnterGestureOwnership(): {
         }
         return false
       },
-      onKeyUp: (event: ImeEnterGestureEvent): void => {
-        // A Process/229 keyup means the IME finished without redispatching, so the
-        // gesture is over immediately.
-        if (event.key === 'Process' && event.keyCode === 229) {
-          stateRef.current.pendingEnter = null
-          return
-        }
-        // Every other keyup expires on the NEXT FRAME, never synchronously. Enter/13
-        // because macOS delivers keyup before the unmarked redispatch; anything else
-        // because IMEs reporting Process/229 on every key (Pinyin candidate selection)
-        // release a non-Enter key, and a Process-only clear left the carry armed and ate
-        // the user's next real Enter.
-        const pendingEnter = stateRef.current.pendingEnter
-        if (pendingEnter) {
-          requestAnimationFrame(() => {
-            if (stateRef.current.pendingEnter === pendingEnter) {
-              stateRef.current.pendingEnter = null
-            }
-          })
+      onKeyUp: (): void => {
+        // Any keyup can precede the redispatch, including an IME-owned Process/229 release.
+        expirePendingEnter()
+      },
+      onCompositionEnd: () => {
+        const compositionWasActive = stateRef.current.composing
+        stateRef.current.composing = false
+        if (compositionWasActive && !stateRef.current.pendingEnter) {
+          // IBus can finish composition before its only unmarked confirming Enter.
+          stateRef.current.pendingEnter = {}
+          expirePendingEnter()
         }
       },
       reset,

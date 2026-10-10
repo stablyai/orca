@@ -3,21 +3,30 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 
-const mocks = vi.hoisted(() => ({
-  state: {
-    activeModal: 'confirm-remove-folder' as string | null,
-    modalData: {
-      repoId: 'repo-1',
-      displayName: 'Example',
-      hostId: 'ssh:target-1'
-    } as Record<string, unknown>,
-    repos: [] as Repo[],
-    sshTargetLabels: new Map<string, string>(),
-    removedSshTargetLabels: new Map<string, string>(),
-    closeModal: vi.fn(),
-    removeProject: vi.fn()
+const mocks = vi.hoisted(() => {
+  const worktreesByRepo: Record<string, { id: string; hostId?: string }[]> = {}
+  const tabsByWorktree: Record<string, { id: string }[]> = {}
+  const ptyIdsByTabId: Record<string, string[]> = {}
+  return {
+    state: {
+      activeModal: 'confirm-remove-folder' as string | null,
+      modalData: {
+        repoId: 'repo-1',
+        displayName: 'Example',
+        hostId: 'ssh:target-1'
+      } as Record<string, unknown>,
+      repos: [] as Repo[],
+      sshTargetLabels: new Map<string, string>(),
+      removedSshTargetLabels: new Map<string, string>(),
+      worktreesByRepo,
+      detectedWorktreesByRepo: {},
+      tabsByWorktree,
+      ptyIdsByTabId,
+      closeModal: vi.fn(),
+      removeProject: vi.fn()
+    }
   }
-}))
+})
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state)
@@ -70,6 +79,9 @@ describe('RemoveFolderDialog', () => {
     }
     mocks.state.sshTargetLabels = new Map([['target-1', 'Persistent host']])
     mocks.state.removedSshTargetLabels = new Map()
+    mocks.state.worktreesByRepo = {}
+    mocks.state.tabsByWorktree = {}
+    mocks.state.ptyIdsByTabId = {}
   })
 
   it('warns that VM recipe cleanup controls file deletion', () => {
@@ -90,5 +102,18 @@ describe('RemoveFolderDialog', () => {
 
     expect(html).toContain('Its files stay on Persistent host')
     expect(html).not.toContain('VM recipe')
+  })
+
+  it('says how many open terminals removal will close', () => {
+    mocks.state.repos = [repo('target-1', 'ssh:target-1')]
+    mocks.state.worktreesByRepo = {
+      'repo-1': [{ id: 'repo-1::/workspace/example', hostId: 'ssh:target-1' }]
+    }
+    mocks.state.tabsByWorktree = { 'repo-1::/workspace/example': [{ id: 'a' }, { id: 'b' }] }
+    mocks.state.ptyIdsByTabId = { a: ['pty-a'], b: ['pty-b'] }
+
+    expect(renderToStaticMarkup(<RemoveFolderDialog />)).toContain(
+      '2 open terminals in this project will be closed.'
+    )
   })
 })

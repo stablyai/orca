@@ -1,9 +1,9 @@
-// Handing the durable lease back after eviction stopped this host's child.
+// Handing the durable lease back once this host's own provider child is gone.
 //
-// Guarded on `hasProviderChild` for a reason that is not bookkeeping: a session restored only for
-// reading, or one a TUI owns, names an owner process this host never started and may still be
-// alive. Writing `exit-observed` against that record would release a lease out from under a running
-// process and let a second writer in.
+// Only an exit this host saw or proved, of the child it started at this fence, may release: a
+// session restored only for reading, or one a TUI owns, names an owner process this host never
+// started and may still be alive. Writing `exit-observed` against that record would release a lease
+// out from under a running process and let a second writer in.
 
 import {
   isSurfaceReleasableAgentSessionRecord,
@@ -17,45 +17,16 @@ export type StructuredAgentSessionLeaseStore = Pick<
   'getRecord' | 'transitionHandoff'
 >
 
-export async function releaseStoredStructuredAgentSessionOwner(input: {
-  store: StructuredAgentSessionLeaseStore
-  sessionId: string
-  hasProviderChild: boolean
-  expectedFence: number
-  now: number
-}): Promise<void> {
-  if (!input.hasProviderChild) {
-    return
-  }
-  const record = input.store.getRecord(input.sessionId)
-  if (
-    !record ||
-    record.lease.runtimeFence !== input.expectedFence ||
-    !isSurfaceReleasableAgentSessionRecord(record)
-  ) {
-    return
-  }
-  await releaseStoredAgentSessionOwnerAfterSurfaceClose(input.store, {
-    sessionId: input.sessionId,
-    expectedFence: input.expectedFence,
-    now: input.now
-  })
-}
-
-/** Releases only the exact provider child whose exit the adapter positively observed. */
-export async function releaseStoredStructuredAgentSessionOwnerAfterUnexpectedExit(input: {
+/** Releases the lease of the child whose exit this host observed, with that exit's evidence.
+ *  Throws `agent_session_checkpoint_stale` when the record no longer names that child. */
+export async function releaseStoredStructuredAgentSessionOwnerAfterExit(input: {
   store: StructuredAgentSessionLeaseStore
   sessionId: string
   expectedFence: number
-  expectedAcquisitionGeneration: string
-  acquisitionGeneration: string | null
   now: number
   exitObservedAt?: number
-  settlementRetry?: { settlementId: string; detail: string }
+  exitReason?: string
 }): Promise<AgentSessionRecord> {
-  if (input.acquisitionGeneration !== input.expectedAcquisitionGeneration) {
-    throw new Error('agent_session_checkpoint_stale')
-  }
   const record = input.store.getRecord(input.sessionId)
   if (
     !record ||
@@ -68,7 +39,7 @@ export async function releaseStoredStructuredAgentSessionOwnerAfterUnexpectedExi
     sessionId: input.sessionId,
     expectedFence: input.expectedFence,
     now: input.now,
-    exitObservedAt: input.exitObservedAt,
-    ...(input.settlementRetry ? { settlementRetry: input.settlementRetry } : {})
+    ...(input.exitObservedAt === undefined ? {} : { exitObservedAt: input.exitObservedAt }),
+    ...(input.exitReason ? { exitReason: input.exitReason } : {})
   })
 }

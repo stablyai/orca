@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { AppState } from '../types'
+import { sshConnectionStatesEqual } from './ssh-connection-state-equality'
 import { buildRemovedSshTargetCleanupPatch } from './ssh-target-cleanup'
 import { createTestStore, makeTab } from './store-test-helpers'
 
@@ -126,5 +128,58 @@ describe('SSH target cleanup tab map', () => {
     expect(patch).toEqual({ deferredSshReconnectTargets: [] })
     store.getState().clearRemovedSshTargetState('removed')
     expect(store.getState().tabsByWorktree).toBe(tabsByWorktree)
+  })
+
+  it('clears pending split edits owned by the removed target', () => {
+    const store = createTestStore()
+    const removed = { targetId: 'removed', root: null }
+    const retained = { targetId: 'other', root: null }
+    store.setState({
+      pendingDirectSshLayoutEditsByTabId: { removedTab: removed, otherTab: retained }
+    })
+
+    const patch = buildRemovedSshTargetCleanupPatch(store.getState(), 'removed')
+
+    expect(patch?.pendingDirectSshLayoutEditsByTabId).toEqual({ otherTab: retained })
+  })
+})
+
+describe('sshConnectionStatesEqual', () => {
+  it('treats a managed-server change on the same connection as a new state', () => {
+    const settingUp: SshConnectionState = {
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0,
+      managedServer: { kind: 'setting-up', phase: 'converting' }
+    }
+    const managed: SshConnectionState = {
+      ...settingUp,
+      managedServer: { kind: 'managed', environmentId: 'env-1' }
+    }
+
+    expect(sshConnectionStatesEqual(settingUp, { ...settingUp })).toBe(true)
+    expect(sshConnectionStatesEqual(settingUp, managed)).toBe(false)
+  })
+
+  it('lands a converted host on managed in the store', () => {
+    const store = createTestStore()
+    const settingUp: SshConnectionState = {
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0,
+      managedServer: { kind: 'setting-up', phase: 'converting' }
+    }
+    store.getState().setSshConnectionState('ssh-1', settingUp)
+    store.getState().setSshConnectionState('ssh-1', {
+      ...settingUp,
+      managedServer: { kind: 'managed', environmentId: 'env-1' }
+    })
+
+    expect(store.getState().sshConnectionStates.get('ssh-1')?.managedServer).toEqual({
+      kind: 'managed',
+      environmentId: 'env-1'
+    })
   })
 })

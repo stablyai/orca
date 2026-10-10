@@ -1,12 +1,21 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
-  rpcUncheckedMemberReader,
-  rpcUncheckedPayloadReader
-} from '../transport/rpc-reader-payload'
+  hostPlatformSchema,
+  hostRepoCatalogSchema,
+  hostScreenUnreadReplySchema,
+  hostSshTargetSummariesSchema,
+  hostViewSettingsSchema
+} from './host-screen-reply-schema'
 
 // What the host screen reads to label its rows and to mirror the desktop's workspace view store.
 // Every read here is decorative: a refusal leaves the screen on what it already has and the next
 // refresh retries, so all of them skip rather than throw.
+//
+// A skip's reader runs only on a reply the policy already admitted, so an unreadable one throws
+// rather than skipping. Both readers that project a list are inside the metadata refresh's own
+// try/catch, which already treats a failed refresh as "retry on the next one"; the four writes read
+// no reply body at all. host-screen-reply-schema.ts says which members each screen actually reads.
 
 export const hostRepoCatalogRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -14,7 +23,7 @@ export const hostRepoCatalogRead = bindDeferredRpcOperation(
     method: 'repo.list',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('repo-catalog')
+    read: rpcResultVariant('repo-catalog', hostRepoCatalogSchema)
   })
 )
 
@@ -25,7 +34,7 @@ export const hostSshTargetSummariesRead = bindDeferredRpcOperation(
     method: 'ssh.listTargetSummaries',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('ssh-target-summaries')
+    read: rpcResultVariant('ssh-target-summaries', hostSshTargetSummariesSchema)
   })
 )
 
@@ -35,7 +44,7 @@ export const hostPlatformRead = bindDeferredRpcOperation(
     method: 'host.platform',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('host-platform')
+    read: rpcResultVariant('host-platform', hostPlatformSchema)
   })
 )
 
@@ -51,7 +60,7 @@ export const hostViewSettingsRead = bindDeferredRpcOperation(
     method: 'ui.get',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedMemberReader('ui-view-settings', 'ui')
+    read: rpcResultVariant('ui-view-settings', hostViewSettingsSchema)
   })
 )
 
@@ -62,7 +71,7 @@ export const hostViewSettingsWrite = bindDeferredRpcOperation(
     method: 'ui.set',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('ui-view-settings-written')
+    read: rpcResultVariant('ui-view-settings-written', hostScreenUnreadReplySchema)
   })
 )
 
@@ -79,7 +88,7 @@ export const worktreePinWrite = bindDeferredRpcOperation(
     method: 'worktree.set',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('pin-written')
+    read: rpcResultVariant('pin-written', hostScreenUnreadReplySchema)
   })
 )
 
@@ -90,7 +99,7 @@ export const worktreeRemove = bindDeferredRpcOperation(
     method: 'worktree.rm',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('worktree-removed')
+    read: rpcResultVariant('worktree-removed', hostScreenUnreadReplySchema)
   })
 )
 
@@ -108,6 +117,6 @@ export const worktreeActivate = bindDeferredRpcOperation(
     method: 'worktree.activate',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('worktree-activated')
+    read: rpcResultVariant('worktree-activated', hostScreenUnreadReplySchema)
   })
 )

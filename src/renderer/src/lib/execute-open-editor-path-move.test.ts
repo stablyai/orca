@@ -16,7 +16,7 @@ import { useAppStore } from '@/store'
 import { executeOpenEditorPathMove } from './execute-open-editor-path-move'
 import { __activeEditorPathMoveCountForTests } from '@/components/editor/editor-path-move-inflight'
 import { getDiskBaselineSignature } from '@/components/editor/diff-content-signature'
-import { createExternalWatchEventHandler } from '@/hooks/useEditorExternalWatch'
+import { buildEditorExternalWatchEventHandler as createExternalWatchEventHandler } from '@/hooks/editor-external-watch-event-reconciliation'
 
 const CONTEXT = {
   settings: null,
@@ -66,7 +66,12 @@ describe('executeOpenEditorPathMove', () => {
       worktreePath: '/repo'
     })
 
-    expect(mocks.renameRuntimePath).toHaveBeenCalledWith(CONTEXT, '/repo/a.md', '/repo/sub/a.md')
+    expect(mocks.renameRuntimePath).toHaveBeenCalledWith(
+      CONTEXT,
+      '/repo/a.md',
+      '/repo/sub/a.md',
+      undefined
+    )
     const moved = useAppStore.getState().openFiles[0]!
     expect(moved.filePath).toBe('/repo/sub/a.md')
     expect(moved.isDirty).toBe(true)
@@ -77,6 +82,24 @@ describe('executeOpenEditorPathMove', () => {
     expect(moved.pendingSelfMoveEcho?.targetPath).toBe('/repo/sub/a.md')
     // The in-flight transaction is settled (no leak).
     expect(__activeEditorPathMoveCountForTests()).toBe(0)
+  })
+
+  it('declares the moved file as the document for a document-scoped rename', async () => {
+    openDirtyTab()
+
+    await executeOpenEditorPathMove({
+      context: CONTEXT,
+      fromPath: '/repo/a.md',
+      toPath: '/repo/b.md',
+      worktreeId: 'wt-1',
+      worktreePath: '/repo',
+      documentScoped: true
+    })
+
+    expect(mocks.renameRuntimePath).toHaveBeenCalledWith(CONTEXT, '/repo/a.md', '/repo/b.md', {
+      kind: 'document-folder',
+      documentPath: '/repo/a.md'
+    })
   })
 
   it('resolves the verify gate proactively when no destination watcher event arrives', async () => {
@@ -180,10 +203,51 @@ describe('executeOpenEditorPathMove', () => {
     ).rejects.toThrow(/retarget/)
 
     // Forward rename then inverse rename to undo the disk move.
-    expect(mocks.renameRuntimePath).toHaveBeenCalledWith(CONTEXT, '/repo/a.md', '/repo/sub/a.md')
-    expect(mocks.renameRuntimePath).toHaveBeenCalledWith(CONTEXT, '/repo/sub/a.md', '/repo/a.md')
+    expect(mocks.renameRuntimePath).toHaveBeenCalledWith(
+      CONTEXT,
+      '/repo/a.md',
+      '/repo/sub/a.md',
+      undefined
+    )
+    expect(mocks.renameRuntimePath).toHaveBeenCalledWith(
+      CONTEXT,
+      '/repo/sub/a.md',
+      '/repo/a.md',
+      undefined
+    )
     // The stranded source session is left intact (not rekeyed).
     expect(useAppStore.getState().openFiles.map((f) => f.id)).toEqual(before)
+  })
+
+  it('undoes a document-scoped rename with the renamed file as the document', async () => {
+    openDirtyTab()
+    useAppStore.getState().openFile(
+      {
+        filePath: '/repo/b.md',
+        relativePath: 'b.md',
+        worktreeId: 'wt-1',
+        runtimeEnvironmentId: null,
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { suppressActiveRuntimeFallback: true }
+    )
+
+    await expect(
+      executeOpenEditorPathMove({
+        context: CONTEXT,
+        fromPath: '/repo/a.md',
+        toPath: '/repo/b.md',
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        documentScoped: true
+      })
+    ).rejects.toThrow(/retarget/)
+
+    expect(mocks.renameRuntimePath).toHaveBeenLastCalledWith(CONTEXT, '/repo/b.md', '/repo/a.md', {
+      kind: 'document-folder',
+      documentPath: '/repo/b.md'
+    })
   })
 
   it('leaves the store untouched and settles the transaction when the rename fails', async () => {

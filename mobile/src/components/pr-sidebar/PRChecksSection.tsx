@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Linking, Pressable, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { openExternalLink } from '../../platform/external-link'
 import { ChevronDown, ChevronRight, ExternalLink, RotateCw, Sparkles } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
@@ -21,12 +22,18 @@ import { PRSection } from './PRSection'
 import { PRCheckDetailView, type DetailEntry } from './PRCheckDetail'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
 import { prAiTriageStyles as triageStyles } from './pr-ai-triage-styles'
+import { AgentLaunchNotice } from '../AgentLaunchNotice'
+import type { MobileAgentLaunchAvailability } from '../../session/mobile-agent-launch-availability'
 
 // Launches the "Fix checks with AI" agent. Absent for display-only usages.
 export type PrChecksTriage = {
   fixChecks: () => void
   isBusy: boolean
+  availability: MobileAgentLaunchAvailability
+  success: string | null
   error: string | null
+  warning: string | null
+  undeliveredPrompt: string | null
 }
 
 type Props = {
@@ -189,7 +196,7 @@ export function PRChecksSection({
           <Pressable
             style={({ pressed }) => [triageStyles.triageStripButton, pressed && { opacity: 0.7 }]}
             onPress={triage.fixChecks}
-            disabled={triage.isBusy}
+            disabled={triage.isBusy || triage.availability !== 'available'}
             accessibilityRole="button"
             accessibilityLabel="Fix failing checks with AI"
           >
@@ -202,7 +209,16 @@ export function PRChecksSection({
           </Pressable>
         </View>
       ) : null}
-      {triage?.error ? <Text style={triageStyles.triageError}>{triage.error}</Text> : null}
+      {triage ? (
+        <AgentLaunchNotice
+          availability={summary.failed > 0 ? triage.availability : 'available'}
+          success={triage.success}
+          error={triage.error}
+          warning={triage.warning}
+          undeliveredPrompt={triage.undeliveredPrompt}
+          errorStyle={triageStyles.triageError}
+        />
+      ) : null}
       {checksError ? <Text style={triageStyles.triageError}>{checksError}</Text> : null}
       {sorted.map((check) => {
         const key = prCheckKey(check)
@@ -233,7 +249,7 @@ export function PRChecksSection({
               {url ? (
                 <Pressable
                   style={styles.rowTrailing}
-                  onPress={() => void Linking.openURL(url).catch(() => {})}
+                  onPress={() => openExternalLink(url)}
                   hitSlop={6}
                   accessibilityRole="button"
                   accessibilityLabel={`Open ${check.name} on the web`}

@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore } from '../runtime/runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { spawnMock, registerPtyMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
@@ -112,7 +113,7 @@ describe('registerPtyHandlers', () => {
       },
       terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-dead-ssh-owner' }
     }
-    const store = {
+    const store = withDurableRuntimeStore({
       getWorkspaceSession: vi.fn((requestedHostId?: string) => {
         expect(requestedHostId).toBe(hostId)
         return session
@@ -128,7 +129,7 @@ describe('registerPtyHandlers', () => {
       removeSshRemotePtyLease: vi.fn(),
       markSshRemotePtyLease: vi.fn(),
       clearSshRemotePtyKillIntent: vi.fn()
-    }
+    })
     const runtime = {
       setPtyController: vi.fn(),
       resolveTerminalPane: vi.fn(() => {

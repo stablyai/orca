@@ -1,0 +1,35 @@
+{
+  "status": "Historical initial observation only; use results.json for current reproducible measurements. The original runtime and full dependency hashes were not captured.",
+  "sourceSha256": "3224594befe1edae514724caf5eff6a4cda85212e2985be4920b6164b088b82c",
+  "bundleSha256": "e2d5ee6e5a7e2a15be217eab8066f9596cc9279f1e81709c1d228a575b40acc5",
+  "measurement": "forced GC at each actual JSON.parse boundary; transient live bytes, not process RSS or leak",
+  "rows": [
+    {
+      "records": 17,
+      "sourceBytes": 8390708,
+      "peakHeapIncrease": 9554312,
+      "peakExternalIncrease": 39165,
+      "retainedHeapIncrease": 155896,
+      "retainedExternalIncrease": 69573,
+      "elapsedMs": 76
+    },
+    {
+      "records": 65,
+      "sourceBytes": 33562676,
+      "peakHeapIncrease": 34626848,
+      "peakExternalIncrease": 0,
+      "retainedHeapIncrease": 2416,
+      "retainedExternalIncrease": 0,
+      "elapsedMs": 284
+    },
+    {
+      "records": 65,
+      "sourceBytes": 8244,
+      "peakHeapIncrease": 27160,
+      "peakExternalIncrease": 0,
+      "retainedHeapIncrease": 4752,
+      "retainedExternalIncrease": 0,
+      "elapsedMs": 269
+    }
+  ]
+}

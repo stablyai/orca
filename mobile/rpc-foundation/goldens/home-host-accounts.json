@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "home.host-accounts",
   "family": "home.host-accounts",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
-  "adapterSha256": "c632fdbc4b730777ecb09f08bec14cca0586042b01ed99d40d0228806c7def4a",
-  "scenarioSha256": "366426641e25542fcc6fcd351ece6a1ee897c8b3974c08eb7557eadfa4d3b06f",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "16b4c187b90c": {
       "name": "accounts.list#1",

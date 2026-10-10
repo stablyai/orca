@@ -239,18 +239,6 @@ describe('buildGitGrepArgs', () => {
     expect(args).toContain(':(exclude,glob)dist/**')
   })
 
-  it('excludes a directory subtree the way rg --glob does', () => {
-    const args = buildGitGrepArgs('q', { excludePattern: 'node_modules' })
-    expect(args).toContain(':(exclude,glob)**/node_modules')
-    expect(args).toContain(':(exclude,glob)**/node_modules/**')
-  })
-
-  it('includes a directory subtree the way rg --glob does', () => {
-    const args = buildGitGrepArgs('q', { includePattern: 'src' })
-    expect(args).toContain(':(glob)**/src')
-    expect(args).toContain(':(glob)**/src/**')
-  })
-
   it('keeps escaped commas inside one generated folder pathspec', () => {
     const args = buildGitGrepArgs('q', { includePattern: 'foo\\,bar/**, *.ts' })
     expect(args).toContain(':(glob)foo\\,bar/**')

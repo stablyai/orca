@@ -130,6 +130,35 @@ describe('Grok completion observations', () => {
     })
   })
 
+  it('keeps the cancellation on the idle backstop that settles a task the cancel left running', () => {
+    normalize({
+      hookEventName: 'UserPromptSubmit',
+      sessionId: 's-1',
+      promptId: 'p-1',
+      prompt: 'go'
+    })
+    expect(
+      normalize({
+        hookEventName: 'StopCancelled',
+        sessionId: 's-1',
+        promptId: 'p-1',
+        backgroundTasks: [{ id: 'task-1', type: 'shell', status: 'running' }]
+      })
+    ).toMatchObject({ state: 'working', workingMode: 'monitoring' })
+    // A settled row without `interrupted` would announce the cancelled turn as a clean finish.
+    expect(
+      normalize({
+        hookEventName: 'Notification',
+        sessionId: 's-1',
+        notificationType: 'idle_prompt'
+      })
+    ).toMatchObject({
+      state: 'done',
+      interrupted: true,
+      mainAgent: { state: 'done', outcome: 'cancellation' }
+    })
+  })
+
   // Pins grok-events.ts: finite task predicate and sessionCrons omission; treating monitors/crons as finite must redden.
   it.each([
     {
@@ -212,9 +241,76 @@ describe('Grok completion observations', () => {
     expect(
       normalize({
         hookEventName: 'Stop',
-        backgroundTasks: [{ id: 'task-1', type: 'subagent', status: 'starting' }]
+        backgroundTasks: [{ id: 'task-1', type: 'shell', status: 'starting' }]
       })
     ).toMatchObject({ state: 'working', workingMode: 'monitoring' })
+  })
+
+  // Real Grok 1.0.41 Stop entry for a background `spawn_subagent`, identifiers dropped.
+  const backgroundSubagent = {
+    id: 'task-1',
+    type: 'subagent',
+    status: 'running',
+    agentType: 'general-purpose',
+    description: 'sleep then reply'
+  }
+  const backgroundShell = { id: 'task-2', type: 'shell', status: 'running', command: 'sleep 30' }
+
+  it.each([
+    { label: 'alone', backgroundTasks: [backgroundSubagent], stopHookActive: false },
+    {
+      label: 'beside a shell',
+      backgroundTasks: [backgroundShell, backgroundSubagent],
+      stopHookActive: false
+    },
+    {
+      label: 'under an active stop hook',
+      backgroundTasks: [backgroundSubagent],
+      stopHookActive: true
+    }
+  ])(
+    'keeps a background subagent that outlives the main agent working, not monitoring ($label)',
+    ({ backgroundTasks, stopHookActive }) => {
+      const row = normalize({
+        hookEventName: 'Stop',
+        reason: 'end_turn',
+        stopHookActive,
+        backgroundTasks
+      })
+      expect(row).toMatchObject({ state: 'working', mainAgent: { state: 'done' } })
+      expect(row?.workingMode).toBeUndefined()
+    }
+  )
+
+  it('reads the snake_case inventory the same way', () => {
+    const row = normalize({
+      hookEventName: 'Stop',
+      reason: 'end_turn',
+      stop_hook_active: false,
+      background_tasks: [{ id: 'task-1', type: 'subagent', status: 'running' }]
+    })
+    expect(row).toMatchObject({ state: 'working', mainAgent: { state: 'done' } })
+    expect(row?.workingMode).toBeUndefined()
+  })
+
+  it('keeps a background subagent working past a cancel, and settles only at a session boundary', () => {
+    const cancelled = normalize({
+      hookEventName: 'StopCancelled',
+      reason: 'user_interrupt',
+      backgroundTasks: [backgroundSubagent]
+    })
+    expect(cancelled).toMatchObject({
+      state: 'working',
+      mainAgent: { state: 'done', outcome: 'cancellation' }
+    })
+    expect(cancelled?.interrupted).toBeUndefined()
+    expect(
+      normalize({
+        hookEventName: 'Stop',
+        reason: 'shutdown',
+        backgroundTasks: [backgroundSubagent]
+      })
+    ).toMatchObject({ state: 'done', sessionBoundary: true })
   })
 
   it('uses only idle_prompt, not task_complete text, as the session-idle backstop', () => {

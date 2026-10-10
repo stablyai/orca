@@ -2,10 +2,17 @@ import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
 import baseConfig from './vitest.config'
+import { nodeRuntimePool } from './scripts/vitest-node-runtime-pool'
 
 const contracts = [
   'src/main/sqlite/sync-database.test.ts',
   'src/main/runtime/orchestration/db/row-column-lists.test.ts',
+  'src/shared/native-chat-tool-attribution-allocation.test.ts',
+  'src/shared/native-chat-tool-pairing.performance.test.ts',
+  'src/main/codex-usage/codex-rollout-file-lifetime.test.ts',
+  'src/main/codex-usage/scanner-incremental-append.test.ts',
+  'src/main/usage/jsonl-file-reader.test.ts',
+  'src/main/usage/jsonl-file-snapshot.test.ts',
   'src/relay/fs-path-metadata-symlink-concurrency.test.ts',
   'src/renderer/src/components/editor/rich-markdown-list-tokenizers.test.ts',
   'src/renderer/src/components/editor/rich-markdown-lowlight-cache.test.ts',
@@ -14,7 +21,9 @@ const contracts = [
   'src/renderer/src/store/store-identity-churn-probe.test.ts',
   'config/scripts/app-store-performance-plugin.test.mjs',
   'config/scripts/quadratic-buffer-concat-plugin.test.mjs',
-  'config/scripts/sort-comparator-performance-plugin.test.mjs'
+  'config/scripts/sort-comparator-performance-plugin.test.mjs',
+  'src/main/claude-usage/scanner-incremental-append.test.ts',
+  'src/main/claude-usage/store-checkpoint-persistence.test.ts'
 ]
 
 for (const contract of contracts) {
@@ -27,6 +36,9 @@ export default defineConfig({
   ...baseConfig,
   test: {
     ...baseConfig.test,
+    // Project-level includes otherwise override this contract-only selection.
+    projects: undefined,
+    ...(process.versions.bun ? { pool: 'node-runtime', poolRunner: nodeRuntimePool } : {}),
     include: contracts,
     fileParallelism: false,
     retry: 0

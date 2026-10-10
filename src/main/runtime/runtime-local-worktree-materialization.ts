@@ -22,6 +22,8 @@ import { resolveWorktreeSharedDirectories } from '../git/worktree-shared-directo
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RemoteTrackingBase } from './runtime-remote-fetch-controller'
 import type { RuntimeStore } from './runtime-store-contract'
+import { attributedSparsePresetId } from '../ipc/sparse-preset-attribution'
+import type { WorktreeCreateTimingRecorder } from '../worktree-create-timing'
 
 export async function materializeRuntimeLocalWorktree<T>(args: {
   request: RuntimeManagedWorktreeCreateArgs
@@ -42,6 +44,7 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
   effectiveCreatedWithAgent?: TuiAgent
   localWorktreeGitOptions: LocalGitExecOptions
   onMetadataPersisted: (worktree: Worktree) => T
+  timing: WorktreeCreateTimingRecorder
 }): Promise<{ worktree: Worktree; metadataResult: T; includeCopyWarning?: string }> {
   const {
     request,
@@ -60,7 +63,8 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
     displayNameKind,
     effectiveSanitizedName,
     effectiveCreatedWithAgent,
-    localWorktreeGitOptions
+    localWorktreeGitOptions,
+    timing
   } = args
   const worktreeId = `${repo.id}::${created.path}`
   const now = Date.now()
@@ -71,62 +75,72 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
     displayNameKind,
     { requestedName: effectiveRequestedName, sanitizedName: effectiveSanitizedName }
   )
-  const meta = store.setWorktreeMeta(worktreeId, {
-    instanceId: randomUUID(),
-    ...getProjectHostSetupWorktreeMeta(store.getProjectHostSetups?.() ?? [], repo),
-    lastActivityAt: now,
-    createdAt: now,
-    orcaCreatedAt: now,
-    orcaCreationSource: 'runtime',
-    orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
-    ...displayNameMeta,
-    baseRef: metadataBaseRef,
-    ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
-    ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),
-    ...(sparseDirectories.length > 0
-      ? {
-          sparseDirectories,
-          sparseBaseRef: metadataBaseRef,
-          sparsePresetId: request.sparseCheckout?.presetId
-        }
-      : {}),
-    ...(request.linkedIssue !== undefined ? { linkedIssue: request.linkedIssue } : {}),
-    ...(request.linkedPR !== undefined ? { linkedPR: request.linkedPR } : {}),
-    ...(request.linkedLinearIssue !== undefined
-      ? { linkedLinearIssue: request.linkedLinearIssue }
-      : {}),
-    ...(request.linkedLinearIssueWorkspaceId !== undefined
-      ? { linkedLinearIssueWorkspaceId: request.linkedLinearIssueWorkspaceId }
-      : {}),
-    ...(request.linkedLinearIssueOrganizationUrlKey !== undefined
-      ? { linkedLinearIssueOrganizationUrlKey: request.linkedLinearIssueOrganizationUrlKey }
-      : {}),
-    ...(request.linkedGitLabIssue !== undefined
-      ? { linkedGitLabIssue: request.linkedGitLabIssue }
-      : {}),
-    ...(request.linkedGitLabMR !== undefined ? { linkedGitLabMR: request.linkedGitLabMR } : {}),
-    ...(request.linkedBitbucketPR !== undefined
-      ? { linkedBitbucketPR: request.linkedBitbucketPR }
-      : {}),
-    ...(request.linkedAzureDevOpsPR !== undefined
-      ? { linkedAzureDevOpsPR: request.linkedAzureDevOpsPR }
-      : {}),
-    ...(request.linkedGiteaPR !== undefined ? { linkedGiteaPR: request.linkedGiteaPR } : {}),
-    ...(request.linkedWorkItem !== undefined ? { linkedWorkItem: request.linkedWorkItem } : {}),
-    ...(request.linkedTaskSourceContext !== undefined
-      ? { linkedTaskSourceContext: request.linkedTaskSourceContext }
-      : {}),
-    ...(effectiveCreatedWithAgent ? { createdWithAgent: effectiveCreatedWithAgent } : {}),
-    ...(request.pendingFirstAgentMessageRename === true && effectiveCreatedWithAgent
-      ? { pendingFirstAgentMessageRename: true }
-      : {}),
-    ...(request.automationProvenance ? { automationProvenance: request.automationProvenance } : {}),
-    ...(request.cliProvenance ? { cliProvenance: request.cliProvenance } : {}),
-    creatorProvenance: request.creatorProvenance ?? { kind: 'host' },
-    ...(request.comment !== undefined ? { comment: request.comment } : {}),
-    ...(request.manualOrder !== undefined ? { manualOrder: request.manualOrder } : {}),
-    ...(request.workspaceStatus !== undefined ? { workspaceStatus: request.workspaceStatus } : {})
-  })
+  const meta = timing.timeSync('persist_metadata', () =>
+    store.setWorktreeMeta(worktreeId, {
+      instanceId: randomUUID(),
+      ...getProjectHostSetupWorktreeMeta(store.getProjectHostSetups?.() ?? [], repo),
+      lastActivityAt: now,
+      createdAt: now,
+      orcaCreatedAt: now,
+      orcaCreationSource: 'runtime',
+      orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
+      ...displayNameMeta,
+      baseRef: metadataBaseRef,
+      ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
+      ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),
+      ...(sparseDirectories.length > 0
+        ? {
+            sparseDirectories,
+            sparseBaseRef: metadataBaseRef,
+            sparsePresetId: attributedSparsePresetId(
+              () => store.getSparsePresets?.(repo.id) ?? [],
+              repo.id,
+              request.sparseCheckout?.presetId,
+              sparseDirectories
+            )
+          }
+        : {}),
+      ...(request.linkedIssue !== undefined ? { linkedIssue: request.linkedIssue } : {}),
+      ...(request.linkedPR !== undefined ? { linkedPR: request.linkedPR } : {}),
+      ...(request.linkedLinearIssue !== undefined
+        ? { linkedLinearIssue: request.linkedLinearIssue }
+        : {}),
+      ...(request.linkedLinearIssueWorkspaceId !== undefined
+        ? { linkedLinearIssueWorkspaceId: request.linkedLinearIssueWorkspaceId }
+        : {}),
+      ...(request.linkedLinearIssueOrganizationUrlKey !== undefined
+        ? { linkedLinearIssueOrganizationUrlKey: request.linkedLinearIssueOrganizationUrlKey }
+        : {}),
+      ...(request.linkedGitLabIssue !== undefined
+        ? { linkedGitLabIssue: request.linkedGitLabIssue }
+        : {}),
+      ...(request.linkedGitLabMR !== undefined ? { linkedGitLabMR: request.linkedGitLabMR } : {}),
+      ...(request.linkedBitbucketPR !== undefined
+        ? { linkedBitbucketPR: request.linkedBitbucketPR }
+        : {}),
+      ...(request.linkedAzureDevOpsPR !== undefined
+        ? { linkedAzureDevOpsPR: request.linkedAzureDevOpsPR }
+        : {}),
+      ...(request.linkedGiteaPR !== undefined ? { linkedGiteaPR: request.linkedGiteaPR } : {}),
+      ...(request.linkedWorkItem !== undefined ? { linkedWorkItem: request.linkedWorkItem } : {}),
+      ...(request.linkedItems !== undefined ? { linkedItems: request.linkedItems } : {}),
+      ...(request.linkedTaskSourceContext !== undefined
+        ? { linkedTaskSourceContext: request.linkedTaskSourceContext }
+        : {}),
+      ...(effectiveCreatedWithAgent ? { createdWithAgent: effectiveCreatedWithAgent } : {}),
+      ...(request.pendingFirstAgentMessageRename === true && effectiveCreatedWithAgent
+        ? { pendingFirstAgentMessageRename: true }
+        : {}),
+      ...(request.automationProvenance
+        ? { automationProvenance: request.automationProvenance }
+        : {}),
+      ...(request.cliProvenance ? { cliProvenance: request.cliProvenance } : {}),
+      creatorProvenance: request.creatorProvenance ?? { kind: 'host' },
+      ...(request.comment !== undefined ? { comment: request.comment } : {}),
+      ...(request.manualOrder !== undefined ? { manualOrder: request.manualOrder } : {}),
+      ...(request.workspaceStatus !== undefined ? { workspaceStatus: request.workspaceStatus } : {})
+    })
+  )
   const worktree = {
     ...mergeWorktree(repo.id, created, meta),
     hostId: meta.hostId ?? getRepoExecutionHostId(repo)
@@ -134,24 +148,30 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
   const metadataResult = args.onMetadataPersisted(worktree)
 
   if ((repo.symlinkPaths ?? []).length > 0) {
-    await createWorktreeLinkedPaths(repo.path, created.path, repo.symlinkPaths ?? [])
+    await timing.time('create_symlinks', () =>
+      createWorktreeLinkedPaths(repo.path, created.path, repo.symlinkPaths ?? [])
+    )
   }
   // These discoveries are read-only; overlap them, but keep the shared-path
   // mutation ahead of include copies below.
   const [sharedDirectories, worktreeIncludePaths] = await Promise.all([
-    resolveWorktreeSharedDirectories(repo.path, localWorktreeGitOptions),
-    resolveWorktreeIncludePaths(repo.path, localWorktreeGitOptions)
+    timing.time('resolve_shared_directories', () =>
+      resolveWorktreeSharedDirectories(repo.path, localWorktreeGitOptions)
+    ),
+    timing.time('resolve_worktreeinclude', () =>
+      resolveWorktreeIncludePaths(repo.path, localWorktreeGitOptions)
+    )
   ])
   if (sharedDirectories.length > 0) {
-    await createWorktreeSharedPaths(repo.path, created.path, sharedDirectories)
+    await timing.time('create_shared_directories', () =>
+      createWorktreeSharedPaths(repo.path, created.path, sharedDirectories)
+    )
   }
   if (worktreeIncludePaths.length === 0) {
     return { worktree, metadataResult }
   }
-  const skippedIncludePaths = await createWorktreeCopiedPaths(
-    repo.path,
-    created.path,
-    worktreeIncludePaths
+  const skippedIncludePaths = await timing.time('copy_worktreeinclude', () =>
+    createWorktreeCopiedPaths(repo.path, created.path, worktreeIncludePaths)
   )
   const includeCopyWarning = formatWorktreeIncludeCopyWarning(skippedIncludePaths)
   if (includeCopyWarning) {

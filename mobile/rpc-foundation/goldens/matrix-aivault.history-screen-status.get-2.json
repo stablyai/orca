@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "aiVault.history-screen",
   "family": "aiVault.history-screen",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "4b876758d3158a8eb6b798055d8db7c58d1cd4a9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
-  "adapterSha256": "c78ab47eea594b7e1988403321ff9ba135ca60c513bb9d5848bdde26c0ffe3c3",
-  "scenarioSha256": "b146be741484f2a6dca25e97f52b9ed10f8a2b28bd00e6b56acffbcd82136b2f",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "01800f06bc8f": {
       "name": "status.get#2",
@@ -371,27 +362,6 @@
         }
       }
     },
-    "5368af075169": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "ChevronLeft": 1,
-        "Pressable": 3,
-        "RefreshCw": 1,
-        "SafeAreaView": 1,
-        "Text": 5,
-        "View": 4
-      },
-      "labels": ["Back", "Refresh agent sessions"],
-      "text": [
-        "Agent Session History",
-        "orca-history",
-        "Unable to Load",
-        "Cannot read properties of undefined (reading 'capabilities')",
-        "Retry"
-      ]
-    },
     "6eacae1aa018": {
       "name": "status.get#2",
       "ordinal": 5,
@@ -517,6 +487,27 @@
           "ok": false
         }
       }
+    },
+    "8cc4f2d607a6": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "ChevronLeft": 1,
+        "Pressable": 3,
+        "RefreshCw": 1,
+        "SafeAreaView": 1,
+        "Text": 5,
+        "View": 4
+      },
+      "labels": ["Back", "Refresh agent sessions"],
+      "text": [
+        "Agent Session History",
+        "orca-history",
+        "Unable to Load",
+        "The host sent a reply this app could not read (status.get)",
+        "Retry"
+      ]
     },
     "8d930b47bf2f": {
       "name": "worktree.ps#1",
@@ -652,27 +643,6 @@
         "Retry"
       ]
     },
-    "c767ef059f7e": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "ChevronLeft": 1,
-        "Pressable": 3,
-        "RefreshCw": 1,
-        "SafeAreaView": 1,
-        "Text": 5,
-        "View": 4
-      },
-      "labels": ["Back", "Refresh agent sessions"],
-      "text": [
-        "Agent Session History",
-        "orca-history",
-        "Unable to Load",
-        "Cannot read properties of null (reading 'capabilities')",
-        "Retry"
-      ]
-    },
     "cee4e3edb0a1": {
       "name": "status.get#2",
       "ordinal": 6,
@@ -775,7 +745,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "5368af075169",
+          "state": "8cc4f2d607a6",
           "effects": []
         }
       },
@@ -787,7 +757,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "c767ef059f7e",
+          "state": "8cc4f2d607a6",
           "effects": []
         }
       },

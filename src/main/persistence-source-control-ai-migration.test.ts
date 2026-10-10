@@ -1,17 +1,19 @@
+import {
+  closeTestStores,
+  testState,
+  createStore,
+  dataFile,
+  writeDataFile,
+  readDataFile,
+  readPersistedStateJson,
+  makeRepo
+} from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { writeFileSync, readFileSync, rmSync, mkdtempSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { PersistedState } from '../shared/persisted-state-types'
 import { setSourceControlActionDefault } from '../shared/source-control-ai-actions'
-import {
-  testState,
-  createStore,
-  dataFile,
-  writeDataFile,
-  readDataFile,
-  makeRepo
-} from './persistence-test-harness'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -61,19 +63,18 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
-  // ── 3. Corrupt JSON → falls back to defaults ────────────────────────
+  // Invalid profile state must not silently replace user settings with defaults.
 
-  it('falls back to defaults when data file contains invalid JSON', async () => {
+  it('refuses invalid legacy JSON without replacing it with defaults', () => {
     mkdirSync(testState.dir, { recursive: true })
     writeFileSync(dataFile(), '{{{invalid json', 'utf-8')
 
-    const store = await createStore()
-    expect(store.getRepos()).toEqual([])
-    expect(store.getSettings().theme).toBe('system')
-    expect(store.getSettings().experimentalNewWorktreeCardStyle).toBe(false)
+    expect(() => createStore()).toThrow('Profile state JSON is invalid')
+    expect(readFileSync(dataFile(), 'utf8')).toBe('{{{invalid json')
   })
 
   // ── 4. Schema migration: merges with defaults ───────────────────────
@@ -347,7 +348,7 @@ describe('Store', () => {
       customAgentCommand: 'claude'
     })
     store.flush()
-    const persisted = JSON.parse(readFileSync(join(testState.dir, 'orca-data.json'), 'utf-8'))
+    const persisted = JSON.parse(readPersistedStateJson(dataFile()))
     expect(persisted.settings.sourceControlAi.actions.commitMessage).toEqual({
       agentId: 'claude',
       commandInputTemplate: '{basePrompt}\n\nRollback commit prompt'

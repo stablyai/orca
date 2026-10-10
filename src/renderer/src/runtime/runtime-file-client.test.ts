@@ -513,6 +513,35 @@ describe('runtime file client', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
+  // A chat attachment lives in the paired server's store, outside every worktree.
+  it.each([
+    { worktreeId: 'wt-1', worktreePath: '/remote/repo' },
+    { worktreeId: null, worktreePath: null }
+  ])('reads a stored chat attachment back through its server ($worktreeId)', async (owner) => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { content: 'base64', isBinary: true, isImage: true, mimeType: 'image/png' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const storedPath = '/srv/orca/agent-session-attachments/abc/u1/shot.png'
+
+    await expect(
+      readRuntimeFilePreview(
+        { settings: { activeRuntimeEnvironmentId: 'env-1' }, ...owner },
+        storedPath
+      )
+    ).resolves.toMatchObject({ content: 'base64', mimeType: 'image/png' })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'agentSessionAttachment.read',
+      params: { path: storedPath },
+      timeoutMs: 15_000
+    })
+    expect(fsReadFile).not.toHaveBeenCalled()
+  })
+
   it('routes root directory reads with an empty relative path', async () => {
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-1',

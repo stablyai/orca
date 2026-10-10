@@ -1,5 +1,8 @@
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
+import type { WorktreeCatalogVersion } from '../../../../../../shared/worktree/catalog-version'
+import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
+import { appliedWorktreeCatalogVersionPatch } from '../listing/worktree-catalog-version-state'
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'
 import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
@@ -8,6 +11,8 @@ import { disposeRemovedWorktreeParkedTerminalWatchers } from '../../../../compon
 import { detachedHeadAutoDerivedDisplayNames } from '../metadata/detached-head-display-name'
 import { applyRemoveWorktreeSuccessState } from './remove-worktree-store-cleanup'
 import { purgeOrphanedRuntimeSshProjects } from './orphaned-runtime-ssh-project-purge'
+import { deleteWorkspaceChatDrafts } from './removed-worktree-chat-drafts'
+import type { WorktreeStateBeforeRemoval } from './worktree-state-before-removal'
 
 /**
  * Renderer-side teardown after the backend removal succeeded.
@@ -22,10 +27,27 @@ export async function tearDownRemovedWorktreeRendererState(args: {
   worktreeId: string
   hostId: ExecutionHostId | undefined
   requiredExecutionHostId: ExecutionHostId | null
-  terminalPtyIdsBeforeRemoval: readonly string[]
+  beforeRemoval: WorktreeStateBeforeRemoval
+  /** The catalog the host's removal produced, when the host stamps it. */
+  catalogVersion?: WorktreeCatalogVersion
 }): Promise<void> {
-  const { set, get, worktreeId, hostId, requiredExecutionHostId, terminalPtyIdsBeforeRemoval } =
-    args
+  const { set, get, worktreeId, hostId, requiredExecutionHostId, beforeRemoval } = args
+  // Why first: a listing scanned before this removal must not be applied after it and bring
+  // the row back, so the version is on record before any await below yields.
+  if (hostId && args.catalogVersion) {
+    const catalogVersion = args.catalogVersion
+    set((s) =>
+      appliedWorktreeCatalogVersionPatch(
+        s,
+        getRepoIdFromWorktreeId(worktreeId),
+        hostId,
+        catalogVersion
+      )
+    )
+  }
+  // Why the captured keys: closing a structured chat keeps its conversation's draft, and a listing
+  // refresh may already have dropped these tabs.
+  deleteWorkspaceChatDrafts(beforeRemoval.chatDraftKeys)
   for (const tab of get().unifiedTabsByWorktree[worktreeId] ?? []) {
     if (tab.contentType === 'agent-session') {
       get().closeUnifiedTab(tab.id, {
@@ -66,7 +88,7 @@ export async function tearDownRemovedWorktreeRendererState(args: {
   requestVirtualizedScrollAnchorRecord('[data-worktree-sidebar]')
 
   // Why: dispose parked terminal watchers only on explicit deletion; identity migration/remounts must keep buffered PTY state.
-  disposeRemovedWorktreeParkedTerminalWatchers(worktreeId, terminalPtyIdsBeforeRemoval)
+  disposeRemovedWorktreeParkedTerminalWatchers(worktreeId, beforeRemoval.terminalPtyIds)
   applyRemoveWorktreeSuccessState(set, worktreeId, tabIds, requiredExecutionHostId ?? hostId)
   get().removeWorkspaceSpaceWorktrees?.(
     hostId ? [{ id: worktreeId, executionHostId: hostId }] : [worktreeId]

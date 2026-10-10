@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { type Mock, vi } from 'vitest'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 
@@ -50,7 +51,7 @@ export const mainWindow: TestMainWindow = {
     send: vi.fn()
   }
 }
-export const ipcEvent = { sender: { id: 1 } }
+export const ipcEvent = { sender: Object.assign(new EventEmitter(), { id: 1 }) }
 export const store: TestStore = {
   getProfileStorageDirectory: vi.fn(() => '/profile-a'),
   getRepos: vi.fn(),

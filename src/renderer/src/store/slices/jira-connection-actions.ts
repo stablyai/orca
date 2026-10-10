@@ -1,3 +1,4 @@
+import { shallow } from 'zustand/shallow'
 import {
   jiraConnect,
   jiraDisconnect,
@@ -39,9 +40,12 @@ function hasJiraStatusChanged(
   return (
     previous.connected !== next.connected ||
     previous.credentialError !== next.credentialError ||
-    previous.viewer?.email !== next.viewer?.email ||
+    previous.credentialProtection !== next.credentialProtection ||
+    previous.activeSiteId !== next.activeSiteId ||
+    !shallow(previous.viewer, next.viewer) ||
     getSelectedJiraSiteId(previous) !== getSelectedJiraSiteId(next) ||
-    (previous.sites?.length ?? 0) !== (next.sites?.length ?? 0)
+    (previous.sites?.length ?? 0) !== (next.sites?.length ?? 0) ||
+    (previous.sites ?? []).some((site, index) => !shallow(site, next.sites?.[index]))
   )
 }
 
@@ -67,12 +71,10 @@ export function createJiraConnectionActions(
           return
         }
         const previous = get().jiraStatus
-        if (hasJiraStatusChanged(previous, status)) {
+        if (get().jiraStatusContextKey !== contextKey || hasJiraStatusChanged(previous, status)) {
           set((state) => jiraStatusUpdate(state, contextKey, status))
         } else if (!get().jiraStatusChecked) {
           set({ jiraStatusChecked: true, jiraStatusContextKey: contextKey })
-        } else if (get().jiraStatusContextKey !== contextKey) {
-          set({ jiraStatusContextKey: contextKey })
         }
       } catch {
         if (

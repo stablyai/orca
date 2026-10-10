@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import type { CodexAccountAddTarget, CodexAccountService } from '../codex-accounts/service'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
+import { broadcastCodexPendingLoginUrl } from './codex-pending-login-url-broadcast'
 import { listRecordedCodexPaneLanes } from '../codex/codex-pane-account-registry'
 import { forgetStaleCodexPanes, listStaleCodexPanes } from '../codex/codex-stale-pane-accounts'
 import type { GlobalSettings } from '../../shared/global-settings-types'
@@ -16,8 +17,7 @@ export function registerCodexAccountHandlers(
     }
     return listStaleCodexPanes({
       ptyIds: args.ptyIds.filter((ptyId): ptyId is string => typeof ptyId === 'string'),
-      settings,
-      activeHostHomeRoute: codexAccounts.runtimeHomeService.getSelectedHostCodexHomeRoute()
+      settings
     })
   })
   ipcMain.handle('codexAccounts:listRecordedPaneLanes', (_event, args: { ptyIds?: unknown }) => {
@@ -38,6 +38,11 @@ export function registerCodexAccountHandlers(
   ipcMain.handle('codexAccounts:add', (_event, args?: CodexAccountAddTarget) =>
     codexAccounts.addAccount(args)
   )
+  ipcMain.handle('codexAccounts:cancelPendingLogin', () => codexAccounts.cancelPendingLogin())
+  ipcMain.handle('codexAccounts:pendingLoginUrl', () => codexAccounts.getPendingLoginUrl())
+  // Why: Settings can open after the login already printed its link, so the
+  // renderer reads the current value on mount and this only carries changes.
+  codexAccounts.onPendingLoginUrlChanged(broadcastCodexPendingLoginUrl)
   ipcMain.handle(
     'codexAccounts:reauthenticate',
     (_event, args: { accountId: string; activateIfSelectionWasEmpty?: boolean }) =>

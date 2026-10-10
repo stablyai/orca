@@ -49,7 +49,8 @@ export function useTaskPageGitHubDetail(model: TaskPageGitHubListStateModel) {
   const dialogWorkItemKey = githubTaskDrawerWorkItem
     ? {
         id: githubTaskDrawerWorkItem.id,
-        repoId: githubTaskDrawerWorkItem.repoId
+        repoId: githubTaskDrawerWorkItem.repoId,
+        url: githubTaskDrawerWorkItem.url
       }
     : null
   const appliedWorkItemsCacheQuery = useMemo(
@@ -67,7 +68,7 @@ export function useTaskPageGitHubDetail(model: TaskPageGitHubListStateModel) {
     )
   )
 
-  // Why: derive the dialog item from the cache for optimistic patches, falling back to the click-time snapshot for new stubs; key by repoId so same-number issues across repos resolve to the clicked row.
+  // Keep cache patches in the clicked conversation when origin and upstream share an issue number.
   const cachedDialogWorkItem = useAppStore((s) =>
     findTaskPageDialogWorkItem(s.workItemsCache, dialogWorkItemKey)
   )

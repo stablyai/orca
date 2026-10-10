@@ -117,14 +117,14 @@ vi.mock('./pty-dispatcher', async (importOriginal) => {
 const BLANK_MODEL_IMAGE = '\x1b[0m\x1b[?25h\x1b[?7h'
 
 describe('restored snapshot baseline shortfall (STA-5179)', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
   })
 
   afterEach(async () => {

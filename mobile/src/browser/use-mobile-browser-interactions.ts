@@ -20,6 +20,7 @@ import {
   type BrowserZoomState
 } from './browser-touch-geometry'
 import type { BrowserPointerModifier } from './MobileBrowserPointerModifiers'
+import type { BrowserDialogState } from './mobile-browser-stream-events'
 import type { BrowserPageCommandSend, BrowserPageParams } from './use-mobile-browser-request'
 import type { BrowserScreencastFrameMetadata } from '../transport/browser-screencast-protocol'
 
@@ -50,7 +51,7 @@ type MobileBrowserInteractionArgs = {
   pinchRef: { current: PinchGesture | null }
   pointerModifiers: BrowserPointerModifier[]
   sendBrowserRequest: SendBrowserRequest
-  setDialog: Dispatch<SetStateAction<{ dialogType: string; message: string } | null>>
+  setDialog: Dispatch<SetStateAction<BrowserDialogState | null>>
   setError: Dispatch<SetStateAction<string | null>>
   setKeyboardValue: Dispatch<SetStateAction<string>>
   scrollingRef: { current: boolean }
@@ -280,7 +281,9 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
           scrollingRef.current = false
           startPointRef.current = null
         },
-        onPanResponderTerminationRequest: () => true
+        // The long-press right-click outlives the WebView's own long-press contextmenu at ~500 ms.
+        onPanResponderTerminationRequest: (event) =>
+          !('type' in event.nativeEvent) || event.nativeEvent.type !== 'contextmenu'
       }),
     [clearLongPressTimer, handleResponderGrant, handleResponderMove, handleResponderRelease]
   )

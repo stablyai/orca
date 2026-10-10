@@ -3,6 +3,21 @@ import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { AutomationActionNotice } from './automation-row-action-dispatch'
 import type { AutomationListRow } from './automation-list-row-identity'
 
+export type AutomationRunsDashboardRun = Pick<
+  AutomationRun,
+  'id' | 'title' | 'scheduledFor' | 'status' | 'trigger'
+>
+
+export function projectAutomationRunsDashboardRun(run: AutomationRun): AutomationRunsDashboardRun {
+  return {
+    id: run.id,
+    title: run.title,
+    scheduledFor: run.scheduledFor,
+    status: run.status,
+    trigger: run.trigger
+  }
+}
+
 export type AutomationRunsScope = 'local' | 'remote'
 export type AutomationRunsStatusFilter = 'all' | 'successful' | 'failed' | 'active' | 'skipped'
 
@@ -11,7 +26,7 @@ export type AutomationRunsDashboardEntry = {
   hostKey: string
   searchText: string
   row: AutomationListRow
-  run: AutomationRun
+  run: AutomationRunsDashboardRun
   scope: AutomationRunsScope
 }
 
@@ -52,7 +67,7 @@ export function getAutomationRunsScope(row: AutomationListRow): AutomationRunsSc
 
 export function buildAutomationRunsDashboardEntries(
   rows: readonly AutomationListRow[],
-  runsByRowKey: ReadonlyMap<string, readonly AutomationRun[]>
+  runsByRowKey: ReadonlyMap<string, readonly AutomationRunsDashboardRun[]>
 ): AutomationRunsDashboardEntry[] {
   return rows
     .flatMap((row) =>

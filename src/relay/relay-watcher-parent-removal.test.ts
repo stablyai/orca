@@ -10,6 +10,8 @@ class ParentRemovalPool {
   readonly subscriptions: { rootPath: string; unsubscribe: ReturnType<typeof vi.fn> }[] = []
   readonly dispose = vi.fn()
   readonly forgetRoot = vi.fn()
+  readonly disposeAndWait = vi.fn(async () => {})
+  readonly reopen = vi.fn()
 
   async subscribe(
     rootPath: string,

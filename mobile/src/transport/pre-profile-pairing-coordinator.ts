@@ -1,14 +1,8 @@
 import { Platform } from 'react-native'
-import {
-  DeviceCredentialInstalledSchema,
-  PairingGetEndpointsResultSchema,
-  type DeviceCredentialInstalled,
-  type MobileRelayEndpoint
-} from '../../../src/shared/mobile-relay-credential-contract'
 import { connect, type ConnectOptions } from './rpc-client'
-import { resolvePairingHostIdentity, saveHost } from './host-store'
+import { resolvePairingHostIdentity, savePairedHost } from './host-store'
 import type { HostProfile, PairingOffer } from './types'
-import { isMethodNotFoundRefusal } from './rpc-acceptance-policies'
+import { isPairingRelayRpcUnavailable } from './pairing-relay-rpc-unavailable'
 import {
   relayCredentialProvision,
   relayPairingEndpointsRead
@@ -19,9 +13,11 @@ import {
 } from './mobile-relay-pairing-journal'
 import {
   clearMobileRelayPairingJournal,
+  releaseMobileRelayPairingJournal,
   saveMobileRelayPairingJournal,
   updateMobileRelayPairingJournal
 } from './mobile-relay-pairing-journal-store'
+import { settleMobileRelayPairingRecovery } from './mobile-relay-pairing-recovery'
 import {
   promotePairingJournalCredential,
   writeMobileRelayCredentialBundle
@@ -36,6 +32,9 @@ import { resolvePairingInviteThroughDirector } from './mobile-relay-invite-direc
 import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
 import { createPairingRelayLogger } from './pairing-relay-log'
 import { redactSocketEndpoint } from './socket-event-debug'
+import { assertCommittedInstall, relayHost } from './pairing-relay-host'
+import { recordHostDescriptorFromStatus } from './host-descriptor-recorder'
+import type { HostStatusReply } from './host-status-reply-schema'
 
 export type PreProfilePairingAttempt = {
   readonly result: Promise<{ hostId: string }>
@@ -48,11 +47,14 @@ type Dependencies = {
   connectRelay: typeof connectMobileRelayForPairing
   resolveInviteDirector: typeof resolvePairingInviteThroughDirector
   resolveHostIdentity: typeof resolvePairingHostIdentity
-  saveHost: typeof saveHost
+  savePairedHost: typeof savePairedHost
   saveJournal: typeof saveMobileRelayPairingJournal
   updateJournal: typeof updateMobileRelayPairingJournal
   clearJournal: typeof clearMobileRelayPairingJournal
+  releaseJournal: typeof releaseMobileRelayPairingJournal
+  recoverPendingJournal: () => Promise<void>
   writeCredentialBundle: typeof writeMobileRelayCredentialBundle
+  recordDescriptorFromStatus: typeof recordHostDescriptorFromStatus
   now: () => number
   platform: string
 }
@@ -62,14 +64,21 @@ const defaultDependencies: Dependencies = {
   connectRelay: connectMobileRelayForPairing,
   resolveInviteDirector: resolvePairingInviteThroughDirector,
   resolveHostIdentity: resolvePairingHostIdentity,
-  saveHost,
+  savePairedHost,
   saveJournal: saveMobileRelayPairingJournal,
   updateJournal: updateMobileRelayPairingJournal,
   clearJournal: clearMobileRelayPairingJournal,
+  releaseJournal: releaseMobileRelayPairingJournal,
+  recoverPendingJournal: () => settleMobileRelayPairingRecovery(PENDING_RECOVERY_WAIT_MS),
   writeCredentialBundle: writeMobileRelayCredentialBundle,
+  recordDescriptorFromStatus: recordHostDescriptorFromStatus,
   now: Date.now,
   platform: Platform.OS
 }
+
+// How long a new scan lets a previous attempt's recovery publish a committed
+// install before the new journal supersedes it.
+const PENDING_RECOVERY_WAIT_MS = 8_000
 
 export function startPreProfilePairing(args: {
   offer: PairingOffer
@@ -103,7 +112,17 @@ export function startPreProfilePairing(args: {
     dispose()
   }, args.timeoutMs)
 
-  const result = runPairing(args.offer, args.connectOptions, dependencies, clients, () => disposed)
+  let savedJournalId: string | null = null
+  const result = runPairing(
+    args.offer,
+    args.connectOptions,
+    dependencies,
+    clients,
+    () => disposed,
+    (journalId) => {
+      savedJournalId = journalId
+    }
+  )
     .catch((error: unknown) => {
       if (timedOut) {
         throw new Error('mobile pairing timed out')
@@ -111,6 +130,9 @@ export function startPreProfilePairing(args: {
       throw error
     })
     .finally(() => {
+      if (savedJournalId) {
+        dependencies.releaseJournal(savedJournalId)
+      }
       if (timer) {
         clearTimeout(timer)
         timer = null
@@ -135,7 +157,8 @@ async function runPairing(
   connectOptions: ConnectOptions | undefined,
   dependencies: Dependencies,
   clients: Set<PairingCandidateClient>,
-  isDisposed: () => boolean
+  isDisposed: () => boolean,
+  onJournalSaved: (journalId: string) => void
 ): Promise<{ hostId: string }> {
   const now = dependencies.now()
   // Why: every pairing artifact must share the preserved host id so re-pairing
@@ -147,6 +170,10 @@ async function runPairing(
   assertActive(isDisposed)
   let journal: MobileRelayPairingJournal | null = null
   if (offer.relay && dependencies.platform !== 'web') {
+    // Why: a new scan always wins over a stale journal, but first gives its
+    // recovery a bounded chance to publish an install that already committed.
+    await dependencies.recoverPendingJournal()
+    assertActive(isDisposed)
     journal = createMobileRelayPairingJournal({
       offer: { ...offer, relay: offer.relay },
       hostId,
@@ -154,6 +181,7 @@ async function runPairing(
       now
     })
     await dependencies.saveJournal(journal)
+    onJournalSaved(journal.metadata.journalId)
     assertActive(isDisposed)
   }
 
@@ -207,7 +235,8 @@ async function runPairing(
   assertActive(isDisposed)
 
   if (!journal) {
-    await dependencies.saveHost(baseHost(offer, hostId, hostName, now))
+    await dependencies.savePairedHost(baseHost(offer, hostId, hostName, now))
+    recordWinnerDescriptor(dependencies, hostId, winner.status)
     return { hostId }
   }
 
@@ -224,32 +253,54 @@ async function runPairing(
     reqId: journal.metadata.installReqId,
     newResumeTokenHash: journal.metadata.pendingResumeTokenHash
   })
-  if (isMethodNotFoundRefusal(provision)) {
+  if (isPairingRelayRpcUnavailable(provision)) {
     if (winner.path !== 'direct') {
       throw new Error('relay pairing RPC unavailable after relay path authentication')
     }
-    await dependencies.saveHost(baseHost(offer, hostId, hostName, now))
+    // Why: this commits a LAN-only host instead of failing, so the refusal code is the only
+    // record of why the phone never got a relay endpoint.
+    log('info', 'Relay: desktop will not serve relay pairing', provision.error.code)
+    await dependencies.savePairedHost(baseHost(offer, hostId, hostName, now))
     await dependencies.clearJournal(journal.metadata.journalId)
+    recordWinnerDescriptor(dependencies, hostId, winner.status)
     return { hostId }
   }
-  const installed = DeviceCredentialInstalledSchema.parse(
-    relayCredentialProvision.interpret(provision)
-  )
+  const installed = relayCredentialProvision.interpret(provision)
   const endpointsReply = await relayPairingEndpointsRead.request(winner.client, {
     installReqId: journal.metadata.installReqId
   })
-  const endpoints = PairingGetEndpointsResultSchema.parse(
-    relayPairingEndpointsRead.interpret(endpointsReply)
-  )
+  const endpoints = relayPairingEndpointsRead.interpret(endpointsReply)
   assertCommittedInstall(endpoints.installStatus, installed)
   if (!endpoints.relay) {
     throw new Error('desktop returned no relay endpoint after credential install')
   }
   assertActive(isDisposed)
   await dependencies.writeCredentialBundle(promotePairingJournalCredential({ journal, installed }))
-  await dependencies.saveHost(relayHost(journal, endpoints.relay))
+  await dependencies.savePairedHost(relayHost(journal, endpoints.relay))
   await dependencies.clearJournal(journal.metadata.journalId)
+  recordWinnerDescriptor(dependencies, hostId, winner.status)
   return { hostId }
+}
+
+/**
+ * Why after the save: the saved row starts as its existing name (or "Host N") and the descriptor
+ * writer adopt-renames it to the desktop's machine name in the same serialized store chain, so a
+ * load issued after pairing returns the desktop-reported name. A recording failure is swallowed —
+ * descriptor upkeep must never fail a pairing that already saved.
+ */
+function recordWinnerDescriptor(
+  dependencies: Dependencies,
+  hostId: string,
+  status: HostStatusReply | null
+): void {
+  if (!status) {
+    return
+  }
+  try {
+    dependencies.recordDescriptorFromStatus(hostId, status)
+  } catch {
+    // Best-effort bookkeeping; the host is already saved.
+  }
 }
 
 function baseHost(
@@ -265,43 +316,6 @@ function baseHost(
     deviceToken: offer.deviceToken,
     publicKeyB64: offer.publicKeyB64,
     lastConnected
-  }
-}
-
-function relayHost(journal: MobileRelayPairingJournal, relay: MobileRelayEndpoint): HostProfile {
-  const host = journal.metadata.host
-  return {
-    ...host,
-    deviceToken: journal.secrets.deviceToken,
-    endpoints: [
-      { id: 'direct-primary', kind: 'lan', url: host.endpoint },
-      { id: 'relay-primary', kind: 'relay', url: relayWebSocketUrl(relay) }
-    ],
-    relayHostId: relay.relayHostId,
-    relay
-  }
-}
-
-function relayWebSocketUrl(relay: MobileRelayEndpoint): string {
-  const url = new URL(relay.cellUrl)
-  url.protocol = 'wss:'
-  url.pathname = `/v1/connect/${encodeURIComponent(relay.relayHostId)}`
-  return url.toString()
-}
-
-function assertCommittedInstall(
-  status:
-    | { state: 'not-found' }
-    | { state: 'committed'; result: DeviceCredentialInstalled }
-    | undefined,
-  installed: DeviceCredentialInstalled
-): void {
-  if (
-    !status ||
-    status.state !== 'committed' ||
-    JSON.stringify(status.result) !== JSON.stringify(installed)
-  ) {
-    throw new Error('relay credential install was not authoritatively reconciled')
   }
 }
 

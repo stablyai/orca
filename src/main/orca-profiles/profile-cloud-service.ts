@@ -33,6 +33,7 @@ import {
 } from './profile-cloud-dev-service'
 import { getOrcaProfileAuthStatusFromProfile } from './profile-cloud-auth-status'
 import { selectCloudOrgWithMutationFence } from './profile-cloud-org-selection'
+import { clearRelayRegionPreferenceCache } from '../runtime/relay/relay-region-preference'
 
 export { refreshCurrentOrcaProfileAuth } from './profile-cloud-capability-refresh'
 
@@ -157,6 +158,11 @@ export async function signOutCurrentOrcaProfile(
   }
   clearOrcaCloudSession(active.profile.id, userDataPath)
   const list = unlinkOrcaProfileFromCloud(active.profile.id, userDataPath)
+  try {
+    clearRelayRegionPreferenceCache(userDataPath)
+  } catch {
+    // A leftover latency cache must not fail the sign-out itself.
+  }
   return {
     status: 'signed-out',
     auth: getCurrentOrcaProfileAuthStatus(userDataPath),

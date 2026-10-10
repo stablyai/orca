@@ -6,6 +6,7 @@ import type {
 } from './runtime-file-command-target'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { RuntimeNativeChatFileContext } from '../../shared/runtime-types'
+import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { FsChangeEvent } from '../../shared/filesystem-entry-types'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import {
@@ -52,14 +53,16 @@ export type RuntimeFileCommandHost = {
     worktreeId: string,
     filePath: string,
     relativePath: string,
-    runtimeEnvironmentId?: string | null
+    runtimeEnvironmentId?: string | null,
+    navigation?: RuntimeNavigationTarget
   ): void
   openDiff(
     worktreeId: string,
     filePath: string,
     relativePath: string,
     staged: boolean,
-    runtimeEnvironmentId?: string | null
+    runtimeEnvironmentId?: string | null,
+    navigation?: RuntimeNavigationTarget
   ): void
 }
 
@@ -169,28 +172,4 @@ export function isMobileBinaryPath(relativePath: string): boolean {
     return false
   }
   return MOBILE_BINARY_EXTENSIONS.has(basename.slice(dotIndex).toLowerCase())
-}
-
-export function isRuntimeDirectoryEntry(entry: {
-  isDirectory(): boolean
-  isSymbolicLink(): boolean
-}): boolean {
-  // Why: listings are passive UI reads; don't stat symlink targets here (explicit open/expand resolves them).
-  if (entry.isSymbolicLink()) {
-    return false
-  }
-  if (entry.isDirectory()) {
-    return true
-  }
-  return false
-}
-
-export function isBinaryBuffer(buffer: Buffer): boolean {
-  const len = Math.min(buffer.length, 8192)
-  for (let i = 0; i < len; i += 1) {
-    if (buffer[i] === 0) {
-      return true
-    }
-  }
-  return false
 }

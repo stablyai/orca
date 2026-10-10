@@ -13,6 +13,8 @@ describe('resolveNativeChatTranscriptAgent', () => {
   })
 
   it('passes codex, grok and omp through and rejects everything else', () => {
+    expect(resolveNativeChatTranscriptAgent('opencode')).toBe('opencode')
+    expect(resolveNativeChatTranscriptAgent('opencode2')).toBe('opencode')
     expect(resolveNativeChatTranscriptAgent('codex')).toBe('codex')
     expect(resolveNativeChatTranscriptAgent('grok')).toBe('grok')
     expect(resolveNativeChatTranscriptAgent('omp')).toBe('omp')
@@ -24,6 +26,8 @@ describe('resolveNativeChatTranscriptAgent', () => {
 
 describe('isNativeChatSupportedAgent', () => {
   it('recognizes the parseable agents and rejects unknown / nullish input', () => {
+    expect(isNativeChatSupportedAgent('opencode')).toBe(true)
+    expect(isNativeChatSupportedAgent('opencode2')).toBe(true)
     expect(isNativeChatSupportedAgent('claude')).toBe(true)
     expect(isNativeChatSupportedAgent('openclaude')).toBe(true)
     expect(isNativeChatSupportedAgent('omp')).toBe(true)
@@ -37,6 +41,8 @@ describe('nativeChatRequiresLocalTranscript', () => {
   it('covers the agents whose hook discloses no transcript path', () => {
     // Claude/Codex report `transcript_path`; Grok and omp report only an id, so
     // native chat has to find their file on a disk this process can read.
+    expect(nativeChatRequiresLocalTranscript('opencode')).toBe(true)
+    expect(nativeChatRequiresLocalTranscript('opencode2')).toBe(true)
     expect(nativeChatRequiresLocalTranscript('grok')).toBe(true)
     expect(nativeChatRequiresLocalTranscript('omp')).toBe(true)
     expect(nativeChatRequiresLocalTranscript('claude')).toBe(false)
@@ -55,6 +61,8 @@ describe('shouldStepNativeChatAskAnswer', () => {
     // Codex 0.145's request_user_input card ignores typed labels and commits on
     // the highlighted row, so pasted answers misdeliver like STA-1860.
     expect(shouldStepNativeChatAskAnswer('codex')).toBe(true)
+    expect(shouldStepNativeChatAskAnswer('opencode')).toBe(true)
+    expect(shouldStepNativeChatAskAnswer('opencode2')).toBe(true)
   })
 
   it('does not step other or unknown agents', () => {

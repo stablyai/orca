@@ -22,11 +22,27 @@ function hostSkipReason(outcome: AiVaultSearchHostOutcome['outcome']): string | 
       return 'unavailable'
     case 'unreachable':
       return 'unreachable'
+    case 'scope-unknown':
+      return 'scope not found there'
+    case 'unsupported-agent':
+      return 'agent not supported'
   }
 }
 
+// Neither reached the scope, so neither is evidence that some computer did.
+const UNSETTLED_SCOPE_OUTCOMES = new Set<AiVaultSearchHostOutcome['outcome']>([
+  'scope-unknown',
+  'unreachable'
+])
+
+// A computer that simply lacks this project is the ordinary case, worth naming
+// only when it is what explains an empty result.
 function describeSkippedHosts(hosts: readonly AiVaultSearchHostOutcome[]): string | null {
+  const anyResolved = hosts.some((entry) => !UNSETTLED_SCOPE_OUTCOMES.has(entry.outcome))
   const skipped = hosts.flatMap((entry) => {
+    if (entry.outcome === 'scope-unknown' && anyResolved) {
+      return []
+    }
     const reason = hostSkipReason(entry.outcome)
     const label = getExecutionHostLabel(parseExecutionHostId(entry.executionHostId)?.id ?? null)
     return reason ? [`${label} (${reason})`] : []
@@ -41,15 +57,13 @@ function describeSkippedHosts(hosts: readonly AiVaultSearchHostOutcome[]): strin
 export function AiVaultPanelSearch({
   search,
   noAgents,
-  onDismiss,
   children
 }: {
   search: ReturnType<typeof useAiVaultPanelSearch>
   noAgents: boolean
-  onDismiss: () => void
   children: ReactNode
 }) {
-  const { localConsent, response, error, loading, retry: onRetry } = search
+  const { needsLocalConsent, response, error, loading, retry: onRetry } = search
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(false)
   async function enable() {
@@ -60,6 +74,7 @@ export function AiVaultPanelSearch({
       await store.updateSettingsOrThrow({
         aiVaultSearch: { ...resolveAiVaultSearchSettings(store.settings), enabled: true }
       })
+      store.markFeatureTipsSeen(['agent-session-search'])
       onRetry()
     } catch {
       setSaveError(true)
@@ -67,9 +82,13 @@ export function AiVaultPanelSearch({
       setSaving(false)
     }
   }
+  // The consent card is an offer above the legacy title filter's own results, not a wall.
+  if (!search.hasQuery) {
+    return children
+  }
   const unavailable = response?.kind === 'unavailable' ? response.reason : null
   let message: string | null = null
-  if (localConsent) {
+  if (needsLocalConsent) {
     message = translate(
       'sessionSearch.panel.consent',
       'Enable full-text search? Orca builds an index on this computer from local agent transcripts, including full conversations and up to 3,072 characters per tool output. Content is not redacted. Authenticated paired clients can search it.'
@@ -78,6 +97,11 @@ export function AiVaultPanelSearch({
     message = translate(
       'auto.components.right.sidebar.AiVaultPanel.noAgentsSelected',
       'No agents selected'
+    )
+  } else if (search.titleOnly) {
+    message = translate(
+      'sessionSearch.panel.titleOnly',
+      'Full-text search is off on this computer, so only session titles are matched.'
     )
   } else if (unavailable === 'disabled') {
     message = translate(
@@ -93,6 +117,16 @@ export function AiVaultPanelSearch({
     message = translate(
       'sessionSearch.panel.noService',
       'Search is unavailable on this computer. It may need an Orca update or a runtime with search support.'
+    )
+  } else if (unavailable === 'unsupported-agent') {
+    message = translate(
+      'sessionSearch.panel.unsupportedAgent',
+      'This computer does not support history search for the selected agent. Update Orca on that computer or select another agent.'
+    )
+  } else if (unavailable === 'scope-unknown') {
+    message = translate(
+      'sessionSearch.panel.scopeUnknown',
+      'This computer does not have this workspace or project. Switch the scope to All to search everything on it.'
     )
   } else if (error) {
     message = translate(
@@ -116,9 +150,6 @@ export function AiVaultPanelSearch({
       )
     }
   }
-  if (!search.searching) {
-    return children
-  }
   if (response?.kind === 'results' && search.hits.length === 0) {
     message = translate(
       'sessionSearch.panel.noMatches',
@@ -136,7 +167,7 @@ export function AiVaultPanelSearch({
         >
           {message && <p>{message}</p>}
           {skippedHosts && <p>{skippedHosts}</p>}
-          {localConsent ? (
+          {needsLocalConsent ? (
             <>
               {saveError && (
                 <p className="text-destructive">
@@ -146,14 +177,9 @@ export function AiVaultPanelSearch({
                   )}
                 </p>
               )}
-              <div className="flex gap-2">
-                <Button size="xs" disabled={saving} onClick={() => void enable()}>
-                  {translate('sessionSearch.panel.enable', 'Enable')}
-                </Button>
-                <Button size="xs" variant="ghost" disabled={saving} onClick={onDismiss}>
-                  {translate('sessionSearch.panel.notNow', 'Not now')}
-                </Button>
-              </div>
+              <Button size="xs" disabled={saving} onClick={() => void enable()}>
+                {translate('sessionSearch.panel.enable', 'Enable')}
+              </Button>
             </>
           ) : !noAgents &&
             (error ||

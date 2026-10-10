@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import * as gitBash from '../main/git-bash'
 import * as ptyShellUtils from './pty-shell-utils'

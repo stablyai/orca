@@ -101,6 +101,8 @@ export type BrowserAnnotationPayload = Omit<BrowserGrabPayload, 'screenshot'> & 
 // Grab operation lifecycle
 // ---------------------------------------------------------------------------
 
+export type GrabIntent = 'copy' | 'annotate'
+
 /** Why a grab operation was cancelled before the user selected an element. */
 export type BrowserGrabCancelReason = 'user' | 'tab-inactive' | 'navigation' | 'evicted' | 'timeout'
 
@@ -240,24 +242,4 @@ export const GRAB_SECRET_PATTERNS = [
   'secret',
   'password',
   'passwd'
-]
-
-/** Computed style properties to extract — matches BrowserGrabComputedStyles keys. */
-export const GRAB_STYLE_PROPERTIES: readonly (keyof BrowserGrabComputedStyles)[] = [
-  'display',
-  'position',
-  'width',
-  'height',
-  'margin',
-  'padding',
-  'color',
-  'backgroundColor',
-  'border',
-  'borderRadius',
-  'fontFamily',
-  'fontSize',
-  'fontWeight',
-  'lineHeight',
-  'textAlign',
-  'zIndex'
 ]

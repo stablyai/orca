@@ -82,6 +82,17 @@ export function rejectPendingSnapshotRequest(
   request.reject(new Error(message))
 }
 
+export function disposeRemoteTerminalStreamState(
+  stream: RemoteRuntimeMultiplexedTerminalState,
+  message: string
+): void {
+  discardOutputAcknowledgements(stream)
+  stream.watchdog.dispose()
+  clearSnapshot(stream)
+  clearResyncTimer(stream)
+  rejectPendingSnapshotRequest(stream, message)
+}
+
 export function decodeSnapshotInfo(
   payload: Uint8Array<ArrayBufferLike>
 ): RemoteRuntimeSnapshotInfo | null {
@@ -97,6 +108,7 @@ export function decodeSnapshotInfo(
     kittyKeyboardFlags?: unknown
     alternateScreen?: unknown
     terminalOwner?: unknown
+    scrollbackRows?: unknown
   }>(payload)
   if (!raw) {
     return null
@@ -116,6 +128,12 @@ export function decodeSnapshotInfo(
     requestId: typeof raw.requestId === 'number' ? raw.requestId : undefined,
     truncated: raw.truncated === true,
     unavailable: parseTerminalSnapshotUnavailableReason(raw.unavailable),
+    scrollbackRows:
+      typeof raw.scrollbackRows === 'number' &&
+      Number.isSafeInteger(raw.scrollbackRows) &&
+      raw.scrollbackRows >= 0
+        ? raw.scrollbackRows
+        : undefined,
     pendingEscapeTailAnsi:
       typeof raw.pendingEscapeTailAnsi === 'string' ? raw.pendingEscapeTailAnsi : undefined
   }
@@ -153,10 +171,9 @@ export function isTerminalDriverState(
   if (!value || typeof value !== 'object' || !('kind' in value)) {
     return false
   }
-  const driver = value as { kind?: unknown; clientId?: unknown }
   return (
-    driver.kind === 'idle' ||
-    driver.kind === 'desktop' ||
-    (driver.kind === 'mobile' && typeof driver.clientId === 'string')
+    value.kind === 'idle' ||
+    value.kind === 'desktop' ||
+    (value.kind === 'mobile' && 'clientId' in value && typeof value.clientId === 'string')
   )
 }

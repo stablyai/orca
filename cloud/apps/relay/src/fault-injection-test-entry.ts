@@ -21,6 +21,7 @@ let faulted = false
 
 function wrap(transaction: RelayDatabase): RelayDatabase {
   return {
+    dialect: transaction.dialect,
     query: async (sql, params) => {
       if (pattern && !faulted && sql.includes(pattern)) {
         faulted = true
@@ -52,7 +53,7 @@ server.listen(config.port, () => {
 
 const shutdown = (): void => {
   sessions.drain(0)
-  server.close(() => void realDatabase.close())
+  server.close(() => void realDatabase.close().catch(() => undefined))
 }
 process.once('SIGTERM', shutdown)
 process.once('SIGINT', shutdown)

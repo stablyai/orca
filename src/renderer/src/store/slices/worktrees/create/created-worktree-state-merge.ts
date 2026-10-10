@@ -1,4 +1,6 @@
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeSliceSet } from '../listing/worktree-slice-types'
+import { appliedWorktreeCatalogVersionPatch } from '../listing/worktree-catalog-version-state'
 import type { CreateWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import {
   getProjectHostSetupForRepoHost,
@@ -10,11 +12,12 @@ import {
 export function applyCreatedWorktree(
   set: WorktreeSliceSet,
   repoId: string,
-  result: CreateWorktreeResult
+  result: CreateWorktreeResult,
+  executionHostId?: ExecutionHostId
 ) {
   // Why: worktrees.onChanged can add this worktree before this callback runs; appending blindly would duplicate it (React key clash).
   set((s) => {
-    const hostId = repoHostId(s, repoId)
+    const hostId = executionHostId ?? repoHostId(s, repoId)
     const createdWorktree = withRepoHostOwnership(
       result.worktree,
       hostId,
@@ -28,6 +31,8 @@ export function applyCreatedWorktree(
         )
       : [...current, createdWorktree]
     return {
+      // Why: a listing scanned before this create must not be applied after it.
+      ...appliedWorktreeCatalogVersionPatch(s, repoId, hostId, result.catalogVersion),
       worktreesByRepo: {
         ...s.worktreesByRepo,
         [repoId]: nextWorktrees

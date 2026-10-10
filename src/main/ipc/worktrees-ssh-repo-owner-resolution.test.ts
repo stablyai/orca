@@ -98,6 +98,9 @@ vi.mock('../runtime/worktree-teardown', async () =>
 )
 vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
 
+// Why: every removal and listing reply now names the catalog it produced or scanned.
+const anyCatalogVersion = { epoch: expect.any(String), sequence: expect.any(Number) }
+
 describe('registerWorktreeHandlers', () => {
   beforeEach(() => {
     setupWorktreeHandlers()
@@ -148,6 +151,7 @@ describe('registerWorktreeHandlers', () => {
         repoId: 'shared-repo',
         authoritative: true,
         source: 'git',
+        catalogVersion: anyCatalogVersion,
         worktrees: []
       }
     })
@@ -213,6 +217,7 @@ describe('registerWorktreeHandlers', () => {
         repoId: 'repo-1',
         authoritative: true,
         source: 'git',
+        catalogVersion: anyCatalogVersion,
         worktrees: []
       }
     })
@@ -251,7 +256,8 @@ describe('registerWorktreeHandlers', () => {
         repoId: 'repo-1',
         authoritative: false,
         source: 'metadata-fallback',
-        worktrees: []
+        worktrees: [],
+        catalogVersion: anyCatalogVersion
       }
     })
   })

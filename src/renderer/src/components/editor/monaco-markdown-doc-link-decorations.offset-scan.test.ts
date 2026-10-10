@@ -1,10 +1,12 @@
 import type { IRange } from 'monaco-editor'
 import { describe, expect, it } from 'vitest'
 import { getMarkdownDocLinkTarget } from './markdown-doc-links'
+import { createMarkdownFenceTracker } from './markdown-fence-scanner'
 import { getMarkdownDocLinkDecorationRanges } from './monaco-markdown-doc-link-decorations'
 
-// Why: the pre-offset implementation, kept verbatim as the equivalence oracle
-// for the allocation-free scan that replaced it.
+// Why: the pre-offset implementation, kept as the equivalence oracle for the
+// allocation-free scan that replaced it. Fence detection is the shared
+// scanner's contract, not this file's, so the oracle calls into it.
 function referenceDecorationRanges(content: string): IRange[] {
   const getInlineCodeSpans = (line: string): { start: number; end: number }[] => {
     const spans: { start: number; end: number }[] = []
@@ -26,7 +28,7 @@ function referenceDecorationRanges(content: string): IRange[] {
     spans.some((span) => index >= span.start && index < span.end)
 
   const ranges: IRange[] = []
-  let insideFence = false
+  const fence = createMarkdownFenceTracker()
   let lineStart = 0
   let lineNumber = 1
   for (let index = 0; index <= content.length; index += 1) {
@@ -39,11 +41,7 @@ function referenceDecorationRanges(content: string): IRange[] {
     const currentLineNumber = lineNumber
     lineNumber += 1
 
-    if (/^\s*(```|~~~)/.test(line)) {
-      insideFence = !insideFence
-      continue
-    }
-    if (insideFence) {
+    if (fence.consume(line) || fence.insideFence) {
       continue
     }
     const inlineCodeSpans = getInlineCodeSpans(line)
@@ -163,5 +161,75 @@ describe('getMarkdownDocLinkDecorationRanges offset scan', () => {
     // hold -1, so a link-free document costs a fixed number of searches rather
     // than one tail scan per line.
     expect(indexOfCalls).toBeLessThanOrEqual(8)
+  })
+
+  it('visits inline-code span offsets linearly across a generated link index', () => {
+    const pairs = 500
+    const content = '`[[hidden]]` [[shown]] '.repeat(pairs)
+    const realPush = Array.prototype.push
+    let spanReads = 0
+    Array.prototype.push = function <T>(this: T[], ...values: T[]): number {
+      const length = realPush.call(this, ...values)
+      // Why: the production scanner stores spans as flat numeric pairs; count their reads without changing values.
+      if (values.length === 2 && values.every((value) => typeof value === 'number')) {
+        for (let index = 0; index < values.length; index += 1) {
+          const value = values[index]
+          Object.defineProperty(this, length - values.length + index, {
+            configurable: true,
+            enumerable: true,
+            get: () => {
+              spanReads += 1
+              return value
+            }
+          })
+        }
+      }
+      return length
+    }
+    let ranges: IRange[]
+    try {
+      ranges = getMarkdownDocLinkDecorationRanges(content)
+    } finally {
+      Array.prototype.push = realPush
+    }
+    expect(ranges).toEqual(referenceDecorationRanges(content))
+    expect(ranges).toHaveLength(pairs)
+    expect(spanReads).toBeLessThanOrEqual(pairs * 8)
+  })
+
+  it('matches the frozen scan across random inline-code and link boundaries', () => {
+    const fragments = [
+      '[[note]]',
+      '[[note|label]]',
+      '[[invalid]',
+      '`code`',
+      '`[[note]]`',
+      '\\`',
+      '[[a]] [[b]]',
+      '\\[[x]]',
+      '```',
+      '~~~',
+      '\r\n',
+      '\n',
+      'α🐋',
+      ' ]] ',
+      '[[]]',
+      '[[a\nb]]',
+      '`'
+    ]
+    let seed = 182
+    const random = (): number => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+      return seed >>> 16
+    }
+    for (let scenario = 0; scenario < 1_000; scenario += 1) {
+      let content = ''
+      for (let chunk = 0; chunk < 30; chunk += 1) {
+        content += fragments[random() % fragments.length]
+      }
+      expect(getMarkdownDocLinkDecorationRanges(content)).toEqual(
+        referenceDecorationRanges(content)
+      )
+    }
   })
 })

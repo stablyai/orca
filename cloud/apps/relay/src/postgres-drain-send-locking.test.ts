@@ -42,9 +42,6 @@ describePostgres('PostgreSQL drain-send locking', () => {
       `DELETE FROM relay_control_connection_reservations WHERE user_id = ?`,
       [identity.userId]
     )
-    await database.query(`DELETE FROM relay_migration_leases WHERE user_id = ?`, [
-      identity.userId
-    ])
     await database.query(`DELETE FROM relay_assignment_activity_leases WHERE user_id = ?`, [
       identity.userId
     ])

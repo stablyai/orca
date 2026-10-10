@@ -69,37 +69,32 @@ describe('TerminalHost PTY owner backend', () => {
     return subprocess
   }
 
+  // Orca's default theme: nothing reported colours for this session.
+  const query = '\x1b]10;?\x07'
+  const reply = '\x1b]10;rgb:ffff/ffff/ffff\x1b\\'
+  // ConPTY echoes a reply with its ESC bytes stripped; wsl.exe's echo shape is unverified.
+  const conptyEcho = reply.replaceAll('\x1b', '')
+
   it('uses the spawned native shell over stale requested WSL metadata', async () => {
-    const replyProducers: string[] = []
-    const onData = vi.fn((data: string) => {
-      if (data === '\x1b]10;?\x07') {
-        replyProducers.push('renderer')
-        host.write('owner-test', '\x1b]10;rgb:ffff/ffff/ffff\x1b\\')
-      }
-    })
+    const onData = vi.fn()
     const subprocess = await createSession('powershell.exe', 'Ubuntu', onData)
 
-    subprocess.emitData('\x1b]10;?\x07')
+    subprocess.emitData(query)
+    subprocess.emitData(conptyEcho)
 
-    expect(replyProducers).toEqual([])
-    expect(onData).toHaveBeenCalledWith('', '\x1b]10;?\x07'.length, true, '\x1b]10;?\x07'.length)
-    expect(subprocess.write).not.toHaveBeenCalled()
+    expect(subprocess.write).toHaveBeenCalledWith(reply)
+    expect(onData).toHaveBeenCalledWith('', query.length, true, query.length)
+    expect(onData).not.toHaveBeenCalledWith(conptyEcho)
   })
 
-  it('keeps replies for an actually spawned WSL shell', async () => {
-    const reply = '\x1b]10;rgb:ffff/ffff/ffff\x1b\\'
-    const replyProducers: string[] = []
-    const onData = vi.fn((data: string) => {
-      if (data === '\x1b]10;?\x07') {
-        replyProducers.push('renderer')
-        host.write('owner-test', reply)
-      }
-    })
+  it('treats an actually spawned WSL shell as wsl.exe, not ConPTY', async () => {
+    const onData = vi.fn()
     const subprocess = await createSession('wsl.exe', undefined, onData)
 
-    subprocess.emitData('\x1b]10;?\x07')
+    subprocess.emitData(query)
+    subprocess.emitData(conptyEcho)
 
-    expect(replyProducers).toEqual(['renderer'])
     expect(subprocess.write).toHaveBeenCalledWith(reply)
+    expect(onData).toHaveBeenCalledWith(conptyEcho)
   })
 })

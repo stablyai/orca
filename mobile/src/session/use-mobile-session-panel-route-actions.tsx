@@ -34,8 +34,16 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     createTabAgentOptions,
     agentSessionHistorySupported,
     clearDeliveredDiffComments,
+    sendDiffNotesToNewAgent,
     handleCreateTerminal
   } = scope
+  const otherRuntimeAgentRow = {
+    label: 'Agents on Another Server',
+    hint: 'Pair that server directly',
+    icon: Bot,
+    disabled: true,
+    onPress: () => {}
+  }
   const createTabAgentActions =
     createTabAgentLoadState === 'loading'
       ? [
@@ -65,17 +73,19 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
                 onPress: () => {}
               }
             ]
-          : createTabAgentLoadState === 'error'
-            ? [
-                {
-                  label: 'Agent Presets Unavailable',
-                  hint: 'Check the host connection',
-                  icon: Bot,
-                  disabled: true,
-                  onPress: () => {}
-                }
-              ]
-            : []
+          : createTabAgentLoadState === 'other-runtime'
+            ? [otherRuntimeAgentRow]
+            : createTabAgentLoadState === 'error'
+              ? [
+                  {
+                    label: 'Agent Presets Unavailable',
+                    hint: 'Check the host connection',
+                    icon: Bot,
+                    disabled: true,
+                    onPress: () => {}
+                  }
+                ]
+              : []
   const sendDiffNotesAgentActions =
     pendingDiffNotesDelivery === null
       ? []
@@ -100,10 +110,12 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
                 if (!delivery) {
                   return
                 }
-                void handleCreateTerminal(option.agent, {
-                  initialPrompt: delivery.prompt,
-                  onPromptSent: () => void clearDeliveredDiffComments(delivery.comments)
-                })
+                void sendDiffNotesToNewAgent(delivery, () =>
+                  handleCreateTerminal(option.agent, {
+                    initialPrompt: delivery.prompt,
+                    onPromptSent: () => void clearDeliveredDiffComments(delivery.comments)
+                  })
+                )
               }
             }))
           : createTabAgentLoadState === 'loaded'
@@ -115,17 +127,19 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
                   onPress: () => {}
                 }
               ]
-            : createTabAgentLoadState === 'error'
-              ? [
-                  {
-                    label: 'Agent Presets Unavailable',
-                    hint: 'Copy notes instead',
-                    icon: Bot,
-                    disabled: true,
-                    onPress: () => {}
-                  }
-                ]
-              : []
+            : createTabAgentLoadState === 'other-runtime'
+              ? [otherRuntimeAgentRow]
+              : createTabAgentLoadState === 'error'
+                ? [
+                    {
+                      label: 'Agent Presets Unavailable',
+                      hint: 'Copy notes instead',
+                      icon: Bot,
+                      disabled: true,
+                      onPress: () => {}
+                    }
+                  ]
+                : []
 
   // Panel-icon taps route through the dock-vs-push decision (U1): dock-capable rows dock, constrained rows push.
   const handleSessionContentRowLayout = useCallback((event: LayoutChangeEvent) => {

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { createTestStore, makeLayout, makeTab } from './store-test-helpers'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
@@ -60,7 +61,7 @@ beforeEach(() => {
     api: {
       repos: {
         list: reposList,
-        remove: vi.fn().mockResolvedValue(undefined)
+        removeForHost: vi.fn().mockResolvedValue(undefined)
       }
     }
   })
@@ -119,7 +120,9 @@ describe('repos slice stale-fetch race (#7020)', () => {
     store.setState({ repos: [localRepo] })
 
     const pending = store.getState().fetchRepos()
-    await store.getState().removeProject(localRepo.id)
+    await store
+      .getState()
+      .removeProject(localRepo.id, { hostId: getRepoExecutionHostId(localRepo) })
     expect(store.getState().repos).toEqual([])
 
     resolveCatalog([localRepo])

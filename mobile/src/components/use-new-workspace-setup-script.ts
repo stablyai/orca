@@ -3,11 +3,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import { normalizeSetupHookTrust } from '../tasks/setup-hook-trust'
 import { newWorkspaceSetupHooksRead } from './new-workspace-operations'
 import type { WorkspaceCreateSetupDecision } from '../tasks/workspace-create-params'
-import type {
-  MobileWorkspaceRepo,
-  RepoHooksResponse,
-  SetupHookDetails
-} from './new-worktree-modal-types'
+import type { MobileWorkspaceRepo, SetupHookDetails } from './new-worktree-modal-types'
 
 export function useNewWorkspaceSetupScript(args: {
   client: RpcClient | null
@@ -46,8 +42,7 @@ export function useNewWorkspaceSetupScript(args: {
         if (stale || !hooks.accepted) {
           return
         }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = hooks.value as RepoHooksResponse
+        const result = hooks.value
         const command = result.hooks?.scripts?.setup?.trim() || null
         const runPolicy = result.setupRunPolicy ?? 'run-by-default'
         setDetails({

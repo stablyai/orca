@@ -13,6 +13,7 @@ import {
   resolveNativeChatHttpLinkSourceOwner
 } from './native-chat-http-link-source-owner'
 import { handleNativeChatWebLink } from './native-chat-web-link-actions'
+import { nativeChatPlainLinkClickBehavior } from './native-chat-link-click-behavior'
 import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
 
 export type NativeChatLinkActions = {
@@ -21,15 +22,15 @@ export type NativeChatLinkActions = {
   closeLinkActions: (dismissed?: LinkActionRequest) => void
 }
 
-/** Transcript links: file targets open in Orca, http(s) targets offer the same
- *  destination popover the terminal shows. */
+/** Transcript links offer the same destination popovers the terminal shows: file
+ *  targets open in Orca or the default app, http(s) targets in a browser. */
 export function useNativeChatLinkActions(
   context: NativeChatFileLinkContext | null,
   rootRef: RefObject<HTMLElement | null>,
   scope: { sessionId: string | null; isVisible: boolean }
 ): NativeChatLinkActions {
-  const openFileLink = useNativeChatFileLinkClick(context)
   const [linkActionRequest, setLinkActionRequest] = useState<LinkActionRequest | null>(null)
+  const openFileLink = useNativeChatFileLinkClick(context, setLinkActionRequest, rootRef)
   const scopeKey = JSON.stringify([
     context?.worktreeId,
     context?.runtimeEnvironmentId,
@@ -61,6 +62,7 @@ export function useNativeChatLinkActions(
       // Read at click time: settings and workspace ownership must not re-render the transcript.
       const state = useAppStore.getState()
       const sourceOwner = resolveNativeChatHttpLinkSourceOwner(state, context.worktreeId)
+      const plainClickBehavior = nativeChatPlainLinkClickBehavior(state.settings)
       const anchor = event.currentTarget
       handleNativeChatWebLink(event, route.url, {
         worktreeId: context.worktreeId,
@@ -70,7 +72,8 @@ export function useNativeChatLinkActions(
           sourceOwner,
           canNativeChatOpenOwnedBrowser(state, context.worktreeId, sourceOwner)
         ),
-        actionsEnabled: state.settings?.terminalLinkActionPopoverEnabled !== false,
+        actionsEnabled: plainClickBehavior === 'actions',
+        plainClickBehavior,
         restoreFocus: () =>
           (anchor.isConnected ? anchor : rootRef.current)?.focus({ preventScroll: true }),
         request: setLinkActionRequest

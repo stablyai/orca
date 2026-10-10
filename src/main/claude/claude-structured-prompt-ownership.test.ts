@@ -1,25 +1,23 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import type {
   StructuredAgentSessionAppendOptions,
   StructuredAgentSessionEventSink
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { ClaudeControlRequestError } from './claude-stream-json-connection'
 import { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
 import { claudeQuestionItems } from './claude-structured-prompt-items'
 import type { ClaudePendingPrompt } from './claude-structured-prompt-replies'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
 import {
-  PROVIDER_SESSION_ID,
   USER_MESSAGE,
   acquired,
   adapterFor,
   fakeClaude,
-  identityFor,
-  invokeCanUseTool
+  identityFor
 } from './claude-structured-session-test-support'
+import { invokeCanUseTool } from './claude-can-use-tool-test-support'
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve = (): void => {}
@@ -120,7 +118,7 @@ describe('Claude live prompt ownership', () => {
       sessionId: 'session-1',
       itemId: 'journal-prompt',
       kind: 'approval',
-      optionId: 'allow',
+      response: { kind: 'option', optionId: 'allow' },
       fence: 7,
       commit: async () => {
         expect(answered.settled()).toBe(false)
@@ -130,16 +128,6 @@ describe('Claude live prompt ownership', () => {
     })
     await vi.waitFor(() => expect(commitStarted).toHaveBeenCalledOnce())
 
-    await expect(
-      adapter.cancelTurn({
-        sessionId: 'session-1',
-        turnId: 'turn-1',
-        fence: 7,
-        prompt: { itemId: 'journal-prompt' }
-      })
-    ).resolves.toEqual({ cancelled: false })
-    expect(claude.connections[0]?.calls.some((call) => call.subtype === 'interrupt')).toBe(false)
-
     commitGate.resolve()
     await answer
     await expect(answered.promise).resolves.toMatchObject({
@@ -148,199 +136,87 @@ describe('Claude live prompt ownership', () => {
     })
   })
 
-  it('lets prompt cancellation win and waits for SDK abort cleanup', async () => {
-    const interruptGate = deferred()
-    const controller = new AbortController()
-    const claude = fakeClaude({
-      replayUuid: 'turn-1',
-      routes: { interrupt: () => interruptGate.promise }
+  it("keeps the user's dismissal when Claude cancels the request while the host records it", async () => {
+    const claude = fakeClaude({ replayUuid: 'turn-1' })
+    const recorded = lifecycleRecorder()
+    const adapter = adapterFor(claude)
+    await adapter.acquire({
+      identity: identityFor(),
+      fence: 7,
+      spawnToken: 'spawn-9',
+      events: recorded.sink
     })
-    const adapter = await acquired(claude)
     await startTurn(adapter)
-    const connection = claude.connections[0]
-    if (!connection) {
-      throw new Error('expected Claude connection')
+    const request = new AbortController()
+    invokeCanUseTool(claude.connections[0]!, 'AskUserQuestion', 'permission-1', 'tool-1', {
+      input: { questions: [{ question: 'Which branch?', options: [{ label: 'main' }] }] },
+      signal: request.signal
+    })
+    const [card] = [...recorded.bodies].find(([, body]) => body.kind === 'question') ?? []
+    if (!card) {
+      throw new Error('expected the question card')
     }
-    const answered = invokeCanUseTool(connection, 'Bash', 'permission-1', 'tool-1', {
-      input: { command: 'git status' },
-      signal: controller.signal
-    })
-    adapter.bindPromptItemId('session-1', 'journal-prompt', 'permission-1')
 
-    let cancellationSettled = false
-    const cancellation = adapter
-      .cancelTurn({
-        sessionId: 'session-1',
-        turnId: 'turn-1',
-        fence: 7,
-        prompt: { itemId: 'journal-prompt' }
-      })
-      .finally(() => {
-        cancellationSettled = true
-      })
-    await vi.waitFor(() => expect(claude.connections[0]?.calls.at(-1)?.subtype).toBe('interrupt'))
-    const commit = vi.fn(async () => undefined)
-    await expect(
-      adapter.answerPrompt({
-        sessionId: 'session-1',
-        itemId: 'journal-prompt',
-        kind: 'approval',
-        optionId: 'allow',
-        fence: 7,
-        commit
-      })
-    ).rejects.toThrow(/no longer waiting/)
-    expect(commit).not.toHaveBeenCalled()
-
-    interruptGate.resolve()
-    await Promise.resolve()
-    expect(cancellationSettled).toBe(false)
-    expect(answered.settled()).toBe(false)
-    controller.abort()
-    await expect(cancellation).resolves.toEqual({ cancelled: true })
-    await expect(answered.promise).resolves.toBeNull()
-    await expect(
-      adapter.answerPrompt({
-        sessionId: 'session-1',
-        itemId: 'journal-prompt',
-        kind: 'approval',
-        optionId: 'allow',
-        fence: 7,
-        commit
-      })
-    ).rejects.toThrow(/no longer waiting/)
-    expect(controller.signal.aborted).toBe(true)
-    expect(commit).not.toHaveBeenCalled()
-  })
-
-  it('cancels an owned prompt after another dispatch queues behind its turn', async () => {
-    const controller = new AbortController()
-    let queuedUuid = ''
-    const claude = fakeClaude({
-      replayUuids: ['turn-1', null],
-      capabilities: ['interrupt_cancel_queued_v1'],
-      routes: {
-        interrupt: () => {
-          controller.abort()
-          return { still_queued: [], cancelled: [queuedUuid] }
-        }
-      }
-    })
-    const lateSettlements: unknown[] = []
-    const adapter = await acquired(claude, {}, [], (settlement) => lateSettlements.push(settlement))
-    await startTurn(adapter)
-    const connection = claude.connections[0]
-    if (!connection) {
-      throw new Error('expected Claude connection')
+    const dismiss = adapter.dismissPrompt
+    if (!dismiss) {
+      throw new Error('expected Claude to dismiss a card')
     }
-    const answered = invokeCanUseTool(connection, 'Bash', 'permission-queued', 'tool-queued', {
-      input: { command: 'git status' },
-      signal: controller.signal
-    })
-    adapter.bindPromptItemId('session-1', 'journal-prompt', 'permission-queued')
-    await expect(
-      adapter.dispatch({
-        sessionId: 'session-1',
-        clientMessageId: 'queued-message',
-        body: USER_MESSAGE,
-        fence: 7
-      })
-    ).resolves.toEqual({ state: 'admitted' })
-    const sentUuid = connection.sent.at(-1)?.uuid
-    if (typeof sentUuid !== 'string') {
-      throw new Error('expected queued dispatch uuid')
-    }
-    queuedUuid = sentUuid
-
-    await expect(
-      adapter.cancelTurn({
-        sessionId: 'session-1',
-        turnId: 'turn-1',
-        fence: 7,
-        prompt: { itemId: 'journal-prompt' }
-      })
-    ).resolves.toEqual({ cancelled: true })
-    await expect(answered.promise).resolves.toBeNull()
-    expect(connection.calls).toContainEqual({
-      subtype: 'interrupt',
-      params: { cancelQueued: true }
-    })
-    expect(lateSettlements).toContainEqual({
+    await dismiss({
       sessionId: 'session-1',
-      clientMessageId: 'queued-message',
-      state: 'rejected',
-      reason: 'provider_cancelled_before_start'
+      itemId: card,
+      fence: 7,
+      answer: false,
+      // Claude's own cancel lands mid-commit, as an interrupt's can.
+      commit: async () => request.abort()
     })
+
+    expect(recorded.bodies.get(card)).toMatchObject({ resolution: { state: 'pending' } })
   })
 
-  it('does not interrupt a queued turn when the CLI cannot cancel queued messages', async () => {
-    const claude = fakeClaude({ replayUuids: ['turn-1', null] })
-    const adapter = await acquired(claude)
-    await startTurn(adapter)
-    const connection = claude.connections[0]
-    if (!connection) {
-      throw new Error('expected Claude connection')
-    }
-    const controller = new AbortController()
-    const answered = invokeCanUseTool(connection, 'Bash', 'permission-legacy', 'tool-legacy', {
-      input: { command: 'git status' },
-      signal: controller.signal
+  it('hands the card back when the host fails to record it, so a withdrawal still closes it', async () => {
+    const claude = fakeClaude({ replayUuid: 'turn-1' })
+    const recorded = lifecycleRecorder()
+    const adapter = adapterFor(claude)
+    await adapter.acquire({
+      identity: identityFor(),
+      fence: 7,
+      spawnToken: 'spawn-9',
+      events: recorded.sink
     })
-    adapter.bindPromptItemId('session-1', 'journal-prompt', 'permission-legacy')
-    await expect(
-      adapter.dispatch({
-        sessionId: 'session-1',
-        clientMessageId: 'queued-message',
-        body: USER_MESSAGE,
-        fence: 7
-      })
-    ).resolves.toEqual({ state: 'admitted' })
-
-    await expect(
-      adapter.cancelTurn({
-        sessionId: 'session-1',
-        turnId: 'turn-1',
-        fence: 7,
-        prompt: { itemId: 'journal-prompt' }
-      })
-    ).resolves.toEqual({ cancelled: false })
-    expect(connection.calls.some((call) => call.subtype === 'interrupt')).toBe(false)
-    controller.abort()
-    await expect(answered.promise).resolves.toBeNull()
-  })
-
-  it('does not interrupt a newer active turn through a stale prompt callback', async () => {
-    const claude = fakeClaude({ replayUuids: ['turn-1', 'turn-2'] })
-    const adapter = await acquired(claude)
     await startTurn(adapter)
-    const connection = claude.connections[0]
-    if (!connection) {
-      throw new Error('expected Claude connection')
-    }
-    const controller = new AbortController()
-    const answered = invokeCanUseTool(connection, 'Bash', 'permission-stale', 'tool-stale', {
-      input: { command: 'git status' },
-      signal: controller.signal
+    const request = new AbortController()
+    invokeCanUseTool(claude.connections[0]!, 'AskUserQuestion', 'permission-1', 'tool-1', {
+      input: { questions: [{ question: 'Which branch?', options: [{ label: 'main' }] }] },
+      signal: request.signal
     })
-    adapter.bindPromptItemId('session-1', 'journal-prompt', 'permission-stale')
-    await startTurn(adapter, 'turn-2')
+    const [card] = [...recorded.bodies].find(([, body]) => body.kind === 'question') ?? []
+    const dismiss = adapter.dismissPrompt
+    if (!card || !dismiss) {
+      throw new Error('expected the question card and a dismissal')
+    }
 
     await expect(
-      adapter.cancelTurn({
+      dismiss({
         sessionId: 'session-1',
-        turnId: 'turn-1',
+        itemId: card,
         fence: 7,
-        prompt: { itemId: 'journal-prompt' }
+        answer: false,
+        // Claude withdraws the request, then the host's record fails.
+        commit: async () => {
+          request.abort()
+          throw new Error('journal write failed')
+        }
       })
-    ).resolves.toEqual({ cancelled: false })
-    expect(connection.calls.some((call) => call.subtype === 'interrupt')).toBe(false)
-    expect(answered.settled()).toBe(false)
-    controller.abort()
-    await expect(answered.promise).resolves.toBeNull()
+    ).rejects.toThrow('journal write failed')
+
+    expect(recorded.bodies.get(card)).toMatchObject({ resolution: { state: 'cancelled' } })
   })
 
   it('drops resolved prompt bodies instead of retaining them for the session lifetime', () => {
-    const prompts = new ClaudeJournalPrompts({ sink: lifecycleRecorder().sink })
+    const prompts = new ClaudeJournalPrompts({
+      sink: lifecycleRecorder().sink,
+      turnScope: () => AGENT_JOURNAL_THREAD_SCOPE
+    })
 
     for (let index = 0; index < 128; index += 1) {
       const promptKey = `resolved-${index}`
@@ -356,7 +232,6 @@ describe('Claude live prompt ownership', () => {
           input: { command: 'git status' },
           suggestions: [],
           questionIds: [],
-          answers: new Map(),
           settle: vi.fn()
         }
       })
@@ -364,141 +239,6 @@ describe('Claude live prompt ownership', () => {
     }
 
     expect(prompts.size).toBe(0)
-  })
-
-  it('releases the callback claim after a failed interrupt', async () => {
-    const claude = fakeClaude({
-      replayUuid: 'turn-1',
-      routes: {
-        interrupt: () => {
-          throw new ClaudeControlRequestError('interrupt', 'not running')
-        }
-      }
-    })
-    const adapter = await acquired(claude)
-    await startTurn(adapter)
-    const connection = claude.connections[0]
-    if (!connection) {
-      throw new Error('expected Claude connection')
-    }
-    const answered = invokeCanUseTool(connection, 'Bash', 'permission-1', 'tool-1', {
-      input: { command: 'git status' }
-    })
-    adapter.bindPromptItemId('session-1', 'journal-prompt', 'permission-1')
-
-    await expect(
-      adapter.cancelTurn({
-        sessionId: 'session-1',
-        turnId: 'turn-1',
-        fence: 7,
-        prompt: { itemId: 'journal-prompt' }
-      })
-    ).resolves.toEqual({ cancelled: false })
-    await adapter.answerPrompt({
-      sessionId: 'session-1',
-      itemId: 'journal-prompt',
-      kind: 'approval',
-      optionId: 'allow',
-      fence: 7,
-      commit: async () => undefined
-    })
-    await expect(answered.promise).resolves.toMatchObject({
-      behavior: 'allow',
-      toolUseID: 'tool-1'
-    })
-  })
-
-  it('enqueues terminal prompt state before a confirmed cancellation resolves', async () => {
-    const controller = new AbortController()
-    const claude = fakeClaude({
-      replayUuid: 'turn-1',
-      routes: { interrupt: () => controller.abort() }
-    })
-    const recorded = lifecycleRecorder()
-    const adapter = adapterFor(claude)
-    await adapter.acquire({
-      identity: identityFor(),
-      fence: 7,
-      spawnToken: 'spawn-9',
-      events: recorded.sink
-    })
-    await startTurn(adapter)
-    const connection = claude.connections[0]
-    if (!connection) {
-      throw new Error('expected Claude connection')
-    }
-    const answered = invokeCanUseTool(connection, 'Bash', 'permission-1', 'tool-1', {
-      input: { command: 'git status' },
-      signal: controller.signal
-    })
-    adapter.bindPromptItemId('session-1', 'journal-prompt', 'permission-1')
-    const promptItemId = [...recorded.bodies].find(([, body]) => body.kind === 'approval')?.[0]
-
-    const cancellation = adapter
-      .cancelTurn({
-        sessionId: 'session-1',
-        turnId: 'turn-1',
-        fence: 7,
-        prompt: { itemId: 'journal-prompt' }
-      })
-      .then((result) => {
-        recorded.order.push('resolved')
-        return result
-      })
-
-    await expect(cancellation).resolves.toEqual({ cancelled: true })
-    await expect(answered.promise).resolves.toBeNull()
-    if (!promptItemId) {
-      throw new Error('expected a recorded prompt item')
-    }
-    expect(recorded.order).toEqual(['prompt-lifecycle', 'resolved'])
-    expect(
-      [...recorded.bodies.values()].some(
-        (body) =>
-          (body.kind === 'approval' || body.kind === 'question') &&
-          body.resolution.state === 'pending'
-      )
-    ).toBe(false)
-    expect(recorded.bodies.get(promptItemId)).toMatchObject({
-      resolution: { state: 'cancelled' }
-    })
-    expect(
-      [...recorded.bodies.values()].some(
-        (body) => readAgentJournalTurn(body)?.state === 'interrupted'
-      )
-    ).toBe(false)
-
-    connection.handlers.onMessage?.({
-      type: 'result',
-      subtype: 'error_during_execution',
-      uuid: 'result-1',
-      session_id: PROVIDER_SESSION_ID,
-      is_error: true,
-      terminal_reason: 'aborted_tools',
-      errors: [],
-      duration_ms: 654
-    })
-    expect([...recorded.bodies.values()].find((body) => readAgentJournalTurn(body))).toMatchObject({
-      state: 'interrupted',
-      durationMs: 654
-    })
-
-    connection.handlers.onMessage?.({
-      type: 'result',
-      subtype: 'success',
-      uuid: 'result-duplicate',
-      session_id: PROVIDER_SESSION_ID,
-      is_error: false,
-      terminal_reason: 'completed',
-      duration_ms: 999
-    })
-    expect([...recorded.bodies.values()].find((body) => readAgentJournalTurn(body))).toMatchObject({
-      state: 'interrupted',
-      durationMs: 654
-    })
-
-    expect(controller.signal.aborted).toBe(true)
-    expect(recorded.tombstones).toHaveLength(0)
   })
 
   it('does not synthesize terminal lifecycle for ordinary Stop', async () => {
@@ -515,193 +255,129 @@ describe('Claude live prompt ownership', () => {
     ).toBe(false)
   })
 
-  it('does not report success or release the claim when prompt lifecycle admission fails', async () => {
-    const controller = new AbortController()
-    const claude = fakeClaude({
-      replayUuid: 'turn-1',
-      routes: { interrupt: () => controller.abort() }
-    })
-    const recorded = lifecycleRecorder(false)
-    const adapter = adapterFor(claude)
-    await adapter.acquire({
-      identity: identityFor(),
-      fence: 7,
-      spawnToken: 'spawn-9',
-      events: recorded.sink
-    })
-    await startTurn(adapter)
-    const connection = claude.connections[0]
-    if (!connection) {
-      throw new Error('expected Claude connection')
-    }
-    invokeCanUseTool(connection, 'Bash', 'permission-1', 'tool-1', {
-      input: { command: 'git status' },
-      signal: controller.signal
-    })
-    const promptItemId = [...recorded.bodies].find(([, body]) => body.kind === 'approval')?.[0]
-    if (!promptItemId) {
-      throw new Error('expected durable Claude prompt')
-    }
-
-    await expect(
-      adapter.cancelTurn({
-        sessionId: 'session-1',
-        turnId: 'turn-1',
-        fence: 7,
-        prompt: { itemId: promptItemId }
-      })
-    ).rejects.toThrow(/lifecycle was not admitted/)
-    const commit = vi.fn(async () => undefined)
-    await expect(
-      adapter.answerPrompt({
-        sessionId: 'session-1',
-        itemId: promptItemId,
-        kind: 'approval',
-        optionId: 'allow',
-        fence: 7,
-        commit
-      })
-    ).rejects.toThrow(/no longer waiting/)
-    expect(commit).not.toHaveBeenCalled()
-  })
-
-  it('checks the bound item, turn, fence, and current acquisition without callback revival', async () => {
-    const claude = fakeClaude({ replayUuid: 'turn-1' })
-    const adapter = await acquired(claude)
-    await startTurn(adapter)
-    const connection = claude.connections[0]
-    if (!connection) {
-      throw new Error('expected Claude connection')
-    }
-    const answered = invokeCanUseTool(connection, 'Bash', 'permission-1', 'tool-1', {
-      input: { command: 'git status' }
-    })
-    adapter.bindPromptItemId('session-1', 'journal-prompt', 'permission-1')
-
-    for (const input of [
-      { turnId: 'turn-1', fence: 7, itemId: 'other-item' },
-      { turnId: 'turn-2', fence: 7, itemId: 'journal-prompt' },
-      { turnId: 'turn-1', fence: 6, itemId: 'journal-prompt' }
-    ]) {
-      await expect(
-        adapter.cancelTurn({
-          sessionId: 'session-1',
-          turnId: input.turnId,
-          fence: input.fence,
-          prompt: { itemId: input.itemId }
-        })
-      ).resolves.toEqual({ cancelled: false })
-    }
-    expect(claude.connections[0]?.calls.some((call) => call.subtype === 'interrupt')).toBe(false)
-
-    await adapter.acquire({ identity: identityFor(), fence: 8, spawnToken: 'spawn-10' })
-    await expect(answered.promise).resolves.toBeNull()
-    await expect(
-      adapter.cancelTurn({
-        sessionId: 'session-1',
-        turnId: 'turn-1',
-        fence: 8,
-        prompt: { itemId: 'journal-prompt' }
-      })
-    ).resolves.toEqual({ cancelled: false })
-    const commit = vi.fn(async () => undefined)
-    await expect(
-      adapter.answerPrompt({
-        sessionId: 'session-1',
-        itemId: 'journal-prompt',
-        kind: 'approval',
-        optionId: 'allow',
-        fence: 8,
-        commit
-      })
-    ).rejects.toThrow(/no longer waiting/)
-    expect(commit).not.toHaveBeenCalled()
-    expect(claude.connections[1]?.calls.some((call) => call.subtype === 'interrupt')).toBe(false)
-  })
-
-  it('rejects a grouped prompt batch without partially revising its first row', () => {
-    const tombstones: string[] = []
-    const appendTombstone = vi.fn(
-      (identity: Parameters<StructuredAgentSessionEventSink['appendTombstone']>[0]) => {
-        tombstones.push(agentJournalItemKey(identity))
-      }
-    )
-    let rowAdmission = 0
-    const tryAppendTombstone = vi.fn(
-      (identity: Parameters<StructuredAgentSessionEventSink['appendTombstone']>[0]) => {
-        rowAdmission += 1
-        if (rowAdmission === 2) {
+  it.each([0, 1, null] as const)(
+    'rejects a grouped prompt batch without partial revision after row %s admission refusal',
+    async (refusedAt) => {
+      const tombstones: string[] = []
+      const appendTombstone = vi.fn(
+        (identity: Parameters<StructuredAgentSessionEventSink['appendTombstone']>[0]) => {
+          tombstones.push(agentJournalItemKey(identity))
+        }
+      )
+      let rowAdmission = 0
+      const tryAppendTombstone = vi.fn(
+        (identity: Parameters<StructuredAgentSessionEventSink['appendTombstone']>[0]) => {
+          rowAdmission += 1
+          if (rowAdmission === 2) {
+            return { accepted: false as const, reason: 'backpressure' as const }
+          }
+          appendTombstone(identity)
+          return { accepted: true as const }
+        }
+      )
+      const tryAppendLifecycleBatch = vi.fn(
+        (
+          _settlementId: string,
+          mutations: Parameters<
+            NonNullable<StructuredAgentSessionEventSink['tryAppendLifecycleBatch']>
+          >[1]
+        ) => {
+          expect(mutations[1]).toMatchObject({
+            kind: 'item',
+            body: { resolution: { state: 'cancelled' } }
+          })
           return { accepted: false as const, reason: 'backpressure' as const }
         }
-        appendTombstone(identity)
-        return { accepted: true as const }
+      )
+      const admittedRows = new Map<string, AgentJournalItemBody>()
+      let admissionAttempts = 0
+      const tryAppendItem = vi.fn(
+        (
+          identity: Parameters<StructuredAgentSessionEventSink['appendItem']>[0],
+          body: AgentJournalItemBody
+        ) => {
+          if (admissionAttempts++ === refusedAt) {
+            return { accepted: false as const, reason: 'backpressure' as const }
+          }
+          admittedRows.set(agentJournalItemKey(identity), body)
+          return { accepted: true as const }
+        }
+      )
+      const bindPromptItemId = vi.fn()
+      const written = vi.fn(async () => ({ ok: true as const }))
+      const prompts = new ClaudeJournalPrompts({
+        sink: {
+          appendItem: () => {},
+          tryAppendItem,
+          appendTombstone,
+          tryAppendTombstone,
+          tryAppendLifecycleBatch,
+          publish: () => {},
+          written
+        },
+        bindPromptItemId,
+        producerOf: () => ({ agentId: 'agent-grouped', producerKind: 'agent' }),
+        questionItems: (input) => {
+          const item = claudeQuestionItems(input)[0]
+          return item
+            ? [
+                {
+                  ...item,
+                  identity: { provider: 'orca', clientMessageId: 'group:first' }
+                },
+                {
+                  ...item,
+                  identity: { provider: 'orca', clientMessageId: 'group:second' }
+                }
+              ]
+            : []
+        },
+        turnScope: () => AGENT_JOURNAL_THREAD_SCOPE
+      })
+      const prompt: ClaudePendingPrompt = {
+        requestId: 'grouped-request',
+        promptKey: 'grouped-request',
+        toolUseId: 'tool-grouped',
+        toolName: 'AskUserQuestion',
+        kind: 'question',
+        input: {
+          questions: [
+            { question: 'First?', options: [{ label: 'Yes' }] },
+            { question: 'Second?', options: [{ label: 'No' }] }
+          ]
+        },
+        suggestions: [],
+        questionIds: ['First?', 'Second?'],
+        settle: vi.fn()
       }
-    )
-    const tryAppendLifecycleBatch = vi.fn(
-      (
-        _settlementId: string,
-        mutations: Parameters<
-          NonNullable<StructuredAgentSessionEventSink['tryAppendLifecycleBatch']>
-        >[1]
-      ) => {
-        expect(mutations[1]).toMatchObject({
-          kind: 'item',
-          body: { resolution: { state: 'cancelled' } }
-        })
-        return { accepted: false as const, reason: 'backpressure' as const }
-      }
-    )
-    const prompts = new ClaudeJournalPrompts({
-      sink: {
-        appendItem: () => {},
-        appendTombstone,
-        tryAppendTombstone,
-        tryAppendLifecycleBatch,
-        publish: () => {}
-      },
-      questionItems: (input) => {
-        const item = claudeQuestionItems(input)[0]
-        return item
-          ? [
-              {
-                ...item,
-                identity: { provider: 'orca', clientMessageId: 'group:first' }
-              },
-              {
-                ...item,
-                identity: { provider: 'orca', clientMessageId: 'group:second' }
-              }
-            ]
-          : []
-      }
-    })
-    const prompt: ClaudePendingPrompt = {
-      requestId: 'grouped-request',
-      promptKey: 'grouped-request',
-      toolUseId: 'tool-grouped',
-      toolName: 'AskUserQuestion',
-      kind: 'question',
-      input: {
-        questions: [
-          { question: 'First?', options: [{ label: 'Yes' }] },
-          { question: 'Second?', options: [{ label: 'No' }] }
-        ]
-      },
-      suggestions: [],
-      questionIds: ['First?', 'Second?'],
-      answers: new Map(),
-      settle: vi.fn()
-    }
-    prompts.handle({ type: 'prompt', sessionId: 'session-1', prompt })
+      prompts.handle({ type: 'prompt', sessionId: 'session-1', prompt })
+      await prompts.whenWritten(prompt.promptKey)
 
-    expect(prompts.cancel(prompt.promptKey)).toEqual({
-      accepted: false,
-      reason: 'backpressure'
-    })
-    expect(tryAppendLifecycleBatch).toHaveBeenCalledOnce()
-    expect(tryAppendTombstone).not.toHaveBeenCalled()
-    expect(tombstones).toEqual([])
-  })
+      expect(tryAppendItem.mock.calls.map(([identity]) => agentJournalItemKey(identity))).toEqual([
+        'orca:group%3Afirst',
+        'orca:group%3Asecond'
+      ])
+      expect([...admittedRows.keys()]).toEqual(
+        ['orca:group%3Afirst', 'orca:group%3Asecond'].filter((_, index) => index !== refusedAt)
+      )
+      expect(bindPromptItemId.mock.calls).toEqual([
+        ['orca:group%3Afirst', prompt.promptKey],
+        ['orca:group%3Asecond', prompt.promptKey]
+      ])
+      expect(written).toHaveBeenCalledTimes(refusedAt === null ? 1 : 0)
+      expect([...prompts.openCards()]).toEqual(
+        refusedAt === null ? [{ promptKey: prompt.promptKey, asker: 'agent-grouped' }] : []
+      )
+
+      expect(prompts.cancel(prompt.promptKey)).toEqual({
+        accepted: false,
+        reason: 'backpressure'
+      })
+      expect(tryAppendLifecycleBatch).toHaveBeenCalledOnce()
+      expect(tryAppendTombstone).not.toHaveBeenCalled()
+      expect(tombstones).toEqual([])
+    }
+  )
 
   it('keeps every backpressured prompt cancellation retry in its owned entry', () => {
     let backpressured = true
@@ -715,7 +391,8 @@ describe('Claude live prompt ownership', () => {
           lifecycleAttempts += 1
           return backpressured ? { accepted: false, reason: 'backpressure' } : { accepted: true }
         }
-      }
+      },
+      turnScope: () => AGENT_JOURNAL_THREAD_SCOPE
     })
     const registerCancellation = (index: number): void => {
       const promptKey = `permission-${index}`
@@ -728,7 +405,6 @@ describe('Claude live prompt ownership', () => {
         input: { command: 'git status' },
         suggestions: [],
         questionIds: [],
-        answers: new Map(),
         settle: vi.fn()
       }
       prompts.handle({ type: 'prompt', sessionId: 'session-1', prompt })

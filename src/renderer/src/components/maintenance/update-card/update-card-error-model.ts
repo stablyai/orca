@@ -47,6 +47,18 @@ export function buildUpdateCardErrorModel({
         }
       : null
   }
+  if (status.retryAction === 'install' && status.retryable !== false) {
+    return {
+      title: translate('auto.components.UpdateCard.4cf109845a', 'Update Error'),
+      summary: status.message,
+      detail: status.message,
+      releaseUrl: getReleaseNotesUrlForVersion(cachedVersion),
+      primaryAction: {
+        label: translate('auto.components.UpdateCard.2c2d3e03ca', 'Try Again'),
+        onClick: onInstallRetry
+      }
+    }
+  }
   if (isLocalBuild) {
     return {
       title: cachedVersion

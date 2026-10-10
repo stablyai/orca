@@ -32,6 +32,7 @@ export const AiVaultListSessionsParams = z
       )
       .pipe(z.union([z.number().int(), z.undefined()]))
       .optional(),
+    includeAntigravityIdeSessions: OptionalBoolean,
     unlimited: OptionalBoolean,
     force: OptionalBoolean,
     scopePaths: z
@@ -57,7 +58,8 @@ export const AiVaultPrepareSessionResumeParams = z.object({
   sessionId: z.string().min(1).max(512).optional(),
   filePath: z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH),
   codexHome: z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH).nullable(),
-  executionHostId: z.string().optional()
+  executionHostId: z.string().optional(),
+  fork: z.boolean().optional()
 })
 
 export const AiVaultSessionTitlesParams = z.object({

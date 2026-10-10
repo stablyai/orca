@@ -147,7 +147,7 @@ export function createClaudeModelSwitchConfirmationObserver(args: {
         // exact Claude warning defaults to “Yes” and needs only one Enter.
         const accepted = args.submitConfirmation
           ? args.submitConfirmation() !== false
-          : sendRuntimePtyInput(args.settings, args.ptyId, NATIVE_CHAT_SUBMIT)
+          : sendRuntimePtyInput(args.settings, args.ptyId, NATIVE_CHAT_SUBMIT, 'driving')
         if (!accepted) {
           finish('unknown')
           return

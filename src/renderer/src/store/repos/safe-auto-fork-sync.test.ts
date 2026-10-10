@@ -95,4 +95,17 @@ describe('scheduleSafeAutoForkSync', () => {
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
+
+  it('bounds completed attempt history under repo churn', async () => {
+    const repos = Array.from({ length: 600 }, (_, index) => ({
+      ...RUNTIME_REPO,
+      id: `repo-${index}`,
+      path: `/srv/repo-${index}`
+    }))
+
+    scheduleSafeAutoForkSync(() => stateWith(RUNTIME_REPO), repos)
+    await flushScheduledSyncs()
+
+    expect(safeAutoForkSyncAttempts.size).toBeLessThanOrEqual(512)
+  })
 })

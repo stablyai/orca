@@ -1,12 +1,20 @@
+// A refused home cell is not fleet capacity, so it gets its own bucket rather
+// than inflating the capacity count a run is read for.
+const ASSIGNMENT_REJECTION_BUCKETS = {
+  relay_capacity_exhausted: 'assignment_capacity_exhausted',
+  relay_connection_headroom_exhausted: 'assignment_capacity_exhausted',
+  relay_home_cell_unavailable: 'assignment_home_cell_unavailable'
+}
+
 export function relayLoadFailureReason(error) {
   const message = error instanceof Error ? error.message : String(error)
   const tokenExchange = /^relay token exchange failed: ([1-5][0-9]{2})$/.exec(message)
   if (tokenExchange) return `token_http_${tokenExchange[1]}`
   const assignment =
-    /^relay assignment failed: ([1-5][0-9]{2})(?: (relay_capacity_exhausted|relay_connection_headroom_exhausted))?$/.exec(
-      message
-    )
-  if (assignment?.[1] === '503' && assignment[2]) return 'assignment_capacity_exhausted'
+    /^relay assignment failed: ([1-5][0-9]{2})(?: (relay_[a-z_]+))?$/.exec(message)
+  if (assignment?.[1] === '503' && assignment[2]) {
+    return ASSIGNMENT_REJECTION_BUCKETS[assignment[2]] ?? `assignment_http_${assignment[1]}`
+  }
   if (assignment) return `assignment_http_${assignment[1]}`
   const closed = /^control closed: ([0-9]{4})\b/.exec(message)
   if (closed) return `control_close_${closed[1]}`

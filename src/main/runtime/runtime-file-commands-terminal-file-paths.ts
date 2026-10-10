@@ -1,7 +1,6 @@
 // @ts-nocheck -- mechanically split declarations.
-import { lstat, open, stat } from 'node:fs/promises'
-import { basename, extname } from 'node:path'
-import { isENOENT } from '../ipc/filesystem-path-containment'
+import { open, stat } from 'node:fs/promises'
+import { extname } from 'node:path'
 import type { Store } from '../persistence'
 import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
 import type { TerminalFileGrant } from './runtime-file-commands-mobile-file-list-limit'
@@ -14,12 +13,13 @@ import {
 } from './runtime-file-commands-mobile-file-list-limit'
 import type { FileHandle } from 'node:fs/promises'
 import {
+  assertTerminalArtifactContentUnchanged,
   assertTerminalFileGrantFresh,
   canonicalPathForArtifactComparison,
   localTerminalArtifactRoots,
   readFileHandleBufferBounded
 } from './runtime-file-commands-terminal-artifact-access'
-import { isBinaryBuffer } from './runtime-file-command-host'
+import { isBinaryBuffer } from '../../shared/binary-buffer'
 import type { RuntimeFilePreviewResult } from '../../shared/runtime-types'
 import {
   isPathInsideOrEqual,
@@ -28,33 +28,6 @@ import {
   resolveRuntimePath
 } from '../../shared/cross-platform-path'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
-
-export async function assertRuntimePathDoesNotExist(targetPath: string): Promise<void> {
-  try {
-    await lstat(targetPath)
-    throw new Error(
-      `A file or folder named '${basename(targetPath)}' already exists in this location`
-    )
-  } catch (error) {
-    if (!isENOENT(error)) {
-      throw error
-    }
-  }
-}
-
-export function rethrowRuntimeFileCreateError(error: unknown, targetPath: string): never {
-  const name = basename(targetPath)
-  if (error instanceof Error && 'code' in error) {
-    const code = (error as NodeJS.ErrnoException).code
-    if (code === 'EEXIST') {
-      throw new Error(`A file or folder named '${name}' already exists in this location`)
-    }
-    if (code === 'EACCES' || code === 'EPERM') {
-      throw new Error(`Permission denied: unable to create '${name}'`)
-    }
-  }
-  throw error
-}
 
 export async function readLocalMobileFile(filePath: string, store: Store): Promise<string> {
   const authorizedPath = await resolveAuthorizedPath(filePath, store)
@@ -84,6 +57,7 @@ export async function readLocalTerminalArtifactFileFromHandle(
   }
   assertTerminalFileGrantFresh(grant, fileStat)
   const buffer = await readFileHandleBufferBounded(handle, MOBILE_FILE_READ_MAX_BYTES + 1)
+  assertTerminalArtifactContentUnchanged(grant, buffer)
   if (isBinaryBuffer(buffer)) {
     throw new Error('binary_file')
   }
@@ -113,6 +87,7 @@ export async function readLocalTerminalArtifactPreviewFromHandle(
     if (buffer.byteLength > binaryMaxBytes) {
       throw new Error('file_too_large')
     }
+    assertTerminalArtifactContentUnchanged(grant, buffer)
     return {
       content: buffer.toString('base64'),
       isBinary: true,

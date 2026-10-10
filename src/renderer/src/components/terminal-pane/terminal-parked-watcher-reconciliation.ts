@@ -66,6 +66,9 @@ export function resolveParkedTerminalPaneCandidates(
       ? {
           ...pane,
           paneId: prior.paneId,
+          ...(prior.ptyId === pane.ptyId && prior.workspaceOwner
+            ? { workspaceOwner: prior.workspaceOwner }
+            : {}),
           drivesTabTitle: prior.drivesTabTitle,
           // Why: the fact belongs to the captured PTY; a re-minted id on this leaf is a different shell.
           ...(prior.ptyId === pane.ptyId && prior.untouchedFreshSpawn

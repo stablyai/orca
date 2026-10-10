@@ -20,6 +20,7 @@ import {
   _setWslCachesForTests,
   getCachedWslAvailability,
   getCachedWslDistros,
+  getWslHome,
   hasCachedWslAvailability,
   hasCachedWslDistros,
   isWslAvailable,
@@ -308,6 +309,28 @@ describe('WSL distro discovery cache', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('WSL home cache', () => {
+  afterEach(() => {
+    execFileMock.mockReset()
+    execFileSyncMock.mockReset()
+    _resetWslCachesForTests()
+  })
+
+  it('bounds cached homes while retaining the most recently used distros', () => {
+    execFileSyncMock.mockImplementation((_command, args) => `/home/${args[1]}\n`)
+
+    withPlatform('win32', () => {
+      for (let index = 0; index < 68; index += 1) {
+        expect(getWslHome(`Distro-${index}`)).toContain(`Distro-${index}`)
+      }
+      expect(getWslHome('Distro-4')).toContain('Distro-4')
+      expect(execFileSyncMock).toHaveBeenCalledTimes(68)
+      expect(getWslHome('Distro-0')).toContain('Distro-0')
+      expect(execFileSyncMock).toHaveBeenCalledTimes(69)
+    })
   })
 })
 

@@ -53,6 +53,8 @@ export type EditorFileSavedDetail = {
 
 export type EditorRequestFileCloseDetail = {
   fileId: string
+  /** Runs once the file actually closes — after save or discard, never on cancel. */
+  onClosed?: () => void
 }
 
 export type EditorRequestCmdSaveDetail = {
@@ -67,22 +69,10 @@ export function isExternalReloadableEditorTab(file: OpenFile): boolean {
   )
 }
 
-// Why: combined "Changes"/"All Changes" tabs render working-tree diffs but
-// match no single path (their relativePath is a label, filePath the worktree
-// root). The fs watcher must still notify them so terminal/agent edits reload
-// the affected section. Branch/commit combined diffs compare committed refs, so
-// working-tree changes don't affect them and are intentionally excluded.
-export function isWorkingTreeCombinedDiffTab(file: OpenFile): boolean {
-  return (
-    file.mode === 'diff' &&
-    (file.diffSource === 'combined-uncommitted' || file.diffSource === 'combined-all')
-  )
-}
-
 export function canAutoSaveOpenFile(file: OpenFile): boolean {
   // Why: read-only tabs (AI Vault View Log) must never autosave — writing an
   // agent-owned transcript can corrupt the provider's resume history.
-  if (file.readOnly === true) {
+  if (file.readOnly === true || file.csvPreviewOnly === true) {
     return false
   }
   // Why: single-file editors and one-file unstaged diffs have an unambiguous
@@ -212,10 +202,13 @@ export async function requestEditorFileSave(target: EditorSaveFileTarget): Promi
   })
 }
 
-export function requestEditorFileClose(fileId: string): void {
+export function requestEditorFileClose(
+  fileId: string,
+  options?: Pick<EditorRequestFileCloseDetail, 'onClosed'>
+): void {
   window.dispatchEvent(
     new CustomEvent<EditorRequestFileCloseDetail>(ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT, {
-      detail: { fileId }
+      detail: { fileId, ...options }
     })
   )
 }

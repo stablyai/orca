@@ -46,9 +46,7 @@ describe('buildDirectWorkItemStartupOpts', () => {
     })
   })
 
-  it('carries launchDraftText for a natively-prefilled draft launch', () => {
-    // Why: the draft is already inside launchCommand, so draftPrompt stays unset
-    // and launchDraftText is the only signal the view-mode gate can read.
+  it('keeps a natively-prefilled draft in the terminal command', () => {
     const plan: AgentStartupPlan = {
       agent: 'claude',
       launchCommand: "claude --prefill 'https://github.com/o/r/issues/12'",
@@ -57,15 +55,10 @@ describe('buildDirectWorkItemStartupOpts', () => {
       launchConfig: { agentArgs: '', agentEnv: {} }
     }
 
-    const opts = buildDirectWorkItemStartupOpts(
-      'claude',
-      plan,
-      'task_page',
-      'https://github.com/o/r/issues/12'
-    )
+    const opts = buildDirectWorkItemStartupOpts('claude', plan, 'task_page')
 
     expect(opts.startup?.draftPrompt).toBeUndefined()
-    expect(opts.startup?.launchDraftText).toBe('https://github.com/o/r/issues/12')
+    expect(opts.startup?.command).toContain('https://github.com/o/r/issues/12')
   })
 })
 
@@ -83,35 +76,18 @@ const settings = {
 }
 
 describe('buildDirectWorkItemAgentStartupPlan', () => {
-  it('omits native-chat preferences when the new workspace opens in terminal mode', () => {
+  it('keeps Chat UI model preferences out of the terminal startup', () => {
     const result = buildDirectWorkItemAgentStartupPlan({
       agent: 'codex',
       draftContent: 'Review issue 42',
       promptDelivery: 'draft',
-      settings: { ...settings, openAgentTabsInChatByDefault: false },
-      launchPlatform: 'darwin',
-      nativeChatTranscriptIsLocalReadable: true
+      settings,
+      launchPlatform: 'darwin'
     })
 
     expect(result.startupPlan?.launchCommand).not.toContain("'-m'")
+    expect(result.startupPlan?.launchCommand).not.toContain('model_reasoning_effort=')
     expect(result.startupPlan?.sessionOptions).toBeUndefined()
-  })
-
-  it('applies native-chat preferences when the new workspace opens in chat', () => {
-    const result = buildDirectWorkItemAgentStartupPlan({
-      agent: 'codex',
-      draftContent: 'Review issue 42',
-      promptDelivery: 'draft',
-      settings: { ...settings, openAgentTabsInChatByDefault: true },
-      launchPlatform: 'darwin',
-      nativeChatTranscriptIsLocalReadable: true
-    })
-
-    expect(result.startupPlan?.launchCommand).toContain("'-m' 'gpt-5.2-codex'")
-    expect(result.startupPlan?.sessionOptions).toEqual({
-      model: 'gpt-5.2-codex',
-      effort: 'medium'
-    })
   })
 })
 
@@ -132,5 +108,41 @@ describe('notifyDirectWorkItemAgentStartTimeout', () => {
     expect(toast.message).toHaveBeenCalledWith(
       expect.stringContaining('paste the work item context')
     )
+  })
+})
+
+// Why: the Source Control AI dialogs hide the CLI arguments field on launches that cannot apply
+// it, and then send nothing. Only `undefined` reaches the global Agents arguments here — an
+// empty string is an explicit "no arguments" that would silently suppress the user's setting.
+describe('buildDirectWorkItemAgentStartupPlan global arguments fallback', () => {
+  const withGlobalArgs = {
+    ...settings,
+    agentDefaultArgs: { codex: '--sandbox danger-full-access' }
+  }
+
+  it('resolves the global Agents arguments when the launch names none', () => {
+    const result = buildDirectWorkItemAgentStartupPlan({
+      agent: 'codex',
+      draftContent: 'Fix the broken checks',
+      promptDelivery: 'draft',
+      settings: withGlobalArgs,
+      launchPlatform: 'darwin'
+    })
+
+    expect(result.startupPlan?.launchCommand).toContain("'--sandbox' 'danger-full-access'")
+  })
+
+  it('lets an explicit per-action value win over the global one', () => {
+    const result = buildDirectWorkItemAgentStartupPlan({
+      agent: 'codex',
+      agentArgs: '--model gpt-5',
+      draftContent: 'Fix the broken checks',
+      promptDelivery: 'draft',
+      settings: withGlobalArgs,
+      launchPlatform: 'darwin'
+    })
+
+    expect(result.startupPlan?.launchCommand).toContain("'--model' 'gpt-5'")
+    expect(result.startupPlan?.launchCommand).not.toContain('danger-full-access')
   })
 })

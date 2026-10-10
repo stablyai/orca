@@ -1,6 +1,6 @@
-import { spawnProcess } from '../../shared/child-process/run-process'
-import type { ChildProcessHandle, ProcessSpec } from '../../shared/child-process/process-spec'
-import { admitProcessTreeKill } from '../../shared/child-process/process-tree-kill-gate'
+import { spawnProcess } from '@orca/process-host'
+import type { ChildProcessHandle, ProcessSpec } from '@orca/process-host/process-spec'
+import { admitProcessTreeKill } from '@orca/process-host/process-tree-kill-gate'
 
 /** Spawn seam for tests; production always goes through the hardened spawnProcess wrapper. */
 export type CodexAppServerSpawn = (
@@ -32,8 +32,8 @@ export function killCodexAppServerProcessTree(
       return
     }
     try {
-      // Why: npm-installed Codex runs behind cmd.exe; killing only that wrapper
-      // leaves the app-server child alive after a timeout or failed shutdown.
+      // Why: npm-installed Codex runs behind a launcher (node, or cmd.exe for an unresolved shim);
+      // killing only that wrapper leaves the app-server child alive after a timeout.
       const killer = spawnImpl('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
         stdio: 'ignore',
         windowsHide: true

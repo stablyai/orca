@@ -73,6 +73,7 @@ Common commands:
 ORCA repo list --json
 ORCA repo show --repo id:<repoId> --json
 ORCA repo add --path /abs/repo --json
+ORCA repo set --repo id:<repoId> --external-worktree-visibility show --json
 ORCA repo set-base-ref --repo id:<repoId> --ref origin/main --json
 ORCA repo search-refs --repo id:<repoId> --query main --limit 10 --json
 ORCA worktree list --repo id:<repoId> --json
@@ -87,8 +88,16 @@ ORCA worktree create --name independent-task --no-parent --json
 ORCA worktree set --worktree id:<repoId>::<worktreePath> --display-name "My Task" --json
 ORCA worktree set --worktree active --comment "reproduced bug; testing fix" --json
 ORCA worktree set --worktree active --workspace-status in-review --json
+ORCA worktree set --worktree active --unread --json
+ORCA worktree create --repo id:<repoId> --name review-task --pr 123 --json
+ORCA worktree set --worktree active --gitlab-issue '#42' --gitlab-mr '!77' --json
+ORCA worktree set --worktree active --pr null --gitlab-mr null --json
 ORCA worktree rm --worktree id:<repoId>::<worktreePath> --force --json
 ```
+
+Use `repo set --external-worktree-visibility show` to show a repo's non-Orca worktrees.
+`hide` hides them; `inherit` clears the repo override and follows the global default.
+Per-worktree visibility rules still apply.
 
 Selectors:
 
@@ -125,6 +134,28 @@ ORCA worktree create --name task --run-hooks --json
 - If an older installed CLI rejects `--agent`, `--prompt`, or `--setup`, create the worktree normally, then run `ORCA terminal create --worktree <selector> --command "<requested-agent>"` and `ORCA terminal send` if a prompt is needed. This can leave a fallback shell when no default tabs are configured; close it only after confirming it is unused.
 - `worktree create` makes a new checkout. For a fresh agent in the **current** checkout, use `ORCA terminal create --worktree active --command "codex" --json`.
 
+## Review and issue references
+
+```text
+ORCA reference list --worktree name:api --json
+ORCA reference add https://github.com/acme/api/pull/5123 https://linear.app/acme/issue/STA-1234 --worktree name:api --json
+ORCA reference remove https://github.com/acme/api/pull/5123 --worktree name:api --json
+ORCA reference remove --key <key-from-list> --worktree name:api --json
+ORCA worktree create --name fix --reference https://github.com/acme/api/pull/5123 --reference https://linear.app/acme/issue/STA-1234 --json
+ORCA reference find STA-1234 --json
+```
+
+- Add/remove require explicit `--worktree`, including `current` or a folder selector. Writes accept full URLs; `remove --key` also accepts opaque keys from list for URL-less entries. Source-unknown legacy links cannot match exact URLs; stored native issue keys remain searchable. Duplicate adds and absent removals do nothing; unrelated links and selection survive concurrent edits. Unsupported older hosts refuse writes.
+- Repeat create `--reference` to seed links before setup/agent startup. Do not combine it with legacy `--pr`, `--issue`, `--linear-issue`, `--gitlab-issue`, or `--gitlab-mr` flags. Legacy `worktree set --pr` still appends/selects; `linkedItems` remains the worktree output field.
+- Find accepts a full URL or native issue key such as `STA-1234`; no bare numbers or custom shorthand. It searches stored links across sources, not conversation text (`ORCA search`). Narrow with `--worktree` or `--repo`; optionally `--include-archived`, `--limit` (default 50 workspaces). Check `truncated` before assuming complete coverage. Remote selectors refer to the execution host; never use local `current` for a paired host.
+- Find returns all known agents in each matching workspace. `linked: true` requires recorded reference/session evidence; `linked: false` means ownership is unknown. Check `liveness` (`live`, `unverifiable`, `exited`) and choose the intended agent; never infer ownership merely from workspace membership.
+- Send through the returned exact `terminal` handle or `mailbox` (`dispatch:<id>` / `orca_session_id:<id>`). A `run:<id>` targets a coordinator. Find does not send, and adding links from a shell records no agent ownership.
+
+```text
+ORCA terminal send --terminal <terminal-from-find> --text "Status?" --enter --json
+ORCA orchestration send --to <mailbox-from-find> --subject "Status?" --type question --json
+```
+
 ## Worktree Comments
 
 A worktree comment is the short status line on the workspace card. Update it at meaningful checkpoints:
@@ -135,7 +166,17 @@ ORCA worktree set --worktree active --comment "fix implemented; running integrat
 
 Update after a repro, fix, validation, handoff, or blocker. Keep it short and current. A failed comment update is not an error to surface unless the user asked for Orca state.
 
-Card status uses `--workspace-status <id>`; defaults are `todo`, `in-progress`, `in-review`, `completed`.
+Card status uses `--workspace-status <id>`; defaults are `todo`, `in-progress`, `in-review`, `completed`. `--unread` puts the workspace's unread dot in the sidebar to ask for a person's attention; `--read` clears it.
+
+Issue/review links: `--pr` writes the GitHub pull request number; `--gitlab-issue` and
+`--gitlab-mr` write separate GitLab numbers and accept `#42` / `!77` respectively.
+All numbers must be positive safe integers. The GitLab flags also accept HTTP(S) URLs
+whose host/project match the workspace's stored GitLab source context or the repo's
+stored remote. They never select a foreign project or fetch a review branch. Absent
+flags leave links unchanged; literal `null` clears only the named link on `set` and
+is refused on `create`. Folder-based repos can store numeric links, but missing
+source/remote identity prevents URL validation and may leave provider links unavailable.
+Old runtimes that predate these existing fields may ignore them; verify with `worktree show --json`.
 
 ## Terminals
 

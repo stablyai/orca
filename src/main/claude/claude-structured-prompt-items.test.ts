@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import { encodeAgentSessionQuestionAnswers } from '../../shared/agent-session-question-answer'
 import { cancelledJournalPromptBody } from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
 import { MAX_JOURNAL_LIFECYCLE_BATCH_BYTES } from '../native-chat/agent-session-journal/journal-row-schema'
 import { MAX_TOOL_DETAIL_LENGTH } from '../../shared/native-chat-tool-summary'
 import { claudeApprovalItem, claudeQuestionItems } from './claude-structured-prompt-items'
 import {
-  applyClaudePromptAnswer,
-  encodeClaudeQuestionOptionId,
+  buildClaudePromptReply,
   type ClaudePendingPrompt
 } from './claude-structured-prompt-replies'
 
@@ -24,7 +22,6 @@ function approvalPrompt(
     input,
     suggestions: [],
     questionIds: [],
-    answers: new Map(),
     settle: () => {},
     ...presentation
   }
@@ -56,10 +53,60 @@ describe('Claude structured approval presentation', () => {
       options: [
         { id: 'allow', label: 'Allow' },
         { id: 'allowForSession', label: 'Allow for this session' },
-        { id: 'deny', label: 'Deny' },
-        { id: 'cancel', label: 'Stop' }
+        { id: 'deny', label: 'Deny' }
       ]
     })
+  })
+
+  it('journals a plan with typed presentation and readable compatibility detail', () => {
+    const prompt = approvalPrompt(
+      { plan: '# Release\n\n- Run tests', planFilePath: '/repo/plan.md' },
+      {
+        title: 'Claude wants to present its plan',
+        subject: { kind: 'plan', text: '# Release\n\n- Run tests', filePath: '/repo/plan.md' }
+      }
+    )
+
+    expect(claudeApprovalItem(prompt)).toMatchObject({
+      kind: 'approval',
+      title: 'Claude wants to present its plan',
+      subject: { kind: 'plan', text: '# Release\n\n- Run tests', filePath: '/repo/plan.md' },
+      detail: '# Release\n\n- Run tests',
+      options: [
+        { id: 'allow', label: 'Approve plan' },
+        { id: 'deny', label: 'Keep planning' }
+      ]
+    })
+  })
+
+  it('answers a dismissal as a plain deny, and a dismissed plan by asking Claude to wait', () => {
+    const tool = buildClaudePromptReply(approvalPrompt({ command: 'ls' }), {
+      kind: 'option',
+      optionId: 'cancel'
+    })
+    const plan = buildClaudePromptReply(
+      approvalPrompt({ plan: '# Release' }, { subject: { kind: 'plan', text: '# Release' } }),
+      { kind: 'option', optionId: 'cancel' }
+    )
+
+    expect(tool).toEqual({
+      behavior: 'deny',
+      message: 'User denied this action.',
+      toolUseID: expect.any(String)
+    })
+    expect(plan).toMatchObject({
+      behavior: 'deny',
+      message: expect.stringMatching(/wait for them/)
+    })
+    expect(plan).not.toHaveProperty('interrupt')
+  })
+
+  it('uses a plan-specific fallback title when the harness omits one', () => {
+    const item = claudeApprovalItem(
+      approvalPrompt({ plan: '# Release' }, { subject: { kind: 'plan', text: '# Release' } })
+    )
+
+    expect(item.title).toBe('Review proposed plan')
   })
 
   it.each([{ plan: '' }, {}])(
@@ -82,14 +129,53 @@ describe('Claude structured approval presentation', () => {
     expect(item.detail?.endsWith('…')).toBe(true)
   })
 
-  it('denying authorizes nothing', () => {
-    const prompt = approvalPrompt({ plan: '# Release' })
+  it('keeps generic approval and denial behavior unchanged', () => {
+    const prompt = approvalPrompt(
+      { command: 'rm output.txt' },
+      {
+        toolName: 'Bash',
+        suggestions: [{ type: 'addRules', rules: [], behavior: 'allow', destination: 'session' }]
+      }
+    )
 
-    expect(applyClaudePromptAnswer({ prompt }, 'deny')).toEqual({
+    expect(buildClaudePromptReply(prompt, { kind: 'option', optionId: 'deny' })).toEqual({
       behavior: 'deny',
       message: 'User denied this action.',
       toolUseID: 'tool-approval'
     })
+    expect(buildClaudePromptReply(prompt, { kind: 'option', optionId: 'allowForSession' })).toEqual(
+      {
+        behavior: 'allow',
+        updatedInput: { command: 'rm output.txt' },
+        updatedPermissions: [
+          { type: 'addRules', rules: [], behavior: 'allow', destination: 'session' }
+        ],
+        toolUseID: 'tool-approval'
+      }
+    )
+  })
+
+  it('asks Claude to revise a rejected plan while accepting legacy session replies', () => {
+    const prompt = approvalPrompt(
+      { plan: '# Release' },
+      {
+        subject: { kind: 'plan', text: '# Release' },
+        suggestions: [{ type: 'addRules', rules: [], behavior: 'allow', destination: 'session' }]
+      }
+    )
+
+    expect(buildClaudePromptReply(prompt, { kind: 'option', optionId: 'deny' })).toEqual({
+      behavior: 'deny',
+      message: 'The user asked you to keep planning. Revise the plan and call ExitPlanMode again.',
+      toolUseID: 'tool-approval'
+    })
+    expect(buildClaudePromptReply(prompt, { kind: 'option', optionId: 'allowForSession' })).toEqual(
+      {
+        behavior: 'allow',
+        updatedInput: { plan: '# Release' },
+        toolUseID: 'tool-approval'
+      }
+    )
   })
 })
 
@@ -113,7 +199,6 @@ describe('Claude structured question addressing', () => {
       input: { questions },
       suggestions: [],
       questionIds: questions.map((question) => question.question),
-      answers: new Map(),
       settle: () => {}
     }
 
@@ -146,7 +231,6 @@ describe('Claude structured question addressing', () => {
       input: { questions: [{ question: questionId, options: [{ label }] }] },
       suggestions: [],
       questionIds: [questionId],
-      answers: new Map(),
       settle: () => {}
     }
 
@@ -154,7 +238,12 @@ describe('Claude structured question addressing', () => {
     expect(agentJournalItemKey(item.identity).length).toBeLessThan(512)
     expect(item.body.options[0]!.id.length).toBeLessThan(512)
     expect(item.body.freeTextQuestionId).toBe('q1')
-    expect(applyClaudePromptAnswer({ prompt }, item.body.options[0]!.id)).toMatchObject({
+    expect(
+      buildClaudePromptReply(prompt, {
+        kind: 'answers',
+        answers: [{ questionId: 'q1', optionIds: [item.body.options[0]!.id] }]
+      })
+    ).toMatchObject({
       updatedInput: { answers: { [questionId]: label } }
     })
   })
@@ -170,13 +259,15 @@ describe('Claude structured question addressing', () => {
       input: { questions: [{ question: questionId }] },
       suggestions: [],
       questionIds: [questionId],
-      answers: new Map(),
       settle: () => {}
     }
     const answer = 'https://example.test:8443/path'
 
     expect(
-      applyClaudePromptAnswer({ prompt }, encodeClaudeQuestionOptionId('q1', answer))
+      buildClaudePromptReply(prompt, {
+        kind: 'answers',
+        answers: [{ questionId: 'q1', optionIds: [], other: answer }]
+      })
     ).toMatchObject({
       updatedInput: { answers: { [questionId]: answer } }
     })
@@ -208,21 +299,20 @@ describe('Claude structured question addressing', () => {
       },
       suggestions: [],
       questionIds: [multiQuestion, singleQuestion, otherQuestion],
-      answers: new Map(),
       settle: () => {}
     }
     const item = claudeQuestionItems({ sessionId: 'session-1', prompt })[0]!
     const questions = item.body.questions!
-    const encoded = encodeAgentSessionQuestionAnswers([
+    const answers = [
       {
         questionId: 'q1',
         optionIds: [questions[0]!.options[0]!.id, questions[0]!.options[1]!.id]
       },
       { questionId: 'q2', optionIds: [questions[1]!.options[1]!.id] },
       { questionId: 'q3', optionIds: [], other: 'remote host' }
-    ])
+    ]
 
-    expect(applyClaudePromptAnswer({ prompt }, encoded)).toMatchObject({
+    expect(buildClaudePromptReply(prompt, { kind: 'answers', answers })).toMatchObject({
       updatedInput: {
         answers: {
           [multiQuestion]: ['frontend', 'backend'],

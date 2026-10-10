@@ -1,10 +1,11 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import { AgentSessionRecordStore } from '../../agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -12,6 +13,10 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcRequest, RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
+import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+import { codexProviderHandle } from '../../../../shared/agent-session-provider-handle-encoding'
+import { claudeAndCodexAgents } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 
 const SESSION = 'session-adoption-replay'
 const THREAD = 'thread-adoption-replay'
@@ -40,7 +45,7 @@ function adapter(): StructuredAgentSessionAdapter {
         },
         link: {
           linkId: `codex-${fence}-${THREAD}`,
-          handle: { provider: 'codex', threadId: THREAD },
+          handle: codexProviderHandle(THREAD),
           origin: 'resumed',
           mintedAtFence: fence,
           observedAt: 1_800_000_000_000
@@ -93,14 +98,19 @@ async function call(dispatcher: RpcDispatcher, params: unknown, client = CLIENT)
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-adoption-rpc-replay-'))
+  // Why: the adopting create pre-trusts its folder in ~/.codex and Orca's managed Codex home.
+  vi.stubEnv('HOME', join(root, 'home'))
+  vi.stubEnv('USERPROFILE', join(root, 'home'))
+  vi.stubEnv('ORCA_USER_DATA_PATH', join(root, 'user-data'))
 })
 
 afterEach(async () => {
   setStructuredAgentSessionHost(null)
   await host?.flushAllStreamedEvents()
-  await host?.close(SESSION)
+  await host?.close(SESSION, 'evict')
   await rm(root, { recursive: true, force: true })
   vi.restoreAllMocks()
+  vi.unstubAllEnvs()
 })
 
 describe('committed adopting create RPC replay', () => {
@@ -134,7 +144,6 @@ describe('committed adopting create RPC replay', () => {
     const runtime = new OrcaRuntimeService(
       {
         getSettings: () => ({
-          experimentalStructuredNativeChat: true,
           agentDefaultEnv: { codex: {} }
         })
       } as never,
@@ -143,8 +152,9 @@ describe('committed adopting create RPC replay', () => {
     )
     // The structured surface is settings-gated for every caller, not just mobile; this test
     // probes durable-identity replay, which only runs once the gate admits the call.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The RPC gate reads only this setting from the test double.
     vi.spyOn(runtime, 'getClientSettings').mockReturnValue({
-      experimentalStructuredNativeChat: true
+      experimentalNativeChat: true
     } as ReturnType<OrcaRuntimeService['getClientSettings']>)
     vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({
       supported: true
@@ -175,15 +185,14 @@ describe('committed adopting create RPC replay', () => {
       .mockRejectedValueOnce(new Error('simulated lost tab publication'))
       .mockResolvedValue(undefined)
 
-    const store = await AgentSessionRecordStore.open({
-      directory: join(root, 'store'),
-      hostId: 'local'
-    })
+    const store = await openTestAgentSessionRecordStore(root)
     const sessionAdapter = adapter()
     host = new StructuredAgentSessionHost({
+      agents: claudeAndCodexAgents(sessionAdapter),
+      logger: createStructuredAgentSessionLogger(),
       store,
       adapter: sessionAdapter,
-      journalRoot: root,
+      journalDatabase: openTestJournalHostDatabase(root),
       claimKeyId: 'key-1'
     })
     setStructuredAgentSessionHost(host)

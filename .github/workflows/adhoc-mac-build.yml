@@ -6,7 +6,9 @@ name: Adhoc macOS + Windows Dev Build
 #
 # Deliberately narrow scope:
 #   - macOS and Windows desktop installers. Linux keeps using RC/stable.
-#   - No tests, no lint, no e2e. PR CI and release-cut remain the gates.
+#   - No tests, no lint, no e2e. PR CI and release-cut remain the gates. The one
+#     exception is the orcad template: like release-cut, it is merged from the
+#     node-server lanes that build and qualify each SSH target's slot.
 #   - macOS is signed and notarized so TCC grants survive updates.
 #   - Windows is unsigned; the published release notes explain the one-time
 #     SmartScreen/manual-install requirement.
@@ -81,8 +83,116 @@ env:
   ADHOC_RETAIN_DAYS: 30
 
 jobs:
-  build-adhoc-mac:
+  # Why: every job below checks out its own copy, and a branch name read per job builds whatever
+  # the branch points at when that job starts. A push mid-run then mixes commits, e.g. slot lanes
+  # from one commit merged by a template step from the next. Resolving once pins the whole run.
+  # The mac job still vets this commit's reachability before anything is signed.
+  resolve-ref:
     if: github.repository == 'stablyai/orca'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - name: Resolve the requested ref to one commit
+        id: resolve
+        shell: bash
+        env:
+          REQUESTED_REF: ${{ inputs.ref || github.ref_name }}
+          REPO_URL: https://github.com/${{ github.repository }}
+        run: |
+          set -euo pipefail
+          case "$REQUESTED_REF" in
+            refs/pull/*|pull/*)
+              echo "::error::Refusing to build PR ref '$REQUESTED_REF'; push the code to a branch of stablyai/orca instead."
+              exit 1
+              ;;
+          esac
+          if [[ "$REQUESTED_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            sha="$REQUESTED_REF"
+          else
+            # Branch first, as the mac job's vet does; a peeled annotated tag names its commit.
+            refs="$(git ls-remote "$REPO_URL" "refs/heads/$REQUESTED_REF" "refs/tags/$REQUESTED_REF" "refs/tags/$REQUESTED_REF^{}")"
+            sha=""
+            for name in "refs/heads/$REQUESTED_REF" "refs/tags/$REQUESTED_REF^{}" "refs/tags/$REQUESTED_REF"; do
+              sha="$(awk -v ref="$name" '$2 == ref { print $1; exit }' <<<"$refs")"
+              [[ -n "$sha" ]] && break
+            done
+          fi
+          if [[ -z "$sha" ]]; then
+            echo "::error::'$REQUESTED_REF' is not a branch, tag, or full commit SHA of stablyai/orca."
+            exit 1
+          fi
+          echo "Resolved $REQUESTED_REF -> $sha"
+          echo "sha=$sha" >>"$GITHUB_OUTPUT"
+
+  # Why its own job: this package ships relays for Windows SSH hosts, and only a
+  # Windows runner compiles the addon that launches one outside sshd's job.
+  # Why the unvetted ref is safe here: this job holds no secrets, and the mac job
+  # vets the same ref before it downloads anything, so fork code never gets signed.
+  relay-windows-process-tree:
+    needs: resolve-ref
+    permissions:
+      contents: read
+    uses: ./.github/workflows/relay-windows-process-tree.yml
+    with:
+      ref: ${{ needs.resolve-ref.outputs.sha }}
+
+  # Why: a branch cut before the orcad template landed has none to build or ship.
+  orcad-template-support:
+    needs: resolve-ref
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      ships: ${{ steps.detect.outputs.ships }}
+    steps:
+      - name: Checkout the template packager only
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.resolve-ref.outputs.sha }}
+          sparse-checkout: |
+            /config/scripts/packaged-orcad-template.cjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Detect whether the ref ships the orcad template
+        id: detect
+        shell: bash
+        run: |
+          if [[ -f config/scripts/packaged-orcad-template.cjs ]]; then
+            echo "ships=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "ships=false" >>"$GITHUB_OUTPUT"
+            echo "::notice::This ref predates the orcad template; the build ships without it."
+          fi
+
+  # Design D2, as release-cut does: every desktop build ships the orcad template (server JS plus
+  # every target's addons), merged from the node-server lanes that qualify each slot at this ref.
+  # Without it an adhoc build cannot deploy managed orcad to an SSH host. No secrets, like the
+  # relay job, and the mac job vets the ref before anything is signed.
+  orcad-template:
+    needs: [resolve-ref, orcad-template-support]
+    if: needs.orcad-template-support.outputs.ships == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/node-server-tests.yml
+    with:
+      ref: ${{ needs.resolve-ref.outputs.sha }}
+      build_template: true
+
+  build-adhoc-mac:
+    needs: [resolve-ref, relay-windows-process-tree, orcad-template-support, orcad-template]
+    # Why not the implicit success(): a ref without the orcad template skips that job on purpose.
+    if: >-
+      !cancelled() && github.repository == 'stablyai/orca' &&
+      needs.relay-windows-process-tree.result == 'success' &&
+      needs.orcad-template-support.result == 'success' &&
+      (needs.orcad-template.result == 'success' ||
+        (needs.orcad-template.result == 'skipped' &&
+          needs.orcad-template-support.outputs.ships == 'false'))
     # Why an environment: it gives the signing/notary/App secrets somewhere to
     # live that a stale copy of this workflow on an old branch cannot reach.
     # Referencing it is a no-op until repo settings give it teeth; the intended
@@ -96,6 +206,7 @@ jobs:
       version: ${{ steps.adhoc.outputs.version }}
       head_sha: ${{ steps.adhoc.outputs.head_sha }}
       published: ${{ steps.publish_live.outcome == 'success' && 'true' || 'false' }}
+      ships_orcad_template: ${{ needs.orcad-template-support.outputs.ships }}
     runs-on: blacksmith-6vcpu-macos-15
     # Why 150: it must exceed the worst case the retry budgets below can produce
     # (install 3x10 + publish 2x45 = 120, plus ~25 for checkout/build/verify), or
@@ -115,7 +226,8 @@ jobs:
         id: vetted
         shell: bash
         env:
-          REQUESTED_REF: ${{ inputs.ref || github.ref_name }}
+          # The commit resolve-ref pinned for every job; vetting it keeps the reachability test.
+          REQUESTED_REF: ${{ needs.resolve-ref.outputs.sha }}
           REPO_URL: https://github.com/${{ github.repository }}
         run: |
           set -euo pipefail
@@ -184,6 +296,9 @@ jobs:
         with:
           node-version-file: package.json
           cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
 
       - name: Cache electron-builder downloads
         uses: actions/cache@v5
@@ -204,6 +319,10 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 30
           command: pnpm install --frozen-lockfile --cpu=current,x64,arm64
+
+      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
+      # build resolves React Native and Expo from mobile/node_modules.
+      - uses: ./.github/actions/install-mobile-dependencies
 
       # Why: signing is what makes an adhoc build installable over an existing
       # Orca, so a missing cert must fail here rather than after a 20-minute build.
@@ -252,6 +371,14 @@ jobs:
           fi
           cat "$RUNNER_TEMP/adhoc-identity.txt" >>"$GITHUB_OUTPUT"
 
+      # Only a Windows runner compiles these; the relay-windows-process-tree job
+      # built them for this run.
+      - name: Collect the Windows process-table addons for the relay
+        uses: actions/download-artifact@v8
+        with:
+          name: relay-windows-process-tree
+          path: .build/windows-process-tree
+
       - name: Build app
         run: pnpm build:release
         env:
@@ -260,6 +387,17 @@ jobs:
           # gate accepts only 'stable' or 'rc', so leaving this unset keeps them
           # silent, which is correct for unvetted branch artifacts.
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+          # Fail the build rather than ship a relay that cannot launch outside
+          # sshd's job for a standard user on a Windows SSH host.
+          ORCA_REQUIRE_RELAY_NATIVE_ADDONS: x64,arm64
+
+      # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
+      - name: Download the orcad deployment template
+        if: needs.orcad-template-support.outputs.ships == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: orcad-template
+          path: out/orcad-template
 
       # Why the token is minted here and not at the top: installation tokens live
       # one hour, everything before this point writes nothing, and the notary round
@@ -335,6 +473,8 @@ jobs:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
           ORCA_ADHOC_BUILD_VERSION: ${{ steps.adhoc.outputs.version }}
           ORCA_BUILD_COMMIT: ${{ steps.adhoc.outputs.commit }}
+          # beforePack and afterPack fail the package when the template is absent.
+          ORCA_REQUIRE_ORCAD_TEMPLATE: ${{ needs.orcad-template-support.outputs.ships == 'true' && '1' || '' }}
           CSC_LINK: ${{ secrets.MAC_CERTS }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
           # Why all three: electron-builder's notarize step authenticates to the
@@ -483,3 +623,4 @@ jobs:
       tag: ${{ needs.build-adhoc-mac.outputs.tag }}
       ref: ${{ needs.build-adhoc-mac.outputs.head_sha }}
       version: ${{ needs.build-adhoc-mac.outputs.version }}
+      orcad_template: ${{ needs.build-adhoc-mac.outputs.ships_orcad_template == 'true' }}

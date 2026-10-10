@@ -6,9 +6,9 @@ import type {
 } from '@/lib/project-host-setup-options'
 import type { SetupConfig } from '@/lib/new-workspace'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
-import type { SmartNameMode } from '@/components/new-workspace/smart-workspace-source-results'
-import type SmartWorkspaceNameField from '@/components/new-workspace/SmartWorkspaceNameField'
-import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
+import type { SmartNameMode } from '../../../../shared/new-workspace/smart-workspace-source-results'
+import type SmartWorkspaceNameField from './SmartWorkspaceNameField'
+import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/smart-workspace-name-field-model'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { JiraIssue } from '../../../../shared/jira-types'
@@ -30,6 +30,9 @@ export const EMPTY_EPHEMERAL_VM_RECIPES: EphemeralVmRecipeOption[] = []
 export type NewWorkspaceComposerCardProps = {
   contextualTourSource?: string
   containerClassName?: string
+  contentClassName?: string
+  selectedRepoPath?: string | null
+  onNativeFileDrop?: (paths: string[], isCurrent: () => boolean) => Promise<void>
   composerRef?: React.RefObject<HTMLDivElement | null>
   onComposerNodeChange?: (node: HTMLDivElement | null) => void
   nameInputRef?: React.RefObject<HTMLInputElement | null>
@@ -62,6 +65,9 @@ export type NewWorkspaceComposerCardProps = {
   onNameValueChange: (value: string) => void
   branchNameOverride: string | undefined
   onBranchNameOverrideChange: (value: string | undefined) => void
+  baseBranch?: string
+  onBaseBranchChange?: (value: string | undefined) => void
+  startFromResetHint?: string | null
   parentWorktreeId?: string | null
   onParentWorktreeIdChange?: (value: string | null) => void
   selectedRepoExecutionHostId?: ExecutionHostId | null
@@ -71,6 +77,7 @@ export type NewWorkspaceComposerCardProps = {
   onSmartGitLabItemSelect: (item: GitLabWorkItem) => void
   onSmartBranchSelect: (refName: string, localBranchName: string) => void
   onSmartNameModeChange?: (mode: SmartNameMode) => void
+  smartNameMode?: SmartNameMode
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   onSmartJiraIssueSelect?: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
   onOpenJiraSettings?: () => void

@@ -32,6 +32,37 @@ export async function writeLogAgentFixtures(
     ])
   )
 
+  await mkdir(join(roots.qoderProjectsDir, 'project'), { recursive: true })
+  await writeFile(
+    join(roots.qoderProjectsDir, 'project', 'qoder-session.jsonl'),
+    jsonlBody([
+      { type: 'workspace-directories', sessionId: 'qoder-session', directories: ['/tmp/qoder'] },
+      {
+        type: 'user',
+        sessionId: 'qoder-session',
+        timestamp: '2026-05-01T10:00:00.000Z',
+        message: { role: 'user', content: 'Qoder title' }
+      }
+    ])
+  )
+
+  // CodeBuddy writes its own message-record shape under its own root.
+  await mkdir(join(roots.codebuddyProjectsDir, 'project'), { recursive: true })
+  await writeFile(
+    join(roots.codebuddyProjectsDir, 'project', 'codebuddy-session.jsonl'),
+    jsonlBody([
+      {
+        id: 'codebuddy-msg-1',
+        timestamp: 1_777_634_430_000,
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: 'CodeBuddy title' }],
+        sessionId: 'codebuddy-session',
+        cwd: '/tmp/codebuddy'
+      }
+    ])
+  )
+
   await mkdir(join(roots.codexSessionsDir, '2026', '05', '01'), { recursive: true })
   await writeFile(
     join(roots.codexSessionsDir, '2026', '05', '01', 'rollout-2026-codex-session.jsonl'),
