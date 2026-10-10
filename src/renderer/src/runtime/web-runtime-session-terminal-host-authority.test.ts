@@ -7,6 +7,7 @@ import {
 import { peekWebSessionFocusIntent } from './web-session-focus-intent'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
 import { PAIRED_TAB_CASES, type PairedTabCase } from '@/lib/launch-parity-paired-tab-cases'
+import { PAIRED_TAB_HOST_PARAMS } from '../../../shared/launch-parity-paired-host.test-fixture'
 import {
   ENVIRONMENT_ID,
   FOCUS_LEAF_ID,
@@ -692,6 +693,7 @@ function stubRuntime(capabilities: string[]): RuntimeCall {
   return runtimeCall
 }
 
+// A host from before the keyboard capability: a current host also gets terminalKittyKeyboardProtocol.
 const HOST_AUTHORITY = ['agent-session.host-authority.v1']
 
 function expectedWire(c: PairedTabCase, modern: boolean): RuntimeRequest[] {
@@ -700,20 +702,11 @@ function expectedWire(c: PairedTabCase, modern: boolean): RuntimeRequest[] {
   const worktree = `id:${String(launch.worktreeId)}`
   const cwd = typeof launch.cwd === 'string' ? launch.cwd : undefined
   if (modern) {
-    // main today: command, env, launchConfig and startupCommandDelivery never reach the host;
-    // agentArgs is the caller's override, else the window's default args.
     return [
       {
         method: 'terminal.createAgentSession',
         params: {
-          worktree,
-          agent: launch.launchAgent,
-          prompt: launch.prompt,
-          promptDelivery: launch.promptDelivery,
-          agentArgs: launch.agentArgs ?? launchConfig.agentArgs,
-          ...(cwd ? { startupCwd: cwd } : {}),
-          viewMode: 'terminal',
-          presentation: 'background',
+          ...PAIRED_TAB_HOST_PARAMS[c.name],
           clientOperationId: expect.stringMatching(/^\d{13}-[0-9a-f]{32}$/)
         }
       },
@@ -759,7 +752,7 @@ describe('row 7: prompted paired launch wire shape on main', () => {
   afterEach(() => resetTerminalCreateEnvironment())
 
   it.each(PAIRED_TAB_CASES.flatMap((c) => [true, false].map((modern) => ({ ...c, modern }))))(
-    '$name, host authority $modern',
+    '$name, host authority (no keyboard capability) $modern',
     async (c) => {
       const runtimeCall = stubRuntime(c.modern ? HOST_AUTHORITY : [])
       const created =
@@ -774,20 +767,21 @@ describe('row 7: prompted paired launch wire shape on main', () => {
         .filter((r) => r.method !== 'status.get' && r.method !== 'session.tabs.list')
         .map(({ method, params }) => ({ method, params }))
       expect(sent).toEqual(expectedWire(c, c.modern))
-      // A draft's chat-composer copy is seeded only after the host answers with its tab.
-      expect(mocks.seedNativeChatLaunchDraftForAgentTab.mock.calls).toEqual(
-        c.creator === 'launch-draft'
-          ? [
-              [
-                {
-                  tabId: 'web-terminal-host-tab-2',
-                  agent: 'claude',
-                  text: recordOf(c.launch).launchDraft
-                }
-              ]
-            ]
-          : []
-      )
+    }
+  )
+
+  it.each(
+    PAIRED_TAB_CASES.filter(
+      (c): c is Extract<PairedTabCase, { creator: 'launch-draft' }> => c.creator === 'launch-draft'
+    )
+  )(
+    '$name: the chat-composer copy is seeded only after the host answers with its tab',
+    async (c) => {
+      stubRuntime(HOST_AUTHORITY)
+      await createWebRuntimeAgentSessionTerminalWithLaunchDraft(c.launch)
+      expect(mocks.seedNativeChatLaunchDraftForAgentTab.mock.calls).toEqual([
+        [{ tabId: 'web-terminal-host-tab-2', agent: 'claude', text: c.launch.launchDraft }]
+      ])
     }
   )
 })

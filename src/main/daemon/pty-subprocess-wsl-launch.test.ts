@@ -183,7 +183,8 @@ describe('createPtySubprocess', () => {
     )
   })
 
-  // Also the convergence parity baseline (§7 item 3): a \\wsl$ folder pane's Windows shell loses to its cwd.
+  // Also the convergence parity baseline: the host lane (a \\wsl$ repo with no saved runtime) and a
+  // window \\wsl$ repo saved as "Windows host" send a Windows shell with a \\wsl$ cwd; the cwd wins.
   it.each([
     { cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo', shellOverride: 'powershell.exe' },
     { cwd: '\\\\wsl$\\Ubuntu\\home\\jin\\repo', shellOverride: 'powershell.exe' },

@@ -17,7 +17,7 @@ export const WSL_PATH = String.raw`\\wsl$\Ubuntu\home\alice\repo`
 const SKIP = '--dangerously-skip-permissions'
 const POSIX_CLAUDE = `claude '${SKIP}'`
 const CMD_CLAUDE = `claude "${SKIP}"`
-// The draft rides --prefill; the apostrophe shows which shell the command was quoted for.
+// The draft rides --prefill.
 const posix = {
   command: `${POSIX_CLAUDE} --prefill 'fix Bob'"'"'s bug'`,
   agentCommand: POSIX_CLAUDE
@@ -56,6 +56,8 @@ const IN_PWSH = { shellOverride: 'powershell.exe' }
 const IN_WSL = { shellOverride: 'wsl.exe' }
 // Main runs a local pane in the settings shell; Windows adds the WSL distro it derived.
 const ZSH = { shellOverride: '/bin/zsh' }
+// A Windows client's default shell setting is '' (its Settings UI hides it), so SSH gets no shell.
+const NO_SHELL = { shellOverride: undefined }
 const PWSH = { shellOverride: 'powershell.exe', terminalWindowsWslDistro: null }
 const WSL_EXE = { shellOverride: 'wsl.exe', terminalWindowsWslDistro: 'Ubuntu' }
 const CMD_EXE = { shellOverride: 'cmd.exe', terminalWindowsWslDistro: null }
@@ -71,12 +73,16 @@ function launch(
   provider: WindowProviderFacts,
   settings?: Record<string, unknown>
 ): WindowLaunchCase {
-  const rules = workspace.connectionId
-    ? ['WINDOW_PLANNER', 'IPC_SSH_DEFAULT_SHELL']
-    : ['WINDOW_PLANNER', 'WINDOW_PANE']
-  return { name, row, rules, client, workspace, producer, request, provider, settings }
+  return { name, row, client, workspace, producer, request, provider, settings }
 }
-const draft = { kind: 'new-tab', agent: 'claude', delivery: 'draft' } as const
+// Quick command's typed prompt; the apostrophe shows which shell the command was quoted for.
+const draft = {
+  kind: 'new-tab',
+  agent: 'claude',
+  prompt: "fix Bob's bug",
+  delivery: 'draft',
+  launchSource: 'quick_command'
+} as const
 const typed = launch.bind(null, 2, draft)
 const resume = (transcript: string, cwd: string | null) =>
   launch.bind(null, 6, { kind: 'transcript-continue', transcript, cwd })
@@ -106,7 +112,7 @@ export const WINDOW_LAUNCH_CASES: WindowLaunchCase[] = [
   ),
   launch(
     2,
-    { kind: 'new-tab', agent: 'codex', delivery: 'auto-submit' },
+    { ...draft, agent: 'codex', delivery: 'auto-submit' },
     'macOS repo, codex auto-submit waits for the shell',
     'darwin',
     repo(POSIX_PATH),
@@ -119,7 +125,7 @@ export const WINDOW_LAUNCH_CASES: WindowLaunchCase[] = [
   // stdin-after-start: the prompt is pasted once the agent is ready (launch-agent-in-new-tab tests).
   launch(
     2,
-    { kind: 'new-tab', agent: 'aider', delivery: 'auto-submit' },
+    { ...draft, agent: 'aider', delivery: 'auto-submit' },
     'Linux repo, aider',
     'linux',
     repo(POSIX_PATH),
@@ -159,7 +165,7 @@ export const WINDOW_LAUNCH_CASES: WindowLaunchCase[] = [
     { ...posix, ...IN_WSL, ...WSL_SENT },
     WSL_EXE
   ),
-  // main today: the host shell runs, yet main still derives a WSL distro from the \\wsl$ cwd.
+  // main today: quoted for PowerShell, yet the \\wsl$ cwd names distro Ubuntu and the daemon runs wsl.exe.
   typed(
     'Windows wsl$ repo, project Windows host',
     'win32',
@@ -208,9 +214,11 @@ export const WINDOW_LAUNCH_CASES: WindowLaunchCase[] = [
     PWSH
   ),
   typed('macOS client, SSH repo', 'darwin', repo(POSIX_PATH, ssh), posix, ZSH),
-  typed('Windows client, SSH repo', 'win32', repo(POSIX_PATH, ssh), posix, ZSH),
+  typed('Windows client, SSH repo', 'win32', repo(POSIX_PATH, ssh), posix, NO_SHELL),
   typed('macOS client, SSH Windows-path repo', 'darwin', repo(WIN_PATH, ssh), ps, ZSH),
   typed('macOS client, SSH folder', 'darwin', folder(POSIX_PATH, ssh), posix, ZSH),
+  // main today: a folder quotes for the client, so a Windows client sends PowerShell quoting to a POSIX host.
+  typed('Windows client, SSH folder', 'win32', folder(POSIX_PATH, ssh), ps, NO_SHELL),
   resume(MAC_T, `${POSIX_PATH}/pkg`)(
     'continue, macOS repo, transcript cwd',
     'darwin',
@@ -257,7 +265,7 @@ export const WINDOW_LAUNCH_CASES: WindowLaunchCase[] = [
     'win32',
     repo(POSIX_PATH, ssh),
     agy(LINUX_T, '/opt/agy/bin/agy'),
-    ZSH,
+    NO_SHELL,
     {
       agentCmdOverrides: { antigravity: '/opt/agy/bin/agy' }
     }

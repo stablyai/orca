@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { classifyErrorMock, statSyncMock, trackMock } from './pty-ipc-mock-registry'
 import {
-  IDENTITY_ENV_KEYS,
   providerFacts,
   recordOf,
   restoreMainPlatform,
@@ -16,6 +15,7 @@ import {
   WSL_PATH
 } from '../../shared/launch-parity-window-cases.test-fixture'
 import {
+  expectedWindowProvider,
   launchWorkspaceId,
   windowSpawnRequest,
   type LaunchWorkspace,
@@ -25,8 +25,15 @@ import {
   AUTOMATION_LAUNCH_CASES,
   automationSpawnRequest
 } from '../../shared/launch-parity-automation-cases.test-fixture'
-import { HOST_LAUNCH_CASES, type HostLaunchCase } from './pty-launch-parity-host-cases'
+import {
+  expectedHostProvider,
+  HOST_LAUNCH_CASES,
+  type HostLaunchCase
+} from './pty-launch-parity-host-cases'
 import { CALLER_LAUNCH_CASES, OPENCODE_MODEL } from './pty-launch-parity-caller-cases'
+import { RpcDispatcher } from '../runtime/rpc/dispatcher'
+import { TERMINAL_LIFECYCLE_METHODS } from '../runtime/rpc/methods/terminal/terminal-lifecycle-methods'
+import { AGENT_SESSION_METHODS } from '../runtime/rpc/methods/agent-session'
 import { applyManagedDataAccountEnvironment } from '../managed-data-accounts/launch-environment'
 import { probeOpenCodeLaunchCapabilities } from '../opencode/opencode-launch-capabilities'
 import {
@@ -109,48 +116,44 @@ type WindowLaneCase = {
   settings?: Record<string, unknown>
   request: Record<string, unknown>
   provider: WindowProviderFacts
+  /** The agent env the case saved, as the provider must receive it. */
+  env: Record<string, string>
 }
 
 const WINDOW_LANE_CASES: WindowLaneCase[] = [
   ...WINDOW_LAUNCH_CASES.map((c) => ({
     ...c,
     label: `row ${c.row}: ${c.name}`,
-    request: windowSpawnRequest(c)
+    request: windowSpawnRequest(c),
+    env: c.request.agentEnv ?? {}
   })),
   ...AUTOMATION_LAUNCH_CASES.map((c) => ({
     ...c,
     label: `row 5: ${c.name}`,
-    request: automationSpawnRequest(c)
+    request: automationSpawnRequest(c),
+    env: {}
   }))
 ]
 
 // Pins main's current launch behaviour as the convergence parity baseline (rows 2, 5 and 6, main
 // half; rules WINDOW_PANE, IPC_SSH_DEFAULT_SHELL, AUTOMATION_WSL_EXE): each table request, fed to
-// pty:spawn, reaches the provider with these facts, one agent_started, and a binding without
-// host-admitted membership.
+// pty:spawn, reaches the provider with these facts (the pane's measured size, never hidden), one
+// agent_started, and a binding without host-admitted membership.
 describe('window lane: pty:spawn request -> provider', () => {
   const suite = setupPtyIpcSuite()
   afterEach(() => restoreMainPlatform())
 
   it.each(WINDOW_LANE_CASES)(
     '$label',
-    async ({ client, workspace, settings, request, provider }) => {
+    async ({ client, workspace, settings, request, provider, env: agentEnv }) => {
       // A desktop client's main process runs on the client OS, SSH included.
       setMainPlatform(client)
       const lanes = startParityLanes(suite, { workspace, settings })
       await lanes.spawnWindow(request)
 
-      const env = { ...recordOf(request.env), ORCA_TERMINAL_HANDLE: 'main' }
-      expect(providerFacts(lanes.provider)).toEqual({
-        command: request.command,
-        // main normalizes the cwd to forward slashes (resolveRuntimePath).
-        cwd: String(request.cwd).replaceAll('\\', '/'),
-        cols: 120,
-        rows: 40,
-        ...provider,
-        ...pick(request, ['commandDelivery', 'startupCommandDelivery']),
-        orcaEnv: IDENTITY_ENV_KEYS.filter((key) => key in env)
-      })
+      expect(await providerFacts(lanes.provider)).toEqual(
+        expectedWindowProvider(request, provider, agentEnv)
+      )
       expect(trackMock.mock.calls).toEqual([['agent_started', request.telemetry]])
       expect(lanes.persistPtyBinding.mock.calls).toEqual([
         [
@@ -196,30 +199,33 @@ function stubOpenCodeV2(): void {
 }
 
 async function runHostCall(lanes: ParityLanes, c: HostLaunchCase): Promise<unknown> {
-  const selector = `id:${launchWorkspaceId(c.workspace)}`
   if (c.call.kind === 'create') {
-    return lanes.runtime.createTerminal(selector, c.call.options)
+    return lanes.runtime.createTerminal(`id:${launchWorkspaceId(c.workspace)}`, c.call.options)
   }
-  return lanes.runtime.createAgentSession(
+  const { method, params } = c.call
+  const dispatcher = new RpcDispatcher({
+    runtime: lanes.runtime,
+    methods: [...TERMINAL_LIFECYCLE_METHODS, ...AGENT_SESSION_METHODS]
+  })
+  const response = await dispatcher.dispatch(
     {
-      clientOperationId: `${Date.now()}-0123456789abcdef0123456789abcdef`,
-      worktree: selector,
-      ...c.call.request
+      id: 'parity',
+      method,
+      params:
+        method === 'terminal.createAgentSession'
+          ? { clientOperationId: `${Date.now()}-0123456789abcdef0123456789abcdef`, ...params }
+          : params
     },
-    { clientId: 'desktop-renderer', clientKind: 'runtime' }
+    // Row 4 is the desktop's own in-process call; rows 5r and 7 come from a paired desktop.
+    c.row === '4' ? {} : { clientId: 'device-1', pairedDeviceId: 'device-1', clientKind: 'runtime' }
   )
+  if (!response.ok) {
+    throw Object.assign(new Error(response.error.message), { code: response.error.code })
+  }
+  return response.result
 }
 
-const HOST_ENV_KEYS = [
-  'ORCA_PANE_KEY',
-  'ORCA_TAB_ID',
-  'ORCA_WORKTREE_ID',
-  'ORCA_AGENT_LAUNCH_TOKEN',
-  'ORCA_TERMINAL_HANDLE'
-]
-const FOLDER_ENV_KEYS = ['ORCA_WORKSPACE_ID', 'ORCA_PROJECT_GROUP_ID', 'ORCA_WORKSPACE_ROOT']
-
-// Pins main's current launch behaviour as the convergence parity baseline (rows 3, 4, 5r, 8, 10;
+// Pins main's current launch behaviour as the convergence parity baseline (rows 3, 4, 5r, 7, 8, 10;
 // rules HOST_REPO, HOST_FOLDER_PATH, RUNTIME_ASSEMBLER): each host producer's call reaches the
 // provider through the real runtime controller with these facts, telemetry, membership and phone tab.
 describe('host lane: producer call -> runtime controller -> provider', () => {
@@ -232,17 +238,8 @@ describe('host lane: producer call -> runtime controller -> provider', () => {
     const lanes = startParityLanes(suite, { workspace: c.workspace, settings: c.settings })
     await runHostCall(lanes, c)
 
-    expect(providerFacts(lanes.provider)).toEqual({
-      cwd: c.workspace.path.replaceAll('\\', '/'),
-      cols: 120,
-      rows: 40,
-      commandDelivery: 'provider',
-      ...c.provider,
-      // main today: the host lane stamps ORCA_WORKSPACE_ID on folders only.
-      orcaEnv:
-        c.workspace.kind === 'folder' ? [...FOLDER_ENV_KEYS, ...HOST_ENV_KEYS] : HOST_ENV_KEYS
-    })
-    // The host stamps its own pane identity over any caller-sent key.
+    expect(await providerFacts(lanes.provider)).toEqual(expectedHostProvider(c))
+    // The host stamps its own pane identity (the window lane's stale-key case is below).
     const spawned = recordOf(lanes.provider.mock.calls.at(-1)?.[0])
     expect(recordOf(spawned.env).ORCA_PANE_KEY).toBe(spawned.paneKey)
     expect(trackMock.mock.calls).toEqual(c.telemetry ? [['agent_started', c.telemetry]] : [])
@@ -261,7 +258,7 @@ const [AI_BUTTON] = HOST_LAUNCH_CASES
 const AI_BUTTON_OPTIONS = AI_BUTTON.call.kind === 'create' ? AI_BUTTON.call.options : {}
 const OPENCODE = CALLER_LAUNCH_CASES.find((c) => c.row === '4')!
 const CALLER_5R = CALLER_LAUNCH_CASES.find((c) => c.row === '5r')!
-const WORKER = HOST_LAUNCH_CASES.find((c) => c.row === '10')!
+const WORKER = HOST_LAUNCH_CASES.find((c) => c.name.startsWith('orchestration worker'))!
 
 // Pins main's current launch behaviour as the convergence parity baseline (rows 3, 4, 5r and 10;
 // disabled agent, failed spawn, missing cwd, reveal): the facts no single table row carries.
@@ -355,19 +352,24 @@ describe('launch facts outside the tables', () => {
     expect(trackMock.mock.calls.filter(([event]) => event === 'agent_error')).toEqual(c.calls)
   })
 
-  // main today: the host lane hands the provider a gone subfolder; the window lane's root fallback
-  // is pinned in pty-spawn-cwd-fallback.test.ts.
-  it('a missing host-lane cwd reaches the provider unchanged', async () => {
+  // main today: neither lane falls back to the workspace root for a gone folder; a window pane's
+  // fallback (it sends cwdFallback) is pinned in pty-spawn-cwd-fallback.test.ts.
+  it.each([
+    { lane: 'row 3 host lane', cwd: `${POSIX_PATH}/gone` },
+    { lane: 'row 5 automation (no cwdFallback)', cwd: POSIX_PATH }
+  ])('a missing $lane folder reaches the provider unchanged', async ({ lane, cwd }) => {
     setMainPlatform('darwin')
     statSyncMock.mockImplementation(() => {
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
     const lanes = startParityLanes(suite, { workspace: POSIX_REPO })
-    await runHostCall(lanes, {
-      ...AI_BUTTON,
-      call: { kind: 'create', options: { ...AI_BUTTON_OPTIONS, cwd: 'gone' } }
-    })
-    expect(providerFacts(lanes.provider).cwd).toBe(`${POSIX_PATH}/gone`)
+    await (lane.startsWith('row 3')
+      ? runHostCall(lanes, {
+          ...AI_BUTTON,
+          call: { kind: 'create', options: { ...AI_BUTTON_OPTIONS, cwd: 'gone' } }
+        })
+      : lanes.spawnWindow(automationSpawnRequest(AUTOMATION_LAUNCH_CASES[0])))
+    expect((await providerFacts(lanes.provider)).cwd).toBe(cwd)
   })
 
   it.each([
@@ -412,7 +414,7 @@ describe('launch facts outside the tables', () => {
   })
 
   // main today: an unmeasured hidden pane's 0x0 grid is not clamped before the provider.
-  it('window lane: a hidden unmeasured pane reaches the provider at 0x0', async () => {
+  it('window lane: a hidden unmeasured pane reaches the provider at 0x0, marked hidden', async () => {
     setMainPlatform('darwin')
     const lanes = startParityLanes(suite, { workspace: POSIX_REPO })
     await lanes.spawnWindow({
@@ -422,6 +424,6 @@ describe('launch facts outside the tables', () => {
       cwd: POSIX_PATH,
       worktreeId: launchWorkspaceId(POSIX_REPO)
     })
-    expect(providerFacts(lanes.provider)).toMatchObject({ cols: 0, rows: 0 })
+    expect(await providerFacts(lanes.provider)).toMatchObject({ cols: 0, rows: 0, hidden: true })
   })
 })

@@ -9,6 +9,8 @@ export const LAUNCH_TAB_ID = 'tab-parity'
 // The pane fixture's first leaf (pty-connection-test-pane-fixtures.ts).
 export const LAUNCH_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 export const LAUNCH_TOKEN = 'launch-token-parity'
+/** The window pane's measured grid: no lane defaults to it, so it shows the pane size reached the provider. */
+export const PANE_GRID = { cols: 97, rows: 31 } as const
 
 export type LaunchWorkspace = {
   kind: 'repo' | 'folder'
@@ -31,7 +33,9 @@ export type WindowLaunchProducer =
   | {
       kind: 'new-tab'
       agent: 'claude' | 'codex' | 'aider'
+      prompt: string
       delivery: 'draft' | 'auto-submit'
+      launchSource: 'quick_command'
       initialCwd?: string
     }
   | { kind: 'transcript-continue'; transcript: string; cwd: string | null }
@@ -59,9 +63,8 @@ export type WindowProviderFacts = {
 
 export type WindowLaunchCase = {
   name: string
-  /** PLAN-v2 §3 producer row; `rules` names the §4.3 runtime rules the case exercises. */
+  /** The launch-convergence producer row. */
   row: 2 | 6
-  rules: readonly string[]
   client: LaunchClient
   workspace: LaunchWorkspace
   settings?: Record<string, unknown>
@@ -106,9 +109,14 @@ export function windowSpawnRequest(c: WindowLaunchCase): Record<string, unknown>
   const ssh = workspace.connectionId !== undefined
   const agent = producer.kind === 'new-tab' ? producer.agent : 'antigravity'
   const cwd = request.cwd ?? workspace.path
+  // A local Windows ConPTY pane withholds the kitty keyboard flag (terminal-keyboard-protocol.ts).
+  const localConpty =
+    c.client === 'win32' &&
+    !ssh &&
+    request.shellOverride !== 'wsl.exe' &&
+    !cwd.startsWith('\\\\wsl')
   return {
-    cols: 120,
-    rows: 40,
+    ...PANE_GRID,
     cwd,
     ...(ssh ? {} : { cwdFallback: 'worktree' }),
     env: {
@@ -141,14 +149,52 @@ export function windowSpawnRequest(c: WindowLaunchCase): Record<string, unknown>
     leafId: LAUNCH_LEAF_ID,
     ...(request.shellOverride ? { shellOverride: request.shellOverride } : {}),
     ...(request.projectRuntime ? { projectRuntime: sentRuntime(request.projectRuntime) } : {}),
-    terminalKittyKeyboardProtocol: true,
+    ...(localConpty ? {} : { terminalKittyKeyboardProtocol: true }),
     telemetry:
       producer.kind === 'new-tab'
         ? {
             agent_kind: agent === 'claude' ? 'claude-code' : agent,
-            launch_source: 'quick_command',
+            launch_source: producer.launchSource,
             request_kind: 'new'
           }
         : { agent_kind: 'antigravity', launch_source: 'sidebar', request_kind: 'resume' }
+  }
+}
+
+// The pane identity keys the plan names; agent hook and CLI keys vary by host and are not launch facts.
+export const IDENTITY_ENV_KEYS = [
+  'ORCA_WORKSPACE_ID',
+  'ORCA_PROJECT_GROUP_ID',
+  'ORCA_WORKSPACE_ROOT',
+  'ORCA_PANE_KEY',
+  'ORCA_TAB_ID',
+  'ORCA_WORKTREE_ID',
+  'ORCA_AGENT_LAUNCH_TOKEN',
+  'ORCA_TERMINAL_HANDLE'
+] as const
+
+/** What main hands the provider for a window-lane pty:spawn request (rows 2, 5 and 6). */
+export function expectedWindowProvider(
+  request: Record<string, unknown>,
+  provider: WindowProviderFacts,
+  agentEnv: Record<string, string>
+): Record<string, unknown> {
+  // main adds the terminal handle to the pane's env.
+  const env = { ...(typeof request.env === 'object' ? request.env : {}), ORCA_TERMINAL_HANDLE: '' }
+  return {
+    command: request.command,
+    // main normalizes the cwd to forward slashes (resolveRuntimePath).
+    cwd: String(request.cwd).replaceAll('\\', '/'),
+    // The pane's measured size, and never marked hidden before its pane shows.
+    cols: request.cols,
+    rows: request.rows,
+    hidden: false,
+    env: agentEnv,
+    ...provider,
+    ...(request.commandDelivery ? { commandDelivery: request.commandDelivery } : {}),
+    ...(request.startupCommandDelivery
+      ? { startupCommandDelivery: request.startupCommandDelivery }
+      : {}),
+    orcaEnv: IDENTITY_ENV_KEYS.filter((key) => key in env)
   }
 }

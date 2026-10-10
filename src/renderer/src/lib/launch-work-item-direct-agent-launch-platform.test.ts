@@ -163,33 +163,31 @@ describe('row 8: work-item direct agent launch on main', () => {
     })
   })
 
-  it.each(['task_page', 'sidebar', 'source_control_recovery'] as const)(
-    'a codex draft rides as draftPrompt, launch_source %s',
-    async (launchSource) => {
-      const { direct } = await load('win32')
-      const { startupPlan } = direct.buildDirectWorkItemAgentStartupPlan({
-        agent: 'codex',
-        draftContent: "Fix Bob's bug",
-        promptDelivery: 'draft',
-        settings: CMD_SHELL_SETTINGS,
-        launchPlatform: 'win32'
-      })
-      const codex = "codex '--dangerously-bypass-approvals-and-sandbox'"
-      // main today: Codex has no native draft flag, so the draft waits for a later paste.
-      expect(direct.buildDirectWorkItemStartupOpts('codex', startupPlan, launchSource)).toEqual({
-        startup: {
-          command: codex,
-          env: {},
-          launchConfig: {
-            agentCommand: codex,
-            agentArgs: '--dangerously-bypass-approvals-and-sandbox',
-            agentEnv: {}
-          },
-          launchAgent: 'codex',
-          draftPrompt: "Fix Bob's bug",
-          telemetry: { agent_kind: 'codex', launch_source: launchSource, request_kind: 'new' }
-        }
-      })
-    }
-  )
+  // Every launchWorkItemDirect caller passes 'task_page'.
+  it('a codex draft rides as draftPrompt', async () => {
+    const { direct } = await load('win32')
+    const { startupPlan } = direct.buildDirectWorkItemAgentStartupPlan({
+      agent: 'codex',
+      draftContent: "Fix Bob's bug",
+      promptDelivery: 'draft',
+      settings: CMD_SHELL_SETTINGS,
+      launchPlatform: 'win32'
+    })
+    const codex = "codex '--dangerously-bypass-approvals-and-sandbox'"
+    // main today: Codex has no native draft flag, so the draft waits for a later paste.
+    expect(direct.buildDirectWorkItemStartupOpts('codex', startupPlan, 'task_page')).toEqual({
+      startup: {
+        command: codex,
+        env: {},
+        launchConfig: {
+          agentCommand: codex,
+          agentArgs: '--dangerously-bypass-approvals-and-sandbox',
+          agentEnv: {}
+        },
+        launchAgent: 'codex',
+        draftPrompt: "Fix Bob's bug",
+        telemetry: { agent_kind: 'codex', launch_source: 'task_page', request_kind: 'new' }
+      }
+    })
+  })
 })

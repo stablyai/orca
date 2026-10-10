@@ -10,17 +10,23 @@ import {
 import {
   AUTOMATION_LAUNCH_CASES,
   AUTOMATION_PROMPT,
+  automationPhoneTab,
   automationSpawnRequest,
   type AutomationLaunchCase
 } from '../../../shared/launch-parity-automation-cases.test-fixture'
 import {
+  PAIRED_AUTOMATION_CASES,
+  PAIRED_AUTOMATION_WORKSPACE,
+  pairedAgentSessionParams,
+  pairedLegacyCreateParams,
+  type PairedAutomationCase
+} from '../../../shared/launch-parity-paired-host.test-fixture'
+import {
   LAUNCH_LEAF_ID,
   LAUNCH_TAB_ID,
   LAUNCH_TOKEN,
-  launchWorkspaceId,
-  type LaunchClient
+  launchWorkspaceId
 } from '../../../shared/launch-parity-window-request.test-fixture'
-import { POSIX_PATH } from '../../../shared/launch-parity-window-cases.test-fixture'
 
 const holder = vi.hoisted((): LaunchStoreHolder => ({ store: null }))
 vi.mock('@/store', async () =>
@@ -92,7 +98,7 @@ async function runAutomation(
     prompt: AUTOMATION_PROMPT,
     // Automation dispatch always passes 'unknown'.
     launchSource: 'unknown',
-    ...(c.title ? { title: c.title } : {})
+    title: c.title
   })
   const phone = modules.phone.buildMobileSessionTabSnapshots(store.getState(), false)
   return { spawn, rpc, phone }
@@ -121,7 +127,6 @@ describe('row 5: desktop automation pty:spawn request', () => {
   it.each(AUTOMATION_LAUNCH_CASES)('$name', async (c) => {
     const { spawn, phone } = await runAutomation(c)
     expect(withFixedIds(spawn.mock.calls[0]?.[0])).toEqual(automationSpawnRequest(c))
-    // The phone sees the hidden run tab under its automation title (or the default title).
     expect(
       phone.map(({ tabs }) =>
         tabs.map((tab) => ({
@@ -130,14 +135,16 @@ describe('row 5: desktop automation pty:spawn request', () => {
           isActive: tab.isActive
         }))
       )
-    ).toEqual([[{ title: c.title ?? 'Terminal 1', launchAgent: undefined, isActive: true }]])
+    ).toEqual([[automationPhoneTab(c)]])
   })
 })
 
-const PAIRED_REPO = { kind: 'repo', path: POSIX_PATH, pairedRuntime: 'env-1' } as const
-const LINUX_CLAUDE = { client: 'linux', agent: 'claude', title: 'Nightly audit' } as const
-const PROMPT_KEYS = { prompt: AUTOMATION_PROMPT, promptDelivery: 'auto-submit' }
 const KEYBOARD = AGENT_SESSION_KEYBOARD_RUNTIME_CAPABILITY
+const pairedRun = (c: PairedAutomationCase) => ({
+  ...c,
+  title: 'Nightly audit run 3',
+  workspace: PAIRED_AUTOMATION_WORKSPACE
+})
 
 function onlyCreate(rpc: ReturnType<typeof vi.fn>, method: string): Record<string, unknown> {
   const creates = rpc.mock.calls.map(([request]) => request).filter((r) => r.method === method)
@@ -154,32 +161,13 @@ function onlyCreate(rpc: ReturnType<typeof vi.fn>, method: string): Record<strin
 describe('row 5r: paired runtime terminal.createAgentSession params', () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  it.each([
-    { name: 'claude, keyboard negotiated', agent: 'claude', removed: [], keys: PROMPT_KEYS },
-    {
-      name: 'claude, keyboard not negotiated',
-      agent: 'claude',
-      removed: [KEYBOARD],
-      keys: PROMPT_KEYS
-    },
-    // The window plan's shell-ready delivery for codex is not sent; the host re-plans.
-    { name: 'codex', agent: 'codex', removed: [], keys: PROMPT_KEYS },
-    // stdin-after-start: the client pastes the prompt after the host creates the terminal.
-    { name: 'aider sends no prompt', agent: 'aider', removed: [], keys: {} }
-  ] as const)('$name', async ({ agent, removed, keys }) => {
-    const { spawn, rpc } = await runAutomation(
-      { ...LINUX_CLAUDE, agent, workspace: PAIRED_REPO },
-      { removed }
-    )
+  it.each(PAIRED_AUTOMATION_CASES.filter((c) => c.client === 'linux'))('$name', async (c) => {
+    const { spawn, rpc } = await runAutomation(pairedRun(c), {
+      removed: c.keyboard ? [] : [KEYBOARD]
+    })
     expect(spawn).not.toHaveBeenCalled()
-    // main today: no command, env, launchConfig, launchToken, title or agentArgs cross the wire.
     expect(withFixedIds(onlyCreate(rpc, 'terminal.createAgentSession'))).toEqual({
-      ...(removed.length === 0 ? { terminalKittyKeyboardProtocol: true } : {}),
-      worktree: `id:repo-1::${POSIX_PATH}`,
-      agent,
-      ...keys,
-      placement: { tabId: LAUNCH_TAB_ID, leafId: LAUNCH_LEAF_ID },
-      presentation: 'background',
+      ...pairedAgentSessionParams(c),
       clientOperationId: expect.stringMatching(/^\d{13}-[0-9a-f]{32}$/)
     })
   })
@@ -191,59 +179,19 @@ describe('row 5r: paired runtime legacy terminal.create params', () => {
   afterEach(() => vi.unstubAllGlobals())
   const LEGACY = [AGENT_SESSION_HOST_AUTHORITY_CAPABILITY, KEYBOARD]
 
-  it.each([
-    { name: 'claude with title, Linux client', c: LINUX_CLAUDE },
-    { name: 'codex without title', c: { client: 'linux', agent: 'codex', title: undefined } },
-    { name: 'aider, prompt kept off argv', c: { ...LINUX_CLAUDE, agent: 'aider' } },
-    // main today: the host runs a command quoted for the Windows client, even on a POSIX host path.
-    { name: 'claude from a Windows client', c: { ...LINUX_CLAUDE, client: 'win32' } }
-  ] as const)('$name', async ({ c }) => {
-    const { spawn, rpc } = await runAutomation(
-      { ...c, workspace: PAIRED_REPO },
-      { removed: LEGACY }
-    )
+  it.each(PAIRED_AUTOMATION_CASES.filter((c) => c.keyboard))('$name', async (c) => {
+    const { spawn, rpc } = await runAutomation(pairedRun(c), { removed: LEGACY })
     expect(spawn).not.toHaveBeenCalled()
-    const window = automationSpawnRequest({
-      ...c,
-      name: c.agent,
-      workspace: PAIRED_REPO,
-      request: legacyCommand(c),
-      provider: { shellOverride: undefined }
-    })
-    const {
-      command,
-      env,
-      launchConfig,
-      launchToken,
-      launchAgent,
-      tabId,
-      leafId,
-      startupCommandDelivery
-    } = window
-    // No telemetry, cwd, placement or connection: the host owns them; kitty is never negotiated here.
-    expect(withFixedIds(onlyCreate(rpc, 'terminal.create'))).toEqual({
-      worktree: `id:repo-1::${POSIX_PATH}`,
-      command,
-      terminalKittyKeyboardProtocol: true,
-      ...(startupCommandDelivery ? { startupCommandDelivery } : {}),
-      env,
-      launchConfig,
-      launchToken,
-      launchAgent,
-      ...(c.title ? { title: c.title } : {}),
-      tabId,
-      leafId,
-      presentation: 'background'
-    })
+    expect(withFixedIds(onlyCreate(rpc, 'terminal.create'))).toEqual(pairedLegacyCreateParams(c))
   })
 
   it.each(['agent_session_legacy_required', 'method_not_found'])(
     'falls back to terminal.create once the host answers %s',
     async (code) => {
-      const { rpc } = await runAutomation(
-        { ...LINUX_CLAUDE, workspace: PAIRED_REPO },
-        { removed: [], failCreateAgentSession: code }
-      )
+      const { rpc } = await runAutomation(pairedRun(PAIRED_AUTOMATION_CASES[0]), {
+        removed: [],
+        failCreateAgentSession: code
+      })
       expect(rpc.mock.calls.map(([request]) => request.method).slice(0, 2)).toEqual([
         'terminal.createAgentSession',
         'terminal.create'
@@ -251,21 +199,6 @@ describe('row 5r: paired runtime legacy terminal.create params', () => {
     }
   )
 })
-
-/** The window plan a paired legacy create carries, by client and agent. */
-function legacyCommand(c: { client: LaunchClient; agent: string }) {
-  const posixPrompt = `'don'"'"'t stop'`
-  if (c.agent === 'aider') {
-    return { command: "aider '--yes-always'", agentCommand: "aider '--yes-always'" }
-  }
-  if (c.agent === 'codex') {
-    const codex = "codex '--dangerously-bypass-approvals-and-sandbox'"
-    return { command: `${codex} ${posixPrompt}`, agentCommand: codex }
-  }
-  const claude = "claude '--dangerously-skip-permissions'"
-  const prompt = c.client === 'win32' ? `'don''t stop'` : posixPrompt
-  return { command: `${claude} ${prompt}`, agentCommand: claude }
-}
 
 function recordOf(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? { ...value } : {}

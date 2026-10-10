@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { launchWorkspaceState, perClientLoader } from '@/lib/launch-parity-renderer-fixture'
 import {
@@ -11,12 +12,28 @@ import type {
 } from '../../../../shared/launch-parity-window-request.test-fixture'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 
+// The selection hook's async probes; the platform and shell it derives are synchronous.
+vi.mock('@/hooks/useDetectedAgents', () => ({ useDetectedAgents: () => ({ detectedIds: null }) }))
+vi.mock('@/components/sidebar/folder-workspace-composer-path-status', () => ({
+  useFolderWorkspaceComposerPathStatus: () => ({
+    pathStatusBlocksCreate: false,
+    pathStatusProjectError: null
+  })
+}))
+vi.mock('@/hooks/useEphemeralVmRecipeOptions', () => ({
+  useEphemeralVmRecipeOptions: () => ({
+    recipes: [],
+    selectedRecipeId: null,
+    setSelectedRecipeId: vi.fn(),
+    error: null
+  })
+}))
+
 const load = perClientLoader(async () => ({
   quick: await import('./quick-startup-plan'),
-  platform: await import('@/lib/agent-launch-platform'),
-  preflight: await import('@/lib/local-preflight-context'),
-  newWorkspace: await import('@/lib/new-workspace'),
-  shell: await import('../../../../shared/windows-terminal-shell')
+  selection: await import('./runtime-target-selection'),
+  // Same module graph as the hook, so both see one React.
+  react: await import('@testing-library/react')
 }))
 
 type QuickCase = {
@@ -33,9 +50,9 @@ type QuickCase = {
   startup: { command: string; agentCommand: string } | null
 }
 
-/** runtime-target-selection.ts's composer rule, then the startup it hands workspace creation. */
+/** runtime-target-selection.ts's platform and shell, handed to the startup builder as quick-creation-execution.ts does. */
 async function quickStartup(c: QuickCase) {
-  const { quick, platform, preflight, newWorkspace, shell, createStore } = await load(c.client)
+  const { quick, selection, react, createStore } = await load(c.client)
   const store = createStore()
   store.setState(
     launchWorkspaceState(c.workspace, {
@@ -45,34 +62,44 @@ async function quickStartup(c: QuickCase) {
     })
   )
   const state = store.getState()
-  const repo = state.repos[0]
-  const isRemote = Boolean(repo.connectionId)
-  const launchPlatform = platform.getAgentLaunchPlatformForRepo(
-    repo,
-    isRemote
-      ? undefined
-      : preflight.getLocalRepoProjectExecutionRuntimeContext(
-          { ...state, activeWorktreeId: null },
-          repo.id,
-          newWorkspace.CLIENT_PLATFORM
-        )
+  // Fed the store as composer-target-store.ts reads it; with no host setups the draft repo is selected.
+  const { result } = react.renderHook(() =>
+    selection.useComposerRuntimeTargetSelection({
+      actionableHostIds: new Set(),
+      activeRepoId: null,
+      eligibleRepos: state.repos,
+      hostOptions: [],
+      initialEphemeralVmRecipeId: null,
+      projectGroups: state.projectGroups,
+      projectHostSetups: [],
+      projects: state.projects,
+      repoId: state.repos[0].id,
+      repos: state.repos,
+      selectedProjectGroup: null,
+      selectedProjectHostSetupOverrideId: null,
+      settings: state.settings,
+      sshConnectionStates: state.sshConnectionStates,
+      workspaceHostScope: state.workspaceHostScope,
+      worktreesByRepo: state.worktreesByRepo
+    })
   )
-  const startupShell = shell.resolveLocalWindowsAgentStartupShell({
-    platform: launchPlatform,
-    isRemote,
-    terminalWindowsShell: state.settings?.terminalWindowsShell
-  })
-  const result = quick.buildQuickComposerStartup({
+  const { selectedRepoAgentLaunchPlatform, selectedRepoStartupShell, selectedRepoIsRemote } =
+    result.current
+  const built = quick.buildQuickComposerStartup({
     agent: c.agent,
     prompt: c.prompt ?? '',
     draftPrompt: c.draftPrompt,
     settings: state.settings,
-    platform: launchPlatform,
-    shell: startupShell,
-    isRemote,
+    platform: selectedRepoAgentLaunchPlatform,
+    shell: selectedRepoStartupShell,
+    isRemote: selectedRepoIsRemote,
     telemetrySource: c.telemetrySource
   })
-  return { launchPlatform, startupShell, result }
+  return {
+    launchPlatform: selectedRepoAgentLaunchPlatform,
+    startupShell: selectedRepoStartupShell,
+    result: built
+  }
 }
 
 const repo = (path: string, extra: Partial<LaunchWorkspace> = {}): LaunchWorkspace => ({
@@ -83,8 +110,9 @@ const repo = (path: string, extra: Partial<LaunchWorkspace> = {}): LaunchWorkspa
 const BOB = "fix Bob's bug"
 const MODEL = "claude '--model' 'sonnet'"
 const CODEX = "codex '--dangerously-bypass-approvals-and-sandbox'"
-const posix = { command: `${MODEL} 'fix Bob'"'"'s bug'`, agentCommand: MODEL }
-const powershell = { command: `${MODEL} 'fix Bob''s bug'`, agentCommand: MODEL }
+// A linked item's draft rides --prefill; the apostrophe shows the quoting.
+const posix = { command: `${MODEL} --prefill 'fix Bob'"'"'s bug'`, agentCommand: MODEL }
+const powershell = { command: `${MODEL} --prefill 'fix Bob''s bug'`, agentCommand: MODEL }
 const WSL = { kind: 'wsl', distro: 'Ubuntu' } as const
 const SSH = { connectionId: 'ssh-1' }
 const CMD = { terminalWindowsShell: 'cmd.exe' }
@@ -96,17 +124,19 @@ const quickCase = (
   plan: QuickCase['plan'],
   startup: QuickCase['startup']
 ): QuickCase => ({ name, client, workspace, ...input, plan, startup })
-const claude = { agent: 'claude', prompt: BOB } as const
+// The composer's text becomes the worktree note; the agent gets a linked item's draft, or nothing.
+const claude = { agent: 'claude', draftPrompt: BOB } as const
 
 const CASES: QuickCase[] = [
   quickCase('macOS repo', 'darwin', repo(POSIX_PATH), claude, ['darwin', undefined], posix),
+  // main today: with no prompt on the command, codex does not wait for the shell.
   quickCase(
     'macOS repo, codex',
     'darwin',
     repo(POSIX_PATH),
-    { agent: 'codex', prompt: BOB },
+    { agent: 'codex' },
     ['darwin', undefined],
-    { command: `${CODEX} 'fix Bob'"'"'s bug'`, agentCommand: CODEX }
+    { command: CODEX, agentCommand: CODEX }
   ),
   quickCase(
     'Windows C: repo, default PowerShell',
@@ -123,7 +153,7 @@ const CASES: QuickCase[] = [
     { ...claude, settings: CMD },
     ['win32', 'cmd'],
     {
-      command: `claude "--model" "sonnet" "fix Bob's bug"`,
+      command: `claude "--model" "sonnet" --prefill "fix Bob's bug"`,
       agentCommand: 'claude "--model" "sonnet"'
     }
   ),
@@ -161,43 +191,36 @@ const CASES: QuickCase[] = [
     powershell
   ),
   quickCase(
-    'macOS repo, no prompt',
+    'macOS repo, no linked item',
     'darwin',
     repo(POSIX_PATH),
     { agent: 'claude' },
     ['darwin', undefined],
     { command: MODEL, agentCommand: MODEL }
   ),
+  // Only a linked Linear item with no URL and no issue block becomes a typed prompt.
   quickCase(
-    'macOS repo, onboarding',
+    'macOS repo, Linear typed-only item',
     'darwin',
     repo(POSIX_PATH),
-    { agent: 'claude', prompt: 'hi', telemetrySource: 'onboarding' },
+    { agent: 'claude', prompt: 'hi' },
     ['darwin', undefined],
     { command: `${MODEL} 'hi'`, agentCommand: MODEL }
   ),
   quickCase(
-    'macOS repo, claude native draft',
+    'macOS repo, onboarding',
     'darwin',
     repo(POSIX_PATH),
-    { agent: 'claude', draftPrompt: 'draft me' },
+    { agent: 'claude', telemetrySource: 'onboarding' },
     ['darwin', undefined],
-    { command: `${MODEL} --prefill 'draft me'`, agentCommand: MODEL }
+    { command: MODEL, agentCommand: MODEL }
   ),
-  // A draft without a native prefill, or a prompt typed after start, stays with the window.
+  // A draft without a native prefill stays with the window.
   quickCase(
     'macOS repo, codex draft',
     'darwin',
     repo(POSIX_PATH),
     { agent: 'codex', draftPrompt: 'draft me' },
-    ['darwin', undefined],
-    null
-  ),
-  quickCase(
-    'macOS repo, aider prompt',
-    'darwin',
-    repo(POSIX_PATH),
-    { agent: 'aider', prompt: 'fix it' },
     ['darwin', undefined],
     null
   )
@@ -233,7 +256,6 @@ describe('row 8: quick composer startup on main', () => {
                   : '--dangerously-bypass-approvals-and-sandbox',
               agentEnv: claudeEnv
             },
-            ...(c.agent === 'codex' ? { startupCommandDelivery: 'shell-ready' } : {}),
             telemetry: {
               agent_kind: c.agent === 'claude' ? 'claude-code' : c.agent,
               launch_source: c.telemetrySource ?? 'new_workspace_composer',

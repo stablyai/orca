@@ -7,13 +7,14 @@ import {
   launchWorkspaceId,
   type LaunchWorkspace
 } from '../../../shared/launch-parity-window-request.test-fixture'
+import { PAIRED_TAB_PATH } from '../../../shared/launch-parity-paired-host.test-fixture'
 
 // The wire suite's paired environment (web-runtime-session-test-harness.ts ENVIRONMENT_ID).
 const ENVIRONMENT_ID = 'web-env-1'
 /** The paired worktree every row 7 case launches into. */
 export const PAIRED_WORKSPACE: LaunchWorkspace = {
   kind: 'repo',
-  path: '/worktree',
+  path: PAIRED_TAB_PATH,
   pairedRuntime: ENVIRONMENT_ID
 }
 const WORKTREE_ID = launchWorkspaceId(PAIRED_WORKSPACE)
@@ -54,27 +55,37 @@ const codex = (agentArgs = CODEX_ARGS): CreateWebRuntimeSessionTerminalArgs => (
   promptDelivery: 'auto-submit'
 })
 
+// A Claude draft rides --prefill on the launch command, through the launch-draft creator.
+const CLAUDE_DRAFT = {
+  ...BASE,
+  launchAgent: 'claude',
+  command: `claude '--dangerously-skip-permissions' --prefill 'review Bob'"'"'s change'`,
+  env: {},
+  launchConfig: {
+    agentCommand: "claude '--dangerously-skip-permissions'",
+    agentArgs: '--dangerously-skip-permissions',
+    agentEnv: {}
+  },
+  prompt: "review Bob's change",
+  promptDelivery: 'draft',
+  agent: 'claude',
+  launchDraft: "review Bob's change"
+} as const
+const claudeDraft = {
+  agent: 'claude',
+  prompt: "  review Bob's change  ",
+  promptDelivery: 'draft'
+} as const
+
 export const PAIRED_TAB_CASES: PairedTabCase[] = [
+  // Session fork: a Claude draft.
+  { name: 'claude draft', producer: claudeDraft, creator: 'launch-draft', launch: CLAUDE_DRAFT },
   {
-    // A Claude draft rides --prefill on the launch command, through the launch-draft creator.
-    name: 'claude draft',
-    producer: { agent: 'claude', prompt: "  review Bob's change  ", promptDelivery: 'draft' },
+    // Session continuation: Claude always gets a draft, with the session's cwd.
+    name: 'claude draft continuation, initial cwd',
+    producer: { ...claudeDraft, initialCwd: `${PAIRED_TAB_PATH}/packages/app` },
     creator: 'launch-draft',
-    launch: {
-      ...BASE,
-      launchAgent: 'claude',
-      command: `claude '--dangerously-skip-permissions' --prefill 'review Bob'"'"'s change'`,
-      env: {},
-      launchConfig: {
-        agentCommand: "claude '--dangerously-skip-permissions'",
-        agentArgs: '--dangerously-skip-permissions',
-        agentEnv: {}
-      },
-      prompt: "review Bob's change",
-      promptDelivery: 'draft',
-      agent: 'claude',
-      launchDraft: "review Bob's change"
-    }
+    launch: { ...CLAUDE_DRAFT, cwd: `${PAIRED_TAB_PATH}/packages/app` }
   },
   {
     name: 'codex auto-submit',
@@ -88,11 +99,5 @@ export const PAIRED_TAB_CASES: PairedTabCase[] = [
     producer: { agent: 'codex', prompt: 'fix it', agentArgs: '--model gpt-5' },
     creator: 'session',
     launch: { ...codex('--model gpt-5'), agentArgs: '--model gpt-5' }
-  },
-  {
-    name: 'codex auto-submit, initial cwd',
-    producer: { agent: 'codex', prompt: 'fix it', initialCwd: '/worktree/packages/app' },
-    creator: 'session',
-    launch: { ...codex(), cwd: '/worktree/packages/app' }
   }
 ]

@@ -42,8 +42,10 @@ const STARTUPS: { name: string; startup: WorktreeStartupLaunch; expectedStartupF
     },
     {
       name: 'Claude native-prefill draft with viewMode',
+      // A real draft always carries the agent env, here empty (tui-agent-startup.ts).
       startup: {
         command: `claude --prefill 'review Bob'"'"'s change'`,
+        env: {},
         launchConfig: { agentCommand: 'claude', agentArgs: '', agentEnv: {} },
         launchAgent: 'claude',
         viewMode: 'terminal',
@@ -51,6 +53,7 @@ const STARTUPS: { name: string; startup: WorktreeStartupLaunch; expectedStartupF
       },
       expectedStartupFields: {
         startupCommand: `claude --prefill 'review Bob'"'"'s change'`,
+        startupEnv: {},
         startupLaunchConfig: { agentCommand: 'claude', agentArgs: '', agentEnv: {} },
         activate: true
       }
@@ -64,7 +67,7 @@ function makeRequest(startup: WorktreeStartupLaunch | undefined): WorktreeCreate
     baseBranch: 'origin/main',
     setupDecision: 'skip',
     telemetrySource: 'sidebar',
-    createdWithAgent: 'codex',
+    createdWithAgent: startup?.launchAgent ?? 'codex',
     creationId: 'creation-1',
     ...(startup ? { startup } : {})
   }
@@ -84,7 +87,7 @@ describe('row 8: worktree create payload startup on main', () => {
         setupDecision: 'skip',
         sparseCheckout: undefined,
         telemetrySource: 'sidebar',
-        createdWithAgent: 'codex',
+        createdWithAgent: startup.launchAgent,
         // main today: creationId never crosses to the paired host.
         ...expectedStartupFields
       })
@@ -117,7 +120,7 @@ describe('row 8: worktree create payload startup on main', () => {
       setupDecision: 'skip',
       sparseCheckout: undefined,
       telemetrySource: 'sidebar',
-      createdWithAgent: 'codex',
+      createdWithAgent: startup.launchAgent,
       startup,
       creationId: 'creation-1'
     })

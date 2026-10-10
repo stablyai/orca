@@ -72,7 +72,12 @@ export function launchWorkspaceState(
   settings: Record<string, unknown> = {}
 ): Record<string, unknown> {
   const connectionId = workspace.connectionId ?? null
-  const executionHostId = connectionId ? `ssh:${connectionId}` : 'local'
+  // A paired runtime's rows name it as their host (project-host-routing.ts).
+  const executionHostId = workspace.pairedRuntime
+    ? `runtime:${workspace.pairedRuntime}`
+    : connectionId
+      ? `ssh:${connectionId}`
+      : 'local'
   const repoPath = workspace.kind === 'repo' ? workspace.path : workspace.repoPath
   const repo = repoPath
     ? {

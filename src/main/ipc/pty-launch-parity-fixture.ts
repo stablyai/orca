@@ -8,10 +8,12 @@ import { existsSyncMock, statSyncMock } from './pty-ipc-mock-registry'
 import type { PtyIpcSuiteFixtures } from './pty-ipc-test-harness'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { TerminalWorkspaceLaunchScope } from '../runtime/runtime-legacy-worker-terminal-recovery-types'
-import type { LaunchWorkspace } from '../../shared/launch-parity-window-request.test-fixture'
-
-export const HOST_TAB_ID = '33333333-3333-4333-8333-333333333333'
-export const HOST_LEAF_ID = '44444444-4444-4444-8444-444444444444'
+import {
+  IDENTITY_ENV_KEYS,
+  type LaunchWorkspace
+} from '../../shared/launch-parity-window-request.test-fixture'
+import { isHiddenRendererPty } from './pty-hidden-delivery-gate'
+import { HOST_TAB_ID } from './pty-launch-parity-host-cases'
 
 const WINDOWS_ENV = {
   COMSPEC: 'C:\\Windows\\system32\\cmd.exe',
@@ -23,6 +25,7 @@ const WINDOWS_ENV = {
 }
 const ORIGINAL_PLATFORM = process.platform
 const savedEnv = new Map<string, string | undefined>()
+let remoteSpawns = 0
 
 /** Main's process.platform for a case; Windows also gets the env and .exe probes its shells read. */
 export function setMainPlatform(platform: NodeJS.Platform): void {
@@ -59,12 +62,11 @@ export function restoreMainPlatform(): void {
   savedEnv.clear()
 }
 
-/** Settings both lanes read; the untrimmed default shell shows which reads trim it. */
-export function parityMainSettings(
-  overrides: Record<string, unknown> = {}
-): Record<string, unknown> {
+/** Settings both lanes read on main's current OS; the untrimmed default shell shows which reads trim it. */
+function parityMainSettings(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    terminalDefaultShell: '  /bin/zsh  ',
+    // Windows hides the default-shell setting and defaults it to ''.
+    terminalDefaultShell: process.platform === 'win32' ? '' : '  /bin/zsh  ',
     terminalDefaultShellArgs: ['-l'],
     terminalWindowsShell: 'powershell.exe',
     terminalWindowsPowerShellImplementation: 'auto',
@@ -78,7 +80,7 @@ export function parityMainSettings(
   }
 }
 
-export function launchScope(workspace: LaunchWorkspace): TerminalWorkspaceLaunchScope {
+function launchScope(workspace: LaunchWorkspace): TerminalWorkspaceLaunchScope {
   const connectionId = workspace.connectionId ?? null
   if (workspace.kind === 'repo') {
     return {
@@ -176,7 +178,8 @@ export function startParityLanes(
     if (args.spawnError) {
       throw args.spawnError
     }
-    return { id: options.sessionId ?? 'remote-pty' }
+    // A fresh id per spawn, so one case's hidden mark never reads into the next.
+    return { id: options.sessionId ?? `remote-pty-${++remoteSpawns}` }
   })
   if (args.workspace.connectionId) {
     installSshTestProvider(args.workspace.connectionId, provider)
@@ -263,27 +266,24 @@ const PROVIDER_FACT_KEYS = [
   'startupCommandDelivery'
 ] as const
 
-// The pane identity keys PLAN-v2 names; agent hook and CLI keys vary by host and are not launch facts.
-export const IDENTITY_ENV_KEYS = [
-  'ORCA_WORKSPACE_ID',
-  'ORCA_PROJECT_GROUP_ID',
-  'ORCA_WORKSPACE_ROOT',
-  'ORCA_PANE_KEY',
-  'ORCA_TAB_ID',
-  'ORCA_WORKTREE_ID',
-  'ORCA_AGENT_LAUNCH_TOKEN',
-  'ORCA_TERMINAL_HANDLE'
-]
+// The agent and caller env keys the tables save; their values must reach the provider.
+const CASE_ENV_KEYS = ['A', 'CUSTOM_FLAG']
 
-/** The launch facts PLAN-v2 names at the provider boundary; `orcaEnv` lists identity keys present. */
-export function providerFacts(provider: Mock): Record<string, unknown> {
+/**
+ * The launch facts the plan names at the provider boundary: `orcaEnv` lists identity keys present,
+ * `env` the case's own env values, `hidden` whether main marked the PTY hidden before a view.
+ */
+export async function providerFacts(provider: Mock): Promise<Record<string, unknown>> {
   const options = recordOf(provider.mock.calls.at(-1)?.[0])
   const env = recordOf(options.env)
+  const spawned = recordOf(await provider.mock.results.at(-1)?.value)
   return {
     ...Object.fromEntries(
       PROVIDER_FACT_KEYS.filter((k) => k in options).map((k) => [k, options[k]])
     ),
-    orcaEnv: IDENTITY_ENV_KEYS.filter((key) => key in env)
+    orcaEnv: IDENTITY_ENV_KEYS.filter((key) => key in env),
+    env: Object.fromEntries(CASE_ENV_KEYS.filter((key) => key in env).map((k) => [k, env[k]])),
+    hidden: isHiddenRendererPty(String(spawned.id))
   }
 }
 

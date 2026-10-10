@@ -1,6 +1,5 @@
-// Test-only: the host-lane launch parity table (rows 3, 4, 5r, 8, 10). Each case is the call a
+// Test-only: the host-lane launch parity table (rows 3, 4, 5r, 7, 8, 10). Each case is the call a
 // host producer makes and the facts main hands the provider, the phone and telemetry for it.
-import type { RuntimeCreateAgentSessionRequest } from '../../shared/agent-session-host-authority'
 import type { TerminalCreateOptions } from '../runtime/runtime-terminal-contracts'
 import type { LaunchWorkspace } from '../../shared/launch-parity-window-request.test-fixture'
 import {
@@ -8,27 +7,36 @@ import {
   WIN_PATH,
   WSL_PATH
 } from '../../shared/launch-parity-window-cases.test-fixture'
-import { HOST_LEAF_ID, HOST_TAB_ID } from './pty-launch-parity-fixture'
+
+export const HOST_TAB_ID = '33333333-3333-4333-8333-333333333333'
+export const HOST_LEAF_ID = '44444444-4444-4444-8444-444444444444'
 
 export type HostLaunchCall =
   | { kind: 'create'; options: TerminalCreateOptions }
+  /** A paired client's RPC, run through the host's method handler; clientOperationId is added. */
   | {
-      kind: 'agent-session'
-      request: Omit<RuntimeCreateAgentSessionRequest, 'clientOperationId' | 'worktree'>
+      kind: 'rpc'
+      method: 'terminal.create' | 'terminal.createAgentSession'
+      params: Record<string, unknown>
     }
 
 export type HostProviderFacts = {
   command: string
+  /** Default: the workspace path. */
+  cwd?: string
   shellOverride?: string
   terminalWindowsWslDistro?: string | null
   startupCommandDelivery?: 'shell-ready'
+  /** The agent or caller env keys the case set, with their values; default none. */
+  env?: Record<string, string>
+  /** Whether main marks the PTY hidden before it has a view; default true on this lane. */
+  hidden?: boolean
 }
 
 export type HostLaunchCase = {
   name: string
-  /** PLAN-v2 §3 producer row; `rules` names the §4.3 runtime rules the case exercises. */
-  row: '3' | '4' | '5r' | '8' | '10'
-  rules: readonly string[]
+  /** The launch-convergence producer row. */
+  row: '3' | '4' | '5r' | '7' | '8' | '10'
   os: NodeJS.Platform
   workspace: LaunchWorkspace
   settings?: Record<string, unknown>
@@ -40,7 +48,7 @@ export type HostLaunchCase = {
   phone: { title: string; launchAgent?: string; isActive: boolean }
 }
 
-// rpc/methods/agent-launch-surfaces.ts createTerminalAgent options for a reserved pane.
+// rpc/methods/agent-launch-surfaces.ts createTerminalAgent options for an AI button's reserved pane.
 const agentLaunch = (extra: Record<string, unknown> = {}): HostLaunchCall => ({
   kind: 'create',
   options: {
@@ -75,6 +83,11 @@ export const folder = (path: string, extra: Partial<LaunchWorkspace> = {}): Laun
   path,
   ...extra
 })
+// The same factory for a CLI `agent.launch` with a prompt: no reserved pane, the window not moved.
+const cliLaunch = (extra: Record<string, unknown>): HostLaunchCall => ({
+  kind: 'create',
+  options: { startupAgent: 'codex', launchSource: 'cli', surfaceOwner: false, ...extra }
+})
 const CLI = { agent_kind: 'claude-code', launch_source: 'cli', request_kind: 'new' }
 export const AGENT_PHONE = { title: 'Terminal', launchAgent: 'claude', isActive: true }
 const POSIX_CLAUDE = "claude '--dangerously-skip-permissions'"
@@ -91,10 +104,13 @@ export const CMD_IN_WSL = { shellOverride: 'cmd.exe', terminalWindowsWslDistro: 
 const WSL_UBUNTU = { kind: 'wsl', distro: 'Ubuntu' } as const
 export const CMD = { terminalWindowsShell: 'cmd.exe' }
 const GLOBAL_WSL = { ...CMD, localWindowsRuntimeDefault: WSL_UBUNTU }
-const REPO_RULES = ['HOST_REPO', 'RUNTIME_ASSEMBLER']
-const FOLDER_RULES = ['HOST_FOLDER_PATH', 'RUNTIME_ASSEMBLER']
-export const rulesFor = (workspace: LaunchWorkspace): string[] =>
-  workspace.kind === 'repo' ? REPO_RULES : FOLDER_RULES
+// A saved default argument with an apostrophe: the byte that tells POSIX and PowerShell quoting apart.
+const BOB_ARGS = {
+  agentDefaultArgs: { claude: `--dangerously-skip-permissions --name "Bob's box"` }
+}
+const BOB_POSIX = `${POSIX_CLAUDE} '--name' 'Bob'"'"'s box'`
+const BOB_PS = `${POSIX_CLAUDE} '--name' 'Bob''s box'`
+const CODEX = "codex '--dangerously-bypass-approvals-and-sandbox'"
 
 /** Row 3: agent.launch with no prompt; `command` + shell are what the provider gets. */
 function aiButton(
@@ -107,7 +123,6 @@ function aiButton(
   return {
     name,
     row: '3',
-    rules: rulesFor(workspace),
     os,
     workspace,
     ...(settings ? { settings } : {}),
@@ -192,34 +207,48 @@ export const HOST_LAUNCH_CASES: HostLaunchCase[] = [
     { command: POSIX_CLAUDE, ...NO_SHELL },
     CMD
   ),
-  aiButton('Linux host, SSH folder', 'linux', folder(POSIX_PATH, ssh), {
-    command: POSIX_CLAUDE,
-    ...NO_SHELL
-  }),
+  // A folder over SSH quotes for its own path: POSIX here, PowerShell for a Windows path.
+  aiButton(
+    'Linux host, SSH folder',
+    'linux',
+    folder(POSIX_PATH, ssh),
+    { command: BOB_POSIX, ...NO_SHELL },
+    BOB_ARGS
+  ),
+  aiButton(
+    'Linux host, SSH Windows-path folder',
+    'linux',
+    folder(WIN_PATH, ssh),
+    { command: BOB_PS, ...NO_SHELL },
+    BOB_ARGS
+  ),
   {
-    // A remote Windows path quotes PowerShell-style (the doubled apostrophe), whatever the host.
-    name: 'Linux host, SSH Windows-path repo, codex prompt',
-    row: '3',
-    rules: REPO_RULES,
-    os: 'linux',
-    workspace: repo(WIN_PATH, ssh),
-    call: agentLaunch({ startupAgent: 'codex', startupPrompt: "fix Bob's branch" }),
-    provider: {
-      command: "codex '--dangerously-bypass-approvals-and-sandbox' 'fix Bob''s branch'",
-      startupCommandDelivery: 'shell-ready'
-    },
+    // The AI buttons never send a prompt; the window pastes it once the agent is ready.
+    // main today: with no prompt on the command, the host does not wait for the shell.
+    ...aiButton('macOS repo, codex', 'darwin', repo(POSIX_PATH), { command: CODEX, ...ZSH }),
+    call: agentLaunch({ startupAgent: 'codex' }),
     telemetry: { ...CLI, agent_kind: 'codex' },
     phone: { ...AGENT_PHONE, launchAgent: 'codex' }
   },
   {
-    name: 'macOS repo, codex prompt waits for the shell',
-    row: '3',
-    rules: REPO_RULES,
+    // A remote Windows path quotes PowerShell-style (the doubled apostrophe), whatever the host.
+    name: 'CLI agent.launch, Linux host, SSH Windows-path repo, codex prompt',
+    row: '10',
+    os: 'linux',
+    workspace: repo(WIN_PATH, ssh),
+    call: cliLaunch({ startupPrompt: "fix Bob's branch" }),
+    provider: { command: `${CODEX} 'fix Bob''s branch'`, startupCommandDelivery: 'shell-ready' },
+    telemetry: { ...CLI, agent_kind: 'codex' },
+    phone: { ...AGENT_PHONE, launchAgent: 'codex' }
+  },
+  {
+    name: 'CLI agent.launch, macOS repo, codex prompt waits for the shell',
+    row: '10',
     os: 'darwin',
     workspace: repo(POSIX_PATH),
-    call: agentLaunch({ startupAgent: 'codex', startupPrompt: "fix Bob's branch" }),
+    call: cliLaunch({ startupPrompt: "fix Bob's branch" }),
     provider: {
-      command: `codex '--dangerously-bypass-approvals-and-sandbox' 'fix Bob'"'"'s branch'`,
+      command: `${CODEX} 'fix Bob'"'"'s branch'`,
       startupCommandDelivery: 'shell-ready',
       ...ZSH
     },
@@ -230,7 +259,6 @@ export const HOST_LAUNCH_CASES: HostLaunchCase[] = [
     (workspace): HostLaunchCase => ({
       name: `orchestration worker, Linux ${workspace.kind}${workspace.connectionId ? ' over SSH' : ''}`,
       row: '10',
-      rules: [],
       os: 'linux',
       workspace,
       call: worker,
@@ -240,3 +268,27 @@ export const HOST_LAUNCH_CASES: HostLaunchCase[] = [
     })
   )
 ]
+
+const HOST_ENV_KEYS = [
+  'ORCA_PANE_KEY',
+  'ORCA_TAB_ID',
+  'ORCA_WORKTREE_ID',
+  'ORCA_AGENT_LAUNCH_TOKEN',
+  'ORCA_TERMINAL_HANDLE'
+]
+const FOLDER_ENV_KEYS = ['ORCA_WORKSPACE_ID', 'ORCA_PROJECT_GROUP_ID', 'ORCA_WORKSPACE_ROOT']
+
+/** What main hands the provider for a host-lane case. */
+export function expectedHostProvider(c: HostLaunchCase): Record<string, unknown> {
+  return {
+    cwd: c.workspace.path.replaceAll('\\', '/'),
+    cols: 120,
+    rows: 40,
+    commandDelivery: 'provider',
+    hidden: true,
+    env: {},
+    ...c.provider,
+    // main today: the host lane stamps ORCA_WORKSPACE_ID on folders only.
+    orcaEnv: c.workspace.kind === 'folder' ? [...FOLDER_ENV_KEYS, ...HOST_ENV_KEYS] : HOST_ENV_KEYS
+  }
+}

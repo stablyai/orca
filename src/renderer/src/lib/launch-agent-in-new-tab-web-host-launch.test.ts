@@ -18,11 +18,6 @@ vi.mock('@/store', async () =>
   (await import('@/lib/launch-parity-renderer-fixture')).launchStoreModuleMock(holder)
 )
 vi.mock('sonner', () => ({ toast: { message: vi.fn(), error: vi.fn() } }))
-// Why: decline the host route the way launch-agent-in-new-tab.test.ts does; the paired branch runs first anyway.
-vi.mock('@/lib/launch-agent-new-tab-host-route', () => ({
-  newTabPromptLaunchesThroughHost: () => false,
-  launchNewTabPromptThroughHost: vi.fn()
-}))
 vi.mock('@/runtime/web-runtime-session', () => ({
   ...mocks,
   isWebRuntimeSessionActive: vi.fn(() => true),

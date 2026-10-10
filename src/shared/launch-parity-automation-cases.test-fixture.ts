@@ -1,6 +1,6 @@
-// Test-only (never imported by production code): the row 5 desktop-automation parity table.
-// Renderer suites assert launchAgentBackgroundSession sends `request`; main suites feed the
-// same pty:spawn request and assert `provider`.
+// Test-only (never imported by production code): the row 5 and 5r desktop-automation parity tables.
+// Renderer suites assert launchAgentBackgroundSession sends `request` (or the paired-host params);
+// main suites feed the same request to pty:spawn (or the params to the host's RPC method).
 import {
   LAUNCH_LEAF_ID,
   LAUNCH_TAB_ID,
@@ -18,7 +18,8 @@ export type AutomationLaunchCase = {
   workspace: LaunchWorkspace
   settings?: Record<string, unknown>
   agent: 'claude' | 'codex' | 'aider'
-  title?: string
+  /** The run title; every dispatch passes "<automation name> run <n>". */
+  title: string
   request: { command: string; agentCommand: string; shellOverride?: string }
   provider: WindowProviderFacts
 }
@@ -29,7 +30,14 @@ const SKIP = '--dangerously-skip-permissions'
 const POSIX_CLAUDE = `claude '${SKIP}'`
 const posix = { command: `${POSIX_CLAUDE} 'don'"'"'t stop'`, agentCommand: POSIX_CLAUDE }
 const powershell = { command: `${POSIX_CLAUDE} 'don''t stop'`, agentCommand: POSIX_CLAUDE }
+const CODEX = "codex '--dangerously-bypass-approvals-and-sandbox'"
+const AGENT_COMMAND = {
+  codex: { command: `${CODEX} 'don'"'"'t stop'`, agentCommand: CODEX },
+  aider: { command: "aider '--yes-always'", agentCommand: "aider '--yes-always'" }
+} as const
 const ZSH = { shellOverride: '/bin/zsh' }
+// A Windows client's default shell setting is '' (its Settings UI hides it), so SSH gets no shell.
+const NO_SHELL = { shellOverride: undefined }
 const PWSH = { shellOverride: 'powershell.exe', terminalWindowsWslDistro: null }
 const WSL_EXE = { shellOverride: 'wsl.exe', terminalWindowsWslDistro: 'Ubuntu' }
 const ssh = { connectionId: 'ssh-1' }
@@ -44,11 +52,11 @@ const folder = (path: string, extra: Partial<LaunchWorkspace> = {}): LaunchWorks
   ...extra
 })
 type AutomationCaseFields = Omit<AutomationLaunchCase, 'name' | 'agent' | 'title'> &
-  Partial<Pick<AutomationLaunchCase, 'agent' | 'title'>>
+  Partial<Pick<AutomationLaunchCase, 'agent'>>
 const automation = (name: string, fields: AutomationCaseFields): AutomationLaunchCase => ({
   name,
   agent: 'claude',
-  title: 'Nightly audit',
+  title: 'Nightly audit run 3',
   ...fields
 })
 
@@ -93,7 +101,8 @@ export const AUTOMATION_LAUNCH_CASES: AutomationLaunchCase[] = [
     request: { ...posix, shellOverride: 'wsl.exe' },
     provider: WSL_EXE
   }),
-  // Only the Settings UI saves inherit-global; it quotes for Windows and still runs wsl.exe.
+  // Only a raw project.update RPC stores inherit-global (the Settings UI's Default deletes the
+  // field); main then quotes for Windows and still runs wsl.exe.
   automation('Windows wsl$ repo, saved inherit-global', {
     client: 'win32',
     workspace: repo(WSL_PATH, { projectRuntime: { kind: 'inherit-global' } }),
@@ -116,7 +125,7 @@ export const AUTOMATION_LAUNCH_CASES: AutomationLaunchCase[] = [
     client: 'win32',
     workspace: repo(POSIX_PATH, ssh),
     request: posix,
-    provider: ZSH
+    provider: NO_SHELL
   }),
   automation('macOS client, SSH Windows-path repo', {
     client: 'darwin',
@@ -145,15 +154,11 @@ export const AUTOMATION_LAUNCH_CASES: AutomationLaunchCase[] = [
     request: posix,
     provider: ZSH
   }),
-  automation('Linux repo, codex, no title', {
+  automation('Linux repo, codex', {
     client: 'linux',
     agent: 'codex',
-    title: undefined,
     workspace: repo(POSIX_PATH),
-    request: {
-      command: `codex '--dangerously-bypass-approvals-and-sandbox' 'don'"'"'t stop'`,
-      agentCommand: `codex '--dangerously-bypass-approvals-and-sandbox'`
-    },
+    request: AGENT_COMMAND.codex,
     provider: ZSH
   }),
   // stdin-after-start: the prompt is pasted after launch, never on argv.
@@ -161,7 +166,7 @@ export const AUTOMATION_LAUNCH_CASES: AutomationLaunchCase[] = [
     client: 'linux',
     agent: 'aider',
     workspace: repo(POSIX_PATH),
-    request: { command: "aider '--yes-always'", agentCommand: "aider '--yes-always'" },
+    request: AGENT_COMMAND.aider,
     provider: ZSH
   })
 ]
@@ -205,7 +210,17 @@ export function automationSpawnRequest(c: AutomationLaunchCase): Record<string, 
     worktreeId,
     tabId: LAUNCH_TAB_ID,
     leafId: LAUNCH_LEAF_ID,
-    placement: { kind: 'new-tab', ...(c.title ? { row: { customTitle: c.title } } : {}) },
+    placement: { kind: 'new-tab', row: { customTitle: c.title } },
     telemetry: { agent_kind: AGENT_KIND[c.agent], launch_source: 'unknown', request_kind: 'new' }
   }
 }
+
+/** The phone's view of a run tab: hidden under its run title, no agent named, active. */
+export function automationPhoneTab(
+  c: Pick<AutomationLaunchCase, 'title'>
+): Record<string, unknown> {
+  return { title: c.title, launchAgent: undefined, isActive: true }
+}
+
+/** The commands this table's automations build, for the paired-host table's legacy creates. */
+export const AUTOMATION_COMMANDS = { posix, powershell, ...AGENT_COMMAND }

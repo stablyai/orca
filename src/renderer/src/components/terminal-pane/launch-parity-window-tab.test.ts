@@ -16,6 +16,7 @@ import { WINDOW_LAUNCH_CASES } from '../../../../shared/launch-parity-window-cas
 import {
   LAUNCH_TAB_ID,
   LAUNCH_TOKEN,
+  PANE_GRID,
   launchWorkspaceId,
   windowSpawnRequest,
   type WindowLaunchCase
@@ -47,17 +48,14 @@ vi.mock('@/lib/windows-terminal-capabilities', async (importOriginal) => ({
     gitBashAvailable: false
   })
 }))
-// Why: decline the host route (launch-agent-in-new-tab.test.ts does the same); this is the window branch.
-vi.mock('@/lib/launch-agent-new-tab-host-route', () => ({
-  newTabPromptLaunchesThroughHost: () => false,
-  launchNewTabPromptThroughHost: vi.fn()
-}))
 
 const load = perClientLoader(async () => ({
   launch: await import('@/lib/launch-agent-in-new-tab'),
   vault: await import('@/lib/launch-ai-vault-session'),
   resume: await import('@/lib/ai-vault-resume-command'),
   pane: await import('./pty-connection'),
+  paneOptions: await import('./terminal-pane-manager-options'),
+  defaults: await import('@/lib/pane-manager/pane-terminal-options'),
   lifecycle: await import('./terminal-pane-lifecycle-primitives')
 }))
 
@@ -76,9 +74,9 @@ async function openTab(c: WindowLaunchCase) {
       requestId: `parity-${c.name}`,
       agent: producer.agent,
       worktreeId,
-      prompt: "fix Bob's bug",
+      prompt: producer.prompt,
       promptDelivery: producer.delivery,
-      launchSource: 'quick_command',
+      launchSource: producer.launchSource,
       ...(producer.initialCwd ? { initialCwd: producer.initialCwd } : {})
     })
   } else {
@@ -119,20 +117,43 @@ async function paneSpawnRequest(c: WindowLaunchCase): Promise<unknown> {
     resize: vi.fn(),
     claimViewport: vi.fn()
   })
+  // As TerminalPane mounts: a queued initial cwd, else the tab's startup cwd, else the workspace.
+  const cwd = modules.lifecycle.resolveQueuedInitialCwd(
+    undefined,
+    () => store.getState().consumeTabInitialCwd(tab.id),
+    tab.startupCwd ?? c.workspace.path
+  ).startupCwd
+  const startup = store.getState().pendingStartupByTabId[tab.id]
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the real store state is a superset of every StoreState member the pane reads.
   const deps = buildPaneConnectionDeps(() => store.getState() as never, {
     tabId: tab.id,
     worktreeId,
-    // As TerminalPane mounts: a queued initial cwd, else the tab's startup cwd, else the workspace.
-    cwd: modules.lifecycle.resolveQueuedInitialCwd(
-      undefined,
-      () => store.getState().consumeTabInitialCwd(tab.id),
-      tab.startupCwd ?? c.workspace.path
-    ).startupCwd,
-    startup: store.getState().pendingStartupByTabId[tab.id]
+    cwd,
+    startup
   })
+  const pane = createPane(1)
+  // A measured grid no lane defaults to, so the request shows the pane's size reached it.
+  Object.assign(pane.terminal, PANE_GRID)
+  // The xterm keyboard options the real TerminalPane builds for this tab, over the defaults (pane-dom-creation.ts).
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: building the bag and terminalOptions read only these deps, ptyDeps.startup and startupCwd.
+  const managerOptions = modules.paneOptions.createTerminalPaneManagerOptions({
+    deps: {
+      tabId: tab.id,
+      worktreeId,
+      settingsRef: { current: store.getState().settings },
+      isVisibleRef: { current: true },
+      effectiveMacOptionAsAltRef: { current: 'false' }
+    },
+    ptyDeps: { startup },
+    startupCwd: cwd
+  } as never)
+  const { vtExtensions } = {
+    ...modules.defaults.buildDefaultTerminalOptions(),
+    ...managerOptions.terminalOptions?.(pane.id)
+  }
+  pane.terminal.options.vtExtensions = { kittyKeyboard: vtExtensions?.kittyKeyboard === true }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pane fixtures model every member connectPanePty reads, as in pty-connection-startup-command-delivery.test.ts.
-  modules.pane.connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+  modules.pane.connectPanePty(pane as never, createManager(1) as never, deps as never)
   await flushAsyncTicks(20)
   const [request] = spawn.mock.calls[0] ?? []
   // Fixed ids so the table can name them; the color replies are this harness's theme.

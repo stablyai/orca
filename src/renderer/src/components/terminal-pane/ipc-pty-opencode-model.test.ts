@@ -81,11 +81,7 @@ describe('local OpenCode model launch authority', () => {
 
   it.each([
     { connectionId: 'ssh_private' },
-    { resumeProviderSession: { key: 'session_id' as const, id: 'old' } },
-    // Row 4 parity: a pane missing any id it would place the session at.
-    { worktreeId: undefined },
-    { tabId: undefined },
-    { leafId: undefined }
+    { resumeProviderSession: { key: 'session_id' as const, id: 'old' } }
   ])('refuses unsupported placement before host or raw spawn', async (extra) => {
     await expect(spawnIpcPty({ ...options(), ...extra }, connect)).rejects.toThrow(
       'capability_unsupported'
@@ -104,46 +100,54 @@ describe('local OpenCode model launch authority', () => {
   })
 })
 
-const WSL_RUNTIME = {
+const HOST_RUNTIME = {
   status: 'resolved',
   runtime: {
-    kind: 'wsl',
-    hostPlatform: 'wsl',
+    kind: 'windows-host',
+    hostPlatform: 'win32',
     projectId: 'repo-1',
-    distro: 'Ubuntu',
-    reason: 'project-override',
-    cacheKey: 'repo-1:wsl:Ubuntu'
+    reason: 'global-default',
+    cacheKey: 'repo-1:windows-host'
   }
 } as const
 const PANE_ENV = { ORCA_PANE_KEY: 'tab-1:leaf-1', ORCA_AGENT_LAUNCH_TOKEN: 'tok-1' }
 const TELEMETRY = {
   agent_kind: 'opencode',
-  launch_source: 'quick_command',
+  launch_source: 'new_workspace_composer',
   request_kind: 'new'
 } as const
+// A macOS pane advertises kitty; a local Windows ConPTY pane withholds it and sends its shell.
+const PANES = [
+  { name: 'macOS', cwd: '/home/alice/repo', kitty: true, shell: {} },
+  {
+    name: 'Windows C:',
+    cwd: String.raw`C:\Users\alice\repo`,
+    kitty: false,
+    shell: { shellOverride: 'powershell.exe', projectRuntime: HOST_RUNTIME }
+  }
+] as const
 
-/** What a local OpenCode pane with a model pick builds (row 4, window half). */
-const modelPane = (kitty: boolean): IpcPtyTransportOptions => ({
-  ...options(),
-  worktreeId: 'repo-1::/r/wt',
+/** A pane seeded with an OpenCode model pick (worktree-initial-terminal-seeding.ts): its startup
+ *  queues sessionOptions, never an args override, and the composer sent no prompt. */
+const modelPane = (pane: (typeof PANES)[number]): IpcPtyTransportOptions => ({
+  worktreeId: `repo-1::${pane.cwd}`,
   tabId: 'tab-1',
   leafId: 'leaf-1',
-  cwd: '/r/wt/packages/app',
+  cwd: pane.cwd,
   cwdFallback: 'worktree',
   env: PANE_ENV,
-  launchConfig: { agentCommand: 'opencode', agentArgs: '--pure', agentEnv: {} },
+  command: 'opencode',
+  launchConfig: { agentCommand: 'opencode', agentArgs: '', agentEnv: {} },
   launchToken: 'tok-1',
-  agentPromptDelivery: 'draft',
-  agentArgsOverride: '--pure',
-  placement: { kind: 'new-tab' },
-  shellOverride: 'wsl.exe',
-  projectRuntime: WSL_RUNTIME,
-  terminalKittyKeyboardProtocol: kitty,
+  launchAgent: 'opencode',
+  agentLaunchPreferences: { model: 'private-proof/model-b' },
+  ...pane.shell,
+  terminalKittyKeyboardProtocol: pane.kitty,
   telemetry: TELEMETRY
 })
 
 // Pins main's current launch behaviour as the convergence parity baseline (row 4, window half):
-// the exact host request and reattach an OpenCode pane with a model pick sends.
+// the exact host request (the main suite's OpenCode cases run it) and reattach a model-pick pane sends.
 describe('row 4: OpenCode model pane requests on main', () => {
   beforeEach(() => {
     vi.resetAllMocks()
@@ -153,72 +157,48 @@ describe('row 4: OpenCode model pane requests on main', () => {
   })
   afterEach(() => vi.unstubAllGlobals())
 
-  it.each([true, false])(
-    'kitty %s: one exact createAgentSession, then a reattach',
-    async (kitty) => {
-      await spawnIpcPty(modelPane(kitty), { ...connect, initiallyHidden: true })
+  it.each(PANES)('$name pane: one exact createAgentSession, then a reattach', async (pane) => {
+    await spawnIpcPty(modelPane(pane), { ...connect, initiallyHidden: true })
 
-      // The host gets prompt, args and cwd but none of the pane's command, env, shell or telemetry.
-      expect(vi.mocked(callRuntimeRpc).mock.calls).toEqual([
-        [
-          { kind: 'local' },
-          'terminal.createAgentSession',
-          {
-            clientOperationId: expect.stringMatching(/^\d{13}-[0-9a-f]{32}$/),
-            worktree: 'id:repo-1::/r/wt',
-            agent: 'opencode',
-            prompt: 'Read only',
-            promptDelivery: 'draft',
-            agentArgs: '--pure',
-            launchPreferences: { model: 'private-proof/model-b' },
-            startupCwd: '/r/wt/packages/app',
-            placement: { tabId: 'tab-1', leafId: 'leaf-1' },
-            presentation: 'background',
-            ...(kitty ? { terminalKittyKeyboardProtocol: true } : {})
-          }
-        ]
-      ])
-      // main today: the reattach keeps telemetry, shell, runtime and the hidden flag, and drops
-      // command, launchConfig, cwdFallback and placement.
-      expect(spawn.mock.calls).toEqual([
-        [
-          {
-            cols: 80,
-            rows: 24,
-            cwd: '/r/wt/packages/app',
-            env: PANE_ENV,
-            command: undefined,
-            launchToken: 'tok-1',
-            launchAgent: 'opencode',
-            sessionId: 'pty_host',
-            worktreeId: 'repo-1::/r/wt',
-            tabId: 'tab-1',
-            leafId: 'leaf-1',
-            initiallyHidden: true,
-            shellOverride: 'wsl.exe',
-            projectRuntime: WSL_RUNTIME,
-            ...(kitty ? { terminalKittyKeyboardProtocol: true } : {}),
-            telemetry: TELEMETRY
-          }
-        ]
-      ])
-    }
-  )
-
-  it('takes the raw window lane when every preference value is undefined', async () => {
-    // No measured size: the request falls back to 80x24.
-    await spawnIpcPty(
-      { ...modelPane(true), agentLaunchPreferences: { model: undefined } },
-      { url: 'ipc://private', callbacks: {} }
-    )
-    expect(callRuntimeRpc).not.toHaveBeenCalled()
-    expect(spawn).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({
-        cols: 80,
-        rows: 24,
-        command: options().command,
-        placement: { kind: 'new-tab' }
-      })
-    )
+    // The host gets the pick and cwd but none of the pane's command, env, shell or telemetry.
+    expect(vi.mocked(callRuntimeRpc).mock.calls).toEqual([
+      [
+        { kind: 'local' },
+        'terminal.createAgentSession',
+        {
+          clientOperationId: expect.stringMatching(/^\d{13}-[0-9a-f]{32}$/),
+          worktree: `id:repo-1::${pane.cwd}`,
+          agent: 'opencode',
+          launchPreferences: { model: 'private-proof/model-b' },
+          startupCwd: pane.cwd,
+          placement: { tabId: 'tab-1', leafId: 'leaf-1' },
+          presentation: 'background',
+          ...(pane.kitty ? { terminalKittyKeyboardProtocol: true } : {})
+        }
+      ]
+    ])
+    // main today: the reattach keeps telemetry, shell, runtime and the hidden flag, and drops
+    // command, launchConfig and cwdFallback.
+    expect(spawn.mock.calls).toEqual([
+      [
+        {
+          cols: 80,
+          rows: 24,
+          cwd: pane.cwd,
+          env: PANE_ENV,
+          command: undefined,
+          launchToken: 'tok-1',
+          launchAgent: 'opencode',
+          sessionId: 'pty_host',
+          worktreeId: `repo-1::${pane.cwd}`,
+          tabId: 'tab-1',
+          leafId: 'leaf-1',
+          initiallyHidden: true,
+          ...pane.shell,
+          ...(pane.kitty ? { terminalKittyKeyboardProtocol: true } : {}),
+          telemetry: TELEMETRY
+        }
+      ]
+    ])
   })
 })

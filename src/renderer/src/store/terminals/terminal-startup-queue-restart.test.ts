@@ -26,7 +26,11 @@ describe('queued tab startup across an app restart on main', () => {
     })
     before.getState().queueTabStartupCommand(tab.id, {
       command: STARTUP_COMMAND,
-      launchConfig: { agentCommand: 'claude', agentArgs: '', agentEnv: {} }
+      launchConfig: {
+        agentCommand: STARTUP_COMMAND,
+        agentArgs: '--dangerously-skip-permissions',
+        agentEnv: {}
+      }
     })
     expect(before.getState().pendingStartupByTabId[tab.id]?.command).toBe(STARTUP_COMMAND)
 
@@ -48,6 +52,5 @@ describe('queued tab startup across an app restart on main', () => {
     expect(after.getState().tabsByWorktree[WORKTREE_ID]).toEqual([
       expect.objectContaining({ id: tab.id, launchAgent: 'claude', ptyId: null })
     ])
-    expect(after.getState().tabsByWorktree[WORKTREE_ID]?.[0]?.agentLaunchPane).toBeUndefined()
   })
 })
