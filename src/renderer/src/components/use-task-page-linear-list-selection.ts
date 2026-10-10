@@ -1,7 +1,10 @@
 import type { TaskPageGitLabLoadingModel } from './use-task-page-gitlab-loading'
 import { useState, useMemo, useEffect } from 'react'
 import { LINEAR_ISSUE_LIST_MAX } from '../../../shared/linear/issue-read-limits'
-import { findTaskPageLinearIssue } from '@/components/task-page-cache-selectors'
+import {
+  findTaskPageLinearIssue,
+  preferFreshTaskPageLinearIssue
+} from '@/components/task-page-cache-selectors'
 import type { LinearTeam } from '../../../shared/linear/workspace-types'
 import {
   buildLinearTeamUrl,
@@ -131,14 +134,16 @@ export function useTaskPageLinearListSelectionPrelude(model: TaskPageGitLabLoadi
         : linearIssueLimit
   const displayedLinearIssues = useMemo(
     () =>
-      activeLinearIssues.map(
-        (issue) =>
+      activeLinearIssues.map((issue) =>
+        preferFreshTaskPageLinearIssue(
+          issue,
           findTaskPageLinearIssue(
             linearCacheSnapshot.issueCache,
             linearCacheSnapshot.searchCache,
             linearCacheSnapshot.listCache,
             issue.id
-          ) ?? issue
+          )
+        )
       ),
     [
       activeLinearIssues,

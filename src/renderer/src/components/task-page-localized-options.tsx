@@ -49,6 +49,16 @@ export type {
   LinearViewMode
 } from '../../../shared/linear/issue-view-resume-state'
 
+export const DEFAULT_LINEAR_DISPLAY_PROPERTIES = [
+  'state',
+  'priority',
+  'assignee',
+  'team',
+  'project',
+  'labels',
+  'updated'
+] satisfies LinearDisplayProperty[]
+
 export function LinearIcon({ className }: { className?: string }): React.JSX.Element {
   return (
     <svg viewBox="0 0 24 24" aria-hidden className={className} fill="currentColor">
@@ -204,6 +214,7 @@ export const getLinearDisplayProperties = createLocalizedCatalog(
       priority: translate('auto.components.TaskPage.c8d5bec5f7', 'Priority'),
       assignee: translate('auto.components.TaskPage.d2a876ca53', 'Assignee'),
       team: translate('auto.components.TaskPage.a98cbe7664', 'Team'),
+      project: translate('auto.components.TaskPage.00022ec0ba', 'Project'),
       labels: translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels'),
       updated: translate('auto.components.TaskPage.f362667d55', 'Updated')
     }
