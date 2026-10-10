@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { useAppStore } from '@/store'
-import { AgentCapabilityStatusNote, AgentCapabilityStatusPill } from './AgentCapabilityStatusBadges'
+import { AgentCapabilityStatusNote } from './AgentCapabilityStatusBadges'
 import { FeatureSetupInlineTerminal } from '../onboarding/FeatureSetupInlineTerminal'
 import type { OnboardingFeatureSetupRuntimeContext } from '../onboarding/onboarding-feature-setup-runtime'
 import {
@@ -295,26 +295,21 @@ function AgentCapabilitySetupChecklist(props: {
               onClick={() => props.onChange({ ...props.value, [row.id]: !selected })}
             >
               <span className="flex items-start justify-between gap-3">
-                <span className="grid size-7 place-items-center rounded-md bg-muted text-foreground">
+                <span className="grid size-7 shrink-0 place-items-center rounded-md bg-muted text-foreground">
                   {row.icon}
                 </span>
-                <span className="flex items-center gap-2">
-                  <AgentCapabilityStatusPill status={installStatus} />
-                  {/* Why: an empty circle on an installed card reads as "not done"; show it only when it means something. */}
-                  {selected || !installStatus.installed ? (
-                    <span
-                      aria-hidden
-                      className={cn(
-                        'flex size-5 items-center justify-center rounded-full border transition-colors',
-                        selected
-                          ? 'border-foreground bg-foreground text-background'
-                          : 'border-border'
-                      )}
-                    >
-                      {selected ? <Check className="size-3" strokeWidth={3} /> : null}
-                    </span>
-                  ) : null}
-                </span>
+                {/* Why: an empty circle on an installed card reads as "not done"; show it only when it means something. */}
+                {selected || !installStatus.installed ? (
+                  <span
+                    aria-hidden
+                    className={cn(
+                      'flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors',
+                      selected ? 'border-foreground bg-foreground text-background' : 'border-border'
+                    )}
+                  >
+                    {selected ? <Check className="size-3" strokeWidth={3} /> : null}
+                  </span>
+                ) : null}
               </span>
               <span className="mt-3 text-sm font-medium text-foreground">{row.title}</span>
               <span className="mt-1 text-xs leading-snug text-muted-foreground">
