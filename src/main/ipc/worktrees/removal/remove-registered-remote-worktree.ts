@@ -13,6 +13,7 @@ import {
   notifyWorktreesChanged
 } from '../../worktree-remote'
 import { runWorktreeChangeInvalidators } from '../../worktree-change-invalidators'
+import { areWorktreePathsEqual } from '../../worktree-logic'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import {
@@ -70,11 +71,27 @@ export async function removeRegisteredRemoteWorktree(
         allowUnverifiedStop: args.allowUnverifiedPtyStop
       })
     })
-    rawRemovalResult = await withWorktreeRemoveStageSpan('git_remove', 'remote', async () =>
-      Object.keys(remoteRemoveOptions).length > 0
-        ? provider!.removeWorktree(canonicalWorktreePath, args.force, remoteRemoveOptions)
-        : provider!.removeWorktree(canonicalWorktreePath, args.force)
-    )
+    try {
+      rawRemovalResult = await withWorktreeRemoveStageSpan('git_remove', 'remote', async () =>
+        Object.keys(remoteRemoveOptions).length > 0
+          ? provider!.removeWorktree(canonicalWorktreePath, args.force, remoteRemoveOptions)
+          : provider!.removeWorktree(canonicalWorktreePath, args.force)
+      )
+    } catch (error) {
+      // Why: `git worktree remove` drops the registration even when deleting files fails; keeping the
+      // record would strand a card no retry can remove. An unreadable listing proves nothing, so rethrow.
+      const remaining = await provider!.listWorktrees(repo.path).catch(() => null)
+      if (
+        !remaining ||
+        remaining.some((worktree) => areWorktreePathsEqual(worktree.path, canonicalWorktreePath))
+      ) {
+        throw error
+      }
+      console.warn(
+        `[worktrees] Remote git dropped the registration but left files behind: ${canonicalWorktreePath}`,
+        error
+      )
+    }
     // Why: the worktree is unlisted from here on; a scan that began before the removal is overtaken.
     runWorktreeChangeInvalidators(repoId)
     removalCompleted = true

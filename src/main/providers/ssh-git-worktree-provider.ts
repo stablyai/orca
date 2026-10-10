@@ -12,6 +12,7 @@ import {
   type LocalBaseBranchRefs
 } from '../../shared/worktree/local-base-branch-fast-forward'
 import { SshGitReviewHeadProvider } from './ssh-git-review-head-provider'
+import { resolveWorktreeAddTimeoutMs } from '../git/worktree'
 
 const WORKTREE_IS_CLEAN_CAPABILITY = 'git.worktreeIsClean' as const
 
@@ -93,11 +94,16 @@ export class SshGitWorktreeProvider extends SshGitReviewHeadProvider {
   ): Promise<RemoveWorktreeResult> {
     return this.runWithGitReadInvalidation(
       async () =>
-        ((await this.mux.request('git.removeWorktree', {
-          worktreePath,
-          force,
-          ...options
-        })) ?? {}) as RemoveWorktreeResult
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Relay git.removeWorktree returns a RemoveWorktreeResult object shape.
+        ((await this.mux.request(
+          'git.removeWorktree',
+          {
+            worktreePath,
+            force,
+            ...options
+          },
+          { timeoutMs: resolveWorktreeAddTimeoutMs() }
+        )) ?? {}) as RemoveWorktreeResult
     )
   }
 

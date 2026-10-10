@@ -37,7 +37,11 @@ import {
   removeWorktreeMetadataAndTransientState,
   stopPtysForDestructiveWorktreeRemoval
 } from './worktree-removal-ownership'
-import { isAlreadyRemovedWorktreePath, isLocalGitRepository } from './worktree-removal-filesystem'
+import {
+  isAlreadyRemovedWorktreePath,
+  isLocalGitRepository,
+  isRemoteGitRepository
+} from './worktree-removal-filesystem'
 
 export async function removeUnregisteredWorktree(
   context: WorktreeIpcContext,
@@ -87,6 +91,21 @@ export async function removeUnregisteredWorktree(
           access.readPath
         ))
     }
+  }
+  // Why: a remote `git worktree remove` that failed partway leaves no .git marker for the orphan proof;
+  // reuse the local leftover rule (Orca provenance, no enclosing repo) so a retry can finish the delete.
+  if (!canCleanOrphanedDirectory && repo.connectionId && fsProvider?.lstat) {
+    canCleanOrphanedDirectory = await canCleanupUnregisteredOrcaLeftoverDirectory({
+      meta: removedMeta,
+      worktreePath,
+      runtimeWorktreePath: worktreePath,
+      repo,
+      runtimeRepoPath: repo.path,
+      registeredWorktrees,
+      statPath: (path) => fsProvider.lstat!(path),
+      home: removalHome,
+      isGitRepository: (path) => isRemoteGitRepository(provider, path)
+    })
   }
   if (canCleanOrphanedDirectory) {
     assertWorktreeDoesNotContainRegisteredWorktree(worktreePath, registeredWorktrees)

@@ -59,10 +59,14 @@ describe('SshGitProvider', () => {
 
   it('removeWorktree sends git.removeWorktree request', async () => {
     await provider.removeWorktree('/home/user/feat', true)
-    expect(mux.request).toHaveBeenCalledWith('git.removeWorktree', {
-      worktreePath: '/home/user/feat',
-      force: true
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.removeWorktree',
+      {
+        worktreePath: '/home/user/feat',
+        force: true
+      },
+      { timeoutMs: 180_000 }
+    )
   })
 
   it('worktreeIsClean sends git.worktreeIsClean request', async () => {
