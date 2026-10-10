@@ -859,7 +859,12 @@ export function createRelayApp(
       regionalRehomeProtocol: config.rehomeAudience && config.rehomeDirectorServiceAccount ? 3 : 0,
       // The flag workflow's read-back: applied switches, never the desired object.
       ...(operations.cellFlags
-        ? { flagsApplied: operations.cellFlags(), supportedFlags: supportedCellFlags() }
+        ? {
+            flagsApplied: operations.cellFlags(),
+            supportedFlags: supportedCellFlags(),
+            // The flag tool paces a flip back's wait from it.
+            databasePoolMax: config.databasePoolMax
+          }
         : {}),
       ...(operations.cellAdmitModeEffective
         ? { admitModeEffective: operations.cellAdmitModeEffective() }

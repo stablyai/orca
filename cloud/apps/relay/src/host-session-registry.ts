@@ -582,10 +582,12 @@ export class HostSessionRegistry {
         // A database that did not answer (a stall, a dropped connection, a busy lock) is retried
         // for as long as the control is open: a fleet-wide flip back must not close everyone over
         // a slow database. An answer that refuses (a row naming another seat, which may still be
-        // the ledger's write on its way, or any other refusal) counts toward giving up.
+        // the ledger's write on its way, or any other refusal) counts toward giving up. A lease
+        // insert that lost a race (23505) is retried too: the next try reads the winner's row.
         const unanswered =
           isRelayDatabaseTransientError(error) ||
-          (error instanceof Error && error.message === 'database_lock_unavailable')
+          (error instanceof Error && error.message === 'database_lock_unavailable') ||
+          (error as { code?: unknown } | null)?.code === '23505'
         if (unanswered) {
           if (!current) return
           entry.stalls = (entry.stalls ?? 0) + 1
