@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   activateAndRevealWorkspace: vi.fn<(workspaceId: string) => unknown>(),
   toastError: vi.fn<(message: string) => void>(),
-  folderWorkspaces: [] as { id: string; projectGroupId: string; executionHostId: string }[]
+  folderWorkspaces: new Array<{ id: string; projectGroupId: string; executionHostId: string }>()
 }))
 
 vi.mock('@/lib/worktree-activation', () => ({
