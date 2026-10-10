@@ -10,6 +10,7 @@ import type {
 import type { Repo } from '../../../../shared/repo-types'
 import { omitSparsePresetsForRepos } from '../slices/sparse-presets'
 import { repoMatchesHostIdentity } from '../slices/repo-host-identity'
+import { pruneRemovedRepoWorktreeRows } from './project-host-setup-row-prune'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { translate } from '@/i18n/i18n'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
@@ -217,11 +218,29 @@ export function createProjectHostSetupActions(
               : s.projects
           const survivingRepoIds = new Set(repos.map((r) => r.id))
           const removedRepoIds = s.repos.filter((r) => !survivingRepoIds.has(r.id)).map((r) => r.id)
+          // Why: this delete removes the repo from `repos` itself, so a later repos:changed refetch
+          // no longer sees it; prune the deleted repo's rows here as removeProject does.
+          const { rows: nextRows, changed: rowsChanged } = pruneRemovedRepoWorktreeRows(
+            s,
+            removedRepoIds,
+            repo,
+            repoHostId
+          )
+          // Why the guard includes removedRepoIds: even with no rows anywhere, presets and
+          // selections for the removed ids still must be cleaned up below.
+          if (removedRepoIds.length === 0 && !rowsChanged) {
+            return { repos, projects, projectHostSetups }
+          }
           return {
             repos,
             projects,
             projectHostSetups,
-            ...omitSparsePresetsForRepos(s, removedRepoIds)
+            ...omitSparsePresetsForRepos(s, removedRepoIds),
+            ...nextRows,
+            activeRepoId:
+              s.activeRepoId && removedRepoIds.includes(s.activeRepoId) ? null : s.activeRepoId,
+            filterRepoIds: s.filterRepoIds.filter((id) => !removedRepoIds.includes(id)),
+            sortEpoch: s.sortEpoch + 1
           }
         })
         return { ...result, repo }
