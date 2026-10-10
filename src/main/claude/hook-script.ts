@@ -10,6 +10,11 @@ import {
   buildWindowsGrokReplayGuardLines
 } from '../agent-hooks/grok-replay-guard'
 import {
+  WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD,
+  buildPosixClaudeBackgroundJobGuardLines,
+  buildWindowsClaudeBackgroundJobGuardLines
+} from '../agent-hooks/claude-background-job-guard'
+import {
   WINDOWS_HOOK_STDIN_DRAIN_LABEL,
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
@@ -17,11 +22,7 @@ import {
   buildWindowsHookStdinDrainEpilogue
 } from '../agent-hooks/hook-stdin-contract'
 
-// Why: a backgrounded session runs in a daemon worker that inherited the dispatching
-// pane's env, so ORCA_PANE_KEY names a pane this session does not run in (#9236).
-// Why exit, not the drain label: the drain parks in more.com and a worker is outside
-// an Orca pane — the abandoned-stdin hang #11549 guards against.
-export const WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD = 'if not "%CLAUDE_JOB_DIR%"=="" exit /b 0'
+export { WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD }
 
 export function getManagedScript(
   target: 'local' | 'posix' = 'local',
@@ -43,7 +44,7 @@ export function getManagedScript(
       // Why (#11549): the env guards must outrank the Devin skip — the Devin skip parks in more.com,
       // and outside an Orca pane the caller can abandon stdin, so more.com never returns.
       ...buildWindowsHookEnvironmentGuardLines(),
-      WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD,
+      ...buildWindowsClaudeBackgroundJobGuardLines(),
       ...(options.skipWhenGrokImportsClaude ? buildWindowsGrokReplayGuardLines() : []),
       ...(options.skipWhenDevinImportsClaude
         ? [
@@ -74,11 +75,7 @@ export function getManagedScript(
           'fi'
         ]
       : []),
-    // Why: a backgrounded session runs in a daemon worker that inherited the dispatching
-    // pane's env, so ORCA_PANE_KEY names a pane this session does not run in (#9236).
-    'if [ -n "$CLAUDE_JOB_DIR" ]; then',
-    '  exit 0',
-    'fi',
+    ...buildPosixClaudeBackgroundJobGuardLines(),
     ...(source === 'claude' ? buildHookProcessCapture() : []),
     // Why: refresh endpoint coordinates for PTYs surviving an Orca restart.
     // Why: suppress parse errors so they neither leak nor trip outer set -e.
