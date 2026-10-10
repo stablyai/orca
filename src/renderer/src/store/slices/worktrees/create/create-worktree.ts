@@ -1,6 +1,9 @@
 import { runtimeTargetForExecutionHostId } from '@/runtime/runtime-client-target'
 import { repoHostId } from '../listing/worktree-host-ownership'
-import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  isUnresolvedOwnerHostId,
+  toRuntimeExecutionHostId
+} from '../../../../../../shared/execution-host'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { CreateWorktreeResult } from '../../../../../../shared/worktree/create-types'
@@ -172,6 +175,10 @@ export function createCreateWorktree(
       }
       // Why: manual sort is user-authored order; stamp new workspaces at the top rather than relying on sortOrder fallback.
       const manualOrder = get().sortBy === 'manual' ? Date.now() : undefined
+      if (isUnresolvedOwnerHostId(options?.executionHostId)) {
+        // Why: the direct-SSH fallback below would otherwise create it on this machine.
+        throw new Error('The workspace host is unresolved. Choose a host and retry.')
+      }
       // Direct SSH still uses desktop IPC; paired runtimes use their captured environment.
       const target = options?.executionHostId
         ? (runtimeTargetForExecutionHostId(options.executionHostId) ?? { kind: 'local' as const })

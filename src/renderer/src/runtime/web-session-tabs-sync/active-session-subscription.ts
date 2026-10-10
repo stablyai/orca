@@ -41,7 +41,7 @@ import {
 } from '../web-runtime-initial-terminal-bootstrap'
 import { dispatchWebRuntimeInitialTerminalBootstrap } from '../web-runtime-initial-terminal-bootstrap-dispatch'
 import { toRuntimeWorktreeSelector } from '../runtime-worktree-selector'
-import type { SessionTabsStreamEvent } from './state'
+import { isSessionTabsStreamEnd, type SessionTabsStreamEvent } from './state'
 import type { SessionTabsSnapshotHandler } from './visibility-resume-types'
 import { subscribeRuntimeEnvironment } from '../runtime-environment-pairing-refresh'
 
@@ -207,7 +207,7 @@ export function installActiveSessionTabsSubscription({
 
   return installWindowVisibilitySubscriptionParking([
     {
-      subscribe: (isCurrent) =>
+      subscribe: (isCurrent, { ended }) =>
         subscribeRuntimeEnvironment(
           {
             selector: environmentId,
@@ -227,6 +227,11 @@ export function installActiveSessionTabsSubscription({
               }
               if (response.ok === false) {
                 console.warn('[web-session-tabs-sync] subscription failed:', response.error.message)
+                ended()
+                return
+              }
+              if (isSessionTabsStreamEnd(response.result)) {
+                ended()
                 return
               }
               const event = response.result as SessionTabsStreamEvent
@@ -260,6 +265,11 @@ export function installActiveSessionTabsSubscription({
             onError: (error) => {
               if (isCurrent()) {
                 console.warn('[web-session-tabs-sync] subscription error:', error.message)
+              }
+            },
+            onClose: () => {
+              if (isCurrent()) {
+                ended()
               }
             }
           }

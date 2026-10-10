@@ -145,7 +145,8 @@ export function prepareWebSessionTabsSnapshotBase(
             environmentId,
             nextRemotePtyIds,
             nextMirroredTerminalIds,
-            exactProvisionalHandoffs
+            exactProvisionalHandoffs,
+            state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId
           )
       )
     : currentTerminalTabs

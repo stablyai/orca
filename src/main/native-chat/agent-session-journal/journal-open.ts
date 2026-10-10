@@ -57,7 +57,7 @@ export function replayJournal(db: Database.Database, sessionId: string): Journal
 /** The same fold, fed a row at a time, for a caller that yields between batches of rows. */
 export function startJournalRowFold(input: { sessionId: string; epoch: string }): {
   /** False once the fold has stopped: the rest of the rows are not read. */
-  add: (entry: { seq: number; rowJson: string }) => boolean
+  add: (entry: { seq: number; rowJson: string; ts?: number }) => boolean
   finish: () => JournalLoad
 } {
   const state = createJournalReducerState(input.sessionId, input.epoch)
@@ -67,7 +67,7 @@ export function startJournalRowFold(input: { sessionId: string; epoch: string })
   let newer: { sequence: number } | null = null
   let empty = true
 
-  const add = (entry: { seq: number; rowJson: string }): boolean => {
+  const add = (entry: { seq: number; rowJson: string; ts?: number }): boolean => {
     empty = false
     const parsed = parseJournalRow(entry.rowJson)
     if (!parsed.ok && parsed.unreadable) {
@@ -99,7 +99,7 @@ export function startJournalRowFold(input: { sessionId: string; epoch: string })
       return true
     }
     anchored = true
-    applyJournalRow(state, row)
+    applyJournalRow(state, row, entry.ts)
     return true
   }
   const finish = (): JournalLoad => {

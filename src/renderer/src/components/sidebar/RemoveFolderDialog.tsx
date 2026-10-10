@@ -15,6 +15,7 @@ import {
   isRuntimeOwnedSshTargetId,
   normalizeExecutionHostId
 } from '../../../../shared/execution-host'
+import { countOpenRepoTerminalTabs } from '@/store/repos/repo-removal'
 
 // Why: interpolated into the sentence so locales control where the name sits;
 // U+0000 cannot appear in a real project name, so the split is unambiguous.
@@ -52,6 +53,23 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
       sshConnectionId
     )
   })
+
+  const openTerminalCount = useAppStore((s) =>
+    repoId && hostId ? countOpenRepoTerminalTabs(s, repoId, hostId) : 0
+  )
+  const openTerminalWarning =
+    openTerminalCount === 0
+      ? null
+      : openTerminalCount === 1
+        ? translate(
+            'auto.components.sidebar.RemoveFolderDialog.openTerminalWarningOne',
+            '1 open terminal in this project will be closed.'
+          )
+        : translate(
+            'auto.components.sidebar.RemoveFolderDialog.openTerminalWarningMany',
+            '{{count}} open terminals in this project will be closed.',
+            { count: openTerminalCount }
+          )
 
   // Why: fragment concatenation around the styled name cannot be reordered by
   // SOV locales (#9294). Translate one full sentence with the name as a
@@ -104,6 +122,9 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
             <span className="break-all font-medium text-foreground">{displayName}</span>
             {descriptionAfterName}
           </DialogDescription>
+          {openTerminalWarning ? (
+            <p className="text-xs font-medium text-foreground">{openTerminalWarning}</p>
+          ) : null}
         </DialogHeader>
         <DialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)}>

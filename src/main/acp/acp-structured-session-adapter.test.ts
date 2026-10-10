@@ -298,7 +298,7 @@ describe('ACP structured session adapter: requests a Stop cancels', () => {
       cancelled: true
     })
     expect(await question).toMatchObject({ result: { outcome: 'cancelled' } })
-    expect(agent.frames.filter((frame) => frame.id === 5)).toHaveLength(1)
+    expect(agent.frames.filter((frame) => frame.id === 5 && !frame.method)).toHaveLength(1)
   })
 
   it("shows Grok's plan in the plan row and answers its plan-mode exit at once, with no card", async () => {

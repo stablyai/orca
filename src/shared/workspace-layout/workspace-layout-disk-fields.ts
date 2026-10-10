@@ -126,7 +126,8 @@ const ROW = {
   // Transient handoffs, never restored; the window strips them, but main's minimal row mint
   // stores `pendingActivationSpawn`, so the Loader drops it.
   pendingActivationSpawn: 'unwritten',
-  recovery: 'unwritten'
+  recovery: 'unwritten',
+  restoredFromSession: 'unwritten'
 } as const satisfies Record<keyof TerminalTab, DiskFieldWritten>
 
 const ENTRY_FIELDS = {

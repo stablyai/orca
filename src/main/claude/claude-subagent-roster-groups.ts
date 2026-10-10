@@ -2,6 +2,7 @@
 // wrote, and the ones earlier runs of the session journaled, inherited one at a
 // time as this run's own events reach them.
 
+import { SubagentRosterRetention } from '../native-chat/subagent-roster-retention'
 import {
   claudeSubagentGroupIdentity,
   inheritedClaudeSubagentGroup
@@ -10,8 +11,7 @@ import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-t
 import type { ClaudeJournaledRosterSource } from './claude-subagent-journaled-roster'
 import type { RosterGroup, TrackedEntry } from './claude-subagent-roster-state'
 
-/** Spawn-group rows kept live per session. Bounds an event-accumulated map that
- *  no provider snapshot ever prunes. */
+/** Settled history target; groups with unfinished children remain owned. */
 const MAX_SUBAGENT_GROUPS = 32
 
 export type LocatedClaudeSubagent = { group: RosterGroup; tracked: TrackedEntry }
@@ -22,14 +22,33 @@ export class ClaudeSubagentRosterGroups {
    *  from an earlier turn revises that turn's row instead of the live one. */
   private readonly groupIdByEntry = new Map<string, string>()
 
+  private readonly retention = new SubagentRosterRetention(this.groups, {
+    maxGroups: MAX_SUBAGENT_GROUPS,
+    maxSettledIdentities: 2048,
+    entries: (group) => [...group.entries.values()].map((tracked) => tracked.entry),
+    identities: (group) =>
+      [...group.entries]
+        .filter(([id]) => this.groupIdByEntry.get(id) === group.groupId)
+        .flatMap(([id, tracked]) => [
+          claudeSubagentRetentionIdentity(id, null),
+          ...[...new Set([...(tracked.invocationIds ?? []), tracked.toolUseId])].map((toolUseId) =>
+            claudeSubagentRetentionIdentity(id, toolUseId)
+          )
+        ]),
+    onEvict: (group) => {
+      for (const id of group.entries.keys()) {
+        if (this.groupIdByEntry.get(id) === group.groupId) {
+          this.groupIdByEntry.delete(id)
+        }
+      }
+    }
+  })
+
   constructor(
     private readonly deps: {
       journaled?: ClaudeJournaledRosterSource
       /** The open turn's scope, which a group this run creates belongs to. */
       currentTurnScope: () => AgentJournalTurnScope
-      /** Once a group leaves the map nothing can reach its children again — not
-       *  even a session sweep — so contact is lost here. */
-      onEvicted: (group: RosterGroup) => void
     }
   ) {}
 
@@ -88,7 +107,16 @@ export class ClaudeSubagentRosterGroups {
     this.groupIdByEntry.delete(id)
   }
 
+  hasSettled(id: string, toolUseId: string | null): boolean {
+    return this.retention.hasSettled(claudeSubagentRetentionIdentity(id, toolUseId))
+  }
+
+  trim(group: RosterGroup, retainAccessed = false): void {
+    this.retention.trim([group], retainAccessed ? group.groupId : undefined)
+  }
+
   clear(): void {
+    this.retention.clear()
     this.groups.clear()
     this.groupIdByEntry.clear()
   }
@@ -114,21 +142,9 @@ export class ClaudeSubagentRosterGroups {
 
   private admit(group: RosterGroup): void {
     this.groups.set(group.groupId, group)
-    while (this.groups.size > MAX_SUBAGENT_GROUPS) {
-      const oldest = this.groups.keys().next()
-      if (oldest.done || oldest.value === group.groupId) {
-        break
-      }
-      const evicted = this.groups.get(oldest.value)
-      if (evicted) {
-        this.deps.onEvicted(evicted)
-      }
-      for (const id of evicted?.entries.keys() ?? []) {
-        if (this.groupIdByEntry.get(id) === oldest.value) {
-          this.groupIdByEntry.delete(id)
-        }
-      }
-      this.groups.delete(oldest.value)
-    }
   }
+}
+
+function claudeSubagentRetentionIdentity(id: string, toolUseId: string | null): string {
+  return JSON.stringify([id, toolUseId])
 }

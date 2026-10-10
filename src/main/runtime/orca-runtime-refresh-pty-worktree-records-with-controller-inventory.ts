@@ -24,9 +24,11 @@ import {
 } from './runtime-worktree-path-identity'
 import {
   indexPersistedPtySurfaceBindings,
-  indexPersistedPtyWorktreeBindings
+  indexPersistedPtyWorktreeBindings,
+  type PersistedPtyBindingIndexes
 } from './runtime-worktree-binding-index'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
+import { indexFloatingSnapshotPtyBindings } from './floating-snapshot-pty-bindings'
 import { NO_OBSERVING_PROVIDER_REASON } from '../../shared/pty-liveness-verdict'
 import { buildControllerTerminalIdentities } from './orca-runtime-build-controller-terminal-identities'
 import { retireOrchestrationAuthorityAbsentFromInventory } from './runtime-restored-orchestration-authority-sweep'
@@ -117,13 +119,7 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
     }
     const { controllerIdentityByPtyId } = buildControllerTerminalIdentities(sessions)
     const findResolvedWorktree = createIncrementalResolvedWorktreeLookup(resolvedWorktrees)
-    const persistedIndexesByHostId = new Map<
-      ExecutionHostId,
-      {
-        worktreeIdByPtyId: ReadonlyMap<string, string>
-        surfaceByPtyId: ReturnType<typeof indexPersistedPtySurfaceBindings>
-      }
-    >()
+    const persistedIndexesByHostId = new Map<ExecutionHostId, PersistedPtyBindingIndexes>()
     const getPersistedIndexes = (hostId: ExecutionHostId) => {
       const existing = persistedIndexesByHostId.get(hostId)
       if (existing) {
@@ -137,6 +133,10 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
       persistedIndexesByHostId.set(hostId, indexes)
       return indexes
     }
+    const floatingPtyBindings = indexFloatingSnapshotPtyBindings(
+      this.mobileSessionTabsByWorktree.get(FLOATING_TERMINAL_WORKTREE_ID),
+      (tab) => this.getMobileTerminalPaneKey(tab)
+    )
     const allLivePtyIds = new Set(sessions.map((session) => session.id))
     const selectedLivePtyIds = new Set<string>()
     for (const session of sessions) {
@@ -157,6 +157,11 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
       const persistedWorktree = persistedWorktreeId
         ? findResolvedWorktree(persistedWorktreeId)
         : undefined
+      // Why: the floating sentinel never resolves as a worktree, so without this its cwd re-files it (#23428).
+      const recordedFloating =
+        persistedWorktreeId === FLOATING_TERMINAL_WORKTREE_ID ||
+        floatingPtyBindings.has(session.id) ||
+        this.ptysById.get(session.id)?.worktreeId === FLOATING_TERMINAL_WORKTREE_ID
       const hasMigrationEvidence =
         Boolean(session.worktreeId) &&
         !providerWorktree &&
@@ -170,6 +175,7 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
           ? (persistedWorktree?.id ?? null)
           : (session.worktreeId ??
             persistedWorktree?.id ??
+            (recordedFloating ? FLOATING_TERMINAL_WORKTREE_ID : undefined) ??
             inferredWorktreeId ??
             findResolvedWorktreeIdForPath(resolvedWorktrees, session.cwd, targetWorktreeId))
       const persistedSurface = persistedIndexes.surfaceByPtyId.get(session.id)

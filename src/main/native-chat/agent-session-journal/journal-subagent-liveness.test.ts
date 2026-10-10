@@ -306,10 +306,12 @@ describe('journal reopen after the writing host is gone', () => {
 
     // The host dies without ever settling them — no `ended`, so no session sweep.
     await live.close()
+    clock += 3_600_000
 
     const reopened = await open()
     const afterRestart = reopened.snapshot().items.at(-1)!
     expect(afterRestart.itemId).toBe(beforeRestart.itemId)
+    expect(afterRestart.recovered).toBe(true)
     expect(rosterOf(afterRestart.body)).toMatchObject([
       { id: 'a', state: 'unverifiable' },
       { id: 'b', state: 'unverifiable' }

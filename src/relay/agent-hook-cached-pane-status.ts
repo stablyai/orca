@@ -42,19 +42,3 @@ export function selectReplayableCachedPanes(input: {
 
 /** How many panes keep a cached status. Bounds a long-lived relay's per-pane state. */
 export const MAX_CACHED_PANES = 256
-
-/** Drop the longest-idle panes until the cache is back under its cap. Map insertion order is
- *  recency (writers delete-then-set), so the first key is always the oldest. */
-export function evictCachedPanesOverCap(
-  cachedByPaneKey: ReadonlyMap<string, unknown>,
-  dropPane: (paneKey: string) => void,
-  maxPanes: number = MAX_CACHED_PANES
-): void {
-  while (cachedByPaneKey.size > maxPanes) {
-    const oldest = cachedByPaneKey.keys().next().value
-    if (oldest === undefined) {
-      return
-    }
-    dropPane(oldest)
-  }
-}

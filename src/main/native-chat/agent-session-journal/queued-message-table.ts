@@ -155,6 +155,8 @@ export function consumeQueuedMessageInTransaction(
     sessionId: string
     messageId: string
     expect: 'waiting' | 'returned'
+    /** The body being sent: a card edited since it was read is not consumed with its old text. */
+    fingerprint: string
     /** The fresh submission id; never the draft's own id. */
     consumedAs: string
     settledByOp: string | null
@@ -171,7 +173,7 @@ export function consumeQueuedMessageInTransaction(
       `UPDATE queued_messages
        SET state = 'dispatched', hold_reason = NULL, returned_reason = NULL, returned_rejection = NULL,
            settled_at = ?, settled_by_op = ?, consumed_as = ?, host_instance = COALESCE(?, host_instance)
-       WHERE session_id = ? AND message_id = ? AND state = ?`
+       WHERE session_id = ? AND message_id = ? AND state = ? AND fingerprint = ?`
     )
     .run(
       input.now,
@@ -180,7 +182,8 @@ export function consumeQueuedMessageInTransaction(
       input.hostInstance ?? null,
       input.sessionId,
       input.messageId,
-      input.expect
+      input.expect,
+      input.fingerprint
     )
   return Number(changed.changes ?? 0) === 1
 }

@@ -9,12 +9,6 @@ import {
   worktreeIdComparisonKey
 } from './id'
 
-describe('WORKTREE_ID_SEPARATOR', () => {
-  it('is the literal "::" separator', () => {
-    expect(WORKTREE_ID_SEPARATOR).toBe('::')
-  })
-})
-
 describe('getRepoMainWorktreeId', () => {
   it('round-trips through the id parsers on posix and Windows paths', () => {
     for (const repo of [

@@ -12,7 +12,12 @@ import type { JournalOperationReceipt } from '../native-chat/agent-session-journ
 import { journalOpenRefusalError } from '../native-chat/agent-session-journal/journal-open-failure'
 import { AgentSessionJournalError } from '../native-chat/agent-session-journal/journal-write-guards'
 import type { AgentSessionStoreState } from './agent-session-store-state'
-import { writeAgentSessionStoreRows } from './agent-session-record-rows'
+import {
+  insertAgentSessionOperationRowsIfAbsent,
+  writeAgentSessionStoreRows
+} from './agent-session-record-rows'
+import { readCommandReceipt } from '../native-chat/agent-session-journal/command-receipt-table'
+import type { CommandReceiptScope } from '../native-chat/agent-session-journal/command-receipt-schema'
 import {
   agentSessionRuntimeIncarnation,
   attributeAgentSessionRuntime
@@ -21,6 +26,10 @@ import {
   beginAgentSessionRuntimeRecord,
   readAgentSessionRuntimeEnds
 } from './agent-session-runtime-end-record'
+import {
+  agentSessionReplacedRuntimes,
+  type AgentSessionReplacedRuntime
+} from './agent-session-replaced-runtime'
 import {
   agentSessionStoreDraftRowWrites,
   draftAgentSessionStoreState,
@@ -81,16 +90,23 @@ type StagedStoreTransaction<T> = {
 export class AgentSessionStoreTransactions {
   private queue: Promise<unknown> = Promise.resolve()
   private published: AgentSessionStoreState
+  /** What this runtime took over from the runtimes before it, as loaded; never changes after. */
+  readonly replacedRuntimes: ReadonlyMap<string, AgentSessionReplacedRuntime>
 
   constructor(
     private readonly journalDatabase: JournalHostDatabase,
-    loaded: AgentSessionStoreState
+    loaded: AgentSessionStoreState,
+    hostId: string
   ) {
     freezeRows(loaded, null)
     this.published = {
       ...loaded,
       runtimeEnds: readAgentSessionRuntimeEnds(journalDatabase.stateDirectory)
     }
+    this.replacedRuntimes = agentSessionReplacedRuntimes(this.published, {
+      hostId,
+      incarnation: agentSessionRuntimeIncarnation()
+    })
     // Before any owner this runtime records: a crash is concluded only from a recorded start.
     beginAgentSessionRuntimeRecord(
       journalDatabase.stateDirectory,
@@ -106,6 +122,10 @@ export class AgentSessionStoreTransactions {
 
   get readOnly(): boolean {
     return this.journalDatabase.readOnly
+  }
+
+  readCommandReceipt(scope: CommandReceiptScope, operationId: string) {
+    return readCommandReceipt(this.journalDatabase.db, scope, operationId)
   }
 
   /**
@@ -127,7 +147,10 @@ export class AgentSessionStoreTransactions {
    * commits. Exact without the queue: `write` and `committed` run in one synchronous step, so no
    * store transaction can commit between the draft's staging and its adoption.
    */
-  receipt(apply: (draft: AgentSessionStoreState) => void): JournalOperationReceipt {
+  receipt(
+    apply: (draft: AgentSessionStoreState) => void,
+    options: { insertOperationsIfAbsent?: true } = {}
+  ): JournalOperationReceipt {
     let staged: StagedStoreTransaction<void> | null = null
     return {
       write: (db) => {
@@ -137,7 +160,12 @@ export class AgentSessionStoreTransactions {
         staged = this.stage(apply)
         const writes = staged.writes
         if (writes) {
-          writeAgentSessionStoreRows(db, writes)
+          // TEMPORARY: ledger co-write preserves cross-family identity until every mutation uses receipts.
+          if (options.insertOperationsIfAbsent) {
+            insertAgentSessionOperationRowsIfAbsent(db, writes.operations.upsert)
+          } else {
+            writeAgentSessionStoreRows(db, writes)
+          }
         }
       },
       committed: () => {

@@ -21,10 +21,7 @@ export function structuredAgentSessionTargetForHost(
   executionHostId: string | null | undefined
 ): RuntimeClientTarget | null {
   const host = parseExecutionHostId(executionHostId)
-  if (!host || (host.kind === 'runtime' && host.environmentId === 'unresolved-owner')) {
-    return null
-  }
-  return runtimeTargetForExecutionHostId(host.id)
+  return host ? runtimeTargetForExecutionHostId(host.id) : null
 }
 
 /**

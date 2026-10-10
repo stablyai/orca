@@ -53,11 +53,13 @@ describe('Grok targeted child control contract', () => {
     'hides targeted Stop when the non-mutating route check fails with %s',
     async (code) => {
       const rig = await openAcpAdapterRig({
-        script: (agent) =>
+        script: (agent) => {
           agent.on('_x.ai/subagent/cancel', (frame) => {
             expect(frame.params).toEqual({})
             agent.fail(frame, code, 'Unavailable')
           })
+          agent.on('_x.ai/task/kill', (frame) => agent.fail(frame, -32601, 'Method not found'))
+        }
       })
       cleanup.push(() => rig.adapter.closeAll())
       await rig.acquire()
@@ -92,7 +94,10 @@ describe('Grok targeted child control contract', () => {
 
   it('bounds an unanswered route check without ending the parent connection', async () => {
     const rig = await openAcpAdapterRig({
-      script: (agent) => agent.on('_x.ai/subagent/cancel', () => {})
+      script: (agent) => {
+        agent.on('_x.ai/subagent/cancel', () => {})
+        agent.on('_x.ai/task/kill', (frame) => agent.fail(frame, -32601, 'Method not found'))
+      }
     })
     cleanup.push(() => rig.adapter.closeAll())
     await rig.acquire()

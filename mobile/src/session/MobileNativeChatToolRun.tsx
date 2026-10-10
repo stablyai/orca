@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Animated, Pressable, Text, View } from 'react-native'
 import { ChevronDown, SquareChevronRight, SquareTerminal, Wrench } from 'lucide-react-native'
 import { diffFromText, diffFromToolCall } from '../../../src/shared/native-chat-diff'
@@ -18,10 +18,11 @@ import {
 } from '../../../src/shared/native-chat-tool-activity'
 import { isShellActivityToolCall } from '../../../src/shared/native-chat-tool-icon'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
+import { nativeChatToolLineIdentity } from '../../../src/shared/native-chat-tool-line-identity'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-native-chat-message-styles'
 
-const MAX_VISIBLE_TOOL_PAIRS = 6
+const TOOL_PAIR_REVEAL_PAGE = 6
 const MAX_TOOL_RUN_DIFF_ROWS = 240
 
 function DiffView({ lines }: { lines: DiffLine[] }): React.JSX.Element {
@@ -183,16 +184,28 @@ export function ToolRun({
   onOpenFile?: (relativePath: string) => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(defaultExpanded)
-  const pairs = pairToolBlocks(blocks, MAX_VISIBLE_TOOL_PAIRS)
-  const diffLineLimit = Math.max(1, Math.floor(MAX_TOOL_RUN_DIFF_ROWS / (pairs.length * 2 || 1)))
+  const [visibleCount, setVisibleCount] = useState(TOOL_PAIR_REVEAL_PAGE)
+  const pairs = useMemo(
+    () => (open ? pairToolBlocks(blocks, visibleCount + 1) : []),
+    [blocks, open, visibleCount]
+  )
+  const visiblePairs = pairs.slice(0, visibleCount)
+  const seen = new Map<string, number>()
+  const diffLineLimit = Math.max(
+    1,
+    Math.floor(MAX_TOOL_RUN_DIFF_ROWS / (visiblePairs.length * 2 || 1))
+  )
   let callCount = 0
+  let resultCount = 0
   for (const block of blocks) {
     if (block.type === 'tool-call') {
       callCount++
+    } else if (block.type === 'tool-result') {
+      resultCount++
     }
   }
-  callCount ||= pairs.length
-  const summary = summarizeToolRun(blocks)
+  const count = callCount || resultCount
+  const summary = callCount > 0 ? summarizeToolRun(blocks) : 'Result'
   // The call's input, not its word: Codex names a classified shell row
   // `read`/`search`/`list` and keeps the command it ran, while Claude's `Read`
   // shares that word and ran none.
@@ -222,26 +235,45 @@ export function ToolRun({
             ) : (
               <SquareChevronRight size={15} color={colors.textMuted} strokeWidth={2} />
             )}
-            <Text style={styles.toolRunCount}>{callCount}×</Text>
+            <Text style={styles.toolRunCount}>{count}×</Text>
             <Text style={styles.toolRunLabel} numberOfLines={1}>
-              {summary || formatToolCallCount(callCount)}
+              {summary || formatToolCallCount(count)}
             </Text>
           </Pressable>
         )}
       </View>
       {open ? (
         <View style={styles.toolRunBody}>
-          {pairs.map((pair, i) => (
+          {visiblePairs.map((pair) => (
             <ToolLine
-              key={i}
+              key={nativeChatToolLineIdentity(pair.call ?? pair.result!, seen, true)}
               pair={pair}
               defaultExpanded={expandChildren}
               diffLineLimit={diffLineLimit}
               onOpenFile={onOpenFile}
             />
           ))}
-          {callCount > pairs.length ? (
-            <Text style={styles.toolPreview}>… {callCount - pairs.length} more tool calls</Text>
+          {pairs.length > visiblePairs.length ? (
+            <Pressable
+              style={styles.toolLine}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: visibleCount > TOOL_PAIR_REVEAL_PAGE }}
+              onPress={() => setVisibleCount((count) => count + TOOL_PAIR_REVEAL_PAGE)}
+              hitSlop={6}
+            >
+              <Text style={styles.toolPreview}>Show more</Text>
+            </Pressable>
+          ) : null}
+          {visiblePairs.length > TOOL_PAIR_REVEAL_PAGE ? (
+            <Pressable
+              style={styles.toolLine}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: true }}
+              onPress={() => setVisibleCount(TOOL_PAIR_REVEAL_PAGE)}
+              hitSlop={6}
+            >
+              <Text style={styles.toolPreview}>Show less</Text>
+            </Pressable>
           ) : null}
         </View>
       ) : null}

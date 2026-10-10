@@ -7,7 +7,7 @@ import { RipgrepSearchDiagnostics } from '../shared/ripgrep-search-diagnostics'
  * so they are straightforward to test independently.
  */
 import { SearchSubprocessLineAccumulator } from '../shared/search-subprocess-lines'
-import { spawnProcess } from '../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { abortSignalReason } from '../shared/abort-signal-reason'
 import { open } from 'node:fs/promises'
 import {

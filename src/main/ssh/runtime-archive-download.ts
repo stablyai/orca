@@ -1,7 +1,8 @@
 /** Streams and hash-checks a pinned runtime archive, and extracts it with the host's own tools. */
 import { createHash } from 'node:crypto'
 import { open, rm } from 'node:fs/promises'
-import { runProcess, type ProcessResult } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
+import type { ProcessResult } from '@orca/process-host/process-spec'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import { getZipExtractorCommand } from '../../shared/zip-extractor-command'

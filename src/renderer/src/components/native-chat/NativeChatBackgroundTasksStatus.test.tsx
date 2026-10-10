@@ -144,6 +144,49 @@ describe('NativeChatBackgroundTasksStatus stop affordances', () => {
     expect(onStop).toHaveBeenCalledWith('codex-command:exec-1')
   })
 
+  it('stops a Grok background command and the Grok subagent beside it by their own ids', () => {
+    const view = (overrides: Partial<AgentChildWorkView>): AgentChildWorkView => ({
+      id: 'child',
+      kind: 'agent',
+      state: 'working',
+      membership: 'live',
+      firstObservedAt: Date.now() - 65_000,
+      observedAt: Date.now() - 1_000,
+      stoppable: true,
+      invocation: { invocationId: 'spawn-1', generation: 1 },
+      ...overrides
+    })
+    const onStop = vi.fn()
+    render(
+      <DisclosureHost
+        isVisible
+        tasks={[]}
+        settledTasks={[]}
+        childViews={[
+          view({ id: 'agent', providerId: 'subagent-1', description: 'Review the diff' }),
+          view({
+            id: 'cmd',
+            kind: 'command',
+            providerId: 'acp-task:01a10366',
+            description: 'Run the dev server'
+          })
+        ]}
+        indicatorActive
+        supportsTaskStop
+        supportsStopAll={false}
+        stoppingTaskIds={new Set()}
+        stoppingAll={false}
+        onStop={onStop}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { expanded: false }))
+
+    fireEvent.click(screen.getByLabelText('Stop Run the dev server'))
+    fireEvent.click(screen.getByLabelText('Stop Review the diff'))
+    expect(onStop.mock.calls).toEqual([['acp-task:01a10366'], ['subagent-1']])
+    expect(screen.queryByLabelText('Stop background tasks')).not.toBeInTheDocument()
+  })
+
   it('offers no stop at all when the provider exposes none', () => {
     // An older Codex: a Stop button here would be a control that cannot act.
     renderStrip({ supportsTaskStop: false, supportsStopAll: false })

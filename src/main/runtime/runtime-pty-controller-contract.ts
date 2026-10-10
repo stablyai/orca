@@ -81,6 +81,7 @@ export type RuntimePtyController = {
     }
     agentSessionCreateOperationId?: string
     signal?: AbortSignal
+    refuseSleptWorktree?: boolean
     onPtySpawnCommitted?: () => void
     adoptedStablePane?: {
       result: PtySpawnResult

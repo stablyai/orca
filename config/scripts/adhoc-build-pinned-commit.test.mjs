@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 const workflow = parse(readFileSync('.github/workflows/adhoc-mac-build.yml', 'utf8'))
 const PINNED = '${{ needs.resolve-ref.outputs.sha }}'

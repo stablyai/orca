@@ -29,6 +29,10 @@ export type SessionTabsStreamEvent =
   | { type: 'snapshots'; snapshots: RuntimeMobileSessionTabsResult[]; authoritative?: boolean }
   | { type: 'end' }
 
+export function isSessionTabsStreamEnd(result: unknown): boolean {
+  return typeof result === 'object' && result !== null && 'type' in result && result.type === 'end'
+}
+
 export type SessionTabsListAllResult = {
   snapshots: RuntimeMobileSessionTabsResult[]
   authoritative?: boolean

@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { runProcessSync } from '../../src/shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
 import {
   OXLINT_SCANS,

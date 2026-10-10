@@ -22,9 +22,6 @@ import {
   codexDispatchRejection,
   codexTurnEndRejection
 } from './codex-structured-turn-end-settlement'
-import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
-import { codexKnownFastModeTier } from './codex-structured-catalog-entry'
-import type { CodexSessionCatalogAccess } from './codex-structured-session-state'
 
 // Writing a Codex turn and learning which message landed where, which are not
 // the same event. The answer proves admission and nothing about identity, which
@@ -44,8 +41,7 @@ const CODEX_TURN_OPTION_KEYS = new Set([
   'effort',
   'approvalsReviewer',
   'personality',
-  'serviceTier',
-  'fastMode'
+  'serviceTier'
 ])
 
 export function isCodexTurnOptionKey(key: string): boolean {
@@ -59,8 +55,6 @@ export type CodexTurnHost = {
   threadId: string
   options: Map<string, string>
   reportedOptions?: { model?: string }
-  /** The account's catalog, read at send so any writer's newer tier applies. */
-  catalogAccess?: CodexSessionCatalogAccess
   dispatchEchoes: CodexDispatchEchoes
   activeTurnIds?: ReadonlySet<string>
   /** Running turns whose interrupt Codex already answered: aborted, so never steered. */
@@ -80,33 +74,6 @@ function turnInputFor(body: AgentJournalMessageItem): Record<string, unknown>[] 
     }
   }
   return input
-}
-
-function codexTurnOptions(host: CodexTurnHost): Record<string, string> {
-  const options = Object.fromEntries(
-    [...host.options].filter(([key]) => key !== 'fastMode' && key !== 'serviceTier')
-  )
-  const encodedFastMode = host.options.get('fastMode')
-  if (encodedFastMode === undefined) {
-    return host.options.has('serviceTier') ? { ...options, serviceTier: 'default' } : options
-  }
-  const fastMode = decodeStructuredAgentSessionOptionValue('fastMode', encodedFastMode)
-  if (typeof fastMode !== 'boolean') {
-    throw new Error('codex fast mode must be encoded as true or false')
-  }
-  if (!fastMode) {
-    return { ...options, serviceTier: 'default' }
-  }
-  const model = host.options.get('model') ?? host.reportedOptions?.model
-  const tierId = model ? codexKnownFastModeTier(host.catalogAccess, model) : undefined
-  // Fast is on but nothing has named the tier for this model yet, so there is no
-  // value to route to. Deliberately Standard rather than an omission: the tier
-  // persists on the thread, so omitting would silently keep routing a paid tier we
-  // cannot currently name, and discovery recovers the exact tier on a later turn.
-  if (!tierId) {
-    return { ...options, serviceTier: 'default' }
-  }
-  return { ...options, serviceTier: tierId }
 }
 
 /**
@@ -178,7 +145,8 @@ export async function startCodexTurn(
       threadId: host.threadId,
       clientUserMessageId: input.clientMessageId,
       input: turnInputFor(input.body),
-      ...codexTurnOptions(host)
+      // Codex omits a tier the model does not list.
+      ...Object.fromEntries(host.options)
     },
     { timeoutMs: input.timeoutMs }
   )

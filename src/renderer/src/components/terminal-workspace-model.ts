@@ -75,9 +75,7 @@ export function isPinnedActiveEditorTab(
   return (
     (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
       (tab) =>
-        tab.entityId === fileId &&
-        isEditorTabContentType(tab.contentType) &&
-        tab.isPinned === true
+        tab.entityId === fileId && isEditorTabContentType(tab.contentType) && tab.isPinned === true
     ) ?? false
   )
 }
@@ -88,8 +86,7 @@ export function isPinnedEditorFileTab(
   fileId: string
 ): boolean {
   return (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
-    (tab) =>
-      tab.entityId === fileId && isEditorTabContentType(tab.contentType) && tab.isPinned
+    (tab) => tab.entityId === fileId && isEditorTabContentType(tab.contentType) && tab.isPinned
   )
 }
 

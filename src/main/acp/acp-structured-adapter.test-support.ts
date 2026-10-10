@@ -191,6 +191,9 @@ export async function openAcpAdapterRig(
       agent.on('_x.ai/subagent/cancel', (frame) =>
         agent.fail(frame, -32602, 'Invalid params', 'invalid params: missing field `subagentId`')
       )
+      agent.on('_x.ai/task/kill', (frame) =>
+        agent.fail(frame, -32602, 'Invalid params', 'invalid params: missing field `sessionId`')
+      )
       agent.on('initialize', (frame) => {
         spawned.push('initialize')
         agent.reply(frame, {
