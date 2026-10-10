@@ -219,7 +219,7 @@ describe('row 5r: paired runtime legacy terminal.create params', () => {
       tabId,
       leafId,
       startupCommandDelivery
-    } = window as Record<string, unknown>
+    } = window
     // No telemetry, cwd, placement or connection: the host owns them; kitty is never negotiated here.
     expect(withFixedIds(onlyCreate(rpc, 'terminal.create'))).toEqual({
       worktree: `id:repo-1::${POSIX_PATH}`,

@@ -43,13 +43,13 @@ const folder = (path: string, extra: Partial<LaunchWorkspace> = {}): LaunchWorks
   path,
   ...extra
 })
-type Shape = Omit<AutomationLaunchCase, 'name' | 'agent' | 'title'> &
+type AutomationCaseFields = Omit<AutomationLaunchCase, 'name' | 'agent' | 'title'> &
   Partial<Pick<AutomationLaunchCase, 'agent' | 'title'>>
-const automation = (name: string, shape: Shape): AutomationLaunchCase => ({
+const automation = (name: string, fields: AutomationCaseFields): AutomationLaunchCase => ({
   name,
   agent: 'claude',
   title: 'Nightly audit',
-  ...shape
+  ...fields
 })
 
 // AUTOMATION_WSL_EXE: only a local \\wsl$ workspace sends a shellOverride. Automations quote a
