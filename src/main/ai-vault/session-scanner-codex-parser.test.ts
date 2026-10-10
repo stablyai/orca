@@ -180,6 +180,92 @@ describe('parseCodexSessionFile', () => {
     })
   })
 
+  // A legacy-history thread's metadata update re-appends its first session_meta, same id,
+  // with only git (and memory_mode) patched.
+  it("refreshes the branch from the thread's own later session_meta and nothing else", async () => {
+    const timestamp = '2026-10-08T10:00:00.000Z'
+    const state = createCodexSessionResumeState(
+      { path: '/fixture/rollout.jsonl', mtimeMs: Date.parse(timestamp), modifiedAt: timestamp },
+      null
+    )
+    const consume = (type: string, payload: Record<string, unknown>) =>
+      state.consumeLine(JSON.stringify({ timestamp, type, payload }))
+    const firstMeta = { id: 'thread-1', cwd: '/repo', git: { branch: 'main' } }
+    consume('session_meta', firstMeta)
+    consume('response_item', {
+      type: 'message',
+      role: 'user',
+      content: [{ type: 'input_text', text: 'Fix the bug' }]
+    })
+    consume('turn_context', { cwd: '/repo/packages/app', model: 'gpt-5' })
+    expect(await state.finalize('darwin')).toMatchObject({ branch: 'main' })
+
+    consume('session_meta', {
+      ...firstMeta,
+      title: 'Metadata title',
+      history_mode: 'paginated',
+      thread_source: 'subagent',
+      git: { branch: 'fix-bug' }
+    })
+    // A memory_mode update re-appends the header without git; the branch stays.
+    consume('session_meta', { ...firstMeta, git: undefined, memory_mode: 'disabled' })
+    expect(await state.finalize('darwin')).toMatchObject({ branch: 'fix-bug' })
+    // Clearing the branch re-appends the header with an empty git object.
+    consume('session_meta', { ...firstMeta, git: {} })
+    expect((await state.finalize('darwin'))?.branch).toBeFalsy()
+    consume('session_meta', { ...firstMeta, git: { branch: 'fix-bug' } })
+    consume('response_item', {
+      type: 'message',
+      role: 'assistant',
+      content: [{ type: 'output_text', text: 'Fixed' }]
+    })
+
+    expect(await state.finalize('darwin')).toMatchObject({
+      sessionId: 'thread-1',
+      branch: 'fix-bug',
+      cwd: '/repo/packages/app',
+      title: 'Fix the bug',
+      messageCount: 2
+    })
+  })
+
+  it("updates a fork's branch from its own later session_meta, never its parent's", async () => {
+    const timestamp = '2026-10-08T10:00:00.000Z'
+    const state = createCodexSessionResumeState(
+      {
+        path: '/fixture/rollout-fork.jsonl',
+        mtimeMs: Date.parse(timestamp),
+        modifiedAt: timestamp
+      },
+      null
+    )
+    const consume = (type: string, payload: Record<string, unknown>) =>
+      state.consumeLine(JSON.stringify({ timestamp, type, payload }))
+    const forkMeta = {
+      id: 'fork-session',
+      forked_from_id: 'parent-session',
+      cwd: '/repo/fork',
+      git: { branch: 'fork-branch' }
+    }
+    const parentMeta = {
+      id: 'parent-session',
+      cwd: '/repo/parent',
+      git: { branch: 'parent-branch' }
+    }
+    consume('session_meta', forkMeta)
+    consume('session_meta', parentMeta)
+    consume('session_meta', { ...forkMeta, git: { branch: 'fork-branch-2' } })
+    consume('session_meta', parentMeta)
+    // A header with no id is not the fork's own either.
+    consume('session_meta', { cwd: '/repo/other', git: { branch: 'unidentified-branch' } })
+
+    expect(await state.finalize('darwin')).toMatchObject({
+      sessionId: 'fork-session',
+      cwd: '/repo/fork',
+      branch: 'fork-branch-2'
+    })
+  })
+
   it('uses user-message events instead of later injected user-role records', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codex-last-prompt-'))
     tempRoots.push(root)

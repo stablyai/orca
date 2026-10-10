@@ -20,14 +20,12 @@ import type {
   CodexUsageSnapshot,
   FileWithMtime,
   ResumableParseFinalizeOptions,
-  ResumableSessionParseState,
-  SessionAccumulator
+  ResumableSessionParseState
 } from './session-scanner-types'
 import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
   addCodexUsage,
   asRecord,
-  extractGitBranch,
   extractModel,
   extractString,
   normalizeCodexUsage,
@@ -36,11 +34,10 @@ import {
 } from './session-scanner-values'
 import { remoteSessionContentLines } from './remote-session-content-lines'
 import { readCodexTimelineOnlyRecord } from './session-scanner-codex-record-fast-path'
-import { extractCodexSessionMetadataTitle } from './session-scanner-codex-session-meta'
 import {
-  readCodexNonUserOrigin,
-  type CodexNonUserOrigin
-} from './session-scanner-codex-non-user-origin'
+  consumeCodexSessionMeta,
+  type CodexSessionMetaState
+} from './session-scanner-codex-session-meta'
 
 export async function parseCodexSessionFile(
   file: FileWithMtime,
@@ -86,20 +83,8 @@ export async function parseCodexSessionContent(args: {
   })
 }
 
-type CodexSessionParseState = {
-  accumulator: SessionAccumulator
+type CodexSessionParseState = CodexSessionMetaState & {
   previousTotals: CodexUsageSnapshot | null
-  // Codex's own classification of this thread as something other than the
-  // user's own — a spawned agent, a review pass, a compaction, a guardian. Codex
-  // writes all of those into the same history tree and AI Vault shows
-  // user-started sessions only, so the parse is rejected on this record's
-  // presence rather than on a separate flag beside it.
-  nonUserOrigin: CodexNonUserOrigin | null
-  sawSessionMeta: boolean
-  historyMode: string | null
-  // Which source set the current title; an index-file title outranks the raw
-  // first user prompt, so finalize must know whether 'meta' already won.
-  titleSource: 'meta' | 'user' | null
 }
 
 function createCodexParseState(
@@ -142,26 +127,8 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
   updateTimeline(accumulator, extractString(record.timestamp))
 
   const payload = asRecord(record.payload)
-  // Codex keeps the first session_meta canonical; a fork copies its parent's in after it, and
-  // such a later one is ignored below like any other record type this parser does not read.
-  if (record.type === 'session_meta' && payload && !state.sawSessionMeta) {
-    state.nonUserOrigin = readCodexNonUserOrigin(payload)
-    if (state.nonUserOrigin) {
-      return
-    }
-    state.sawSessionMeta = true
-    state.historyMode = extractString(payload.history_mode)
-    const sessionId = extractString(payload.id)
-    if (sessionId) {
-      accumulator.sessionId = sessionId
-    }
-    const metadataTitle = extractCodexSessionMetadataTitle(payload)
-    if (metadataTitle) {
-      accumulator.title = metadataTitle
-      state.titleSource = 'meta'
-    }
-    accumulator.cwd = extractString(payload.cwd) ?? accumulator.cwd
-    accumulator.branch = extractGitBranch(payload.git) ?? accumulator.branch
+  if (record.type === 'session_meta' && payload) {
+    consumeCodexSessionMeta(state, payload)
     return
   }
 
