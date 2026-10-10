@@ -62,6 +62,22 @@ describe('createDesktopRelayServiceInstaller', () => {
     expect(create).toHaveBeenCalledOnce()
   })
 
+  it('refuses installs after sign-out, including one already waiting, until the next auth change', async () => {
+    let ready!: () => void
+    const whenNetworkReady = new Promise<void>((resolve) => (ready = resolve))
+    const create = vi.fn(() => fakeService())
+    const { installer } = installerWith({ create, whenNetworkReady })
+
+    const waiting = installer.ensure()
+    installer.suspend()
+    ready()
+    await expect(waiting).resolves.toBe(false)
+    await expect(installer.ensure()).resolves.toBe(false)
+    expect(create).not.toHaveBeenCalled()
+    await expect(installer.authChanged()).resolves.toBe(true)
+    expect(create).toHaveBeenCalledOnce()
+  })
+
   it('never installs once quit or relaunch fenced the host', async () => {
     const create = vi.fn(() => fakeService())
     const { installer } = installerWith({ create, isFenced: () => true })
