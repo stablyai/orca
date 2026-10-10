@@ -87,10 +87,10 @@ describe('structured composer image input', () => {
     expect(result.pendingChip).not.toBeNull()
   })
 
-  it('references an image by path, with no chip, when the agent takes none', async () => {
+  it('references an image by path, with a removable pending operation, when the agent takes none', async () => {
     const result = await attach(false, '/tmp/shot.png')
-    expect(result.chips).toEqual([])
-    expect(result.pendingChip).toBeNull()
+    expect(result.chips).toEqual([''])
+    expect(result.pendingChip).not.toBeNull()
     expect(result.draft).toContain('/tmp/shot.png')
   })
 

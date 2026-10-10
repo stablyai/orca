@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createStore, type StoreApi } from 'zustand'
 import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
+import type { SshConnectionState } from '../../../../../shared/ssh-types'
 
 type MockState = {
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>
@@ -12,6 +13,7 @@ type MockState = {
   groupsByWorktree: Record<string, TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
   remoteBrowserPageHandlesByPageId: Record<string, never>
+  sshConnectionStates: Map<string, SshConnectionState>
   focusGroup: () => void
   updateBrowserPageState: () => void
   setBrowserPageUrl: () => void
@@ -104,6 +106,18 @@ function createState(): MockState {
     },
     activeGroupIdByWorktree: { 'wt-1': 'group-1' },
     remoteBrowserPageHandlesByPageId: {},
+    sshConnectionStates: new Map([
+      [
+        'target-a',
+        {
+          targetId: 'target-a',
+          status: 'connected',
+          error: null,
+          reconnectAttempt: 0,
+          connectionGeneration: 1
+        }
+      ]
+    ]),
     focusGroup: () => {},
     updateBrowserPageState: () => {},
     setBrowserPageUrl: () => {},

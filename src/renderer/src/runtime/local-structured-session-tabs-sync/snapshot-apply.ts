@@ -11,9 +11,8 @@ import {
 } from '../web-session-tabs-sync'
 import type { WebSessionTabsSyncState } from '../web-session-tabs-sync'
 import {
-  hasRetiredValue,
+  admitRetiredValueUnderAuthority,
   noteRetiredValue,
-  reviveRetiredValue,
   sameSessionTabsPublicationLineage
 } from '../web-session-tabs-sync/publisher-identity-fences'
 import { knownStructuredSessionWorktreeIds } from '../local-structured-session-tab-retirement'
@@ -130,12 +129,16 @@ export function applyLocalStructuredSessionTabSnapshots<
     // headless rebuild), and the structured publish inherits the worktree's existing epoch rather
     // than minting its own. So a retired epoch is not proof of a dead generation — only authority
     // can settle it, and the repair lane goes and asks.
-    if (hasRetiredValue(epochHistory, snapshot.publicationEpoch) && !sharesLineage) {
-      if (!options.authoritative) {
-        options.onRetiredEpochDrop?.(snapshot.worktree, snapshot.publicationEpoch)
-        continue
-      }
-      reviveRetiredValue(epochHistory, snapshot.publicationEpoch)
+    if (
+      !sharesLineage &&
+      !admitRetiredValueUnderAuthority(
+        epochHistory,
+        snapshot.publicationEpoch,
+        options.authoritative === true
+      )
+    ) {
+      options.onRetiredEpochDrop?.(snapshot.worktree, snapshot.publicationEpoch)
+      continue
     }
     if (prior && sharesLineage && snapshot.snapshotVersion <= prior.snapshotVersion) {
       continue

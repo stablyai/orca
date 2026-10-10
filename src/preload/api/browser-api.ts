@@ -145,6 +145,7 @@ export type BrowserApi = {
   /** Resolves once the SSH workspace's partition is bound and proxy-verified; the webview must wait for it. */
   prepareSshWorkspacePartition: (args: {
     targetId: string
+    expectedSshTargetGeneration?: number
     browserProfileId?: string
     skipProbe?: boolean
   }) => Promise<{ partition: string }>

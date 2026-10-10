@@ -16,14 +16,18 @@ import {
   type ProfileStateWriterInitialization
 } from './profile-state-writer-protocol'
 import { recordProfileStateWriterFault } from './profile-state-writer-diagnostics'
+import {
+  PROFILE_STATE_WRITER_SLOW_WARNING_MS,
+  startProfileStateWriterSlowWarning
+} from './profile-state-writer-slow-warning'
 import { ProfileStateWriterThread } from './profile-state-writer-thread'
-
-const REQUEST_TIMEOUT_MS = 30_000
 
 export type ProfileStateWriterConnectionOptions = {
   workerPath?: string
-  timeoutMs?: number
+  /** Delay before one diagnostic breadcrumb; never fails the request. */
+  slowWarningMs?: number
   onFailure?: (error: Error) => void
+  onSaveDelayChanged?: (delayed: boolean) => void
   reportInitializationFailure?: boolean
   /** Monotonic milliseconds; tests replace it to model a stalled main loop. */
   clock?: () => number
@@ -39,7 +43,8 @@ export class ProfileStateWriterConnection {
   private draining = false
   private closePromise: Promise<void> | undefined
   private closeAcknowledged = false
-  private readonly timeoutMs: number
+  private saveDelayed = false
+  private readonly slowWarningMs: number
   private readonly initialRevision: number
   private latestRevision: number | undefined
 
@@ -48,7 +53,7 @@ export class ProfileStateWriterConnection {
     private readonly options: ProfileStateWriterConnectionOptions = {}
   ) {
     this.initialRevision = initialization.revision
-    this.timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS
+    this.slowWarningMs = options.slowWarningMs ?? PROFILE_STATE_WRITER_SLOW_WARNING_MS
     const pending = this.createPending(0, 'initialize')
     this.active = pending
     this.ready = pending.promise.then(() => {})
@@ -68,8 +73,7 @@ export class ProfileStateWriterConnection {
               this.faultWith('profile-state-writer-exit', message, { exitCode: code })
             }
           }
-        },
-        { timeoutMs: this.timeoutMs, now: options.clock }
+        }
       )
     } catch (cause) {
       this.faultWith('profile-state-writer-unavailable', 'Profile state writer could not start', {
@@ -117,24 +121,40 @@ export class ProfileStateWriterConnection {
   private async finishClose(): Promise<void> {
     await this.active?.promise.catch(() => {})
     if (!this.failure && !this.didExit) {
+      const closeRequestId = this.nextId
       try {
         await this.dispatch({ command: 'close' })
       } finally {
-        if (!(await (this.thread?.waitForExit() ?? true))) {
-          this.faultWith(
-            'profile-state-writer-close-timeout',
-            'Profile state writer did not exit after close',
-            { outcome: 'indeterminate' }
-          )
-        }
-        // Termination is asynchronous; close must retain ownership until exit is confirmed.
-        await this.thread?.exitPromise
+        // Neither elapsed time nor a termination request proves exit; ownership waits for it.
+        await this.awaitExit(closeRequestId)
       }
       if (this.failure) {
         throw this.failure
       }
     } else {
       await this.thread?.exitPromise
+    }
+  }
+
+  private async awaitExit(requestId: number): Promise<void> {
+    const thread = this.thread
+    if (!thread || thread.exited) {
+      return
+    }
+    const clearSlowWarning = startProfileStateWriterSlowWarning({
+      warningMs: this.slowWarningMs,
+      phase: 'awaiting-exit',
+      now: this.options.clock,
+      request: {
+        command: 'close',
+        requestId,
+        acknowledgedRevision: this.lastAcknowledgedRevision
+      }
+    })
+    try {
+      await thread.exitPromise
+    } finally {
+      clearSlowWarning()
     }
   }
 
@@ -189,17 +209,28 @@ export class ProfileStateWriterConnection {
     id: number,
     command: PendingProfileStateWriterRequest['command']
   ): PendingProfileStateWriterRequest {
-    const pending = createProfileStateWriterRequest(id, command, this.timeoutMs, {
+    return createProfileStateWriterRequest(id, command, this.slowWarningMs, {
       now: this.options.clock,
-      acknowledgedRevision: () => this.lastAcknowledgedRevision,
-      onTimeout: () => {
-        // A cleared or superseded request must never fault its successor.
-        if (this.active === pending) {
-          this.faultWith('profile-state-writer-timeout', 'Profile state writer command timed out')
+      acknowledgedRevision: this.lastAcknowledgedRevision,
+      onSlow: () => {
+        // Revision checks and exports occupy the same worker and can hold up later saves.
+        if (this.active?.id === id && command !== 'initialize' && command !== 'close') {
+          this.reportSaveDelay(true)
         }
       }
     })
-    return pending
+  }
+
+  private reportSaveDelay(delayed: boolean): void {
+    if (this.saveDelayed === delayed) {
+      return
+    }
+    this.saveDelayed = delayed
+    try {
+      this.options.onSaveDelayChanged?.(delayed)
+    } catch (error) {
+      console.error('[persistence] Could not report delayed saving:', error)
+    }
   }
 
   private receive(value: unknown): void {
@@ -243,7 +274,8 @@ export class ProfileStateWriterConnection {
     if (!pending) {
       return
     }
-    pending.clearDeadline()
+    pending.clearSlowWarning()
+    this.reportSaveDelay(false)
     if (response) {
       pending.resolve(response)
     } else {

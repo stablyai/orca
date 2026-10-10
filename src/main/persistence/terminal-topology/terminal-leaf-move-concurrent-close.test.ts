@@ -51,7 +51,7 @@ async function rendererClose(
       options: { allowMissing: true, force: true, closedByLayoutOwner: true, reason },
       requestedSession: store.getWorkspaceSession(),
       ownerMatches: () => true,
-      hostId: () => 'local',
+      hostIds: () => ['local'],
       getSession: (hostId) => store.getWorkspaceSession(hostId),
       setSession: (session, hostId) => store.setWorkspaceSession(session, hostId),
       onClosed: () => {}

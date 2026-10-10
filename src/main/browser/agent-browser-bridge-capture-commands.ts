@@ -12,11 +12,16 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserScreenshotResult> {
+    const screenshotFormat = format === 'jpeg' ? 'jpeg' : 'png'
     // Why: agent-browser writes the screenshot to a temp file and returns its path; read it and return base64.
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       return this.readScreenshotFromResult(
-        await this.execAgentBrowser(sessionName, ['screenshot']),
-        format
+        await this.execAgentBrowser(sessionName, [
+          'screenshot',
+          '--screenshot-format',
+          screenshotFormat
+        ]),
+        screenshotFormat
       )
     })
   }

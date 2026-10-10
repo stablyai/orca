@@ -1,6 +1,6 @@
 import { ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
-import { spawnProcess } from '../../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import type * as NodeChildProcess from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 

@@ -1,10 +1,10 @@
 import { StringDecoder } from 'node:string_decoder'
-import { spawnProcess } from '../shared/child-process/run-process'
-import { forceTerminateProcessTree } from '../shared/child-process/process-tree-termination'
-import { createChildTerminationReporter } from '../shared/child-process/child-termination-reporter'
+import { spawnProcess } from '@orca/process-host'
+import { forceTerminateProcessTree } from '@orca/process-host/process-tree-termination'
+import { createChildTerminationReporter } from '@orca/process-host/child-termination-reporter'
 import { GitCommandTimeoutError, gitCommandTimeoutMs } from '../shared/git-command-timeout'
 import { expandTilde } from './context'
-import { buildRelayGitEnv } from './relay-command-env'
+import { buildRelayGitEnv } from '../wsl-guest/relay-command-env'
 import { acquireRelayGitAdmission } from './git-handler-command-termination'
 
 const DEFAULT_RELAY_GIT_STREAM_MAX_BYTES = 10 * 1024 * 1024

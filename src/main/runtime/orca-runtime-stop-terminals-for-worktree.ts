@@ -5,6 +5,7 @@ import {
   runtimeWorktreeIdsEqual
 } from './runtime-worktree-path-identity'
 import { teardownRpcDeadline } from './worktree-teardown'
+import { WORKTREE_TERMINALS_SLEEPING_ERROR } from './worktree-terminals-sleeping-error'
 import type {
   RuntimeWorktreeTerminalCloseResult,
   RuntimeWorktreeTerminalSleepResult
@@ -262,13 +263,21 @@ export class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntimeWithReso
     }
   }
 
-  async acquireWorktreeTerminalSpawn(worktreeId?: string): Promise<() => void> {
+  async acquireWorktreeTerminalSpawn(
+    worktreeId?: string,
+    opts: { refuseSleptWorktree?: boolean } = {}
+  ): Promise<() => void> {
     if (!worktreeId) {
       return () => {}
     }
     const release = await this.acquireWorktreeTerminalMutation(worktreeId, 'shared')
     const key = runtimeWorktreeIdentityKey(worktreeId)
     const sleepState = this.terminalSleepStateByWorktreeId.get(key)
+    // Why: re-checked under the lock, since a sleep can commit while an automatic spawn waits for it.
+    if (sleepState && opts.refuseSleptWorktree) {
+      release()
+      throw new Error(WORKTREE_TERMINALS_SLEEPING_ERROR)
+    }
     if (sleepState?.phase === 'sleeping' || sleepState?.phase === 'partial') {
       this.terminalSleepStateByWorktreeId.delete(key)
       this.emitClientEvent({
@@ -281,6 +290,11 @@ export class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntimeWithReso
       })
     }
     return release
+  }
+
+  /** Whether the host itself has put (or is putting) this worktree's terminals to sleep. */
+  protected isWorktreeTerminalSleepHeld(worktreeId: string): boolean {
+    return this.terminalSleepStateByWorktreeId.has(runtimeWorktreeIdentityKey(worktreeId))
   }
 
   protected async runWorktreeTerminalMutation<T>(

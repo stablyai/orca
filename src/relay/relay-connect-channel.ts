@@ -1,6 +1,6 @@
 import { createConnection } from 'node:net'
-import { DispatcherClientWriter } from './dispatcher-client-writer'
-import { RELAY_SENTINEL } from './protocol'
+import { DispatcherClientWriter } from '../wsl-guest/dispatcher-client-writer'
+import { RELAY_SENTINEL } from '../wsl-guest/protocol'
 import { readLaunchVersion, runConnectHandshake } from './relay-handshake'
 
 const CONNECT_TIMEOUT_MS = 5_000

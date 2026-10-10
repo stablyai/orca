@@ -395,7 +395,8 @@ describe('startParkedTerminalByteWatcher', () => {
         url: 'https://github.com/orca-dev/orca/pull/421',
         number: 421,
         slug: { owner: 'orca-dev', repo: 'orca', host: 'github.com' }
-      })
+      }),
+      expect.objectContaining({ tabId: TAB_ID, ptyId: PTY_ID })
     )
     dispose()
   })
@@ -942,7 +943,8 @@ describe('startParkedTerminalByteWatcher', () => {
       expect(mockStoreState.observeTerminalGitHubPullRequestLink).toHaveBeenCalledTimes(1)
       expect(mockStoreState.observeTerminalGitHubPullRequestLink).toHaveBeenCalledWith(
         WORKTREE_ID,
-        link
+        link,
+        expect.objectContaining({ tabId: TAB_ID, ptyId: PTY_ID })
       )
       dispose()
     })

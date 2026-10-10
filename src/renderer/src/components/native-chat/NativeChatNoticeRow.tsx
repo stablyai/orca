@@ -1,4 +1,5 @@
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
 import { NativeChatCodeBlock } from './NativeChatCodeBlock'
@@ -21,6 +22,9 @@ import {
   nativeChatClaudeSignInLabel,
   useNativeChatClaudeSignInView
 } from './native-chat-claude-sign-in'
+import { readWholeAgentSessionFailureFact } from '../../../../shared/agent-session-failure'
+import { agentSessionFailureSentence } from '../../../../shared/agent-session-failure-words'
+import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 
 const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string> = {
   'history-repaired': () =>
@@ -37,17 +41,23 @@ const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string
 
 export function NativeChatNoticeRow({
   block,
+  agentName,
   onLinkClick,
   allowFileUriLinks = false
 }: {
   block: NativeChatTextBlock
+  agentName?: string
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
 }): React.JSX.Element {
+  useTranslation()
   const orcaStopView = useNativeChatOrcaStopView()
   const claudeSignIn = useNativeChatClaudeSignInView()
-  if (block.presentation === 'compaction') {
-    const label = translate('components.native-chat.notices.compaction', 'Context compacted')
+  if (block.presentation === 'compaction' || block.presentation === 'context-cleared') {
+    const label =
+      block.presentation === 'context-cleared'
+        ? translate('components.native-chat.notices.contextCleared', 'Context cleared')
+        : translate('components.native-chat.notices.compaction', 'Context compacted')
     return (
       <div
         role="separator"
@@ -101,11 +111,26 @@ export function NativeChatNoticeRow({
   // The host's row about an Orca stop names the cause and the machine, muted: Orca stopped, not the
   // agent. With no machine to name it keeps the host's own words.
   const { orcaStop } = block
-  const { hostLabel, continueAvailable } = orcaStopView
+  const { hostLabel, remoteHost, continueAvailable } = orcaStopView
   const named = orcaStop !== undefined && hostLabel !== null
+  const failure = readWholeAgentSessionFailureFact(block.failure)
+  // Only reword auth text fully described by its fact; host text may also carry command advice.
+  const authSurface =
+    failure?.kind === 'notSignedIn'
+      ? (['row', 'rejection'] as const).find(
+          (surface) => block.text === agentSessionFailureSentence(failure, surface, { agentName })
+        )
+      : undefined
   const text = named
-    ? nativeChatOrcaStopRowText(orcaStop.cause, hostLabel, { continueAvailable })
-    : block.text
+    ? nativeChatOrcaStopRowText(orcaStop.cause, hostLabel, { continueAvailable, remoteHost })
+    : failure && authSurface
+      ? agentSessionFailureSentence(
+          failure,
+          authSurface,
+          { agentName },
+          sayAgentSessionFailureTranslated
+        )
+      : block.text
   const tone =
     named || block.presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION ? 'notice' : block.tone
   const Icon =

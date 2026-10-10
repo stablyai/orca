@@ -107,6 +107,8 @@ export function useNativeChatTranscriptWindow({
     overscan: NATIVE_CHAT_WINDOW_OVERSCAN,
     gap: NATIVE_CHAT_ROW_GAP_PX,
     scrollMargin,
+    // A hidden pane has no boxes to measure; retain its last visible row sizes.
+    useCachedMeasurements: !isVisible,
     anchorTo: 'end',
     followOnAppend: false,
     // Distances are nonnegative: disable geometry-only resize pinning, retaining prepend anchoring.

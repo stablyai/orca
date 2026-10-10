@@ -51,10 +51,13 @@ function hostStub(): StructuredAgentSessionHost {
     cursor: { epoch: 'epoch-a', sequence: 0 },
     value: { sessionId: SESSION, fence: 1, page: {}, unconfirmedClientMessageIds: [] }
   }))
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: create reaches only attach, and the logger a failure past it reports to.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: legacy create reads the empty ledger, calls attach and logs failures.
   return {
     attach,
-    deps: { logger: recordingStructuredAgentSessionLogger().logger }
+    deps: {
+      logger: recordingStructuredAgentSessionLogger().logger,
+      store: { getOperationRow: vi.fn(() => null) }
+    }
   } as unknown as StructuredAgentSessionHost
 }
 
@@ -79,7 +82,7 @@ async function create(
     getRuntimeId: () => 'runtime-1',
     // The structured surface is settings-gated for every caller; these fixtures probe the
     // pre-commit boundary, which only runs once the gate admits the call.
-    getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
+    getClientSettings: () => ({ experimentalNativeChat: true }),
     registerSubscriptionCleanup: vi.fn(),
     cleanupSubscription: vi.fn(),
     cleanupSubscriptionsByPrefix: vi.fn(),
@@ -201,6 +204,7 @@ describe('the boundary the envelope stops at', () => {
 
     expect(response).toMatchObject({ ok: false, error: { code: 'runtime_error' } })
     expect(refusalOf(response)).toBeNull()
+    expect(attach).toHaveBeenCalledOnce()
   })
 
   it('leaves a committed create whose tab could not be published unknown', async () => {
@@ -213,6 +217,7 @@ describe('the boundary the envelope stops at', () => {
     const refusal = refusalOf(response)
     expect(refusal?.code).toBe('agent_session_operation_unknown')
     expect(isDefinitiveAgentSessionCreateRefusal(refusal?.code)).toBe(false)
+    expect(attach).toHaveBeenCalledOnce()
   })
 
   it('keeps hiding the surface from a client that never advertised it', async () => {

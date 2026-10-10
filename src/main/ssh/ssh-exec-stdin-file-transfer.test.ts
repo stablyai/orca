@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Duplex } from 'node:stream'
 import { afterEach, describe, expect, it } from 'vitest'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import type { SshConnection } from './ssh-connection'
 import {
   EXEC_STDIN_WRITE_DONE,

@@ -3,7 +3,6 @@ import { CLIPBOARD_IMAGE_TOO_LARGE_ERROR } from '../../../src/shared/clipboard-i
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { useMediaPicker } from '../platform/media-picker'
-import { fingerprintNativeChatImage } from '../platform/native-chat-image-fingerprint'
 import {
   ImageLibraryPermissionError,
   type MobileImageSource
@@ -71,7 +70,6 @@ export function useMobileNativeChatImageUpload(args: {
           client,
           getConnectionId: getActiveWorktreeConnectionId,
           pickImages: picker.pickImages,
-          fingerprintImage: fingerprintNativeChatImage,
           onImageUploaded: (image) => uploadedImages.push(image),
           onUploadStart: () => {
             started = true

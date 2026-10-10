@@ -5,10 +5,9 @@ import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
 import { resetWebSessionReorderIntentForTests } from './web-session-reorder-intent'
 import { resetWebAgentSessionHandoffsForTests } from './web-agent-session-handoff'
 import { resetWebRuntimeInitialTerminalBootstrapForTests } from './web-runtime-initial-terminal-bootstrap'
-import {
-  resetWebSessionTabsSnapshotFreshnessForTests,
-  type WebSessionTabsSyncState
-} from './web-session-tabs-sync'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
+import './web-runtime-browser-creation'
 
 export const WT = 'repo::/worktree'
 export const ENV = 'web-env-1'

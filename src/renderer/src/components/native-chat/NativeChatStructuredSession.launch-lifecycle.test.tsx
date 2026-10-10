@@ -30,6 +30,8 @@ vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 import { agentSessionRefusalFailure } from '../../../../shared/agent-session-write-failure'
+import { structuredLaunchFailure } from '@/lib/structured-agent-session-launch-failure'
+import { StructuredAgentSessionCreateRefusalError } from '@/lib/structured-agent-session-launch-errors'
 
 const NOT_SIGNED_IN = {
   kind: 'refused',
@@ -37,9 +39,9 @@ const NOT_SIGNED_IN = {
   details: { reason: 'notSignedIn' }
 } as const
 // Retry beside it is the resend, so the words keep only the step before it.
-const NOT_SIGNED_IN_TEXT = 'Codex is not signed in for the selected account. Sign in first.'
+const NOT_SIGNED_IN_TEXT = "Codex isn't signed in. Run `codex login`."
 
-function sessionView(): React.JSX.Element {
+function sessionView(agent: 'codex' | 'grok' = 'codex'): React.JSX.Element {
   return (
     <NativeChatStructuredSession
       isVisible
@@ -47,7 +49,7 @@ function sessionView(): React.JSX.Element {
       tabId="structured-tab-1"
       sessionId="session-1"
       target={{ kind: 'local' }}
-      agent="codex"
+      agent={agent}
     />
   )
 }
@@ -130,6 +132,23 @@ describe('NativeChatStructuredSession launch lifecycle', () => {
 
     expect(screen.getByText(`Chat could not be started. ${NOT_SIGNED_IN_TEXT}`)).toBeTruthy()
     expect(screen.queryByText(/agent_session_/)).toBeNull()
+  })
+
+  it('renders the host-composed auth startup diagnostic beside Retry', () => {
+    const message = 'Sign in to Grok with `grok login`. Provider diagnostic: {{agent}} key expired.'
+    mocks.launchLifecycle = 'failed'
+    mocks.launchFailure =
+      structuredLaunchFailure(
+        new StructuredAgentSessionCreateRefusalError(message, 'agent_session_operation_invalid', {
+          code: 'agent_session_operation_invalid',
+          details: { reason: 'notSignedIn' }
+        })
+      ) ?? null
+    render(sessionView('grok'))
+    expect(screen.getByText(`Chat could not be started. ${message}`)).toBeTruthy()
+    expect(screen.queryByText(/send your message again/i)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(mocks.retryLaunch).toHaveBeenCalledWith('wt-1', 'session-1')
   })
 
   it("keeps a step the Retry doesn't take, and drops one it does", () => {

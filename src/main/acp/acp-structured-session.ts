@@ -8,6 +8,7 @@ import {
   type StructuredAgentSessionTurnVerdict
 } from '../native-chat/agent-session-wire/structured-agent-session-stale-turn-verdict'
 import type { AcpLaunchSpec } from './acp-launch-specs'
+import type { AcpChildStops } from './acp-dialects/acp-dialect'
 import type { AcpSessionEvent } from './acp-session-runtime'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import type { AcpStructuredLane } from './acp-structured-lane'
@@ -20,6 +21,7 @@ export type AcpStructuredSession = {
   fence: number
   acquisitionGeneration: string
   spec: AcpLaunchSpec
+  childStops?: AcpChildStops
   /** The agent's process and its protocol, one owner. */
   connection: AcpStructuredConnection
   lane: AcpStructuredLane

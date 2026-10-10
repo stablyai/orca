@@ -16,7 +16,9 @@ import {
   NativeChatToolName
 } from './NativeChatToolAnnotations'
 import { NativeChatToolIcon } from './NativeChatToolIcon'
+import { NativeChatToolFileTarget } from './NativeChatToolFileTarget'
 import { NativeChatDiffView } from './NativeChatDiffView'
+import { NativeChatHighlightedCode } from './NativeChatHighlightedCode'
 import { nativeChatToolLineLabel } from './native-chat-tool-line-label'
 import { diffFromText, diffFromToolCall } from './native-chat-diff'
 import { NativeChatExpandable } from './NativeChatExpandable'
@@ -24,18 +26,22 @@ import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { truncateToolDetail } from './native-chat-tool-summary'
 
 const NO_SEARCH_RESULTS: NonNullable<NativeChatToolCallBlock['webSearchResults']> = []
+const TARGET_CLASS =
+  'min-w-0 truncate text-chat-foreground transition-colors group-hover/tool-line:text-chat-foreground-strong'
 
 /** What an opened row shows. Its own component so a row diffs only while it is open. */
 function ToolLineDetail({
   block,
   body,
   fullCommand,
+  commandLanguage,
   results,
   onLinkClick
 }: {
   block: NativeChatBlock
   body: NativeChatToolResultBlock | undefined
   fullCommand: string | null
+  commandLanguage: string | null
   results: NonNullable<NativeChatToolCallBlock['webSearchResults']>
   onLinkClick?: CommentMarkdownLinkClickHandler
 }): React.JSX.Element {
@@ -55,7 +61,11 @@ function ToolLineDetail({
           data-native-chat-code-content
           className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-chat-code-border bg-chat-code-surface p-2 font-mono text-xs text-chat-foreground scrollbar-sleek"
         >
-          {fullCommand}
+          {commandLanguage ? (
+            <NativeChatHighlightedCode code={fullCommand} language={commandLanguage} />
+          ) : (
+            fullCommand
+          )}
         </pre>
       ) : null}
       {body ? (
@@ -156,23 +166,25 @@ export function NativeChatToolLine({
               (isCall ? <NativeChatToolName name={name} mcpIdentity={block.mcpIdentity} /> : name)}
           </span>
         )}
-        {(label?.target ?? resultPreview) ? (
-          <span
-            className="min-w-0 truncate text-chat-foreground transition-colors group-hover/tool-line:text-chat-foreground-strong"
-            title={label?.title ?? resultPreview}
-            aria-hidden={label?.filePath ? true : undefined}
-          >
+        {label?.filePath ? (
+          <NativeChatToolFileTarget
+            path={label.filePath}
+            label={label.target}
+            className={TARGET_CLASS}
+            onLinkClick={onLinkClick}
+          />
+        ) : (label?.target ?? resultPreview) ? (
+          <span className={TARGET_CLASS} title={label?.title ?? resultPreview}>
             {label?.target ?? resultPreview}
           </span>
         ) : null}
-        {label?.filePath ? <span className="sr-only">{label.filePath}</span> : null}
         {/* Held at the row's right edge, so the carets of a run line up in one column. */}
         <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-2">
           {isCall ? <NativeChatCommandMetadata block={block} /> : null}
           {hasDetail ? (
             <ChevronRight
               className={cn(
-                'size-3.5 shrink-0 text-chat-foreground-faint transition-transform',
+                'size-3.5 shrink-0 text-chat-foreground-faint transition-transform motion-reduce:transition-none',
                 expanded && 'rotate-90'
               )}
             />
@@ -185,6 +197,7 @@ export function NativeChatToolLine({
             block={block}
             body={body}
             fullCommand={fullCommand}
+            commandLanguage={label?.commandLanguage ?? null}
             results={results}
             onLinkClick={onLinkClick}
           />

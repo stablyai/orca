@@ -16,7 +16,7 @@ const fake = vi.hoisted(() => ({
 }))
 vi.mock('node:fs/promises', () => ({ stat: fake.stat }))
 vi.mock('node:fs', () => ({ realpathSync: (path: string) => path }))
-vi.mock('../git/repo', () => ({ isGitRepo: fake.git, getGitRepoRoot: fake.root }))
+vi.mock('../git/repo', () => ({ isGitRepoAsync: fake.git, getGitRepoRootAsync: fake.root }))
 vi.mock('../worktree-root-preparation', () => ({ prepareLocalWorktreeRootForRepo: fake.prepare }))
 vi.mock('./registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: fake.invalidate
@@ -107,6 +107,32 @@ describe('folder repo upgrade poll lifetime', () => {
     expect(fake.reposChanged).not.toHaveBeenCalled()
     expect(vi.getTimerCount()).toBe(0)
   })
+
+  it.each(['stopped', 'removed', 'path changed', 'already upgraded'])(
+    'refuses a stale folder upgrade when its owner is %s during Git discovery',
+    async (change) => {
+      const pending = deferred<boolean>()
+      fake.git.mockReturnValue(pending.promise)
+      const repos = [folder()]
+      const { store } = begin(repos)
+      await vi.advanceTimersByTimeAsync(25)
+      expect(fake.git).toHaveBeenCalledTimes(1)
+      if (change === 'stopped') {
+        stopFolderRepoGitUpgradeWatch()
+      } else if (change === 'removed') {
+        repos.splice(0)
+      } else if (change === 'path changed') {
+        repos[0].path = join('mock', 'new-root')
+      } else {
+        repos[0].kind = 'git'
+      }
+      pending.resolve(true)
+      await flush()
+      expect(store.updateRepo).not.toHaveBeenCalled()
+      expect(fake.prepare).not.toHaveBeenCalled()
+      expect(fake.reposChanged).not.toHaveBeenCalled()
+    }
+  )
 
   it('stops the remaining folder scan when a pending marker fails after stop', async () => {
     const pending = deferred<typeof marker>()

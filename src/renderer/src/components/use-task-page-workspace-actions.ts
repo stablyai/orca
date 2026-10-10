@@ -54,7 +54,8 @@ export function useTaskPageWorkspaceActions(model: TaskPageSearchActionsModel) {
         useAppStore.getState().allWorktrees(),
         item.repoId,
         item.type,
-        item.number
+        item.number,
+        item.url
       )
       if (!currentAttached) {
         handleUseWorkItem(item)

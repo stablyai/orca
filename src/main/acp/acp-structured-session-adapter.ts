@@ -1,6 +1,6 @@
 // A structured chat over the Agent Client Protocol: one adapter per registered ACP agent, which
-// the router drives like the Claude and Codex lanes. Rewind, compaction and goals are absent, so
-// the chat hides them; everything else maps onto ACP methods.
+// the router drives like the Claude and Codex lanes. Rewind and goals are absent, so the chat hides
+// them; compaction is the agent's own `/compact` prompt, for an agent whose launch spec offers it.
 
 import { randomUUID } from 'node:crypto'
 import { agentSessionFailureFact } from '../../shared/agent-session-failure'
@@ -31,8 +31,7 @@ import {
   ProviderAcquisitionStarts,
   type ProviderStartAttempt
 } from '../provider-process/provider-acquisition-starts'
-import type { AcpStructuredConnection } from './acp-structured-connection'
-import { waitForAcpExit } from './acp-structured-connection'
+import { waitForAcpExit, type AcpStructuredConnection } from './acp-structured-connection'
 import { AcpConnectionClosedError } from './acp-errors'
 import { awaitAcpTurnEnd, interruptAcpTurn, windDownAcpTurn } from './acp-structured-stop'
 import { acpDispatchPrompt } from './acp-prompt-content'
@@ -43,6 +42,8 @@ import {
 } from './acp-structured-session-adapter-deps'
 import { writeAcpSessionOption } from './acp-structured-options'
 import { readAcpRecoveryHistory } from './acp-recovery-history'
+import { withLiveCatalogListing } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import { stopAcpChildren, acpChildStopCapabilities } from './acp-structured-child-stop'
 
 export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapter {
   /** Live children, and ones whose exit is not yet proven; a proven exit removes its entry. */
@@ -104,7 +105,8 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
         throw new Error('closed while starting')
       }
       this.sessions.set(sessionId, session)
-      return acquisition
+      // Its saved picks restored: what it runs now is what its start resolved.
+      return { ...acquisition, catalogListing: session.options.startListing() }
     } catch (error) {
       const { connection } = attempt
       if (connection && error instanceof AcpConnectionClosedError) {
@@ -170,6 +172,9 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     return { state: 'admitted' }
   }
 
+  compact: NonNullable<StructuredAgentSessionAdapter['compact']> = async (input) =>
+    this.live(input.sessionId).turns.compact(input.command)
+
   cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = async (input) => {
     const session = this.live(input.sessionId)
     // The Stop ends the child unless it is declined here. Claude's rule: a Stop naming an ended turn
@@ -211,6 +216,7 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     if (!write) {
       throw new Error(`${session.spec.agent} offers no session option named ${input.key}`)
     }
+    session.options.notePick(input.key)
     // Bounded, and abandoned by a close or Stop: the session's queue waits on it.
     await writeAcpSessionOption(session.connection, session.options, write, {
       agent: session.spec.agent,
@@ -220,24 +226,28 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     return session.options.reported()
   }
 
-  readOptions = async (input: { sessionId: string; fence: number }) =>
-    this.live(input.sessionId).options.read()
+  readOptions = async (input: { sessionId: string; fence: number }) => {
+    const { options } = this.live(input.sessionId)
+    // Only the start says what the config resolved: the session may have moved since.
+    return withLiveCatalogListing(options.read())
+  }
 
   readOptionRestoreFailures = (sessionId: string): readonly string[] =>
     this.sessions.get(sessionId)?.restoreSkipped ?? []
 
   readCommands = (sessionId: string) => this.sessions.get(sessionId)?.options.readCommands()
 
-  // ACP has no way to stop one background task the agent started.
+  stopBackgroundTasks: NonNullable<StructuredAgentSessionAdapter['stopBackgroundTasks']> = (
+    input
+  ) => stopAcpChildren(this.live(input.sessionId), input.fence, input.taskIds, () => this.now())
+
   backgroundTaskStops: NonNullable<StructuredAgentSessionAdapter['backgroundTaskStops']> = (
     sessionId
-  ) =>
-    this.sessions.has(sessionId) ? { supportsTaskStop: false, supportsStopAll: false } : undefined
+  ) => acpChildStopCapabilities(this.sessions.get(sessionId))
 
   closeSession = (sessionId: string): Promise<boolean> => this.close(sessionId)
   disposeSession = (sessionId: string): Promise<boolean> => this.close(sessionId)
-  releaseAcquisition = (input: { sessionId: string }): Promise<boolean> =>
-    this.close(input.sessionId)
+  releaseAcquisition = (input: { sessionId: string }) => this.close(input.sessionId)
   /** After a sink failure: the exit is recovered as unexpected. */
   forceCloseSession = (sessionId: string): Promise<boolean> => this.stop(sessionId, false)
 

@@ -31,7 +31,10 @@ vi.mock('./claude-profile-wsl-router', () => ({
     return fakes.wsl
   }
 }))
-vi.mock('./claude-profile-installed-router', () => ({ installClaudeProfileRouter: () => {} }))
+vi.mock('./claude-profile-installed-router', () => ({
+  installClaudeProfileRouter: () => {},
+  installClaudeWslProfileRouter: () => {}
+}))
 
 import { ClaudeRuntimeAuthService } from './runtime-auth-service'
 

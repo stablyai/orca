@@ -14,7 +14,7 @@ import type {
 } from '../../../shared/project-types'
 import { getProjectIdForProviderIdentity } from '../../../shared/project-host-setup-projection'
 import { getProjectHostSetupForRepo } from '../../../shared/project-host-setup-lookup'
-import { parseExecutionHostId } from '../../../shared/execution-host'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
 import { emitRepoAdded } from './repo-added-telemetry'
@@ -177,7 +177,7 @@ export function registerProjectHostSetupHandlers(mainWindow: BrowserWindow, stor
       } catch (err) {
         // Why: an import that cannot be linked must not leave a new repo registration or authorization root behind.
         if (!result.alreadyExisted) {
-          store.removeProject(result.repo.id)
+          store.removeProjectForHost(result.repo.id, getRepoExecutionHostId(result.repo))
           invalidateAuthorizedRootsCache()
         }
         throw err

@@ -134,6 +134,27 @@ export class CodexSubagentExecutions {
     return this.children.get(agentThreadId)
   }
 
+  /** The child and every child it spawned, at any depth. */
+  lineage(agentThreadId: string): CodexExecutionChild[] {
+    const lineage: CodexExecutionChild[] = []
+    const seen = new Set<string>()
+    const pending = [agentThreadId]
+    for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
+      const child = this.children.get(id)
+      if (!child || seen.has(id)) {
+        continue
+      }
+      seen.add(id)
+      lineage.push(child)
+      for (const spawned of this.children.values()) {
+        if (spawned.spawnerThreadId === id) {
+          pending.push(spawned.agentThreadId)
+        }
+      }
+    }
+    return lineage
+  }
+
   workingChildren(): CodexExecutionChild[] {
     return [...this.children.values()].filter(
       (child) => child.registered && child.execution?.state === 'working'

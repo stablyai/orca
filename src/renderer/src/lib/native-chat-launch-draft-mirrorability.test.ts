@@ -12,7 +12,6 @@ vi.mock('@/store', () => ({
 
 import { seedNativeChatLaunchDraftForAgentTab } from './agent-launch-prompt-delivery'
 import { canMirrorLaunchDraftToNativeChat } from './native-chat-launch-draft-mirrorability'
-import { decideInitialAgentTabViewMode } from './native-chat-initial-view-mode'
 import { AGENT_TUI_CLEAR_MAX_LINES } from '../../../shared/agent-tui-input-clear'
 
 const maxLineDraft = Array.from({ length: AGENT_TUI_CLEAR_MAX_LINES }, () => 'line').join('\n')
@@ -39,18 +38,6 @@ const DRAFT_TEXTS = [
   '\n'
 ]
 
-function opensInChat(text: string): boolean {
-  return (
-    decideInitialAgentTabViewMode({
-      experimentalNativeChat: true,
-      openAgentTabsInChatByDefault: true,
-      agent: 'claude',
-      promptDelivery: 'draft',
-      launchDraftText: text
-    }) === 'chat'
-  )
-}
-
 function seedsTheComposer(text: string): boolean {
   mocks.seedNativeChatLaunchDraft.mockClear()
   seedNativeChatLaunchDraftForAgentTab({ tabId: 'tab-1', agent: 'claude', text })
@@ -62,10 +49,9 @@ describe('launch draft mirrorability', () => {
     vi.clearAllMocks()
   })
 
-  it.each(DRAFT_TEXTS)('both sides follow the predicate: %j', (text) => {
+  it.each(DRAFT_TEXTS)('seeds only mirrorable explicit chat drafts: %j', (text) => {
     const expected = canMirrorLaunchDraftToNativeChat(text)
     expect(seedsTheComposer(text)).toBe(expected)
-    expect(opensInChat(text)).toBe(expected)
   })
 
   it('accepts CR/LF drafts and rejects unsupported Unicode line separators', () => {
@@ -84,8 +70,6 @@ describe('launch draft mirrorability', () => {
   })
 
   it('withholds the mirror from agents without a native-chat renderer', () => {
-    // The view mode already returns undefined for these, so the sets still
-    // agree — but only the seeding side enforces it.
     expect(seedsTheComposer('https://github.com/o/r/issues/12')).toBe(true)
     mocks.seedNativeChatLaunchDraft.mockClear()
     seedNativeChatLaunchDraftForAgentTab({
@@ -94,14 +78,5 @@ describe('launch draft mirrorability', () => {
       text: 'https://github.com/o/r/issues/12'
     })
     expect(mocks.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
-    expect(
-      decideInitialAgentTabViewMode({
-        experimentalNativeChat: true,
-        openAgentTabsInChatByDefault: true,
-        agent: 'gemini',
-        promptDelivery: 'draft',
-        launchDraftText: 'https://github.com/o/r/issues/12'
-      })
-    ).toBeUndefined()
   })
 })

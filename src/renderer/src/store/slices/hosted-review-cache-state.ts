@@ -12,12 +12,15 @@ import type { AppState } from '../types'
 export type HostedReviewCacheEntry<T> = {
   data: T | null
   fetchedAt: number
+  stale?: boolean
   linkedReviewHintKey?: string
   branchLookupGitHubPRNumber?: number
 }
 export type HostedReviewCache = Record<string, HostedReviewCacheEntry<HostedReviewInfo>>
 
 export type HostedReviewFetchOptions = {
+  /** Source-qualified exact lookup; does not replace the branch’s selected review. */
+  exactReviewKey?: string
   force?: boolean
   repoId?: string
   admissionTier?: 'interactive' | 'status' | 'background'
@@ -141,10 +144,6 @@ export function shouldRefetchGitHubScopedResultForNoHint(
     hintKey === '' &&
     isGitHubLinkedReviewHintKey(cached.linkedReviewHintKey)
   )
-}
-
-export function canReuseInflightHint(inflightHintKey: string, nextHintKey: string): boolean {
-  return inflightHintKey === nextHintKey
 }
 
 export function isStaleMergedGitHubReviewForHead(

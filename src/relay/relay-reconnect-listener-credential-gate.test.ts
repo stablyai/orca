@@ -11,8 +11,8 @@ import {
   FrameDecoder,
   parseHandshakeMessage,
   RELAY_VERSION
-} from './protocol'
-import type { RelayDispatcher } from './dispatcher'
+} from '../wsl-guest/protocol'
+import type { RelayDispatcher } from '../wsl-guest/dispatcher'
 
 const noopCallbacks = {
   detachPrimaryInput: () => {},

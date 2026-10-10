@@ -52,6 +52,8 @@ export type AgentLaunchTarget =
   /** A worktree this launch creates. `create` is the `worktree.create` request minus its agent
    *  fields — the launch owns those, so a caller cannot set a startup agent behind the router. */
   | { kind: 'create-worktree'; create: Readonly<Record<string, unknown>> }
+  /** A folder workspace this launch creates. `create` is the `folderWorkspace.create` request. */
+  | { kind: 'create-folder-workspace'; create: Readonly<Record<string, unknown>> }
 
 /** An existing terminal the caller wants reused rather than a fresh surface. Always resolves to a
  *  terminal agent: a running PTY keeps its execution transport. */
@@ -333,12 +335,6 @@ function isAgentLaunchModeReceipt(value: unknown): value is AgentLaunchModeRecei
 
 function isAgentLaunchPromptDelivery(value: unknown): value is AgentLaunchPromptDelivery {
   return value === 'submit' || value === 'draft'
-}
-
-export function agentLaunchTargetIsCreate(
-  target: AgentLaunchTarget
-): target is Extract<AgentLaunchTarget, { kind: 'create-worktree' }> {
-  return target.kind === 'create-worktree'
 }
 
 /** The agent fields a create payload must not carry: the launch owns placement, and a caller that

@@ -1,8 +1,6 @@
 import { sha256 } from './sha256'
-import {
-  isAgentSessionHandleProvider,
-  type StructuredAgentId
-} from './agent-session-provider-handle'
+import type { StructuredAgentSessionFirstMessage } from './structured-agent-session-create'
+import type { StructuredAgentId } from './agent-session-provider-handle'
 
 function canonicalize(value: unknown): string {
   if (value === null || typeof value !== 'object') {
@@ -17,21 +15,15 @@ function canonicalize(value: unknown): string {
   return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${canonicalize(entry)}`).join(',')}}`
 }
 
-export function serializeStructuredAgentSessionFingerprintPayload(input: {
-  method: string
-  sessionId: string
-  fields: Record<string, unknown>
-}): string {
-  return canonicalize({ method: input.method, sessionId: input.sessionId, fields: input.fields })
-}
-
 export function structuredAgentSessionPayloadFingerprint(input: {
   method: string
   sessionId: string
   fields: Record<string, unknown>
 }): string {
   const bytes = sha256(
-    new TextEncoder().encode(serializeStructuredAgentSessionFingerprintPayload(input))
+    new TextEncoder().encode(
+      canonicalize({ method: input.method, sessionId: input.sessionId, fields: input.fields })
+    )
   )
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
@@ -54,6 +46,8 @@ export function structuredAgentSessionCreateFingerprint(input: {
   agent: StructuredAgentId
   resumeFrom?: { providerSessionId: string }
   tabId?: string
+  firstMessage?: StructuredAgentSessionFirstMessage
+  options?: Readonly<Record<string, string>>
 }): string {
   return structuredAgentSessionPayloadFingerprint({
     method: 'agentSession.create',
@@ -66,17 +60,11 @@ export function structuredAgentSessionCreateFingerprint(input: {
       resumeFrom: input.resumeFrom,
       // The host digests the same field; a retry naming another tab still replays with the
       // recorded one, since the host owns the id.
-      tabId: input.tabId
+      tabId: input.tabId,
+      firstMessage: input.firstMessage,
+      options: input.options
     }
   })
-}
-
-export function showStructuredAgentSessionChoice(input: {
-  hostCapability: boolean
-  workspaceSupport: boolean
-  agent: string
-}): boolean {
-  return input.hostCapability && input.workspaceSupport && isAgentSessionHandleProvider(input.agent)
 }
 
 export function createStructuredAgentSessionOperationId(

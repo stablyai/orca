@@ -83,6 +83,7 @@ const REASON_WORDS = {
     promptPending: causeWords('promptPending', 'actFirst', 'answerFirst'),
     backgroundTasksRunning: causeWords('backgroundTasksRunning', 'wait', 'waitForBackgroundTasks'),
     messagesUnsettled: causeWords('messagesUnsettled', 'actFirst', 'settleEarlierMessage'),
+    queueTooLarge: causeWords('queueTooLarge', 'actFirst', 'shrinkQueue'),
     // The rewind control words its own refusals; anywhere else says only that it did not happen.
     rewindRefused: codeWords('hostFinding'),
     rewindUnconfirmed: codeWords('hostFinding'),
@@ -93,6 +94,7 @@ const REASON_WORDS = {
     providerRejected: causeWords('agentRefused', 'retry'),
     providerStartFailed: { fact: 'providerStartFailed', action: 'retry' },
     notSignedIn: { fact: 'notSignedIn', action: 'actFirst' },
+    cliMissing: { fact: 'cliMissing', action: 'actFirst' },
     historyTooLarge: { fact: 'historyTooLarge', action: 'goElsewhere' },
     managedAccountEnvOverride: { fact: 'managedAccountEnvOverride', action: 'actFirst' },
     accountSwitchInProgress: { fact: 'accountSwitchInProgress', action: 'wait' },
@@ -149,7 +151,7 @@ const REASON_WORDS = {
     handoffInFlight: codeWords('retry')
   },
   agent_session_operation_expired: { operationExpired: codeWords('retry') },
-  agent_session_operation_capacity: { operationCapacity: codeWords('wait') },
+  agent_session_operation_capacity: { operationCapacity: codeWords('updateOrca') },
   agent_session_operation_unknown: {
     outcomeUnknown: codeWords('checkChat'),
     resultLost: codeWords('checkChat'),

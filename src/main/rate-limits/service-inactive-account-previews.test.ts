@@ -404,7 +404,6 @@ describe('RateLimitService', () => {
     service.setClaudeAuthPreparationResolver(async () => ({
       configDir: '/tmp/.claude',
       envPatch: {},
-      stripAuthEnv: false,
       provenance: 'system'
     }))
     vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 7))
@@ -437,7 +436,6 @@ describe('RateLimitService', () => {
     service.setClaudeAuthPreparationResolver(async () => ({
       configDir: '/tmp/.claude',
       envPatch: {},
-      stripAuthEnv: false,
       provenance: 'system'
     }))
     vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 7))

@@ -221,22 +221,23 @@ describe('the sweep and the lease (P2-20)', () => {
 })
 
 describe('a start that never finishes (P2-15)', () => {
-  it('is stopped by the sweep, and the message it was handed carries its one row and rejection', async () => {
+  it('is stopped by the sweep, and the message held for it carries its one row and rejection', async () => {
     const stopReason = 'Codex never finished starting, so Orca stopped it.'
     const spawn = rig.adapter.acquire.getMockImplementation()!
     rig.adapter.acquire.mockImplementationOnce(async (input) => ({
       ...(await spawn(input)),
       providerChildPhase: 'starting' as const
     }))
-    // Written to the starting child at once; it never answers.
-    rig.adapter.dispatch.mockResolvedValueOnce({ state: 'admitted' })
+    // Held for the starting child, which never proves its start.
     const reader = collectSubscriber()
     const attached = await rig.host.attach(CALLER, hostTestAttachParams(null))
     expect(attached.ok).toBe(true)
     await rig.host.subscribe({ id: 'reader', sessionId: SESSION, emit: reader.emit })
     const sent = await rig.host.send(CALLER, restTestSend('stuck behind the start', fence()))
     expect(sent.ok).toBe(true)
-    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledOnce())
+    await vi.waitFor(() =>
+      expect(rig.host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('starting')
+    )
     rig.clock.now += IDLE_MS + 1
 
     await sweepOnce(rig.host)
@@ -259,7 +260,8 @@ describe('a start that never finishes (P2-15)', () => {
 
     const again = await rig.host.send(CALLER, restTestSend('try again', fence()))
     expect(again.ok).toBe(true)
-    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(2), COLD_START)
+    expect(rig.adapter.dispatch).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(1), COLD_START)
     await expect(sweepOnce(rig.host)).resolves.toBeUndefined()
   })
 })

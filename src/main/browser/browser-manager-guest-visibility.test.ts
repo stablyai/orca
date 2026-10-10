@@ -81,7 +81,8 @@ describe('browserManager', () => {
       isDestroyed: vi.fn(() => false),
       executeJavaScript: vi.fn(() => new Promise(() => {})),
       send: vi.fn(),
-      setBackgroundThrottling: vi.fn()
+      setBackgroundThrottling: vi.fn(),
+      capturePage: vi.fn(async () => null)
     }
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {

@@ -6,11 +6,11 @@ import { getTuiAgentRestSignal } from '../../shared/tui-agent-rest-signal'
 import { isKnownReadyPromptBody } from './terminal-wait-detection'
 import {
   evaluateAgentStateRules,
+  hookAuthority,
   readsTrustedScreen
 } from './agent-state-rules/agent-state-rules-engine'
 import {
   evaluateTuiIdle,
-  hasFreshDoneFirstPartyStatus,
   quietForegroundLaneForTerminalAgent,
   hasQuietReadyScreen,
   isTuiIdleReadyVerdict,
@@ -206,8 +206,15 @@ describe('evaluateTuiIdle ranking', () => {
 describe('rest signal agrees with the lanes that can settle a wait', () => {
   it.each(Object.keys(TUI_AGENT_CONFIG).filter(isTuiAgent))('%s', (agent) => {
     const signal = getTuiAgentRestSignal(agent)
-    const hookDone = hasFreshDoneFirstPartyStatus(agent, { state: 'done', updatedAt: Date.now() })
-    expect(hookDone).toBe(signal === 'hook-done')
+    // Why both ways: a `hook-done` agent rests only through the hook lane, and a trusted hook
+    // lane is a stronger signal than the quiet foreground `none` reopens.
+    const trustsHooks = hookAuthority(agent) !== 'identity-only'
+    if (signal === 'hook-done') {
+      expect(trustsHooks).toBe(true)
+    }
+    if (trustsHooks) {
+      expect(signal).not.toBe('none')
+    }
     let screenRead = false
     isKnownReadyPromptBody(
       '',
@@ -277,47 +284,6 @@ describe('nameOnlyIdleNeedsCorroboration', () => {
   it("names an adopted pane's agent from a shell auto-title", () => {
     expect(nameOnlyIdleNeedsCorroboration(null, 'claude')).toBe(true)
     expect(nameOnlyIdleNeedsCorroboration(null, 'claude ~/p/repo')).toBe(true)
-  })
-})
-
-describe('a DSH pane settles tui-idle on its own hook', () => {
-  const base = {
-    record: { lastAgentStatus: null, lastOutputAt: null, lastOscTitle: '\u2726 \u{1F40B} repo' },
-    rendererTitle: undefined,
-    readPositiveBodyEvidence: () => false,
-    readQuietReadyBodyEvidence: () => false,
-    readAgentRuleVerdict: () => null,
-    readScreenInputVeto: () => null,
-    titleObservedAtEpochMs: null,
-    readTailBlockedReason: () => null,
-    agent: 'dsh' as const,
-    firstPartyStatus: { state: 'done' as const, updatedAt: Date.now() },
-    quiescenceMs: 1_000
-  } satisfies TuiIdleEvaluationInput
-
-  const ready = (over: Partial<TuiIdleEvaluationInput> = {}) =>
-    isTuiIdleReadyVerdict(evaluateTuiIdle({ ...base, ...over }))
-
-  it('settles on a fresh first-party done', () => {
-    // The regression: DSH's title carries no idle (its rest glyph is Gemini's working one),
-    // so every title-reading tier failed and `terminal wait --for tui-idle` ran to timeout
-    // against an already-ready composer.
-    expect(ready()).toBe(true)
-  })
-
-  it('does not settle while the same pane reports working', () => {
-    expect(ready({ firstPartyStatus: { state: 'working', updatedAt: Date.now() } })).toBe(false)
-  })
-
-  it('does not settle on a stale done', () => {
-    expect(
-      ready({ firstPartyStatus: { state: 'done', updatedAt: Date.now() - 31 * 60 * 1000 } })
-    ).toBe(false)
-  })
-
-  it('leaves other agents on the title lanes', () => {
-    // Scoped on purpose: an agent whose hooks report child turns can emit `done` mid-turn.
-    expect(ready({ agent: 'claude' })).toBe(false)
   })
 })
 

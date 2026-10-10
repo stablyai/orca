@@ -171,6 +171,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'runtimeEnvironments:recoverOrcad',
       'runtimeEnvironments:stopOrcad',
       'runtimeEnvironments:cancelOrcadStop',
+      'runtimeEnvironments:forgetOrcad',
       'runtimeEnvironments:subscribe',
       'runtimeEnvironments:unsubscribe'
     ])
@@ -206,6 +207,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'runtimeEnvironments:recoverOrcad',
       'runtimeEnvironments:stopOrcad',
       'runtimeEnvironments:cancelOrcadStop',
+      'runtimeEnvironments:forgetOrcad',
       'runtimeEnvironments:convertSshHostToManagedOrcad',
       'runtimeEnvironments:listPendingOrcadMigrations',
       'runtimeEnvironments:previewOrcadDeltaMove',

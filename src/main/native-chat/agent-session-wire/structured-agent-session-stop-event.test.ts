@@ -126,9 +126,13 @@ describe("a Stop's event", () => {
 
   it('at an agent still starting, reaches the journal before the start is ended, and holds a card queued before it', async () => {
     rig = await createQueuedMessageTestRig({ starting: true, restartable: true })
-    // A starting agent takes the send at once; it never proves its start.
+    // Held for a starting agent that never proves its start.
     rig.send('work on this')
-    await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(1))
+    await eventually(() =>
+      expect(rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)?.child?.phase).toBe(
+        'starting'
+      )
+    )
     const held = await queuedDraft('queued while it starts')
     let atEnd: JournalStopEvent[] | undefined
     rig.closeSession.mockImplementationOnce(async () => {
@@ -140,6 +144,7 @@ describe("a Stop's event", () => {
     expect(await rig.handoff(held)).toBeUndefined()
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
     expect(rig.cancelTurn).not.toHaveBeenCalled()
+    expect(rig.dispatch).not.toHaveBeenCalled()
     expect(rig.closeSession).toHaveBeenCalledTimes(1)
     expect(atEnd).toEqual([
       { reason: 'user-stop', caller: QUEUED_RIG_CALLER.callerKey, at: expect.any(Number) }

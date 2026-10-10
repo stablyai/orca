@@ -1,9 +1,7 @@
 // Host-held drafts as this pane acts on them: the card list, Send-now (Steer),
-// Delete, Edit, the Cmd/Ctrl+Enter steer chord, Resume of a held queue, and
+// Delete, in-place Edit, the Cmd/Ctrl+Enter steer chord, Resume of a held queue, and
 // clearing it before a new message.
-// Everything durable lives on the host, and no draft text ever travels back over
-// the wire: Edit copies the text the card already shows into the composer,
-// locally, before deleting the draft, so no RPC outcome can lose it.
+// Everything durable lives on the host; an open editor holds only its own typing.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
@@ -16,12 +14,18 @@ import type {
   AgentSessionQueuePause,
   AgentSessionSendResult
 } from '../../../../shared/agent-session-wire'
-import { appendNativeChatDraftCache } from './native-chat-draft-cache'
-import { nativeChatComposerDraftWriteSettled } from './native-chat-composer-draft-store'
+import {
+  useStructuredAgentSessionQueuedEdit,
+  type QueuedEditTransport,
+  type QueuedMessageInlineEditor
+} from './use-structured-agent-session-queued-edit'
+import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 import {
   newestSteerableQueuedMessageCard,
   projectQueuedMessageCards,
+  pendingQueueSendsOnTheirWay,
   queuedMessagesQueuePause,
+  sendingQueuedMessageCards,
   type QueuedMessageCard
 } from './structured-agent-session-queued-cards'
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
@@ -43,7 +47,11 @@ export type StructuredAgentSessionQueuedMessagesController = {
   /** Send-now into the running turn; the transcript shows it at delivery position. */
   steer: (messageId: string) => Promise<void>
   remove: (messageId: string) => Promise<void>
-  /** Copy the card's shown text into the composer, then delete the draft. */
+  /** The host edits cards in place; without it a card offers no Edit. */
+  editCapable: boolean
+  /** The card being edited in this pane, at most one. */
+  editor: QueuedMessageInlineEditor | undefined
+  /** Opens the card's inline editor. */
   edit: (messageId: string) => Promise<void>
   /** Cmd/Ctrl+Enter: Send-now the newest card. False when there is none to steer. */
   steerNewest: () => boolean
@@ -61,6 +69,8 @@ export type StructuredAgentSessionQueueResume = {
   resuming: boolean
 }
 
+const NO_SENDS: readonly StructuredAgentSessionPendingSend[] = []
+
 function alreadySentNotice(): void {
   toast.error(
     translate('components.native-chat.queuedMessages.alreadySent', 'This message was already sent.')
@@ -76,19 +86,33 @@ export function useStructuredAgentSessionQueuedMessages(args: {
   hasPendingPrompt: boolean
   /** A turn is running, whoever started it, or the queue is about to send its next card. */
   isWorking: boolean
+  /** This pane's sends without a host record yet show as sending cards. */
+  sending?: readonly StructuredAgentSessionPendingSend[]
   composerScopeKey: string | undefined
   mutate: StructuredAgentSessionMutate
+  editTransport: QueuedEditTransport
 }): StructuredAgentSessionQueuedMessagesController {
   const { composerScopeKey, enabled, hasPendingPrompt, mutate, queuedMessages, submissions } = args
-  const { queuePause } = args
+  const { isWorking, queuePause } = args
+  const sending = args.sending ?? NO_SENDS
 
   const cards = useMemo(
-    () =>
-      projectQueuedMessageCards(queuedMessages, submissions, {
-        hasPendingPrompt,
+    () => [
+      ...projectQueuedMessageCards(queuedMessages, submissions, {
+        // A command card offers no send while the agent works.
+        agentWorking: isWorking,
         queuePaused: queuePause !== null
       }),
-    [hasPendingPrompt, queuePause, queuedMessages, submissions]
+      ...sendingQueuedMessageCards(
+        pendingQueueSendsOnTheirWay(
+          sending,
+          (queuedMessages ?? []).map((message) => message.messageId),
+          isWorking,
+          submissions
+        )
+      )
+    ],
+    [isWorking, sending, queuePause, queuedMessages, submissions]
   )
   const cardsRef = useRef(cards)
   useEffect(() => {
@@ -150,38 +174,14 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     [removeCard]
   )
 
-  const edit = useCallback(
-    (messageId: string): Promise<void> =>
-      actOnce(messageId, async () => {
-        // The text is copied FIRST, from the card this pane already shows — a local move,
-        // never a wire payload. Without a composer to hold it, deleting would destroy it,
-        // so the draft then stays a card.
-        const card = cardsRef.current.find((entry) => entry.messageId === messageId)
-        if (!card || !composerScopeKey) {
-          return
-        }
-        appendNativeChatDraftCache(composerScopeKey, card.text)
-        // The card goes only once storage holds the draft; a refused save keeps it.
-        if (!(await nativeChatComposerDraftWriteSettled(composerScopeKey))) {
-          return
-        }
-        const result = await mutate<AgentSessionQueuedMessageDeleteResult>(
-          'agentSession.queuedMessageDelete',
-          'agentSession.queuedMessageDelete',
-          { messageId }
-        )
-        if (result && !result.deleted && result.disposition === 'dispatched') {
-          toast.error(
-            translate(
-              'components.native-chat.queuedMessages.editAlreadySent',
-              'Already sent — your text is still in the composer.'
-            )
-          )
-        }
-        // A failed Delete leaves the card: the text shows in both places, visibly, never lost.
-      }),
-    [actOnce, composerScopeKey, mutate]
-  )
+  const editing = useStructuredAgentSessionQueuedEdit({
+    transport: args.editTransport,
+    messages: queuedMessages,
+    cards,
+    submissions,
+    composerScopeKey,
+    promptOpen: hasPendingPrompt
+  })
 
   const steerNewest = useCallback((): boolean => {
     if (!enabled) {
@@ -219,7 +219,7 @@ export function useStructuredAgentSessionQueuedMessages(args: {
   // Resume and the "Send message?" choice only where the queue could send now: no turn runs (the
   // queue's coming send counts, as the host names it) and no prompt waits, which holds the queue
   // too; the composer shows beside a prompt only when this build cannot answer it.
-  const held = enabled && pause !== null && !args.isWorking && !hasPendingPrompt
+  const held = enabled && pause !== null && !isWorking && !hasPendingPrompt
   const queueResume = useMemo(
     () => (held ? { resume, resuming } : undefined),
     [held, resume, resuming]
@@ -246,7 +246,9 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     resuming,
     steer,
     remove,
-    edit,
+    edit: editing.begin,
+    editCapable: editing.capable,
+    editor: editing.editor,
     steerNewest,
     queueResume,
     queueHold

@@ -351,6 +351,22 @@ async function main() {
       )
     }
     log('terminal round trip OK')
+    if (launch.env.ORCA_USER_DATA && process.platform !== 'win32') {
+      const cliNonce = randomBytes(8).toString('hex')
+      orca(pairingCode, [
+        'terminal',
+        'send',
+        '--terminal',
+        terminal.handle,
+        '--text',
+        `orca status && orca worktree ps --json && printf 'ORCA_CLI_%s\\n' '${cliNonce}'`,
+        '--enter'
+      ])
+      if (!(await waitForNonce(pairingCode, terminal.handle, `ORCA_CLI_${cliNonce}`))) {
+        throw new Error('The managed terminal could not run the execution host CLI')
+      }
+      log('execution host CLI round trip OK')
+    }
   } catch (error) {
     fail(error instanceof Error ? error.message : String(error))
   } finally {

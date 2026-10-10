@@ -17,12 +17,12 @@ import { createStructuredAgentSessionOperationId } from '../../../shared/structu
 import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import { queuedSendAnswer } from './structured-agent-session-queued-send-answer'
 import { structuredAgentSessionSendBlock } from './structured-agent-session-send-preparation'
-import { isUnsettledQueuedMessage } from '../agent-session-journal/queued-message-table'
+import { queuedMessagesPublishedBytesRefusal } from './structured-agent-session-queued-published-bytes'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/structured-agent-session-main-agent-working'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
-import { QueuedMessageNotConsumableError } from '../agent-session-journal/journal-queued-messages'
+import { QueuedMessageNotConsumableError } from '../agent-session-journal/queued-message-consume-error'
 import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import {
@@ -33,11 +33,6 @@ import { nextSendableQueuedCard } from '../agent-session-journal/queued-message-
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { agentSessionAttachmentExpiredRefusal } from './structured-agent-session-turns'
 import { isAgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
-
-/** Budget at accept, in the send schema's own unit (`Buffer.byteLength` of the
- *  serialized blocks); refused readably rather than trimmed. */
-export const QUEUED_MESSAGES_MAX_COUNT = 20
-export const QUEUED_MESSAGES_MAX_TOTAL_BYTES = 1024 * 1024
 
 /** Text-only v1: any image block routes to the immediate path. */
 export function queuedMessageBodyIsTextOnly(body: AgentJournalMessageItem): boolean {
@@ -62,16 +57,19 @@ export function pendingPromptExists(journal: Pick<AgentSessionJournal, 'visitIte
 
 /** Waiting, not held on its own, and not positioned behind a returned card or a
  *  card the queue's pause holds: the queue never reorders. The admission rule
- *  (§accept) and the drain's selection both read it. */
+ *  (§accept) and the drain's selection both read it; only the drain's (`automatic`) stops at a
+ *  card being edited, so an edited card still counts as backlog a new send queues behind. */
 function oldestActionableQueuedMessage(
-  journal: Pick<AgentSessionJournal, 'queuedMessages'>
+  journal: Pick<AgentSessionJournal, 'queuedMessages'>,
+  automatic: boolean
 ): QueuedMessageRow | null {
   const rows = journal.queuedMessages.list()
   // Nothing waiting costs no pause derivation: this runs on every journal publish.
   if (!rows.some((row) => row.state === 'waiting')) {
     return null
   }
-  return nextSendableQueuedCard(structuredQueuePauses(journal), rows)
+  const edited = automatic ? journal.queuedMessages.editLeases.heldIds(rows) : undefined
+  return nextSendableQueuedCard(structuredQueuePauses(journal), rows, edited)
 }
 
 /**
@@ -83,8 +81,8 @@ function oldestActionableQueuedMessage(
  *     hold, or an actionable backlog, queues the send as a draft.
  *   drain step: any hold returns early; whatever clears it publishes or
  *     commits, which re-derives.
- *   Send-now: overrides only `working` (plus FIFO order and the stored hold);
- *     `blocked` and `prompt` refuse readably.
+ *   Send-now: overrides only `working` (plus FIFO order and the stored hold),
+ *     never for a command card; `blocked` and `prompt` refuse readably.
  *
  * `blocked` is whatever refuses any send (an uncertain rewind, a cleared source);
  * the rest are waits. A /compact is a queued message and then a turn,
@@ -130,7 +128,7 @@ export function nextStructuredQueuedMessage(input: {
   record: AgentSessionRecord | null
   fence: number
 }): QueuedMessageRow | null {
-  const next = oldestActionableQueuedMessage(input.journal)
+  const next = oldestActionableQueuedMessage(input.journal, true)
   const { journal, fence } = input
   // The gate's cheap `working` first: publication asks on every streamed frame, and the gate's
   // prompt check walks the whole fold.
@@ -165,26 +163,7 @@ export function shouldQueueStructuredAgentSessionSend(input: {
   if (hold !== null) {
     return true
   }
-  return oldestActionableQueuedMessage(input.journal) !== null
-}
-
-/** The accept-side budget refusal, or null when the draft fits. */
-export function queuedMessageBudgetRefusal(
-  journal: AgentSessionJournal,
-  body: AgentJournalMessageItem
-): AgentSessionWireRefusal | null {
-  const unsettled = journal.queuedMessages.list().filter(isUnsettledQueuedMessage)
-  const bytes = unsettled.reduce(
-    (sum, row) => sum + Buffer.byteLength(JSON.stringify(row.body.blocks), 'utf8'),
-    Buffer.byteLength(JSON.stringify(body.blocks), 'utf8')
-  )
-  if (unsettled.length >= QUEUED_MESSAGES_MAX_COUNT || bytes > QUEUED_MESSAGES_MAX_TOTAL_BYTES) {
-    return {
-      code: 'agent_session_operation_invalid',
-      message: 'The message queue is full. Send again after the current turn ends.'
-    }
-  }
-  return null
+  return oldestActionableQueuedMessage(input.journal, false) !== null
 }
 
 /**
@@ -204,6 +183,8 @@ export async function maybeQueueStructuredAgentSessionSend(
     delivery?: 'queue-if-active'
     /** A person's send at a chat surface: every attachment it names must still be stored. */
     userSend?: true
+    /** A person's message the host sends for them. */
+    personsMessage?: true
   }
 ): Promise<
   | { ok: true; value: AgentSessionSendResult }
@@ -233,7 +214,11 @@ export async function maybeQueueStructuredAgentSessionSend(
   ) {
     return null
   }
-  const refusal = queuedMessageBudgetRefusal(ctx.journal, params.body)
+  const refusal = queuedMessagesPublishedBytesRefusal(
+    ctx.journal,
+    params.body,
+    params.userSend === true || params.personsMessage === true
+  )
   if (refusal) {
     return { ok: false, refusal }
   }
@@ -307,7 +292,7 @@ export class StructuredAgentSessionQueuedMessageDrain {
     try {
       if (
         !journal.queuedMessages.settlementOwed() &&
-        (oldestActionableQueuedMessage(journal) === null ||
+        (oldestActionableQueuedMessage(journal, true) === null ||
           isStructuredAgentSessionMainAgentWorking(
             journal.activeTurnId(),
             journal.submissions(),

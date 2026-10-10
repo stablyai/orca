@@ -106,6 +106,8 @@ type HostStream = {
   ptyId: string
   outputPaused: boolean
   ackRecoverySnapshotInFlight: boolean
+  ackRecoveryHistoryOwed: boolean
+  ackInFlightBytes: number
   ackOutputSourceRanges: boolean
   ackPendingOutput: unknown[]
   ackPendingOutputBytes: number
@@ -115,6 +117,7 @@ type HostConnection = {
   runtime: HostRuntime
   streams: Map<number, HostStream>
   closed: boolean
+  ackTotalInFlightBytes: number
   sendFrame: (streamId: number, opcode: number, payload?: Uint8Array<ArrayBufferLike>) => boolean
   sendStreamError: (streamId: number, message: string) => void
   sendAckRecoverySnapshot?: (stream: HostStream) => Promise<void>
@@ -271,6 +274,8 @@ async function publishHostRecovery(
     ptyId: PTY_ID,
     outputPaused: false,
     ackRecoverySnapshotInFlight: false,
+    ackRecoveryHistoryOwed: false,
+    ackInFlightBytes: 0,
     ackOutputSourceRanges: false,
     ackPendingOutput: [],
     ackPendingOutputBytes: 0,
@@ -280,6 +285,7 @@ async function publishHostRecovery(
     runtime: host,
     streams: new Map([[streamId, stream]]),
     closed: false,
+    ackTotalInFlightBytes: 0,
     sendFrame,
     sendStreamError: (_id, message) => {
       throw new Error(message)
@@ -380,19 +386,41 @@ describe('host-published recovery snapshot onto a live alt screen', () => {
   // alt and show the host's normal screen.
   it('repaints from the normal buffer once the host TUI has exited', async () => {
     const { data, meta } = await publishHostRecovery(AGENT_EXIT)
+    // The ACK-overflow recovery replaces the pane's history with the host's.
+    expect(data).toContain('\x1b[3J')
     expect(meta.terminalOwner).toBe('shell')
     expect(meta.alternateScreen).toBe(false)
     const client = await render([LIVE_PANE, ...(await drainOntoLiveAltScreen(data, meta))])
     const host = await render([LIVE_PANE, AGENT_EXIT])
-    const fresh = await render([data])
     try {
       expect(client.buffer.active.type).toBe('normal')
       expect(viewport(client, 'normal')).toEqual(viewport(host, 'normal'))
-      expect(bufferLines(client, 'normal')).toEqual(bufferLines(fresh, 'normal'))
+      // P2-5: no silent hole where the missed output scrolled off the host's screen.
+      expect(bufferLines(client, 'normal')).toEqual(bufferLines(host, 'normal'))
     } finally {
       client.dispose()
       host.dispose()
-      fresh.dispose()
+    }
+  })
+
+  // Why: inside the gap the TUI exited, the shell printed past the pane's history and a
+  // second TUI started; both ends are on alt, but the pane's normal buffer is stale.
+  it('replaces the normal history that changed between two alt-screen sessions', async () => {
+    const missed = `\x1b[?1049l\r\n${Array.from({ length: 300 }, (_, i) => `MISSED-${i}`).join('\r\n')}\r\n$ next-agent${COMMAND_START}\x1b[?1049h\x1b[2J\x1b[HNEW-AGENT-FRAME`
+    const { data, meta } = await publishHostRecovery(missed)
+    const liveExit = '\x1b[?1049l\r\nAFTER-RECOVERY'
+    const client = await render([
+      LIVE_PANE,
+      ...(await drainOntoLiveAltScreen(data, meta)),
+      liveExit
+    ])
+    const host = await render([LIVE_PANE, missed, liveExit])
+    try {
+      expect(bufferLines(client, 'normal')).toContain('MISSED-299')
+      expect(bufferLines(client, 'normal')).toEqual(bufferLines(host, 'normal'))
+    } finally {
+      client.dispose()
+      host.dispose()
     }
   })
 })

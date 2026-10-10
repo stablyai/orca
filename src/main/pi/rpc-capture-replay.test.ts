@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { JsonlRpcTimelineLane } from '../jsonl-rpc/timeline-lane'
 import { PiRpcTurns } from './rpc-turns'
+import { piRpcFailureFact } from './rpc-prompt-delivery'
+import { agentSessionFailureSentence } from '../../shared/agent-session-failure-words'
 import { piRpcDialogPresentation } from './rpc-extension-dialogs'
 import {
   closeProviderTimelineRigs,
@@ -22,6 +24,23 @@ function capture(name: string) {
     })
 }
 const disposals: (() => void)[] = []
+
+it('separates resend advice from the captured Pi 1.0.4 missing-key detail', () => {
+  const reply = capture('signed-out').find(
+    ({ dir, frame }) => dir === 'out' && frame.command === 'prompt' && frame.success === false
+  )?.frame
+  if (typeof reply?.error !== 'string') {
+    throw new Error('The signed-out capture must contain a prompt error')
+  }
+  expect(reply.error.endsWith('docs/models.md')).toBe(true)
+  const fact = piRpcFailureFact(reply.error)
+  expect(fact.kind).toBe('notSignedIn')
+  expect(fact.detail?.text).toBe(reply.error)
+  expect(agentSessionFailureSentence(fact, 'rejection', { agentName: 'Pi' })).toContain(
+    `${reply.error}. Then send your message again.`
+  )
+})
+
 afterEach(async () => {
   disposals.splice(0).forEach((dispose) => dispose())
   await closeProviderTimelineRigs()

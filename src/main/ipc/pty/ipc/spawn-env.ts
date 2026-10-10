@@ -11,10 +11,6 @@ import {
 } from '../../../../shared/jcode-runtime-dir'
 import { isOpaqueRemintedPaneKey } from '../../../../shared/pane-key-alias'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
-import {
-  CLAUDE_AUTH_ENV_CONFLICT_MESSAGE,
-  hasClaudeAuthEnvConflict
-} from '../../../claude-accounts/environment'
 import { prewarmJcodeDaemon } from '../../../jcode/daemon-prewarm'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
 import { resolvePathEnvKey } from '../../../pty/windows-environment-path'
@@ -28,9 +24,6 @@ import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-
 
 export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
-  if (ctx.claudeAuth?.stripAuthEnv && hasClaudeAuthEnvConflict(args.env)) {
-    throw new Error(CLAUDE_AUTH_ENV_CONFLICT_MESSAGE)
-  }
   // Why: the daemon-backed provider skips LocalPtyProvider's buildSpawnEnv, so assemble the same host-local env here for parity.
   // Safety: skip entirely for SSH — every injection is a loopback secret or a local path that leaks or misleads on the remote host.
   // Why: forward pane env to SSH only when the relay hook path is enabled, or a newer relay could emit statuses this build can't route.

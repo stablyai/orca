@@ -20,10 +20,7 @@ import {
 import type { TuiAgent } from './tui-agent'
 import type { WorkspaceLaunchKind } from './workspace-launch-kind'
 
-export type NativeChatDefaultSettings = Pick<
-  GlobalSettings,
-  'experimentalNativeChat' | 'experimentalStructuredNativeChat' | 'openAgentTabsInChatByDefault'
->
+export type NativeChatDefaultSettings = Pick<GlobalSettings, 'experimentalNativeChat'>
 
 /** Why a launch that the user's default asked to be structured cannot be. */
 export type StructuredNativeChatBlocker =
@@ -64,22 +61,11 @@ export type StructuredNativeChatSupportInput = {
   hostStructuredAgents?: readonly string[]
 }
 
-/** The user's default for a new agent tab: native chat rather than the raw TUI. */
-export function agentTabsDefaultToNativeChat(
+/** The single Chat UI switch selects structured chat for supported new launches. */
+export function isNativeChatEnabled(
   settings: Partial<NativeChatDefaultSettings> | null | undefined
 ): boolean {
-  return (
-    settings?.experimentalNativeChat === true && settings?.openAgentTabsInChatByDefault === true
-  )
-}
-
-/** ...and specifically a structured native chat session rather than a terminal rendered as chat. */
-export function prefersStructuredNativeChatByDefault(
-  settings: Partial<NativeChatDefaultSettings> | null | undefined
-): boolean {
-  return (
-    agentTabsDefaultToNativeChat(settings) && settings?.experimentalStructuredNativeChat === true
-  )
+  return settings?.experimentalNativeChat === true
 }
 
 function clientChoosesStructuredLaunches(capabilities: readonly string[] | undefined): boolean {

@@ -303,6 +303,31 @@ describe('createRemoteRuntimePtyTransport', () => {
     }
   })
 
+  it('ignores a hold whose grid the host does not know yet instead of shrinking the pane', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const { getFitOverrideForPty } = await import('@/lib/pane-manager/mobile-fit-overrides')
+    const transport = createRemoteRuntimePtyTransport('env-1', { worktreeId: 'wt-1' })
+    await transport.connect({ url: '', cols: 120, rows: 40, callbacks: {} })
+    const { streamId } = latestSubscribePayload()
+    const ptyId = transport.getPtyId()
+    expect(ptyId).not.toBeNull()
+
+    // A just-restarted server answers before it has learned the adopted terminal's size.
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: {
+        type: 'fit-override-changed',
+        streamId,
+        mode: 'remote-desktop-fit',
+        cols: 0,
+        rows: 0
+      }
+    })
+
+    expect(ptyId ? getFitOverrideForPty(ptyId) : null).toBeNull()
+    transport.destroy?.()
+  })
+
   it('gives separate paired viewers of the same host pane distinct refresh identities', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const first = createRemoteRuntimePtyTransport('env-1', {

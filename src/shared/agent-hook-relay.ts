@@ -1,11 +1,11 @@
 import type { AgentProcessPresence } from './agent-process-presence'
 // Why: defines the wire shape carried by the JSON-RPC `agent.hook` notification
-// the relay sends to Orca. Consumed by `src/relay/agent-hook-server.ts` (which
+// the relay sends to Orca. Consumed by `src/wsl-guest/agent-hook-server.ts` (which
 // produces it after the shared listener parses an HTTP POST) and by
 // `src/main/agent-hooks/server.ts` (which ingests it via `ingestRemote`).
 //
 // Lives in `shared/` because the relay deliberately has no Electron dependency
-// (cf. `src/relay/protocol.ts` header). `agent-hook-types.ts` is reserved for
+// (cf. `src/wsl-guest/protocol.ts` header). `agent-hook-types.ts` is reserved for
 // the renderer-bound IPC + installer contract; this module is the wire envelope
 // between Orca's main process and the remote relay.
 //
@@ -62,7 +62,8 @@ const AGENT_HOOK_SOURCES = [
   'muse',
   'zcode',
   'dsh',
-  'jcode'
+  'jcode',
+  'kiro'
 ] as const
 
 export type AgentHookSource = (typeof AGENT_HOOK_SOURCES)[number]
@@ -148,7 +149,7 @@ export type AgentHookUnavailableEnvelope = {
 export const AGENT_HOOK_NOTIFICATION_METHOD = 'agent.hook' as const
 
 /** Identifies optional payload fields the relay dropped to fit an oversized frame
- *  (see `src/relay/agent-hook-envelope-publication.ts`), so `ingestRemote` can tell
+ *  (see `src/wsl-guest/agent-hook-envelope-publication.ts`), so `ingestRemote` can tell
  *  "shed in transit" from "the agent cleared it"; rosters include their digest. */
 export const AGENT_HOOK_SHED_FIELDS_KEY = 'shedFields' as const
 const AGENT_HOOK_SHED_SUBAGENTS_DIGEST_PREFIX = 'subagents:sha256:'

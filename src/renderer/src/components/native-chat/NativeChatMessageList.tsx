@@ -60,6 +60,8 @@ import { isStructuredAgentSessionThinking } from '../../../../shared/structured-
 import type { NativeChatSettledTurns } from '../../../../shared/native-chat-turn-status'
 import type { NativeChatDiffReveal, NativeChatDiffTarget } from './native-chat-turn-diffs'
 import { useNativeChatTurnDiffs } from './use-native-chat-turn-diffs'
+import { transcriptTailRow } from './native-chat-transcript-tail-row'
+import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 
 /** The turn is blocked on the reader. `shown`: the pane draws the prompt itself, as a card;
  *  `unshown`: it cannot (the prompt is only in the agent's terminal). */
@@ -186,12 +188,7 @@ export function NativeChatMessageList({
   })
   // The transcript tail: what the running turn is doing, or that it waits on a
   // prompt nothing else on screen shows. A prompt card says so itself.
-  const tailRow =
-    awaitingInput === 'unshown'
-      ? 'awaiting-input'
-      : isWorking && awaitingInput === null
-        ? 'activity'
-        : null
+  const tailRow = transcriptTailRow(isWorking, awaitingInput)
   const lifecycleWorking = session.transcriptLifecycle?.state === 'working'
   const { measureContent, typography } = useNativeChatRowTypography(contentRef)
   const { slots: allSlots, liveLine } = useNativeChatTranscriptSlots({
@@ -313,12 +310,12 @@ export function NativeChatMessageList({
     beginNavigation()
     scrollToBottom()
   }, [beginNavigation, scrollToBottom])
-  useNativeChatMessageListHandle(ref, jumpToLatest)
   const readerScrollInput = useNativeChatReaderScrollInput(scrollRef, {
     onReaderScroll: beginNavigation,
     onTakeScroll: transcriptWindow.cancelAlign,
     onLeaveEnd: readerLeavesEnd
   })
+  useNativeChatMessageListHandle(ref, jumpToLatest, readerScrollInput.revealFindMatch)
   useNativeChatRailJumpLanding({
     railJump,
     slots,
@@ -330,6 +327,7 @@ export function NativeChatMessageList({
 
   const rowContext = useMemo<NativeChatTranscriptRowContext>(
     () => ({
+      agentName: structuredAgentLabel(session.agent),
       expandSignal,
       revealedDiff,
       taskListPredecessors,
@@ -344,6 +342,7 @@ export function NativeChatMessageList({
       onRevealDiff: revealDiff
     }),
     [
+      session.agent,
       allowFileUriLinks,
       expandSignal,
       expandedTurnIds,

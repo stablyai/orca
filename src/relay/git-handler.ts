@@ -1,4 +1,4 @@
-import type { RelayDispatcher, RequestContext } from './dispatcher'
+import type { RelayDispatcher, RequestContext } from '../wsl-guest/dispatcher'
 import type { RelayContext } from './context'
 import { expandTilde } from './context'
 import { MAX_IN_FLIGHT_PROMISE_DEDUPE_ENTRIES } from '../shared/in-flight-promise-dedupe'
@@ -12,7 +12,7 @@ import {
 import { GitResponseStreamRegistry, maybeStreamRpcResponse } from './git-response-stream'
 import { clearGitStatusLineStatsCache } from '../shared/git-status-line-stats-cache'
 import { invalidateGitBranchLineTotalInFlight } from '../shared/git-branch-line-total'
-import { buildRelayGitEnv, buildRelayUnattendedGitEnv } from './relay-command-env'
+import { buildRelayGitEnv, buildRelayUnattendedGitEnv } from '../wsl-guest/relay-command-env'
 import { getGitCloneFailureMessage } from '../shared/git-clone-failure-message'
 import type {
   GitHandlerCommandOptions,

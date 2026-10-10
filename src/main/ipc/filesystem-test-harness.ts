@@ -37,6 +37,7 @@ export const getBranchDiffMock: IpcMock = vi.fn()
 export const getStagedCommitContextMock: IpcMock = vi.fn()
 export const stageFileMock: IpcMock = vi.fn()
 export const bulkStageFilesMock: IpcMock = vi.fn()
+export const stageWorktreeChangesMock: IpcMock = vi.fn()
 export const unstageFileMock: IpcMock = vi.fn()
 export const bulkUnstageFilesMock: IpcMock = vi.fn()
 export const bulkDiscardChangesMock: IpcMock = vi.fn()
@@ -99,6 +100,7 @@ export const gitStatusModuleMock = {
   getStagedCommitContext: getStagedCommitContextMock,
   stageFile: stageFileMock,
   bulkStageFiles: bulkStageFilesMock,
+  stageWorktreeChanges: stageWorktreeChangesMock,
   unstageFile: unstageFileMock,
   bulkUnstageFiles: bulkUnstageFilesMock,
   bulkDiscardChanges: bulkDiscardChangesMock,
@@ -130,7 +132,8 @@ export const sshFilesystemDispatchMock = {
 
 export const sshGitDispatchMock = {
   getSshGitProvider: getSshGitProviderMock,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: PROVIDER_UNAVAILABLE_MESSAGE
+  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: PROVIDER_UNAVAILABLE_MESSAGE,
+  sshGitProviderMissingError: () => new Error(PROVIDER_UNAVAILABLE_MESSAGE)
 }
 
 export const textGenerationModuleMock = {

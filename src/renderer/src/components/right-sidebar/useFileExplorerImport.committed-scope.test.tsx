@@ -31,7 +31,6 @@ function dropOn(target: Element): { dropEffect: string } {
 
 it('keeps native drops on committed scope when a new scope render suspends', async () => {
   vi.stubGlobal('api', {
-    ui: { onFileDrop: () => () => undefined },
     fs: {
       getPathForFile: () => '/source/file.ts',
       prepareDroppedPaths: mocks.prepare.mockImplementation(async ({ paths }) => ({

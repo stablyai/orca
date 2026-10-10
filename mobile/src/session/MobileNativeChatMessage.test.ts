@@ -95,6 +95,30 @@ describe('MobileNativeChatMessage', () => {
   const textIn = (node: ReactTestInstance): string[] =>
     node.findAllByType('Text' as never).map((text) => String(text.children.join('')))
 
+  it('renders the shared clear boundary as one muted divider with prior history retained', () => {
+    const message = projectStructuredItemToNativeChat({
+      itemId: 'clear',
+      revision: 1,
+      sequence: 5,
+      observedAt: 5,
+      body: {
+        kind: 'status',
+        text: 'Context cleared',
+        presentation: 'context-cleared',
+        contextClear: { operationId: 'clear', afterFence: 3, clearedAt: 5 }
+      }
+    })!
+    const tree = render(message)
+    expect(textIn(tree.root)).toEqual(['Context cleared'])
+    expect(tree.root.findAll((node) => String(node.type) === 'MobileMarkdown')).toHaveLength(0)
+    expect(
+      tree.root.findAll(
+        (node) => String(node.type) === 'View' && node.props.style === styles.contextBoundary
+      )
+    ).toHaveLength(1)
+    expect(styles.contextBoundary.borderTopColor).toBe(colors.borderSubtle)
+  })
+
   it.each(['system', 'user'] as const)(
     'renders a %s host notice as selectable muted text rather than a markdown answer',
     (role) => {

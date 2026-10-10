@@ -392,7 +392,12 @@ it('refuses the command at handover when the provider opened a turn meanwhile (B
   }
   await expect(commanded).resolves.toMatchObject({
     ok: true,
-    value: { state: 'completed', error: "This command didn't run. Try it again.", failure: refused }
+    // The reason, said as its refusal is everywhere, not a bare "try it again".
+    value: {
+      state: 'completed',
+      error: "The agent is still working. Run /compact when it's done.",
+      failure: refused
+    }
   })
   expect(compact).not.toHaveBeenCalled()
   expect(await commandTurn(params.envelope.clientOperationId)).toBeUndefined()
@@ -402,7 +407,7 @@ it('refuses the command at handover when the provider opened a turn meanwhile (B
     )
   ).toMatchObject({
     dispatchState: 'rejected',
-    reason: "This command didn't run. Try it again.",
+    reason: "The agent is still working. Run /compact when it's done.",
     rejection: refused
   })
 })
@@ -734,7 +739,7 @@ it('delivers the next message after a command whose child died and whose settlem
   expect(readAgentJournalTurn((await commandTurn(cmid))?.body)?.state).not.toBe('running')
 })
 
-it("ignores an older build's unconfirmed compaction record, and answers its operation without rerunning it (B15)", async () => {
+it('ignores a ledger-only compaction record with no command receipt (B15)', async () => {
   await attach()
   const older = compactParams()
   // An older build admitted this operation and died before recording its outcome.
@@ -775,13 +780,10 @@ it("ignores an older build's unconfirmed compaction record, and answers its oper
 
   await expect(state.host.conversationCommand(CALLER, older)).resolves.toMatchObject({
     ok: true,
-    value: {
-      state: 'unknown',
-      error: 'Compaction completion is unconfirmed.',
-      failure: { kind: 'compactionUnconfirmed' }
-    }
+    replayed: false,
+    value: { state: 'completed' }
   })
-  expect(compact).toHaveBeenCalledOnce()
+  expect(compact).toHaveBeenCalledTimes(2)
 })
 
 it('never lets a provider echo alias the command entry', async () => {

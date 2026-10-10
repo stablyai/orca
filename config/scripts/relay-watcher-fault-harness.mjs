@@ -65,7 +65,7 @@ function waitForExit(proc) {
 async function loadProtocol(bundleDir) {
   const outfile = join(bundleDir, 'relay-protocol.cjs')
   await build({
-    entryPoints: [resolve('src/relay/protocol.ts')],
+    entryPoints: [resolve('src/wsl-guest/protocol.ts')],
     bundle: true,
     platform: 'node',
     format: 'cjs',

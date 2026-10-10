@@ -165,6 +165,50 @@ describe('structured AI Vault ownership', () => {
       )
     ).resolves.toBeUndefined()
   })
+
+  // A fork writes a new conversation, so "Resume in New CLI" on a chat-owned row must pass.
+  it.each([
+    {
+      provider: 'claude' as const,
+      command: `claude '--resume' '${PROVIDER_SESSION}' '--fork-session'`
+    },
+    { provider: 'claude' as const, command: `claude --continue --fork-session` },
+    { provider: 'codex' as const, command: `CODEX_HOME=/h codex 'fork' '${PROVIDER_SESSION}'` }
+  ])('allows a fork of the owned session: $command', async ({ provider, command }) => {
+    installOwnership({ provider })
+
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(command, async () => undefined)
+    ).resolves.toBeUndefined()
+  })
+
+  it.each([
+    // After `--` the flag is prompt text, so Claude resumes the owned session as a writer.
+    `claude --resume ${PROVIDER_SESSION} -- --fork-session`,
+    // `--session-id` makes the fork write under the id it names.
+    `claude --resume ${PROVIDER_SESSION} --fork-session --session-id ${PROVIDER_SESSION}`,
+    `claude --resume ${PROVIDER_SESSION} --fork-session --session-id=${PROVIDER_SESSION}`
+  ])('refuses a fork flag that does not make a fork: %s', async (command) => {
+    installOwnership({ provider: 'claude' })
+
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(command, async () => undefined)
+    ).rejects.toThrow('agent_session_conflict')
+  })
+
+  it('prepares a fork of the owned session but still refuses a resume of it', () => {
+    installOwnership()
+    const args = {
+      agent: 'codex' as const,
+      sessionId: PROVIDER_SESSION,
+      filePath: `/sessions/rollout-${PROVIDER_SESSION}.jsonl`,
+      codexHome: null,
+      executionHostId: 'local' as const
+    }
+
+    expect(() => assertLegacyAiVaultResumeAllowed({ ...args, fork: true })).not.toThrow()
+    expect(() => assertLegacyAiVaultResumeAllowed(args)).toThrow('agent_session_conflict')
+  })
 })
 
 function installOwnership(overrides: Partial<StructuredProviderSessionOwnership> = {}): void {

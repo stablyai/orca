@@ -1,3 +1,4 @@
+import { readSshBridgeCredential } from '../../shared/ssh-bridge-credential-env'
 import { createConnection } from 'node:net'
 import { randomUUID } from 'node:crypto'
 import { findTransport, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
@@ -196,7 +197,8 @@ export async function sendRequest<TResult>(
       socket.write(
         `${JSON.stringify({
           id: requestId,
-          authToken: metadata.authToken,
+          // Why: a bridged SSH invocation must present its scoped credential, never the owner token.
+          authToken: readSshBridgeCredential() ?? metadata.authToken,
           method,
           params,
           orchestrationCapability: envelope?.orchestrationCapability,

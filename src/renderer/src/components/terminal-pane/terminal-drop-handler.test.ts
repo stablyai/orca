@@ -498,7 +498,9 @@ describe('handleTerminalFileDrop', () => {
       paths: ['/Users/me/spec.pdf']
     })
 
-    expect(sendInputAccepted).toHaveBeenCalledWith('/Users/me/spec.pdf ', 'driving')
+    expect(sendInputAccepted).toHaveBeenCalledWith('/Users/me/spec.pdf ', 'driving', {
+      signal: expect.any(AbortSignal)
+    })
     expect(sendInput).not.toHaveBeenCalled()
     expect(focus).not.toHaveBeenCalled()
     expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ExternalAutomationCommandExecutor } from './external-automation-command-executor'
 import { ExternalAutomationsHandler } from './external-automations-handler'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher } from '../wsl-guest/dispatcher'
 
 const execFileMock = vi.hoisted(() =>
   vi.fn((...args: unknown[]) => {

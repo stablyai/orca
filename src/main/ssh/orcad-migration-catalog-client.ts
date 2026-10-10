@@ -17,6 +17,8 @@ import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electr
 import { ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
 import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../shared/remote-runtime-client'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import { AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import { hasExtraAgentArgs } from '../../shared/automation-extra-agent-args'
 
 type OrcadCatalogMigrationOperation = 'abort' | 'commit' | 'stage' | 'state'
 
@@ -26,6 +28,9 @@ type OrcadCatalogMigrationOperation = 'abort' | 'commit' | 'stage' | 'state'
  * the caller re-reads the catalog state before deciding anything.
  */
 export const ORCAD_MIGRATION_DESTINATION_UNSUPPORTED = 'orcad_migration_destination_unsupported'
+/** An older destination would strip automations' extra agent arguments, so the move is refused. */
+export const ORCAD_MIGRATION_DESTINATION_EXTRA_AGENT_ARGS_UNSUPPORTED =
+  'orcad_migration_destination_extra_agent_args_unsupported:Update Orca on this host to use extra arguments.'
 
 type CatalogRequestOptions = {
   signal?: AbortSignal
@@ -119,11 +124,17 @@ async function request(
   if (!pairing) {
     throw new Error('orcad_migration_pairing_code_invalid')
   }
+  const carriesExtraAgentArgs =
+    (operation === 'stage' || operation === 'commit') &&
+    (manifest.payload.dormantState?.automations ?? []).some((automation) =>
+      hasExtraAgentArgs(automation.extraAgentArgs)
+    )
   const response = await sendSupportedMigrationRequest(
     pairing,
     METHOD_BY_OPERATION[operation],
     { manifest },
-    options
+    options,
+    carriesExtraAgentArgs
   )
   if (!response.ok) {
     throw new Error(`orcad_migration_${operation}_failed:${response.error.message}`)
@@ -135,7 +146,8 @@ async function sendSupportedMigrationRequest(
   pairing: NonNullable<ReturnType<typeof parsePairingCode>>,
   method: string,
   params: unknown,
-  options: CatalogRequestOptions
+  options: CatalogRequestOptions,
+  requiresExtraAgentArgs = false
 ): Promise<RuntimeRpcResponse<unknown>> {
   const response = await sendRemoteRuntimeRequestWithStatusPreflight<unknown>(
     pairing,
@@ -154,6 +166,12 @@ async function sendSupportedMigrationRequest(
       }
       if (!status.result.capabilities?.includes(ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY)) {
         throw new Error(ORCAD_MIGRATION_DESTINATION_UNSUPPORTED)
+      }
+      if (
+        requiresExtraAgentArgs &&
+        !status.result.capabilities?.includes(AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY)
+      ) {
+        throw new Error(ORCAD_MIGRATION_DESTINATION_EXTRA_AGENT_ARGS_UNSUPPORTED)
       }
     },
     undefined,

@@ -2,9 +2,9 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { RelayDispatcher } from './dispatcher'
-import { relayWriterControlReserve } from './dispatcher-writer-admission'
-import { encodeJsonRpcFrame, MessageType, type JsonRpcRequest } from './protocol'
+import { RelayDispatcher } from '../wsl-guest/dispatcher'
+import { relayWriterControlReserve } from '../wsl-guest/dispatcher-writer-admission'
+import { encodeJsonRpcFrame, MessageType, type JsonRpcRequest } from '../wsl-guest/protocol'
 import { WorkspaceSessionHandler } from './workspace-session-handler'
 import {
   REMOTE_WORKSPACE_CHANGED_NOTIFICATION,

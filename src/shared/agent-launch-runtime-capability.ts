@@ -38,6 +38,13 @@ export const AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY =
 // may publish the launch's tab before it admits the launch.
 export const AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY = 'agent.launch.placement.v1' as const
 
+// Host-advertised: accepts `target.kind: 'create-folder-workspace'`. An older host refuses the
+// unknown target kind, so a client offers the new-folder-workspace launch only on this. It is not
+// enough on its own: the target also needs `folderWorkspace.create` authorization, which a
+// mobile-scope device lacks, so a phone folder launch needs its own gate.
+export const AGENT_LAUNCH_CREATE_FOLDER_WORKSPACE_RUNTIME_CAPABILITY =
+  'agent.launch.create-folder-workspace.v1' as const
+
 // Client-advertised only: the client reads a listed launch tab with no terminal yet as "not
 // started", never as proof its agent runs. The host publishes a paired caller's tab before the
 // spawn only for a client that says so.
@@ -54,5 +61,6 @@ export const AGENT_LAUNCH_RUNTIME_CAPABILITIES = [
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_PROMPT_CARRY_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY
+  AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_CREATE_FOLDER_WORKSPACE_RUNTIME_CAPABILITY
 ] as const

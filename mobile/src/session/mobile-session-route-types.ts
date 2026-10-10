@@ -144,7 +144,8 @@ export type DirtyMarkdownDraft = {
   content: string
 }
 
-export type MobileNewTabAgentLoadState = 'idle' | 'loading' | 'loaded' | 'error'
+/** `other-runtime`: another Orca server owns the workspace, so the paired host cannot list its agents. */
+export type MobileNewTabAgentLoadState = 'idle' | 'loading' | 'loaded' | 'error' | 'other-runtime'
 
 export type MobileDisplayMode = 'auto' | 'phone' | 'desktop'
 

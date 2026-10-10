@@ -6,10 +6,10 @@ import { linearWorkspaceScopeSignature } from '../../../../shared/linear/workspa
 import { getSmartWorkspaceLinearSearchQuery } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
 import type { parseBoundedSmartWorkspaceLinearIssueUrlIntent } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
 import { RESULT_LIMIT } from './smart-workspace-name-field-model'
-import { getBranchSearchRequest } from './smart-workspace-source-results'
-import type { useSmartWorkspaceNameFieldFoundation } from './use-smart-workspace-name-field-foundation'
+import { getBranchSearchRequest } from '../../../../shared/new-workspace/smart-workspace-source-results'
+import type { useWorkItemSourceFoundation } from './use-work-item-source-foundation'
 
-type Foundation = ReturnType<typeof useSmartWorkspaceNameFieldFoundation>
+type Foundation = ReturnType<typeof useWorkItemSourceFoundation>
 
 export function useSmartWorkspaceSecondarySearches({
   foundation,
@@ -46,6 +46,7 @@ export function useSmartWorkspaceSecondarySearches({
     searchLinearIssues,
     listLinearIssues,
     linearSourceContext,
+    linearWorkspaceIdOverride,
     setLinearIssues,
     setLinearLoading,
     setSettledLinearUrlQuery,
@@ -171,13 +172,21 @@ export function useSmartWorkspaceSecondarySearches({
             getSmartWorkspaceLinearSearchQuery(trimmed),
             RESULT_LIMIT,
             {
-              sourceContext: linearSourceContext
+              sourceContext: linearSourceContext,
+              ...(linearWorkspaceIdOverride !== undefined
+                ? { workspaceId: linearWorkspaceIdOverride }
+                : {})
             }
           )
         : linearReadMethodsRef.current
             .listLinearIssues(
               { kind: 'list', filter: 'assigned', limit: RESULT_LIMIT },
-              { sourceContext: linearSourceContext }
+              {
+                sourceContext: linearSourceContext,
+                ...(linearWorkspaceIdOverride !== undefined
+                  ? { workspaceId: linearWorkspaceIdOverride }
+                  : {})
+              }
             )
             .then((result) => result.items)
     void request
@@ -208,6 +217,7 @@ export function useSmartWorkspaceSecondarySearches({
     linearQuery,
     linearScopeSignature,
     linearSourceContext,
+    linearWorkspaceIdOverride,
     linearUrlIntent,
     setSettledLinearUrlQuery,
     shouldQueryLinear

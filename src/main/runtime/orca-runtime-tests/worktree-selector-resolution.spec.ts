@@ -36,6 +36,15 @@ import {
   store
 } from '../orca-runtime-test-fixtures.spec'
 
+const LOCAL_CHILD_REPO = {
+  id: 'child-repo',
+  path: '/child',
+  displayName: 'child',
+  badgeColor: '#000',
+  addedAt: 0
+}
+const SSH_CHILD_REPO = { ...LOCAL_CHILD_REPO, connectionId: 'other-host' }
+
 describe('OrcaRuntimeService', () => {
   it('resolves branch selectors when worktrees store refs/heads-prefixed branches', async () => {
     vi.mocked(listWorktrees).mockResolvedValueOnce([
@@ -380,6 +389,31 @@ describe('OrcaRuntimeService', () => {
     await expect(resolveLineage({ parentWorktree: `id:${TEST_REPO_ID}` })).rejects.toThrow(
       'Worktree id selectors must use the full <repo-id>::<path> value.'
     )
+  })
+
+  // #12757: create must refuse the cross-host edge that update refuses and the renderer drops.
+  it('refuses an explicit parent worktree on another execution host before creating', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const resolveLineage = runtime['resolveLineageForWorktreeCreate'].bind(runtime)
+
+    await expect(
+      resolveLineage({ parentWorktree: `id:${TEST_WORKTREE_ID}` }, SSH_CHILD_REPO)
+    ).rejects.toMatchObject({ code: 'LINEAGE_PARENT_CONTEXT_CONFLICT' })
+    await expect(
+      resolveLineage({ parentWorktree: `id:${TEST_WORKTREE_ID}` }, LOCAL_CHILD_REPO)
+    ).resolves.toMatchObject({ kind: 'lineage' })
+  })
+
+  it('drops an inferred parent on another execution host with a warning', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const resolveLineage = runtime['resolveLineageForWorktreeCreate'].bind(runtime)
+
+    await expect(
+      resolveLineage({ cwdParentWorktree: `id:${TEST_WORKTREE_ID}` }, SSH_CHILD_REPO)
+    ).resolves.toEqual({
+      kind: 'none',
+      warnings: [expect.objectContaining({ code: 'LINEAGE_PARENT_CONTEXT_CONFLICT' })]
+    })
   })
 
   it('does not reuse stale in-flight worktree scans after creating a worktree', async () => {

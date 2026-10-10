@@ -1,3 +1,4 @@
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
 import type { SessionRestoredBannerReason } from '../session-restored-banner-pane-state'
 import { hasPtySerializer } from '../pty-buffer-serializer'
@@ -12,7 +13,6 @@ import { writeTerminalPastePtyInput } from '../terminal-pty-paste-writer'
 import { createPasteReadinessTimeoutNotice } from '@/lib/launch-agent-paste-timeout-notice'
 
 import { STARTUP_DRAFT_PASTE_QUIET_MS } from './pty-connect-limits'
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 

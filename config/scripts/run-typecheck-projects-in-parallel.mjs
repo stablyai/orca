@@ -1,5 +1,8 @@
 import { spawn } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { availableParallelism, totalmem } from 'node:os'
+import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const BYTES_PER_GIB = 1024 ** 3
@@ -9,9 +12,11 @@ const BYTES_PER_GIB = 1024 ** 3
 // out-of-memory runner is killed mid-check, so the job reports a lost runner instead of a
 // type error. Admission is therefore by memory, not by core count alone.
 export const TYPECHECK_PROJECTS = [
-  { config: 'tsconfig.node.json', heapGib: 7 },
-  { config: 'tsconfig.tc.web.json', heapGib: 6 },
-  { config: 'tsconfig.tc.cli.json', heapGib: 2 }
+  { config: 'config/tsconfig.node.json', heapGib: 7 },
+  { config: 'config/tsconfig.tc.web.json', heapGib: 6 },
+  { config: 'config/tsconfig.tc.cli.json', heapGib: 2 },
+  // Root projects exclude workspace package tests; each runs with its package's compiler.
+  { config: 'src/packages/process-host/tsconfig.test.json', heapGib: 1 }
 ]
 
 // The OS, node itself, and the runner agent need their share; the rest is what tsc may hold.
@@ -53,21 +58,31 @@ export function planTypecheckBatches(projects, { budgetGib, parallelism }) {
 }
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
-const tsc = fileURLToPath(new URL('../../node_modules/typescript/bin/tsc', import.meta.url))
 
-function checkProject(project) {
+export function resolveProjectCompiler(config, root = repoRoot) {
+  const require = createRequire(join(root, dirname(config), 'package.json'))
+  const manifestPath = require.resolve('typescript/package.json')
+  const { bin } = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  return join(dirname(manifestPath), typeof bin === 'string' ? bin : bin.tsc)
+}
+
+function checkProject(config) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [tsc, '--noEmit', '-p', `config/${project}`], {
-      cwd: repoRoot,
-      stdio: 'inherit'
-    })
+    const child = spawn(
+      process.execPath,
+      [resolveProjectCompiler(config), '--noEmit', '-p', config],
+      {
+        cwd: repoRoot,
+        stdio: 'inherit'
+      }
+    )
 
     child.on('error', reject)
     child.on('exit', (code, signal) => {
       if (signal) {
-        reject(new Error(`tsc ${project} exited with signal ${signal}`))
+        reject(new Error(`tsc ${config} exited with signal ${signal}`))
       } else if (code !== 0) {
-        reject(new Error(`tsc ${project} exited with code ${code}`))
+        reject(new Error(`tsc ${config} exited with code ${code}`))
       } else {
         resolve()
       }

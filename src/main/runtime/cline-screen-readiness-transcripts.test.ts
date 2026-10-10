@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
-import { createTranscriptPane } from './agent-transcript-pane-test-harness'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createTranscriptPane, waitForTranscriptIdle } from './agent-transcript-pane-test-harness'
 import {
   finalReadProjection,
   finalReplayFrame,
@@ -10,6 +10,7 @@ import {
   describeScreenRuledAgentTranscripts,
   readsIdleComposer
 } from './screen-ruled-agent-transcript-suite'
+import { RuntimeMachineName } from './runtime-machine-name'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -17,6 +18,17 @@ vi.mock('electron', () => ({
   ipcMain: { on: vi.fn(), removeListener: vi.fn() },
   app: { getPath: vi.fn(() => '/tmp') }
 }))
+
+let machineNameStartSpy: { mockRestore(): void } | undefined
+
+beforeEach(() => {
+  machineNameStartSpy = vi.spyOn(RuntimeMachineName.prototype, 'start').mockImplementation(() => {})
+})
+
+afterEach(() => {
+  machineNameStartSpy?.mockRestore()
+  machineNameStartSpy = undefined
+})
 
 // cline 3.0.66 on macOS with an isolated config; 3.0.65 on Windows recorded for PR #23269 (see
 // each .meta.json); STA-8741.
@@ -83,9 +95,8 @@ describe('Cline readiness from captured bytes', () => {
       data: readRuntimeFixture(STREAMING),
       size: { cols: 120, rows: 40 }
     })
+    await runtime.readTerminal(handle, { screen: true })
     // Why 2.5s: inside the 3s quiescence window, past the 2s poll.
-    await expect(
-      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 2_500 })
-    ).rejects.toThrow(/timeout/)
+    await expect(waitForTranscriptIdle({ runtime, handle }, 2_500)).rejects.toThrow(/timeout/)
   }, 15_000)
 })

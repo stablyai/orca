@@ -17,8 +17,7 @@ type TestActiveView = 'terminal' | 'tasks'
 const store = {
   settings: {
     activeRuntimeEnvironmentId: null as string | null,
-    experimentalNativeChat: undefined as boolean | undefined,
-    openAgentTabsInChatByDefault: undefined as boolean | undefined
+    experimentalNativeChat: undefined
   },
   activeView: 'terminal' as TestActiveView,
   activePendingCreationId: 'creation-1' as string | null,

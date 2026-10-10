@@ -116,7 +116,7 @@ describe('detecting writes since activation', () => {
   })
 
   it('looks at the same members the snapshot covers', () => {
-    const command = newestStateMtimeCommand(posix, ROOT)
+    const command = newestStateMtimeCommand(posix, ROOT, BASE)
     for (const member of ORCAD_SNAPSHOT_MEMBERS) {
       expect(command).toContain(`'${member}'`)
     }
@@ -129,34 +129,33 @@ describe('Windows hosts', () => {
     [
       'capture',
       'snapshot-capture',
-      (base?: string) => captureOrcadStateSnapshotCommand(windows, ROOT, SNAP, base ?? '')
+      (base: string) => captureOrcadStateSnapshotCommand(windows, ROOT, SNAP, base)
     ],
     [
       'restore',
       'snapshot-restore',
-      (base?: string) => restoreOrcadStateSnapshotCommand(windows, ROOT, SNAP, base ?? '')
+      (base: string) => restoreOrcadStateSnapshotCommand(windows, ROOT, SNAP, base)
     ],
     [
       'clear',
       'snapshot-clear',
-      (base?: string) => clearOrcadStateSnapshotMembersCommand(windows, ROOT, base ?? '')
+      (base: string) => clearOrcadStateSnapshotMembersCommand(windows, ROOT, base)
     ],
     [
       'presence',
       'snapshot-probe',
-      (base?: string) => probeOrcadStateSnapshotCommand(windows, SNAP, base)
+      (base: string) => probeOrcadStateSnapshotCommand(windows, SNAP, base)
     ],
     [
       'compare',
       'snapshot-compare',
-      (base?: string) => compareOrcadStateSnapshotCommand(windows, ROOT, SNAP, base)
+      (base: string) => compareOrcadStateSnapshotCommand(windows, ROOT, SNAP, base)
     ],
-    ['mtime', 'state-newest-mtime', (base?: string) => newestStateMtimeCommand(windows, ROOT, base)]
+    ['mtime', 'state-newest-mtime', (base: string) => newestStateMtimeCommand(windows, ROOT, base)]
   ])('%s runs the host script op %s with node.exe, never a POSIX command', (_label, op, build) => {
     const command = build(BASE)
     expect(command).toContain(` ${op} `)
     expect(command).toMatch(/^C:\\Users\\u\\\.orca-remote\\runtimes\\node-[0-9a-f]+\\node\.exe /u)
     expect(command).not.toMatch(/tar |find |diff |EncodedCommand|powershell/u)
-    expect(() => build()).toThrow('~/.orca-remote')
   })
 })

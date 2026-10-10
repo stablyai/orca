@@ -11,8 +11,11 @@ import { gitExecFileAsync } from './runner'
 
 export {
   isGitRepo,
+  isGitRepoAsync,
   inspectGitRepoForRegistration,
+  inspectGitRepoForRegistrationAsync,
   getGitRepoRoot,
+  getGitRepoRootAsync,
   getLinkedWorktreeMainRepoRoot,
   normalizeGitRepoRootForInputPath
 } from './repo-detection'

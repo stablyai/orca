@@ -2,6 +2,7 @@
 // beside it. The latest goal transition in journal order is the whole answer.
 
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
+import { isAgentSessionContextClear } from './agent-session-context-clear'
 import {
   AGENT_JOURNAL_THREAD_GOAL_STATUSES,
   type AgentJournalItemBody,
@@ -48,7 +49,10 @@ function goalFromRow(body: AgentJournalItemBody): AgentJournalThreadGoal | null 
 }
 
 function isGoalTransition(item: GoalCandidate): boolean {
-  return isRootAgentJournalItem(item) && isAgentJournalThreadGoalRow(item.body)
+  return (
+    isAgentSessionContextClear(item.body) ||
+    (isRootAgentJournalItem(item) && isAgentJournalThreadGoalRow(item.body))
+  )
 }
 
 /**
@@ -59,11 +63,12 @@ function isGoalTransition(item: GoalCandidate): boolean {
  * row's sequence, so the last goal row is the answer.
  */
 export function currentAgentSessionThreadGoal(
-  items: readonly GoalCandidate[]
+  items: readonly GoalCandidate[],
+  minimumSequence = 0
 ): AgentJournalThreadGoal | null | undefined {
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
-    if (item && isGoalTransition(item)) {
+    if (item && item.sequence > minimumSequence && isGoalTransition(item)) {
       return goalFromRow(item.body)
     }
   }
