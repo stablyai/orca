@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
+import type { PipedChildProcess, PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { executeCodexMaintenanceProcess } from './codex-maintenance-process'
 import { setTimeout as scheduleTimeout } from 'node:timers'
 
@@ -100,8 +101,8 @@ describe('owned maintenance process supervision', () => {
   )
 
   it('reports failed tree termination as unverifiable and drains pipes within a bound', async () => {
-    const children: ReturnType<typeof spawnProcess>[] = []
-    const spawn = (spec: Parameters<typeof spawnProcess>[0]) => {
+    const children: PipedChildProcess[] = []
+    const spawn: PipedProcessSpawner = (spec) => {
       // The Windows supervisor's system cwd does not exist on the POSIX test host.
       const child = spawnProcess(
         process.platform === 'win32' ? spec : { ...spec, cwd: process.cwd() }

@@ -1,6 +1,7 @@
 import { win32 } from 'node:path'
-import { windowsSystem32Binary } from '../../shared/child-process/windows-system-binary'
-import { resolveSpawn, type ProcessSpec } from '../../shared/child-process/run-process'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
+import type { PipedProcessSpec, ProcessSpec } from '@orca/process-host/process-spec'
+import { resolveSpawn } from '@orca/process-host/spawn-resolution'
 
 export const CODEX_MAINTENANCE_PROVIDER_EXIT = 'codex-maintenance-provider-exit'
 
@@ -33,7 +34,7 @@ process.once('disconnect', () => {
 })
 `
 
-export function codexMaintenanceWindowsSpawnSpec(input: ProcessSpec): ProcessSpec {
+export function codexMaintenanceWindowsSpawnSpec(input: ProcessSpec): PipedProcessSpec {
   const cwd = input.cwd ?? process.cwd()
   const resolved = resolveSpawn({ ...input, cwd }, 'win32')
   const env = { ...process.env, ...resolved.options.env }

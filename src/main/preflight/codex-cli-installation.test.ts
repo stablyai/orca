@@ -10,7 +10,7 @@ import { CodexCliInstallationCache } from './codex-cli-installation-cache'
 import { codexCliInstallation } from '../../shared/codex-cli-installation'
 
 const { runProcess } = vi.hoisted(() => ({ runProcess: vi.fn() }))
-vi.mock('../../shared/child-process/run-process', async (original) => ({
+vi.mock('@orca/process-host', async (original) => ({
   ...(await original<object>()),
   runProcess
 }))

@@ -8,6 +8,7 @@ export default defineConfig({
   // otherwise fails before Vitest can run the test modules.
   oxc: vitestOxcConfig,
   test: {
+    pool: 'threads',
     environment: 'node',
     setupFiles: ['./vitest.setup.ts'],
     onConsoleLog: (log) => !log.includes('react-test-renderer is deprecated'),

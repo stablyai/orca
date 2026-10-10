@@ -110,6 +110,8 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     removeHandlerMock.mockReset()
     removeAllListenersMock.mockReset()
     sendRemoteRuntimeRequestMock.mockReset()
+    // An invalidation restarts status; left unanswered so it never settles mid-test.
+    sendRemoteRuntimeRequestMock.mockReturnValue(new Promise(() => {}))
     subscribeRemoteRuntimeRequestMock.mockReset()
     sendRemoteRuntimeConnectionRequestMock.mockReset()
     sendRemoteRuntimeSharedControlRequestMock.mockReset()
@@ -556,5 +558,36 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     // ...and its late close must not re-fire after the retirement already sent one.
     transportCallbacks!.onClose()
     expect(senderSend).not.toHaveBeenCalled()
+  })
+
+  // P1-C: a rollback run from the CLI re-paired the server, and nothing told the renderer.
+  it('restarts status for a re-paired server so renderers see its new pairing', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    // As the real one: closing the transport drops the environment's status owner.
+    closeRemoteRuntimeRequestConnectionMock.mockImplementation(() =>
+      resetRuntimeEnvironmentStatusOwners()
+    )
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+    sendRemoteRuntimeRequestMock.mockClear()
+
+    await invalidateRuntimeEnvironmentTransport(added.environment.id)
+    expect(sendRemoteRuntimeRequestMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'status.get',
+      undefined,
+      15_000,
+      undefined,
+      expect.anything(),
+      expect.anything()
+    )
+
+    sendRemoteRuntimeRequestMock.mockClear()
+    const disconnect = handler<{ selector: string }, unknown>('runtimeEnvironments:disconnect')
+    await disconnect(null, { selector: added.environment.id })
+    expect(sendRemoteRuntimeRequestMock).not.toHaveBeenCalled()
   })
 })

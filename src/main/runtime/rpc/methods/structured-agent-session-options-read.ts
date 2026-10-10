@@ -20,6 +20,8 @@ import {
   OptionsParams
 } from './structured-agent-session-schemas'
 import { agentSessionPinnedLaunchDirectory } from '../../agent-session-record-launch-directory'
+import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
+import { clientReadsOptionsWithoutModel } from './structured-agent-session-policy'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
 
 export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
@@ -41,8 +43,17 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
     name: 'agentSession.options',
     permission: 'workspace',
     params: OptionsParams,
-    handler: async (params, ctx) =>
-      (await requireInstalledStructuredHost(ctx, params.sessionId)).readOptions(params.sessionId)
+    handler: async (params, ctx) => {
+      const result = await (
+        await requireInstalledStructuredHost(ctx, params.sessionId)
+      ).readOptions(params.sessionId)
+      if (result.current.model === undefined && !clientReadsOptionsWithoutModel(ctx)) {
+        throw agentSessionRefusalError('structured_agent_session_unsupported', {
+          reason: 'clientCapabilityMissing'
+        })
+      }
+      return result
+    }
   }),
   defineMethod({
     name: 'agentSession.modelCatalog',

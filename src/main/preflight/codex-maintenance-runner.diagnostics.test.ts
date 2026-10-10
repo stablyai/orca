@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { setTimeout as scheduleTimeout } from 'node:timers'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
+import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { codexCliInstallation } from '../../shared/codex-cli-installation'
 import { CodexMaintenanceRunner } from './codex-maintenance-runner'
 import { codexMaintenanceDiagnostic } from './codex-maintenance-diagnostic'
@@ -15,7 +16,7 @@ function fixture(
     installation: codexCliInstallation(false, null),
     spec: { program: process.execPath, args: ['-e', script] }
   })
-  const spawn = vi.fn(spawnProcess)
+  const spawn = vi.fn<PipedProcessSpawner>(spawnProcess)
   const runner = new CodexMaintenanceRunner({ resolve, spawn, invalidate: vi.fn() })
   return { runner, spawn }
 }

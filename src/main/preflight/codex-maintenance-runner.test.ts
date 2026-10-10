@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { codexCliInstallation } from '../../shared/codex-cli-installation'
-import type { ProcessSpec } from '../../shared/child-process/run-process'
+import type { PipedProcessSpawner, ProcessSpec } from '@orca/process-host/process-spec'
 import { CodexMaintenanceRunner } from './codex-maintenance-runner'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -24,7 +24,7 @@ function fixture(exitCode = 0, releasePath?: string) {
   }
   const evidence = { expiresAt: Date.now() + 30_000, configurationId: 'configuration' }
   const resolve = vi.fn().mockResolvedValue({ installation, evidence, spec })
-  const spawn = vi.fn(spawnProcess)
+  const spawn = vi.fn<PipedProcessSpawner>(spawnProcess)
   const invalidate = vi.fn(() => {
     resolve.mockResolvedValue({
       installation: exitCode ? installation : ready,

@@ -20,6 +20,7 @@ import { ptyIncarnationById } from './pty/provider/ownership-state'
 import type { TerminalIntentionalStopKind } from '../runtime/terminal-intentional-stops'
 import { teardownSshTargetTransport } from './ssh-session-teardown'
 import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
+import { errorMessage } from '../../shared/error-message'
 
 export type SshTerminateSessionsOptions = {
   /** Records each stop as main's own, so every viewer keeps the tab through its exit. */
@@ -109,9 +110,7 @@ export async function terminateSshTargetSessions(
         continue
       }
       if (result.status !== 'fulfilled' && !isSshPtyNotFoundError(result.reason)) {
-        shutdownFailures.push(
-          `${relayPtyId}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`
-        )
+        shutdownFailures.push(`${relayPtyId}: ${errorMessage(result.reason)}`)
         continue
       }
       clearProviderPtyState(appPtyId)

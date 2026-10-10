@@ -2,13 +2,15 @@ import { defineMethod } from '../core'
 import { CodexMaintenanceRequest } from '../../../../shared/codex-cli-maintenance'
 import { codexMaintenanceOnHost } from '../../../preflight/codex-maintenance-host'
 import {
-  detectRemoteAgents,
   detectRemoteWindowsTerminalCapabilities,
-  detectInstalledAgentsWithShellPathHydration,
-  refreshShellPathAndDetectAgents,
   runPreflightCheck
 } from '../../../preflight/agent-detection'
 import {
+  detectAgentsOnHost,
+  refreshAgentsOnHost
+} from '../../../preflight/workspace-agent-detection'
+import {
+  PreflightAgentDetection,
   PreflightCheck,
   PreflightDetectRemoteAgents,
   PreflightDetectRemoteWindowsTerminalCapabilities
@@ -31,14 +33,17 @@ export const PREFLIGHT_METHODS = [
   defineMethod({
     name: 'preflight.detectAgents',
     permission: 'workspace',
-    params: null,
-    handler: async () => detectInstalledAgentsWithShellPathHydration()
+    params: PreflightAgentDetection,
+    // Why the host resolves: only it knows the workspace's project runtime, including WSL.
+    handler: async (params, { runtime }) =>
+      detectAgentsOnHost(await runtime.resolveAgentDetectionHost(params.worktreeId))
   }),
   defineMethod({
     name: 'preflight.detectRemoteAgents',
     permission: 'workspace',
     params: PreflightDetectRemoteAgents,
-    handler: async (params) => detectRemoteAgents(params)
+    handler: async (params) =>
+      detectAgentsOnHost({ kind: 'ssh', connectionId: params.connectionId })
   }),
   defineMethod({
     name: 'preflight.detectRemoteWindowsTerminalCapabilities',
@@ -49,7 +54,8 @@ export const PREFLIGHT_METHODS = [
   defineMethod({
     name: 'preflight.refreshAgents',
     permission: 'workspace',
-    params: null,
-    handler: async () => refreshShellPathAndDetectAgents()
+    params: PreflightAgentDetection,
+    handler: async (params, { runtime }) =>
+      refreshAgentsOnHost(await runtime.resolveAgentDetectionHost(params.worktreeId))
   })
 ]

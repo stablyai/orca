@@ -162,7 +162,7 @@ beforeEach(async () => {
     claimKeyId: 'key-1',
     resolveWorkspacePath: async () => root,
     resolveLaunchArgs: () => [],
-    resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+    resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
     resolveCodexCommand: () => 'codex',
     resolveEnvironment: async () => ({ PATH: process.env.PATH }),
     ...scriptedCodexTransport(openConnection)

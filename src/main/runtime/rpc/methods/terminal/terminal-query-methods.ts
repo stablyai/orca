@@ -8,7 +8,7 @@ import {
   TerminalRename,
   TerminalResolveActive,
   TerminalResolvePane
-} from './unary-schemas'
+} from '../../../../../shared/rpc-contract/terminal-unary-params'
 
 export const TERMINAL_QUERY_METHODS = [
   defineMethod({

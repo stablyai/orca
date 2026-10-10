@@ -1,7 +1,7 @@
 import type { OrcaCloudAuthConfig } from '../../orca-profiles/profile-cloud-auth-config'
 import { ensureActiveOrcaProfile } from '../../orca-profiles/profile-index-store'
 import { readFreshOrcaCloudSession } from '../../orca-profiles/profile-cloud-session-refresh'
-import type { RelayAuthContext } from './relay-auth-coordinator'
+import type { RelayAuthContext } from './relay-auth-identity'
 
 export async function readRelayAuthContext(
   authConfig: OrcaCloudAuthConfig,

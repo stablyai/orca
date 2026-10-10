@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { executeCodexMaintenanceProcess } from './codex-maintenance-process'
 import { codexMaintenanceDiagnostic } from './codex-maintenance-diagnostic'
-import { spawnProcess, type ProcessSpec } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
+import type { PipedProcessSpec, ProcessSpec } from '@orca/process-host/process-spec'
 import { clampUtf8TextTail } from '../../shared/utf8-byte-limits'
 import {
   CODEX_INSTALL_COMMAND,
@@ -25,7 +26,7 @@ export class CodexMaintenanceRunner {
   constructor(
     private readonly deps = {
       resolve: (context: CodexMaintenanceContext) => resolveCodexMaintenanceCommand(context),
-      spawn: (spec: ProcessSpec) => spawnProcess(spec),
+      spawn: (spec: PipedProcessSpec) => spawnProcess(spec),
       invalidate: () => invalidateCodexCliInstallation()
     }
   ) {}

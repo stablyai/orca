@@ -41,6 +41,10 @@ export function shouldShowCopyFileAction(
   connectionId?: string | null,
   selectionSize = 1
 ): boolean {
+  // Clipboard staging supports desktop paths and direct SSH, not paired runtimes.
+  if (node.operationOwner?.kind === 'runtime' || node.operationOwner?.kind === 'unresolved') {
+    return false
+  }
   // Why: remote directories would require recursive materialization semantics;
   // keep this to a single concrete file reference until multi-file copy exists.
   return (

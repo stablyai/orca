@@ -151,6 +151,18 @@ export function paramsFor(method: string): unknown {
     }
     case 'agentSession.queuedMessagesResume':
       return { envelope: envelope({ method, fields: {}, fence }) }
+    case 'agentSession.queuedMessageUpdate': {
+      const fields = { messageId: 'queued-1', expectedBodyFingerprint: 'a'.repeat(64), text: 'hi' }
+      return { envelope: envelope({ method, fields, fence }), ...fields }
+    }
+    case 'agentSession.queuedMessageEditHold':
+      return {
+        sessionId: SESSION,
+        messageId: 'queued-1',
+        editId: 'edit-1',
+        action: 'acquire',
+        expectedBodyFingerprint: 'a'.repeat(64)
+      }
     case 'agentSession.respondToApproval':
     case 'agentSession.respondToQuestion': {
       const fields = { itemId: 'item-1', expectedRevision: 1, optionId: 'allow' }

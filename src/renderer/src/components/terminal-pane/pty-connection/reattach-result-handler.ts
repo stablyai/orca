@@ -1,3 +1,4 @@
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import type { PtyBufferSnapshot, PtyConnectResult } from '../pty-transport'
 import { warnTerminalLifecycleAnomaly } from '../terminal-lifecycle-diagnostics'
@@ -9,7 +10,6 @@ import { parseAppSshPtyId } from '../../../../../shared/ssh-pty-id'
 import { resolveHiddenRestoreScrollbackRows } from '../terminal-hidden-restore-scrollback'
 import { shouldIgnoreStalePanePtyLayoutBinding } from './pane-pty-layout-binding'
 
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { hasEmptyReattachRetireEvidence } from './empty-reattach-retire-evidence'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 

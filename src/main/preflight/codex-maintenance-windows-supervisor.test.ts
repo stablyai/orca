@@ -4,7 +4,7 @@ import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { codexMaintenanceWindowsSpawnSpec } from './codex-maintenance-windows-supervisor'
 const { resolve } = vi.hoisted(() => ({ resolve: vi.fn() }))
-vi.mock('../../shared/child-process/run-process', () => ({ resolveSpawn: resolve }))
+vi.mock('@orca/process-host/spawn-resolution', () => ({ resolveSpawn: resolve }))
 afterEach(() => {
   vi.restoreAllMocks()
   vi.clearAllMocks()

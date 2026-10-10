@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { BoundedMap } from '../../shared/bounded-map'
-import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
+import type { AcpTimelineEvent as ProviderTimelineEvent } from './acp-timeline-event'
 import { acpNotificationEnvelopeSchema, AcpContextTimeline } from './acp-context-usage'
 import { AcpBackgroundTaskTimeline } from './acp-background-task-timeline'
 import { GENERIC_ACP_DIALECT, type AcpDialect } from './acp-dialects/acp-dialect'
@@ -8,7 +8,8 @@ import { AcpAgentError } from './acp-errors'
 import { acpTurnEnd, AcpPromptTurns } from './acp-prompt-turns'
 import { readAcpSessionEvent, type AcpSessionEvent } from './acp-session-events'
 import { translateAcpRequest } from './acp-timeline-requests'
-import { acpSessionUpdate } from './acp-session-update'
+import { ACP_SUBSTANTIVE_UPDATES, acpSessionUpdate } from './acp-session-update'
+import { AcpSubagentTimeline } from './acp-subagent-timeline'
 import { AcpToolTimeline } from './acp-tool-timeline'
 import {
   AcpTurnFailures,
@@ -17,18 +18,11 @@ import {
 } from './acp-turn-failures'
 import { acpNamedTextKey, AcpTurnMessages, type AcpTextDrop } from './acp-turn-messages'
 import type { PromptResponse } from './generated/acp-protocol.generated'
+import type { NativeChatSubagentState } from '../../shared/native-chat-types'
 
 export { acpTurnEnd } from './acp-prompt-turns'
 
 const requestSessionSchema = z.object({ sessionId: z.string() })
-const SUBSTANTIVE_UPDATES = [
-  'user_message_chunk',
-  'agent_message_chunk',
-  'agent_thought_chunk',
-  'tool_call',
-  'tool_call_update',
-  'plan'
-]
 
 export type AcpTimelineTranslatorOptions = {
   sessionId: string
@@ -45,6 +39,7 @@ export class AcpTimelineTranslator {
   private readonly prompts: AcpPromptTurns
   private readonly tools = new AcpToolTimeline()
   private readonly backgroundTasks: AcpBackgroundTaskTimeline
+  private readonly subagents = new AcpSubagentTimeline()
   private readonly messages = new AcpTurnMessages()
   private readonly started = new BoundedMap<string, true>({ maxEntries: 128 })
   private readonly failures: AcpTurnFailures
@@ -56,10 +51,11 @@ export class AcpTimelineTranslator {
     this.dialect = options.dialect ?? GENERIC_ACP_DIALECT
     this.failures = new AcpTurnFailures(options.sessionId, this.dialect, options.agentName)
     this.backgroundTasks = new AcpBackgroundTaskTimeline((callId) => this.tools.turn(callId))
-    this.prompts = new AcpPromptTurns(
-      options.sessionId,
-      this.dialect.injectedPromptIdentity === true
-    )
+    this.prompts = new AcpPromptTurns(options.sessionId, this.dialect, options.agentName)
+  }
+
+  dispose(): void {
+    this.subagents.dispose()
   }
 
   /** Whether the agent's dialect echoes an injected prompt identity on the turn's events. */
@@ -67,15 +63,17 @@ export class AcpTimelineTranslator {
     return this.dialect.injectedPromptIdentity === true
   }
 
-  /** The host injects promptId as session/prompt._meta.promptId (and requestId). */
+  /** The host injects promptId as session/prompt._meta.promptId (and requestId). A `/compact` runs
+   *  as `compactionTurn`, the command turn the host opened. */
   openPrompt(
     clientMessageId: string,
-    at: number
+    at: number,
+    compactionTurn?: string
   ): { promptId: string; events: ProviderTimelineEvent[] } {
     if (this.loading) {
       throw new Error('ACP prompt overlaps a prompt or load')
     }
-    return this.prompts.open(clientMessageId, at)
+    return this.prompts.open(clientMessageId, at, compactionTurn)
   }
 
   promptResult(
@@ -147,6 +145,22 @@ export class AcpTimelineTranslator {
     this.loading = false
   }
 
+  get providerSessionId(): string {
+    return this.options.sessionId
+  }
+
+  reconcileSubagent(
+    id: string,
+    state: NativeChatSubagentState,
+    at: number
+  ): ProviderTimelineEvent[] {
+    return this.subagents.translate(
+      [{ id, state, knownOnly: true }],
+      { thread: this.options.sessionId },
+      at
+    )
+  }
+
   sessionEvent(event: AcpSessionEvent, at: number): ProviderTimelineEvent[] {
     return this.notification(
       'session/update',
@@ -158,7 +172,13 @@ export class AcpTimelineTranslator {
   notification(method: string, params: unknown, at: number): ProviderTimelineEvent[] {
     const session = requestSessionSchema.safeParse(params)
     if (session.success && session.data.sessionId !== this.options.sessionId) {
-      return []
+      const id = session.data.sessionId
+      const child = acpNotificationEnvelopeSchema.safeParse(params)
+      if (this.loading || !this.subagents.has(id) || !child.success || child.data._meta?.isReplay) {
+        return []
+      }
+      const state = this.dialect.subagentSessionEnd?.(method, params)
+      return state ? this.reconcileSubagent(id, state, at) : []
     }
     const extension = this.dialect.notification?.(method, params, at)
     if (extension?.disposition === 'ignore') {
@@ -178,13 +198,15 @@ export class AcpTimelineTranslator {
     }
     const providerTurn = extension?.turn
     const opens =
-      (update !== undefined && SUBSTANTIVE_UPDATES.includes(update.sessionUpdate)) ||
+      (update !== undefined && ACP_SUBSTANTIVE_UPDATES.includes(update.sessionUpdate)) ||
       extension?.end !== undefined ||
       extension?.started === true
     const offeredTurn =
       providerTurn ?? (this.prompts.current?.opened ? this.prompts.current.turn : this.activeTurn)
     const owner = update ? this.messages.owner(offeredTurn, update) : { turn: offeredTurn }
-    const turn = owner.turn
+    // A running compaction's turn is the host's, open in the assembler under no provider key, so
+    // its frames name none; its words and end are read for the result its answer writes.
+    const turn = this.prompts.compacting(owner.turn) ? undefined : owner.turn
     if (
       owner.settled &&
       (update?.sessionUpdate === 'agent_message_chunk' ||
@@ -207,10 +229,17 @@ export class AcpTimelineTranslator {
     }
     const join = { thread: this.options.sessionId, ...(turn === undefined ? {} : { turn }) }
     if (extension?.backgroundTasks) {
-      events.push(...this.backgroundTasks.translate(extension.backgroundTasks, join))
+      const tasks = extension.backgroundTasks.filter((task) => !this.subagents.has(task.taskId))
+      events.push(...this.backgroundTasks.translate(tasks, join))
+    }
+    if (extension?.subagents) {
+      events.push(...this.subagents.translate(extension.subagents, join, at))
     }
     if (extension?.usage) {
       events.push(...this.context.update(extension.usage, join))
+    }
+    if (this.prompts.absorbCompaction(owner.turn, extension, update)) {
+      return events
     }
     if (extension?.failureDetail && turn) {
       events.push(...this.failures.row(turn, extension.failureDetail))
@@ -238,6 +267,7 @@ export class AcpTimelineTranslator {
           tools: this.tools,
           dialect: this.dialect,
           backgroundTasks: this.backgroundTasks,
+          subagents: this.subagents,
           messageKey
         })
       ]
@@ -269,8 +299,11 @@ export class AcpTimelineTranslator {
     failureDetail: string | undefined,
     notSignedIn = false
   ): ProviderTimelineEvent[] {
-    const events = this.failures.ended(turn, stopReason, failureDetail, notSignedIn)
-    events.push(acpTurnEnd(turn, stopReason, at, durationMs))
+    const ending = { stopReason, at, failureDetail, notSignedIn }
+    const events = this.prompts.endCompaction(turn, ending) ?? [
+      ...this.failures.ended(turn, stopReason, failureDetail, notSignedIn),
+      acpTurnEnd(turn, stopReason, at, durationMs)
+    ]
     this.end(turn)
     if (this.prompts.current?.turn === turn) {
       this.prompts.finish()

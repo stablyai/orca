@@ -30,7 +30,6 @@ async function recoveryAction() {
   }
   const { page } = result
   const cards = projectQueuedMessageCards(page.queuedMessages, page.submissions, {
-    hasPendingPrompt: false,
     queuePaused: Boolean(page.queuePause)
   })
   const pause = queuedMessagesQueuePause(cards, page.queuePause ?? null)

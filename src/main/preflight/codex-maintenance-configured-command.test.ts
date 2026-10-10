@@ -11,7 +11,7 @@ import { createStructuredAgentEnvironmentResolvers } from '../runtime/structured
 import { resolveCodexStructuredInvocation } from '../codex/codex-structured-launch-resolution'
 
 const { run, shell } = vi.hoisted(() => ({ run: vi.fn(), shell: vi.fn() }))
-vi.mock('../../shared/child-process/run-process', async (original) => ({
+vi.mock('@orca/process-host', async (original) => ({
   ...(await original<object>()),
   runProcess: run
 }))

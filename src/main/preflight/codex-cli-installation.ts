@@ -6,7 +6,8 @@ import {
   parseCodexCliVersion,
   type CodexCliInstallation
 } from '../../shared/codex-cli-installation'
-import { resolveSpawn, type ProcessSpec } from '../../shared/child-process/run-process'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
+import { resolveSpawn } from '@orca/process-host/spawn-resolution'
 import { readAgentCliVersion } from '../agent-cli-version-probe'
 import { resolveLocalExecutionCommand } from '../ipc/command-path-resolver'
 import { CodexCliInstallationCache } from './codex-cli-installation-cache'

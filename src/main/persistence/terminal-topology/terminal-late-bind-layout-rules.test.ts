@@ -12,7 +12,7 @@ import {
   openTopologyStore
 } from './terminal-topology-profile-fixture'
 import { WindowSession, withoutLeaf } from './terminal-topology-window-session-fixture'
-import { checkWorkspaceLayoutRules } from './workspace-layout-rules'
+import { checkWorkspaceLayoutRules } from '../../../shared/workspace-layout/workspace-layout-rules'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../ssh/ssh-config-parser', () => ({
@@ -80,7 +80,7 @@ describe('a terminal spawn that lands after its pane changed', () => {
         options: { allowMissing: true, force: true, closedByLayoutOwner: true, reason: 'user' },
         requestedSession: store.getWorkspaceSession(),
         ownerMatches: () => true,
-        hostId: () => LOCAL_EXECUTION_HOST_ID,
+        hostIds: () => [LOCAL_EXECUTION_HOST_ID],
         getSession: (hostId) => store.getWorkspaceSession(hostId),
         setSession: (session, hostId) => store.setWorkspaceSession(session, hostId),
         onClosed: () => {}

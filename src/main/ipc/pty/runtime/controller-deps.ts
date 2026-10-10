@@ -18,13 +18,14 @@ import type { CodexResumeLaunch, PreparedCodexResumeHome } from '../host-env/cod
 import type { StablePaneOwner } from '../pane/stable-owner'
 import type { AdoptStablePaneArgs, AdoptStablePaneResult } from '../ipc/spawn-types'
 import type { finishPtyShutdown } from '../provider/liveness'
+import type { ResolvedPtyHost } from '../provider/registry'
 
 export type PtyRuntimeControllerDeps = {
   runtime?: OrcaRuntimeService
   store?: Store
   adoptStablePane: (args: AdoptStablePaneArgs) => Promise<AdoptStablePaneResult | null>
-  getLocalPtyStartupPromise: (connectionId?: string | null) => Promise<void> | undefined
-  getLocalPtyProviderStartupPromise: (connectionId?: string | null) => Promise<void> | undefined
+  getLocalPtyStartupPromise: (hostId?: ResolvedPtyHost) => Promise<void> | undefined
+  getLocalPtyProviderStartupPromise: (hostId?: ResolvedPtyHost) => Promise<void> | undefined
   prepareCodexResumeHome: (args: {
     connectionId?: string | null
     launchAgent?: TuiAgent

@@ -6,7 +6,7 @@ import {
 import { hasExplicitTuiLaunchCommand } from '../../shared/tui-agent-launch-command-override'
 import type { CodexCliInstallation } from '../../shared/codex-cli-installation'
 import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
-import type { ProcessSpec } from '../../shared/child-process/run-process'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { resolveCodexStructuredInvocation } from '../codex/codex-structured-launch-resolution'
 import { readCodexCliInstallationEvidence } from './codex-cli-installation'
 

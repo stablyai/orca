@@ -124,6 +124,7 @@ export function appState(overrides: Record<string, unknown> = {}): AppState {
     hydrateTabsSession: vi.fn(),
     hydrateEditorSession: vi.fn(),
     hydrateBrowserSession: vi.fn(),
+    remoteWorkspaceHydratedTargetIds: new Set<string>(),
     markRemoteWorkspaceHydrated: vi.fn(),
     clearRemoteWorkspaceHydrated: vi.fn(),
     setRemoteWorkspaceSyncStatus: vi.fn(),

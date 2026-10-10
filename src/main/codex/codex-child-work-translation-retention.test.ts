@@ -96,7 +96,7 @@ describe('Codex child message preview ownership', () => {
             state: 'working',
             description: 'report',
             lastMessage: preview,
-            stoppable: false,
+            stoppable: true,
             operation: null
           }
         }

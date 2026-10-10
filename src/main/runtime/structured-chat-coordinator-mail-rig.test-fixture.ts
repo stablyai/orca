@@ -256,7 +256,7 @@ beforeEach(async () => {
     resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
     resolveCodexCommand: () => '/usr/local/bin/codex',
     resolveLaunchArgs: () => [],
-    resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+    resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
     resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
     ...scriptedCodexTransport(codex.openConnection),
     // The same calls the runtime's own host install makes.

@@ -223,7 +223,7 @@ it.each(['0.135.0', null])(
 
 it('recovers a chat refused for a missing Codex installed from Settings through the same focus recheck', async () => {
   refuse(null)
-  const refreshDetectedAgents = vi.fn(async () => ['codex'])
+  const refreshDetectedAgents = vi.fn(async () => [])
   useAppStore.setState({ refreshDetectedAgents })
   let installed = false
   const job = { id: 'install', output: 'installed', exitCode: null, error: null }

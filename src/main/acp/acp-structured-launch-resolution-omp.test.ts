@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import { NATIVE_CHAT_VISUALS_DIR_ENV } from '../native-chat/native-chat-visuals-delivery'
@@ -36,7 +36,7 @@ function resolver(
   } = {}
 ) {
   return createAcpStructuredLaunchResolver(OMP, {
-    store: { getRecord: () => record },
+    store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
     readJournal: () => null,
     resolveWorkspacePath: async () => '/repo/worktree',
     resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/user' }),

@@ -2,6 +2,7 @@
 
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
 import type { FsChangedPayload } from '../../../../shared/filesystem-entry-types'
 import type {
   FileExplorerOperationOwner,
@@ -10,7 +11,6 @@ import type {
 
 const ownerRef = vi.hoisted(() => ({ current: { kind: 'local' } as FileExplorerOperationOwner }))
 const runtimeWatch = vi.hoisted(() => ({
-  handler: null as ((payload: FsChangedPayload) => void) | null,
   subscribe: vi.fn()
 }))
 
@@ -40,14 +40,7 @@ describe('useFileExplorerWatch pending refreshes', () => {
     vi.useFakeTimers()
     ownerRef.current = { kind: 'local' }
     mainWatchHandler = null
-    runtimeWatch.handler = null
     runtimeWatch.subscribe.mockReset()
-    runtimeWatch.subscribe.mockImplementation(
-      async (_context: unknown, handler: WatchHandler): Promise<() => void> => {
-        runtimeWatch.handler = handler
-        return () => undefined
-      }
-    )
     refreshDir = vi.fn(async () => {})
     refreshTree = vi.fn(async () => 'refreshed' as const)
     Object.defineProperty(window, 'api', {
@@ -110,6 +103,16 @@ describe('useFileExplorerWatch pending refreshes', () => {
     })
   }
 
+  function emitRuntimeBatch(): void {
+    emit((payload) =>
+      window.dispatchEvent(
+        new CustomEvent(ORCA_WORKTREE_FILE_CHANGE_EVENT, {
+          detail: { payload, runtimeEnvironmentId: 'runtime-1' }
+        })
+      )
+    )
+  }
+
   it('resyncs on reopen when hiding Files cancelled a received remote event', async () => {
     ownerRef.current = { kind: 'ssh', connectionId: 'ssh-1' }
     const hook = renderWatch()
@@ -135,54 +138,35 @@ describe('useFileExplorerWatch pending refreshes', () => {
     expect(refreshDir).toHaveBeenCalledOnce()
   })
 
-  it('flushes runtime RPC batches on the next turn without another debounce window', async () => {
+  it('flushes remote broker batches on the next turn without another debounce window', async () => {
     ownerRef.current = {
       kind: 'runtime',
       environmentId: 'runtime-1',
       executionHostId: 'runtime:runtime-1'
     }
     renderWatch()
-    expect(runtimeWatch.handler).not.toBeNull()
+    expect(runtimeWatch.subscribe).not.toHaveBeenCalled()
 
-    act(() => emit(runtimeWatch.handler!))
+    act(emitRuntimeBatch)
     expect(refreshDir).not.toHaveBeenCalled()
     await act(async () => vi.advanceTimersByTimeAsync(0))
 
     expect(refreshDir).toHaveBeenCalledOnce()
   })
 
-  it('resyncs after an event races cleanup of a pending runtime subscription', async () => {
+  it('resyncs on reopen after hiding Files canceled a received broker event', async () => {
     ownerRef.current = {
       kind: 'runtime',
       environmentId: 'runtime-1',
       executionHostId: 'runtime:runtime-1'
     }
-    let releaseSubscription!: () => void
-    const subscriptionReady = new Promise<void>((resolve) => {
-      releaseSubscription = resolve
-    })
-    runtimeWatch.subscribe.mockImplementation(
-      async (_context: unknown, handler: WatchHandler): Promise<() => void> => {
-        runtimeWatch.handler = handler
-        await subscriptionReady
-        return () => undefined
-      }
-    )
     const hook = renderWatch()
-    const disposedHandler = runtimeWatch.handler!
-
+    act(emitRuntimeBatch)
     hook.rerender({ visiblePath: null, activeInteraction: null })
     hook.rerender({ visiblePath: '/repo', activeInteraction: null })
-    act(() => emit(disposedHandler))
     await act(async () => vi.advanceTimersByTimeAsync(0))
-
     expect(refreshTree).toHaveBeenCalledOnce()
     expect(refreshDir).not.toHaveBeenCalled()
-
-    await act(async () => {
-      releaseSubscription()
-      await subscriptionReady
-    })
   })
   it.each(['rename', 'drag', 'native'] as const)(
     'does not refresh the current root on reopen after foreign events during %s',

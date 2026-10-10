@@ -48,7 +48,7 @@ describe('codex model catalog probe', () => {
           })
         }
       })
-      const success = await probe('/homes/account-a')
+      const success = await probe({ variable: 'CODEX_HOME', path: '/homes/account-a' })
       expect(success.origin).toBe('probe')
       expect(success.models.map((model) => model.id)).toEqual(['gpt-live'])
       // The session launch resolves the exact same invocation for the same deps.
@@ -69,9 +69,9 @@ describe('codex model catalog probe', () => {
       const searchPaths = Object.entries(invocations[0]!.env ?? {}).filter(
         ([key]) => key.toUpperCase() === 'PATH'
       )
-      expect(searchPaths.some(([, value]) => value.split(delimiter).includes('/resolved/bin'))).toBe(
-        true
-      )
+      expect(
+        searchPaths.some(([, value]) => value.split(delimiter).includes('/resolved/bin'))
+      ).toBe(true)
       expect(invocations[0]!.env).not.toHaveProperty('DROPPED')
       // A short-lived probe must not start plugin marketplace clones that outlive its teardown.
       expect(invocations[0]!.args.join(' ')).toContain('features.plugins=false')
@@ -107,7 +107,7 @@ describe('codex model catalog probe', () => {
           body
         )
     })
-    const success = await probe('/homes/a')
+    const success = await probe({ variable: 'CODEX_HOME', path: '/homes/a' })
     expect(success.models.map((model) => ({ id: model.id, isDefault: model.isDefault }))).toEqual([
       { id: 'gpt-live', isDefault: true }
     ])
@@ -120,7 +120,9 @@ describe('codex model catalog probe', () => {
       runSession: async (_invocation, body) =>
         body({ request: async () => ({ data: [], nextCursor: null }), notify: () => {} })
     })
-    await expect(probe('/homes/a')).rejects.toThrow(/listed no models/)
+    await expect(probe({ variable: 'CODEX_HOME', path: '/homes/a' })).rejects.toThrow(
+      /listed no models/
+    )
   })
 
   it.each(['npx codex', 'codex --profile work', '/missing/codex', './codex'])(
@@ -137,7 +139,9 @@ describe('codex model catalog probe', () => {
           ),
         runSession
       })
-      await expect(probe('/homes/a')).rejects.toMatchObject({ reason: 'agentCommandNotRunnable' })
+      await expect(probe({ variable: 'CODEX_HOME', path: '/homes/a' })).rejects.toMatchObject({
+        reason: 'agentCommandNotRunnable'
+      })
       expect(runSession).not.toHaveBeenCalled()
     }
   )
@@ -178,7 +182,9 @@ describe('Codex catalog availability', () => {
     new Error('unsupported method'),
     new Error('timeout')
   ])('unknown or authenticated account does not block: %j', async (account) => {
-    expect((await withAccount(account)('/homes/a')).models).toHaveLength(1)
+    expect(
+      (await withAccount(account)({ variable: 'CODEX_HOME', path: '/homes/a' })).models
+    ).toHaveLength(1)
   })
   it.each([
     ['/homes/a', 'managed'],
@@ -187,7 +193,12 @@ describe('Codex catalog availability', () => {
     'reports explicit signed-out account for %s beside its list',
     async (home, account) => {
       // The verdict can be wrong while a chat works, so the picker keeps the list it got.
-      expect(await withAccount({ account: null, requiresOpenaiAuth: true })(home)).toMatchObject({
+      expect(
+        await withAccount({ account: null, requiresOpenaiAuth: true })({
+          variable: 'CODEX_HOME',
+          path: home
+        })
+      ).toMatchObject({
         models: [{ id: 'gpt-live' }],
         unavailable: { reason: 'notSignedIn', account }
       })
@@ -206,7 +217,9 @@ describe('Codex catalog availability', () => {
           notify: () => {}
         })
     })
-    expect((await probe('/custom/home')).unavailable).toEqual({ reason: 'notSignedIn' })
+    expect((await probe({ variable: 'CODEX_HOME', path: '/custom/home' })).unavailable).toEqual({
+      reason: 'notSignedIn'
+    })
   })
   it('lists models while the account check is still answering', async () => {
     let answerAccount!: (value: unknown) => void
@@ -226,7 +239,7 @@ describe('Codex catalog availability', () => {
           notify: () => {}
         })
     })
-    const pending = probe('/homes/a')
+    const pending = probe({ variable: 'CODEX_HOME', path: '/homes/a' })
     await vi.waitFor(() => expect(methods).toContain('model/list'))
     expect(methods).toContain('account/read')
     answerAccount({ account: { type: 'chatgpt' }, requiresOpenaiAuth: true })
@@ -247,7 +260,7 @@ describe('Codex catalog availability', () => {
           notify: () => {}
         })
     })
-    await expect(probe('/homes/a')).rejects.toMatchObject({
+    await expect(probe({ variable: 'CODEX_HOME', path: '/homes/a' })).rejects.toMatchObject({
       unavailable: { reason: 'notSignedIn' }
     })
   })
@@ -259,7 +272,9 @@ describe('Codex catalog availability', () => {
         throw Object.assign(new Error('spawn failed'), { code, path: 'codex' })
       }
     })
-    const failure = await probe('/homes/a').catch((error: unknown) => error)
+    const failure = await probe({ variable: 'CODEX_HOME', path: '/homes/a' }).catch(
+      (error: unknown) => error
+    )
     expect(failure instanceof AgentModelCatalogUnavailableError).toBe(code === 'ENOENT')
   })
 })
@@ -282,7 +297,7 @@ describe('Codex catalog probe reads the home a launch would', () => {
         })
       }
     })
-    expect((await probe('/homes/mirror')).models).toHaveLength(1)
+    expect((await probe({ variable: 'CODEX_HOME', path: '/homes/mirror' })).models).toHaveLength(1)
     expect(order).toEqual(['prepare /homes/mirror', 'spawn'])
   })
 })

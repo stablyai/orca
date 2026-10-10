@@ -28,6 +28,8 @@ function harness(options: {
   /** Whether the surface reports that its typed line took the offered prompt. */
   lineCarriesPrompt?: boolean
   onSurfacePublished?: AgentLaunchExecution['onSurfacePublished']
+  /** A worktree-only factory, as orchestration workers and `worktree.create` pass. */
+  worktreeOnlyFactory?: boolean
 }) {
   const calls: string[] = []
   const carried = (startupPrompt: string | undefined) =>
@@ -47,6 +49,10 @@ function harness(options: {
       }
     }
   )
+  const createFolderWorkspace = vi.fn(async (_args: { create: Record<string, unknown> }) => {
+    calls.push('createFolderWorkspace')
+    return { worktreeId: 'folder:fw-new', connectionId: null }
+  })
   const getStructuredAgentSessionCreateSupport = vi.fn(async () => {
     calls.push('createSupport')
     if (options.createSupportThrows) {
@@ -81,6 +87,7 @@ function harness(options: {
   return {
     calls,
     createWorktree,
+    createFolderWorkspace,
     createStructuredSession,
     createTerminalAgent,
     deliverStructuredPrompt,
@@ -96,7 +103,9 @@ function harness(options: {
           deliverStructuredPrompt,
           deliverTerminalPrompt
         },
-        workspaces: { createWorktree },
+        workspaces: options.worktreeOnlyFactory
+          ? { createWorktree }
+          : { createWorktree, createFolderWorkspace },
         ...(options.onSurfacePublished ? { onSurfacePublished: options.onSurfacePublished } : {})
       })
   }
@@ -218,6 +227,41 @@ describe('a structured launch that creates its own worktree', () => {
       'createSupport',
       'createStructuredSession'
     ])
+  })
+
+  it('creates a folder workspace, then opens its structured session there', async () => {
+    const h = harness({})
+    const result = await h.run({
+      agent: 'claude',
+      target: { kind: 'create-folder-workspace', create: { projectGroupId: 'group-1' } }
+    })
+
+    expect(h.calls).toEqual(['createFolderWorkspace', 'createSupport', 'createStructuredSession'])
+    expect(h.createFolderWorkspace).toHaveBeenCalledWith({ create: { projectGroupId: 'group-1' } })
+    expect(result.worktreeId).toBe('folder:fw-new')
+    expect(result.outcome.kind).toBe('structured')
+  })
+
+  it('starts a terminal agent in a new folder workspace, not agent-first', async () => {
+    const h = harness({ settings: null })
+    const result = await h.run({
+      agent: 'claude',
+      target: { kind: 'create-folder-workspace', create: { projectGroupId: 'group-1' } }
+    })
+
+    expect(h.calls).toEqual(['createFolderWorkspace', 'createTerminalAgent'])
+    expect(result).toMatchObject({ worktreeId: 'folder:fw-new', outcome: { kind: 'terminal' } })
+  })
+
+  it('refuses a folder create from a factory that cannot make one, before anything is created', async () => {
+    const h = harness({ worktreeOnlyFactory: true })
+    await expect(
+      h.run({
+        agent: 'claude',
+        target: { kind: 'create-folder-workspace', create: { projectGroupId: 'group-1' } }
+      })
+    ).rejects.toThrow('agent_launch_workspace_factory_required')
+    expect(h.calls).toEqual([])
   })
 
   it('strips a stale startupAgent out of a migrated create payload', async () => {

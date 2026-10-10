@@ -1,8 +1,12 @@
 import { emitNativeChatToggled } from '@/lib/native-chat-telemetry'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
-import { findTabAndWorktree, patchTab, updateGroup, dedupeTabOrder } from '../tab-group-state'
-import { applyTabOrderSortValues, partitionPinnedTabOrder } from './tabs-tab-order'
+import { findTabAndWorktree, patchTab, updateGroup } from '../tab-group-state'
+import {
+  applyTabOrderSortValues,
+  dedupeTabOrder,
+  partitionPinnedTabOrder
+} from '../../../../../shared/workspace-layout/tab-order'
 import {
   mirrorTabPinnedToHost,
   mirrorTabViewModeToHost,

@@ -9,8 +9,8 @@ import type {
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import type { Repo } from '../../shared/repo-types'
 import {
+  getConnectionExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
@@ -214,9 +214,7 @@ export class OrcaRuntimeWithPersistHeadlessTerminalTitle extends OrcaRuntimeWith
       // ambiguous one, and it is never hosted by a runtime environment.
       return {
         worktree: this.folderWorkspaceToResolvedWorktree(folderScope.folderWorkspace),
-        executionHostId: folderScope.connectionId
-          ? toSshExecutionHostId(folderScope.connectionId)
-          : LOCAL_EXECUTION_HOST_ID
+        executionHostId: getConnectionExecutionHostId(folderScope.connectionId)
       }
     }
 

@@ -1,13 +1,14 @@
-import {
-  spawnProcess,
-  type ProcessSpec,
-  type SpawnedProcess
-} from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
+import type {
+  PipedProcessSpawner,
+  ProcessSpec,
+  SpawnedProcess
+} from '@orca/process-host/process-spec'
 import {
   codexMaintenanceWindowsSpawnSpec,
   CODEX_MAINTENANCE_PROVIDER_EXIT
 } from './codex-maintenance-windows-supervisor'
-import { forceTerminateProcessTree } from '../../shared/child-process/process-tree-termination'
+import { forceTerminateProcessTree } from '@orca/process-host/process-tree-termination'
 import {
   createProviderSpawnSpec,
   PROVIDER_OUTPUT_DRAIN_TIMEOUT_MS
@@ -26,7 +27,7 @@ export async function executeCodexMaintenanceProcess(
   spec: ProcessSpec,
   append: (chunk: Buffer | string) => void,
   options: {
-    spawn?: typeof spawnProcess
+    spawn?: PipedProcessSpawner
     timeoutMs?: number
     platform?: NodeJS.Platform
     stop?: (child: SpawnedProcess, supervised: boolean) => Promise<boolean>

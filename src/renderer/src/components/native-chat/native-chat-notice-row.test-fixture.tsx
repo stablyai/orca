@@ -12,15 +12,17 @@ import {
 
 function orcaStopView(
   hostLabel: string | null,
-  continueAvailable: boolean
+  continueAvailable: boolean,
+  remoteHost: boolean
 ): NativeChatOrcaStopView {
-  return { hostLabel, continueAvailable }
+  return { hostLabel, remoteHost, continueAvailable }
 }
 
 export function renderStatus(
   body: AgentJournalStatusItem,
   hostLabel: string | null = null,
   continueAvailable = false,
+  remoteHost = false,
   agentName?: string,
   maintenanceNotice?: NativeChatComposerNotice
 ) {
@@ -34,7 +36,7 @@ export function renderStatus(
       turnScope: { kind: 'turn', turnItemId: 'cut-turn' }
     }
   ])
-  const view = orcaStopView(hostLabel, continueAvailable)
+  const view = orcaStopView(hostLabel, continueAvailable, remoteHost)
   return render(
     <NativeChatOrcaStopContext.Provider value={view}>
       <NativeChatCodexMaintenanceContext.Provider value={maintenanceNotice ?? null}>

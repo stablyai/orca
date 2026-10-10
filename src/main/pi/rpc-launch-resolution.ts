@@ -17,6 +17,7 @@ import {
   type StructuredAgentCommandSettings
 } from '../native-chat/structured-agent-command-resolution'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
+import { resolveAgentSessionLaunchDirectory } from '../runtime/agent-session-launch-directory'
 import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
 import type { PiRpcLaunchOptions } from './rpc-launch'
 
@@ -126,7 +127,7 @@ export function createPiRpcLaunchResolver(
     ) {
       throw new Error('Pi account home does not match its binary')
     }
-    const cwd = await deps.resolveWorkspacePath(record.location.workspaceId)
+    const cwd = await resolveAgentSessionLaunchDirectory(deps, record)
     const env: Record<string, string> = {}
     for (const [key, value] of Object.entries(await deps.resolveEnvironment())) {
       if (value !== undefined) {

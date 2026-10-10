@@ -3263,6 +3263,7 @@
                 "ce8248b835": "工作树路径不可用。",
                 "internalTooManyPaths": "拖放的路径过多，无法安全粘贴到终端。",
                 "internalPathsTooLarge": "拖放的路径列表过大，无法安全粘贴到终端。",
+                "internalHostMismatch": "请拖放与此终端位于同一主机的文件。",
                 "b4cf68e889": "已跳过 {{value0}} {{value1}}。",
                 "writeTimeout": "文件拖放已取消：终端在安全超时前未接受路径。",
                 "writeRejected": "文件拖放已取消：终端无法接受路径。"
@@ -3425,7 +3426,8 @@
             "ec2adf093e": "在新终端中启动 {{value0}}",
             "465e432ef1": "无法为 {{value0}} 构建启动命令。",
             "e518f544b1": "未检测到智能体",
-            "8dea9b5cdf": "没有启用智能体"
+            "8dea9b5cdf": "没有启用智能体",
+            "needsServerUpdate": "请更新此服务器上的 Orca 以列出此工作区的智能体"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "切换选项卡",
@@ -3742,7 +3744,6 @@
             "54e8d6bb2d": "Fable",
             "d79c3362c4": "5小时",
             "a79c64f87e": "Fable",
-            "8295903d17": "切换后继续旧对话之前，请重新启动实时 Claude 终端。",
             "c98ea88392": "没有其他账户",
             "9332ba8684": "切换到",
             "d450654fa2": "Claude 账户",
@@ -3981,6 +3982,10 @@
           "StatusBarUsageChangeNotices": {
             "compactTitle": "用量显示现已精简",
             "compactBody": "每个服务提供商显示一个主要指标。在用量菜单中选择“<detailed>详细</detailed>”即可查看更多限额。"
+          },
+          "usageUnitLabel": {
+            "used": "已用",
+            "remaining": "剩余"
           },
           "UsagePercentageDisplayChangeNotice": {
             "title": "用量现在显示已用百分比",
@@ -6497,7 +6502,6 @@
         "AccountsPane": {
           "c2d2751587": "删除账户",
           "dbb9626ed1": "取消",
-          "854ebbcc45": "Orca 将删除此已保存账户的托管 Claude 身份验证。如果当前处于活动状态，Orca 将回退到系统默认的 Claude 登录名。",
           "63843e37e2": "删除 Claude 账户？",
           "380a7736cc": "移除此账户会永久删除其托管的 Codex 主目录，包括其中存储的所有 Codex 会话历史记录和 MCP 登录信息。此操作无法撤销。如果该账户当前处于活动状态，Orca 将回退到系统默认的 Codex 登录。",
           "0d47394635": "删除 Codex 账户？",
@@ -6545,12 +6549,10 @@
           "3fe7862418": "{{value0}} 没有受管理的 Claude 账户。Orca 将使用该环境的系统默认 Claude 登录，直到您在此处添加一个。",
           "3455cf43fa": "Claude 登录。",
           "fcc4093fc1": "使用您当前 {{value0}} Codex 登录名。",
-          "79e484c3b2": "用于共享 Claude 身份验证文件的可选账户切换器。",
           "8bbfd74556": "Claude 账户",
           "72b36ea174": "可选。Orca 可使用系统默认 Claude 登录；仅当你需要快速切换且不想迁移聊天会话时才添加账户。",
           "26ef4b55be": "Claude",
           "2743cdc0af": "Claude 账户更新失败。",
-          "b15ce90870": "{{value0}} -> {{value1}}。在继续旧会话之前重新启动实时 Claude 终端。",
           "f921d32606": "Claude 账户已更新。",
           "5bf8764953": "Codex 账户更新失败。",
           "9baf45d071": "当前设备",
@@ -11457,7 +11459,6 @@
           "pathGroup": "手机访问此电脑的方式",
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "手机可通过蜂窝网络或任意 Wi‑Fi 连接。仅 Relay 需要登录。",
-          "signInRequired": "仅 Relay 需要 — 局域网无需账号。",
           "relayUnavailable": "此版本不支持 Orca Relay。请使用局域网。",
           "signInAgain": "重新登录以使用 Relay",
           "localTitle": "局域网",
@@ -12311,7 +12312,11 @@
             "confirmRestore": "恢复快照并重新启动",
             "keepState": "保留状态",
             "statusUnknown": "状态未知",
-            "checking": "正在检查…"
+            "checking": "正在检查…",
+            "forget": "忘记…",
+            "confirmForget": "在此桌面上忘记",
+            "keepLinked": "保持关联",
+            "forgetDescription": "在此处取消关联此服务器，而不联系其主机。如果主机恢复，服务器可能仍在那里运行。"
           },
           "title": "受管服务器",
           "description": "Orca 会在空的 SSH 主机上安装并运行服务器，并使其保持最新。",
@@ -14897,7 +14902,6 @@
                 "d90d2e1f6d": "跟踪会话和每周使用情况。",
                 "8919321417": "Codex 登录失败。",
                 "c7b90c140b": "添加了 Codex 账户。",
-                "4e71d72912": "Claude 登录失败。",
                 "9ddeb558f9": "已添加 Claude 账户。",
                 "29d0653961": "登入",
                 "945865332e": "登录",
@@ -17809,6 +17813,8 @@
         "managedAccountUnsupported": "当 WSL 中添加了 Claude 账户时，Claude 聊天需要 Windows Claude 账户。",
         "launchFolderMissing": "此聊天运行所在的文件夹已不存在。请恢复该文件夹以继续此聊天。",
         "historyInOtherAccount": "此聊天的历史记录位于另一个 Claude 账户中。请切换回该账户以继续此聊天。",
+        "claudeAccountFolderMissing": "所选 Claude 账户的文件夹不存在。请重新登录该账户或选择其他账户。",
+        "claudeAccountSetupFailed": "无法设置所选 Claude 账户。请重试或选择其他账户。",
         "agentCommandNotRunnable": "{{agent}} 在设置 → 智能体中的命令必须是 Orca 能找到的程序路径或名称，且不能包含参数或变量。请修改或重置。",
         "chooseClaudeAccount": "请在 Claude 账户设置中选择或添加一个。",
         "chooseClaudeAccountThenRunCommand": "请在 Claude 账户设置中选择或添加一个，然后重新运行 /{{command}}。",
@@ -17974,6 +17980,7 @@
         "model": "模型",
         "effort": "推理强度",
         "fastMode": "快速模式",
+        "speed": "速度",
         "thinking": "思考",
         "options": "选项",
         "sessionOptions": "会话选项",
@@ -17994,7 +18001,8 @@
           "high": "高",
           "xhigh": "极高",
           "max": "最大",
-          "ultra": "极致"
+          "ultra": "极致",
+          "standard": "标准"
         },
         "noCommandsOrSkills": "没有匹配的命令或技能",
         "commands": "命令",
@@ -18247,6 +18255,7 @@
         "orcaStopUpdate": "此回复进行期间，{{machine}} 上的 Orca 为更新而重新启动。",
         "orcaStopQuit": "此回复进行期间，{{machine}} 上的 Orca 已关闭。",
         "orcaStopCrash": "此回复进行期间，{{machine}} 上的 Orca 意外停止。",
+        "orcaStopRemote": "此回复进行期间，{{machine}} 上的 Orca 已停止。",
         "orcaStopCanContinue": "你可以在此对话中继续。"
       },
       "providerFrame": {
@@ -18383,10 +18392,8 @@
       },
       "queuedMessages": {
         "alreadySent": "此消息已发送。",
-        "editAlreadySent": "已发送 — 你的文本仍在输入框中。",
         "listLabel": "排队的消息",
         "behindReturnedHold": "等待中 — 前面有一条消息需要处理",
-        "awaitingAnswerHold": "等待你的回答",
         "steer": "立即发送",
         "send": "发送",
         "steerHint": "提交且不中断模型",
@@ -18410,7 +18417,15 @@
         "sendConfirmClear": "清空队列",
         "sendConfirmSend": "发送消息",
         "fromSender": "来自",
-        "pausedSendFailedWaiting": "无法发送。智能体完成后，点按发送以重试。"
+        "pausedSendFailedWaiting": "无法发送。智能体完成后，点按发送以重试。",
+        "save": "保存",
+        "editingMessage": "正在编辑消息",
+        "cancelEditing": "取消编辑",
+        "editChanged": "你编辑时此消息已更改。你编辑的内容已放入聊天输入框。",
+        "editChangedPrompt": "你编辑时此消息已更改。回答智能体后，你编辑的内容会出现在聊天输入框中。",
+        "editFailed": "此消息无法编辑。",
+        "editGone": "此消息已发送或移除。你编辑的内容已放入聊天输入框。",
+        "editGonePrompt": "此消息已发送或移除。回答智能体后，你编辑的内容会出现在聊天输入框中。"
       },
       "thought": "已思考",
       "thoughtForDuration": "思考了 {{duration}}",
@@ -18451,8 +18466,7 @@
       },
       "visualUnavailable": "可视化不可用",
       "visualLoading": "正在加载可视化",
-      "visualOpenInSidebar": "在侧边栏中打开",
-      "visualClose": "关闭可视化"
+      "visualOpenInNewTab": "在新标签页中打开"
     },
     "tab": {
       "bar": {
@@ -19115,6 +19129,9 @@
     "nativeChatUpgrade": {
       "eyebrow": "新功能",
       "title": "本机聊天已升级",
+      "chatModeNote": "新的智能体标签页仍像以前一样在终端中打开。",
+      "chatModeLabel": "开启聊天模式",
+      "chatModeHint": "新的智能体标签页改为以聊天方式打开。",
       "intro": "受支持智能体的新聊天现在会在升级后的聊天视图中打开。要在聊天和 CLI 之间切换，请打开右侧边栏中的{{panel}}：",
       "resumeInNativeChat": "{{action}}：在本机聊天中打开受支持的 CLI 对话。",
       "resumeInCli": "{{action}}：将 Claude 或 Codex 聊天复制到新的 CLI 会话中。原始聊天保持不变。",
@@ -19234,6 +19251,7 @@
       "sortResultsAriaLabel": "排序结果：{{value0}}",
       "consent": "启用全文搜索吗？ Orca 根据本地智能体记录在此计算机上构建索引，包括完整对话和每个工具输出最多 3,072 个字符。内容未经过编辑。经过身份验证的配对客户端可以搜索它。",
       "remoteDisabled": "此计算机上已禁用搜索。在该计算机上启用转录索引以搜索其会话。",
+      "titleOnly": "此计算机上的全文搜索已关闭，因此仅匹配会话标题。",
       "notReady": "搜索索引尚未准备好。稍后再试。",
       "noService": "在此计算机上无法进行搜索。它可能需要 Orca 更新或具有搜索支持的运行时。",
       "failed": "无法搜索这台计算机。检查其连接并重试。",
@@ -19441,9 +19459,6 @@
       "oldTerminalDialogRisk": "共享服务器的 Codex 会话可能会一起结束，并且智能体状态可能会错误。",
       "oldTerminalDialogCause": "较旧的终端仍然共享 Codex 服务器。打开一个新终端以在单独的服务器上运行 Codex。",
       "fix": "使固定",
-      "openNewTerminal": "打开新终端",
-      "dontShowAgain": "不再显示",
-      "dismiss": "关闭",
       "dialogTitle": "为每个 Codex 选项卡提供自己的服务器",
       "dialogDescription": "Codex 会话直接在共享一台后台服务器的终端中启动。 Orca 将其启动的 Codex 会话分开保存。当会话共享一台服务器时，关闭一个服务器可能会结束其他服务器，并且智能体状态可能会错误。",
       "copy": "复制",
@@ -19454,7 +19469,6 @@
       "step2Title": "停止正在运行的共享服务器",
       "undo": "要撤消，请运行 codex features enable daemon_auto_start。",
       "step2Warning": "关闭共享服务器的所有打开的 Codex 会话",
-      "learnMore": "了解更多",
       "turnOff": "关",
       "turningOff": "正在关闭…",
       "turnedOff": "已关闭",
@@ -19470,6 +19484,12 @@
     },
     "paneMove": {
       "failed": "无法将窗格移动到新选项卡。"
+    },
+    "paneTopBanner": {
+      "openNewTerminal": "打开新终端",
+      "learnMore": "了解更多",
+      "dontShowAgain": "不再显示",
+      "dismiss": "关闭"
     }
   },
   "fileSearch": {

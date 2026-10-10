@@ -6,9 +6,9 @@ import { createStructuredAgentSessionLogger } from '../native-chat/agent-session
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime,
-  STRUCTURED_AGENT_LAUNCH_ARGS_REQUIRED,
-  SCRIPTED_CODEX_INSTALLATION_REQUIRED
+  STRUCTURED_AGENT_LAUNCH_ARGS_REQUIRED
 } from './structured-agent-session-runtime'
+import { SCRIPTED_CODEX_INSTALLATION_REQUIRED } from './structured-agent-runtime-registrations'
 
 let stateDirectory: string | undefined
 
@@ -31,7 +31,7 @@ it('refuses installation when the host omits the saved Arguments source', async 
       hostId: 'local',
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root,
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
       logger: createStructuredAgentSessionLogger()
     })
   ).rejects.toThrow(STRUCTURED_AGENT_LAUNCH_ARGS_REQUIRED)
@@ -49,7 +49,7 @@ it('refuses a scripted Codex transport that does not say which Codex it stands f
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root,
       resolveLaunchArgs: () => [],
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
       openCodexConnection: async () => {
         throw new Error('never opened')
       },

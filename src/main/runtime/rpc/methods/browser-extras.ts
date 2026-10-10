@@ -1,6 +1,6 @@
 import { defineMethod } from '../core'
 import { assertRpcClipboardTextWriteWithinLimit } from '../rpc-clipboard-text-validation'
-import { BrowserTarget } from '../schemas'
+import { BrowserTarget } from '../../../../shared/rpc-contract/rpc-param-primitives'
 import {
   ClipboardWrite,
   CookieDelete,

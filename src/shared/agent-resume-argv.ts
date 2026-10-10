@@ -31,9 +31,8 @@ export function getAgentResumeArgv(
     case 'opencode':
       return providerSession.key === 'session_id' ? ['opencode', '--session', id] : null
     case 'opencode2':
-      return providerSession.key === 'session_id'
-        ? ['opencode2', '--standalone', '--session', id]
-        : null
+      // Why: the launch command owns standalone/shared mode, including user overrides.
+      return providerSession.key === 'session_id' ? ['opencode2', '--session', id] : null
     case 'pi':
       return providerSession.key === 'session_id' && providerSession.transcriptPath
         ? ['pi', '--session', providerSession.transcriptPath]
@@ -76,6 +75,8 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' ? ['dsh-tui', '--resume', id] : null
     case 'jcode':
       return providerSession.key === 'session_id' ? ['jcode', '--resume', id] : null
+    case 'kiro':
+      return providerSession.key === 'session_id' ? ['kiro-cli', '--resume-id', id] : null
   }
 }
 

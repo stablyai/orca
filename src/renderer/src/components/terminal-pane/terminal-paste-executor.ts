@@ -17,7 +17,7 @@ import type {
 
 type ExecuteTerminalPastePlanArgs = {
   pasteText: (text: string, options?: TerminalPasteTextOptions) => void | Promise<void>
-  writePty?: (data: string) => boolean | Promise<boolean>
+  writePty?: (data: string, signal?: AbortSignal) => boolean | Promise<boolean>
   isTargetCurrent?: () => boolean
   canContinue?: () => boolean
   yieldToEventLoop?: () => Promise<void>
@@ -91,7 +91,7 @@ async function executeTerminalPastePlanNow(
     }
     try {
       const closeResult = await runTerminalPasteOperationWithTimeout(
-        () => writePty(BRACKETED_PASTE_END),
+        (signal) => writePty(BRACKETED_PASTE_END, signal),
         operationTimeoutMs
       )
       if (closeResult.timedOut) {
@@ -115,7 +115,7 @@ async function executeTerminalPastePlanNow(
         return { status: 'cancelled', reason: 'target-disconnected' }
       }
       const writeResult = await runTerminalPasteOperationWithTimeout(
-        () => writePty(chunk),
+        (signal) => writePty(chunk, signal),
         operationTimeoutMs
       )
       // Why: a failed close chunk is already the close attempt; retrying would emit a stray end.

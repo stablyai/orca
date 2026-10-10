@@ -7,11 +7,15 @@ import {
   createProviderTimelineAssembler,
   type ProviderTimelineAssembler
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler'
-import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
+import type { AcpTimelineEvent } from './acp-timeline-event'
 import { createLegacyProviderTimelineIdentityScheme } from '../native-chat/agent-session-timeline/provider-timeline-identity'
 import type { ProviderTimelineSink } from '../native-chat/agent-session-timeline/provider-timeline-plan'
+import type { StructuredAgentSessionCommandRun } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
 import { AcpTimelineTranslator } from './acp-timeline-translator'
+import { acpSubagentChildWork, isAcpSubagentChildWorkEvent } from './acp-subagent-child-work'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
+import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 import {
   neverThrowingStructuredAgentSessionLogger,
   type StructuredAgentSessionLogger
@@ -35,12 +39,16 @@ export type AcpStructuredLaneDeps = {
   onInputAccepted: (clientMessageId: string) => void
   /** The sink refused for good; nothing more this child says can be journaled. */
   onFailed: (reason: string) => void
+  onChildWorkEvidence?: (evidence: AgentChildWorkEvidence[]) => void
+  onChildWorkFailure?: (error: unknown) => void
+  now?: () => number
+  canStopSubagents?: () => boolean
 }
 
 export class AcpStructuredLane {
   readonly translator: AcpTimelineTranslator
   private readonly assembler: ProviderTimelineAssembler
-  private readonly backlog: ProviderTimelineEvent[] = []
+  private readonly backlog: AcpTimelineEvent[] = []
   private readonly turnWatchers = new Set<() => void>()
   private readonly requestIdentity: ReturnType<typeof createLegacyProviderTimelineIdentityScheme>
   private retryTimer: ReturnType<typeof setTimeout> | null = null
@@ -73,7 +81,19 @@ export class AcpStructuredLane {
     return this.assembler.openTurnId
   }
 
-  apply(events: readonly ProviderTimelineEvent[]): void {
+  /** The host already opened this command's turn; the agent's frames and end join that turn. */
+  beginCommand(command: StructuredAgentSessionCommandRun): void {
+    if (this.failed || this.disposed || this.backlog.length > 0) {
+      throw new Error('ACP timeline has not drained for this command')
+    }
+    this.assembler.beginCommand(command)
+  }
+
+  forgetCommand(turnId: string): void {
+    this.assembler.forgetCommand(turnId)
+  }
+
+  apply(events: readonly AcpTimelineEvent[]): void {
     if (this.failed || this.disposed) {
       return
     }
@@ -121,18 +141,30 @@ export class AcpStructuredLane {
   }
 
   dispose(): void {
+    if (this.disposed) {
+      return
+    }
     this.disposed = true
+    this.translator.dispose()
     this.clearRetry()
     this.backlog.length = 0
     this.assembler.dispose()
     this.notifyTurnWatchers()
+    // Observation has ended even if its journal edge was refused; drain admitted snapshots first.
+    void Promise.resolve(this.deps.sink.written?.()).then(
+      () => this.publishSessionEnd(),
+      () => this.publishSessionEnd()
+    )
   }
 
   private drain(): void {
     this.clearRetry()
     while (this.backlog.length > 0 && !this.failed && !this.disposed) {
       const event = this.backlog[0]
-      const { admission, dropped } = this.assembler.apply(event)
+      const { admission, dropped } = this.assembler.apply(
+        event,
+        isAcpSubagentChildWorkEvent(event) ? () => this.publishChildWork(event) : undefined
+      )
       if (dropped === 'stream-mismatch' && event.type === 'text.delta') {
         this.reportTextDrop({
           reason: dropped,
@@ -162,6 +194,34 @@ export class AcpStructuredLane {
     this.notifyTurnWatchers()
   }
 
+  private publishChildWork(event: AcpTimelineEvent): void {
+    const evidence = acpSubagentChildWork(
+      event,
+      this.deps.now?.() ?? Date.now(),
+      this.deps.canStopSubagents?.() === true
+    )
+    if (!evidence.length) {
+      return
+    }
+    this.publishEvidence(evidence)
+  }
+
+  private publishEvidence(evidence: AgentChildWorkEvidence[]): void {
+    try {
+      this.deps.onChildWorkEvidence?.(evidence)
+    } catch (error) {
+      try {
+        this.deps.onChildWorkFailure?.(error)
+      } catch {
+        // Diagnostics cannot fail an admitted journal transition.
+      }
+    }
+  }
+
+  private publishSessionEnd(): void {
+    this.publishEvidence([{ type: 'session-ended', observedAt: this.deps.now?.() ?? Date.now() }])
+  }
+
   private notifyTurnWatchers(): void {
     for (const check of this.turnWatchers) {
       check()
@@ -184,5 +244,20 @@ export class AcpStructuredLane {
       clearTimeout(this.retryTimer)
       this.retryTimer = null
     }
+  }
+}
+
+export function acpLaneChildWorkDelivery(
+  deps: AcpStructuredSessionAdapterDeps,
+  sessionId: string
+): Pick<AcpStructuredLaneDeps, 'onChildWorkEvidence' | 'onChildWorkFailure'> {
+  return {
+    onChildWorkEvidence: (evidence) => deps.onChildWorkEvidence?.(sessionId, evidence),
+    onChildWorkFailure: (error) =>
+      deps.logger?.error('publishing ACP child work failed', {
+        scope: 'acp-child-work',
+        sessionId,
+        error
+      })
   }
 }

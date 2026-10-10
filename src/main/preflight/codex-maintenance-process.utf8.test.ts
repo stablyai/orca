@@ -1,23 +1,10 @@
 import { once } from 'node:events'
-import { PassThrough } from 'node:stream'
 import { expect, it } from 'vitest'
-import type { spawnProcess } from '../../shared/child-process/run-process'
-import { createFakeSpawnedChild } from '../../shared/child-process/__fixtures__/fake-spawned-child'
+import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { executeCodexMaintenanceProcess } from './codex-maintenance-process'
 
 function fixture() {
-  const stdin = new PassThrough()
-  const stdout = new PassThrough()
-  const stderr = new PassThrough()
-  const stdio: ReturnType<typeof spawnProcess>['stdio'] = [stdin, stdout, stderr, null, null]
-  const child = Object.assign(createFakeSpawnedChild(), {
-    stdin,
-    stdout,
-    stderr,
-    stdio,
-    exitCode: null,
-    signalCode: null
-  })
+  const child = Object.assign(createFakePipedChild(), { exitCode: null, signalCode: null })
   let output = ''
   const pending = executeCodexMaintenanceProcess(
     { program: 'fake-updater' },

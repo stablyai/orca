@@ -58,6 +58,9 @@ export function createFolderWorkspaceCatalogActions(
         })
       } catch (err) {
         console.error('Failed to fetch folder workspaces:', err)
+        if (options?.throwOnError) {
+          throw err
+        }
       }
     },
 

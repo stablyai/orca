@@ -51,8 +51,6 @@ import { AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES } from '../../shared
 import { _internals as openCodeInternals } from '../opencode/hook-service'
 import { getPiAgentStatusExtensionSource } from '../pi/agent-status-extension-source'
 import {
-  registerSshPtyProvider,
-  unregisterSshPtyProvider,
   getSshPtyProvider,
   getPtyIdsForConnection,
   clearPtyOwnershipForConnection,
@@ -74,12 +72,7 @@ import {
   installSshPtySourceAckPublisher,
   installSshPtySourceCancellationPublisher
 } from '../ipc/ssh-pty-output-intake-registry'
-import {
-  registerSshFilesystemProvider,
-  unregisterSshFilesystemProvider,
-  getSshFilesystemProvider
-} from '../providers/ssh-filesystem-dispatch'
-import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
+import { registerSshHostProviders, retireSshHostProviders } from './ssh-host-provider-set'
 import { notifyRemoteWorkspaceHandlers } from '../ipc/remote-workspace-events'
 import { PortScanner } from './ssh-port-scanner'
 import { isMainWindowVisible, onMainWindowBecameVisible } from '../window/main-window-visibility'
@@ -355,8 +348,7 @@ export class SshRelaySession {
     run: RemoteOpenCodeRuntimePreparation
     controller: AbortController
   } | null = null
-  private aiVaultListMethodSupported: boolean | null = null
-  private aiVaultTitleMethodSupported: boolean | null = null
+  private readonly unsupportedRelayMethods = new Set<string>()
   private pendingPtyReattaches = new Map<string, PendingPtyReattach>()
   private readonly ptyRecoveryRetention = new SshPtyRecoveryRetentionBudget()
   private activePtyProviderGeneration: number | null = null
@@ -494,51 +486,51 @@ export class SshRelaySession {
     params: SshAiVaultRelayListParams,
     options: { signal?: AbortSignal; timeoutMs?: number } = {}
   ): Promise<unknown> {
-    if (this.aiVaultListMethodSupported === false) {
-      return null
-    }
-    const mux = this.mux
-    if (!mux || mux.isDisposed() || this._state !== 'ready') {
-      throw new Error('SSH relay is not ready')
-    }
-    this.prepareOpenCodeRuntimeForScan()
-    try {
-      const result = await mux.request(SSH_AI_VAULT_LIST_SESSIONS_METHOD, params, {
-        signal: options.signal,
-        timeoutMs: options.timeoutMs ?? SSH_AI_VAULT_LIST_SESSIONS_TIMEOUT_MS
-      })
-      this.aiVaultListMethodSupported = true
-      return result
-    } catch (error) {
-      if (isMethodNotFoundError(error)) {
-        this.aiVaultListMethodSupported = false
-        return null
-      }
-      throw error
-    }
+    return this.requestOptionalRelayMethod(
+      SSH_AI_VAULT_LIST_SESSIONS_METHOD,
+      params,
+      options,
+      SSH_AI_VAULT_LIST_SESSIONS_TIMEOUT_MS,
+      () => this.prepareOpenCodeRuntimeForScan()
+    )
   }
 
   async requestAiVaultSessionTitles(
     params: SshAiVaultRelayTitleParams,
     options: { signal?: AbortSignal; timeoutMs?: number } = {}
   ): Promise<unknown> {
-    if (this.aiVaultTitleMethodSupported === false) {
+    return this.requestOptionalRelayMethod(
+      SSH_AI_VAULT_RESOLVE_SESSION_TITLES_METHOD,
+      params,
+      options,
+      SSH_AI_VAULT_RESOLVE_SESSION_TITLES_TIMEOUT_MS
+    )
+  }
+
+  private async requestOptionalRelayMethod(
+    method: string,
+    params: Record<string, unknown>,
+    options: { signal?: AbortSignal; timeoutMs?: number },
+    defaultTimeoutMs: number,
+    before?: () => void
+  ): Promise<unknown> {
+    if (this.unsupportedRelayMethods.has(method)) {
       return null
     }
     const mux = this.mux
     if (!mux || mux.isDisposed() || this._state !== 'ready') {
       throw new Error('SSH relay is not ready')
     }
+    before?.()
     try {
-      const result = await mux.request(SSH_AI_VAULT_RESOLVE_SESSION_TITLES_METHOD, params, {
+      return await mux.request(method, params, {
         signal: options.signal,
-        timeoutMs: options.timeoutMs ?? SSH_AI_VAULT_RESOLVE_SESSION_TITLES_TIMEOUT_MS
+        timeoutMs: options.timeoutMs ?? defaultTimeoutMs
       })
-      this.aiVaultTitleMethodSupported = true
-      return result
     } catch (error) {
+      // Why: older relays lack optional methods; remember per session so callers degrade to null.
       if (isMethodNotFoundError(error)) {
-        this.aiVaultTitleMethodSupported = false
+        this.unsupportedRelayMethods.add(method)
         return null
       }
       throw error
@@ -563,8 +555,7 @@ export class SshRelaySession {
       throw new Error(`Cannot establish relay session in state: ${this._state}`)
     }
     this._state = 'deploying'
-    this.aiVaultListMethodSupported = null
-    this.aiVaultTitleMethodSupported = null
+    this.unsupportedRelayMethods.clear()
     this.currentConnection = conn
     this.lastGraceTimeSeconds = graceTimeSeconds
 
@@ -724,8 +715,7 @@ export class SshRelaySession {
     this.abortController = abortController
 
     this._state = 'reconnecting'
-    this.aiVaultListMethodSupported = null
-    this.aiVaultTitleMethodSupported = null
+    this.unsupportedRelayMethods.clear()
     this.currentConnection = conn
     this.lastGraceTimeSeconds = graceTimeSeconds
 
@@ -1280,9 +1270,6 @@ export class SshRelaySession {
       )
     }
     this.activePtyProviderGeneration = providerGeneration
-    registerSshPtyProvider(this.targetId, ptyProvider)
-    this.installPtyRecoveryNotifications(mux)
-
     const connection = this.requireReadyConnection()
     const createSftp =
       connection.usesSystemSshTransport?.() === true
@@ -1312,14 +1299,14 @@ export class SshRelaySession {
       },
       hostPlatform
     )
-    registerSshFilesystemProvider(this.targetId, fsProvider)
-
     const gitProvider = new SshGitProvider(
       this.targetId,
       mux,
       this.remoteCliBridgeEnv?.hostPlatform ?? null
     )
-    registerSshGitProvider(this.targetId, gitProvider)
+    // Why built first: a throw while building one must not leave the host half-registered.
+    registerSshHostProviders(this.targetId, { pty: ptyProvider, fs: fsProvider, git: gitProvider })
+    this.installPtyRecoveryNotifications(mux)
 
     this.wireUpPtyEvents(ptyProvider, mux, providerGeneration)
     this.wireUpAgentHookEvents(mux)
@@ -1902,18 +1889,7 @@ export class SshRelaySession {
     // Connection loss makes remote status unverifiable, not exited. Keep the last observation;
     // replay or certified process teardown will update or remove it on the execution host.
 
-    const ptyProvider = getSshPtyProvider(this.targetId)
-    if (ptyProvider && 'dispose' in ptyProvider) {
-      ;(ptyProvider as { dispose: () => void }).dispose()
-    }
-    const fsProvider = getSshFilesystemProvider(this.targetId)
-    if (fsProvider && 'dispose' in fsProvider) {
-      ;(fsProvider as { dispose: () => void }).dispose()
-    }
-
-    unregisterSshPtyProvider(this.targetId)
-    unregisterSshFilesystemProvider(this.targetId)
-    unregisterSshGitProvider(this.targetId)
+    retireSshHostProviders(this.targetId)
     this.sourceIdentityByRelayPtyId.clear()
     this.retiredSourceDeliveries.clear()
     this.rejectedPtyRecoveryAttempts.clear()
@@ -2809,7 +2785,7 @@ export class SshRelaySession {
           return
         }
       } else {
-        setPtyOwnership(appPtyId, this.targetId)
+        setPtyOwnership(appPtyId, toSshExecutionHostId(this.targetId))
       }
       attachedLeaseIds.add(ptyId)
       pendingReattach.activated = true
@@ -3059,7 +3035,7 @@ export class SshRelaySession {
         this.store.markSshRemotePtyLease(this.targetId, appPtyId, 'expired')
         return 'missing-surface'
       }
-      setPtyOwnership(appPtyId, this.targetId)
+      setPtyOwnership(appPtyId, toSshExecutionHostId(this.targetId))
       restorePtyIncarnation(appPtyId, incarnationId)
       this.runtime?.registerPty(appPtyId, lease.worktreeId, this.targetId, {
         tabId,
@@ -3068,7 +3044,7 @@ export class SshRelaySession {
       })
       return 'restored'
     }
-    setPtyOwnership(appPtyId, this.targetId)
+    setPtyOwnership(appPtyId, toSshExecutionHostId(this.targetId))
     restorePtyIncarnation(appPtyId, incarnationId)
     this.runtime?.onPtySpawned(appPtyId, incarnationId, { awaitsRegistration: false })
     return 'restored'
@@ -3112,7 +3088,7 @@ export class SshRelaySession {
         return true
       }
     } else {
-      setPtyOwnership(appPtyId, this.targetId)
+      setPtyOwnership(appPtyId, toSshExecutionHostId(this.targetId))
     }
     args.attachedLeaseIds.add(args.ptyId)
     this.forwardReattachReplay(appPtyId, result.replay ?? '')

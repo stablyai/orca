@@ -34,6 +34,7 @@ describe('Codex installation in notice rows', () => {
         },
         null,
         false,
+        false,
         'Codex',
         { key: 'codex', kind: 'error', text }
       )
