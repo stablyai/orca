@@ -275,9 +275,13 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
     let worktree: ResolvedWorktree
     try {
       worktree = await this.resolveWorktreeSelector(`id:${worktreeId}`)
-    } catch {
-      // An unknown workspace keeps the answer older clients always got.
-      return HOST_DEFAULT_AGENT_DETECTION
+    } catch (error) {
+      // Only an unknown workspace keeps the answer older clients always got; an ambiguous one
+      // has no single host, and probing this one would list another machine's agents.
+      if (error instanceof Error && error.message === 'selector_not_found') {
+        return HOST_DEFAULT_AGENT_DETECTION
+      }
+      throw error
     }
     return resolveWorkspaceAgentDetectionHost(store, {
       kind: 'worktree',
