@@ -15,18 +15,21 @@ export function createRuntimeRendererNotificationSender(args: {
   onMainFrameReloadStarted: () => void
   onMainFrameReloadCancelled: () => void
   onMainFrameLoadFinished: () => void
+  onGraphPublicationAccepted: () => void
   onRendererProcessGone: () => void
   close: () => void
 } {
   let available = true
   let warningEmitted = false
   let closed = false
+  let failureReason: RuntimeRendererGraphFailureReason | null = null
   const warn = args.warn ?? ((message: string) => console.warn(message))
   const suspend = (reason: RuntimeRendererGraphFailureReason): void => {
-    if (closed || (!available && warningEmitted)) {
+    if (closed || failureReason === reason || failureReason === 'renderer-process-gone') {
       return
     }
     available = false
+    failureReason = reason
     if (!warningEmitted) {
       warningEmitted = true
       warn(`[runtime-graph] Renderer notifications suspended: ${reason}`)
@@ -55,6 +58,7 @@ export function createRuntimeRendererNotificationSender(args: {
       }
       available = false
       warningEmitted = false
+      failureReason = null
     },
     onMainFrameReloadCancelled: () => {
       if (closed) {
@@ -62,6 +66,7 @@ export function createRuntimeRendererNotificationSender(args: {
       }
       available = true
       warningEmitted = false
+      failureReason = null
     },
     onMainFrameLoadFinished: () => {
       if (closed) {
@@ -69,6 +74,15 @@ export function createRuntimeRendererNotificationSender(args: {
       }
       available = true
       warningEmitted = false
+      failureReason = null
+    },
+    onGraphPublicationAccepted: () => {
+      if (closed || args.isWindowDestroyed() || args.webContents.isDestroyed()) {
+        return
+      }
+      available = true
+      warningEmitted = false
+      failureReason = null
     },
     onRendererProcessGone: () => suspend('renderer-process-gone'),
     close: () => {

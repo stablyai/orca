@@ -92,10 +92,27 @@ describe('runtime renderer notification sender', () => {
     expect(fixture.onFailure).toHaveBeenNthCalledWith(2, 'renderer-process-gone')
   })
 
+  it('reports process loss even after a recoverable send failure suspended delivery', () => {
+    const fixture = createSender({
+      send: () => {
+        throw new Error('frame unavailable')
+      }
+    })
+    fixture.sender.send('repos:changed')
+    fixture.sender.onRendererProcessGone()
+    fixture.sender.onRendererProcessGone()
+    expect(fixture.onFailure.mock.calls).toEqual([
+      ['renderer-frame-unavailable'],
+      ['renderer-process-gone']
+    ])
+    expect(fixture.warn).toHaveBeenCalledOnce()
+  })
+
   it('keeps close terminal when renderer lifecycle events arrive late', () => {
     const fixture = createSender()
 
     fixture.sender.close()
+    fixture.sender.onGraphPublicationAccepted()
     fixture.sender.onMainFrameLoadFinished()
     fixture.sender.onMainFrameReloadStarted()
     fixture.sender.onRendererProcessGone()
