@@ -234,7 +234,8 @@ describe('detachTerminalPaneToTab', () => {
       activate: true,
       initialPtyId: 'remote:env-1@@terminal-1',
       initialLeafId: LEAF_2,
-      recordInteraction: true
+      recordInteraction: true,
+      placementFixed: true
     })
     expect(store.setTabLayout).toHaveBeenCalledWith(SOURCE_TAB_ID, {
       root: { type: 'leaf', leafId: LEAF_1 },
@@ -458,6 +459,7 @@ describe('detachTerminalPaneToTab', () => {
       activate: true,
       pendingActivationSpawn: true,
       recordInteraction: true,
+      placementFixed: true,
       startupCwd: '/remote/repo/packages/app'
     })
   })

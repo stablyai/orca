@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createEditorStore, createEditorTabsStore } from './editor-slice-test-harness'
+import { seedThreePaneLayout } from './store-test-helpers'
 import type { AppState } from '../types'
 
 const { toastErrorMock } = vi.hoisted(() => ({
@@ -496,6 +497,7 @@ describe('createEditorSlice openDiff', () => {
 
   it('reuses a preview editor tab when opening a preview diff', () => {
     const store = createEditorTabsStore()
+    seedThreePaneLayout(store, 'wt-1')
 
     store.getState().openFile(
       {
@@ -529,6 +531,7 @@ describe('createEditorSlice openDiff', () => {
 
   it('keeps an existing preview replaceable when it is opened as preview again', () => {
     const store = createEditorTabsStore()
+    seedThreePaneLayout(store, 'wt-1')
 
     const openPreviewFile = (): void => {
       store.getState().openFile(
@@ -572,19 +575,19 @@ describe('createEditorSlice openDiff', () => {
   it('does not orphan another split group when replacing a shared preview diff', () => {
     const store = createEditorTabsStore()
 
+    const { leftGroupId: firstGroupId, rightGroupId: secondGroupId } = seedThreePaneLayout(
+      store,
+      'wt-1'
+    )
     store.getState().openDiff('wt-1', '/repo/a.ts', 'a.ts', 'typescript', false, { preview: true })
-    const firstGroupId = store.getState().groupsByWorktree['wt-1'][0].id
-    const secondGroupId = store.getState().createEmptySplitGroup('wt-1', firstGroupId, 'right')
-
-    expect(secondGroupId).toBeTruthy()
 
     store.getState().openDiff('wt-1', '/repo/a.ts', 'a.ts', 'typescript', false, {
       preview: true,
-      targetGroupId: secondGroupId ?? undefined
+      targetGroupId: secondGroupId
     })
     store.getState().openDiff('wt-1', '/repo/b.ts', 'b.ts', 'typescript', false, {
       preview: true,
-      targetGroupId: secondGroupId ?? undefined
+      targetGroupId: secondGroupId
     })
 
     const state = store.getState()

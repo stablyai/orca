@@ -232,7 +232,9 @@ export function createBrowserHydrationActions(
             state.createUnifiedTab(worktreeId, 'browser', {
               entityId: bt.id,
               label: bt.title,
-              recordInteraction: false
+              recordInteraction: false,
+              // Why: replay of a layout that already existed — restoring must not rearrange it.
+              placementFixed: true
             })
           }
         }

@@ -17,6 +17,7 @@ import {
   updateGroup
 } from '../slices/tab-group-state'
 import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-order'
+import { resolveAutoPlacementGroupId } from '../slices/tabs/lone-pane-split-source'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { ownsGlobalSelection } from '../global-selection-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
@@ -46,6 +47,11 @@ export function createTerminalTabCreationActions(
   return {
     createTab: (worktreeId, targetGroupId, shellOverride, options) => {
       let tab!: TerminalTab
+      // Why: terminals bypass createUnifiedTab, so automatic placement lives here too.
+      const besideGroupId = options?.placementFixed
+        ? null
+        : resolveAutoPlacementGroupId(get(), worktreeId, targetGroupId, 'terminal')
+      const requestedGroupId = besideGroupId ?? targetGroupId
       set((s) => {
         const orphanTerminalIds = getOrphanTerminalIds(s, worktreeId)
         const orphanCleanupPatch = buildOrphanTerminalCleanupPatch(s, worktreeId, orphanTerminalIds)
@@ -128,9 +134,9 @@ export function createTerminalTabCreationActions(
           void warnIfZCodeCannotOpenSession()
         }
         const validTargetGroupId =
-          targetGroupId &&
-          s.groupsByWorktree[worktreeId]?.some((group) => group.id === targetGroupId)
-            ? targetGroupId
+          requestedGroupId &&
+          s.groupsByWorktree[worktreeId]?.some((group) => group.id === requestedGroupId)
+            ? requestedGroupId
             : undefined
         const { group, groupsByWorktree, activeGroupIdByWorktree } = ensureGroup(
           s.groupsByWorktree,

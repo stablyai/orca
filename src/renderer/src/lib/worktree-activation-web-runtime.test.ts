@@ -101,7 +101,14 @@ describe('activateAndRevealWorktree', () => {
         })
       })
     )
-    await vi.waitFor(() => expect(shouldSkipWebRuntimeWakeTerminalRespawn(worktree.id)).toBe(false))
+    // Why 15s: the terminal now carries a target group, so the create awaits the bounded
+    // placement settlement (10s) before the in-flight guard is released.
+    await vi.waitFor(
+      () => expect(shouldSkipWebRuntimeWakeTerminalRespawn(worktree.id)).toBe(false),
+      {
+        timeout: 15_000
+      }
+    )
   })
 
   it('does not request another host terminal when backend startup already spawned', async () => {

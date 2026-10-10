@@ -85,9 +85,14 @@ export type TerminalActions = {
       viewMode?: Tab['viewMode']
       startupCwd?: string
       forceHostRuntime?: boolean
+      /** This call's placement is already decided (reopen replay); never redirect it beside a lone pane. */
+      placementFixed?: boolean
     }
   ) => TerminalTab
-  openNewTerminalTabInActiveWorkspace: (groupId: string) => Promise<void>
+  openNewTerminalTabInActiveWorkspace: (
+    groupId: string,
+    options?: { placementFixed?: boolean }
+  ) => Promise<void>
   /** Synchronous retirement: provider teardown starts before state removal but is never awaited. */
   closeTab: (
     tabId: string,

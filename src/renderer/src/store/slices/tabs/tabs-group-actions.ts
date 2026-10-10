@@ -193,7 +193,10 @@ export function createTabsGroupActions(
             : {})
         }
       })
-      get().recordFeatureInteraction?.('terminal-panes')
+      // Why: an automatic split is not the user discovering pane creation.
+      if (opts?.recordInteraction !== false) {
+        get().recordFeatureInteraction?.('terminal-panes')
+      }
       return newGroupId
     }
   }

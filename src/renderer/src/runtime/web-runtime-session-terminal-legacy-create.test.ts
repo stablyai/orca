@@ -163,7 +163,21 @@ describe('createWebRuntimeSessionTerminal', () => {
           }))
         },
         groupsByWorktree: {
-          [WORKTREE_ID]: [{ id: 'client-group', tabOrder: [predecessor, successor, created] }]
+          [WORKTREE_ID]: [
+            { id: 'client-group', tabOrder: [predecessor, successor, created] },
+            { id: 'client-group-right', tabOrder: [] }
+          ]
+        },
+        // Why: this test is about ordering inside one group, so it starts already split — the
+        // beside-a-lone-pane rule would otherwise place the new terminal in its own group.
+        layoutByWorktree: {
+          [WORKTREE_ID]: {
+            type: 'split',
+            direction: 'horizontal',
+            ratio: 0.5,
+            first: { type: 'leaf', groupId: 'client-group' },
+            second: { type: 'leaf', groupId: 'client-group-right' }
+          }
         },
         reorderUnifiedTabs,
         moveUnifiedTabToGroup: mocks.moveUnifiedTabToGroup

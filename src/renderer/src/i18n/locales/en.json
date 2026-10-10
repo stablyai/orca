@@ -3571,6 +3571,9 @@
             "notStarted": "The agent couldn't start.",
             "unconfirmed": "Couldn't confirm the agent started.",
             "workspaceGone": "Its workspace is no longer available."
+          },
+          "TerminalSinglePaneWidthHandles": {
+            "75e1cb1f51": "Resize terminal width"
           }
         }
       },
@@ -9631,7 +9634,19 @@
               "kw": {
                 "cursor": "cursor"
               }
-            }
+            },
+            "singlePaneWidth": "Single Pane Width",
+            "singlePaneWidthSummary": "Maximum width for a tab with no splits — terminal, browser, editor or preview — centered in the window.",
+            "kwWidth": "width",
+            "kwMaxWidth": "max width",
+            "kwCentered": "centered",
+            "kwSingle": "single",
+            "kwWide": "wide",
+            "kwUnsplit": "unsplit",
+            "kwPane": "pane",
+            "kwBrowser": "browser",
+            "kwEditor": "editor",
+            "kwTerminal": "terminal"
           }
         },
         "auto": {

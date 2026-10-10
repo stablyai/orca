@@ -47,6 +47,7 @@ export function applyOpenFileToState(
         focusEditor?: boolean
         reopenId?: string
         selection?: EditorTabSelection
+        placementFixed?: boolean
       }
     | undefined,
   scratch: OpenFileApplyScratch
@@ -99,7 +100,9 @@ export function applyOpenFileToState(
   const recordReplacedPreview = options?.recordReplacedPreview ?? false
   // Why: resolve the target group up-front so preview replacement is scoped to it (group B open must not evict group A's preview).
   const targetGroupId =
-    resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
+    resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId, {
+      placementFixed: options?.placementFixed || (options?.selection ?? 'focus') !== 'focus'
+    }) ?? undefined
   scratch.editorItemTargetGroupId = targetGroupId
   const activeResult =
     options?.selection === 'none' ? {} : buildEditorActiveResult(s, worktreeId, id)

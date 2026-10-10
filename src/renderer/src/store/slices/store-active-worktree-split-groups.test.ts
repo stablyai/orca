@@ -587,8 +587,20 @@ describe('setActiveWorktree', () => {
             activeTabId: orphanId,
             tabOrder: [orphanId, existingId],
             recentTabIds: [orphanId]
-          })
+          }),
+          makeTabGroup({ id: 'group-2', worktreeId: wt })
         ]
+      },
+      // Why: this test is about orphan cleanup inside one group, so it starts already split — the
+      // beside-a-lone-pane rule would otherwise move the new terminal out of group-1.
+      layoutByWorktree: {
+        [wt]: {
+          type: 'split',
+          direction: 'horizontal',
+          ratio: 0.5,
+          first: { type: 'leaf', groupId: 'group-1' },
+          second: { type: 'leaf', groupId: 'group-2' }
+        }
       },
       ptyIdsByTabId: {
         [orphanId]: [],

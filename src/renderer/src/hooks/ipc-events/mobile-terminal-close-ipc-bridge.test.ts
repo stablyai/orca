@@ -101,7 +101,8 @@ function setup(viewedSurface: 'editor' | 'terminal'): {
     mode: 'edit'
   })
   if (viewedSurface === 'terminal') {
-    store.getState().createTab(VIEWED)
+    // Why placementFixed: these tests pin one pane; the second-pane split is covered elsewhere.
+    store.getState().createTab(VIEWED, undefined, undefined, { placementFixed: true })
     store.getState().setActiveTabType('terminal', VIEWED)
   }
   store.setState({ activeView: 'terminal', pendingRevealWorktree: null })

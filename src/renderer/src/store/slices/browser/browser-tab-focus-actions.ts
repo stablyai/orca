@@ -47,7 +47,9 @@ export function createBrowserTabFocusActions(
           sessionProfileId,
           sessionPartition,
           ...(snap.docLocation ? { docLocation: snap.docLocation } : {}),
-          targetGroupId: entryToRestore.position?.groupId
+          targetGroupId: entryToRestore.position?.groupId,
+          // Why: replay of a layout that already existed — restoring must not rearrange it.
+          placementFixed: true
         })
         restoreRecentlyClosedTabPosition(get, worktreeId, restored.id, entryToRestore.position)
         return (
@@ -63,6 +65,8 @@ export function createBrowserTabFocusActions(
         sessionProfileId,
         sessionPartition,
         targetGroupId: entryToRestore.position?.groupId,
+        // Why: replay of a layout that already existed — restoring must not rearrange it.
+        placementFixed: true,
         browserRuntimeEnvironmentId: firstPage.browserRuntimeEnvironmentId,
         ...(firstPage.docLocation ? { docLocation: firstPage.docLocation } : {})
       })

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
-import { createTestStore } from './store-test-helpers'
+import { createTestStore, seedThreePaneLayout } from './store-test-helpers'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
@@ -91,6 +91,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
       })
 
       it('moves pinned tabs before unpinned siblings', () => {
+        seedThreePaneLayout(store, WT)
         const t1 = store.getState().createUnifiedTab(WT, 'terminal')
         const t2 = store.getState().createUnifiedTab(WT, 'terminal')
         const t3 = store.getState().createUnifiedTab(WT, 'terminal')
@@ -112,6 +113,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
       })
 
       it('keeps remaining pinned tabs before a tab that was unpinned', () => {
+        seedThreePaneLayout(store, WT)
         const t1 = store.getState().createUnifiedTab(WT, 'terminal')
         const t2 = store.getState().createUnifiedTab(WT, 'terminal')
         const t3 = store.getState().createUnifiedTab(WT, 'terminal')

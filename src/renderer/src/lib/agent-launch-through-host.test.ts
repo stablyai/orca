@@ -110,6 +110,8 @@ describe('a desktop launch through the host', () => {
   it('shows its tab at the click, in its split, waiting for the host before it spawns', () => {
     const reply = deferred<unknown>()
     callRuntimeRpc.mockReturnValue(reply.promise)
+    // Why before launch: the tab opens beside the lone pane, which moves focus to its new group.
+    const clickedGroupId = store.getState().activeGroupIdByWorktree[WT]
 
     const { tabId } = launch()
 
@@ -125,7 +127,7 @@ describe('a desktop launch through the host', () => {
       target: { kind: 'existing', worktree: `id:${WT}` },
       agentArgs: null,
       launchSource: 'source_control_recovery',
-      placement: { groupId: store.getState().activeGroupIdByWorktree[WT] },
+      placement: { groupId: clickedGroupId },
       presentation: 'focused',
       operationId: expect.stringMatching(/^\d+-[0-9a-f]{32}$/),
       paneKey: `${tabId}:${leafId}`

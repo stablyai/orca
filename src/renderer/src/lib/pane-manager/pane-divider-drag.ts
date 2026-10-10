@@ -1,5 +1,6 @@
 import { holdPtyResizesForPaneSubtrees } from './pane-pty-resize-hold'
 import type { PaneLayoutEditIntent } from '../../../../shared/rpc-contract/session-tabs-schemas-params'
+import { matchesActiveDragPointer, releasePointerCaptureIfHeld } from './drag-pointer-session'
 
 export type DividerCallbacks = {
   refitPanesUnder: (el: HTMLElement) => void
@@ -115,23 +116,10 @@ export function attachDividerDrag(
     window.removeEventListener('blur', onWindowBlur, true)
   }
 
-  const releasePointerCaptureIfHeld = (pointerId: number | null): void => {
-    if (pointerId === null) {
-      return
-    }
-    try {
-      if (divider.hasPointerCapture(pointerId)) {
-        divider.releasePointerCapture(pointerId)
-      }
-    } catch {
-      // Best effort: capture may already be gone after crossing native chrome/webviews.
-    }
-  }
-
   const finishActiveDrag = (commitLayout: boolean): void => {
     if (!dragging) {
       removeWindowListeners()
-      releasePointerCaptureIfHeld(activePointerId)
+      releasePointerCaptureIfHeld(divider, activePointerId)
       activePointerId = null
       activePointerType = null
       return
@@ -153,7 +141,7 @@ export function attachDividerDrag(
       }
     }
 
-    releasePointerCaptureIfHeld(pointerId)
+    releasePointerCaptureIfHeld(divider, pointerId)
     divider.classList.remove('is-dragging')
     callbacks.onDragActiveChange?.(false)
 
@@ -223,15 +211,13 @@ export function attachDividerDrag(
     prevFlex = prevSize
   }
 
-  // Why: WSLg's RDP input path reports press/release as a `mouse` pointer but
-  // streams motion as a `pen` pointer with a different pointerId, so a strict
-  // pointerId match drops every move. A foreign primary pointer may take over
-  // only when neither end is touch: each pointer type has its own primary, so
-  // otherwise a stray finger hijacks a mouse/pen drag and a stray mouse hijacks
-  // a touch drag. Either drag still matches its own pointer by pointerId.
   const isActiveDragPointer = (e: PointerEvent): boolean =>
-    e.pointerId === activePointerId ||
-    (e.isPrimary && e.pointerType !== 'touch' && activePointerType !== 'touch')
+    matchesActiveDragPointer(
+      activePointerId === null || activePointerType === null
+        ? null
+        : { pointerId: activePointerId, pointerType: activePointerType },
+      e
+    )
 
   const onPointerMove = (e: PointerEvent): void => {
     if (!dragging || !isActiveDragPointer(e) || !prevEl || !nextEl) {
