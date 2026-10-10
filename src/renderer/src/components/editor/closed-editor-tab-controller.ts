@@ -138,7 +138,11 @@ export function attachClosedEditorTabCleanup(
               return null
             }
             const model = currentRegistry.editor.getModel(uri)
-            return model && models.has(model) ? model : null
+            return model &&
+              models.has(model) &&
+              !bridge.getRetainedDiffModelOwners(model).some((owner) => openIds.has(owner))
+              ? model
+              : null
           },
           getModels: () =>
             [...models].filter((model) => currentRegistry.editor.getModel(model.uri) === model)
@@ -232,6 +236,19 @@ export function attachClosedEditorTabCleanup(
         }
         pendingFiles.set(ownerKey(descriptor), descriptor)
         removed = true
+        const diffModels = bridge.getRetainedDiffModels(file.id)
+        if (diffModels.length > 0) {
+          // Changes models belong to the tab id, while plain edit models can have shared URI owners.
+          const diffDescriptor = {
+            ...descriptor,
+            mode: 'diff' as const,
+            diffModelPaths: diffModels.map((model) => model.uri.toString())
+          }
+          pendingFiles.set(ownerKey(diffDescriptor), diffDescriptor)
+          for (const model of diffModels) {
+            candidateModels.add(model)
+          }
+        }
         if (file.mode === 'edit' && registry) {
           const model = registry.editor.getModel(
             registry.Uri.parse(toEditorModelUri(file.filePath, descriptor.modelOwnerKey))
@@ -239,7 +256,7 @@ export function attachClosedEditorTabCleanup(
           if (model) {
             candidateModels.add(model)
           }
-        } else if (file.mode === 'diff') {
+        } else if (file.mode === 'diff' && diffModels.length === 0) {
           removedDiff = true
         }
       }

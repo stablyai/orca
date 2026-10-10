@@ -19,6 +19,7 @@ import { toEditorModelUri } from './editor-model-uri'
 
 export type ClosedEditorTab = Pick<OpenFile, 'id' | 'mode' | 'filePath'> & {
   modelOwnerKey?: string
+  diffModelPaths?: readonly string[]
 }
 
 // One registry sweep avoids quadratic close-all work.
@@ -47,6 +48,20 @@ export function disposeClosedEditorModels(
         model?.dispose()
       }
     } else if (closedFile.mode === 'diff') {
+      if (closedFile.diffModelPaths) {
+        for (const path of closedFile.diffModelPaths) {
+          if (!isStillClosed(closedFile)) {
+            break
+          }
+          const model = monacoRegistry.editor.getModel(monacoRegistry.Uri.parse(path))
+          if (model?.isAttachedToEditor()) {
+            onAttachedModel?.(model, closedFile)
+          } else {
+            model?.dispose()
+          }
+        }
+        continue
+      }
       const { originalModelPathPrefix, modifiedModelPathPrefix } =
         getDiffViewerMonacoModelPathPrefixes(closedFile.id)
       diffFilesByPrefix.set(originalModelPathPrefix, closedFile)
