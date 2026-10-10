@@ -2,7 +2,7 @@ import React, { useCallback } from 'react'
 import { ExternalLink, MonitorUp, Pencil, StickyNote } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
+import { HoverCard, HoverCardContent } from '@/components/ui/hover-card'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
@@ -28,7 +28,7 @@ import { useWorktreeCardLifecycleEffects } from '../sidebar/use-worktree-card-li
 import { useWorktreeCardSecondaryDetails } from '../sidebar/use-worktree-card-secondary-details'
 import { getReviewLabel } from '../sidebar/worktree-review-helpers'
 import { ActivityThreadHoverCardSummary } from './activity-thread-hover-card-summary'
-import { useActivityThreadHoverCardIntent } from './activity-thread-hover-card-intent'
+import { ActivityThreadHoverCardTrigger } from './activity-thread-hover-card-trigger'
 import type { AgentPaneThread } from './activity-thread-types'
 
 export type ActivityThreadHoverCardProps = {
@@ -54,10 +54,6 @@ export function ActivityThreadHoverCard({
 }: ActivityThreadHoverCardProps): React.JSX.Element {
   const detailsHoverControl = useWorktreeCardDetailsHoverControl()
   const open = detailsHoverControl.hoverOpen && !suppressed
-  const intent = useActivityThreadHoverCardIntent({
-    open,
-    onOpenChange: detailsHoverControl.handleHoverOpenChange
-  })
 
   return (
     <HoverCard
@@ -66,13 +62,12 @@ export function ActivityThreadHoverCard({
       openDelay={openDelay}
       closeDelay={closeDelay}
     >
-      <HoverCardTrigger
-        asChild
-        data-hover-card-resting={intent.resting ? '' : undefined}
-        {...intent.triggerHandlers}
+      <ActivityThreadHoverCardTrigger
+        open={open}
+        onOpenChange={detailsHoverControl.handleHoverOpenChange}
       >
         {children}
-      </HoverCardTrigger>
+      </ActivityThreadHoverCardTrigger>
       {open ? (
         <ActivityThreadHoverCardContent
           thread={thread}
