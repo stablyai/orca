@@ -107,7 +107,12 @@ it('compresses large caches losslessly and resumes the same totals after restart
   ).join('')
   await writeFile(transcript, rows)
   const cold = await scanClaudeUsageFiles([], [], undefined, [])
-  await writeClaudeUsageSourceCache(ref(), cold.processedFiles)
+  const mutableRef = ref()
+  const pending = writeClaudeUsageSourceCache(mutableRef, cold.processedFiles)
+  mutableRef.path = join(directory, 'different-cache.json')
+  mutableRef.worktreeFingerprint = '["different-workspace"]'
+  await pending
+  await expect(readFile(mutableRef.path)).rejects.toMatchObject({ code: 'ENOENT' })
   const text = await readFile(sourcePath)
   expect([...text.subarray(0, 2)]).toEqual([0x1f, 0x8b])
   const decoded = await decodeClaudeUsageSourceText(text)

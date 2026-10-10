@@ -12,7 +12,7 @@
       "commit": "51e7181850b022bae2d41091fe1229accef4bd50",
       "storeSha256": "c2457e55948c1982fd1a1cd045d847c1e6cecb6eb5e9eadfc3647da8c6a226c2",
       "scanner": {
-        "bundleSha256": "6a63c8dd134eb1cafebbe5e7c15dc5eff95a4903c08a4e26e5bf6823a3cd699c",
+        "bundleSha256": "ff7da33319be01f944cee557d1a0b326b2445f0c898b6b5f466cab61953dc8da",
         "sourceFingerprints": {
           "src/main/claude-usage/scanner.ts": {
             "source": "51e7181850b022bae2d41091fe1229accef4bd50",
@@ -42,7 +42,7 @@
       "commit": "8467877ed92aba2ef59737aebf461e9cab52c273",
       "storeSha256": "cd0305c4ed01af5bc8c11c8247feb9bf92d6e9df00551a87574cdff8e7389d0b",
       "scanner": {
-        "bundleSha256": "13fa06407cddfcf3dbda7962730318df9c7934aa9caaf59dcbbb0b5d6e4235c2",
+        "bundleSha256": "8bb88b61faf2cf1131631c37dd89d16dcdedfeb5d3c2f925dd5ebb550b573e20",
         "sourceFingerprints": {
           "src/main/claude-usage/scanner.ts": {
             "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
@@ -160,7 +160,7 @@
       "commit": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
       "storeSha256": "7247d4f8288249a95085a2150048c76b797d64d7e21bf432802b5881c2a0f2ab",
       "scanner": {
-        "bundleSha256": "6a63c8dd134eb1cafebbe5e7c15dc5eff95a4903c08a4e26e5bf6823a3cd699c",
+        "bundleSha256": "ff7da33319be01f944cee557d1a0b326b2445f0c898b6b5f466cab61953dc8da",
         "sourceFingerprints": {
           "src/main/claude-usage/scanner.ts": {
             "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
@@ -234,7 +234,7 @@
       "commit": null,
       "storeSha256": "5beb17f973fbd12b70408e7c8526fda9486ca3fdba2acc89dccb3b0f6d3e8b39",
       "scanner": {
-        "bundleSha256": "225088ba86d2e1b9c5c32c83e5a35f808907a22d4367c4096a66ff050e910dab",
+        "bundleSha256": "46154f2200b925b31db4103fc5a6abf52e70f66a014d867667819e60e0855bce",
         "sourceFingerprints": {
           "src/main/claude-usage/persisted-projection-validation.ts": {
             "source": "worktree",
@@ -303,7 +303,7 @@
         }
       },
       "persistence": {
-        "bundleSha256": "fe867a08aaaf3b7794bb34775fa59829df0788279a8e0a91daa2bf009c17a8bd",
+        "bundleSha256": "cc18078db9f4fa4632e9653ee3e963fc7d559d05f063a5e1b87c34e43ccca948",
         "sourceFingerprints": {
           "src/main/claude-usage/persisted-projection-validation.ts": {
             "source": "worktree",
@@ -311,7 +311,7 @@
           },
           "src/main/claude-usage/persisted-source-cache.ts": {
             "source": "worktree",
-            "sha256": "1bf0d7ba520b8f8727bfe0c6c147005d6af328e9368c6e68238e5df8afbdb7a6"
+            "sha256": "9b4de097982b7b2d705647456e319ab9cab8b11c786e244fb19349fe63931ab5"
           },
           "src/main/claude-usage/persisted-token-columns.ts": {
             "source": "worktree",
@@ -399,7 +399,7 @@
       "maximaPattern": "repeated",
       "historyBytes": 7465268,
       "suffixBytes": 451,
-      "fixtureSha256": "b7ca0ebdad5cca50b7f0c181d510c8fc5ef1c389aec25b7206b4fd444de2262d",
+      "fixtureSha256": "f3b342d71da6a2dfdd696c1bb9cf2841e4f8c548420e46632bd1e0d915eaa051",
       "measurements": {
         "original": {
           "sourceBytes": 0,
@@ -430,12 +430,12 @@
           }
         },
         "main": {
-          "sourceBytes": 470892,
+          "sourceBytes": 470891,
           "reportBytes": 1426,
-          "totalPersistedBytes": 472318,
+          "totalPersistedBytes": 472317,
           "productionIndent": null,
           "sourceComponents": {
-            "fileBytes": 470833,
+            "fileBytes": 470832,
             "ownedKeyListBytes": 469301,
             "tokenColumnsBytes": null,
             "tokenRowsBytes": null,
@@ -444,12 +444,12 @@
           }
         },
         "current": {
-          "sourceBytes": 82423,
+          "sourceBytes": 82411,
           "reportBytes": 1510,
-          "totalPersistedBytes": 83933,
+          "totalPersistedBytes": 83921,
           "productionIndent": null,
           "sourceComponents": {
-            "fileBytes": 537223,
+            "fileBytes": 537221,
             "ownedKeyListBytes": 469301,
             "tokenColumnsBytes": 65553,
             "tokenRowsBytes": null,
@@ -464,15 +464,15 @@
       "maximaPattern": "unique",
       "historyBytes": 47222805,
       "suffixBytes": 453,
-      "fixtureSha256": "9112ca1f1bc2c23167422b48618fdd0900f8549a3d1a4af087d58d0e8c21f9af",
+      "fixtureSha256": "af7af784522047431204709330653590043792311bdd5c40e56c1a592ec0bad8",
       "measurements": {
         "original": {
           "sourceBytes": 0,
-          "reportBytes": 3883173,
-          "totalPersistedBytes": 3883173,
+          "reportBytes": 3883175,
+          "totalPersistedBytes": 3883175,
           "productionIndent": 2,
           "sourceComponents": {
-            "fileBytes": 2979819,
+            "fileBytes": 2979821,
             "ownedKeyListBytes": 2977781,
             "tokenColumnsBytes": null,
             "tokenRowsBytes": null,
@@ -509,9 +509,9 @@
           }
         },
         "current": {
-          "sourceBytes": 1596462,
+          "sourceBytes": 1596451,
           "reportBytes": 2016,
-          "totalPersistedBytes": 1598478,
+          "totalPersistedBytes": 1598467,
           "productionIndent": null,
           "sourceComponents": {
             "fileBytes": 6125887,

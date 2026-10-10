@@ -99,15 +99,16 @@ export async function writeClaudeUsageSourceCache(
   ref: UsageSourceCacheRef,
   sources: readonly ClaudeUsagePersistedFile[]
 ): Promise<void> {
+  const cacheRef = { ...ref }
   const material = JSON.stringify({
-    schemaVersion: ref.schemaVersion,
-    worktreeFingerprint: ref.worktreeFingerprint,
+    schemaVersion: cacheRef.schemaVersion,
+    worktreeFingerprint: cacheRef.worktreeFingerprint,
     sources: encodeClaudeUsagePersistedFiles(sources)
   })
   await writeUsageSourceCacheData(
-    ref,
+    cacheRef,
     await compressClaudeUsageSourceText(
-      ref.schemaVersion === 6 ? material : sealUsageCacheJson(material, SOURCE_DOMAIN)
+      cacheRef.schemaVersion === 6 ? material : sealUsageCacheJson(material, SOURCE_DOMAIN)
     )
   )
 }

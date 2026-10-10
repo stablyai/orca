@@ -4,21 +4,21 @@
   "artifacts": {
     "16k": {
       "artifact": "claude-source-compression-16k.json",
-      "sha256": "1dfce9d1fcf3c57b545c5ea42acd9e3fd2ea8e166a9ec5a3edecbdc93838c3f9",
+      "sha256": "c89ca2493f6939408d48404cbdbf0991b5607bd10c407fb1f252c11f32811fdd",
       "currentSourceHashesVerified": true,
       "sixCounterbalancedRounds": true,
       "unchangedSourceWrites": 0
     },
     "100k": {
       "artifact": "claude-source-compression-100k.json",
-      "sha256": "fbae1e2f9a9fd39e880981447945e891dc3e7bdc56130b798f40e313743482dd",
+      "sha256": "4de42062dafe452af3b373b7769daac0342015d3c6136c42004644a5bb955345",
       "currentSourceHashesVerified": true,
       "sixCounterbalancedRounds": true,
       "unchangedSourceWrites": 0
     },
     "varied-100k": {
       "artifact": "claude-source-compression-varied-100k.json",
-      "sha256": "87ab6dfd787ed995e9f08216a4a76868991b2f914fa338ef914bc32d2a26f056",
+      "sha256": "ff196aafeb019143774536ff580c81f9130729b10eecf388ef8d7b2c9e1607b9",
       "currentSourceHashesVerified": true,
       "sixCounterbalancedRounds": true,
       "unchangedSourceWrites": 0
@@ -32,7 +32,7 @@
   },
   "fourArmBytes": {
     "artifact": "claude-source-compression-four-arm-bytes.json",
-    "sha256": "04e063020058787ddca5146e39c7b97f5ab79098b321dfbd9d3f7fe2aa0c12ab",
+    "sha256": "d486a559c2fc1700a7ddcab9bae8867a8a5e74f76c569a5b32de95b6008e494c",
     "crossArmProjectionParity": true,
     "currentSourceHashesVerified": true
   },
@@ -43,6 +43,11 @@
     "mobileTests": 19,
     "contracts": 163,
     "antiSlop": "passed",
-    "binaryWrite": "exact bytes, bounded view and temp cleanup passed"
+    "binaryWrite": "exact bytes, bounded view and temp cleanup passed",
+    "bindingGuard": {
+      "focusedTests": 32,
+      "nodeTypecheck": "passed",
+      "destinationMutationDuringCompression": "original destination retained; replacement destination absent"
+    }
   }
 }
