@@ -6,7 +6,10 @@ import {
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
 import { registerWorktreeActivation } from '@/lib/worktree-activation-nav-registration'
-import { workspaceHasSleepingAgentSessions } from '@/lib/worktree-agent-activation-gate'
+import {
+  canInspectAgentActivationInventory,
+  workspaceHasSleepingAgentSessions
+} from '@/lib/worktree-agent-activation-gate'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
@@ -51,14 +54,6 @@ export type ActivateAndRevealResult = {
   /** Id of the primary terminal tab seeded with `opts.startup`, or null. Prefer this over
    *  `activeTabIdByWorktree`, which may point at another tab if setup/issue scripts opened their own. */
   primaryTabId: string | null
-}
-
-function canInspectAgentActivationInventory(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.api?.runtime?.call === 'function' &&
-    typeof window.api?.pty?.listSessions === 'function'
-  )
 }
 
 export function activateAndRevealFolderWorkspace(
