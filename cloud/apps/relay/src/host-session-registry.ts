@@ -491,6 +491,19 @@ export class HostSessionRegistry {
           false,
         cellIncarnation: this.cellIncarnation
       })
+      .then(async (activityId) => {
+        // As a database-path join does: an open migration onto this cell sees its host arrive.
+        try {
+          await this.assignments.markMigrationTargetRegistered(identity, {
+            cellId: this.config.cellId,
+            assignmentEpoch: epoch
+          })
+        } catch (error) {
+          this.releaseActivityBestEffort(identity, activityId)
+          throw error
+        }
+        return activityId
+      })
       .then((activityId) => {
         const current = this.sessions.get(entry.key)
         if (
@@ -523,6 +536,11 @@ export class HostSessionRegistry {
             reason: error instanceof Error ? error.message : 'unknown'
           })
         )
+        // Unleased on a database-mode cell, its row would expire under it: re-assign instead.
+        const socket = session.socket
+        if (this.sessions.get(entry.key) === session && session.generation === entry.generation && socket) {
+          socket.close(RELAY_CLOSE_CODE.WRONG_CELL, 'control could not re-register')
+        }
       })
       .finally(() => {
         state.inFlight -= 1

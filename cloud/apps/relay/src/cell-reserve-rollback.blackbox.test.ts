@@ -250,6 +250,7 @@ describe('flipping a reserve-mode cell back to the database', () => {
     // Admitted from memory: no lease was taken.
     expect(await controlLeases()).toEqual([])
 
+    const marked = vi.spyOn(relay.assignments, 'markMigrationTargetRegistered')
     applied = { generation: 2, flags: { ...CELL_FLAG_DEFAULTS, admitMode: 'db' } }
     await until(async () => (await controlLeases()).length === 2)
     await lateRow!()
@@ -268,6 +269,8 @@ describe('flipping a reserve-mode cell back to the database', () => {
         }))
         .sort(byHost)
     ).toEqual((await controlLeases()).sort(byHost))
+    // As a database-path join does, each one also tells an open migration its host arrived.
+    expect(marked.mock.calls.map(([, input]) => input.assignmentEpoch).sort()).toEqual([5, 6, 7])
     // A second flip back has nothing left to register.
     expect(relay.sessions.reregisterMemoryControls()).toBe(0)
   }, 30_000)
