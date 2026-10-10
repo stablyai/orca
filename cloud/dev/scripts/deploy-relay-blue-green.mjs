@@ -721,6 +721,49 @@ export async function assertRegionalRehomeDisabled(
   return result.control
 }
 
+// `undefined` when the director predates the reserve census (its router 404s the route).
+export async function readReserveCells(config, origin, cellIds, fetchImpl = fetch) {
+  const reserve = []
+  for (const cellId of cellIds) {
+    const response = await fetchImpl(`${origin}/v1/admin/cell-admit-mode`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${adminIdentityToken(config)}`,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({ v: 1, cellId }),
+      signal: AbortSignal.timeout(30_000)
+    })
+    const result = await response.json().catch(() => null)
+    if (response.status === 404 && result === null) return undefined
+    if (!response.ok || result?.v !== 1 || !['db', 'reserve'].includes(result.admitMode)) {
+      throw new Error(`cell admit mode read failed for ${cellId}: ${result?.error ?? response.status}`)
+    }
+    if (result.admitMode === 'reserve') reserve.push(cellId)
+  }
+  return reserve
+}
+
+// A director without the census places hosts on reserve cells from stale rows, so traffic may
+// move between revisions that differ in it only while every cell is db.
+export function assertReserveCompatibleTrafficMove(servingReserve, candidateReserve) {
+  if ((servingReserve === undefined) === (candidateReserve === undefined)) return
+  const reserve = servingReserve ?? candidateReserve
+  if (reserve.length > 0) {
+    throw new Error(
+      `director revisions differ in reserve-mode support while cells are reserve (${reserve.join(', ')}); flip them to db first`
+    )
+  }
+}
+
+function directorCellIds(...environments) {
+  const ids = new Set()
+  for (const environment of environments) {
+    for (const cell of JSON.parse(environment.ORCA_RELAY_CELLS_JSON ?? '[]')) ids.add(cell.id)
+  }
+  return [...ids]
+}
+
 function assertDirectorRevisionIdentity(revision, config) {
   const expectedRuntimeServiceAccount = config['runtime-service-account']
   if (
@@ -741,6 +784,7 @@ export async function deployDirector(config, tag, overrides = {}) {
     updateTraffic,
     waitForHealth,
     assertRegionalRehomeDisabled,
+    readReserveCells,
     ...overrides
   }
   // Why: gcloud does not carry minScale onto a new revision, and the candidate below takes
@@ -911,6 +955,19 @@ export async function deployDirector(config, tag, overrides = {}) {
     }
     await operations.waitForHealth(candidate.origin, requiredCapacityProtocol)
     await verifyRehomeDisabled(candidate.origin)
+    const servingOrigin = initialService.status?.url
+    if (!servingOrigin) throw new Error('relay service reports no URL for the serving revision')
+    const cellIds = directorCellIds(currentEnvironment, environment)
+    const servingReserve = await operations.readReserveCells(config, servingOrigin, cellIds)
+    const candidateReserve = await operations.readReserveCells(config, candidate.origin, cellIds)
+    assertReserveCompatibleTrafficMove(servingReserve, candidateReserve)
+    console.warn(
+      JSON.stringify({
+        event: 'director_reserve_support_checked',
+        serving: servingReserve === undefined ? 'unsupported' : servingReserve,
+        candidate: candidateReserve === undefined ? 'unsupported' : candidateReserve
+      })
+    )
     operations.updateTraffic(config, [`--to-tags=${tag}=100`])
     promoted = true
     removeDirectorTrafficTags(config, operations, new Set([SELECTOR_ROLLBACK_TAG]))

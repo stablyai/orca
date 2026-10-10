@@ -13,6 +13,7 @@ import {
   DIRECTOR_REHOME_AUDIENCE_ENV,
   DIRECTOR_REHOME_IDENTITY_ENV,
   assertRegionalRehomeDisabled,
+  assertReserveCompatibleTrafficMove,
   deployDirector,
   directorDeploymentEnvironment,
   directorCellSetAddition,
@@ -20,6 +21,7 @@ import {
   directorTopologyChange,
   environmentUpdateValue,
   parseArguments,
+  readReserveCells,
   revisionEnvironment,
   revisionSecretEnvironment,
   suppliedAdminIdentityToken,
@@ -428,7 +430,8 @@ function directorHarness({
   // Reproduces gcloud dropping minScale from a newly created revision.
   dropRequestedMinimum = false,
   servingServiceAccount,
-  servingImageDigest = `sha256:${'f'.repeat(64)}`
+  servingImageDigest = `sha256:${'f'.repeat(64)}`,
+  reserveCells = {}
 } = {}) {
   const state = {
     activeRevision: 'relay-00001-old',
@@ -462,6 +465,7 @@ function directorHarness({
   const operations = {
     describeService: () => ({
       status: {
+        url: 'https://relay-hash-uc.a.run.app',
         traffic: [
           { percent: 100, revisionName: state.activeRevision },
           ...[...state.tags].map(([tag, revisionName]) => ({
@@ -544,7 +548,8 @@ function directorHarness({
     },
     waitForHealth: async (_origin, connectionCapacityProtocol) => {
       healthProtocols.push(connectionCapacityProtocol)
-    }
+    },
+    readReserveCells: async (_config, origin) => reserveCells[origin]
   }
   return { state, removed, healthProtocols, operations }
 }
@@ -853,4 +858,62 @@ test('sets a reviewed cohort only behind repeated disabled-control verification'
     assertRegionalRehomeDisabled: async () => { verified++ } })
   assert.ok(verified >= 2)
   assert.equal(harness.state.revisions.get('relay-00003-new').env[DIRECTOR_CORRECTION_COHORT_ENV], '1')
+})
+
+test('director deploy refuses a traffic move between reserve-support revisions while a cell is reserve', async () => {
+  const candidateOrigin = 'https://candidate-new---relay-hash-uc.a.run.app'
+  const oldServing = directorHarness({
+    reserveCells: { [candidateOrigin]: ['production-gce-c3'] }
+  })
+  await assert.rejects(
+    deployDirector({}, 'candidate-new', oldServing.operations),
+    /differ in reserve-mode support while cells are reserve \(production-gce-c3\)/
+  )
+  assert.equal(oldServing.state.activeRevision, 'relay-00001-old')
+  const rollbackToOld = directorHarness({
+    reserveCells: { 'https://relay-hash-uc.a.run.app': ['production-gce-c3'] }
+  })
+  await assert.rejects(deployDirector({}, 'candidate-new', rollbackToOld.operations), /flip them to db first/)
+  assert.equal(rollbackToOld.state.activeRevision, 'relay-00001-old')
+  const allDb = directorHarness({ reserveCells: { [candidateOrigin]: [] } })
+  await deployDirector({}, 'candidate-new', allDb.operations)
+  assert.equal(allDb.state.activeRevision, 'relay-00003-new')
+})
+
+test('two revisions that both read the census may move traffic with reserve cells', () => {
+  assert.doesNotThrow(() => assertReserveCompatibleTrafficMove(['c3'], ['c3']))
+  assert.doesNotThrow(() => assertReserveCompatibleTrafficMove(undefined, undefined))
+  assert.throws(() => assertReserveCompatibleTrafficMove(undefined, ['c3']), /flip them to db first/)
+})
+
+test('reads a census-less director as unsupported and fails closed on any other refusal', async () => {
+  const environment = process.env.ORCA_RELAY_ADMIN_ID_TOKEN
+  process.env.ORCA_RELAY_ADMIN_ID_TOKEN = 'aaa.bbb.ccc'
+  const config = { 'admin-audience': 'https://relay.onorca.dev/v1/admin/drain' }
+  try {
+    assert.equal(
+      await readReserveCells(config, 'https://old.example.test', ['c1'], async () =>
+        new Response('404 Not Found', { status: 404 })
+      ),
+      undefined
+    )
+    const modes = { c1: 'db', c2: 'reserve' }
+    assert.deepEqual(
+      await readReserveCells(config, 'https://new.example.test', ['c1', 'c2'], async (url, init) => {
+        assert.equal(url, 'https://new.example.test/v1/admin/cell-admit-mode')
+        const { cellId } = JSON.parse(init.body)
+        return new Response(JSON.stringify({ v: 1, cellId, admitMode: modes[cellId], updatedAt: 1 }))
+      }),
+      ['c2']
+    )
+    await assert.rejects(
+      readReserveCells(config, 'https://new.example.test', ['c1'], async () =>
+        new Response(JSON.stringify({ error: 'invalid_token' }), { status: 401 })
+      ),
+      /cell admit mode read failed for c1: invalid_token/
+    )
+  } finally {
+    if (environment === undefined) delete process.env.ORCA_RELAY_ADMIN_ID_TOKEN
+    else process.env.ORCA_RELAY_ADMIN_ID_TOKEN = environment
+  }
 })
