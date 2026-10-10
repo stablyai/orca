@@ -6,6 +6,7 @@ import {
 } from '../../shared/browser-annotation-viewport-bridge'
 import type { BrowserViewportOverride } from '../../shared/browser-workspace-types'
 import { BrowserManagerDownloadLifecycle } from './browser-manager-download-lifecycle'
+import { installGuestDevToolsCloseShortcut } from './browser-guest-devtools-close-shortcut'
 import { sendGuestCdpCommand } from './guest-cdp-command'
 
 // Why no maxTouchPoints: Chromium rejects values outside 1..16 even when disabling, which left
@@ -31,6 +32,7 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
       return false
     }
     guest.openDevTools({ mode: 'detach' })
+    installGuestDevToolsCloseShortcut(guest, () => this.settingsResolver?.().keybindings)
     return true
   }
 
