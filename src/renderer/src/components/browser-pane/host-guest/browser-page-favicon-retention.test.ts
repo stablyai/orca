@@ -33,12 +33,11 @@ function createHarness(startUrl: string) {
     // Why the destination, not the current document: Orca-driven navigations set this ref before
     // assigning src, which is exactly the case the origin check must not read it for.
     lastKnownWebviewUrlRef: ref<string | null>(startUrl),
-    addressBarInputRef: ref(null),
     onSetUrlRef: ref(vi.fn()),
     onUpdatePageStateRef,
     addBrowserHistoryEntryRef: ref(vi.fn()),
     faviconUrlRef,
-    setAddressBarValue: vi.fn(),
+    setAddressBarValueFromPage: vi.fn(),
     annotationViewportBridgeTokenRef: ref('token'),
     setBrowserOverlayViewport: vi.fn()
   })
@@ -48,7 +47,6 @@ function createHarness(startUrl: string) {
     faviconUrlRef,
     browserTabUrlRef: ref(startUrl),
     addressBarValueRef: ref(startUrl),
-    addressBarInputRef: ref(null),
     activeLoadFailureRef: ref(null),
     lastKnownWebviewUrlRef: ref<string | null>(startUrl),
     trackNextLoadingEventRef: ref(true),
@@ -58,7 +56,7 @@ function createHarness(startUrl: string) {
     onUpdatePageStateRef,
     onSetUrlRef: ref(vi.fn()),
     setBrowserOverlayViewport: vi.fn(),
-    setAddressBarValue: vi.fn(),
+    setAddressBarValueFromPage: vi.fn(),
     focusAddressBarNow: () => false
   })
 

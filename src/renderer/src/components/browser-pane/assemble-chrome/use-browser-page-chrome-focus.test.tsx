@@ -35,6 +35,7 @@ function ChromeHarness({
   workspaceId = WORKSPACE_ID,
   chromeShortcutScope,
   hasGuest = true,
+  guestRefusesFocus = false,
   testId = 'a'
 }: {
   isActive?: boolean
@@ -42,11 +43,16 @@ function ChromeHarness({
   workspaceId?: string
   chromeShortcutScope?: BrowserChromeShortcutScope
   hasGuest?: boolean
+  /** A dying <webview>: still attached, but its guarded focus() fails (STA-3448). */
+  guestRefusesFocus?: boolean
   testId?: string
 }): React.JSX.Element {
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
   const guestRef = useRef<HTMLDivElement | null>(null)
-  const guestFocus = useElementGuestFocus(guestRef)
+  const elementGuestFocus = useElementGuestFocus(guestRef)
+  const guestFocus = guestRefusesFocus
+    ? { ...elementGuestFocus, focus: () => false }
+    : elementGuestFocus
   chromeFocus = useBrowserPageChromeFocus({
     browserTabId,
     workspaceId,
@@ -239,6 +245,28 @@ describe('useBrowserPageChromeFocus', () => {
     // the other has to be superseded on the way in, or it outlives the switch and steals focus.
     expect(document.activeElement).toBe(outside)
     expect(chromeFocus?.keepAddressBarFocusRef.current).toBe(false)
+  })
+
+  it('keeps the page when the bar is left for it mid-grab', () => {
+    queuePendingAddressBarFocus()
+    render(<ChromeHarness />)
+    act(() => flushFrames(1))
+    expect(document.activeElement).toBe(addressBar())
+
+    act(() => chromeFocus?.leaveAddressBarForPage())
+    act(() => flushFrames())
+
+    expect(document.activeElement).toBe(guest())
+    expect(chromeFocus?.keepAddressBarFocusRef.current).toBe(false)
+  })
+
+  it('keeps the address bar when the page it is left for refuses focus', () => {
+    renderChrome({ guestRefusesFocus: true })
+    act(() => addressBar().focus())
+
+    act(() => chromeFocus?.leaveAddressBarForPage())
+
+    expect(document.activeElement).toBe(addressBar())
   })
 
   it('leaves the page alone when a palette request aims at the guest mid-grab', () => {

@@ -64,7 +64,7 @@ function createHarness() {
       store.getState().setBrowserPageUrl(id, nextUrl)
     ),
     setBrowserOverlayViewport,
-    setAddressBarValue: vi.fn()
+    setAddressBarValueFromPage: vi.fn()
   }
   const loading = createBrowserPageWebviewLoadingHandlers({
     ...common,

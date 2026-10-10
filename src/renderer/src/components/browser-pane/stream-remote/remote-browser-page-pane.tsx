@@ -64,7 +64,7 @@ export function RemoteBrowserPagePane({
   // Why: the screencast <img> only exists once a frame lands, so before the first one the
   // viewport is the only place guest focus can go.
   const guestFocus = useElementGuestFocus(imageRef, remoteViewportRef)
-  const { startAddressBarFocusGrab } = useBrowserPageChromeFocus({
+  const { startAddressBarFocusGrab, leaveAddressBarForPage } = useBrowserPageChromeFocus({
     browserTabId: browserTab.id,
     workspaceId,
     isActive,
@@ -72,13 +72,18 @@ export function RemoteBrowserPagePane({
     addressBarInputRef,
     guestFocus
   })
-  const { addressBarValue, setAddressBarValue, setAddressBarValueFromPage, addressBarEditSession } =
-    useBrowserAddressBarEditSession({
-      pageId: browserTab.id,
-      url: browserTab.url,
-      addressBarInputRef,
-      startAddressBarFocusGrab
-    })
+  const {
+    addressBarValue,
+    setAddressBarValue,
+    committedAddress,
+    setAddressBarValueFromPage,
+    addressBarEditSession
+  } = useBrowserAddressBarEditSession({
+    pageId: browserTab.id,
+    url: browserTab.url,
+    addressBarInputRef,
+    startAddressBarFocusGrab
+  })
   // Pane-owned notices, split by what they are ABOUT, because that decides who outranks whom:
   //
   //   'direct'      — feedback on what the user just did (URL validation). Always shown: it is the
@@ -386,6 +391,8 @@ export function RemoteBrowserPagePane({
         runtimeEnvironmentId={runtimeEnvironmentId}
         addressBarValue={addressBarValue}
         onAddressBarChange={setAddressBarValue}
+        committedAddress={committedAddress}
+        onLeaveAddressBar={leaveAddressBarForPage}
         onSubmitAddressBar={submitAddressBar}
         onNavigateToUrl={navigateToUrl}
         onOpenWorkspaceDoc={(docLocation) =>

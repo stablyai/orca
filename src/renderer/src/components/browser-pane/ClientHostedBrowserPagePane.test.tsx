@@ -4,18 +4,23 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserPage } from '../../../../shared/browser-workspace-types'
 
-const mocks = vi.hoisted(() => ({
-  attach: vi.fn(),
-  publishMetadata: vi.fn(),
-  createBrowserTab: vi.fn(async () => true),
-  addressBar: {
-    current: null as {
-      value: string
-      onNavigate: (value: string) => void
-      inputRef: React.RefObject<HTMLInputElement | null>
-    } | null
+type CapturedAddressBarProps = {
+  value: string
+  onNavigate: (value: string) => void
+  committedAddress: string
+  onLeaveAddressBar: () => void
+  inputRef: React.RefObject<HTMLInputElement | null>
+}
+
+const mocks = vi.hoisted(() => {
+  const addressBar: { current: CapturedAddressBarProps | null } = { current: null }
+  return {
+    attach: vi.fn(),
+    publishMetadata: vi.fn(),
+    createBrowserTab: vi.fn(async () => true),
+    addressBar
   }
-}))
+})
 
 vi.mock('@/runtime/web-runtime-session', () => ({
   createWebRuntimeSessionBrowserTab: mocks.createBrowserTab
@@ -39,11 +44,7 @@ vi.mock('./browser-client-page-renderer-installation', () => ({
 vi.mock('./assemble-chrome/BrowserAddressBar', () => ({
   // Suggestions and select-on-focus are the shared bar's own suites; what matters here is that
   // the pane hands it the ref the chrome focus rules aim at.
-  default: (props: {
-    value: string
-    onNavigate: (value: string) => void
-    inputRef: React.RefObject<HTMLInputElement | null>
-  }) => {
+  default: (props: CapturedAddressBarProps) => {
     mocks.addressBar.current = props
     return <input aria-label="Address" ref={props.inputRef} value={props.value} readOnly />
   }
@@ -52,6 +53,7 @@ vi.mock('./assemble-chrome/BrowserAddressBar', () => ({
 import { useAppStore } from '@/store'
 import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
 import { requestBrowserFocus } from './host-guest/browser-focus'
+import { resolveAddressBarEscape } from './assemble-chrome/browser-address-bar-escape'
 import { installClientHostedPaneApi } from './client-hosted-browser-pane-test-rig'
 import { ClientHostedBrowserPagePane } from './ClientHostedBrowserPagePane'
 
@@ -597,6 +599,84 @@ describe('ClientHostedBrowserPagePane address bar parity', () => {
     // keyboard focus until it is told to let go.
     expect(blur).toHaveBeenCalled()
     expect(document.activeElement).toBe(screen.getByLabelText('Address'))
+  })
+
+  it('hands the bar the page address to revert to and the guest to leave for', () => {
+    const { webview, focus } = createWebview()
+    mocks.attach.mockReturnValue(retainedAttachment(webview))
+    useAppStore.setState({
+      pendingAddressBarFocusByPageId: { 'page-a': true },
+      pendingAddressBarFocusByTabId: { 'page-a': true }
+    })
+    render(
+      <ClientHostedBrowserPagePane
+        browserTab={page()}
+        workspaceId="workspace-a"
+        chromeShortcutScope="focused"
+        runtimeEnvironmentId="environment-a"
+        worktreeId="worktree-a"
+        placement={PLACEMENT}
+        isActive
+        onUpdatePageState={vi.fn()}
+        onSetUrl={vi.fn()}
+      />
+    )
+    act(() => flushFrames())
+    expect(focus).not.toHaveBeenCalled()
+    expect(mocks.addressBar.current?.committedAddress).toBe(mocks.addressBar.current?.value)
+
+    act(() => mocks.addressBar.current?.onLeaveAddressBar())
+    act(() => flushFrames())
+
+    expect(focus).toHaveBeenCalled()
+  })
+
+  it('leaves for the page on Escape after the page writes a URL the store never took', () => {
+    const { webview, setUrl } = createWebview()
+    mocks.attach.mockReturnValue(retainedAttachment(webview))
+    const onSetUrl = vi.fn()
+    render(
+      <ClientHostedBrowserPagePane
+        browserTab={page()}
+        workspaceId="workspace-a"
+        chromeShortcutScope="focused"
+        runtimeEnvironmentId="environment-a"
+        worktreeId="worktree-a"
+        placement={PLACEMENT}
+        isActive
+        onUpdatePageState={vi.fn()}
+        onSetUrl={onSetUrl}
+      />
+    )
+    onSetUrl.mockClear()
+    act(() =>
+      webview.dispatchEvent(
+        Object.assign(new Event('did-fail-load'), {
+          errorCode: -105,
+          errorDescription: 'ERR_NAME_NOT_RESOLVED',
+          validatedURL: 'https://failed.internal/',
+          isMainFrame: true
+        })
+      )
+    )
+    setUrl('https://failed.internal/')
+    act(() => webview.dispatchEvent(new Event('did-stop-loading')))
+    act(() => screen.getByLabelText('Address').focus())
+
+    expect(onSetUrl).not.toHaveBeenCalled()
+    const bar = mocks.addressBar.current
+    expect(bar?.value).toBe('https://failed.internal/')
+    const outcome = resolveAddressBarEscape({
+      suggestions: { kind: 'closed' },
+      draft: bar?.value ?? '',
+      committedAddress: bar?.committedAddress ?? ''
+    })
+    expect(outcome).toEqual({ kind: 'leave-for-page' })
+
+    setUrl('https://next.internal/')
+    act(() => webview.dispatchEvent(new Event('did-navigate')))
+    expect(mocks.addressBar.current?.value).toBe('https://failed.internal/')
+    expect(mocks.addressBar.current?.committedAddress).toBe('https://next.internal/')
   })
 
   it('files guest navigations into the URL history the address bar suggests from', () => {
