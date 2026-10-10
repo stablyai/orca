@@ -180,6 +180,40 @@ describe('Pi child rows', () => {
     ])
   })
 
+  it('names workflow children that share an agent by their workflow step key', async () => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'pi' })
+    startWorkflow(harness)
+    // pi-subagents 0.76.1 tags each scripted-workflow child with the key it was launched under.
+    for (const key of ['review-code', 'review-rollout']) {
+      harness.emitPiEvent('subagent:async-started', {
+        id: `run-${key}`,
+        mode: 'single',
+        agent: 'reviewer',
+        pid: 4000,
+        parentWorkflowRunId: WORKFLOW,
+        workflowKey: key
+      })
+    }
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(posts(harness).at(-1)?.subagents).toEqual([
+      {
+        id: 'run-review-code',
+        state: 'working',
+        startedAt: expect.any(Number),
+        agentType: 'reviewer',
+        description: 'review-code'
+      },
+      {
+        id: 'run-review-rollout',
+        state: 'working',
+        startedAt: expect.any(Number),
+        agentType: 'reviewer',
+        description: 'review-rollout'
+      }
+    ])
+  })
+
   it('posts an OMP task child with its description', async () => {
     const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
     await harness.callHook('session_start')

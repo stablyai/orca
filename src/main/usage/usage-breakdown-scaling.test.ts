@@ -55,6 +55,145 @@ it('folds events without rescanning accumulated location breakdowns', () => {
   expect(result.dailyAggregates).toHaveLength(1000)
 })
 
+it('folds streamed events immediately with the batch counters, metrics and metadata', () => {
+  const [seed] = events(1)
+  const first: Event = {
+    ...seed,
+    sessionId: 'mixed',
+    timestamp: '2026-09-09T00:00:00Z',
+    day: '2026-09-09',
+    projectKey: 'z',
+    projectLabel: 'Z',
+    repoId: 'repo-z',
+    worktreeId: 'tree-z',
+    model: 'large',
+    inputTokens: 3,
+    cachedInputTokens: 1,
+    outputTokens: 5,
+    reasoningOutputTokens: 2,
+    totalTokens: 8,
+    cost: 2
+  }
+  const input: Event[] = [
+    first,
+    {
+      ...seed,
+      sessionId: 'unknown',
+      timestamp: '2026-09-10T00:00:00Z',
+      day: '2026-09-10',
+      model: null
+    },
+    {
+      ...first,
+      timestamp: '2026-09-07T00:00:00Z',
+      day: '2026-09-07',
+      projectKey: 'a',
+      projectLabel: 'A',
+      repoId: 'repo-a',
+      worktreeId: 'tree-a',
+      model: 'small',
+      inputTokens: 7,
+      cachedInputTokens: 3,
+      outputTokens: 11,
+      reasoningOutputTokens: 5,
+      totalTokens: 18,
+      cost: 5
+    },
+    {
+      ...first,
+      timestamp: '2026-09-09T12:00:00Z',
+      projectLabel: 'Changed label',
+      repoId: 'changed-repo',
+      worktreeId: 'changed-tree',
+      inputTokens: 13,
+      cachedInputTokens: 7,
+      outputTokens: 17,
+      reasoningOutputTokens: 11,
+      totalTokens: 30,
+      cost: 7
+    }
+  ]
+  const expected = aggregation.aggregate(input)
+  const accumulator = aggregation.createAccumulator()
+  for (const event of input) {
+    accumulator.add(event)
+    event.totalTokens = 999
+    event.cost = 999
+    event.model = 'changed'
+    event.projectLabel = 'Changed after adding'
+  }
+  const result = accumulator.finalize()
+  expect(result).toEqual(expected)
+  expect(result.sessions.map((session) => session.sessionId)).toEqual(['unknown', 'mixed'])
+  expect(result.sessions[0].primaryModel).toBe('Unknown model')
+  const mixed = result.sessions[1]
+  expect(mixed).toMatchObject({
+    firstTimestamp: '2026-09-07T00:00:00Z',
+    lastTimestamp: '2026-09-09T12:00:00Z',
+    primaryModel: 'Mixed models',
+    hasMixedModels: true,
+    primaryProjectLabel: 'Multiple locations',
+    hasMixedLocations: true,
+    primaryRepoId: 'repo-z',
+    primaryWorktreeId: 'tree-z',
+    eventCount: 3,
+    totalInputTokens: 23,
+    totalCachedInputTokens: 11,
+    totalOutputTokens: 33,
+    totalReasoningOutputTokens: 18,
+    totalTokens: 56,
+    cost: 14
+  })
+  expect(mixed.locationBreakdown).toMatchObject([
+    { locationKey: 'z', projectLabel: 'Z', totalTokens: 38, cost: 9 },
+    { locationKey: 'a', projectLabel: 'A', totalTokens: 18, cost: 5 }
+  ])
+  expect(mixed.modelBreakdown).toMatchObject([
+    { modelKey: 'large', totalTokens: 38, cost: 9 },
+    { modelKey: 'small', totalTokens: 18, cost: 5 }
+  ])
+  expect(mixed.locationModelBreakdown).toMatchObject([
+    { locationKey: 'z', modelKey: 'large', totalTokens: 38, cost: 9 },
+    { locationKey: 'a', modelKey: 'small', totalTokens: 18, cost: 5 }
+  ])
+  expect(result.dailyAggregates).toMatchObject([
+    { day: '2026-09-07', projectKey: 'a', totalTokens: 18, cost: 5 },
+    { day: '2026-09-09', projectKey: 'z', projectLabel: 'Z', totalTokens: 38, cost: 9 },
+    { day: '2026-09-10', projectKey: 'path-0', totalTokens: 3, cost: 0.5 }
+  ])
+})
+
+it('keeps first encounter order when streamed rollup sort keys tie', () => {
+  const accumulator = aggregation.createAccumulator()
+  for (const [index, event] of events(4).entries()) {
+    accumulator.add({ ...event, sessionId: `session-${index % 2}`, projectLabel: 'Same label' })
+  }
+  const result = accumulator.finalize()
+  expect(result.sessions.map((session) => session.sessionId)).toEqual(['session-0', 'session-1'])
+  expect(result.sessions[0].locationBreakdown.map((entry) => entry.locationKey)).toEqual([
+    'path-0',
+    'path-2'
+  ])
+  expect(result.sessions[0].modelBreakdown.map((entry) => entry.modelKey)).toEqual([
+    'model-0',
+    'model-2'
+  ])
+  expect(result.dailyAggregates.map((entry) => entry.projectKey)).toEqual([
+    'path-0',
+    'path-1',
+    'path-2',
+    'path-3'
+  ])
+})
+
+it('finalizes an empty stream once and rejects subsequent additions', () => {
+  const accumulator = aggregation.createAccumulator()
+  const result = accumulator.finalize()
+  expect(result).toEqual({ sessions: [], dailyAggregates: [] })
+  expect(accumulator.finalize()).toBe(result)
+  expect(() => accumulator.add(events(1)[0])).toThrow('Cannot add usage events after finalization')
+})
+
 it('merges rollups using first-match indexes without mutating source breakdowns', () => {
   const source = aggregation.aggregate(events(1000)).sessions[0]
   const existing = structuredClone(source)

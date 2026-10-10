@@ -93,13 +93,7 @@ function getFolderWorkspacePartitionHostId(
     : null
   const parsed = parseExecutionHostId(workspace?.executionHostId ?? group?.executionHostId)
   if (parsed) {
-    // Every non-local kind owns its own partition — the same answer main's
-    // RuntimeWorkspaceSessionController.getPreferredHostId gives for this key. Answering 'local'
-    // for an ssh host left the renderer and the runtime writing one folder workspace into two
-    // stores, which is #12723 unfixed for folder workspaces; and once the renderer began writing
-    // `ssh:<targetId>` at all, a save's field-level patch erased the folder rows main had put
-    // there. Boot reads these partitions from persistence's own census, not the repo catalog, so
-    // a target whose only workspace is a folder is no longer unenumerated.
+    // Why: every non-local kind owns its own partition, matching main's getPreferredHostId (#12723).
     return parsed.id
   }
   if (workspace && group) {
@@ -135,14 +129,6 @@ function buildRepoHostById(
   return repoHostById
 }
 
-/** Map a worktree to the host partition it persists under, plus the host claims behind it.
- *
- *  Why every non-local host and not just `runtime:*`: an SSH worktree's session is already
- *  read-modify-written into `ssh:<targetId>` by the main-process runtime, so answering 'local'
- *  here double-owned the data and left whichever half the readers skipped round-tripping as
- *  absence (#12721, #12723). The one exception is an id two hosts both publish: it gets a
- *  deterministic primary so the co-claimant's rows can be parked in the shadow instead of sharing
- *  one bucket with it. */
 /** True only when the catalog positively says `hostId` no longer holds the workspace. An id the
  *  catalog cannot speak for yet keeps its restored partition — the same rule the shadow uses. */
 function catalogReattributedAwayFrom(
@@ -154,6 +140,14 @@ function catalogReattributedAwayFrom(
   return Boolean(claimed) && !contestedPartitionHosts(claimed ?? []).includes(hostId)
 }
 
+/** Map a worktree to the host partition it persists under, plus the host claims behind it.
+ *
+ *  Why every non-local host and not just `runtime:*`: an SSH worktree's session is already
+ *  read-modify-written into `ssh:<targetId>` by the main-process runtime, so answering 'local'
+ *  here double-owned the data and left whichever half the readers skipped round-tripping as
+ *  absence (#12721, #12723). The one exception is an id two hosts both publish: it gets a
+ *  deterministic primary so the co-claimant's rows can be parked in the shadow instead of sharing
+ *  one bucket with it. */
 export function buildHostSessionRouting(state: HostPersistenceState): HostSessionRouting {
   const repoHostById = buildRepoHostById(state.repos)
   const claims = indexWorktreeHostClaims(state.worktreesByRepo, repoHostById)
@@ -268,14 +262,9 @@ export async function persistWorkspaceSessionByHost(
   payload: WorkspaceSessionState,
   state: HostPersistenceState
 ): Promise<void> {
-  // Why 'replace': api.set swaps the whole partition, so parked rows must ride along even for
-  // fields nothing else routed to this host.
-  const slices = splitWorkspaceSessionForWrite(payload, state, 'replace')
-  const writes: Promise<void>[] = [api.set(slices[LOCAL_EXECUTION_HOST_ID] ?? payload)]
-  for (const [hostId, slice] of nonLocalHostSessionEntries(slices)) {
-    writes.push(api.set(slice, hostId))
-  }
-  await Promise.all(writes)
+  await Promise.all(
+    buildWorkspaceSessionHostSnapshots(payload, state).map((s) => api.set(s.state, s.hostId))
+  )
   await api.flush()
 }
 
@@ -293,15 +282,4 @@ export function buildWorkspaceSessionHostSnapshots(
       hostId
     }))
   ]
-}
-
-/** Synchronous full-session split for the beforeunload / quit paths. */
-export function persistWorkspaceSessionByHostSync(
-  api: SessionApi,
-  payload: WorkspaceSessionState,
-  state: HostPersistenceState
-): void {
-  for (const snapshot of buildWorkspaceSessionHostSnapshots(payload, state)) {
-    api.setSync(snapshot.state, snapshot.hostId)
-  }
 }

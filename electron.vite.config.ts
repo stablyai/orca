@@ -6,6 +6,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { createBootstrapFatalExitBanner } from './config/build-plugins/bootstrap-fatal-exit-banner'
 import { createPdfjsViewerAssetsPlugin } from './config/build-plugins/pdfjs-viewer-assets'
+import { createProcessHostDevRebuildPlugin } from './config/build-plugins/process-host-dev-rebuild'
 import {
   CLI_MAIN_ENTRY_NAMES,
   createPlainNodeEntryGuardPlugin
@@ -290,7 +291,11 @@ export const electronViteConfig: UserConfig = {
           entryFileNames: '[name].js',
           chunkFileNames: 'chunks/[name]-[hash].js'
         },
-        plugins: [createMainBootstrapPlugin(), createPlainNodeEntryGuardPlugin()]
+        plugins: [
+          createMainBootstrapPlugin(),
+          createPlainNodeEntryGuardPlugin(),
+          createProcessHostDevRebuildPlugin()
+        ]
       }
     },
     // Why: compile-time substitution for the telemetry gate. See the block

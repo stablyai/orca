@@ -5,4 +5,8 @@ export {
   rollbackManagedOrcadEnvironment,
   updateManagedOrcadEnvironment
 } from './orcad-runtime-maintenance'
-export { cancelManagedOrcadStop, stopManagedOrcadEnvironment } from './orcad-runtime-decommission'
+export {
+  cancelManagedOrcadStop,
+  forgetManagedOrcadEnvironment,
+  stopManagedOrcadEnvironment
+} from './orcad-runtime-decommission'

@@ -71,6 +71,8 @@ export type TerminalMultiplexStream = {
   ackWindowBytes: number
   supportsOutputPause: boolean
   supportsWriteUnavailable: boolean
+  // Set only when the client negotiated `inputAck`; sequenced Input frames are then deduped and acked.
+  inputSessionId: string | null
   outputPaused: boolean
   supportsDesktopViewportClaims: boolean
   desktopClaimTail: Promise<boolean>
@@ -83,6 +85,8 @@ export type TerminalMultiplexStream = {
   ackPendingOutputBytes: number
   ackPendingOutputOverflowed: boolean
   ackRecoverySnapshotInFlight: boolean
+  /** A recovery went out screen-only while the link was saturated; history follows once it drains. */
+  ackRecoveryHistoryOwed: boolean
   pendingOutput: TerminalOutputChunk[]
   pendingOutputBytes: number
   pendingOutputOverflowed: boolean

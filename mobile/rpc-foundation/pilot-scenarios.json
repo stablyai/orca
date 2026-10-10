@@ -9268,7 +9268,7 @@
         {
           "complete": "preflight.detectAgents#1",
           "params": {
-            "$undefined": true
+            "worktreeId": "repo-9::/w"
           },
           "reply": {
             "ok": true,
@@ -9361,7 +9361,7 @@
         {
           "complete": "preflight.detectAgents#1",
           "params": {
-            "$undefined": true
+            "worktreeId": "repo-9::/w"
           },
           "reply": {
             "ok": true,
@@ -9454,7 +9454,7 @@
         {
           "complete": "preflight.detectAgents#1",
           "params": {
-            "$undefined": true
+            "worktreeId": "repo-9::/w"
           },
           "reply": {
             "ok": true,
@@ -18538,7 +18538,7 @@
         {
           "complete": "preflight.detectAgents#1",
           "params": {
-            "$undefined": true
+            "worktreeId": "workspace-1"
           },
           "reply": {
             "ok": true,
@@ -23149,7 +23149,7 @@
         {
           "complete": "preflight.detectAgents#1",
           "params": {
-            "$undefined": true
+            "worktreeId": "repo-1::/folder"
           },
           "reply": {
             "ok": true,

@@ -14,10 +14,7 @@ import {
   launchHostProvesAgentInFront,
   nameLocalTypedLineShell
 } from './agent-launch-typed-line-shell'
-import {
-  detectInstalledAgentsWithShellPathHydration,
-  detectRemoteAgents
-} from '../preflight/agent-detection'
+import { detectAgentsOnHost } from '../preflight/workspace-agent-detection'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 
@@ -61,9 +58,9 @@ export async function resolveWorktreeStartupDraftAgent(
   const sshConnectionId = getRepoSshConnectionId(repo)
   try {
     // Why: startup-draft fallback can run from sparse runtime launch envs too.
-    detected = sshConnectionId
-      ? await detectRemoteAgents({ connectionId: sshConnectionId })
-      : await detectInstalledAgentsWithShellPathHydration()
+    detected = await detectAgentsOnHost(
+      sshConnectionId ? { kind: 'ssh', connectionId: sshConnectionId } : { kind: 'local' }
+    )
   } catch {
     detected = []
   }

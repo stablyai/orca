@@ -143,6 +143,11 @@ function buildAiVaultResumeForWorktree(
   }
   const { platform, codexHome, liveShell } = resolveAiVaultResumeHost(args)
   const resumeFilePath = normalizeAiVaultResumeFilePath(args.session.filePath, platform)
+  // Why: Pi resumes by transcript path, spelled for the shell it runs in (#24408).
+  const localProviderSession = getAiVaultAgentProviderSession({
+    ...args.session,
+    filePath: resumeFilePath
+  })
   const cwd = embedCwd ? args.session.cwd : null
   const startupCwd = !embedCwd && args.session.cwd ? { cwd: args.session.cwd } : {}
   if (isAntigravityReferenceSession(args.session)) {
@@ -158,10 +163,10 @@ function buildAiVaultResumeForWorktree(
       return { ...reference, ...startupCwd }
     }
   }
-  if (providerSession && isResumableTuiAgent(args.session.agent)) {
+  if (localProviderSession && isResumableTuiAgent(args.session.agent)) {
     const startupPlan = buildAgentResumeStartupPlan({
       agent: args.session.agent,
-      providerSession,
+      providerSession: localProviderSession,
       cmdOverrides: {
         ...args.state.settings?.agentCmdOverrides,
         ...(args.commandOverride?.trim() ? { [args.session.agent]: args.commandOverride } : {})
@@ -205,7 +210,7 @@ function buildAiVaultResumeForWorktree(
         ...realHomeCodexResumeEnvDeletion(args.session),
         ...startupCwd,
         launchConfig: startupPlan.launchConfig,
-        providerSession
+        providerSession: localProviderSession
       }
     }
   }

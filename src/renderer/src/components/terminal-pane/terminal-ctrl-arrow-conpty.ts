@@ -1,5 +1,6 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
   getExecutionHostIdForWorktree,
@@ -8,8 +9,6 @@ import {
 import { isLocalNativeWindowsConpty } from '@/lib/pane-manager/windows-pty-compatibility'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import type { PtyTransport } from './pty-transport-types'
-
-const REMOTE_RUNTIME_PTY_ID_PREFIX = 'remote:'
 
 type TerminalTabShellState = {
   tabsByWorktree: Record<
@@ -39,10 +38,6 @@ type TerminalCtrlArrowConptyArgs = {
   transport: TerminalCtrlArrowConptyTransport | null
 }
 
-function isRemoteRuntimePtyId(ptyId: string): boolean {
-  return ptyId.startsWith(REMOTE_RUNTIME_PTY_ID_PREFIX)
-}
-
 export function isLocalWindowsConptyPaneForCtrlArrow({
   isWindows,
   userAgent,
@@ -59,7 +54,7 @@ export function isLocalWindowsConptyPaneForCtrlArrow({
   }
 
   const ptyId = transport?.getPtyId() ?? null
-  if (ptyId !== null && isRemoteRuntimePtyId(ptyId)) {
+  if (isRemoteRuntimePtyId(ptyId)) {
     return false
   }
 

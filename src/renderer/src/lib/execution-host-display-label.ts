@@ -1,5 +1,6 @@
 import {
   getExecutionHostLabel,
+  isUnresolvedOwnerHostId,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
@@ -50,10 +51,10 @@ export function selectExecutionHostDisplayLabel(
  */
 export function selectWorktreeHostDisplayLabel(state: AppState, worktreeId: string): string | null {
   const hostId = getExecutionHostIdForWorktree(state, worktreeId)
-  const parsed = parseExecutionHostId(hostId)
-  if (parsed?.kind === 'runtime' && parsed.environmentId === 'unresolved-owner') {
+  if (isUnresolvedOwnerHostId(hostId)) {
     return null
   }
+  const parsed = parseExecutionHostId(hostId)
   return selectExecutionHostDisplayLabel(state, hostId, {
     sshEnvironmentId:
       parsed?.kind === 'ssh' ? getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId) : null

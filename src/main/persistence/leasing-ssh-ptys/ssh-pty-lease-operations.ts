@@ -1,7 +1,6 @@
-import { isLiveSshPtyLease } from '../../../shared/ssh-pty-lease-liveness'
 import type { StoreRuntimeState } from '../loading-store/store-runtime-state'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { SshRemotePtyLease } from '../../../shared/ssh-types'
+import { isLiveSshPtyLease, type SshRemotePtyLease } from '../../../shared/ssh-types'
 import { isTerminalLeafId } from '../../../shared/stable-pane-id'
 import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
 import { pruneRetiredSshRemotePtyLeaseTombstones } from './ssh-pty-lease-tombstone-retention'

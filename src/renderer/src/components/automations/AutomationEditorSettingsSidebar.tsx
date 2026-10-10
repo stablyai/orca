@@ -102,9 +102,7 @@ export function AutomationEditorSettingsSidebar({
                 <AgentCombobox
                   agents={visibleAgents}
                   value={draft.agentId}
-                  onValueChange={(agentId) =>
-                    agentId && onDraftChange((current) => ({ ...current, agentId }))
-                  }
+                  onValueChange={(agentId) => onDraftChange((current) => ({ ...current, agentId }))}
                   defaultAgent={settings?.defaultTuiAgent ?? null}
                   triggerClassName={`h-9 w-full min-w-0 ${pickerTriggerClassName}`}
                   allowNarrowTrigger

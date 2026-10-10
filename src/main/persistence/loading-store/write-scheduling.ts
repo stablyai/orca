@@ -85,12 +85,3 @@ export function scheduleSave(
     void enqueueWrite(writes, { skipIfClean: true }).catch(() => {})
   }, delay)
 }
-
-export function installWriteSchedulingOperationsContext(
-  target: WriteSchedulingOperations,
-  source: WriteSchedulingOperations
-): void {
-  Object.defineProperty(target, writeSchedulingOperationsContext, {
-    value: source[writeSchedulingOperationsContext]
-  })
-}

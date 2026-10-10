@@ -1,24 +1,28 @@
 import { isAuthError, isPassphraseError, isTransientError } from './ssh-connection-utils'
 import { isHostKeyVerificationError } from './ssh-host-key-decision'
 
+const DEFINITE_HOST_FAILURE_FRAGMENTS = [
+  'no route to host',
+  'network is unreachable',
+  'network is down',
+  'host is down',
+  'temporary failure in name resolution',
+  'name or service not known',
+  'nodename nor servname',
+  'could not resolve hostname'
+]
+
 // Why: the system-SSH transport reports network failures as OpenSSH prose, not errno codes, so its
 // probe timeouts and connect failures never match isTransientError's code table.
 const NETWORK_LIKE_ERROR_FRAGMENTS = [
+  ...DEFINITE_HOST_FAILURE_FRAGMENTS,
   'system ssh connection timed out',
   'timed out while waiting for handshake',
   'connection timed out',
   'operation timed out',
   'connection refused',
   'connection reset',
-  'no route to host',
-  'network is unreachable',
-  'network is down',
-  'host is down',
   'broken pipe',
-  'temporary failure in name resolution',
-  'name or service not known',
-  'nodename nor servname',
-  'could not resolve hostname',
   'kex_exchange_identification',
   // Pre-7.x OpenSSH wording for the same banner-exchange failure.
   'ssh_exchange_identification',
@@ -30,17 +34,6 @@ const NETWORK_LIKE_ERROR_FRAGMENTS = [
   // Deliberately not the bare 'connection closed by': OpenSSH prints "Connection closed by <ip> port 22"
   // for server-side rejections (MaxStartups, DenyUsers) too, and those must stay permanent.
   'connection closed by remote'
-]
-
-const DEFINITE_HOST_FAILURE_FRAGMENTS = [
-  'no route to host',
-  'network is unreachable',
-  'network is down',
-  'host is down',
-  'temporary failure in name resolution',
-  'name or service not known',
-  'nodename nor servname',
-  'could not resolve hostname'
 ]
 
 const DEFINITE_HOST_FAILURE_CODES = new Set(['EHOSTUNREACH', 'ENETUNREACH', 'EAI_AGAIN'])

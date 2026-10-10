@@ -1,3 +1,4 @@
+import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
@@ -29,7 +30,6 @@ function record(accountHomePath: string): AgentSessionRecord {
 function listing(id: string): AgentModelCatalogSuccess {
   return {
     models: [{ id, label: id, isDefault: true, efforts: [] }],
-    fastModeTierByModel: new Map(),
     origin: 'probe'
   }
 }
@@ -51,7 +51,7 @@ const CODEX_HOME = (path: string): { variable: 'CODEX_HOME'; path: string } => (
 describe('agent model catalog service', () => {
   it('answers unknown and kicks one probe for a session whose key has never listed', async () => {
     const store = new AgentModelCatalogStore()
-    const probe = vi.fn(async (_home: string) => listing('gpt-a'))
+    const probe = vi.fn(async (_home: AgentSessionAccountHome) => listing('gpt-a'))
     const service = createAgentModelCatalogService({
       store,
       getRecord: () => record('/homes/a'),
@@ -67,7 +67,7 @@ describe('agent model catalog service', () => {
     // record-scoped read probes the RECORD's pinned home, not the selection.
     await service.read({ agent: 'codex', sessionId: 'session-1' })
     expect(probe).toHaveBeenCalledTimes(1)
-    expect(probe).toHaveBeenCalledWith('/homes/a')
+    expect(probe).toHaveBeenCalledWith(CODEX_HOME('/homes/a'), { signal: expect.any(AbortSignal) })
     await vi.waitFor(async () => {
       const result = await service.read({ agent: 'codex', sessionId: 'session-1' })
       expect(result.origin).toBe('probe')
@@ -76,7 +76,7 @@ describe('agent model catalog service', () => {
 
   it('probes as for no record when this build cannot start the record as it is pinned', async () => {
     const store = new AgentModelCatalogStore()
-    const probe = vi.fn(async (_home: string) => listing('gpt-a'))
+    const probe = vi.fn(async (_home: AgentSessionAccountHome) => listing('gpt-a'))
     // A Codex record pinning Claude's variable: its path is not a Codex home to probe under.
     const pinned = { ...record('/x'), accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/x' } }
     const drivesRecord = vi.fn(() => false)
@@ -91,14 +91,16 @@ describe('agent model catalog service', () => {
     await service.read({ agent: 'codex', sessionId: 'session-1' })
 
     expect(drivesRecord).toHaveBeenCalledWith(pinned)
-    expect(probe).toHaveBeenCalledExactlyOnceWith('/homes/selected')
+    expect(probe).toHaveBeenCalledExactlyOnceWith(CODEX_HOME('/homes/selected'), {
+      signal: expect.any(AbortSignal)
+    })
   })
 
   it('an account switch with no record reads and prewarms the NEW account, never the old entry', async () => {
     const store = new AgentModelCatalogStore()
     // The old account listed under its own fingerprint before the switch.
     const oldFingerprint = selectedHomeFingerprint('/homes/old')
-    store.recordSuccess(oldFingerprint, 'codex', listing('gpt-old'))
+    store.recordSuccess(oldFingerprint, 'codex', listing('gpt-old'), 'discovery')
     const probe = vi.fn(async () => listing('gpt-new'))
     const service = createAgentModelCatalogService({
       store,
@@ -112,7 +114,9 @@ describe('agent model catalog service', () => {
       origin: 'unknown',
       listingInProgress: true
     })
-    expect(probe).toHaveBeenCalledWith('/homes/new')
+    expect(probe).toHaveBeenCalledWith(CODEX_HOME('/homes/new'), {
+      signal: expect.any(AbortSignal)
+    })
     await vi.waitFor(async () => {
       const result = await service.read({ agent: 'codex' })
       expect(result.origin === 'unknown' ? null : result.models[0]!.id).toBe('gpt-new')
@@ -124,8 +128,18 @@ describe('agent model catalog service', () => {
 
   it('a record-less read serves the selected account entry when it exists', async () => {
     const store = new AgentModelCatalogStore()
-    store.recordSuccess(selectedHomeFingerprint('/homes/selected'), 'codex', listing('gpt-mine'))
-    store.recordSuccess(selectedHomeFingerprint('/homes/other'), 'codex', listing('gpt-other'))
+    store.recordSuccess(
+      selectedHomeFingerprint('/homes/selected'),
+      'codex',
+      listing('gpt-mine'),
+      'discovery'
+    )
+    store.recordSuccess(
+      selectedHomeFingerprint('/homes/other'),
+      'codex',
+      listing('gpt-other'),
+      'discovery'
+    )
     const service = createAgentModelCatalogService({
       store,
       getRecord: () => undefined,
@@ -142,12 +156,14 @@ describe('agent model catalog service', () => {
     store.recordSuccess(
       agentModelCatalogFingerprintForRecord(sessionRecord),
       'codex',
-      listing('gpt-session')
+      listing('gpt-session'),
+      'discovery'
     )
     store.recordSuccess(
       selectedHomeFingerprint('/homes/selected'),
       'codex',
-      listing('gpt-selected')
+      listing('gpt-selected'),
+      'discovery'
     )
     const service = createAgentModelCatalogService({
       store,
@@ -210,7 +226,9 @@ describe('agent model catalog service', () => {
       return { promise, resolve, reject }
     }
 
-    function coldService(probe: (home: string) => Promise<AgentModelCatalogSuccess>) {
+    function coldService(
+      probe: (home: AgentSessionAccountHome) => Promise<AgentModelCatalogSuccess>
+    ) {
       const store = new AgentModelCatalogStore()
       const service = createAgentModelCatalogService({
         store,
@@ -423,7 +441,12 @@ describe('agent model catalog service', () => {
     it('serves an aged entry at once and refreshes it behind the answer', async () => {
       let now = 0
       const store = new AgentModelCatalogStore({ now: () => now })
-      store.recordSuccess(selectedHomeFingerprint('/homes/selected'), 'codex', listing('gpt-old'))
+      store.recordSuccess(
+        selectedHomeFingerprint('/homes/selected'),
+        'codex',
+        listing('gpt-old'),
+        'discovery'
+      )
       now = AGENT_MODEL_CATALOG_FRESH_MS
       const probe = vi.fn(() => new Promise<AgentModelCatalogSuccess>(() => {}))
       const service = createAgentModelCatalogService({
@@ -442,7 +465,12 @@ describe('agent model catalog service', () => {
   describe('a read for the workspace a new chat runs in', () => {
     function serviceWith(mayOverride: boolean) {
       const store = new AgentModelCatalogStore()
-      store.recordSuccess(selectedHomeFingerprint('/homes/selected'), 'codex', listing('gpt-user'))
+      store.recordSuccess(
+        selectedHomeFingerprint('/homes/selected'),
+        'codex',
+        listing('gpt-user'),
+        'discovery'
+      )
       const workspaceMayOverrideDefaultModel = vi.fn(async () => mayOverride)
       const service = createAgentModelCatalogService({
         store,
@@ -488,6 +516,61 @@ describe('agent model catalog service', () => {
       const { service, workspaceMayOverrideDefaultModel } = serviceWith(true)
       expect(defaults(await service.read({ agent: 'codex' }))).toEqual([true])
       expect(workspaceMayOverrideDefaultModel).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('an agent whose account is not one directory', () => {
+    const managed = (id: string): AgentSessionAccountHome => ({
+      kind: 'opencode',
+      locator: { kind: 'managed', managedProfileId: id }
+    })
+    const PROFILE_A = '0b0c6f5e-4f51-4c4a-9d3e-1a2b3c4d5e6f'
+    const PROFILE_B = '9f8e7d6c-5b4a-4c3d-8e2f-1a0b9c8d7e6f'
+    const openCodeRecord = (
+      home: AgentSessionAccountHome,
+      wslDistro: string | null = null
+    ): AgentSessionRecord => ({
+      ...record('/unused'),
+      provider: 'opencode',
+      accountHome: home,
+      location: { ...record('/unused').location, wslDistro }
+    })
+
+    it('probes under the account the chat pinned, and keeps each account’s listing apart', async () => {
+      const store = new AgentModelCatalogStore()
+      const probe = vi.fn(async (home: AgentSessionAccountHome) => listing(JSON.stringify(home)))
+      const service = createAgentModelCatalogService({
+        store,
+        getRecord: () => openCodeRecord(managed(PROFILE_A)),
+        drivesRecord: () => true,
+        resolveAccountHome: async () => managed(PROFILE_B),
+        probes: { opencode: probe }
+      })
+      await service.read({ agent: 'opencode', sessionId: 'session-1', waitForListing: true })
+      await service.read({ agent: 'opencode', waitForListing: true })
+      expect(probe.mock.calls.map(([home]) => home)).toEqual([
+        managed(PROFILE_A),
+        managed(PROFILE_B)
+      ])
+      const pinned = await service.read({ agent: 'opencode', sessionId: 'session-1' })
+      const selected = await service.read({ agent: 'opencode' })
+      expect(pinned.origin !== 'unknown' && pinned.models[0]!.id).toContain(PROFILE_A)
+      expect(selected.origin !== 'unknown' && selected.models[0]!.id).toContain(PROFILE_B)
+    })
+
+    it('starts no host-side probe for a chat pinned inside WSL', async () => {
+      const probe = vi.fn(async () => listing('never'))
+      const service = createAgentModelCatalogService({
+        store: new AgentModelCatalogStore(),
+        getRecord: () => openCodeRecord(managed(PROFILE_A), 'Ubuntu'),
+        drivesRecord: () => true,
+        resolveAccountHome: async () => managed(PROFILE_B),
+        probes: { opencode: probe }
+      })
+      expect(await service.read({ agent: 'opencode', sessionId: 'session-1' })).toEqual({
+        origin: 'unknown'
+      })
+      expect(probe).not.toHaveBeenCalled()
     })
   })
 })

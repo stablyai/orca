@@ -26,9 +26,5 @@ export async function runQueueableStructuredAgentSessionSend(
   if (queued) {
     return queued
   }
-  const accepted = await immediate()
-  if (accepted.ok) {
-    context.wakeDelivery(ctx.sessionId)
-  }
-  return accepted
+  return immediate()
 }

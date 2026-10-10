@@ -8,6 +8,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   NATIVE_CHAT_VISUAL_FRAME_NAME_PREFIX,
   NATIVE_CHAT_VISUAL_OPEN_LINK_TYPE,
+  NATIVE_CHAT_VISUAL_PING_TYPE,
+  NATIVE_CHAT_VISUAL_PONG_TIMEOUT_MS,
+  NATIVE_CHAT_VISUAL_PONG_TYPE,
   NATIVE_CHAT_VISUAL_SIZE_TYPE,
   NATIVE_CHAT_VISUAL_THEME_TYPE
 } from '../../../../shared/native-chat-visual-shell'
@@ -18,6 +21,7 @@ vi.mock('@/lib/http-link-routing', () => ({
 }))
 
 import { NativeChatVisualFrame } from './NativeChatVisualFrame'
+import { acquireWebviewsDragPassthrough } from '../browser-pane/host-guest/webview-drag-passthrough'
 
 const visual = { revision: 'r1', html: '<p>chart</p>' }
 
@@ -54,6 +58,48 @@ function post(data: unknown, source: MessageEventSource | null): void {
   })
 }
 
+function load(frame: HTMLIFrameElement): void {
+  act(() => {
+    frame.dispatchEvent(new Event('load'))
+  })
+}
+
+function answer(frame: HTMLIFrameElement, id: number): void {
+  post({ type: NATIVE_CHAT_VISUAL_PONG_TYPE, channel: channelOf(frame), id }, frame.contentWindow)
+}
+
+/** Records what the host posts into the frame, so only the test answers its pings. */
+function captureFramePosts(frame: HTMLIFrameElement): ReturnType<typeof vi.fn> {
+  const contentWindow = frame.contentWindow
+  if (!contentWindow) {
+    throw new Error('no content window')
+  }
+  const posted = vi.fn()
+  vi.spyOn(contentWindow, 'postMessage').mockImplementation(posted)
+  return posted
+}
+
+/** Renders the frame and lets its own first load land, then hands the clock to the test. */
+async function renderLoaded(onRetired: () => void) {
+  const view = render(<Harness onRetired={onRetired} />)
+  const frame = frameOf(view.container)
+  const posted = captureFramePosts(frame)
+  await vi.waitFor(() => {
+    expect(posted).toHaveBeenCalledWith(
+      expect.objectContaining({ type: NATIVE_CHAT_VISUAL_THEME_TYPE }),
+      '*'
+    )
+  })
+  vi.useFakeTimers()
+  return { ...view, frame, posted }
+}
+
+function waitOutTheAnswer(): void {
+  act(() => {
+    vi.advanceTimersByTime(NATIVE_CHAT_VISUAL_PONG_TIMEOUT_MS)
+  })
+}
+
 function setUserActivation(isActive: boolean): void {
   Object.defineProperty(navigator, 'userActivation', {
     configurable: true,
@@ -66,11 +112,27 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   cleanup()
   document.documentElement.classList.remove('dark')
 })
 
 describe('NativeChatVisualFrame', () => {
+  it('lets a dragged tab pass over the frame while a tab drag holds pointer passthrough', () => {
+    const { container } = render(<Harness layout="panel" />)
+    const frame = frameOf(container)
+    expect(frame.style.pointerEvents).toBe('')
+
+    let release = (): void => {}
+    act(() => {
+      release = acquireWebviewsDragPassthrough()
+    })
+    expect(frame.style.pointerEvents).toBe('none')
+
+    act(() => release())
+    expect(frame.style.pointerEvents).toBe('')
+  })
+
   it('runs the visual in a scripts-only sandbox, named for host registration, with its CSP first', () => {
     const { container } = render(<Harness />)
     const frame = frameOf(container)
@@ -150,18 +212,55 @@ describe('NativeChatVisualFrame', () => {
     expect(openHttpLink).toHaveBeenCalledTimes(1)
   })
 
-  it('retires itself if the frame loads a second document', () => {
+  it('keeps the visual through a later load it answers, as for an in-page link in WebKit', async () => {
     const onRetired = vi.fn()
-    const { container } = render(<Harness onRetired={onRetired} />)
-    const frame = frameOf(container)
+    const { frame, posted } = await renderLoaded(onRetired)
+    const ping = expect.objectContaining({ type: NATIVE_CHAT_VISUAL_PING_TYPE })
+    expect(posted).not.toHaveBeenCalledWith(ping, '*')
+    load(frame)
+    expect(posted).toHaveBeenCalledWith(
+      { type: NATIVE_CHAT_VISUAL_PING_TYPE, channel: channelOf(frame), id: 2 },
+      '*'
+    )
+    answer(frame, 2)
+    waitOutTheAnswer()
+    expect(onRetired).not.toHaveBeenCalled()
+  })
+
+  it('retires itself when a later load goes unanswered: the frame went blank or left', async () => {
+    const onRetired = vi.fn()
+    const { frame } = await renderLoaded(onRetired)
+    load(frame)
     act(() => {
-      frame.dispatchEvent(new Event('load'))
+      vi.advanceTimersByTime(NATIVE_CHAT_VISUAL_PONG_TIMEOUT_MS - 1)
     })
     expect(onRetired).not.toHaveBeenCalled()
     act(() => {
-      frame.dispatchEvent(new Event('load'))
+      vi.advanceTimersByTime(1)
     })
     expect(onRetired).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores answers from another window, another channel, or an earlier load', async () => {
+    const onRetired = vi.fn()
+    const { frame } = await renderLoaded(onRetired)
+    load(frame)
+    load(frame)
+    answer(frame, 2)
+    const pong = { type: NATIVE_CHAT_VISUAL_PONG_TYPE, id: 3 }
+    post({ ...pong, channel: channelOf(frame) }, window)
+    post({ ...pong, channel: 'other' }, frame.contentWindow)
+    waitOutTheAnswer()
+    expect(onRetired).toHaveBeenCalledTimes(1)
+  })
+
+  it('owes no answer once it unmounts', async () => {
+    const onRetired = vi.fn()
+    const { frame, unmount } = await renderLoaded(onRetired)
+    load(frame)
+    unmount()
+    waitOutTheAnswer()
+    expect(onRetired).not.toHaveBeenCalled()
   })
 
   it('fills a panel instead of fitting its height', () => {

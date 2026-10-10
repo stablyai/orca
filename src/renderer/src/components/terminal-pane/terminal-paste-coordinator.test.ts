@@ -496,7 +496,7 @@ describe('terminal paste coordinator', () => {
 
     expect(result).toMatchObject({ status: 'cancelled', reason: 'target-disconnected' })
     expect(writePty).toHaveBeenCalledTimes(1)
-    expect(writePty).toHaveBeenCalledWith('x'.repeat(8))
+    expect(writePty).toHaveBeenCalledWith('x'.repeat(8), expect.any(AbortSignal))
     expect(codePointAt.mock.calls.length).toBeLessThan(text.length)
   })
 

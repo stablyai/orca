@@ -3,6 +3,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 import {
   deriveGlobalWindowsRuntimeDefaultFromLegacySettings,
+  getWorkspaceRuntimePreference,
   resolveProjectExecutionRuntime,
   type ProjectExecutionRuntimeResolution
 } from '../../../shared/project-execution-runtime'
@@ -81,11 +82,10 @@ export function getLocalProjectExecutionRuntimeContext(
   }
   const projectId = getLocalPreflightProjectId(state, worktreeId)
   const project = getLocalRuntimeProject(state, projectId, repo.id)
-  const localPath = worktree?.path ?? repo?.path
-  const worktreeWslDistro = getWslDistroFromPath(localPath)
-  const projectRuntimePreference =
-    project?.localWindowsRuntimePreference ??
-    (worktreeWslDistro ? { kind: 'wsl', distro: worktreeWslDistro } : { kind: 'inherit-global' })
+  const projectRuntimePreference = getWorkspaceRuntimePreference(
+    project?.localWindowsRuntimePreference,
+    worktree?.path ?? repo?.path
+  )
 
   return resolveProjectExecutionRuntime({
     appPlatform,
@@ -140,10 +140,10 @@ export function getLocalRepoProjectExecutionRuntimeContext(
   }
   const project = getLocalRuntimeProject(state, repoId, repo.id)
   const projectId = project?.id ?? repoId
-  const repoWslDistro = getWslDistroFromPath(repo?.path)
-  const projectRuntimePreference =
-    project?.localWindowsRuntimePreference ??
-    (repoWslDistro ? { kind: 'wsl', distro: repoWslDistro } : { kind: 'inherit-global' })
+  const projectRuntimePreference = getWorkspaceRuntimePreference(
+    project?.localWindowsRuntimePreference,
+    repo?.path
+  )
 
   return resolveProjectExecutionRuntime({
     appPlatform,

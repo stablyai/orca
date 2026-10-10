@@ -3,7 +3,7 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { afterEach, describe, expect, it } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import { SUPERVISED_GRACEFUL_EXIT_MS } from './claude-child-exit-proof-ladder'
 import {

@@ -1,5 +1,7 @@
 import type { AgentJournalItemBody, AgentJournalMessageItem } from './agent-session-journal-types'
 import type { AgentSessionMutationEnvelope } from './agent-session-wire'
+import type { z } from 'zod'
+import type { SendBody } from './rpc-contract/structured-agent-session-message-params'
 import { structuredAgentSessionPayloadFingerprint } from './structured-agent-session-mutation'
 
 export type StructuredAgentSessionSendMutation = {
@@ -65,7 +67,7 @@ export type StructuredAgentSessionAttachment = {
 export function structuredAgentSessionSendBody(
   text: string,
   attachments: readonly StructuredAgentSessionAttachment[]
-): AgentJournalMessageItem {
+): z.infer<typeof SendBody> {
   return {
     kind: 'message',
     role: 'user',

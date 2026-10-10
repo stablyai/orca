@@ -12,6 +12,7 @@ import type {
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
 import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../../../shared/agent-session-orca-stop'
+import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from '../../../../shared/agent-session-compaction'
 import {
   isBackgroundTaskBlock,
   isSubagentGroupBlock,
@@ -163,6 +164,7 @@ export function buildNativeChatTranscriptSlots(
       (block) =>
         block.type === 'text' &&
         (block.presentation === 'compaction' ||
+          block.presentation === AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION ||
           block.presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION)
     )
   }))

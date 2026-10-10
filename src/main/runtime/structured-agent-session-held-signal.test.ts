@@ -44,7 +44,7 @@ function installHost(): Promise<StructuredAgentSessionHost> {
     claimKeyId: 'key-1',
     resolveWorkspacePath: async () => stateDirectory,
     resolveLaunchArgs: () => [],
-    resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+    resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
     resolveEnvironment: async () => ({}),
     logger: createStructuredAgentSessionLogger()
   })

@@ -103,6 +103,11 @@ describe('agentSession.modelCatalog', () => {
     )
     expect(read).toHaveBeenCalledWith({ agent: 'codex', sessionId: SESSION, waitForListing: true })
   })
+
+  it('passes a saved-only read through to the catalog', async () => {
+    await call('agentSession.modelCatalog', { agent: 'grok', savedOnly: true }, STRUCTURED_CLIENT)
+    expect(read).toHaveBeenCalledWith({ agent: 'grok', savedOnly: true })
+  })
 })
 
 describe('agentSession.modelCatalog before anything built the host', () => {

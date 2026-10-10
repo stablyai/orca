@@ -52,8 +52,6 @@ export type SessionOptionDescriptor = {
   transport: NativeChatLiveOptionTransport
   settable: boolean
   disabledReason?: SessionOptionDisabledReason
-  /** The host is still listing this option's choices: the pill keeps its value but cannot open. */
-  choicesPending?: true
   /** Why: picker-only and toggle-only PTY commands cannot be represented as
    * a truthful radio/checkbox state, so the producer exposes an action row. */
   action?: { type: 'agent-picker' | 'toggle-command' }
@@ -85,6 +83,17 @@ export function sessionOptionValueMarker(
     return 'default'
   }
   return descriptor.valueSource === 'unknown' ? 'unreported' : null
+}
+
+/** Like Fast off, the standard tier adds nothing to a summary pill. */
+export function isDefaultServiceTier(
+  descriptor: Pick<SessionOptionDescriptor, 'id' | 'kind'>
+): boolean {
+  return (
+    descriptor.id === 'serviceTier' &&
+    descriptor.kind.type === 'select' &&
+    descriptor.kind.currentValue === 'default'
+  )
 }
 
 export type SessionOptionSetResult = {

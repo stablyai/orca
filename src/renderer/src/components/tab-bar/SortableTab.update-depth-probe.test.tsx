@@ -71,6 +71,7 @@ vi.mock('@dnd-kit/sortable', () => ({
 vi.mock('@/lib/use-tab-agent', () => ({ useTabAgent: () => null }))
 
 vi.mock('@/components/ui/tooltip', () => ({
+  TooltipProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
   Tooltip: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   TooltipContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   TooltipTrigger: ({ children, asChild }: { children: ReactNode; asChild?: boolean }) =>
@@ -108,7 +109,10 @@ vi.mock('./TerminalTabLeadingIcon', () => ({
 }))
 
 vi.mock('./shell-icons', () => ({ ShellIcon: () => <span /> }))
-vi.mock('@/lib/agent-catalog', () => ({ AgentIcon: () => <span /> }))
+vi.mock('@/lib/agent-catalog', () => ({
+  AgentIcon: () => <span />,
+  getAgentLabel: (agent: string) => agent
+}))
 vi.mock('../sidebar/WorktreeCardHelpers', () => ({ FilledBellIcon: () => <span /> }))
 
 function makeTab(overrides: Partial<TerminalTab> = {}): TerminalTab {

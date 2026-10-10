@@ -46,7 +46,7 @@ jobs:
       test: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.test }}
       orcad_browser: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.orcad_browser }}
       cross-version-wire: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.cross-version-wire }}
-      managed_hook_node24: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.managed_hook_node24 }}
+      managed_hook_node18: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.managed_hook_node18 }}
       package: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.package }}
       package_windows: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.package_windows }}
       e2e_should_run: ${{ steps.e2e_filter.outputs.should_run }}
@@ -202,6 +202,17 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
+
+      - name: Check process-host imports
+        if: '!cancelled()'
+        id: process-host-imports
+        background: true
+        env:
+          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.static_analysis == 'true' }}
+          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
+        run: |
+          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
+          pnpm run check:process-host-imports
 
       # Keep each check in its own log while sharing this runner.
       - name: Lint
@@ -440,6 +451,8 @@ jobs:
 
       - run: pnpm run typecheck
         if: needs.code_paths.outputs.typecheck == 'true'
+
+      - wait: process-host-imports
 
       - wait: unit-plan
 
@@ -979,15 +992,15 @@ jobs:
       - name: Old/new client and server compatibility journeys
         run: pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/
 
-  managed_hook_node24:
-    name: managed hooks on Node 24
+  managed_hook_node18:
+    name: managed hooks on Node 18
     needs: [code_paths, preflight]
     if: >-
       !cancelled() &&
       needs.code_paths.result == 'success' &&
-      needs.code_paths.outputs.managed_hook_node24 == 'true' &&
+      needs.code_paths.outputs.managed_hook_node18 == 'true' &&
       needs.preflight.result == 'success'
-    # Why ARM: Node 24 publishes linux-arm64; the per-platform runtime files are read as data.
+    # Why ARM: Node 18 publishes linux-arm64; the per-platform runtime files are read as data.
     runs-on: ubuntu-24.04-arm
 
     steps:
@@ -1001,13 +1014,17 @@ jobs:
       - name: Build relay companions
         run: pnpm run build:relay
 
-      - name: Setup Node 24 runtime
+      - name: Setup Node 18 runtime
         uses: actions/setup-node@v6
         with:
-          node-version: '24'
+          node-version: '18'
 
       - name: Smoke managed-hook companions
-        run: node config/scripts/smoke-managed-hook-runtime-node24.mjs
+        run: node config/scripts/smoke-managed-hook-runtime-node18.mjs
+
+      # The process-host package declares engines >=18; load its staged public output on Node 18.
+      - name: Smoke process-host package
+        run: node config/scripts/smoke-process-host-node18.mjs
 
   package:
     name: package
@@ -1252,9 +1269,9 @@ jobs:
           src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts
           src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts
           src/main/providers/pty-repaint-wide-char-buffer.node-pty.test.ts
-          src/shared/child-process/windows-command-line.win32.test.ts
-          src/shared/child-process/windows-cmd-shim-resolution.test.ts
-          src/shared/child-process/windows-cmd-shim-resolution.win32.test.ts
+          src/shared/__tests__/process-host/windows-command-line.win32.test.ts
+          src/shared/__tests__/process-host/windows-cmd-shim-resolution.test.ts
+          src/shared/__tests__/process-host/windows-cmd-shim-resolution.win32.test.ts
           src/main/agent-hooks/windows-hook-payload-delivery.test.ts
           src/main/jcode/hook-gate-script.test.ts
           src/main/agent-hooks/windows-direct-cmd-hook-command.test.ts
@@ -1275,6 +1292,7 @@ jobs:
           src/main/wsl/wsl-runner.test.ts
           src/main/wsl/wsl-guest-environment.test.ts
           src/main/wsl/wsl-executable-path.win32.test.ts
+          src/main/claude-accounts/claude-profile-history-windows.test.ts
           src/main/wsl/wsl-w1-w3-contract.test.ts
           src/shared/source-scan/source-tree-scan.test.ts
           src/main/cli/wsl-cli-powershell-boundary.test.ts
@@ -1410,7 +1428,7 @@ jobs:
       - orcad_browser
       - mobile_web_app
       - cross-version-wire
-      - managed_hook_node24
+      - managed_hook_node18
       - package
       - package_windows
     # Evaluating job results only needs the lightweight container runner.
@@ -1448,8 +1466,8 @@ jobs:
           MOBILE_WEB_APP_SHOULD_RUN: ${{ needs.code_paths.outputs.mobile_web_app }}
           CROSS_VERSION_WIRE: ${{ needs.cross-version-wire.result }}
           CROSS_VERSION_WIRE_SHOULD_RUN: ${{ needs.code_paths.outputs.cross-version-wire }}
-          MANAGED_HOOK_NODE24: ${{ needs.managed_hook_node24.result }}
-          MANAGED_HOOK_NODE24_SHOULD_RUN: ${{ needs.code_paths.outputs.managed_hook_node24 }}
+          MANAGED_HOOK_NODE18: ${{ needs.managed_hook_node18.result }}
+          MANAGED_HOOK_NODE18_SHOULD_RUN: ${{ needs.code_paths.outputs.managed_hook_node18 }}
           PACKAGE: ${{ needs.package.result }}
           PACKAGE_SHOULD_RUN: ${{ needs.code_paths.outputs.package }}
           PACKAGE_WINDOWS: ${{ needs.package_windows.result }}
@@ -1486,7 +1504,7 @@ jobs:
           check_job orcad_browser "$ORCAD_BROWSER" "$ORCAD_BROWSER_SHOULD_RUN"
           check_job mobile_web_app "$MOBILE_WEB_APP" "$MOBILE_WEB_APP_SHOULD_RUN"
           check_job cross-version-wire "$CROSS_VERSION_WIRE" "$CROSS_VERSION_WIRE_SHOULD_RUN"
-          check_job managed_hook_node24 "$MANAGED_HOOK_NODE24" "$MANAGED_HOOK_NODE24_SHOULD_RUN"
+          check_job managed_hook_node18 "$MANAGED_HOOK_NODE18" "$MANAGED_HOOK_NODE18_SHOULD_RUN"
           check_job package "$PACKAGE" "$PACKAGE_SHOULD_RUN"
           check_job package_windows "$PACKAGE_WINDOWS" "$PACKAGE_WINDOWS_SHOULD_RUN"
           exit "$failed"

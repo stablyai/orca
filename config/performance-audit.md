@@ -16,12 +16,16 @@ manual review. A warning identifies repeated setup, not proof of visible lag.
 
 `pnpm test:perf:contracts` runs the explicit selection in
 `vitest.performance.config.ts`: SQLite statement reuse and schema parity, relay
-filesystem concurrency, tokenizer rejection, highlighting cache, queued
-cancellation, terminal backing-memory retention and detector fixtures. Missing
+filesystem concurrency, incremental Codex scans and reader lifetimes, pinned JSONL
+readers and snapshots, linear tool-result pairing and attribution allocation,
+tokenizer rejection, highlighting cache, queued cancellation, terminal backing-memory
+retention and detector fixtures. Missing
 listed files fail configuration loading. Tests run serially, without retries,
 and inherit the full suite's setup and forced-GC support. This makes existing
 regression coverage easy to run and attribute; it does not create new workload
 coverage by itself.
+
+Incremental Claude scans and persisted Claude cache checkpoints are also included.
 
 `.github/workflows/performance-contracts.yml` runs daily and manually on Linux,
 macOS and Windows, and on PRs changing this tooling or any listed contract file.
