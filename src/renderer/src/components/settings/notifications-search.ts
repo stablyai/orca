@@ -1,8 +1,10 @@
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
+import type { SettingsSearchEntry } from './settings-search'
 
-export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
+const getNotificationsPaneSearchEntriesCatalog = createLocalizedCatalog(() => [
   {
     title: translate(
       'auto.components.settings.notifications.search.4a210b2f72',
@@ -202,3 +204,50 @@ export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   }
 ])
+
+const getDockBadgeEntryCatalog = createLocalizedCatalog((): SettingsSearchEntry[] => [
+  {
+    title: translate('auto.components.settings.notifications.search.9f4c21de05', 'Show Dock Badge'),
+    description: translate(
+      'auto.components.settings.notifications.search.2a8b67c5d4',
+      'Show the unread count on the macOS Dock icon.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.notifications.search.ca8faa40d7',
+        'notifications'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.notifications.search.d0cd11e5f3',
+        'dock',
+        {
+          englishOnly: true
+        }
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.notifications.search.e5f28b90a7',
+        'badge',
+        { englishOnly: true }
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.notifications.search.7c31a4f8b6',
+        'macos',
+        { englishOnly: true }
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.notifications.search.18d9c0e24a',
+        'unread',
+        { englishOnly: true }
+      )
+    ]
+  }
+])
+
+export function getNotificationsPaneSearchEntries(): SettingsSearchEntry[] {
+  // Why: the toggle only renders on darwin, so the search index follows the pane
+  // (same pattern as the tray / menu-bar-icon appearance entries).
+  if (getRendererAppPlatform() !== 'darwin') {
+    return getNotificationsPaneSearchEntriesCatalog()
+  }
+  return [...getNotificationsPaneSearchEntriesCatalog(), ...getDockBadgeEntryCatalog()]
+}

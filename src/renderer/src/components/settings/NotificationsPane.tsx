@@ -11,6 +11,7 @@ import {
 import { NotificationSettingToggle } from './NotificationSettingToggle'
 import { NotificationHostToggles } from './NotificationHostToggles'
 import { NotificationSoundSection } from './NotificationSoundSection'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import {
   createNotificationVolumeDraftState,
   resolveNotificationVolumeDraftState,
@@ -213,6 +214,25 @@ export function NotificationsPane({
           })
         }
       />
+
+      {getRendererAppPlatform() === 'darwin' ? (
+        <NotificationSettingToggle
+          label={translate(
+            'auto.components.settings.NotificationsPane.b50c251b25',
+            'Show Dock Badge'
+          )}
+          description={translate(
+            'auto.components.settings.NotificationsPane.4e76a4246d',
+            'Show the unread count on the macOS Dock icon.'
+          )}
+          checked={notificationSettings.showDockBadge}
+          onToggle={() =>
+            void updateNotificationSettings({
+              showDockBadge: !notificationSettings.showDockBadge
+            })
+          }
+        />
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-2 pt-3">
         <Button

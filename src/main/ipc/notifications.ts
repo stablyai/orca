@@ -1,5 +1,6 @@
 import { BrowserWindow, Notification, ipcMain, powerMonitor } from 'electron'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
+import { setDockBadgeVisible } from '../dock/unread-badge'
 import type { Store } from '../persistence'
 import type {
   NotificationDeliveryProbeResult,
@@ -187,4 +188,12 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
   )
 
   registerNotificationSoundHandlers(store)
+
+  // The Show Dock badge toggle lives with the other notification preferences; the unread count itself stays untouched.
+  setDockBadgeVisible(store.getSettings().notifications.showDockBadge)
+  store.onSettingsChanged?.((updates, settings) => {
+    if (updates.notifications) {
+      setDockBadgeVisible(settings.notifications.showDockBadge)
+    }
+  })
 }

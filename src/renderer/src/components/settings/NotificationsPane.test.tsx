@@ -25,6 +25,14 @@ vi.mock('sonner', () => ({
   }
 }))
 
+const { appPlatformHolder } = vi.hoisted(() => ({
+  appPlatformHolder: { value: 'darwin' as NodeJS.Platform }
+}))
+
+vi.mock('@/lib/renderer-app-platform', () => ({
+  getRendererAppPlatform: () => appPlatformHolder.value
+}))
+
 function createSettings(): GlobalSettings {
   return createGlobalSettingsFixture({
     notifications: {
@@ -32,6 +40,7 @@ function createSettings(): GlobalSettings {
       agentTaskComplete: true,
       terminalBell: true,
       suppressWhenFocused: true,
+      showDockBadge: true,
       customSoundId: 'system',
       customSoundPath: null,
       customSoundVolume: 50,
@@ -60,6 +69,24 @@ describe('NotificationsPane', () => {
     expect(getNotificationSoundOptions(null).map((option) => option.title)).toEqual(
       expect.arrayContaining(['System Default', 'Two Tone', 'Bong', 'Ding'])
     )
+  })
+
+  it('shows the Show Dock Badge toggle on macOS', () => {
+    appPlatformHolder.value = 'darwin'
+    const html = renderToStaticMarkup(
+      <NotificationsPane settings={createSettings()} updateSettings={vi.fn()} />
+    )
+
+    expect(html).toContain('Show Dock Badge')
+  })
+
+  it('hides the Show Dock Badge toggle off macOS', () => {
+    appPlatformHolder.value = 'win32'
+    const html = renderToStaticMarkup(
+      <NotificationsPane settings={createSettings()} updateSettings={vi.fn()} />
+    )
+
+    expect(html).not.toContain('Show Dock Badge')
   })
 
   it('resets the volume draft only when the persisted volume changes', () => {

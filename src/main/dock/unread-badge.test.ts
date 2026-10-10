@@ -41,4 +41,38 @@ describe('unread Dock badge', () => {
     setUnreadDockBadgeCount(104)
     expect(setBadgeMock).toHaveBeenLastCalledWith('99+')
   })
+
+  it('clears the badge immediately when hidden and keeps it hidden as unread counts change', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    const { setUnreadDockBadgeCount, setDockBadgeVisible } = await import('./unread-badge')
+
+    setUnreadDockBadgeCount(3)
+    expect(setBadgeMock).toHaveBeenLastCalledWith('3')
+
+    setDockBadgeVisible(false)
+    expect(setBadgeMock).toHaveBeenLastCalledWith('')
+
+    setUnreadDockBadgeCount(7)
+    expect(setBadgeMock).toHaveBeenLastCalledWith('')
+  })
+
+  it('restores the current unread count when shown again', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    const { setUnreadDockBadgeCount, setDockBadgeVisible } = await import('./unread-badge')
+
+    setUnreadDockBadgeCount(3)
+    setDockBadgeVisible(false)
+    setUnreadDockBadgeCount(7)
+
+    setDockBadgeVisible(true)
+    expect(setBadgeMock).toHaveBeenLastCalledWith('7')
+  })
+
+  it('ignores visibility changes off macOS', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    const { setDockBadgeVisible } = await import('./unread-badge')
+
+    setDockBadgeVisible(false)
+    expect(setBadgeMock).not.toHaveBeenCalled()
+  })
 })

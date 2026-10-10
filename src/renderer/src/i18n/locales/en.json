@@ -7991,6 +7991,8 @@
           "ca76d06fd2": "Agent Task Complete",
           "deff6d30da": "Native system notifications for background events.",
           "841c8c549f": "Enable Notifications",
+          "b50c251b25": "Show Dock Badge",
+          "4e76a4246d": "Show the unread count on the macOS Dock icon.",
           "0fadad17ce": "Notification sound could not be played",
           "406feb0aa6": "Test notification was not delivered",
           "6fc3781729": "Notifications are disabled",
@@ -10461,6 +10463,12 @@
         "notifications": {
           "search": {
             "aa288005c3": "test",
+            "9f4c21de05": "Show Dock Badge",
+            "2a8b67c5d4": "Show the unread count on the macOS Dock icon.",
+            "d0cd11e5f3": "dock",
+            "e5f28b90a7": "badge",
+            "7c31a4f8b6": "macos",
+            "18d9c0e24a": "unread",
             "ca8faa40d7": "notifications",
             "4e30b1925e": "Trigger a sample desktop notification using the native delivery path.",
             "ef9b311346": "Send Test Notification",
