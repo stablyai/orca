@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import type { FlatList, NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
+import {
+  planMobileChatPrependResize,
+  type MobileChatPrependAnchor
+} from './mobile-native-chat-prepend-anchor'
 
 /** Distance from the bottom, in points, still treated as "at the tail". */
 const AT_TAIL_SLOP = 80
@@ -26,6 +30,11 @@ export type MobileNativeChatTailFollow<TItem> = {
   endMomentum: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
   /** Leave the tail deliberately, e.g. before prepending older history. */
   detachFromTail: () => void
+  /**
+   * Hold the visible row until an earlier page is actually inserted. Scrolls
+   * during the request count; bottom-only growth does not.
+   */
+  holdVisibleContent: () => void
   recordScrollMetrics: (event: NativeScrollEvent) => void
 }
 
@@ -45,8 +54,15 @@ export type MobileNativeChatTailFollow<TItem> = {
 export function useMobileNativeChatTailFollow<TItem>(args: {
   /** Guards `scrollToEnd` against an empty list. */
   hasItems: boolean
+  /** Oldest transcript row. Also changes when the bounded window trims it. */
+  historyHeadId: string | null
+  /** Ids currently in the transcript, so a trim is not mistaken for a prepend. */
+  messageIds: readonly string[]
+  earlierPageLoading: boolean
+  /** Chat surface identity. The view is reused across tab switches. */
+  surfaceKey: string
 }): MobileNativeChatTailFollow<TItem> {
-  const { hasItems } = args
+  const { hasItems, historyHeadId, messageIds, earlierPageLoading, surfaceKey } = args
   const listRef = useRef<FlatList<TItem> | null>(null)
   const [following, setFollowingFlag] = useState(true)
   const [atTail, setAtTailFlag] = useState(true)
@@ -55,6 +71,31 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
   const atTailRef = useRef(true)
   const userScrollActiveRef = useRef(false)
   const userScrollSettleFrameRef = useRef<number | null>(null)
+  const lastOffsetYRef = useRef(0)
+  const lastHeightRef = useRef(0)
+  const prependAnchorRef = useRef<MobileChatPrependAnchor | null>(null)
+  const historyHeadIdRef = useRef(historyHeadId)
+  historyHeadIdRef.current = historyHeadId
+  const messageIdsRef = useRef(messageIds)
+  messageIdsRef.current = messageIds
+  const surfaceKeyRef = useRef(surfaceKey)
+  if (surfaceKeyRef.current !== surfaceKey) {
+    surfaceKeyRef.current = surfaceKey
+    prependAnchorRef.current = null
+  }
+  const earlierPageLoadingRef = useRef(earlierPageLoading)
+  const armedHeadId = prependAnchorRef.current?.historyHeadId
+  const armedHeadRetained = armedHeadId != null && messageIds.includes(armedHeadId)
+  if (
+    earlierPageLoadingRef.current &&
+    !earlierPageLoading &&
+    prependAnchorRef.current &&
+    (armedHeadId === historyHeadId || !armedHeadRetained)
+  ) {
+    // The page finished without inserting older rows, or the window trimmed the armed row.
+    prependAnchorRef.current = null
+  }
+  earlierPageLoadingRef.current = earlierPageLoading
 
   // Single writer, so the event-time ref and the render flag cannot disagree.
   const setFollowing = useCallback((next: boolean) => {
@@ -82,10 +123,31 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
 
   const pinToTailAfterContentResize = useCallback(
     (_width: number, height: number) => {
-      if (!followingRef.current || !hasItems) {
+      const hadAnchor = prependAnchorRef.current !== null
+      const detached = !followingRef.current
+      const plan = planMobileChatPrependResize({
+        anchor: prependAnchorRef.current,
+        following: followingRef.current,
+        hasItems,
+        height,
+        offsetY: lastOffsetYRef.current,
+        historyHeadId: historyHeadIdRef.current,
+        armedHeadRetained:
+          prependAnchorRef.current?.historyHeadId != null &&
+          messageIdsRef.current.includes(prependAnchorRef.current.historyHeadId)
+      })
+      prependAnchorRef.current = plan.anchor
+      if (plan.anchor) {
+        lastHeightRef.current = plan.anchor.height
+      }
+      if (plan.scrollOffset === null) {
         return
       }
-      listRef.current?.scrollToOffset({ animated: false, offset: height })
+      if (hadAnchor && detached) {
+        lastOffsetYRef.current = plan.scrollOffset
+        lastHeightRef.current = height
+      }
+      listRef.current?.scrollToOffset({ animated: false, offset: plan.scrollOffset })
     },
     [hasItems]
   )
@@ -98,7 +160,11 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
   }, [])
 
   const recordScrollMetrics = useCallback(
-    (event: NativeScrollEvent) => setAtTail(isAtTail(event)),
+    (event: NativeScrollEvent) => {
+      lastOffsetYRef.current = event.contentOffset.y
+      lastHeightRef.current = event.contentSize.height
+      setAtTail(isAtTail(event))
+    },
     [setAtTail]
   )
 
@@ -166,6 +232,18 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
     setFollowing(false)
   }, [clearUserScrollSettle, setAtTail, setFollowing])
 
+  const holdVisibleContent = useCallback(() => {
+    detachFromTail()
+    // Why: FlatList keeps the numeric offset when rows are prepended, which
+    // slides the visible page down by the inserted height.
+    if (lastHeightRef.current > 0) {
+      prependAnchorRef.current = {
+        height: lastHeightRef.current,
+        historyHeadId: historyHeadIdRef.current
+      }
+    }
+  }, [detachFromTail])
+
   useEffect(() => clearUserScrollSettle, [clearUserScrollSettle])
 
   return {
@@ -179,6 +257,7 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
     beginMomentum,
     endMomentum,
     detachFromTail,
+    holdVisibleContent,
     recordScrollMetrics
   }
 }
