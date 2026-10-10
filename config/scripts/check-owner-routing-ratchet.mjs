@@ -37,8 +37,8 @@ const SETTING_DESTRUCTURE_READ =
 // A top-level declaration: `[export] [async] function name` or `[export] const|let name =`.
 const TOP_LEVEL_DECLARATION =
   /^(export\s+)?(?:default\s+)?(?:async\s+)?(?:function\s*\*?\s*([\w$]+)|(?:const|let)\s+([\w$]+)\b)/gm
-const TOP_LEVEL_BOUNDARY =
-  /^(?:export|import|function|async|const|let|type|interface|class|enum)\b/gm
+// Any new statement at column 0 ends a declaration; closing brackets and continuations do not.
+const TOP_LEVEL_BOUNDARY = /^[^\s)}\]]/gm
 
 function readerUsePattern(names) {
   return names.size === 0
@@ -69,41 +69,207 @@ export function topLevelDeclarations(sourceText) {
   })
 }
 
+// Statements that hand a value on: `return …` or an arrow's expression body, each running to the
+// first newline outside brackets. Object-literal results (`=> ({ … })`, `return { … }`) are
+// skipped: slice creators and hooks return bags of actions, which pulls in the whole store.
+const VALUE_STATEMENT_START = /\breturn\s+(?!\(?\s*\{)|=>\s*(?!\(?\s*\{)/g
+
+function valueStatements(body) {
+  const statements = []
+  for (const match of body.matchAll(VALUE_STATEMENT_START)) {
+    let depth = 0
+    let end = match.index + match[0].length
+    for (; end < body.length; end += 1) {
+      const char = body[end]
+      if ('([{'.includes(char)) {
+        depth += 1
+      } else if (')]}'.includes(char)) {
+        if (depth === 0) {
+          break
+        }
+        depth -= 1
+      } else if (char === '\n' && depth === 0) {
+        break
+      }
+    }
+    statements.push(body.slice(match.index, end))
+  }
+  return statements.join('\n')
+}
+
+const IMPORT_STATEMENT =
+  /\bimport\s+(?:type\s+)?(?:[\w$]+\s*,\s*)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g
+const REEXPORT_STATEMENT = /\bexport\s+(?:type\s+)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g
+const STAR_REEXPORT_STATEMENT = /\bexport\s+\*\s+from\s*['"]([^'"]+)['"]/g
+const LOCAL_EXPORT_LIST = /\bexport\s+\{([^}]*)\}(?!\s*from)/g
+
+function specifiers(list) {
+  return list
+    .split(',')
+    .map((part) => part.trim().replace(/^type\s+/, ''))
+    .filter(Boolean)
+    .map((part) => {
+      const [imported, local = imported] = part.split(/\s+as\s+/)
+      return { imported: imported.trim(), local: local.trim() }
+    })
+}
+
+function resolveModule(spec, fromRel, files) {
+  let base
+  if (spec.startsWith('@/')) {
+    base = `${SCAN_ROOT}/${spec.slice(2)}`
+  } else if (spec.startsWith('.')) {
+    base = path.posix.join(path.posix.dirname(fromRel), spec)
+  } else {
+    return null
+  }
+  base = base.replace(/\.(?:m?js|tsx?)$/, '')
+  return (
+    ['.ts', '.tsx', '/index.ts', '/index.tsx'].map((ext) => base + ext).find((c) => files.has(c)) ??
+    null
+  )
+}
+
+function parseModule(rel, text, files) {
+  const imports = new Map()
+  for (const [, list, spec] of text.matchAll(IMPORT_STATEMENT)) {
+    const from = resolveModule(spec, rel, files)
+    for (const { imported, local } of specifiers(list)) {
+      imports.set(local, { from, name: imported })
+    }
+  }
+  const reexports = new Map()
+  for (const [, list, spec] of text.matchAll(REEXPORT_STATEMENT)) {
+    const from = resolveModule(spec, rel, files)
+    for (const { imported, local } of specifiers(list)) {
+      reexports.set(local, { from, name: imported })
+    }
+  }
+  const starFrom = [...text.matchAll(STAR_REEXPORT_STATEMENT)].map(([, spec]) =>
+    resolveModule(spec, rel, files)
+  )
+  const listed = new Map()
+  for (const [, list] of text.matchAll(LOCAL_EXPORT_LIST)) {
+    for (const { imported, local } of specifiers(list)) {
+      listed.set(imported, local)
+    }
+  }
+  const declarations = topLevelDeclarations(text.replace(IMPORT_EXPORT_LIST, '')).map((decl) => ({
+    ...decl,
+    exportedAs: decl.exported ? decl.name : (listed.get(decl.name) ?? null)
+  }))
+  return { imports, reexports, starFrom, declarations }
+}
+
 /**
- * Functions that read the setting for their caller: the seeds plus every exported top-level
- * function whose own body reads the setting or calls a seed. Hand lists miss look-alikes such as
- * a copy of `getActiveRuntimeTarget` under another name; discovery does not. One level only:
- * following calls transitively pulls in most of the renderer.
+ * Functions that read the setting for their caller, keyed by defining file so a same-named
+ * function elsewhere (a test harness's `useAppStore`) is not mistaken for one. Seeds, then every
+ * exported top-level function whose body reads the setting or calls a seed, then, to a fixpoint,
+ * every one that returns a reader's result. Hand lists miss look-alikes such as a copy of
+ * `getActiveRuntimeTarget` under another name; discovery does not. Following every call instead
+ * of returned values pulls in most of the renderer through the store.
  */
 export function discoverFocusReaders(sources) {
-  const readers = new Set(SEED_FOCUS_READERS)
-  const seedUse = readerUsePattern(new Set(SEED_FOCUS_READERS))
-  for (const text of sources.values()) {
-    for (const { name, exported, text: body } of topLevelDeclarations(
-      text.replace(IMPORT_EXPORT_LIST, '')
-    )) {
+  const files = new Set(sources.keys())
+  const modules = new Map([...sources].map(([rel, text]) => [rel, parseModule(rel, text, files)]))
+  const seeds = new Set(SEED_FOCUS_READERS)
+  const seedUse = readerUsePattern(seeds)
+  const readerKeys = new Set()
+
+  const resolveExport = (rel, name, depth = 0) => {
+    const mod = rel ? modules.get(rel) : null
+    if (!mod || depth > 8) {
+      return null
+    }
+    if (mod.declarations.some((decl) => decl.exportedAs === name)) {
+      return `${rel}#${name}`
+    }
+    const re = mod.reexports.get(name)
+    if (re) {
+      return resolveExport(re.from, re.name, depth + 1)
+    }
+    for (const from of mod.starFrom) {
+      const key = resolveExport(from, name, depth + 1)
+      if (key) {
+        return key
+      }
+    }
+    return null
+  }
+  const resolveLocal = (rel, name) => {
+    const mod = modules.get(rel)
+    if (mod.declarations.some((decl) => decl.exportedAs && decl.name === name)) {
+      return `${rel}#${mod.declarations.find((decl) => decl.name === name).exportedAs}`
+    }
+    const imported = mod.imports.get(name)
+    return imported ? resolveExport(imported.from, imported.name) : null
+  }
+  const isReader = (rel, name) => seeds.has(name) || readerKeys.has(resolveLocal(rel, name))
+
+  const pending = []
+  for (const [rel, mod] of modules) {
+    for (const { name, exportedAs, text } of mod.declarations) {
+      // Components render; a `<Pane />` that reads focus inside is not a read by its parent.
+      if (!exportedAs || /^[A-Z]/.test(exportedAs)) {
+        continue
+      }
       seedUse.lastIndex = 0
-      if (exported && (countSettingReads(body) > 0 || seedUse.test(body))) {
-        readers.add(name)
+      if (countSettingReads(text) > 0 || seedUse.test(text)) {
+        readerKeys.add(`${rel}#${exportedAs}`)
+        continue
+      }
+      const passed = new Set(valueStatements(text).match(/[\w$]+/g))
+      passed.delete(name)
+      pending.push({ rel, key: `${rel}#${exportedAs}`, passed: [...passed] })
+    }
+  }
+  let changed = true
+  while (changed) {
+    changed = false
+    for (let i = pending.length - 1; i >= 0; i -= 1) {
+      const { rel, key, passed } = pending[i]
+      if (passed.some((id) => isReader(rel, id))) {
+        readerKeys.add(key)
+        pending.splice(i, 1)
+        changed = true
       }
     }
   }
-  return readers
+
+  const namesByFile = new Map()
+  return {
+    has: (name) => seeds.has(name) || [...readerKeys].some((key) => key.endsWith(`#${name}`)),
+    /** Names that refer to a reader inside `rel`: seeds, its own readers and imported ones. */
+    namesFor(rel) {
+      if (!namesByFile.has(rel)) {
+        const mod = modules.get(rel)
+        const local = [
+          ...(mod?.declarations.map((decl) => decl.name) ?? []),
+          ...(mod?.imports.keys() ?? [])
+        ]
+        namesByFile.set(
+          rel,
+          new Set([...seeds, ...local.filter((name) => mod && isReader(rel, name))])
+        )
+      }
+      return namesByFile.get(rel)
+    }
+  }
 }
 
 /**
- * Reads of the setting (member, element and destructuring reads) plus every call of a function
- * that reads it for the caller. Object-literal keys are writes and are not counted.
+ * Reads of the setting (member, element and destructuring reads) plus every use of a name that
+ * refers to a reader. Object-literal keys are writes and are not counted.
  */
-export function countFocusSettingReads(sourceText, readers = new Set(SEED_FOCUS_READERS)) {
+export function countFocusSettingReads(sourceText, readerNames = new Set(SEED_FOCUS_READERS)) {
   const body = sourceText.replace(IMPORT_EXPORT_LIST, '')
-  const pattern = readerUsePattern(readers)
+  const pattern = readerUsePattern(readerNames)
   return countSettingReads(body) + (pattern ? (body.match(pattern)?.length ?? 0) : 0)
 }
 
-/** An alias hides later calls from the count, so it is refused outright. */
-export function hasFocusRoutingAlias(sourceText, readers = new Set(SEED_FOCUS_READERS)) {
-  const alias = new RegExp(`\\b(?:${[...readers].join('|')})\\s+as\\b`)
+/** An alias hides later calls from the name-based helper count, so it is refused outright. */
+export function hasFocusRoutingAlias(sourceText) {
+  const alias = new RegExp(`\\b(?:${SEED_FOCUS_READERS.join('|')})\\s+as\\b`)
   return (sourceText.match(IMPORT_EXPORT_LIST) ?? []).some((list) => alias.test(list))
 }
 
@@ -124,7 +290,7 @@ export const RATCHETS = [
   {
     name: 'focus-setting-read',
     baselinePath: 'config/focus-setting-read-baseline.txt',
-    count: (text, _rel, readers) => countFocusSettingReads(text, readers),
+    count: (text, rel, readers) => countFocusSettingReads(text, readers.namesFor(rel)),
     header: [
       '# Renderer reads of the Active Server setting (member, element and destructuring reads of',
       '# activeRuntimeEnvironmentId) plus calls of exported functions that read it, per file.',
@@ -213,11 +379,21 @@ function readTrackedSources(root, scanRoot) {
   return sources
 }
 
+// One read and one discovery per root per run; `--prune` then `main` reuse them.
+const scanCache = new Map()
+
+function scanSources(root) {
+  if (!scanCache.has(root)) {
+    const sources = new Map(
+      FOCUS_SCAN_ROOTS.flatMap((scanRoot) => [...readTrackedSources(root, scanRoot)])
+    )
+    scanCache.set(root, { sources, readers: discoverFocusReaders(sources) })
+  }
+  return scanCache.get(root)
+}
+
 export function collectCurrentCounts(root = process.cwd(), count = RATCHETS[0].count) {
-  const sources = new Map(
-    FOCUS_SCAN_ROOTS.flatMap((scanRoot) => [...readTrackedSources(root, scanRoot)])
-  )
-  const readers = discoverFocusReaders(sources)
+  const { sources, readers } = scanSources(root)
   const counts = new Map()
   const aliased = []
   for (const [rel, source] of sources) {
@@ -228,7 +404,7 @@ export function collectCurrentCounts(root = process.cwd(), count = RATCHETS[0].c
     if (found > 0) {
       counts.set(rel, found)
     }
-    if (hasFocusRoutingAlias(source, readers)) {
+    if (hasFocusRoutingAlias(source)) {
       aliased.push(rel)
     }
   }

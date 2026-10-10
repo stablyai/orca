@@ -56,7 +56,7 @@ describe('countFocusSettingReads', () => {
     expect(countFocusSettingReads(src)).toBe(5)
   })
 
-  it('discovers look-alike readers, so swapping a helper for one lowers nothing', () => {
+  it('discovers readers through imports, so a look-alike or a wrapper lowers nothing', () => {
     const readers = discoverFocusReaders(
       new Map([
         [
@@ -66,34 +66,65 @@ describe('countFocusSettingReads', () => {
         [
           'src/renderer/src/a.ts',
           [
+            "import { getSettingsFocusedExecutionHostId } from '../../shared/execution-host'",
             'export function getAutomationListTarget(settings) {',
             '  const id = settings?.activeRuntimeEnvironmentId?.trim()',
             "  return id ? { kind: 'environment', environmentId: id } : { kind: 'local' }",
             '}',
             'export const cacheKey = (s) => `k:${getActiveRuntimeTarget(s).kind}`',
-            'function localOnly(s) {',
-            '  return s.activeRuntimeEnvironmentId',
+            'export function browserHostId(state, override) {',
+            '  return override ?? getSettingsFocusedExecutionHostId(state.settings)',
+            '}',
+            'export function wrappedTwice(state) {',
+            '  return browserHostId(state, null)',
             '}',
             'export function ownerTarget(row) {',
             '  return row.owner',
+            '}',
+            'export function SettingsPane() {',
+            '  return getAutomationListTarget(null)',
             '}'
+          ].join('\n')
+        ],
+        [
+          'src/renderer/src/harness.ts',
+          'export const ownerTarget = (s) => s.activeRuntimeEnvironmentId'
+        ],
+        [
+          'src/renderer/src/b.ts',
+          [
+            "import { browserHostId, wrappedTwice, ownerTarget, SettingsPane } from './a'",
+            'const a = wrappedTwice(state)',
+            'const b = ownerTarget(row)',
+            'const c = <SettingsPane />'
           ].join('\n')
         ]
       ])
     )
-    expect(readers.has('getAutomationListTarget')).toBe(true)
-    expect(readers.has('getSettingsFocusedExecutionHostId')).toBe(true)
-    expect(readers.has('cacheKey')).toBe(true)
-    expect(readers.has('localOnly')).toBe(false)
-    expect(readers.has('ownerTarget')).toBe(false)
-    expect(countFocusSettingReads('const t = getAutomationListTarget(settings)', readers)).toBe(1)
+    const inA = readers.namesFor('src/renderer/src/a.ts')
+    for (const name of ['getAutomationListTarget', 'cacheKey', 'browserHostId', 'wrappedTwice']) {
+      expect(inA.has(name)).toBe(true)
+    }
+    expect(inA.has('ownerTarget')).toBe(false)
+    expect(inA.has('SettingsPane')).toBe(false)
+    // `ownerTarget` from `./a` is not the harness's same-named reader.
+    expect(
+      [...readers.namesFor('src/renderer/src/b.ts')].filter((n) => !n.startsWith('get'))
+    ).toEqual(expect.arrayContaining(['browserHostId', 'wrappedTwice']))
+    expect(readers.namesFor('src/renderer/src/b.ts').has('ownerTarget')).toBe(false)
     expect(
       countFocusSettingReads(
         'const t = runtimeTargetForOwnerHostId(getSettingsFocusedExecutionHostId(s))',
-        readers
+        readers.namesFor('src/renderer/src/a.ts')
       )
     ).toBe(1)
-    expect(countFocusSettingReads('export const cacheKey = (s) => s', readers)).toBe(0)
+    expect(
+      countFocusSettingReads(
+        "import { wrappedTwice } from './a'\nconst t = wrappedTwice(state)",
+        readers.namesFor('src/renderer/src/b.ts')
+      )
+    ).toBe(1)
+    expect(countFocusSettingReads('export const cacheKey = (s) => s', inA)).toBe(0)
   })
 
   it('counts destructuring reads', () => {
@@ -130,12 +161,6 @@ describe('hasFocusRoutingAlias', () => {
       hasFocusRoutingAlias("export {\n  settingsForRuntimeOwner as owner\n} from './target'")
     ).toBe(true)
     expect(hasFocusRoutingAlias("import { defaultCreationHost as host } from './d'")).toBe(true)
-    expect(
-      hasFocusRoutingAlias(
-        "import { getAutomationListTarget as h } from './e'",
-        new Set(['getAutomationListTarget'])
-      )
-    ).toBe(true)
     expect(hasFocusRoutingAlias("import { getActiveRuntimeTarget } from './rpc'")).toBe(false)
   })
 })
