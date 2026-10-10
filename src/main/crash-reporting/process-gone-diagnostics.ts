@@ -6,6 +6,7 @@ import {
 import { getSystemMemoryDetails, memoryKBFieldMB } from './system-memory-details'
 import {
   PRE_GONE_SYSTEM_MEMORY_SAMPLE_INTERVAL_MS,
+  preGoneLinuxOomKillDetails,
   preGoneSystemMemoryDetails,
   resetPreGoneSystemMemorySamplingForTest,
   startPreGoneSystemMemorySampling
@@ -304,5 +305,6 @@ export function buildProcessGoneCrashDetails(
     Object.assign(crashDetails, preGoneSampleDetails(preGoneSample, nowMs))
   }
   Object.assign(crashDetails, preGoneSystemMemoryDetails(nowMs))
+  Object.assign(crashDetails, preGoneLinuxOomKillDetails(nowMs))
   return crashDetails
 }

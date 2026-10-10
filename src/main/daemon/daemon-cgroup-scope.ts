@@ -172,6 +172,13 @@ export type DurableDaemonScopeCommand = {
   env: NodeJS.ProcessEnv
 }
 
+/** Any scope Orca puts its terminal daemon in, current or legacy naming. */
+export function isDaemonScopeUnit(unit: string): boolean {
+  return (
+    (unit.startsWith(UNIT_NAME_PREFIX) && unit.endsWith('.scope')) || isLegacyDaemonScopeUnit(unit)
+  )
+}
+
 export function isLegacyDaemonScopeUnit(unit: string | null): boolean {
   return unit?.startsWith(LEGACY_SCOPE_PREFIX) === true && unit.endsWith('.scope')
 }
