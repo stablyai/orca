@@ -121,14 +121,21 @@ export type SimulationFaults = {
   noWrongCellRowRead?: boolean
   // Reserve placement re-uses the floor epoch instead of minting above it.
   mintAtFloor?: boolean
-  // Today's path skips every cell Postgres records as reserve, even one its feed says tripped to db.
+  // Today's path skips every cell Postgres records as reserve, ignoring the cell's own row.
   pgReserveBlocksDatabase?: boolean
+  // Directors place by the reported mode, which stays reserve while a tripped cell re-registers.
+  noRawFeedMode?: boolean
   unguardedLedger?: boolean
   noEpochFloor?: boolean
 }
 
-// shadow-seat-directory.ts SEAT_FEED_DB_ADMIT_FRESH_MS: a reserve cell whose feed said db this recently takes today's path.
-const TRIPPED_FEED_FRESH_MS = 5_000
+// relay_cell_admit_effective: each cell writes its raw mode every 15 s (cell-admit-effective-writer.ts),
+// and today's path takes a reserve cell whose current-process row says db within 45 s
+// (assignment-store.ts CELL_ADMIT_EFFECTIVE_FRESH_MS).
+const CELL_ADMIT_EFFECTIVE_REFRESH_MS = 15_000
+const CELL_ADMIT_EFFECTIVE_FRESH_MS = 45_000
+// A tripped cell reports reserve until every control it admitted from memory holds a lease.
+const DEFAULT_REREGISTRATION_MS = 20_000
 
 // cell-reserve-dead-man.ts's window: 60-120 s, fixed per cell.
 function deadManWindowMs(cellId: string): number {
@@ -140,6 +147,8 @@ class SimDatabase {
   // relay_cell_admit_modes: what the flag workflow recorded. A trip does not change it.
   readonly reserveCells = new Set<string>()
   readonly rows = new Map<string, { cellId: string; epoch: number }>()
+  // relay_cell_admit_effective: written by each cell itself, never by a director.
+  readonly admitEffective = new Map<string, { mode: 'db' | 'reserve'; incarnation: number; at: number }>()
   private readonly counts = new Map<string, number>()
 
   set(host: string, row: { cellId: string; epoch: number }): void {
@@ -191,6 +200,9 @@ class SimCell {
   // polled with reserver=1 for its window flips itself to db, latched.
   lastContactAt = 0
   trippedAt: number | null = null
+  reregisteredAt = 0
+  // Booted and no flag object read yet: its mode is a default, so it writes no admit row.
+  flagsUnread = false
   book: CellReserveBook
 
   constructor(
@@ -242,10 +254,16 @@ class SimCell {
     this.lastContactAt = this.clock.now
   }
 
-  checkDeadMan(windowMs: number): void {
+  checkDeadMan(windowMs: number, reregistrationMs: number): void {
     if (this.mode !== 'reserve' || this.old || this.clock.now - this.lastContactAt <= windowMs) return
     this.mode = 'db'
     this.trippedAt = this.clock.now
+    this.reregisteredAt = this.clock.now + reregistrationMs
+  }
+
+  // What the feed's admitModeEffective reports: `mode` is the raw one (switch file and dead-man).
+  effectiveMode(): 'db' | 'reserve' {
+    return this.mode === 'reserve' || this.clock.now < this.reregisteredAt ? 'reserve' : 'db'
   }
 
   reserve(directorId: string, host: string, epoch: number, sticky: boolean): ReserveOutcome {
@@ -329,8 +347,10 @@ class SimCell {
     this.okBookingTimes.push([])
     const mode = this.mode
     this.mode = 'db'
+    this.flagsUnread = true
     this.clock.schedule(5_000, () => {
       this.mode = mode
+      this.flagsUnread = false
     })
     return hosts
   }
@@ -385,6 +405,8 @@ export type SimulationConfig = {
   databaseStalls?: Array<{ at: number; durationMs: number }>
   // Every director misses every feed poll for this long (a director-side outage).
   pollOutages?: Array<{ at: number; durationMs: number }>
+  // How long a tripped cell keeps reporting reserve while it leases its memory-admitted controls.
+  reregistrationMs?: number
   drains?: Array<{ at: number; cellId: string; paceMs: number }>
 }
 
@@ -404,6 +426,11 @@ export type SimulationReport = {
   // Row-ahead demotions per demoted host: a repair that converges needs one.
   rowAheadDemotionsPerHost: { max: number; p99: number }
   deadManTrips: number
+  // Bookings sent to a cell after its dead-man tripped (the cell answers `off`).
+  reserveCallsOnTrippedCells: number
+  databasePlacementsWhilePollsFail: number
+  // From the first poll outage's start to the first fresh database placement inside it.
+  pollFailureGapMs: number | null
   // First seats after a row-ahead demotion that land behind (or level with) the row again.
   badFirstReseats: number
   intakeRefusals: number
@@ -500,9 +527,6 @@ export async function runReservePlacementSimulation(
   for (const cell of cells) if (cell.mode === 'reserve' && !cell.old) database.reserveCells.add(cell.cellId)
   const inPollOutage = (at: number): boolean =>
     (config.pollOutages ?? []).some((outage) => at >= outage.at && at < outage.at + outage.durationMs)
-  // Invariant 9 holds once the outage is over and every director has polled the tripped cells.
-  const afterOutageSettled = (at: number): boolean =>
-    (config.pollOutages ?? []).some((outage) => at >= outage.at + outage.durationMs + 15_000)
   const directors = Array.from(
     { length: config.directors },
     (_, index) =>
@@ -528,6 +552,9 @@ export async function runReservePlacementSimulation(
     rowAheadDemotions: 0,
     rowAheadDemotionsPerHost: { max: 0, p99: 0 },
     deadManTrips: 0,
+    reserveCallsOnTrippedCells: 0,
+    databasePlacementsWhilePollsFail: 0,
+    pollFailureGapMs: null,
     badFirstReseats: 0,
     intakeRefusals: 0,
     stickyReserves: 0,
@@ -600,7 +627,7 @@ export async function runReservePlacementSimulation(
       seats: cell.seats.size,
       bookings: cell.book.count(),
       tokens: cell.book.intakeSnapshot().tokens,
-      mode: cell.mode,
+      mode: faults.noRawFeedMode ? cell.effectiveMode() : cell.mode,
       draining: cell.draining
     }
     const delay = config.rttMs(cell.region) + config.pollLagMs(director.index)
@@ -787,6 +814,7 @@ export async function runReservePlacementSimulation(
       clock.schedule(rtt / 2, () => {
         const outcome = cell.old ? { outcome: 'off' as const } : cell.reserve(director.id, host, epoch, sticky)
         if (outcome.outcome === 'intake') report.intakeRefusals += 1
+        if (outcome.outcome === 'off' && cell.trippedAt !== null) report.reserveCallsOnTrippedCells += 1
         clock.schedule(rtt / 2, () => resolve(outcome))
       })
     })
@@ -795,17 +823,20 @@ export async function runReservePlacementSimulation(
   function databaseAssign(director: SimDirector, host: Host, floor: number): Answer {
     if (!database.up) return { kind: 'retry', afterMs: 2_000, calls: 0 }
     const row = database.rows.get(host.id)
+    // Postgres still says reserve after a trip; the cell's own fresh row (db, current process)
+    // lets today's path back in, with or without any feed poll getting through.
+    const admitsDatabase = (cell: SimCell): boolean => {
+      const own = database.admitEffective.get(cell.cellId)
+      return (
+        !faults.pgReserveBlocksDatabase &&
+        own?.mode === 'db' &&
+        own.incarnation === cell.incarnation &&
+        clock.now - own.at <= CELL_ADMIT_EFFECTIVE_FRESH_MS
+      )
+    }
     const eligible = cells.filter((cell) => {
-      const view = director.views.get(cell.cellId)
-      const reserve = !director.old && view?.placement.reserve === true
-      if (reserve || cell.draining) return false
-      // Postgres still says reserve after a trip; the cell's own feed (fresh, db) lets today's
-      // path back in, while the census sweeps keep skipping it until the flag workflow says db.
-      const polledAt = view?.placement.polledAt ?? null
-      const feedSaysDb = polledAt !== null && clock.now - polledAt <= TRIPPED_FEED_FRESH_MS && !view!.placement.reserve
-      if (!director.old && database.reserveCells.has(cell.cellId) && (faults.pgReserveBlocksDatabase || !feedSaysDb)) {
-        return false
-      }
+      if (cell.draining) return false
+      if (!director.old && database.reserveCells.has(cell.cellId) && !admitsDatabase(cell)) return false
       const count = cell.mode === 'reserve' ? cell.frozenDatabaseCount : database.countOn(cell.cellId)
       return count < cell.ceiling
     })
@@ -814,7 +845,18 @@ export async function runReservePlacementSimulation(
     const inRegion = eligible.filter((cell) => cell.region === host.region)
     const pool = inRegion.length > 0 ? inRegion : eligible
     if (pool.length === 0) {
-      if (afterOutageSettled(clock.now)) violate(9, `${host.id}: no cell takes a fresh placement after the fleet tripped`)
+      // A cell that tripped 20 s ago (a 1 s write, a 5 s cached read, slack) must be takeable.
+      const stranded = cells.find(
+        (cell) =>
+          !director.old &&
+          !cell.old &&
+          !cell.draining &&
+          cell.trippedAt !== null &&
+          cell.mode === 'db' &&
+          clock.now - cell.trippedAt >= 20_000 &&
+          database.countOn(cell.cellId) < cell.ceiling
+      )
+      if (stranded) violate(9, `${host.id}: ${stranded.cellId} tripped but takes no fresh placement`)
       return { kind: 'retry', afterMs: 5_000, calls: 0 }
     }
     const target = pool.reduce((best, cell) => (load(cell) < load(best) ? cell : best))
@@ -823,6 +865,11 @@ export async function runReservePlacementSimulation(
     database.assign(host.id, target.cellId, epoch)
     if (target.mode === 'reserve') target.frozenDatabaseCount += 1
     report.databasePlacements += 1
+    const outage = (config.pollOutages ?? [])[0]
+    if (inPollOutage(clock.now)) {
+      report.databasePlacementsWhilePollsFail += 1
+      if (outage && report.pollFailureGapMs === null) report.pollFailureGapMs = clock.now - outage.at
+    }
     return { kind: 'cell', cellId: target.cellId, epoch, calls: 0 }
   }
 
@@ -986,8 +1033,18 @@ export async function runReservePlacementSimulation(
     const windowMs = deadManWindowMs(cell.cellId)
     const check = (): void => {
       const wasReserve = cell.mode === 'reserve'
-      cell.checkDeadMan(windowMs)
+      cell.checkDeadMan(windowMs, config.reregistrationMs ?? DEFAULT_REREGISTRATION_MS)
       if (wasReserve && cell.mode === 'db') report.deadManTrips += 1
+      // Best-effort through the cell's own pool: nothing to write while the database is down.
+      const own = database.admitEffective.get(cell.cellId)
+      if (
+        !cell.old &&
+        !cell.flagsUnread &&
+        database.up &&
+        (!own || own.mode !== cell.mode || own.incarnation !== cell.incarnation || clock.now - own.at >= CELL_ADMIT_EFFECTIVE_REFRESH_MS)
+      ) {
+        database.admitEffective.set(cell.cellId, { mode: cell.mode, incarnation: cell.incarnation, at: clock.now })
+      }
       clock.schedule(1_000, check)
     }
     clock.schedule(1_000, check)

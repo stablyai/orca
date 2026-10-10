@@ -299,6 +299,35 @@ describe('step 5 deterministic simulation', () => {
     pollOutages: [{ at: 60_000, durationMs: 150_000 }]
   })
 
+  // Token minting, the cells' token check or a partition: no director's poll gets through again.
+  // The cells' own rows still say db once they trip, so today's path recovers without the feed;
+  // before the trips a fully reserve region has no fresh placement (60-120 s).
+  it('recovers fresh placement while feed polls fail and stay failed, once the cells trip (invariant 9)', async () => {
+    const stuck = (faults: SimulationConfig['faults']) => ({
+      ...fleetTrip(faults),
+      pollOutages: [{ at: 60_000, durationMs: Number.POSITIVE_INFINITY }]
+    })
+    const report = await runReservePlacementSimulation(stuck({}))
+    expect(report.deadManTrips).toBe(6)
+    expect(report.violations.filter((violation) => violation.invariant === 9)).toEqual([])
+    expect(report.databasePlacementsWhilePollsFail).toBeGreaterThan(0)
+    // The first cell trips 60-120 s into the outage; its row is read within a few seconds.
+    expect(report.pollFailureGapMs).toBeGreaterThanOrEqual(60_000)
+    expect(report.pollFailureGapMs).toBeLessThanOrEqual(130_000)
+    const blocked = await runReservePlacementSimulation(stuck({ pgReserveBlocksDatabase: true }))
+    expect(blocked.violations.map((violation) => violation.invariant)).toContain(9)
+  }, 240_000)
+
+  // A tripped cell reports reserve while it re-registers, but db as its raw mode at once.
+  it('books nothing on a tripped cell while it re-registers, by its raw mode', async () => {
+    const slow = (faults: SimulationConfig['faults']) => ({ ...fleetTrip(faults), reregistrationMs: 120_000 })
+    const report = await runReservePlacementSimulation(slow({}))
+    expect(report.deadManTrips).toBe(6)
+    expect(report.reserveCallsOnTrippedCells).toBe(0)
+    const reported = await runReservePlacementSimulation(slow({ noRawFeedMode: true }))
+    expect(reported.reserveCallsOnTrippedCells).toBeGreaterThan(0)
+  }, 240_000)
+
   it('places fresh hosts on the tripped cells once a fleet-wide poll outage ends (invariant 9)', async () => {
     const report = await runReservePlacementSimulation(fleetTrip({}))
     expect(report.deadManTrips).toBe(6)
