@@ -70,7 +70,8 @@ export const CALLER_LAUNCH_CASES: HostLaunchCase[] = [
     phone: { title: 'Nightly triage', launchAgent: 'claude', isActive: false }
   },
   {
-    // runtime-local-worktree-terminal-startup.ts for a paired worktree.create (telemetry dropped).
+    // runtime-local-worktree-terminal-startup.ts for a paired worktree.create; the window already
+    // dropped telemetry (worktree-create-payload-startup.test.ts).
     name: 'paired worktree.create startup, verbatim',
     row: '8',
     rules: [],

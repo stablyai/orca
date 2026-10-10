@@ -242,6 +242,9 @@ describe('host lane: producer call -> runtime controller -> provider', () => {
       orcaEnv:
         c.workspace.kind === 'folder' ? [...FOLDER_ENV_KEYS, ...HOST_ENV_KEYS] : HOST_ENV_KEYS
     })
+    // The host stamps its own pane identity over any caller-sent key.
+    const spawned = recordOf(lanes.provider.mock.calls.at(-1)?.[0])
+    expect(recordOf(spawned.env).ORCA_PANE_KEY).toBe(spawned.paneKey)
     expect(trackMock.mock.calls).toEqual(c.telemetry ? [['agent_started', c.telemetry]] : [])
     expect(lanes.persistPtyBinding.mock.calls[0]?.[0]).toMatchObject({
       hostAdmittedMembership: true,
@@ -383,6 +386,29 @@ describe('launch facts outside the tables', () => {
     }
     expect(lanes.reveal.mock.calls[0]?.[1]).toMatchObject(reveal)
     expect(lanes.reveal.mock.calls[0]?.[1]).not.toHaveProperty('presentation')
+  })
+
+  // main rewrites stale pane identity keys from the request's tab and leaf; workspace keys pass.
+  it('window lane: the provider gets the pane keys main derives, not the stale ones sent', async () => {
+    setMainPlatform('darwin')
+    const tabId = '55555555-5555-4555-8555-555555555555'
+    const leafId = '66666666-6666-4666-8666-666666666666'
+    const lanes = startParityLanes(suite, { workspace: POSIX_REPO })
+    await lanes.spawnWindow({
+      cols: 80,
+      rows: 24,
+      cwd: POSIX_PATH,
+      worktreeId: launchWorkspaceId(POSIX_REPO),
+      tabId,
+      leafId,
+      env: { ORCA_WORKSPACE_ID: 'folder:f1', ORCA_PANE_KEY: 'stale', ORCA_TAB_ID: 'stale' }
+    })
+    const env = recordOf(recordOf(lanes.provider.mock.calls.at(-1)?.[0]).env)
+    expect(pick(env, ['ORCA_WORKSPACE_ID', 'ORCA_PANE_KEY', 'ORCA_TAB_ID'])).toEqual({
+      ORCA_WORKSPACE_ID: 'folder:f1',
+      ORCA_PANE_KEY: `${tabId}:${leafId}`,
+      ORCA_TAB_ID: tabId
+    })
   })
 
   // main today: an unmeasured hidden pane's 0x0 grid is not clamped before the provider.
