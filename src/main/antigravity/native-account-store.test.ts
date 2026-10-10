@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { withAsyncSecretForms } from '../../../config/scripts/vitest-host-ports-setup'
 import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -14,17 +15,19 @@ import { credential, harness } from './native-account-test-fixtures'
 let dir: string
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'orca-agy-vault-test-'))
-  setSecretStore({
-    isEncryptionAvailable: () => true,
-    describeProtectionGap: () => null,
-    encryptString: (value) => Buffer.from(`sealed:${Buffer.from(value).toString('base64')}`),
-    decryptString: (value) => {
-      if (!value.toString().startsWith('sealed:')) {
-        throw new Error('synthetic decrypt failure')
+  setSecretStore(
+    withAsyncSecretForms({
+      isEncryptionAvailable: () => true,
+      describeProtectionGap: () => null,
+      encryptString: (value) => Buffer.from(`sealed:${Buffer.from(value).toString('base64')}`),
+      decryptString: (value) => {
+        if (!value.toString().startsWith('sealed:')) {
+          throw new Error('synthetic decrypt failure')
+        }
+        return Buffer.from(value.toString().slice(7), 'base64').toString()
       }
-      return Buffer.from(value.toString().slice(7), 'base64').toString()
-    }
-  })
+    })
+  )
 })
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true })
@@ -101,16 +104,18 @@ describe('protected Antigravity account snapshots', () => {
       const store = createEncryptedAntigravityAccountStore(path)
       store.write(h.getVault())
       const before = readFileSync(path)
-      setSecretStore({
-        isEncryptionAvailable: () => available,
-        describeProtectionGap: () => 'unprotected',
-        encryptString: () => {
-          throw new Error('must not encrypt')
-        },
-        decryptString: () => {
-          throw new Error('must not decrypt')
-        }
-      })
+      setSecretStore(
+        withAsyncSecretForms({
+          isEncryptionAvailable: () => available,
+          describeProtectionGap: () => 'unprotected',
+          encryptString: () => {
+            throw new Error('must not encrypt')
+          },
+          decryptString: () => {
+            throw new Error('must not decrypt')
+          }
+        })
+      )
       expect(() => store.write({ accounts: [], selectedAccountId: null })).toThrow(
         'Protected secret storage'
       )

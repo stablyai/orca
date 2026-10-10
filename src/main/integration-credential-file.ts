@@ -24,21 +24,20 @@ export function credentialFileHasContent(path: string): boolean {
   }
 }
 
-// Falls back to 0600 plaintext when the OS keyring is unavailable, matching the
-// Linear/Jira token writers so a keyring-less box still connects.
-export function writeEncryptedCredential(
+// The bytes to store for a credential. Falls back to plaintext (callers write it 0600) when
+// the OS keyring is unavailable, so a keyring-less box still connects.
+export async function sealCredentialForStorage(
   service: IntegrationCredentialService,
-  path: string,
   value: string
-): void {
-  if (getSecretStore().isEncryptionAvailable()) {
-    writeCredentialFileAtomic(path, getSecretStore().encryptString(value))
-    return
+): Promise<Buffer> {
+  const store = getSecretStore()
+  if (await store.isEncryptionAvailableAsync()) {
+    return store.encryptStringAsync(value)
   }
   console.warn(
     `[${service.toLowerCase()}] secret encryption unavailable — storing credential in plaintext`
   )
-  writeCredentialFileAtomic(path, Buffer.from(value, 'utf-8'))
+  return Buffer.from(value, 'utf-8')
 }
 
 // Why (STA-3941): a direct write can truncate the previous credential if it

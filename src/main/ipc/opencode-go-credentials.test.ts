@@ -46,7 +46,7 @@ describe('OpenCode Go write-only credentials', () => {
     ])
   })
 
-  it.each(['saveApiKey', 'clearApiKey'])('invalidates before refreshing on %s', (action) => {
+  it.each(['saveApiKey', 'clearApiKey'])('invalidates before refreshing on %s', async (action) => {
     const invalidate = vi.fn()
     const refresh = vi.fn(async () => {
       expect(invalidate).toHaveBeenCalledOnce()
@@ -57,30 +57,28 @@ describe('OpenCode Go write-only credentials', () => {
       refresh
     })
     mocks.has.mockReturnValue(action === 'saveApiKey')
-    expect(invoke(action, 'fake-key')).toEqual({ apiKeyConfigured: action === 'saveApiKey' })
+    expect(await invoke(action, 'fake-key')).toEqual({ apiKeyConfigured: action === 'saveApiKey' })
     expect(action === 'saveApiKey' ? mocks.save : mocks.clear).toHaveBeenCalledOnce()
     expect(refresh).toHaveBeenCalledOnce()
     // Why: only clearing the saved key may hide the chip; another key source can still exist after a save.
     expect(invalidate).toHaveBeenCalledWith({ apiKeyCleared: action === 'clearApiKey' })
   })
 
-  it.each([null, undefined, 42, {}])('rejects a non-string key', (key) => {
+  it.each([null, undefined, 42, {}])('rejects a non-string key', async (key) => {
     registerOpenCodeGoCredentialsHandlers(null)
-    expect(() => invoke('saveApiKey', key)).toThrow('OpenCode Go API key must be a string')
+    await expect(invoke('saveApiKey', key)).rejects.toThrow('OpenCode Go API key must be a string')
     expect(mocks.save).not.toHaveBeenCalled()
   })
 
-  it('does not refresh after a failed save', () => {
+  it('does not refresh after a failed save', async () => {
     const invalidate = vi.fn()
     const refresh = vi.fn()
     registerOpenCodeGoCredentialsHandlers({
       invalidateOpenCodeGoCredentialState: invalidate,
       refresh
     })
-    mocks.save.mockImplementation(() => {
-      throw new Error('Could not save credential')
-    })
-    expect(() => invoke('saveApiKey', 'fake-key')).toThrow('Could not save credential')
+    mocks.save.mockRejectedValue(new Error('Could not save credential'))
+    await expect(invoke('saveApiKey', 'fake-key')).rejects.toThrow('Could not save credential')
     expect(invalidate).not.toHaveBeenCalled()
     expect(refresh).not.toHaveBeenCalled()
   })

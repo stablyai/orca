@@ -4,11 +4,13 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { hardenExistingSecureFile, writeSecureFile } from '../../shared/secure-file'
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
+import { CredentialWriteOrder } from '../credentials/credential-write-order'
 
 const ZCODE_PLAN_API_KEY_FILE = 'zcode-plan-api-key.enc'
 const API_KEY_ENVELOPE_PREFIX = 'orca-zcode-plan-api-key:v1:'
 let cachedZcodePlanApiKey: string | null = null
 let warnedZcodePlanApiKeyStatusHardenFailure = false
+const writeOrder = new CredentialWriteOrder('GLM Coding Plan API key')
 
 type ZcodePlanApiKeyEnvelope = {
   kind: 'encrypted' | 'plaintext'
@@ -84,7 +86,7 @@ export function getZcodePlanApiKeyProtection(): SecretAtRestProtection | null {
   }
 }
 
-export function saveZcodePlanApiKey(key: string): void {
+export async function saveZcodePlanApiKey(key: string): Promise<void> {
   const trimmed = key.trim()
   if (!trimmed) {
     throw new Error('GLM Coding Plan API key is required')
@@ -92,11 +94,13 @@ export function saveZcodePlanApiKey(key: string): void {
   if (/[\r\n]/.test(trimmed)) {
     throw new Error('GLM Coding Plan API key must be a single line')
   }
-  if (safeStorage.isEncryptionAvailable()) {
-    writeSecureFile(
-      getZcodePlanApiKeyPath(),
-      encodeApiKeyEnvelope('encrypted', safeStorage.encryptString(trimmed))
-    )
+  const turn = writeOrder.begin()
+  const sealed = (await safeStorage.isAsyncEncryptionAvailable())
+    ? await safeStorage.encryptStringAsync(trimmed)
+    : null
+  turn.assertLatest()
+  if (sealed) {
+    writeSecureFile(getZcodePlanApiKeyPath(), encodeApiKeyEnvelope('encrypted', sealed))
     cachedZcodePlanApiKey = trimmed
     return
   }
@@ -164,6 +168,7 @@ export function readZcodePlanApiKey(): string | null {
 }
 
 export function clearZcodePlanApiKey(): void {
+  writeOrder.begin()
   cachedZcodePlanApiKey = null
   rmSync(getZcodePlanApiKeyPath(), { force: true })
 }

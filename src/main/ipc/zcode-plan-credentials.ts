@@ -31,13 +31,13 @@ function refreshAfterZcodePlanCredentialChange(
 
 export function registerZcodePlanCredentialsHandlers(rateLimits: RateLimitService | null): void {
   ipcMain.handle('zcodePlanCredentials:getStatus', () => getZcodePlanCredentialsStatus())
-  ipcMain.handle('zcodePlanCredentials:saveApiKey', (_event, key: string) => {
+  ipcMain.handle('zcodePlanCredentials:saveApiKey', async (_event, key: string) => {
     // Validate the IPC argument in the main process; the renderer-declared type
     // is compile-time only and the value arrives as unknown over IPC.
     if (typeof key !== 'string') {
       throw new Error('GLM Coding Plan API key must be a string')
     }
-    saveZcodePlanApiKey(key)
+    await saveZcodePlanApiKey(key)
     refreshAfterZcodePlanCredentialChange(rateLimits, 'save')
     return getZcodePlanCredentialsStatus()
   })

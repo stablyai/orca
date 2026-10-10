@@ -4,11 +4,13 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { hardenExistingSecureFile, writeSecureFile } from '../../shared/secure-file'
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
+import { CredentialWriteOrder } from '../credentials/credential-write-order'
 
 const MINIMAX_COOKIE_FILE = 'minimax-session-cookie.enc'
 const COOKIE_ENVELOPE_PREFIX = 'orca-minimax-cookie:v1:'
 let cachedMiniMaxCookie: string | null = null
 let warnedMiniMaxCookieStatusHardenFailure = false
+const writeOrder = new CredentialWriteOrder('MiniMax session cookie')
 
 type MiniMaxCookieEnvelope = {
   kind: 'encrypted' | 'plaintext'
@@ -137,16 +139,18 @@ export function hasMiniMaxSessionCookie(): boolean {
   return true
 }
 
-export function saveMiniMaxSessionCookie(cookie: string): void {
+export async function saveMiniMaxSessionCookie(cookie: string): Promise<void> {
   const trimmed = cookie.trim()
   if (!trimmed) {
     throw new Error('MiniMax session cookie is required')
   }
-  if (safeStorage.isEncryptionAvailable()) {
-    writeSecureFile(
-      getMiniMaxCookiePath(),
-      encodeCookieEnvelope('encrypted', safeStorage.encryptString(trimmed))
-    )
+  const turn = writeOrder.begin()
+  const sealed = (await safeStorage.isAsyncEncryptionAvailable())
+    ? await safeStorage.encryptStringAsync(trimmed)
+    : null
+  turn.assertLatest()
+  if (sealed) {
+    writeSecureFile(getMiniMaxCookiePath(), encodeCookieEnvelope('encrypted', sealed))
     cachedMiniMaxCookie = trimmed
     return
   }
@@ -185,6 +189,7 @@ export function readMiniMaxSessionCookie(): string | null {
 }
 
 export function clearMiniMaxSessionCookie(): void {
+  writeOrder.begin()
   cachedMiniMaxCookie = null
   rmSync(getMiniMaxCookiePath(), { force: true })
 }

@@ -16,7 +16,10 @@ import {
   readDataFile,
   makeRepo
 } from './persistence-test-harness'
-import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
+import {
+  installFakeAppEnvironment,
+  withAsyncSecretForms
+} from '../../config/scripts/vitest-host-ports-setup'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -46,18 +49,20 @@ async function createStore() {
     vi.resetModules()
   }
   const { setSecretStore } = await import('../shared/secret-store')
-  setSecretStore({
-    isEncryptionAvailable: () => true,
-    encryptString: (plaintext) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
-    decryptString: (ciphertext) => {
-      const decoded = ciphertext.toString('utf-8')
-      if (!decoded.startsWith('encrypted:')) {
-        throw new Error('invalid ciphertext')
-      }
-      return decoded.slice('encrypted:'.length)
-    },
-    describeProtectionGap: () => null
-  })
+  setSecretStore(
+    withAsyncSecretForms({
+      isEncryptionAvailable: () => true,
+      encryptString: (plaintext) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
+      decryptString: (ciphertext) => {
+        const decoded = ciphertext.toString('utf-8')
+        if (!decoded.startsWith('encrypted:')) {
+          throw new Error('invalid ciphertext')
+        }
+        return decoded.slice('encrypted:'.length)
+      },
+      describeProtectionGap: () => null
+    })
+  )
   if (!hasCreatedStoreInCase) {
     hasCreatedStoreInCase = true
     return createFreshStore()

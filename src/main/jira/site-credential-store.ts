@@ -1,15 +1,16 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { getSecretStore } from '../../shared/secret-store'
 import { readCredentialFileProtection } from '../credential-file-protection'
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 import {
   CredentialDecryptionError,
   credentialFileHasContent,
-  readStoredCredentialToken
+  readStoredCredentialToken,
+  sealCredentialForStorage
 } from '../integration-credential-file'
 import type { JiraSite, JiraSiteSelection } from '../../shared/jira-types'
+import { CredentialWriteOrder } from '../credentials/credential-write-order'
 
 export type JiraSiteFile = {
   version: 1
@@ -21,6 +22,7 @@ export type JiraSiteFile = {
 let cachedSiteFile: JiraSiteFile | null = null
 let siteFileLoaded = false
 const cachedTokens = new Map<string, string>()
+const writeOrder = new CredentialWriteOrder('Jira API token')
 // Why: decrypt failures are recorded per site so getStatus can explain
 // failing reads without re-touching the keychain on every status poll.
 export const credentialErrors = new Map<string, string>()
@@ -158,15 +160,6 @@ export function writeSiteFile(file: JiraSiteFile): void {
   })
 }
 
-function writeEncryptedToken(path: string, apiToken: string): void {
-  if (getSecretStore().isEncryptionAvailable()) {
-    writeFileSync(path, getSecretStore().encryptString(apiToken), { mode: 0o600 })
-    return
-  }
-  console.warn('[jira] secret encryption unavailable — storing token in plaintext')
-  writeFileSync(path, apiToken, { encoding: 'utf-8', mode: 0o600 })
-}
-
 export function readToken(siteId: string): string | null {
   const cached = cachedTokens.get(siteId)
   if (cached !== undefined) {
@@ -198,15 +191,19 @@ export function getSiteTokenProtection(siteId: string): SecretAtRestProtection |
   return readCredentialFileProtection(getTokenPath(siteId))
 }
 
-export function saveToken(siteId: string, apiToken: string): void {
+export async function saveToken(siteId: string, apiToken: string): Promise<void> {
+  const turn = writeOrder.begin(siteId)
+  const sealed = await sealCredentialForStorage('Jira', apiToken)
+  turn.assertLatest()
   ensureOrcaDir()
   ensureTokenDir()
-  writeEncryptedToken(getTokenPath(siteId), apiToken)
+  writeFileSync(getTokenPath(siteId), sealed, { mode: 0o600 })
   cachedTokens.set(siteId, apiToken)
   credentialErrors.delete(siteId)
 }
 
 export function deleteToken(siteId: string): void {
+  writeOrder.begin(siteId)
   cachedTokens.delete(siteId)
   credentialErrors.delete(siteId)
   try {

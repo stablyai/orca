@@ -1,11 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ZcodePlanApiKeyStore from './zcode-plan-api-key-store'
 
-const safeStorageMock = vi.hoisted(() => ({
-  isEncryptionAvailable: vi.fn(() => true),
-  encryptString: vi.fn((value: string) => Buffer.from(value)),
-  decryptString: vi.fn((value: Buffer) => value.toString('utf8'))
-}))
+const safeStorageMock = vi.hoisted(() => {
+  const sync = {
+    isEncryptionAvailable: vi.fn(() => true),
+    encryptString: vi.fn((value: string) => Buffer.from(value)),
+    decryptString: vi.fn((value: Buffer) => value.toString('utf8'))
+  }
+  // The async API seals exactly like the sync one, so its mocks run the sync mocks.
+  return {
+    ...sync,
+    isAsyncEncryptionAvailable: vi.fn(async () => sync.isEncryptionAvailable()),
+    encryptStringAsync: vi.fn(async (value: string) => sync.encryptString(value))
+  }
+})
 
 const electronMock = vi.hoisted(() => ({
   safeStorage: safeStorageMock
@@ -77,8 +85,9 @@ describe('zcode-plan-api-key-store', () => {
     existsSyncMock.mockReturnValue(false)
     const store = await loadStore()
 
-    store.saveZcodePlanApiKey(' glm-secret ')
+    await store.saveZcodePlanApiKey(' glm-secret ')
 
+    expect(safeStorageMock.encryptStringAsync).toHaveBeenCalledWith('glm-secret')
     expect(writeSecureFileMock).toHaveBeenCalledWith(storePath, envelope('encrypted', 'glm-secret'))
     existsSyncMock.mockReturnValue(true)
     readFileSyncMock.mockReturnValue(Buffer.from(envelope('encrypted', 'glm-secret')))
@@ -92,7 +101,7 @@ describe('zcode-plan-api-key-store', () => {
     existsSyncMock.mockReturnValue(false)
     const store = await loadStore()
 
-    store.saveZcodePlanApiKey('glm-secret')
+    await store.saveZcodePlanApiKey('glm-secret')
 
     expect(writeSecureFileMock).toHaveBeenCalledWith(storePath, envelope('plaintext', 'glm-secret'))
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('safeStorage encryption unavailable'))
@@ -125,14 +134,18 @@ describe('zcode-plan-api-key-store', () => {
   it('rejects saving an empty key', async () => {
     const store = await loadStore()
 
-    expect(() => store.saveZcodePlanApiKey('   ')).toThrow('GLM Coding Plan API key is required')
+    await expect(store.saveZcodePlanApiKey('   ')).rejects.toThrow(
+      'GLM Coding Plan API key is required'
+    )
     expect(writeSecureFileMock).not.toHaveBeenCalled()
   })
 
   it('rejects a key with an interior newline instead of saving it', async () => {
     const store = await loadStore()
 
-    expect(() => store.saveZcodePlanApiKey('glm\r\nsecret')).toThrow('must be a single line')
+    await expect(store.saveZcodePlanApiKey('glm\r\nsecret')).rejects.toThrow(
+      'must be a single line'
+    )
     expect(writeSecureFileMock).not.toHaveBeenCalled()
   })
 
@@ -143,7 +156,7 @@ describe('zcode-plan-api-key-store', () => {
     existsSyncMock.mockReturnValue(false)
     const store = await loadStore()
 
-    expect(() => store.saveZcodePlanApiKey('glm-secret')).toThrow(
+    await expect(store.saveZcodePlanApiKey('glm-secret')).rejects.toThrow(
       'could not be stored securely on this device'
     )
     expect(rmSyncMock).toHaveBeenCalledWith(storePath, { force: true })
@@ -159,7 +172,7 @@ describe('zcode-plan-api-key-store', () => {
     writeSecureFileMock.mockReturnValueOnce(false).mockReturnValueOnce(true)
     const store = await loadStore()
 
-    expect(() => store.saveZcodePlanApiKey('new-key')).toThrow(
+    await expect(store.saveZcodePlanApiKey('new-key')).rejects.toThrow(
       'could not be stored securely on this device'
     )
     // First write publishes the unrestricted replacement; the second restores
@@ -190,7 +203,7 @@ describe('zcode-plan-api-key-store', () => {
   it('clearing removes the file and resets the cached value', async () => {
     existsSyncMock.mockReturnValue(false)
     const store = await loadStore()
-    store.saveZcodePlanApiKey('glm-secret')
+    await store.saveZcodePlanApiKey('glm-secret')
 
     existsSyncMock.mockReturnValue(true)
     store.clearZcodePlanApiKey()

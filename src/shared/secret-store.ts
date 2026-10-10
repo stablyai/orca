@@ -10,10 +10,21 @@
  * which exists so the reason reaches the user, not a console warning nobody reads.
  */
 
+/** One unsealed secret. `shouldReEncrypt`: the key changed; seal `plainText` again and store that. */
+export type SecretDecryption = {
+  plainText: string
+  shouldReEncrypt: boolean
+}
+
 export type SecretStore = {
+  /** Synchronous forms, which Electron 46 removes; only paths that cannot await yet use them. */
   isEncryptionAvailable(): boolean
   encryptString(plainText: string): Buffer
   decryptString(cipher: Buffer): string
+  /** Ciphertexts are interchangeable with the synchronous forms, in both directions. */
+  isEncryptionAvailableAsync(): Promise<boolean>
+  encryptStringAsync(plainText: string): Promise<Buffer>
+  decryptStringAsync(cipher: Buffer): Promise<SecretDecryption>
   /**
    * Why separate from `isEncryptionAvailable()`: that answers "can this host seal and
    * unseal at all", which must stay true for a backend that seals weakly — flipping it

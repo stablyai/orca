@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { withAsyncSecretForms } from '../../../config/scripts/vitest-host-ports-setup'
 
 const OLD_ENV = process.env
 const OLD_FETCH = globalThis.fetch
@@ -11,16 +12,18 @@ let tempHome = ''
 async function loadModule() {
   vi.resetModules()
   const { setSecretStore } = await import('../../shared/secret-store')
-  setSecretStore({
-    isEncryptionAvailable: () => true,
-    // Why a binary prefix and not an identity function: real safeStorage ciphertext is
-    // not printable UTF-8, and the at-rest protection reporter distinguishes sealed from
-    // plaintext by exactly that. An identity double writes a readable token and would
-    // make this suite assert that a sealed credential is exposed.
-    encryptString: (value) => Buffer.concat([Buffer.from([0x00]), Buffer.from(value)]),
-    decryptString: (value) => value.subarray(1).toString('utf-8'),
-    describeProtectionGap: () => null
-  })
+  setSecretStore(
+    withAsyncSecretForms({
+      isEncryptionAvailable: () => true,
+      // Why a binary prefix and not an identity function: real safeStorage ciphertext is
+      // not printable UTF-8, and the at-rest protection reporter distinguishes sealed from
+      // plaintext by exactly that. An identity double writes a readable token and would
+      // make this suite assert that a sealed credential is exposed.
+      encryptString: (value) => Buffer.concat([Buffer.from([0x00]), Buffer.from(value)]),
+      decryptString: (value) => value.subarray(1).toString('utf-8'),
+      describeProtectionGap: () => null
+    })
+  )
   vi.doMock('node:os', async () => {
     const actual = await vi.importActual<typeof Os>('node:os')
     return { ...actual, homedir: () => tempHome }

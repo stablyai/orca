@@ -3,7 +3,7 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeEach } from 'vitest'
 import { setAppEnvironment, type AppEnvironment } from '../../src/shared/app-environment'
-import { setSecretStore } from '../../src/shared/secret-store'
+import { setSecretStore, type SecretStore } from '../../src/shared/secret-store'
 
 // The harness owns its directory even when a suite replaces the fs module.
 const { mkdtempSync, rmSync } = process.getBuiltinModule('fs')
@@ -48,6 +48,24 @@ export function fakeAppEnvironment(overrides: Partial<AppEnvironment> = {}): App
   }
 }
 
+type SyncSecretStoreFake = Omit<
+  SecretStore,
+  'isEncryptionAvailableAsync' | 'encryptStringAsync' | 'decryptStringAsync'
+>
+
+/** A fake's async forms run its sync ones, so a suite fakes each operation once. */
+export function withAsyncSecretForms(store: SyncSecretStoreFake): SecretStore {
+  return {
+    ...store,
+    isEncryptionAvailableAsync: async () => store.isEncryptionAvailable(),
+    encryptStringAsync: async (plainText) => store.encryptString(plainText),
+    decryptStringAsync: async (cipher) => ({
+      plainText: store.decryptString(cipher),
+      shouldReEncrypt: false
+    })
+  }
+}
+
 /** Install a fake in one call — the common shape in suites that need one specific member. */
 export function installFakeAppEnvironment(overrides: Partial<AppEnvironment> = {}): void {
   setAppEnvironment(fakeAppEnvironment(overrides))
@@ -55,16 +73,18 @@ export function installFakeAppEnvironment(overrides: Partial<AppEnvironment> = {
 
 beforeEach(() => {
   setAppEnvironment(fakeAppEnvironment())
-  setSecretStore({
-    isEncryptionAvailable: () => true,
-    encryptString: (plainText) => Buffer.from(`${SEAL_PREFIX}${plainText}`),
-    decryptString: (cipher) => {
-      const text = cipher.toString()
-      if (!text.startsWith(SEAL_PREFIX)) {
-        throw new Error('vitest secret store: ciphertext was not produced by this store')
-      }
-      return text.slice(SEAL_PREFIX.length)
-    },
-    describeProtectionGap: () => null
-  })
+  setSecretStore(
+    withAsyncSecretForms({
+      isEncryptionAvailable: () => true,
+      encryptString: (plainText) => Buffer.from(`${SEAL_PREFIX}${plainText}`),
+      decryptString: (cipher) => {
+        const text = cipher.toString()
+        if (!text.startsWith(SEAL_PREFIX)) {
+          throw new Error('vitest secret store: ciphertext was not produced by this store')
+        }
+        return text.slice(SEAL_PREFIX.length)
+      },
+      describeProtectionGap: () => null
+    })
+  )
 })

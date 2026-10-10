@@ -86,14 +86,16 @@ function createNodeAppEnvironment(): AppEnvironment {
  * `describeProtectionGap()` gives the reason a client can surface.
  */
 function createNodeSecretStore(): SecretStore {
+  const unavailable = (): never => {
+    throw new Error('orcad_secret_sealing_unavailable')
+  }
   return {
     isEncryptionAvailable: () => false,
-    encryptString: () => {
-      throw new Error('orcad_secret_sealing_unavailable')
-    },
-    decryptString: () => {
-      throw new Error('orcad_secret_sealing_unavailable')
-    },
+    encryptString: unavailable,
+    decryptString: unavailable,
+    isEncryptionAvailableAsync: async () => false,
+    encryptStringAsync: async () => unavailable(),
+    decryptStringAsync: async () => unavailable(),
     describeProtectionGap: () =>
       'This host has no OS keyring, so credentials are stored unencrypted. Pair from a desktop to manage secrets, or install and unlock a keyring.'
   }

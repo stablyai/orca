@@ -13,7 +13,10 @@ import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
-import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
+import {
+  installFakeAppEnvironment,
+  withAsyncSecretForms
+} from '../../config/scripts/vitest-host-ports-setup'
 
 const testState = { dir: '' }
 
@@ -47,22 +50,24 @@ vi.mock('./telemetry/cohort-classifier', () => ({
 async function createStore() {
   vi.resetModules()
   const { setSecretStore } = await import('../shared/secret-store')
-  setSecretStore({
-    isEncryptionAvailable: () => cipherState.encryptionAvailable,
-    encryptString: (plaintext) =>
-      Buffer.from(
-        `enc:${cipherState.deterministic ? DETERMINISTIC_IV : randomUUID()}:${plaintext}`,
-        'utf-8'
-      ),
-    decryptString: (ciphertext) => {
-      const decoded = ciphertext.toString('utf-8')
-      if (!decoded.startsWith('enc:')) {
-        throw new Error('invalid ciphertext')
-      }
-      return decoded.slice('enc:'.length + 36 + 1)
-    },
-    describeProtectionGap: () => null
-  })
+  setSecretStore(
+    withAsyncSecretForms({
+      isEncryptionAvailable: () => cipherState.encryptionAvailable,
+      encryptString: (plaintext) =>
+        Buffer.from(
+          `enc:${cipherState.deterministic ? DETERMINISTIC_IV : randomUUID()}:${plaintext}`,
+          'utf-8'
+        ),
+      decryptString: (ciphertext) => {
+        const decoded = ciphertext.toString('utf-8')
+        if (!decoded.startsWith('enc:')) {
+          throw new Error('invalid ciphertext')
+        }
+        return decoded.slice('enc:'.length + 36 + 1)
+      },
+      describeProtectionGap: () => null
+    })
+  )
   const { Store, initDataPath } = await import('./persistence')
   // Why here: userData resolves through AppEnvironment, and this must point at this
   // file's temp dir rather than the global fake's shared one, after resetModules.

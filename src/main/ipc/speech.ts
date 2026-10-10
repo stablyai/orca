@@ -27,7 +27,7 @@ export function registerSpeechHandlers(store: Store): void {
   })
 
   ipcMain.handle('speech:saveOpenAiApiKey', async (_event, apiKey: string) => {
-    saveOpenAiSpeechApiKey(apiKey)
+    await saveOpenAiSpeechApiKey(apiKey)
     return { configured: true, protection: getOpenAiSpeechApiKeyProtection() }
   })
 

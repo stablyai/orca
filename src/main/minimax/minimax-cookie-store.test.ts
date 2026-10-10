@@ -1,11 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as MiniMaxCookieStore from './minimax-cookie-store'
 
-const safeStorageMock = vi.hoisted(() => ({
-  isEncryptionAvailable: vi.fn(() => true),
-  encryptString: vi.fn((value: string) => Buffer.from(value)),
-  decryptString: vi.fn((value: Buffer) => value.toString('utf8'))
-}))
+const safeStorageMock = vi.hoisted(() => {
+  const sync = {
+    isEncryptionAvailable: vi.fn(() => true),
+    encryptString: vi.fn((value: string) => Buffer.from(value)),
+    decryptString: vi.fn((value: Buffer) => value.toString('utf8'))
+  }
+  // The async API seals exactly like the sync one, so its mocks run the sync mocks.
+  return {
+    ...sync,
+    isAsyncEncryptionAvailable: vi.fn(async () => sync.isEncryptionAvailable()),
+    encryptStringAsync: vi.fn(async (value: string) => sync.encryptString(value))
+  }
+})
 
 const electronMock = vi.hoisted(() => ({
   safeStorage: safeStorageMock
@@ -98,8 +106,10 @@ describe('minimax-cookie-store', () => {
   it('writes the cookie using safeStorage when encryption is available', async () => {
     existsSyncMock.mockReturnValue(false)
     const store = await loadStore()
-    store.saveMiniMaxSessionCookie('_token=abc; minimax_group_id_v2=42')
-    expect(safeStorageMock.encryptString).toHaveBeenCalledWith('_token=abc; minimax_group_id_v2=42')
+    await store.saveMiniMaxSessionCookie('_token=abc; minimax_group_id_v2=42')
+    expect(safeStorageMock.encryptStringAsync).toHaveBeenCalledWith(
+      '_token=abc; minimax_group_id_v2=42'
+    )
     expect(writeSecureFileMock).toHaveBeenCalledWith(
       storePath,
       envelope('encrypted', '_token=abc; minimax_group_id_v2=42')
@@ -111,7 +121,7 @@ describe('minimax-cookie-store', () => {
     safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
     existsSyncMock.mockReturnValue(false)
     const store = await loadStore()
-    store.saveMiniMaxSessionCookie('_token=abc')
+    await store.saveMiniMaxSessionCookie('_token=abc')
     expect(writeSecureFileMock).toHaveBeenCalledWith(storePath, envelope('plaintext', '_token=abc'))
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('safeStorage encryption unavailable'))
     warn.mockRestore()
@@ -119,7 +129,7 @@ describe('minimax-cookie-store', () => {
 
   it('refuses empty cookies', async () => {
     const store = await loadStore()
-    expect(() => store.saveMiniMaxSessionCookie('   ')).toThrow(/required/)
+    await expect(store.saveMiniMaxSessionCookie('   ')).rejects.toThrow(/required/)
   })
 
   it('reads decrypted cookie from disk and caches it', async () => {

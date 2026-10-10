@@ -46,15 +46,19 @@ describe('GLM credential IPC', () => {
     })
   })
 
-  it('validates an untyped IPC key before persistence', () => {
-    expect(() => handler('zcodePlanCredentials:saveApiKey')(null, 42)).toThrow('must be a string')
+  it('validates an untyped IPC key before persistence', async () => {
+    await expect(handler('zcodePlanCredentials:saveApiKey')(null, 42)).rejects.toThrow(
+      'must be a string'
+    )
     expect(mocks.save).not.toHaveBeenCalled()
   })
 
-  it('saves and removes keys while returning status only', () => {
+  it('saves and removes keys while returning status only', async () => {
     mocks.save.mockImplementationOnce(() => mocks.hasKey.mockReturnValue(true))
     mocks.clear.mockImplementationOnce(() => mocks.hasKey.mockReturnValue(false))
-    expect(handler('zcodePlanCredentials:saveApiKey')(null, 'synthetic-key')).toEqual({
+    await expect(
+      handler('zcodePlanCredentials:saveApiKey')(null, 'synthetic-key')
+    ).resolves.toEqual({
       apiKeyConfigured: true,
       zcodeCliConfigured: false,
       apiKeyProtection: null

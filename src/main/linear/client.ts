@@ -125,7 +125,7 @@ export async function connect(
     const org = await me.organization
     const workspace = workspaceFromLinearData(me, org)
 
-    saveWorkspaceToken(workspace.id, apiKey)
+    await saveWorkspaceToken(workspace.id, apiKey)
     const legacyWorkspace = getLegacyWorkspace()
     if (
       legacyWorkspace &&
@@ -227,9 +227,9 @@ export async function testConnection(
     const org = await me.organization
     const workspace = workspaceFromLinearData(me, org)
     if (resolvedWorkspaceId === LEGACY_WORKSPACE_ID) {
-      replaceLegacyWorkspace(workspace, token)
+      await replaceLegacyWorkspace(workspace, token)
     } else {
-      saveWorkspaceToken(workspace.id, token)
+      await saveWorkspaceToken(workspace.id, token)
       upsertWorkspace(workspace, { select: true })
     }
     return { ok: true, viewer: workspace, workspace }

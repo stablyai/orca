@@ -1,5 +1,5 @@
 import { safeStorage } from 'electron'
-import type { SecretStore } from '../../shared/secret-store'
+import type { SecretDecryption, SecretStore } from '../../shared/secret-store'
 
 /**
  * Electron-backed SecretStore for the desktop app: a pass-through to
@@ -16,6 +16,19 @@ export class ElectronSecretStore implements SecretStore {
 
   decryptString(cipher: Buffer): string {
     return safeStorage.decryptString(cipher)
+  }
+
+  isEncryptionAvailableAsync(): Promise<boolean> {
+    return safeStorage.isAsyncEncryptionAvailable()
+  }
+
+  encryptStringAsync(plainText: string): Promise<Buffer> {
+    return safeStorage.encryptStringAsync(plainText)
+  }
+
+  async decryptStringAsync(cipher: Buffer): Promise<SecretDecryption> {
+    const { result, shouldReEncrypt } = await safeStorage.decryptStringAsync(cipher)
+    return { plainText: result, shouldReEncrypt }
   }
 
   describeProtectionGap(): string | null {

@@ -4,6 +4,7 @@ import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protect
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { CredentialWriteOrder } from '../credentials/credential-write-order'
 
 type StoredOpenAiKey = {
   encryptedKeyBase64: string
@@ -11,6 +12,7 @@ type StoredOpenAiKey = {
 
 const OPENAI_SPEECH_TOKEN_FILE = 'openai-speech-token.enc'
 let cachedOpenAiSpeechApiKey: string | null = null
+const writeOrder = new CredentialWriteOrder('OpenAI API key')
 
 function getOrcaDir(): string {
   return join(homedir(), '.orca')
@@ -58,14 +60,20 @@ export function getOpenAiSpeechApiKeyProtection(): SecretAtRestProtection | null
   return readCredentialFileProtection(getOpenAiKeyPath())
 }
 
-export function saveOpenAiSpeechApiKey(apiKey: string): void {
+export async function saveOpenAiSpeechApiKey(apiKey: string): Promise<void> {
   const trimmed = apiKey.trim()
   if (!trimmed) {
     throw new Error('OpenAI API key is required')
   }
+  const turn = writeOrder.begin()
+  const store = getSecretStore()
+  const sealed = (await store.isEncryptionAvailableAsync())
+    ? await store.encryptStringAsync(trimmed)
+    : null
+  turn.assertLatest()
   ensureOrcaDir()
-  if (getSecretStore().isEncryptionAvailable()) {
-    writeFileSync(getOpenAiKeyPath(), getSecretStore().encryptString(trimmed), { mode: 0o600 })
+  if (sealed) {
+    writeFileSync(getOpenAiKeyPath(), sealed, { mode: 0o600 })
     cachedOpenAiSpeechApiKey = trimmed
     return
   }
@@ -103,6 +111,7 @@ export function readOpenAiSpeechApiKey(): string {
 }
 
 export function clearOpenAiSpeechApiKey(): void {
+  writeOrder.begin()
   cachedOpenAiSpeechApiKey = null
   rmSync(getOpenAiKeyPath(), { force: true })
 }

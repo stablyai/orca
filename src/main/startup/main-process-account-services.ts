@@ -19,7 +19,7 @@ import { readZcodePlanApiKey } from '../zcode/zcode-plan-api-key-store'
 import {
   hasOpenCodeGoApiKey,
   readOpenCodeGoApiKey,
-  saveOpenCodeGoApiKey
+  saveOpenCodeGoApiKeySync
 } from '../opencode/opencode-go-api-key-store'
 import { createAccountRuntimeTargetSettingsSync } from '../rate-limits/account-runtime-target-sync'
 import { normalizeCodexRuntimeSelection } from '../codex-accounts/runtime-selection'
@@ -152,7 +152,7 @@ export function initializeMainProcessAccountServices(): void {
   store.migrateLegacyOpenCodeGoApiKey({
     has: hasOpenCodeGoApiKey,
     read: readOpenCodeGoApiKey,
-    save: saveOpenCodeGoApiKey
+    save: saveOpenCodeGoApiKeySync
   })
   state.rateLimits.setOpenCodeGoConfigResolver(() => {
     const settings = store.getSettings()

@@ -132,7 +132,7 @@ export async function connect(
       accountId: viewer.accountId,
       authType
     }
-    saveToken(id, apiToken)
+    await saveToken(id, apiToken)
     const file = getSiteFile()
     writeSiteFile({
       version: 1,

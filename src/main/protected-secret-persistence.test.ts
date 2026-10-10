@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { withAsyncSecretForms } from '../../config/scripts/vitest-host-ports-setup'
 import { _resetSecretStoreForTests, setSecretStore } from '../shared/secret-store'
 
 const cipherState = { available: true }
@@ -6,12 +7,14 @@ const cipherState = { available: true }
 describe('ProtectedSecretPersistence', () => {
   beforeEach(() => {
     cipherState.available = true
-    setSecretStore({
-      isEncryptionAvailable: () => cipherState.available,
-      encryptString: (plaintext) => Buffer.from(`encrypted:${plaintext}`),
-      decryptString: (ciphertext) => ciphertext.toString().slice('encrypted:'.length),
-      describeProtectionGap: () => null
-    })
+    setSecretStore(
+      withAsyncSecretForms({
+        isEncryptionAvailable: () => cipherState.available,
+        encryptString: (plaintext) => Buffer.from(`encrypted:${plaintext}`),
+        decryptString: (ciphertext) => ciphertext.toString().slice('encrypted:'.length),
+        describeProtectionGap: () => null
+      })
+    )
   })
 
   it('surfaces an uninstalled secret store instead of degrading silently', async () => {

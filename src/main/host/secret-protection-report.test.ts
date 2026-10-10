@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { withAsyncSecretForms } from '../../../config/scripts/vitest-host-ports-setup'
 import { _resetSecretStoreForTests, setSecretStore } from '../../shared/secret-store'
 import { reportSecretProtectionGap } from './secret-protection-report'
 
@@ -23,12 +24,14 @@ describe('reportSecretProtectionGap', () => {
   })
 
   function installStore(gap: string | null): void {
-    setSecretStore({
-      isEncryptionAvailable: () => true,
-      encryptString: (plainText) => Buffer.from(plainText),
-      decryptString: (cipher) => cipher.toString(),
-      describeProtectionGap: () => gap
-    })
+    setSecretStore(
+      withAsyncSecretForms({
+        isEncryptionAvailable: () => true,
+        encryptString: (plainText) => Buffer.from(plainText),
+        decryptString: (cipher) => cipher.toString(),
+        describeProtectionGap: () => gap
+      })
+    )
   }
 
   const report = (force = false): string | null =>

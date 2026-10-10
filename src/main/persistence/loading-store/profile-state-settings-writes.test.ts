@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { withAsyncSecretForms } from '../../../../config/scripts/vitest-host-ports-setup'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import { setSecretStore } from '../../../shared/secret-store'
 import { buildProfileStateCutoverFixture } from '../profile-state-cutover-fixture'
@@ -33,31 +34,33 @@ const stores: Store[] = []
 beforeEach(() => {
   failure = 'none'
   nonce = 0
-  setSecretStore({
-    isEncryptionAvailable: () => {
-      if (failure === 'availability') {
-        throw new Error('keychain unavailable')
-      }
-      return failure !== 'unavailable'
-    },
-    encryptString: (plaintext) => {
-      if (failure === 'encryption') {
-        throw new Error('encryption failed')
-      }
-      return Buffer.from(`cipher:${++nonce}:${plaintext}`)
-    },
-    decryptString: (ciphertext) => {
-      if (failure === 'decryption') {
-        throw new Error('decryption failed')
-      }
-      const value = ciphertext.toString()
-      if (!value.startsWith('cipher:')) {
-        throw new Error('invalid ciphertext')
-      }
-      return value.slice(value.indexOf(':', 'cipher:'.length) + 1)
-    },
-    describeProtectionGap: () => null
-  })
+  setSecretStore(
+    withAsyncSecretForms({
+      isEncryptionAvailable: () => {
+        if (failure === 'availability') {
+          throw new Error('keychain unavailable')
+        }
+        return failure !== 'unavailable'
+      },
+      encryptString: (plaintext) => {
+        if (failure === 'encryption') {
+          throw new Error('encryption failed')
+        }
+        return Buffer.from(`cipher:${++nonce}:${plaintext}`)
+      },
+      decryptString: (ciphertext) => {
+        if (failure === 'decryption') {
+          throw new Error('decryption failed')
+        }
+        const value = ciphertext.toString()
+        if (!value.startsWith('cipher:')) {
+          throw new Error('invalid ciphertext')
+        }
+        return value.slice(value.indexOf(':', 'cipher:'.length) + 1)
+      },
+      describeProtectionGap: () => null
+    })
+  )
   vi.spyOn(ProfileStateSqliteAuthority.prototype, 'scheduleBackup').mockImplementation(() => {})
 })
 

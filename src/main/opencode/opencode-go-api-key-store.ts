@@ -9,5 +9,6 @@ const store = createEncryptedApiKeyFileStore({
 
 export const hasOpenCodeGoApiKey = store.has
 export const saveOpenCodeGoApiKey = store.save
+export const saveOpenCodeGoApiKeySync = store.saveSync
 export const readOpenCodeGoApiKey = store.read
 export const clearOpenCodeGoApiKey = store.clear

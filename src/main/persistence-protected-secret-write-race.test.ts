@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { withAsyncSecretForms } from '../../config/scripts/vitest-host-ports-setup'
 import { getSecretStore, setSecretStore } from '../shared/secret-store'
 import {
   createWorkerMaintenanceFixture,
@@ -21,12 +22,14 @@ let previousSecretStore: ReturnType<typeof getSecretStore>
 beforeEach(() => {
   encryptionAvailable = true
   previousSecretStore = getSecretStore()
-  setSecretStore({
-    isEncryptionAvailable: () => encryptionAvailable,
-    encryptString: (plaintext) => Buffer.from(`enc:${plaintext}`, 'utf8'),
-    decryptString: (ciphertext) => ciphertext.toString('utf8').slice('enc:'.length),
-    describeProtectionGap: () => null
-  })
+  setSecretStore(
+    withAsyncSecretForms({
+      isEncryptionAvailable: () => encryptionAvailable,
+      encryptString: (plaintext) => Buffer.from(`enc:${plaintext}`, 'utf8'),
+      decryptString: (ciphertext) => ciphertext.toString('utf8').slice('enc:'.length),
+      describeProtectionGap: () => null
+    })
+  )
 })
 afterEach(() => setSecretStore(previousSecretStore))
 

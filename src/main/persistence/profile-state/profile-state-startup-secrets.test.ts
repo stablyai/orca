@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { withAsyncSecretForms } from '../../../../config/scripts/vitest-host-ports-setup'
 import {
   getSecretStore,
   hasSecretStore,
@@ -38,17 +39,19 @@ vi.mock('../../ssh/ssh-config-parser', () => ({
 let originalSecretStore: ReturnType<typeof getSecretStore> | undefined
 beforeEach(() => {
   originalSecretStore = hasSecretStore() ? getSecretStore() : undefined
-  setSecretStore({
-    isEncryptionAvailable: () => keyState !== 'unavailable',
-    encryptString: (value) => Buffer.from(`encrypted:${value}`, 'utf8'),
-    decryptString: (value) => {
-      if (keyState === 'decrypt-fails') {
-        throw new Error('keychain denied decryption')
-      }
-      return value.toString('utf8').slice('encrypted:'.length)
-    },
-    describeProtectionGap: () => null
-  })
+  setSecretStore(
+    withAsyncSecretForms({
+      isEncryptionAvailable: () => keyState !== 'unavailable',
+      encryptString: (value) => Buffer.from(`encrypted:${value}`, 'utf8'),
+      decryptString: (value) => {
+        if (keyState === 'decrypt-fails') {
+          throw new Error('keychain denied decryption')
+        }
+        return value.toString('utf8').slice('encrypted:'.length)
+      },
+      describeProtectionGap: () => null
+    })
+  )
 })
 
 const directories: string[] = []

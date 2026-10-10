@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { withAsyncSecretForms } from '../../config/scripts/vitest-host-ports-setup'
 import { setSecretStore } from '../shared/secret-store'
 import {
   ProtectedSecretPersistence,
@@ -25,17 +26,19 @@ describe('protected secret acknowledgements', () => {
   beforeEach(() => {
     cipherState.available = true
     cipherState.fails = false
-    setSecretStore({
-      isEncryptionAvailable: () => cipherState.available,
-      encryptString: (plaintext) => {
-        if (cipherState.fails) {
-          throw new Error('Keyring encryption failed')
-        }
-        return Buffer.from(`encrypted:${plaintext}`)
-      },
-      decryptString: (encrypted) => encrypted.toString().slice('encrypted:'.length),
-      describeProtectionGap: () => null
-    })
+    setSecretStore(
+      withAsyncSecretForms({
+        isEncryptionAvailable: () => cipherState.available,
+        encryptString: (plaintext) => {
+          if (cipherState.fails) {
+            throw new Error('Keyring encryption failed')
+          }
+          return Buffer.from(`encrypted:${plaintext}`)
+        },
+        decryptString: (encrypted) => encrypted.toString().slice('encrypted:'.length),
+        describeProtectionGap: () => null
+      })
+    )
   })
 
   afterEach(() => vi.restoreAllMocks())

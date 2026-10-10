@@ -31,11 +31,11 @@ export function registerOpenCodeGoCredentialsHandlers(
   rateLimits: CredentialRateLimits | null
 ): void {
   ipcMain.handle('opencodeGoCredentials:getStatus', () => getOpenCodeGoCredentialsStatus())
-  ipcMain.handle('opencodeGoCredentials:saveApiKey', (_event, key: unknown) => {
+  ipcMain.handle('opencodeGoCredentials:saveApiKey', async (_event, key: unknown) => {
     if (typeof key !== 'string') {
       throw new Error('OpenCode Go API key must be a string')
     }
-    saveOpenCodeGoApiKey(key)
+    await saveOpenCodeGoApiKey(key)
     refreshAfterOpenCodeGoCredentialChange(rateLimits, false)
     return getOpenCodeGoCredentialsStatus()
   })

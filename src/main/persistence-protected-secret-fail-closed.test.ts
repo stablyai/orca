@@ -8,7 +8,10 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
+import {
+  installFakeAppEnvironment,
+  withAsyncSecretForms
+} from '../../config/scripts/vitest-host-ports-setup'
 
 type FailureMode = 'availability-throws' | 'encryption-throws' | 'unavailable'
 
@@ -35,31 +38,33 @@ vi.mock('./telemetry/cohort-classifier', () => ({
 
 async function createStore() {
   const { setSecretStore } = await import('../shared/secret-store')
-  setSecretStore({
-    isEncryptionAvailable: () => {
-      if (cipherState.availability === 'throws') {
-        throw new Error('keychain access denied')
-      }
-      return cipherState.availability === 'available'
-    },
-    encryptString: (plaintext) => {
-      if (cipherState.encryptionThrows) {
-        throw new Error('keychain encryption failed')
-      }
-      return Buffer.from(`enc:${randomUUID()}:${plaintext}`, 'utf-8')
-    },
-    decryptString: (ciphertext) => {
-      if (cipherState.decryptionThrows) {
-        throw new Error('keychain decryption failed')
-      }
-      const decoded = ciphertext.toString('utf-8')
-      if (!decoded.startsWith('enc:')) {
-        throw new Error('invalid ciphertext')
-      }
-      return decoded.slice('enc:'.length + 36 + 1)
-    },
-    describeProtectionGap: () => null
-  })
+  setSecretStore(
+    withAsyncSecretForms({
+      isEncryptionAvailable: () => {
+        if (cipherState.availability === 'throws') {
+          throw new Error('keychain access denied')
+        }
+        return cipherState.availability === 'available'
+      },
+      encryptString: (plaintext) => {
+        if (cipherState.encryptionThrows) {
+          throw new Error('keychain encryption failed')
+        }
+        return Buffer.from(`enc:${randomUUID()}:${plaintext}`, 'utf-8')
+      },
+      decryptString: (ciphertext) => {
+        if (cipherState.decryptionThrows) {
+          throw new Error('keychain decryption failed')
+        }
+        const decoded = ciphertext.toString('utf-8')
+        if (!decoded.startsWith('enc:')) {
+          throw new Error('invalid ciphertext')
+        }
+        return decoded.slice('enc:'.length + 36 + 1)
+      },
+      describeProtectionGap: () => null
+    })
+  )
   const { Store, initDataPath } = await import('./persistence')
   // Each reopened store must resolve userData to this fixture's directory.
   installFakeAppEnvironment({ getPath: () => testState.dir })

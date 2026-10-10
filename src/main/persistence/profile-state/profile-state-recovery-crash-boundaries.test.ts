@@ -11,6 +11,7 @@ import {
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, relative } from 'node:path'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { withAsyncSecretForms } from '../../../../config/scripts/vitest-host-ports-setup'
 import { setSecretStore } from '../../../shared/secret-store'
 import { profileStateStorage } from '../../orca-profiles/profile-project-state-file'
 import {
@@ -93,16 +94,18 @@ beforeAll(() => {
   bundle = buildRecoveryCrashProcess(suiteRoot).bundle
 })
 beforeEach(() => {
-  setSecretStore({
-    isEncryptionAvailable: () => false,
-    encryptString: () => {
-      throw new Error('Keychain unavailable')
-    },
-    decryptString: () => {
-      throw new Error('Keychain unavailable')
-    },
-    describeProtectionGap: () => null
-  })
+  setSecretStore(
+    withAsyncSecretForms({
+      isEncryptionAvailable: () => false,
+      encryptString: () => {
+        throw new Error('Keychain unavailable')
+      },
+      decryptString: () => {
+        throw new Error('Keychain unavailable')
+      },
+      describeProtectionGap: () => null
+    })
+  )
 })
 afterEach(() => {
   for (const root of fixtureRoots.splice(0)) {

@@ -29,6 +29,8 @@ vi.mock('electron', () => ({
   safeStorage: {
     isEncryptionAvailable: () => true,
     encryptString: (key: string) => Buffer.from(`encrypted:${key}`),
+    isAsyncEncryptionAvailable: async () => true,
+    encryptStringAsync: async (key: string) => Buffer.from(`encrypted:${key}`),
     decryptString: (bytes: Buffer) => bytes.toString().slice('encrypted:'.length)
   }
 }))
@@ -44,7 +46,7 @@ describe('OpenCode Go main-owned API key file', () => {
   it('persists a versioned encrypted envelope, reads it after restart, and clears it', async () => {
     const store = await import('./opencode-go-api-key-store')
     expect(store.hasOpenCodeGoApiKey()).toBe(false)
-    store.saveOpenCodeGoApiKey(' fake-key ')
+    await store.saveOpenCodeGoApiKey(' fake-key ')
     expect(store.hasOpenCodeGoApiKey()).toBe(true)
     const path = join(home.directory, '.orca', 'opencode-go-api-key.enc')
     expect(readFileSync(path, 'utf8')).toBe(
@@ -61,8 +63,8 @@ describe('OpenCode Go main-owned API key file', () => {
   it('keeps the MiniMax cache and file independent', async () => {
     const go = await import('./opencode-go-api-key-store')
     const miniMax = await import('../minimax/minimax-api-key-store')
-    go.saveOpenCodeGoApiKey('fake-go')
-    miniMax.saveMiniMaxApiKey('fake-minimax')
+    await go.saveOpenCodeGoApiKey('fake-go')
+    await miniMax.saveMiniMaxApiKey('fake-minimax')
     expect(go.readOpenCodeGoApiKey()).toBe('fake-go')
     expect(miniMax.readMiniMaxApiKey()).toBe('fake-minimax')
     go.clearOpenCodeGoApiKey()
@@ -72,8 +74,8 @@ describe('OpenCode Go main-owned API key file', () => {
 
   it('rejects empty keys and malformed envelopes without returning the key', async () => {
     const store = await import('./opencode-go-api-key-store')
-    expect(() => store.saveOpenCodeGoApiKey(' ')).toThrow('required')
-    store.saveOpenCodeGoApiKey('fake-key')
+    await expect(store.saveOpenCodeGoApiKey(' ')).rejects.toThrow('required')
+    await store.saveOpenCodeGoApiKey('fake-key')
     writeFileSync(join(home.directory, '.orca', 'opencode-go-api-key.enc'), 'fake-invalid-envelope')
     vi.resetModules()
     const restarted = await import('./opencode-go-api-key-store')
@@ -84,7 +86,7 @@ describe('OpenCode Go main-owned API key file', () => {
 
   it('throws a distinct unreadable error for a transient read failure', async () => {
     const store = await import('./opencode-go-api-key-store')
-    store.saveOpenCodeGoApiKey('fake-key')
+    await store.saveOpenCodeGoApiKey('fake-key')
     vi.resetModules()
     const restarted = await import('./opencode-go-api-key-store')
     vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -95,5 +97,23 @@ describe('OpenCode Go main-owned API key file', () => {
     )
     home.readError = null
     expect(restarted.readOpenCodeGoApiKey()).toBe('fake-key')
+  })
+
+  it('drops a save that finishes sealing after a later clear', async () => {
+    const store = await import('./opencode-go-api-key-store')
+    const saving = store.saveOpenCodeGoApiKey('fake-key')
+    store.clearOpenCodeGoApiKey()
+
+    await expect(saving).rejects.toThrow('OpenCode Go API key changed while it was being saved')
+    expect(store.hasOpenCodeGoApiKey()).toBe(false)
+    expect(store.readOpenCodeGoApiKey()).toBeNull()
+  })
+
+  it('writes the same envelope from the sync save the legacy migration uses', async () => {
+    const store = await import('./opencode-go-api-key-store')
+    store.saveOpenCodeGoApiKeySync(' fake-key ')
+    expect(readFileSync(join(home.directory, '.orca', 'opencode-go-api-key.enc'), 'utf8')).toBe(
+      `orca-opencode-go-api-key:v1:encrypted:${Buffer.from('encrypted:fake-key').toString('base64')}`
+    )
   })
 })

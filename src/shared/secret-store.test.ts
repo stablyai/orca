@@ -12,6 +12,12 @@ function fakeStore(overrides: Partial<SecretStore> = {}): SecretStore {
     isEncryptionAvailable: () => true,
     encryptString: (plainText) => Buffer.from(`sealed:${plainText}`),
     decryptString: (cipher) => cipher.toString().slice('sealed:'.length),
+    isEncryptionAvailableAsync: async () => true,
+    encryptStringAsync: async (plainText) => Buffer.from(`sealed:${plainText}`),
+    decryptStringAsync: async (cipher) => ({
+      plainText: cipher.toString().slice('sealed:'.length),
+      shouldReEncrypt: false
+    }),
     describeProtectionGap: () => null,
     ...overrides
   }

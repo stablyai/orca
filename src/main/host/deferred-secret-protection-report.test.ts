@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { withAsyncSecretForms } from '../../../config/scripts/vitest-host-ports-setup'
 import { _resetSecretStoreForTests, setSecretStore } from '../../shared/secret-store'
 
 type Listener = (...args: unknown[]) => void
@@ -55,16 +56,18 @@ describe('scheduleSecretProtectionGapReport', () => {
     dataFile = join(dir, 'orca-data.json')
     probes = 0
     logged = []
-    setSecretStore({
-      isEncryptionAvailable: () => true,
-      encryptString: (plainText) => Buffer.from(plainText),
-      decryptString: (cipher) => cipher.toString(),
-      describeProtectionGap: () => {
-        // Why count here: this is the call that blocks on the OS keyring.
-        probes += 1
-        return 'The OS keyring is unavailable.'
-      }
-    })
+    setSecretStore(
+      withAsyncSecretForms({
+        isEncryptionAvailable: () => true,
+        encryptString: (plainText) => Buffer.from(plainText),
+        decryptString: (cipher) => cipher.toString(),
+        describeProtectionGap: () => {
+          // Why count here: this is the call that blocks on the OS keyring.
+          probes += 1
+          return 'The OS keyring is unavailable.'
+        }
+      })
+    )
   })
 
   afterEach(() => {

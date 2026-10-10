@@ -9,11 +9,14 @@ import {
 } from '../../shared/secure-file'
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 import { ApiKeyFileUnreadableError } from './api-key-file-unreadable-error'
+import { CredentialWriteOrder } from './credential-write-order'
 
 type EncryptedApiKeyFileStore = {
   protection: () => SecretAtRestProtection | null
   has: () => boolean
-  save: (key: string) => void
+  save: (key: string) => Promise<void>
+  /** Sync form for the legacy settings migration only; Electron 46 removes the sync safeStorage API. */
+  saveSync: (key: string) => void
   read: () => string | null
   clear: () => void
 }
@@ -31,6 +34,7 @@ export function createEncryptedApiKeyFileStore({
 }): EncryptedApiKeyFileStore {
   let cachedApiKey: string | null = null
   let warnedStatusHardenFailure = false
+  const writeOrder = new CredentialWriteOrder(`${providerLabel} API key`)
 
   type ApiKeyEnvelope = {
     kind: 'encrypted' | 'plaintext'
@@ -110,29 +114,45 @@ export function createEncryptedApiKeyFileStore({
     }
   }
 
-  function save(key: string): void {
+  function requireKey(key: string): string {
     const trimmed = key.trim()
     if (!trimmed) {
       throw new Error(`${providerLabel} API key is required`)
     }
-    if (safeStorage.isEncryptionAvailable()) {
-      writeSecureFile(
-        getApiKeyPath(),
-        encodeApiKeyEnvelope('encrypted', safeStorage.encryptString(trimmed)),
-        { durable: true }
+    return trimmed
+  }
+
+  /** `sealed` is null when the OS keychain is unavailable; the key is then stored in plaintext. */
+  function writeKey(trimmed: string, sealed: Buffer | null): void {
+    if (!sealed) {
+      console.warn(
+        `[${logScope}] safeStorage encryption unavailable — storing ${providerLabel} API key in plaintext`
       )
-      cachedApiKey = trimmed
-      return
     }
-    console.warn(
-      `[${logScope}] safeStorage encryption unavailable — storing ${providerLabel} API key in plaintext`
-    )
-    writeSecureFile(
-      getApiKeyPath(),
-      encodeApiKeyEnvelope('plaintext', Buffer.from(trimmed, 'utf8')),
-      { durable: true }
-    )
+    const envelope = sealed
+      ? encodeApiKeyEnvelope('encrypted', sealed)
+      : encodeApiKeyEnvelope('plaintext', Buffer.from(trimmed, 'utf8'))
+    writeSecureFile(getApiKeyPath(), envelope, { durable: true })
     cachedApiKey = trimmed
+  }
+
+  async function save(key: string): Promise<void> {
+    const trimmed = requireKey(key)
+    const turn = writeOrder.begin()
+    const sealed = (await safeStorage.isAsyncEncryptionAvailable())
+      ? await safeStorage.encryptStringAsync(trimmed)
+      : null
+    turn.assertLatest()
+    writeKey(trimmed, sealed)
+  }
+
+  function saveSync(key: string): void {
+    const trimmed = requireKey(key)
+    writeOrder.begin()
+    writeKey(
+      trimmed,
+      safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(trimmed) : null
+    )
   }
 
   function read(): string | null {
@@ -169,9 +189,10 @@ export function createEncryptedApiKeyFileStore({
   }
 
   function clear(): void {
+    writeOrder.begin()
     cachedApiKey = null
     rmSync(getApiKeyPath(), { force: true })
   }
 
-  return { has, save, read, clear, protection }
+  return { has, save, saveSync, read, clear, protection }
 }

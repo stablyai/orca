@@ -1,11 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as MiniMaxApiKeyStore from './minimax-api-key-store'
 
-const safeStorageMock = vi.hoisted(() => ({
-  isEncryptionAvailable: vi.fn(() => true),
-  encryptString: vi.fn((value: string) => Buffer.from(value)),
-  decryptString: vi.fn((value: Buffer) => value.toString('utf8'))
-}))
+const safeStorageMock = vi.hoisted(() => {
+  const sync = {
+    isEncryptionAvailable: vi.fn(() => true),
+    encryptString: vi.fn((value: string) => Buffer.from(value)),
+    decryptString: vi.fn((value: Buffer) => value.toString('utf8'))
+  }
+  // The async API seals exactly like the sync one, so its mocks run the sync mocks.
+  return {
+    ...sync,
+    isAsyncEncryptionAvailable: vi.fn(async () => sync.isEncryptionAvailable()),
+    encryptStringAsync: vi.fn(async (value: string) => sync.encryptString(value))
+  }
+})
 
 const electronMock = vi.hoisted(() => ({
   safeStorage: safeStorageMock
@@ -100,8 +108,8 @@ describe('minimax-api-key-store', () => {
   it('writes the key using safeStorage when encryption is available', async () => {
     existsSyncMock.mockReturnValue(false)
     const store = await loadStore()
-    store.saveMiniMaxApiKey('sk-test-1234567890')
-    expect(safeStorageMock.encryptString).toHaveBeenCalledWith('sk-test-1234567890')
+    await store.saveMiniMaxApiKey('sk-test-1234567890')
+    expect(safeStorageMock.encryptStringAsync).toHaveBeenCalledWith('sk-test-1234567890')
     expect(writeSecureFileMock).toHaveBeenCalledWith(
       storePath,
       envelope('encrypted', 'sk-test-1234567890'),
@@ -114,7 +122,7 @@ describe('minimax-api-key-store', () => {
     safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
     existsSyncMock.mockReturnValue(false)
     const store = await loadStore()
-    store.saveMiniMaxApiKey('sk-test-1234567890')
+    await store.saveMiniMaxApiKey('sk-test-1234567890')
     expect(writeSecureFileMock).toHaveBeenCalledWith(
       storePath,
       envelope('plaintext', 'sk-test-1234567890'),
@@ -166,7 +174,7 @@ describe('minimax-api-key-store', () => {
 
   it('refuses empty keys', async () => {
     const store = await loadStore()
-    expect(() => store.saveMiniMaxApiKey('   ')).toThrow(/required/)
+    await expect(store.saveMiniMaxApiKey('   ')).rejects.toThrow(/required/)
   })
 
   it('reads decrypted key from disk and caches it', async () => {

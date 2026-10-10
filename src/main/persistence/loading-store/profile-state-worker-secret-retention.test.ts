@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { withAsyncSecretForms } from '../../../../config/scripts/vitest-host-ports-setup'
 import { getSecretStore, setSecretStore } from '../../../shared/secret-store'
 import { fixture } from './profile-state-delayed-authority-fixture'
 
@@ -18,12 +19,14 @@ const ciphertext = (plaintext: string) => Buffer.from(`sealed:${plaintext}`).toS
 beforeEach(() => {
   encryptionAvailable = true
   previousSecretStore = getSecretStore()
-  setSecretStore({
-    isEncryptionAvailable: () => encryptionAvailable,
-    encryptString: (value) => Buffer.from(`sealed:${value}`),
-    decryptString: (value) => value.toString().slice('sealed:'.length),
-    describeProtectionGap: () => null
-  })
+  setSecretStore(
+    withAsyncSecretForms({
+      isEncryptionAvailable: () => encryptionAvailable,
+      encryptString: (value) => Buffer.from(`sealed:${value}`),
+      decryptString: (value) => value.toString().slice('sealed:'.length),
+      describeProtectionGap: () => null
+    })
+  )
 })
 afterEach(() => setSecretStore(previousSecretStore))
 

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { withAsyncSecretForms } from '../../../config/scripts/vitest-host-ports-setup'
 
 type ViewerFixture = {
   displayName: string
@@ -91,12 +92,14 @@ async function loadClientModule(options: SafeStorageMockOptions = {}) {
     })
   })
   const { setSecretStore } = await import('../../shared/secret-store')
-  setSecretStore({
-    isEncryptionAvailable: () => options.encryptionAvailable ?? false,
-    encryptString: (value) => Buffer.from(value),
-    decryptString: options.decryptString ?? ((value) => value.toString('utf-8')),
-    describeProtectionGap: () => null
-  })
+  setSecretStore(
+    withAsyncSecretForms({
+      isEncryptionAvailable: () => options.encryptionAvailable ?? false,
+      encryptString: (value) => Buffer.from(value),
+      decryptString: options.decryptString ?? ((value) => value.toString('utf-8')),
+      describeProtectionGap: () => null
+    })
+  )
   vi.doMock('os', async () => {
     const actual = await vi.importActual<typeof Os>('os')
     return { ...actual, homedir: () => tempHome }
