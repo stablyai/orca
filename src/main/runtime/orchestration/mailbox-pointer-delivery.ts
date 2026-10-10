@@ -118,6 +118,11 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     ) {
       return
     }
+    // Why: the pointer's Enter would send the user's half-typed draft with it. Mail stays unread,
+    // so the next idle edge after they send it, or the next message, offers it again.
+    if (leaf.ptyId && this.deps.hasUnsubmittedInput(leaf.ptyId)) {
+      return
+    }
     const unread = selectOrchestrationPointerBatch({
       db,
       mailboxHandle,

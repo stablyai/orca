@@ -24,11 +24,18 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
     ptyId: string,
     data: string
   ): WriteSettlement | Promise<WriteSettlement> {
-    return writeOrchestrationPointerWithSettlement({
-      ptyId,
-      data,
-      controller: this.ptyController
-    })
+    // Why: the pointer is Orca's text, not the user's draft. The write records input synchronously,
+    // so restoring right after it cannot undo a keystroke.
+    const draft = this.terminalRunFacts.readComposerDraft(ptyId)
+    try {
+      return writeOrchestrationPointerWithSettlement({
+        ptyId,
+        data,
+        controller: this.ptyController
+      })
+    } finally {
+      this.terminalRunFacts.restoreComposerDraft(ptyId, draft)
+    }
   }
 
   // A parked leaf has left the renderer graph but its PTY is still addressable, so the pointer

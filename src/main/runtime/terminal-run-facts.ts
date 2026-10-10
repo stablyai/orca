@@ -22,6 +22,56 @@ export function isUntypedTerminalInput(payload: string): boolean {
   return isTerminalQueryReply(payload) || TERMINAL_FOCUS_REPORTS_ONLY_RE.test(payload)
 }
 
+const BRACKETED_PASTE_START = '\x1b[200~'
+const BRACKETED_PASTE_END = '\x1b[201~'
+const KITTY_ENTER = '\x1b[13u'
+
+export type ComposerDraftState = { draft: boolean; inPaste: boolean }
+
+/** CSI runs to its final byte; SS3 and Alt+key are ESC plus one or two characters. */
+function escapeSequenceEnd(data: string, start: number): number {
+  const introducer = data[start + 1]
+  if (introducer === '[') {
+    let index = start + 2
+    while (
+      index < data.length &&
+      (data.charCodeAt(index) < 0x40 || data.charCodeAt(index) > 0x7e)
+    ) {
+      index += 1
+    }
+    return Math.min(index + 1, data.length)
+  }
+  return Math.min(start + (introducer === 'O' ? 3 : 2), data.length)
+}
+
+/** Walks input the way an agent's composer sees it: typed or pasted text leaves a draft, Enter or
+ *  Ctrl+C sends or clears it, and keys such as arrows, Esc or Shift+Enter (ESC CR) change neither. */
+function advanceComposerDraft(state: ComposerDraftState, data: string): ComposerDraftState {
+  let { draft, inPaste } = state
+  for (let index = 0; index < data.length; index += 1) {
+    const char = data[index]
+    if (char === '\x1b') {
+      const end = escapeSequenceEnd(data, index)
+      const sequence = data.slice(index, end)
+      if (sequence === BRACKETED_PASTE_START) {
+        inPaste = true
+      } else if (sequence === BRACKETED_PASTE_END) {
+        inPaste = false
+      } else if (!inPaste && sequence === KITTY_ENTER) {
+        draft = false
+      }
+      index = end - 1
+    } else if (inPaste) {
+      draft = true
+    } else if (char === '\r' || char === '\x03') {
+      draft = false
+    } else if (char >= ' ' && char !== '\x7f') {
+      draft = true
+    }
+  }
+  return { draft, inPaste }
+}
+
 export type TerminalSpawnCommit = Parameters<typeof spawnCommitBindingOrigin>[0] & {
   id: string
   incarnationId?: string
@@ -42,6 +92,7 @@ export class TerminalRunFactsRegister {
   private readonly runsByPtyId = new Map<string, TerminalRunRecord>()
   // Why apart from the run record: input must count on a PTY main adopted without a commit.
   private readonly lastInputAtByPtyId = new Map<string, number>()
+  private readonly composerDraftByPtyId = new Map<string, ComposerDraftState>()
   private readonly pendingByPtyId = new Map<
     string,
     { incarnationId: string | null; firstInputAt: number | null }
@@ -82,6 +133,7 @@ export class TerminalRunFactsRegister {
       origin === 'reattach' && (incarnationId === null || !previous?.incarnationId)
     if (!sameProcess) {
       this.lastInputAtByPtyId.delete(commit.id)
+      this.composerDraftByPtyId.delete(commit.id)
     }
     this.runsByPtyId.set(commit.id, {
       incarnationId,
@@ -102,6 +154,13 @@ export class TerminalRunFactsRegister {
       return
     }
     this.lastInputAtByPtyId.set(ptyId, now)
+    this.composerDraftByPtyId.set(
+      ptyId,
+      advanceComposerDraft(
+        this.composerDraftByPtyId.get(ptyId) ?? { draft: false, inPaste: false },
+        data
+      )
+    )
     const run = this.runsByPtyId.get(ptyId)
     if (inputKind === 'driving') {
       const pending = this.pendingByPtyId.get(ptyId)
@@ -122,6 +181,23 @@ export class TerminalRunFactsRegister {
     return this.lastInputAtByPtyId.get(ptyId) ?? null
   }
 
+  /** Whether text was typed or pasted into the PTY since the last Enter or Ctrl+C. */
+  hasUnsubmittedInput(ptyId: string): boolean {
+    return this.composerDraftByPtyId.get(ptyId)?.draft === true
+  }
+
+  readComposerDraft(ptyId: string): ComposerDraftState | undefined {
+    return this.composerDraftByPtyId.get(ptyId)
+  }
+
+  restoreComposerDraft(ptyId: string, state: ComposerDraftState | undefined): void {
+    if (state) {
+      this.composerDraftByPtyId.set(ptyId, state)
+    } else {
+      this.composerDraftByPtyId.delete(ptyId)
+    }
+  }
+
   /** A run main never saw committed reads as not fresh, which keeps today's close-on-exit. */
   read(ptyId: string, incarnationId: string | null | undefined): TerminalRunFacts {
     const run = this.runsByPtyId.get(ptyId)
@@ -137,6 +213,7 @@ export class TerminalRunFactsRegister {
   delete(ptyId: string): void {
     this.runsByPtyId.delete(ptyId)
     this.lastInputAtByPtyId.delete(ptyId)
+    this.composerDraftByPtyId.delete(ptyId)
     this.pendingByPtyId.delete(ptyId)
   }
 }
