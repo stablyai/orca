@@ -20,6 +20,11 @@ const LOCALE_CONFIG = {
     displayName: 'Simplified Chinese',
     cacheFile: '.zh-catalog-cache.json'
   },
+  'zh-Hant': {
+    targetLanguage: 'zh-TW',
+    displayName: 'Traditional Chinese',
+    cacheFile: '.zh-Hant-catalog-cache.json'
+  },
   ko: {
     targetLanguage: 'ko',
     displayName: 'Korean',

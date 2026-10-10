@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import {
   UI_LANGUAGE_CHINESE,
+  UI_LANGUAGE_CHINESE_TRADITIONAL,
   UI_LANGUAGE_ENGLISH,
   UI_LANGUAGE_SPANISH
 } from '../../../shared/ui-language'
@@ -35,6 +36,19 @@ describe('renderer i18n lazy locale loading', () => {
   it('lazy-loads a catalog through a direct changeLanguage call', async () => {
     await i18n.changeLanguage(UI_LANGUAGE_CHINESE)
     expect(i18n.t('menu.file', { defaultValue: 'File' })).not.toBe('File')
+  })
+
+  it('lazy-loads Traditional Chinese under its script tag', async () => {
+    await setRendererUiLanguage(UI_LANGUAGE_CHINESE_TRADITIONAL)
+    expect(i18n.language).toBe('zh-Hant')
+    expect(i18n.t('menu.file', { defaultValue: 'File' })).toBe('檔案')
+  })
+
+  it('falls back to English, not Simplified Chinese, for keys zh-Hant lacks', async () => {
+    await i18n.changeLanguage(UI_LANGUAGE_CHINESE)
+    i18n.addResource('zh', 'translation', 'probe.onlyInSimplified', '简体')
+    await setRendererUiLanguage(UI_LANGUAGE_CHINESE_TRADITIONAL)
+    expect(i18n.t('probe.onlyInSimplified', { defaultValue: 'English' })).toBe('English')
   })
 
   it('uses the inline English default when a target catalog omits a key', async () => {

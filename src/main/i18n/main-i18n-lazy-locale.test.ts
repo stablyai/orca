@@ -12,6 +12,7 @@ vi.mock('electron', () => ({
 
 import {
   UI_LANGUAGE_CHINESE,
+  UI_LANGUAGE_CHINESE_TRADITIONAL,
   UI_LANGUAGE_ENGLISH,
   UI_LANGUAGE_JAPANESE,
   UI_LANGUAGE_KOREAN,
@@ -19,6 +20,7 @@ import {
 } from '../../shared/ui-language'
 import {
   ensureMainI18n,
+  mainI18n,
   setMainPluginLanguagePacks,
   setMainUiLanguage,
   translateMain
@@ -56,6 +58,19 @@ describe('main-i18n lazy locale loading', () => {
 
     await setMainUiLanguage(UI_LANGUAGE_CHINESE)
     expect(translateMain('menu.file', 'File')).not.toBe('File')
+  })
+
+  it('lazy-loads Traditional Chinese under its script tag', async () => {
+    expect(await setMainUiLanguage(UI_LANGUAGE_CHINESE_TRADITIONAL)).toBe('zh-Hant')
+    expect(translateMain('menu.file', 'File')).toBe('檔案')
+    expect(translateMain('menu.settings', 'Settings')).toBe('設定')
+  })
+
+  it('falls back to English, not Simplified Chinese, for keys zh-Hant lacks', async () => {
+    await setMainUiLanguage(UI_LANGUAGE_CHINESE)
+    mainI18n.addResource('zh', 'translation', 'probe.onlyInSimplified', '简体')
+    await setMainUiLanguage(UI_LANGUAGE_CHINESE_TRADITIONAL)
+    expect(translateMain('probe.onlyInSimplified', 'English')).toBe('English')
   })
 
   it('uses caller English when a target catalog omits a key', async () => {

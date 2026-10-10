@@ -1,5 +1,6 @@
 import {
   UI_LANGUAGE_CHINESE,
+  UI_LANGUAGE_CHINESE_TRADITIONAL,
   UI_LANGUAGE_ENGLISH,
   UI_LANGUAGE_FRENCH,
   UI_LANGUAGE_JAPANESE,
@@ -10,21 +11,29 @@ import {
   type UiLanguage
 } from './ui-language'
 
-export const SUPPORTED_UI_LOCALES = ['en', 'zh', 'ko', 'ja', 'es', 'fr'] as const
+export const SUPPORTED_UI_LOCALES = ['en', 'zh', 'zh-Hant', 'ko', 'ja', 'es', 'fr'] as const
 export type SupportedUiLocale = (typeof SUPPORTED_UI_LOCALES)[number]
 
 export const DEFAULT_UI_LOCALE: SupportedUiLocale = 'en'
 
+const TRADITIONAL_CHINESE_TAG_PREFIXES = ['zh-tw', 'zh-hk', 'zh-mo', 'zh-hant']
+
+/**
+ * Normalizes a locale tag to the same lowercase, hyphenated form used by the app.
+ */
 function normalizeLocaleTag(locale: string | undefined): string {
   return (locale ?? DEFAULT_UI_LOCALE).trim().toLowerCase().replace(/_/g, '-')
 }
 
+/**
+ * Maps any system locale to the closest supported app locale, with zh-Hant handled as Taiwan/Traditional Chinese.
+ */
 export function normalizeSupportedUiLocale(locale: string | undefined): SupportedUiLocale {
   const tag = normalizeLocaleTag(locale)
   const primary = tag.split('-')[0]
   if (primary === 'zh') {
-    if (tag.startsWith('zh-tw') || tag.startsWith('zh-hk') || tag.startsWith('zh-hant')) {
-      return DEFAULT_UI_LOCALE
+    if (TRADITIONAL_CHINESE_TAG_PREFIXES.some((prefix) => tag.startsWith(prefix))) {
+      return 'zh-Hant'
     }
     return 'zh'
   }
@@ -33,6 +42,9 @@ export function normalizeSupportedUiLocale(locale: string | undefined): Supporte
     : DEFAULT_UI_LOCALE
 }
 
+/**
+ * Resolves the UI locale to a built-in catalog identifier, regardless of the system locale.
+ */
 export function resolveUiLocale(
   language: UiLanguage,
   systemLocale: string | undefined = DEFAULT_UI_LOCALE
@@ -45,6 +57,9 @@ export function resolveUiLocale(
   }
   if (language === UI_LANGUAGE_CHINESE) {
     return 'zh'
+  }
+  if (language === UI_LANGUAGE_CHINESE_TRADITIONAL) {
+    return 'zh-Hant'
   }
   if (language === UI_LANGUAGE_KOREAN) {
     return 'ko'

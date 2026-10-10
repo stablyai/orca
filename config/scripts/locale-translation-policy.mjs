@@ -220,8 +220,17 @@ export const NEVER_TRANSLATE_VALUES = new Set([
 ])
 
 export const NATIVE_PICKER_LABELS = {
+  'zh-Hant': {
+    chinese: '中文（简体）',
+    chineseTraditional: '中文（繁體）',
+    korean: '한국어',
+    japanese: '日本語',
+    spanish: 'Español',
+    french: 'Français'
+  },
   zh: {
     chinese: '中文（简体）',
+    chineseTraditional: '中文（繁體）',
     korean: '한국어',
     japanese: '日本語',
     spanish: 'Español',
@@ -229,6 +238,7 @@ export const NATIVE_PICKER_LABELS = {
   },
   ko: {
     chinese: '中文（简体）',
+    chineseTraditional: '中文（繁體）',
     korean: '한국어',
     japanese: '日本語',
     spanish: 'Español',
@@ -236,6 +246,7 @@ export const NATIVE_PICKER_LABELS = {
   },
   ja: {
     chinese: '中文（简体）',
+    chineseTraditional: '中文（繁體）',
     korean: '한국어',
     japanese: '日本語',
     spanish: 'Español',
@@ -243,6 +254,7 @@ export const NATIVE_PICKER_LABELS = {
   },
   es: {
     chinese: '中文（简体）',
+    chineseTraditional: '中文（繁體）',
     korean: '한국어',
     japanese: '日本語',
     spanish: 'Español',
@@ -250,6 +262,7 @@ export const NATIVE_PICKER_LABELS = {
   },
   fr: {
     chinese: '中文（简体）',
+    chineseTraditional: '中文（繁體）',
     korean: '한국어',
     japanese: '日本語',
     spanish: 'Español',
@@ -408,7 +421,7 @@ export function repairTranslatedValue({ key, enValue, localeValue, locale }) {
     // Why: exact key overrides can still carry stale MT output, so glossary repairs remain the final gate.
     let result = applyBrandMistranslationFixes(enValue, keyOverride, locale, key)
     result = applyPhraseFixes(enValue, result, locale, key)
-    if (['zh', 'ja', 'ko'].includes(locale)) {
+    if (['zh', 'zh-Hant', 'ja', 'ko'].includes(locale)) {
       result = applyCjkLatinTermSpacing(result, locale)
     }
     return result
@@ -418,7 +431,7 @@ export function repairTranslatedValue({ key, enValue, localeValue, locale }) {
   if (valueOverride) {
     let result = applyBrandMistranslationFixes(enValue, valueOverride, locale, key)
     result = applyPhraseFixes(enValue, result, locale, key)
-    if (['zh', 'ja', 'ko'].includes(locale)) {
+    if (['zh', 'zh-Hant', 'ja', 'ko'].includes(locale)) {
       result = applyCjkLatinTermSpacing(result, locale)
     }
     return result
@@ -439,7 +452,7 @@ export function repairTranslatedValue({ key, enValue, localeValue, locale }) {
 
   result = applyBrandMistranslationFixes(enValue, result, locale, key)
   result = applyPhraseFixes(enValue, result, locale, key)
-  if (['zh', 'ja', 'ko'].includes(locale)) {
+  if (['zh', 'zh-Hant', 'ja', 'ko'].includes(locale)) {
     result = applyCjkLatinTermSpacing(result, locale)
   }
 

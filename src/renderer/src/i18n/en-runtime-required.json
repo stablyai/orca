@@ -3166,6 +3166,11 @@
     }
   },
   "settings": {
+    "appearance": {
+      "language": {
+        "chineseTraditional": "中文（繁體）"
+      }
+    },
     "browser": {
       "clientHostedRemote": {
         "description": "Render remote workspace pages on this desktop; network traffic still goes through the remote host. Applies to new pages only.",

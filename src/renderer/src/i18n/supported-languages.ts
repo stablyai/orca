@@ -1,6 +1,7 @@
 import { DEFAULT_UI_LOCALE, resolveRendererUiLocale } from '../../../shared/ui-locale'
 import {
   UI_LANGUAGE_CHINESE,
+  UI_LANGUAGE_CHINESE_TRADITIONAL,
   UI_LANGUAGE_ENGLISH,
   UI_LANGUAGE_FRENCH,
   UI_LANGUAGE_JAPANESE,
@@ -24,6 +25,10 @@ export const UI_LANGUAGE_CHOICES: UiLanguageChoice[] = [
   { value: UI_LANGUAGE_SYSTEM, labelKey: 'settings.appearance.language.system' },
   { value: UI_LANGUAGE_ENGLISH, labelKey: 'settings.appearance.language.english' },
   { value: UI_LANGUAGE_CHINESE, labelKey: 'settings.appearance.language.chinese' },
+  {
+    value: UI_LANGUAGE_CHINESE_TRADITIONAL,
+    labelKey: 'settings.appearance.language.chineseTraditional'
+  },
   { value: UI_LANGUAGE_KOREAN, labelKey: 'settings.appearance.language.korean' },
   { value: UI_LANGUAGE_JAPANESE, labelKey: 'settings.appearance.language.japanese' },
   { value: UI_LANGUAGE_SPANISH, labelKey: 'settings.appearance.language.spanish' },
@@ -34,12 +39,16 @@ const UI_LANGUAGE_CHOICE_FALLBACKS: Record<BuiltInUiLanguage, string> = {
   [UI_LANGUAGE_SYSTEM]: 'System',
   [UI_LANGUAGE_ENGLISH]: 'English',
   [UI_LANGUAGE_CHINESE]: '中文（简体）',
+  [UI_LANGUAGE_CHINESE_TRADITIONAL]: '中文（繁體）',
   [UI_LANGUAGE_KOREAN]: '한국어',
   [UI_LANGUAGE_JAPANESE]: '日本語',
   [UI_LANGUAGE_SPANISH]: 'Español',
   [UI_LANGUAGE_FRENCH]: 'Français'
 }
 
+/**
+ * Produces the label shown for a language choice, falling back to a default string if the catalog is missing.
+ */
 export function getUiLanguageChoiceLabel(
   choice: UiLanguageChoice,
   translateFn: (key: string, fallback: string) => string
@@ -47,6 +56,9 @@ export function getUiLanguageChoiceLabel(
   return translateFn(choice.labelKey, UI_LANGUAGE_CHOICE_FALLBACKS[choice.value])
 }
 
+/**
+ * Resolves the renderer's active locale using the current language setting and browser locale.
+ */
 export function resolveUiLocale(language: UiLanguage): string {
   return resolveRendererUiLocale(language)
 }
