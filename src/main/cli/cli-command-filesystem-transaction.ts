@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { lstat, mkdir, readFile, readlink, rename, rmdir } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import type { CliInstallStatus } from '../../shared/cli-install-types'
-import { isMissingError } from './cli-install-errors'
+import { isMissingError, isPermissionError } from './cli-install-errors'
 import { quoteShell } from './cli-install-path-format'
 
 export type EntryIdentity = {
@@ -22,6 +22,8 @@ export type CommandQuarantine = {
 export type StableCommandInspection = {
   fileSha256: string | null
   rawSymlinkTarget: string | null
+  // Why: macOS applies a symlink's own mode to readlink(2); only root can verify such a link.
+  unreadableSymlink: boolean
   snapshot: EntrySnapshot | null
   status: CliInstallStatus
 }
@@ -90,18 +92,22 @@ export async function inspectStableCommand(
     }
     let fileSha256: string | null = null
     let rawSymlinkTarget: string | null = null
+    let unreadableSymlink = false
     try {
       if (afterInspection?.isSymbolicLink) {
         rawSymlinkTarget = await readlink(commandPath)
       } else if (afterInspection && status.state !== 'conflict') {
         fileSha256 = await hashCommandFile(commandPath)
       }
-    } catch {
-      continue
+    } catch (error) {
+      if (!afterInspection?.isSymbolicLink || !isPermissionError(error)) {
+        continue
+      }
+      unreadableSymlink = true
     }
     const afterEvidence = await readEntrySnapshot(commandPath)
     if (hasSameSnapshot(afterInspection, afterEvidence)) {
-      return { fileSha256, rawSymlinkTarget, snapshot: afterEvidence, status }
+      return { fileSha256, rawSymlinkTarget, unreadableSymlink, snapshot: afterEvidence, status }
     }
   }
   throw new Error(`The command at ${commandPath} changed while Orca inspected it.`)
@@ -160,6 +166,8 @@ type MacPrivilegedSymlinkTransaction = {
   expected: EntryIdentity | null
   expectedFileSha256: string | null
   expectedRawSymlinkTarget: string | null
+  /** Set when the user could not readlink the entry; root must confirm it targets an Orca launcher. */
+  unreadableSymlinkLauncherPath: string | null
 } & ({ action: 'install'; launcherPath: string } | { action: 'remove' })
 
 export function buildMacPrivilegedSymlinkTransaction(
@@ -181,8 +189,11 @@ export function buildMacPrivilegedSymlinkTransaction(
   const symlinkMismatch = args.expectedRawSymlinkTarget
     ? ` || [ "$(/usr/bin/readlink -n ${quoteShell(heldPath)}; /usr/bin/printf x)" != ${quoteShell(`${args.expectedRawSymlinkTarget}x`)} ]`
     : ''
+  const unreadableSymlinkMismatch = args.unreadableSymlinkLauncherPath
+    ? ` || { case "$(/usr/bin/readlink -n ${quoteShell(heldPath)})" in *.app/Contents/Resources/bin/${quoteShell(basename(args.unreadableSymlinkLauncherPath))}|${quoteShell(args.unreadableSymlinkLauncherPath)}) false;; *) true;; esac; }`
+    : ''
   const rejectCaptured = args.expected
-    ? `if [ "$captured" -eq 1 ] && { [ "$(/usr/bin/stat -f '%d:%i' ${quoteShell(heldPath)})" != ${quoteShell(`${args.expected.dev}:${args.expected.ino}`)} ]${fileMismatch}${symlinkMismatch}; }; then ${restoreOrPreserve}; exit 73; fi`
+    ? `if [ "$captured" -eq 1 ] && { [ "$(/usr/bin/stat -f '%d:%i' ${quoteShell(heldPath)})" != ${quoteShell(`${args.expected.dev}:${args.expected.ino}`)} ]${fileMismatch}${symlinkMismatch}${unreadableSymlinkMismatch}; }; then ${restoreOrPreserve}; exit 73; fi`
     : `if [ "$captured" -eq 1 ]; then ${restoreOrPreserve}; exit 73; fi`
   const capture =
     `umask 077; /bin/mkdir -p ${quoteShell(commandDirectory)} || exit $?; ` +
@@ -200,7 +211,8 @@ export function buildMacPrivilegedSymlinkTransaction(
     `if [ "$captured" -eq 1 ]; then ${restoreOrPreserve}; else /bin/rmdir ${quoteShell(transactionDirectory)}; fi; exit 73`
   return (
     `${capture}if /bin/mkdir ${quoteShell(publishDirectory)} && ` +
-    `/bin/ln -s ${quoteShell(args.launcherPath)} ${quoteShell(publishPath)} && ` +
+    // Why: under umask 077 the link is 0700, and macOS then denies readlink(2) to the user and the shim (#19120).
+    `(umask 022 && /bin/ln -s ${quoteShell(args.launcherPath)} ${quoteShell(publishPath)}) && ` +
     `/bin/ln -P ${quoteShell(publishPath)} ${quoteShell(commandDirectory)}; then ` +
     `/bin/rm ${quoteShell(publishPath)}; /bin/rmdir ${quoteShell(publishDirectory)}; ` +
     `if [ "$captured" -eq 1 ]; then /bin/rm ${quoteShell(heldPath)}; fi; ` +

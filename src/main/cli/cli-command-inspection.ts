@@ -5,7 +5,7 @@ import type { CliInstallMethod, CliInstallStatus } from '../../shared/cli-instal
 import { isAppImageExtractedLauncherPath } from './appimage-extracted-root'
 import { DEV_COMMAND_NAME, DEV_LAUNCHER_DIR } from './cli-install-constants'
 import { buildWindowsForwarder, extractManagedUnixLauncherTarget } from './cli-dev-launcher'
-import { isMissingError } from './cli-install-errors'
+import { isMissingError, isPermissionError } from './cli-install-errors'
 import { CliInstallLocation } from './cli-install-location'
 import { isPathInsideOrEqual, samePathEntry } from './cli-install-path-format'
 import { extractLegacyAppImageCliWrapperTarget } from './legacy-appimage-cli-wrapper'
@@ -52,7 +52,24 @@ export class CliCommandInspection extends CliInstallLocation {
         })
       }
 
-      const currentTarget = await readlink(commandPath)
+      let currentTarget: string
+      try {
+        currentTarget = await readlink(commandPath)
+      } catch (error) {
+        if (!isPermissionError(error)) {
+          throw error
+        }
+        // Why: older privileged registrations published root-owned 0700 links (#19120) that only root can read.
+        return this.buildStatus({
+          commandPath,
+          launcherPath,
+          installMethod: 'symlink',
+          supported: true,
+          state: 'stale',
+          currentTarget: null,
+          detail: `${commandPath} is a symlink Orca cannot read. Register again to repair it.`
+        })
+      }
       const resolvedCurrentTarget = resolve(dirname(commandPath), currentTarget)
       const resolvedLauncher = resolve(launcherPath)
       const isInstalled = resolvedCurrentTarget === resolvedLauncher && existsSync(resolvedLauncher)

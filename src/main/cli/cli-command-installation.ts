@@ -40,6 +40,10 @@ export class CliCommandInstallation extends CliCommandInspection {
     if (inspected.status.state === 'installed') {
       return
     }
+    if (inspected.unreadableSymlink) {
+      await this.installSymlinkWithPrivileges(commandPath, launcherPath, inspected)
+      return
+    }
 
     let quarantine: CommandQuarantine
     try {
@@ -80,6 +84,10 @@ export class CliCommandInstallation extends CliCommandInspection {
     if (inspected.status.state === 'conflict') {
       throw new Error(`Refusing to remove non-Orca command at ${commandPath}.`)
     }
+    if (inspected.unreadableSymlink) {
+      await this.removeSymlinkWithPrivileges(commandPath, launcherPath, inspected)
+      return
+    }
 
     let quarantine: CommandQuarantine
     try {
@@ -88,7 +96,7 @@ export class CliCommandInstallation extends CliCommandInspection {
       if (this.platform !== 'darwin' || !isPermissionError(error)) {
         throw error
       }
-      await this.removeSymlinkWithPrivileges(commandPath, inspected)
+      await this.removeSymlinkWithPrivileges(commandPath, launcherPath, inspected)
       return
     }
     if (!(await capturedExpectedEntry(quarantine, inspected))) {
@@ -289,7 +297,8 @@ export class CliCommandInstallation extends CliCommandInspection {
         launcherPath,
         expected: inspected.snapshot?.identity ?? null,
         expectedFileSha256: inspected.fileSha256,
-        expectedRawSymlinkTarget: inspected.rawSymlinkTarget
+        expectedRawSymlinkTarget: inspected.rawSymlinkTarget,
+        unreadableSymlinkLauncherPath: inspected.unreadableSymlink ? launcherPath : null
       })
     )
     const installed = await this.inspectStableSymlink(commandPath, launcherPath)
@@ -300,6 +309,7 @@ export class CliCommandInstallation extends CliCommandInspection {
 
   private async removeSymlinkWithPrivileges(
     commandPath: string,
+    launcherPath: string,
     inspected: StableCommandInspection
   ): Promise<void> {
     await this.privilegedRunner(
@@ -308,7 +318,8 @@ export class CliCommandInstallation extends CliCommandInspection {
         commandPath,
         expected: inspected.snapshot?.identity ?? null,
         expectedFileSha256: inspected.fileSha256,
-        expectedRawSymlinkTarget: inspected.rawSymlinkTarget
+        expectedRawSymlinkTarget: inspected.rawSymlinkTarget,
+        unreadableSymlinkLauncherPath: inspected.unreadableSymlink ? launcherPath : null
       })
     )
   }
