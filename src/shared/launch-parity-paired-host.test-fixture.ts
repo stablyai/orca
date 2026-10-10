@@ -92,7 +92,7 @@ export function pairedLegacyCreateParams(c: PairedAutomationCase): Record<string
   }
 }
 
-// Row 7: terminal.createAgentSession params per launch-parity-paired-tab-cases.ts case.
+// Row 7: terminal.createAgentSession params per launch-parity-paired-tab.test-cases.ts case.
 export const PAIRED_TAB_PATH = '/worktree'
 const CODEX_ARGS = '--dangerously-bypass-approvals-and-sandbox'
 const base = {

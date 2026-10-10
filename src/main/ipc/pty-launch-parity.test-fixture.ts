@@ -13,7 +13,7 @@ import {
   type LaunchWorkspace
 } from '../../shared/launch-parity-window-request.test-fixture'
 import { isHiddenRendererPty } from './pty-hidden-delivery-gate'
-import { HOST_TAB_ID } from './pty-launch-parity-host-cases'
+import { HOST_TAB_ID } from './pty-launch-parity-host.test-cases'
 
 const WINDOWS_ENV = {
   COMSPEC: 'C:\\Windows\\system32\\cmd.exe',

@@ -6,7 +6,7 @@ import {
 } from './web-runtime-session'
 import { peekWebSessionFocusIntent } from './web-session-focus-intent'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
-import { PAIRED_TAB_CASES, type PairedTabCase } from '@/lib/launch-parity-paired-tab-cases'
+import { PAIRED_TAB_CASES, type PairedTabCase } from '@/lib/launch-parity-paired-tab.test-cases'
 import { PAIRED_TAB_HOST_PARAMS } from '../../../shared/launch-parity-paired-host.test-fixture'
 import {
   ENVIRONMENT_ID,
@@ -745,7 +745,7 @@ function recordOf(value: unknown): Record<string, unknown> {
 }
 
 // Pins main's current launch behaviour as the convergence parity baseline (row 7, wire half):
-// the launch object the real producer builds (launch-parity-paired-tab-cases.ts), sent by the
+// the launch object the real producer builds (launch-parity-paired-tab.test-cases.ts), sent by the
 // real creator to a host with and without agent-session host authority.
 describe('row 7: prompted paired launch wire shape on main', () => {
   beforeEach(() => stubTerminalCreateEnvironment(mocks))

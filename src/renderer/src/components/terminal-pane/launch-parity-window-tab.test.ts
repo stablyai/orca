@@ -11,7 +11,7 @@ import {
   launchWorkspaceState,
   perClientLoader,
   type LaunchStoreHolder
-} from '@/lib/launch-parity-renderer-fixture'
+} from '@/lib/launch-parity-renderer.test-fixture'
 import { WINDOW_LAUNCH_CASES } from '../../../../shared/launch-parity-window-cases.test-fixture'
 import {
   LAUNCH_TAB_ID,
@@ -24,7 +24,7 @@ import {
 
 const holder = vi.hoisted((): LaunchStoreHolder => ({ store: null }))
 vi.mock('@/store', async () =>
-  (await import('@/lib/launch-parity-renderer-fixture')).launchStoreModuleMock(holder)
+  (await import('@/lib/launch-parity-renderer.test-fixture')).launchStoreModuleMock(holder)
 )
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
 vi.mock('@/lib/agent-status', async (importOriginal) => {

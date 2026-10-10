@@ -8,7 +8,7 @@ import {
   setMainPlatform,
   startParityLanes,
   type ParityLanes
-} from './pty-launch-parity-fixture'
+} from './pty-launch-parity.test-fixture'
 import {
   POSIX_PATH,
   WINDOW_LAUNCH_CASES,
@@ -29,8 +29,8 @@ import {
   expectedHostProvider,
   HOST_LAUNCH_CASES,
   type HostLaunchCase
-} from './pty-launch-parity-host-cases'
-import { CALLER_LAUNCH_CASES, OPENCODE_MODEL } from './pty-launch-parity-caller-cases'
+} from './pty-launch-parity-host.test-cases'
+import { CALLER_LAUNCH_CASES, OPENCODE_MODEL } from './pty-launch-parity-caller.test-cases'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import { DESKTOP_RPC_CALLER } from '../runtime/rpc/rpc-caller-identity'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './desktop-renderer-runtime-capabilities'

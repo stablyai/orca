@@ -26,7 +26,7 @@ import {
   type HostLaunchCall,
   type HostLaunchCase,
   type HostProviderFacts
-} from './pty-launch-parity-host-cases'
+} from './pty-launch-parity-host.test-cases'
 
 // A window-built codex startup quoted for a Windows cmd.exe client; the host must not re-quote it.
 const CLIENT_CODEX = 'codex "--dangerously-bypass-approvals-and-sandbox"'

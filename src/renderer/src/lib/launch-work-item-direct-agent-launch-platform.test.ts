@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { tuiAgentToAgentKind } from '../../../shared/agent-kind'
-import { perClientLoader } from '@/lib/launch-parity-renderer-fixture'
+import { perClientLoader } from '@/lib/launch-parity-renderer.test-fixture'
 import type { LaunchClient } from '../../../shared/launch-parity-window-request.test-fixture'
 import {
   POSIX_PATH,

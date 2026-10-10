@@ -1,10 +1,10 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { PAIRED_TAB_CASES, PAIRED_WORKSPACE } from './launch-parity-paired-tab-cases'
+import { PAIRED_TAB_CASES, PAIRED_WORKSPACE } from './launch-parity-paired-tab.test-cases'
 import {
   launchWorkspaceState,
   perClientLoader,
   type LaunchStoreHolder
-} from './launch-parity-renderer-fixture'
+} from './launch-parity-renderer.test-fixture'
 import { launchWorkspaceId } from '../../../shared/launch-parity-window-request.test-fixture'
 
 const mocks = vi.hoisted(() => ({
@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
 const holder = vi.hoisted((): LaunchStoreHolder => ({ store: null }))
 
 vi.mock('@/store', async () =>
-  (await import('@/lib/launch-parity-renderer-fixture')).launchStoreModuleMock(holder)
+  (await import('@/lib/launch-parity-renderer.test-fixture')).launchStoreModuleMock(holder)
 )
 vi.mock('sonner', () => ({ toast: { message: vi.fn(), error: vi.fn() } }))
 vi.mock('@/runtime/web-runtime-session', () => ({

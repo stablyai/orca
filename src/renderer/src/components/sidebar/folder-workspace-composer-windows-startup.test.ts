@@ -6,7 +6,7 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../../shared/tui-agent-launch-defaults'
-import { perClientLoader } from '@/lib/launch-parity-renderer-fixture'
+import { perClientLoader } from '@/lib/launch-parity-renderer.test-fixture'
 
 const activateAndRevealFolderWorkspace = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/worktree-activation', async (importOriginal) => ({

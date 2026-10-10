@@ -6,7 +6,7 @@ import {
   launchWorkspaceState,
   perClientLoader,
   type LaunchStoreHolder
-} from '@/lib/launch-parity-renderer-fixture'
+} from '@/lib/launch-parity-renderer.test-fixture'
 import {
   AUTOMATION_LAUNCH_CASES,
   AUTOMATION_PROMPT,
@@ -30,7 +30,7 @@ import {
 
 const holder = vi.hoisted((): LaunchStoreHolder => ({ store: null }))
 vi.mock('@/store', async () =>
-  (await import('@/lib/launch-parity-renderer-fixture')).launchStoreModuleMock(holder)
+  (await import('@/lib/launch-parity-renderer.test-fixture')).launchStoreModuleMock(holder)
 )
 // The stdin-after-start paste is pinned by launch-agent-background-session.test.ts.
 vi.mock('@/lib/agent-paste-draft', () => ({ pasteDraftWhenAgentReady: vi.fn() }))

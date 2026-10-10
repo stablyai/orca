@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { launchWorkspaceState, perClientLoader } from '@/lib/launch-parity-renderer-fixture'
+import { launchWorkspaceState, perClientLoader } from '@/lib/launch-parity-renderer.test-fixture'
 import {
   POSIX_PATH,
   WIN_PATH,
