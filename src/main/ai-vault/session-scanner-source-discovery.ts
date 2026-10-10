@@ -4,6 +4,7 @@ import { discoverFiles } from './session-scanner-discovery'
 import { opencodeDiscoveries } from './session-scanner-opencode-sources'
 import { zcodeDiscoveries } from './session-scanner-zcode-sources'
 import { antigravityDiscoveries } from './session-scanner-antigravity-sources'
+import { hermesDiscoveries } from './session-scanner-hermes-sources'
 import { AI_VAULT_AGENT_SOURCES, type AiVaultAgentSource } from './session-scanner-agent-sources'
 import { normalizedWslHomeDirs } from './session-scanner-roots'
 import { configureOpenCodeWslReaders } from './session-scanner-opencode-wsl-client'
@@ -31,8 +32,12 @@ export async function discoverAiVaultSessionSources(args: {
     ...opencodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     ...zcodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     ...antigravityDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
+    // Why: Hermes 0.19+ migrated sessions to a SQLite DB. hermesDiscoveries runs both the
+    // file scanner (legacy) and the SQLite scanner; dedup by sessionId happens inside.
+    // Its table entry stays for the delete validator, so skip it in the generic loop.
+    ...hermesDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     ...Object.entries(AI_VAULT_AGENT_SOURCES).flatMap(([agent, source]) =>
-      source
+      source && agent !== 'hermes'
         ? agentDiscoveries(
             agent as AiVaultAgent,
             source,
