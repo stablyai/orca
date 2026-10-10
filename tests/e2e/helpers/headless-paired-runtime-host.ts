@@ -96,6 +96,11 @@ export async function launchHeadlessPairedRuntimeHost(
   options: {
     agentBrowserSocketParent?: string
     executablePath?: string
+    /**
+     * `mobile` makes `offer` a phone pairing (`orca serve --mobile-pairing`). It is the host's only
+     * offer, so no desktop can pair to such a host: a desktop plus a direct phone is unsupported.
+     */
+    pairingScope?: 'runtime' | 'mobile'
     /** Bind a stable loopback port so `restartServeProcess` can reclaim it. */
     pinnedServePort?: boolean
     userDataParent?: string
@@ -141,7 +146,8 @@ export async function launchHeadlessPairedRuntimeHost(
           '--serve-port',
           String(servePort),
           '--serve-pairing-address',
-          '127.0.0.1'
+          '127.0.0.1',
+          ...(options.pairingScope === 'mobile' ? ['--serve-mobile-pairing'] : [])
         ],
         env: isolation.env
       })
