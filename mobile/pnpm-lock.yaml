@@ -257,6 +257,9 @@ importers:
       expo-secure-store:
         specifier: ^55.0.18
         version: 55.0.18(expo@55.0.31)
+      expo-sharing:
+        specifier: ~55.0.24
+        version: 55.0.24(expo@55.0.31)(react-native@0.83.10(patch_hash=44876634a8efbb0f2c3f66cd4332be170ec821d1cbfc0264ac80680983e8513d)(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.8))(react@19.2.8)
       expo-splash-screen:
         specifier: ^55.0.25
         version: 55.0.25(expo@55.0.31)(typescript@6.0.3)
@@ -4444,6 +4447,13 @@ packages:
   expo-server@55.0.12:
     resolution: {integrity: sha512-yuNHbxobUKCXWn9Z/H+lgYk6heXEFub6q1h8Yo9kCLxgL2afluWZ/YylbtxgHgmFwDVUmi6milQYfL+wwQMlzw==}
     engines: {node: '>=20.16.0'}
+
+  expo-sharing@55.0.24:
+    resolution: {integrity: sha512-2WXaevJUpNdKvktmboTMtbDPWicU44Vo8z5kyDuYIH7xU6jv411U/Pgk9ljhR3kf0XB34NZfa1QPNs+b25BOkA==}
+    peerDependencies:
+      expo: '*'
+      react: '*'
+      react-native: '*'
 
   expo-splash-screen@55.0.25:
     resolution: {integrity: sha512-Jl3VPbNqbgGjXlkH93hi4Y4p6GB5DasLNbpL2Gb4kl8grujKaIGi4rXL25qYbYxIzefSlt96NqG9czanxxooPg==}
@@ -12167,6 +12177,17 @@ snapshots:
       expo: 55.0.31(6e1eff07115a8c47a6fe668ab523fd7c)
 
   expo-server@55.0.12: {}
+
+  expo-sharing@55.0.24(expo@55.0.31)(react-native@0.83.10(patch_hash=44876634a8efbb0f2c3f66cd4332be170ec821d1cbfc0264ac80680983e8513d)(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.8))(react@19.2.8):
+    dependencies:
+      '@expo/config-plugins': 55.0.11
+      '@expo/config-types': 55.0.6
+      '@expo/plist': 0.5.4
+      expo: 55.0.31(6e1eff07115a8c47a6fe668ab523fd7c)
+      react: 19.2.8
+      react-native: 0.83.10(patch_hash=44876634a8efbb0f2c3f66cd4332be170ec821d1cbfc0264ac80680983e8513d)(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.8)
+    transitivePeerDependencies:
+      - supports-color
 
   expo-splash-screen@55.0.25(expo@55.0.31)(typescript@6.0.3):
     dependencies:

@@ -1,5 +1,6 @@
 import { mobileFileMediaMime } from './mobile-file-media'
 import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
+import { mediaHandoffMimeFor } from './mobile-file-media-handoff'
 import { defaultScheduleTimer } from '../transport/timer-scheduler'
 import {
   createMobileFilePreviewHref,
@@ -38,6 +39,7 @@ export function canPreviewMobileFileRow(item: {
   return (
     item.kind === 'text' ||
     classifyMobileArtifact(item.relativePath) === 'image' ||
-    mobileFileMediaMime(item.relativePath) !== null
+    mobileFileMediaMime(item.relativePath) !== null ||
+    mediaHandoffMimeFor(item.relativePath) !== null
   )
 }

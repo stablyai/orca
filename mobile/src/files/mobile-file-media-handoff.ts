@@ -1,0 +1,192 @@
+import { Buffer } from 'buffer/index.js'
+import type { RpcFailure } from '../transport/types'
+import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
+import { fileMediaChunkRead, fileMediaStatRead } from './mobile-file-preview-operations'
+
+// Supported external media downloads use chunked host reads and hand the cache to the OS share sheet.
+
+/** Documents and media Android/iOS can open from another app. */
+export const MEDIA_HANDOFF_MIME_TYPES: Record<string, string> = {
+  pdf: 'application/pdf',
+  mp4: 'video/mp4',
+  m4v: 'video/mp4',
+  mov: 'video/quicktime',
+  mp3: 'audio/mpeg',
+  m4a: 'audio/mp4',
+  wav: 'audio/wav'
+}
+
+/** Host params cap one readChunk at 512KB (FileReadChunk), and replies stay far under budget. */
+export const MEDIA_HANDOFF_CHUNK_BYTES = 512 * 1024
+
+/** A cap the share sheet stays responsive under; larger files stay on the desktop. */
+export const MEDIA_HANDOFF_MAX_BYTES = 128 * 1024 * 1024
+
+export function mediaHandoffMimeFor(path: string): string | null {
+  const base = path.split(/[\\/]/).pop() ?? ''
+  const dot = base.lastIndexOf('.')
+  if (dot <= 0) {
+    return null
+  }
+  return MEDIA_HANDOFF_MIME_TYPES[base.slice(dot + 1).toLowerCase()] ?? null
+}
+
+/**
+ * Where the downloaded bytes land. Kept behind a seam so the loop is testable without
+ * expo-file-system, the way native-media splits its device calls out.
+ */
+export type MobileFileMediaSink = {
+  /** Opens the destination fresh; any earlier download of the same name is discarded. */
+  open(attempt: MobileFileMediaAttempt): void
+  appendBase64(base64: string, attempt: MobileFileMediaAttempt): void
+  /** Releases the active owner while retaining a completed file for sharing. */
+  release(attempt: MobileFileMediaAttempt): void
+  discard(attempt: MobileFileMediaAttempt): void
+}
+
+export type MobileFileMediaAttempt = {
+  readonly cancelled: boolean
+  cancel(): void
+}
+
+export function createMobileFileMediaAttempt(): MobileFileMediaAttempt {
+  let cancelled = false
+  return {
+    get cancelled() {
+      return cancelled
+    },
+    cancel() {
+      cancelled = true
+    }
+  }
+}
+
+export type MobileFileMediaDownload = {
+  byteLength: number
+}
+
+/** The bytes a base64 payload decodes to; padded groups are 1 or 2 bytes short of 3-per-4. */
+export function mediaHandoffBase64ByteLength(base64: string): number {
+  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0
+  return (base64.length / 4) * 3 - padding
+}
+
+export async function downloadMobileFileMedia(
+  client: MobileFilePreviewRpcSender,
+  args: { worktreeId: string; relativePath: string },
+  sink: MobileFileMediaSink,
+  onProgress?: (byteLength: number) => void,
+  attempt: MobileFileMediaAttempt = createMobileFileMediaAttempt()
+): Promise<MobileFileMediaDownload> {
+  sink.open(attempt)
+  let offset = 0
+  let byteLength = 0
+  let appendedBytes = 0
+  const requestOptions = { failWhenDisconnected: true, timeoutMs: 30_000 }
+  try {
+    if (attempt.cancelled) {
+      throw new Error('Media download cancelled')
+    }
+    const initialStatReply = await fileMediaStatRead.request(
+      client,
+      { worktree: `id:${args.worktreeId}`, relativePath: args.relativePath },
+      requestOptions
+    )
+    if (attempt.cancelled) {
+      throw new Error('Media download cancelled')
+    }
+    const stat = fileMediaStatRead.interpret(initialStatReply)
+    if (stat.isDirectory || stat.size === 0) {
+      throw new Error('This file has no content to open')
+    }
+    if (stat.size > MEDIA_HANDOFF_MAX_BYTES) {
+      throw new Error('Files larger than 128 MB cannot be opened on mobile')
+    }
+    for (;;) {
+      if (attempt.cancelled) {
+        throw new Error('Media download cancelled')
+      }
+      if (offset >= stat.size) {
+        break
+      }
+      const length = Math.min(MEDIA_HANDOFF_CHUNK_BYTES, stat.size - offset)
+      const reply = await fileMediaChunkRead.request(
+        client,
+        {
+          worktree: `id:${args.worktreeId}`,
+          relativePath: args.relativePath,
+          offset,
+          length
+        },
+        requestOptions
+      )
+      if (attempt.cancelled) {
+        throw new Error('Media download cancelled')
+      }
+      const verdict = fileMediaChunkRead.interpret(reply)
+      if (!verdict.accepted) {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this policy skips only a refusal, so an unaccepted reply is a failure envelope.
+        const refusal = (reply as RpcFailure).error
+        throw new Error(refusal.message || refusal.code || 'Unable to open file')
+      }
+      const chunk = verdict.value
+      const bytes = Buffer.from(chunk.contentBase64, 'base64')
+      if (
+        bytes.toString('base64') !== chunk.contentBase64 ||
+        bytes.byteLength !== chunk.bytesRead ||
+        chunk.bytesRead === 0 ||
+        chunk.bytesRead > length ||
+        (chunk.eof && offset + chunk.bytesRead !== stat.size)
+      ) {
+        throw new Error('File changed during download. Retry the preview')
+      }
+      // Why: the cap tracks the bytes we actually append — a host that under-reports bytesRead
+      // must not slip a large file past it, and the crossing chunk must never reach the sink.
+      const chunkBytes = mediaHandoffBase64ByteLength(chunk.contentBase64)
+      if (appendedBytes + chunkBytes > MEDIA_HANDOFF_MAX_BYTES) {
+        throw new Error('File too large to open on this device')
+      }
+      if (attempt.cancelled) {
+        throw new Error('Media download cancelled')
+      }
+      sink.appendBase64(chunk.contentBase64, attempt)
+      appendedBytes += chunkBytes
+      byteLength += chunk.bytesRead
+      offset += chunk.bytesRead
+      onProgress?.(byteLength)
+      if (chunk.eof) {
+        break
+      }
+    }
+    if (offset !== stat.size) {
+      throw new Error('File changed during download. Retry the preview')
+    }
+    if (attempt.cancelled) {
+      throw new Error('Media download cancelled')
+    }
+    const latestStat = fileMediaStatRead.interpret(
+      await fileMediaStatRead.request(
+        client,
+        { worktree: `id:${args.worktreeId}`, relativePath: args.relativePath },
+        requestOptions
+      )
+    )
+    if (attempt.cancelled) {
+      throw new Error('Media download cancelled')
+    }
+    const latest = latestStat
+    if (
+      latest.isDirectory ||
+      latest.size !== stat.size ||
+      latest.mtime !== stat.mtime ||
+      (stat.ctime !== undefined && latest.ctime !== stat.ctime)
+    ) {
+      throw new Error('File changed during download. Retry the preview')
+    }
+  } catch (error) {
+    sink.discard(attempt)
+    throw error
+  }
+  sink.release(attempt)
+  return { byteLength }
+}
