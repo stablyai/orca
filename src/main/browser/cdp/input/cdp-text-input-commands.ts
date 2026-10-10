@@ -95,15 +95,9 @@ export class CdpTextInputCommands {
       const node = await this.refResolution.resolveRef(guest, sender, element)
       const refSender = this.refResolution.senderForRef(guest, node)
 
-      const { nodeId } = (await refSender('DOM.requestNode', {
-        backendNodeId: node.backendDOMNodeId
-      })) as { nodeId: number }
-      const { object } = (await refSender('DOM.resolveNode', { nodeId })) as {
-        object: { objectId: string }
-      }
-
+      const objectId = await this.refResolution.resolveNodeObjectId(refSender, node.backendDOMNodeId)
       await refSender('Runtime.callFunctionOn', {
-        objectId: object.objectId,
+        objectId,
         functionDeclaration: `function() {
           this.value = '';
           this.dispatchEvent(new Event('input', { bubbles: true }));
