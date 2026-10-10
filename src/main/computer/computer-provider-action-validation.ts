@@ -26,6 +26,12 @@ export async function validateComputerProviderActionParams(
   switch (method) {
     case 'click':
       validateElementOrCoordinates('Click', params)
+      if (params.accessibilityOnly !== undefined && typeof params.accessibilityOnly !== 'boolean') {
+        throw new RuntimeClientError('invalid_argument', 'accessibilityOnly must be a boolean')
+      }
+      if (params.accessibilityOnly && params.elementIndex === undefined) {
+        throw new RuntimeClientError('invalid_argument', 'accessibilityOnly requires elementIndex')
+      }
       validatePositiveInteger(params, 'clickCount')
       validateMouseButton(params)
       validateClickModifiers(params)

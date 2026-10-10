@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   createDesktopScriptProviderClient,
+  expectDesktopProviderSubprocessStartCount,
   mockBridgeResponse,
   publicSnapshotKeys,
   resetDesktopScriptProviderTestHarness,
@@ -10,6 +11,20 @@ import {
 
 describe('DesktopScriptProviderClient snapshots', () => {
   afterEach(resetDesktopScriptProviderTestHarness)
+
+  it.each(['linux', 'windows'] as const)(
+    'refuses accessibility-only clicks on %s',
+    async (platform) => {
+      const client = await createDesktopScriptProviderClient(platform, '/tmp/runtime')
+      await expect(
+        client.action('click', { app: 'Text Editor', elementIndex: 0, accessibilityOnly: true })
+      ).rejects.toMatchObject({ code: 'unsupported_capability' })
+      await expect(
+        client.action('click', { app: 'Text Editor', x: 0, y: 0, accessibilityOnly: true })
+      ).rejects.toMatchObject({ code: 'invalid_argument' })
+      expectDesktopProviderSubprocessStartCount(0)
+    }
+  )
 
   it('normalizes list-apps responses', async () => {
     mockBridgeResponse({

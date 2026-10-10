@@ -57,6 +57,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   ref: '--ref <ref>            Base ref to persist for the repo',
   repo: '--repo <selector>      Repo selector such as id:<id>, name:<name>, or path:<path>',
   'restore-window': '--restore-window     Bring the target app/window forward before the operation',
+  'accessibility-only':
+    '--accessibility-only Use an element accessibility action; refuse mouse fallback (macOS)',
   session: '--session <id>        Snapshot namespace for a related computer-use workflow',
   setup: '--setup run|skip|inherit Setup policy for repo-defined setup hooks',
   shell: '--shell <shell>        Windows shell the terminal itself runs as',

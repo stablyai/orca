@@ -63,6 +63,15 @@ export class MacOSNativeProviderClient {
       params && typeof params === 'object' ? (params as Record<string, unknown>) : {}
     )
     await this.ensureActionSupported(method)
+    if (
+      method === 'click' &&
+      params &&
+      typeof params === 'object' &&
+      'accessibilityOnly' in params &&
+      params.accessibilityOnly === true
+    ) {
+      await this.ensureCapability('actions', 'accessibilityOnlyClick')
+    }
     return normalizeComputerActionResult((await this.call(method, params)) as ComputerActionResult)
   }
   shutdown(): void {

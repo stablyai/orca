@@ -351,6 +351,44 @@ describe('MacOSNativeProviderClient', () => {
     expect(socket.writes).toHaveLength(1)
   })
 
+  it.each([false, true])(
+    'gates accessibility-only clicks on native helper support (%s)',
+    async (supported) => {
+      const { MacOSNativeProviderClient } = await loadClientModule()
+      const client = new MacOSNativeProviderClient()
+      const request = client.action('click', {
+        app: 'Finder',
+        elementIndex: 0,
+        accessibilityOnly: true
+      })
+      const rejected = expect(request).rejects.toMatchObject({
+        code: supported ? 'action_not_supported' : 'unsupported_capability'
+      })
+      await vi.waitFor(() => expect(sockets).toHaveLength(1))
+      const socket = sockets[0]!
+      await vi.waitFor(() => expect(socket.writes).toHaveLength(1))
+      const handshake = JSON.parse(socket.writes[0]!)
+      socket.emit(
+        'data',
+        `${JSON.stringify({ id: handshake.id, ok: true, result: macOSProviderCapabilities(supported ? { accessibilityOnlyClick: true } : {}) })}\n`
+      )
+      if (supported) {
+        await vi.waitFor(() => expect(socket.writes).toHaveLength(2))
+        const action = JSON.parse(socket.writes[1]!)
+        expect(action).toMatchObject({
+          method: 'click',
+          params: { accessibilityOnly: true, elementIndex: 0 }
+        })
+        socket.emit(
+          'data',
+          `${JSON.stringify({ id: action.id, ok: false, error: { code: 'action_not_supported', message: 'No AX action; no mouse input sent' } })}\n`
+        )
+      }
+      await rejected
+      expect(socket.writes).toHaveLength(supported ? 2 : 1)
+    }
+  )
+
   it('rejects malformed action payloads before starting the native helper', async () => {
     const { MacOSNativeProviderClient } = await loadClientModule()
     const client = new MacOSNativeProviderClient()
