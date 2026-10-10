@@ -7,6 +7,7 @@ import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured
 import {
   CODEX_DEFAULT_SERVICE_TIER,
   codexFastServiceTier,
+  codexOffersServiceTier,
   dropUnlistedCodexServiceTier
 } from './codex-structured-service-tier'
 import {
@@ -107,10 +108,10 @@ function applyLiveCodexCatalog(
   session: CodexSession,
   listing: CodexModelCatalogListing
 ): AgentSessionOptionsResult {
-  const model = session.options.get('model') ?? session.reportedOptions.model
   dropUnlistedCodexServiceTier(
     session,
-    listing.models.find((entry) => entry.id === model)
+    session.options.get('model') ?? session.reportedOptions.model,
+    listing.models
   )
   return composeLiveCodexCatalog(session, listing)
 }
@@ -189,11 +190,7 @@ function applyValidatedCodexStructuredSessionOption(
     session.options.set(key, value)
     return Object.fromEntries(session.options)
   }
-  // The thread's own reported tier (a configured Flex, say) stays pickable even when unlisted.
-  if (
-    key === 'serviceTier' &&
-    (value === CODEX_DEFAULT_SERVICE_TIER || value === session.reportedOptions.serviceTier)
-  ) {
+  if (key === 'serviceTier' && value === CODEX_DEFAULT_SERVICE_TIER) {
     session.options.set(key, value)
     return Object.fromEntries(session.options)
   }
@@ -206,7 +203,7 @@ function applyValidatedCodexStructuredSessionOption(
   const modelId = key === 'model' ? value : catalog.current.model
   const model = catalog.models.find((entry) => entry.id === modelId)
   if (key === 'serviceTier') {
-    if (!model?.serviceTiers?.some((tier) => tier.value === value)) {
+    if (!codexOffersServiceTier(session, model, catalog.models, value)) {
       throw new Error(`codex app-server model ${modelId} does not offer the ${value} tier`)
     }
     session.options.set(key, value)
@@ -232,21 +229,7 @@ function applyValidatedCodexStructuredSessionOption(
   } else {
     session.options.delete('effort')
   }
-  dropUnlistedCodexServiceTier(session, model)
-  const reportedTier = session.reportedOptions.serviceTier
-  const priorTiers = catalog.models.find(
-    (entry) => entry.id === catalog.current.model
-  )?.serviceTiers
-  // A reported tier the old model listed and the new one does not would be omitted by Codex.
-  if (
-    !session.options.has('serviceTier') &&
-    reportedTier &&
-    priorTiers?.some((tier) => tier.value === reportedTier) &&
-    model?.serviceTiers &&
-    !model.serviceTiers.some((tier) => tier.value === reportedTier)
-  ) {
-    session.options.set('serviceTier', CODEX_DEFAULT_SERVICE_TIER)
-  }
+  dropUnlistedCodexServiceTier(session, modelId, catalog.models)
   return Object.fromEntries(session.options)
 }
 
