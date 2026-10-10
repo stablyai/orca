@@ -195,6 +195,7 @@ export async function ghExecFileWithScopeAsync(
           timeout: timeoutMs,
           env: nonInteractiveGhEnv(boundEnv ?? options.env),
           signal: options.signal,
+          stdin: options.stdin,
           onDeadlineKill: () => logHostedCliDeadlineKill('gh', resolved.binary, args, timeoutMs)
         },
         resolved.termination

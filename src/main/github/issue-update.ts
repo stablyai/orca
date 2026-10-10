@@ -77,10 +77,10 @@ export async function updateIssue(
           '-X',
           'PATCH',
           `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${issueNumber}`,
-          '--raw-field',
-          `body=${updates.body}`
+          '--input',
+          '-'
         ],
-        ghOptions
+        { ...ghOptions, stdin: JSON.stringify({ body: updates.body }) }
       )
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)

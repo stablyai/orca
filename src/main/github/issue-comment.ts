@@ -43,10 +43,10 @@ export async function addIssueComment(
         '-X',
         'POST',
         `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${issueNumber}/comments`,
-        '--raw-field',
-        `body=${body}`
+        '--input',
+        '-'
       ],
-      ghOptions
+      { ...ghOptions, stdin: JSON.stringify({ body }) }
     )
     const data = JSON.parse(stdout) as {
       id?: number
