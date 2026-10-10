@@ -19,6 +19,7 @@ export function isKnownRemoteStartFailure(code: string): boolean {
   return [
     'invalid_argument',
     'agent_unconfigured',
+    'agent_not_available',
     'worktree_not_found_on_server',
     'terminal_worktree_mismatch',
     'capability_unsupported'

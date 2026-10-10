@@ -1,4 +1,5 @@
 import { probeWorkerOpenCodeModelLaunchSupport } from './worker-opencode-model-preflight'
+import { validateWorkerAgent } from './worker-agent-validation'
 import { resolveWorkerConfiguredAgentParams } from './worker-configured-agent-preflight'
 import { waitForWorkerAgentReady } from '../../../../launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -55,7 +56,6 @@ export async function startLocalWorker(args: {
   mode: WorkerStartModeReceipt
 }): Promise<unknown> {
   const { runtime, db, run, coordinator, callerSession, existingTask } = args
-  const { orchestrationMutation } = args
   // `--terminal` names a party: a chat by its `/clear` root address, as its Dispatch does.
   const terminal = args.params.terminal && resolveDispatchAssigneeParty(args.params.terminal, db)
   const params = terminal ? { ...args.params, terminal: terminal.address } : args.params
@@ -119,6 +119,7 @@ export async function startLocalWorker(args: {
     : requestedWorktree === 'current'
       ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorWorktreeId}`)
       : await runtime.showManagedTerminalWorkspace(requestedWorktree)
+  await validateWorkerAgent(runtime, agent, params, creationWorktree, resolvedWorktree)
   if (terminal) {
     await assertExplicitWorkerUsable({
       runtime,
@@ -169,7 +170,7 @@ export async function startLocalWorker(args: {
     retryOf: params.retryOf,
     startOptions,
     runtimeEpoch: runtime.getRuntimeId(),
-    mutationReceipt: orchestrationMutation
+    mutationReceipt: args.orchestrationMutation
   })
   const effects: WorkerEffect[] = []
   const task = started.task
@@ -281,7 +282,7 @@ export async function startLocalWorker(args: {
       terminalHandle,
       coordinatorHandle: params.from,
       devMode: params.devMode,
-      requestId: orchestrationMutation?.requestId ?? started.dispatch.id,
+      requestId: args.orchestrationMutation?.requestId ?? started.dispatch.id,
       agent: agent ?? null,
       launchedAgent: params.terminal ? null : (agent ?? null),
       setupReceipt,

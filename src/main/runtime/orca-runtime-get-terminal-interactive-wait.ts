@@ -24,6 +24,7 @@ import { resolveLocalProjectRuntimeForRepo } from '../project-runtime-git-option
 
 import { prepareOpenCodeModelStartupInputs } from '../opencode/opencode-model-startup-plan'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
+import { validateWorkerAgentAvailability } from './worker-agent-availability'
 
 export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAdoptTerminalOrphansFromInventory {
   async getTerminalInteractiveWait(
@@ -189,6 +190,27 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
       wslDistro,
       observedAfter,
       statuses: this.getAgentStatusSnapshotFn?.() ?? []
+    })
+  }
+
+  async validateOrchestrationAgentLauncherForRepo(
+    agent: TuiAgent,
+    repoSelector: string
+  ): Promise<void> {
+    this.validateOrchestrationAgentLauncher(agent)
+    const settings = this.store?.getSettings()
+    if (!settings) {
+      return
+    }
+    const repo = await this.showRepo(repoSelector)
+    await validateWorkerAgentAvailability({
+      agent,
+      settings,
+      repo,
+      projectRuntime: repo.connectionId
+        ? undefined
+        : resolveLocalProjectRuntimeForRepo(this.requireStore(), repo),
+      platform: this.getAgentLaunchPlatformForRepo(repo)
     })
   }
 

@@ -10,7 +10,11 @@ import { isCommandOnPath } from '../ipc/preflight-command-exec'
 
 export async function detectAgentCommandsOnHost(
   commands: readonly string[],
-  options: { connectionId?: string | null; context?: PreflightRuntimeContext } = {}
+  options: {
+    connectionId?: string | null
+    context?: PreflightRuntimeContext
+    failOnProbeError?: boolean
+  } = {}
 ): Promise<Set<string>> {
   if (options.connectionId) {
     const mux = getActiveMultiplexer(options.connectionId)
@@ -27,7 +31,7 @@ export async function detectAgentCommandsOnHost(
   const context = options.context
   const wslTarget = getPreflightWslTarget(context)
   if (wslTarget) {
-    return detectWslCommandsOnPath(wslTarget, commands)
+    return detectWslCommandsOnPath(wslTarget, commands, options)
   }
   const pathChecks = await Promise.all(
     commands.map(async (cmd) => ({

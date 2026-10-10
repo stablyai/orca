@@ -15,7 +15,6 @@ import { getBitbucketAuthStatus } from '../bitbucket/client'
 import { getGiteaAuthStatus } from '../gitea/client'
 import { _resetKnownHostsCache } from '../gitlab/gl-utils'
 import { mergePersistedWindowsPathAsync } from '../pty/windows-environment-path'
-import { getActiveMultiplexer } from '../ssh/ssh-target-registry'
 import type { WslPreflightTarget } from '../ipc/preflight-wsl-agent-detection'
 import {
   getPreflightWslTarget,
@@ -120,10 +119,6 @@ export function _resetPreflightCache(): void {
   preflightCacheEpoch += 1
 }
 
-function uniqueAgentIds(ids: Iterable<string>): string[] {
-  return [...new Set(ids)]
-}
-
 /** A CLI verdict and, on the local path, the exact copy that produced it. */
 type CommandRuntime = { installed: boolean; wslTarget?: WslPreflightTarget; binary?: string }
 
@@ -144,23 +139,27 @@ async function detectCommandRuntime(
     : { installed: false }
 }
 
-export async function detectInstalledAgents(context?: PreflightRuntimeContext): Promise<string[]> {
+export async function detectInstalledAgents(
+  context?: PreflightRuntimeContext,
+  options: { failOnProbeError?: boolean } = {}
+): Promise<string[]> {
   const commands = getTuiAgentDetectionProbeCommands(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
     getPreflightWslTarget(context) ? 'wsl' : process.platform
   )
   return resolveDetectedTuiAgentIds(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-    await detectAgentCommandsOnHost(commands, { context }),
+    await detectAgentCommandsOnHost(commands, { context, ...options }),
     getPreflightWslTarget(context) ? 'wsl' : process.platform
   )
 }
 
 export async function detectInstalledAgentsWithShellPathHydration(
-  context?: PreflightRuntimeContext
+  context?: PreflightRuntimeContext,
+  options: { failOnProbeError?: boolean } = {}
 ): Promise<string[]> {
   await hydrateShellPathForAgentDetection(context)
-  return detectInstalledAgents(context)
+  return detectInstalledAgents(context, options)
 }
 
 export type RefreshAgentsResult = {
@@ -218,18 +217,7 @@ export async function refreshShellPathAndDetectAgents(
   }
 }
 
-export async function detectRemoteAgents(args: { connectionId: string }): Promise<string[]> {
-  const mux = getActiveMultiplexer(args.connectionId)
-  if (!mux || mux.isDisposed()) {
-    // Why: remote agent detection is passive UI polling. A disconnected host has
-    // no detectable agents until reconnect, but should not spam IPC errors.
-    return []
-  }
-  const result = (await mux.request('preflight.detectAgents', {
-    commands: KNOWN_TUI_AGENT_DETECTION_COMMANDS
-  })) as { agents: string[] }
-  return uniqueAgentIds(result.agents)
-}
+export { detectRemoteAgents } from './remote-agent-detection'
 
 // Why the probe object rather than the bare command name: on the local path
 // `binary` is the copy that just passed `--version`, which on a shim-shadowed
