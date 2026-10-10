@@ -40,6 +40,9 @@ const TOP_LEVEL_DECLARATION =
 // Any new statement at column 0 ends a declaration; closing brackets and continuations do not.
 const TOP_LEVEL_BOUNDARY = /^[^\s)}\]]/gm
 
+// Member calls only, so dotted string keys (`'auto.hooks.useX.abc'`) are not uses.
+const MEMBER_NAME = /\.\s*([\w$]+)\s*(?:\?\.\s*)?\(/g
+
 function readerUsePattern(names) {
   return names.size === 0
     ? null
@@ -100,6 +103,8 @@ function valueStatements(body) {
 const IMPORT_STATEMENT =
   /\bimport\s+(?:type\s+)?(?:[\w$]+\s*,\s*)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g
 const REEXPORT_STATEMENT = /\bexport\s+(?:type\s+)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g
+// `const { reader } = await import('…')` binds like a named import.
+const DYNAMIC_IMPORT_DESTRUCTURE = /\{([^{}]*)\}\s*=\s*await\s+import\(\s*['"]([^'"]+)['"]\s*\)/g
 const STAR_REEXPORT_STATEMENT = /\bexport\s+\*\s+from\s*['"]([^'"]+)['"]/g
 const LOCAL_EXPORT_LIST = /\bexport\s+\{([^}]*)\}(?!\s*from)/g
 
@@ -132,7 +137,10 @@ function resolveModule(spec, fromRel, files) {
 
 function parseModule(rel, text, files) {
   const imports = new Map()
-  for (const [, list, spec] of text.matchAll(IMPORT_STATEMENT)) {
+  for (const [, list, spec] of [
+    ...text.matchAll(IMPORT_STATEMENT),
+    ...text.matchAll(DYNAMIC_IMPORT_DESTRUCTURE)
+  ]) {
     const from = resolveModule(spec, rel, files)
     for (const { imported, local } of specifiers(list)) {
       imports.set(local, { from, name: imported })
@@ -218,18 +226,32 @@ export function discoverFocusReaders(sources) {
         readerKeys.add(`${rel}#${exportedAs}`)
         continue
       }
-      const passed = new Set(valueStatements(text).match(/[\w$]+/g))
+      const statements = valueStatements(text)
+      const passed = new Set(statements.match(/[\w$]+/g))
       passed.delete(name)
-      pending.push({ rel, key: `${rel}#${exportedAs}`, passed: [...passed] })
+      const members = [...statements.matchAll(MEMBER_NAME)].map(([, member]) => member)
+      pending.push({ rel, key: `${rel}#${exportedAs}`, passed: [...passed], members })
     }
+  }
+  // Exported reader names, for `ns.reader(…)` through a namespace or dynamic import.
+  const memberNames = new Set(seeds)
+  const addReader = (key) => {
+    readerKeys.add(key)
+    memberNames.add(key.slice(key.indexOf('#') + 1))
+  }
+  for (const key of readerKeys) {
+    addReader(key)
   }
   let changed = true
   while (changed) {
     changed = false
     for (let i = pending.length - 1; i >= 0; i -= 1) {
-      const { rel, key, passed } = pending[i]
-      if (passed.some((id) => isReader(rel, id))) {
-        readerKeys.add(key)
+      const { rel, key, passed, members } = pending[i]
+      if (
+        passed.some((id) => isReader(rel, id)) ||
+        members.some((member) => memberNames.has(member))
+      ) {
+        addReader(key)
         pending.splice(i, 1)
         changed = true
       }
@@ -238,7 +260,8 @@ export function discoverFocusReaders(sources) {
 
   const namesByFile = new Map()
   return {
-    has: (name) => seeds.has(name) || [...readerKeys].some((key) => key.endsWith(`#${name}`)),
+    has: (name) => memberNames.has(name),
+    memberNames,
     /** Names that refer to a reader inside `rel`: seeds, its own readers and imported ones. */
     namesFor(rel) {
       if (!namesByFile.has(rel)) {
@@ -261,10 +284,18 @@ export function discoverFocusReaders(sources) {
  * Reads of the setting (member, element and destructuring reads) plus every use of a name that
  * refers to a reader. Object-literal keys are writes and are not counted.
  */
-export function countFocusSettingReads(sourceText, readerNames = new Set(SEED_FOCUS_READERS)) {
-  const body = sourceText.replace(IMPORT_EXPORT_LIST, '')
+export function countFocusSettingReads(
+  sourceText,
+  readerNames = new Set(SEED_FOCUS_READERS),
+  memberNames = new Set()
+) {
+  const body = sourceText.replace(IMPORT_EXPORT_LIST, '').replace(DYNAMIC_IMPORT_DESTRUCTURE, '')
   const pattern = readerUsePattern(readerNames)
-  return countSettingReads(body) + (pattern ? (body.match(pattern)?.length ?? 0) : 0)
+  // `ns.reader(…)` through a namespace or dynamic import; names already counted bare are skipped.
+  const members = [...body.matchAll(MEMBER_NAME)].filter(
+    ([, member]) => memberNames.has(member) && !readerNames.has(member)
+  ).length
+  return countSettingReads(body) + (pattern ? (body.match(pattern)?.length ?? 0) : 0) + members
 }
 
 /** An alias hides later calls from the name-based helper count, so it is refused outright. */
@@ -290,7 +321,8 @@ export const RATCHETS = [
   {
     name: 'focus-setting-read',
     baselinePath: 'config/focus-setting-read-baseline.txt',
-    count: (text, rel, readers) => countFocusSettingReads(text, readers.namesFor(rel)),
+    count: (text, rel, readers) =>
+      countFocusSettingReads(text, readers.namesFor(rel), readers.memberNames),
     header: [
       '# Renderer reads of the Active Server setting (member, element and destructuring reads of',
       '# activeRuntimeEnvironmentId) plus calls of exported functions that read it, per file.',

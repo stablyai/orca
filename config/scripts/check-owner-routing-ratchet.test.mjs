@@ -127,6 +127,40 @@ describe('countFocusSettingReads', () => {
     expect(countFocusSettingReads('export const cacheKey = (s) => s', inA)).toBe(0)
   })
 
+  it('counts a reader called through a namespace or dynamic import', () => {
+    const readers = discoverFocusReaders(
+      new Map([
+        [
+          'src/renderer/src/routing.ts',
+          'export function focusedHostId(s) {\n  return s.activeRuntimeEnvironmentId\n}\n'
+        ],
+        [
+          'src/renderer/src/wrap.ts',
+          "import * as rr from './routing'\nexport function hostOf(s) {\n  return rr.focusedHostId(s)\n}\n"
+        ],
+        [
+          'src/renderer/src/use.ts',
+          "const { focusedHostId } = await import('./routing')\nconst a = focusedHostId(s)\n"
+        ]
+      ])
+    )
+    expect(readers.has('hostOf')).toBe(true)
+    expect(
+      countFocusSettingReads(
+        "import * as rr from './routing'\nconst a = rr.focusedHostId(s)\nt('auto.rr.focusedHostId.x')",
+        readers.namesFor('src/renderer/src/other.ts'),
+        readers.memberNames
+      )
+    ).toBe(1)
+    expect(
+      countFocusSettingReads(
+        "const { focusedHostId } = await import('./routing')\nconst a = focusedHostId(s)\n",
+        readers.namesFor('src/renderer/src/use.ts'),
+        readers.memberNames
+      )
+    ).toBe(1)
+  })
+
   it('counts destructuring reads', () => {
     expect(countFocusSettingReads('const { activeRuntimeEnvironmentId } = s')).toBe(1)
     expect(

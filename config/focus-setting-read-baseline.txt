@@ -146,7 +146,7 @@
 3 src/renderer/src/components/pull-request-page/edit/issue-updates.ts
 8 src/renderer/src/components/pull-request-page/edit/section.tsx
 4 src/renderer/src/components/pull-request-page/reviewers/panel.tsx
-2 src/renderer/src/components/pull-request-page/reviewers/request-actions.ts
+4 src/renderer/src/components/pull-request-page/reviewers/request-actions.ts
 2 src/renderer/src/components/quick-open-file-list-test-harness.ts
 6 src/renderer/src/components/quick-open-file-list.ts
 4 src/renderer/src/components/quick-open-file-navigation.ts
@@ -321,7 +321,7 @@
 1 src/renderer/src/components/tab-group/AiVaultSessionDropLayer.tsx
 3 src/renderer/src/components/tab-group/useTabGroupActivationCommands.ts
 5 src/renderer/src/components/tab-group/useTabGroupCreationCommands.ts
-2 src/renderer/src/components/task-page-github-reviewer-actions.ts
+4 src/renderer/src/components/task-page-github-reviewer-actions.ts
 2 src/renderer/src/components/task-page/TaskPage.tsx
 2 src/renderer/src/components/task-page/github/AssigneesCell.tsx
 2 src/renderer/src/components/task-page/github/MergeCell.tsx
@@ -389,6 +389,7 @@
 1 src/renderer/src/hooks/editor-external-watch-disk-verification.ts
 2 src/renderer/src/hooks/editor-external-watch-targets.ts
 1 src/renderer/src/hooks/editor-runtime-file-watch.ts
+6 src/renderer/src/hooks/ipc-events-test-harness.ts
 2 src/renderer/src/hooks/ipc-events/app-lifetime-ipc-bridge.ts
 1 src/renderer/src/hooks/ipc-events/browser-state-ipc-bridge.ts
 1 src/renderer/src/hooks/ipc-events/runtime-environment-subscription-selection.ts
@@ -564,8 +565,9 @@
 1 src/renderer/src/store/slices/browser/browser-page-conversion-actions.ts
 12 src/renderer/src/store/slices/browser/browser-profile-import-actions.ts
 11 src/renderer/src/store/slices/browser/browser-profile-list-actions.ts
-4 src/renderer/src/store/slices/browser/browser-tab-actions.ts
+6 src/renderer/src/store/slices/browser/browser-tab-actions.ts
 1 src/renderer/src/store/slices/browser/create-browser-slice.ts
+1 src/renderer/src/store/slices/browser/paired-browser-tab-creator.ts
 3 src/renderer/src/store/slices/diff-comment-persistence.ts
 2 src/renderer/src/store/slices/editor-slice-test-harness.ts
 4 src/renderer/src/store/slices/editor/actions/git-remote-push-pull.ts
@@ -634,7 +636,7 @@
 1 src/renderer/src/store/slices/worktrees/teardown/force-delete-preserved-branch.ts
 1 src/renderer/src/store/slices/worktrees/teardown/missing-worktree-terminal-teardown.ts
 2 src/renderer/src/store/slices/worktrees/teardown/remove-worktree.ts
-1 src/renderer/src/store/terminals/terminal-active-workspace-creation.ts
+2 src/renderer/src/store/terminals/terminal-active-workspace-creation.ts
 1 src/renderer/src/store/terminals/terminal-pane-hibernation.ts
 1 src/renderer/src/store/terminals/terminal-shutdown.ts
 1 src/renderer/src/store/terminals/terminal-workspace-routing.ts
