@@ -54,6 +54,7 @@ export type RuntimeGitContext = {
   settings: RuntimeGitSettings | null | undefined
   worktreeId: string | null | undefined
   worktreePath: string
+  authorizedParentPath?: string
   connectionId?: string
 }
 
