@@ -212,4 +212,96 @@ describe('automation session reuse', () => {
 
     expect(session).toBeNull()
   })
+
+  // Why: a long-idle seed can outlive its status row, and requiring the row made
+  // reuse fail forever for slow-cadence automations while #9493 kept every
+  // un-reused session resident (#19193).
+  it('reuses a provably live pane whose agent status row is absent', () => {
+    const session = findReusableAutomationSession({
+      automationId: 'auto-1',
+      agentId: 'claude',
+      worktreeId: 'wt-1',
+      currentRunId: 'run-current',
+      runs: [run({ id: 'run-new', terminalSessionId: 'tab-1', createdAt: 2 })],
+      state: {
+        agentStatusByPaneKey: {},
+        ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+        terminalLayoutsByTabId: { 'tab-1': { ptyIdsByLeafId: { [leafId]: 'pty-1' } } },
+        unifiedTabsByWorktree: {
+          'wt-1': [{ contentType: 'terminal', entityId: 'tab-1' }]
+        }
+      } as never
+    })
+
+    expect(session).toEqual({ tabId: 'tab-1', ptyId: 'pty-1', paneKey })
+  })
+
+  it('still rejects a missing status row when the pane itself is not live', () => {
+    const session = findReusableAutomationSession({
+      automationId: 'auto-1',
+      agentId: 'claude',
+      worktreeId: 'wt-1',
+      currentRunId: 'run-current',
+      runs: [run({ id: 'run-new', terminalSessionId: 'tab-1', createdAt: 2 })],
+      state: {
+        agentStatusByPaneKey: {},
+        ptyIdsByTabId: { 'tab-1': ['pty-other'] },
+        terminalLayoutsByTabId: { 'tab-1': { ptyIdsByLeafId: { [leafId]: 'pty-1' } } },
+        unifiedTabsByWorktree: {
+          'wt-1': [{ contentType: 'terminal', entityId: 'tab-1' }]
+        }
+      } as never
+    })
+
+    expect(session).toBeNull()
+  })
+
+  it('does not reuse a pane whose live status row belongs to another agent', () => {
+    const session = findReusableAutomationSession({
+      automationId: 'auto-1',
+      agentId: 'claude',
+      worktreeId: 'wt-1',
+      currentRunId: 'run-current',
+      runs: [run({ id: 'run-new', terminalSessionId: 'tab-1', createdAt: 2 })],
+      state: {
+        agentStatusByPaneKey: { [paneKey]: status({ agentType: 'codex' }) },
+        ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+        terminalLayoutsByTabId: { 'tab-1': { ptyIdsByLeafId: { [leafId]: 'pty-1' } } },
+        unifiedTabsByWorktree: {
+          'wt-1': [{ contentType: 'terminal', entityId: 'tab-1' }]
+        }
+      } as never
+    })
+
+    expect(session).toBeNull()
+  })
+
+  // Why: without a status row a sibling leaf may be the one holding the agent, so
+  // a split tab is not proof and must not be reused blind.
+  it('does not reuse a split tab when the status row is absent', () => {
+    const session = findReusableAutomationSession({
+      automationId: 'auto-1',
+      agentId: 'claude',
+      worktreeId: 'wt-1',
+      currentRunId: 'run-current',
+      runs: [run({ id: 'run-new', terminalSessionId: 'tab-1', createdAt: 2 })],
+      state: {
+        agentStatusByPaneKey: {},
+        ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-right'] },
+        terminalLayoutsByTabId: {
+          'tab-1': {
+            ptyIdsByLeafId: {
+              [leafId]: 'pty-1',
+              [splitLeafId]: 'pty-right'
+            }
+          }
+        },
+        unifiedTabsByWorktree: {
+          'wt-1': [{ contentType: 'terminal', entityId: 'tab-1' }]
+        }
+      } as never
+    })
+
+    expect(session).toBeNull()
+  })
 })
