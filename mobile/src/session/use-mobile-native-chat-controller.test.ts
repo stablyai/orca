@@ -375,11 +375,14 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
       })
       expect(controller?.nativeChatAgentWorking).toBe(true)
       expect(controller?.nativeChatCanStop).toBe(false)
+      // No turn to stop, so a card offers no X (a Pi dialog can open outside a turn).
+      expect(controller?.handleNativeChatCancelPrompt).toBeUndefined()
       structuredActivity.turnId = 'provider-turn'
       await act(async () => {
         renderer?.update(createElement(Harness, props))
       })
       expect(controller?.nativeChatCanStop).toBe(true)
+      expect(controller?.handleNativeChatCancelPrompt).toEqual(expect.any(Function))
     } finally {
       structuredActivity.isWorking = false
       structuredActivity.turnId = null
