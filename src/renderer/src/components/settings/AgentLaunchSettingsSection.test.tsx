@@ -39,12 +39,17 @@ vi.mock('../sidebar/use-sidebar-host-scope-options', () => ({
     ]
   })
 }))
-vi.mock('./HostAgentLaunchSettings', () => ({
-  HostAgentLaunchSettings: (props: { environmentId: string }) => {
-    state.remote(props)
-    return <p>Remote launch settings</p>
+vi.mock('./HostAgentLaunchSettings', async () => {
+  const { useState } = await import('react')
+  return {
+    HostAgentLaunchSettings: (props: { environmentId: string; pairingRevision: number }) => {
+      state.remote(props)
+      // Stands in for unsaved edits: survives prop changes, dropped only by a remount.
+      const [mountedAt] = useState(props.pairingRevision)
+      return <p>Remote launch settings mounted at {mountedAt}</p>
+    }
   }
-}))
+})
 vi.mock('./AgentLaunchSettingsCatalog', () => ({
   AgentLaunchSettingsCatalog: (props: unknown) => {
     state.local(props)
@@ -54,6 +59,9 @@ vi.mock('./AgentLaunchSettingsCatalog', () => ({
 afterEach(cleanup)
 beforeEach(() => {
   state.workspace = {}
+  state.runtimeEnvironments = [
+    { id: 'ssh-host', name: 'SSH host', createdAt: 1, pairingRevision: 17 }
+  ]
   state.remote.mockClear()
   state.local.mockClear()
 })
@@ -73,7 +81,7 @@ describe('launch settings host selection', () => {
       worktreesByRepo: { repo: [{ id: 'repo::wt', repoId: 'repo', hostId: 'runtime:ssh-host' }] }
     }
     renderSection()
-    expect(screen.getByText('Remote launch settings')).toBeTruthy()
+    expect(screen.getByText('Remote launch settings mounted at 17')).toBeTruthy()
     expect(state.remote.mock.calls[0]?.[0]).toMatchObject({
       environmentId: 'ssh-host',
       pairingRevision: 17,
@@ -108,6 +116,22 @@ describe('launch settings host selection', () => {
     renderSection(' ssh-host ')
     expect(state.remote.mock.calls[0]?.[0].environmentId).toBe('ssh-host')
     expect(state.local).not.toHaveBeenCalled()
+  })
+
+  it('remounts the host form when its host is re-paired, dropping unsaved edits', () => {
+    const { rerender } = renderSection(' ssh-host ')
+    expect(screen.getByText('Remote launch settings mounted at 17')).toBeTruthy()
+    state.runtimeEnvironments = [
+      { id: 'ssh-host', name: 'SSH host', createdAt: 1, pairingRevision: 18 }
+    ]
+    rerender(
+      <AgentLaunchSettingsSection
+        settings={createGlobalSettingsFixture({ activeRuntimeEnvironmentId: ' ssh-host ' })}
+        updateSettings={vi.fn()}
+        renderPermissions={() => null}
+      />
+    )
+    expect(screen.getByText('Remote launch settings mounted at 18')).toBeTruthy()
   })
 
   it('keeps unknown workspace ownership unresolved instead of displaying desktop defaults', () => {

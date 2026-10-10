@@ -9,10 +9,7 @@ import {
 } from '@/runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
-import {
-  captureRuntimeEnvironmentRequestRevision,
-  getRuntimeEnvironmentRevision
-} from '@/runtime/runtime-environment-revision'
+import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/runtime-environment-revision'
 import { PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import {
   getRuntimeAgentInventoryEnvironmentId,
@@ -291,10 +288,7 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
           callRuntimeRpc<{ agents: TuiAgent[] }>(target, 'preflight.refreshAgents', params, fence)
             .then((result) => result.agents)
             .catch((error) => {
-              const repaired =
-                getRuntimeEnvironmentRevision(environmentId) !==
-                fence.expectedEnvironmentPairingRevision
-              if (!isRuntimeMethodNotFoundError(error) || repaired) {
+              if (!isRuntimeMethodNotFoundError(error)) {
                 throw error
               }
               // Why: only older servers need the fallback; retrying disconnects and

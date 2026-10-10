@@ -58,7 +58,7 @@ beforeEach(() => {
 })
 
 describe('runtime detection across a re-pair', () => {
-  it('does not retarget an old refresh fallback to the replacement pairing', async () => {
+  it('sends an old refresh fallback only under the retired pairing, which main refuses', async () => {
     const store = createTestStore()
     let failOld!: (error: Error) => void
     rpc.call.mockReturnValueOnce(
@@ -71,6 +71,27 @@ describe('runtime detection across a re-pair', () => {
     store.getState().setRuntimeEnvironments([environment(2)])
     rpc.call.mockResolvedValueOnce(['codex'])
     await store.getState().ensureRuntimeDetectedAgents('detection-peer')
+    // Main's transport refuses any request whose fence is not the current pairing.
+    rpc.call.mockImplementationOnce(
+      (
+        _target,
+        method: string,
+        _params,
+        fence?: { expectedEnvironmentPairingRevision?: number }
+      ) =>
+        fence?.expectedEnvironmentPairingRevision === 2
+          ? Promise.resolve(['claude'])
+          : Promise.reject(
+              new RuntimeRpcCallError({
+                id: method,
+                ok: false,
+                error: {
+                  code: 'runtime_environment_changed',
+                  message: 'Runtime environment pairing changed; refresh and try again'
+                }
+              })
+            )
+    )
     failOld(
       new RuntimeRpcCallError({
         id: 'refresh',
@@ -79,7 +100,9 @@ describe('runtime detection across a re-pair', () => {
       })
     )
     await old
-    expect(rpc.call).toHaveBeenCalledTimes(2)
+    expect(rpc.call).toHaveBeenCalledTimes(3)
+    expect(rpc.call.mock.calls[2][1]).toBe('preflight.detectAgents')
+    expect(rpc.call.mock.calls[2][3]).toEqual({ expectedEnvironmentPairingRevision: 1 })
     expect(store.getState().runtimeDetectedAgentIds['detection-peer']).toEqual(['codex'])
   })
 
