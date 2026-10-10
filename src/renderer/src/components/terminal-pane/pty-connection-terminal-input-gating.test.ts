@@ -868,7 +868,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
 
     expect(transport.sendInput).toHaveBeenCalledWith('x', 'query-reply')
-    expect(pane.terminal.write).toHaveBeenCalledWith('', expect.any(Function))
+    expect(pane.terminal.write).toHaveBeenCalledWith(new Uint8Array(0), expect.any(Function))
     expect(remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1', AUTOMATIC_REQUEST)
     binding.dispose()
   })
@@ -893,7 +893,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
 
     expect(transport.sendInputAccepted).toHaveBeenCalledWith('\x03', 'query-reply')
-    expect(pane.terminal.write).not.toHaveBeenCalledWith('', expect.any(Function))
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(new Uint8Array(0), expect.any(Function))
     binding.dispose()
   })
 

@@ -169,7 +169,7 @@ export function createPane(paneId: number): MockPane {
     },
     write: vi.fn<(data: string, callback?: () => void) => void>(function write(...args): void {
       const [data, callback] = args
-      if (data === '' || callback?.name === 'runParsedSteps') {
+      if (data.length === 0 || callback?.name === 'runParsedSteps') {
         callback?.()
       }
     }),
@@ -217,12 +217,13 @@ export function captureCallbackTerminalWrites(pane: MockPane): {
 } {
   const writes: string[] = []
   const parseCallbacks: (() => void)[] = []
-  pane.terminal.write = function write(data: string, callback?: () => void): void {
-    writes.push(data)
+  pane.terminal.write.mockImplementation((data: string | Uint8Array, callback?: () => void) => {
+    // Parse barriers are zero-length byte writes; record what xterm would parse.
+    writes.push(typeof data === 'string' ? data : new TextDecoder().decode(data))
     if (callback) {
       parseCallbacks.push(callback)
     }
-  } as typeof pane.terminal.write
+  })
   return { writes, parseCallbacks }
 }
 

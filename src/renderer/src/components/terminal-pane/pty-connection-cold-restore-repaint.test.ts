@@ -330,7 +330,7 @@ describe('connectPanePty', () => {
       operations.push({ kind: 'write', data })
       if (data === viewportClear) {
         sawViewportClear = true
-      } else if (sawViewportClear && data === '' && preResizeBarrier.release === null) {
+      } else if (sawViewportClear && data.length === 0 && preResizeBarrier.release === null) {
         preResizeBarrier.release = callback ?? (() => {})
         return
       }
