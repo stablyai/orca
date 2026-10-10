@@ -4,6 +4,7 @@ import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
+import { readHookEndpoint } from './helpers/agent-hook-endpoint'
 import {
   enableNativeChatSetting,
   toggleTerminalTabToChatView
@@ -51,18 +52,34 @@ test('ZCode native chat reads ordered visible history and follows new messages',
     const descriptor = await waitForActivePaneHookDescriptor(orcaPage)
     const [tabId] = descriptor.paneKey.split(':')
     await enableNativeChatSetting(orcaPage)
-    await orcaPage.evaluate(({ paneKey, worktreeId }) => {
-      window.__store
-        ?.getState()
-        .setAgentStatus(
-          paneKey,
-          { state: 'waiting', prompt: '', agentType: 'zcode' },
-          'ZCode',
-          undefined,
-          { worktreeId },
-          { providerSession: { key: 'session_id', id: 'zcode-proof' } }
+    const endpoint = await readHookEndpoint(electronApp)
+    const response = await fetch(`http://127.0.0.1:${endpoint.port}/hook/zcode`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Orca-Agent-Hook-Token': endpoint.token
+      },
+      body: JSON.stringify({
+        ...descriptor,
+        tabId,
+        env: endpoint.env,
+        version: endpoint.version,
+        payload: {
+          hook_event_name: 'SessionStart',
+          source: 'resume',
+          session_id: 'zcode-proof'
+        }
+      })
+    })
+    expect(response.status).toBe(204)
+    await expect
+      .poll(() =>
+        orcaPage.evaluate(
+          (paneKey) => window.__store?.getState().agentStatusByPaneKey[paneKey]?.agentType,
+          descriptor.paneKey
         )
-    }, descriptor)
+      )
+      .toBe('zcode')
     await orcaPage.screenshot({ path: testInfo.outputPath('01-terminal-before-chat.png') })
     await toggleTerminalTabToChatView(orcaPage, { tabId, worktreeId: descriptor.worktreeId })
     const chat = orcaPage.locator('[data-native-chat-root="true"]')
