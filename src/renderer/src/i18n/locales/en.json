@@ -4906,6 +4906,9 @@
           },
           "legacyRelayBridge": {
             "unreachable": "This terminal is still running on the host under an older version of Orca. Reconnecting to it…"
+          },
+          "TerminalSinglePaneWidthHandles": {
+            "75e1cb1f51": "Resize terminal width"
           }
         }
       },
@@ -10642,7 +10645,19 @@
             "96e32c1118": "MiniMax usage",
             "e8d2710689": "Muse usage",
             "aff6e6afdf": "IDE font",
-            "ba1f9d39a6": "Antigravity usage"
+            "ba1f9d39a6": "Antigravity usage",
+            "singlePaneWidth": "Single Pane Width",
+            "singlePaneWidthSummary": "Maximum width for a tab with no splits — terminal, browser, editor or preview — centered in the window.",
+            "kwWidth": "width",
+            "kwMaxWidth": "max width",
+            "kwCentered": "centered",
+            "kwSingle": "single",
+            "kwWide": "wide",
+            "kwUnsplit": "unsplit",
+            "kwPane": "pane",
+            "kwBrowser": "browser",
+            "kwEditor": "editor",
+            "kwTerminal": "terminal"
           }
         },
         "auto": {

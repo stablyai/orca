@@ -17,7 +17,7 @@ import {
   twinFileBrowserUnsupportedMessage
 } from '@/lib/browser/documents/workspace-file-browser-open-target'
 import { useAppStore } from '@/store/index'
-import { findSiblingGroupId } from '../../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
+import { findReusableRightSplitGroupId } from '@/lib/simulator/tabs/emulator-right-split-target'
 import '../../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import {
@@ -144,7 +144,7 @@ function openDocPreviewTab(
     activate: boolean
     placementWorkspaceId?: string
   },
-  placement?: Pick<CreateBrowserTabOptions, 'targetGroupId' | 'split'>
+  placement?: Pick<CreateBrowserTabOptions, 'targetGroupId' | 'split' | 'placementFixed'>
 ): void {
   const docLocation = {
     kind: 'workspace-doc' as const,
@@ -269,14 +269,21 @@ export function openFilePreviewToSide(params: {
     return
   }
 
-  const layout = state.layoutByWorktree[worktreeId] ?? null
-  const existingSibling = layout ? findSiblingGroupId(layout, sourceGroupId) : null
-
-  // Keep paired side splits unfocused; host snapshots interpret activated empty groups as terminals.
+  // Why the right sibling only: the preview must sit to the RIGHT of its source.
+  const existingSibling = findReusableRightSplitGroupId(
+    state.layoutByWorktree[worktreeId],
+    sourceGroupId
+  )
+  // Why the unfocused split on a paired workspace: the preview opens in the background, and a host
+  // snapshot reads an activated empty group as a terminal pane.
   const activate = !runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
-  const placement = existingSibling
-    ? { targetGroupId: existingSibling }
-    : { split: { sourceGroupId, splitDirection: 'right' as const, activate } }
+  // Why placementFixed: the right split was chosen on purpose; automatic placement must not flip it.
+  const placement = {
+    ...(existingSibling
+      ? { targetGroupId: existingSibling }
+      : { split: { sourceGroupId, splitDirection: 'right' as const, activate } }),
+    placementFixed: true
+  }
 
   if (plan.status === 'doc-preview') {
     openDocPreviewTab(

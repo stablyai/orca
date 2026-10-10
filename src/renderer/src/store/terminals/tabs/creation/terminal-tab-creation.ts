@@ -21,6 +21,7 @@ import { pushRecentTabId, sanitizeRecentTabIds } from '../../../slices/tabs/tab-
 import { dedupeTabOrder } from '../../../../../../shared/workspace-layout/tab-groups/tab-order'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
 import { emptySplitGroup, splitGroupEntries } from '../../../slices/tabs/tabs-group-actions'
+import { resolveAutoPlacementGroupId } from '../../../slices/tabs/lone-pane-split-source'
 import { ownsGlobalSelection } from '../../../workspaces/selection/global-selection-owner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import {
@@ -45,6 +46,11 @@ export function createTerminalTabCreationActions(
       let tab!: TerminalTab
       const split = options?.split
       const splitGroupId = split ? createBrowserUuid() : undefined
+      // Why: terminals bypass createUnifiedTab, so automatic placement lives here too.
+      const besideGroupId =
+        options?.placementFixed || split
+          ? null
+          : resolveAutoPlacementGroupId(get(), worktreeId, targetGroupId, 'terminal')
       set((current) => {
         const s = current
         // The split's per-worktree group, layout and focus; each record is built once in the patch below.
@@ -61,7 +67,7 @@ export function createTerminalTabCreationActions(
         const worktreeActiveGroupId =
           splitEntries?.activeGroupId ?? current.activeGroupIdByWorktree[worktreeId]
         const worktreeLayout = splitEntries?.layout ?? current.layoutByWorktree[worktreeId]
-        const requestedGroupId = splitGroupId ?? targetGroupId
+        const requestedGroupId = splitGroupId ?? besideGroupId ?? targetGroupId
         const orphanTerminalIds = getOrphanTerminalIds(s, worktreeId)
         // Seam records are built once below from the orphan IDs; this cleans only the orphans' caches.
         const orphanCleanupPatch = buildOrphanTerminalCompanionCleanupPatch(

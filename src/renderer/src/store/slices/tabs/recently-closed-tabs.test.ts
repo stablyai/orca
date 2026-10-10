@@ -30,6 +30,7 @@ const mockApi = {
 // @ts-expect-error -- minimal window.api stub for the store under test
 globalThis.window = { api: mockApi }
 
+import { seedThreePaneLayout } from './three-pane-layout.test-fixture'
 import { createTestStore, seedStore } from '../../testing/app-store-test-fixture'
 import { makeWorktree } from '../worktrees/worktree.test-fixture'
 import { makeOpenFile } from '../editor/types/open-file.test-fixture'
@@ -58,6 +59,9 @@ function makeSeededStore(): ReturnType<typeof createTestStore> {
     },
     activeWorktreeId: WT
   })
+  // Why: these tests are about where a reopened tab lands inside its group, so they start from a
+  // layout the beside-a-lone-pane rule leaves alone.
+  seedThreePaneLayout(store, WT)
   return store
 }
 

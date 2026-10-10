@@ -20,7 +20,7 @@ import {
 import {
   buildEditorActiveResult,
   resolveEditorLinkOpenPlacement,
-  resolveEditorOpenTargetGroupId
+  resolveOpenFileTargetGroupId
 } from '../tabs/editor-open-target-group'
 import type { OpenFileOptions } from '../types/editor-files-slice'
 import type { EditorOpenLinkIntent } from '../types/editor-open-link-intent'
@@ -122,8 +122,8 @@ export function applyOpenFileToState(
   const requestedGroupId =
     splitGroup?.id ??
     (linkPlacement?.kind === 'group' ? linkPlacement.groupId : options?.targetGroupId)
-  const targetGroupId =
-    resolveEditorOpenTargetGroupId(s, placementId, requestedGroupId) ?? undefined
+  const fixedBy = { options, linkIntent, splitGroup }
+  const targetGroupId = resolveOpenFileTargetGroupId(s, placementId, requestedGroupId, fixedBy)
   scratch.editorItemTargetGroupId = targetGroupId
   const activeResult =
     options?.selection === 'none' ? {} : buildEditorActiveResult(s, placementId, id)

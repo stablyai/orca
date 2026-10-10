@@ -1,4 +1,5 @@
 import { holdPtyResizesForPaneSubtrees } from './pane-pty-resize-hold'
+import { matchesActiveDragPointer, releasePointerCaptureIfHeld } from './drag-pointer-session'
 
 export type DividerCallbacks = {
   refitPanesUnder: (el: HTMLElement) => void
@@ -116,23 +117,10 @@ export function attachDividerDrag(
     window.removeEventListener('blur', onWindowBlur)
   }
 
-  const releasePointerCaptureIfHeld = (pointerId: number | null): void => {
-    if (pointerId === null) {
-      return
-    }
-    try {
-      if (divider.hasPointerCapture(pointerId)) {
-        divider.releasePointerCapture(pointerId)
-      }
-    } catch {
-      // Best effort: capture may already be gone after crossing native chrome/webviews.
-    }
-  }
-
   const finishActiveDrag = (commitLayout: boolean): void => {
     if (!dragging) {
       removeWindowListeners()
-      releasePointerCaptureIfHeld(activePointerId)
+      releasePointerCaptureIfHeld(divider, activePointerId)
       activePointerId = null
       activePointerType = null
       return
@@ -154,7 +142,7 @@ export function attachDividerDrag(
       }
     }
 
-    releasePointerCaptureIfHeld(pointerId)
+    releasePointerCaptureIfHeld(divider, pointerId)
     divider.classList.remove('is-dragging')
     callbacks.onDragActiveChange?.(false)
 
@@ -224,10 +212,13 @@ export function attachDividerDrag(
     prevFlex = prevSize
   }
 
-  // WSLg can change mouse press into pen motion with another ID; permit foreign primary mouse/pen takeover, never cross touch/non-touch ownership.
   const isActiveDragPointer = (e: PointerEvent): boolean =>
-    e.pointerId === activePointerId ||
-    (e.isPrimary && e.pointerType !== 'touch' && activePointerType !== 'touch')
+    matchesActiveDragPointer(
+      activePointerId === null || activePointerType === null
+        ? null
+        : { pointerId: activePointerId, pointerType: activePointerType },
+      e
+    )
 
   const onPointerMove = (e: PointerEvent): void => {
     if (!dragging || !isActiveDragPointer(e) || !prevEl || !nextEl) {

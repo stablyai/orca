@@ -3,6 +3,7 @@ import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree
 import { createTestStore, seedStore } from '../../../testing/app-store-test-fixture'
 
 import { makeWorktree } from '../../worktrees/worktree.test-fixture'
+import { seedThreePaneLayout } from '../../tabs/three-pane-layout.test-fixture'
 import { createStoreCascadesMockApi } from '../../../testing/app-store-cascade-api.test-fixture'
 import {
   drawTabsFromMain,
@@ -61,6 +62,38 @@ describe('setActiveWorktree', () => {
     mockApi.worktrees.updateMeta.mockResolvedValue({})
   })
 
+  it('reopens a closed browser tab into its recorded group, not a second pane', async () => {
+    // Why: Cmd+Shift+T returns a tab to where it was; it is replay, not a new pane.
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt
+    })
+    main = await drawTabsFromMain(store)
+
+    store.getState().createBrowserTab(wt, 'https://first.example.com')
+    await settled()
+    const groupId = store.getState().activeGroupIdByWorktree[wt]
+    const second = store.getState().createBrowserTab(wt, 'https://second.example.com', {
+      targetGroupId: groupId,
+      placementFixed: true
+    })
+    await settled()
+    store.getState().closeBrowserTab(second.id)
+    await settled()
+    store.getState().reopenClosedBrowserTab(wt)
+    await settled()
+
+    const s = store.getState()
+    expect(s.groupsByWorktree[wt]).toHaveLength(1)
+    expect(s.layoutByWorktree[wt]?.type).toBe('leaf')
+    expect(new Set((s.unifiedTabsByWorktree[wt] ?? []).map((tab) => tab.groupId)).size).toBe(1)
+  })
+
   it('uses unified MRU selection when closing an active browser tab', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
@@ -71,6 +104,7 @@ describe('setActiveWorktree', () => {
       },
       activeWorktreeId: wt
     })
+    seedThreePaneLayout(store, wt)
     main = await drawTabsFromMain(store)
 
     const previous = store.getState().createBrowserTab(wt, 'https://previous.example.com')
@@ -101,6 +135,7 @@ describe('setActiveWorktree', () => {
       },
       activeWorktreeId: wt
     })
+    seedThreePaneLayout(store, wt)
     main = await drawTabsFromMain(store)
 
     store.getState().createTab(wt)
