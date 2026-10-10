@@ -1,6 +1,7 @@
 import type { AgentType, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { isNoiseMessage } from '../../shared/native-chat-noise'
+import { claudeBashInputAsTypedCommand } from '../../shared/claude-bash-input'
 import {
   asRecord,
   extractString,
@@ -120,10 +121,23 @@ export function decodeClaudeTurnLifecycle(
   // Why: harness noise (task-notification, system-reminder, …) is user-role in
   // the JSONL but not a new generation. Treating it as working would overwrite
   // a real terminal marker and re-stick the chat spinner after done/interrupt.
-  if (isNoiseMessage(decoded)) {
+  if (isNoiseMessage(decoded) || isClaudeBashInputRecord(record)) {
     return null
   }
   return { state: 'working', turnId: decoded.id, timestamp }
+}
+
+// Why: a `!` command runs in the shell and starts no generation; the decoder shows
+// it as a user row, but marking it working would stick the spinner.
+function isClaudeBashInputRecord(record: Record<string, unknown>): boolean {
+  const content = asRecord(record.message)?.content
+  const text =
+    typeof content === 'string'
+      ? content
+      : Array.isArray(content) && content.length === 1
+        ? extractString(asRecord(content[0])?.text)
+        : null
+  return text != null && claudeBashInputAsTypedCommand(text) !== null
 }
 
 function lifecycleTimestamp(value: unknown): number | null {
