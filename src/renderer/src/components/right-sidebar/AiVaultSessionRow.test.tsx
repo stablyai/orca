@@ -9,6 +9,8 @@ import type { AiVaultSessionWorktreeInfo } from './ai-vault-session-worktree'
 import { searchHit } from '../../../../shared/ai-vault-search-test-fixture'
 import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
 import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { VaultSessionRow } from './AiVaultSessionRow'
 
 const session = {
@@ -176,6 +178,45 @@ describe('VaultSessionRow native session actions', () => {
     await user.click(screen.getByTestId('ai-vault-session-more-actions'))
 
     expect(screen.queryByRole('menuitem', { name: 'Delete' })).toBeNull()
+  })
+})
+
+describe('VaultSessionRow remote Delete reason', () => {
+  const initialState = useAppStore.getState()
+  afterEach(() => {
+    useAppStore.setState(initialState, true)
+  })
+
+  async function deleteItemName(remoteSession: AiVaultSession): Promise<string> {
+    renderRow({ session: remoteSession })
+    const user = userEvent.setup()
+    await user.click(screen.getByTestId('ai-vault-session-more-actions'))
+    const item = await screen.findByRole('menuitem', { name: /^Delete\./ })
+    return item.getAttribute('aria-label') ?? ''
+  }
+
+  it('names an SSH host by its label, not its generated target id', async () => {
+    const targetId = 'ssh-1759012345678-k3j2h1'
+    useAppStore.setState({ sshTargetLabels: new Map([[targetId, 'Build box']]) })
+
+    const name = await deleteItemName({ ...session, executionHostId: `ssh:${targetId}` })
+
+    expect(name).toContain('This session is on Build box.')
+    expect(name).not.toContain(targetId)
+  })
+
+  it('names a runtime host by its environment name, not its id', async () => {
+    const environmentId = '7c9e6679-7425-40de-944b-e07fc1f90ae7'
+    useAppStore.setState({
+      runtimeEnvironments: [
+        { id: environmentId, name: 'GPU server' }
+      ] as unknown as AppState['runtimeEnvironments']
+    })
+
+    const name = await deleteItemName({ ...session, executionHostId: `runtime:${environmentId}` })
+
+    expect(name).toContain('This session is on GPU server.')
+    expect(name).not.toContain(environmentId)
   })
 })
 
