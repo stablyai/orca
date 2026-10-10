@@ -5,21 +5,22 @@ import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { normalizeGhAccountBinding } from '../../../../shared/github/account-binding'
 import {
-  findRepoForHost,
-  getRepoHostIdentityForParts,
-  repoMatchesHostIdentity
-} from '../slices/repo-host-identity'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+  assertRuntimeEnvironmentCapability,
+  callRuntimeRpc
+} from '../../runtime/runtime-rpc-client'
+import { REPO_UPDATE_EXECUTION_HOST_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
 } from '../../../../shared/worktree/visibility-sources'
 import type { RepoSlice, RepoUpdate } from './repo-state'
-import { repoWithFetchedOwner, settingsForRepoOwner } from './owner-routing'
-import { getRuntimeTargetHostId } from '../runtime-target-host'
-import { getProjectSetupRuntimeTarget } from '../projects/project-host-routing'
+import { repoWithFetchedOwner } from './owner-routing'
 import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-identity'
+import {
+  captureRepoUpdateOwner,
+  findCapturedRepoUpdateOwner,
+  repoUpdateResponseMatchesOwner
+} from './repo-update-owner'
 
 export function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
   const sanitized = { ...updates }
@@ -100,51 +101,64 @@ export function createRepoUpdateActions(
   return {
     updateRepo: async (projectId, updates, options) => {
       const updateRepoChains = getRepoUpdateChains(get)
-      // Why: pass options.hostId so a duplicate repo id across hosts resolves to the intended row, not the settings-focused fallback.
-      const ownerRepo = findRepoForHost(get().repos, projectId, {
-        settings: get().settings,
-        hostId: options?.hostId
-      })
-      if (!ownerRepo) {
+      const owner = captureRepoUpdateOwner(get(), projectId, options)
+      if (!owner) {
         return false
       }
-      // Why: an explicit hostId is authoritative; route to that host's target rather than the currently-focused runtime.
-      const ownerHasExplicitHost = Boolean(
-        options?.hostId || ownerRepo.executionHostId?.trim() || ownerRepo.connectionId?.trim()
-      )
-      const explicitOwnerHostId = getRepoExecutionHostId(ownerRepo)
-      const ownerTarget = ownerHasExplicitHost
-        ? getProjectSetupRuntimeTarget(explicitOwnerHostId)
-        : getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId))
-      const ownerHostId = ownerHasExplicitHost
-        ? explicitOwnerHostId
-        : getRuntimeTargetHostId(ownerTarget)
-      const updateChainKey = getRepoHostIdentityForParts(projectId, ownerHostId)
+      const updateChainKey = owner.queueKey
       const applyRepoUpdate = async () => {
         try {
           const sanitizedUpdates = sanitizeRepoUpdate(updates)
-          const target = ownerTarget
+          const target = owner.target
+          if (target.kind === 'environment' && owner.qualified) {
+            await assertRuntimeEnvironmentCapability(
+              target.environmentId,
+              REPO_UPDATE_EXECUTION_HOST_RUNTIME_CAPABILITY,
+              'Update Orca on the server to safely change this project setup.',
+              15_000
+            )
+          }
+          if (!findCapturedRepoUpdateOwner(get(), owner)) {
+            return false
+          }
           const updatedRepo =
             target.kind === 'local'
               ? await window.api.repos.update({
                   repoId: projectId,
                   updates: sanitizedUpdates,
-                  ...(ownerHasExplicitHost ? { hostId: ownerHostId } : {})
+                  ...(owner.explicitHost ? { hostId: owner.rawHostId } : {})
                 })
               : (
                   await callRuntimeRpc<{ repo: Repo }>(
                     target,
                     'repo.update',
-                    { repo: projectId, updates: sanitizedUpdates },
-                    { timeoutMs: 15_000 }
+                    {
+                      repo: projectId,
+                      updates: sanitizedUpdates,
+                      ...(owner.qualified ? { executionHostId: owner.rawHostId } : {})
+                    },
+                    {
+                      timeoutMs: 15_000,
+                      expectedEnvironmentPairingRevision: owner.pairingRevision,
+                      expectedEnvironmentRuntimeId: owner.runtimeId
+                    }
                   )
                 ).repo
+          if (
+            (owner.qualified && !updatedRepo) ||
+            (updatedRepo && !repoUpdateResponseMatchesOwner(updatedRepo, owner))
+          ) {
+            return false
+          }
+          let applied = false
           set((s) => {
+            const currentOwner = findCapturedRepoUpdateOwner(s, owner)
+            if (!currentOwner) {
+              return s
+            }
+            applied = true
             const nextRepos = s.repos.map((r) => {
-              const matchesOwner = ownerHasExplicitHost
-                ? repoMatchesHostIdentity(r, projectId, ownerHostId)
-                : repoMatchesHostIdentity(r, projectId, ownerHostId) || r === ownerRepo
-              if (!matchesOwner) {
+              if (r !== currentOwner) {
                 return r
               }
               if (updatedRepo) {
@@ -203,18 +217,20 @@ export function createRepoUpdateActions(
               ...mergeProjectCompatibilityForHostRepoChange({
                 previous: { projects: s.projects, projectHostSetups: s.projectHostSetups },
                 nextRepos,
-                hostId: ownerHostId
+                hostId: owner.publisherHostId
               }),
               folderWorkspacePathStatuses: {}
             }
           })
-          return true
+          return applied
         } catch (err) {
           console.error('Failed to update repo:', err)
           return false
         }
       }
-      const previous = updateRepoChains.get(updateChainKey)
+      // A first legacy reply can add raw ownership while earlier edits are still queued.
+      const previous =
+        updateRepoChains.get(updateChainKey) ?? updateRepoChains.get(owner.legacyQueueKey)
       // Why: settings persist as full nested values, so preserve per-repo call order — a slower response mustn't overwrite newer state.
       const next = previous
         ? previous.catch(() => undefined).then(applyRepoUpdate)

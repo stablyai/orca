@@ -62,6 +62,12 @@ export type RepoUpdate = Partial<
 
 export type ProjectUpdate = ProjectUpdateArgs['updates']
 
+export type RepoUpdateOwnerOptions = {
+  hostId?: ExecutionHostId
+  authoritativeExecutionHostId?: ExecutionHostId
+  catalogOwnerHostId?: ExecutionHostId
+}
+
 export type FolderWorkspaceUpdates = Partial<
   Pick<
     FolderWorkspace,
@@ -268,7 +274,7 @@ export type RepoSlice = {
   updateRepo: (
     projectId: string,
     updates: RepoUpdate,
-    options?: { hostId?: ExecutionHostId }
+    options?: RepoUpdateOwnerOptions
   ) => Promise<boolean>
   setActiveRepo: (projectId: string | null) => void
   reorderRepos: (orderedIds: string[]) => Promise<void>

@@ -72,9 +72,15 @@ export class RuntimeRepositorySettingsController {
     return updated
   }
 
-  async update(repoSelector: string, updates: RepositoryUpdates): Promise<Repo> {
+  async update(
+    repoSelector: string,
+    updates: RepositoryUpdates,
+    executionHostId?: ExecutionHostId
+  ): Promise<Repo> {
     const store = this.requireStore()
-    const repo = await this.deps.resolveRepo(repoSelector)
+    const repo = await (executionHostId === undefined
+      ? this.deps.resolveRepo(repoSelector)
+      : this.deps.resolveRepo(repoSelector, executionHostId))
     const sanitizedUpdates = omitUndefined(updates)
     if ('worktreeBasePath' in updates && updates.worktreeBasePath === undefined) {
       sanitizedUpdates.worktreeBasePath = undefined
@@ -88,7 +94,7 @@ export class RuntimeRepositorySettingsController {
     if ('sourceControlAi' in updates && updates.sourceControlAi === null) {
       sanitizedUpdates.sourceControlAi = null
     }
-    const updated = store.updateRepo(repo.id, sanitizedUpdates)
+    const updated = store.updateRepo(repo.id, sanitizedUpdates, getRepoExecutionHostId(repo))
     if (!updated) {
       throw new Error('repo_not_found')
     }

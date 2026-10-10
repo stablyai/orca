@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
 import { createRepoUpdateSchema } from './repo-update-params'
 import { RepoSelector } from './github-repo-target-params'
+import { OptionalExecutionHostId } from './worktree-params'
 
 export const RepoPath = z.object({
   path: requiredString('Missing repo path'),
@@ -25,7 +26,10 @@ export const RepoSetBaseRef = z.object({
   ref: requiredString('Missing base ref')
 })
 
-export const RepoUpdate = createRepoUpdateSchema(RepoSelector.shape)
+export const RepoUpdate = createRepoUpdateSchema({
+  ...RepoSelector.shape,
+  executionHostId: OptionalExecutionHostId
+})
 
 export const RepoSearchRefs = z.object({
   repo: requiredString('Missing repo selector'),

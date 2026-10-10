@@ -4,7 +4,8 @@ import type { OrcaHooks, RepoHookSettings } from '../../../../shared/orca-yaml-h
 import type { Project, ProjectUpdateArgs } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import type { RepoUpdateOwnerOptions } from '../../store/repos/repo-state'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
 import { useShallow } from 'zustand/react/shallow'
@@ -54,7 +55,7 @@ type RepositoryPaneProps = {
   updateRepo: (
     repoId: string,
     updates: RepositoryPaneRepoUpdate,
-    options?: { hostId?: ExecutionHostId }
+    options?: RepoUpdateOwnerOptions
   ) => void | Promise<boolean>
   removeProject: (repoId: string) => void
   project?: Project | null
@@ -92,15 +93,18 @@ export function RepositoryPane({
   updateProject
 }: RepositoryPaneProps): React.JSX.Element {
   const isFolder = isFolderRepo(repo)
-  // Why: this pane renders the switcher-selected host's repo row. Bind every
-  // edit to that host so identity/host-specific writes land on the selected
-  // host, not findRepoForHost's focused-host fallback (the same-id/self-pair
-  // case where local and a runtime share one repo id).
+  // Keep edits bound to the selected setup's publisher and raw execution owner.
   const selectedHostId = getRepoExecutionHostId(repo)
+  const selectedRawHostId = repo.authoritativeExecutionHostId
+  const selectedPublisherHostId = repo.catalogOwnerHostId
   const updateSelectedRepo = useCallback(
     (repoId: string, updates: RepositoryPaneRepoUpdate) =>
-      updateRepo(repoId, updates, { hostId: selectedHostId }),
-    [updateRepo, selectedHostId]
+      updateRepo(repoId, updates, {
+        hostId: selectedHostId,
+        ...(selectedRawHostId ? { authoritativeExecutionHostId: selectedRawHostId } : {}),
+        ...(selectedPublisherHostId ? { catalogOwnerHostId: selectedPublisherHostId } : {})
+      }),
+    [updateRepo, selectedHostId, selectedRawHostId, selectedPublisherHostId]
   )
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const settings = useAppStore((state) => state.settings)
