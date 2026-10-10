@@ -116,7 +116,11 @@ export async function bulkDiscardChanges(
     }
 
     const trackedPathSpecs = await listTrackedPathSpecs(worktreePath, filePaths, options)
-    const { trackedPaths, untrackedPaths } = partitionTrackedPathSpecs(filePaths, trackedPathSpecs)
+    const { trackedPaths, untrackedPaths } = partitionTrackedPathSpecs(
+      filePaths,
+      trackedPathSpecs,
+      process.platform === 'win32' || Boolean(options.wslDistro)
+    )
     await removeSafeUntrackedDiscardTargets(
       worktreePath,
       untrackedPaths,
