@@ -84,7 +84,10 @@ export function createStructuredAgentSessionConversationLifetime(host: {
     isDisposed: () => disposed,
     deliveryActive: host.deliveryActive,
     childWork: host.readChildWork,
-    getRecord: (sessionId) => deps().store.getRecord(sessionId),
+    store: {
+      getRecord: (sessionId) => deps().store.getRecord(sessionId),
+      replacedRuntime: (sessionId) => deps().store.replacedRuntime(sessionId)
+    },
     hasOpenDispatch: (sessionId) => {
       const record = deps().store.getRecord(sessionId)
       return record !== null && deps().hasOpenDispatch?.(record) === true

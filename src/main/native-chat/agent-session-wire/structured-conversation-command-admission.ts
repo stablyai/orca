@@ -28,7 +28,7 @@ export type ConversationCommandAdmissionContext = {
     snapshot(): Pick<ReturnType<AgentSessionJournal['snapshot']>, 'items'>
   }
   /** The host's projection of current work; without one, the generation at `fence` is live. */
-  currentWork?: () => StructuredAgentSessionCurrentWork
+  currentWork?: () => StructuredAgentSessionCurrentWork | null
   adapter: Pick<StructuredAgentSessionAdapter, 'backgroundTaskStops'>
 }
 

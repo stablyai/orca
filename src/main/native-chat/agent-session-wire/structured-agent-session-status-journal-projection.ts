@@ -69,7 +69,7 @@ export class StructuredAgentSessionJournalProjections {
     const work = structuredAgentSessionCurrentWork(journal, {
       record,
       replaced: record ? this.replacedRuntime?.(record.sessionId) : undefined,
-      ...(seen ? { child: seen.child ?? null } : {}),
+      child: seen?.child ?? null,
       ...(ended ? { ended } : {}),
       revision: seen?.operationalRevision ?? 0
     })

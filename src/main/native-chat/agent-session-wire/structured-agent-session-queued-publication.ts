@@ -19,8 +19,10 @@ import {
   nextStructuredQueuedMessage,
   type StructuredQueueGateInput
 } from './structured-agent-session-queued-messages'
-import { structuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
-import type { StructuredAgentSessionCurrentWorkHost } from './structured-agent-session-host-current-work'
+import {
+  heldStructuredAgentSessionCurrentWork,
+  type StructuredAgentSessionCurrentWorkHost
+} from './structured-agent-session-host-current-work'
 
 export type QueuePublication = {
   queuedMessages: AgentSessionQueuedMessage[]
@@ -51,17 +53,15 @@ export function structuredQueueSendGate(
 ): QueueSendGate {
   return (journal) => {
     const record = host.store.getRecord(sessionId)
-    const session = host.sessions.get(sessionId)
-    const ended = session?.lastEndedChild
     const abandoned = drain?.abandonedCard(sessionId)
     return {
       record,
-      work: structuredAgentSessionCurrentWork(journal, {
-        record,
-        replaced: host.store.replacedRuntime(sessionId),
-        ...(session ? { child: session.child } : {}),
-        ...(ended ? { ended } : {})
-      }),
+      work: heldStructuredAgentSessionCurrentWork(
+        host.store,
+        sessionId,
+        journal,
+        host.sessions.get(sessionId)
+      ),
       ...(drain ? { drainWaits: (messageId: string) => drain.waits(sessionId, messageId) } : {}),
       ...(abandoned ? { abandoned } : {})
     }

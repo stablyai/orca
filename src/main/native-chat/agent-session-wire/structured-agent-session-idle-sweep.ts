@@ -12,12 +12,14 @@ import { agentChildWorkLiveness } from '../../../shared/agent-status-child-work-
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
-  structuredAgentSessionCurrentWork,
   structuredAgentSessionHandsOver,
   type StructuredAgentSessionCurrentWork
 } from './structured-agent-session-current-work'
+import {
+  heldStructuredAgentSessionCurrentWork,
+  type StructuredAgentSessionCurrentWorkHost
+} from './structured-agent-session-host-current-work'
 
 export const STRUCTURED_AGENT_SESSION_IDLE_SWEEP_INTERVAL_MS = 5 * 60_000
 export const STRUCTURED_AGENT_SESSION_IDLE_MS = 30 * 60_000
@@ -37,8 +39,8 @@ export type StructuredAgentSessionIdleSweepDeps = {
   hasOpenDispatch: (sessionId: string) => boolean
   /** The provider holds a send it took and has not answered; see `holdsDispatch`. */
   providerHoldsDispatch: (sessionId: string) => boolean
-  /** The lease the current-work projection reads (`structuredAgentSessionCurrentWork`). */
-  getRecord: (sessionId: string) => AgentSessionRecord | null
+  /** The lease store the current-work projection reads (`heldStructuredAgentSessionCurrentWork`). */
+  store: StructuredAgentSessionCurrentWorkHost['store']
   /** Each of these runs inside the session's serialize and never takes it again. */
   stopAgent: (sessionId: string) => Promise<void>
   stopStartingAgent: (sessionId: string) => Promise<void>
@@ -170,10 +172,12 @@ export class StructuredAgentSessionIdleSweep {
       this.queuedOrDelivering(sessionId, session) ||
       structuredAgentSessionChildHasOpenWork({
         currentWork: () =>
-          structuredAgentSessionCurrentWork(session.journal, {
-            record: this.deps.getRecord(sessionId),
-            ...(session.lastEndedChild ? { ended: session.lastEndedChild } : {})
-          }),
+          heldStructuredAgentSessionCurrentWork(
+            this.deps.store,
+            sessionId,
+            session.journal,
+            session
+          ),
         childWork: () => this.deps.childWork(sessionId),
         hasOpenDispatch: () => this.deps.hasOpenDispatch(sessionId),
         providerHoldsDispatch: () => this.deps.providerHoldsDispatch(sessionId)

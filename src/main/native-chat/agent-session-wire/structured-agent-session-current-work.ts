@@ -21,7 +21,6 @@ import {
   type AgentJournalTurnScope
 } from '../../../shared/agent-session-journal-types'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import { agentSessionOwnerUnadjudicated } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionLatestTurn } from '../../../shared/agent-session-wire'
 import type { StructuredAgentSessionWorkScope } from '../../../shared/structured-agent-session-main-agent-working'
@@ -78,8 +77,7 @@ export function structuredAgentSessionLiveFence(
 function structuredAgentSessionOwnerUnverifiable(evidence: StructuredAgentSessionWorkEvidence) {
   const lease = evidence.record?.lease
   return (
-    lease !== undefined &&
-    agentSessionOwnerUnadjudicated(evidence.record) &&
+    (lease?.unreconciled === true || lease?.handoffStage === 'recovering') &&
     evidence.child !== undefined &&
     evidence.child?.fence !== lease.runtimeFence
   )
@@ -264,7 +262,7 @@ export function structuredAgentSessionCurrentWork(
 export function contextStructuredAgentSessionCurrentWork(ctx: {
   journal: StructuredAgentSessionCurrentWorkJournal
   fence: number
-  currentWork?: () => StructuredAgentSessionCurrentWork
+  currentWork?: () => StructuredAgentSessionCurrentWork | null
 }): StructuredAgentSessionCurrentWork {
   return ctx.currentWork?.() ?? new StructuredAgentSessionCurrentWork(ctx.journal, ctx.fence)
 }

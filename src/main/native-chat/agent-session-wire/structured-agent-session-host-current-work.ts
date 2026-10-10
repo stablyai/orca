@@ -5,7 +5,8 @@
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import {
   structuredAgentSessionCurrentWork,
-  type StructuredAgentSessionCurrentWork
+  type StructuredAgentSessionCurrentWork,
+  type StructuredAgentSessionCurrentWorkJournal
 } from './structured-agent-session-current-work'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 
@@ -31,12 +32,26 @@ export function hostStructuredAgentSessionCurrentWork(
 ): StructuredAgentSessionCurrentWork | null {
   const session = host.sessions.get(sessionId)
   return session
-    ? structuredAgentSessionCurrentWork(session.journal, {
-        record: host.store.getRecord(sessionId),
-        replaced: host.store.replacedRuntime(sessionId),
-        child: session.child,
-        ...(session.lastEndedChild ? { ended: session.lastEndedChild } : {}),
-        revision: session.operationalRevision ?? 0
-      })
+    ? heldStructuredAgentSessionCurrentWork(host.store, sessionId, session.journal, session)
     : null
+}
+
+/** The one current work every host reader decides and displays by: this host's child is always
+ *  evidence (none held reads as none), so an action never reads work the display does not show. */
+export function heldStructuredAgentSessionCurrentWork(
+  store: StructuredAgentSessionCurrentWorkHost['store'],
+  sessionId: string,
+  journal: StructuredAgentSessionCurrentWorkJournal,
+  session:
+    | Pick<StructuredAgentSessionHostSession, 'lastEndedChild' | 'operationalRevision' | 'child'>
+    | undefined
+): StructuredAgentSessionCurrentWork {
+  const ended = session?.lastEndedChild
+  return structuredAgentSessionCurrentWork(journal, {
+    record: store.getRecord(sessionId),
+    replaced: store.replacedRuntime(sessionId),
+    child: session?.child ?? null,
+    ...(ended ? { ended } : {}),
+    revision: session?.operationalRevision ?? 0
+  })
 }

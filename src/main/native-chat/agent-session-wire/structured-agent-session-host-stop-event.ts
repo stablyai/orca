@@ -1,10 +1,8 @@
 // The Stop event a host stop writes (`JournalStopEvent`): whether it ends work its event must
 // record, and the write itself, issued before the kill.
 
-import {
-  structuredAgentSessionCurrentWork,
-  type StructuredAgentSessionCurrentWork
-} from './structured-agent-session-current-work'
+import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
+import { heldStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import type { StructuredAgentSessionStopCause } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
@@ -66,11 +64,12 @@ export async function stopEndsWork(
     'slow' as const
   )
   // The child is live: the work its stop ends is its generation's.
-  const work = structuredAgentSessionCurrentWork(journal, {
-    record: context.deps.store.getRecord(sessionId),
-    replaced: context.deps.store.replacedRuntime(sessionId),
-    ...(session.lastEndedChild ? { ended: session.lastEndedChild } : {})
-  })
+  const work = heldStructuredAgentSessionCurrentWork(
+    context.deps.store,
+    sessionId,
+    journal,
+    session
+  )
   const working =
     (drain === 'slow' && journal.stopMarks.latestAcceptedSendUnopened()) || work.working()
   return working && (ending.cause === 'user-close' || !defersToPersonsStop(session, work))
@@ -109,11 +108,12 @@ export function recordStopEvent(
     return Promise.resolve(null)
   }
   const fence = structuredAgentSessionConversationFence(context.deps.store, sessionId)
-  const turnId = structuredAgentSessionCurrentWork(session.journal, {
-    record: context.deps.store.getRecord(sessionId),
-    replaced: context.deps.store.replacedRuntime(sessionId),
-    ...(session.lastEndedChild ? { ended: session.lastEndedChild } : {})
-  }).activeTurnId()
+  const turnId = heldStructuredAgentSessionCurrentWork(
+    context.deps.store,
+    sessionId,
+    session.journal,
+    session
+  ).activeTurnId()
   return session.journal
     .appendStopEvent({ reason: ending.cause, ...(turnId !== null ? { turnId } : {}) }, fence)
     .then(

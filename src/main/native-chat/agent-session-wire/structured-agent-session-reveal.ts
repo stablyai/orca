@@ -10,7 +10,6 @@
 // a send does. And a journal it cannot open is not a refusal — the chat shows that failure with a
 // Retry, so the tab is worth publishing either way.
 
-import { agentSessionOwnerUnadjudicated } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
 import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import { journalOpenRefusal } from '../agent-session-journal/journal-open-failure'
@@ -113,7 +112,8 @@ export function createStructuredAgentSessionHostRestore(
   let restoring = false
   const latchedTargets = () => {
     for (const sessionId of restoreTargets) {
-      if (!agentSessionOwnerUnadjudicated(deps.store.getRecord(sessionId))) {
+      const lease = deps.store.getRecord(sessionId)?.lease
+      if (!lease?.unreconciled && lease?.handoffStage !== 'recovering') {
         restoreTargets.delete(sessionId)
       }
     }
@@ -192,7 +192,7 @@ export function createStructuredAgentSessionHostRestore(
       // Once, as the restorer restores once.
       for (const { sessionId, lease } of restoring ? [] : deps.store.listRecords()) {
         if (
-          agentSessionOwnerUnadjudicated({ lease }) &&
+          (lease.unreconciled || lease.handoffStage === 'recovering') &&
           (!sessionIds || sessionIds.includes(sessionId))
         ) {
           restoreTargets.add(sessionId)

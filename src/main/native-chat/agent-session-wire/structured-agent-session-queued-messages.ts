@@ -18,7 +18,6 @@ import { queuedSendAnswer } from './structured-agent-session-queued-send-answer'
 import { structuredAgentSessionSendBlock } from './structured-agent-session-send-preparation'
 import { queuedMessagesPublishedBytesRefusal } from './structured-agent-session-queued-published-bytes'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import { agentSessionOwnerUnadjudicated } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   contextStructuredAgentSessionCurrentWork,
@@ -105,9 +104,7 @@ export function structuredQueueHold(input: StructuredQueueGateInput): Structured
   if (input.work.hasActionablePrompt()) {
     return 'prompt'
   }
-  // Delivery reads the owner's adjudication, not what is shown: an owner none has concluded about
-  // may still run, so its queue waits as a live one's does, though nothing it left reads working.
-  return agentSessionOwnerUnadjudicated(input.record) || input.work.working() ? 'working' : null
+  return input.work.working() ? 'working' : null
 }
 
 /** The card the drain sends next, or null while anything holds the queue: the drain's own pick

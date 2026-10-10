@@ -11,6 +11,7 @@ import { agentSessionOperationKey } from '../../../shared/agent-session-operatio
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import { sendPreparation } from './structured-agent-session-send-preparation'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
+import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import { conversationCommandBlocked } from './structured-conversation-command-admission'
 import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import {
@@ -69,7 +70,8 @@ export function runStructuredConversationCommand(
       // Starts the agent only to settle a rewind in doubt, as a send does; a /clear itself starts nothing.
       prepareSession: sendPreparation(context, envelope, { refusesInRun: true }),
       journal: () => context.sessions.get(sessionId)?.journal,
-      endedChild: () => context.sessions.get(sessionId)?.lastEndedChild,
+      currentWork: () =>
+        hostStructuredAgentSessionCurrentWork({ store, sessions: context.sessions }, sessionId),
       publish: (journal) => context.publish(sessionId, journal),
       now: context.now,
       plan: {

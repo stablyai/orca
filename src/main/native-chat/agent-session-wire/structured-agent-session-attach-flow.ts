@@ -36,7 +36,7 @@ import type { StructuredAgentRegistry } from './structured-agent-registry'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
 import { readAgentSessionHydrationPage } from './agent-session-history-page'
-import { structuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
+import { heldStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import { acquireOwner } from './structured-agent-session-acquisition'
 import {
   importAdoptedTranscript,
@@ -289,7 +289,7 @@ export async function performAttach(
       page: readAgentSessionHydrationPage(
         attached.journal,
         fence,
-        structuredAgentSessionCurrentWork(attached.journal, { record })
+        heldStructuredAgentSessionCurrentWork(store, sessionId, attached.journal, undefined)
       ),
       unconfirmedClientMessageIds: attached.unconfirmedClientMessageIds,
       ...(tabId ? { tabId } : {})

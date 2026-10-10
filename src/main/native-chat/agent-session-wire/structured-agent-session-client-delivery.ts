@@ -16,7 +16,7 @@ import type {
 } from './structured-agent-session-host-types'
 import { AGENT_SESSION_NOT_ATTACHED } from './structured-agent-session-mutation-admission'
 import { StructuredAgentSessionSendSettlement } from './structured-agent-session-send-settlement'
-import { structuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
+import { heldStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import type { StructuredAgentSessionStatusSubscriber } from './structured-agent-session-status-feed'
 import { createStructuredAgentSessionHostStatusFeed } from './structured-agent-session-host-status-feed'
@@ -199,14 +199,7 @@ export class StructuredAgentSessionClientDelivery {
   /** The current-work projection over this journal (`structuredAgentSessionCurrentWork`). */
   private currentWork(sessionId: string, journal: AgentSessionJournal) {
     const session = this.sessions.get(sessionId)
-    const ended = session?.lastEndedChild
-    return structuredAgentSessionCurrentWork(journal, {
-      record: this.deps().store.getRecord(sessionId),
-      replaced: this.deps().store.replacedRuntime(sessionId),
-      ...(session ? { child: session.child } : {}),
-      ...(ended ? { ended } : {}),
-      revision: session?.operationalRevision ?? 0
-    })
+    return heldStructuredAgentSessionCurrentWork(this.deps().store, sessionId, journal, session)
   }
 
   private settlementReading(sessionId: string, journal: AgentSessionJournal) {

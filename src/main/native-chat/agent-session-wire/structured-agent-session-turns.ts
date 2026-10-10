@@ -59,7 +59,7 @@ export type AgentSessionTurnContext = {
   fence: number
   /** The host's projection of what work is current (`structuredAgentSessionCurrentWork`), read
    *  fresh per call: a child's end can move it mid-operation. */
-  currentWork?: () => StructuredAgentSessionCurrentWork
+  currentWork?: () => StructuredAgentSessionCurrentWork | null
   adapter: StructuredAgentSessionAdapter
   /** What each agent declares; the session's own answer is `agents.capabilities(agent)`. */
   agents: StructuredAgentRegistry

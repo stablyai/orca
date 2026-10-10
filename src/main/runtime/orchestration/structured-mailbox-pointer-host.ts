@@ -18,7 +18,6 @@ import {
   type StructuredSessionGateFacts
 } from './structured-session-pointer-delivery'
 import { sendAgentTurn } from './send-agent-turn'
-import { agentSessionOwnerUnadjudicated } from '../../../shared/agent-session-lease-adjudication'
 
 /** Names the dispatch a nudge belongs to on the operation row it writes. */
 export function structuredPointerCallerKey(dispatchId: string): string {
@@ -52,12 +51,8 @@ export async function readStructuredSessionGateFacts(
     return null
   }
   // The host's projection of current work: an agent that ended is idle, whatever its rows say.
-  const host = getStructuredAgentSessionHost()
-  const facts = structuredSessionGateFacts(snapshot.items, host?.currentWork(sessionId)?.scope)
-  // An owner no adjudication has concluded about may still run: never idle, as its queue holds.
-  return agentSessionOwnerUnadjudicated(host?.deps.store.getRecord(sessionId))
-    ? { ...facts, turnRunning: true }
-    : facts
+  const work = getStructuredAgentSessionHost()?.currentWork(sessionId)
+  return structuredSessionGateFacts(snapshot.items, work?.scope)
 }
 
 /** What each recorded send settled as. */
