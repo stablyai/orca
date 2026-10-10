@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { chmod, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { grantDirAclAsync, isPermissionError } from '../win32-utils'
+import { isNewerManagedScript, recordManagedScript } from './managed-script-generation'
 
 type ExistingScript = { exists: false } | { exists: true; content: string | null }
 
@@ -84,6 +85,14 @@ async function writeManagedScriptAtomically(
     if (process.platform !== 'win32') {
       await chmod(scriptPath, 0o755)
     }
+    await recordManagedScript(scriptPath, content)
+    return true
+  }
+  if (
+    existing.exists &&
+    existing.content !== null &&
+    (await isNewerManagedScript(scriptPath, existing.content))
+  ) {
     return true
   }
 
@@ -97,6 +106,7 @@ async function writeManagedScriptAtomically(
       return false
     }
     await rename(tmpPath, scriptPath)
+    await recordManagedScript(scriptPath, content)
     return true
   } finally {
     await rm(tmpPath, { force: true }).catch(() => undefined)

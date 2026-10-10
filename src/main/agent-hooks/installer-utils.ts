@@ -15,6 +15,7 @@ import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { resolveHooksJsonWritePath } from './hook-config-write-path'
 import { writeRollingFileBackup } from '../rolling-file-backup'
+import { isNewerManagedScriptSync, recordManagedScriptSync } from './managed-script-generation'
 
 export type HookCommandConfig = {
   type: 'command'
@@ -232,10 +233,15 @@ export function writeManagedScript(scriptPath: string, content: string): void {
 
   if (existsSync(scriptPath)) {
     try {
-      if (readFileSync(scriptPath, 'utf-8') === content) {
+      const existing = readFileSync(scriptPath, 'utf-8')
+      if (existing === content) {
         if (process.platform !== 'win32') {
           chmodSync(scriptPath, 0o755)
         }
+        recordManagedScriptSync(scriptPath, content)
+        return
+      }
+      if (isNewerManagedScriptSync(scriptPath, existing)) {
         return
       }
     } catch {
@@ -251,6 +257,7 @@ export function writeManagedScript(scriptPath: string, content: string): void {
       chmodSync(tmpPath, 0o755)
     }
     renameSync(tmpPath, scriptPath)
+    recordManagedScriptSync(scriptPath, content)
   } finally {
     if (existsSync(tmpPath)) {
       try {

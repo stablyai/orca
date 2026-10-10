@@ -15,6 +15,7 @@ import {
   utimesSync,
   writeFileSync
 } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as osModule from 'node:os'
@@ -68,6 +69,65 @@ import {
   MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS
 } from './managed-agent-hook-registry'
 import { ClaudeHookService } from '../claude/hook-service'
+import { MANAGED_SCRIPT_GENERATION, MANAGED_SCRIPT_LEDGER_FILE } from './managed-script-generation'
+
+// Digest of every shared launcher script each platform's installers write, for the generation
+// those bytes belong to. A failure here means a managed script changed: bump
+// MANAGED_SCRIPT_GENERATION in managed-script-generation.ts and paste the new digests.
+const MANAGED_SCRIPT_DIGESTS = {
+  generation: 1,
+  darwin: '0931080d8b67f65126ea3391754780987398d2273d586003d49d36c59695f9e1',
+  linux: '0931080d8b67f65126ea3391754780987398d2273d586003d49d36c59695f9e1',
+  win32: 'e229f76bba6ce6790f6daa4235d8109220be26069b5c7a090a99424abb074838'
+}
+
+const AGENT_HOME_ENV = ['GROK_HOME', 'KIMI_CODE_HOME', 'XDG_CONFIG_HOME'] as const
+
+async function installedScriptsDigest(platform: NodeJS.Platform): Promise<string> {
+  const home = mkdtempSync(join(tmpdir(), 'orca-hook-digest-'))
+  homedirMock.mockReturnValue(home)
+  const savedEnv = AGENT_HOME_ENV.map((key) => [key, process.env[key]] as const)
+  for (const key of AGENT_HOME_ENV) {
+    delete process.env[key]
+  }
+  try {
+    await withPlatform(platform, async () => {
+      for (const [, install] of MANAGED_AGENT_HOOK_INSTALLERS) {
+        await install()
+      }
+    })
+    const hooksDir = join(home, '.orca', 'agent-hooks')
+    const hash = createHash('sha256')
+    // Why top level only: subdirectories hold per-run state (grok-owners/), not scripts.
+    const files = readdirSync(hooksDir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name !== MANAGED_SCRIPT_LEDGER_FILE)
+      .map((entry) => entry.name)
+      .sort()
+    for (const file of files) {
+      // Why: scripts may name the home, userData and Node binary (also inside PowerShell's
+      // base64 -EncodedCommand), which differ per run and per machine.
+      const text = readFileSync(join(hooksDir, file), 'utf8')
+        .replaceAll(/-EncodedCommand ([A-Za-z0-9+/=]+)/g, (_match, encoded: string) =>
+          Buffer.from(encoded, 'base64').toString('utf16le')
+        )
+        .replaceAll(home, '<home>')
+        .replaceAll(isolatedUserDataDir, '<userData>')
+        .replaceAll(process.execPath, '<node>')
+      hash.update(`${file}\0${text}\0`)
+    }
+    return hash.digest('hex')
+  } finally {
+    homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
+    for (const [key, value] of savedEnv) {
+      if (value === undefined) {
+        delete process.env[key]
+      } else {
+        process.env[key] = value
+      }
+    }
+    rmSync(home, { recursive: true, force: true })
+  }
+}
 
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => T | Promise<T>): Promise<T> {
   const original = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -163,7 +223,7 @@ describe('managed hook script refresh', () => {
         }
       })
       const hooksDir = join(home, '.orca', 'agent-hooks')
-      const files = readdirSync(hooksDir)
+      const files = readdirSync(hooksDir).filter((file) => file !== MANAGED_SCRIPT_LEDGER_FILE)
       expect(files.length).toBeGreaterThan(0)
       const refresherAgents = MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS.map(([agent]) => agent)
       // Why: an installer that writes a shared launcher but skips the refresher list would
@@ -219,4 +279,19 @@ describe('managed hook script refresh', () => {
       rmSync(home, { recursive: true, force: true })
     }
   })
+})
+
+describe('managed script generation', () => {
+  // Why not on Windows: the pin emulates each platform, and a Windows host's path module would
+  // write backslash paths no other host produces.
+  it.skipIf(process.platform === 'win32')(
+    'pins the generation to the bytes the installers write',
+    async () => {
+      const actual = { generation: MANAGED_SCRIPT_GENERATION, darwin: '', linux: '', win32: '' }
+      for (const platform of ['darwin', 'linux', 'win32'] as const) {
+        actual[platform] = await installedScriptsDigest(platform)
+      }
+      expect(actual).toEqual(MANAGED_SCRIPT_DIGESTS)
+    }
+  )
 })
