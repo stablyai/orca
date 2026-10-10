@@ -232,6 +232,19 @@ describe('resolveWorkspaceAgentDetectionHost on a Windows host', () => {
       context: wslContext('Ubuntu-24.04', 'r1', 'project-override')
     })
   })
+  it('refuses a folder whose candidate repos live on different SSH hosts', () => {
+    const s = store({
+      repos: [
+        repo({ id: 'a', path: '/srv/a', executionHostId: 'ssh:one', projectGroupId: 'g1' }),
+        repo({ id: 'b', path: '/srv/b', executionHostId: 'ssh:two', projectGroupId: 'g1' })
+      ],
+      projectGroups: [GROUP],
+      folderWorkspaces: [{ ...FOLDER, folderPath: '/srv' }]
+    })
+    expect(() => resolveFor(s, folderWorkspaceKey('f1'))).toThrow(
+      'worktree_execution_host_unresolved'
+    )
+  })
 })
 
 describe('preflight.detectAgents resolves the workspace on the host', () => {

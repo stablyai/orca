@@ -105,6 +105,9 @@ function resolveFolderWorkspace(
   if (host.kind === 'ssh') {
     return { kind: 'ssh', connectionId: host.targetId }
   }
+  if (host.kind === 'ambiguous') {
+    throw new Error('worktree_execution_host_unresolved')
+  }
   const folder = state.folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
   const candidates = findFolderWorkspaceCandidateRepos(state, folderWorkspaceId)
   // Why one candidate: a folder spanning several repos has no single project runtime to pick.
