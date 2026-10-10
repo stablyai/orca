@@ -27,6 +27,19 @@ export type E2EEKeypair = {
   publicKeyB64: string
 }
 
+// The listener decrypts with the secret key, so the advertised key must be the
+// one derived from it; a file whose stored public key disagrees would otherwise
+// put a key in every pairing offer that no listener holds. The file is left as is.
+function keypairFromSecret(secretKey: Uint8Array, storedPublicKey: Uint8Array): E2EEKeypair {
+  const { publicKey } = nacl.box.keyPair.fromSecretKey(secretKey)
+  if (!Buffer.from(publicKey).equals(Buffer.from(storedPublicKey))) {
+    console.warn(
+      '[e2ee] stored public key does not match the secret key; advertising the derived key'
+    )
+  }
+  return { publicKey, secretKey, publicKeyB64: Buffer.from(publicKey).toString('base64') }
+}
+
 export function loadOrCreateE2EEKeypair(userDataPath: string): E2EEKeypair {
   const filePath = join(userDataPath, KEYPAIR_FILENAME)
 
@@ -43,7 +56,7 @@ export function loadOrCreateE2EEKeypair(userDataPath: string): E2EEKeypair {
         const publicKey = Uint8Array.from(Buffer.from(raw.publicKeyB64, 'base64'))
         const secretKey = Uint8Array.from(Buffer.from(raw.secretKeyB64, 'base64'))
         if (publicKey.length === 32 && secretKey.length === 32) {
-          return { publicKey, secretKey, publicKeyB64: raw.publicKeyB64 }
+          return keypairFromSecret(secretKey, publicKey)
         }
       }
     } catch (error) {
