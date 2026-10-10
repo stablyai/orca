@@ -287,11 +287,9 @@ export function DictationController() {
     }
 
     const handleKeyDown = (): void => {
-      if (
-        !settings?.voice?.enabled ||
-        !settings.voice.sttModel ||
-        dictationStateRef.current === 'stopping'
-      ) {
+      // Why: no early-return on a missing sttModel — startDictation() below is what
+      // owns the "No speech model selected" toast, so it must still get called.
+      if (!settings?.voice?.enabled || dictationStateRef.current === 'stopping') {
         return
       }
       if (dictationStateRef.current === 'listening' || dictationStateRef.current === 'starting') {
@@ -312,7 +310,9 @@ export function DictationController() {
   ])
 
   useEffect(() => {
-    const canDictate = (): boolean => Boolean(settings?.voice?.enabled && settings.voice.sttModel)
+    // Why: same as handleKeyDown above — don't gate on sttModel here, or
+    // startDictation()'s "No speech model selected" toast never gets a chance to fire.
+    const canDictate = (): boolean => Boolean(settings?.voice?.enabled)
     const handleControl = (event: Event): void => {
       if (!canDictate() || dictationStateRef.current === 'stopping') {
         return
