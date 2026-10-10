@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, type MutableRefObject } from 'react'
 import {
-  buildAskAnswerKeys,
-  buildCodexAskAnswerKeys,
+  buildNativeChatAskAnswerKeys,
   formatAskAnswer,
   hasAskAnswer,
   type AskAnswerSelection,
@@ -18,12 +17,9 @@ import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
 } from './mobile-native-chat-terminal-write-lock'
-import {
-  resolveNativeChatTranscriptAgent,
-  shouldStepNativeChatAskAnswer
-} from '../../../src/shared/native-chat-agent-support'
+import { shouldStepNativeChatAskAnswer } from '../../../src/shared/native-chat-agent-support'
 
-/** Sends an ask-user answer to the active chat pane. Claude and Codex selectors
+/** Sends an ask-user answer to the active chat pane. Claude, Codex and OMP selectors
  *  use their agent-specific keystrokes; other agents get pasted label text.
  *  Extracted from the session route to keep that file under its line cap and to
  *  own the pending-timer lifecycle in one place. */
@@ -224,7 +220,7 @@ export function useMobileNativeChatAnswerSend(args: {
           }
           return false
         }
-        // Grok commits pasted labels; Claude and Codex need their selector-specific
+        // Grok commits pasted labels; Claude, Codex and OMP need their selector-specific
         // keystrokes paced so each step renders before the next lands.
         if (!shouldStepNativeChatAskAnswer(agentRef.current)) {
           // This shape pastes the label into the composer and commits it, so an
@@ -259,10 +255,7 @@ export function useMobileNativeChatAnswerSend(args: {
           const sent = (await sendTerminal(formatAskAnswer(prompt, selections), true)) || fail()
           return sent && writeTurnsRef.current.get(handle) === turn
         }
-        const groups =
-          resolveNativeChatTranscriptAgent(agentRef.current) === 'codex'
-            ? buildCodexAskAnswerKeys(prompt, selections)
-            : buildAskAnswerKeys(prompt, selections)
+        const groups = buildNativeChatAskAnswerKeys(agentRef.current, prompt, selections)
         for (let index = 0; index < groups.length; index += 1) {
           if (generationRef.current !== generation) {
             return false

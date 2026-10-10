@@ -8,6 +8,7 @@ import {
   extractPendingAsk,
   nativeChatAskDismissKey,
   parseAskFromStatus,
+  parseAskFromToolInput,
   resolveNativeChatAsk
 } from './native-chat-ask'
 
@@ -221,5 +222,19 @@ describe('resolveNativeChatAsk', () => {
     expect(resolveNativeChatAsk({ liveAsk, messages: transcript, transcriptSettled: false })).toBe(
       liveAsk
     )
+  })
+})
+
+describe('parseAskFromToolInput OMP multi flag', () => {
+  it('treats OMP multi: true as a multi-select question', () => {
+    expect(
+      parseAskFromToolInput('AskUserQuestion', {
+        questions: [{ question: 'Q', options: [{ label: 'A' }], multi: true }]
+      })
+    ).toEqual({
+      questions: [
+        { question: 'Q', header: undefined, multiSelect: true, options: [{ label: 'A' }] }
+      ]
+    })
   })
 })

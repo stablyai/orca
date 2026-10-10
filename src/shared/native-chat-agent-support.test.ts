@@ -55,7 +55,7 @@ describe('nativeChatRequiresLocalTranscript', () => {
 })
 
 describe('shouldStepNativeChatAskAnswer', () => {
-  it('steps the digit-commit selector agents (Claude, OpenClaude, Codex)', () => {
+  it('steps the selector agents (Claude, OpenClaude, Codex, OpenCode, OMP)', () => {
     expect(shouldStepNativeChatAskAnswer('claude')).toBe(true)
     expect(shouldStepNativeChatAskAnswer('openclaude')).toBe(true)
     // Codex 0.145's request_user_input card ignores typed labels and commits on
@@ -63,11 +63,11 @@ describe('shouldStepNativeChatAskAnswer', () => {
     expect(shouldStepNativeChatAskAnswer('codex')).toBe(true)
     expect(shouldStepNativeChatAskAnswer('opencode')).toBe(true)
     expect(shouldStepNativeChatAskAnswer('opencode2')).toBe(true)
+    expect(shouldStepNativeChatAskAnswer('omp')).toBe(true)
   })
 
   it('does not step other or unknown agents', () => {
     expect(shouldStepNativeChatAskAnswer('grok')).toBe(false)
-    expect(shouldStepNativeChatAskAnswer('omp')).toBe(false)
     expect(shouldStepNativeChatAskAnswer('cursor')).toBe(false)
     expect(shouldStepNativeChatAskAnswer(null)).toBe(false)
     expect(shouldStepNativeChatAskAnswer(undefined)).toBe(false)

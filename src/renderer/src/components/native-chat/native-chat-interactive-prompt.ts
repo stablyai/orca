@@ -7,6 +7,8 @@ import type {
 import {
   buildAskAnswerKeys,
   buildCodexAskAnswerKeys,
+  buildNativeChatAskAnswerKeys,
+  buildOmpAskAnswerKeys,
   formatAskAnswer,
   hasAskAnswer,
   parseAskFromStatus,
@@ -22,6 +24,8 @@ import {
 export {
   buildAskAnswerKeys,
   buildCodexAskAnswerKeys,
+  buildNativeChatAskAnswerKeys,
+  buildOmpAskAnswerKeys,
   formatAskAnswer,
   hasAskAnswer,
   parseAskFromStatus,
