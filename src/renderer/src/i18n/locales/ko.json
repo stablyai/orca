@@ -5299,7 +5299,9 @@
           "b79b39d865": "프로젝트 제거",
           "removeDescriptionSsh": "이 작업은 {{name}}을(를) Orca에서 제거만 합니다. 파일은 {{host}}에 그대로 남아 있으며, 해당 SSH 호스트를 다시 추가하면 복구할 수 있습니다.",
           "removeDescriptionLocal": "이 작업은 {{name}}을(를) Orca에서 제거만 합니다. 파일은 디스크에 그대로 남아 있습니다.",
-          "removeDescriptionVmRecipe": "이렇게 하면 Orca에서 {{name}}이(가) 제거됩니다. 해당 VM 레시피에 따라 환경과 해당 파일이 영구적으로 삭제되는지 여부가 결정됩니다."
+          "removeDescriptionVmRecipe": "이렇게 하면 Orca에서 {{name}}이(가) 제거됩니다. 해당 VM 레시피에 따라 환경과 해당 파일이 영구적으로 삭제되는지 여부가 결정됩니다.",
+          "openTerminalWarningOne": "이 프로젝트에서 열려 있는 터미널 1개가 닫힙니다.",
+          "openTerminalWarningMany": "이 프로젝트에서 열려 있는 터미널 {{count}}개가 닫힙니다."
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "활성 워크스페이스로 이동"
