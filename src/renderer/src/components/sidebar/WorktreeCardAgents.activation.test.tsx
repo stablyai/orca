@@ -225,7 +225,11 @@ describe('WorktreeCardAgents activation', () => {
     renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
     capturedRowActivations[0].onActivate(tabId, paneKey)
 
-    expect(ownerActivationMocks.activateTerminalTabOnOwner).toHaveBeenCalledWith('wt-1', tabId)
+    expect(ownerActivationMocks.activateTerminalTabOnOwner).toHaveBeenCalledWith(
+      'wt-1',
+      tabId,
+      LEAF_A
+    )
     expect(activationMocks.activateTabAndFocusPane).toHaveBeenCalledWith(
       tabId,
       LEAF_A,
@@ -246,7 +250,11 @@ describe('WorktreeCardAgents activation', () => {
     renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
     capturedRowActivations[0].onActivate(tabId, paneKey)
 
-    expect(ownerActivationMocks.activateTerminalTabOnOwner).toHaveBeenCalledWith('wt-1', tabId)
+    expect(ownerActivationMocks.activateTerminalTabOnOwner).toHaveBeenCalledWith(
+      'wt-1',
+      tabId,
+      LEAF_A
+    )
     expect(activationMocks.activateTabAndFocusPane).not.toHaveBeenCalled()
     expect(staleAgentRowMocks.dismissStaleAgentRowByKey).not.toHaveBeenCalled()
   })

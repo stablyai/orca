@@ -19,7 +19,7 @@ export function revealDashboardAgent(args: DashboardRevealAgentArgs): boolean {
   if (activated === false) {
     return false
   }
-  activateTerminalTabOnOwner(args.worktreeId, args.tabId)
   activateTabAndFocusPane(args.tabId, args.leafId, { flashFocusedPane: true })
+  activateTerminalTabOnOwner(args.worktreeId, args.tabId, args.leafId)
   return true
 }

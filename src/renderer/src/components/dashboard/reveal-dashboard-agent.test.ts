@@ -36,10 +36,14 @@ describe('revealDashboardAgent', () => {
 
     expect(revealDashboardAgent(args)).toBe(true)
 
-    expect(mocks.activateTerminalTabOnOwner).toHaveBeenCalledWith('wt-1', args.tabId)
+    expect(mocks.activateTerminalTabOnOwner).toHaveBeenCalledWith('wt-1', args.tabId, args.leafId)
     expect(mocks.activateTabAndFocusPane).toHaveBeenCalledWith(args.tabId, args.leafId, {
       flashFocusedPane: true
     })
+    // Why: the owner call captures the visible tab, so it must follow the local activation.
+    expect(mocks.activateTabAndFocusPane.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.activateTerminalTabOnOwner.mock.invocationCallOrder[0]
+    )
   })
 
   it('touches no tab when the workspace cannot be revealed', () => {
