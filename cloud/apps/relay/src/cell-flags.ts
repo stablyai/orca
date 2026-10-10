@@ -11,12 +11,15 @@ export type CellFlags = {
   admitMode: 'db' | 'reserve'
   // Bookings per second this cell accepts; absent means its region's default.
   intakePerSec?: number
+  // Answers a director's dry-run booking check; off, the reserve endpoint is inert in db mode.
+  reserveDryRun: boolean
 }
 
 export const CELL_FLAG_DEFAULTS: CellFlags = {
   readinessLocal: false,
   ticketCheck: 'off',
-  admitMode: 'db'
+  admitMode: 'db',
+  reserveDryRun: false
 }
 
 // Until E-pre measures each cell's accept rate (S3 §4.2).
@@ -30,7 +33,8 @@ const CellFlagsSchema = z.object({
   readinessLocal: z.boolean().default(CELL_FLAG_DEFAULTS.readinessLocal),
   ticketCheck: z.enum(['off', 'shadow', 'enforce']).default(CELL_FLAG_DEFAULTS.ticketCheck),
   admitMode: z.enum(['db', 'reserve']).default(CELL_FLAG_DEFAULTS.admitMode),
-  intakePerSec: z.number().positive().max(1_000).optional()
+  intakePerSec: z.number().positive().max(1_000).optional(),
+  reserveDryRun: z.boolean().default(CELL_FLAG_DEFAULTS.reserveDryRun)
 })
 
 export function cellFlagObjectName(cellId: string): string {

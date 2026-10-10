@@ -224,6 +224,24 @@ describe('a reserve-mode cell admits from memory with its database wedged', () =
     }
   }
 
+  it('answers a director dry run only while reserveDryRun is on, and books nothing either way', async () => {
+    const cell = await startCell({})
+    const identity = await cell.host()
+    const check = () =>
+      cell.relay.sessions.reserve({
+        v: 1,
+        directorId: 'director-a',
+        dryRun: true,
+        items: [{ userId: 'user-1', relayHostId: identity.hostId, epoch: 7, ttlMs: 30_000 }]
+      })
+    expect(check()).toEqual([{ outcome: 'off' }])
+    cell.setFlags({ reserveDryRun: true })
+    expect(check()).toEqual([{ outcome: 'ok' }])
+    expect(cell.relay.sessions.reserveCounts()?.bookings).toBe(0)
+    // A real booking on a database-mode cell stays off, whatever the dry-run switch says.
+    expect(cell.book(identity, 7)).toEqual([{ outcome: 'off' }])
+  })
+
   it('connects a booked host, and only at its booked epoch, without a database read', async () => {
     const cell = await startCell({ admitMode: 'reserve' })
     const booked = await cell.host()

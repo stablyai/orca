@@ -212,6 +212,7 @@ export const CONTROL_LEASE_JITTER_MS = 30 * 60 * 1000
 export type CellReserveAdmission = {
   mode: () => CellAdmitMode
   ticketEnforce: () => boolean
+  dryRunEnabled: () => boolean
   book: CellReserveBook
   verifyLease: (input: {
     lease: string | undefined
@@ -392,7 +393,7 @@ export class HostSessionRegistry {
 
   reserve(request: ReserveRequest): ReserveOutcome[] {
     const admission = this.reserveAdmission
-    if (this.config.role !== 'cell' || !admission) {
+    if (this.config.role !== 'cell' || !admission || (request.dryRun && !admission.dryRunEnabled())) {
       return request.items.map(() => ({ outcome: 'off' }))
     }
     const context = {

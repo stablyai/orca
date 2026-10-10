@@ -222,6 +222,7 @@ export function createRelayServer(
       ? {
           mode: () => options.cellFlags?.().flags.admitMode ?? 'db',
           ticketEnforce: () => options.cellFlags?.().flags.ticketCheck === 'enforce',
+          dryRunEnabled: () => options.cellFlags?.().flags.reserveDryRun === true,
           book: reserveBook,
           verifyLease: (input) =>
             classifyAssignmentLease({

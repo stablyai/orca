@@ -70,7 +70,8 @@ const SeatFeedReplySchema = z.object({
       flags: z.object({
         readinessLocal: z.boolean(),
         ticketCheck: z.enum(['off', 'shadow', 'enforce']),
-        admitMode: z.enum(['db', 'reserve'])
+        admitMode: z.enum(['db', 'reserve']),
+        reserveDryRun: z.boolean()
       })
     })
     .optional(),
