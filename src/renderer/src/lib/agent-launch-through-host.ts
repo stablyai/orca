@@ -17,6 +17,7 @@ import {
   isAgentLaunchPaneSpawnHeld
 } from '@/lib/agent-launch-pane-spawn-hold'
 import { wasAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
+import { applyAgentLaunchPaneVerdict } from '@/lib/agent-launch-pane-verdict-application'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import { callRuntimeRpc, RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
 import { createAgentSessionOperationId } from '@/runtime/agent-session-operation-id'
@@ -76,13 +77,20 @@ function tabExists(worktreeId: string, tabId: string): boolean {
 }
 
 /** A launch tab nothing ran in was never the user's: it is not reopened, and its workspace stays. */
-export function closeLaunchTab(worktreeId: string, tabId: string): void {
+function closeLaunchTab(worktreeId: string, tabId: string): void {
   if (tabExists(worktreeId, tabId)) {
-    useAppStore.getState().closeTab(tabId, {
-      recordInteraction: false,
-      captureRecentlyClosed: false,
-      preserveWorktreeSelection: true
-    })
+    useAppStore
+      .getState()
+      .closeTab(tabId, { recordInteraction: false, captureRecentlyClosed: false, unwound: true })
+  }
+}
+
+/** Takes back a launch's pane as the host does: the tab goes, unless the user split it meanwhile. */
+export function takeBackLaunchPane(worktreeId: string, tabId: string): void {
+  const leafId = useAppStore.getState().tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)
+    ?.agentLaunchPane?.leafId
+  if (leafId) {
+    applyAgentLaunchPaneVerdict({ worktreeId, tabId, leafId, verdict: { kind: 'withdrawn' } })
   }
 }
 
@@ -125,7 +133,7 @@ async function settleLaunch(
     return outcomeFromResult(await send)
   } catch (error) {
     const code = error instanceof RuntimeRpcCallError ? error.code : undefined
-    // Only the host says this: a failure of the call itself proves nothing about the launch.
+    // Only the host says this, and each click is sent once, so it covers the whole launch.
     const nothingRan =
       error instanceof RuntimeRpcCallError && isAgentLaunchNothingRanData(error.response.error.data)
     // A launch that ran nothing must not start again another way once the user closed its pane.

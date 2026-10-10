@@ -8,7 +8,7 @@ const host = vi.hoisted(() => ({
 }))
 vi.mock('@/lib/agent-launch-through-host', async (importOriginal) => ({
   hostLaunchRanNothing: (await importOriginal<typeof HostModule>()).hostLaunchRanNothing,
-  closeLaunchTab: vi.fn(),
+  takeBackLaunchPane: vi.fn(),
   ...host
 }))
 vi.mock('@/lib/launch-agent-tab-prompt-paste', () => ({

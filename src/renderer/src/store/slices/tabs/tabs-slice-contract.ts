@@ -89,6 +89,8 @@ export type TabsSlice = {
     opts?: {
       /** Keep the worktree selected even if this empties it — for closes the user did not ask for. */
       preserveWorktreeSelection?: boolean
+      /** Keep a split it empties: the tab was never the user's, so the layout stays as it was. */
+      keepEmptiedGroup?: boolean
       recordInteraction?: boolean
       terminalRetirementHandled?: boolean
     }

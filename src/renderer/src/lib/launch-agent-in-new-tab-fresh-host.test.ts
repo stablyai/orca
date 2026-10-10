@@ -31,6 +31,9 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
 }))
 const focusTerminalTabSurface = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface }))
+vi.mock('@/components/terminal-pane/closed-terminal-leaf-notice', () => ({
+  applyClosedTerminalLeafNotice: vi.fn()
+}))
 // The host route is for macOS and Linux clients; pinned so a Windows runner reads the same.
 vi.mock('@/lib/new-workspace', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -199,6 +202,68 @@ describe('a plain new-tab launch the host proves ran nothing', () => {
     expect(store.getState().activeTabId).toBe(replacement.id)
     expect(focusTerminalTabSurface).toHaveBeenCalledExactlyOnceWith(replacement.id)
     expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  // Why: main put "+" from an empty split in that split; taking back a tab that never ran keeps it.
+  it('keeps an empty split it was launched from, and starts there', async () => {
+    const store = seed()
+    store.getState().createTab(WT)
+    const root = store.getState().activeGroupIdByWorktree[WT]!
+    const split = store.getState().createEmptySplitGroup(WT, root, 'right')!
+    const reply = deferred()
+    callRuntimeRpc.mockReturnValue(reply.promise)
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    const result = launchAgentInNewTab({
+      requestId: 'request-5',
+      agent: 'claude',
+      worktreeId: WT,
+      groupId: split,
+      freshNewTab: true
+    })
+    const tabId = result?.surface.kind === 'local-terminal' ? result.surface.tabId : ''
+    hostTakesPane(store, tabId)
+    applyAgentLaunchPaneVerdict({
+      worktreeId: WT,
+      tabId,
+      leafId: launchLeafId(store, tabId),
+      verdict: { kind: 'withdrawn' }
+    })
+
+    reply.reject(nothingRan())
+
+    await vi.waitFor(() => expect(windowLaunchedTabs(store)).toHaveLength(1))
+    const replacement = windowLaunchedTabs(store)[0]!
+    const group = store.getState().groupsByWorktree[WT]?.find((g) => g.id === split)
+    expect(group?.tabOrder).toEqual([replacement.id])
+  })
+
+  // Why: the user's own pane in a tab they split while it waited is theirs; only the launch's goes.
+  it('keeps a split the user made in the tab while it waited', async () => {
+    const store = seed()
+    const { tabId, reply } = await launchFresh()
+    hostTakesPane(store, tabId)
+    const leafId = launchLeafId(store, tabId)
+    store.getState().setTabLayout(tabId, {
+      root: {
+        type: 'split',
+        direction: 'vertical',
+        first: { type: 'leaf', leafId },
+        second: { type: 'leaf', leafId: 'user-leaf' }
+      },
+      activeLeafId: 'user-leaf',
+      expandedLeafId: null
+    })
+    applyAgentLaunchPaneVerdict({
+      worktreeId: WT,
+      tabId,
+      leafId,
+      verdict: { kind: 'not-started', code: 'spawn claude ENOENT' }
+    })
+
+    reply.reject(nothingRan())
+
+    await vi.waitFor(() => expect(windowLaunchedTabs(store)).toHaveLength(1))
+    expect(worktreeTabs(store).map((tab) => tab.id)).toContain(tabId)
   })
 
   it('selects the replacement in the floating panel, as the panel selected the tab it was handed', async () => {

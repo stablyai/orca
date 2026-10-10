@@ -2,9 +2,9 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { agentLaunchPaneNoticeText } from '@/components/terminal-pane/agent-launch-pane-notice-text'
 import {
-  closeLaunchTab,
   hostLaunchRanNothing,
   launchAgentThroughHost,
+  takeBackLaunchPane,
   windowMakesHostLaunchTab,
   type HostAgentLaunchArgs,
   type HostAgentLaunchOutcome
@@ -70,7 +70,7 @@ export function launchFreshNewTabThroughHost(
   const { tabId, outcome } = launchAgentThroughHost(launch)
   void outcome.then((launched) => {
     if (hostLaunchRanNothing(launched)) {
-      closeLaunchTab(args.worktreeId, tabId)
+      takeBackLaunchPane(args.worktreeId, tabId)
       selectReplacementTab(args.worktreeId, launchInWindow())
       return
     }

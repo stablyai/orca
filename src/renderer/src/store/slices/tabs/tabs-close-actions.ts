@@ -111,7 +111,12 @@ export function createTabsCloseActions(
         )
         let nextLayoutByWorktree = current.layoutByWorktree
         let nextActiveGroupIdByWorktree = current.activeGroupIdByWorktree
-        if (wasLastTab && current.layoutByWorktree[worktreeId] && nextGroups.length > 1) {
+        if (
+          wasLastTab &&
+          !opts?.keepEmptiedGroup &&
+          current.layoutByWorktree[worktreeId] &&
+          nextGroups.length > 1
+        ) {
           nextGroups = nextGroups.filter((candidate) => candidate.id !== group.id)
           const collapsedState = collapseGroupLayout(
             current.layoutByWorktree,

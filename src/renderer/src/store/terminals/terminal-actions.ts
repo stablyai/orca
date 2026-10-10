@@ -95,8 +95,8 @@ export type TerminalActions = {
       recordInteraction?: boolean
       reason?: TerminalTabCloseReason
       captureRecentlyClosed?: boolean
-      /** Keep the worktree selected even if this empties it: a tab that never ran, taken back. */
-      preserveWorktreeSelection?: boolean
+      /** A tab nothing ran in, taken back: its workspace's selection and splits stay as they were. */
+      unwound?: boolean
       remoteCloseOwnedByHost?: boolean
       localPtyTeardownOwnedExternally?: boolean
       precomputedRetirementPlan?: TerminalTabRetirementPlan

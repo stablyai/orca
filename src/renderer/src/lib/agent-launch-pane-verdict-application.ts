@@ -45,7 +45,7 @@ export function applyAgentLaunchPaneVerdict(event: AgentLaunchPaneVerdictEvent):
           recordInteraction: false,
           captureRecentlyClosed: false,
           // A launch tab nothing ran in was never the user's: its workspace stays as the click left it.
-          preserveWorktreeSelection: true
+          unwound: true
         })
       } else {
         state.setTabAgentLaunchPane(tabId, undefined)
