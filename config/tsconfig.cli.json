@@ -128,6 +128,7 @@
     "../src/main/antigravity/hook-service.ts",
     "../src/main/antigravity/hooks-json-bundle.ts",
     "../src/main/claude/hook-settings.ts",
+    "../src/main/claude/claude-config-dir-pin.ts",
     "../src/main/claude/hook-service.ts",
     "../src/main/claude/claude-profile-hook-target.ts",
     "../src/main/claude/statusline-script.ts",

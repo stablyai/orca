@@ -16,6 +16,7 @@ import {
 import { quotePowerShellLiteral } from '../../shared/powershell-native-argument'
 import { wrapRuntimeHomeHookCommand } from '../agent-hooks/runtime-home-hook-command'
 import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
+import { defaultClaudeConfigDir } from './claude-config-dir-pin'
 import type { ClaudeManagedHookPlan } from './claude-managed-hook-events'
 
 export type ClaudeCompatibleHookSettings = {
@@ -44,7 +45,14 @@ export const OPENCLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
 }
 
 export function getConfigPath(settings = CLAUDE_HOOK_SETTINGS, configDir?: string): string {
-  return join(configDir ?? join(homedir(), settings.configDirName), 'settings.json')
+  // Why: only the Claude CLI reads $CLAUDE_CONFIG_DIR, so hooks must land where those sessions read settings.
+  // An explicit configDir argument (profile pin) wins over the env-derived default.
+  const resolvedConfigDir =
+    configDir ??
+    (settings.configDirName === '.claude'
+      ? defaultClaudeConfigDir()
+      : join(homedir(), settings.configDirName))
+  return join(resolvedConfigDir, 'settings.json')
 }
 
 export function getStatusLineScriptBaseName(settings = CLAUDE_HOOK_SETTINGS): string {
