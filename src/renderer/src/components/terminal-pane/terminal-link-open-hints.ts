@@ -74,14 +74,16 @@ export function getTerminalUrlOpenHint(options: TerminalUrlOpenHintOptions = {})
     : `${prefix}Ctrl+click to open, or Shift+Ctrl+click for system browser`
 }
 
-export function getTerminalUrlSystemBrowserHint(): string {
-  return isMacPlatform() ? '⇧⌘+click for system browser' : 'Shift+Ctrl+click for system browser'
+// Why isMac is injectable: surfaces that render under a non-browser test runner (the
+// ports rows) need the platform pinned instead of sniffed off navigator.
+export function getTerminalUrlSystemBrowserHint(isMac: boolean = isMacPlatform()): string {
+  return isMac ? '⇧⌘+click for system browser' : 'Shift+Ctrl+click for system browser'
 }
 
 // Why: the mirror of the system-browser hint for surfaces where inverting sends the
 // modifier the other way; a plain click there already opens the system browser.
-export function getTerminalUrlOrcaBrowserHint(): string {
-  return isMacPlatform() ? '⇧⌘+click to open in Orca' : 'Shift+Ctrl+click to open in Orca'
+export function getTerminalUrlOrcaBrowserHint(isMac: boolean = isMacPlatform()): string {
+  return isMac ? '⇧⌘+click to open in Orca' : 'Shift+Ctrl+click to open in Orca'
 }
 
 export function getTerminalWorktreePathOpenHint(

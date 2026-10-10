@@ -4,13 +4,13 @@ import {
   dedupeChangeEvents,
   formatHostForOrigin,
   isDefaultPort,
-  isUnspecifiedHost,
   shouldReplace,
   worktreeIdFromCacheKey,
   type CacheKey,
   type ListenerScanState
 } from './advertised-url-parsing'
 import type { AdvertisedUrl, AdvertisedUrlChangeEvent } from './advertised-url-watcher'
+import { isWildcardBindHost } from '../../shared/workspace-ports'
 
 export function considerAdvertisedUrl(args: {
   url: URL
@@ -29,7 +29,7 @@ export function considerAdvertisedUrl(args: {
     return []
   }
   const hostname = args.url.hostname
-  if (isUnspecifiedHost(hostname)) {
+  if (isWildcardBindHost(hostname)) {
     return []
   }
   const candidate: AdvertisedUrl = {

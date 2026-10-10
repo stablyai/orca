@@ -10,10 +10,11 @@ import {
   openWorkspacePortInBrowser,
   publishWorkspacePortScanForHost,
   refreshWorkspacePortScanAfterStop,
-  resolvePortOpenInOrcaBrowser,
   scanWorkspacePortsForTarget,
   workspacePortRuntimeTargetKey
 } from '@/lib/workspace-port-actions'
+import { resolvePortOpenRouting } from '@/lib/workspace-port-open-routing'
+import { resolvePortClientReachability } from '@/lib/workspace-port-client-reachability'
 import { resolveLocalhostLabelRouteForPort } from '@/lib/workspace-port-localhost-label-selector'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -143,18 +144,27 @@ export function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }):
 
   const handleOpenPortInBrowser = useCallback(
     async (port: WorkspacePort, event?: React.MouseEvent<HTMLButtonElement>) => {
+      // Why resolved per port rather than from the panel's target: this panel also lists
+      // other workspaces' and unassigned ports, which can belong to another host — and
+      // the modifier's meaning depends on where a plain click on *this* row lands.
+      const reachability = resolvePortClientReachability(useAppStore.getState(), port)
+      const routing = resolvePortOpenRouting({
+        settings,
+        remoteHost: reachability.remoteHost,
+        systemBrowserAvailable: reachability.systemBrowserAvailable,
+        event,
+        isMac: navigator.userAgent.includes('Mac')
+      })
       const result = await openWorkspacePortInBrowser({
         port,
         activeWorktreeId: activeWorktree?.id,
         runtimeTarget,
         createBrowserTab,
         setRemoteBrowserPageHandle,
-        openInOrcaBrowser: resolvePortOpenInOrcaBrowser({
-          settings,
-          event,
-          isMac: navigator.userAgent.includes('Mac')
-        }),
-        localhostLabelRoute: resolveLocalhostLabelRouteForPort(useAppStore.getState(), port)
+        openInOrcaBrowser: routing.openInOrcaBrowser,
+        systemBrowserRequested: routing.systemBrowserRequested,
+        localhostLabelRoute: resolveLocalhostLabelRouteForPort(useAppStore.getState(), port),
+        clientReachableUrl: reachability.reachableUrl
       })
       if (!result.ok) {
         toast.error(

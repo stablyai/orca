@@ -4,18 +4,20 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
-  addressForPort,
   canStopWorkspacePort,
-  getPortOpenBrowserTooltipLabel,
   goToWorkspacePortOwner,
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,
-  refreshWorkspacePortScanAfterStop,
-  resolvePortOpenInOrcaBrowser
+  refreshWorkspacePortScanAfterStop
 } from '@/lib/workspace-port-actions'
+import {
+  getPortOpenBrowserTooltipLabel,
+  resolvePortOpenModifierDestination,
+  resolvePortOpenRouting
+} from '@/lib/workspace-port-open-routing'
 import type { WorkspacePortGroup } from '@/lib/workspace-port-groups'
+import { usePortClientReachability } from '@/lib/workspace-port-client-reachability'
 import { useLocalhostLabelRouteForPort } from '@/lib/workspace-port-localhost-label-selector'
-import { useWorktreeRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
 import { useAppStore } from '@/store'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import { translate } from '@/i18n/i18n'
@@ -78,14 +80,22 @@ export function PortRow({
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const localhostLabelRoute = useLocalhostLabelRouteForPort(port)
+  // Why: this popover renders the *merged* all-hosts scan, so a row's host is not
+  // necessarily the active workspace's. The hook resolves the owning host from the scan
+  // key stamped at merge time and derives the address, the reachable URL and the stop /
+  // open target from that one answer.
+  const { address, reachableUrl, remoteHost, runtimeTarget, systemBrowserAvailable } =
+    usePortClientReachability(port)
+  const modifierDestination = resolvePortOpenModifierDestination({
+    settings,
+    remoteHost,
+    systemBrowserAvailable
+  })
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const setRemoteBrowserPageHandle = useAppStore((s) => s.setRemoteBrowserPageHandle)
   const replaceWorkspacePortScans = useAppStore((s) => s.replaceWorkspacePortScans)
   const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
-  const runtimeTarget = useWorktreeRuntimeTarget(
-    port.kind === 'workspace' ? port.owner.worktreeId : activeWorktreeId
-  )
   const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
   const canStop = canStopWorkspacePort(port)
   const openBrowserLabel = translate(
@@ -97,8 +107,10 @@ export function PortRow({
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
       recordFeatureInteraction('ports')
-      const openInOrcaBrowser = resolvePortOpenInOrcaBrowser({
+      const routing = resolvePortOpenRouting({
         settings,
+        remoteHost,
+        systemBrowserAvailable,
         // Why: keyboard activations have detail=0; only pointer clicks carry
         // the modifier intent for the system-browser escape hatch.
         event: event.detail > 0 ? event : null,
@@ -110,8 +122,10 @@ export function PortRow({
         runtimeTarget,
         createBrowserTab,
         setRemoteBrowserPageHandle,
-        openInOrcaBrowser,
-        localhostLabelRoute
+        openInOrcaBrowser: routing.openInOrcaBrowser,
+        systemBrowserRequested: routing.systemBrowserRequested,
+        localhostLabelRoute,
+        clientReachableUrl: reachableUrl
       }).then((result) => {
         if (!result.ok) {
           toast.error(
@@ -126,13 +140,16 @@ export function PortRow({
     },
     [
       activeWorktreeId,
+      reachableUrl,
       createBrowserTab,
       localhostLabelRoute,
       port,
       recordFeatureInteraction,
+      remoteHost,
       runtimeTarget,
       settings,
-      setRemoteBrowserPageHandle
+      setRemoteBrowserPageHandle,
+      systemBrowserAvailable
     ]
   )
 
@@ -140,7 +157,6 @@ export function PortRow({
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
       recordFeatureInteraction('ports')
-      const address = addressForPort(port)
       void window.api.ui.writeClipboardText(address)
       toast.success(
         translate(
@@ -150,7 +166,7 @@ export function PortRow({
         )
       )
     },
-    [port, recordFeatureInteraction]
+    [address, recordFeatureInteraction]
   )
 
   const handleStop = useCallback(
@@ -226,7 +242,9 @@ export function PortRow({
           <div className="absolute inset-y-0 right-0 flex items-center gap-0.5 rounded-md border border-border/40 bg-popover/95 px-0.5 can-hover:opacity-0 shadow-xs transition-opacity group-hover/port:opacity-100 group-focus-within/port:opacity-100">
             <PortAction
               label={openBrowserLabel}
-              tooltipLabel={getPortOpenBrowserTooltipLabel(openBrowserLabel)}
+              tooltipLabel={getPortOpenBrowserTooltipLabel(openBrowserLabel, {
+                modifierDestination
+              })}
               onClick={handleOpen}
             >
               <ExternalLink className="size-3" />
@@ -235,7 +253,7 @@ export function PortRow({
               label={translate(
                 'auto.components.status.bar.ports.status.popover.rows.536d48a5dc',
                 'Copy {{value0}}',
-                { value0: addressForPort(port) }
+                { value0: address }
               )}
               onClick={handleCopy}
             >
@@ -254,7 +272,7 @@ export function PortRow({
           </div>
         </div>
         <div className="select-text truncate text-[10px] text-muted-foreground/70">
-          {external ? port.kind : addressForPort(port)}
+          {external ? port.kind : address}
         </div>
       </div>
     </div>

@@ -23,15 +23,17 @@ vi.mock('@/lib/worktree-activation', () => ({
 
 import { getLocalWorkspacePortSections } from './PortsPanel'
 import {
-  getPortOpenBrowserTooltipLabel,
-  getPortSystemBrowserHint,
   killWorkspacePortForTarget,
   mergeWorkspacePortScans,
   openWorkspacePortInBrowser,
   refreshWorkspacePortScanAfterStop,
-  resolvePortOpenInOrcaBrowser,
   scanWorkspacePortsForTarget
 } from '@/lib/workspace-port-actions'
+import {
+  getPortOpenBrowserTooltipLabel,
+  resolvePortOpenInOrcaBrowser
+} from '@/lib/workspace-port-open-routing'
+import { getTerminalUrlSystemBrowserHint } from '@/components/terminal-pane/terminal-link-open-hints'
 
 const workspacePort: WorkspacePort = {
   id: '127.0.0.1:63468:1234',
@@ -112,9 +114,9 @@ beforeEach(() => {
 
 describe('PortsPanel runtime routing', () => {
   it('formats platform-specific system-browser hints for port open tooltips', () => {
-    expect(getPortSystemBrowserHint(true)).toBe('⇧⌘+click for system browser')
-    expect(getPortSystemBrowserHint(false)).toBe('Shift+Ctrl+click for system browser')
-    expect(getPortOpenBrowserTooltipLabel('Open in Browser', false)).toBe(
+    expect(getTerminalUrlSystemBrowserHint(true)).toBe('⇧⌘+click for system browser')
+    expect(getTerminalUrlSystemBrowserHint(false)).toBe('Shift+Ctrl+click for system browser')
+    expect(getPortOpenBrowserTooltipLabel('Open in Browser', { isMac: false })).toBe(
       'Open in Browser. Shift+Ctrl+click for system browser'
     )
   })
@@ -317,6 +319,13 @@ describe('PortsPanel runtime routing', () => {
     expect(
       merged?.ports.map((port) => (port.kind === 'workspace' ? port.owner.worktreeId : null))
     ).toEqual(['runtime-repo::/srv/app', 'repo::/workspace/app'])
+    // Why asserted: the merged view is the only place rows from different hosts sit side
+    // by side, and the scan key is what lets each row resolve its own host instead of
+    // inheriting the active workspace's.
+    expect(merged?.ports.map((port) => port.hostScanKey)).toEqual([
+      'environment:env-1:all',
+      'local:all'
+    ])
   })
 
   it('reuses the capability verdict across remote port opens', async () => {

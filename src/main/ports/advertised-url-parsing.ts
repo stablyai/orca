@@ -180,11 +180,6 @@ function isPrivateIpv4(value: string): boolean {
   return false
 }
 
-export function isUnspecifiedHost(hostname: string): boolean {
-  const stripped = hostname.toLowerCase().replace(/^\[|\]$/g, '')
-  return stripped === '0.0.0.0' || stripped === '::' || stripped === '*'
-}
-
 function isIpv6(value: string): boolean {
   // url.hostname for IPv6 returns lowercase without brackets — quick sniff.
   return value.includes(':') && /^[0-9a-f:]+$/.test(value)
