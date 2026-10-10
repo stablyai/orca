@@ -15,34 +15,15 @@ function finalToken(path: string[]): string {
   return path.at(-1) ?? ''
 }
 
-// Why: destructiveness is declared on the spec (single source of truth); the
-// intent verbs are the final tokens of every destructive path/alias so the guard
-// tracks the registry instead of a hand-maintained list.
-function destructiveVerbs(specs: CommandSpec[]): Set<string> {
-  const verbs = new Set<string>()
-  for (const spec of specs) {
-    if (spec.destructive) {
-      for (const path of specPaths(spec)) {
-        verbs.add(finalToken(path))
-      }
-    }
-  }
-  return verbs
-}
-
-// Why: deletion is irreversible and suggestions flow into agents' recovery
-// channel (--json nextSteps), so only unlock destructive candidates when the
-// input token is itself a near-miss of a destructive verb. #6303
-function intendsDestruction(inputToken: string, verbs: Set<string>): boolean {
-  for (const verb of verbs) {
-    if (
+// A near-miss must match this command or its aliases, not an unrelated destructive verb.
+function intendsDestructiveCommand(inputToken: string, spec: CommandSpec): boolean {
+  return specPaths(spec).some((path) => {
+    const verb = finalToken(path)
+    return (
       Math.abs(inputToken.length - verb.length) <= DESTRUCTIVE_INTENT_THRESHOLD &&
       levenshtein(inputToken, verb) <= DESTRUCTIVE_INTENT_THRESHOLD
-    ) {
-      return true
-    }
-  }
-  return false
+    )
+  })
 }
 
 export type CommandErrorData = {
@@ -62,16 +43,14 @@ function rankByDistance(scored: { label: string; distance: number }[]): string[]
 // Why: same-depth matching avoids suggesting parent groups or unrelated commands.
 export function suggestCommands(specs: CommandSpec[], commandPath: string[]): string[] {
   const input = commandPath.join(' ')
-  // Why: only surface destructive commands when the user actually reached for one;
-  // otherwise a benign typo could recover into an irreversible action. #6303
-  const allowDestructive = intendsDestruction(finalToken(commandPath), destructiveVerbs(specs))
+  const inputToken = finalToken(commandPath)
   const seen = new Set<string>()
   const scored: { label: string; distance: number }[] = []
   for (const spec of specs) {
     if (spec.hidden) {
       continue
     }
-    if (spec.destructive && !allowDestructive) {
+    if (spec.destructive && !intendsDestructiveCommand(inputToken, spec)) {
       continue
     }
     const candidates = specPaths(spec).map((path) =>
