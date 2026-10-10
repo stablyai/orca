@@ -50,6 +50,7 @@ import {
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
 import { getGitHubLinkedWorkItemIdentity } from './source-selection-decisions'
+import { getUnresolvedSmartGitHubSubmitMessage } from './github-submit-unresolved-message'
 
 export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
   const {
@@ -188,7 +189,12 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
             })
           : null
       if (!item) {
-        throw new Error('Could not resolve the GitHub item before creating the workspace.')
+        throw new Error(
+          getUnresolvedSmartGitHubSubmitMessage(
+            intent,
+            !isProjectGroupTarget && Boolean(selectedRepo) && selectedRepoIsGit
+          )
+        )
       }
 
       const itemIdentity = resolveGitHubWorkItemIdentity(item)
