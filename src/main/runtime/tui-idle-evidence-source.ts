@@ -35,6 +35,15 @@ export type TuiIdleEvidenceSource = {
   readRuledScreen?(ptyId: string | null | undefined): RuledScreen | null
   /** When the PTY last observed a title of its own. Absent, no title has an age. */
   getTitleObservedAtEpochMs?(ptyId: string | null | undefined): number | null
+  /** Whether main's model is dormant or its rebuild is in flight, so a screen read finds none
+   *  yet. The rebuild's seed timeout bounds it. */
+  isScreenRebuilding?(ptyId: string | null | undefined): boolean
+}
+
+type ScreenReader = {
+  read: () => readonly string[] | null
+  /** Whether the read found no screen only because main's model was being rebuilt. */
+  missedRebuild: () => boolean
 }
 
 // Why per agent: every other agent keeps the live screen its rules were recorded against.
@@ -43,12 +52,22 @@ function screenReader(
   source: TuiIdleEvidenceSource,
   agent: TuiAgent | null,
   ptyId: string | null | undefined
-): () => readonly string[] | null {
+): ScreenReader {
   let lines: readonly string[] | null | undefined
+  let missedRebuild = false
   const read = readsTrustedScreen(agent)
     ? () => source.readRuledScreen?.(ptyId)?.lines ?? null
     : () => source.readScreenLines(ptyId)
-  return () => (lines === undefined ? (lines = read()) : lines)
+  return {
+    read: () => {
+      if (lines === undefined) {
+        lines = read()
+        missedRebuild = lines === null && source.isScreenRebuilding?.(ptyId) === true
+      }
+      return lines
+    },
+    missedRebuild: () => missedRebuild
+  }
 }
 
 function readAgentRuleVerdict(
@@ -85,7 +104,16 @@ function screenInputVetoReader(
   let veto: boolean | null = null
   return () => {
     if (!read) {
-      veto = readScreenInputVeto(agent, () => source.readRuledScreen?.(ptyId) ?? null)
+      let rebuilding = false
+      veto = readScreenInputVeto(agent, () => {
+        const screen = source.readRuledScreen?.(ptyId) ?? null
+        rebuilding = screen === null && source.isScreenRebuilding?.(ptyId) === true
+        return screen
+      })
+      // Why: a screen still being rebuilt cannot prove that no overlay refuses input.
+      if (rebuilding) {
+        veto = true
+      }
       read = true
     }
     return veto
@@ -104,7 +132,8 @@ export function leafTuiIdleEvidence(
 ): TuiIdleEvaluationInput {
   const waitText = lazyWaitText(readWaitText)
   const agent = source.getPaneAgent(leaf.ptyId)
-  const readScreen = screenReader(source, agent, leaf.ptyId)
+  const screen = screenReader(source, agent, leaf.ptyId)
+  const readScreen = screen.read
   return {
     record: leaf,
     readTailBlockedReason: () => detectTerminalWaitBlockedReason(waitText()),
@@ -114,6 +143,7 @@ export function leafTuiIdleEvidence(
     readQuietReadyBodyEvidence: () => isQuietReadyScreenBody(waitText(), agent, readScreen),
     readAgentRuleVerdict: () => readAgentRuleVerdict(agent, leaf, readScreen, waitText),
     readScreenInputVeto: screenInputVetoReader(source, agent, leaf.ptyId),
+    readScreenRebuilding: screen.missedRebuild,
     titleObservedAtEpochMs: source.getTitleObservedAtEpochMs?.(leaf.ptyId) ?? null,
     agent,
     firstPartyStatus: source.getFirstPartyAgentStatus(leaf.ptyId),
@@ -129,7 +159,8 @@ export function ptyTuiIdleEvidence(
 ): TuiIdleEvaluationInput {
   const waitText = lazyWaitText(readWaitText)
   const agent = source.getPaneAgent(pty.ptyId)
-  const readScreen = screenReader(source, agent, pty.ptyId)
+  const screen = screenReader(source, agent, pty.ptyId)
+  const readScreen = screen.read
   return {
     record: pty,
     readTailBlockedReason: () => detectTerminalWaitBlockedReason(waitText()),
@@ -141,6 +172,7 @@ export function ptyTuiIdleEvidence(
     readQuietReadyBodyEvidence: () => isQuietReadyScreenBody(waitText(), agent, readScreen),
     readAgentRuleVerdict: () => readAgentRuleVerdict(agent, pty, readScreen, waitText),
     readScreenInputVeto: screenInputVetoReader(source, agent, pty.ptyId),
+    readScreenRebuilding: screen.missedRebuild,
     titleObservedAtEpochMs: pty.lastOscTitleEpochMs,
     agent,
     firstPartyStatus: source.getFirstPartyAgentStatus(pty.ptyId),

@@ -397,6 +397,7 @@ describe('DegradedDaemonPtyProvider', () => {
 
   it('routes later fresh PTYs to the daemon after spawn health recovers', async () => {
     const current = createDaemonAdapter('daemon')
+    current.canProvideSettledBufferSnapshot = vi.fn(() => true)
     const fallback = createProvider('fallback')
     const probeCurrentDaemonSpawn = vi
       .fn<() => Promise<boolean>>()
@@ -426,6 +427,8 @@ describe('DegradedDaemonPtyProvider', () => {
       expect(current.spawn).toHaveBeenCalledWith({ cols: 80, rows: 24, worktreeId: 'wt-1' })
       expect(recovered.id).toBe('daemon-new')
       expect(provider.canProvideAuthoritativeBufferSnapshot(recovered.id)).toBe(true)
+      expect(provider.canProvideSettledBufferSnapshot(recovered.id)).toBe(true)
+      expect(provider.canProvideSettledBufferSnapshot('unknown-session')).toBe(false)
     } finally {
       now.mockRestore()
     }

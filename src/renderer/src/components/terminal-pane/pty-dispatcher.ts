@@ -27,11 +27,11 @@ import {
   bufferPtyShutdownReplayData,
   isPtyDataHandlerShutdownPending,
   ptyDataHandlers,
-  ptyDataSidecars,
   ptyExitHandlers,
   ptyReplayHandlers
 } from './pty-shutdown-data-suspension'
 import { markCommittedPtyShutdowns } from './pty-shutdown-exit-deferral'
+import { deliverPtyDataToSidecars, deliverSidecarOnlyPtyData } from './pty-sidecar-only-delivery'
 
 export {
   ptyDataHandlers,
@@ -118,7 +118,13 @@ function handleDispatchedPtyData(payload: {
   transformed?: boolean
   background?: boolean
   droppedOutput?: boolean
+  sidecarOnly?: boolean
 }): void {
+  const chars = payload.rawLength ?? payload.data.length
+  if (payload.sidecarOnly === true) {
+    deliverSidecarOnlyPtyData(payload.id, payload.data, chars)
+    return
+  }
   let meta: PtyDataMeta | undefined
   if (typeof payload.seq === 'number') {
     meta ??= {}
@@ -140,7 +146,6 @@ function handleDispatchedPtyData(payload: {
     meta ??= {}
     meta.droppedOutput = true
   }
-  const chars = payload.rawLength ?? payload.data.length
   const dispatch = (): void => {
     if (isPtyDataHandlerShutdownPending(payload.id)) {
       // Why: teardown output is speculative until the owner verifies sleep; retain it so a failed attempt resumes without losing terminal data.
@@ -153,14 +158,7 @@ function handleDispatchedPtyData(payload: {
     } else {
       bufferPreHandlerPtyData(payload.id, payload.data, meta)
     }
-    const sidecars = ptyDataSidecars.get(payload.id)
-    if (sidecars && sidecars.size > 0) {
-      // Why: snapshot before iterating — watchers often unsubscribe (or subscribe siblings) mid-iteration, and mutating the live Set would skip or double-fire.
-      const snapshot = Array.from(sidecars)
-      for (const watcher of snapshot) {
-        watcher(payload.data)
-      }
-    }
+    deliverPtyDataToSidecars(payload.id, payload.data)
   }
   recordPtyDataReceived(payload.id, chars)
   // Why deferred: main budgets by bytes PARSED not received; ACK fires when xterm consumes, and undelivered chunks settle at return so no PTY stays backpressured.

@@ -3,7 +3,9 @@
 // v43 dropped it with the revert); v41 stages long startup commands as sourced scripts; v40 rolled
 // the #25130/#24636 shell-wrapper changes and the wider agent list into a fresh daemon; older owners
 // stay attachable.
-export const PROTOCOL_VERSION = 44
+export const PROTOCOL_VERSION = 45
+// v45: the daemon answers a view-gated session's terminal queries once main delegates them.
+export const QUERY_RESPONDER_DAEMON_PROTOCOL_VERSION = 45
 export const CLAUDE_ACCOUNT_FUNCTION_DAEMON_PROTOCOL_VERSION = 42
 export const CLAUDE_ACCOUNT_FUNCTION_REVERTED_DAEMON_PROTOCOL_VERSION = 43
 // v39 gives plain fish panes Orca's codex function through XDG_DATA_DIRS.
@@ -15,6 +17,9 @@ export const CONTENT_ADDRESSED_SHELL_WRAPPER_DAEMON_PROTOCOL_VERSION = 36
 export const ASYNC_CWD_VALIDATION_DAEMON_PROTOCOL_VERSION = 35
 export const CODEX_SHELL_LAUNCH_PREFLIGHT_DAEMON_PROTOCOL_VERSION = 34
 export const WSL_POSIX_CWD_DAEMON_PROTOCOL_VERSION = 33
+// Why: from v36 getSnapshot awaits the emulator's parse queue, so its outputSequence never
+// counts a byte the image does not show; older snapshots can trail their own seq.
+export const SETTLED_BUFFER_SNAPSHOT_DAEMON_PROTOCOL_VERSION = 36
 export const SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION = 32
 export const STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION = 31
 export const HISTORY_SEED_TRANSFER_PROTOCOL_VERSION = 30
@@ -40,11 +45,15 @@ export const CLEAN_DISCONNECT_PROTOCOL_VERSION = 24
 export const MODE_2031_UNSUBSCRIBE_FACT_PROTOCOL_VERSION = 29
 export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44
 ] as const
 
 export function supportsColorQueryReplyColors(protocolVersion: number): boolean {
   return protocolVersion >= COLOR_QUERY_REPLY_COLORS_DAEMON_PROTOCOL_VERSION
+}
+
+export function supportsDaemonQueryResponder(protocolVersion: number): boolean {
+  return protocolVersion >= QUERY_RESPONDER_DAEMON_PROTOCOL_VERSION
 }
 
 export function supportsPtyStartupIngress(protocolVersion: number): boolean {

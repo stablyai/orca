@@ -129,6 +129,8 @@ export type RuntimeHeadlessTerminal = {
   ownership: PtyShellOwnershipMirror
   /** The grid a reattach reflowed the model onto, until a PTY resize off it repaints the TUI. */
   unrepaintedReflowGrid?: { cols: number; rows: number }
+  /** Seq a daemon-snapshot seed already covers; live chunks at or below it are not reapplied. */
+  seedCoverageSeq?: number
 }
 
 export type RuntimeVisibleTerminalState = {

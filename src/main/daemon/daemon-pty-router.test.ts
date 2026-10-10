@@ -12,6 +12,7 @@ import {
 import {
   HISTORY_SEED_TRANSFER_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
+  SETTLED_BUFFER_SNAPSHOT_DAEMON_PROTOCOL_VERSION,
   STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
 } from './daemon-protocol-version'
 
@@ -301,11 +302,20 @@ describe('DaemonPtyRouter', () => {
       undefined,
       STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
     )
-    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    const unsettled = createAdapter(
+      'unsettled',
+      ['unsettled-session'],
+      undefined,
+      SETTLED_BUFFER_SNAPSHOT_DAEMON_PROTOCOL_VERSION - 1
+    )
+    const router = new DaemonPtyRouter({ current, legacy: [legacy, unsettled] })
     await router.discoverLegacySessions()
 
     expect(router.canProvideAuthoritativeBufferSnapshot('current-session')).toBe(true)
     expect(router.canProvideAuthoritativeBufferSnapshot('legacy-session')).toBe(false)
+    expect(router.canProvideSettledBufferSnapshot('current-session')).toBe(true)
+    expect(router.canProvideAuthoritativeBufferSnapshot('unsettled-session')).toBe(true)
+    expect(router.canProvideSettledBufferSnapshot('unsettled-session')).toBe(false)
   })
 
   it('reports guard-host support for the adapter that owns the session', async () => {

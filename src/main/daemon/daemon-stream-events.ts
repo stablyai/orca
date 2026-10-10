@@ -79,6 +79,15 @@ export type DaemonTransientFact =
   | { kind: '2031-subscribe' }
   | { kind: '2031-unsubscribe' }
 
+/** Query-responder handoff marker: the daemon answers this session's queries in every byte
+ *  after this event iff `responder`, so main flips its own reply ownership here. */
+export type SessionQueryResponderMarkerEvent = {
+  type: 'event'
+  event: 'sessionQueryResponderMarker'
+  sessionId: string
+  payload: { responder: boolean }
+}
+
 export type TransientFactEvent = {
   type: 'event'
   event: 'transientFact'
@@ -92,4 +101,5 @@ export type DaemonEvent =
   | TerminalErrorEvent
   | SessionBackgroundMarkerEvent
   | DataGapEvent
+  | SessionQueryResponderMarkerEvent
   | TransientFactEvent

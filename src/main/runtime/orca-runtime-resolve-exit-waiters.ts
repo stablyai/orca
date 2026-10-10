@@ -116,6 +116,17 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
     }
   }
 
+  // Why: a wait held only because the screen was being rebuilt settles now, not on its next poll.
+  protected onMainTerminalModelRebuilt(ptyId: string): void {
+    const pty = this.ptysById.get(ptyId)
+    if (pty) {
+      this.resolvePtyTuiIdleWaiters(pty, ptyId)
+    }
+    for (const leaf of this.getLeavesForPty(ptyId)) {
+      this.resolveTuiIdleWaiters(leaf)
+    }
+  }
+
   protected evaluateTuiIdleForLeaf(leaf: RuntimeLeafRecord): TuiIdleVerdict {
     return evaluateTuiIdle(
       leafTuiIdleEvidence(this.tuiIdleEvidenceSource, leaf, () =>

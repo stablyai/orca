@@ -5,6 +5,7 @@ import {
 } from './visibility-state'
 import { allocatePtyLifecycleSequence } from '../host-env/types'
 import { makePtyDataPayload, sendPtyDataToRenderer } from './payload'
+import { pendingIngestedDelivery } from './pending-delivery-stamp'
 import { getRendererInFlightCharsForPty } from './accounting'
 import { clearFlushTimerIfIdle } from './flush'
 import type { PtyIpcSession } from '../session'
@@ -93,7 +94,8 @@ export function preparePtyExitForRenderer(
             data: remaining.data,
             droppedOutput: true
           },
-          remaining.projectionAdmissionIds
+          remaining.projectionAdmissionIds,
+          pendingIngestedDelivery(remaining)
         )
       } else {
         sendPtyDataToRenderer(
@@ -107,7 +109,8 @@ export function preparePtyExitForRenderer(
             remaining.rawLength,
             remaining.transformed
           ),
-          remaining.projectionAdmissionIds
+          remaining.projectionAdmissionIds,
+          pendingIngestedDelivery(remaining)
         )
       }
     }

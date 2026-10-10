@@ -192,6 +192,8 @@ export type TuiIdleEvaluationInput = {
   readAgentRuleVerdict: () => AgentStateVerdict | null
   /** Whether an overlay on the agent's screen refuses input; null with no rule or no screen. */
   readScreenInputVeto: () => boolean | null
+  /** Whether a screen read in this evaluation found main's model still being rebuilt. */
+  readScreenRebuilding?: () => boolean
   /** When the PTY's own current title was observed; null when it has none or no clock. */
   titleObservedAtEpochMs: number | null
   agent: TuiAgent | null | undefined
@@ -250,8 +252,10 @@ export function hasQuietReadyScreen(
 export function evaluateTuiIdle(input: TuiIdleEvaluationInput): TuiIdleVerdict {
   const verdict = rankTuiIdleEvidence(input)
   // Why over the verdict rather than per lane: an overlay refuses input whichever lane would
-  // settle, and only a ready verdict pays for the screen read.
-  return isTuiIdleReadyVerdict(verdict) && input.readScreenInputVeto() === true
+  // settle, and only a ready verdict pays for the screen read. A screen still being rebuilt
+  // proves no refusal either; the rebuild re-offers the wait once it lands.
+  return isTuiIdleReadyVerdict(verdict) &&
+    (input.readScreenRebuilding?.() === true || input.readScreenInputVeto() === true)
     ? { kind: 'pending', quietForeground: 'closed' }
     : verdict
 }

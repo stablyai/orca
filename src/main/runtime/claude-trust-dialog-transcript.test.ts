@@ -11,6 +11,8 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
+import { FakeDaemonModel } from './fake-daemon-terminal-model.test-fixture'
+import { MAIN_TERMINAL_MODEL_DORMANT_AFTER_MS } from './main-terminal-model-dormancy'
 
 function readCapture(name: string): { data: string; size: { cols: number; rows: number } } {
   const base = join(__dirname, '__fixtures__', name)
@@ -248,5 +250,41 @@ describe("Claude's trust dialog under a shell auto-title", () => {
     const wait = await promise
     expect(wait).toMatchObject({ satisfied: true })
     expect(wait).not.toHaveProperty('blockedReason')
+  })
+})
+
+describe("Claude's trust dialog behind a dormant main model", () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('rebuilds the model from the daemon for the wait and still reports the dialog', async () => {
+    const { data, size } = readCapture('claude-dialog-trust-workspace')
+    // Why a no-op chunk: main lets its model go at the first chunk after the quiet period.
+    const afterQuiet = '\x1b[?25l'
+    const daemon = new FakeDaemonModel(size)
+    await daemon.feed(data)
+    await daemon.feed(afterQuiet)
+    const { runtime, handle } = await createTranscriptPane({
+      paneTitle: 'Claude Code',
+      foregroundProcess: 'claude',
+      launchAgent: 'claude',
+      size,
+      data: '',
+      settledDaemonSnapshot: () => daemon.snapshot()
+    })
+    vi.useFakeTimers()
+    runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, data, Date.now())
+    await vi.advanceTimersByTimeAsync(MAIN_TERMINAL_MODEL_DORMANT_AFTER_MS)
+    runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, afterQuiet, Date.now())
+    expect(runtime.isMainTerminalModelDormant(TRANSCRIPT_PANE_PTY_ID)).toBe(true)
+
+    const promise = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 15_000 })
+    promise.catch(() => {})
+    await vi.advanceTimersByTimeAsync(15_000)
+    await expect(promise).resolves.toMatchObject({
+      satisfied: false,
+      blockedReason: 'agent-trust-workspace'
+    })
   })
 })

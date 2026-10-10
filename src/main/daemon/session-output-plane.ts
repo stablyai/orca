@@ -7,10 +7,17 @@ import type { PendingOutputRecord, TakePendingOutputResult, TerminalSnapshot } f
 import type { TerminalOwner } from '../../shared/terminal-owner'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { nudgePowerShellPromptRepaint } from './session-powershell-prompt-repaint'
+import {
+  getDaemonTerminalViewAttributes,
+  onDaemonTerminalViewAttributes
+} from './daemon-view-attributes'
+import { shouldForwardHeadlessTerminalQueryReply } from '../runtime/headless-terminal-query-reply-policy'
+import type { TuiAgent } from '../../shared/tui-agent'
 
 // Why: bounds in-memory pending output when no client drains it; past the cap we drop records and flag
 // overflow so the next take falls back to one full snapshot. UTF-16 units; worst-case wire is ~6x, under NDJSON_MAX_LINE_BYTES (16MB).
 const PENDING_OUTPUT_MAX_BYTES = 2 * 1024 * 1024
+const FORWARD_QUERY_REPLIES = { forwardQueryReplies: true }
 
 export type AttachedClient = {
   token: symbol
@@ -27,7 +34,12 @@ export type SessionOutputPlaneOptions = {
   /** Read from the recovery barrier at snapshot time; the barrier scans bytes
    *  before this plane receives them, so its owner never lags the emulator. */
   getTerminalOwner?: (() => TerminalOwner | undefined) | undefined
+  launchAgent?: TuiAgent | null | undefined
+  /** Where a delegated query reply goes: the session's write path. */
+  writeQueryReply?: ((reply: string) => void) | undefined
 }
+
+export type SessionQueryResponder = { nativeWindowsConpty?: boolean }
 
 /** Everything downstream of the PTY: the scrollback emulator, the pending-output record buffer that
  *  feeds reattach/cold-restore, and fan-out to attached clients. */
@@ -42,6 +54,11 @@ export class SessionOutputPlane {
   private pendingOutputSeq = 0
   private _outputSequence = 0
   private deviceAttributesQueryFilter: StartupDeviceAttributesQueryFilter | null = null
+  // Why fields, not the options: a closure over the options would retain the spawn's history seed.
+  private readonly launchAgent: TuiAgent | null
+  private writeQueryReply: ((reply: string) => void) | null
+  private answersQueries = false
+  private readonly stopViewAttributes: () => void
   private disposed = false
 
   constructor(opts: SessionOutputPlaneOptions) {
@@ -50,12 +67,24 @@ export class SessionOutputPlane {
       cols: size.cols,
       rows: size.rows,
       scrollback: opts.scrollback,
-      wslDistro: opts.wslDistro
-      // No onData: the daemon emulator must never reply to query sequences — the renderer's xterm is
-      // the authoritative responder and a daemon reply would race ahead and clobber it. See HeadlessEmulator.
-      // The one exception is DA1 while the shell-ready barrier holds (below): the renderer's reply
+      wslDistro: opts.wslDistro,
+      // Replies stay silent unless main delegated this session's queries (setQueryResponder): while a
+      // view answers, a daemon reply would race ahead and clobber it. See HeadlessEmulator.
+      // DA1 while the shell-ready barrier holds is the other exception (below): the renderer's reply
       // would be queued behind the marker it is needed to produce, so it cannot be authoritative there.
+      onQueryReply: (reply) => {
+        if (shouldForwardHeadlessTerminalQueryReply(this.launchAgent, reply)) {
+          this.writeQueryReply?.(reply)
+        }
+      }
     })
+    this.launchAgent = opts.launchAgent ?? null
+    this.writeQueryReply = opts.writeQueryReply ?? null
+    // Why installed up front: the responder must see every OSC colour SET, even before a delegation.
+    this.emulator.installViewAttributeResponder(getDaemonTerminalViewAttributes)
+    this.stopViewAttributes = onDaemonTerminalViewAttributes((attributes) =>
+      this.emulator.applyPushedViewAttributes(attributes)
+    )
     // Why: seed recovery must precede listener registration; shells can emit their prompt synchronously once onData subscribes.
     // Why the every() short-circuit is safe: writeSync only fails emulator-wide (disposed / no sync write API), so later
     // chunks could not land either — and writing them past a dropped chunk would seed a torn stream.
@@ -70,11 +99,21 @@ export class SessionOutputPlane {
     return this.emulator.responderParser
   }
 
+  /** Main delegated this session's query replies (non-null) or took them back, from the next emitted byte. */
+  setQueryResponder(responder: SessionQueryResponder | null): void {
+    if (responder?.nativeWindowsConpty) {
+      this.emulator.installConptyPrimaryDeviceAttributesOverride()
+    }
+    this.answersQueries = responder !== null
+  }
+
   get hasAttachedClients(): boolean {
     return this.attachedClients.length > 0
   }
 
   attachClient(client: Omit<AttachedClient, 'token'>): symbol {
+    // Why: a delegation outlives a quit main; the attaching one starts as responder and delegates again.
+    this.answersQueries = false
     const token = Symbol('attach')
     this.attachedClients.push({ token, ...client })
     return token
@@ -208,7 +247,8 @@ export class SessionOutputPlane {
     // Why: absolute raw count (daemon stream thinning can drop bytes) lets a snapshot cover the gaps while the renderer dedups the tail.
     this._outputSequence += rawLength
     if (data.length > 0) {
-      this.emulator.write(data)
+      // Why per write: a chunk the emulator parses after a take-back was still emitted under delegation.
+      this.emulator.write(data, this.answersQueries ? FORWARD_QUERY_REPLIES : undefined)
       data = this.deviceAttributesQueryFilter?.accept(data) ?? data
     }
     if (data.length > 0) {
@@ -282,6 +322,9 @@ export class SessionOutputPlane {
   }
 
   disposeEmulator(): void {
+    this.answersQueries = false
+    this.writeQueryReply = null
+    this.stopViewAttributes()
     this.emulator.dispose()
   }
 }

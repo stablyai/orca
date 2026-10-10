@@ -78,6 +78,8 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
         deliveryInterestPtyCount: 0,
         hiddenDeliveryDroppedChars: 0,
         hiddenDeliveryDroppedChunks: 0,
+        daemonQueryResponderPtyCount: 0,
+        mainTerminalModelSeedFailureCount: 0,
         pendingDroppedChars: 0,
         diagnostics: EMPTY_PTY_MAIN_DELIVERY_DIAGNOSTICS,
         rendererLifecycleResetCount: 0,

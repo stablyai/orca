@@ -10,6 +10,13 @@ export async function confirmTerminalHostForegroundProcess(
   return session.confirmForegroundProcess()
 }
 
+export function getTerminalHostForegroundProcess(session: Session | undefined): string | null {
+  if (!session || !session.isAlive) {
+    return null
+  }
+  return session.getForegroundProcess()
+}
+
 export async function confirmTerminalHostShellForeground(
   session: Session | undefined,
   currentSession: () => Session | undefined

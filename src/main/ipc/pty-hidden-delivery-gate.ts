@@ -6,8 +6,8 @@
  * main then drops renderer-bound delivery AFTER model ingestion — the runtime
  * already parsed the chunk, and reveal restores from the model snapshot via
  * the existing seq-guarded machinery. Any renderer party that still needs raw
- * bytes (dispatcher sidecars) registers delivery
- * interest, which suppresses the gate for that PTY.
+ * bytes (dispatcher sidecars) registers delivery interest; main then sends that
+ * PTY's hidden bytes for sidecars only, and the view stays gated.
  */
 import type { GlobalSettings } from '../../shared/global-settings-types'
 
@@ -19,7 +19,7 @@ export type HiddenPtyDeliveryGateSettings = Pick<
 const hiddenRendererPtys = new Set<string>()
 // Why: sidecar consumers (paste-draft pacing, background agent launches,
 // automation observers) need live bytes even while no visible view exists. Any
-// registered interest suppresses the gate for that PTY.
+// registered interest turns drops for that PTY into sidecar-only delivery.
 const deliveryInterestRendererPtys = new Set<string>()
 // Why: reveal must restore from the model only when bytes were actually
 // dropped. Doubles as the one-shot marker latch: the first gated drop emits a
@@ -31,6 +31,18 @@ const droppedSinceHiddenPtys = new Set<string>()
 // reload/crash, so its hidden mark must outlive renderer-scoped resets until a
 // renderer unmarks it (visible mount) or the PTY is torn down.
 const runtimeOwnedHiddenRendererPtys = new Set<string>()
+
+// Why: a PTY whose main model is being rebuilt from the daemon snapshot keeps feeding its
+// renderer, which answers its queries, until the model has caught up with the stream.
+const modelHandoffPtys = new Set<string>()
+// Why: main asked the daemon to answer while its own model is dormant, so the view keeps
+// answering until the daemon's in-order marker confirms.
+const daemonHandoffPtys = new Set<string>()
+// Why: set by the daemon's in-order marker; after a take-back the view waits for the next one.
+const daemonResponderConfirmedPtys = new Set<string>()
+const hiddenMarkListeners = new Set<(id: string) => void>()
+const hiddenUnmarkListeners = new Set<(id: string) => void>()
+let viewGateChangeListener: ((id: string) => void) | null = null
 
 let droppedHiddenDeliveryChars = 0
 let droppedHiddenDeliveryChunks = 0
@@ -52,6 +64,7 @@ export function isHiddenPtyDeliveryGateEnabled(
  *  restore. Unmark is the only consumer of the latch. */
 export function markHiddenRendererPty(id: string): void {
   hiddenRendererPtys.add(id)
+  notifyHiddenMark(id)
 }
 
 /** Clears the hidden bit. Returns whether bytes were dropped while hidden so
@@ -59,6 +72,13 @@ export function markHiddenRendererPty(id: string): void {
 export function unmarkHiddenRendererPty(id: string): { droppedWhileHidden: boolean } {
   hiddenRendererPtys.delete(id)
   runtimeOwnedHiddenRendererPtys.delete(id)
+  for (const listener of hiddenUnmarkListeners) {
+    listener(id)
+  }
+  // Why: while the daemon still answers, the view stays gated; its marker consumes the latch.
+  if (daemonResponderConfirmedPtys.has(id)) {
+    return { droppedWhileHidden: false }
+  }
   const droppedWhileHidden = droppedSinceHiddenPtys.delete(id)
   return { droppedWhileHidden }
 }
@@ -71,6 +91,80 @@ export function isHiddenRendererPty(id: string): boolean {
 export function markRuntimeOwnedHiddenRendererPty(id: string): void {
   hiddenRendererPtys.add(id)
   runtimeOwnedHiddenRendererPtys.add(id)
+  notifyHiddenMark(id)
+}
+
+/** Runs synchronously inside every hidden mark, before the caller reads droppability, so a
+ *  listener that opens a model handoff keeps the PTY's bytes flowing from the first one. */
+export function registerHiddenRendererPtyMarkListener(listener: (id: string) => void): void {
+  hiddenMarkListeners.add(listener)
+}
+
+/** Runs inside every unmark, before the caller reads droppability. */
+export function registerHiddenRendererPtyUnmarkListener(listener: (id: string) => void): void {
+  hiddenUnmarkListeners.add(listener)
+}
+
+function notifyHiddenMark(id: string): void {
+  for (const listener of hiddenMarkListeners) {
+    listener(id)
+  }
+}
+
+/** Suppresses the gate for `id` while main's model catches up with the stream. */
+export function setHiddenDeliveryModelHandoff(id: string, pending: boolean): void {
+  const changed = pending ? !modelHandoffPtys.has(id) : modelHandoffPtys.has(id)
+  if (pending) {
+    modelHandoffPtys.add(id)
+  } else {
+    modelHandoffPtys.delete(id)
+  }
+  if (changed) {
+    viewGateChangeListener?.(id)
+  }
+}
+
+/** Keeps `id`'s view answering until the daemon confirms the delegation main requested. */
+export function setHiddenDeliveryDaemonHandoff(id: string, pending: boolean): void {
+  const changed = pending !== daemonHandoffPtys.has(id)
+  if (pending) {
+    daemonHandoffPtys.add(id)
+  } else {
+    daemonHandoffPtys.delete(id)
+  }
+  if (changed) {
+    viewGateChangeListener?.(id)
+  }
+}
+
+/** The daemon's in-order responder marker. Returns whether a released, visible view needs the
+ *  restore its unmark deferred. */
+export function setDaemonQueryResponderConfirmed(
+  id: string,
+  confirmed: boolean
+): { droppedWhileHidden: boolean } {
+  const changed = confirmed !== daemonResponderConfirmedPtys.has(id)
+  if (confirmed) {
+    daemonResponderConfirmedPtys.add(id)
+  } else {
+    daemonResponderConfirmedPtys.delete(id)
+  }
+  if (changed) {
+    viewGateChangeListener?.(id)
+  }
+  const released = changed && !confirmed && !hiddenRendererPtys.has(id)
+  return { droppedWhileHidden: released && droppedSinceHiddenPtys.delete(id) }
+}
+
+export function isDaemonQueryResponderConfirmed(id: string): boolean {
+  return daemonResponderConfirmedPtys.has(id)
+}
+
+/** Delivery re-evaluates queued bytes whenever the view gate flips without a mark. */
+export function setHiddenDeliveryViewGateChangeListener(
+  listener: ((id: string) => void) | null
+): void {
+  viewGateChangeListener = listener
 }
 
 export function isRuntimeOwnedHiddenRendererPty(id: string): boolean {
@@ -92,15 +186,56 @@ export function setRendererPtyDeliveryInterest(id: string, interested: boolean):
   }
 }
 
+/** Hidden for the view whether or not a sidecar holds interest: the view restores
+ *  from the model on reveal, so main (or the daemon) owns the PTY's query replies meanwhile. */
+export function isHiddenRendererPtyViewGated(
+  id: string,
+  settings: HiddenPtyDeliveryGateSettings | null | undefined
+): boolean {
+  // Why first: until the daemon's take-back marker, the view must not parse a byte it answers.
+  if (daemonResponderConfirmedPtys.has(id)) {
+    return true
+  }
+  return (
+    isHiddenPtyDeliveryGateEnabled(settings) &&
+    hiddenRendererPtys.has(id) &&
+    !modelHandoffPtys.has(id) &&
+    !daemonHandoffPtys.has(id)
+  )
+}
+
+/** How main delivers a PTY's bytes to the renderer; the one owner of that decision:
+ *  - 'drop': hidden view, no sidecar wants the bytes; the view restores from the model on reveal.
+ *  - 'sidecarsOnly': hidden view, sidecars still get the bytes; the view skips them.
+ *  - 'parse': the view parses the bytes.
+ *  Main's model owns a chunk's query replies unless its delivery is 'parse'. Delivery stamps
+ *  each chunk with the mode it had at ingestion, so a later flip cannot move that ownership. */
+export type RendererPtyViewDelivery = 'parse' | 'sidecarsOnly' | 'drop'
+
+export function rendererPtyViewDelivery(
+  id: string,
+  settings: HiddenPtyDeliveryGateSettings | null | undefined
+): RendererPtyViewDelivery {
+  if (isHiddenRendererPtyViewGated(id, settings)) {
+    return deliveryInterestRendererPtys.has(id) ? 'sidecarsOnly' : 'drop'
+  }
+  return 'parse'
+}
+
 export function shouldDropHiddenRendererPtyData(
   id: string,
   settings: HiddenPtyDeliveryGateSettings | null | undefined
 ): boolean {
-  return (
-    isHiddenPtyDeliveryGateEnabled(settings) &&
-    hiddenRendererPtys.has(id) &&
-    !deliveryInterestRendererPtys.has(id)
-  )
+  return rendererPtyViewDelivery(id, settings) === 'drop'
+}
+
+/** Hidden bytes still sent because a sidecar needs them, which the view must skip:
+ *  the renderer credits them on receipt, so a throttled hidden view never paces the PTY. */
+export function shouldDeliverHiddenRendererPtyDataToSidecarsOnly(
+  id: string,
+  settings: HiddenPtyDeliveryGateSettings | null | undefined
+): boolean {
+  return rendererPtyViewDelivery(id, settings) === 'sidecarsOnly'
 }
 
 /** Record one gated drop. Returns whether the caller should emit the one-shot
@@ -115,7 +250,10 @@ export function recordHiddenRendererPtyDataDrop(
     return { shouldEmitRestoreMarker: false }
   }
   droppedSinceHiddenPtys.add(id)
-  return { shouldEmitRestoreMarker: true }
+  // Why: a revealed view gated only until the daemon's take-back restores when that marker lands.
+  return {
+    shouldEmitRestoreMarker: hiddenRendererPtys.has(id) || !daemonResponderConfirmedPtys.has(id)
+  }
 }
 
 /** Renderer process replaced (reload / crash): its ref-counted interest
@@ -140,6 +278,16 @@ export function clearHiddenRendererPtyDeliveryState(id: string): void {
   runtimeOwnedHiddenRendererPtys.delete(id)
   deliveryInterestRendererPtys.delete(id)
   droppedSinceHiddenPtys.delete(id)
+  modelHandoffPtys.delete(id)
+  daemonHandoffPtys.delete(id)
+  daemonResponderConfirmedPtys.delete(id)
+}
+
+let mainTerminalModelSeedFailures = 0
+
+/** A dormant model's rebuild gave up, so tui-idle stopped waiting for that pane's screen. */
+export function recordMainTerminalModelSeedFailure(): void {
+  mainTerminalModelSeedFailures += 1
 }
 
 export type HiddenRendererPtyDeliveryDebug = {
@@ -147,6 +295,8 @@ export type HiddenRendererPtyDeliveryDebug = {
   deliveryInterestPtyCount: number
   hiddenDeliveryDroppedChars: number
   hiddenDeliveryDroppedChunks: number
+  daemonQueryResponderPtyCount: number
+  mainTerminalModelSeedFailureCount: number
 }
 
 export function getHiddenRendererPtyDeliveryDebug(): HiddenRendererPtyDeliveryDebug {
@@ -154,13 +304,16 @@ export function getHiddenRendererPtyDeliveryDebug(): HiddenRendererPtyDeliveryDe
     hiddenDeliveryGatedPtyCount: hiddenRendererPtys.size,
     deliveryInterestPtyCount: deliveryInterestRendererPtys.size,
     hiddenDeliveryDroppedChars: droppedHiddenDeliveryChars,
-    hiddenDeliveryDroppedChunks: droppedHiddenDeliveryChunks
+    hiddenDeliveryDroppedChunks: droppedHiddenDeliveryChunks,
+    daemonQueryResponderPtyCount: daemonResponderConfirmedPtys.size,
+    mainTerminalModelSeedFailureCount: mainTerminalModelSeedFailures
   }
 }
 
 export function resetHiddenRendererPtyDeliveryDebugCounters(): void {
   droppedHiddenDeliveryChars = 0
   droppedHiddenDeliveryChunks = 0
+  mainTerminalModelSeedFailures = 0
 }
 
 /** Test seam: reset all module state between tests. */
@@ -169,5 +322,11 @@ export function _resetHiddenRendererPtyDeliveryGateForTest(): void {
   runtimeOwnedHiddenRendererPtys.clear()
   deliveryInterestRendererPtys.clear()
   droppedSinceHiddenPtys.clear()
+  modelHandoffPtys.clear()
+  daemonHandoffPtys.clear()
+  daemonResponderConfirmedPtys.clear()
+  hiddenMarkListeners.clear()
+  hiddenUnmarkListeners.clear()
+  viewGateChangeListener = null
   resetHiddenRendererPtyDeliveryDebugCounters()
 }

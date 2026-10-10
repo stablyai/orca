@@ -327,6 +327,8 @@ export type DaemonRequest =
   | TakePendingOutputRequest
   | PtyOwnerQueryProtocol.CloseStartupQueryAuthorityRequest
   | PtyOwnerQueryProtocol.SetColorQueryReplyColorsRequest
+  | PtyOwnerQueryProtocol.SetTerminalViewAttributesRequest
+  | PtyOwnerQueryProtocol.SetSessionQueryResponderRequest
 
 // ─── RPC Responses (Daemon → Client, on control socket) ────────────
 

@@ -27,6 +27,8 @@ export class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends OrcaRuntimeW
     // literally (Bug E / #7329).
     pendingEscapeTailAnsi?: string
   } | null> {
+    // Why: a dormant model is rebuilt here, and the read keeps it from going dormant again.
+    this.noteMainTerminalModelDemand(ptyId)
     const state = this.headlessTerminals.get(ptyId)
     if (!state) {
       return null

@@ -160,6 +160,17 @@ export type RuntimePtyController = {
     lastTitle?: string
     kittyKeyboardFlags?: number
   } | null>
+  /** True when serializeProviderBuffer's seq is settled for this PTY, so main can rebuild its model from it. */
+  canProvideSettledBufferSnapshot?(ptyId: string): boolean
+  /** True when the PTY's daemon can answer its terminal queries for a view-gated pane. */
+  canDelegateDaemonQueryResponder?(ptyId: string): boolean
+  /** Delegates (true) or takes back (false) the PTY's query replies; false when nothing was sent.
+   *  The daemon acknowledges in byte order with a queryResponderMarker stream event. */
+  setDaemonQueryResponder?(
+    ptyId: string,
+    responder: boolean,
+    opts: { nativeWindowsConpty: boolean }
+  ): boolean
   /** Authoritative provider-owned snapshot for restored PTYs with no mounted renderer. */
   serializeProviderBuffer?(
     ptyId: string,

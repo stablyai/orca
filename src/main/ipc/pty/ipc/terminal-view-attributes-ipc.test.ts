@@ -150,3 +150,37 @@ describe('one viewer colour value for every PTY owner', () => {
     expect(published).toEqual([CLIENT, DESKTOP])
   })
 })
+
+describe('view attributes for a delegated daemon responder', () => {
+  const originalLocal = getLocalPtyProvider()
+  const settings = getDefaultSettings('/tmp')
+
+  class AttributeRecordingProvider extends LocalPtyProvider {
+    readonly attributes: TerminalViewAttributes[] = []
+
+    setTerminalViewAttributes(attributes: TerminalViewAttributes): void {
+      this.attributes.push(attributes)
+    }
+  }
+
+  afterEach(() => {
+    _resetTerminalViewAttributesForTest()
+    _resetColorQueryReplyColorsForTest()
+    setLocalPtyProvider(originalLocal)
+  })
+
+  it('pushes each new renderer push and re-pushes the latest to a replacement owner', () => {
+    const owner = new AttributeRecordingProvider()
+    setLocalPtyProvider(owner)
+    installTerminalViewAttributesIpc({ getSettings: () => settings })
+    expect(owner.attributes).toEqual([])
+
+    setTerminalViewAttributes(DESKTOP_ATTRIBUTES)
+    setTerminalViewAttributes({ ...DESKTOP_ATTRIBUTES })
+    expect(owner.attributes).toEqual([DESKTOP_ATTRIBUTES])
+
+    const replacement = new AttributeRecordingProvider()
+    setLocalPtyProvider(replacement)
+    expect(replacement.attributes).toEqual([DESKTOP_ATTRIBUTES])
+  })
+})

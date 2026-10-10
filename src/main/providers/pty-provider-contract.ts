@@ -2,6 +2,7 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import type { AgentWorkspaceTrustSpawnRequest } from '../../shared/agent-workspace-trust-spawn-request'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
+import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { PtyBackgroundStreamEvent, PtyDataEvent } from './pty-provider-events'
@@ -193,6 +194,8 @@ export type IPtyProvider = {
   ) => Promise<PtyProviderBufferSnapshot | null>
   /** Whether this exact PTY can return a sequence-safe provider snapshot. */
   canProvideAuthoritativeBufferSnapshot?: (id: string) => boolean
+  /** Whether that snapshot's seq is settled: it never counts a byte the image does not show. */
+  canProvideSettledBufferSnapshot?: (id: string) => boolean
   /**
    * The size the PTY has ACTUALLY applied, not the last size requested.
    * resize() is fire-and-forget for remote providers (daemon/SSH `notify`),
@@ -236,6 +239,17 @@ export type IPtyProvider = {
   closeStartupQueryAuthority?: (id: string) => Promise<number> | number
   /** Host-wide viewer colours the PTY owner answers OSC 10/11 from. */
   setColorQueryReplyColors?: (colors: TerminalOscColorQueryReplyColors) => void
+  /** Viewer attributes a delegated query responder answers from. */
+  setTerminalViewAttributes?: (attributes: TerminalViewAttributes) => void
+  /** Whether this PTY's owner can answer its terminal queries for a view-gated pane. */
+  canDelegateQueryResponder?: (id: string) => boolean
+  /** Delegates (true) or takes back (false) the PTY's query replies; false when nothing was sent.
+   *  The owner acknowledges in byte order with a `queryResponderMarker` stream event. */
+  setSessionQueryResponder?: (
+    id: string,
+    responder: boolean,
+    opts?: { nativeWindowsConpty?: boolean }
+  ) => boolean
   acknowledgeDataEvent(id: string, charCount: number): void
   hasChildProcesses(id: string): Promise<boolean>
   getForegroundProcess(id: string): Promise<string | null>
