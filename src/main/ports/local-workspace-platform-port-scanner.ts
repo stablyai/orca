@@ -113,10 +113,15 @@ async function dispatchPlatformListeningPortScan(
   throw new Error(`Port scanning is not supported on ${process.platform}`)
 }
 
+// Why (#24112): without -b, lsof stat()s every mount first, so a hung hard-mounted NFS share
+// leaves an unkillable lsof behind on each scan. -w drops the warnings -b then prints.
+const LSOF_SKIP_MOUNT_STAT = ['-b', '-w']
+
 async function scanDarwinLsofPorts(
   options: WorkspacePortScanOptions
 ): Promise<PlatformListeningPortScan> {
   const { stdout, spawnMs } = await runPortScanCommand('lsof', [
+    ...LSOF_SKIP_MOUNT_STAT,
     '-nP',
     '-iTCP',
     '-sTCP:LISTEN',
@@ -258,6 +263,7 @@ async function loadDarwinProcessMetadata(pids: Set<number>): Promise<Map<number,
   // Why (#11161): sequential, not Promise.all — the probe worker dispatches one
   // command at a time, so issuing both at once would only queue the second.
   const cwdOutput = await runPortScanCommand('lsof', [
+    ...LSOF_SKIP_MOUNT_STAT,
     '-a',
     '-p',
     pidList,
