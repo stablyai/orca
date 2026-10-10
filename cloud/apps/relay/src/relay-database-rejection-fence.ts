@@ -67,8 +67,9 @@ function rejectionFields(reason: unknown): { code: string; message: string } {
 
 // Installed once by the process entry point. Fatal rejections are rethrown, which ends the
 // process exactly as Node's default would, after one line that names them.
-export function handleRelayUnhandledRejection(reason: unknown): void {
-  if (isFencedRelayDatabaseRejection(reason)) {
+// `fenced` false is the per-cell switch turned off: every rejection is fatal, as before #26817.
+export function handleRelayUnhandledRejection(reason: unknown, fenced = true): void {
+  if (fenced && isFencedRelayDatabaseRejection(reason)) {
     console.warn(
       JSON.stringify({ event: 'orca_relay_database_rejection_fenced', ...rejectionFields(reason) })
     )

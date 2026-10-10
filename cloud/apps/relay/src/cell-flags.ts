@@ -6,16 +6,35 @@ import type { ControlFlagParse } from './relay-control-flag-channel.js'
 export type CellFlags = {
   readinessLocal: boolean
   ticketCheck: 'off' | 'shadow'
+  // Off restores Node's default: any unhandled rejection ends the process (#26817 reverted).
+  rejectionFence: boolean
+  // Past statement_timeout before a lost reply ends its connection; absent keeps the boot value.
+  readTimeoutMarginMs?: number
 }
 
-export const CELL_FLAG_DEFAULTS: CellFlags = { readinessLocal: false, ticketCheck: 'off' }
+export const CELL_FLAG_DEFAULTS: CellFlags = {
+  readinessLocal: false,
+  ticketCheck: 'off',
+  rejectionFence: true
+}
+
+export const READ_TIMEOUT_MARGIN_MIN_MS = 1_000
+export const READ_TIMEOUT_MARGIN_MAX_MS = 60_000
 
 export const CELL_FLAGS_APPLIED_EVENT = 'orca_relay_cell_flags_applied'
 
 const CellFlagsSchema = z.object({
   readinessLocal: z.boolean().default(CELL_FLAG_DEFAULTS.readinessLocal),
-  ticketCheck: z.enum(['off', 'shadow']).default(CELL_FLAG_DEFAULTS.ticketCheck)
+  ticketCheck: z.enum(['off', 'shadow']).default(CELL_FLAG_DEFAULTS.ticketCheck),
+  rejectionFence: z.boolean().default(CELL_FLAG_DEFAULTS.rejectionFence),
+  readTimeoutMarginMs: z
+    .number()
+    .int()
+    .min(READ_TIMEOUT_MARGIN_MIN_MS)
+    .max(READ_TIMEOUT_MARGIN_MAX_MS)
+    .optional()
 })
+const KNOWN_FLAG_KEYS = new Set(Object.keys(CellFlagsSchema.shape))
 
 export function cellFlagObjectName(cellId: string): string {
   return `cells/${cellId}.json`
@@ -29,6 +48,12 @@ export function cellFlagParser(cellId: string): ControlFlagParse<CellFlags> {
   })
   return (body) => {
     const parsed = ObjectSchema.safeParse(body)
-    return parsed.success ? parsed.data.flags : null
+    if (!parsed.success) return null
+    const named = body !== null && typeof body === 'object' && 'flags' in body ? body.flags : {}
+    const ignoredKeys =
+      named !== null && typeof named === 'object'
+        ? Object.keys(named).filter((key) => !KNOWN_FLAG_KEYS.has(key)).sort()
+        : []
+    return { flags: parsed.data.flags, ignoredKeys }
   }
 }
