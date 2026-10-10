@@ -44,12 +44,25 @@ function fixture() {
   writeFileSync(
     join(compiler, 'bin', 'tsc'),
     `import { appendFileSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { runProcess } from ${JSON.stringify(pathToFileURL(require.resolve('@orca/process-host')).href)}
 appendFileSync('.compiler-invocations', 'compile\\n')
 if (existsSync('.compiler-input-edit')) {
   writeFileSync('src/entry.ts', readFileSync('.compiler-input-edit'))
   rmSync('.compiler-input-edit')
 }
-await import(${JSON.stringify(pathToFileURL(join(compilerDir, 'bin', 'tsc')).href)})
+const result = await runProcess({
+  program: process.execPath,
+  args: [${JSON.stringify(join(compilerDir, 'bin', 'tsc'))}, ...process.argv.slice(2)],
+  cwd: process.cwd(),
+  timeoutMs: 120_000
+})
+if (existsSync('.compiler-input-restore')) {
+  writeFileSync('src/entry.ts', readFileSync('.compiler-input-restore'))
+  rmSync('.compiler-input-restore')
+}
+process.stdout.write(result.stdout)
+process.stderr.write(result.stderr)
+process.exitCode = result.code ?? 1
 `
   )
   writeFileSync(join(root, 'package.json'), JSON.stringify({ name: '@orca/process-host' }))
@@ -249,5 +262,23 @@ describe('process-host compilation reuse', () => {
     await buildPackageDist(root)
     await buildPackageDist(root)
     expect(compilationCount(root)).toBe(4)
+  })
+
+  it('recompiles when source changes and returns to its original contents during compilation', async () => {
+    const root = fixture()
+    writeFileSync(join(root, '.compiler-input-edit'), 'export const value = 2\n')
+    writeFileSync(join(root, '.compiler-input-restore'), 'export const value = 1\n')
+
+    await buildPackageDist(root)
+
+    expect(readFileSync(join(root, 'dist', 'entry.js'), 'utf8')).toContain('value = 2')
+    expect(readFileSync(join(root, 'src', 'entry.ts'), 'utf8')).toContain('value = 1')
+    expect(existsSync(join(root, stateFile))).toBe(false)
+
+    await buildPackageDist(root)
+    await buildPackageDist(root)
+
+    expect(readFileSync(join(root, 'dist', 'entry.js'), 'utf8')).toContain('value = 1')
+    expect(compilationCount(root)).toBe(2)
   })
 })

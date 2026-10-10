@@ -8,6 +8,7 @@ import {
   renameSync,
   rmSync,
   rmdirSync,
+  statSync,
   writeFileSync
 } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -19,8 +20,21 @@ import lockfile from 'proper-lockfile'
 
 const BUILD_STATE_FILE = '.dist-build-state.json'
 
-function hashDirectory(hash, directory) {
+function hashBuildInput(hash, file) {
+  const contents = readFileSync(file)
+  const { mtimeNs, ctimeNs, ino } = statSync(file, { bigint: true })
+  // Content can change and return to its original value while the compiler reads it.
+  hash
+    .update(JSON.stringify([file, contents.length, `${mtimeNs}`, `${ctimeNs}`, `${ino}`]))
+    .update(contents)
+}
+
+function hashDirectory(hash, directory, buildInputs = false) {
   for (const file of listFiles(directory).sort()) {
+    if (buildInputs) {
+      hashBuildInput(hash, join(directory, file))
+      continue
+    }
     const contents = readFileSync(join(directory, file))
     hash.update(JSON.stringify([directory, file, contents.length])).update(contents)
   }
@@ -115,10 +129,10 @@ function inputFingerprint(packageDir, compiler, compiledFiles) {
       compilerManifest,
       compiler
     ]) {
-      hash.update(file).update(readFileSync(file))
+      hashBuildInput(hash, file)
     }
     for (const root of roots) {
-      hashDirectory(hash, root)
+      hashDirectory(hash, root, true)
     }
     return hash.digest('hex')
   } catch {
