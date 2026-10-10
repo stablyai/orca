@@ -42,6 +42,11 @@ import { acquireCodexStructuredSession } from './codex-structured-session-acquir
 import { codexStoppedRequestEndWait, settleCodexRequestEndWaiters } from './codex-request-end-wait'
 import { changeCodexThreadGoal } from './codex-structured-thread-goal'
 import {
+  codexBackgroundTaskStops,
+  startCodexTerminalStopProbe,
+  stopCodexBackgroundCommands
+} from './codex-background-terminals'
+import {
   answerCodexStructuredPrompt,
   cancelCodexStructuredTurn
 } from './codex-structured-prompt-ownership'
@@ -143,6 +148,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       session.backgroundTasks.observe(event, session.prompts.takeAbandonedCommands())
       // After the journal and the parent's republished row, never ahead of either.
       session.backgroundTasks.publishChildWork()
+      startCodexTerminalStopProbe(this.sessions, event.sessionId, session, this.deps)
     }
     settleCodexRequestEndWaiters(session)
     this.deps.onEvent?.(event)
@@ -192,11 +198,13 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     )
   }
 
-  // Codex exposes no honest stop for a child thread or a persistent command.
   backgroundTaskStops: NonNullable<StructuredAgentSessionAdapter['backgroundTaskStops']> = (
     sessionId
-  ) =>
-    this.sessions.has(sessionId) ? { supportsTaskStop: false, supportsStopAll: false } : undefined
+  ) => codexBackgroundTaskStops(this.sessions.get(sessionId))
+
+  stopBackgroundTasks: NonNullable<StructuredAgentSessionAdapter['stopBackgroundTasks']> = (
+    input
+  ) => stopCodexBackgroundCommands(this.sessions, input, this.deps.requestTimeoutMs)
 
   bindPromptItemId = (
     sessionId: string,

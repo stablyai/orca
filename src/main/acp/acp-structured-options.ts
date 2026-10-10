@@ -14,7 +14,9 @@ import type { AcpStructuredConnection } from './acp-structured-connection'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
 import {
   unpickedSessionConfiguredChoice,
-  type AgentModelCatalogConfiguredChoice
+  withLiveCatalogListing,
+  type AgentModelCatalogConfiguredChoice,
+  type AgentModelCatalogLiveListing
 } from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
 import {
   SessionConfigSelectGroupSchema,
@@ -181,6 +183,11 @@ export class AcpStructuredOptions {
       models,
       current
     })
+  }
+
+  /** What this session's start hands the host once: its listing, with what it resolved. */
+  startListing(): AgentModelCatalogLiveListing {
+    return withLiveCatalogListing(this.read(), this.configuredDefault()).catalogListing
   }
 
   /** The values the agent reports now, as the record's options would name them. */

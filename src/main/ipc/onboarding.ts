@@ -1,11 +1,12 @@
 import { ipcMain } from 'electron'
 import { sanitizeOnboardingUpdate, type Store } from '../persistence'
 import type { OnboardingState } from '../../shared/onboarding-state-types'
+import type { NativeChatUpgradeTipVariant } from '../../shared/native-chat-upgrade-tip-audience'
 
 export function registerOnboardingHandlers(store: Store): void {
   ipcMain.removeHandler('onboarding:get')
   ipcMain.removeHandler('onboarding:update')
-  ipcMain.removeHandler('onboarding:isInNativeChatUpgradeTipAudience')
+  ipcMain.removeHandler('onboarding:getNativeChatUpgradeTipVariant')
 
   ipcMain.handle('onboarding:get', (): OnboardingState => store.getOnboarding())
   // Why: never trust renderer input — a compromised/buggy caller could send
@@ -14,7 +15,7 @@ export function registerOnboardingHandlers(store: Store): void {
   ipcMain.handle('onboarding:update', (_event, updates: unknown): OnboardingState => {
     return store.updateOnboarding(sanitizeOnboardingUpdate(updates))
   })
-  ipcMain.handle('onboarding:isInNativeChatUpgradeTipAudience', (): boolean =>
-    store.isInNativeChatUpgradeTipAudience()
+  ipcMain.handle('onboarding:getNativeChatUpgradeTipVariant', (): NativeChatUpgradeTipVariant =>
+    store.getNativeChatUpgradeTipVariant()
   )
 }

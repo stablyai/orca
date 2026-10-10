@@ -211,6 +211,80 @@ describe('ClaudeAccountService', () => {
     expect(f.runtimeAuth.removeAccountFolder).not.toHaveBeenCalled()
   })
 
+  it('lets Claude open the browser itself for a plain sign-in', async () => {
+    const f = fixture()
+    f.runLogin.mockImplementationOnce(async (_args, config, _timeoutMs, options) => {
+      expect(options?.browser).toBeUndefined()
+      expect(existsSync(join(config.windowsPath, '.orca-sign-in-browser'))).toBe(false)
+      f.signIn(newId(f), 'new@example.test')
+      return ''
+    })
+    await f.service.addAccount({ runtime: 'host' })
+    expect(f.runLogin).toHaveBeenCalledTimes(1)
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'hands the link Claude gives BROWSER to Settings when asked to copy it',
+    async () => {
+      const LINK =
+        'https://claude.com/cai/oauth/authorize?redirect_uri=http%3A%2F%2Flocalhost%3A5000%2Fcallback'
+      const f = fixture()
+      let copied: string | null = null
+      f.runLogin.mockImplementationOnce(async (_args, _config, _timeoutMs, options) => {
+        // Stands in for Claude running BROWSER, then finishing once the browser signs in.
+        writeFileSync(`${options!.browser}.link`, LINK)
+        await vi.waitFor(() => expect(copied).toBe(LINK))
+        f.signIn(newId(f), 'new@example.test')
+        return ''
+      })
+      const adding = f.service.addAccount({ runtime: 'host' }, true)
+      copied = await f.service.waitForSignInLink()
+      await adding
+      expect(existsSync(join(f.home(newId(f)), '.orca-sign-in-browser'))).toBe(false)
+      await expect(f.service.waitForSignInLink()).resolves.toBeNull()
+    }
+  )
+
+  it('fails a copy-link sign-in it cannot catch, rather than opening a browser', async () => {
+    const f = fixture()
+    // A folder that does not exist: the BROWSER stand-in cannot be written there.
+    f.runtimeAuth.prepareAccountFolder.mockImplementationOnce(async (id: string) => ({
+      configDir: join(f.root, id, 'missing'),
+      readPath: join(f.root, id, 'missing')
+    }))
+    const adding = f.service.addAccount({ runtime: 'host' }, true)
+    await expect(f.service.waitForSignInLink()).resolves.toBeNull()
+    await expect(adding).rejects.toThrow('Claude sign-in failed. Please try again.')
+    expect(f.runLogin).not.toHaveBeenCalled()
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'ends a copy-link sign-in when Claude hands BROWSER something other than a sign-in link',
+    async () => {
+      const f = fixture()
+      f.runLogin.mockImplementationOnce(
+        (_args, _config, _timeoutMs, options) =>
+          new Promise((_resolve, reject) => {
+            writeFileSync(`${options!.browser}.link`, 'https://example.test/not-a-sign-in')
+            options?.signal?.addEventListener('abort', () =>
+              reject(new Error('Claude sign-in was cancelled.'))
+            )
+          })
+      )
+      const adding = f.service.addAccount({ runtime: 'host' }, true)
+      await expect(f.service.waitForSignInLink()).resolves.toBeNull()
+      await expect(adding).rejects.toThrow('Claude sign-in failed. Please try again.')
+    }
+  )
+
+  it('reports no link when a copy-link sign-in ends before Claude hands one over', async () => {
+    const f = fixture()
+    f.runLogin.mockRejectedValueOnce(new Error('Claude sign-in was cancelled.'))
+    const adding = f.service.reauthenticateAccount('b', true)
+    await expect(f.service.waitForSignInLink()).resolves.toBeNull()
+    await expect(adding).rejects.toThrow('cancelled')
+  })
+
   it('runs a WSL login against the guest folder', async () => {
     const f = fixture()
     f.runtimeAuth.prepareAccountFolder.mockImplementation(async (id: string) => {

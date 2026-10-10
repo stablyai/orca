@@ -8,7 +8,8 @@ import { JsonlRpcResponseError } from '../jsonl-rpc/peer'
 import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import {
   unpickedSessionConfiguredChoice,
-  type AgentModelCatalogConfiguredChoice
+  withLiveCatalogListing,
+  type AgentModelCatalogLiveListing
 } from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
 import { piRpcProviderLink, type PiRpcResolvedLaunch } from './rpc-launch-resolution'
 import {
@@ -26,9 +27,6 @@ export class PiRpcSessionStartup {
   commands?: AgentSessionSlashCommand[]
   /** What the start listed; a signed-out Pi lists no model. */
   options?: AgentSessionOptionsResult
-  /** What this child started on, as its config's default; never re-read, so a later switch (an
-   *  extension's or the user's) teaches nothing. */
-  startChoice?: AgentModelCatalogConfiguredChoice | null
   private readonly controller = new AbortController()
 
   constructor(
@@ -92,13 +90,14 @@ export class PiRpcSessionStartup {
     // is signed out, and what it started on names its config's default.
     const options = await this.readListing()
     this.assertLive()
+    // What it started on names its config's default once; a later switch teaches nothing.
+    let catalogListing: AgentModelCatalogLiveListing | undefined
     if (options) {
       this.options = options
-      this.startChoice = unpickedSessionConfiguredChoice({
-        resolvesConfig: this.resolvesConfig,
-        picked,
-        ...options
-      })
+      catalogListing = withLiveCatalogListing(
+        options,
+        unpickedSessionConfiguredChoice({ resolvesConfig: this.resolvesConfig, picked, ...options })
+      ).catalogListing
     }
     this.started = true
     this.deps.onLifecycle({
@@ -107,7 +106,8 @@ export class PiRpcSessionStartup {
       link,
       reportedOptions: options?.current ?? current,
       restoreSkippedOptions: skipped,
-      optionRevision
+      optionRevision,
+      ...(catalogListing ? { catalogListing } : {})
     })
     await this.readCommands()
   }

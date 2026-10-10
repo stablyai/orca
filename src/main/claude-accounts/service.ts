@@ -18,6 +18,7 @@ import type { ClaudeAccountSelectionTarget } from './runtime-selection'
 export class ClaudeAccountService {
   private mutationQueue: Promise<unknown> = Promise.resolve()
   private cancelPendingClaudeLogin: (() => boolean) | null = null
+  private pendingSignInLink: Promise<string | null> | null = null
   private readonly selection: ClaudeAccountSelection
   private readonly registration: ClaudeAccountRegistration
 
@@ -42,12 +43,23 @@ export class ClaudeAccountService {
   }
 
   /** A hidden `claude auth login` opens the browser and writes into the new account's folder. */
-  addAccount(target: ClaudeAccountSelectionTarget = {}): Promise<ClaudeRateLimitAccountsState> {
-    return this.signInHidden({ runtime: target.runtime, wslDistro: target.wslDistro })
+  addAccount(
+    target: ClaudeAccountSelectionTarget = {},
+    copyLink = false
+  ): Promise<ClaudeRateLimitAccountsState> {
+    return this.signInHidden({ runtime: target.runtime, wslDistro: target.wslDistro }, copyLink)
   }
 
-  reauthenticateAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
-    return this.signInHidden({ accountId })
+  reauthenticateAccount(
+    accountId: string,
+    copyLink = false
+  ): Promise<ClaudeRateLimitAccountsState> {
+    return this.signInHidden({ accountId }, copyLink)
+  }
+
+  /** The latest hidden sign-in's link once Claude hands it over; null if it ends without one. */
+  waitForSignInLink(): Promise<string | null> {
+    return this.pendingSignInLink ?? Promise.resolve(null)
   }
 
   cancelPendingLogin(): boolean {
@@ -91,18 +103,35 @@ export class ClaudeAccountService {
     return this.runtimeAuth.getRuntimeConfigDir(target)
   }
 
-  private signInHidden(request: ClaudeSignInRequest): Promise<ClaudeRateLimitAccountsState> {
+  private signInHidden(
+    request: ClaudeSignInRequest,
+    copyLink: boolean
+  ): Promise<ClaudeRateLimitAccountsState> {
     this.supersedePendingLogin()
-    return this.serializeMutation(() =>
-      this.registration.signIn(request, (folder) =>
-        runClaudeLoginSession(folder, {
-          runCommand: this.runLoginCommand,
-          setCancel: (cancel) => {
-            this.cancelPendingClaudeLogin = cancel
-          }
-        })
-      )
-    )
+    // Why set before queueing: the renderer asks for the link right after starting the sign-in.
+    const signInLink = copyLink ? Promise.withResolvers<string | null>() : null
+    this.pendingSignInLink = signInLink?.promise ?? null
+    return this.serializeMutation(async () => {
+      try {
+        return await this.registration.signIn(request, (folder) =>
+          runClaudeLoginSession(
+            folder,
+            {
+              runCommand: this.runLoginCommand,
+              setCancel: (cancel) => {
+                this.cancelPendingClaudeLogin = cancel
+              }
+            },
+            signInLink?.resolve
+          )
+        )
+      } finally {
+        signInLink?.resolve(null)
+        if (signInLink && this.pendingSignInLink === signInLink.promise) {
+          this.pendingSignInLink = null
+        }
+      }
+    })
   }
 
   // Why before the queue, not inside it: the abandoned login owns the queue slot every later

@@ -28,6 +28,10 @@ import { agentModelCatalogFingerprint } from '../native-chat/agent-model-catalog
 import { createPiModelCatalogProbe, piModelCatalogFromListing } from './rpc-model-catalog-probe'
 import type { PiRpcConnection } from './rpc-session'
 import { PiRpcSessionAdapter } from './rpc-session-adapter'
+import type {
+  StructuredAgentSessionLifecycleEvent,
+  StructuredAgentSessionStartedEvent
+} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 
 const PI_HOME = { variable: 'PI_CODING_AGENT_DIR', path: '/homes/pi' }
 // What `pi --list-models` prints: the first row is not the model Pi starts on.
@@ -75,10 +79,10 @@ function workspace(name: string, files: Record<string, string> = {}): string {
 
 type PiChild = { connection: PiRpcConnection; switchTo: (modelId: string) => void }
 
-/** A Pi child that starts on GPT-6 at `thinking`; a signed-out one lists no model. `switchTo` is
- *  a switch Orca didn't send, as an extension's `setModel` makes. */
-function piChild(available: readonly object[], thinking: string): PiChild {
-  let model: object | null = RUNS
+/** A Pi child that starts on `startsOn` at `thinking`; a signed-out one lists no model. `switchTo`
+ *  is a switch Orca didn't send, as an extension's `setModel` makes. */
+function piChild(available: readonly object[], thinking: string, startsOn: string): PiChild {
+  let model: object | null = AVAILABLE.find((entry) => entry.id === startsOn) ?? RUNS
   const switchTo = (modelId: string): void => {
     model = AVAILABLE.find((entry) => entry.id === modelId) ?? model
   }
@@ -119,8 +123,11 @@ type ChatOptions = {
   saved?: Record<string, string>
   resumed?: boolean
   forked?: boolean
+  /** A new Pi session standing in for one whose saved file was gone. */
+  replacement?: boolean
   available?: object[]
   thinking?: string
+  startsOn?: string
   /** What happens between the chat's start and the pane's options read. */
   afterStart?: (chat: {
     child: PiChild
@@ -154,7 +161,8 @@ async function piHost() {
   })
 
   let chats = 0
-  /** A Pi chat in `workspacePath` whose options the pane reads once, as the host's step does. */
+  /** A Pi chat in `workspacePath`: the host saves what its start listed, then the pane reads its
+   *  options once, and the host saves each read's listing too. */
   async function chat(workspacePath: string, opts: ChatOptions = {}) {
     const sessionId = `pi-${++chats}`
     let child: PiChild | undefined
@@ -172,7 +180,7 @@ async function piHost() {
       }
     } as AgentSessionRecord)
     const rig = await openProviderTimelineRig({ agent: 'pi', sessionId })
-    const onLifecycle = vi.fn()
+    const onLifecycle = vi.fn<(event: StructuredAgentSessionLifecycleEvent) => void>()
     const adapter = new PiRpcSessionAdapter({
       resolveLaunch: async () => ({
         command: '/opt/pi/bin/pi',
@@ -180,11 +188,12 @@ async function piHost() {
         fullAccess: true,
         previous: null,
         ...(opts.resumed ? { sessionFile: '/homes/pi/sessions/one.jsonl' } : {}),
-        ...(opts.forked ? { forkFile: '/homes/pi/sessions/elsewhere.jsonl' } : {})
+        ...(opts.forked ? { forkFile: '/homes/pi/sessions/elsewhere.jsonl' } : {}),
+        ...(opts.replacement ? { replacement: 'unsaved' as const } : {})
       }),
       readProcessStartTime: async () => 1,
       openConnection: () => {
-        child = piChild(opts.available ?? AVAILABLE, opts.thinking ?? 'high')
+        child = piChild(opts.available ?? AVAILABLE, opts.thinking ?? 'high', opts.startsOn ?? '')
         return child.connection
       },
       onLifecycle,
@@ -206,19 +215,31 @@ async function piHost() {
       options: opts.saved ?? {},
       events: rig.eventSink
     })
-    // The acquire answers at spawn; the chat is the pane's once its start is proven.
-    await vi.waitFor(() =>
-      expect(onLifecycle).toHaveBeenCalledWith(expect.objectContaining({ type: 'started' }))
-    )
+    // The acquire answers at spawn; the start hands the host its listing once it is proven.
+    const started = await vi.waitFor(() => {
+      const event = onLifecycle.mock.calls
+        .map(([call]) => call)
+        .find((call): call is StructuredAgentSessionStartedEvent => call.type === 'started')
+      if (!event) {
+        throw new Error('Pi has not started')
+      }
+      return event
+    })
+    if (!started.catalogListing) {
+      throw new Error('a Pi start hands the host its listing')
+    }
+    catalog.recordLiveListing(sessionId, started.catalogListing)
     if (opts.afterStart && child) {
       await opts.afterStart({ child, adapter, sessionId })
     }
-    const { catalogListing } = await adapter.readOptions({ sessionId, fence: 1 })
-    if (!catalogListing) {
-      throw new Error('a Pi options read hands the host its listing')
+    const read = async (): Promise<void> => {
+      const { catalogListing } = await adapter.readOptions({ sessionId, fence: 1 })
+      if (catalogListing) {
+        catalog.recordLiveListing(sessionId, catalogListing)
+      }
     }
-    catalog.recordLiveListing(sessionId, catalogListing)
-    return catalogListing
+    await read()
+    return { listing: started.catalogListing, read }
   }
   return { catalog, chat, store, clock }
 }
@@ -284,10 +305,10 @@ describe('Pi’s default comes from what a chat with no pick runs', () => {
     const { catalog, chat } = await piHost()
     await catalog.read({ agent: 'pi', waitForListing: true })
     const clean = workspace('clean')
-    expect(await chat(clean, { saved: { model: 'openai/gpt-6' } })).not.toHaveProperty(
+    expect((await chat(clean, { saved: { model: 'openai/gpt-6' } })).listing).not.toHaveProperty(
       'configuredDefault'
     )
-    expect(await chat(clean, { resumed: true })).not.toHaveProperty('configuredDefault')
+    expect((await chat(clean, { resumed: true })).listing).not.toHaveProperty('configuredDefault')
     expect(firstFrame(await catalog.read({ agent: 'pi', workspacePath: clean }))).toEqual(NOTHING)
   })
 
@@ -295,7 +316,7 @@ describe('Pi’s default comes from what a chat with no pick runs', () => {
     const { catalog, chat } = await piHost()
     const clean = workspace('clean')
     await catalog.read({ agent: 'pi', waitForListing: true })
-    expect(await chat(clean, { available: [] })).not.toHaveProperty('configuredDefault')
+    expect((await chat(clean, { available: [] })).listing).not.toHaveProperty('configuredDefault')
     expect(firstFrame(await catalog.read({ agent: 'pi', workspacePath: clean }))).toEqual(NOTHING)
 
     // Nor does it forget one a signed-in chat taught.
@@ -342,7 +363,7 @@ describe('Pi’s default comes from what a chat with no pick runs', () => {
     const { catalog, chat } = await piHost()
     await catalog.read({ agent: 'pi', waitForListing: true })
     const clean = workspace('clean')
-    expect(await chat(clean, { forked: true })).not.toHaveProperty('configuredDefault')
+    expect((await chat(clean, { forked: true })).listing).not.toHaveProperty('configuredDefault')
     expect(firstFrame(await catalog.read({ agent: 'pi', workspacePath: clean }))).toEqual(NOTHING)
   })
 
@@ -366,5 +387,32 @@ describe('Pi’s default comes from what a chat with no pick runs', () => {
       model: 'openai/gpt-6',
       effort: 'xhigh'
     })
+  })
+
+  it('a chat’s later reads teach nothing: a newer chat’s default stands', async () => {
+    const { catalog, chat } = await piHost()
+    const clean = workspace('clean')
+    await catalog.read({ agent: 'pi', waitForListing: true })
+    const first = await chat(clean)
+    // Pi's own default changed since (a `/model` in a terminal): the next new chat starts on it.
+    await chat(clean, { startsOn: 'claude-sonnet-4' })
+    // The first chat keeps running and reads its options again, as every turn does.
+    await first.read()
+    expect(firstFrame(await catalog.read({ agent: 'pi', workspacePath: clean }))).toEqual({
+      model: 'anthropic/claude-sonnet-4',
+      effort: 'high'
+    })
+  })
+
+  it('learns the model, but not the thinking level, from a chat that restored only its thinking level', async () => {
+    const { chat } = await piHost()
+    const { listing } = await chat(workspace('clean'), { saved: { effort: 'low' } })
+    expect(listing.configuredDefault).toEqual({ modelId: 'openai/gpt-6' })
+  })
+
+  it('learns from a new Pi session standing in for a conversation whose file was gone', async () => {
+    const { chat } = await piHost()
+    const { listing } = await chat(workspace('clean'), { replacement: true })
+    expect(listing.configuredDefault).toEqual({ modelId: 'openai/gpt-6', effort: 'high' })
   })
 })

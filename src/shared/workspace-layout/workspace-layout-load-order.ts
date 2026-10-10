@@ -23,7 +23,8 @@ function compareUnplaced(left: OrderCandidate, right: OrderCandidate): number {
 export function resolveGroupOrder(args: {
   storedGroups: readonly TabGroup[]
   candidates: readonly OrderCandidate[]
-  mintId: () => string
+  workspaceKey: string
+  mintId: (seed: string) => string
 }): LayoutGroup[] {
   const known = new Set(args.candidates.map((candidate) => candidate.id))
   const placed = new Set<string>()
@@ -45,7 +46,7 @@ export function resolveGroupOrder(args: {
   for (const candidate of [...unplaced].sort(compareUnplaced)) {
     let group = groups.find((entry) => entry.id === candidate.groupId) ?? groups[0]
     if (!group) {
-      group = { id: args.mintId(), tabOrder: [] }
+      group = { id: args.mintId(`group:${args.workspaceKey}`), tabOrder: [] }
       groups.push(group)
     }
     group.tabOrder.push(candidate.id)

@@ -34,3 +34,17 @@ export function structuredAgentSessionNamedTurnScope(
     .items.findLast((item) => readAgentJournalTurn(item.body)?.turnId === turnId)
   return turn ? { kind: 'turn', turnItemId: turn.itemId } : null
 }
+
+/** The turn the provider says the interrupt took, even one that opened while the cancel waited for
+ *  it: the note is that turn's, never a conversation row read before the wait. */
+export function structuredAgentSessionStopNoteScope(
+  journal: Pick<AgentSessionJournal, 'snapshot'>,
+  stoppedTurn: string | undefined,
+  fallback: AgentJournalTurnScope
+): AgentJournalTurnScope {
+  return (
+    (stoppedTurn !== undefined
+      ? structuredAgentSessionNamedTurnScope(journal, stoppedTurn)
+      : null) ?? fallback
+  )
+}

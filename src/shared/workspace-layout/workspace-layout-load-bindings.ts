@@ -30,21 +30,33 @@ function terminalTabsInOrder(model: WorkspaceLayoutModel) {
   )
 }
 
-/** The tree with every leaf id already `seen` replaced; `renamed` maps a stored id to its first pane. */
+type Remint = {
+  tabId: string
+  seen: Set<string>
+  /** A stored id → its first pane's id. */
+  renamed: Map<string, string>
+  /** Leaves walked in this tab so far: a repeated id's position, for its new id's seed. */
+  position: number
+  context: WorkspaceLayoutLoadContext
+}
+
+/** The tree with every leaf id already `seen` replaced. */
 function remintRepeatedLeaves(
   root: LayoutTerminalPanes['root'],
-  seen: Set<string>,
-  renamed: Map<string, string>,
-  context: WorkspaceLayoutLoadContext
+  remint: Remint
 ): LayoutTerminalPanes['root'] {
   if (!root) {
     return root
   }
   if (root.type === 'split') {
-    const first = remintRepeatedLeaves(root.first, seen, renamed, context)!
-    return { ...root, first, second: remintRepeatedLeaves(root.second, seen, renamed, context)! }
+    const first = remintRepeatedLeaves(root.first, remint)!
+    return { ...root, first, second: remintRepeatedLeaves(root.second, remint)! }
   }
-  const leafId = seen.has(root.leafId) ? context.mintLeafId() : root.leafId
+  const { seen, renamed, context } = remint
+  const position = remint.position++
+  const leafId = seen.has(root.leafId)
+    ? context.mintLeafId(`leaf:${remint.tabId}:${position}`)
+    : root.leafId
   seen.add(leafId)
   if (!renamed.has(root.leafId)) {
     renamed.set(root.leafId, leafId)
@@ -103,7 +115,13 @@ export function loadLeaves(
     const layout = stored.layouts.get(tab.entityId)!
     const renamed = new Map<string, string>()
     // Loaded objects are fresh copies, so editing them in place touches no stored data.
-    tab.panes.root = remintRepeatedLeaves(tab.panes.root, seen, renamed, context)
+    tab.panes.root = remintRepeatedLeaves(tab.panes.root, {
+      tabId: tab.entityId,
+      seen,
+      renamed,
+      position: 0,
+      context
+    })
     const modelId = (leafId: string) => renamed.get(leafId) ?? leafId
     if (tab.panes.chatLeafId !== undefined) {
       tab.panes.chatLeafId = modelId(tab.panes.chatLeafId)

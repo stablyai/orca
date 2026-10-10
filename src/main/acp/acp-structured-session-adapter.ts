@@ -230,7 +230,8 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
 
   readOptions = async (input: { sessionId: string; fence: number }) => {
     const { options } = this.live(input.sessionId)
-    return withLiveCatalogListing(options.read(), options.configuredDefault())
+    // Only the start says what the config resolved: the session may have moved since.
+    return withLiveCatalogListing(options.read())
   }
 
   readCommands = (sessionId: string) => {

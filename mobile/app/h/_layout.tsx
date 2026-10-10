@@ -13,6 +13,7 @@ import {
 import { HostProtocolGate } from '../../src/components/HostProtocolGate'
 import { HostScreen } from '../../src/host-screen/HostScreen'
 import { HostStack } from '../../src/navigation/host-stack'
+import { HostSidebarRevealContext } from '../../src/layout/host-sidebar-reveal'
 import { HostAreaServingContext } from '../../src/mobile-web-shell/host-area-serving'
 import { usePageOwnsHostArea } from '../../src/mobile-web-shell/page-owns-host-area'
 
@@ -66,6 +67,7 @@ export default function HostGroupLayout() {
   }, [windowWidth])
 
   const hideSidebar = useCallback(() => setSidebarOpen(false), [])
+  const revealSidebar = useCallback(() => setSidebarOpen(true), [])
   const [hostAreaServing, setHostAreaServing] = useState(false)
   const pageOwnsHostArea = usePageOwnsHostArea()
   // One owner: the page only with its init fact; natively all but a host route its page is serving.
@@ -75,9 +77,8 @@ export default function HostGroupLayout() {
   const detailHasContent = !!hostId && pathname !== `/h/${hostId}`
   const canCollapseSidebar = showSidebar && detailHasContent
 
-  // Why: there is no reveal button — navigating Back to the base host route brings
-  // the sidebar back (and that route's detail pane is only a placeholder, so a
-  // hidden sidebar would leave nothing useful).
+  // Why: the base host route's detail pane is only a placeholder, so a hidden
+  // sidebar there would leave nothing useful.
   useEffect(() => {
     if (showSidebar && !detailHasContent) {
       setSidebarOpen(true)
@@ -132,7 +133,11 @@ export default function HostGroupLayout() {
         ) : null}
         <View style={styles.detail}>
           <HostAreaServingContext.Provider value={setHostAreaServing}>
-            <HostStack animation={showSidebar ? 'none' : 'default'} />
+            <HostSidebarRevealContext.Provider
+              value={showSidebar && !sidebarOpen ? revealSidebar : null}
+            >
+              <HostStack animation={showSidebar ? 'none' : 'default'} />
+            </HostSidebarRevealContext.Provider>
           </HostAreaServingContext.Provider>
         </View>
       </View>

@@ -35,6 +35,10 @@ import {
   structuredAgentSessionConversationFence
 } from './structured-agent-session-provider-child'
 import type { StructuredAgentSessionOptionRevisions } from './structured-agent-session-option-revisions'
+import {
+  saveStructuredAgentSessionStartListing,
+  saveStructuredAgentSessionStartReadbackListing
+} from './structured-agent-session-start-listing'
 import type { StructuredAgentSessionStartupAttempts } from './structured-agent-session-startup-attempt'
 import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
 import { recordAgentSessionProviderHandle } from '../../runtime/agent-session-provider-handle-transition'
@@ -109,7 +113,7 @@ export async function settleStructuredAgentSessionProviderStarted(
     const delivered = context.wakeDelivery(event.sessionId)
     noteStructuredAgentSessionProviderStarted(context.deps, event.sessionId)
     if (event.catalogListing) {
-      context.deps.modelCatalog?.recordLiveListing(event.sessionId, event.catalogListing)
+      saveStructuredAgentSessionStartListing(context, event.sessionId, event.catalogListing)
     }
     context.publishStatus?.(event.sessionId)
     return { delivered }
@@ -226,7 +230,11 @@ export function settleStructuredAgentSessionOptionsReported(
   context: StructuredAgentSessionProviderStartedContext,
   event: StructuredAgentSessionOptionsReportedEvent
 ): Promise<void> {
-  return persistReportedOptions(context, event, admitReportedOptions(context, event))
+  const admitted = admitReportedOptions(context, event)
+  if (event.catalogListing) {
+    void saveStructuredAgentSessionStartReadbackListing(context, event, event.catalogListing)
+  }
+  return persistReportedOptions(context, event, admitted)
 }
 
 function admitReportedOptions(

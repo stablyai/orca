@@ -3982,6 +3982,10 @@
             "compactTitle": "使用量がコンパクト表示になりました",
             "compactBody": "プロバイダーごとに主要な指標を1つ表示します。より多くの上限を表示するには、使用量メニューで「<detailed>詳細</detailed>」を選択してください。"
           },
+          "usageUnitLabel": {
+            "used": "使用済み",
+            "remaining": "残り"
+          },
           "UsagePercentageDisplayChangeNotice": {
             "title": "使用状況に、使用済みの割合を表示するようになりました",
             "body": "残量表示にしたい場合は、[設定] で変更できます。",
@@ -18486,8 +18490,7 @@
       },
       "visualUnavailable": "ビジュアライゼーションを利用できません",
       "visualLoading": "ビジュアライゼーションを読み込み中",
-      "visualOpenInSidebar": "サイドバーで開く",
-      "visualClose": "ビジュアライゼーションを閉じる"
+      "visualOpenInNewTab": "新しいタブで開く"
     },
     "tab": {
       "bar": {
@@ -19115,6 +19118,9 @@
     "nativeChatUpgrade": {
       "eyebrow": "新機能",
       "title": "ネイティブチャットを刷新",
+      "chatModeNote": "新しい Agent タブは、これまでどおりターミナルで開きます。",
+      "chatModeLabel": "チャットモードをオンにする",
+      "chatModeHint": "新しい Agent タブをチャットで開きます。",
       "intro": "対応 Agent の新しいチャットはアップグレード版のチャットビューで開きます。チャットと CLI の切り替えは右サイドバーの{{panel}}から:",
       "resumeInNativeChat": "{{action}}: 対応する CLI の会話をネイティブチャットで開きます。",
       "resumeInCli": "{{action}}: Claude/Codex のチャットを新しい CLI セッションに複製します。元のチャットは残ります。",

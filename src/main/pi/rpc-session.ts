@@ -168,12 +168,9 @@ export class PiRpcSession {
     }
   }
 
-  /** What the child reports now, with what its start said of its config's default. */
+  /** What the child reports now; only the start says what its config resolved. */
   async readOptions() {
-    return withLiveCatalogListing(
-      await readPiRpcSessionOptions(this.connection),
-      this.startup.startChoice
-    )
+    return withLiveCatalogListing(await readPiRpcSessionOptions(this.connection))
   }
 
   async close(requested = true): ReturnType<PiRpcConnection['close']> {

@@ -143,7 +143,7 @@ export function renderTabBarItems({
         canDuplicate={item.type === 'browser' && managedBrowserCreationEnabled}
         gitStatus={
           item.type === 'editor'
-            ? resolveEditorTabGitStatus(item.data.relativePath, statusByRelativePath)
+            ? resolveEditorTabGitStatus(item.data, statusByRelativePath)
             : null
         }
       />
