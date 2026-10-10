@@ -69,7 +69,7 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     browserTabId: string,
     guest: Electron.WebContents
   ): void
-  protected abstract setupMouseWheelZoomForwarding(
+  protected abstract setupGuestMouseForwarding(
     browserTabId: string,
     guest: Electron.WebContents
   ): void
@@ -137,7 +137,7 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected readonly contextMenuCleanupByTabId = new Map<string, () => void>()
   protected readonly grabShortcutCleanupByTabId = new Map<string, () => void>()
   protected readonly shortcutForwardingCleanupByTabId = new Map<string, () => void>()
-  protected readonly mouseWheelZoomCleanupByTabId = new Map<string, () => void>()
+  protected readonly guestMouseCleanupByTabId = new Map<string, () => void>()
   protected readonly annotationViewportBridgeOpsByTabId = new Map<string, Promise<unknown>>()
   protected readonly worktreeIdByTabId = new Map<string, string>()
   protected readonly policyAttachedGuestIds = new Set<number>()
