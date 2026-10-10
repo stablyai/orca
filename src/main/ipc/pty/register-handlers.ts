@@ -16,11 +16,13 @@ import { installPtyCodexSharedServerIpcHandler } from './ipc/codex-shared-server
 import { installPtyClaudeOldTerminalIpcHandler } from './ipc/claude-old-terminal'
 import {
   installPtyKillIpcHandler,
+  stopRendererOwnedPty,
   stopReplacedPanePty,
   type PtyKillIpcDeps
 } from './ipc/renderer-kill'
 import { installPtyWriteIpcHandlers } from './ipc/write'
 import { installPtySpawnIpcHandler } from './ipc/spawn'
+import { installWindowPtySpawn } from './ipc/window-pty-spawn'
 import { installPtyLeafMoveIpcHandler } from './ipc/leaf-move'
 import { installPtyRuntimeController } from './runtime/controller'
 import { installPtySnapshotIpcHandlers } from './ipc/snapshot'
@@ -264,7 +266,7 @@ export function registerPtyHandlers(
     sendPtyExitToRenderer: session.sendPtyExitToRenderer
   }
   installPtyLeafMoveIpcHandler({ store, runtime })
-  installPtySpawnIpcHandler({
+  const spawnPty = installPtySpawnIpcHandler({
     runtime,
     store,
     getSettings,
@@ -294,4 +296,9 @@ export function registerPtyHandlers(
   installPtyCodexSharedServerIpcHandler({ getLocalPtyProviderStartupPromise })
   installPtyClaudeOldTerminalIpcHandler({ getLocalPtyProviderStartupPromise })
   installPtyKillIpcHandler(killDeps)
+  installWindowPtySpawn(
+    getSettings
+      ? { spawn: spawnPty, stop: (id) => stopRendererOwnedPty(killDeps, { id }), getSettings }
+      : null
+  )
 }

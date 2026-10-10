@@ -1,14 +1,10 @@
 import { useAppStore } from '@/store'
-import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import type {
   LaunchAgentBackgroundSessionArgs,
   LaunchAgentBackgroundSessionResult
 } from '@/lib/agent-background-session-contract'
-import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { scheduleAgentBackgroundDraft } from '@/lib/agent-background-draft-delivery'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
-import { resolveAgentStartupPlanInputs } from '../../../shared/agent-startup-plan-inputs'
-import { requireTuiAgentConfig } from '../../../shared/require-tui-agent-config'
 import { resolveAgentBackgroundLaunchHost } from '@/lib/agent-background-session-launch-host'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
@@ -34,9 +30,12 @@ import {
   reserveAgentBackgroundSessionIdentity
 } from '@/lib/adopt-agent-background-session-tab'
 import { createBackgroundAgentStatusConsumer } from '@/lib/background-agent-status-consumer'
-import { isWslUncPath } from '../../../shared/wsl-paths'
 import { runtimeWaitExitCode, settleTabPtyBinding } from '@/lib/agent-background-session-exit'
 import { spawnBackgroundRunPty } from '@/lib/background-run-host-spawn'
+import {
+  buildBackgroundRunPtySpawn,
+  buildBackgroundRunStartup
+} from '../../../shared/background-run-launch'
 
 export async function launchAgentBackgroundSession(
   args: LaunchAgentBackgroundSessionArgs
@@ -66,26 +65,18 @@ export async function launchAgentBackgroundSession(
     throw new Error("Extra arguments can't be applied to a paired server's workspace from here.")
   }
   // Why before any tab or PTY: an invalid launch must fail the run without creating a terminal.
-  const planInputs = resolveAgentStartupPlanInputs({
+  const startup = buildBackgroundRunStartup({
     agent,
     settings: store.settings ?? {},
     platform: launchPlatform,
     isRemote,
-    extraAgentArgs: args.extraAgentArgs
+    extraAgentArgs: args.extraAgentArgs,
+    prompt
   })
-  const trimmedPrompt = prompt?.trim() ?? ''
-  const hasPrompt = trimmedPrompt.length > 0
-  const isFollowupPath = requireTuiAgentConfig(agent).promptInjectionMode === 'stdin-after-start'
-
-  const pasteDraftAfterLaunch = hasPrompt && isFollowupPath ? trimmedPrompt : null
-  const startupPlan = buildAgentStartupPlan({
-    ...planInputs,
-    prompt: hasPrompt && !isFollowupPath ? trimmedPrompt : '',
-    allowEmptyPromptLaunch: !hasPrompt || isFollowupPath
-  })
-  if (!startupPlan) {
+  if (!startup) {
     return null
   }
+  const { plan: startupPlan, commandPrompt, pastePromptAfterStart } = startup
 
   // A hidden run tab must never be store-visible without its PTY (#2989).
   const { reservedTabId, leafId, launchToken, launchRegistration, paneEnv } =
@@ -151,7 +142,7 @@ export async function launchAgentBackgroundSession(
         tabId: reservedTabId,
         leafId,
         agent,
-        ...(hasPrompt && !isFollowupPath ? { prompt: trimmedPrompt } : {}),
+        ...(commandPrompt ? { prompt: commandPrompt } : {}),
         ...(startupPlan.sessionOptions ? { sessionOptions: startupPlan.sessionOptions } : {}),
         legacy: {
           command: startupPlan.launchCommand,
@@ -170,42 +161,24 @@ export async function launchAgentBackgroundSession(
       const result = await spawnBackgroundRunPty({
         agent,
         worktreeId,
-        ...(hasPrompt && !isFollowupPath ? { commandPrompt: trimmedPrompt } : {}),
+        ...(commandPrompt ? { commandPrompt } : {}),
         ...(args.extraAgentArgs ? { extraAgentArgs: args.extraAgentArgs } : {}),
         ...(title ? { title } : {}),
         ...(launchSource ? { launchSource } : {}),
         launchPlatform,
-        spawn: {
-          cols: 120,
-          rows: 40,
+        spawn: buildBackgroundRunPtySpawn({
+          agent,
+          plan: startupPlan,
           cwd: worktree.path,
-          command: startupPlan.launchCommand,
-          ...(!sshConnectionId && isWslUncPath(worktree.path) ? { shellOverride: 'wsl.exe' } : {}),
-          // Why: the relay types, waits for the shell and stages long lines on the host that owns the PTY.
-          ...(sshConnectionId
-            ? {
-                commandDelivery: 'provider' as const,
-                startupCommandDelivery: 'shell-ready' as const
-              }
-            : startupPlan.startupCommandDelivery
-              ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
-              : {}),
-          env: paneEnv,
-          launchConfig: startupPlan.launchConfig,
-          launchToken,
-          launchAgent: agent,
-          connectionId: sshConnectionId,
           worktreeId,
+          sshConnectionId,
+          env: paneEnv,
+          launchToken,
           tabId: reservedTabId,
           leafId,
-          // Why no launchAgent: the adopted tab is created without one, and the row must match it.
-          placement: { kind: 'new-tab', ...(title ? { row: { customTitle: title } } : {}) },
-          telemetry: {
-            agent_kind: tuiAgentToAgentKind(agent),
-            launch_source: launchSource ?? 'unknown',
-            request_kind: 'new'
-          }
-        }
+          ...(title ? { title } : {}),
+          ...(launchSource ? { launchSource } : {})
+        })
       })
       ptyId = result.id
       spawned = result
@@ -232,7 +205,7 @@ export async function launchAgentBackgroundSession(
     tab = adopted.tab
     paneKey = adopted.paneKey
     terminalOwnership = adopted.terminalOwnership
-    if (agent === 'command-code' && hasPrompt && !isFollowupPath) {
+    if (agent === 'command-code' && commandPrompt) {
       // Why: Command Code does not expose a prompt-start hook; seed working for
       // hidden prompt launches so sidebar/activity surfaces do not stay idle.
       const routing = agentStatusConsumer.resolveRouting()
@@ -240,7 +213,7 @@ export async function launchAgentBackgroundSession(
         const observation = agentStatusConsumer.observeLaunchIngress()
         store.setAgentStatus(
           paneKey,
-          { state: 'working', prompt: trimmedPrompt, agentType: agent, observation },
+          { state: 'working', prompt: commandPrompt, agentType: agent, observation },
           undefined,
           undefined,
           routing,
@@ -281,8 +254,8 @@ export async function launchAgentBackgroundSession(
     // can double-spawn, while later tracking can miss user takeover.
     requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
 
-    if (pasteDraftAfterLaunch !== null) {
-      scheduleAgentBackgroundDraft(tab.id, pasteDraftAfterLaunch, agent)
+    if (pastePromptAfterStart !== null) {
+      scheduleAgentBackgroundDraft(tab.id, pastePromptAfterStart, agent)
     }
 
     return { tabId: tab.id, paneKey, ptyId, startupPlan, terminalOwnership }

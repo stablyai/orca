@@ -7,7 +7,8 @@
  * (launch-unification phase 2).
  *
  * Anything that fails before the spawn is requested answers `unavailable`, and the window then starts
- * the run itself, as on main. After that request a failure may have left an agent, so it is the run's.
+ * the run itself, as on main. After that request a failure fails the run, and a PTY the spawn already
+ * answered is stopped, as the window stops its own.
  */
 
 import type {
@@ -18,13 +19,14 @@ import {
   AGENT_LAUNCH_BACKGROUND_RUN_SPAWN_FAILED_CODE,
   AGENT_LAUNCH_BACKGROUND_RUN_UNAVAILABLE_CODE
 } from '../../../../shared/agent-launch-background-run'
-import { tuiAgentToAgentKind } from '../../../../shared/agent-kind'
-import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-startup-plan-inputs'
+import {
+  backgroundRunPaneEnv,
+  buildBackgroundRunPtySpawn,
+  buildBackgroundRunStartup
+} from '../../../../shared/background-run-launch'
 import type { AgentLaunchParams } from '../../../../shared/rpc-contract/agent-launch-params'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { buildAgentStartupPlan } from '../../../../shared/tui-agent-startup'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { executeAgentLaunch } from '../../../agent-launch/agent-launch-executor'
 import { getWindowPtySpawn } from '../../../ipc/pty/ipc/window-pty-spawn'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -33,13 +35,19 @@ import { resolveUnlaunchedIntent } from './agent-launch-intent-resolution'
 
 type BackgroundRun = NonNullable<AgentLaunchParams['backgroundRun']>
 
+/** How far this run's spawn got, which decides what a failure owes. */
+type SpawnProgress = {
+  requested: boolean
+  /** The PTY the spawn answered, and the window's own stop for it. */
+  spawned?: { answer: AgentLaunchBackgroundRunSpawn; stop: () => Promise<void> }
+}
+
 export async function runBackgroundRunAgentLaunch(
   params: AgentLaunchParams,
   context: RpcContext
 ): Promise<AgentLaunchResult> {
   const { backgroundRun } = params
-  let spawnRequested = false
-  let spawned: AgentLaunchBackgroundRunSpawn | undefined
+  const progress: SpawnProgress = { requested: false }
   try {
     if (
       !backgroundRun ||
@@ -50,6 +58,12 @@ export async function runBackgroundRunAgentLaunch(
       throw unavailable()
     }
     const intent = await resolveUnlaunchedIntent(params, context.runtime, null)
+    const { target } = intent
+    // The window keeps SSH launches: their relay delivery is not this host's to rebuild yet.
+    if (target.kind !== 'existing' || target.workspacePath === undefined || target.connectionId) {
+      throw unavailable()
+    }
+    const workspacePath = target.workspacePath
     const result = await executeAgentLaunch({
       runtime: context.runtime,
       intent,
@@ -59,31 +73,33 @@ export async function runBackgroundRunAgentLaunch(
         createStructuredSession: () => {
           throw unavailable()
         },
-        createTerminalAgent: async ({ worktreeId, startupPrompt, launchSource, paneKey }) => {
-          const terminal = await spawnWindowLaunch({
+        createTerminalAgent: ({ worktreeId, startupPrompt, launchSource, paneKey }) =>
+          spawnWindowLaunch({
             runtime: context.runtime,
+            workspacePath,
             worktreeId,
             agent: intent.agent,
             startupPrompt,
             launchSource,
             paneKey,
             backgroundRun,
-            onSpawnRequested: () => {
-              spawnRequested = true
-            }
+            progress
           })
-          spawned = terminal.spawned
-          return terminal.surface
-        }
       }
     })
-    if (!spawned) {
+    if (!progress.spawned) {
       throw new Error('The agent launch did not report its terminal.')
     }
-    return { ...result, backgroundRun: spawned }
+    return { ...result, backgroundRun: progress.spawned.answer }
   } catch (error) {
-    if (!spawnRequested) {
+    if (!progress.requested) {
       throw new Error(AGENT_LAUNCH_BACKGROUND_RUN_UNAVAILABLE_CODE, { cause: error })
+    }
+    try {
+      // The window never learns this PTY, so nothing else would stop it.
+      await progress.spawned?.stop()
+    } catch {
+      // Best effort: the run records the launch's own failure.
     }
     throw error
   }
@@ -92,7 +108,8 @@ export async function runBackgroundRunAgentLaunch(
 /** Builds the launch exactly as the window's `launch-agent-background-session` builds it for a local
  *  workspace, and spawns it through that window's spawn. */
 async function spawnWindowLaunch(args: {
-  runtime: Pick<OrcaRuntimeService, 'showTerminalWorkspaceLaunchScope' | 'preAllocateHandleForPty'>
+  runtime: Pick<OrcaRuntimeService, 'preAllocateHandleForPty'>
+  workspacePath: string
   worktreeId: string
   agent: TuiAgent
   /** An argv agent's prompt, which rides the command at any length, as the window's did. */
@@ -100,71 +117,52 @@ async function spawnWindowLaunch(args: {
   launchSource: string | undefined
   paneKey: string | undefined
   backgroundRun: BackgroundRun
-  onSpawnRequested: () => void
-}): Promise<{
-  surface: { handle: string; paneKey: string; promptRodeLaunchCommand?: true }
-  spawned: AgentLaunchBackgroundRunSpawn
-}> {
-  const { runtime, worktreeId, agent, startupPrompt, paneKey, backgroundRun } = args
+  progress: SpawnProgress
+}): Promise<{ handle: string; paneKey: string; promptRodeLaunchCommand?: true }> {
+  const { runtime, worktreeId, agent, paneKey, backgroundRun, progress } = args
   const windowSpawn = getWindowPtySpawn()
   const pane = paneKey ? parsePaneKey(paneKey) : null
   if (!windowSpawn || !paneKey || !pane) {
     throw unavailable()
   }
-  const workspace = await runtime.showTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
-  // The window keeps SSH launches: their relay delivery is not this host's to rebuild yet.
-  if (workspace.connectionId) {
-    throw unavailable()
-  }
-  const plan = buildAgentStartupPlan({
-    ...resolveAgentStartupPlanInputs({
-      agent,
-      settings: windowSpawn.getSettings(),
-      platform: process.platform,
-      isRemote: false,
-      ...(backgroundRun.extraAgentArgs ? { extraAgentArgs: backgroundRun.extraAgentArgs } : {})
-    }),
-    prompt: startupPrompt ?? '',
-    allowEmptyPromptLaunch: !startupPrompt
+  const startup = buildBackgroundRunStartup({
+    agent,
+    settings: windowSpawn.getSettings(),
+    platform: process.platform,
+    isRemote: false,
+    extraAgentArgs: backgroundRun.extraAgentArgs,
+    prompt: args.startupPrompt
   })
-  if (!plan) {
+  if (!startup) {
     throw unavailable()
   }
-  const { title, launchToken } = backgroundRun
-  args.onSpawnRequested()
+  const { launchToken } = backgroundRun
+  const spawnArgs = buildBackgroundRunPtySpawn({
+    agent,
+    plan: startup.plan,
+    cwd: args.workspacePath,
+    worktreeId,
+    sshConnectionId: null,
+    env: backgroundRunPaneEnv({
+      env: startup.plan.env,
+      paneKey,
+      tabId: pane.tabId,
+      worktreeId,
+      launchToken
+    }),
+    launchToken,
+    tabId: pane.tabId,
+    leafId: pane.leafId,
+    ...(backgroundRun.title ? { title: backgroundRun.title } : {}),
+    ...(args.launchSource ? { launchSource: args.launchSource } : {})
+  })
+  progress.requested = true
   let spawned: Awaited<ReturnType<typeof windowSpawn.spawn>>
   try {
-    spawned = await windowSpawn.spawn({
-      cols: 120,
-      rows: 40,
-      cwd: workspace.path,
-      command: plan.launchCommand,
-      ...(isWslUncPath(workspace.path) ? { shellOverride: 'wsl.exe' } : {}),
-      ...(plan.startupCommandDelivery
-        ? { startupCommandDelivery: plan.startupCommandDelivery }
-        : {}),
-      env: {
-        ...plan.env,
-        ORCA_PANE_KEY: paneKey,
-        ORCA_TAB_ID: pane.tabId,
-        ORCA_WORKTREE_ID: worktreeId,
-        ORCA_AGENT_LAUNCH_TOKEN: launchToken
-      },
-      launchConfig: plan.launchConfig,
-      launchToken,
-      launchAgent: agent,
-      connectionId: null,
-      worktreeId,
-      tabId: pane.tabId,
-      leafId: pane.leafId,
-      placement: { kind: 'new-tab', ...(title ? { row: { customTitle: title } } : {}) },
-      telemetry: {
-        agent_kind: tuiAgentToAgentKind(agent),
-        launch_source: args.launchSource ?? 'unknown',
-        request_kind: 'new'
-      }
-    })
+    spawned = await windowSpawn.spawn(spawnArgs)
   } catch (error) {
+    // Electron logged a failed `pty:spawn` this way before replying to the window.
+    console.error("Error occurred in handler for 'pty:spawn':", error)
     // The window records this as its own spawn's failure, in the words main recorded.
     throw Object.assign(new Error(String(error)), {
       code: AGENT_LAUNCH_BACKGROUND_RUN_SPAWN_FAILED_CODE
@@ -174,17 +172,19 @@ async function spawnWindowLaunch(args: {
   if (!('id' in spawned)) {
     throw new Error('The agent launch did not report its terminal.')
   }
-  return {
-    surface: {
-      handle: runtime.preAllocateHandleForPty(spawned.id),
-      paneKey,
-      ...(startupPrompt ? { promptRodeLaunchCommand: true as const } : {})
-    },
-    spawned: {
-      ptyId: spawned.id,
+  const ptyId = spawned.id
+  progress.spawned = {
+    answer: {
+      ptyId,
       ...(spawned.incarnationId ? { incarnationId: spawned.incarnationId } : {}),
       ...(spawned.launchConfig ? { launchConfig: spawned.launchConfig } : {})
-    }
+    },
+    stop: () => windowSpawn.stop(ptyId)
+  }
+  return {
+    handle: runtime.preAllocateHandleForPty(ptyId),
+    paneKey,
+    ...(startup.commandPrompt ? { promptRodeLaunchCommand: true as const } : {})
   }
 }
 

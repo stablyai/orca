@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import { makePaneKey, type PaneKey } from '../../../shared/stable-pane-id'
 import type { AgentType } from '../../../shared/agent-status-types'
+import { backgroundRunPaneEnv } from '../../../shared/background-run-launch'
 import { bindAutomationTerminal } from '@/lib/automation-terminal-ownership'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { retireProvider, retireUnownedTerminal } from '@/lib/retire-unowned-background-terminal'
@@ -42,13 +43,13 @@ export function reserveAgentBackgroundSessionIdentity(args: {
     paneKey,
     launchToken,
     launchRegistration,
-    paneEnv: {
-      ...args.env,
-      ORCA_PANE_KEY: paneKey,
-      ORCA_TAB_ID: reservedTabId,
-      ORCA_WORKTREE_ID: args.worktreeId,
-      ORCA_AGENT_LAUNCH_TOKEN: launchToken
-    }
+    paneEnv: backgroundRunPaneEnv({
+      env: args.env,
+      paneKey,
+      tabId: reservedTabId,
+      worktreeId: args.worktreeId,
+      launchToken
+    })
   }
 }
 

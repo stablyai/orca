@@ -194,7 +194,8 @@ const refuseRunBeforeSpawn = async (_request: { method: string; params: unknown 
   },
   _meta: { runtimeId: 'runtime-local' }
 })
-export const localRuntimeCall = vi.fn(refuseRunBeforeSpawn)
+export const localRuntimeCall =
+  vi.fn<(request: { method: string; params: unknown }) => Promise<unknown>>(refuseRunBeforeSpawn)
 
 export function stubAgentBackgroundSessionWindow(mocks: {
   dispatchEvent: TestMock

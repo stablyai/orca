@@ -11,6 +11,7 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
 
 const { spawnBackgroundRunPty } = await import('./background-run-host-spawn')
 const { CLIENT_PLATFORM } = await import('@/lib/new-workspace')
+const OTHER_PLATFORM: NodeJS.Platform = CLIENT_PLATFORM === 'win32' ? 'linux' : 'win32'
 
 const ptySpawn = vi.fn()
 const TAB_ID = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d'
@@ -27,7 +28,7 @@ const WINDOW_SPAWN = {
   worktreeId: 'repo1::/tmp/feature',
   tabId: TAB_ID,
   leafId: LEAF_ID,
-  placement: { kind: 'new-tab', row: { customTitle: 'Nightly' } }
+  placement: { kind: 'new-tab' as const, row: { customTitle: 'Nightly' } }
 }
 
 function run(overrides: Partial<Parameters<typeof spawnBackgroundRunPty>[0]> = {}) {
@@ -92,9 +93,9 @@ describe("a desktop automation run's spawn", () => {
     expect(callRuntimeRpc.mock.calls[0]?.[2]).not.toHaveProperty('prompt')
   })
 
-  it.each([
+  it.each<[string, Partial<Parameters<typeof spawnBackgroundRunPty>[0]>]>([
     ['an SSH workspace', { spawn: { ...WINDOW_SPAWN, connectionId: 'ssh-1' } }],
-    ['a launch planned for another platform', { launchPlatform: 'linux-wsl' as NodeJS.Platform }]
+    ['a launch planned for another platform', { launchPlatform: OTHER_PLATFORM }]
   ])('keeps the window spawn for %s', async (_name, overrides) => {
     await expect(run(overrides)).resolves.toEqual({ id: 'pty-window' })
 

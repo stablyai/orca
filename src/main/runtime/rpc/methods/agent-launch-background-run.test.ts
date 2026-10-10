@@ -5,9 +5,11 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
-import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-startup-plan-inputs'
-import { buildAgentStartupPlan } from '../../../../shared/tui-agent-startup'
-import { tuiAgentToAgentKind } from '../../../../shared/agent-kind'
+import {
+  backgroundRunPaneEnv,
+  buildBackgroundRunPtySpawn,
+  buildBackgroundRunStartup
+} from '../../../../shared/background-run-launch'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { installWindowPtySpawn } from '../../../ipc/pty/ipc/window-pty-spawn'
 import type { RpcContext } from '../core'
@@ -41,13 +43,18 @@ function hostWith(settings: Partial<GlobalSettings> = {}) {
     ...runtimeStub({ settings: STRUCTURED_PREFERENCE }),
     preAllocateHandleForPty: vi.fn((ptyId: string) => `term_${ptyId}`)
   }
-  const spawn = vi.fn(async (_args: Record<string, unknown>) => ({
-    id: 'pty-9',
-    incarnationId: 'inc-1'
-  }))
+  const spawn = vi.fn(
+    async (
+      _args: Record<string, unknown>
+    ): Promise<{ id: string; incarnationId?: string } | { isReattach: true }> => ({
+      id: 'pty-9',
+      incarnationId: 'inc-1'
+    })
+  )
+  const stop = vi.fn(async (_ptyId: string) => {})
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch reads only the settings keys a startup plan reads.
-  installWindowPtySpawn({ spawn, getSettings: () => settings as GlobalSettings })
-  return { runtime, spawn }
+  installWindowPtySpawn({ spawn, stop, getSettings: () => settings as GlobalSettings })
+  return { runtime, spawn, stop }
 }
 
 function backgroundRun(overrides: Record<string, unknown> = {}) {
@@ -79,6 +86,35 @@ async function launch(
   return AGENT_LAUNCH.handler(parsed.data, rpcContext(runtime, context))
 }
 
+/** What the window spawns for this run on its own path, through the same builders. */
+function windowSpawnFor(
+  startup: ReturnType<typeof buildBackgroundRunStartup>,
+  overrides: { agent?: 'claude' | 'aider'; title?: string; cwd?: string } = {}
+) {
+  if (!startup) {
+    throw new Error('no plan')
+  }
+  return buildBackgroundRunPtySpawn({
+    agent: overrides.agent ?? 'claude',
+    plan: startup.plan,
+    cwd: overrides.cwd ?? '/tmp/wt-7',
+    worktreeId: 'wt-7',
+    sshConnectionId: null,
+    env: backgroundRunPaneEnv({
+      env: startup.plan.env,
+      paneKey: PANE_KEY,
+      tabId: TAB_ID,
+      worktreeId: 'wt-7',
+      launchToken: LAUNCH_TOKEN
+    }),
+    launchToken: LAUNCH_TOKEN,
+    tabId: TAB_ID,
+    leafId: LEAF_ID,
+    ...(overrides.title ? { title: overrides.title } : {}),
+    launchSource: 'unknown'
+  })
+}
+
 afterEach(() => {
   installWindowPtySpawn(null)
   setAgentLaunchRecordStore(null)
@@ -90,49 +126,24 @@ describe('a desktop automation run started by its host', () => {
 
     const result = await launch(backgroundRun(), runtime)
 
-    // Built as launch-agent-background-session.ts builds it for a local workspace.
-    const plan = buildAgentStartupPlan({
-      ...resolveAgentStartupPlanInputs({
-        agent: 'claude',
-        settings: { agentDefaultArgs: { claude: '--model sonnet' } },
-        platform: process.platform,
-        isRemote: false,
-        extraAgentArgs: '--effort high'
-      }),
-      prompt: LONG_PROMPT,
-      allowEmptyPromptLaunch: false
+    // The window's own builders, from what the window had: the raw prompt and its own settings.
+    const startup = buildBackgroundRunStartup({
+      agent: 'claude',
+      settings: { agentDefaultArgs: { claude: '--model sonnet' } },
+      platform: process.platform,
+      isRemote: false,
+      extraAgentArgs: '--effort high',
+      prompt: `  ${LONG_PROMPT}  `
     })
-    expect(plan?.launchCommand).toContain("'--effort' 'high'")
+    expect(startup?.plan.launchCommand).toContain("'--effort' 'high'")
     expect(spawn).toHaveBeenCalledTimes(1)
-    expect(spawn.mock.calls[0]?.[0]).toEqual({
-      cols: 120,
-      rows: 40,
-      cwd: '/tmp/wt-7',
-      command: plan?.launchCommand,
-      ...(plan?.startupCommandDelivery
-        ? { startupCommandDelivery: plan.startupCommandDelivery }
-        : {}),
-      env: {
-        ...plan?.env,
-        ORCA_PANE_KEY: PANE_KEY,
-        ORCA_TAB_ID: TAB_ID,
-        ORCA_WORKTREE_ID: 'wt-7',
-        ORCA_AGENT_LAUNCH_TOKEN: LAUNCH_TOKEN
-      },
-      launchConfig: plan?.launchConfig,
-      launchToken: LAUNCH_TOKEN,
-      launchAgent: 'claude',
-      connectionId: null,
-      worktreeId: 'wt-7',
-      tabId: TAB_ID,
-      leafId: LEAF_ID,
+    expect(spawn.mock.calls[0]?.[0]).toEqual(windowSpawnFor(startup, { title: 'Nightly review' }))
+    expect(spawn.mock.calls[0]?.[0]).toMatchObject({
       placement: { kind: 'new-tab', row: { customTitle: 'Nightly review' } },
-      telemetry: {
-        agent_kind: tuiAgentToAgentKind('claude'),
-        launch_source: 'unknown',
-        request_kind: 'new'
-      }
+      telemetry: { agent_kind: 'claude-code', launch_source: 'unknown', request_kind: 'new' }
     })
+    // One workspace lookup per run: the intent's.
+    expect(runtime.showTerminalWorkspaceLaunchScope).toHaveBeenCalledTimes(1)
     // Terminal-only although the chat default is on, and never revealed by the host.
     expect(runtime.createTerminal).not.toHaveBeenCalled()
     expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_pty-9', paneKey: PANE_KEY })
@@ -156,17 +167,17 @@ describe('a desktop automation run started by its host', () => {
     const { extraAgentArgs: _none, ...run } = backgroundRun().backgroundRun
     await launch(backgroundRun({ agent: 'aider', prompt: undefined, backgroundRun: run }), runtime)
 
-    const plan = buildAgentStartupPlan({
-      ...resolveAgentStartupPlanInputs({
-        agent: 'aider',
-        settings: {},
-        platform: process.platform,
-        isRemote: false
-      }),
-      prompt: '',
-      allowEmptyPromptLaunch: true
+    const startup = buildBackgroundRunStartup({
+      agent: 'aider',
+      settings: {},
+      platform: process.platform,
+      isRemote: false,
+      prompt: 'fix the bug'
     })
-    expect(spawn.mock.calls[0]?.[0]).toMatchObject({ command: plan?.launchCommand })
+    expect(startup?.pastePromptAfterStart).toBe('fix the bug')
+    expect(spawn.mock.calls[0]?.[0]).toEqual(
+      windowSpawnFor(startup, { agent: 'aider', title: 'Nightly review' })
+    )
   })
 
   it.each([
@@ -217,8 +228,10 @@ describe('a desktop automation run started by its host', () => {
   })
 
   it("reports a failed spawn as the spawn's own failure, never as unavailable", async () => {
-    const { runtime, spawn } = hostWith()
-    spawn.mockRejectedValue(new Error('posix_spawnp failed.'))
+    const { runtime, spawn, stop } = hostWith()
+    const spawnError = new Error('posix_spawnp failed.')
+    spawn.mockRejectedValue(spawnError)
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     const failure = await launch(backgroundRun(), runtime).catch((error: unknown) => error)
 
@@ -226,5 +239,58 @@ describe('a desktop automation run started by its host', () => {
       code: 'agent_launch_background_run_spawn_failed',
       message: 'Error: posix_spawnp failed.'
     })
+    // Logged as Electron logged a failed `pty:spawn` on main.
+    expect(logged).toHaveBeenCalledWith("Error occurred in handler for 'pty:spawn':", spawnError)
+    expect(stop).not.toHaveBeenCalled()
+    logged.mockRestore()
+  })
+
+  it('spawns in a WSL workspace with the WSL shell, as the window does', async () => {
+    const { runtime, spawn } = hostWith()
+    const wslPath = '\\\\wsl.localhost\\Ubuntu\\home\\me\\wt-7'
+    runtime.showTerminalWorkspaceLaunchScope.mockResolvedValue({
+      id: 'wt-7',
+      path: wslPath,
+      connectionId: null,
+      repo: null,
+      folderWorkspace: null
+    })
+
+    await launch(backgroundRun({ prompt: undefined }), runtime)
+
+    const startup = buildBackgroundRunStartup({
+      agent: 'claude',
+      settings: {},
+      platform: process.platform,
+      isRemote: false,
+      extraAgentArgs: '--effort high'
+    })
+    expect(spawn.mock.calls[0]?.[0]).toEqual(
+      windowSpawnFor(startup, { title: 'Nightly review', cwd: wslPath })
+    )
+    expect(spawn.mock.calls[0]?.[0]).toMatchObject({ cwd: wslPath, shellOverride: 'wsl.exe' })
+  })
+
+  it('stops the PTY it spawned when the launch then fails, and fails with that error', async () => {
+    const { runtime, spawn, stop } = hostWith()
+    stop.mockRejectedValue(new Error('already gone'))
+    runtime.preAllocateHandleForPty.mockImplementation(() => {
+      throw new Error('handle table full')
+    })
+
+    await expect(launch(backgroundRun(), runtime)).rejects.toThrow('handle table full')
+
+    expect(spawn).toHaveBeenCalledTimes(1)
+    expect(stop).toHaveBeenCalledWith('pty-9')
+  })
+
+  it('stops nothing when the spawn answered no PTY', async () => {
+    const { runtime, spawn, stop } = hostWith()
+    spawn.mockResolvedValue({ isReattach: true })
+
+    await expect(launch(backgroundRun(), runtime)).rejects.toThrow(
+      'The agent launch did not report its terminal.'
+    )
+    expect(stop).not.toHaveBeenCalled()
   })
 })
