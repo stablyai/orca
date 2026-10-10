@@ -46,13 +46,18 @@ export function createRecoveringPairingRelayCandidate(args: {
   }
 
   async function recoverThroughDirector(method: string, params: unknown, initialError: unknown) {
-    const maxAttempts = args.maxRecoveryAttempts ?? 3
+    // Safety net only: with equal jitter, 16 attempts outlast the window.
+    const maxAttempts = args.maxRecoveryAttempts ?? 16
     const random = args.random ?? Math.random
     const sleep =
       args.sleep ?? ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)))
+    const startedAt = args.now()
+    const exhausted = (attempt: number): boolean =>
+      attempt + 1 >= maxAttempts || args.now() - startedAt >= RECOVERY_WINDOW_MS
     const backOff = async (attempt: number, floorMs = 0): Promise<void> => {
-      const capMs = Math.min(2_000, 100 * 2 ** attempt)
-      const delayMs = Math.max(floorMs, Math.floor(random() * (capMs + 1)))
+      // Equal jitter: a guaranteed half-cap pause so fast failures still span the window.
+      const capMs = Math.min(2_000, 250 * 2 ** attempt)
+      const delayMs = Math.max(floorMs, Math.floor(capMs / 2 + random() * (capMs / 2)))
       if (delayMs > 0) {
         log('info', `Relay: backing off ${delayMs}ms`)
       }
@@ -117,7 +122,7 @@ export function createRecoveringPairingRelayCandidate(args: {
               `Relay: recovery attempt ${attempt + 1} failed`,
               pairingRelayErrorDetail(retryError)
             )
-            if (!isDirectorRecoverable(retryError) || attempt + 1 >= maxAttempts) {
+            if (!isDirectorRecoverable(retryError) || exhausted(attempt)) {
               log('error', 'Relay: recovery gave up', `after ${attempt + 1} attempt(s)`)
               throw retryError
             }
@@ -126,7 +131,7 @@ export function createRecoveringPairingRelayCandidate(args: {
           }
         }
         log('warn', `Relay: recovery attempt ${attempt + 1} failed`, pairingRelayErrorDetail(error))
-        if (!isDirectorRecoverable(error) || attempt + 1 >= maxAttempts) {
+        if (!isDirectorRecoverable(error) || exhausted(attempt)) {
           log('error', 'Relay: recovery gave up', `after ${attempt + 1} attempt(s)`)
           throw error
         }
@@ -136,6 +141,10 @@ export function createRecoveringPairingRelayCandidate(args: {
     throw lastError
   }
 }
+
+// Why: a shared-DB stall makes the director fail for 5-7 s; keep re-resolving
+// for ~12 s, which still fits inside pair-scan's 25 s overall pairing cap.
+const RECOVERY_WINDOW_MS = 12_000
 
 // Redialing the assignment the director just confirmed needs a real pause, not
 // the near-zero full jitter that would hammer the cell that refused the dial.
