@@ -50,13 +50,10 @@ export class Session {
     this.processNameIsSpawnFile = opts.subprocess.processNameIsSpawnFile === true
     this.onSessionExit = opts.onExit
     const pipeline = createSessionOutputPipeline({
-      cols: opts.cols,
-      rows: opts.rows,
-      scrollback: opts.scrollback,
-      wslDistro: opts.wslDistro,
-      historySeedChunks: opts.historySeedChunks,
-      subprocess: this.subprocess,
-      isAlive: () => !this._disposed && this._state !== 'exited'
+      ...opts,
+      isAlive: () => !this._disposed && this._state !== 'exited',
+      // Why through write(): startup-ingress dedup and the shell-ready queue treat it as main's reply.
+      writeQueryReply: (reply) => this.write(reply)
     })
     this.output = pipeline.output
     this.recoveryBarrier = pipeline.recoveryBarrier
@@ -202,6 +199,11 @@ export class Session {
 
   attachClient(client: Omit<AttachedClient, 'token'>): symbol {
     return this.output.attachClient(client)
+  }
+
+  /** Main delegated this session's query replies to its emulator (non-null) or took them back. */
+  setQueryResponder(responder: { nativeWindowsConpty?: boolean } | null): void {
+    this.output.setQueryResponder(responder)
   }
 
   detachClient(token: symbol): void {

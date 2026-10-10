@@ -103,7 +103,11 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
                 : {})
             }
           }
-          discardTerminalOutput(session.pane.terminal)
+          // Why salvage: the snapshot replaces these unparsed live bytes, but not their replies.
+          discardTerminalOutput(
+            session.pane.terminal,
+            session.salvageRendererQueriesFromDiscardedRestoreData
+          )
           if (
             hasSnapshotDimensions &&
             (session.pane.terminal.cols !== snapshot.cols ||

@@ -1,5 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
-import { OrcaRuntimeWithSerializeHeadlessTerminalBuffer } from './orca-runtime-serialize-headless-terminal-buffer'
+import { OrcaRuntimeWithMainTerminalModelDormancy } from './orca-runtime-main-terminal-model-dormancy'
 import type {
   OrchestrationCompatibilityEvidence,
   OrchestrationCompatibilityHostStamp
@@ -12,7 +12,7 @@ import { createHash } from 'node:crypto'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 
-export class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller extends OrcaRuntimeWithSerializeHeadlessTerminalBuffer {
+export class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller extends OrcaRuntimeWithMainTerminalModelDormancy {
   verifyOrchestrationCompatibilityCaller(
     evidence: OrchestrationCompatibilityEvidence | null | undefined,
     options?: { currentRuntimeLaunchSufficient?: boolean }

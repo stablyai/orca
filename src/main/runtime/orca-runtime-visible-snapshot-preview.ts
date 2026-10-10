@@ -177,6 +177,8 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
     if (!ptyId) {
       return null
     }
+    // Why: screen rules poll; a dormant model reads null once while its seed lands.
+    this.noteMainTerminalModelDemand(ptyId)
     const state = this.headlessTerminals.get(ptyId)
     if (
       !state ||

@@ -3,6 +3,7 @@ import type { IPtyProvider } from '../../../providers/types'
 import { parseAppSshPtyId, toAppSshPtyId, toRelaySshPtyId } from '../../../providers/ssh-pty-id'
 import { ptyOwnership } from './ownership-state'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
+import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
 import { colorQueryReplyColorsEqual } from '../../../../shared/pty-owner-color-query-colors'
 import {
   getSshTargetIdForExecutionHost,
@@ -20,6 +21,7 @@ export let localProvider: IPtyProvider = new LocalPtyProvider()
 export const sshProviders = new Map<string, IPtyProvider>()
 export const sshProvidersByGeneration = new Map<number, IPtyProvider>()
 let colorQueryReplyColors: TerminalOscColorQueryReplyColors | null = null
+let terminalViewAttributes: TerminalViewAttributes | null = null
 
 // Why push to every owner: each process that owns PTYs (in-process, daemon, relay) answers
 // OSC 10/11 itself, so a theme change must reach it before its next query, not at spawn.
@@ -46,8 +48,27 @@ export function publishColorQueryReplyColors(colors: TerminalOscColorQueryReplyC
   }
 }
 
+// Why only the local owner: a daemon answering a hidden pane's queries needs the viewer's
+// palette and cursor, which SSH relays never take over.
+function pushTerminalViewAttributes(provider: IPtyProvider): void {
+  if (!terminalViewAttributes) {
+    return
+  }
+  try {
+    provider.setTerminalViewAttributes?.(terminalViewAttributes)
+  } catch {
+    /* Best-effort; the daemon answers OSC 4/12 and ?996n only once it has attributes. */
+  }
+}
+
+export function publishTerminalViewAttributes(attributes: TerminalViewAttributes): void {
+  terminalViewAttributes = attributes
+  pushTerminalViewAttributes(localProvider)
+}
+
 export function _resetColorQueryReplyColorsForTest(): void {
   colorQueryReplyColors = null
+  terminalViewAttributes = null
 }
 
 export type RegisteredPtyProvider = {
@@ -206,4 +227,5 @@ export function getLocalPtyProvider(): IPtyProvider {
 export function setLocalPtyProvider(provider: IPtyProvider): void {
   localProvider = provider
   pushColorQueryReplyColors(provider)
+  pushTerminalViewAttributes(provider)
 }

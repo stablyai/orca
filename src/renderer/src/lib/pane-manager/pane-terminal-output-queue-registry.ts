@@ -29,7 +29,8 @@ export type WriteTerminalOutputOptions = {
   onParsed?: TerminalOutputParsedCallback
   /** Parse-deferred delivery ACK (terminal-pty-ack-gate). MUST be invoked when the chunk is parsed OR discarded by any drop path; fire-once, so double invocation is safe but omission permanently shrinks main's in-flight window. */
   ackCredit?: () => void
-  onBackgroundBacklogDropped?: () => void
+  /** Receives the unparsed bytes the drop discarded, so their queries can still be answered. */
+  onBackgroundBacklogDropped?: (droppedData: string) => void
   latencySensitive?: boolean
   forceForegroundRefresh?: boolean
   followupForegroundRefresh?: boolean
@@ -70,7 +71,7 @@ export type QueueEntry = {
   chunks: QueueChunk[]
   chunkIndex: number
   queuedChars: number
-  onBackgroundBacklogDropped?: () => void
+  onBackgroundBacklogDropped?: (droppedData: string) => void
   backgroundBacklogDropped: boolean
   highPriority: boolean
   foregroundHold: boolean
@@ -235,10 +236,17 @@ export function registerTerminalBacklogRecovery(
   }
 }
 
-export function discardTerminalOutput(terminal: TerminalOutputTarget): void {
+/** `onDiscardedData` gets the queued bytes xterm never parsed, so a caller can answer their queries. */
+export function discardTerminalOutput(
+  terminal: TerminalOutputTarget,
+  onDiscardedData?: (data: string) => void
+): void {
   exposeDebugApi()
   const entry = queuedByTerminal.get(terminal)
   if (entry) {
+    if (onDiscardedData) {
+      onDiscardedData(queuedTerminalOutputData(entry))
+    }
     // Why: discarded chunks still consumed their deliveries — credit them or main's in-flight window leaks (fireQueuedAckCredits).
     fireQueuedAckCredits(entry)
   }
@@ -248,4 +256,11 @@ export function discardTerminalOutput(terminal: TerminalOutputTarget): void {
   // Why: cancel the watch without masquerading as parse progress; replay guards use real completions to tell slow from wedged.
   cancelTerminalWriteStallWatch(terminal)
   recordQueueDebugPressure()
+}
+
+export function queuedTerminalOutputData(entry: QueueEntry): string {
+  return entry.chunks
+    .slice(entry.chunkIndex)
+    .map((chunk) => chunk.data)
+    .join('')
 }

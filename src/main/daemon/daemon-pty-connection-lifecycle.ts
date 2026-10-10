@@ -13,15 +13,53 @@ import type { DaemonEvidenceSource, ExactDaemonIncarnation } from './daemon-inca
 import { notifyDaemonAuditListeners } from './daemon-listener-registry'
 import { DaemonPtyEventSubscriptions } from './daemon-pty-event-subscriptions'
 import { parseDaemonPidFile, type ParsedDaemonPid } from './daemon-pid-file-parse'
-import { supportsColorQueryReplyColors } from './daemon-protocol-version'
+import {
+  supportsColorQueryReplyColors,
+  supportsDaemonQueryResponder
+} from './daemon-protocol-version'
 import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
+import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
+import type { PtyBackgroundStreamEvent } from '../providers/types'
 
 export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscriptions {
   private colorQueryReplyColors: TerminalOscColorQueryReplyColors | null = null
+  private terminalViewAttributes: TerminalViewAttributes | null = null
+  protected readonly queryResponderSessionIds = new Set<string>()
+
+  protected abstract emitBackgroundStreamEvent(payload: PtyBackgroundStreamEvent): void
 
   setColorQueryReplyColors(colors: TerminalOscColorQueryReplyColors): void {
     this.colorQueryReplyColors = colors
     this.syncColorQueryReplyColors()
+  }
+
+  setTerminalViewAttributes(attributes: TerminalViewAttributes): void {
+    this.terminalViewAttributes = attributes
+    this.syncTerminalViewAttributes()
+  }
+
+  canDelegateQueryResponder(id: string): boolean {
+    return supportsDaemonQueryResponder(this.protocolVersion) && this.activeSessionIds.has(id)
+  }
+
+  /** The daemon acknowledges with a sessionQueryResponderMarker; false means nothing was sent. */
+  setSessionQueryResponder(
+    id: string,
+    responder: boolean,
+    opts: { nativeWindowsConpty?: boolean } = {}
+  ): boolean {
+    if (responder && !this.canDelegateQueryResponder(id)) {
+      return false
+    }
+    const sent = this.client.notify('setSessionQueryResponder', {
+      sessionId: id,
+      responder,
+      ...(opts.nativeWindowsConpty ? { nativeWindowsConpty: true } : {})
+    })
+    if (sent && responder) {
+      this.queryResponderSessionIds.add(id)
+    }
+    return sent
   }
 
   protected async ensureConnected(deadlineMs?: number): Promise<void> {
@@ -46,7 +84,23 @@ export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscri
       this.resyncBackgroundedSessions()
       // Why: a replacement daemon starts with no colours, and a disconnected push was dropped.
       this.syncColorQueryReplyColors()
+      this.syncTerminalViewAttributes()
+      this.releaseQueryResponderSessions()
     }
+  }
+
+  private syncTerminalViewAttributes(): void {
+    if (this.terminalViewAttributes && supportsDaemonQueryResponder(this.protocolVersion)) {
+      this.client.notify('setTerminalViewAttributes', { attributes: this.terminalViewAttributes })
+    }
+  }
+
+  // Why: a reattach resets the daemon's delegation, so main must answer again until it re-delegates.
+  private releaseQueryResponderSessions(): void {
+    for (const id of this.queryResponderSessionIds) {
+      this.emitBackgroundStreamEvent({ id, kind: 'queryResponderMarker', responder: false })
+    }
+    this.queryResponderSessionIds.clear()
   }
 
   private syncColorQueryReplyColors(): void {

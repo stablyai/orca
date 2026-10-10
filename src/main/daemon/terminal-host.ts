@@ -1,4 +1,5 @@
 import type { Session } from './session'
+import type { SessionQueryResponder } from './session-output-plane'
 import { SessionNotFoundError } from './types'
 import type { SessionInfo, TakePendingOutputResult, TerminalSnapshot } from './types'
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
@@ -25,6 +26,7 @@ import {
   confirmTerminalHostShellForeground,
   getSettledTerminalHostSnapshot,
   getTerminalHostAppliedSize,
+  getTerminalHostForegroundProcess,
   getTerminalHostPartialEscapeTail,
   getTerminalHostSnapshot,
   takeTerminalHostPendingOutput
@@ -219,11 +221,7 @@ export class TerminalHost {
 
   // Why: null-not-throw — fetched for the tab-bar icon, so a vanished pane should quietly yield "no agent".
   getForegroundProcess(sessionId: string): string | null {
-    const session = this.sessions.get(sessionId)
-    if (!session || !session.isAlive) {
-      return null
-    }
-    return session.getForegroundProcess()
+    return getTerminalHostForegroundProcess(this.sessions.get(sessionId))
   }
 
   inspectProcess(
@@ -283,6 +281,10 @@ export class TerminalHost {
     opts: { scrollbackRows?: number } = {}
   ): Promise<TerminalSnapshot | null> {
     return getSettledTerminalHostSnapshot(this.sessions.get(sessionId), opts)
+  }
+
+  setSessionQueryResponder(sessionId: string, responder: SessionQueryResponder | null): void {
+    getAliveTerminalHostSession(this.sessions, sessionId).setQueryResponder(responder)
   }
 
   // Why: scan-authority handoff seed (null-not-throw like getSnapshot) — emulator's dangling incomplete escape at the stream position.

@@ -11,6 +11,7 @@ import {
   setLocalWriteUnavailableUnsub
 } from './listener-lifecycle'
 import { localProvider } from './registry'
+import { setDaemonQueryResponderConfirmed } from '../../pty-hidden-delivery-gate'
 import { clearProviderPtyState } from './state-cleanup'
 import { providerSnapshotRequiredPtys } from '../delivery/visibility-state'
 import type { PtyIpcSession } from '../session'
@@ -38,7 +39,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
     }) ?? null
   )
 
-  // Daemon keep-tail thinning facts, in byte order with onData: markers flip transient-fact scan authority; a gap forces renderer restore from the snapshot.
+  // Daemon keep-tail thinning facts, in byte order with onData: markers flip transient-fact scan authority or query-reply authority; a gap forces renderer restore from the snapshot.
   setLocalBackgroundStreamUnsub(
     localProvider.onBackgroundStreamEvent?.((payload) => {
       if (payload.kind === 'backgroundMarker') {
@@ -48,6 +49,18 @@ export function bindProviderListeners(session: PtyIpcSession): void {
           payload.scanSeedAnsi,
           payload.mode2031PendingSubscribe
         )
+        return
+      }
+      if (payload.kind === 'queryResponderMarker') {
+        const release = setDaemonQueryResponderConfirmed(payload.id, payload.responder)
+        session.runtime?.noteDaemonQueryResponderMarker(payload.id, payload.responder)
+        if (release.droppedWhileHidden) {
+          session.sendModelRestoreNeededMarker(
+            payload.id,
+            'unhide',
+            session.runtime?.getPtyOutputSequence(payload.id)
+          )
+        }
         return
       }
       if (payload.kind === 'dataGap') {

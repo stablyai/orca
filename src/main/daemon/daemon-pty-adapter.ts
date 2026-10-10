@@ -46,6 +46,15 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
             ? { mode2031PendingSubscribe: true as const }
             : {})
         })
+      } else if (event.event === 'sessionQueryResponderMarker') {
+        if (!event.payload.responder) {
+          this.queryResponderSessionIds.delete(event.sessionId)
+        }
+        this.emitBackgroundStreamEvent({
+          id: event.sessionId,
+          kind: 'queryResponderMarker',
+          responder: event.payload.responder === true
+        })
       } else if (event.event === 'dataGap') {
         this.emitBackgroundStreamEvent({
           id: event.sessionId,

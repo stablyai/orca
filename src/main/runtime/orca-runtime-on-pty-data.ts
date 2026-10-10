@@ -51,6 +51,8 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
     // the writeChain link. A mark/setting/subscriber flip before the queued
     // emulator write runs must not change who answers (terminal-query-
     // authority.md invariant 1).
+    // Why first: waking a dormant model opens its gate handoff before this chunk's ownership.
+    const modelDormant = this.syncMainTerminalModelDemand(ptyId, outputSequence - sequenceChars)
     const forwardQueryReplies = this.shouldAnswerQueriesForLiveChunk(ptyId)
     // Ordering invariant (DO NOT REORDER): maybeHydrateHeadlessFromRenderer
     // MUST run before trackHeadlessTerminalData so the eager-state pattern
@@ -59,18 +61,23 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
     // trackHeadlessTerminalData would lazy-create a fresh state at PTY dims
     // that the later seed-resolve would overwrite, dropping the live byte.
     // See docs/mobile-prefer-renderer-scrollback.md.
-    this.maybeHydrateHeadlessFromRenderer(ptyId)
+    if (!modelDormant) {
+      this.maybeHydrateHeadlessFromRenderer(ptyId)
+    }
     // Our structure wins: OSC title/agent-status extraction runs through the
     // shared per-PTY title tracker below (getOrCreatePtyTitleTrackerEntry →
     // applyTrackedPtyTitle) in byte order, superseding main's inline
     // extractLastOscTitleForPty block (#7880/#7852 title/status semantics are
     // preserved via the tracker + detectAgentStatusFromTitle path).
-    const modelCompletion = this.trackHeadlessTerminalData(
-      ptyId,
-      data,
-      outputSequence,
-      forwardQueryReplies
-    )
+    const modelCompletion = modelDormant
+      ? Promise.resolve()
+      : this.trackHeadlessTerminalData(
+          ptyId,
+          data,
+          outputSequence,
+          forwardQueryReplies,
+          sequenceChars
+        )
     captureModelReceipt?.(modelCompletion)
 
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)

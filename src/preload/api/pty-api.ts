@@ -205,6 +205,7 @@ export type PtyApi = {
     deliveryInterestPtyCount: number
     hiddenDeliveryDroppedChars: number
     hiddenDeliveryDroppedChunks: number
+    daemonQueryResponderPtyCount: number
     pendingDroppedChars: number
     diagnostics: PtyMainDeliveryDiagnostics
     rendererLifecycleResetCount: number
@@ -222,6 +223,7 @@ export type PtyApi = {
       transformed?: boolean
       background?: boolean
       droppedOutput?: boolean
+      sidecarOnly?: boolean
     }) => void
   ) => () => void
   onReplay: (callback: (data: { id: string; data: string }) => void) => () => void

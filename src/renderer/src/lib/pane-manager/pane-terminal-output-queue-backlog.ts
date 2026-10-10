@@ -18,6 +18,7 @@ import {
   fireQueuedAckCredits,
   getTerminalOutputMaxQueueChars,
   queuedByTerminal,
+  queuedTerminalOutputData,
   type QueueEntry,
   type TerminalOutputBeforeWrite
 } from './pane-terminal-output-queue-registry'
@@ -58,6 +59,7 @@ export function replaceBacklogWithWarning(
       break
     }
   }
+  const droppedData = shouldNotify ? queuedTerminalOutputData(entry) : ''
   clearForegroundHoldSafety(entry)
   fireQueuedAckCredits(entry)
   entry.chunks = [
@@ -83,7 +85,7 @@ export function replaceBacklogWithWarning(
   clearForegroundRelease(entry)
   recordQueueDebugPressure()
   if (shouldNotify) {
-    entry.onBackgroundBacklogDropped?.()
+    entry.onBackgroundBacklogDropped?.(droppedData)
   }
 }
 

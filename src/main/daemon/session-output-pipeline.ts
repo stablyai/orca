@@ -1,6 +1,7 @@
 import { SessionOutputPlane } from './session-output-plane'
 import { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 import type { SubprocessHandle } from './session-subprocess-handle'
+import type { TuiAgent } from '../../shared/tui-agent'
 
 /** The session's ordered output pipeline: the recovery barrier feeding the
  *  output plane. Built together because the barrier's owner is what the
@@ -11,8 +12,10 @@ export function createSessionOutputPipeline(opts: {
   scrollback?: number | undefined
   wslDistro?: string | undefined
   historySeedChunks?: readonly string[] | undefined
+  launchAgent?: TuiAgent | null | undefined
   subprocess: SubprocessHandle
   isAlive: () => boolean
+  writeQueryReply: (reply: string) => void
 }): { output: SessionOutputPlane; recoveryBarrier: TerminalShellRecoveryBarrier } {
   const { subprocess, isAlive } = opts
   let barrier: TerminalShellRecoveryBarrier | null = null
@@ -22,7 +25,9 @@ export function createSessionOutputPipeline(opts: {
     scrollback: opts.scrollback,
     wslDistro: opts.wslDistro,
     historySeedChunks: opts.historySeedChunks,
-    getTerminalOwner: () => barrier?.getOwner()
+    getTerminalOwner: () => barrier?.getOwner(),
+    launchAgent: opts.launchAgent,
+    writeQueryReply: opts.writeQueryReply
   })
   const recoveryBarrier = new TerminalShellRecoveryBarrier({
     confirmShellForeground: async () => (await subprocess.confirmShellForeground?.()) ?? false,

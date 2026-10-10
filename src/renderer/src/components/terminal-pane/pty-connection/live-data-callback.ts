@@ -88,7 +88,10 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
     }
     // Post-restore reconciliation: drop chunks the snapshot covers, force a fresh restore for unmappable seq gaps; runs after byte observers, before any xterm write.
     const reconciliation = session.reconcileChunkAgainstRestoredSnapshot(data, meta)
+    // Why salvage on every discard below: main delivered this chunk because the view answers its
+    // queries (main answered none), so skipping its bytes must not skip its replies.
     if (reconciliation.action === 'drop-duplicate') {
+      session.salvageRendererQueriesFromDiscardedRestoreData(data)
       return
     }
     if (reconciliation.action === 'force-fresh-restore') {
@@ -104,9 +107,15 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
         if (restoreWasInFlight) {
           session.hiddenOutputRestoreFreshSnapshotNeeded = true
         }
+        session.salvageRendererQueriesFromDiscardedRestoreData(data)
         return
       }
     } else {
+      if (reconciliation.data.length < data.length) {
+        session.salvageRendererQueriesFromDiscardedRestoreData(
+          data.slice(0, data.length - reconciliation.data.length)
+        )
+      }
       data = reconciliation.data
       meta = reconciliation.meta
     }
@@ -126,6 +135,7 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
     if (orderedRendererData === null) {
       // Why: renderer filtering can't map cleaned text back to raw seq offsets; rebuild from main instead of risking stale bytes.
       session.markHiddenOutputRestoreNeeded()
+      session.salvageRendererQueriesFromDiscardedRestoreData(rendererData)
       session.schedulePendingStartupCommandDelivery()
       return
     }
@@ -163,11 +173,14 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
         }
         session.queueLiveChunkDuringRestore(orderedRendererData, rendererMeta)
         session.requestHiddenOutputRestoreIfNeeded()
-      } else if (session.hiddenOutputRestoreInFlight) {
-        session.hiddenOutputRestoreNeeded = true
-        session.hiddenOutputRestoreFreshSnapshotNeeded = true
+      } else {
+        if (session.hiddenOutputRestoreInFlight) {
+          session.hiddenOutputRestoreNeeded = true
+          session.hiddenOutputRestoreFreshSnapshotNeeded = true
+        }
+        // Why: hidden chunks with a restore already latched are dropped; the reveal snapshot covers their bytes.
+        session.salvageRendererQueriesFromDiscardedRestoreData(orderedRendererData)
       }
-      // Why: hidden chunks with a restore already latched are dropped; the reveal snapshot covers their bytes.
     } else {
       // Why: hidden panes normally get no bytes (main drops post-ingestion); stragglers ride the bounded background queue, overflow latches restore.
       if (pendingForegroundQuery?.statefulQueryData) {

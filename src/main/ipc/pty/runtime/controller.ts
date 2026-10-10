@@ -28,6 +28,7 @@ import {
   writePtyFromRuntimeController
 } from './operations'
 import { recordUnconfirmedExplicitSshStop } from './undelivered-ssh-kill'
+import { tryGetProviderForPty } from '../provider/registry'
 import { supportsForegroundProcessEvidenceFromRuntimeController } from './foreground-process-evidence-capability'
 import {
   listProcessesFromRuntimeController,
@@ -84,6 +85,12 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     },
     serializeProviderBuffer: (ptyId, opts) =>
       serializeProviderBufferFromRuntimeController(ptyId, opts),
+    canProvideSettledBufferSnapshot: (ptyId) =>
+      tryGetProviderForPty(ptyId)?.canProvideSettledBufferSnapshot?.(ptyId) === true,
+    canDelegateDaemonQueryResponder: (ptyId) =>
+      tryGetProviderForPty(ptyId)?.canDelegateQueryResponder?.(ptyId) === true,
+    setDaemonQueryResponder: (ptyId, responder, opts) =>
+      tryGetProviderForPty(ptyId)?.setSessionQueryResponder?.(ptyId, responder, opts) === true,
     hasRendererSerializer: (ptyId) => hasRendererSerializerFromRuntimeController(ptyId),
     getRendererSerializerGeneration: (ptyId) =>
       getRendererSerializerGenerationFromRuntimeController(ptyId),

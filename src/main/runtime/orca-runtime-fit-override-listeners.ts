@@ -193,6 +193,7 @@ export class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWithStopRequ
     isUnattachedLocalCandidate: (ptyId) => {
       if (
         this.headlessTerminals.has(ptyId) ||
+        this.isMainTerminalModelDormant(ptyId) ||
         this.providerSnapshotPreferredPtys.has(ptyId) ||
         this.pendingPtyRegistrationIncarnations.has(ptyId) ||
         parseAppSshPtyId(ptyId)

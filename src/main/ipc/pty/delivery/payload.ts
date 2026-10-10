@@ -2,6 +2,13 @@ import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagn
 import type { PtyModelRestoreReason } from '../../../../shared/pty-model-restore-marker'
 import { mainDeliveryBreadcrumbs } from './debug'
 import { recordPtyRendererDeliveryPressure } from './accounting'
+import { DROPPED_QUERY_SALVAGE_MAX_CHARS } from './constants'
+import { extractDroppedPtyQueryBytes } from './pending'
+import {
+  recordHiddenRendererPtyDataDrop,
+  rendererPtyViewDelivery,
+  type RendererPtyViewDelivery
+} from '../../pty-hidden-delivery-gate'
 import type { PtyDataPayload, PtyIpcSession } from '../session'
 
 export function makePtyDataPayload(
@@ -55,11 +62,21 @@ export function sendModelRestoreNeededMarker(
   return true
 }
 
+/** The view was to answer these bytes' queries but will skip them: hand it just the queries,
+ *  as a pending-cap drop does, so the program still gets its replies. */
+export function sendSkippedViewQueries(session: PtyIpcSession, id: string, data: string): void {
+  const queries = extractDroppedPtyQueryBytes(data).slice(0, DROPPED_QUERY_SALVAGE_MAX_CHARS)
+  if (queries) {
+    sendPtyDataToRenderer(session, id, { id, data: queries, droppedOutput: true, background: true })
+  }
+}
+
 export function sendPtyDataToRenderer(
   session: PtyIpcSession,
   id: string,
   payload: PtyDataPayload,
-  projectionAdmissionIds?: readonly string[]
+  projectionAdmissionIds?: readonly string[],
+  ingestedDelivery: RendererPtyViewDelivery = 'parse'
 ): { sent: boolean; projectionsTransferred: boolean } {
   if (!session.mainWindow) {
     if (projectionAdmissionIds) {
@@ -68,6 +85,26 @@ export function sendPtyDataToRenderer(
     return { sent: false, projectionsTransferred: projectionAdmissionIds !== undefined }
   }
   const charCount = getPtyPayloadCharCount(payload)
+  // Why the ingestion stamp wins: main fixed who answers these bytes' queries when it ingested
+  // them, so bytes the view did not own then never reach its parser, even after a reveal.
+  const viewOwesReplies = ingestedDelivery === 'parse'
+  const sidecarOnly =
+    !viewOwesReplies ||
+    (payload.droppedOutput !== true &&
+      rendererPtyViewDelivery(id, session.getSettings?.()) === 'sidecarsOnly')
+  if (sidecarOnly && viewOwesReplies) {
+    sendSkippedViewQueries(session, id, payload.data)
+  }
+  if (sidecarOnly) {
+    if (recordHiddenRendererPtyDataDrop(id, charCount).shouldEmitRestoreMarker) {
+      sendModelRestoreNeededMarker(
+        session,
+        id,
+        'hidden-drop',
+        session.runtime?.getPtyOutputSequence(id)
+      )
+    }
+  }
   const accounting = session.rendererDeliveryAccountingByPty.get(id)
   const hadAccounting = accounting !== undefined
   if (accounting) {
@@ -84,7 +121,10 @@ export function sendPtyDataToRenderer(
   session.rendererInFlightTotalChars += charCount
   recordPtyRendererDeliveryPressure(session, id)
   try {
-    session.mainWindow.webContents.send('pty:data', payload)
+    session.mainWindow.webContents.send(
+      'pty:data',
+      sidecarOnly ? { ...payload, sidecarOnly } : payload
+    )
   } catch (error) {
     const current = session.rendererDeliveryAccountingByPty.get(id)
     if (current) {
