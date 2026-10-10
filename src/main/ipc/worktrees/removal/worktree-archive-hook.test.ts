@@ -2,12 +2,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import type * as HooksModule from '../../../hooks'
 
-const { getSshFilesystemProviderMock, getEffectiveHooksMock } = vi.hoisted(() => ({
-  getSshFilesystemProviderMock: vi.fn(),
-  getEffectiveHooksMock: vi.fn()
-}))
+const { getSshFilesystemProviderMock, getEffectiveHooksMock, requireSshGitProviderMock } =
+  vi.hoisted(() => ({
+    getSshFilesystemProviderMock: vi.fn(),
+    getEffectiveHooksMock: vi.fn(),
+    requireSshGitProviderMock: vi.fn()
+  }))
 vi.mock('../../../providers/ssh-filesystem-dispatch', () => ({
   getSshFilesystemProvider: getSshFilesystemProviderMock
+}))
+vi.mock('../../../providers/ssh-git-dispatch', () => ({
+  requireSshGitProvider: requireSshGitProviderMock
 }))
 // Only `getEffectiveHooks` is stubbed: the module under test also imports `parseOrcaYaml` from
 // here, and replacing it wholesale made the parse throw into the fail-open catch — which answers
@@ -17,7 +22,7 @@ vi.mock('../../../hooks', async () => ({
   getEffectiveHooks: getEffectiveHooksMock
 }))
 
-import { getArchiveHooksForRemoval } from './worktree-archive-hook'
+import { getArchiveHooksForRemoval, runRemoteArchiveHook } from './worktree-archive-hook'
 
 const REMOTE_REPO: Repo = {
   id: 'r',
@@ -89,5 +94,40 @@ describe('getArchiveHooksForRemoval owner resolution', () => {
     })
 
     await expect(getArchiveHooksForRemoval(REMOTE_REPO, 'ssh-target')).resolves.toEqual(null)
+  })
+})
+
+describe('runRemoteArchiveHook script path', () => {
+  it('anchors a relative script that exists only on the remote checkout that supplied orca.yaml', async () => {
+    const execNonInteractive = vi.fn().mockResolvedValue({
+      stdout: '',
+      stderr: '',
+      exitCode: 0,
+      timedOut: false
+    })
+    requireSshGitProviderMock.mockReturnValue({ execNonInteractive })
+    getSshFilesystemProviderMock.mockReturnValue({
+      stat: vi.fn(async (filePath: string) => {
+        if (filePath === '/home/orca/repo/scripts/worktree-archive.sh') {
+          return { type: 'file', size: 1, mtime: 0 }
+        }
+        throw new Error('ENOENT')
+      })
+    })
+
+    await runRemoteArchiveHook(
+      { ...REMOTE_REPO, connectionId: 'ssh-target' },
+      '/home/orca/old',
+      'bash scripts/worktree-archive.sh'
+    )
+
+    expect(execNonInteractive).toHaveBeenCalledWith(
+      '/bin/bash',
+      ['-lc', "bash '/home/orca/repo/scripts/worktree-archive.sh'"],
+      '/home/orca/old',
+      120_000,
+      undefined,
+      expect.any(Object)
+    )
   })
 })
