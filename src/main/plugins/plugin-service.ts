@@ -111,15 +111,13 @@ export class PluginService {
     }
   }
 
-  async initialize(): Promise<void> {
-    this.initPromise ??= this.refresh()
-    return this.initPromise
+  initialize(): Promise<void> {
+    return (this.initPromise ??= this.refresh())
   }
 
   async whenReady(): Promise<void> {
     await (this.initPromise ?? Promise.resolve()).catch(() => undefined)
-    // Client reads wait for the complete transaction so rollback-based content
-    // validation cannot expose a partially activated plugin between passes.
+    // Wait for content validation to finish before publishing the refreshed plugins.
     await waitForPluginRefreshSettlement(() => this.refreshChain)
   }
 
@@ -196,8 +194,7 @@ export class PluginService {
   }
 
   activationState(plugin: ValidDiscoveredPlugin): ReturnType<typeof getPluginActivationState> {
-    // The feature flag is an authority boundary, not only a discovery hint:
-    // callers fail closed immediately even before async reconciliation ends.
+    // Keep the feature flag authoritative while async reconciliation is pending.
     if (!this.options.isPluginSystemEnabled()) {
       return 'disabled'
     }
@@ -260,7 +257,8 @@ export class PluginService {
           ? bindPluginHostServices({
               delegate: this.runtimeDelegate,
               pluginsDataDir: getPluginsDataDir(this.options.userDataPath),
-              subscribeEvents: (key, events) => this.eventBus.subscribe(key, events)
+              subscribeEvents: (key, events) => this.eventBus.subscribe(key, events),
+              invokePluginCommand: this.invokeCommand.bind(this)
             })
           : null,
         audit: this.audit
@@ -307,8 +305,7 @@ export class PluginService {
     this.notifyChanged(false)
   }
 
-  /** Reconciles live workers and client projections after consent or
-   * enablement changes without re-reading plugin files or starting workers. */
+  /** Reconciles live workers after consent or enablement changes. */
   async reconcileActivationState(): Promise<void> {
     const reconcile = this.refreshChain.then(() => this.performActivationStateReconciliation())
     this.refreshChain = reconcile.catch(() => undefined)

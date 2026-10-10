@@ -36,6 +36,7 @@ function createServices(): PluginHostServices {
     listWorktreeTerminals: vi
       .fn()
       .mockResolvedValue([{ id: TERMINAL_ID, title: '/home/private/orca' }]),
+    invokePluginCommand: vi.fn().mockResolvedValue({ started: true }),
     sendTerminalText: vi.fn().mockResolvedValue({ accepted: true }),
     dispatchPluginNotification: vi.fn().mockResolvedValue({ delivered: true }),
     storage: {
@@ -108,6 +109,7 @@ const successParams: Record<string, unknown> = {
   'workspace.readContext': {},
   'terminal.sendText': { terminalId: TERMINAL_ID, text: 'echo hi', enter: true },
   'notifications.show': { title: 'Hello' },
+  'commands.invoke': { commandId: 'hello-ping', args: { from: 'panel' } },
   'storage.get': { key: 'alpha' },
   'storage.set': { key: 'alpha', value: 1 },
   'storage.delete': { key: 'alpha' },
@@ -121,8 +123,8 @@ const successParams: Record<string, unknown> = {
 }
 
 describe('plugin host main/relay conformance', () => {
-  it('runs a granted success through both transports for all 13 v0 methods', async () => {
-    expect(PLUGIN_HOST_API_V0).toHaveLength(13)
+  it('runs a granted success through both transports for all 14 v0 methods', async () => {
+    expect(PLUGIN_HOST_API_V0).toHaveLength(14)
     expect(Object.keys(successParams).sort()).toEqual(
       PLUGIN_HOST_API_V0.map((entry) => entry.name).sort()
     )

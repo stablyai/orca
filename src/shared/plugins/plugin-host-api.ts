@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { PLUGIN_EVENT_NAMES } from './plugin-manifest'
+import { pluginCommandIdSchema } from './plugin-manifest-fields'
 import type { PluginCapabilityKind } from './plugin-capabilities'
 
 /**
@@ -33,7 +34,8 @@ const workspaceReadContextResult = z
       .array(
         z
           .object({
-            id: z.string().min(1).max(PLUGIN_TERMINAL_ID_MAX_LENGTH)
+            id: z.string().min(1).max(PLUGIN_TERMINAL_ID_MAX_LENGTH),
+            title: z.string().max(PLUGIN_WORKSPACE_LABEL_MAX_LENGTH).nullable().optional()
           })
           .strict()
       )
@@ -56,6 +58,11 @@ const notificationsShowParams = z.object({
   body: z.string().max(1000).optional()
 })
 const notificationsShowResult = z.object({ delivered: z.boolean() })
+const commandsInvokeParams = z.object({
+  commandId: pluginCommandIdSchema,
+  args: z.json().optional()
+})
+const commandsInvokeResult = z.json().optional()
 
 const RESERVED_STORAGE_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
 const storageKeySchema = z
@@ -149,6 +156,16 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     panel: true,
     params: notificationsShowParams,
     result: notificationsShowResult
+  }),
+  spec({
+    name: 'commands.invoke',
+    since: '1.0',
+    scope: 'plugin-private',
+    capability: 'worker:invoke',
+    mutation: true,
+    panel: true,
+    params: commandsInvokeParams,
+    result: commandsInvokeResult
   }),
   spec({
     name: 'storage.get',

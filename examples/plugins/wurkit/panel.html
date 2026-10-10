@@ -1,0 +1,393 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body {
+        margin: 0;
+        padding: 14px;
+        color: var(--foreground);
+        background: var(--background);
+        font:
+          13px/1.45 Geist,
+          system-ui,
+          sans-serif;
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 16px;
+      }
+      h2 {
+        margin: 18px 0 8px;
+        font-size: 13px;
+      }
+      label {
+        display: block;
+        margin: 10px 0 4px;
+        color: var(--muted-foreground);
+      }
+      input,
+      select,
+      button {
+        box-sizing: border-box;
+        width: 100%;
+        min-height: 34px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 6px 9px;
+        color: var(--foreground);
+        font: inherit;
+      }
+      input,
+      select {
+        background: var(--input);
+      }
+      button {
+        margin-top: 8px;
+        color: var(--secondary-foreground);
+        background: var(--secondary);
+        cursor: pointer;
+      }
+      button:hover {
+        border-color: var(--ring);
+      }
+      button:focus-visible,
+      input:focus-visible,
+      select:focus-visible {
+        outline: 2px solid var(--ring);
+        outline-offset: 2px;
+      }
+      button:disabled {
+        cursor: wait;
+        opacity: 0.65;
+      }
+      .muted {
+        color: var(--muted-foreground);
+      }
+      .status {
+        min-height: 1.5em;
+        margin: 10px 0;
+        white-space: pre-wrap;
+      }
+      .tickets {
+        display: grid;
+        gap: 8px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .ticket {
+        padding: 10px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        color: var(--card-foreground);
+        background: var(--card);
+      }
+      .ticket button {
+        text-align: left;
+      }
+      .ticket-title {
+        display: block;
+        font-weight: 600;
+      }
+      .ticket-meta {
+        display: block;
+        margin-top: 4px;
+        color: var(--muted-foreground);
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Wurkit</h1>
+    <p id="intro" class="muted">Connect with a Wurkit API key to browse open tickets.</p>
+    <section id="connect">
+      <label for="api-key">Wurkit API key</label>
+      <input id="api-key" type="password" autocomplete="off" spellcheck="false" />
+      <button id="save-key" type="button">Save key securely</button>
+    </section>
+    <section id="browser" hidden>
+      <label for="project">Project</label>
+      <select id="project">
+        <option value="">Choose a project</option>
+      </select>
+      <label for="agent">Send to agent terminal</label>
+      <select id="agent">
+        <option value="">Choose an agent terminal</option>
+      </select>
+      <button id="refresh" type="button">Refresh tickets</button>
+      <ul id="tickets" class="tickets"></ul>
+      <button id="more" type="button" hidden>Load more</button>
+      <button id="replace-key" type="button">Replace API key</button>
+    </section>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+    <script>
+      'use strict'
+      var requestNumber = 0
+      var pending = Object.create(null)
+      var currentCursor = null
+      var activeProjectId = ''
+      var dispatching = false
+      var selectedTicket = null
+      var statusEl = document.getElementById('status')
+      var projectEl = document.getElementById('project')
+      var agentEl = document.getElementById('agent')
+      var ticketsEl = document.getElementById('tickets')
+
+      function call(action, params) {
+        return new Promise(function (resolve, reject) {
+          var requestId = 'wurkit-' + ++requestNumber
+          var timer = window.setTimeout(function () {
+            delete pending[requestId]
+            reject(new Error('Orca did not respond. Try again.'))
+          }, 20000)
+          pending[requestId] = function (result) {
+            window.clearTimeout(timer)
+            resolve(result)
+          }
+          window.parent.postMessage(
+            {
+              type: 'orca-panel-action',
+              requestId: requestId,
+              action: action,
+              params: params
+            },
+            '*'
+          )
+        })
+      }
+
+      function invoke(commandId, args) {
+        return call('commands.invoke', { commandId: commandId, args: args })
+      }
+
+      window.addEventListener('message', function (event) {
+        if (event.source !== window.parent) return
+        var data = event.data
+        if (!data || data.type !== 'orca-panel-action-result') return
+        var resolve = pending[data.requestId]
+        if (!resolve) return
+        delete pending[data.requestId]
+        resolve(data)
+      })
+
+      function explain(result) {
+        if (result.ok) return ''
+        if (result.errorCode === 'capability_denied' || result.errorCode === 'consent_required') {
+          return 'Enable the Wurkit plugin and grant its listed capabilities in Orca Settings.'
+        }
+        return result.error || 'The request failed (' + (result.errorCode || 'unknown error') + ').'
+      }
+
+      function setConnected(connected) {
+        document.getElementById('connect').hidden = connected
+        document.getElementById('browser').hidden = !connected
+        document.getElementById('intro').textContent = connected
+          ? 'Choose a project and agent terminal, then click a ticket to send it.'
+          : 'Connect with a Wurkit API key to browse open tickets.'
+      }
+
+      async function checkConnection() {
+        try {
+          var result = await invoke('status')
+          if (!result.ok) throw new Error(explain(result))
+          setConnected(Boolean(result.value && result.value.configured))
+          if (result.value && result.value.configured) await loadProjects()
+        } catch (error) {
+          statusEl.textContent = error.message
+        }
+      }
+
+      async function saveKey() {
+        var input = document.getElementById('api-key')
+        var key = input.value.trim()
+        if (!key) {
+          statusEl.textContent = 'Enter a Wurkit API key.'
+          input.focus()
+          return
+        }
+        document.getElementById('save-key').disabled = true
+        statusEl.textContent = 'Saving the key to Orca’s encrypted plugin vault…'
+        try {
+          var result = await invoke('configure', { apiKey: key })
+          if (!result.ok) throw new Error(explain(result))
+          input.value = ''
+          setConnected(true)
+          await loadProjects()
+        } catch (error) {
+          statusEl.textContent = error.message
+        } finally {
+          key = ''
+          document.getElementById('save-key').disabled = false
+        }
+      }
+
+      async function loadProjects() {
+        statusEl.textContent = 'Loading projects…'
+        try {
+          var result = await invoke('projects')
+          if (!result.ok) throw new Error(explain(result))
+          if (!result.value.configured) {
+            setConnected(false)
+            return
+          }
+          var projects = result.value.projects
+          projectEl.replaceChildren(new Option('Choose a project', ''))
+          projects.forEach(function (project) {
+            var option = new Option(project.identifierSlug + ' · ' + project.name, project.id)
+            projectEl.add(option)
+          })
+          statusEl.textContent = projects.length
+            ? ''
+            : 'No Wurkit projects are visible to this key.'
+        } catch (error) {
+          statusEl.textContent = error.message
+        }
+      }
+
+      async function loadTerminals() {
+        var result = await call('workspace.readContext')
+        if (!result.ok) throw new Error(explain(result))
+        var context = result.value
+        agentEl.replaceChildren(new Option('Choose an agent terminal', ''))
+        if (!context) return
+        context.terminals.forEach(function (terminal) {
+          var label = terminal.title || terminal.id
+          agentEl.add(new Option(label, terminal.id))
+        })
+      }
+
+      async function loadTickets(cursor) {
+        if (!activeProjectId) return
+        var isAppend = Boolean(cursor)
+        if (!isAppend) {
+          ticketsEl.replaceChildren()
+          currentCursor = null
+        }
+        document.getElementById('refresh').disabled = true
+        document.getElementById('more').disabled = true
+        statusEl.textContent = 'Loading open tickets…'
+        try {
+          var result = await invoke('packages', {
+            projectId: activeProjectId,
+            cursor: cursor || ''
+          })
+          if (!result.ok) throw new Error(explain(result))
+          var page = result.value
+          page.items.forEach(renderTicket)
+          currentCursor = page.nextCursor
+          document.getElementById('more').hidden = !currentCursor
+          statusEl.textContent = ticketsEl.children.length
+            ? ''
+            : 'No open tickets found on this page.'
+        } catch (error) {
+          statusEl.textContent = error.message
+        } finally {
+          document.getElementById('refresh').disabled = false
+          document.getElementById('more').disabled = false
+        }
+      }
+
+      function renderTicket(ticket) {
+        var row = document.createElement('li')
+        row.className = 'ticket'
+        var button = document.createElement('button')
+        button.type = 'button'
+        var title = document.createElement('span')
+        title.className = 'ticket-title'
+        title.textContent = ticket.identifier + ' · ' + ticket.title
+        var assignee = ticket.assignedAgentId
+          ? 'Agent ' + ticket.assignedAgentId.slice(0, 8)
+          : ticket.assignedHumanId
+            ? 'Human ' + ticket.assignedHumanId.slice(0, 8)
+            : 'Unassigned'
+        var meta = document.createElement('span')
+        meta.className = 'ticket-meta'
+        meta.textContent = ticket.status.replaceAll('_', ' ') + ' · ' + assignee
+        button.append(title, meta)
+        button.addEventListener('click', function () {
+          selectTicket(ticket)
+        })
+        row.append(button)
+        ticketsEl.append(row)
+      }
+
+      async function selectTicket(ticket) {
+        if (dispatching) return
+        selectedTicket = ticket
+        if (!agentEl.value) {
+          statusEl.textContent = 'Choose an agent terminal to send ' + ticket.identifier + '.'
+          agentEl.focus()
+          return
+        }
+        if (!/^[A-Z0-9]{2,8}-[0-9]+(?:\.[A-Z0-9-]+)?$/.test(ticket.identifier)) {
+          statusEl.textContent =
+            'The ticket identifier contains characters that cannot be sent safely.'
+          return
+        }
+        dispatching = true
+        statusEl.textContent = 'Sending ' + ticket.identifier + ' to the selected terminal…'
+        try {
+          var context = await call('workspace.readContext')
+          if (!context.ok) throw new Error(explain(context))
+          if (
+            !context.value ||
+            !context.value.terminals.some(function (terminal) {
+              return terminal.id === agentEl.value
+            })
+          ) {
+            await loadTerminals()
+            throw new Error('The selected terminal is no longer available. Choose it again.')
+          }
+          var result = await call('terminal.sendText', {
+            terminalId: agentEl.value,
+            text: 'Wurk ' + ticket.identifier + ' in Wurkit.',
+            enter: true
+          })
+          if (!result.ok) throw new Error(explain(result))
+          selectedTicket = null
+          statusEl.textContent =
+            'Sent ' + ticket.identifier + ' to ' + agentEl.options[agentEl.selectedIndex].text + '.'
+        } catch (error) {
+          statusEl.textContent = error.message
+        } finally {
+          dispatching = false
+        }
+      }
+
+      projectEl.addEventListener('change', function () {
+        activeProjectId = projectEl.value
+        selectedTicket = null
+        if (activeProjectId) loadTickets('')
+        else {
+          ticketsEl.replaceChildren()
+          document.getElementById('more').hidden = true
+        }
+      })
+      agentEl.addEventListener('change', function () {
+        if (selectedTicket) selectTicket(selectedTicket)
+      })
+      document.getElementById('save-key').addEventListener('click', saveKey)
+      document.getElementById('api-key').addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') saveKey()
+      })
+      document.getElementById('refresh').addEventListener('click', function () {
+        loadTickets('')
+      })
+      document.getElementById('more').addEventListener('click', function () {
+        if (currentCursor) loadTickets(currentCursor)
+      })
+      document.getElementById('replace-key').addEventListener('click', function () {
+        setConnected(false)
+        document.getElementById('api-key').focus()
+      })
+      loadTerminals().catch(function (error) {
+        statusEl.textContent = error.message
+      })
+      checkConnection()
+    </script>
+  </body>
+</html>

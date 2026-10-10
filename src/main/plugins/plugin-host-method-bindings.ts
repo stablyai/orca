@@ -18,7 +18,8 @@ export type PluginWorktreeContext = {
  *  over runtime services; relay policy and conformance tests bind fakes. */
 export type PluginHostServices = {
   resolveActiveWorktreeContext(): Promise<PluginWorktreeContext | null>
-  listWorktreeTerminals(worktreeId: string): Promise<{ id: string }[]>
+  listWorktreeTerminals(worktreeId: string): Promise<{ id: string; title?: string | null }[]>
+  invokePluginCommand?(pluginId: string, commandId: string, args?: unknown): Promise<unknown>
   sendTerminalText(
     terminalId: string,
     action: { text: string; enter: boolean }
@@ -68,6 +69,26 @@ function definePluginMethod(
   return [name, { spec, handler }]
 }
 
+function safeTerminalTitle(title: string | null | undefined): string | null {
+  const candidate = title?.trim()
+  if (!candidate || candidate.length > PLUGIN_WORKSPACE_LABEL_MAX_LENGTH) {
+    return null
+  }
+  const hasControlCharacter = Array.from(candidate).some((character) => {
+    const code = character.charCodeAt(0)
+    return code < 32 || code === 127
+  })
+  if (
+    candidate.includes('/') ||
+    candidate.includes('\\') ||
+    /^[A-Za-z]:/.test(candidate) ||
+    hasControlCharacter
+  ) {
+    return null
+  }
+  return candidate
+}
+
 const HANDLERS = new Map<string, BoundPluginHostMethod>([
   definePluginMethod('workspace.readContext', async (_params, { services }) => {
     const context = await services.resolveActiveWorktreeContext()
@@ -86,7 +107,10 @@ const HANDLERS = new Map<string, BoundPluginHostMethod>([
             terminal.id.length > 0 && terminal.id.length <= PLUGIN_TERMINAL_ID_MAX_LENGTH
         )
         .slice(0, PLUGIN_WORKSPACE_TERMINAL_LIMIT)
-        .map((terminal) => ({ id: terminal.id }))
+        .map((terminal) => {
+          const title = safeTerminalTitle(terminal.title)
+          return title ? { id: terminal.id, title } : { id: terminal.id }
+        })
     }
   }),
   definePluginMethod('terminal.sendText', async (params, { services }) => {
@@ -111,6 +135,13 @@ const HANDLERS = new Map<string, BoundPluginHostMethod>([
   definePluginMethod('notifications.show', async (params, { pluginId, services }) => {
     const { title, body } = params as { title: string; body?: string }
     return services.dispatchPluginNotification({ pluginId, title, body })
+  }),
+  definePluginMethod('commands.invoke', async (params, { pluginId, services }) => {
+    const { commandId, args } = params as { commandId: string; args?: unknown }
+    if (!services.invokePluginCommand) {
+      throw new Error('plugin command invocation is unavailable')
+    }
+    return services.invokePluginCommand(pluginId, commandId, args)
   }),
   definePluginMethod('storage.get', async (params, { pluginId, services }) => {
     const { key } = params as { key: string }

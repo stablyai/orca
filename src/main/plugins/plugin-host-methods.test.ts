@@ -103,6 +103,35 @@ describe('executePluginHostCall mutation auditing', () => {
     expect(order).toEqual(['audit:attempt', 'mutation', 'audit:ok'])
   })
 
+  it('invokes only the plugin command requested by the panel and audits the command id', async () => {
+    const invokePluginCommand = vi.fn().mockResolvedValue({ configured: true })
+    const services = {
+      ...createServices(vi.fn().mockReturnValue({ ok: true })),
+      invokePluginCommand
+    }
+    const summaries: string[] = []
+    const record = vi.fn(async (entry: { summary: string }) => {
+      summaries.push(entry.summary)
+    })
+
+    const outcome = await executePluginHostCall({
+      pluginId: 'orca-samples.demo',
+      method: 'commands.invoke',
+      params: { commandId: 'configure', args: { apiKey: 'never-audit-this' } },
+      viaPanel: true,
+      grantedCapabilities: ['worker:invoke'],
+      services,
+      audit: { record }
+    })
+
+    expect(outcome).toEqual({ ok: true, value: { configured: true } })
+    expect(invokePluginCommand).toHaveBeenCalledWith('orca-samples.demo', 'configure', {
+      apiKey: 'never-audit-this'
+    })
+    expect(summaries).toEqual(['command=configure', 'command=configure'])
+    expect(JSON.stringify(record.mock.calls)).not.toContain('never-audit-this')
+  })
+
   it('refuses mutations when no audit writer is configured', async () => {
     const storageSet = vi.fn().mockReturnValue({ ok: true })
     const outcome = await executePluginHostCall({

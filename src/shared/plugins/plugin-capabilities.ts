@@ -16,6 +16,7 @@ export const PLUGIN_CAPABILITY_KINDS = [
   'workspace:read',
   'terminal:send',
   'notifications:show',
+  'worker:invoke',
   'storage',
   'secrets',
   'events:subscribe',
@@ -36,6 +37,7 @@ export const PLUGIN_CAPABILITY_DESCRIPTIONS: Record<PluginCapabilityKind, string
   'workspace:read': 'Read the name, branch, and terminal list of your focused worktree',
   'terminal:send': 'Type text into a terminal you can see (always a specific terminal)',
   'notifications:show': 'Show desktop notifications labeled with the plugin name',
+  'worker:invoke': "Let this plugin's panel invoke its declared worker commands",
   storage: "Store data in the plugin's own storage folder",
   secrets: "Store and read secrets in the plugin's own encrypted vault",
   'events:subscribe':

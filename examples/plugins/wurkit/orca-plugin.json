@@ -1,0 +1,26 @@
+{
+  "manifestVersion": 1,
+  "id": "wurkit",
+  "publisher": "blacksite-labs",
+  "name": "Wurkit",
+  "version": "1.0.0",
+  "description": "Browse open Wurkit tickets and send one to an Orca agent.",
+  "repository": "https://github.com/stablyai/orca",
+  "engines": { "orca": ">=1.4.0" },
+  "pluginApi": 1,
+  "main": "main.mjs",
+  "contributes": {
+    "panels": [{ "id": "wurkit", "title": "Wurkit", "icon": "list-checks", "entry": "panel.html" }],
+    "commands": [
+      { "id": "configure", "title": "Wurkit: Save API key" },
+      { "id": "projects", "title": "Wurkit: List projects" },
+      { "id": "packages", "title": "Wurkit: List tickets" }
+    ]
+  },
+  "capabilities": [
+    { "kind": "workspace:read" },
+    { "kind": "terminal:send" },
+    { "kind": "worker:invoke" },
+    { "kind": "secrets" }
+  ]
+}

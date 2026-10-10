@@ -34,9 +34,16 @@ export function bindPluginHostServices(input: {
   delegate: PluginRuntimeDelegate
   pluginsDataDir: string
   subscribeEvents: (pluginKey: string, events: PluginEventName[]) => PluginEventName[]
+  invokePluginCommand?: (pluginKey: string, commandId: string, args?: unknown) => Promise<unknown>
 }): PluginHostServices {
   const { delegate, pluginsDataDir, subscribeEvents } = input
   return {
+    invokePluginCommand: (pluginKey, commandId, args) => {
+      if (!input.invokePluginCommand) {
+        throw new Error('plugin command invocation is unavailable')
+      }
+      return input.invokePluginCommand(pluginKey, commandId, args)
+    },
     resolveActiveWorktreeContext: async () => {
       const context = await delegate.resolveActiveWorktreeContext()
       if (!context) {
@@ -58,7 +65,7 @@ export function bindPluginHostServices(input: {
       )
       return result.terminals
         .slice(0, PLUGIN_WORKSPACE_TERMINAL_LIMIT)
-        .map((terminal) => ({ id: terminal.handle }))
+        .map((terminal) => ({ id: terminal.handle, title: terminal.title }))
     },
     sendTerminalText: async (terminalId, action) => {
       const result = await delegate.sendTerminal(terminalId, action, { inputKind: 'driving' })

@@ -132,6 +132,8 @@ function summarizeParams(method: string, params: unknown): string {
       const title = typeof record.title === 'string' ? record.title : ''
       return `titleChars=${title.length}`
     }
+    case 'commands.invoke':
+      return `command=${String(record.commandId)}`
     case 'storage.set':
     case 'storage.delete':
     case 'secrets.set':
