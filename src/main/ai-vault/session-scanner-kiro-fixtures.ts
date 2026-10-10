@@ -54,3 +54,69 @@ export async function writeKiroSessionFixture(
     }
   ])
 }
+
+export const KIRO_V3_FIXTURE_SESSION_ID = 'sess_dc17e658-cf15-4822-80df-0f356f21879a'
+
+// Mirrors the session.json kiro-cli 2.27.0 writes for a V3 `work` session.
+export const KIRO_V3_FIXTURE_MANIFEST = {
+  schemaVersion: '1',
+  id: KIRO_V3_FIXTURE_SESSION_ID,
+  title: 'Execute PowerShell Sleep Command',
+  agentMode: 'work',
+  workspacePaths: ['/private/tmp/kiro-test-proj'],
+  createdAt: '2026-10-02T16:04:12.112Z',
+  lastModifiedAt: '2026-10-02T16:04:35.400Z',
+  modelId: 'claude-opus-5.5'
+}
+
+// Mirrors messages.jsonl: one record per line with the turn content under `payload`.
+export const KIRO_V3_FIXTURE_MESSAGES = [
+  { id: 'm1', timestamp: '2026-10-02T16:04:12.200Z', payload: { type: 'session_start' } },
+  {
+    id: 'm2',
+    timestamp: '2026-10-02T16:04:12.300Z',
+    payload: { type: 'user', content: 'Run the shell command: echo dev-ok', images: [] }
+  },
+  {
+    id: 'm3',
+    timestamp: '2026-10-02T16:04:13.000Z',
+    payload: { type: 'assistant', operationType: 'Reasoning', content: 'thinking about it' }
+  },
+  {
+    id: 'm4',
+    timestamp: '2026-10-02T16:04:14.000Z',
+    payload: { type: 'tool_call', executionId: 'e1' }
+  },
+  {
+    id: 'm5',
+    timestamp: '2026-10-02T16:04:30.000Z',
+    payload: { type: 'assistant', operationType: 'Say', content: 'done' }
+  },
+  {
+    id: 'm6',
+    timestamp: '2026-10-02T16:04:31.000Z',
+    payload: { type: 'assistant', operationType: 'Summary', content: 'conversation summary' }
+  }
+]
+
+/**
+ * The V3 engine's layout: `<workspace-hash>/sess_<uuid>/session.json` beside `messages.jsonl`.
+ * `messageLines: null` leaves the transcript out. Returns the manifest path.
+ */
+export async function writeKiroV3SessionFixture(
+  sessionsDir: string,
+  options: {
+    manifest?: Record<string, unknown>
+    messageLines?: Record<string, unknown>[] | null
+  } = {}
+): Promise<string> {
+  const sessionDir = join(sessionsDir, '5fab923ac92fb45c', KIRO_V3_FIXTURE_SESSION_ID)
+  await mkdir(sessionDir, { recursive: true })
+  const manifestPath = join(sessionDir, 'session.json')
+  await writeFile(manifestPath, JSON.stringify(options.manifest ?? KIRO_V3_FIXTURE_MANIFEST))
+  const lines = options.messageLines === undefined ? KIRO_V3_FIXTURE_MESSAGES : options.messageLines
+  if (lines) {
+    await writeJsonlFile(join(sessionDir, 'messages.jsonl'), lines)
+  }
+  return manifestPath
+}

@@ -5,7 +5,6 @@ import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type { AiVaultDeletableAgent } from '../../shared/ai-vault-session-deletion'
 import { resolveGrokSessionsDir } from '../../shared/grok-session-paths'
-import { resolveKiroHomeDir } from '../../shared/kiro-home'
 import { uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
 import {
   clineMessagesPathForMetadata,
@@ -15,10 +14,7 @@ import { cursorChatMetaPath } from './session-scanner-cursor-chat-meta'
 import { devinSessionsDbDependencyPath } from './session-scanner-devin-db'
 import { resolveKimiSessionsDir } from './session-scanner-kimi-paths'
 import { resolveMuseSessionsDir } from './session-scanner-muse-paths'
-import {
-  isKiroSessionMetadataPath,
-  kiroTranscriptPathForMetadata
-} from './session-scanner-kiro-parser'
+import { KIRO_AGENT_SOURCE } from './session-scanner-kiro-sources'
 import { OPENCLAW_AGENT_SOURCE } from './openclaw-session-layout'
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from './session-scanner-omp-subagent-transcripts'
 import {
@@ -65,7 +61,6 @@ const DEVIN_TRANSCRIPTS_DIR = join(
   ),
   'transcripts'
 )
-const KIRO_SESSIONS_DIR = join(resolveKiroHomeDir(), 'sessions', 'cli')
 const DROID_SESSIONS_DIR = join(homedir(), '.factory', 'sessions')
 const DROID_PROJECTS_DIR = join(homedir(), '.factory', 'projects')
 const CLINE_SESSIONS_DIR =
@@ -223,20 +218,7 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     // Why: skip the live .journal.jsonl appends and consolidated backups.
     filePredicate: (filePath) => basename(filePath).startsWith('session_')
   },
-  kiro: {
-    rootDirs: (options, wslHomeDirs) =>
-      sessionRootDirs(options.kiroSessionsDir ?? KIRO_SESSIONS_DIR, wslHomeDirs, [
-        '.kiro',
-        'sessions',
-        'cli'
-      ]),
-    extensions: ['.json'],
-    filePredicate: isKiroSessionMetadataPath,
-    // Why: turns append to the .jsonl transcript; its stat must refresh the cached row.
-    contentDependencyPath: kiroTranscriptPathForMetadata,
-    // Per-session subdirectories hold background task state, not sessions.
-    directoryPredicate: () => false
-  },
+  kiro: KIRO_AGENT_SOURCE,
   rovo: {
     rootDirs: (options, wslHomeDirs) =>
       sessionRootDirs(options.rovoSessionsDir ?? ROVO_SESSIONS_DIR, wslHomeDirs, [

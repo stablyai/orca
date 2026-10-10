@@ -35,7 +35,7 @@ import type { FileWithMtime } from './session-scanner-types'
 import { openClawSessionDirectoryPredicate } from './openclaw-session-layout'
 import { remoteCodexSources } from './remote-session-scanner-codex-sources'
 import { remoteClineSource } from './remote-session-scanner-cline-source'
-import { remoteKiroSource } from './remote-session-scanner-kiro-source'
+import { remoteKiroSource, remoteKiroV3Source } from './remote-session-scanner-kiro-source'
 import { remoteDevinSource } from './remote-session-scanner-devin-source'
 import type {
   RemoteParserOptions,
@@ -125,6 +125,7 @@ export function remoteSessionSources(
     ),
     remoteClineSource(remoteHome, hostPlatform),
     remoteKiroSource(remoteHome, hostPlatform, kiroHomeDir),
+    remoteKiroV3Source(remoteHome, hostPlatform),
     source(
       'hermes',
       remoteHome,
