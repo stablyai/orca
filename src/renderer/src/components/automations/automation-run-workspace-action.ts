@@ -52,12 +52,16 @@ export function createAutomationRunWorkspaceAction({ store, list }: AutomationsP
     }
     const paneRef = parsePaneKey(run.terminalPaneKey ?? '')
     if (runViewState.availability === 'terminal' && !terminalTarget) {
-      if (ownerEnvironmentId && paneRef && activateAndRevealWorktree(run.workspaceId)) {
-        // Why: the mirror may not hold the pane yet; the server focuses it when it arrives.
-        void openRunTerminalOnOwner(run.workspaceId, ownerEnvironmentId, paneRef)
+      if (!ownerEnvironmentId || !paneRef) {
+        toast.error(runViewState.statusLabel)
         return
       }
-      toast.error(runViewState.statusLabel)
+      if (!activateAndRevealWorktree(run.workspaceId)) {
+        toast.error(workspaceUnavailableMessage())
+        return
+      }
+      // Why: the mirror may not hold the pane yet; the server focuses it when it arrives.
+      void openRunTerminalOnOwner(run.workspaceId, ownerEnvironmentId, paneRef)
       return
     }
     if (terminalTarget && currentLayout) {
@@ -73,16 +77,18 @@ export function createAutomationRunWorkspaceAction({ store, list }: AutomationsP
       }
     }
     if (!activateAndRevealWorktree(run.workspaceId)) {
-      toast.error(
-        translate(
-          'auto.components.automations.AutomationsPage.e1bf9b1512',
-          'Workspace is not available.'
-        )
-      )
+      toast.error(workspaceUnavailableMessage())
       return
     }
     toast.message(runViewState.statusLabel)
   }
+}
+
+function workspaceUnavailableMessage(): string {
+  return translate(
+    'auto.components.automations.AutomationsPage.e1bf9b1512',
+    'Workspace is not available.'
+  )
 }
 
 async function openRunTerminalOnOwner(
