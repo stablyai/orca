@@ -2,6 +2,7 @@ import { toast } from 'sonner'
 import type { Tab } from '../../../../shared/tab-types'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { activateAiVaultResumeWorkspace } from './ai-vault-session-resume-in-chat-launch'
 import {
   aiVaultSessionHistoryChatTabId,
   canOpenAiVaultSessionHistoryChat
@@ -24,6 +25,15 @@ export function openAiVaultSessionHistoryChatForRow(
 ): boolean {
   if (!canOpenAiVaultSessionHistoryChat(session)) {
     return false
+  }
+  // Tab state is per-worktree: nothing below moves `activeWorktreeId`, so a target other
+  // than the active workspace has to be activated or the tab opens out of view.
+  if (
+    worktreeId &&
+    useAppStore.getState().activeWorktreeId !== worktreeId &&
+    !activateAiVaultResumeWorkspace(worktreeId)
+  ) {
+    return true
   }
   const tab = openAiVaultSessionHistoryChatTab(session, worktreeId)
   if (!tab) {
