@@ -16,10 +16,16 @@ import { ChevronLeft } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
 import { loadHosts, updateHostNameAndEndpoint } from '../../../src/transport/host-store'
 import { displayHostEndpoint } from '../../../src/transport/host-endpoint'
+import { checkEdgeAuthEndpoint } from '../../../src/transport/endpoint-auth-headers'
 import { resolveHostEndpointEdit } from '../../../src/transport/host-endpoint-edit'
 import { usePrimeHosts, useRefreshHostClient } from '../../../src/transport/client-context'
 import type { HostProfile } from '../../../src/transport/types'
 import { hostOs } from '../../../src/platform/host-os'
+import {
+  EdgeAuthHeadersSection,
+  useEdgeAuthHeaders,
+  type EdgeAuthScrollTarget
+} from '../../../src/components/edge-auth-headers-section'
 
 export default function EditHostScreen() {
   const router = useRouter()
@@ -32,11 +38,13 @@ export default function EditHostScreen() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
+  const edgeAuth = useEdgeAuthHeaders()
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   // Why: setSaving is async, so a second trigger before the re-render could
   // still read stale state and re-enter handleSave; the ref closes that race.
   const savingRef = useRef(false)
+  const authScrollTarget = useRef<EdgeAuthScrollTarget | null>(null)
 
   const load = useCallback(async () => {
     if (!hostId) {
@@ -55,6 +63,15 @@ export default function EditHostScreen() {
       // The field edits the phone's override; an empty field means "use the desktop's name".
       setName(found.personalName ?? '')
       setAddress(displayHostEndpoint(found.endpoint))
+      try {
+        await edgeAuth.loadAuthForHost(found.id)
+      } catch {
+        // Why: without a readable baseline a save could delete headers it never loaded —
+        // block the whole form until a retry can establish it.
+        setLoadError('Could not load edge authentication for this host.')
+        setHost(null)
+        return
+      }
       setLoadError(null)
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Failed to load host.')
@@ -74,11 +91,20 @@ export default function EditHostScreen() {
   const nameTrimmed = name.trim()
   const nameChanged = host != null && nameTrimmed !== (host.personalName ?? '')
   const endpointChanged = endpointEdit?.kind === 'changed'
+  const { authNormalized, authChanged } = edgeAuth
+  // Why: headers ride the handshake in cleartext on ws:// — only encrypted transports may carry them.
+  const authEndpointCheck = checkEdgeAuthEndpoint(
+    authNormalized.ok ? authNormalized.headers : null,
+    endpointEdit?.kind === 'changed' ? endpointEdit.endpoint : host?.endpoint
+  )
+  const authSectionError = !authNormalized.ok ? authNormalized.error : authEndpointCheck.error
   const canSave =
     host != null &&
     endpointEdit != null &&
     endpointEdit.kind !== 'invalid' &&
-    (nameChanged || endpointChanged) &&
+    authNormalized.ok &&
+    !authEndpointCheck.blocked &&
+    (nameChanged || endpointChanged || authChanged) &&
     !saving
 
   async function handleSave() {
@@ -93,7 +119,7 @@ export default function EditHostScreen() {
 
     const willRename = nextName !== (host.personalName ?? '')
     const nextEndpoint = endpointEdit.kind === 'changed' ? endpointEdit.endpoint : undefined
-    if (!willRename && nextEndpoint === undefined) {
+    if (!willRename && nextEndpoint === undefined && !authChanged) {
       router.back()
       return
     }
@@ -115,7 +141,36 @@ export default function EditHostScreen() {
       setSaving(false)
       return
     }
+    if (authChanged && authNormalized.ok) {
+      try {
+        await edgeAuth.persistAuthChanges(host.id, authNormalized.headers)
+      } catch {
+        // Why: metadata already committed above — surface a static message (never a keychain
+        // error, which can echo secrets) but still refresh a moved endpoint below.
+        setSaveError('Could not save edge authentication.')
+        await reprimeHosts()
+        savingRef.current = false
+        setSaving(false)
+        if (nextEndpoint !== undefined) {
+          refreshHostClient(host.id)
+        }
+        return
+      }
+    }
 
+    await reprimeHosts()
+
+    savingRef.current = false
+    setSaving(false)
+    router.back()
+
+    if (nextEndpoint !== undefined || authChanged) {
+      // Why: the live client, even one riding the relay, and its primed profile hold the old address.
+      refreshHostClient(host.id)
+    }
+  }
+
+  async function reprimeHosts() {
     try {
       // Why: the write already committed above; a re-prime failure here
       // must not be reported as a save failure — the next loadHosts() call
@@ -124,15 +179,6 @@ export default function EditHostScreen() {
       primeHosts(hosts)
     } catch {
       // best-effort re-prime; persisted data is unaffected
-    }
-
-    savingRef.current = false
-    setSaving(false)
-    router.back()
-
-    if (nextEndpoint !== undefined) {
-      // Why: the live client, even one riding the relay, and its primed profile hold the old address.
-      refreshHostClient(host.id)
     }
   }
 
@@ -183,6 +229,9 @@ export default function EditHostScreen() {
           behavior={hostOs() === 'ios' ? 'padding' : undefined}
         >
           <ScrollView
+            ref={(node) => {
+              authScrollTarget.current = node
+            }}
             contentContainerStyle={[styles.form, { paddingBottom: insets.bottom + spacing.xl }]}
             keyboardShouldPersistTaps="handled"
           >
@@ -233,7 +282,7 @@ export default function EditHostScreen() {
             />
             <Text style={styles.hint}>
               Accepts IP, host:port, or ws:// / wss://. Missing port defaults to the current port
-              (or 6768).
+              (443 for wss://, 6768 otherwise).
             </Text>
 
             {endpointEdit == null ? null : endpointEdit.kind !== 'invalid' ? (
@@ -242,6 +291,19 @@ export default function EditHostScreen() {
               </Text>
             ) : address.trim().length > 0 ? (
               <Text style={styles.previewError}>{endpointEdit.error}</Text>
+            ) : null}
+
+            {Platform.OS !== 'web' ? (
+              <EdgeAuthHeadersSection
+                rows={edgeAuth.authRows}
+                storedCount={edgeAuth.storedAuthCount}
+                error={authSectionError}
+                onRowsChange={(rows) => {
+                  edgeAuth.setAuthRows(rows)
+                  setSaveError(null)
+                }}
+                scrollViewRef={authScrollTarget}
+              />
             ) : null}
 
             {saveError ? <Text style={styles.errorText}>{saveError}</Text> : null}

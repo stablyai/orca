@@ -3,6 +3,7 @@ import {
   clearHostCredentialWriteRevision,
   getHostCredentialWriteRevision
 } from './host-credential-write-revision'
+import { deleteEndpointAuthHeaders } from './endpoint-auth-headers-store'
 import { deleteMobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import { deleteMobileRelayDirectUpgradeJournal } from './mobile-relay-direct-upgrade-journal'
 
@@ -48,6 +49,11 @@ export function createUnpairedHostCredentialDeletion(dependencies: DeletionDepen
     }
     assertWriteRevisionUnchanged(hostId, writeRevision)
     await deleteMobileRelayDirectUpgradeJournal(hostId)
+    if (await shouldSkip(hostId, writeRevision)) {
+      return
+    }
+    assertWriteRevisionUnchanged(hostId, writeRevision)
+    await deleteEndpointAuthHeaders(hostId)
     if (await shouldSkip(hostId, writeRevision)) {
       return
     }

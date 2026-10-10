@@ -3,6 +3,10 @@ import {
   forgetHostUpdateFailures
 } from '../mobile-web-shell/removed-host-shell-cache'
 import { unregisterPushForRemovedHost } from '../notifications/push-registration'
+import {
+  clearEndpointAuthHeadersCache,
+  noteEndpointAuthHeadersChanged
+} from './endpoint-auth-headers'
 import { forgetHostDescriptor } from './host-descriptor-store'
 import { removeHost } from './host-store'
 
@@ -23,6 +27,9 @@ export async function removeHostAndCloseClient(
   }
   forgetHostClient(hostId)
   forgetHostDescriptor(hostId)
+  // Why: synchronous — a re-pair reusing this id must never inherit the previous edge-auth snapshot.
+  clearEndpointAuthHeadersCache(hostId)
+  noteEndpointAuthHeadersChanged(hostId)
   // Why after the commit and not awaited: state about a host that is gone, never a reason to hold
   // the removal or fail it. A cache that fails to delete is reclaimed by the next eviction.
   void forgetHostUpdateFailures(hostId).catch(() => undefined)

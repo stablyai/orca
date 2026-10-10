@@ -1,19 +1,20 @@
 import type { ConnectOptions, RpcClient, SendRequestOptions } from './rpc-client'
 import { DirectConnectionLog } from './direct-connection-log'
+import { createDirectRequestPipeline } from './direct-request-pipeline'
 import { RpcClientAuthenticationRetry } from './rpc-client-authentication-retry'
 import { RpcClientConnectionState } from './rpc-client-connection-state'
 import {
   RpcClientReconnectSchedule,
   RPC_RECONNECT_ATTEMPT_LIMIT
 } from './rpc-client-reconnect-schedule'
-import { RpcClientRequestTracker } from './rpc-client-request-tracker'
 import { RpcClientSocketCloseController } from './rpc-client-socket-close-controller'
 import { RpcClientSocketFactory } from './rpc-client-socket-factory'
 import type { RpcClientSocketSession } from './rpc-client-socket-session'
-import {
+import type { RpcClientRequestTracker } from './rpc-client-request-tracker'
+import type {
   RpcClientStreamRegistry,
-  type RpcStreamingListener,
-  type RpcStreamSubscribeOptions
+  RpcStreamingListener,
+  RpcStreamSubscribeOptions
 } from './rpc-client-stream-registry'
 import { RpcSessionLivenessWatchdog } from './rpc-session-liveness-watchdog'
 import { isStaleForegroundDial } from './rpc-stale-dial'
@@ -32,10 +33,10 @@ export class DirectRpcClient implements RpcClient {
   private readonly socketFactory: RpcClientSocketFactory
   private readonly authenticationRetry: RpcClientAuthenticationRetry
   private readonly socketClose: RpcClientSocketCloseController
-  private requestCounter = 0
   private readonly connectionLog: DirectConnectionLog
   private intentionallyClosed = false
   private authenticationGeneration = 0
+  private readonly nextId: () => string
   private livenessSession: RpcClientSocketSession | null = null
 
   constructor(
@@ -57,19 +58,15 @@ export class DirectRpcClient implements RpcClient {
       getReconnectAttempt: () => this.reconnect.getAttempt(),
       isClosed: () => this.intentionallyClosed
     })
-    this.streams = new RpcClientStreamRegistry({
-      nextId: () => this.nextId(),
-      deviceToken,
-      getState: () => this.connectionState.get(),
-      sendEncrypted: (request) => this.sendEncrypted(request)
-    })
-    this.requests = new RpcClientRequestTracker({
-      nextId: () => this.nextId(),
+    const pipeline = createDirectRequestPipeline({
       deviceToken,
       getState: () => this.connectionState.get(),
       waitForConnected: (timeoutMs) => this.waitForConnected(timeoutMs),
       sendEncrypted: (request) => this.sendEncrypted(request)
     })
+    this.requests = pipeline.requests
+    this.streams = pipeline.streams
+    this.nextId = pipeline.nextId
     this.liveness = new RpcSessionLivenessWatchdog({
       transport: 'direct',
       sendProbe: (identity) => identity === this.livenessSession && this.sendLivenessProbe(),
@@ -84,6 +81,7 @@ export class DirectRpcClient implements RpcClient {
       endpoint,
       deviceToken,
       serverPublicKeyB64,
+      edgeAuthHeaders: options.edgeAuthHeaders ?? null,
       getCurrentSocket: () => this.socketSession?.socket ?? null,
       getState: () => this.getState(),
       getReconnectAttempt: () => this.getReconnectAttempt(),
@@ -316,9 +314,5 @@ export class DirectRpcClient implements RpcClient {
       return Promise.reject(new Error('Connection retry limit reached'))
     }
     return this.connectionState.waitForConnected(timeoutMs)
-  }
-
-  private nextId(): string {
-    return `rpc-${++this.requestCounter}-${Date.now()}`
   }
 }

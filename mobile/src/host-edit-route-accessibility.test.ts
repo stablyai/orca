@@ -14,6 +14,7 @@ const dependencies = vi.hoisted(() => ({
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   KeyboardAvoidingView: 'KeyboardAvoidingView',
+  Keyboard: { addListener: () => ({ remove: () => {} }) },
   Platform: { OS: 'ios' },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
@@ -39,6 +40,11 @@ vi.mock('lucide-react-native', () => ({
 vi.mock('./transport/host-store', () => ({
   loadHosts: dependencies.loadHosts,
   updateHostNameAndEndpoint: dependencies.updateHostNameAndEndpoint
+}))
+vi.mock('./transport/endpoint-auth-headers-store', () => ({
+  readEndpointAuthHeaders: async () => null,
+  writeEndpointAuthHeaders: async () => {},
+  deleteEndpointAuthHeaders: async () => {}
 }))
 
 vi.mock('./transport/client-context', () => ({
@@ -79,9 +85,32 @@ describe('edit host route accessibility', () => {
   it('exposes stable accessible names for both editable fields', async () => {
     const renderer = await renderEditHostRoute()
 
-    const inputs = renderer.root.findAllByType('TextInput')
-    expect(inputs).toHaveLength(2)
-    expect(inputs.map((input) => input.props.accessibilityLabel)).toEqual(['Name', 'Address'])
+    const labels = renderer.root
+      .findAllByType('TextInput')
+      .map((input) => input.props.accessibilityLabel)
+    expect(labels).toEqual(expect.arrayContaining(['Name', 'Address']))
+
+    act(() => renderer.unmount())
+  })
+
+  it('exposes edge-auth header controls separately from the address fields', async () => {
+    const renderer = await renderEditHostRoute()
+
+    const byLabel = (label: string) =>
+      renderer.root
+        .findAllByType('TextInput')
+        .filter((input) => input.props.accessibilityLabel === label)
+    expect(byLabel('Header 1 name')).toHaveLength(1)
+    expect(byLabel('Header 1 value')).toHaveLength(1)
+
+    const addButton = renderer.root.findAllByProps({ accessibilityLabel: 'Add header' }).at(0)
+    expect(addButton).toBeDefined()
+    await act(async () => {
+      addButton?.props.onPress()
+      await Promise.resolve()
+    })
+    expect(byLabel('Header 2 name')).toHaveLength(1)
+    expect(byLabel('Header 2 value')).toHaveLength(1)
 
     act(() => renderer.unmount())
   })

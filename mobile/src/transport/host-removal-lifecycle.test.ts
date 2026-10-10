@@ -19,6 +19,11 @@ vi.mock('../mobile-web-shell/removed-host-shell-cache', () => ({
 }))
 
 import { removeHostAndCloseClient } from './host-removal-lifecycle'
+import {
+  cacheEndpointAuthSnapshot,
+  endpointAuthMutationEpoch,
+  peekEndpointAuthHeaders
+} from './endpoint-auth-headers'
 
 describe('host removal lifecycle', () => {
   beforeEach(() => {
@@ -26,6 +31,15 @@ describe('host removal lifecycle', () => {
     unregisterPushMock.mockClear()
     forgetUpdateFailuresMock.mockClear()
     deletePageCacheMock.mockClear()
+  })
+
+  it('clears cached edge-auth headers once the host is gone', async () => {
+    removeHostMock.mockResolvedValue(undefined)
+    cacheEndpointAuthSnapshot('host-1', { 'X-A': 'b' })
+    const epochBefore = endpointAuthMutationEpoch('host-1')
+    await removeHostAndCloseClient('host-1', vi.fn())
+    expect(peekEndpointAuthHeaders('host-1')).toBeNull()
+    expect(endpointAuthMutationEpoch('host-1')).toBeGreaterThan(epochBefore)
   })
 
   it('closes the client only after metadata removal commits', async () => {

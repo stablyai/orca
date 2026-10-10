@@ -1,4 +1,5 @@
 import { AppState, Platform } from 'react-native'
+import { peekEndpointAuthHeaders } from './endpoint-auth-headers'
 import { connect, type RpcClient } from './rpc-client'
 import { createStableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ConnectionLogSink, HostProfile } from './types'
@@ -9,7 +10,10 @@ export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSin
   // Why: the stable facade owns app-visible RPC/subscription state while the
   // direct socket remains a replaceable first physical generation.
   const logical = createStableLogicalRpcClient(
-    connect(host.endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
+    connect(host.endpoint, host.deviceToken, host.publicKeyB64, {
+      onLog,
+      edgeAuthHeaders: peekEndpointAuthHeaders(host.id)
+    }),
     directPathForEndpoint(host.endpoint)
   )
   if (Platform.OS === 'web') {

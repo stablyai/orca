@@ -42,6 +42,16 @@ describe('resolveHostEndpointEdit', () => {
   })
 
   it.each([
+    ['ws://old.local:6768', 'wss://tunnel.example.com', 'wss://tunnel.example.com:443'],
+    ['ws://old.local:6768', 'wss://tunnel.example.com:6768', 'wss://tunnel.example.com:6768'],
+    ['wss://old.example.com:443', 'ws://desk.local', 'ws://desk.local:443']
+  ])('defaults a schemed address to its transport port', (stored, input, expected) => {
+    const edit = resolveHostEndpointEdit(stored, input)
+
+    expect(edit).toEqual({ kind: 'changed', endpoint: expected })
+  })
+
+  it.each([
     ['surrounding whitespace', '  desk.example.com  '],
     ['hostname case', 'DESK.EXAMPLE.COM'],
     ['explicit default port', 'desk.example.com:443'],

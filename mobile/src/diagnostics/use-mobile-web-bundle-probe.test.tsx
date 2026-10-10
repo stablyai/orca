@@ -18,6 +18,9 @@ vi.mock('../transport/host-logical-client', () => ({
   openHostLogicalClient: (...args: unknown[]) => connectMock(...args)
 }))
 vi.mock('../transport/host-store', () => ({ loadHosts: () => loadHostsMock() }))
+vi.mock('../transport/endpoint-auth-headers-store', () => ({
+  primeEndpointAuthHeaders: async () => null
+}))
 // Why: the opener starts a descriptor status probe per connection; these fakes have no RPC surface.
 vi.mock('../transport/runtime-status-probe', () => ({ startRuntimeStatusProbe: () => () => {} }))
 vi.mock('../transport/connection-revival-triggers', () => ({

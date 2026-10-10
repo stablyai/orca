@@ -1,5 +1,6 @@
 import type { BrowserScreencastFrame } from './browser-screencast-protocol'
 import { DirectRpcClient } from './direct-rpc-client'
+import type { EndpointAuthHeaders } from './endpoint-auth-headers'
 import type { ConnectionLogSink, ConnectionState, ForegroundNudgeReason } from './types'
 import type { UnvalidatedRpcRequestPort } from './unvalidated-rpc-request-port'
 
@@ -57,6 +58,8 @@ export type RpcClient = UnvalidatedRpcRequestPort & {
 export type ConnectOptions = {
   onStateChange?: (state: ConnectionState) => void
   onLog?: ConnectionLogSink
+  /** In-memory edge-auth snapshot; resolved before open, never read from the store here. */
+  edgeAuthHeaders?: EndpointAuthHeaders | null
 }
 
 export function connect(

@@ -85,6 +85,7 @@ On the hosts list, tap the host card's **⋯** button (or long-press the card) a
 
 - **Name** — display name on this phone only.
 - **Address** — IP, `host:port`, or `ws://` / `wss://`. Missing port keeps the current port (or defaults to `6768`). Address edits only change where this phone connects; they do **not** re-pair. Use this when the same desktop is reachable at a different path (for example home LAN vs Tailscale).
+- **Edge authentication** — optional headers sent on the connection handshake, for tunnels protected by edge authentication (for example Cloudflare Access service tokens). Stored in this phone's keychain, never in pairing links. Headers require a `wss://` address and are not sent over plain `ws://`.
 
 Saving an address change reconnects to the new endpoint. Pairing token stays the same.
 

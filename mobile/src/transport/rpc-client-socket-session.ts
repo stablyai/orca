@@ -20,6 +20,7 @@ type SocketSessionOptions = {
   endpoint: string
   deviceToken: string
   serverPublicKey: Uint8Array
+  createSocket?: (url: string) => WebSocket
   getCurrentSocket: () => WebSocket | null
   getState: () => ConnectionState
   getReconnectAttempt: () => number
@@ -46,7 +47,7 @@ export class RpcClientSocketSession {
   private handshakeTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(private readonly options: SocketSessionOptions) {
-    this.socket = new WebSocket(options.endpoint)
+    this.socket = (options.createSocket ?? ((url) => new WebSocket(url)))(options.endpoint)
     this.attachHandlers()
     this.armConnectTimeout()
   }

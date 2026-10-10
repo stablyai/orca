@@ -41,6 +41,9 @@ vi.mock('./host-logical-client', () => ({
 vi.mock('./host-store', () => ({
   loadHosts: () => loadHostsMock()
 }))
+vi.mock('./endpoint-auth-headers-store', () => ({
+  primeEndpointAuthHeaders: async () => null
+}))
 vi.mock('./connection-revival-triggers', () => ({
   subscribeConnectionRevivalTriggers: () => () => {}
 }))

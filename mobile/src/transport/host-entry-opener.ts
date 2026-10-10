@@ -6,6 +6,7 @@ import {
   recordConnectionClientSessionStart
 } from './persisted-connection-log-store'
 import { loadHosts } from './host-store'
+import { primeEndpointAuthHeaders } from './endpoint-auth-headers-store'
 import { openHostLogicalClient } from './host-logical-client'
 import type { HostClientOpenRegistry } from './host-client-open-registry'
 import type { HostOpenRetryScheduler } from './host-open-retry-scheduler'
@@ -107,6 +108,12 @@ export async function openHostClientEntry(
     let client: RpcClient
     try {
       recordConnectionClientSessionStart(hostId)
+      // Why: SecureStore reads are async but the dial path is sync — prime the
+      // in-memory snapshot here so every socket this client opens carries it.
+      await primeEndpointAuthHeaders(hostId, isCurrent)
+      if (!isCurrent() || !isWanted() || state.store.has(hostId)) {
+        return state.store.get(hostId) ?? null
+      }
       client = openHostLogicalClient(host, (entry) => connectionLogStore.append(hostId, entry))
     } catch {
       failCurrentOpen('client-construction')
