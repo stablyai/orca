@@ -20,13 +20,21 @@ export function useWebviewGuestFocus(
   return useMemo(
     () => ({
       blur: () => webviewRef.current?.blur(),
-      isAttached: () => webviewRef.current !== null,
+      isAttached: () => {
+        try {
+          return (webviewRef.current?.getWebContentsId() ?? 0) > 0
+        } catch {
+          return false
+        }
+      },
       focus: () => {
         const webview = webviewRef.current
         if (!webview) {
           return false
         }
         try {
+          // Why: focusing the element alone can leave keyboard input on the opener guest.
+          window.focus()
           webview.focus()
         } catch {
           // Why: WebViewElement.focus() reads null internals once the guest is destroyed (STA-3448).
