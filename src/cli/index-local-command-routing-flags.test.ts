@@ -167,6 +167,24 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
     expect(runtimeClientConstructorMock).toHaveBeenCalledWith(undefined, 'm4air')
   })
 
+  it('lets an owning-host invocation pick --host runtime:<id> despite a stale ambient selector', async () => {
+    process.env.ORCA_CLI_OWNING_HOST = '1'
+    process.env.ORCA_ENVIRONMENT = 'stale-shell-selection'
+    pairRuntimeEnvironment(listEnvironmentsMock, 'gpu')
+    resolveEnvironmentMock.mockReturnValue({ id: 'stale-shell-selection' })
+    queueFixtures(callMock, okFixture('req_project_setups', { setups: [] }))
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+    await main(['project', 'setups', '--host', 'runtime:gpu', '--json'], '/tmp/repo')
+    expect([...log.mock.calls, ...err.mock.calls].flat().join('\n')).not.toContain(
+      'name different Orca servers'
+    )
+    expect(callMock).toHaveBeenCalledWith('projectHostSetup.list')
+    expect(runtimeClientConstructorMock).toHaveBeenCalledWith(null, 'gpu')
+    process.exitCode = priorExitCode
+  })
+
   it('routes `host name` through an ambient ORCA_ENVIRONMENT, unlike the pinned `host list`', async () => {
     // Why: the pin used to cover the whole `host` family, which silently answered for this machine
     // when the shell was pointed at another one. `host name` describes one runtime, so it routes.

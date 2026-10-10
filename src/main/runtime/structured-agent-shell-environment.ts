@@ -108,7 +108,8 @@ async function captureHostShellEnvironment(
   previous: NodeJS.ProcessEnv | null
 ): Promise<LoginShellEnvironmentCapture> {
   if (process.platform !== 'win32') {
-    return captureLoginShellEnvironment({ force: true })
+    // Why: the first capture shares a run a startup reader already began; later ones need a fresh run.
+    return captureLoginShellEnvironment({ force: previous !== null })
   }
   const env = { ...(previous ?? process.env) }
   await mergePersistedWindowsPathAsync(env, { forceRefresh: true })
@@ -122,7 +123,9 @@ const SHELL_ENVIRONMENT_TTL_MS = 10_000
 /**
  * Stale-while-refresh: the first capture starts at creation; later acquisitions get the last
  * snapshot at once and, once it is older than the TTL, refresh it in the background. A capture
- * that fell back to Orca's own env replaces only the first, empty snapshot.
+ * that fell back to Orca's own env never replaces a snapshot. macOS/Linux retry the shell on the
+ * next refresh; Windows loads the profile once, so a failed first PowerShell capture stays until
+ * restart, as before.
  */
 export function createStructuredAgentEnvironmentResolvers(
   sources: StructuredAgentEnvironmentSources

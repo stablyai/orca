@@ -281,6 +281,45 @@ describe('createStructuredAgentEnvironmentResolvers', () => {
     }
   )
 
+  it.skipIf(process.platform === 'win32')(
+    'shares the login-shell run an earlier reader started instead of running the shell again',
+    async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'orca-structured-shell-runs-'))
+      const counter = join(dir, 'count')
+      const shell = join(dir, 'shell.sh')
+      await writeFile(
+        shell,
+        [
+          '#!/bin/sh',
+          `echo run >> '${counter}'`,
+          "printf '\\000__ORCA_LOGIN_SHELL_ENV_START__\\000PATH=/profile/bin\\000\\000__ORCA_LOGIN_SHELL_ENV_END__\\000'",
+          ''
+        ].join('\n')
+      )
+      await chmod(shell, 0o755)
+      const originalShell = process.env.SHELL
+      process.env.SHELL = shell
+      try {
+        // Startup readers such as the Claude account router capture before the runtime exists.
+        const early = loginShell.resolveLoginShellEnvironment()
+        const resolvers = createStructuredAgentEnvironmentResolvers({
+          resolveShellEnvironmentPolicy: () => INHERIT_ALL
+        })
+        expect((await resolvers.resolveBaseEnvironment()).PATH).toBe('/profile/bin')
+        expect((await early).PATH).toBe('/profile/bin')
+        expect((await readFile(counter, 'utf8')).trim().split('\n')).toHaveLength(1)
+      } finally {
+        if (originalShell === undefined) {
+          delete process.env.SHELL
+        } else {
+          process.env.SHELL = originalShell
+        }
+        loginShell.resetLoginShellEnvironmentCacheForTests()
+        await rm(dir, { recursive: true, force: true })
+      }
+    }
+  )
+
   it('starts the first capture when created, before any chat asks for it', () => {
     const capture = vi.fn(async () => ({ PATH: '/shell/A' }))
     createStructuredAgentEnvironmentResolvers({ resolveEnvironment: capture })
@@ -301,11 +340,13 @@ describe('createStructuredAgentEnvironmentResolvers', () => {
         expect((await resolvers.resolveBaseEnvironment()).PATH).toBe('/shell/A')
         expect((await resolvers.resolveClaudeInheritedEnv()).PATH).toBe('/shell/A')
         expect(capture).toHaveBeenCalledOnce()
-        expect(capture).toHaveBeenCalledWith(expect.objectContaining({ force: true }))
+        // The first capture may share a startup reader's run; refreshes must run the shell again.
+        expect(capture).toHaveBeenCalledWith(expect.objectContaining({ force: false }))
         vi.advanceTimersByTime(10_000)
         // The stale start still gets the old snapshot; the install shows up on the next one.
         expect((await resolvers.resolveBaseEnvironment()).PATH).toBe('/shell/A')
         expect(capture).toHaveBeenCalledTimes(2)
+        expect(capture).toHaveBeenLastCalledWith(expect.objectContaining({ force: true }))
         await new Promise((resolve) => setImmediate(resolve))
         expect((await resolvers.resolveBaseEnvironment()).PATH).toBe('/shell/B')
       } finally {

@@ -17,15 +17,15 @@ export type LoginShellEnvironmentCapture = {
   env: NodeJS.ProcessEnv
 }
 
-type CachedEnvironment = { capture: Promise<LoginShellEnvironmentCapture>; captured: boolean }
+type CachedEnvironment = { capture: Promise<LoginShellEnvironmentCapture>; settled: boolean }
 
 const environmentCache = new Map<string, CachedEnvironment>()
 const MAX_CACHED_ENVIRONMENTS = 8
 
 function cacheEnvironment(key: string, capture: Promise<LoginShellEnvironmentCapture>): void {
-  const entry: CachedEnvironment = { capture, captured: false }
-  void capture.then((result) => {
-    entry.captured = result.status === 'captured'
+  const entry: CachedEnvironment = { capture, settled: false }
+  void capture.then(() => {
+    entry.settled = true
   })
   environmentCache.delete(key)
   while (environmentCache.size >= MAX_CACHED_ENVIRONMENTS) {
@@ -187,8 +187,8 @@ export function captureLoginShellEnvironment(
       return captured ? { status: 'captured', env: captured } : fellBack
     })
     .catch(() => fellBack)
-  if (cached?.captured) {
-    // Why: readers keep the last good env while a forced refresh runs; only a real capture replaces it.
+  if (cached?.settled) {
+    // Why: readers keep any settled env, a fallback too, during a forced refresh; only a capture replaces it.
     void pending.then((capture) => {
       if (capture.status === 'captured') {
         cacheEnvironment(shellKey, Promise.resolve(capture))
@@ -196,7 +196,7 @@ export function captureLoginShellEnvironment(
     })
     return pending
   }
-  // Why: a forced capture that falls back yields to whatever the earlier entry settles to.
+  // Why: a forced capture that falls back yields to whatever the earlier in-flight entry settles to.
   const previous = cached?.capture
   cacheEnvironment(
     shellKey,

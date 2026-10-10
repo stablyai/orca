@@ -1,3 +1,6 @@
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
 import type { GlobalSettings } from '../../shared/global-settings-types'
@@ -46,4 +49,34 @@ describe('execution host structured launch settings wiring', () => {
     expect(deps?.resolveClaudeCommand?.()).toBe(resolveCliCommand('claude'))
     expect(deps?.resolveCodexCommand?.()).toBe(resolveCliCommand('codex'))
   })
+
+  // The chat child's PATH and home decide which binary runs, for a saved bare command and the stock one.
+  it.skipIf(process.platform === 'win32')(
+    'resolves both agents against the PATH and home the chat child will run with',
+    async () => {
+      installed.mockClear()
+      const bin = mkdtempSync(join(tmpdir(), 'orca-chat-child-bin-'))
+      for (const name of ['custom-claude', 'custom-codex', 'claude', 'codex']) {
+        writeFileSync(join(bin, name), '#!/bin/sh\n')
+        chmodSync(join(bin, name), 0o755)
+      }
+      try {
+        const settings: Partial<GlobalSettings> = {
+          agentCmdOverrides: { claude: 'custom-claude', codex: 'custom-codex' }
+        }
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked installer only reads the store's getSettings method.
+        const runtime = new OrcaRuntimeService({ getSettings: () => settings } as never)
+        await runtime.ensureStructuredAgentSessionHost()
+        const deps = installed.mock.calls[0]?.[0]
+        const childLookup = { pathEnv: bin, homePath: bin }
+        expect(deps?.resolveClaudeCommand?.(childLookup)).toBe(join(bin, 'custom-claude'))
+        expect(deps?.resolveCodexCommand?.(childLookup)).toBe(join(bin, 'custom-codex'))
+        settings.agentCmdOverrides = {}
+        expect(deps?.resolveClaudeCommand?.(childLookup)).toBe(join(bin, 'claude'))
+        expect(deps?.resolveCodexCommand?.(childLookup)).toBe(join(bin, 'codex'))
+      } finally {
+        rmSync(bin, { recursive: true, force: true })
+      }
+    }
+  )
 })

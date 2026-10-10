@@ -1,6 +1,5 @@
 import { activeProviderContext } from '../../shared/agent-session-provider-context'
 import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
-import type { resolveClaudeCommand } from '../codex-cli/command'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import type {
   Options as ClaudeAgentSdkOptions,
@@ -109,7 +108,7 @@ export type ClaudeStructuredLaunchResolverDeps = {
   store: Pick<AgentSessionRecordStore, 'getRecord' | 'pinLaunchDirectory'>
   resolveLaunchArgs: () => Promise<string[]> | string[]
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
-  resolveCommand?: typeof resolveClaudeCommand
+  resolveCommand?: (options?: { pathEnv?: string | null; homePath?: string }) => string
   resolveEnv?: () =>
     | Promise<Record<string, string> | undefined>
     | Record<string, string>
