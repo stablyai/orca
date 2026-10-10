@@ -93,6 +93,73 @@ describe('hard-wrapped terminal HTTP candidate bounds', () => {
     expect(candidates[0]?.text).toBe('http://a/aba你你你你你tailzzzzzzz')
   })
 
+  it('reconstructs a framed URL while the screen underneath shows through left of the frame', () => {
+    const inner = 'http://example.com/aaaa'
+    const rows = [
+      `      |${inner}|`,
+      `todo  |${'b'.repeat(inner.length)}|`,
+      `  in  |${'c'.repeat(inner.length)}|`,
+      `Final |${'dddd'.padEnd(inner.length, ' ')}|`
+    ].map(bufferLineWithCellColumns)
+
+    const candidates = buildHardWrappedHttpLogicalLineCandidates(
+      { getLine: (y) => rows[y] },
+      rows.length
+    )
+
+    expect(candidates[0]?.text).toBe(
+      `${inner}${'b'.repeat(inner.length)}${'c'.repeat(inner.length)}dddd`
+    )
+  })
+
+  it('does not join adjacent cells from a shared framed table', () => {
+    const rows = [
+      '│ Label  │ https://example.com/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa │',
+      '│ Other  │ bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb │',
+      '│ Third  │ cccccccccccccccccccccccccccccccccccccccccccccccccc │'
+    ].map(bufferLineWithCellColumns)
+
+    expect(
+      buildHardWrappedHttpLogicalLineCandidates({ getLine: (y) => rows[y] }, rows.length)
+    ).toEqual([])
+  })
+
+  it('aligns continuation rows by the frame cell column when a gutter holds wide characters', () => {
+    const inner = 'http://example.com/aaaa'
+    const rows = [
+      `      |${inner}|`,
+      `你你你|${'b'.repeat(inner.length)}|`,
+      `  in  |${'c'.repeat(inner.length)}|`,
+      `Final |${'dddd'.padEnd(inner.length, ' ')}|`
+    ].map(bufferLineWithCellColumns)
+
+    const candidates = buildHardWrappedHttpLogicalLineCandidates(
+      { getLine: (y) => rows[y] },
+      rows.length
+    )
+
+    expect(candidates[0]?.text).toBe(
+      `${inner}${'b'.repeat(inner.length)}${'c'.repeat(inner.length)}dddd`
+    )
+  })
+
+  it('stops joining when the frame moves to another column', () => {
+    const inner = 'http://example.com/aaaa'
+    const rows = [
+      `      |${inner}|`,
+      `todo  |${'b'.repeat(inner.length)}|`,
+      `  in  |${'c'.repeat(inner.length)}|`,
+      `Final  |${'dddd'.padEnd(inner.length - 1, ' ')}|`
+    ].map(bufferLineWithCellColumns)
+
+    const candidates = buildHardWrappedHttpLogicalLineCandidates(
+      { getLine: (y) => rows[y] },
+      rows.length
+    )
+
+    expect(candidates).toEqual([])
+  })
+
   it('reconstructs a maximum-length wide-character URL beyond the ASCII row bound', () => {
     const scheme = 'http://'
     const continuation = '你'.repeat(TERMINAL_HTTP_URL_MAX_LENGTH - scheme.length)
