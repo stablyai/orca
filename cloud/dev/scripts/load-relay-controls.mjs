@@ -20,6 +20,7 @@ import {
   waitForRelayLoadRebindGate
 } from './relay-load-rebind-boundary.mjs'
 import { proveRelayLoadRegionBehavior } from './relay-load-region-behavior.mjs'
+import { proveRelayLoadDuplicateAssign } from './relay-load-duplicate-assign.mjs'
 import {
   openRelayLoadInviteOffers,
   proveRelayLoadRequestUnitBoundary
@@ -95,6 +96,7 @@ function report(state, final = false) {
     regionalFallbacksProved: state.regionalFallbacksProved,
     oldClientUsFirstProved: state.oldClientUsFirstProved,
     stickyAssignmentProved: state.stickyAssignmentProved,
+    duplicateAssign: state.duplicateAssign,
     requestUnitInvitesOpened: state.requestUnitInvitesOpened,
     requestUnitPrincipalCount: state.requestUnitPrincipalCount,
     relayAsiaLoadPrincipalCount: state.relayAsiaLoadPrincipalCount,
@@ -231,6 +233,7 @@ const state = {
   regionalFallbacksProved: 0,
   oldClientUsFirstProved: 0,
   stickyAssignmentProved: 0,
+  duplicateAssign: null,
   requestUnitInvitesOpened: 0,
   requestUnitOverflowReason: null,
   requestUnitCleanupProved: 0,
@@ -255,6 +258,8 @@ const state = {
 }
 const peers = new Map()
 const reconnectTimers = new Set()
+// Duplicate-assign probe hosts: outside `peers`, so they never count toward the run's controls.
+const probePeers = []
 
 async function readRuntimeQueuedBytes(origin) {
   const response = await fetch(`${origin}/v1/admin/runtime-status`, {
@@ -396,6 +401,47 @@ progressTimer.unref()
 await runRelayLoadWithShutdown(async () => {
   await Promise.all(initialConnections)
   assertRelayLoadRampAccepted(state.rampConnectionFailures, config.maxRampConnectionFailures)
+  if (config.duplicateAssignProbes > 0) {
+    const reconnects = { closes: 0, closesByCode: {}, reconnectFailures: 0 }
+    // A probe host closed by a demotion re-assigns through the director, as a desktop would.
+    const observeProbe = (peer) => (type, detail) => {
+      if (type !== 'closed' || detail.stopped) return
+      reconnects.closes++
+      const code = String(detail.code)
+      reconnects.closesByCode[code] = (reconnects.closesByCode[code] ?? 0) + 1
+      if (state.stopping) return
+      const timeout = setTimeout(() => {
+        reconnectTimers.delete(timeout)
+        void peer.connect().catch(() => {
+          reconnects.reconnectFailures++
+        })
+      }, 1_000 + Math.floor(Math.random() * 5_000))
+      reconnectTimers.add(timeout)
+    }
+    const base = config.controls * config.shardCount + 20_000
+    const pairs = Array.from({ length: config.duplicateAssignProbes }, (_, probe) => {
+      const index = base + probe * config.shardCount + config.shardIndex
+      const primary = new RelayLoadControlPeer(index, peerOptions(index), (type, detail) =>
+        observeProbe(primary)(type, detail)
+      )
+      const twin = new RelayLoadControlPeer(
+        index,
+        peerOptions(index, { keys: primary.keys }),
+        () => undefined
+      )
+      probePeers.push(primary, twin)
+      return { primary, twin }
+    })
+    state.duplicateAssign = {
+      ...(await proveRelayLoadDuplicateAssign({
+        pairs,
+        holdMs: config.duplicateAssignHoldMs,
+        delay,
+        failureReason: relayLoadFailureReason
+      })),
+      probeReconnects: reconnects
+    }
+  }
   if (
     config.rebindProbes > 0 || config.placementOverflowProbes > 0 ||
     config.regionalFallbackProbes > 0
@@ -527,7 +573,7 @@ await runRelayLoadWithShutdown(async () => {
   clearInterval(progressTimer)
   for (const timeout of reconnectTimers) clearTimeout(timeout)
   reconnectTimers.clear()
-  await Promise.all([...peers.values()].map((peer) => peer.shutdown()))
+  await Promise.all([...peers.values(), ...probePeers].map((peer) => peer.shutdown()))
   eventLoopDelay.disable()
   state.shutdownEvidence = {
     peerShutdowns: state.peerShutdowns,

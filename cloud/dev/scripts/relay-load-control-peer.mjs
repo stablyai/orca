@@ -188,7 +188,8 @@ export class RelayLoadControlPeer {
     this.index = index
     this.options = options
     this.observe = observe
-    this.keys = nacl.box.keyPair()
+    // A twin shares a host's keys, so it can seat the same relay host on a second cell.
+    this.keys = options.keys ?? nacl.box.keyPair()
     this.relayHostId = createHash('sha256')
       .update(this.keys.publicKey)
       .digest('base64url')
@@ -210,7 +211,8 @@ export class RelayLoadControlPeer {
     this.spliceSequence = 0
   }
 
-  connect() {
+  // `assignment`, when given, is used instead of asking the director.
+  connect(assignment) {
     if (
       this.stopped ||
       this.connecting ||
@@ -219,7 +221,7 @@ export class RelayLoadControlPeer {
       return Promise.resolve()
     }
     this.connecting = true
-    const operation = this.connectOnce()
+    const operation = this.connectOnce(assignment)
     this.inFlight.add(operation)
     const finish = () => {
       this.connecting = false
@@ -233,12 +235,12 @@ export class RelayLoadControlPeer {
     return this.lastAssignment?.cellUrl
   }
 
-  async connectOnce() {
+  async connectOnce(givenAssignment) {
     let socket = null
     try {
       const relayToken = await this.relayToken()
       if (this.stopped) return
-      const assignment = await this.assignment(relayToken)
+      const assignment = givenAssignment ?? (await this.assignment(relayToken))
       if (this.stopped) return
       this.lastAssignment = assignment
       socket = this.createSocket(assignment, relayToken)

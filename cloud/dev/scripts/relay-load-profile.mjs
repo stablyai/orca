@@ -49,6 +49,8 @@ export function parseRelayLoadArguments(argv) {
   const placementOverflowProbes = integer('--placement-overflow-probes', 0)
   const regionalFallbackProbes = integer('--regional-fallback-probes', 0)
   const regionBehaviorProbes = integer('--region-behavior-probes', 0)
+  const duplicateAssignProbes = integer('--duplicate-assign-probes', 0)
+  const duplicateAssignHoldMs = integer('--duplicate-assign-hold-ms', 20_000)
   const requestUnitInvites = integer('--request-unit-invites', 0)
   const requestUnitInvitesPerSecond = integer('--request-unit-invites-per-second', 0)
   const requestUnitPrincipalCount = integer('--request-unit-principals', 0)
@@ -218,6 +220,15 @@ export function parseRelayLoadArguments(argv) {
     !directorOrigin || !capacityCellOrigin || preferredRegionValue(values) !== 'asia-east2' ||
     (shardCount > 1 && shardIndex !== 0)
   )) throw new Error('regional behavior proof requires the coordinating Asia shard')
+  if (duplicateAssignProbes > 1_000) {
+    throw new Error('--duplicate-assign-probes cannot exceed 1000')
+  }
+  if (duplicateAssignProbes > 0 && !directorOrigin) {
+    throw new Error('duplicate assign probes require --director-origin')
+  }
+  if (duplicateAssignHoldMs < 1_000 || duplicateAssignHoldMs > 120_000) {
+    throw new Error('--duplicate-assign-hold-ms must be between 1000 and 120000')
+  }
   if (phaseBarrierDir && shardCount < 2) {
     throw new Error('phase barrier requires multiple shards')
   }
@@ -276,6 +287,8 @@ export function parseRelayLoadArguments(argv) {
     placementOverflowProbes,
     regionalFallbackProbes,
     regionBehaviorProbes,
+    duplicateAssignProbes,
+    duplicateAssignHoldMs,
     requestUnitInvites,
     requestUnitInvitesPerSecond,
     requestUnitPrincipalCount,
