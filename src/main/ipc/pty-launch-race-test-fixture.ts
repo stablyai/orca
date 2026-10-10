@@ -1,9 +1,6 @@
 import { vi, type Mock } from 'vitest'
 import { makePaneKey } from '../../shared/stable-pane-id'
-import {
-  makePaneSpawnReservationKey,
-  paneSpawnReservationsByOwnerKey
-} from './pty/pane/spawn-reservation'
+import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../runtime/worktree-terminals-sleeping-error'
 import { registerPtyHandlers, setLocalPtyProvider } from './pty'
 
 type IpcHandlerMap = Map<string, (_event: unknown, args: unknown) => unknown>
@@ -13,7 +10,7 @@ type LaunchRaceSpawnReply = {
   isReattach?: boolean
   stablePaneOwner?: { handle: string; tabId: string; leafId: string }
 }
-export type LaunchRaceController = {
+type LaunchRaceController = {
   spawn(args: Record<string, unknown>): Promise<LaunchRaceSpawnReply>
   claimStablePaneCreate(args: {
     worktreeId: string
@@ -21,6 +18,7 @@ export type LaunchRaceController = {
     tabId: string
     leafId: string
   }): () => void
+  adoptStablePane(args: Record<string, unknown>): Promise<unknown>
 }
 type ProviderSpawn = (options: Record<string, unknown>) => Promise<Record<string, unknown>>
 export type LaunchRaceProvider = {
@@ -38,6 +36,8 @@ type LaunchRaceRuntimeBase = Record<
   | 'assertPtyRegistrationAllowed'
   | 'registerPty'
   | 'noteTerminalSpawnCommand'
+  | 'noteTerminalSpawnCommit'
+  | 'reflowHeadlessTerminalToPtyGrid'
   | 'seedHeadlessTerminal'
   | 'onPtySpawned'
   | 'onPtyExit'
@@ -45,8 +45,18 @@ type LaunchRaceRuntimeBase = Record<
   Mock
 >
 
+/** The two spawn lanes: the window's `pty:spawn` IPC and the host's runtime controller. */
+export type LaunchRaceLane = 'ipc' | 'runtime'
+export const LAUNCH_RACE_LANES: LaunchRaceLane[] = ['ipc', 'runtime']
+
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test doubles implement only the members the two spawn lanes read.
 const testDouble = <T>(value: unknown): T => value as T
+
+export const flushMacrotasks = async (rounds = 20): Promise<void> => {
+  for (let index = 0; index < rounds; index++) {
+    await new Promise<void>((resolve) => setImmediate(resolve))
+  }
+}
 
 /** One stable pane per test; reservation maps are module state, so names must not repeat. */
 export function launchRacePane(tag: string, leafId: string) {
@@ -57,8 +67,6 @@ export function launchRacePane(tag: string, leafId: string) {
     worktreeId,
     tabId,
     leafId,
-    paneKey,
-    ownerKey: makePaneSpawnReservationKey(worktreeId, null, paneKey)!,
     args: {
       cols: 80,
       rows: 24,
@@ -116,6 +124,8 @@ export function createLaunchRaceRuntime<T extends object = Record<never, never>>
     assertPtyRegistrationAllowed: vi.fn(),
     registerPty: vi.fn(),
     noteTerminalSpawnCommand: vi.fn(),
+    noteTerminalSpawnCommit: vi.fn(),
+    reflowHeadlessTerminalToPtyGrid: vi.fn(),
     seedHeadlessTerminal: vi.fn(),
     onPtySpawned: vi.fn(),
     onPtyExit: vi.fn(),
@@ -124,11 +134,11 @@ export function createLaunchRaceRuntime<T extends object = Record<never, never>>
   return Object.assign(base, overrides)
 }
 
-/** Registers both lanes against one runtime: `pty:spawn` (IPC lane) and the runtime controller. */
+/** Registers both lanes against one runtime, as main does. */
 export function registerLaunchRaceLanes(args: {
   handlers: IpcHandlerMap
   mainWindow: unknown
-  runtime: { setPtyController: ReturnType<typeof vi.fn> }
+  runtime: { setPtyController: Mock }
   prepareClaudeAuth?: () => Promise<unknown>
   store?: unknown
 }) {
@@ -143,11 +153,15 @@ export function registerLaunchRaceLanes(args: {
   const controller = testDouble<LaunchRaceController>(
     args.runtime.setPtyController.mock.calls.at(-1)?.[0]
   )
-  return {
-    controller,
-    spawnThroughIpc: (spawnArgs: Record<string, unknown>) =>
-      testDouble<Promise<LaunchRaceSpawnReply>>(args.handlers.get('pty:spawn')!(null, spawnArgs))
+  const spawn: Record<
+    LaunchRaceLane,
+    (spawnArgs: Record<string, unknown>) => Promise<LaunchRaceSpawnReply>
+  > = {
+    ipc: (spawnArgs) =>
+      testDouble<Promise<LaunchRaceSpawnReply>>(args.handlers.get('pty:spawn')!(null, spawnArgs)),
+    runtime: (spawnArgs) => controller.spawn(spawnArgs)
   }
+  return { controller, spawn }
 }
 
 export function gatedClaudeAuth() {
@@ -162,20 +176,20 @@ export function gatedClaudeAuth() {
   return { prepareClaudeAuth, release }
 }
 
-/** Flags the first read of a held reservation's promise, i.e. the moment another spawn joins it. */
-export function watchPaneSpawnJoin(ownerKey: string): () => boolean {
-  const reservation = paneSpawnReservationsByOwnerKey.get(ownerKey)
-  if (!reservation) {
-    throw new Error(`no reservation held for ${ownerKey}`)
-  }
-  const promise = reservation.promise
-  let joined = false
-  Object.defineProperty(reservation, 'promise', {
-    configurable: true,
-    get: () => {
-      joined = true
-      return promise
-    }
+/** The host's worktree spawn lock for a slept worktree: refuses only the spawns that ask it to. */
+export function sleptWorktreeLock() {
+  let refuse!: () => void
+  const refusal = new Promise<void>((resolve) => {
+    refuse = resolve
   })
-  return () => joined
+  const acquireWorktreeTerminalSpawn = vi.fn(
+    async (_worktreeId?: string, opts?: { refuseSleptWorktree?: boolean }) => {
+      if (opts?.refuseSleptWorktree) {
+        await refusal
+        throw new Error(WORKTREE_TERMINALS_SLEEPING_ERROR)
+      }
+      return () => {}
+    }
+  )
+  return { acquireWorktreeTerminalSpawn, refuse }
 }

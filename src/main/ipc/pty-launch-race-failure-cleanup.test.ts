@@ -1,12 +1,14 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { getHiddenRendererPtyIds, isHiddenRendererPty } from './pty-hidden-delivery-gate'
 import { ptySizes } from './pty/delivery/visibility-state'
 import {
+  LAUNCH_RACE_LANES,
   createLaunchRaceRuntime,
   gatedClaudeAuth,
   installLaunchRaceProvider,
-  registerLaunchRaceLanes
+  registerLaunchRaceLanes,
+  type LaunchRaceLane
 } from './pty-launch-race-test-fixture'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
@@ -74,71 +76,69 @@ function installDegradedRaceProvider(spawn: Parameters<typeof installLaunchRaceP
 const mintedFor = (worktreeId: string): string[] =>
   getHiddenRendererPtyIds().filter((id) => id.startsWith(`${worktreeId}@@`))
 
-// Pins main's current launch behaviour as the convergence parity baseline (failure cleanup races).
-describe('launch race parity: provisional size and hidden mark, both spawn lanes', () => {
+// Pins main's current launch behaviour as the baseline the spawn-lane merge must keep.
+describe('launch race parity: cleanup when a start fails, both spawn lanes', () => {
   const { handlers, mainWindow } = setupPtyIpcSuite()
 
-  it('IPC lane restores the provisional size when building options fails (ipc/spawn-run.ts:66-69)', async () => {
-    installLaunchRaceProvider(async () => ({ id: 'pty-must-not-spawn' }))
-    let sizeWhileBuilding: unknown
-    const runtime = createLaunchRaceRuntime({
-      acquireWorktreeTerminalSpawn: vi.fn(async () => {
-        sizeWhileBuilding = ptySizes.get('race-size-ipc')
-        throw new Error('options failed')
+  // Row 5: a failed options build puts the session's size back (ipc/spawn-run.ts:66-69 with its
+  // capture at ipc/spawn-options.ts:154-157; runtime/spawn.ts:94-97 with runtime/spawn-options.ts:159-162).
+  // Each lane fails its options build its own way; the outcome is the same.
+  describe.each(LAUNCH_RACE_LANES)('%s lane: options build fails', (lane: LaunchRaceLane) => {
+    it.each([
+      { label: 'no size before', cached: undefined },
+      { label: 'a size before', cached: { cols: 100, rows: 30 } }
+    ])('the session keeps $label', async ({ label, cached }) => {
+      const sessionId = `race-size-${lane}-${label.replaceAll(' ', '-')}`
+      let sizeWhileBuilding: unknown
+      const recordSize = (): void => {
+        sizeWhileBuilding = ptySizes.get(sessionId)
+      }
+      const provider = installLaunchRaceProvider(async () => ({ id: 'pty-must-not-spawn' }))
+      Object.assign(provider, {
+        supportsAgentSessionCreateOperations: vi.fn(async () => {
+          recordSize()
+          return false
+        })
       })
+      const runtime = createLaunchRaceRuntime({
+        acquireWorktreeTerminalSpawn: vi.fn(async () => {
+          recordSize()
+          throw new Error('execution_owner_unavailable')
+        })
+      })
+      const lanes = registerLaunchRaceLanes({ handlers, mainWindow, runtime })
+      onTestFinished(() => {
+        ptySizes.delete(sessionId)
+      })
+      if (cached) {
+        ptySizes.set(sessionId, cached)
+      }
+      const failingArgs =
+        lane === 'ipc'
+          ? {}
+          : { isNewSession: true, agentSessionCreateOperationId: `op-${sessionId}` }
+
+      await expect(
+        lanes.spawn[lane]({
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp/race-size',
+          worktreeId: 'repo-1::/tmp/race-size',
+          sessionId,
+          ...failingArgs
+        })
+      ).rejects.toThrow('execution_owner_unavailable')
+
+      if (!cached) {
+        expect(sizeWhileBuilding).toEqual({ cols: 80, rows: 24 })
+      }
+      expect(ptySizes.get(sessionId)).toEqual(cached)
+      expect(provider.spawn).not.toHaveBeenCalled()
     })
-    const lanes = registerLaunchRaceLanes({ handlers, mainWindow, runtime })
-    ptySizes.delete('race-size-ipc')
-
-    await expect(
-      lanes.spawnThroughIpc({
-        cols: 80,
-        rows: 24,
-        cwd: '/tmp/race-size-ipc',
-        worktreeId: 'repo-1::/tmp/race-size-ipc',
-        sessionId: 'race-size-ipc'
-      })
-    ).rejects.toThrow('options failed')
-
-    expect(sizeWhileBuilding).toEqual({ cols: 80, rows: 24 })
-    expect(ptySizes.has('race-size-ipc')).toBe(false)
   })
 
-  it('runtime lane restores the provisional size when building options fails (runtime/spawn.ts:94-97)', async () => {
-    const provider = installLaunchRaceProvider(async () => ({ id: 'pty-must-not-spawn' }))
-    let sizeWhileBuilding: unknown
-    Object.assign(provider, {
-      supportsAgentSessionCreateOperations: vi.fn(async () => {
-        sizeWhileBuilding = ptySizes.get('race-size-runtime')
-        return false
-      })
-    })
-    const lanes = registerLaunchRaceLanes({
-      handlers,
-      mainWindow,
-      runtime: createLaunchRaceRuntime()
-    })
-    ptySizes.set('race-size-runtime', { cols: 100, rows: 30 })
-
-    await expect(
-      lanes.controller.spawn({
-        cols: 80,
-        rows: 24,
-        cwd: '/tmp/race-size-runtime',
-        worktreeId: 'repo-1::/tmp/race-size-runtime',
-        sessionId: 'race-size-runtime',
-        isNewSession: true,
-        agentSessionCreateOperationId: 'op-race-size-runtime'
-      })
-    ).rejects.toThrow('execution_owner_unavailable')
-
-    expect(sizeWhileBuilding).toEqual({ cols: 80, rows: 24 })
-    expect(ptySizes.get('race-size-runtime')).toEqual({ cols: 100, rows: 30 })
-    expect(provider.spawn).not.toHaveBeenCalled()
-    ptySizes.delete('race-size-runtime')
-  })
-
-  it('IPC lane marks a fresh daemon session hidden before its preflight awaits (ipc/spawn-preflight.ts:42-48)', async () => {
+  // Row 7 (window lane): the mark is set before preflight's first await (ipc/spawn-preflight.ts:42-48).
+  it('window lane marks a fresh daemon session hidden before its preflight awaits', async () => {
     const worktreeId = 'repo-1::/tmp/race-hidden-early'
     installLaunchRaceProvider(async (options) => ({ id: String(options.sessionId) }))
     const auth = gatedClaudeAuth()
@@ -149,7 +149,7 @@ describe('launch race parity: provisional size and hidden mark, both spawn lanes
       prepareClaudeAuth: auth.prepareClaudeAuth
     })
 
-    const spawn = lanes.spawnThroughIpc({
+    const spawn = lanes.spawn.ipc({
       cols: 80,
       rows: 24,
       cwd: '/tmp/race-hidden-early',
@@ -161,11 +161,11 @@ describe('launch race parity: provisional size and hidden mark, both spawn lanes
     expect(mintedFor(worktreeId)).toHaveLength(1)
 
     auth.release()
-    const result = await spawn
-    expect(isHiddenRendererPty(result.id)).toBe(true)
+    expect(isHiddenRendererPty((await spawn).id)).toBe(true)
   })
 
-  it('IPC lane marks the session it recovers daemon routing for before preflight continues (ipc/spawn-preflight.ts:181-192)', async () => {
+  // Row 7 (window lane): recovering daemon routing mints a session and marks it (ipc/spawn-preflight.ts:181-192).
+  it('window lane marks the session it recovers daemon routing for before preflight continues', async () => {
     const worktreeId = 'repo-1::/tmp/race-hidden-recovered'
     const { recoverFreshSpawnRouting } = installDegradedRaceProvider(async (options) => ({
       id: String(options.sessionId)
@@ -178,7 +178,7 @@ describe('launch race parity: provisional size and hidden mark, both spawn lanes
       prepareClaudeAuth: auth.prepareClaudeAuth
     })
 
-    const spawn = lanes.spawnThroughIpc({
+    const spawn = lanes.spawn.ipc({
       cols: 80,
       rows: 24,
       cwd: '/tmp/race-hidden-recovered',
@@ -194,83 +194,65 @@ describe('launch race parity: provisional size and hidden mark, both spawn lanes
     await expect(spawn).resolves.toMatchObject({ id: expect.stringMatching(/@@/) })
   })
 
-  it('IPC lane rolls the pre-spawn hidden mark back on a throw outside the provider spawn (ipc/spawn-run.ts:82-84)', async () => {
-    const worktreeId = 'repo-1::/tmp/race-hidden-rollback'
-    installLaunchRaceProvider(async () => ({ id: 'pty-must-not-spawn' }))
-    let markedWhileBuilding: string[] = []
-    const runtime = createLaunchRaceRuntime({
-      acquireWorktreeTerminalSpawn: vi.fn(async () => {
-        markedWhileBuilding = mintedFor(worktreeId)
-        throw new Error('options failed')
+  // Row 7: any throw rolls the pre-spawn mark back (ipc/spawn-run.ts:82-84; runtime/spawn.ts:106).
+  it.each(LAUNCH_RACE_LANES)(
+    '%s lane: a throw after the provider spawn rolls the pre-spawn hidden mark back',
+    async (lane) => {
+      const worktreeId = `repo-1::/tmp/race-hidden-rollback-${lane}`
+      let markedWhileSpawning: string[] = []
+      installLaunchRaceProvider(async (options) => {
+        markedWhileSpawning = mintedFor(worktreeId)
+        return { id: String(options.sessionId) }
       })
-    })
-    const lanes = registerLaunchRaceLanes({ handlers, mainWindow, runtime })
-
-    await expect(
-      lanes.spawnThroughIpc({
-        cols: 80,
-        rows: 24,
-        cwd: '/tmp/race-hidden-rollback',
-        worktreeId,
-        initiallyHidden: true
+      const runtime = createLaunchRaceRuntime({
+        registerPty: vi.fn(() => {
+          throw new Error('register failed')
+        })
       })
-    ).rejects.toThrow('options failed')
+      const lanes = registerLaunchRaceLanes({ handlers, mainWindow, runtime })
 
-    expect(markedWhileBuilding).toHaveLength(1)
-    expect(mintedFor(worktreeId)).toEqual([])
-  })
+      await expect(
+        lanes.spawn[lane]({ cols: 80, rows: 24, cwd: '/tmp', worktreeId, initiallyHidden: true })
+      ).rejects.toThrow('register failed')
 
-  it('runtime lane rolls the pre-spawn hidden mark back on a throw after the provider spawn (runtime/spawn.ts:106)', async () => {
-    const worktreeId = 'repo-1::/tmp/race-hidden-rollback-runtime'
-    let markedWhileSpawning: string[] = []
-    installLaunchRaceProvider(async (options) => {
-      markedWhileSpawning = mintedFor(worktreeId)
-      return { id: String(options.sessionId) }
-    })
-    const runtime = createLaunchRaceRuntime({
-      registerPty: vi.fn(() => {
-        throw new Error('register failed')
+      expect(markedWhileSpawning).toHaveLength(1)
+      expect(mintedFor(worktreeId)).toEqual([])
+    }
+  )
+
+  // Row 7: the mark follows the id the provider returned (ipc/spawn-commit-persist.ts:122-125;
+  // runtime/spawn-hidden-delivery.ts:44-47).
+  it.each(LAUNCH_RACE_LANES)(
+    '%s lane: the hidden mark moves to the id the provider returned',
+    async (lane) => {
+      installLaunchRaceProvider(async () => ({ id: `pty-renamed-${lane}` }))
+      const lanes = registerLaunchRaceLanes({
+        handlers,
+        mainWindow,
+        runtime: createLaunchRaceRuntime()
       })
-    })
-    const lanes = registerLaunchRaceLanes({ handlers, mainWindow, runtime })
 
-    await expect(
-      lanes.controller.spawn({
-        cols: 80,
-        rows: 24,
-        cwd: '/tmp/race-hidden-rollback-runtime',
-        worktreeId,
-        initiallyHidden: true
-      })
-    ).rejects.toThrow('register failed')
+      await lanes.spawn[lane]({ cols: 80, rows: 24, cwd: '/tmp', initiallyHidden: true })
 
-    expect(markedWhileSpawning).toHaveLength(1)
-    expect(mintedFor(worktreeId)).toEqual([])
-  })
+      expect(getHiddenRendererPtyIds()).toEqual([`pty-renamed-${lane}`])
+    }
+  )
 
-  it('IPC lane moves the hidden mark to the id the provider returned (ipc/spawn-commit-persist.ts:119-125)', async () => {
-    installLaunchRaceProvider(async () => ({ id: 'pty-renamed-ipc' }))
+  // Row 7 drift: IPC re-marks every hidden-requested result after its save
+  // (ipc/spawn-commit-persist.ts:119-121); the runtime lane skips a reattach
+  // (runtime/spawn-hidden-delivery.ts:31; also pty-runtime-hidden-at-spawn-mark.test.ts).
+  const HIDDEN_REATTACH: Record<LaunchRaceLane, boolean> = { ipc: true, runtime: false }
+  it.each(LAUNCH_RACE_LANES)('%s lane: a hidden-requested reattach', async (lane) => {
+    const sessionId = `race-hidden-reattach-${lane}`
+    installLaunchRaceProvider(async () => ({ id: sessionId, isReattach: true }))
     const lanes = registerLaunchRaceLanes({
       handlers,
       mainWindow,
       runtime: createLaunchRaceRuntime()
     })
 
-    await lanes.spawnThroughIpc({ cols: 80, rows: 24, cwd: '/tmp', initiallyHidden: true })
+    await lanes.spawn[lane]({ cols: 80, rows: 24, cwd: '/tmp', sessionId, initiallyHidden: true })
 
-    expect(getHiddenRendererPtyIds()).toEqual(['pty-renamed-ipc'])
-  })
-
-  it('runtime lane moves the hidden mark to the id the provider returned (runtime/spawn-hidden-delivery.ts:44-47)', async () => {
-    installLaunchRaceProvider(async () => ({ id: 'pty-renamed-runtime' }))
-    const lanes = registerLaunchRaceLanes({
-      handlers,
-      mainWindow,
-      runtime: createLaunchRaceRuntime()
-    })
-
-    await lanes.controller.spawn({ cols: 80, rows: 24, cwd: '/tmp', initiallyHidden: true })
-
-    expect(getHiddenRendererPtyIds()).toEqual(['pty-renamed-runtime'])
+    expect(isHiddenRendererPty(sessionId)).toBe(HIDDEN_REATTACH[lane])
   })
 })

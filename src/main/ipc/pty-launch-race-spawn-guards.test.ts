@@ -1,10 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
+import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../runtime/worktree-terminals-sleeping-error'
 import {
+  LAUNCH_RACE_LANES,
   createLaunchRaceRuntime,
   installLaunchRaceProvider,
   launchRacePane,
-  registerLaunchRaceLanes
+  registerLaunchRaceLanes,
+  sleptWorktreeLock,
+  type LaunchRaceLane
 } from './pty-launch-race-test-fixture'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
@@ -51,44 +55,43 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
-function recordingWorktreeLock() {
-  return vi.fn(async (_worktreeId?: string, _opts?: { refuseSleptWorktree?: boolean }) => () => {})
-}
-
-// Pins main's current launch behaviour as the convergence parity baseline (slept-worktree and
-// client-disconnect guards, which only the runtime lane has).
-describe('launch race parity: spawn guards, both spawn lanes', () => {
+// Pins main's current launch behaviour as the baseline the spawn-lane merge must keep.
+describe('launch race parity: slept-worktree and disconnect guards, both spawn lanes', () => {
   const { handlers, mainWindow } = setupPtyIpcSuite()
 
-  it('runtime lane asks the worktree spawn lock to refuse a slept worktree (runtime/spawn-execute.ts:25-30)', async () => {
-    const pane = launchRacePane('guard-refuse-runtime', '91919191-9191-4191-8191-919191919191')
-    installLaunchRaceProvider(async () => ({ id: 'pty-guard-refuse-runtime' }))
-    const acquireWorktreeTerminalSpawn = recordingWorktreeLock()
-    const runtime = createLaunchRaceRuntime({ acquireWorktreeTerminalSpawn })
-    const lanes = registerLaunchRaceLanes({ handlers, mainWindow, runtime })
+  // Row 13 drift: only the runtime lane passes the refusal to the worktree spawn lock
+  // (runtime/spawn-execute.ts:25-30); IPC never does (ipc/spawn-options.ts:238-241), so it wakes.
+  const ASKED_TO_REFUSE_SLEPT_WORKTREE: Record<LaunchRaceLane, 'refused' | 'wakes'> = {
+    ipc: 'wakes',
+    runtime: 'refused'
+  }
+  it.each(LAUNCH_RACE_LANES)(
+    '%s lane: a spawn that asks to refuse a slept worktree',
+    async (lane) => {
+      const pane = launchRacePane(`guard-slept-${lane}`, '91919191-9191-4191-8191-919191919191')
+      const provider = installLaunchRaceProvider(async () => ({ id: `pty-guard-slept-${lane}` }))
+      const lock = sleptWorktreeLock()
+      lock.refuse()
+      const runtime = createLaunchRaceRuntime({
+        acquireWorktreeTerminalSpawn: lock.acquireWorktreeTerminalSpawn
+      })
+      const lanes = registerLaunchRaceLanes({ handlers, mainWindow, runtime })
 
-    await lanes.controller.spawn({ ...pane.args, refuseSleptWorktree: true })
+      const spawn = lanes.spawn[lane]({ ...pane.args, refuseSleptWorktree: true })
 
-    expect(acquireWorktreeTerminalSpawn).toHaveBeenCalledWith(pane.worktreeId, {
-      refuseSleptWorktree: true
-    })
-  })
+      if (ASKED_TO_REFUSE_SLEPT_WORKTREE[lane] === 'refused') {
+        await expect(spawn).rejects.toThrow(WORKTREE_TERMINALS_SLEEPING_ERROR)
+        expect(provider.spawn).not.toHaveBeenCalled()
+      } else {
+        await expect(spawn).resolves.toMatchObject({ id: `pty-guard-slept-${lane}` })
+        expect(provider.spawn).toHaveBeenCalledOnce()
+      }
+    }
+  )
 
-  // Lane drift: the IPC lane never forwards a slept-worktree refusal, so its spawns always wake.
-  it('IPC lane takes the worktree spawn lock with no slept-worktree refusal (ipc/spawn-options.ts:238-241)', async () => {
-    const pane = launchRacePane('guard-refuse-ipc', '92929292-9292-4292-8292-929292929292')
-    installLaunchRaceProvider(async () => ({ id: 'pty-guard-refuse-ipc' }))
-    const acquireWorktreeTerminalSpawn = recordingWorktreeLock()
-    const runtime = createLaunchRaceRuntime({ acquireWorktreeTerminalSpawn })
-    const lanes = registerLaunchRaceLanes({ handlers, mainWindow, runtime })
-
-    await lanes.spawnThroughIpc({ ...pane.args, refuseSleptWorktree: true })
-
-    expect(acquireWorktreeTerminalSpawn.mock.calls).toEqual([[pane.worktreeId]])
-  })
-
-  it('runtime lane refuses to start the process once the requesting client has disconnected (runtime/spawn-execute.ts:65-69,135)', async () => {
-    const pane = launchRacePane('guard-disconnect-runtime', '93939393-9393-4393-8393-939393939393')
+  // Row 13 (runtime lane only; a client signal cannot cross IPC): runtime/spawn-execute.ts:65-69,135.
+  it('runtime lane refuses to start the process once the requesting client has disconnected', async () => {
+    const pane = launchRacePane('guard-disconnect', '93939393-9393-4393-8393-939393939393')
     const provider = installLaunchRaceProvider(async () => ({ id: 'pty-must-not-spawn' }))
     const abort = new AbortController()
     const runtime = createLaunchRaceRuntime({
@@ -100,7 +103,7 @@ describe('launch race parity: spawn guards, both spawn lanes', () => {
     })
     const lanes = registerLaunchRaceLanes({ handlers, mainWindow, runtime })
 
-    await expect(lanes.controller.spawn({ ...pane.args, signal: abort.signal })).rejects.toThrow(
+    await expect(lanes.spawn.runtime({ ...pane.args, signal: abort.signal })).rejects.toThrow(
       'client_disconnected'
     )
     expect(provider.spawn).not.toHaveBeenCalled()
