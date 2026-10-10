@@ -9,8 +9,8 @@ export const CODEX_SUBAGENT_POLL_MS = 1_000
 // Why: starts at 2 — pre-merge v1 lacked receivedAt/stateStartedAt (never shipped); a mismatched version hydrates empty (treated as corrupt).
 export const LAST_STATUS_FILE_VERSION = 2
 
-// Why: trailing-edge debounce so a burst of hook events yields one disk write, not N; quit-time flushStatusPersistSync() guarantees the final flush.
-export const STATUS_PERSIST_DEBOUNCE_MS = 250
+// Recovery snapshots batch event churn; shutdown still flushes immediately.
+export const STATUS_PERSIST_INTERVAL_MS = 5_000
 export const AGENT_PROMPT_SENT_AGENT_KINDS = new Set<AgentKind>(AGENT_KIND_VALUES)
 
 // Why: bound file growth from PTYs that never re-attach; 7 days is the "still relevant?" horizon beyond which entries shouldn't resurrect on hydrate.

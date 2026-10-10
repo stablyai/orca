@@ -140,7 +140,7 @@ export abstract class AgentHookServerState {
   protected paneKeyAliasPersistenceListener: PaneKeyAliasPersistenceListener | null = null
   // Why: on-disk last-status cache path; null without a userDataPath (tests), where persistence is a no-op and only in-memory replay applies.
   protected lastStatusFilePath: string | null = null
-  // Why: trailing-edge debounce timer, per-instance so test servers in one process don't share state.
+  // Recovery write deadline, owned by this server instance.
   protected statusPersistTimer: ReturnType<typeof setTimeout> | null = null
   protected assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   protected promptSentDedupeByPaneKey = new Map<string, AgentPromptSentDedupeEntry>()

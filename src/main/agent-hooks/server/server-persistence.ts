@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 
 import { isValidPaneKey } from './server-status-identity'
-import { LAST_STATUS_FILE_VERSION, STATUS_PERSIST_DEBOUNCE_MS } from './server-constants'
+import { LAST_STATUS_FILE_VERSION, STATUS_PERSIST_INTERVAL_MS } from './server-constants'
 import type {
   EnrichedAgentHookEventPayload,
   LastStatusFile,
@@ -82,14 +82,14 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
     if (!this.lastStatusFilePath) {
       return
     }
-    // Why: reset the timer each call so the write fires only after the last event in a burst.
+    // Keep the first deadline so continuous activity cannot starve restart recovery.
     if (this.statusPersistTimer) {
-      clearTimeout(this.statusPersistTimer)
+      return
     }
     this.statusPersistTimer = setTimeout(() => {
       this.statusPersistTimer = null
       this.runStatusPersist()
-    }, STATUS_PERSIST_DEBOUNCE_MS)
+    }, STATUS_PERSIST_INTERVAL_MS)
     // Why: don't keep the event loop alive just for a status flush — quit already flushes sync.
     if (typeof this.statusPersistTimer.unref === 'function') {
       this.statusPersistTimer.unref()
