@@ -271,6 +271,8 @@ export class EmulatorBridge {
 
   async destroyAllSessions(): Promise<void> {
     const promises: Promise<unknown>[] = []
+    // Recordings outlive their device's helper, so stop them even when unmanaged.
+    promises.push(...this.backends.map((b) => b.stopAllRecordings?.() ?? Promise.resolve()))
     for (const session of this.sessionRegistry.listSessions()) {
       if (!session.managed) {
         continue
