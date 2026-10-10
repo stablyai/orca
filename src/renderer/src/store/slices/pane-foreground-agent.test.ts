@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createTestStore } from './store-test-helpers'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 function terminalTab(id: string, worktreeId: string): TerminalTab {
   return {
@@ -31,13 +31,63 @@ describe('pane foreground agent slice', () => {
     store.getState().setPaneForegroundAgent('tab-1:leaf-1', {
       agent: 'aider',
       routingRevoked: true,
+      routingConfirmationPending: true,
       shellForeground: false
     })
     expect(store.getState().paneForegroundAgentByPaneKey).not.toBe(first)
     expect(store.getState().paneForegroundAgentByPaneKey['tab-1:leaf-1']?.routingRevoked).toBe(true)
+    expect(
+      store.getState().paneForegroundAgentByPaneKey['tab-1:leaf-1']?.routingConfirmationPending
+    ).toBe(true)
 
     store.getState().clearPaneForegroundAgent('tab-1:leaf-1')
     expect(store.getState().paneForegroundAgentByPaneKey).toEqual({})
+  })
+
+  // Why: the settle publish drops routingConfirmationPending while every other
+  // compared field stays equal, so the equality short-circuit is the only thing
+  // standing between "confirmation ended" and a pane that keeps CSI-u forever.
+  it('lands the publish that clears a pending confirmation', () => {
+    const store = createTestStore()
+    store.getState().setPaneForegroundAgent('tab-1:leaf-1', {
+      agent: 'pi',
+      routingRevoked: true,
+      routingConfirmationPending: true,
+      shellForeground: false
+    })
+
+    // Exactly the entry the inconclusive-settle path republishes.
+    store.getState().setPaneForegroundAgent('tab-1:leaf-1', {
+      agent: 'pi',
+      routingRevoked: true,
+      shellForeground: false
+    })
+
+    expect(store.getState().paneForegroundAgentByPaneKey['tab-1:leaf-1']).toEqual({
+      agent: 'pi',
+      routingRevoked: true,
+      shellForeground: false
+    })
+  })
+
+  // Why: a reattach seeds the launch agent; the read confirming the same agent must still land,
+  // or sidebar rows would never treat the pane as process-backed.
+  it('lands a process read that confirms a launch-record agent', () => {
+    const store = createTestStore()
+    store.getState().setPaneForegroundAgent('tab-1:leaf-1', {
+      agent: 'codex',
+      agentEvidence: 'launch-record',
+      shellForeground: false
+    })
+    store.getState().setPaneForegroundAgent('tab-1:leaf-1', {
+      agent: 'codex',
+      agentEvidence: 'process-read',
+      shellForeground: false
+    })
+
+    expect(store.getState().paneForegroundAgentByPaneKey['tab-1:leaf-1']?.agentEvidence).toBe(
+      'process-read'
+    )
   })
 
   it('sweeps only the closed tab prefix, not sibling tabs or prefix-share ids', () => {

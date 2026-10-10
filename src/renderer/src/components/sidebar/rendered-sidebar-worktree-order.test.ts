@@ -1,8 +1,16 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
-import { getVisibleWorktreeIds, setVisibleWorktreeIds } from './visible-worktrees'
+import {
+  getVisibleWorktreeIds,
+  getVisibleWorktreeShortcutTargets,
+  setVisibleWorktreeIds,
+  setVisibleWorktreeShortcutTargets
+} from './visible-worktrees'
 import type { AppState } from '@/store/types'
-import type { FolderWorkspace, ProjectGroup, Repo, Worktree } from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
 const initialState = useAppStore.getInitialState()
@@ -101,11 +109,13 @@ function seedStore(worktrees: Worktree[], overrides: Partial<AppState> = {}): vo
     true
   )
   setVisibleWorktreeIds(null)
+  setVisibleWorktreeShortcutTargets(null)
 }
 
 describe('closed-sidebar Cmd+1-9 ordering (#9497)', () => {
   afterEach(() => {
     setVisibleWorktreeIds(null)
+    setVisibleWorktreeShortcutTargets(null)
     useAppStore.setState(initialState, true)
   })
 
@@ -258,5 +268,33 @@ describe('closed-sidebar Cmd+1-9 ordering (#9497)', () => {
 
     seedStore([older, newer, main], { sortBy: 'name' })
     expect(getVisibleWorktreeIds()).toEqual(['wt-main', 'wt-newer', 'wt-older'])
+  })
+
+  it('keeps same-id hosts as separate closed-sidebar shortcut positions', () => {
+    seedStore([
+      makeWorktree('repo1::/same', { hostId: 'local' }),
+      makeWorktree('repo1::/same', { hostId: 'ssh:box' })
+    ])
+
+    expect(getVisibleWorktreeIds()).toEqual(['repo1::/same'])
+    expect(getVisibleWorktreeShortcutTargets()).toEqual([
+      { id: 'repo1::/same', executionHostId: 'local' },
+      { id: 'repo1::/same', executionHostId: 'ssh:box' }
+    ])
+  })
+
+  it('does not reconstruct a filtered same-id host in closed-sidebar shortcuts', () => {
+    seedStore(
+      [
+        makeWorktree('repo1::/same', { hostId: 'local' }),
+        makeWorktree('repo1::/same', { hostId: 'ssh:box' })
+      ],
+      { visibleWorkspaceHostIds: ['local'] }
+    )
+
+    expect(getVisibleWorktreeIds()).toEqual(['repo1::/same'])
+    expect(getVisibleWorktreeShortcutTargets()).toEqual([
+      { id: 'repo1::/same', executionHostId: 'local' }
+    ])
   })
 })

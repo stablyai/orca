@@ -1,15 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
-  NEW_WORKSPACE_PROJECT_OPTION_QUERY_MAX_BYTES,
-  buildNewWorkspaceFolderSourceOptions,
   buildNewWorkspaceProjectOptions,
-  findActionableFolderProjectGroup,
-  getRepoIdFromNewWorkspaceFolderSourceOptionId,
-  isNewWorkspaceProjectOptionQueryTooLarge,
-  searchNewWorkspaceProjectOptions,
-  type NewWorkspaceProjectOption
+  findActionableFolderProjectGroup
 } from './new-workspace-project-options'
-import type { Project, ProjectGroup, ProjectHostSetup, Repo } from '../../../shared/types'
+import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { Project, ProjectHostSetup } from '../../../shared/project-types'
+import type { Repo } from '../../../shared/repo-types'
 
 function repo(id: string, overrides: Partial<Repo> = {}): Repo {
   return {
@@ -387,71 +383,6 @@ describe('buildNewWorkspaceProjectOptions', () => {
       'Builder (ssh:builder-a) · /workspace/merchant',
       'Builder (ssh:builder-b) · /workspace/merchant'
     ])
-  })
-
-  it('filters project options by display name and detail', () => {
-    const options: NewWorkspaceProjectOption[] = [
-      {
-        kind: 'project',
-        id: 'orca',
-        projectId: 'orca',
-        displayName: 'Orca',
-        badgeColor: '#111111',
-        detail: 'stablyai/orca'
-      },
-      {
-        kind: 'project',
-        id: 'docs',
-        projectId: 'docs',
-        displayName: 'Docs',
-        badgeColor: '#222222',
-        detail: 'stablyai/docs'
-      }
-    ]
-
-    expect(searchNewWorkspaceProjectOptions(options, 'docs')).toEqual([options[1]])
-    expect(searchNewWorkspaceProjectOptions(options, 'stablyai/orca')).toEqual([options[0]])
-  })
-
-  it('rejects oversized pasted searches before reading project options', () => {
-    const oversizedQuery = 'secret-project-option'.repeat(
-      NEW_WORKSPACE_PROJECT_OPTION_QUERY_MAX_BYTES
-    )
-    const throwingOptions = [
-      {
-        id: 'secret',
-        badgeColor: '#111111',
-        get displayName(): string {
-          throw new Error('oversized project option queries must not scan names')
-        },
-        get detail(): string {
-          throw new Error('oversized project option queries must not scan details')
-        }
-      }
-    ] as NewWorkspaceProjectOption[]
-
-    expect(isNewWorkspaceProjectOptionQueryTooLarge(oversizedQuery)).toBe(true)
-    expect(searchNewWorkspaceProjectOptions(throwingOptions, oversizedQuery)).toEqual([])
-  })
-})
-
-describe('buildNewWorkspaceFolderSourceOptions', () => {
-  it('keeps concrete source repos separate even when they are the same logical project', () => {
-    const options = buildNewWorkspaceFolderSourceOptions([
-      repo('local-repo', { displayName: 'orca', path: '/tmp/orca' }),
-      repo('ssh-repo', {
-        displayName: 'orca',
-        path: '/srv/orca',
-        connectionId: 'ssh:builder'
-      })
-    ])
-
-    expect(options.map((option) => option.id).sort()).toEqual([
-      'folder-source:local-repo',
-      'folder-source:ssh-repo'
-    ])
-    expect(options.map((option) => option.detail).sort()).toEqual(['/srv/orca', '/tmp/orca'])
-    expect(getRepoIdFromNewWorkspaceFolderSourceOptionId('folder-source:ssh-repo')).toBe('ssh-repo')
   })
 })
 

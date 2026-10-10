@@ -7,7 +7,7 @@ import {
   isExpectedAgentProcess
 } from '../../../shared/agent-process-recognition'
 import { isShellProcess } from '../../../shared/shell-process-detection'
-import type { GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 
 type RuntimeOwnerSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 
@@ -22,7 +22,7 @@ export async function sendFollowupPromptWhenAgentReady(args: {
     return false
   }
   try {
-    return await sendRuntimePtyInputVerified(settings, ptyId, `${prompt}\r`)
+    return await sendRuntimePtyInputVerified(settings, ptyId, `${prompt}\r`, 'launch')
   } catch {
     return false
   }

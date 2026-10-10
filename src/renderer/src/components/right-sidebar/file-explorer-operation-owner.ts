@@ -10,11 +10,11 @@ import {
 } from '@/lib/worktree-runtime-owner'
 import type { FileExplorerOperationOwner } from './file-explorer-types'
 import {
+  getFloatingWorkspaceOperationRoute,
   resolveWorktreeOperationRoute,
   type WorktreeOperationRoute
 } from '@/lib/worktree-operation-route'
 import { captureWorktreeOperationGenerationGuard } from '@/lib/worktree-operation-generation'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 export type FileExplorerOperationRoute = {
   settings: { activeRuntimeEnvironmentId: string | null }
@@ -44,8 +44,9 @@ export function getFileExplorerOperationOwnerFromState(
   state: FileExplorerOwnerState,
   worktreeId: string | null | undefined
 ): FileExplorerOperationOwner {
-  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
-    return { kind: 'local' }
+  const floatingRoute = worktreeId ? getFloatingWorkspaceOperationRoute(worktreeId) : null
+  if (floatingRoute?.executionHostId) {
+    return operationOwnerFromHostId(floatingRoute.executionHostId)
   }
   const parsedWorkspace = worktreeId ? parseWorkspaceKey(worktreeId) : null
   if (worktreeId && parsedWorkspace?.type !== 'folder') {
@@ -232,6 +233,12 @@ function getFileExplorerGenerationRoute(
     case undefined:
       return null
   }
+}
+
+export function getFileExplorerOperationExecutionHostId(
+  owner: FileExplorerOperationOwner | undefined
+): ExecutionHostId | null {
+  return getFileExplorerGenerationRoute(owner)?.executionHostId ?? null
 }
 
 export function getFileExplorerOwnerUnresolvedMessage(): string {

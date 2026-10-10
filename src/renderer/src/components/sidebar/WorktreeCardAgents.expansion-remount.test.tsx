@@ -56,7 +56,7 @@ vi.mock('./useWorktreeAgentRows', () => ({
   useWorktreeAgentRows: vi.fn(() => mockAgents)
 }))
 
-vi.mock('@/components/dashboard/useNow', () => ({
+vi.mock('@/hooks/use-now', () => ({
   useNow: vi.fn(() => 2000)
 }))
 

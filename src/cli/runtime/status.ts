@@ -1,8 +1,16 @@
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
+import { runtimeHostConnectionState } from '../../shared/runtime-host-connection-state'
 import { findTransport } from '../../shared/runtime-bootstrap'
 import { tryReadMetadata } from './metadata'
 import { sendRequest } from './transport'
-import { RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
+import {
+  projectRemoteAppStatus,
+  resolveDesktopWindowStatus
+} from '../../shared/cli-app-status-projection'
+import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
+import { isProcessRunning } from './runtime-pid-liveness'
+
+export { projectRemoteAppStatus, resolveDesktopWindowStatus }
 
 export async function getCliStatus(
   userDataPath: string
@@ -45,18 +53,27 @@ export async function getCliStatus(
       runtime: {
         state: graphState === 'ready' ? 'ready' : 'graph_not_ready',
         reachable: true,
+        connectionState: runtimeHostConnectionState({
+          hasStatusEntry: true,
+          status: response.result
+        }),
         runtimeId: response.result.runtimeId,
         ...(response.result.appVersion ? { appVersion: response.result.appVersion } : {}),
         ...(response.result.remoteUpdateSupport
           ? { remoteUpdateSupport: response.result.remoteUpdateSupport }
           : {}),
-        ...(response.result.capabilities ? { capabilities: response.result.capabilities } : {})
+        ...(response.result.capabilities ? { capabilities: response.result.capabilities } : {}),
+        ...(response.result.degradations ? { degradations: response.result.degradations } : {})
       },
       graph: {
         state: graphState
       }
     })
-  } catch {
+  } catch (error) {
+    // Why: a denied caller cannot tell a live Orca from a dead one, so report the denial, not a state.
+    if (error instanceof RuntimeClientError && error.code === 'runtime_access_denied') {
+      throw error
+    }
     const running = isProcessRunning(metadata.pid)
     return buildCliStatusResponse({
       app: {
@@ -66,6 +83,7 @@ export async function getCliStatus(
       runtime: {
         state: running ? 'starting' : 'stale_bootstrap',
         reachable: false,
+        connectionState: 'disconnected',
         runtimeId: null
       },
       graph: {
@@ -75,38 +93,13 @@ export async function getCliStatus(
   }
 }
 
-export function resolveDesktopWindowStatus(
-  status: RuntimeStatus
-): CliStatusResult['app']['desktopWindowStatus'] {
-  if (status.desktopWindowStatus) {
-    return status.desktopWindowStatus
-  }
-  // Why: older desktop runtimes predate the explicit status but a positive
-  // Electron id still proves that a real window owns the graph.
-  return status.authoritativeWindowId !== null && status.authoritativeWindowId > 0
-    ? 'available'
-    : undefined
-}
-
 function buildCliStatusResponse(result: CliStatusResult): RuntimeRpcSuccess<CliStatusResult> {
   return {
     id: 'local-status',
     ok: true,
-    result,
+    result: { target: { kind: 'local' }, ...result },
     _meta: {
       runtimeId: result.runtime.runtimeId ?? 'none'
     }
-  }
-}
-
-function isProcessRunning(pid: number | null | undefined): boolean {
-  if (!pid || pid <= 0) {
-    return false
-  }
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch {
-    return false
   }
 }

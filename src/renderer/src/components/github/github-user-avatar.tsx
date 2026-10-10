@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 
-export function githubAvatarUrl(login: string): string {
+function githubAvatarUrl(login: string): string {
   return `https://github.com/${encodeURIComponent(login)}.png?size=64`
 }
 

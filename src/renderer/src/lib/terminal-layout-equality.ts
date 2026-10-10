@@ -1,6 +1,10 @@
-import type { TerminalLayoutSnapshot, TerminalPaneLayoutNode } from '../../../shared/types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode
+} from '../../../shared/terminal-tab-types'
 
-function sameStringRecord(
+/** Exported so pty-topology gates can reuse the leaf-map comparison this equality already defines. */
+export function sameStringRecord(
   a: Readonly<Record<string, string>> | undefined,
   b: Readonly<Record<string, string>> | undefined
 ): boolean {
@@ -45,6 +49,7 @@ export function terminalLayoutEqual(
     terminalLayoutNodeEqual(a?.root, b.root) &&
     (a?.activeLeafId ?? null) === b.activeLeafId &&
     (a?.expandedLeafId ?? null) === b.expandedLeafId &&
+    (a?.chatLeafId ?? null) === (b.chatLeafId ?? null) &&
     sameStringRecord(a?.ptyIdsByLeafId, b.ptyIdsByLeafId) &&
     sameStringRecord(a?.buffersByLeafId, b.buffersByLeafId) &&
     sameStringRecord(a?.scrollbackRefsByLeafId, b.scrollbackRefsByLeafId) &&

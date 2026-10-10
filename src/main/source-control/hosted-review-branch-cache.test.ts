@@ -15,7 +15,7 @@ import {
   MAX_UNSETTLED_LOOKUPS_PER_KEY
 } from './hosted-review-refresh-pacing'
 
-const identity = { repoPath: '/repo', connectionId: null, branch: 'feature/x' }
+const identity = { repoPath: '/repo', executionHostId: 'local' as const, branch: 'feature/x' }
 const START = 1_000_000
 
 /** A lookup that never settles — the wedged provider this file's deadline exists for. */
@@ -120,6 +120,37 @@ describe('hosted review branch cache (#11532)', () => {
 
     vi.setSystemTime(1_000_000 + 60_001)
     await withHostedReviewBranchCache(identity, { headOid: null }, lookup)
+    expect(lookup).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps merged reviews fresh for only 60 seconds for older clients', async () => {
+    const lookup = vi.fn(async () => mergedReview)
+    await withHostedReviewBranchCache(identity, { headOid: 'aaa' }, lookup)
+    vi.setSystemTime(START + 59_999)
+    await withHostedReviewBranchCache(identity, { headOid: 'aaa', active: true }, lookup)
+    expect(lookup).toHaveBeenCalledTimes(1)
+    vi.setSystemTime(START + 60_000)
+    await withHostedReviewBranchCache(identity, { headOid: 'aaa' }, lookup)
+    expect(lookup).toHaveBeenCalledTimes(2)
+    await withHostedReviewBranchCache(identity, { headOid: 'bbb' }, lookup)
+    expect(lookup).toHaveBeenCalledTimes(3)
+  })
+
+  it('continues watching merged reviews whose checks are pending', async () => {
+    const lookup = vi.fn(async () => ({ ...mergedReview, status: 'pending' as const }))
+    await withHostedReviewBranchCache(identity, { headOid: 'aaa' }, lookup)
+    vi.setSystemTime(START + 60_000)
+    await withHostedReviewBranchCache(identity, { headOid: 'aaa' }, lookup)
+    expect(lookup).toHaveBeenCalledTimes(2)
+  })
+
+  it('bypasses a merged result for an explicit refresh', async () => {
+    const lookup = vi.fn(async () => mergedReview)
+    await withHostedReviewBranchCache(identity, { headOid: 'aaa' }, lookup)
+    lookup.mockResolvedValue(openReview)
+    await expect(
+      withHostedReviewBranchCache(identity, { headOid: 'aaa', force: true }, lookup)
+    ).resolves.toEqual(openReview)
     expect(lookup).toHaveBeenCalledTimes(2)
   })
 
@@ -248,7 +279,7 @@ describe('hosted review branch cache (#11532)', () => {
       .mockResolvedValueOnce(openReview)
 
     await withHostedReviewBranchCache(identity, { headOid: null }, lookup)
-    invalidateHostedReviewBranchCache('/repo', null)
+    invalidateHostedReviewBranchCache('/repo', 'local')
 
     await expect(withHostedReviewBranchCache(identity, { headOid: null }, lookup)).resolves.toEqual(
       openReview
@@ -269,7 +300,7 @@ describe('hosted review branch cache (#11532)', () => {
       .mockResolvedValue(openReview)
 
     const inflight = withHostedReviewBranchCache(identity, { headOid: null }, lookup)
-    invalidateHostedReviewBranchCache('/repo', null)
+    invalidateHostedReviewBranchCache('/repo', 'local')
     // The poll started before the review existed, so its "no review" answer is
     // older than the invalidation and must not be cached back over it.
     resolveLookup(null)
@@ -292,7 +323,7 @@ describe('hosted review branch cache (#11532)', () => {
     )
 
     const inflight = withHostedReviewBranchCache(other, { headOid: null }, lookup)
-    invalidateHostedReviewBranchCache('/repo', null)
+    invalidateHostedReviewBranchCache('/repo', 'local')
     resolveLookup(null)
     await inflight
 
@@ -311,7 +342,7 @@ describe('hosted review branch cache (#11532)', () => {
     )
     expect(lookup).toHaveBeenCalledTimes(2)
 
-    invalidateHostedReviewBranchCache('/other', null)
+    invalidateHostedReviewBranchCache('/other', 'local')
 
     await withHostedReviewBranchCache(identity, { headOid: null }, lookup)
     expect(lookup).toHaveBeenCalledTimes(2)
@@ -328,7 +359,7 @@ describe('hosted review branch cache (#11532)', () => {
 
     await withHostedReviewBranchCache(identity, { headOid: null }, lookup)
     await withHostedReviewBranchCache(
-      { ...identity, connectionId: 'ssh-1' },
+      { ...identity, executionHostId: 'ssh:ssh-1' as const },
       { headOid: null },
       lookup
     )
@@ -891,11 +922,11 @@ describe('hosted review branch cache (#11532)', () => {
       const stale = stuckLookup()
       const inflight = withHostedReviewBranchCache(identity, { headOid: null }, stale.lookup)
 
-      invalidateHostedReviewBranchCache('/repo', null)
+      invalidateHostedReviewBranchCache('/repo', 'local')
       // Fill the generation map so the repo's own generation is evicted: read back
       // as zero it would match what this lookup captured before the invalidation.
       for (let index = 0; index < MAX_BRANCH_MAP_ENTRIES; index += 1) {
-        invalidateHostedReviewBranchCache(`/filler/${index}`, null)
+        invalidateHostedReviewBranchCache(`/filler/${index}`, 'local')
       }
 
       stale.resolve(null)

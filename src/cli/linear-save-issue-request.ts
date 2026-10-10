@@ -1,4 +1,4 @@
-import type { LinearSaveIssueRequest } from '../shared/linear-agent-access'
+import type { LinearSaveIssueRequest } from '../shared/linear/agent-access'
 import {
   getOptionalNullableNumberFlag,
   getOptionalStringFlag,

@@ -1,11 +1,40 @@
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { reattachWebglIfNeeded } from './pane-webgl-reattach'
+import { presentPaneViewportPreservingSynchronizedOutput } from './pane-webgl-renderer'
 import { resetAndRefreshAllTerminalWebglAtlases } from './pane-manager-registry'
 
 type PaneGetter = () => Iterable<ManagedPaneInternal>
+type PaneRevealOwner = { isVisibleForAtlasRecovery(): boolean }
+
+const revealPaneGetters = new WeakMap<PaneRevealOwner, PaneGetter>()
 
 const pendingRevealRepaints = new Set<PaneGetter>()
 let revealRepaintScheduled = false
+
+function resolvePaneGetter(
+  ownerOrGetter: PaneRevealOwner | PaneGetter,
+  panes?: ReadonlyMap<number, ManagedPaneInternal>
+): PaneGetter {
+  if (typeof ownerOrGetter === 'function') {
+    return ownerOrGetter
+  }
+  const cached = revealPaneGetters.get(ownerOrGetter)
+  if (cached) {
+    return cached
+  }
+  if (!panes) {
+    throw new Error('A reveal owner requires its pane map')
+  }
+  // Hidden-window frames can outlive a destroyed manager's mount context.
+  const ownerRef = new WeakRef(ownerOrGetter)
+  const panesRef = new WeakRef(panes)
+  const getPanes: PaneGetter = () => {
+    const owner = ownerRef.deref()
+    return owner?.isVisibleForAtlasRecovery() ? (panesRef.deref()?.values() ?? []) : []
+  }
+  revealPaneGetters.set(ownerOrGetter, getPanes)
+  return getPanes
+}
 
 function scheduleSettledFrame(callback: () => void): void {
   if (typeof globalThis.requestAnimationFrame !== 'function') {
@@ -74,8 +103,16 @@ function flushPaneRevealRepaints(): void {
  * registry-wide atlas reset so no delayed pane-local clear can invalidate a
  * sibling terminal's rebuilt model.
  */
-export function schedulePaneRevealRepaint(getPanes: () => Iterable<ManagedPaneInternal>): void {
-  pendingRevealRepaints.add(getPanes)
+export function schedulePaneRevealRepaint(getPanes: PaneGetter): void
+export function schedulePaneRevealRepaint(
+  owner: PaneRevealOwner,
+  panes: ReadonlyMap<number, ManagedPaneInternal>
+): void
+export function schedulePaneRevealRepaint(
+  ownerOrGetter: PaneRevealOwner | PaneGetter,
+  panes?: ReadonlyMap<number, ManagedPaneInternal>
+): void {
+  pendingRevealRepaints.add(resolvePaneGetter(ownerOrGetter, panes))
   if (revealRepaintScheduled) {
     return
   }
@@ -83,21 +120,18 @@ export function schedulePaneRevealRepaint(getPanes: () => Iterable<ManagedPaneIn
   scheduleSettledFrame(flushPaneRevealRepaints)
 }
 
-/**
- * Presents already-visible panes without clearing the shared glyph atlas.
- *
- * Why: a plain window refocus never hid its panes, so their WebGL model is
- * already current — a `refresh` re-presents the live buffer (covering a
- * compositor that dropped frames while occluded). Using the atlas-clearing
- * reveal repaint here would wipe the atlas shared by every same-config pane and
- * re-arm the mid-stream page-merge garble race (xterm.js issue 4480); this path
- * must stay texture-atlas-preserving.
- */
-export function schedulePaneRevealPresent(getPanes: () => Iterable<ManagedPaneInternal>): void {
-  forEachPaneOnSettledFrame(getPanes, (pane) => {
+/** Presents panes without clearing the shared glyph atlas or bypassing DEC 2026. */
+export function schedulePaneRevealPresent(getPanes: PaneGetter): void
+export function schedulePaneRevealPresent(
+  owner: PaneRevealOwner,
+  panes: ReadonlyMap<number, ManagedPaneInternal>
+): void
+export function schedulePaneRevealPresent(
+  ownerOrGetter: PaneRevealOwner | PaneGetter,
+  panes?: ReadonlyMap<number, ManagedPaneInternal>
+): void {
+  forEachPaneOnSettledFrame(resolvePaneGetter(ownerOrGetter, panes), (pane) => {
     reattachWebglIfNeeded(pane)
-    if (pane.terminal.rows > 0) {
-      pane.terminal.refresh(0, pane.terminal.rows - 1)
-    }
+    presentPaneViewportPreservingSynchronizedOutput(pane)
   })
 }

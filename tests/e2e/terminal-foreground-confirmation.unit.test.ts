@@ -61,8 +61,8 @@ describe('daemon foreground confirmation composes with pane tracking', () => {
     }
   })
 
-  function createComposedTracker(publish: ReturnType<typeof vi.fn>) {
-    const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+  async function createComposedTracker(publish: ReturnType<typeof vi.fn>) {
+    const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
     const tracker = createPaneForegroundAgentTracker({
       getPtyId: () => 'pty-1',
       isTrackablePtyId: () => true,
@@ -82,7 +82,7 @@ describe('daemon foreground confirmation composes with pane tracking', () => {
       })
     )
     const publish = vi.fn()
-    const { tracker } = createComposedTracker(publish)
+    const { tracker } = await createComposedTracker(publish)
 
     tracker.onVisiblePtyBound(true)
     await vi.advanceTimersByTimeAsync(350)
@@ -93,6 +93,7 @@ describe('daemon foreground confirmation composes with pane tracking', () => {
 
     expect(publish).toHaveBeenCalledExactlyOnceWith({
       agent: 'droid',
+      agentEvidence: 'process-read',
       routingTrusted: true,
       shellForeground: false
     })
@@ -103,7 +104,7 @@ describe('daemon foreground confirmation composes with pane tracking', () => {
     spawnMock.mockReturnValue(mockWindowsPty())
     resolveForegroundMock.mockResolvedValue('powershell.exe')
     const publish = vi.fn()
-    const { tracker } = createComposedTracker(publish)
+    const { tracker } = await createComposedTracker(publish)
 
     tracker.onCommandFinished()
     await vi.advanceTimersByTimeAsync(350)
@@ -119,7 +120,7 @@ describe('daemon foreground confirmation composes with pane tracking', () => {
       processName: 'powershell.exe'
     })
     const publish = vi.fn()
-    const { tracker } = createComposedTracker(publish)
+    const { tracker } = await createComposedTracker(publish)
 
     tracker.onCommandFinished()
     await vi.advanceTimersByTimeAsync(350 + 1_200 + 6_000)

@@ -3,7 +3,7 @@ import type {
   ClaudeRateLimitAccountsState,
   CodexManagedAccountRuntimeSelection,
   CodexRateLimitAccountsState
-} from '../../../../shared/types'
+} from '../../../../shared/managed-account-types'
 
 type ProviderAccount =
   | ClaudeRateLimitAccountsState['accounts'][number]

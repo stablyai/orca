@@ -7,6 +7,7 @@ import type {
 import { getFeatureWallSetupStepsForSection } from '../../../../shared/feature-wall-setup-steps'
 import { cn } from '@/lib/utils'
 import type { FeatureWallSetupProgress } from './feature-wall-setup-progress'
+import { FullDiskAccessSetupPrompt } from './FullDiskAccessSetupPrompt'
 import { AgentCapabilitiesSetupAction } from './AgentCapabilitiesSetupAction'
 import {
   AddReposAction,
@@ -23,9 +24,11 @@ import {
 import { AgentStep } from '../onboarding/AgentStep'
 import { NotificationStep } from '../onboarding/NotificationStep'
 import { useAppStore } from '@/store'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { translate } from '@/i18n/i18n'
+
+import { getLocalizedFeatureWallSetupChecklistCopy } from './feature-wall-setup-checklist-localized-copy'
 
 type FeatureWallSetupChecklistLayout = 'modal' | 'embedded'
 
@@ -45,48 +48,45 @@ function SetupStepRow(props: {
   active: boolean
   ordinal: number
   onSelect: () => void
-  layout: FeatureWallSetupChecklistLayout
 }): React.JSX.Element {
-  const { step, done, active, ordinal, onSelect, layout } = props
-  const isEmbedded = layout === 'embedded'
+  const { step, done, active, ordinal, onSelect } = props
+  const localizedStepCopy = getLocalizedFeatureWallSetupChecklistCopy(step)
   return (
     <button
       type="button"
       onClick={onSelect}
       aria-current={active ? 'step' : undefined}
       className={cn(
-        'relative flex w-full items-center gap-3 text-left transition-colors',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-        isEmbedded
-          ? cn(
-              'rounded-lg px-3 py-2',
-              active ? 'bg-accent text-accent-foreground' : 'hover:bg-accent'
-            )
-          : cn(
-              'rounded-md border px-3 py-2.5',
-              active
-                ? 'border-border bg-accent text-accent-foreground'
-                : 'border-border bg-background hover:bg-accent'
-            )
+        'flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left transition-colors',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        active ? 'bg-accent' : 'hover:bg-accent/60'
       )}
     >
-      {active ? (
-        <span className="absolute bottom-2 left-0 top-2 w-0.5 rounded-full bg-foreground" />
-      ) : null}
       <span
         className={cn(
           'flex size-5 shrink-0 items-center justify-center rounded-full border',
           done
-            ? 'border-green-500/45 bg-green-500/10 text-green-600 dark:text-green-300'
+            ? 'border-foreground bg-foreground text-background'
             : 'border-border text-muted-foreground'
         )}
       >
-        {done ? <Check className="size-3" /> : <span className="text-xs">{ordinal}</span>}
+        {done ? (
+          <Check className="size-3" strokeWidth={3} />
+        ) : (
+          <span className="text-[11px] tabular-nums">{ordinal}</span>
+        )}
       </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-[15px] font-medium leading-snug text-foreground">
-          {step.name}
-        </span>
+      <span
+        className={cn(
+          'min-w-0 flex-1 text-sm leading-snug',
+          active
+            ? 'font-medium text-foreground'
+            : done
+              ? 'text-muted-foreground'
+              : 'text-foreground'
+        )}
+      >
+        {localizedStepCopy.name}
       </span>
     </button>
   )
@@ -99,20 +99,19 @@ function SetupSection(props: {
   activeStepId: FeatureWallSetupStepId | null
   progress: FeatureWallSetupProgress
   onSelectStep: (id: FeatureWallSetupStepId) => void
-  layout: FeatureWallSetupChecklistLayout
 }): React.JSX.Element {
   const doneCount = props.steps.filter((step) => props.progress.stepDone[step.id]).length
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between gap-3">
-        <h4 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        <h4 className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
           {props.title}
         </h4>
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="text-[11px] tabular-nums text-muted-foreground">
           {doneCount}/{props.steps.length}
         </span>
       </div>
-      <div className="space-y-1.5">
+      <div className="space-y-0.5">
         {props.steps.map((step, index) => (
           <SetupStepRow
             key={step.id}
@@ -120,7 +119,6 @@ function SetupSection(props: {
             done={props.progress.stepDone[step.id]}
             active={props.activeStepId === step.id}
             ordinal={props.startOrdinal + index}
-            layout={props.layout}
             onSelect={() => props.onSelectStep(step.id)}
           />
         ))}
@@ -163,6 +161,15 @@ function SelectedStepAction(props: FeatureWallSetupChecklistProps): React.JSX.El
   }
   if (activeStep.id === 'setup-script') {
     return <SetupScriptAction />
+  }
+  return null
+}
+
+// Full-width content below the caption/visual grid.
+function SelectedStepFooter(props: { stepId: FeatureWallSetupStepId }): React.JSX.Element | null {
+  // Why: Full Disk Access matters for projects in protected folders, so it sits with adding projects.
+  if (props.stepId === 'add-two-repos') {
+    return <FullDiskAccessSetupPrompt />
   }
   return null
 }
@@ -296,7 +303,6 @@ export function FeatureWallSetupChecklist(
           activeStepId={activeStep?.id ?? null}
           progress={progress}
           onSelectStep={onSelectStep}
-          layout={layout}
         />
         <SetupSection
           title={translate(
@@ -308,7 +314,6 @@ export function FeatureWallSetupChecklist(
           activeStepId={activeStep?.id ?? null}
           progress={progress}
           onSelectStep={onSelectStep}
-          layout={layout}
         />
       </div>
 
@@ -321,31 +326,21 @@ export function FeatureWallSetupChecklist(
         )}
       >
         {activeStep ? (
-          <div className={cn('flex h-full flex-col', isEmbedded ? 'gap-7' : 'gap-5')}>
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <div className="text-2xl font-semibold leading-tight text-foreground">
-                  {activeStep.name}
-                </div>
-              </div>
-              <span
-                className={cn(
-                  'shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium',
-                  activeDone
-                    ? 'border-green-500/45 bg-green-500/10 text-green-600 dark:text-green-300'
-                    : 'border-border bg-muted/30 text-muted-foreground'
-                )}
-              >
-                {activeDone
-                  ? translate(
-                      'auto.components.feature.wall.FeatureWallSetupChecklist.13294d3405',
-                      'Done'
-                    )
-                  : translate(
-                      'auto.components.feature.wall.FeatureWallSetupChecklist.0235b268b2',
-                      'Not done yet'
-                    )}
-              </span>
+          <div className={cn('flex h-full flex-col', isEmbedded ? 'gap-4' : 'gap-3')}>
+            <div className="flex items-center justify-between gap-4">
+              <h3 className="min-w-0 text-xl font-semibold tracking-tight text-foreground">
+                {getLocalizedFeatureWallSetupChecklistCopy(activeStep).name}
+              </h3>
+              {/* Why: a "not done" pill on every open step is noise; only completion is news. */}
+              {activeDone ? (
+                <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <Check className="size-3.5" />
+                  {translate(
+                    'auto.components.feature.wall.FeatureWallSetupChecklist.13294d3405',
+                    'Done'
+                  )}
+                </span>
+              ) : null}
             </div>
             <div
               className={cn(
@@ -357,20 +352,21 @@ export function FeatureWallSetupChecklist(
               <div className="min-w-0">
                 <p
                   className={cn(
-                    'text-base leading-relaxed text-muted-foreground',
+                    'text-sm leading-relaxed text-muted-foreground',
                     hasStepVisual && !isEmbedded ? 'pr-4 sm:pr-6' : null
                   )}
                 >
-                  {activeStep.description}
+                  {getLocalizedFeatureWallSetupChecklistCopy(activeStep).description}
                 </p>
                 {/* Action lives under the caption, not after the grid, so it sits just
                     below the copy instead of being pushed down by the taller visual. */}
-                <div className={cn('min-w-0', isEmbedded ? 'mt-8' : 'mt-7')}>
+                <div className={cn('min-w-0', isEmbedded ? 'mt-7' : 'mt-6')}>
                   <SelectedStepAction {...props} />
                 </div>
               </div>
               <SelectedStepVisual stepId={activeStep.id} />
             </div>
+            <SelectedStepFooter stepId={activeStep.id} />
           </div>
         ) : null}
       </section>

@@ -1,13 +1,15 @@
 import type { Team } from '@linear/sdk'
 import type {
-  LinearTeam,
-  LinearWorkflowState,
   LinearLabel,
   LinearMember,
+  LinearTeam,
+  LinearWorkflowState,
   LinearWorkspaceError,
   LinearWorkspaceSelection
-} from '../../shared/types'
-import { acquire, release, getClients, isAuthError, clearToken } from './client'
+} from '../../shared/linear/workspace-types'
+import { acquire, release } from './linear-request-concurrency'
+import { clearToken } from './linear-token-store'
+import { getClients, isAuthError } from './client'
 import {
   fetchAllTeamLabels,
   fetchAllTeamMembers,

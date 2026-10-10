@@ -1,3 +1,4 @@
+import { presentTerminalPerfWindow } from './terminal-perf-presentation'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -28,6 +29,11 @@ import type { HiddenPressureOutputMode } from './artificial-opencode-hidden-pres
 import { runMainPressureScenario } from './artificial-opencode-main-pressure-scenario'
 import { runRendererBackpressureRevisitScenario } from './artificial-opencode-revisit-pressure-scenario'
 import { startSyntheticOpenCodeInjection } from './artificial-opencode-synthetic-injection'
+
+test.beforeEach(async ({ electronApp, orcaPage }, testInfo) => {
+  await orcaPage.waitForLoadState('domcontentloaded')
+  await presentTerminalPerfWindow(electronApp, testInfo)
+})
 
 type TypingMeasurement = {
   latencies: number[]
@@ -125,9 +131,9 @@ const MAX_WORST_KEY_LATENCY_MS = 300
 // whichever synthetic flush it collides with, so on a CPU-starved OSS shard it
 // is environment-dominated (seen at ~3.1s) even when typing stays instant. The
 // median (75ms) is the real responsiveness guard; keep worst-under-load only as
-// a catastrophic-hang detector. Mirrors ssh-docker-relay-perf's 2s worst-key
-// tolerance and the hidden-pressure scenario's relaxed worst budget.
-const MAX_WORST_KEY_LATENCY_UNDER_LOAD_MS = 3_000
+// a catastrophic-hang detector. Leave CI headroom above the observed ~3.1s
+// scheduler overrun while still surfacing multi-second renderer stalls.
+const MAX_WORST_KEY_LATENCY_UNDER_LOAD_MS = 3_500
 // Why: the post-revisit printf is sampled while the background panes are still
 // ACK-gate-held and through a whole-buffer serialize poll, so it inherits the
 // same environment-dominated worst-case as typing under load; the unloaded
@@ -137,11 +143,11 @@ const MAX_REVISIT_LATENCY_UNDER_LOAD_MS = 3_000
 // without visible typing lag. Keep this as a smoke gate, not a CPU lottery.
 const MAX_TIMER_DRIFT_MS = 250
 // Why: under injected multi-pane redraw load the renderer event loop is
-// environment-dominated (seen at ~1s on a CPU-starved OSS shard) even when
+// environment-dominated (seen at ~3.1s on a CPU-starved OSS shard) even when
 // typing stays responsive, mirroring MAX_WORST_KEY_LATENCY_UNDER_LOAD_MS. Keep
 // this only as a catastrophic-starvation gate; the unloaded 250ms budget guards
 // the real baseline.
-const MAX_TIMER_DRIFT_UNDER_LOAD_MS = 2_500
+const MAX_TIMER_DRIFT_UNDER_LOAD_MS = 3_500
 const MAX_SCROLL_LATENCY_MS = 150
 // Why: byte-level peaks vary by drain quantum; the coarse guard matches the main-pressure scenario.
 const MAX_RENDERER_SCHEDULER_QUEUED_CHARS = 5 * 1024 * 1024
@@ -447,7 +453,7 @@ async function measureCrossWorkspaceTypingDuringHiddenLoad({
       scheduler,
       mainPressure
     )
-    expect(scheduler?.rendererDroppedBacklogs ?? 0).toBe(0)
+    expect(scheduler?.droppedBacklogCount ?? Number.POSITIVE_INFINITY).toBe(0)
     expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
     expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_UNDER_LOAD_MS)
     expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_TIMER_DRIFT_UNDER_LOAD_MS)

@@ -1,0 +1,194 @@
+import { resolveAgentPromptSubmitDelayForAgent } from '../../shared/agent-prompt-injection'
+import type { TerminalAgent } from '../../shared/terminal-agent'
+import { iterateTerminalInputChunks } from '../../shared/terminal-input'
+import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import {
+  WRITE_ACCEPTED,
+  writeRefused,
+  writeUnverifiable,
+  type WriteSettlement
+} from '../../shared/pty-write-settlement'
+
+export type RuntimeTerminalWriteOptions = {
+  inputKind: TerminalInputKind
+  signal?: AbortSignal
+  beforeWrite?: (ptyId: string) => void | Promise<void>
+  reserveWrite?: (ptyId: string) => void
+  afterWrite?: (ptyId: string) => void | Promise<void>
+  suffixFailureError?: string
+  requireWriteSettlement?: true
+}
+
+export class RuntimeTerminalWriter {
+  constructor(
+    private readonly write: (ptyId: string, data: string, inputKind: TerminalInputKind) => boolean,
+    private readonly getWriteHostPlatform: (ptyId: string) => NodeJS.Platform = () =>
+      process.platform,
+    private readonly getAgent: (ptyId: string) => TerminalAgent | null = () => null,
+    private readonly writeWithSettlement?: (
+      ptyId: string,
+      data: string,
+      inputKind: TerminalInputKind
+    ) => WriteSettlement | Promise<WriteSettlement>
+  ) {}
+
+  async writeAction(
+    ptyId: string,
+    action: { text?: string; enter?: boolean; interrupt?: boolean },
+    payload: string,
+    options: RuntimeTerminalWriteOptions
+  ): Promise<WriteSettlement | undefined> {
+    let acknowledgedPrefix = false
+    const guardedOptions = options.requireWriteSettlement
+      ? {
+          ...options,
+          afterWrite: async (id: string): Promise<void> => {
+            acknowledgedPrefix = true
+            await options.afterWrite?.(id)
+          }
+        }
+      : options
+    try {
+      const settlement = await this.writeActionWithinLimit(ptyId, action, payload, guardedOptions)
+      return acknowledgedPrefix && settlement?.outcome === 'refused'
+        ? writeUnverifiable('partial_write', true)
+        : settlement
+    } catch (error) {
+      if (acknowledgedPrefix) {
+        return writeUnverifiable('partial_write', true)
+      }
+      throw error
+    }
+  }
+
+  private async writeActionWithinLimit(
+    ptyId: string,
+    action: { text?: string; enter?: boolean; interrupt?: boolean },
+    payload: string,
+    options: RuntimeTerminalWriteOptions
+  ): Promise<WriteSettlement | undefined> {
+    // Why: direct terminal.send can carry paste-sized text from RPC/mobile
+    // clients; chunk text before PTY/ConPTY while preserving suffix separation.
+    const text = typeof action.text === 'string' ? action.text : ''
+    const hasSuffix = action.enter || action.interrupt
+    if (text) {
+      const settlement = await this.writeChunks(ptyId, text, options)
+      if (settlement && settlement.outcome !== 'accepted') {
+        return settlement
+      }
+    }
+    if (hasSuffix) {
+      const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
+      if (text) {
+        // Why: same hazard as the agent-prompt path -- Enter must not overtake text the
+        // execution host is still ingesting, and a flat 500 ms cannot cover 16 MB.
+        await waitForTerminalWriteDelay(
+          resolveAgentPromptSubmitDelayForAgent(
+            this.getWriteHostPlatform(ptyId),
+            text,
+            this.getAgent(ptyId)
+          ),
+          options.signal
+        )
+      }
+      try {
+        await options.beforeWrite?.(ptyId)
+      } catch (error) {
+        if (options.suffixFailureError) {
+          throw new Error(options.suffixFailureError)
+        }
+        throw error
+      }
+      options.reserveWrite?.(ptyId)
+      const settlement = await this.writeInput(ptyId, suffix, options)
+      if (settlement && settlement.outcome !== 'accepted') {
+        return settlement
+      }
+      await options.afterWrite?.(ptyId)
+      return settlement
+    }
+    if (text) {
+      return options.requireWriteSettlement ? WRITE_ACCEPTED : undefined
+    }
+    await options.beforeWrite?.(ptyId)
+    options.reserveWrite?.(ptyId)
+    const settlement = await this.writeInput(ptyId, payload, options)
+    if (settlement && settlement.outcome !== 'accepted') {
+      return settlement
+    }
+    await options.afterWrite?.(ptyId)
+    return settlement
+  }
+
+  async writeChunks(
+    ptyId: string,
+    text: string,
+    options: RuntimeTerminalWriteOptions
+  ): Promise<WriteSettlement | undefined> {
+    const chunks = iterateTerminalInputChunks(text)
+    let chunk = chunks.next()
+    while (!chunk.done) {
+      await options.beforeWrite?.(ptyId)
+      options.reserveWrite?.(ptyId)
+      const settlement = await this.writeInput(ptyId, chunk.value, options)
+      if (settlement && settlement.outcome !== 'accepted') {
+        return settlement
+      }
+      await options.afterWrite?.(ptyId)
+      chunk = chunks.next()
+      if (!chunk.done) {
+        await yieldBetweenTerminalInputChunks()
+      }
+    }
+    return options.requireWriteSettlement ? WRITE_ACCEPTED : undefined
+  }
+
+  private async writeInput(
+    ptyId: string,
+    data: string,
+    options: RuntimeTerminalWriteOptions
+  ): Promise<WriteSettlement | undefined> {
+    if (!options.requireWriteSettlement) {
+      if (!this.write(ptyId, data, options.inputKind)) {
+        throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
+      }
+      return undefined
+    }
+    if (!this.writeWithSettlement) {
+      return writeRefused('provider_cannot_settle')
+    }
+    try {
+      return await this.writeWithSettlement(ptyId, data, options.inputKind)
+    } catch {
+      return writeUnverifiable('provider_threw_after_handoff', true)
+    }
+  }
+}
+
+function yieldBetweenTerminalInputChunks(): Promise<void> {
+  return new Promise<void>((resolve) => setImmediate(resolve))
+}
+
+async function waitForTerminalWriteDelay(delayMs: number, signal?: AbortSignal): Promise<void> {
+  if (!signal) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs))
+    return
+  }
+  if (signal.aborted) {
+    throw new Error('request_aborted')
+  }
+  await new Promise<void>((resolve, reject) => {
+    const onAbort = (): void => {
+      clearTimeout(timer)
+      reject(new Error('request_aborted'))
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort)
+      resolve()
+    }, delayMs)
+    signal.addEventListener('abort', onAbort, { once: true })
+    if (signal.aborted) {
+      onAbort()
+    }
+  })
+}

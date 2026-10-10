@@ -1,5 +1,4 @@
 import {
-  MessageSquare,
   PanelLeftClose,
   PanelRightClose,
   Pin,
@@ -17,11 +16,12 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { useAppStore } from '../../store'
 import { formatShortcutLabel, useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 import { TerminalTabSplitMenuSection } from './TerminalTabSplitMenuSection'
+import { TabSessionSurfaceSwitchMenuItems } from './TabSessionSurfaceSwitchMenuItems'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 
 const TAB_COLORS = [
@@ -107,14 +107,18 @@ type SortableTabContextMenuProps = {
   onRenameOpen: () => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePin: () => void
-  /** True when this tab is an agent terminal that can switch to the native chat
-   *  view; gates the "Switch view" menu item. */
+  /** True when this tab is an agent terminal that can switch between the terminal
+   *  and native chat views; gates the "Switch view" menu item. Structured
+   *  sessions never qualify — they have no terminal underneath. */
   canToggleViewMode?: boolean
   /** True when the tab is currently showing the native chat view (drives the
    *  item's label/icon between "chat" and "terminal"). */
   isChatView?: boolean
   /** Toggle the tab between terminal and native chat view. */
   onToggleViewMode?: () => void
+  canSplitTerminal?: boolean
+  /** Set only for a native chat tab: the chat session it shows. */
+  structuredSessionId?: string
 }
 
 export function SortableTabContextMenu({
@@ -139,7 +143,9 @@ export function SortableTabContextMenu({
   onTogglePin,
   canToggleViewMode = false,
   isChatView = false,
-  onToggleViewMode
+  onToggleViewMode,
+  canSplitTerminal = true,
+  structuredSessionId
 }: SortableTabContextMenuProps): React.JSX.Element {
   const keybindings = useAppStore((state) => state.keybindings)
   const splitRightShortcut = formatShortcutLabel('terminal.splitRight', keybindings)
@@ -147,6 +153,9 @@ export function SortableTabContextMenu({
 
   const closeShortcut = useOptionalShortcutLabel('tab.close')
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
+  // Why: switching a tab into chat view is hidden while that toggle is removed; a tab already in
+  // chat view keeps its way back.
+  const showTerminalViewSwitch = canToggleViewMode && isChatView && onToggleViewMode !== undefined
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
@@ -167,28 +176,25 @@ export function SortableTabContextMenu({
           onActivate={onActivate}
           splitRightShortcut={splitRightShortcut}
           splitDownShortcut={splitDownShortcut}
+          showTerminalSplit={canSplitTerminal}
         />
-        {canToggleViewMode && onToggleViewMode ? (
+        {showTerminalViewSwitch ? (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={onToggleViewMode}>
-              {isChatView ? (
-                <SquareTerminal className="size-3.5 shrink-0" />
-              ) : (
-                <MessageSquare className="size-3.5 shrink-0" />
+              <SquareTerminal className="size-3.5 shrink-0" />
+              {translate(
+                'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
+                'Switch to terminal view'
               )}
-              {isChatView
-                ? translate(
-                    'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
-                    'Switch to terminal view'
-                  )
-                : translate(
-                    'components.tab.bar.SortableTabContextMenu.switchToChatView',
-                    'Switch to chat view'
-                  )}
             </DropdownMenuItem>
           </>
         ) : null}
+        <TabSessionSurfaceSwitchMenuItems
+          tab={tab}
+          structuredSessionId={structuredSessionId}
+          leadingSeparator={!showTerminalViewSwitch}
+        />
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onTogglePin}>
           {isPinned ? (

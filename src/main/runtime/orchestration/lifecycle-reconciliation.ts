@@ -1,6 +1,18 @@
 import type { OrchestrationDb } from './db'
 import type { MessageRow, WorkerReportOutcome } from './types'
-import { isEquivalentPaneKey } from '../../../shared/stable-pane-id'
+import { workerReportObservation } from './worker-report-observation'
+import { parsePaneKey } from '../../../shared/stable-pane-id'
+
+// Why: the tab half can change on pane break-out, while opaque legacy keys
+// have no safe equivalence beyond exact equality.
+function isSamePane(assigneePaneKey: string, senderPaneKey: string): boolean {
+  if (assigneePaneKey === senderPaneKey) {
+    return true
+  }
+  const assigneeLeaf = parsePaneKey(assigneePaneKey)?.leafId
+  const senderLeaf = parsePaneKey(senderPaneKey)?.leafId
+  return Boolean(assigneeLeaf && senderLeaf && assigneeLeaf === senderLeaf)
+}
 
 function hasLifecycleAuthority(
   dispatch: { assignee_handle: string | null; assignee_pane_key: string | null },
@@ -8,7 +20,7 @@ function hasLifecycleAuthority(
 ): boolean {
   if (dispatch.assignee_pane_key) {
     return Boolean(
-      msg.sender_pane_key && isEquivalentPaneKey(dispatch.assignee_pane_key, msg.sender_pane_key)
+      msg.sender_pane_key && isSamePane(dispatch.assignee_pane_key, msg.sender_pane_key)
     )
   }
   // Why: rows created before pane identity existed can only use the exact
@@ -29,7 +41,6 @@ export type LifecycleReconciliationResult =
 
 export type LifecycleRejectionCode =
   | 'sender_not_assignee'
-  | 'dispatch_capability_invalid'
   | 'invalid_payload'
   | 'missing_task_id'
   | 'missing_dispatch_id'
@@ -278,7 +289,8 @@ function reconcileWorkerDoneMessage(
     taskId,
     dispatchId,
     outcome: outcome as WorkerReportOutcome,
-    result
+    result,
+    observation: workerReportObservation(msg)
   })
   if (settlement.action === 'rejected') {
     return rejectLifecycleMessage(db, msg, settlement.code, settlement.reason, onLog)

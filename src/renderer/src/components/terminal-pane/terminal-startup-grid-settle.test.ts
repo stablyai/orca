@@ -103,7 +103,8 @@ describe('waitForStableStartupGrid', () => {
       cancelFrame: scheduler.cancelFrame,
       minFrames: 3,
       stableFrames: 2,
-      maxFrames: 4
+      maxFrames: 4,
+      maxReadinessWaitFrames: 10
     })
 
     scheduler.run(8)
@@ -113,6 +114,50 @@ describe('waitForStableStartupGrid', () => {
     scheduler.run()
 
     expect(onSettled).toHaveBeenCalledWith({ cols: 88, rows: 50 })
+  })
+
+  it('stops polling at the default cap when the external split gate never opens', () => {
+    const scheduler = createFrameScheduler()
+    const onSettled = vi.fn()
+    const measure = vi.fn(() => ({ cols: 88, rows: 50 }))
+
+    waitForStableStartupGrid({
+      isAlive: () => true,
+      isReadyToSettle: () => false,
+      measure,
+      onSettled,
+      requestFrame: scheduler.requestFrame,
+      cancelFrame: scheduler.cancelFrame
+    })
+
+    expect(scheduler.run(119)).toBe(119)
+    expect(scheduler.pending()).toBe(1)
+    expect(onSettled).not.toHaveBeenCalled()
+
+    expect(scheduler.run(10)).toBe(1)
+    expect(scheduler.pending()).toBe(0)
+    expect(measure).toHaveBeenCalledTimes(120)
+    expect(onSettled).toHaveBeenCalledWith({ cols: 88, rows: 50 })
+  })
+
+  it('settles after a bounded wait when the split gate never opens', () => {
+    const scheduler = createFrameScheduler()
+    const onSettled = vi.fn()
+    const measure = vi.fn(() => ({ cols: 180, rows: 50 }))
+
+    waitForStableStartupGrid({
+      isAlive: () => true,
+      isReadyToSettle: () => false,
+      measure,
+      onSettled,
+      requestFrame: scheduler.requestFrame,
+      cancelFrame: scheduler.cancelFrame,
+      maxReadinessWaitFrames: 4
+    })
+
+    expect(scheduler.run()).toBe(4)
+    expect(onSettled).toHaveBeenCalledWith({ cols: 180, rows: 50 })
+    expect(scheduler.pending()).toBe(0)
   })
 
   it('uses the latest usable grid at the frame cap when dimensions keep changing', () => {

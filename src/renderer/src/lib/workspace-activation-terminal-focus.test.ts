@@ -1,155 +1,235 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+// @vitest-environment happy-dom
+import type { AppState } from '@/store/types'
+import { act, createElement } from 'react'
+import { createRoot } from 'react-dom/client'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const focusTerminalTabSurfaceMock = vi.hoisted(() => vi.fn())
-const focusRuntimeTerminalSurfaceMock = vi.hoisted(() => vi.fn())
-const getStateMock = vi.hoisted(() => vi.fn())
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
-vi.mock('@/lib/focus-terminal-tab-surface', () => ({
-  focusTerminalTabSurface: focusTerminalTabSurfaceMock
+const mocks = vi.hoisted(() => ({
+  focus: vi.fn(),
+  getState: vi.fn(),
+  subscribe: vi.fn()
 }))
-
-vi.mock('@/runtime/sync-runtime-graph', () => ({
-  focusRuntimeTerminalSurface: focusRuntimeTerminalSurfaceMock
-}))
-
+vi.mock('@/runtime/sync-runtime-graph', () => ({ focusRuntimeTerminalSurface: mocks.focus }))
 vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: getStateMock
-  }
+  useAppStore: { getState: mocks.getState, subscribe: mocks.subscribe }
 }))
 
 import { queueWorkspaceActivationTerminalFocus } from './workspace-activation-terminal-focus'
 
-type FocusState = {
-  activeWorktreeId: string | null
-  activeView: string
-  activeTabType: string
-  activeTabId: string | null
-}
-
-let pendingFrame: (() => void) | null = null
-
-function setFocusState(state: FocusState): void {
-  getStateMock.mockImplementation(() => state)
-}
+let state: Pick<
+  AppState,
+  | 'activeWorktreeId'
+  | 'activeWorkspaceExecutionHostId'
+  | 'activeView'
+  | 'activeTabType'
+  | 'activeTabId'
+  | 'activeModal'
+>
+let frame: FrameRequestCallback | null
+let notifyStore: () => void
+let notifyMount: () => void
+const unsubscribe = vi.fn()
+const disconnect = vi.fn()
 
 function flushFrame(): void {
-  const frame = pendingFrame
-  pendingFrame = null
-  frame?.()
+  const callback = frame
+  frame = null
+  callback?.(0)
 }
 
-describe('queueWorkspaceActivationTerminalFocus', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    pendingFrame = null
-    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
-      pendingFrame = () => callback(0)
-      return 1
-    })
-    focusRuntimeTerminalSurfaceMock.mockReturnValue(false)
+beforeEach(() => {
+  vi.clearAllMocks()
+  vi.useFakeTimers()
+  frame = null
+  state = {
+    activeWorktreeId: 'wt-1',
+    activeWorkspaceExecutionHostId: null,
+    activeView: 'terminal',
+    activeTabType: 'terminal',
+    activeTabId: 'tab-1',
+    activeModal: 'none'
+  }
+  mocks.getState.mockImplementation(() => state)
+  mocks.subscribe.mockImplementation((listener) => {
+    notifyStore = listener
+    return unsubscribe
   })
+  mocks.focus.mockReturnValue(false)
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    frame = callback
+    return 1
+  })
+  vi.stubGlobal('cancelAnimationFrame', () => {
+    frame = null
+  })
+  vi.stubGlobal(
+    'MutationObserver',
+    class {
+      constructor(callback: () => void) {
+        notifyMount = callback
+      }
+      observe = vi.fn()
+      disconnect = disconnect
+    }
+  )
+})
+afterEach(() => {
+  document.dispatchEvent(new Event('pointerdown'))
+  document.body.replaceChildren()
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+})
 
-  it('focuses the primary tab from the activation result after the modal close frame', () => {
-    setFocusState({
-      activeWorktreeId: 'wt-1',
-      activeView: 'terminal',
-      activeTabType: 'terminal',
-      activeTabId: 'tab-1'
-    })
-
-    queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: 'tab-1' })
-
-    expect(focusRuntimeTerminalSurfaceMock).not.toHaveBeenCalled()
+describe('workspace activation focus', () => {
+  it('focuses an existing terminal after the palette closes and cleans up', () => {
+    mocks.focus.mockReturnValue(true)
+    expect(queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: 'tab-1' })).toBe(true)
+    expect(mocks.focus).not.toHaveBeenCalled()
     flushFrame()
-
-    expect(focusRuntimeTerminalSurfaceMock).toHaveBeenCalledWith('tab-1')
-    expect(focusTerminalTabSurfaceMock).toHaveBeenCalledWith('tab-1')
+    expect(mocks.focus).toHaveBeenCalledWith('tab-1', null, 'wt-1')
+    expect(unsubscribe).toHaveBeenCalledOnce()
+    expect(disconnect).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('uses the adopted active terminal tab when activation did not create one', () => {
-    setFocusState({
-      activeWorktreeId: 'wt-1',
-      activeView: 'terminal',
-      activeTabType: 'terminal',
-      activeTabId: 'tab-adopted'
-    })
-
+  it('waits for a sleeping terminal to mount instead of focusing another workspace', () => {
     queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: null })
     flushFrame()
-
-    expect(focusRuntimeTerminalSurfaceMock).toHaveBeenCalledWith('tab-adopted')
-    expect(focusTerminalTabSurfaceMock).toHaveBeenCalledWith('tab-adopted')
-  })
-
-  it('does not fall back to DOM focus when the runtime surface handled focus', () => {
-    focusRuntimeTerminalSurfaceMock.mockReturnValue(true)
-    setFocusState({
-      activeWorktreeId: 'wt-1',
-      activeView: 'terminal',
-      activeTabType: 'terminal',
-      activeTabId: 'tab-1'
-    })
-
-    queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: 'tab-1' })
+    expect(mocks.focus).toHaveBeenCalledTimes(1)
+    expect(frame).toBeNull()
+    mocks.focus.mockReturnValue(true)
+    notifyMount()
     flushFrame()
-
-    expect(focusRuntimeTerminalSurfaceMock).toHaveBeenCalledWith('tab-1')
-    expect(focusTerminalTabSurfaceMock).not.toHaveBeenCalled()
+    expect(mocks.focus).toHaveBeenLastCalledWith('tab-1', null, 'wt-1')
+    expect(unsubscribe).toHaveBeenCalledOnce()
   })
 
-  // Why: #9939 — the return value is what stops the palette from running its whole-document
-  // fallback, which would grab the worktree the user just left, now mounted but hidden.
-  it('reports that it claimed focus for a terminal destination', () => {
-    setFocusState({
-      activeWorktreeId: 'wt-1',
-      activeView: 'terminal',
-      activeTabType: 'terminal',
-      activeTabId: 'tab-adopted'
-    })
-
+  it('claims a workspace whose terminal tab is created asynchronously', () => {
+    state.activeTabId = null
     expect(queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: null })).toBe(true)
-  })
-
-  it('declines a destination whose restored surface is not a terminal', () => {
-    setFocusState({
-      activeWorktreeId: 'wt-1',
-      activeView: 'terminal',
-      activeTabType: 'browser',
-      activeTabId: 'tab-adopted'
-    })
-
-    expect(queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: null })).toBe(false)
     flushFrame()
-    expect(focusRuntimeTerminalSurfaceMock).not.toHaveBeenCalled()
-    expect(focusTerminalTabSurfaceMock).not.toHaveBeenCalled()
+    expect(mocks.focus).not.toHaveBeenCalled()
+    state.activeTabId = 'restored-tab'
+    notifyStore()
+    flushFrame()
+    mocks.focus.mockReturnValue(true)
+    notifyMount()
+    flushFrame()
+    expect(mocks.focus).toHaveBeenLastCalledWith('restored-tab', null, 'wt-1')
   })
 
-  it('declines a destination that has no terminal tab yet', () => {
-    setFocusState({
-      activeWorktreeId: 'wt-1',
-      activeView: 'terminal',
-      activeTabType: 'terminal',
-      activeTabId: null
-    })
-
-    expect(queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: null })).toBe(false)
-  })
-
-  it('does not steal focus if the user leaves the created workspace first', () => {
-    const state: FocusState = {
-      activeWorktreeId: 'wt-1',
-      activeView: 'terminal',
-      activeTabType: 'terminal',
-      activeTabId: 'tab-1'
-    }
-    setFocusState(state)
-
+  it.each([
+    { activeWorktreeId: 'wt-2' },
+    { activeWorkspaceExecutionHostId: 'ssh:second-host' },
+    { activeView: 'settings' },
+    { activeTabType: 'browser' },
+    { activeTabId: 'tab-2' },
+    { activeModal: 'worktree-palette' }
+  ] as const)('cancels when selection changes to %j during restoration', (change) => {
     queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: 'tab-1' })
-    state.activeWorktreeId = 'wt-2'
     flushFrame()
+    mocks.focus.mockClear()
+    state = { ...state, ...change }
+    notifyStore()
+    flushFrame()
+    notifyMount()
+    flushFrame()
+    expect(mocks.focus).not.toHaveBeenCalled()
+    expect(unsubscribe).toHaveBeenCalledOnce()
+  })
 
-    expect(focusRuntimeTerminalSurfaceMock).not.toHaveBeenCalled()
-    expect(focusTerminalTabSurfaceMock).not.toHaveBeenCalled()
+  it('cancels on a user click while waiting', () => {
+    queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: 'tab-1' })
+    flushFrame()
+    document.dispatchEvent(new Event('pointerdown'))
+    mocks.focus.mockClear()
+    notifyMount()
+    flushFrame()
+    expect(mocks.focus).not.toHaveBeenCalled()
+  })
+
+  it('does not steal focus from an input claimed during restoration', () => {
+    queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: 'tab-1' })
+    const input = document.createElement('input')
+    document.body.append(input)
+    input.focus()
+    notifyMount()
+    flushFrame()
+    expect(mocks.focus).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(input)
+  })
+
+  it('retains focus through composer dialog close with a previously focused editable input', async () => {
+    const previousInput = document.createElement('input')
+    const container = document.createElement('div')
+    document.body.append(previousInput, container)
+    previousInput.focus()
+    const root = createRoot(container)
+    try {
+      // The composer uses a controlled modal without a DialogTrigger or close autofocus handler.
+      await act(async () => {
+        root.render(
+          createElement(
+            Dialog,
+            { open: true },
+            createElement(
+              DialogContent,
+              { 'aria-describedby': undefined },
+              createElement(DialogTitle, null, 'New workspace'),
+              createElement('input', { 'aria-label': 'Workspace name' })
+            )
+          )
+        )
+      })
+      expect(document.activeElement?.getAttribute('aria-label')).toBe('Workspace name')
+      queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: 'tab-1' })
+      await act(async () => root.render(null))
+      await act(async () => vi.advanceTimersByTime(0))
+      expect(previousInput.isConnected).toBe(true)
+      expect(document.activeElement).not.toBe(previousInput)
+      mocks.focus.mockReturnValue(true)
+      flushFrame()
+      expect(mocks.focus).toHaveBeenCalledWith('tab-1', null, 'wt-1')
+    } finally {
+      await act(async () => root.unmount())
+    }
+  })
+
+  it('keeps the post-palette request when terminal mounting briefly takes focus', () => {
+    queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: 'tab-1' })
+    const textarea = document.createElement('textarea')
+    textarea.className = 'xterm-helper-textarea'
+    document.body.append(textarea)
+    textarea.focus()
+    textarea.blur()
+    mocks.focus.mockReturnValue(true)
+    flushFrame()
+    expect(mocks.focus).toHaveBeenCalledWith('tab-1', null, 'wt-1')
+  })
+
+  it('expires a request if restoration fails', () => {
+    queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: 'tab-1' })
+    vi.advanceTimersByTime(30_000)
+    notifyMount()
+    flushFrame()
+    expect(mocks.focus).not.toHaveBeenCalled()
+    expect(unsubscribe).toHaveBeenCalledOnce()
+  })
+
+  it('cancels the previous request when a new activation is declined', () => {
+    queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: 'tab-1' })
+    state.activeTabType = 'browser'
+    expect(queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: null })).toBe(false)
+    notifyMount()
+    flushFrame()
+    expect(mocks.focus).not.toHaveBeenCalled()
+  })
+
+  it('declines a failed activation', () => {
+    expect(queueWorkspaceActivationTerminalFocus('wt-1', false)).toBe(false)
+    expect(mocks.subscribe).not.toHaveBeenCalled()
   })
 })

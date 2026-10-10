@@ -77,6 +77,7 @@ export async function installManagedHooks(options?: {
   signal?: AbortSignal
   hostKeyFingerprint?: string
   agents?: readonly AgentHookTarget[]
+  claudeVersion?: string
 }): Promise<ManagedHookInstallSummary> {
   options?.signal?.throwIfAborted()
   // Why: empty/omitted allowlist fails closed before any home/host probes.
@@ -85,7 +86,9 @@ export async function installManagedHooks(options?: {
     return { installers: 0, errors: 0 }
   }
   const home = homedir()
-  const grokHomeDir = await resolveRelayGrokHome(home, options?.signal)
+  const grokHomeDir = agents.includes('grok')
+    ? await resolveRelayGrokHome(home, options?.signal)
+    : undefined
   options?.signal?.throwIfAborted()
   const hostIdentity = scopeManagedHookHostIdentity(
     await readManagedHookHostIdentity(),
@@ -101,7 +104,8 @@ export async function installManagedHooks(options?: {
         {
           grokHomeDir,
           signal: options?.signal,
-          agents
+          agents,
+          ...(options?.claudeVersion ? { claudeVersion: options.claudeVersion } : {})
         }
       )
       return {

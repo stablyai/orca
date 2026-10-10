@@ -1,3 +1,6 @@
+import { codebuddyHookService } from '../codebuddy/hook-service'
+import { qwenCodeHookService } from '../qwen-code/hook-service'
+import { qoderCnHookService, qoderHookService } from '../qoder/hook-service'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import type { HookInstallAgent } from '../../shared/telemetry-events'
 import { ampHookService } from '../amp/hook-service'
@@ -8,33 +11,61 @@ import { commandCodeHookService } from '../command-code/hook-service'
 import { copilotHookService } from '../copilot/hook-service'
 import { cursorHookService } from '../cursor/hook-service'
 import { devinHookService } from '../devin/hook-service'
+import { dshHookService } from '../dsh/hook-service'
 import { droidHookService } from '../droid/hook-service'
 import { geminiHookService } from '../gemini/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
+import { jcodeHookService } from '../jcode/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
+import { museHookService } from '../muse/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
+import { zcodeHookService } from '../zcode/hook-service'
 
-export type ManagedAgentHookInstaller = readonly [HookInstallAgent, () => AgentHookInstallStatus]
+// Why (#16441): Codex's installer may await a codex app-server session for its
+// hook hashes instead of blocking the main thread on spawnSync. Widening the tuple
+// keeps the other agent services synchronous — the shared loop already awaits.
+export type ManagedAgentHookInstallOptions = { userInitiated?: boolean; cliVersion?: string }
+export type ManagedAgentHookInstaller = readonly [
+  HookInstallAgent,
+  (
+    options?: ManagedAgentHookInstallOptions
+  ) => AgentHookInstallStatus | Promise<AgentHookInstallStatus>
+]
 export type ManagedAgentHookScriptRefresher = readonly [HookInstallAgent, () => Promise<void>]
-export type ManagedAgentHookRemover = readonly [HookInstallAgent, () => AgentHookInstallStatus]
+export type ManagedAgentHookRemover = readonly [
+  HookInstallAgent,
+  () => AgentHookInstallStatus | Promise<AgentHookInstallStatus>
+]
+export type ManagedAgentHookAsyncRemover = readonly [
+  HookInstallAgent,
+  () => Promise<AgentHookInstallStatus>
+]
 export type ManagedAgentHookStatusReader = readonly [HookInstallAgent, () => AgentHookInstallStatus]
 
 export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[] = [
-  ['claude', () => claudeHookService.install()],
+  ['claude', (options) => claudeHookService.install({ claudeVersion: options?.cliVersion })],
   ['openclaude', () => openClaudeHookService.install()],
-  ['codex', () => codexHookService.install()],
+  ['codex', () => codexHookService.reconcileHooks()],
   ['gemini', () => geminiHookService.install()],
+  ['qoder', () => qoderHookService.install()],
+  ['qoder-cn', () => qoderCnHookService.install()],
+  ['qwen-code', () => qwenCodeHookService.install()],
+  ['codebuddy', () => codebuddyHookService.install()],
   ['antigravity', () => antigravityHookService.install()],
   ['amp', () => ampHookService.install()],
   ['cursor', () => cursorHookService.install()],
   ['droid', () => droidHookService.install()],
   ['command-code', () => commandCodeHookService.install()],
-  ['grok', () => grokHookService.install()],
+  ['grok', (options) => grokHookService.install(options)],
   ['copilot', () => copilotHookService.install()],
   ['hermes', () => hermesHookService.install()],
   ['devin', () => devinHookService.install()],
-  ['kimi', () => kimiHookService.install()]
+  ['kimi', () => kimiHookService.install()],
+  ['muse', () => museHookService.install()],
+  ['zcode', () => zcodeHookService.install()],
+  ['dsh', () => dshHookService.install()],
+  ['jcode', () => jcodeHookService.install()]
 ]
 
 // Why: covers the shared launcher/statusline scripts under ~/.orca/agent-hooks — the files a
@@ -48,6 +79,10 @@ export const MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS: readonly ManagedAgentHookScri
   ['openclaude', () => openClaudeHookService.refreshManagedScripts()],
   ['codex', () => codexHookService.refreshManagedScripts()],
   ['gemini', () => geminiHookService.refreshManagedScripts()],
+  ['qoder', () => qoderHookService.refreshManagedScripts()],
+  ['qoder-cn', () => qoderCnHookService.refreshManagedScripts()],
+  ['qwen-code', () => qwenCodeHookService.refreshManagedScripts()],
+  ['codebuddy', () => codebuddyHookService.refreshManagedScripts()],
   ['antigravity', () => antigravityHookService.refreshManagedScripts()],
   ['cursor', () => cursorHookService.refreshManagedScripts()],
   ['droid', () => droidHookService.refreshManagedScripts()],
@@ -55,7 +90,11 @@ export const MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS: readonly ManagedAgentHookScri
   ['grok', () => grokHookService.refreshManagedScripts()],
   ['copilot', () => copilotHookService.refreshManagedScripts()],
   ['devin', () => devinHookService.refreshManagedScripts()],
-  ['kimi', () => kimiHookService.refreshManagedScripts()]
+  ['kimi', () => kimiHookService.refreshManagedScripts()],
+  ['muse', () => museHookService.refreshManagedScripts()],
+  ['zcode', () => zcodeHookService.refreshManagedScripts()],
+  ['dsh', () => dshHookService.refreshManagedScripts()],
+  ['jcode', () => jcodeHookService.refreshManagedScripts()]
 ]
 
 export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
@@ -63,6 +102,10 @@ export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
   ['openclaude', () => openClaudeHookService.remove()],
   ['codex', () => codexHookService.remove()],
   ['gemini', () => geminiHookService.remove()],
+  ['qoder', () => qoderHookService.remove()],
+  ['qoder-cn', () => qoderCnHookService.remove()],
+  ['qwen-code', () => qwenCodeHookService.remove()],
+  ['codebuddy', () => codebuddyHookService.remove()],
   ['antigravity', () => antigravityHookService.remove()],
   ['amp', () => ampHookService.remove()],
   ['cursor', () => cursorHookService.remove()],
@@ -72,7 +115,15 @@ export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
   ['copilot', () => copilotHookService.remove()],
   ['hermes', () => hermesHookService.remove()],
   ['devin', () => devinHookService.remove()],
-  ['kimi', () => kimiHookService.remove()]
+  ['kimi', () => kimiHookService.remove()],
+  ['muse', () => museHookService.remove()],
+  ['zcode', () => zcodeHookService.remove()],
+  ['dsh', () => dshHookService.remove()],
+  ['jcode', () => jcodeHookService.remove()]
+]
+
+export const MANAGED_AGENT_HOOK_ASYNC_REMOVERS: readonly ManagedAgentHookAsyncRemover[] = [
+  ['grok', () => grokHookService.removeAsync()]
 ]
 
 export const MANAGED_AGENT_HOOK_STATUS_READERS: readonly ManagedAgentHookStatusReader[] = [
@@ -80,6 +131,10 @@ export const MANAGED_AGENT_HOOK_STATUS_READERS: readonly ManagedAgentHookStatusR
   ['openclaude', () => openClaudeHookService.getStatus()],
   ['codex', () => codexHookService.getStatus()],
   ['gemini', () => geminiHookService.getStatus()],
+  ['qoder', () => qoderHookService.getStatus()],
+  ['qoder-cn', () => qoderCnHookService.getStatus()],
+  ['qwen-code', () => qwenCodeHookService.getStatus()],
+  ['codebuddy', () => codebuddyHookService.getStatus()],
   ['antigravity', () => antigravityHookService.getStatus()],
   ['amp', () => ampHookService.getStatus()],
   ['cursor', () => cursorHookService.getStatus()],
@@ -89,5 +144,9 @@ export const MANAGED_AGENT_HOOK_STATUS_READERS: readonly ManagedAgentHookStatusR
   ['copilot', () => copilotHookService.getStatus()],
   ['hermes', () => hermesHookService.getStatus()],
   ['devin', () => devinHookService.getStatus()],
-  ['kimi', () => kimiHookService.getStatus()]
+  ['kimi', () => kimiHookService.getStatus()],
+  ['muse', () => museHookService.getStatus()],
+  ['zcode', () => zcodeHookService.getStatus()],
+  ['dsh', () => dshHookService.getStatus()],
+  ['jcode', () => jcodeHookService.getStatus()]
 ]

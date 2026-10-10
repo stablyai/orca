@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { WorkspaceStatusDefinition } from '../../../src/shared/types'
+import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
 import type { MobileGroupMode, MobileSortMode } from './workspace-view-settings'
 import {
   buildSections,
@@ -22,6 +22,7 @@ export function useWorkspaceSections(args: {
   search: string
   groupMode: MobileGroupMode
   pinnedIds: Set<string>
+  showPinnedInGroups: boolean
   repoIdsByName: Map<string, string>
   repoColorsByName: Map<string, string>
   collapsedGroups: Set<string>
@@ -39,6 +40,7 @@ export function useWorkspaceSections(args: {
     search,
     groupMode,
     pinnedIds,
+    showPinnedInGroups,
     repoIdsByName,
     repoColorsByName,
     collapsedGroups,
@@ -74,7 +76,8 @@ export function useWorkspaceSections(args: {
         pinnedIds,
         repoIdsByName,
         workspaceStatuses,
-        collapsedGroups
+        collapsedGroups,
+        showPinnedInGroups
       ),
     [
       displayWorktrees,
@@ -85,7 +88,8 @@ export function useWorkspaceSections(args: {
       pinnedIds,
       repoIdsByName,
       workspaceStatuses,
-      collapsedGroups
+      collapsedGroups,
+      showPinnedInGroups
     ]
   )
 

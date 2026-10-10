@@ -22,8 +22,12 @@ export const ONBOARDING_SKIP_CONFIRMATION_COPY = {
       "It won't take long!"
     )
   },
-  skipLabel: 'Skip',
-  keepGoingLabel: 'No, keep going'
+  get skipLabel() {
+    return translate('components.onboarding.skipConfirmation.skip', 'Skip')
+  },
+  get keepGoingLabel() {
+    return translate('components.onboarding.skipConfirmation.keepGoing', 'No, keep going')
+  }
 } as const
 
 export function OnboardingSkipConfirmationDialog(props: {

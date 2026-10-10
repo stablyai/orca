@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { createTestStore, makeWorktree } from './store-test-helpers'
-import { workItemsCacheKey } from './github'
-import type { Project, ProjectHostSetup, Repo } from '../../../../shared/types'
+import { workItemsCacheKey } from '../github/cache-identity'
+import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 import { toast } from 'sonner'
 import {
   installReposRuntimeRoutingHarness,
@@ -16,7 +18,7 @@ import {
   reposCloneRemote,
   reposList,
   reposPickFolder,
-  reposRemove,
+  reposRemoveForHost,
   reposReorder,
   reposUpdate,
   runtimeEnvironmentCall,
@@ -33,6 +35,8 @@ vi.mock('sonner', () => ({
 }))
 
 installReposRuntimeRoutingHarness()
+
+const ownerOf = (repo: Repo) => ({ hostId: getRepoExecutionHostId(repo) })
 
 describe('repo slice runtime routing', () => {
   it('fetches repos from local IPC when no remote environment is active', async () => {
@@ -657,7 +661,7 @@ describe('repo slice runtime routing', () => {
       activeRepoId: remoteRepo.id
     })
 
-    await store.getState().removeProject(remoteRepo.id)
+    await store.getState().removeProject(remoteRepo.id, ownerOf(remoteRepo))
 
     expect(store.getState().repos).toEqual([])
     expect(store.getState().activeRepoId).toBeNull()
@@ -667,7 +671,7 @@ describe('repo slice runtime routing', () => {
       params: { repo: remoteRepo.id },
       timeoutMs: 15_000
     })
-    expect(reposRemove).not.toHaveBeenCalled()
+    expect(reposRemoveForHost).not.toHaveBeenCalled()
   })
 
   it('removes SSH-owned repos through local IPC even when a runtime is focused', async () => {
@@ -682,11 +686,11 @@ describe('repo slice runtime routing', () => {
       }
     })
 
-    await store.getState().removeProject(sshRepo.id)
+    await store.getState().removeProject(sshRepo.id, ownerOf(sshRepo))
 
     expect(store.getState().repos).toEqual([])
     expect(store.getState().activeRepoId).toBeNull()
-    expect(reposRemove).toHaveBeenCalledWith({ repoId: sshRepo.id })
+    expect(reposRemoveForHost).toHaveBeenCalledWith({ repoId: sshRepo.id, hostId: 'ssh:ssh-1' })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
@@ -703,11 +707,11 @@ describe('repo slice runtime routing', () => {
       }
     })
 
-    await store.getState().removeProject(sshRepo.id)
+    await store.getState().removeProject(sshRepo.id, ownerOf(sshRepo))
 
     expect(store.getState().repos).toEqual([localRepo])
     expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ [localWorktreeId]: 200 })
-    expect(reposRemove).toHaveBeenCalledWith({ repoId: sshRepo.id })
+    expect(reposRemoveForHost).toHaveBeenCalledWith({ repoId: sshRepo.id, hostId: 'ssh:ssh-1' })
   })
 
   it('drops persisted visit timestamps for removed unhydrated runtime repos', async () => {
@@ -730,7 +734,7 @@ describe('repo slice runtime routing', () => {
       }
     })
 
-    await store.getState().removeProject(remoteRepo.id)
+    await store.getState().removeProject(remoteRepo.id, ownerOf(remoteRepo))
 
     expect(store.getState().repos).toEqual([localRepo])
     expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ [localWorktreeId]: 200 })
@@ -740,7 +744,7 @@ describe('repo slice runtime routing', () => {
       params: { repo: remoteRepo.id },
       timeoutMs: 15_000
     })
-    expect(reposRemove).not.toHaveBeenCalled()
+    expect(reposRemoveForHost).not.toHaveBeenCalled()
   })
 
   it('evicts GitHub caches for removed repos using repo id and legacy path keys', async () => {
@@ -760,7 +764,7 @@ describe('repo slice runtime routing', () => {
       }
     })
 
-    await store.getState().removeProject(localRepo.id)
+    await store.getState().removeProject(localRepo.id, ownerOf(localRepo))
 
     expect(Object.keys(store.getState().workItemsCache)).toEqual([
       workItemsCacheKey('other-repo', 20, '')
@@ -792,7 +796,7 @@ describe('repo slice runtime routing', () => {
       }
     })
 
-    await store.getState().removeProject(remoteRepo.id)
+    await store.getState().removeProject(remoteRepo.id, ownerOf(remoteRepo))
 
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
@@ -838,7 +842,7 @@ describe('repo slice runtime routing', () => {
       activeWorktreeId: hiddenWorktree.id
     })
 
-    await store.getState().removeProject(localRepo.id)
+    await store.getState().removeProject(localRepo.id, ownerOf(localRepo))
 
     expect(store.getState().detectedWorktreesByRepo[localRepo.id]).toBeUndefined()
     expect(store.getState().tabsByWorktree[hiddenWorktree.id]).toBeUndefined()

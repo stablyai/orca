@@ -1,6 +1,6 @@
 import { getTaskPresetQuery } from '../../../shared/task-preset-query'
 import { parseTaskQuery } from '../../../shared/task-query'
-import type { TaskViewPresetId } from '../../../shared/types'
+import type { TaskViewPresetId } from '../../../shared/ui-chrome-types'
 import type { GitHubTaskKind } from '@/components/task-page-localized-options'
 
 export function isPRFocusedTaskView(preset: TaskViewPresetId | null, query: string): boolean {

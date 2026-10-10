@@ -1,5 +1,5 @@
 import type { ITerminalInitOnlyOptions, ITerminalOptions, ITheme } from '@xterm/xterm'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
@@ -10,7 +10,7 @@ import {
   resolveTerminalCursorInactiveStyle
 } from '@/lib/pane-manager/pane-terminal-options'
 import { buildLocalConptyTerminalOptions } from '@/lib/pane-manager/windows-pty-compatibility'
-import { buildFontFamily } from '@/components/terminal-pane/layout-serialization'
+import { buildFontFamily } from '@/lib/monospace-font-family'
 import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
 
 /** Options a live settings change can write onto an open preview terminal. */
@@ -19,7 +19,10 @@ export function buildPreviewAppearanceOptions(
   macOptionIsMeta: boolean
 ): Partial<ITerminalOptions> {
   const cursorStyle = settings?.terminalCursorStyle ?? 'block'
-  const fontWeights = resolveTerminalFontWeights(settings?.terminalFontWeight)
+  const fontWeights = resolveTerminalFontWeights(
+    settings?.terminalFontWeight,
+    settings?.terminalFontWeightBold
+  )
   return {
     fontSize: settings?.terminalFontSize ?? 14,
     fontFamily: buildFontFamily(settings?.terminalFontFamily ?? ''),
@@ -42,6 +45,13 @@ export function buildPreviewAppearanceOptions(
   }
 }
 
+// Why: local ConPTY CLIs read the advertisement but can't decode CSI-u (#2434); mirror the pane's withhold.
+export function previewAdvertisesKittyKeyboard(
+  terminalInput: DashboardCardTerminalInput | null
+): boolean {
+  return !terminalInput || terminalInput.kittyKeyboardAdvertised
+}
+
 /**
  * Full option set for the preview's xterm: the same defaults, user appearance,
  * and host compatibility flags a pane resolves, so the agent's TUI negotiates
@@ -62,10 +72,9 @@ export function buildPreviewTerminalOptions(args: {
     ...(args.terminalInput?.localWindowsConpty
       ? buildLocalConptyTerminalOptions(args.terminalInput.osRelease)
       : {}),
-    // Why: local ConPTY CLIs read the advertisement but can't decode CSI-u (#2434); mirror the pane's withhold.
-    ...(args.terminalInput && !args.terminalInput.kittyKeyboardAdvertised
-      ? { vtExtensions: { kittyKeyboard: false } }
-      : {})
+    ...(previewAdvertisesKittyKeyboard(args.terminalInput)
+      ? {}
+      : { vtExtensions: { kittyKeyboard: false } })
   }
   return {
     ...buildDefaultTerminalOptions(),
@@ -77,7 +86,8 @@ export function buildPreviewTerminalOptions(args: {
     theme: args.theme ?? undefined,
     minimumContrastRatio: resolveTerminalMinimumContrastRatio(
       args.theme?.background,
-      args.themeMode
+      args.themeMode,
+      args.settings?.terminalMinimumContrastRatio
     )
   }
 }

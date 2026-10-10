@@ -5,7 +5,7 @@ import {
   refreshGitStatusForWorktreeStrict,
   type GitStatusRefreshDeps
 } from './git-status-refresh'
-import type { GitStatusResult, GitUpstreamStatus } from '../../../../shared/types'
+import type { GitStatusResult, GitUpstreamStatus } from '../../../../shared/git-status-types'
 
 function makeDeps(): GitStatusRefreshDeps {
   return {
@@ -63,7 +63,8 @@ describe('refreshGitStatusForWorktree', () => {
 
     expect(gitStatus).toHaveBeenCalledWith({
       worktreePath: '/repo',
-      connectionId: 'ssh-1'
+      connectionId: 'ssh-1',
+      admissionTier: 'status'
     })
     expect(deps.setGitStatus).toHaveBeenCalledWith('wt-1', status)
     expect(deps.updateWorktreeGitIdentity).toHaveBeenCalledWith('wt-1', {
@@ -132,29 +133,6 @@ describe('refreshGitStatusForWorktree', () => {
     })
   })
 
-  it('leaves ignored-file discovery to the File Explorer instead of status polling', async () => {
-    const status: GitStatusResult = {
-      entries: [],
-      conflictOperation: 'unknown'
-    }
-    const gitStatus = vi.fn().mockResolvedValue(status)
-    vi.stubGlobal('window', { api: { git: { status: gitStatus } } })
-    const deps = makeDeps()
-
-    await refreshGitStatusForWorktree({
-      settings: { activeRuntimeEnvironmentId: null },
-      worktreeId: 'wt-3',
-      worktreePath: '/repo',
-      deps
-    })
-
-    expect(gitStatus).toHaveBeenCalledWith({
-      worktreePath: '/repo',
-      connectionId: undefined
-    })
-    expect(deps.setGitStatus).toHaveBeenCalledWith('wt-3', status)
-  })
-
   it('bypasses automatic no-upstream backoff only for strict refreshes', async () => {
     const status: GitStatusResult = {
       entries: [],
@@ -178,11 +156,13 @@ describe('refreshGitStatusForWorktree', () => {
 
     expect(gitStatus).toHaveBeenNthCalledWith(1, {
       worktreePath: '/repo',
-      connectionId: undefined
+      connectionId: undefined,
+      admissionTier: 'status'
     })
     expect(gitStatus).toHaveBeenNthCalledWith(2, {
       worktreePath: '/repo',
       connectionId: undefined,
+      admissionTier: 'interactive',
       bypassEffectiveUpstreamNegativeCache: true
     })
   })

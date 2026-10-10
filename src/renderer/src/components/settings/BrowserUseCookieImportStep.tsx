@@ -4,6 +4,7 @@ import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
 import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
 import { BrowserCookieImportDisclosure } from '../BrowserCookieImportDisclosure'
+import { BrowserCookieImportMachineNotice } from '../BrowserCookieImportMachineNotice'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,7 +25,7 @@ import { translate } from '@/i18n/i18n'
 type BrowserUseCookieImportStepProps = {
   cookiesImported: boolean
   isImportingDefault: boolean
-  step3Blocked: boolean
+  disabled: boolean
   sourceLabel: string | null
   onConfigureMoreBrowsers?: () => void
 }
@@ -32,7 +33,7 @@ type BrowserUseCookieImportStepProps = {
 export function BrowserUseCookieImportStep({
   cookiesImported,
   isImportingDefault,
-  step3Blocked,
+  disabled,
   sourceLabel,
   onConfigureMoreBrowsers
 }: BrowserUseCookieImportStepProps): React.JSX.Element {
@@ -60,7 +61,7 @@ export function BrowserUseCookieImportStep({
             value2: browserProfile ? ` (${browserProfile})` : ''
           }
         ),
-        result.executionHostLabel
+        result
       )
     } else {
       toast.error(result.reason)
@@ -77,7 +78,7 @@ export function BrowserUseCookieImportStep({
           'Imported {{value0}} cookies from file.',
           { value0: result.summary.importedCookies }
         ),
-        result.executionHostLabel
+        result
       )
     } else if (result.reason !== 'canceled') {
       toast.error(result.reason)
@@ -94,15 +95,12 @@ export function BrowserUseCookieImportStep({
         'auto.components.settings.BrowserUsePane.af8c83ed61',
         'Import cookies from Chrome, Edge, or other browsers so agents can reuse your logins.'
       )}
-      keywords={getBrowserUsePaneSearchEntries()[2].keywords}
-      className={cn(
-        'rounded-xl border border-border/60 bg-card/50 p-4',
-        step3Blocked && 'opacity-60'
-      )}
+      keywords={getBrowserUsePaneSearchEntries()[1].keywords}
+      className={cn('rounded-xl border border-border/60 bg-card/50 p-4', disabled && 'opacity-60')}
     >
       <div className="flex items-start gap-3">
         <StepBadge
-          index={3}
+          index={2}
           state={cookiesImported ? 'done' : isImportingDefault ? 'in-progress' : 'pending'}
         />
         <div className="min-w-0 flex-1 space-y-1">
@@ -165,6 +163,7 @@ export function BrowserUseCookieImportStep({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <BrowserCookieImportMachineNotice />
             {detectedBrowsers.map((browser) =>
               browser.profiles.length > 1 ? (
                 <DropdownMenuSub key={browser.family}>

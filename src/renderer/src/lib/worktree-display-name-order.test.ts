@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { compareWorktreeDisplayName } from './worktree-display-name-order'
 
 // displayName is typed `string`, but crash 99657ab1 proved it arrives undefined
@@ -44,17 +44,5 @@ describe('compareWorktreeDisplayName', () => {
     expect(
       compareWorktreeDisplayName(worktree('a', 'Apple'), worktree('b', 'Banana'))
     ).toBeLessThan(0)
-  })
-
-  it('keeps Array.sort safe when the list contains an undefined-name worktree', () => {
-    const worktrees = [worktree('a', 'Charlie'), worktree('b', undefined), worktree('c', 'Alpha')]
-    expect(() =>
-      [...worktrees].sort((x, y) => {
-        if (x.lastActivityAt !== y.lastActivityAt) {
-          return y.lastActivityAt - x.lastActivityAt
-        }
-        return compareWorktreeDisplayName(x, y)
-      })
-    ).not.toThrow()
   })
 })

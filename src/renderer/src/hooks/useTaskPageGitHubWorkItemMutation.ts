@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { ParsedTaskQuery } from '../../../shared/task-query'
-import type { GitHubWorkItem } from '../../../shared/types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { useAppStore } from '@/store'
 import {

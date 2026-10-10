@@ -5,7 +5,7 @@ import {
   isProjectRemoteIdentityPending
 } from '../../../shared/project-host-setup-projection'
 import { isGitRepoKind } from '../../../shared/repo-kind'
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
 
 export type TaskProjectPickerGroup = {
   projectKey: string
@@ -34,13 +34,6 @@ export function getDefaultTaskRepoSelection(repos: readonly Repo[]): Set<string>
     }
   }
   return new Set([...selectedByProject.values()].map((repo) => repo.id))
-}
-
-export function getTaskProjectPickerRepos(
-  repos: readonly Repo[],
-  preferredSelection: ReadonlySet<string> = new Set()
-): Repo[] {
-  return getTaskProjectPickerGroups(repos, preferredSelection).map((group) => group.repo)
 }
 
 export function getTaskProjectPickerGroups(

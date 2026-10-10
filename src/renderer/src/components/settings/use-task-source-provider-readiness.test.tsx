@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TaskProvider } from '../../../../shared/types'
+import type { TaskProvider } from '../../../../shared/task-providers'
 import type { TaskProviderReadiness } from './task-source-setup-state'
 import { useTaskSourceProviderReadiness } from './use-task-source-provider-readiness'
 
@@ -13,8 +13,10 @@ const mocks = vi.hoisted(() => ({
     installed: false,
     loading: false,
     settled: true,
+    installedUnverifiable: false,
     error: null,
     skills: [],
+    sources: [],
     refresh: vi.fn()
   }
 }))
@@ -91,8 +93,10 @@ beforeEach(() => {
     installed: true,
     loading: false,
     settled: true,
+    installedUnverifiable: false,
     error: null,
     skills: [],
+    sources: [],
     refresh: vi.fn()
   }
 })
@@ -168,5 +172,13 @@ describe('useTaskSourceProviderReadiness', () => {
 
     await renderProbe(['github', 'linear', 'jira'])
     expect(latest?.jira.visible).toBe(true)
+  })
+
+  it('carries an unverifiable skill scan through to Linear readiness', async () => {
+    mocks.skill = { ...mocks.skill, installed: false, installedUnverifiable: true }
+    await renderProbe()
+
+    expect(latest?.linear.skillInstalled).toBe(false)
+    expect(latest?.linear.skillUnverifiable).toBe(true)
   })
 })

@@ -211,7 +211,10 @@ describe('restored subagent liveness sweep', () => {
     }
   })
 
-  it('does not probe a hydrated Claude pane without restored rows', async () => {
+  it('reaps a hydrated non-terminal row with no roster at all (STA-4612)', async () => {
+    // A restored roster is only one shape of stranded claim. A lead row left `working` with no
+    // children has nothing left to retire it — no child event, no inventory, no hook — so it holds
+    // the pane working for good and locks its agent out of hibernation.
     const server = await restartWithInFlightSubagent({ subagents: [] })
     const probeLiveLocalPty = vi.fn(() => false)
     try {
@@ -220,9 +223,42 @@ describe('restored subagent liveness sweep', () => {
           probeLiveLocalPty,
           persistedPtyIdByPaneKey: { [PANE]: PTY }
         })
+      ).toBe(1)
+
+      expect(probeLiveLocalPty).toHaveBeenCalled()
+      expect(paneStatus(server).state).toBe('missing')
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('keeps a hydrated non-terminal row with no roster when its PTY is still live', async () => {
+    const server = await restartWithInFlightSubagent({ subagents: [] })
+    try {
+      expect(
+        await sweepWith(server, {
+          probeLiveLocalPty: () => true,
+          persistedPtyIdByPaneKey: { [PANE]: PTY }
+        })
       ).toBe(0)
 
-      expect(probeLiveLocalPty).not.toHaveBeenCalled()
+      expect(paneStatus(server).state).toBe('working')
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('keeps a hydrated non-terminal row with no roster when the probe cannot prove either state', async () => {
+    const server = await restartWithInFlightSubagent({ subagents: [] })
+    try {
+      expect(
+        await sweepWith(server, {
+          probeLiveLocalPty: () => null,
+          persistedPtyIdByPaneKey: { [PANE]: PTY }
+        })
+      ).toBe(0)
+
+      expect(paneStatus(server).state).toBe('working')
     } finally {
       server.stop()
     }

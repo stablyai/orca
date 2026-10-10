@@ -65,7 +65,18 @@ export async function settleGitBranchLineTotalWithinSoftDeadline(input: {
  * OID parsed as a rev even if a path of the same name exists.
  */
 export function buildGitBranchLineTotalDiffArgs(mergeBase: string): string[] {
-  return ['-c', 'core.quotePath=false', 'diff', '-z', '--numstat', '-M', mergeBase, '--']
+  return [
+    '-c',
+    'core.quotePath=false',
+    '-c',
+    'diff.autoRefreshIndex=false',
+    'diff',
+    '-z',
+    '--numstat',
+    '-M',
+    mergeBase,
+    '--'
+  ]
 }
 
 /**
@@ -183,6 +194,8 @@ export function invalidateGitBranchLineTotalInFlight(): void {
  */
 export async function computeGitBranchLineTotal(input: {
   worktreePath: string
+  /** Spelling for the direct untracked-file reads when the git host's differs; defaults to worktreePath. */
+  filesystemWorktreePath?: string
   /** Distinguishes hosts that can map the same path to different filesystems (WSL distro, relay). */
   hostKey: string
   mergeBase: string
@@ -227,7 +240,11 @@ export async function computeGitBranchLineTotal(input: {
     // Untracked files are invisible to a ranged diff but already render as
     // CHANGES rows, so they are added on top. Stat-keyed caching inside makes
     // this near-free when attachLineStats just read the same paths.
-    collectUntrackedAdditions(input.worktreePath, input.untrackedPaths, input.signal)
+    collectUntrackedAdditions(
+      input.filesystemWorktreePath ?? input.worktreePath,
+      input.untrackedPaths,
+      input.signal
+    )
   ])
   if (tracked === null) {
     return undefined

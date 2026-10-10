@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import type { GitHubWorkItem, GitLabWorkItem, LinearIssue } from '../../../src/shared/types'
 import {
   buildGitHubLinkedWorkItem,
   buildGitLabLinkedWorkItem,
@@ -238,6 +237,3 @@ describe('resolveComposerBranchPick', () => {
     expect(pick.base.branchNameOverride).toBeUndefined()
   })
 })
-
-// Keep the exported type aliases referenced so the module surface stays covered.
-export type _Ref = [GitHubWorkItem, GitLabWorkItem, LinearIssue]

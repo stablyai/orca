@@ -1,3 +1,5 @@
+import type { ExecutionHostId } from '../../shared/execution-host'
+import { hostedReviewSshConnectionId } from '../source-control/hosted-review-execution-host'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { CreateHostedReviewInput, CreateHostedReviewResult } from '../../shared/hosted-review'
@@ -16,7 +18,7 @@ import { getProjectSlug } from './client'
 import {
   acquire,
   glabExecFileAsync,
-  glabHostnameArgs,
+  glabHostEnvOptions,
   glabRepoExecOptions,
   release
 } from './gl-utils'
@@ -124,7 +126,7 @@ async function readMergeRequestTemplate(
 export async function createGitLabMergeRequest(
   repoPath: string,
   input: CreateHostedReviewInput,
-  connectionId?: string | null,
+  executionHostId: ExecutionHostId,
   options: HostedReviewExecutionOptions = {}
 ): Promise<CreateHostedReviewResult> {
   if (input.provider !== 'gitlab') {
@@ -134,6 +136,9 @@ export async function createGitLabMergeRequest(
       error: 'Creating reviews for this provider is not supported yet.'
     }
   }
+
+  // `glab` runs on this client whatever the host; only the git reads under it are routed.
+  const connectionId = hostedReviewSshConnectionId(executionHostId)
 
   const projectRef = await getProjectSlug(
     repoPath,
@@ -183,8 +188,7 @@ export async function createGitLabMergeRequest(
       title,
       '--description',
       body,
-      '--yes',
-      ...glabHostnameArgs(projectRef, connectionId)
+      '--yes'
     ]
     if (head) {
       createArgs.push('--source-branch', head)
@@ -196,6 +200,7 @@ export async function createGitLabMergeRequest(
       const { stdout } = await glabExecFileAsync(createArgs, {
         ...glabRepoExecOptions(repoPath, connectionId),
         ...(connectionId ? {} : getHostedReviewLocalGitOptions(options)),
+        ...glabHostEnvOptions(projectRef, connectionId),
         timeout: 60_000,
         idempotent: false
       })

@@ -1,5 +1,6 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import type { Tab, TabContentType, TopLevelView } from '../../../../shared/types'
+import type { Tab, TabContentType } from '../../../../shared/tab-types'
+import type { TopLevelView } from '../../../../shared/ui-chrome-types'
 
 export const EDITOR_TAB_CONTENT_TYPES = new Set<TabContentType>([
   'editor',

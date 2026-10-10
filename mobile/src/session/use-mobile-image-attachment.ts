@@ -1,12 +1,12 @@
 import { useCallback, useState } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
-import { attachMobileImageToTerminal } from './mobile-image-attachment'
+import { useMediaPicker } from '../platform/media-picker'
 import {
   ImageLibraryPermissionError,
-  pickMobileImage,
   type MobileImageSource
-} from './mobile-image-source-picker'
+} from '../platform/media-picker-contract'
+import { attachMobileImageToTerminal } from './mobile-image-attachment'
 
 type CurrentRef<T> = {
   readonly current: T
@@ -15,6 +15,7 @@ type CurrentRef<T> = {
 type ShowToast = (message: string, durationMs?: number) => void
 
 type UseMobileImageAttachmentArgs = {
+  readonly agent?: string | null
   readonly client: RpcClient | null
   readonly activeHandle: string | null
   readonly canSend: boolean
@@ -40,6 +41,7 @@ function getErrorMessage(error: unknown): string {
 
 export function useMobileImageAttachment({
   client,
+  agent,
   activeHandle,
   canSend,
   connState,
@@ -51,6 +53,7 @@ export function useMobileImageAttachment({
   beforeTerminalSend
 }: UseMobileImageAttachmentArgs): MobileImageAttachment {
   const [isAttaching, setIsAttaching] = useState(false)
+  const picker = useMediaPicker()
   const attachImage = useCallback(
     async (source: MobileImageSource): Promise<void> => {
       if (!client || !activeHandle || !canSend) {
@@ -59,10 +62,11 @@ export function useMobileImageAttachment({
       try {
         const sent = await attachMobileImageToTerminal(source, {
           client,
+          agent,
           terminal: activeHandle,
           deviceToken: deviceTokenRef.current,
           getConnectionId: getActiveWorktreeConnectionId,
-          pickImage: pickMobileImage,
+          pickImage: picker.pickImage,
           onUploadStart: () => setIsAttaching(true),
           beforeTerminalSend
         })
@@ -91,6 +95,7 @@ export function useMobileImageAttachment({
     },
     [
       activeHandle,
+      agent,
       beforeTerminalSend,
       canSend,
       client,
@@ -99,6 +104,7 @@ export function useMobileImageAttachment({
       getActiveWorktreeConnectionId,
       onError,
       onSuccess,
+      picker,
       showToast
     ]
   )

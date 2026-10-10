@@ -11,7 +11,10 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
 }))
 
 import { readNativeChatTranscript } from './transcript-reader'
-import { WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS } from './wsl-transcript-fs-gate'
+import {
+  resetWslTranscriptFsGateForTests,
+  WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS
+} from './wsl-transcript-fs-gate'
 
 const SLOW_MESSAGE =
   'WSL transcript files are temporarily unavailable because filesystem access is taking too long. Try again shortly or restart Orca if the issue continues.'
@@ -43,6 +46,7 @@ function handleServing(body: Buffer, delayMs = 0) {
 }
 
 beforeEach(() => {
+  resetWslTranscriptFsGateForTests()
   mocks.open.mockReset()
 })
 

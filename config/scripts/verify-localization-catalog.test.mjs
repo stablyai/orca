@@ -51,6 +51,20 @@ describe('verify-localization-catalog', () => {
     expect(readJson(path.join(localesDir, 'es.json'))).toEqual({})
   })
 
+  it('bootstraps keys referenced only through translateSearchKeyword', async () => {
+    const { root, localesDir } = makeProject({
+      sourceText:
+        "import { translateSearchKeyword } from '@/components/settings/settings-search-keywords'\nexport const keywords = translateSearchKeyword('auto.components.settings.example.search.scroll', 'scroll')\n"
+    })
+
+    await expect(verifyLocalizationCatalog(root, { fix: false })).resolves.toBe(1)
+    await expect(verifyLocalizationCatalog(root, { fix: true })).resolves.toBe(0)
+
+    expect(readJson(path.join(localesDir, 'en.json'))).toEqual({
+      auto: { components: { settings: { example: { search: { scroll: 'scroll' } } } } }
+    })
+  })
+
   it('never overwrites mismatched translations or removes target-only entries', async () => {
     const { root, localesDir } = makeProject({
       sourceText:

@@ -1,29 +1,37 @@
 import type { ColdRestoreInfo } from './terminal-history-cold-restore-info'
-import { COLD_RESTORE_SEED_MODE_RESET } from '../../shared/terminal-mode-reset-profiles'
+import {
+  PROCESS_BOUNDARY_GROUND,
+  RESET_GRAPHIC_RENDITION
+} from '../../shared/terminal-mode-reset-profiles'
 
-// Why the reset belongs in the seed and not only at replay: the recovered stream
-// re-arms mouse reporting from two independent sources (rehydrateSequences AND
+// Why the ground belongs in the seed and not only at replay: the recovered stream
+// re-arms input modes from two independent sources (rehydrateSequences AND
 // SerializeAddon's own mode trailer inside snapshotAnsi), and the seed is what
 // feeds the daemon's emulator — so without it every downstream consumer that
-// re-serializes from that emulator, including mobile, inherits the dead TUI's
-// modes no matter which profile the desktop renderer applies. See
-// COLD_RESTORE_SEED_MODE_RESET for the precondition and the choice of bits.
+// re-serializes from that emulator, including mobile, inherits the dead process's
+// modes no matter which profile the desktop renderer applies.
 
 export function getRecoveredHistorySeedSegments(restoreInfo: ColdRestoreInfo): readonly string[] {
   if (restoreInfo.modes.alternateScreen) {
     const normalBuffer = restoreInfo.scrollbackAnsi || restoreInfo.snapshotAnsi
-    return normalBuffer ? [normalBuffer, COLD_RESTORE_SEED_MODE_RESET] : []
+    return normalBuffer
+      ? [`${RESET_GRAPHIC_RENDITION}${normalBuffer}`, PROCESS_BOUNDARY_GROUND]
+      : []
   }
   const recovered = [restoreInfo.rehydrateSequences, restoreInfo.snapshotAnsi].filter(
     (segment) => segment.length > 0
   )
-  const escapeTail = restoreInfo.pendingEscapeTailAnsi
   // Why: an empty list is daemon-pty-adapter's "nothing to recover" sentinel (it gates
-  // the probe-race respawn and the history re-anchor), so the reset must never pad it.
-  if (recovered.length === 0 && !escapeTail) {
+  // the probe-race respawn and the history re-anchor), so the ground must never pad it.
+  if (recovered.length === 0) {
     return []
   }
-  // Why after the snapshot: it must undo the snapshot's own mode trailer, and
-  // pendingEscapeTailAnsi is a torn escape that has to stay at the very end.
-  return [...recovered, COLD_RESTORE_SEED_MODE_RESET, ...(escapeTail ? [escapeTail] : [])]
+  // Why no pendingEscapeTailAnsi: every seed starts a new process, whose first bytes
+  // must not complete an escape the dead one left half-written.
+  const [firstRecovered, ...remainingRecovered] = recovered
+  return [
+    `${RESET_GRAPHIC_RENDITION}${firstRecovered}`,
+    ...remainingRecovered,
+    PROCESS_BOUNDARY_GROUND
+  ]
 }

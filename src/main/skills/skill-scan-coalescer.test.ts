@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SkillScanCoalescer } from './skill-scan-coalescer'
+import { SkillScanCoalescer, SkillScanShedError } from './skill-scan-coalescer'
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
@@ -195,13 +195,21 @@ describe('SkillScanCoalescer', () => {
     const coalescer = new SkillScanCoalescer<number>(8, () => now)
     const wedged = deferred<number>()
     let runs = 0
-    const task = (): Promise<number> => {
+    // Mirrors `findSkillFiles`, which throws once its signal aborts.
+    const task = (signal: AbortSignal): Promise<number> => {
       runs += 1
       // The first scan models a root on a stalled mount: its readdir never settles.
-      return runs === 1 ? wedged.promise : Promise.resolve(runs)
+      return runs === 1
+        ? Promise.race([
+            wedged.promise,
+            new Promise<number>((_resolve, reject) => {
+              signal.addEventListener('abort', () => reject(signal.reason))
+            })
+          ])
+        : Promise.resolve(runs)
     }
 
-    void coalescer.run('root', { ttlMs: 10_000 }, task)
+    void coalescer.run('root', { ttlMs: 10_000 }, task).catch(() => undefined)
     now = 1_100
     // Still young enough to share.
     const joined = coalescer.run('root', { ttlMs: 10_000 }, task)
@@ -213,10 +221,77 @@ describe('SkillScanCoalescer', () => {
     })
     expect(runs).toBe(2)
 
-    // The wedged callers still receive its eventual value rather than being orphaned...
+    // Callers of the abandoned scan are released by its abort rather than left
+    // waiting on a mount that may never answer.
+    await expect(joined).rejects.toThrow()
+    // It must not overwrite the replacement's newer result with a fresh ttl.
     wedged.resolve(99)
-    expect((await joined).value).toBe(99)
-    // ...but it must not overwrite the replacement's newer result with a fresh ttl.
     expect(await coalescer.run('root', { ttlMs: 10_000 }, task)).toEqual({ value: 2, cached: true })
+  })
+
+  it('aborts the scan it abandons so its walk stops doing filesystem work', async () => {
+    let now = 1_000
+    const coalescer = new SkillScanCoalescer<number>(8, () => now)
+    const signals: AbortSignal[] = []
+    const task = (signal: AbortSignal): Promise<number> => {
+      signals.push(signal)
+      return signals.length === 1 ? new Promise<number>(() => {}) : Promise.resolve(2)
+    }
+
+    void coalescer.run('root', { ttlMs: 10_000 }, task).catch(() => undefined)
+    expect(signals[0].aborted).toBe(false)
+    now = 40_000
+    await coalescer.run('root', { ttlMs: 10_000 }, task)
+
+    expect(signals[0].aborted).toBe(true)
+    // The replacement owns the key now, so it must not be aborted alongside it.
+    expect(signals[1].aborted).toBe(false)
+  })
+
+  // Why not abort here: on a healthy root the superseded scan is about to finish and
+  // its callers still want an answer; the publish fence already stops the stale write.
+  it('does not abort the scan a refresh supersedes', async () => {
+    const coalescer = new SkillScanCoalescer<string>(8)
+    const slowScan = deferred<string>()
+    const signals: AbortSignal[] = []
+
+    const inFlight = coalescer.run('root', { ttlMs: 10_000 }, (signal) => {
+      signals.push(signal)
+      return slowScan.promise
+    })
+    await coalescer.run('root', { ttlMs: 10_000, refresh: true }, async () => 'after-install')
+
+    expect(signals[0].aborted).toBe(false)
+    slowScan.resolve('before-install')
+    expect((await inFlight).value).toBe('before-install')
+  })
+
+  // The walk is wedged inside a syscall here, so aborting it never settles it —
+  // the case the budget exists for. A walk that does return on abort frees its
+  // slot again, which is why the budget is not a permanent ceiling.
+  it('sheds a replacement once too many abandoned scans are still live', async () => {
+    let now = 1_000
+    const coalescer = new SkillScanCoalescer<number>(64, () => now)
+    const task = (): Promise<number> => new Promise<number>(() => {})
+    const keys = Array.from({ length: 17 }, (_unused, index) => `root-${index}`)
+
+    // Every root on one dead mount wedges, then each is abandoned for age when a
+    // later caller arrives and tries to replace it.
+    for (const key of keys) {
+      void coalescer.run(key, { ttlMs: 10_000 }, task).catch(() => undefined)
+    }
+    now = 40_000
+    const shed: string[] = []
+    for (const key of keys) {
+      void coalescer.run(key, { ttlMs: 10_000 }, task).catch((error: unknown) => {
+        if (error instanceof SkillScanShedError) {
+          shed.push(key)
+        }
+      })
+    }
+    await new Promise((resolve) => setImmediate(resolve))
+
+    // 16 replacements are admitted; past that no further walk is started.
+    expect(shed).toEqual(['root-16'])
   })
 })

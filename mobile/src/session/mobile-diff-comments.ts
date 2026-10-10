@@ -1,4 +1,4 @@
-import type { DiffComment, DiffReviewScope } from '../../../src/shared/types'
+import type { DiffComment, DiffReviewScope } from '../../../src/shared/diff-comment-types'
 import { formatDiffComment, formatDiffComments } from '../../../src/shared/diff-comments-format'
 
 export { formatDiffComment, formatDiffComments }
@@ -141,4 +141,12 @@ export function removeDeliveredMobileDiffComments(
     const snapshot = deliveredById.get(comment.id)
     return !snapshot || !deliveredCommentMatches(comment, snapshot)
   })
+}
+
+/** Unsent notes that no new-agent send is still carrying. */
+export function sendableMobileDiffComments(
+  comments: readonly DiffComment[],
+  sendingIds: ReadonlySet<string>
+): DiffComment[] {
+  return comments.filter((comment) => !comment.sentAt && !sendingIds.has(comment.id))
 }

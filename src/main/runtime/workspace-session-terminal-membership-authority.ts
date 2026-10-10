@@ -1,11 +1,10 @@
+import type { Tab, TabGroup } from '../../shared/tab-types'
 import type {
-  Tab,
-  TabGroup,
   TerminalLayoutSnapshot,
-  TerminalPaneLayoutNode,
-  WorkspaceSessionState
-} from '../../shared/types'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
+  TerminalPaneLayoutNode
+} from '../../shared/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { pruneTabGroupLayoutAfterRetirement } from './mobile-session-terminal-retirement'
 
 function collectLeafIds(node: TerminalPaneLayoutNode | null, ids: Set<string>): void {
@@ -70,7 +69,7 @@ function rebaseUnifiedTabs(
     (tab) => tab.contentType !== 'terminal' || terminalUnifiedTabMatches(tab, terminalTabIds)
   )
   const representedTerminalIds = new Set(
-    result.filter((tab) => tab.contentType === 'terminal').flatMap((tab) => [tab.id, tab.entityId])
+    result.flatMap((tab) => (tab.contentType === 'terminal' ? [tab.id, tab.entityId] : []))
   )
   for (const tab of current) {
     if (
@@ -93,17 +92,18 @@ function rebaseTabGroups(
     if (tabOrder.length === 0) {
       return []
     }
+    const tabIds = new Set(tabOrder)
     const activeTabId =
-      group.activeTabId && tabOrder.includes(group.activeTabId)
-        ? group.activeTabId
-        : (tabOrder[0] ?? null)
-    const recentTabIds = group.recentTabIds?.filter((tabId) => tabOrder.includes(tabId))
+      group.activeTabId && tabIds.has(group.activeTabId) ? group.activeTabId : (tabOrder[0] ?? null)
+    const recentTabIds = group.recentTabIds?.filter((tabId) => tabIds.has(tabId))
     return [
       {
         ...group,
         tabOrder,
         activeTabId,
-        ...(recentTabIds && recentTabIds.length > 0 ? { recentTabIds } : {})
+        // Why assigned even when it filters to empty: omitting the key lets `...group`
+        // re-introduce the unfiltered array, persisting ids for tabs the host dropped.
+        ...(group.recentTabIds ? { recentTabIds: recentTabIds ?? [] } : {})
       }
     ]
   })
@@ -147,57 +147,6 @@ function rebaseIncarnationBindings(
   return Object.keys(retained).length > 0 ? retained : undefined
 }
 
-export function advanceTerminalTopologyRevision(
-  session: WorkspaceSessionState,
-  worktreeId: string
-): WorkspaceSessionState {
-  const repoId = getRepoIdFromWorktreeId(worktreeId)
-  return {
-    ...session,
-    terminalTopologyRevisionByRepoId: {
-      ...session.terminalTopologyRevisionByRepoId,
-      [repoId]: (session.terminalTopologyRevisionByRepoId?.[repoId] ?? 0) + 1
-    }
-  }
-}
-
-/**
- * The tab whose live layout holds this leaf. Only the leaf half of a pane key is stable — breaking
- * a pane out into its own tab moves the leaf and leaves any stored tabId naming the tab it left.
- */
-export function findTerminalTabIdForLeaf(
-  session: WorkspaceSessionState | undefined,
-  leafId: string
-): string | undefined {
-  // Only a still-existing tab counts: a layout entry outlives its tab, and binding a live shell to
-  // a deleted one registers a pane under a ghost. Scanned across worktrees rather than under one
-  // key so the answer cannot hinge on a worktreeId matching exactly (`::workspace:` suffixes).
-  const liveTabIds = new Set(
-    Object.values(session?.tabsByWorktree ?? {}).flatMap((tabs) => tabs.map((tab) => tab.id))
-  )
-  for (const [tabId, layout] of Object.entries(session?.terminalLayoutsByTabId ?? {})) {
-    const leafIds = new Set<string>()
-    collectLeafIds(layout.root, leafIds)
-    if (liveTabIds.has(tabId) && leafIds.has(leafId)) {
-      return tabId
-    }
-  }
-  return undefined
-}
-
-export function hasHostAuthoritativeTerminalMembership(
-  session: WorkspaceSessionState | undefined,
-  worktreeId: string
-): boolean {
-  const repoId = getRepoIdFromWorktreeId(worktreeId)
-  return (
-    (session?.terminalTopologyRevisionByRepoId?.[repoId] ?? 0) > 0 ||
-    Object.values(session?.terminalSurfaceTombstonesByPaneKey ?? {}).some(
-      (tombstone) => tombstone.worktreeId === worktreeId
-    )
-  )
-}
-
 export function rebaseWorkspaceSessionTerminalMembership(
   incoming: WorkspaceSessionState,
   prior: WorkspaceSessionState | undefined
@@ -213,7 +162,9 @@ export function rebaseWorkspaceSessionTerminalMembership(
     )
   }
   const tabsByWorktree = { ...incoming.tabsByWorktree }
-  const terminalLayoutsByTabId = { ...incoming.terminalLayoutsByTabId }
+  const incomingTerminalLayoutsByTabId = incoming.terminalLayoutsByTabId ?? {}
+  const priorTerminalLayoutsByTabId = prior.terminalLayoutsByTabId ?? {}
+  const terminalLayoutsByTabId = { ...incomingTerminalLayoutsByTabId }
   const unifiedTabs = { ...incoming.unifiedTabs }
   const tabGroups = { ...incoming.tabGroups }
   const tabGroupLayouts = { ...incoming.tabGroupLayouts }
@@ -251,8 +202,8 @@ export function rebaseWorkspaceSessionTerminalMembership(
     }
     for (const tabId of terminalTabIds) {
       const layout = rebaseLayout(
-        incoming.terminalLayoutsByTabId[tabId],
-        prior.terminalLayoutsByTabId[tabId]
+        incomingTerminalLayoutsByTabId[tabId],
+        priorTerminalLayoutsByTabId[tabId]
       )
       if (layout) {
         terminalLayoutsByTabId[tabId] = layout

@@ -5,7 +5,7 @@ import { JiraIcon } from '@/components/icons/JiraIcon'
 import { CommandItem } from '@/components/ui/command'
 import { CREATE_WORKTREE_ITEM_ID } from '@/lib/worktree-palette-create-action'
 import type { CmdJTaskUrlCreatePreview } from '@/lib/worktree-palette-task-url-match'
-import type { LinearIssue } from '../../../../shared/types'
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import { translate } from '@/i18n/i18n'
 
 function TaskUrlProviderIcon({

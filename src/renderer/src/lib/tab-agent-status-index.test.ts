@@ -14,7 +14,8 @@ import type {
   AgentStatusState,
   AgentType
 } from '../../../shared/agent-status-types'
-import type { TerminalLayoutSnapshot, TerminalTab, TuiAgent } from '../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalAgent } from '../../../shared/terminal-agent'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 
 // ─── Oracle: the pre-index full-map scans, kept here (not in src) so the
@@ -24,7 +25,7 @@ function oracleAnyTabAgent(
   map: Record<string, AgentStatusEntry>,
   tabId: string,
   excludedLeafId?: string
-): TuiAgent | null {
+): TerminalAgent | null {
   for (const [paneKey, entry] of Object.entries(map)) {
     const parsed = parsePaneKey(paneKey)
     if (parsed?.tabId === tabId && parsed.leafId !== excludedLeafId) {
@@ -41,7 +42,7 @@ function oracleAnyCompletedTabAgent(
   map: Record<string, AgentStatusEntry>,
   tabId: string,
   excludedLeafId?: string
-): TuiAgent | null {
+): TerminalAgent | null {
   for (const [paneKey, entry] of Object.entries(map)) {
     const parsed = parsePaneKey(paneKey)
     if (parsed?.tabId === tabId && parsed.leafId !== excludedLeafId) {
@@ -58,7 +59,7 @@ function oracleAnyRetainedTabAgent(
   map: Record<string, RetainedAgentEntry>,
   tabId: string,
   excludedLeafId?: string
-): TuiAgent | null {
+): TerminalAgent | null {
   for (const [paneKey, retained] of Object.entries(map)) {
     const parsed = parsePaneKey(paneKey)
     if (parsed?.tabId === tabId && parsed.leafId !== excludedLeafId) {
@@ -81,7 +82,7 @@ const ORACLES = {
     map: Record<string, AgentStatusEntry>,
     layout: TerminalLayoutSnapshot | undefined,
     tabId: string
-  ): TuiAgent | null => {
+  ): TerminalAgent | null => {
     const activeLeafId = activeLeafOf(layout)
     if (activeLeafId) {
       const entry = map[`${tabId}:${activeLeafId}`]
@@ -93,7 +94,7 @@ const ORACLES = {
     map: Record<string, AgentStatusEntry>,
     layout: TerminalLayoutSnapshot | undefined,
     tabId: string
-  ): TuiAgent | null => {
+  ): TerminalAgent | null => {
     const activeLeafId = activeLeafOf(layout)
     return activeLeafId ? oracleAnyTabAgent(map, tabId, activeLeafId) : null
   },
@@ -101,7 +102,7 @@ const ORACLES = {
     map: Record<string, AgentStatusEntry>,
     layout: TerminalLayoutSnapshot | undefined,
     tabId: string
-  ): TuiAgent | null => {
+  ): TerminalAgent | null => {
     const activeLeafId = activeLeafOf(layout)
     if (activeLeafId) {
       const entry = map[`${tabId}:${activeLeafId}`]
@@ -113,7 +114,7 @@ const ORACLES = {
     map: Record<string, AgentStatusEntry>,
     layout: TerminalLayoutSnapshot | undefined,
     tabId: string
-  ): TuiAgent | null => {
+  ): TerminalAgent | null => {
     const activeLeafId = activeLeafOf(layout)
     return activeLeafId ? oracleAnyCompletedTabAgent(map, tabId, activeLeafId) : null
   },
@@ -121,7 +122,7 @@ const ORACLES = {
     map: Record<string, RetainedAgentEntry>,
     layout: TerminalLayoutSnapshot | undefined,
     tabId: string
-  ): TuiAgent | null => {
+  ): TerminalAgent | null => {
     const activeLeafId = activeLeafOf(layout)
     if (activeLeafId) {
       return agentTypeToIconAgent(map[`${tabId}:${activeLeafId}`]?.agentType)
@@ -132,7 +133,7 @@ const ORACLES = {
     map: Record<string, RetainedAgentEntry>,
     layout: TerminalLayoutSnapshot | undefined,
     tabId: string
-  ): TuiAgent | null => {
+  ): TerminalAgent | null => {
     const activeLeafId = activeLeafOf(layout)
     return activeLeafId ? oracleAnyRetainedTabAgent(map, tabId, activeLeafId) : null
   }

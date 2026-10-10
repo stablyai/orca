@@ -34,10 +34,14 @@ export function reconcileTransientPortScanFailures(
       return { key, result }
     }
     const failures = previousFailures + 1
+    // Why: a surface that hit the same failure first (the ports popover) republishes
+    // the host's last-good ports alongside the reason. Treating that as a spent grace
+    // period would drop those ports on the very next poll, undoing the retention.
+    const publishedIsRetainable =
+      Boolean(publishedResult) &&
+      (!publishedResult.unavailableReason || publishedResult.ports.length > 0)
     const nextResult =
-      failures < failureThreshold && publishedResult && !publishedResult.unavailableReason
-        ? publishedResult
-        : result
+      failures < failureThreshold && publishedIsRetainable ? publishedResult : result
     state.set(key, { consecutiveFailures: failures, publishedResult: nextResult })
     return { key, result: nextResult }
   })

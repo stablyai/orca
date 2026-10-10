@@ -1,7 +1,10 @@
 import { Import, Loader2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
-import type { BrowserCookieImportSummary, BrowserSessionProfile } from '../../../../shared/types'
+import type {
+  BrowserCookieImportSummary,
+  BrowserSessionProfile
+} from '../../../../shared/browser-workspace-types'
 import { Button } from '../ui/button'
 import {
   DropdownMenu,
@@ -15,6 +18,7 @@ import {
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
 import { BrowserCookieImportDisclosure } from '../BrowserCookieImportDisclosure'
+import { BrowserCookieImportMachineNotice } from '../BrowserCookieImportMachineNotice'
 import { useAppStore } from '../../store'
 import { BROWSER_FAMILY_LABELS } from '../../../../shared/constants'
 import { translate } from '@/i18n/i18n'
@@ -82,7 +86,7 @@ export function BrowserProfileRow({
                 value2: profile.label
               }
             ),
-        result.executionHostLabel
+        result
       )
     } else {
       toast.error(result.reason)
@@ -99,7 +103,7 @@ export function BrowserProfileRow({
           'Imported {{value0}} cookies from file into {{value1}}.',
           { value0: result.summary.importedCookies, value1: profile.label }
         ),
-        result.executionHostLabel
+        result
       )
     } else if (result.reason !== 'canceled') {
       toast.error(result.reason)
@@ -109,10 +113,6 @@ export function BrowserProfileRow({
   const sourceLabel = profile.source
     ? `${BROWSER_FAMILY_LABELS[profile.source.browserFamily] ?? profile.source.browserFamily}${profile.source.profileName ? ` (${profile.source.profileName})` : ''}`
     : translate('auto.components.settings.BrowserProfileRow.796d846483', 'No cookies imported')
-  const userAgentLabel =
-    profile.userAgentMode === 'native'
-      ? translate('auto.components.settings.BrowserProfileRow.b5c0479e21', 'Unmodified user agent')
-      : null
 
   // Why: uses div[role=button] instead of <button> to avoid nested <button>
   // elements — the dropdown trigger and trash actions inside also render as
@@ -143,10 +143,7 @@ export function BrowserProfileRow({
             </span>
           ) : null}
         </div>
-        <p className="truncate text-[11px] text-muted-foreground">
-          {sourceLabel}
-          {userAgentLabel ? ` · ${userAgentLabel}` : ''}
-        </p>
+        <p className="truncate text-[11px] text-muted-foreground">{sourceLabel}</p>
       </div>
       <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
         <DropdownMenu
@@ -174,6 +171,7 @@ export function BrowserProfileRow({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <BrowserCookieImportMachineNotice />
             {detectedBrowsers.map((browser) =>
               browser.profiles.length > 1 ? (
                 <DropdownMenuSub key={browser.family}>

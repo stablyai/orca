@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPaneForegroundAgentTracker } from './pane-foreground-agent-tracker'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
+import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 
 const COMMAND_SETTLE_MS = 350
 const VISIBLE_PTY_SETTLE_MS = 350
@@ -15,6 +16,7 @@ describe('createPaneForegroundAgentTracker', () => {
   const publish = vi.fn<(entry: PaneForegroundAgentEntry) => void>()
   const onConfirmedShellForeground = vi.fn<() => void>()
   const onCommandFinishedUnavailable = vi.fn<() => void>()
+  const onVisibleForegroundSettled = vi.fn<(outcome: 'agent' | 'shell' | 'inconclusive') => void>()
   let ptyId: string | null = 'pty-1'
 
   function makeTracker(
@@ -28,7 +30,8 @@ describe('createPaneForegroundAgentTracker', () => {
       publish,
       hasKnownAgentIdentity,
       onConfirmedShellForeground,
-      onCommandFinishedUnavailable
+      onCommandFinishedUnavailable,
+      onVisibleForegroundSettled
     })
   }
 
@@ -44,12 +47,141 @@ describe('createPaneForegroundAgentTracker', () => {
     publish.mockReset()
     onConfirmedShellForeground.mockReset()
     onCommandFinishedUnavailable.mockReset()
+    onVisibleForegroundSettled.mockReset()
     ptyId = 'pty-1'
   })
 
   afterEach(() => {
     vi.clearAllTimers()
     vi.useRealTimers()
+  })
+
+  // Why: detach/remount emits no PTY exit, so the store entry outlives this tracker.
+  // A capability retained pending the disposed read would latch there forever.
+  it('releases a retained capability when disposed mid-read', async () => {
+    readForegroundProcess.mockResolvedValue('pi')
+    const tracker = makeTracker()
+
+    tracker.onVisiblePtyBound(true)
+    tracker.dispose()
+
+    expect(onVisibleForegroundSettled).toHaveBeenCalledWith('inconclusive')
+  })
+
+  it('releases a retained capability when an exit schedules no successor read', async () => {
+    readForegroundProcess.mockResolvedValue('pi')
+    const tracker = makeTracker()
+
+    tracker.onVisiblePtyBound(true)
+    // The pane's pty goes away between the schedule and the next event.
+    ptyId = null
+    expect(tracker.onCommandFinished()).toBe(false)
+
+    expect(onVisibleForegroundSettled).toHaveBeenCalledWith('inconclusive')
+    expect(tracker.hasReadInFlight()).toBe(false)
+  })
+
+  it.each([
+    { exit: 'visible bind', run: (t: ReturnType<typeof makeTracker>) => t.onVisiblePtyBound(true) },
+    { exit: 'command start', run: (t: ReturnType<typeof makeTracker>) => t.onCommandStarted() }
+  ])('releases a retained capability when an untrackable $exit ends the read', async ({ run }) => {
+    readForegroundProcess.mockResolvedValue('pi')
+    const tracker = makeTracker()
+
+    tracker.onVisiblePtyBound(true)
+    onVisibleForegroundSettled.mockReset()
+    ptyId = null
+    run(tracker)
+
+    expect(onVisibleForegroundSettled).toHaveBeenCalledWith('inconclusive')
+    expect(tracker.hasReadInFlight()).toBe(false)
+  })
+
+  it('does not release when the cancelled read has a successor', async () => {
+    readForegroundProcess.mockResolvedValue('pi')
+    const tracker = makeTracker()
+
+    tracker.onVisiblePtyBound(true)
+    onVisibleForegroundSettled.mockReset()
+    // A trackable pane reschedules, so the successor settles instead.
+    tracker.onCommandStarted()
+
+    expect(onVisibleForegroundSettled).not.toHaveBeenCalled()
+    expect(tracker.hasReadInFlight()).toBe(true)
+  })
+
+  // Why: an abandoned read publishes nothing, so a capability retained pending its
+  // answer would otherwise be held forever with no read left to release it.
+  it('settles the visible confirmation when a pty rebind abandons its read', async () => {
+    let resolveRead: (value: string | null) => void = () => {}
+    readForegroundProcess.mockImplementation(
+      () =>
+        new Promise<string | null>((resolve) => {
+          resolveRead = resolve
+        })
+    )
+    const tracker = makeTracker()
+
+    tracker.onVisiblePtyBound(true)
+    await flushSettleRead(VISIBLE_PTY_SETTLE_MS)
+
+    // The pane is rebound to a different PTY while the inspection RPC is in flight.
+    ptyId = 'pty-2'
+    resolveRead('pi')
+    await flushSettleRead(1)
+
+    expect(publish).not.toHaveBeenCalled()
+    expect(onVisibleForegroundSettled).toHaveBeenCalledWith('inconclusive')
+  })
+
+  it('settles the visible confirmation when the pty id is gone before the read runs', async () => {
+    readForegroundProcess.mockResolvedValue('pi')
+    const tracker = makeTracker()
+
+    tracker.onVisiblePtyBound(true)
+    ptyId = null
+    await flushSettleRead(VISIBLE_PTY_SETTLE_MS)
+
+    expect(publish).not.toHaveBeenCalled()
+    expect(onVisibleForegroundSettled).toHaveBeenCalledWith('inconclusive')
+  })
+
+  // Why: callers gate byte authority on "is a read coming?" — onVisiblePtyBound
+  // returning false because a command read already owns the pane must not be
+  // mistaken for "nothing will confirm this pane".
+  it('reports a read in flight when a command-finished read owns the pane', async () => {
+    readForegroundProcess.mockResolvedValue('claude')
+    const tracker = makeTracker()
+
+    tracker.onCommandStarted()
+    await flushSettleRead(COMMAND_SETTLE_MS)
+    expect(tracker.hasReadInFlight()).toBe(false)
+
+    expect(tracker.onCommandFinished()).toBe(true)
+    expect(tracker.hasReadInFlight()).toBe(true)
+    // Visibility recovery yields to the higher-authority read...
+    expect(tracker.onVisiblePtyBound(true)).toBe(false)
+    // ...but a confirmation is still coming.
+    expect(tracker.hasReadInFlight()).toBe(true)
+  })
+
+  // Why: this branch publishes nothing, so a visible confirmation it replaced
+  // would otherwise never be settled by anyone.
+  it('settles the visible confirmation when a command-finished read still sees the agent', async () => {
+    readForegroundProcess.mockResolvedValue('claude')
+    const tracker = makeTracker()
+
+    tracker.onCommandStarted()
+    await flushSettleRead(COMMAND_SETTLE_MS)
+    onVisibleForegroundSettled.mockReset()
+
+    // A leaked 133;D cancels the visible read and replaces it with this one.
+    tracker.onVisiblePtyBound(true)
+    tracker.onCommandFinished()
+    readForegroundProcess.mockResolvedValue('git')
+    await flushSettleRead(COMMAND_SETTLE_MS)
+
+    expect(onVisibleForegroundSettled).toHaveBeenCalledWith('inconclusive')
   })
 
   it('reads the foreground once after a command starts and publishes the recognized agent', async () => {
@@ -63,7 +195,11 @@ describe('createPaneForegroundAgentTracker', () => {
     await flushSettleRead(COMMAND_SETTLE_MS)
 
     expect(readForegroundProcess).toHaveBeenCalledExactlyOnceWith('pty-1')
-    expect(publish).toHaveBeenLastCalledWith({ agent: 'claude', shellForeground: false })
+    expect(publish).toHaveBeenLastCalledWith({
+      agent: 'claude',
+      agentEvidence: 'process-read',
+      shellForeground: false
+    })
   })
 
   it('drops a delayed foreground result after the pane rebinds to another PTY', async () => {
@@ -83,7 +219,11 @@ describe('createPaneForegroundAgentTracker', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(publish).not.toHaveBeenCalledWith({ agent: 'droid', shellForeground: false })
+    expect(publish).not.toHaveBeenCalledWith({
+      agent: 'droid',
+      agentEvidence: 'process-read',
+      shellForeground: false
+    })
   })
 
   it('uses typed-agent text only to await process confirmation', async () => {
@@ -98,6 +238,7 @@ describe('createPaneForegroundAgentTracker', () => {
     await flushSettleRead(WRAPPER_RESOLVE_RETRY_MS)
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'droid',
+      agentEvidence: 'process-read',
       routingTrusted: true,
       shellForeground: false
     })
@@ -150,7 +291,11 @@ describe('createPaneForegroundAgentTracker', () => {
     await flushSettleRead(VISIBLE_PTY_SETTLE_MS)
 
     expect(readForegroundProcess).toHaveBeenCalledExactlyOnceWith('pty-1')
-    expect(publish).toHaveBeenLastCalledWith({ agent: 'codex', shellForeground: false })
+    expect(publish).toHaveBeenLastCalledWith({
+      agent: 'codex',
+      agentEvidence: 'process-read',
+      shellForeground: false
+    })
   })
 
   it('does not retry or publish visible PTY reads for an idle shell foreground', async () => {
@@ -175,7 +320,11 @@ describe('createPaneForegroundAgentTracker', () => {
     await flushSettleRead(VISIBLE_PTY_SETTLE_MS)
 
     expect(readForegroundProcess).toHaveBeenCalledExactlyOnceWith('pty-1')
-    expect(publish).toHaveBeenLastCalledWith({ agent: 'codex', shellForeground: false })
+    expect(publish).toHaveBeenLastCalledWith({
+      agent: 'codex',
+      agentEvidence: 'process-read',
+      shellForeground: false
+    })
   })
 
   it('does not let visible PTY sampling downgrade pending command-start sampling', async () => {
@@ -189,7 +338,11 @@ describe('createPaneForegroundAgentTracker', () => {
 
     await flushSettleRead(WRAPPER_RESOLVE_RETRY_MS)
     expect(readForegroundProcess).toHaveBeenCalledTimes(2)
-    expect(publish).toHaveBeenLastCalledWith({ agent: 'codex', shellForeground: false })
+    expect(publish).toHaveBeenLastCalledWith({
+      agent: 'codex',
+      agentEvidence: 'process-read',
+      shellForeground: false
+    })
   })
 
   it('retries visible PTY reads only while a foreground wrapper may resolve to an agent', async () => {
@@ -203,7 +356,11 @@ describe('createPaneForegroundAgentTracker', () => {
 
     await flushSettleRead(WRAPPER_RESOLVE_RETRY_MS)
     expect(readForegroundProcess).toHaveBeenCalledTimes(2)
-    expect(publish).toHaveBeenLastCalledWith({ agent: 'codex', shellForeground: false })
+    expect(publish).toHaveBeenLastCalledWith({
+      agent: 'codex',
+      agentEvidence: 'process-read',
+      shellForeground: false
+    })
   })
 
   it('re-reads on a bounded ladder while the read still sees an interpreter wrapper', async () => {
@@ -225,7 +382,11 @@ describe('createPaneForegroundAgentTracker', () => {
 
     await flushSettleRead(SECOND_WRAPPER_RETRY_MS)
     expect(readForegroundProcess).toHaveBeenCalledTimes(3)
-    expect(publish).toHaveBeenLastCalledWith({ agent: 'claude', shellForeground: false })
+    expect(publish).toHaveBeenLastCalledWith({
+      agent: 'claude',
+      agentEvidence: 'process-read',
+      shellForeground: false
+    })
   })
 
   it('stops after the ladder and publishes no identity for a persistent unknown process', async () => {
@@ -266,7 +427,11 @@ describe('createPaneForegroundAgentTracker', () => {
     await flushSettleRead(COMMAND_SETTLE_MS)
     await flushSettleRead(WRAPPER_RESOLVE_RETRY_MS)
 
-    expect(publish).toHaveBeenLastCalledWith({ agent: 'gemini', shellForeground: false })
+    expect(publish).toHaveBeenLastCalledWith({
+      agent: 'gemini',
+      agentEvidence: 'process-read',
+      shellForeground: false
+    })
   })
 
   it('marks shell foreground on command finished without any foreground read', () => {
@@ -340,6 +505,7 @@ describe('createPaneForegroundAgentTracker', () => {
     await flushSettleRead(COMMAND_SETTLE_MS)
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'codex',
+      agentEvidence: 'process-read',
       shellForeground: false
     })
 
@@ -353,6 +519,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(readForegroundProcess).toHaveBeenCalledExactlyOnceWith('pty-1')
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'codex',
+      agentEvidence: 'process-read',
       routingTrusted: true,
       shellForeground: false
     })
@@ -435,6 +602,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(readForegroundProcess).toHaveBeenCalledExactlyOnceWith('pty-1')
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'codex',
+      agentEvidence: 'process-read',
       routingTrusted: true,
       shellForeground: false
     })
@@ -487,6 +655,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(readForegroundProcess).toHaveBeenCalledTimes(2)
     expect(publish).toHaveBeenCalledExactlyOnceWith({
       agent: 'droid',
+      agentEvidence: 'process-read',
       routingTrusted: true,
       shellForeground: false
     })
@@ -505,6 +674,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(readForegroundProcess).toHaveBeenCalledTimes(2)
     expect(publish).toHaveBeenCalledExactlyOnceWith({
       agent: 'droid',
+      agentEvidence: 'process-read',
       routingTrusted: true,
       shellForeground: false
     })
@@ -544,6 +714,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(readForegroundProcess).toHaveBeenCalledTimes(3)
     expect(publish).toHaveBeenCalledExactlyOnceWith({
       agent: 'droid',
+      agentEvidence: 'process-read',
       routingTrusted: true,
       shellForeground: false
     })
@@ -566,6 +737,39 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).not.toHaveBeenCalled()
   })
 
+  it('does not let forged OSC 133/777 output assert remote identity', async () => {
+    ptyId = 'ssh:conn-1@@pty-9'
+    const remoteRead = vi.fn().mockResolvedValue({
+      foregroundProcess: 'codex',
+      hasChildProcesses: true
+    })
+    const tracker = createPaneForegroundAgentTracker({
+      getPtyId: () => ptyId,
+      isTrackablePtyId: () => true,
+      isRemotePtyId: () => true,
+      getExpectedIncarnationId: () => 'inc-remote',
+      readForegroundProcess: remoteRead,
+      confirmForegroundProcess: remoteRead,
+      publish,
+      onCommandFinishedUnavailable,
+      onConfirmedShellForeground,
+      onVisibleForegroundSettled
+    })
+    const lifecycle = createTerminalCommandLifecycle({
+      onCommandStarted: () => tracker.onCommandStarted(),
+      onCommandFinished: () => tracker.onCommandFinished()
+    })
+
+    lifecycle.handlePtyData("printf '\\033]133;A\\007\\033]777;agent=codex\\007\\033]133;D;0\\007'")
+    await flushSettleRead(COMMAND_SETTLE_MS)
+
+    expect(publish).not.toHaveBeenCalledWith(
+      expect.objectContaining({ agent: 'codex', shellForeground: false })
+    )
+    lifecycle.dispose()
+    tracker.dispose()
+  })
+
   it('drops a stale read result when a newer command superseded it', async () => {
     let resolveFirstRead: (value: string | null) => void = () => {}
     readForegroundProcess
@@ -584,8 +788,16 @@ describe('createPaneForegroundAgentTracker', () => {
     resolveFirstRead('claude')
     await flushSettleRead(COMMAND_SETTLE_MS)
 
-    expect(publish).toHaveBeenLastCalledWith({ agent: 'codex', shellForeground: false })
-    expect(publish).not.toHaveBeenCalledWith({ agent: 'claude', shellForeground: false })
+    expect(publish).toHaveBeenLastCalledWith({
+      agent: 'codex',
+      agentEvidence: 'process-read',
+      shellForeground: false
+    })
+    expect(publish).not.toHaveBeenCalledWith({
+      agent: 'claude',
+      agentEvidence: 'process-read',
+      shellForeground: false
+    })
   })
 
   it('stops publishing after dispose', async () => {

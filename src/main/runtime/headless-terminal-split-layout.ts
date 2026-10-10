@@ -1,18 +1,7 @@
-import type { TerminalLayoutSnapshot, TerminalPaneLayoutNode } from '../../shared/types'
-
-export function terminalLayoutContainsLeaf(
-  node: TerminalPaneLayoutNode | null | undefined,
-  leafId: string
-): boolean {
-  if (!node) {
-    return false
-  }
-  return node.type === 'leaf'
-    ? node.leafId === leafId
-    : terminalLayoutContainsLeaf(node.first, leafId) ||
-        terminalLayoutContainsLeaf(node.second, leafId)
-}
-
+import type {
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode
+} from '../../shared/terminal-tab-types'
 /**
  * Insert a newly split-off leaf into a terminal tab's persisted layout tree.
  *

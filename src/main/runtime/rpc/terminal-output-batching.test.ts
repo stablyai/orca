@@ -1,8 +1,10 @@
+import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { TERMINAL_METHODS } from './methods/terminal'
+import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
 import {
   TerminalStreamOpcode,
@@ -15,6 +17,7 @@ import {
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
+    subscribeToPtyExit: vi.fn(() => vi.fn()),
     // Why: subscribe streams register as remote view subscribers for Phase-5
     // query-authority suppression (terminal-query-authority.md).
     registerRemoteTerminalViewSubscriber: () => () => {},
@@ -31,7 +34,7 @@ describe('terminal output batching', () => {
     vi.useFakeTimers()
     try {
       const messages: string[] = []
-      const cleanups = new Map<string, () => void>()
+      const registry = createSubscriptionRegistryDouble()
       const dataListenerRef: { current?: (data: string) => void } = {}
       const runtime = stubRuntime({
         resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
@@ -45,14 +48,9 @@ describe('terminal output batching', () => {
           return vi.fn()
         }),
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-        registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-          cleanups.set(id, cleanup)
-        }),
-        cleanupSubscription: vi.fn((id: string) => {
-          const cleanup = cleanups.get(id)
-          cleanups.delete(id)
-          cleanup?.()
-        }),
+        registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+        registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+        cleanupSubscription: vi.fn(registry.cleanupSubscription),
         waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
       })
       const dispatcher = new RpcDispatcher({
@@ -100,7 +98,7 @@ describe('terminal output batching', () => {
     try {
       const messages: string[] = []
       const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-      const cleanups = new Map<string, () => void>()
+      const registry = createSubscriptionRegistryDouble()
       const dataListenerRef: { current?: (data: string) => void } = {}
       const runtime = stubRuntime({
         resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
@@ -119,14 +117,9 @@ describe('terminal output batching', () => {
         }),
         subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-        registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-          cleanups.set(id, cleanup)
-        }),
-        cleanupSubscription: vi.fn((id: string) => {
-          const cleanup = cleanups.get(id)
-          cleanups.delete(id)
-          cleanup?.()
-        }),
+        registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+        registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+        cleanupSubscription: vi.fn(registry.cleanupSubscription),
         waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
         sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
         updateMobileViewport: vi.fn().mockResolvedValue(false)
@@ -192,7 +185,7 @@ describe('terminal output batching', () => {
     try {
       const messages: string[] = []
       const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-      const cleanups = new Map<string, () => void>()
+      const registry = createSubscriptionRegistryDouble()
       const dataListenerRef: { current?: (data: string) => void } = {}
       let captureOutputFrames = false
       let firstOutputEncodeCount: number | undefined
@@ -210,14 +203,9 @@ describe('terminal output batching', () => {
         }),
         subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-        registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-          cleanups.set(id, cleanup)
-        }),
-        cleanupSubscription: vi.fn((id: string) => {
-          const cleanup = cleanups.get(id)
-          cleanups.delete(id)
-          cleanup?.()
-        }),
+        registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+        registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+        cleanupSubscription: vi.fn(registry.cleanupSubscription),
         waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
         sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
         updateMobileViewport: vi.fn().mockResolvedValue(false)
@@ -282,7 +270,7 @@ describe('terminal output batching', () => {
       number,
       (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
     >()
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     const write = vi.fn()
     const commit = vi.fn().mockResolvedValue(undefined)
     const rollback = vi.fn()
@@ -304,13 +292,9 @@ describe('terminal output batching', () => {
       getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
       handleMobileSubscribe: vi.fn().mockResolvedValue(undefined),
       handleMobileUnsubscribe: vi.fn(),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      cleanupSubscription: vi.fn((id: string) => {
-        cleanups.get(id)?.()
-        cleanups.delete(id)
-      }),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+      cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
       sendTerminal: vi.fn().mockImplementation(async (_handle, _action, options) => {
         options.reserveWrite('pty-1')
@@ -364,7 +348,11 @@ describe('terminal output batching', () => {
       expect(runtime.sendTerminal).toHaveBeenCalledWith(
         'terminal-1',
         { text: 'ls\r', enter: false, interrupt: false },
-        { reserveWrite: expect.any(Function), afterWrite: expect.any(Function) }
+        {
+          inputKind: 'driving',
+          reserveWrite: expect.any(Function),
+          afterWrite: expect.any(Function)
+        }
       )
     )
     expect(beginMobileInputFloor).toHaveBeenCalledWith('pty-1', 'mobile-1')

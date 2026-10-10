@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-vault-types'
-import { reuseAiVaultListResult } from './ai-vault-session-identity'
+import { EMPTY_AI_VAULT_SESSIONS, reuseAiVaultListResult } from './ai-vault-session-identity'
 
 // Why: production rows carry nested previewMessages + subagent. A scalar
 // {id, title} fixture reconciles even when the walker is broken, which is how
@@ -130,5 +130,13 @@ describe('reuseAiVaultListResult', () => {
     expect(reused.sessions).toBe(current.sessions)
     expect(reused.issues).toEqual([])
     expect(reused.issues).toBe(incoming.issues)
+  })
+})
+
+describe('EMPTY_AI_VAULT_SESSIONS', () => {
+  // Every mounted hook returns this same array before its first scan lands.
+  it('is frozen so one panel cannot mutate the sentinel for the others', () => {
+    expect(EMPTY_AI_VAULT_SESSIONS).toHaveLength(0)
+    expect(Object.isFrozen(EMPTY_AI_VAULT_SESSIONS)).toBe(true)
   })
 })

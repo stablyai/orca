@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   computeClearFilterActions,
-  isDefaultBranchWorkspace,
   isSleepingSweepExemptionNarrowingList,
   sidebarHasActiveFilters
 } from './visible-worktrees'
-import type { Worktree } from '../../../../shared/types'
+import { isDefaultBranchWorkspace } from './default-branch-workspace'
+import type { Worktree } from '../../../../shared/worktree/types'
+
+const gitRepo = { kind: 'git' } as const
 
 function makeWorktree(id: string, repoId = 'repo1'): Worktree {
   return {
@@ -50,19 +52,34 @@ describe('isDefaultBranchWorkspace', () => {
   it('returns true for a branch-backed main worktree', () => {
     const main = makeWorktree('main')
     main.isMainWorktree = true
-    expect(isDefaultBranchWorkspace(main)).toBe(true)
+    expect(isDefaultBranchWorkspace(main, gitRepo)).toBe(true)
   })
 
-  it('returns false for folder-mode main worktrees (empty branch)', () => {
+  it('returns false for an empty-branch git main (detached HEAD or offline SSH row)', () => {
+    const detached = makeWorktree('detached')
+    detached.isMainWorktree = true
+    detached.branch = ''
+    expect(isDefaultBranchWorkspace(detached, gitRepo)).toBe(false)
+  })
+
+  it('returns true for a folder project root, which has no branch', () => {
     const folder = makeWorktree('folder')
     folder.isMainWorktree = true
     folder.branch = ''
-    expect(isDefaultBranchWorkspace(folder)).toBe(false)
+    folder.head = ''
+    expect(isDefaultBranchWorkspace(folder, { kind: 'folder' })).toBe(true)
   })
 
   it('returns false for non-main worktrees even on the default branch', () => {
     const feature = makeWorktree('feature')
-    expect(isDefaultBranchWorkspace(feature)).toBe(false)
+    expect(isDefaultBranchWorkspace(feature, gitRepo)).toBe(false)
+  })
+
+  it('keeps a provisioned root visible as the recipe-created workspace', () => {
+    const provisionedRoot = makeWorktree('provisioned-root')
+    provisionedRoot.isMainWorktree = true
+    provisionedRoot.ephemeralVmCheckoutMode = 'provisioned-root'
+    expect(isDefaultBranchWorkspace(provisionedRoot, gitRepo)).toBe(false)
   })
 })
 

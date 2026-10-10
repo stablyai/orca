@@ -5,11 +5,8 @@ import { cn } from '@/lib/utils'
 import { track } from '@/lib/telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { GhosttyDiscoveryRow } from './GhosttyDiscoveryRow'
-import type {
-  DiscoveryStatusEmitted,
-  GhosttyImportPreview,
-  GlobalSettings
-} from '../../../../shared/types'
+import type { GhosttyImportPreview, GlobalSettings } from '../../../../shared/global-settings-types'
+import type { DiscoveryStatusEmitted } from '../../../../shared/onboarding-state-types'
 import { translate } from '@/i18n/i18n'
 import { ChromePreview } from './theme-chrome-preview'
 
@@ -198,19 +195,19 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
     {
       id: 'system',
       label: translate('auto.components.onboarding.ThemeStep.827ea7b4a2', 'System'),
-      hint: 'Match OS',
+      hint: translate('components.onboarding.theme.hints.system', 'Match OS'),
       icon: Monitor
     },
     {
       id: 'dark',
       label: translate('auto.components.onboarding.ThemeStep.fa7b673ea9', 'Dark'),
-      hint: 'Easy on the eyes',
+      hint: translate('components.onboarding.theme.hints.dark', 'Easy on the eyes'),
       icon: Moon
     },
     {
       id: 'light',
       label: translate('auto.components.onboarding.ThemeStep.ad192706e6', 'Light'),
-      hint: 'Bright & crisp',
+      hint: translate('components.onboarding.theme.hints.light', 'Bright & crisp'),
       icon: Sun
     }
   ]
@@ -224,17 +221,15 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
             <button
               key={id}
               className={cn(
-                'group overflow-hidden rounded-xl border p-3 text-left transition-all',
-                selected
-                  ? 'border-violet-500/60 bg-violet-500/10 ring-2 ring-violet-500/30'
-                  : 'border-border bg-muted/30 hover:bg-muted/60'
+                'group overflow-hidden rounded-xl border p-3 text-left transition-colors',
+                selected ? 'border-foreground/60 bg-accent' : 'border-border hover:bg-accent/60'
               )}
               onClick={() => applyOnboardingThemeSelection(id, onThemeChange, updateSettings)}
             >
               <div className="relative mb-3 h-24 overflow-hidden rounded-lg border border-border">
                 <ChromePreview variant={id} />
                 {selected && (
-                  <div className="absolute right-1.5 top-1.5 grid size-5 place-items-center rounded-full bg-violet-500 text-white shadow-sm">
+                  <div className="absolute right-1.5 top-1.5 grid size-5 place-items-center rounded-full bg-foreground text-background shadow-sm">
                     <Check className="size-3" strokeWidth={3} />
                   </div>
                 )}

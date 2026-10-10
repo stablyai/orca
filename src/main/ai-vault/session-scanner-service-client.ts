@@ -2,29 +2,29 @@ import type { ChildProcess } from 'node:child_process'
 import { createAiVaultScanCancelledError } from './ai-vault-scan-cancellation'
 import {
   AI_VAULT_SERVICE_IDLE_TIMEOUT_MS,
-  AI_VAULT_SERVICE_INTERACTIVE_TIMEOUT_MS,
   AI_VAULT_SERVICE_MAX_CALLS,
   AI_VAULT_SERVICE_READY_TIMEOUT_MS,
-  AI_VAULT_SERVICE_SCAN_TIMEOUT_MS,
   AiVaultServiceIdleRetirement,
   AiVaultServiceInvalidations,
-  armAiVaultServiceCancellationTimeout,
+  AiVaultServiceSessionSearchHold,
+  aiVaultServiceErrorText,
+  attachAiVaultServiceChild,
+  cancelAiVaultServiceCall,
   clearAiVaultServiceCall,
   createAiVaultServiceReadyWaiter,
   rejectAiVaultServiceCall,
-  requeueAiVaultServiceStart,
+  requeueOrRejectAiVaultServiceStart,
   retireAiVaultServiceChild,
+  sendAiVaultServiceCall,
   type AiVaultServiceClientOptions,
   type AiVaultServicePendingCall,
   type AiVaultServiceReadyWaiter
 } from './session-scanner-service-client-state'
 import { AiVaultServiceRestartPolicy } from './session-scanner-service-restart-policy'
 import {
-  AI_VAULT_SERVICE_PROTOCOL_VERSION,
   aiVaultServiceLane,
   isAiVaultServiceChildMessage,
-  type AiVaultServiceChildMessage,
-  type AiVaultServiceInit,
+  type AiVaultSessionSearchInit,
   type AiVaultServiceRequest,
   type AiVaultServiceRequestBody,
   type AiVaultServiceResultValue
@@ -39,6 +39,7 @@ export class AiVaultScannerServiceClient {
   private nextId = 1
   private readonly idleRetirement = new AiVaultServiceIdleRetirement()
   private readonly restartPolicy = new AiVaultServiceRestartPolicy()
+  private readonly sessionSearch = new AiVaultServiceSessionSearchHold()
   private disposed = false
 
   constructor(private readonly options: AiVaultServiceClientOptions) {}
@@ -77,31 +78,34 @@ export class AiVaultScannerServiceClient {
     })
   }
 
+  /** Push a consent or retention change, and while the index is on keep a child. */
+  updateSessionSearch(init: AiVaultSessionSearchInit): void {
+    if (this.disposed) {
+      return
+    }
+    if (!this.sessionSearch.record(init, this.child)) {
+      this.scheduleIdleIfNeeded()
+      return
+    }
+    this.idleRetirement.clear()
+    this.startSessionSearchChild()
+  }
+
+  clearRestartCircuit(): void {
+    this.restartPolicy.clearCircuit()
+    this.pump()
+  }
+
   async invalidate(paths: string[]): Promise<void> {
     if (paths.length === 0 || this.disposed) {
       return
     }
     this.idleRetirement.clear()
     const child = await this.ensureChild()
-    return this.invalidations.open(
-      AI_VAULT_SERVICE_READY_TIMEOUT_MS,
-      (generation) => this.onInvalidationDeadline(generation),
-      (generation) => child.send({ type: 'invalidate', generation, paths })
-    )
-  }
-
-  /**
-   * The deadline is a startup-sized budget, but a child mid-scan can be slow to
-   * turn the channel around. Fork IPC ordering already guarantees the child
-   * applies the invalidation before any request sent after it, so a busy child
-   * owes nothing here — only an idle one that misses the deadline is wedged.
-   */
-  private onInvalidationDeadline(generation: number): void {
-    if (this.active.size > 0) {
-      this.invalidations.settle(generation)
-      return
-    }
-    this.onFault(new Error('AI Vault service cache invalidation timed out.'))
+    return this.invalidations.send(child, paths, {
+      busy: () => this.active.size > 0,
+      onFault: (error) => this.onFault(error)
+    })
   }
 
   dispose(): void {
@@ -136,7 +140,13 @@ export class AiVaultScannerServiceClient {
       const call = this.queue.splice(index, 1)[0]!
       this.active.set(lane, call)
       void this.ensureChild().then(
-        (child) => this.sendCall(child, call),
+        (child) =>
+          sendAiVaultServiceCall(
+            child,
+            call,
+            () => this.active.get(call.lane) === call,
+            (error) => this.onFault(error)
+          ),
         (error: Error) => {
           if (this.active.get(lane) !== call) {
             return
@@ -147,33 +157,32 @@ export class AiVaultScannerServiceClient {
         }
       )
     }
+    this.startSessionSearchChild()
     this.scheduleIdleIfNeeded()
   }
 
-  private sendCall(child: ChildProcess, call: AiVaultServicePendingCall): void {
-    if (call.cancelled || this.active.get(call.lane) !== call) {
+  /**
+   * The index's own restart. A child indexing for the hold has no queued call to
+   * bring it back, so without this a fault stops the indexing until an unrelated
+   * request happens to arrive. The restart delay and circuit bound it, exactly as
+   * they bound a queued call's start.
+   */
+  private startSessionSearchChild(): void {
+    if (this.disposed || !this.sessionSearch.holdsChild || this.child || this.readyWaiter) {
       return
     }
-    const timeoutMs =
-      call.request.operation === 'scan'
-        ? AI_VAULT_SERVICE_SCAN_TIMEOUT_MS
-        : AI_VAULT_SERVICE_INTERACTIVE_TIMEOUT_MS
-    call.timer = setTimeout(() => {
-      this.onFault(new Error(`AI Vault service timed out after ${timeoutMs}ms.`))
-    }, timeoutMs)
-    call.timer.unref?.()
-    call.sent = true
-    child.send(call.request)
+    void this.ensureChild().catch((error: unknown) => {
+      this.options.onStderr?.(`session search child unavailable: ${aiVaultServiceErrorText(error)}`)
+    })
   }
 
   private retryStartOrReject(call: AiVaultServicePendingCall, error: Error): void {
-    if (
-      this.disposed ||
-      !this.restartPolicy.restartScheduled ||
-      !requeueAiVaultServiceStart(call, this.queue)
-    ) {
-      rejectAiVaultServiceCall(call, error)
-    }
+    requeueOrRejectAiVaultServiceStart(
+      call,
+      this.queue,
+      error,
+      !this.disposed && this.restartPolicy.restartScheduled
+    )
   }
 
   private ensureChild(): Promise<ChildProcess> {
@@ -199,25 +208,32 @@ export class AiVaultScannerServiceClient {
       this.onFault(new Error('AI Vault service did not become ready.'))
     )
     this.readyWaiter = waiter
-    child.on('message', (message) => this.onMessage(message))
-    child.on('error', (error) => this.onFault(error))
-    child.on('disconnect', () => this.onFault(new Error('AI Vault service disconnected.')))
-    child.on('exit', (code) => this.onFault(new Error(`AI Vault service exited (${code}).`)))
-    child.stderr?.on('data', (chunk: Buffer) => this.options.onStderr?.(String(chunk)))
-    child.send({
-      type: 'init',
-      protocol: AI_VAULT_SERVICE_PROTOCOL_VERSION,
-      ...this.options.init
-    } satisfies AiVaultServiceInit)
+    attachAiVaultServiceChild(child, this.options.init(), {
+      onMessage: (message) => this.onMessage(message),
+      onFault: (error) => this.onFault(error),
+      onStderr: this.options.onStderr
+    })
     return waiter.promise
   }
 
-  private onMessage(raw: unknown): void {
-    if (!isAiVaultServiceChildMessage(raw)) {
+  private onMessage(message: unknown): void {
+    if (!isAiVaultServiceChildMessage(message)) {
       this.onFault(new Error('AI Vault service sent a malformed message.'))
       return
     }
-    const message = raw as AiVaultServiceChildMessage
+    if (message.type === 'sessionSearchRoots') {
+      const child = this.child
+      const resolve = this.options.resolveSessionSearchRoots
+      void Promise.resolve()
+        .then(() => (resolve ? resolve() : (this.options.init().sessionSearch?.roots ?? null)))
+        .catch(() => null)
+        .then((roots) => {
+          if (child && this.child === child && child.connected) {
+            child.send({ type: 'sessionSearchRoots', id: message.id, roots }, () => undefined)
+          }
+        })
+      return
+    }
     if (message.type === 'ready') {
       const waiter = this.readyWaiter
       if (!waiter || !this.child) {
@@ -251,32 +267,13 @@ export class AiVaultScannerServiceClient {
   }
 
   private cancel(call: AiVaultServicePendingCall): void {
-    if (call.cancelled) {
-      return
-    }
-    call.cancelled = true
-    call.reject(createAiVaultScanCancelledError())
-    const queuedIndex = this.queue.indexOf(call)
-    if (queuedIndex !== -1) {
-      this.queue.splice(queuedIndex, 1)
-      clearAiVaultServiceCall(call)
-      this.pump()
-      return
-    }
-    if (this.active.get(call.lane) === call) {
-      // Why: a call cancelled before it reached the child gets no acknowledgement,
-      // so waiting on one would kill a healthy service and stall the lane.
-      if (!call.sent) {
-        this.active.delete(call.lane)
-        clearAiVaultServiceCall(call)
-        this.pump()
-        return
-      }
-      this.child?.send({ type: 'cancel', id: call.request.id })
-      armAiVaultServiceCancellationTimeout(call, () =>
-        this.onFault(new Error('AI Vault service did not cancel within 2000ms.'))
-      )
-    }
+    cancelAiVaultServiceCall(call, {
+      queue: this.queue,
+      active: this.active,
+      child: this.child,
+      pump: () => this.pump(),
+      onFault: (error) => this.onFault(error)
+    })
   }
 
   private onFault(error: Error): void {
@@ -305,7 +302,11 @@ export class AiVaultScannerServiceClient {
 
   private scheduleIdleIfNeeded(): void {
     this.idleRetirement.schedule(
-      this.active.size > 0 || this.queue.length > 0 || this.invalidations.size > 0 || !this.child,
+      this.sessionSearch.holdsChild ||
+        this.active.size > 0 ||
+        this.queue.length > 0 ||
+        this.invalidations.size > 0 ||
+        !this.child,
       this.options.idleTimeoutMs ?? AI_VAULT_SERVICE_IDLE_TIMEOUT_MS,
       () => this.retireChild()
     )

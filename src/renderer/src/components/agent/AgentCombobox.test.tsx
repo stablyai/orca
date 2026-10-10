@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
 import { AGENT_FAVICON_ASSETS } from '@/lib/agent-favicon-assets'
 import AgentCombobox from './AgentCombobox'
@@ -199,9 +199,11 @@ describe('AgentCombobox', () => {
   it('renders bundled favicons for favicon-domain agents instead of the remote Google service', () => {
     // Why: previously loaded from Google's favicon service (#8451). Iterate the
     // full asset map so missing files/key mismatches fail the test.
+    const sharedIcons = new Map([['qoder-cn', 'qoder']])
     for (const agent of Object.keys(AGENT_FAVICON_ASSETS) as TuiAgent[]) {
       const markup = renderToStaticMarkup(<AgentIcon agent={agent} />)
-      expect(markup).toContain(`/shared/agent-icons/${agent}.png`)
+      const iconName = sharedIcons.get(agent) ?? agent
+      expect(markup).toContain(`/shared/agent-icons/${iconName}.png`)
       expect(markup).not.toContain('https://www.google.com/s2/favicons')
     }
   })

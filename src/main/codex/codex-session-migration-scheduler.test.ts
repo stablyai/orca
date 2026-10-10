@@ -94,6 +94,57 @@ describe('createCodexSessionMigrationScheduler', () => {
     )
   })
 
+  it('publishes the baseline while a Codex pane is still open', async () => {
+    vi.setSystemTime(new Date('2026-08-05T10:00:00Z'))
+    const prepareScheduledRun = vi.fn()
+    const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
+    const scheduler = createCodexSessionMigrationScheduler({
+      isEligible: () => true,
+      isQuitting: () => false,
+      resolveSystemCodexHomePathOverride: () => undefined,
+      prepareScheduledRun,
+      startBackfill,
+      startIndexHeal: vi.fn().mockResolvedValue(null),
+      initialDelayMs: 1_000
+    })
+
+    scheduler.beginLaunch('pty-1')
+    await vi.advanceTimersByTimeAsync(1_000)
+    await vi.waitFor(() => expect(startBackfill).toHaveBeenCalledOnce())
+
+    const options = startBackfill.mock.calls[0]?.[0]
+    // The open pane only holds its own date pending; publication is not blocked.
+    expect(options?.retainPendingScanDates).toBe(true)
+    expect(options?.canWriteCompletionMarker?.()).toBe(true)
+    // Preparation is handed the dates so it can persist them before the walk.
+    expect(prepareScheduledRun).toHaveBeenCalledWith([['2026', '08', '05']])
+  })
+
+  it('hands preparation every date a cross-midnight launch spanned', async () => {
+    vi.setSystemTime(new Date('2026-08-05T23:59:59Z'))
+    const prepareScheduledRun = vi.fn()
+    const scheduler = createCodexSessionMigrationScheduler({
+      isEligible: () => true,
+      isQuitting: () => false,
+      resolveSystemCodexHomePathOverride: () => undefined,
+      prepareScheduledRun,
+      startBackfill: vi.fn().mockResolvedValue({ stopped: false }),
+      startIndexHeal: vi.fn().mockResolvedValue(null),
+      initialDelayMs: 1_000
+    })
+
+    scheduler.beginLaunch('pty-1')
+    vi.setSystemTime(new Date('2026-08-07T01:00:00Z'))
+    scheduler.finishLaunch('pty-1')
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    expect(prepareScheduledRun).toHaveBeenLastCalledWith([
+      ['2026', '08', '05'],
+      ['2026', '08', '06'],
+      ['2026', '08', '07']
+    ])
+  })
+
   it('keeps launch passes full when no completed baseline can cover older failures', async () => {
     const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
     const scheduler = createCodexSessionMigrationScheduler({
@@ -375,7 +426,7 @@ describe('createCodexSessionMigrationScheduler', () => {
     await vi.advanceTimersByTimeAsync(1_000)
     await vi.waitFor(() => expect(startBackfill).toHaveBeenCalledOnce())
     expect(startBackfill).toHaveBeenLastCalledWith(
-      expect.objectContaining({ writeCompletionMarker: false }),
+      expect.objectContaining({ retainPendingScanDates: true }),
       undefined
     )
     expect(finishScheduledRun).not.toHaveBeenCalled()
@@ -392,8 +443,8 @@ describe('createCodexSessionMigrationScheduler', () => {
           ['2026', '08', '07']
         ],
         ignoreCompletionMarker: true,
-        writeCompletionMarker: true,
-        writeBoundedCompletionMarker: true
+        retainPendingScanDates: false,
+        fullScanRequired: false
       }),
       undefined
     )
@@ -421,7 +472,7 @@ describe('createCodexSessionMigrationScheduler', () => {
     await vi.advanceTimersByTimeAsync(1_000)
     await vi.waitFor(() => expect(startBackfill).toHaveBeenCalledOnce())
     expect(startBackfill).toHaveBeenLastCalledWith(
-      expect.objectContaining({ scanDates: undefined, writeBoundedCompletionMarker: false }),
+      expect.objectContaining({ scanDates: undefined, fullScanRequired: true }),
       undefined
     )
 
@@ -429,7 +480,7 @@ describe('createCodexSessionMigrationScheduler', () => {
     await vi.advanceTimersByTimeAsync(1_000)
     await vi.waitFor(() => expect(startBackfill).toHaveBeenCalledTimes(2))
     expect(startBackfill).toHaveBeenLastCalledWith(
-      expect.objectContaining({ scanDates: undefined, writeBoundedCompletionMarker: false }),
+      expect.objectContaining({ scanDates: undefined, fullScanRequired: true }),
       undefined
     )
     await vi.waitFor(() => expect(finishScheduledRun).toHaveBeenCalledOnce())
@@ -485,7 +536,7 @@ describe('createCodexSessionMigrationScheduler', () => {
     await vi.advanceTimersByTimeAsync(1_000)
 
     expect(startBackfill).toHaveBeenCalledWith(
-      expect.objectContaining({ scanDates: undefined, writeBoundedCompletionMarker: false }),
+      expect.objectContaining({ scanDates: undefined, fullScanRequired: true }),
       undefined
     )
     await vi.waitFor(() => expect(finishScheduledRun).toHaveBeenCalledOnce())
@@ -510,8 +561,8 @@ describe('createCodexSessionMigrationScheduler', () => {
     expect(startBackfill).toHaveBeenCalledWith(
       expect.objectContaining({
         scanDates: expect.any(Array),
-        writeCompletionMarker: false,
-        writeBoundedCompletionMarker: false
+        retainPendingScanDates: true,
+        fullScanRequired: false
       }),
       undefined
     )
@@ -536,8 +587,8 @@ describe('createCodexSessionMigrationScheduler', () => {
     expect(startBackfill).toHaveBeenCalledWith(
       expect.objectContaining({
         scanDates: expect.any(Array),
-        writeCompletionMarker: false,
-        writeBoundedCompletionMarker: false
+        retainPendingScanDates: true,
+        fullScanRequired: false
       }),
       undefined
     )
@@ -560,14 +611,14 @@ describe('createCodexSessionMigrationScheduler', () => {
     await vi.advanceTimersByTimeAsync(1_000)
 
     expect(startBackfill).toHaveBeenCalledWith(
-      expect.objectContaining({ writeCompletionMarker: false }),
+      expect.objectContaining({ retainPendingScanDates: true }),
       undefined
     )
 
     scheduler.finishLaunch('stable-pty', 4)
     await vi.advanceTimersByTimeAsync(1_000)
     expect(startBackfill).toHaveBeenLastCalledWith(
-      expect.objectContaining({ writeCompletionMarker: true }),
+      expect.objectContaining({ retainPendingScanDates: false }),
       undefined
     )
   })
@@ -588,14 +639,14 @@ describe('createCodexSessionMigrationScheduler', () => {
     scheduler.beginLaunch('stable-pty', false, new Date(), 2)
     await vi.advanceTimersByTimeAsync(61_000)
     expect(startBackfill).toHaveBeenLastCalledWith(
-      expect.objectContaining({ writeCompletionMarker: false }),
+      expect.objectContaining({ retainPendingScanDates: true }),
       undefined
     )
 
     scheduler.finishLaunch('stable-pty', 3)
     await vi.advanceTimersByTimeAsync(1_000)
     expect(startBackfill).toHaveBeenLastCalledWith(
-      expect.objectContaining({ writeCompletionMarker: true }),
+      expect.objectContaining({ retainPendingScanDates: false }),
       undefined
     )
   })
@@ -623,7 +674,7 @@ describe('createCodexSessionMigrationScheduler', () => {
     await vi.advanceTimersByTimeAsync(1_000)
     expect(startBackfill).toHaveBeenCalledTimes(2)
     expect(startBackfill).toHaveBeenLastCalledWith(
-      expect.objectContaining({ writeCompletionMarker: true }),
+      expect.objectContaining({ retainPendingScanDates: false }),
       undefined
     )
   })
@@ -646,7 +697,7 @@ describe('createCodexSessionMigrationScheduler', () => {
     scheduler.beginLaunch('stable-pty', false, new Date(), 5)
     await vi.advanceTimersByTimeAsync(1_000)
     expect(startBackfill).toHaveBeenLastCalledWith(
-      expect.objectContaining({ writeCompletionMarker: false }),
+      expect.objectContaining({ retainPendingScanDates: true }),
       undefined
     )
 
@@ -654,7 +705,7 @@ describe('createCodexSessionMigrationScheduler', () => {
     await vi.advanceTimersByTimeAsync(1_000)
     expect(startBackfill).toHaveBeenCalledTimes(2)
     expect(startBackfill).toHaveBeenLastCalledWith(
-      expect.objectContaining({ writeCompletionMarker: true }),
+      expect.objectContaining({ retainPendingScanDates: false }),
       undefined
     )
   })
@@ -675,7 +726,7 @@ describe('createCodexSessionMigrationScheduler', () => {
     await vi.advanceTimersByTimeAsync(1_000)
 
     expect(startBackfill).toHaveBeenCalledWith(
-      expect.objectContaining({ writeCompletionMarker: false }),
+      expect.objectContaining({ retainPendingScanDates: true }),
       undefined
     )
   })

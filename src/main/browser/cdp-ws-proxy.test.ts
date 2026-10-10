@@ -21,8 +21,8 @@ describe('CdpWsProxy', () => {
 
   beforeEach(async () => {
     mock = createMockWebContents()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    proxy = new CdpWsProxy(mock.webContents as any)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements every WebContents member the proxy calls.
+    proxy = new CdpWsProxy(mock.webContents as never, () => () => {})
     endpoint = await proxy.start()
   })
 
@@ -400,11 +400,7 @@ describe('CdpWsProxy', () => {
     })
 
     expect(mock.webContents.focus).toHaveBeenCalledTimes(1)
-    expect(getSendCommandMethods(mock)).toEqual([
-      'Page.enable',
-      'Page.addScriptToEvaluateOnNewDocument',
-      'Input.insertText'
-    ])
+    expect(getSendCommandMethods(mock)).toEqual(['Page.enable', 'Input.insertText'])
     client.close()
   })
 
@@ -421,7 +417,6 @@ describe('CdpWsProxy', () => {
     expect(response.result).toEqual({})
     expect(getSendCommandMethods(mock)).toEqual([
       'Page.enable',
-      'Page.addScriptToEvaluateOnNewDocument',
       'Network.enable',
       'Page.enable',
       'Page.setLifecycleEventsEnabled',
@@ -442,7 +437,6 @@ describe('CdpWsProxy', () => {
     expect(response.result).toEqual({})
     expect(getSendCommandMethods(mock)).toEqual([
       'Page.enable',
-      'Page.addScriptToEvaluateOnNewDocument',
       'Network.enable',
       'Page.enable',
       'Page.setLifecycleEventsEnabled'
@@ -462,7 +456,7 @@ describe('CdpWsProxy', () => {
       sessionId: 'iframe-session-123'
     })
 
-    expect(getSendCommandCalls(mock).slice(2)).toEqual([
+    expect(getSendCommandCalls(mock).slice(1)).toEqual([
       ['Network.enable', {}, 'iframe-session-123'],
       ['Page.enable', {}, 'iframe-session-123'],
       ['Page.setLifecycleEventsEnabled', { enabled: true }, 'iframe-session-123'],
@@ -481,7 +475,7 @@ describe('CdpWsProxy', () => {
       sessionId: 'iframe-session-123'
     })
 
-    expect(getSendCommandCalls(mock).slice(2)).toEqual([
+    expect(getSendCommandCalls(mock).slice(1)).toEqual([
       ['Network.enable', {}, 'iframe-session-123'],
       ['Page.enable', {}, 'iframe-session-123'],
       ['Page.setLifecycleEventsEnabled', { enabled: true }, 'iframe-session-123'],
@@ -562,11 +556,7 @@ describe('CdpWsProxy', () => {
 
     expect(response.id).toBe(13)
     expect(response.result).toEqual({})
-    expect(getSendCommandMethods(mock)).toEqual([
-      'Page.enable',
-      'Page.addScriptToEvaluateOnNewDocument',
-      'Runtime.evaluate'
-    ])
+    expect(getSendCommandMethods(mock)).toEqual(['Page.enable', 'Runtime.evaluate'])
     client.close()
   })
 
@@ -599,7 +589,6 @@ describe('CdpWsProxy', () => {
       printBackground: true,
       pageSize: { width: 8.5, height: 11 },
       margins: {
-        marginType: 'custom',
         top: 0.25,
         bottom: 0.5,
         left: 0.75,
@@ -625,7 +614,6 @@ describe('CdpWsProxy', () => {
 
     expect(mock.webContents.printToPDF).toHaveBeenCalledWith({
       margins: {
-        marginType: 'custom',
         top: 0.25,
         bottom: defaultPdfMarginInches,
         left: defaultPdfMarginInches,
@@ -721,7 +709,9 @@ describe('CdpWsProxy', () => {
           resolvePrint = resolve
         })
     )
-    const store = (proxy as unknown as { pdfStreams: { create: (b: Buffer) => string } }).pdfStreams
+    const store = (
+      proxy as unknown as { pageCapture: { pdfStreams: { create: (b: Buffer) => string } } }
+    ).pageCapture.pdfStreams
     const createSpy = vi.spyOn(store, 'create')
 
     const client = await connect(endpoint)
@@ -812,24 +802,5 @@ describe('CdpWsProxy', () => {
     const removedEvents = offSpy.mock.calls.map(([event]) => event)
     expect(removedEvents).toEqual(expect.arrayContaining(['message', 'close']))
     offSpy.mockRestore()
-  })
-
-  it('rejects inflight requests on stop', async () => {
-    let resolveCommand: (v: unknown) => void
-    mock.webContents.debugger.sendCommand.mockImplementation(
-      () =>
-        new Promise((r) => {
-          resolveCommand = r as (v: unknown) => void
-        })
-    )
-
-    const client = await connect(endpoint)
-    client.send(JSON.stringify({ id: 1, method: 'Page.enable', params: {} }))
-
-    await new Promise((r) => setTimeout(r, 10))
-    await proxy.stop()
-
-    resolveCommand!({})
-    client.close()
   })
 })

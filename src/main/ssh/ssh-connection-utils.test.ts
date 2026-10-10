@@ -29,35 +29,11 @@ import {
   shellEscape,
   findDefaultKeyFile,
   buildConnectConfig,
-  resolveAgentSocket,
-  CONNECT_TIMEOUT_MS,
-  INITIAL_RETRY_ATTEMPTS,
-  INITIAL_RETRY_DELAY_MS,
-  RECONNECT_BACKOFF_MS
+  resolveAgentSocket
 } from './ssh-connection-utils'
 import { resolveEffectiveProxy } from './ssh-proxy-command'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
-
-// ── Constants ────────────────────────────────────────────────────────
-
-describe('SSH connection constants', () => {
-  it('CONNECT_TIMEOUT_MS is 30 seconds (matches VS Code)', () => {
-    expect(CONNECT_TIMEOUT_MS).toBe(30_000)
-  })
-
-  it('INITIAL_RETRY_ATTEMPTS is 5', () => {
-    expect(INITIAL_RETRY_ATTEMPTS).toBe(5)
-  })
-
-  it('INITIAL_RETRY_DELAY_MS is 2 seconds', () => {
-    expect(INITIAL_RETRY_DELAY_MS).toBe(2000)
-  })
-
-  it('RECONNECT_BACKOFF_MS has 9 entries', () => {
-    expect(RECONNECT_BACKOFF_MS).toHaveLength(9)
-  })
-})
 
 // ── isTransientError ─────────────────────────────────────────────────
 
@@ -108,6 +84,15 @@ describe('isTransientError', () => {
 
   it('returns true for ECONNRESET in message', () => {
     expect(isTransientError(new Error('read ECONNRESET'))).toBe(true)
+  })
+
+  it('returns true for the bounded SSH authentication watchdog', () => {
+    const timeout = Object.assign(new Error('Timed out while waiting for SSH authentication'), {
+      level: 'client-timeout'
+    })
+
+    expect(isTransientError(timeout)).toBe(true)
+    expect(isTransientError(new Error('Timed out while waiting for SSH authentication'))).toBe(true)
   })
 
   it('returns false for auth errors', () => {
@@ -385,6 +370,11 @@ function makeResolved(overrides?: Partial<SshResolvedConfig>): SshResolvedConfig
     proxyUseFdpass: false,
     controlMaster: 'no',
     controlPersist: 'no',
+    userKnownHostsFiles: [],
+    globalKnownHostsFiles: [],
+    strictHostKeyChecking: 'ask',
+    hashKnownHosts: false,
+    updateHostKeys: 'no',
     ...overrides
   }
 }
@@ -498,6 +488,11 @@ describe('buildConnectConfig', () => {
   it('sets keepaliveInterval to 15s', () => {
     const config = buildConnectConfig(makeTarget(), null)
     expect(config.keepaliveInterval).toBe(15_000)
+  })
+
+  it('enables keyboard-interactive auth so MFA challenges can be answered', () => {
+    const config = buildConnectConfig(makeTarget(), null)
+    expect(config.tryKeyboard).toBe(true)
   })
 
   it('uses agent auth when no explicit key and SSH_AUTH_SOCK is set', () => {

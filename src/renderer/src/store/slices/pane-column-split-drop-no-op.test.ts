@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TabGroupLayoutNode } from '../../../../shared/types'
+import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
 import {
   findLayoutSiblingOnSplitSide,
   isPaneColumnSplitDropNoOp

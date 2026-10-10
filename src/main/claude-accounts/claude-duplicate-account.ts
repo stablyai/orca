@@ -1,4 +1,4 @@
-import type { ClaudeManagedAccount } from '../../shared/types'
+import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
 import { getClaudeWslSelectionKey } from './runtime-selection'
 
 export type ClaudeAccountIdentityCandidate = {

@@ -1,4 +1,4 @@
-import type { PRCheckAnnotation } from '../../../../shared/types'
+import type { PRCheckAnnotation } from '../../../../shared/github/check-types'
 import { relativePathInsideRoot, resolveRuntimePath } from '../../../../shared/cross-platform-path'
 
 const WORKFLOW_PSEUDO_ANNOTATION_PATH = '.github'

@@ -1,8 +1,8 @@
 // ─── Stats Event Log ────────────────────────────────────────────────
 
 export type StatsEventType =
-  | 'agent_start' // agent PTY detected via OSC title
-  | 'agent_stop' // agent PTY exited or went idle
+  | 'agent_start' // agent reported working via its hooks
+  | 'agent_stop' // agent left working (done/waiting/blocked) or its pane was torn down
   | 'pr_created' // PR opened from an Orca worktree
 
 export type StatsEvent = {
@@ -14,8 +14,8 @@ export type StatsEvent = {
   worktreeId?: string
   meta?: Record<string, string | number>
   // meta examples:
-  //   agent_start:  { ptyId: '42' }
-  //   agent_stop:   { ptyId: '42', durationMs: 185000 }
+  //   agent_start:  { sessionKey: '<paneKey>' }
+  //   agent_stop:   { sessionKey: '<paneKey>', durationMs: 185000 }
   //   pr_created:   { prNumber: 123 }
 }
 

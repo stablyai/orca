@@ -1,29 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
-  buildLocalNotificationData,
   getNotificationNavigationTarget,
   notificationCredentialRecoveryRoute
 } from './notification-routing'
 
 describe('notification routing', () => {
-  it('includes the host id in locally scheduled notification data', () => {
-    expect(
-      buildLocalNotificationData(
-        {
-          source: 'agent-task-complete',
-          worktreeId: 'repo::/Users/me/orca/workspaces/feature',
-          notificationId: 'agent:one'
-        },
-        'host-1'
-      )
-    ).toEqual({
-      source: 'agent-task-complete',
-      hostId: 'host-1',
-      worktreeId: 'repo::/Users/me/orca/workspaces/feature',
-      notificationId: 'agent:one'
-    })
-  })
-
   // Identities stay raw: the target is dispatched as navigator params, not a URL.
   it('routes notification taps to the worktree terminal screen', () => {
     expect(
@@ -87,4 +68,12 @@ describe('notification routing', () => {
     expect(target?.sessionTarget).not.toBeNull()
     expect(notificationCredentialRecoveryRoute(target!)).toBeNull()
   })
+})
+
+it('preserves the originating pane in the workspace route', () => {
+  const paneKey = 'tab-b:11111111-1111-4111-8111-111111111111'
+  expect(
+    getNotificationNavigationTarget({ hostId: 'host', worktreeId: 'folder:/work', paneKey })
+      ?.sessionTarget?.params
+  ).toEqual({ hostId: 'host', worktreeId: 'folder:/work', paneKey })
 })

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest'
 import type * as EditorAutosaveModule from '@/components/editor/editor-autosave'
-import type { FsChangedPayload } from '../../../shared/types'
+import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -20,10 +20,10 @@ vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
 })
 
 import {
-  createExternalWatchEventHandler,
-  getOverflowExternalReloadTargets,
-  getWatchedTargetKey
-} from './useEditorExternalWatch'
+  buildEditorExternalWatchEventHandler as createExternalWatchEventHandler,
+  collectOverflowEditorExternalReloadTargets as getOverflowExternalReloadTargets
+} from './editor-external-watch-event-reconciliation'
+import { getEditorExternalWatchTargetKey as getWatchedTargetKey } from './editor-external-watch-targets'
 import { useAppStore } from '@/store'
 import {
   getOpenFilesForExternalFileChange,

@@ -1,4 +1,4 @@
-import type { CheckStatus } from '../../shared/types'
+import type { CheckStatus } from '../../shared/github/pull-request-types'
 import {
   deriveBitbucketBuildStatus,
   mapBitbucketPullRequest,

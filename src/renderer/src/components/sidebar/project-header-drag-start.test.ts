@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { createProjectHeaderDragSession } from './project-header-drag-start'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 
 function createRepo(id: string, projectGroupId: string | null = null): Repo {
   return {

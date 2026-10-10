@@ -1,5 +1,5 @@
 import { useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   ColorField,
   SettingsSegmentedControl,
@@ -252,8 +252,19 @@ export function TerminalThemeCatalogSection({
                   onQueryChange={setThemeSearch}
                   onSelectTheme={(theme) => {
                     rememberTerminalThemeTarget(target)
+                    // A selected theme must replace overrides or they mask the picker.
+                    const hasColorOverrides =
+                      Object.keys(settings.terminalColorOverrides ?? {}).length > 0
                     updateSettings(
-                      isLightTarget ? { terminalThemeLight: theme } : { terminalThemeDark: theme }
+                      isLightTarget
+                        ? {
+                            terminalThemeLight: theme,
+                            ...(hasColorOverrides ? { terminalColorOverrides: undefined } : {})
+                          }
+                        : {
+                            terminalThemeDark: theme,
+                            ...(hasColorOverrides ? { terminalColorOverrides: undefined } : {})
+                          }
                     )
                   }}
                   importedHighlightSignal={importedHighlightSignal}

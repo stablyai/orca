@@ -3,13 +3,17 @@
  *
  * Why: heavy fan-out (listWorkItems × repos, org-walks) can drain the core/search buckets; surfacing remaining budget lets users self-regulate rather than throttle.
  * The probe itself is exempt from rate-limit accounting per GitHub docs.
+ *
+ * Part A: breaker stays host/runtime-scoped (not account-scoped). Bound-account
+ * calls can trip a host breaker that ambient reset probes later clear — known
+ * cross-account bleed, accepted for Part A.
  */
 import type {
   GetRateLimitResult,
   GitHubRateLimitBucket,
   GitHubRateLimitSnapshot
-} from '../../shared/types'
-import { isDefaultGitHubHost } from '../../shared/github-repository-identity-key'
+} from '../../shared/github/rate-limit-types'
+import { isDefaultGitHubHost } from '../../shared/github/repository-identity-key'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { acquire, release } from './gh-utils'
 import { ghExecFileAsync } from '../git/runner'

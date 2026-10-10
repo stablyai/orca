@@ -6,8 +6,13 @@ import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../ui/button'
 import { removeSshTargetWithBestEffortCleanup } from './ssh-target-remove'
-import { terminateSshSessionsWithReconnect } from './ssh-session-termination'
+import {
+  describeSshTerminateOutcome,
+  terminateSshSessionsWithReconnect
+} from './ssh-session-termination'
 import { SshTargetCard } from './SshTargetCard'
+import { SshTargetServerStatus } from './SshTargetServerStatus'
+import { SshTargetsEmptyState } from './SshTargetsEmptyState'
 import { SshTargetDestructiveActions } from './SshTargetDestructiveActions'
 import { SshTargetForm, EMPTY_FORM, type EditingTarget } from './SshTargetForm'
 import { getEditingTargetForSshTarget } from './ssh-target-draft'
@@ -218,10 +223,8 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
 
   const handleTerminateSessions = async (targetId: string): Promise<void> => {
     try {
-      await terminateSshSessionsWithReconnect(targetId)
-      toast.success(
-        translate('auto.components.settings.SshPane.90e308c98b', 'Remote terminals ended')
-      )
+      const report = describeSshTerminateOutcome(await terminateSshSessionsWithReconnect(targetId))
+      toast[report.level](report.message)
     } catch (err) {
       toast.error(
         err instanceof Error
@@ -374,33 +377,30 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
           <>
             {/* Target list */}
             {targets.length === 0 ? (
-              <div className="flex items-center justify-center rounded-lg border border-dashed border-border/60 bg-card/30 px-4 py-5 text-sm text-muted-foreground">
-                {translate(
-                  'auto.components.settings.SshPane.c0f1c80166',
-                  'No SSH targets configured.'
-                )}
-              </div>
+              <SshTargetsEmptyState />
             ) : (
               <div className="space-y-2">
                 {targets.map((target) => (
-                  <SshTargetCard
-                    key={target.id}
-                    target={target}
-                    state={sshConnectionStates.get(target.id)}
-                    testing={testingIds.has(target.id)}
-                    busyAction={busyActionForTarget(target.id)}
-                    onConnect={handleConnect}
-                    onDisconnect={handleDisconnect}
-                    onTerminateSessions={(id) =>
-                      requestTerminateSessions({ id, label: target.label })
-                    }
-                    onResetRelay={(id) => requestResetRelay({ id, label: target.label })}
-                    onTest={handleTest}
-                    onEdit={handleEdit}
-                    onRemove={(id) =>
-                      requestRemoveTarget({ id, label: target.label }, requestRemove)
-                    }
-                  />
+                  <div key={target.id} className="space-y-1">
+                    <SshTargetCard
+                      target={target}
+                      state={sshConnectionStates.get(target.id)}
+                      testing={testingIds.has(target.id)}
+                      busyAction={busyActionForTarget(target.id)}
+                      onConnect={handleConnect}
+                      onDisconnect={handleDisconnect}
+                      onTerminateSessions={(id) =>
+                        requestTerminateSessions({ id, label: target.label })
+                      }
+                      onResetRelay={(id) => requestResetRelay({ id, label: target.label })}
+                      onTest={handleTest}
+                      onEdit={handleEdit}
+                      onRemove={(id) =>
+                        requestRemoveTarget({ id, label: target.label }, requestRemove)
+                      }
+                    />
+                    <SshTargetServerStatus target={target} onChanged={() => void loadTargets()} />
+                  </div>
                 ))}
               </div>
             )}

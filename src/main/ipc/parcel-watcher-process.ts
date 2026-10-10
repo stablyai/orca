@@ -62,6 +62,20 @@ export function disposeWatcherProcess(): void {
   }
 }
 
+/** Dispose both watcher hosts and wait for every child they own to exit. */
+export async function disposeWatcherProcessAndWait(): Promise<void> {
+  const results = await Promise.allSettled([
+    sharedWatcherProcessSupervisor.disposeAndWait(),
+    runtimeWatcherProcessPool.disposeAndWait()
+  ])
+  const failures = results.flatMap((result) =>
+    result.status === 'rejected' ? [result.reason] : []
+  )
+  if (failures.length > 0) {
+    throw new AggregateError(failures, 'watcher_process_shutdown_incomplete')
+  }
+}
+
 export function resetWatcherProcessForTest(): void {
   sharedWatcherProcessSupervisor.resetForTest()
 }

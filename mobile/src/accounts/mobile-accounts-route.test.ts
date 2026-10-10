@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { mobileAccountsRouteTarget } from './mobile-accounts-route'
 import {
@@ -6,8 +5,6 @@ import {
   navigateToHostStackRoute,
   type HostStackNavigationState
 } from '../navigation/host-stack-navigation'
-
-const homeSource = readFileSync(new URL('../../app/index.tsx', import.meta.url), 'utf8')
 
 function navigationHarness(initialState: HostStackNavigationState) {
   const stateListeners = new Set<() => void>()
@@ -80,17 +77,5 @@ describe('mobile accounts route', () => {
       source: 'host-index',
       payload: mobileAccountsRouteTarget('host/one')
     })
-  })
-
-  it('opens the home account-usage card through the cold-navigator-safe transition', () => {
-    const start = homeSource.indexOf('{/* ─── Account usage ─── */}')
-
-    // Assert the marker first: a renamed banner would otherwise slice garbage and report a
-    // missing call instead of the real cause.
-    expect(start).toBeGreaterThanOrEqual(0)
-
-    const accountsSection = homeSource.slice(start)
-    expect(accountsSection).toContain('openMobileAccounts(host.id)')
-    expect(accountsSection).not.toContain('/accounts`')
   })
 })

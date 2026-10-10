@@ -1,5 +1,6 @@
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   getPersistedWorkspaceCleanupActivityAt,
   isWorkspaceOldForCleanup

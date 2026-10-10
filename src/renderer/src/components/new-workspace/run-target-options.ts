@@ -1,4 +1,4 @@
-import type { OrcaHooks } from '../../../../shared/types'
+import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
 import type {
   NeedsSetupProjectHostOption,
   ProjectHostSetupOption,

@@ -1,9 +1,10 @@
 import { getDefaultRepoHookSettings } from '../../../shared/constants'
 import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import type { SetupScriptImportCandidate } from '../../../shared/setup-script-imports'
-import type { Repo, RepoHookSettings } from '../../../shared/types'
+import type { RepoHookSettings } from '../../../shared/orca-yaml-hook-types'
+import type { Repo } from '../../../shared/repo-types'
 import type { HookCheckResult } from '@/runtime/runtime-hooks-client'
-import { isRuntimeScopeForbiddenError } from '@/runtime/runtime-rpc-client'
+import { isRuntimeScopeForbiddenError } from '@/runtime/runtime-rpc-result'
 import { hasEffectiveSetupCommand } from './setup-script-status'
 
 const SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX = 'generation-v1:'

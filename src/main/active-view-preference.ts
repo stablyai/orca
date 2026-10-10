@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import type { TopLevelView } from '../shared/types'
+import type { TopLevelView } from '../shared/ui-chrome-types'
 import { isTopLevelView } from '../shared/top-level-view'
 
 const ACTIVE_VIEW_FILE_NAME = 'active-view.json'
@@ -43,6 +43,7 @@ export class ActiveViewPreference {
   /** Set by flushAsync so the quit flush is the final write; see scheduleSave. */
   private quitFlushStarted = false
   private quitFlushPromise: Promise<void> | null = null
+  private maintenancePaused = false
 
   constructor(dataFile: string, legacyActiveView: unknown) {
     this.file = getActiveViewPreferenceFile(dataFile)
@@ -78,6 +79,9 @@ export class ActiveViewPreference {
       return
     }
     this.writeGeneration += 1
+    if (this.maintenancePaused) {
+      return
+    }
     if (this.writeTimer) {
       clearTimeout(this.writeTimer)
     }
@@ -244,6 +248,23 @@ export class ActiveViewPreference {
   async waitForPendingWrite(): Promise<void> {
     if (this.pendingWrite) {
       await this.pendingWrite
+    }
+  }
+
+  pauseForMaintenance(): () => void {
+    if (this.maintenancePaused || this.quitFlushStarted) {
+      throw new Error('Active-view persistence is already paused')
+    }
+    this.maintenancePaused = true
+    if (this.writeTimer) {
+      clearTimeout(this.writeTimer)
+      this.writeTimer = null
+    }
+    return () => {
+      this.maintenancePaused = false
+      if (this.activeView !== this.persistedActiveView) {
+        this.scheduleSave()
+      }
     }
   }
 }

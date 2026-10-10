@@ -1,0 +1,45 @@
+name: Scheduled x86 unit compatibility
+
+on:
+  schedule:
+    # Keep current and future Node coverage on x86 while PR unit shards use ARM.
+    - cron: '0 10 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: node-next-compat
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Prime each Node ABI before its shards restore native modules.
+  test_native_cache:
+    name: prepare test native cache node ${{ matrix.node }}
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['24', '26']
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          node-version: ${{ matrix.node }}
+
+  unit_plan:
+    uses: ./.github/workflows/unit-plan.yml
+
+  test:
+    needs: [test_native_cache, unit_plan]
+    uses: ./.github/workflows/unit-tests.yml
+    with:
+      node_versions: '["24", "26"]'
+      shards: ${{ needs.unit_plan.outputs.shards }}

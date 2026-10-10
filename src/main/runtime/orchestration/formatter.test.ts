@@ -145,14 +145,6 @@ describe('formatMessageBanner', () => {
     }
   })
 
-  it('keeps current formatting unchanged when authority is explicit', () => {
-    const message = makeMessage({ id: 'msg_current' })
-
-    expect(formatMessageBanner(message, { authority: 'current' })).toBe(
-      formatMessageBanner(message)
-    )
-  })
-
   it('ends with a separator line', () => {
     const banner = formatMessageBanner(makeMessage())
     const lines = banner.split('\n')
@@ -173,25 +165,25 @@ describe('formatMessagesForInjection', () => {
     expect(result).toContain('msg_2')
     expect(result).toMatch(/\n---\n$/)
   })
-
-  it('separates multiple banners with blank lines', () => {
-    const messages = [makeMessage({ id: 'msg_a' }), makeMessage({ id: 'msg_b' })]
-    const result = formatMessagesForInjection(messages)
-    // Two banners should be separated by \n\n
-    const bannerA = formatMessageBanner(messages[0])
-    const bannerB = formatMessageBanner(messages[1])
-    expect(result).toContain(`${bannerA}\n\n${bannerB}`)
-  })
 })
 
 describe('formatMessagePointer', () => {
   it('formats a singular pointer without message content', () => {
-    expect(formatMessagePointer(1)).toBe(
-      '\nYou have 1 orchestration message. Run `orca orchestration check`.\n'
+    expect(formatMessagePointer(1, 'run:run_1')).toBe(
+      '\nYou have 1 orchestration message. Run `orca orchestration check --run run_1`.\n'
     )
   })
 
   it('pluralizes a batched pointer', () => {
     expect(formatMessagePointer(3)).toContain('3 orchestration messages')
+  })
+
+  it('uses the terminal-resolved CLI command', () => {
+    expect(formatMessagePointer(1, 'run:run_wsl', 'orca-ide')).toContain(
+      '`orca-ide orchestration check --run run_wsl`'
+    )
+    expect(formatMessagePointer(1, 'run:run_dev', 'orca-dev')).toContain(
+      '`orca-dev orchestration check --run run_dev`'
+    )
   })
 })

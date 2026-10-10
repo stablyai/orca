@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { ParkVerdictFlipRecord } from './terminal-park-verdict-flip-telemetry'
 import { withholdUnparkableTerminalTabs } from './terminal-cold-park-withheld-tabs'
 
@@ -22,6 +22,7 @@ function pinnedRecord(pinnedUntilMs: number | null): ParkVerdictFlipRecord {
     windowStartMs: 0,
     flips: 0,
     notified: false,
+    lastFlipMs: 0,
     burstStartMs: 0,
     burstFlips: 0,
     pinnedUntilMs

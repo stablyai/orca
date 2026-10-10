@@ -52,6 +52,12 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
         this.routeIncarnations.delete(sessionId)
       }
     }
+    // Another resolver may already have removed this provider's shared routes.
+    for (const sessionId of this.routeIncarnations.keys()) {
+      if (!this.routes.has(sessionId)) {
+        this.routeIncarnations.delete(sessionId)
+      }
+    }
   }
 
   async spawnAttachOnly(opts: PtySpawnOptions & { sessionId: string }): Promise<PtySpawnResult> {

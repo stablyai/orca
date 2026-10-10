@@ -1,57 +1,83 @@
 import {
   buildRegistry,
-  formatZodError,
+  isRegistrationFencedUnsubscribe,
   isStreamingMethod,
-  type RpcAnyMethod,
+  type RpcAnyMethodDeclaration,
   type RpcEnvelopeMeta,
   type RpcRegistry,
   type RpcRequest,
   type RpcResponse
 } from './core'
 
-import type { FeatureInteractionId } from '../../../shared/feature-interactions'
 import { errorResponse, successResponse } from './errors'
 import { ALL_RPC_METHODS } from './methods'
 import { emulatorProbe, emulatorProbeError } from '../../emulator/emulator-probe'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import {
-  authenticatedCallerFingerprint,
   getOrchestrationMutationExecutor,
-  type OrchestrationMutationExecutor,
-  type DurableMutationInvocation
+  type OrchestrationMutationExecutor
 } from './orchestration-mutation-executor'
 import { orchestrationMigrationFence } from './orchestration-contract-fence'
-import { recordRuntimeFeatureInteraction } from './runtime-feature-interaction'
 import { OrchestrationLegacyCompatibility } from './orchestration-legacy-compatibility'
 import type { RpcDispatchStreamingOptions } from './dispatcher-stream-options'
-import { invalidArgumentResponse, mapDispatcherError } from './dispatcher-error-response'
+import { mapDispatcherError } from './dispatcher-error-response'
+import { parseRpcRequestParams } from './dispatcher-request-parsing'
+import { RpcStreamingDispatcher } from './rpc-streaming-dispatcher'
+import { invokeDispatcherUnaryMethod } from './dispatcher-unary-method-invocation'
+import { resolveRpcCallerIdentity } from './rpc-caller-identity'
+import {
+  bindRpcCallToCallerScope,
+  denyRpcMethodForCaller,
+  OWNER_RPC_CALLER_SCOPE,
+  type RpcCallerScope
+} from './rpc-caller-scope'
+import {
+  needsOrchestrationCallerResolution,
+  resolveOrchestrationSessionCaller,
+  type ResolvedOrchestrationRequest
+} from './orchestration-session-caller'
 
-export type DispatcherOptions = { runtime: OrcaRuntimeService; methods?: readonly RpcAnyMethod[] }
+export type DispatcherOptions = {
+  runtime: OrcaRuntimeService
+  methods?: readonly RpcAnyMethodDeclaration[]
+  /** Pins every call to this scope, for in-process bridges that relay a non-owner caller. */
+  callerScope?: RpcCallerScope
+}
+
+type DispatchCallOptions = RpcDispatchStreamingOptions
 
 export class RpcDispatcher {
   private readonly runtime: OrcaRuntimeService
   private readonly registry: RpcRegistry
   private readonly orchestrationMutations: OrchestrationMutationExecutor
   private readonly legacyOrchestration: OrchestrationLegacyCompatibility
+  private readonly streamingDispatcher: RpcStreamingDispatcher
+  private readonly pinnedCallerScope: RpcCallerScope | undefined
 
-  constructor({ runtime, methods = ALL_RPC_METHODS }: DispatcherOptions) {
+  constructor({ runtime, methods = ALL_RPC_METHODS, callerScope }: DispatcherOptions) {
     this.runtime = runtime
+    this.pinnedCallerScope = callerScope
     this.registry = buildRegistry(methods)
     this.orchestrationMutations = getOrchestrationMutationExecutor(runtime)
     this.legacyOrchestration = new OrchestrationLegacyCompatibility(runtime)
+    this.streamingDispatcher = new RpcStreamingDispatcher({
+      runtime,
+      registry: this.registry,
+      orchestrationMutations: this.orchestrationMutations,
+      legacyOrchestration: this.legacyOrchestration,
+      meta: () => this.meta(),
+      pinnedCallerScope: callerScope
+    })
   }
 
-  async dispatch(request: RpcRequest, options?: { signal?: AbortSignal }): Promise<RpcResponse> {
+  async dispatch(request: RpcRequest, options?: DispatchCallOptions): Promise<RpcResponse> {
     const meta = this.meta()
-    if (request.expectedRuntimeId && request.expectedRuntimeId !== meta.runtimeId) {
-      return errorResponse(
-        request.id,
-        meta,
-        'runtime_replaced',
-        'The runtime changed before the request could be applied. Refresh and try again.'
-      )
-    }
     const method = this.registry.get(request.method)
+    const callerScope = this.pinnedCallerScope ?? options?.callerScope ?? OWNER_RPC_CALLER_SCOPE
+    const denial = denyRpcMethodForCaller(callerScope, request.method, method?.permission)
+    if (denial) {
+      return errorResponse(request.id, meta, 'forbidden', denial)
+    }
     if (!method) {
       return errorResponse(
         request.id,
@@ -66,7 +92,15 @@ export class RpcDispatcher {
       return migrationFence
     }
 
-    const parsedParams = this.parseParams(request, method, meta)
+    let resolved: ResolvedOrchestrationRequest = { request }
+    if (needsOrchestrationCallerResolution(request)) {
+      try {
+        resolved = await resolveOrchestrationSessionCaller(this.runtime, request, options)
+      } catch (error) {
+        return mapDispatcherError(request, meta, error)
+      }
+    }
+    const parsedParams = parseRpcRequestParams(resolved.request, method, meta)
     if (parsedParams.error) {
       return parsedParams.error
     }
@@ -80,56 +114,51 @@ export class RpcDispatcher {
       )
     }
 
+    const pendingBinding = bindRpcCallToCallerScope(
+      callerScope,
+      this.runtime,
+      request.method,
+      parsedParams.value
+    )
+    const binding = pendingBinding ? await pendingBinding : null
+    if (binding?.kind === 'denied') {
+      return errorResponse(request.id, meta, 'forbidden', binding.message)
+    }
+
     if (request.method.startsWith('emulator.')) {
       emulatorProbe(`rpc ${request.method}`, request.params)
     }
     try {
-      const compatibility = await this.legacyOrchestration.tryHandle(
-        request,
-        parsedParams.value,
-        options?.signal
-      )
-      if (compatibility.handled) {
-        return successResponse(request.id, meta, compatibility.result)
-      }
-      const effectiveParams = compatibility.params ?? parsedParams.value
-      const legacyCoordinator = this.legacyOrchestration.createCoordinatorInvocation(
-        request,
-        compatibility.legacyCoordinatorAuthority
-      )
-      const invoke = (mutation?: DurableMutationInvocation) => {
-        const legacyCoordinatorRunId = legacyCoordinator?.revalidate()
-        return method.handler(effectiveParams, {
+      const result = await invokeDispatcherUnaryMethod({
+        runtime: this.runtime,
+        request: resolved.request,
+        method,
+        params: parsedParams.value,
+        context: {
           runtime: this.runtime,
           signal: options?.signal,
+          connectionId: options?.connectionId,
+          // Session tabs always need this fence. COMPAT(terminal request-addressed unsubscribe): terminal only for phones without `requestId`.
+          subscriptionRegistrationVersion: isRegistrationFencedUnsubscribe(request.method)
+            ? this.runtime.getSubscriptionRegistrationVersion()
+            : undefined,
           requestId: request.id,
-          orchestrationCapability: request.orchestrationCapability,
-          authenticatedCallerFingerprint:
-            mutation?.identity.callerFingerprint ?? authenticatedCallerFingerprint(request),
-          recordMutationReceipt: mutation?.recordReceipt,
-          orchestrationMutation: mutation?.identity,
-          legacyCoordinatorRunId,
-          legacyCoordinatorAuthority: legacyCoordinator?.authority,
-          revalidateLegacyCoordinator: legacyCoordinator?.revalidate,
-          orchestrationCompatibilityCallerAuthority:
-            compatibility.orchestrationCompatibilityCallerAuthority,
-          orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
-        })
+          clientId: options?.clientId,
+          caller: resolveRpcCallerIdentity(options),
+          clientKind: options?.clientKind,
+          clientCapabilities: options?.clientCapabilities,
+          updateClientCapabilities: options?.updateClientCapabilities,
+          authenticatedCallerFingerprint: options?.authenticatedCallerFingerprint,
+          orchestrationCaller: resolved.caller
+        },
+        orchestrationMutations: this.orchestrationMutations,
+        legacyOrchestration: this.legacyOrchestration
+      })
+      const filtered = binding?.filterResult?.(result) ?? { kind: 'allowed', result }
+      if (filtered.kind === 'denied') {
+        return errorResponse(request.id, meta, 'forbidden', filtered.message)
       }
-      const result = await this.orchestrationMutations.run(
-        request,
-        effectiveParams,
-        invoke,
-        legacyCoordinator?.mutationCallerFingerprint
-      )
-      recordRuntimeFeatureInteraction(
-        this.runtime,
-        request.method,
-        result,
-        undefined,
-        request.params
-      )
-      return successResponse(request.id, meta, result)
+      return successResponse(request.id, meta, filtered.result)
     } catch (error) {
       if (request.method.startsWith('emulator.')) {
         emulatorProbeError(`rpc ${request.method}`, error, { params: request.params })
@@ -138,174 +167,12 @@ export class RpcDispatcher {
     }
   }
 
-  // Why: streaming dispatch sends multiple responses through the reply callback
-  // instead of returning a single Promise. This enables terminal.subscribe and
-  // other subscription-style methods that push data over time.
   async dispatchStreaming(
     request: RpcRequest,
     reply: (response: string) => void,
     options?: RpcDispatchStreamingOptions
   ): Promise<void> {
-    const meta = this.meta()
-    if (request.expectedRuntimeId && request.expectedRuntimeId !== meta.runtimeId) {
-      reply(
-        JSON.stringify(
-          errorResponse(
-            request.id,
-            meta,
-            'runtime_replaced',
-            'The runtime changed before the request could be applied. Refresh and try again.'
-          )
-        )
-      )
-      return
-    }
-    const method = this.registry.get(request.method)
-    if (!method) {
-      reply(
-        JSON.stringify(
-          errorResponse(request.id, meta, 'method_not_found', `Unknown method: ${request.method}`)
-        )
-      )
-      return
-    }
-
-    const migrationFence = orchestrationMigrationFence(request, meta)
-    if (migrationFence) {
-      reply(JSON.stringify(migrationFence))
-      return
-    }
-
-    const parsedParams = this.parseParams(request, method, meta)
-    if (parsedParams.error) {
-      reply(JSON.stringify(parsedParams.error))
-      return
-    }
-
-    if (!isStreamingMethod(method)) {
-      try {
-        const compatibility = await this.legacyOrchestration.tryHandle(
-          request,
-          parsedParams.value,
-          options?.signal
-        )
-        if (compatibility.handled) {
-          reply(JSON.stringify(successResponse(request.id, meta, compatibility.result)))
-          return
-        }
-        const effectiveParams = compatibility.params ?? parsedParams.value
-        const legacyCoordinator = this.legacyOrchestration.createCoordinatorInvocation(
-          request,
-          compatibility.legacyCoordinatorAuthority
-        )
-        const invoke = (mutation?: DurableMutationInvocation) => {
-          const legacyCoordinatorRunId = legacyCoordinator?.revalidate()
-          return method.handler(effectiveParams, {
-            runtime: this.runtime,
-            signal: options?.signal,
-            requestId: request.id,
-            connectionId: options?.connectionId,
-            clientId: options?.clientId,
-            pairedDeviceId: options?.pairedDeviceId,
-            clientKind: options?.clientKind,
-            clientCapabilities: options?.clientCapabilities,
-            orchestrationCapability: request.orchestrationCapability,
-            authenticatedCallerFingerprint:
-              mutation?.identity.callerFingerprint ?? authenticatedCallerFingerprint(request),
-            recordMutationReceipt: mutation?.recordReceipt,
-            orchestrationMutation: mutation?.identity,
-            pairing: options?.pairing,
-            sendBinary: options?.sendBinary,
-            registerBinaryStreamHandler: options?.registerBinaryStreamHandler,
-            legacyCoordinatorRunId,
-            legacyCoordinatorAuthority: legacyCoordinator?.authority,
-            revalidateLegacyCoordinator: legacyCoordinator?.revalidate,
-            orchestrationCompatibilityCallerAuthority:
-              compatibility.orchestrationCompatibilityCallerAuthority,
-            orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
-          })
-        }
-        const result = await this.orchestrationMutations.run(
-          request,
-          effectiveParams,
-          invoke,
-          legacyCoordinator?.mutationCallerFingerprint
-        )
-        recordRuntimeFeatureInteraction(
-          this.runtime,
-          request.method,
-          result,
-          undefined,
-          request.params
-        )
-        reply(JSON.stringify(successResponse(request.id, meta, result)))
-      } catch (error) {
-        reply(JSON.stringify(mapDispatcherError(request, meta, error)))
-      }
-      return
-    }
-
-    const recordedStreamingFeatureInteractions = new Set<FeatureInteractionId>()
-    const emit = (result: unknown): void => {
-      recordRuntimeFeatureInteraction(
-        this.runtime,
-        request.method,
-        result,
-        recordedStreamingFeatureInteractions,
-        request.params
-      )
-      const response = successResponse(request.id, meta, result)
-      response.streaming = true
-      reply(JSON.stringify(response))
-    }
-
-    try {
-      const result = await method.handler(
-        parsedParams.value,
-        {
-          runtime: this.runtime,
-          signal: options?.signal,
-          requestId: request.id,
-          connectionId: options?.connectionId,
-          clientId: options?.clientId,
-          pairedDeviceId: options?.pairedDeviceId,
-          clientKind: options?.clientKind,
-          clientCapabilities: options?.clientCapabilities,
-          orchestrationCapability: request.orchestrationCapability,
-          pairing: options?.pairing,
-          sendBinary: options?.sendBinary,
-          registerBinaryStreamHandler: options?.registerBinaryStreamHandler
-        },
-        emit
-      )
-      recordRuntimeFeatureInteraction(
-        this.runtime,
-        request.method,
-        result,
-        recordedStreamingFeatureInteractions,
-        request.params
-      )
-    } catch (error) {
-      reply(JSON.stringify(mapDispatcherError(request, meta, error)))
-    }
-  }
-
-  private parseParams(
-    request: RpcRequest,
-    method: RpcAnyMethod,
-    meta: RpcEnvelopeMeta
-  ): { value: unknown; error?: undefined } | { value?: undefined; error: RpcResponse } {
-    if (method.params === null) {
-      return { value: undefined }
-    }
-    const rawParams = request.params ?? {}
-    const result = method.params.safeParse(rawParams)
-    if (!result.success) {
-      return {
-        error: invalidArgumentResponse(request, meta, formatZodError(result.error))
-      }
-    }
-    return { value: result.data }
+    return this.streamingDispatcher.dispatch(request, reply, options)
   }
 
   private meta(): RpcEnvelopeMeta {

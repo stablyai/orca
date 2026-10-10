@@ -1,3 +1,4 @@
+import type * as NodeCliCommandResolutionModule from '../../shared/node-cli-command-resolution'
 import { EventEmitter } from 'node:events'
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
@@ -12,6 +13,7 @@ const {
   resolveCliCommandMock,
   rmSyncMock,
   spawnMock,
+  stdioForWindowsInteractiveChildMock,
   writeKeychainMock
 } = vi.hoisted(() => ({
   deleteKeychainMock: vi.fn(),
@@ -20,6 +22,7 @@ const {
   resolveCliCommandMock: vi.fn(),
   rmSyncMock: vi.fn(),
   spawnMock: vi.fn(),
+  stdioForWindowsInteractiveChildMock: vi.fn(),
   writeKeychainMock: vi.fn()
 }))
 
@@ -41,9 +44,15 @@ vi.mock('../../main/claude-accounts/keychain', () => ({
   readActiveClaudeKeychainCredentialsStrict: readKeychainMock,
   writeActiveClaudeKeychainCredentials: writeKeychainMock
 }))
-vi.mock('../../shared/node-cli-command-resolution', () => ({
+// Why importOriginal: withCliRuntimeOnPath is a pure filesystem-probing helper,
+// and the PATH assertions below are only meaningful against the real one.
+vi.mock('../../shared/node-cli-command-resolution', async (importOriginal) => ({
+  ...(await importOriginal<typeof NodeCliCommandResolutionModule>()),
   getVersionManagerBinPaths: getVersionManagerBinPathsMock,
   resolveCliCommand: resolveCliCommandMock
+}))
+vi.mock('../../shared/windows-console-input', () => ({
+  stdioForWindowsInteractiveChild: stdioForWindowsInteractiveChildMock
 }))
 
 import { ACCOUNT_HANDLERS } from './account'
@@ -88,14 +97,16 @@ describe('account CLI handlers', () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
   const originalElectronRunAsNode = process.env.ELECTRON_RUN_AS_NODE
   const originalPathAlias = process.env.Path
+  const originalWslDistroName = process.env.WSL_DISTRO_NAME
+  const originalBridgeDistro = process.env.ORCA_CLI_WSL_DISTRO
   const callMock = vi.fn()
   const client = { call: callMock } as unknown as RuntimeClient
   let logSpy: ReturnType<typeof vi.spyOn>
 
-  function context(agent: string, json = false): HandlerContext {
+  function context(agent: string, json = false, cwd = process.cwd()): HandlerContext {
     return {
       client,
-      cwd: process.cwd(),
+      cwd,
       flags: new Map([['agent', agent]]),
       json,
       rawArgs: []
@@ -105,6 +116,10 @@ describe('account CLI handlers', () => {
   beforeEach(() => {
     Object.defineProperty(process, 'platform', originalPlatform)
     spawnMock.mockReset().mockImplementation(() => successfulChild())
+    stdioForWindowsInteractiveChildMock.mockReset().mockImplementation((json: boolean) => ({
+      stdio: ['inherit', json ? process.stderr : 'inherit', 'inherit'],
+      dispose: vi.fn()
+    }))
     resolveCliCommandMock.mockReset().mockImplementation((command: string) => command)
     getVersionManagerBinPathsMock.mockReset().mockReturnValue([])
     readKeychainMock.mockReset().mockResolvedValue(null)
@@ -123,6 +138,10 @@ describe('account CLI handlers', () => {
     )
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     process.env.ELECTRON_RUN_AS_NODE = '1'
+    // Why: a test run inside a real distro carries WSL_DISTRO_NAME, which would
+    // leak WSL attribution into every faked-win32 add below.
+    delete process.env.WSL_DISTRO_NAME
+    delete process.env.ORCA_CLI_WSL_DISTRO
   })
 
   afterEach(() => {
@@ -137,6 +156,16 @@ describe('account CLI handlers', () => {
       delete process.env.Path
     } else {
       process.env.Path = originalPathAlias
+    }
+    if (originalBridgeDistro === undefined) {
+      delete process.env.ORCA_CLI_WSL_DISTRO
+    } else {
+      process.env.ORCA_CLI_WSL_DISTRO = originalBridgeDistro
+    }
+    if (originalWslDistroName === undefined) {
+      delete process.env.WSL_DISTRO_NAME
+    } else {
+      process.env.WSL_DISTRO_NAME = originalWslDistroName
     }
   })
 
@@ -157,6 +186,56 @@ describe('account CLI handlers', () => {
     expect(callMock).toHaveBeenCalledWith('accounts.addCodexFromHome', {
       sourceHome: spawnOptions.env.CODEX_HOME
     })
+  })
+
+  it('passes Windows console device handles to the login child instead of inheriting Electron stdio', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const dispose = vi.fn()
+    stdioForWindowsInteractiveChildMock.mockReturnValue({
+      stdio: [11, 'inherit', 'inherit'],
+      dispose
+    })
+
+    await ACCOUNT_HANDLERS['account add'](context('codex'))
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'codex',
+      ['login', '--device-auth'],
+      expect.objectContaining({ stdio: [11, 'inherit', 'inherit'] })
+    )
+    expect(dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('disposes the Windows console input fd when spawn throws synchronously', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const dispose = vi.fn()
+    stdioForWindowsInteractiveChildMock.mockReturnValue({
+      stdio: [11, 'inherit', 'inherit'],
+      dispose
+    })
+    spawnMock.mockImplementationOnce(() => {
+      throw new Error('invalid stdio')
+    })
+
+    await expect(ACCOUNT_HANDLERS['account add'](context('codex'))).rejects.toThrow('invalid stdio')
+
+    expect(dispose).toHaveBeenCalledOnce()
+  })
+
+  it('keeps JSON login prompts off the CLI stdout envelope when console fds are attached', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    stdioForWindowsInteractiveChildMock.mockReturnValue({
+      stdio: [11, process.stderr, 'inherit'],
+      dispose: vi.fn()
+    })
+
+    await ACCOUNT_HANDLERS['account add'](context('codex', true))
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'codex',
+      ['login', '--device-auth'],
+      expect.objectContaining({ stdio: [11, process.stderr, 'inherit'] })
+    )
   })
 
   it('routes Windows package-manager shims through the safe cmd launcher', async () => {
@@ -244,6 +323,88 @@ describe('account CLI handlers', () => {
     })
     expect(existsSync(configDir)).toBe(false)
   })
+
+  it('attributes a Claude account added through the WSL bridge to the cwd distro', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+    await ACCOUNT_HANDLERS['account add'](
+      context('claude', false, String.raw`\\wsl.localhost\Ubuntu-22.04\home\user\project`)
+    )
+
+    const configDir = spawnMock.mock.calls[0]?.[2].env.CLAUDE_CONFIG_DIR
+    expect(callMock).toHaveBeenCalledWith('accounts.addClaudeFromConfigDir', {
+      configDir,
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu-22.04'
+    })
+  })
+
+  it('attributes a Codex account added through the WSL bridge to the cwd distro', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+    await ACCOUNT_HANDLERS['account add'](
+      context('codex', false, String.raw`\\wsl$\Ubuntu\home\user`)
+    )
+
+    const sourceHome = spawnMock.mock.calls[0]?.[2].env.CODEX_HOME
+    expect(callMock).toHaveBeenCalledWith('accounts.addCodexFromHome', {
+      sourceHome,
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu'
+    })
+  })
+
+  it('uses the explicit bridge distro over an ambient environment or another distro cwd', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    process.env.WSL_DISTRO_NAME = 'stale-Windows-value'
+    process.env.ORCA_CLI_WSL_DISTRO = 'Debian'
+
+    await ACCOUNT_HANDLERS['account add'](
+      context('claude', false, String.raw`\\wsl.localhost\Ubuntu-22.04\home\user`)
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'accounts.addClaudeFromConfigDir',
+      expect.objectContaining({ runtime: 'wsl', wslDistro: 'Debian' })
+    )
+  })
+
+  it.each(['claude', 'codex'])(
+    'attributes %s from a Windows mount to the bridge distro',
+    async (agent) => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      process.env.ORCA_CLI_WSL_DISTRO = 'Ubuntu Work'
+      await ACCOUNT_HANDLERS['account add'](context(agent, false, String.raw`C:\work with spaces`))
+      expect(callMock).toHaveBeenCalledWith(
+        agent === 'claude' ? 'accounts.addClaudeFromConfigDir' : 'accounts.addCodexFromHome',
+        expect.objectContaining({ runtime: 'wsl', wslDistro: 'Ubuntu Work' })
+      )
+    }
+  )
+
+  it('ignores an ambient WSL distro in a native Windows account add', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    process.env.WSL_DISTRO_NAME = 'stale-Windows-value'
+    await ACCOUNT_HANDLERS['account add'](context('codex', false, String.raw`C:\work`))
+    const sourceHome = spawnMock.mock.calls[0]?.[2].env.CODEX_HOME
+    expect(callMock).toHaveBeenCalledWith('accounts.addCodexFromHome', { sourceHome })
+  })
+
+  it.each(['linux', 'darwin'])(
+    'keeps host attribution when the CLI runs on %s',
+    async (platform) => {
+      // Why: a Linux CLI talks to a Linux runtime whose accounts are host-lane;
+      // WSL_DISTRO_NAME there names the CLI's own environment, not a target lane.
+      Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+      process.env.WSL_DISTRO_NAME = 'Ubuntu-22.04'
+      process.env.ORCA_CLI_WSL_DISTRO = 'Ubuntu-22.04'
+
+      await ACCOUNT_HANDLERS['account add'](context('codex'))
+
+      const sourceHome = spawnMock.mock.calls[0]?.[2].env.CODEX_HOME
+      expect(callMock).toHaveBeenCalledWith('accounts.addCodexFromHome', { sourceHome })
+    }
+  )
 
   it('waits for physical child close before removing interrupted login credentials', async () => {
     // Why: deleting first lets the still-live login recreate credentials afterward.
@@ -554,7 +715,9 @@ describe('account CLI handlers', () => {
     // default would run a full OAuth login for the wrong provider.
     await expect(
       ACCOUNT_HANDLERS['account add']({ ...context('claude'), flags: new Map([['agent', true]]) })
-    ).rejects.toThrow('Missing a value for --agent')
+    ).rejects.toThrow(
+      'Missing a value for --agent. Use `--agent claude`, `--agent codex`, `--agent opencode`, or `--agent devin`.'
+    )
     expect(spawnMock).not.toHaveBeenCalled()
   })
 

@@ -1,11 +1,18 @@
+import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
+import {
+  WORKTREE_LINKED_ITEMS_RUNTIME_CAPABILITY,
+  WORKSPACE_ATTACHMENT_RUNTIME_CAPABILITIES
+} from '../../../../shared/workspace-attachment-capabilities'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace, ProjectGroup } from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import { createTestStore } from './store-test-helpers'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
 const folderWorkspacesUpdate = vi.fn()
 const folderWorkspacesDelete = vi.fn()
@@ -68,6 +75,105 @@ beforeEach(() => {
 })
 
 describe('folder workspace owner-routed mutations', () => {
+  it.each([true, false])(
+    'keeps legacy folder task link=%s compatible with an older host',
+    async (link) => {
+      const folderWorkspace = makeFolderWorkspace({ executionHostId: 'runtime:env-owner' })
+      const linkedTask = link
+        ? {
+            provider: 'github' as const,
+            type: 'issue' as const,
+            number: 9,
+            title: 'Existing task',
+            url: 'https://github.com/acme/orca/issues/9',
+            repoId: 'repo'
+          }
+        : null
+      runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+        const status = createCompatibleRuntimeStatusResponseIfNeeded(args)
+        return status?.ok
+          ? {
+              ...status,
+              result: {
+                ...status.result,
+                capabilities: status.result.capabilities?.filter(
+                  (capability) =>
+                    !WORKSPACE_ATTACHMENT_RUNTIME_CAPABILITIES.some((item) => item === capability)
+                )
+              }
+            }
+          : runtimeEnvironmentCall(args)
+      })
+      runtimeEnvironmentCall.mockResolvedValue({
+        id: 'folder-write',
+        ok: true,
+        result: { folderWorkspace: { ...folderWorkspace, linkedTask, updatedAt: 2 } }
+      })
+      const store = createTestStore()
+      store.setState({
+        projectGroups: [{ ...projectGroup, executionHostId: 'runtime:env-owner' }],
+        folderWorkspaces: [folderWorkspace]
+      })
+      await expect(
+        store.getState().updateWorktreeMeta(
+          folderWorkspaceKey(folderWorkspace.id),
+          {
+            linkedWorkItem: linkedTask
+          },
+          { executionHostId: 'runtime:env-owner' }
+        )
+      ).resolves.toEqual({ ok: true })
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'folderWorkspace.update',
+          params: {
+            folderWorkspaceId: folderWorkspace.id,
+            updates: { linkedTask }
+          }
+        })
+      )
+    }
+  )
+
+  it('reports failure when the host drops an attachment collection', async () => {
+    const folderWorkspace = makeFolderWorkspace()
+    folderWorkspacesUpdate.mockResolvedValue(folderWorkspace)
+    folderWorkspacesList.mockResolvedValue([folderWorkspace])
+    const store = createTestStore()
+    store.setState({
+      projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
+      folderWorkspaces: [folderWorkspace]
+    })
+    const result = await store.getState().updateFolderWorkspace(folderWorkspace.id, {
+      linkedItems: [{ provider: 'linear', type: 'issue', number: 0, identifier: 'ENG-42' }]
+    })
+    expect(result).toBe(false)
+    expect(store.getState().folderWorkspaces[0]?.linkedItems).toBeUndefined()
+  })
+
+  it('persists manual rank through the shared batch metadata boundary', async () => {
+    const folderWorkspace = makeFolderWorkspace()
+    folderWorkspacesUpdate.mockResolvedValue({ ...folderWorkspace, manualOrder: 9000 })
+    const store = createTestStore()
+    store.setState({
+      projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
+      folderWorkspaces: [folderWorkspace]
+    })
+
+    await store.getState().updateWorktreesMeta([
+      {
+        worktreeId: folderWorkspaceKey(folderWorkspace.id),
+        updates: { manualOrder: 9000 }
+      }
+    ])
+
+    expect(folderWorkspacesUpdate).toHaveBeenCalledWith({
+      folderWorkspaceId: folderWorkspace.id,
+      updates: { manualOrder: 9000 }
+    })
+    expect(store.getState().folderWorkspaces[0]?.manualOrder).toBe(9000)
+  })
+
   it('updates a local folder locally while another runtime is focused', async () => {
     const folderWorkspace = makeFolderWorkspace()
     folderWorkspacesUpdate.mockResolvedValue({ ...folderWorkspace, comment: 'Ready' })
@@ -269,6 +375,7 @@ describe('folder workspace owner-routed mutations', () => {
         { isUnread: true },
         { executionHostId: 'runtime:env-owner' }
       )
+    await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1))
     await store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: null })
     resolveRuntimeUpdate({
       id: 'rpc-update-folder',
@@ -387,10 +494,12 @@ describe('folder workspace owner-routed mutations', () => {
     const folderWorkspace = makeFolderWorkspace()
     folderWorkspacesDelete.mockResolvedValue(true)
     const store = createTestStore()
+    const shutdownWorktreeBrowsers = vi.fn().mockResolvedValue(undefined)
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-focused' } as never,
       projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
-      folderWorkspaces: [folderWorkspace]
+      folderWorkspaces: [folderWorkspace],
+      shutdownWorktreeBrowsers
     })
 
     await expect(store.getState().deleteFolderWorkspace(folderWorkspace.id)).resolves.toBe(true)
@@ -398,7 +507,41 @@ describe('folder workspace owner-routed mutations', () => {
     expect(folderWorkspacesDelete).toHaveBeenCalledWith({
       folderWorkspaceId: folderWorkspace.id
     })
+    expect(shutdownWorktreeBrowsers).toHaveBeenCalledWith(folderWorkspaceKey(folderWorkspace.id))
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('deletes only the selected owner row when workspace IDs collide', async () => {
+    const localFolder = makeFolderWorkspace({ executionHostId: 'local' })
+    const runtimeFolder = makeFolderWorkspace({
+      name: 'Runtime collision',
+      folderPath: '/runtime/platform',
+      executionHostId: 'runtime:env-owner'
+    })
+    folderWorkspacesDelete.mockResolvedValue(true)
+    const store = createTestStore()
+    const shutdownWorktreeBrowsers = vi.fn().mockResolvedValue(undefined)
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: null } as never,
+      activeWorktreeId: `folder:${localFolder.id}`,
+      activeWorkspaceExecutionHostId: 'local',
+      projectGroups: [
+        { ...projectGroup, executionHostId: 'local' },
+        { ...projectGroup, executionHostId: 'runtime:env-owner' }
+      ],
+      folderWorkspaces: [localFolder, runtimeFolder],
+      shutdownWorktreeBrowsers
+    })
+
+    await expect(store.getState().deleteFolderWorkspace(localFolder.id)).resolves.toBe(true)
+
+    expect(folderWorkspacesDelete).toHaveBeenCalledWith({
+      folderWorkspaceId: localFolder.id
+    })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    // Delete is owner-scoped: the sibling host's row keeps the bare ID alive.
+    expect(store.getState().folderWorkspaces).toEqual([runtimeFolder])
+    expect(shutdownWorktreeBrowsers).not.toHaveBeenCalled()
   })
 
   it('deletes a runtime folder through its owner instead of the focused runtime', async () => {
@@ -425,5 +568,59 @@ describe('folder workspace owner-routed mutations', () => {
       timeoutMs: 15_000
     })
     expect(folderWorkspacesDelete).not.toHaveBeenCalled()
+    expect(store.getState().folderWorkspaces).toEqual([])
+  })
+
+  it('deletes only the host-qualified folder when ids collide', async () => {
+    const localFolder = makeFolderWorkspace({ executionHostId: 'local' })
+    const runtimeFolder = makeFolderWorkspace({ executionHostId: 'runtime:env-owner' })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-delete-folder',
+      ok: true,
+      result: { deleted: true },
+      _meta: { runtimeId: 'runtime-owner' }
+    })
+    const store = createTestStore()
+    store.setState({
+      activeWorktreeId: `folder:${runtimeFolder.id}`,
+      activeWorkspaceExecutionHostId: 'runtime:env-owner',
+      settings: { activeRuntimeEnvironmentId: 'env-owner' } as never,
+      projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
+      folderWorkspaces: [localFolder, runtimeFolder]
+    })
+
+    await expect(
+      store
+        .getState()
+        .deleteFolderWorkspace(runtimeFolder.id, { executionHostId: 'runtime:env-owner' })
+    ).resolves.toBe(true)
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-owner',
+      method: 'folderWorkspace.delete',
+      params: { folderWorkspaceId: runtimeFolder.id },
+      timeoutMs: 15_000
+    })
+    expect(store.getState().folderWorkspaces).toEqual([localFolder])
+  })
+  it('refuses collection creation before an old runtime strips attachments', async () => {
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      const status = createCompatibleRuntimeStatusResponseIfNeeded(args)
+      if (status?.ok) {
+        status.result.capabilities = (status.result.capabilities ?? []).filter(
+          (capability) => capability !== WORKTREE_LINKED_ITEMS_RUNTIME_CAPABILITY
+        )
+        return status
+      }
+      return runtimeEnvironmentCall(args)
+    })
+    const store = createTestStore()
+    store.setState({
+      settings: createGlobalSettingsFixture({ activeRuntimeEnvironmentId: 'env-old' })
+    })
+    await expect(
+      store.getState().createFolderWorkspace({ projectGroupId: projectGroup.id, linkedItems: [] })
+    ).rejects.toThrow('Update the remote runtime')
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 })

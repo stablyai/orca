@@ -2,7 +2,7 @@
 
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JiraConnectionStatus, JiraIssue, JiraSite } from '../../../../shared/types'
+import type { JiraConnectionStatus, JiraIssue, JiraSite } from '../../../../shared/jira-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { useJiraUrlSource } from './use-jira-url-source'
 

@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { app } from 'electron'
+import { quitProcess } from './startup/process-quit-request'
 import {
   SERVE_UPDATE_HANDOFF_PATH_ENV,
   getServeUpdateHandoffPath,
@@ -79,7 +80,7 @@ export function installServeSupervisorDisconnectQuit(
   if (!isServeMode || !hasServeUpdateSupervisor()) {
     return () => undefined
   }
-  const quit = (): void => app.quit()
+  const quit = (): void => quitProcess()
   parent.once('disconnect', quit)
   return () => parent.off('disconnect', quit)
 }

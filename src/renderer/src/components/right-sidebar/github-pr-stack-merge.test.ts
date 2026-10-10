@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { GitHubPRStack } from '../../../../shared/types'
+import type { GitHubPRStack } from '../../../../shared/github/pull-request-types'
 import {
   getGitHubPRStackMergeBlocker,
   getGitHubPRStackMergeScope,

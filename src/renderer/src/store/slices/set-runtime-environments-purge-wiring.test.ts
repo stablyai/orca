@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, vi } from 'vitest'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
-import type { ProjectHostSetup } from '../../../../shared/types'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 
 vi.mock('sonner', () => ({

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactModule from 'react'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 
 const mocks = vi.hoisted(() => ({
   stateValues: [] as unknown[],
@@ -283,5 +283,19 @@ describe('useCreateRepo default-checkout handoff', () => {
       executionHostId: 'runtime:env-1'
     })
     expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'runtime:env-1')
+  })
+
+  it('never creates on this computer while the chosen host is unresolved', async () => {
+    const { useCreateRepo } = await import('./useCreateRepo')
+
+    const result = useCreateRepo(mocks.fetchWorktrees, vi.fn(), mocks.onGitRepoReady, {
+      hostId: null,
+      runtimeEnvironmentId: null,
+      sshTargetId: null
+    })
+    await result.handleCreate()
+
+    expect(mocks.createRepo).not.toHaveBeenCalled()
+    expect(mocks.createRemoteRepo).not.toHaveBeenCalled()
   })
 })

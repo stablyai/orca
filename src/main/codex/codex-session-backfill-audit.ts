@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { createReadStream, type Stats } from 'node:fs'
+import type { Stats } from 'node:fs'
 import { appendFile, mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { createInterface } from 'node:readline'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import { streamCodexSessionLedgerRecords } from './codex-session-ledger-stream'
 import type { CodexSessionBackfillSummary } from './codex-session-backfill-types'
 
 export type CodexSessionBackfillAuditWriter = (record: Record<string, unknown>) => Promise<boolean>
@@ -68,38 +68,23 @@ export async function readCodexSessionBackfillAuditCoverage(
     diagnosticEventIds: new Set<string>(),
     hasRunSummary: false
   }
-  const input = createReadStream(auditLogPath, { encoding: 'utf-8' })
-  const lines = createInterface({ input, crlfDelay: Infinity })
-  try {
-    for await (const raw of lines) {
-      try {
-        const parsed: unknown = JSON.parse(raw)
-        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-          continue
-        }
-        const record = parsed as Record<string, unknown>
-        coverage.hasRunSummary ||= record.action === 'run-summary'
-        if (
-          typeof record.action === 'string' &&
-          HEAL_AUDIT_ACTIONS.has(record.action) &&
-          typeof record.fileEventId === 'string'
-        ) {
-          coverage.fileEventIds.add(record.fileEventId)
-        }
-        if (
-          typeof record.action === 'string' &&
-          DIAGNOSTIC_AUDIT_ACTIONS.has(record.action) &&
-          typeof record.diagnosticEventId === 'string'
-        ) {
-          coverage.diagnosticEventIds.add(record.diagnosticEventId)
-        }
-      } catch {
-        // Torn audit tails are quarantined by the writer's leading newline.
-      }
+  for await (const record of streamCodexSessionLedgerRecords(auditLogPath, {
+    throwOnReadFailure: true
+  })) {
+    coverage.hasRunSummary ||= record.action === 'run-summary'
+    if (
+      typeof record.action === 'string' &&
+      HEAL_AUDIT_ACTIONS.has(record.action) &&
+      typeof record.fileEventId === 'string'
+    ) {
+      coverage.fileEventIds.add(record.fileEventId)
     }
-  } catch (error) {
-    if (!isNotFoundError(error)) {
-      throw error
+    if (
+      typeof record.action === 'string' &&
+      DIAGNOSTIC_AUDIT_ACTIONS.has(record.action) &&
+      typeof record.diagnosticEventId === 'string'
+    ) {
+      coverage.diagnosticEventIds.add(record.diagnosticEventId)
     }
   }
   return coverage
@@ -191,8 +176,4 @@ export async function recordExistingCodexSessionForHeal(
     target,
     ...(fileEventId ? { fileEventId } : {})
   })
-}
-
-function isNotFoundError(error: unknown): boolean {
-  return (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
 }

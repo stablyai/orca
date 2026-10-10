@@ -252,3 +252,54 @@ describe('buildLinuxPackageInstallCommand', () => {
     })
   })
 })
+
+describe('hasTrustedPackageManagerFor', () => {
+  it('accepts a deb host that has dpkg', async () => {
+    install('/usr/bin/dpkg')
+    const { hasTrustedPackageManagerFor } = await loadCommandModule()
+    expect(hasTrustedPackageManagerFor('deb')).toBe(true)
+  })
+
+  it('accepts a deb host that has only apt', async () => {
+    install('/usr/bin/apt')
+    const { hasTrustedPackageManagerFor } = await loadCommandModule()
+    expect(hasTrustedPackageManagerFor('deb')).toBe(true)
+  })
+
+  // The #17702 case: an Arch rebuild of the .deb inherits the marker but has no deb tooling.
+  it('rejects a deb marker on a host with only pacman', async () => {
+    install('/usr/bin/pacman')
+    install('/usr/bin/sudo')
+    const { hasTrustedPackageManagerFor } = await loadCommandModule()
+    expect(hasTrustedPackageManagerFor('deb')).toBe(false)
+  })
+
+  it('rejects an rpm marker on a host with only deb tooling', async () => {
+    install('/usr/bin/dpkg')
+    install('/usr/bin/apt')
+    const { hasTrustedPackageManagerFor } = await loadCommandModule()
+    expect(hasTrustedPackageManagerFor('rpm')).toBe(false)
+  })
+
+  it('accepts each rpm-family manager on its own', async () => {
+    for (const name of ['zypper', 'dnf', 'yum', 'rpm']) {
+      vi.resetModules()
+      executables = new Map()
+      install(`/usr/bin/${name}`)
+      const { hasTrustedPackageManagerFor } = await loadCommandModule()
+      expect(hasTrustedPackageManagerFor('rpm')).toBe(true)
+    }
+  })
+
+  it('ignores a package manager outside the trusted directories', async () => {
+    install('/home/user/.local/bin/dpkg')
+    const { hasTrustedPackageManagerFor } = await loadCommandModule()
+    expect(hasTrustedPackageManagerFor('deb')).toBe(false)
+  })
+
+  it('ignores a non-executable file at a trusted path', async () => {
+    install('/usr/bin/dpkg', { mode: 0o644 })
+    const { hasTrustedPackageManagerFor } = await loadCommandModule()
+    expect(hasTrustedPackageManagerFor('deb')).toBe(false)
+  })
+})

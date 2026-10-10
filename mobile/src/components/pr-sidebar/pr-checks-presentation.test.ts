@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { PRCheckDetail } from '../../../../src/shared/types'
+import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
 import {
   checkOutcome,
   firstFailingCheckKey,
   getPRReviewerRows,
   prCheckKey,
+  prChecksSummaryLabel,
   prStateBadge,
   sortPRChecks,
   summarizePRChecks
@@ -85,6 +86,13 @@ describe('summarizePRChecks', () => {
     expect(summary.total).toBe(0)
     expect(summary.outcome).toBe('none')
     expect(summary.label).toBe('No checks')
+  })
+  it('reads the empty header as unavailable, not absent, when the checks read failed', () => {
+    const summary = summarizePRChecks([])
+    expect(prChecksSummaryLabel(summary, null)).toBe('No checks')
+    expect(prChecksSummaryLabel(summary, 'The host sent a reply this app could not read')).toBe(
+      'Checks unavailable'
+    )
   })
   it('counts pass/pending/fail and reports worst-case outcome', () => {
     const summary = summarizePRChecks([

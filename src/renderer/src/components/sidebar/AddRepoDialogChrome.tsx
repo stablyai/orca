@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { preventOutsideDismissWhenDirty } from '@/lib/outside-dismiss-guard'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import { AddRepoStepIndicator } from './AddRepoStepIndicator'
 
@@ -22,19 +23,18 @@ export function AddRepoDialogChrome({
   onOpenChange: (open: boolean) => void
   step: AddRepoDialogStep
 }) {
-  // Why: a stray backdrop click or ESC during a long clone must not dismiss the dialog and abort it; explicit close still can.
-  const preventDismissalWhileCloning = (event: Event) => {
-    if (isCloning) {
-      event.preventDefault()
-    }
-  }
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent
         onCloseAutoFocus={onCloseAutoFocus}
-        onEscapeKeyDown={preventDismissalWhileCloning}
-        onInteractOutside={preventDismissalWhileCloning}
-        onPointerDownOutside={preventDismissalWhileCloning}
+        // Closing the dialog aborts the clone; require an explicit close while it runs.
+        onInteractOutside={preventOutsideDismissWhenDirty(() => isCloning)}
+        // Why: a stray ESC must not abort an in-flight clone either; X and Back stay explicit cancel paths.
+        onEscapeKeyDown={(event) => {
+          if (isCloning) {
+            event.preventDefault()
+          }
+        }}
         className={`min-w-0 overflow-hidden sm:max-w-lg [&>*]:min-w-0 ${
           step === 'nested' ? 'max-h-[calc(100vh-2rem)] grid-rows-[auto_auto_minmax(0,1fr)]' : ''
         }`}

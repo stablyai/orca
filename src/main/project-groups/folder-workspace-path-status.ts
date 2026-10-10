@@ -5,7 +5,9 @@ import type {
   FolderWorkspacePathStatusRequest
 } from '../../shared/folder-workspace-path-status'
 import { getProjectGroupSubtreeIds } from '../../shared/project-groups'
-import type { FolderWorkspace, ProjectGroup, Repo } from '../../shared/types'
+import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../shared/project-group-types'
+import type { Repo } from '../../shared/repo-types'
 import type { IFilesystemProvider } from '../providers/types'
 
 type FolderWorkspacePathStatusStore = {
@@ -210,18 +212,26 @@ export async function getFolderWorkspacePathStatus(
   )
 }
 
-export function assertFolderWorkspacePathUsable(status: FolderWorkspacePathStatus): void {
+/** The code a folder workspace refuses this path with, or null when the path is usable. */
+export function folderWorkspacePathRefusal(status: FolderWorkspacePathStatus): string | null {
   if (status.exists) {
-    return
+    return null
   }
   if (status.reason === 'missing') {
-    throw new Error(`folder_workspace_path_missing:${status.path}`)
+    return `folder_workspace_path_missing:${status.path}`
   }
   if (status.reason === 'not-directory') {
-    throw new Error(`folder_workspace_path_not_directory:${status.path}`)
+    return `folder_workspace_path_not_directory:${status.path}`
   }
   if (status.reason === 'ambiguous-connection') {
-    throw new Error(`folder_workspace_connection_ambiguous:${status.path}`)
+    return `folder_workspace_connection_ambiguous:${status.path}`
   }
-  throw new Error(`folder_workspace_path_unavailable:${status.path}`)
+  return `folder_workspace_path_unavailable:${status.path}`
+}
+
+export function assertFolderWorkspacePathUsable(status: FolderWorkspacePathStatus): void {
+  const refusal = folderWorkspacePathRefusal(status)
+  if (refusal) {
+    throw new Error(refusal)
+  }
 }

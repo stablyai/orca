@@ -2,17 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { FolderOpen, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   ORCA_CLI_SKILL_INSTALL_COMMAND,
   ORCA_CLI_SKILL_NAME,
   ORCA_CLI_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
-import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  ensureOrcaCliAvailableForAgentSkillTerminal,
-  isOrcaCliAvailableOnPath
-} from '@/lib/agent-skill-cli-prerequisite'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
@@ -26,13 +21,12 @@ import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import { CliRegistrationDialog } from './CliRegistrationDialog'
 import {
   buildSkillCommandForRuntime,
-  ensureWslCliAvailableForAgentSkillTerminal,
   getAgentSkillTerminalShellOverride,
   getSelectedAgentRuntime,
-  getSkillDiscoveryTargetForRuntime,
-  getWslCliDistroRequest
+  getSkillDiscoveryTargetForRuntime
 } from './CliSkillRuntimeSetup'
 import { WslCliRegistration } from './WslCliRegistration'
+import { useCliRegistrationActions } from './use-cli-registration-actions'
 import { useLocalCliSkillFreshnessName } from './use-local-cli-skill-freshness-name'
 import { translate } from '@/i18n/i18n'
 
@@ -46,12 +40,12 @@ type CliSectionProps = {
 
 function getRevealLabel(platform: string): string {
   if (platform === 'darwin') {
-    return 'Show in Finder'
+    return translate('auto.components.settings.CliSection.6f894ef9c2', 'Show in Finder')
   }
   if (platform === 'win32') {
-    return 'Show in Explorer'
+    return translate('auto.components.settings.CliSection.cbe55e4d48', 'Show in Explorer')
   }
-  return 'Show in File Manager'
+  return translate('auto.components.settings.CliSection.9fd4023db0', 'Show in File Manager')
 }
 
 function getInstallDescription(platform: string): string {
@@ -81,7 +75,6 @@ export function CliSection({
   const [status, setStatus] = useState<CliInstallStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [busyAction, setBusyAction] = useState<'install' | 'remove' | null>(null)
   const mountedRef = useMountedRef()
   const agentRuntime = useMemo(
     () =>
@@ -115,14 +108,6 @@ export function CliSection({
     settings,
     agentRuntime
   )
-  const getCliSkillPrerequisiteStatus = useCallback(
-    () =>
-      agentRuntime.runtime === 'wsl'
-        ? window.api.cli.getWslInstallStatus(getWslCliDistroRequest(agentRuntime))
-        : window.api.cli.getInstallStatus(),
-    [agentRuntime]
-  )
-
   const handleStatusChange = useCallback(
     (nextStatus: CliInstallStatus): void => {
       if (mountedRef.current) {
@@ -132,8 +117,19 @@ export function CliSection({
     [mountedRef]
   )
 
+  const closeDialog = useCallback((): void => setDialogOpen(false), [])
+  const commandName = status?.commandName ?? getFallbackCommandName(currentPlatform)
+  const { busyAction, installFailure, clearInstallFailure, install, remove } =
+    useCliRegistrationActions({
+      commandName,
+      mountedRef,
+      onStatusChange: handleStatusChange,
+      onSettled: closeDialog
+    })
+
   const refreshStatus = useCallback(async (): Promise<void> => {
     setLoading(true)
+    clearInstallFailure()
     try {
       handleStatusChange(await window.api.cli.getInstallStatus())
     } catch (error) {
@@ -152,7 +148,7 @@ export function CliSection({
         setLoading(false)
       }
     }
-  }, [handleStatusChange, mountedRef])
+  }, [clearInstallFailure, handleStatusChange, mountedRef])
 
   useEffect(() => {
     void refreshStatus()
@@ -163,77 +159,8 @@ export function CliSection({
   const isSupported = status?.supported ?? false
   const isBrowserManaged = status?.unsupportedReason === 'launch_mode_unavailable'
   const revealLabel = getRevealLabel(currentPlatform)
-  const commandName = status?.commandName ?? getFallbackCommandName(currentPlatform)
   const canRevealCommandPath =
     status?.commandPath != null && ['installed', 'stale', 'conflict'].includes(status.state)
-
-  const handleInstall = async (): Promise<void> => {
-    setBusyAction('install')
-    try {
-      const next = await window.api.cli.install()
-      if (mountedRef.current) {
-        setStatus(next)
-        setDialogOpen(false)
-        toast.success(
-          translate(
-            'auto.components.settings.CliSection.9cbcd31338',
-            'Registered `{{value0}}` in PATH.',
-            { value0: next.commandName }
-          )
-        )
-      }
-    } catch (error) {
-      if (mountedRef.current) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : translate(
-                'auto.components.settings.CliSection.a2b13efa94',
-                'Failed to register `{{value0}}` in PATH.',
-                { value0: commandName }
-              )
-        )
-      }
-    } finally {
-      if (mountedRef.current) {
-        setBusyAction(null)
-      }
-    }
-  }
-
-  const handleRemove = async (): Promise<void> => {
-    setBusyAction('remove')
-    try {
-      const next = await window.api.cli.remove()
-      if (mountedRef.current) {
-        setStatus(next)
-        setDialogOpen(false)
-        toast.success(
-          translate(
-            'auto.components.settings.CliSection.af5540930c',
-            'Removed `{{value0}}` from PATH.',
-            { value0: next.commandName }
-          )
-        )
-      }
-    } catch (error) {
-      if (mountedRef.current) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : translate(
-                'auto.components.settings.CliSection.d77352f2df',
-                'Failed to remove `{{value0}}` from PATH.',
-                { value0: commandName }
-              )
-        )
-      }
-    } finally {
-      if (mountedRef.current) {
-        setBusyAction(null)
-      }
-    }
-  }
 
   return (
     <section className="space-y-4" data-settings-section="cli">
@@ -243,8 +170,8 @@ export function CliSection({
         </h2>
         <p className="text-xs text-muted-foreground">
           {translate(
-            'auto.components.settings.CliSection.6930feda9e',
-            'Use Orca from your terminal to open the app, manage worktrees, and interact with Orca terminals.'
+            'auto.components.settings.CliSection.outsideOrcaDescription',
+            'Orca terminals already have `orca`. Turn this on to use `orca` from other terminals outside Orca.'
           )}
         </p>
       </div>
@@ -336,6 +263,31 @@ export function CliSection({
           <p className="text-xs text-muted-foreground">{status.detail}</p>
         ) : null}
 
+        {installFailure ? (
+          <div
+            role="alert"
+            className="space-y-1 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+          >
+            <p className="font-medium">
+              {translate(
+                'auto.components.settings.CliSection.a2b13efa94',
+                'Failed to register `{{value0}}` in PATH.',
+                { value0: commandName }
+              )}
+            </p>
+            <p className="leading-snug">{installFailure.reason}</p>
+            {installFailure.conflictCommandPath ? (
+              <p className="leading-snug">
+                {translate(
+                  'auto.components.settings.CliSection.installFailureConflictRemedy',
+                  'Remove {{value0}} and register again if it is no longer needed.',
+                  { value0: installFailure.conflictCommandPath }
+                )}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="flex items-center gap-2">
           {status?.commandPath ? (
             <Button
@@ -383,16 +335,6 @@ export function CliSection({
               installed={cliSkillDetected}
               loading={cliSkillLoading}
               error={cliSkillError}
-              preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
-              getPrerequisiteStatus={getCliSkillPrerequisiteStatus}
-              isPrerequisiteAvailable={isOrcaCliAvailableOnPath}
-              onBeforeOpenTerminal={async () => {
-                await (agentRuntime.runtime === 'wsl'
-                  ? ensureWslCliAvailableForAgentSkillTerminal(agentRuntime)
-                  : ensureOrcaCliAvailableForAgentSkillTerminal({
-                      onStatusChange: handleStatusChange
-                    }))
-              }}
               onRecheck={refreshCliSkill}
               freshnessSkillName={cliSkillFreshnessName}
             />
@@ -408,9 +350,9 @@ export function CliSection({
         commandPath={status?.commandPath}
         isEnabled={isEnabled}
         isSupported={isSupported}
-        onInstall={handleInstall}
+        onInstall={install}
         onOpenChange={setDialogOpen}
-        onRemove={handleRemove}
+        onRemove={remove}
         open={dialogOpen}
       />
     </section>

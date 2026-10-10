@@ -138,8 +138,8 @@ test.describe('SSH config host picker', () => {
 
     await form.getByRole('button', { name: 'Save' }).click()
     await expect(form).toBeHidden({ timeout: 10_000 })
-    await expect(orcaPage.getByText('SSH host added.')).toBeVisible({ timeout: 5_000 })
 
+    // The saved settings card is durable; the success toast is not.
     const sshSection = await openSshHostSettings(orcaPage)
     await expectSshHostListedInSettings(sshSection, prod)
   })

@@ -12,7 +12,7 @@
  * where pre-mount output produces no attention side effects. The one exception
  * is a PTY whose consumer just unregistered: see the handoff buffer below.
  */
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
 import type {

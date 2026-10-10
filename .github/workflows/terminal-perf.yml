@@ -55,6 +55,7 @@ jobs:
     timeout-minutes: 45
     env:
       NODE_OPTIONS: --max-old-space-size=4096
+      ORCA_BACKGROUND_LAUNCH: '1'
       ORCA_E2E_FORWARD_APP_LOGS: '1'
       ORCA_E2E_TERMINAL_PERF_REPORT_PATH: ${{ inputs.report_path || 'test-results/terminal-scale-perf-report.json' }}
 
@@ -67,24 +68,60 @@ jobs:
       - name: Install native build tools and xvfb
         run: sudo apt-get update && sudo apt-get install -y build-essential python3 xvfb zsh
 
+      - name: Select dependency preparation
+        id: install-mode
+        shell: bash
+        env:
+          RUNNER_KIND: ${{ runner.environment }}
+          JOB_CONTAINER: ${{ job.container.id }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs')
+          const manifest = JSON.parse(fs.readFileSync('package.json', 'utf8'))
+          const actionPath = '.github/actions/install-node-dependencies/action.yml'
+          const action = fs.existsSync(actionPath) ? fs.readFileSync(actionPath, 'utf8') : ''
+          const inputs = action.split(/^inputs:[ \t]*\r?$/m)[1]?.split(/^\S/m)[0] ?? ''
+          const shared = process.env.RUNNER_KIND === 'github-hosted' && !process.env.JOB_CONTAINER &&
+            process.env.RUNNER_OS === 'Linux' && process.env.RUNNER_ARCH === 'X64' &&
+            manifest.engines?.node === '24' && typeof manifest.packageManager === 'string' &&
+            manifest.packageManager.split('+')[0] === 'pnpm@12.8.1' &&
+            manifest.scripts?.postinstall === 'node config/scripts/rebuild-native-deps.mjs' &&
+            /^  native-runtime:/m.test(inputs) && /^  cache-pnpm-store-lookup-only:/m.test(inputs) &&
+            fs.existsSync('.github/actions/prepare-native-runtime/action.yml') &&
+            fs.existsSync('config/scripts/ensure-native-runtime.mjs')
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `shared=${shared}\n`)
+          NODE
+
+      - name: Prepare current dependencies
+        if: steps.install-mode.outputs.shared == 'true'
+        uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+          cache-electron-package: 'true'
+          cache-pnpm-store-lookup-only: 'true'
+
+      - name: Setup pnpm
+        if: steps.install-mode.outputs.shared != 'true'
+        uses: pnpm/setup@v2
+        with:
+          install: false
+
       - name: Setup Node.js
+        if: steps.install-mode.outputs.shared != 'true'
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          cache: pnpm
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      # Why: this scheduled/manual workflow uses the same native install path as
-      # PR and E2E CI, which needs pnpm to bypass its bundled gyp_main.py.
+      # Historical refs can lack the shared action; retain their original install path.
       - name: Use external node-gyp to avoid pnpm's bundled copy
+        if: steps.install-mode.outputs.shared != 'true'
         run: |
           npm install -g node-gyp@11.5.0
           echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
 
       - name: Install dependencies
+        if: steps.install-mode.outputs.shared != 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Build Electron app for terminal perf
@@ -127,7 +164,7 @@ jobs:
           if [ -n "${ORCA_TERMINAL_PERF_SCALE_HIDDEN_PRESSURE_PANES:-}" ]; then
             export ORCA_E2E_OPENCODE_SCALE_HIDDEN_PRESSURE_PANES="$ORCA_TERMINAL_PERF_SCALE_HIDDEN_PRESSURE_PANES"
           fi
-          xvfb-run --auto-servernum env SKIP_BUILD=1 pnpm run test:e2e:terminal-perf:scale:report -- "${args[@]}"
+          xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_TERMINAL_PERF_XVFB=1 pnpm run test:e2e:terminal-perf:scale:report -- "${args[@]}"
 
       - name: Upload terminal perf report
         if: always()

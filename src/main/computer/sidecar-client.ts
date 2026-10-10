@@ -1,4 +1,5 @@
 import { fork, type ChildProcess } from 'node:child_process'
+import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
 import { join } from 'node:path'
 import type {
   ComputerActionResult,
@@ -8,6 +9,7 @@ import type {
   ComputerSnapshotResult
 } from '../../shared/runtime-types'
 import { normalizeComputerActionResult } from './computer-action-verification-normalization'
+import { isComputerSidecarDiagnostic, logComputerDiagnostic } from './computer-sidecar-diagnostics'
 import { validateComputerSidecarPasteText } from './computer-sidecar-paste-validation'
 import { RuntimeClientError } from './runtime-client-error'
 
@@ -107,12 +109,15 @@ function getComputerSidecarEntryPath(): string {
   return join(basePath, 'out', 'main', 'computer-sidecar.js')
 }
 
+// Why the port and not require('electron'): the literal text fails the plain-Node
+// entry guard even inside a try/catch, and hasAppEnvironment() gives the same
+// "no app root here" answer without it.
 function loadElectronApp(): { getAppPath(): string; isPackaged: boolean } | null {
-  try {
-    return require('electron').app
-  } catch {
+  if (!hasAppEnvironment()) {
     return null
   }
+  const environment = getAppEnvironment()
+  return { getAppPath: () => environment.getAppPath(), isPackaged: environment.isPackaged() }
 }
 
 class ComputerSidecarProcess {
@@ -241,6 +246,11 @@ class ComputerSidecarProcess {
   }
 
   private handleMessage(message: unknown): void {
+    // The sidecar's stdio is piped and unread, so its warnings arrive here.
+    if (isComputerSidecarDiagnostic(message)) {
+      logComputerDiagnostic(message.message)
+      return
+    }
     if (!isSidecarResponse(message)) {
       return
     }

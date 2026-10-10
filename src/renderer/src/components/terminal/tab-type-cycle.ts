@@ -1,4 +1,6 @@
-export type TabCycleType = 'terminal' | 'editor' | 'browser' | 'simulator'
+import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
+
+export type TabCycleType = WorkspaceVisibleTabType
 
 export type TypeCyclableTab = {
   type: TabCycleType
@@ -16,17 +18,30 @@ type GetNextTabWithinActiveTypeParams = {
   direction: number
 }
 
+/**
+ * The backing entity id of the active tab, in the same id domain the cyclable entries use.
+ *
+ * `activeAgentSessionEntityId` is optional because a caller that only compares type-matched
+ * entries stays correct without it; a caller that searches a pre-filtered single-type list must
+ * pass it, or a structured tab resolves to a live background terminal (see the branch below).
+ */
 export function getActiveEntityIdForTabType(
   activeTabType: TabCycleType,
   activeTabId: string | null,
   activeFileId: string | null,
-  activeBrowserTabId: string | null
+  activeBrowserTabId: string | null,
+  activeAgentSessionEntityId: string | null = null
 ): string | null {
   if (activeTabType === 'editor') {
     return activeFileId
   }
   if (activeTabType === 'browser') {
     return activeBrowserTabId
+  }
+  // Why: `activeTabId` is terminal-only state that keeps naming a live background terminal while a
+  // structured tab is active, so falling through here cycles from a tab the user is not on.
+  if (activeTabType === 'agent-session') {
+    return activeAgentSessionEntityId
   }
   if (activeTabType === 'simulator') {
     return activeTabId

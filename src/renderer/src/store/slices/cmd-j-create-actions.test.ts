@@ -12,8 +12,12 @@ const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
 const createWebRuntimeSessionTerminalMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/runtime/web-runtime-session', () => ({
-  createWebRuntimeSessionBrowserTab: createWebRuntimeSessionBrowserTabMock,
   createWebRuntimeSessionTerminal: createWebRuntimeSessionTerminalMock
+}))
+
+vi.mock('@/store/slices/browser/paired-browser-tab-creator', () => ({
+  getRegisteredPairedBrowserTabCreator: () => null,
+  loadPairedBrowserTabCreator: async () => createWebRuntimeSessionBrowserTabMock
 }))
 
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({
@@ -85,7 +89,8 @@ describe('Cmd+J lifted creation actions', () => {
       worktreeId: 'wt-1',
       environmentId: 'runtime-1',
       url: 'about:blank',
-      targetGroupId: 'group-1'
+      targetGroupId: 'group-1',
+      clientTargetGroupId: 'group-1'
     })
     expect(store.getState().browserTabsByWorktree['wt-1'] ?? []).toEqual([])
   })
@@ -118,7 +123,8 @@ describe('Cmd+J lifted creation actions', () => {
       worktreeId: 'wt-1',
       environmentId: 'owner-runtime',
       url: 'about:blank',
-      targetGroupId: 'group-1'
+      targetGroupId: 'group-1',
+      clientTargetGroupId: 'group-1'
     })
     // Remote-owned: no local fallback even when the remote create fails.
     expect(store.getState().browserTabsByWorktree['wt-1'] ?? []).toEqual([])

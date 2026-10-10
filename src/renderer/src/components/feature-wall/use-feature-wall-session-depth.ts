@@ -47,13 +47,14 @@ export function useFeatureWallSessionDepth(
     visitedWorkbenchSteps: Set<WorkbenchStepId>
     visitedReviewSteps: Set<ReviewStepId>
     lastGroupId: FeatureWallWorkflowId | null
-  }>({
+  }>(undefined!)
+  sessionDepthRef.current ??= {
     visitedWorkflows: new Set(),
     visitedAgentSteps: new Set(),
     visitedWorkbenchSteps: new Set(),
     visitedReviewSteps: new Set(),
     lastGroupId: null
-  })
+  }
 
   const getTourDepthSummary = useCallback((): FeatureWallTourDepthSummary => {
     const session = sessionDepthRef.current

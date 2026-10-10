@@ -344,7 +344,8 @@ describe('SshRelaySession data delivery', () => {
       })
     )
     session.dispose()
-    expect(mockStore.removeSshPtyConsumerRecovery).toHaveBeenCalledWith(targetId)
+    const removeRecovery = mockStore.removeSshPtyConsumerRecovery
+    expect(removeRecovery).toHaveBeenCalledWith(targetId, 'persisted-client')
   })
 
   it('voids checkpoints for a fresh claim without a second owner request', async () => {
@@ -403,6 +404,7 @@ describe('SshRelaySession data delivery', () => {
     expect(retryCalls[0]).toHaveProperty('resume')
     expect(attachForReconnectMock).toHaveBeenCalledWith(
       'pty-1',
+      undefined,
       Object.freeze({ status: 'checkpointUnavailable' })
     )
     second.dispose()
@@ -615,7 +617,11 @@ describe('SshRelaySession data delivery', () => {
       outputFlowControl: { requestedWindowSu: 256 * 1024 }
     })
     expect(deployAndLaunchRelay).toHaveBeenCalledWith(mockConn, undefined, undefined, 'target-1')
-    expect(notifyWithSettlementMock).toHaveBeenCalledWith('pty.ackData', batch, settled)
+    // The ACK publisher consumes the two-valued projection of the write settlement.
+    const [method, published] = notifyWithSettlementMock.mock.calls[0]!
+    notifyWithSettlementMock.mock.calls[0]![2]({ outcome: 'accepted' })
+    expect([method, published]).toEqual(['pty.ackData', batch])
+    expect(settled).toHaveBeenCalledWith({ ok: true })
   })
 
   it('offers V1 through reconnect negotiation', async () => {
@@ -761,6 +767,7 @@ describe('SshRelaySession data delivery', () => {
 
     expect(attachForReconnectMock).toHaveBeenCalledWith(
       'pty-1',
+      undefined,
       expect.objectContaining({
         status: 'checkpoint',
         deliveryToken: 'old-token',

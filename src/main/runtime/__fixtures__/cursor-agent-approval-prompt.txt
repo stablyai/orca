@@ -1,0 +1,24 @@
+p/sta4513/live-cursor-trust && cursor-agent
+
+
+  Cursor Agent
+  v2026.08.11-e8db854
+  Tip: Use /mcp to connect Cursor to your tools and data sources.
+
+
+  Run the shell command: git status --porcelain
+
+
+  I'll run git status --porcelain in the workspace now.
+
+  $ git status --porcelain Waiting for approval...
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ $  git status --porcelain in .
+
+ Run this command?
+ Not in allowlist: git status
+  → Run (once) (y)
+    Add Shell(git status) to allowlist? (tab)
+    Run Everything (shift+tab)
+    Skip & tell the agent what to do instead (esc or n)

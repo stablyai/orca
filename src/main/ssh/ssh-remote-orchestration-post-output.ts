@@ -4,6 +4,7 @@ import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RpcResponse } from '../runtime/rpc/core'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
+import { ALL_RPC_METHODS } from '../runtime/rpc/methods'
 import type {
   RemoteOrcaCliPostOutput,
   RemoteOrcaCliRequest
@@ -17,6 +18,7 @@ export async function acknowledgeRemoteOrcaCliPostOutput(
     postOutput: RemoteOrcaCliPostOutput
     env: Record<string, string>
     runtimeAuthority?: RemoteOrcaCliRequest['runtimeAuthority']
+    callerScope: RemoteOrcaCliRequest['callerScope']
   }
 ): Promise<void> {
   const inheritedEvidence = readOrchestrationCompatibilityEvidence(args.env)
@@ -39,7 +41,11 @@ export async function acknowledgeRemoteOrcaCliPostOutput(
             answerMessageId: args.postOutput.answerMessageId
           })
         }
-  const response = await new RpcDispatcher({ runtime }).dispatch({
+  const response = await new RpcDispatcher({
+    runtime,
+    methods: ALL_RPC_METHODS,
+    callerScope: args.callerScope
+  }).dispatch({
     id: `remote-cli-post-output-${randomUUID()}`,
     authToken: 'remote-cli',
     method: 'orchestration.check',

@@ -3,11 +3,9 @@ import { describe, expect, it } from 'vitest'
 import {
   findGithubIssueWorkspaceAttachment,
   findGithubPrWorkspaceAttachment,
-  findGithubWorkItemWorkspaceAttachment,
-  getGithubWorkItemWorkspaceAttachmentLabel,
-  getGithubPrWorkspaceAttachmentLabel
+  findGithubWorkItemWorkspaceAttachment
 } from './github-work-item-workspace-attachment'
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 
 function worktree(overrides: Partial<Worktree> = {}): Worktree {
   return {
@@ -95,20 +93,50 @@ describe('GitHub work-item workspace attachment', () => {
     expect(findGithubPrWorkspaceAttachment([gitlabOnly], 'repo-1', 42)).toBeNull()
     expect(findGithubIssueWorkspaceAttachment([gitlabOnly], 'repo-1', 42)).toBeNull()
   })
+})
 
-  it('labels attachments without exposing a full path when display or branch is available', () => {
+describe('multiple GitHub attachments', () => {
+  it('finds secondary reviews and issues', () => {
+    const attached = worktree({
+      linkedPR: 1,
+      linkedIssue: 2,
+      linkedItems: [
+        { provider: 'github', type: 'pr', number: 3 },
+        { provider: 'github', type: 'issue', number: 4 }
+      ]
+    })
+    expect(findGithubPrWorkspaceAttachment([attached], attached.repoId, 3)).toBe(attached)
+    expect(findGithubIssueWorkspaceAttachment([attached], attached.repoId, 4)).toBe(attached)
+  })
+})
+
+describe('GitHub attachment repository scope', () => {
+  it('matches a foreign task by URL across workspace repositories', () => {
+    const attached = worktree({
+      linkedItems: [
+        {
+          provider: 'github',
+          type: 'issue',
+          number: 42,
+          url: 'https://github.com/foreign/project/issues/42'
+        }
+      ]
+    })
     expect(
-      getGithubWorkItemWorkspaceAttachmentLabel(worktree({ displayName: '  Named GH  ' }))
-    ).toBe('Named GH')
-    expect(
-      getGithubWorkItemWorkspaceAttachmentLabel(
-        worktree({ displayName: '', branch: 'refs/heads/fix-ci' })
+      findGithubIssueWorkspaceAttachment(
+        [attached],
+        'foreign-repo',
+        42,
+        'https://github.com/foreign/project/issues/42'
       )
-    ).toBe('fix-ci')
+    ).toBe(attached)
     expect(
-      getGithubPrWorkspaceAttachmentLabel(
-        worktree({ displayName: '', branch: '', path: 'C:\\repo\\workspace-tail' })
+      findGithubIssueWorkspaceAttachment(
+        [attached],
+        'repo-1',
+        42,
+        'https://github.com/current/project/issues/42'
       )
-    ).toBe('workspace-tail')
+    ).toBeNull()
   })
 })

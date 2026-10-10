@@ -1,7 +1,7 @@
 import type React from 'react'
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../../../shared/network-proxy'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '../../store'
@@ -9,6 +9,7 @@ import { Button } from '../ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
+import { Textarea } from '../ui/textarea'
 import { getAdvancedNetworkSearchEntries } from './advanced-network-search'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
@@ -304,16 +305,11 @@ export function AdvancedNetworkSettingsSection({
                   'Proxy Bypass Rules'
                 )}
               </Label>
-              <Input
+              <Textarea
                 id="settings-http-proxy-bypass-rules"
                 value={httpProxyBypassRulesDraft}
                 onChange={(e) => updateHttpProxyBypassRulesDraft(e.target.value)}
                 onBlur={commitHttpProxyBypassRules}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.currentTarget.blur()
-                  }
-                }}
                 placeholder={translate(
                   'auto.components.settings.AdvancedNetworkSettingsSection.3e431564b5',
                   'localhost, 127.0.0.1, *.internal'
@@ -322,6 +318,7 @@ export function AdvancedNetworkSettingsSection({
                 autoCorrect="off"
                 autoComplete="off"
                 spellCheck={false}
+                rows={3}
                 className="font-mono text-xs"
               />
               <p className="text-xs text-muted-foreground">

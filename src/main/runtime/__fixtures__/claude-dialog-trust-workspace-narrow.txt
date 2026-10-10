@@ -1,0 +1,21 @@
+7[r8[?25h[?25l[?2004h[?2031h[?1004h
+[38;2;255;193;7m────────────────────────────────────────────────────────────[39m
+[2G[38;2;255;193;7m[1mAccessing[12Gworkspace:[22m[39m
+
+[2G[1m/private/tmp/claude-trust-review/proj[22m
+
+[2GQuick[8Gsafety[15Gcheck:[22GIs[25Gthis[30Ga[32Gproject[40Gyou[44Gcreated[52Gor[55Gone
+[2Gyou[6Gtrust?[13G(Like[19Gyour[24Gown[28Gcode,[34Ga[36Gwell-known[47Gopen[52Gsource
+[2Gproject,[11Gor[14Gwork[19Gfrom[24Gyour[29Gteam).[36GIf[39Gnot,[44Gtake[49Ga[51Gmoment[58Gto
+[2Greview[9Gwhat's[16Gin[19Gthis[24Gfolder[31Gfirst.
+
+[2GClaude[9GCode'll[17Gbe[20Gable[25Gto[28Gread,[34Gedit,[40Gand[44Gexecute[52Gfiles
+[2Ghere.
+
+[2G]8;id=zaxmda;https://code.claude.com/docs/en/security[38;2;153;153;153mSecurity guide[39m]8;;
+
+[2G[38;2;177;185;249m❯[4GNo,[8Gexit[39m
+[4GYes,[9GI[11Gtrust[17Gthis[22Gfolder
+
+[2G[38;2;153;153;153mEnter[8Gto[11Gconfirm[19G·[21GEsc[25Gto[28Gcancel[39m
+[1C[4A[>0q[?u[c

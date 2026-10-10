@@ -1,16 +1,13 @@
+import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
+import { createAgentSessionKeyboardOptions } from '@/runtime/agent-session-keyboard-capability'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
 import type { RuntimeTerminalCreate } from '../../../shared/runtime-types'
-import type { TuiAgent } from '../../../shared/types'
-import { TERMINAL_ATTRIBUTION_REMOVED_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
-import {
-  addLegacyTerminalAttributionDisableRequest,
-  withLegacyTerminalAttributionDisabledEnv
-} from '../../../shared/legacy-terminal-attribution-env'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import { toAgentLaunchPreferences } from '../../../shared/agent-launch-preferences'
 import {
   createAgentSessionCreateOperation,
-  toAgentLaunchPreferences,
   withAgentSessionCreateOperationId
 } from '@/runtime/agent-session-create-operation'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
@@ -34,18 +31,20 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
     title?: string
   }
 }): Promise<{ terminal: RuntimeTerminalCreate }> {
+  const keyboardProtocol = buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard
+  const keyboardOptions = createAgentSessionKeyboardOptions(keyboardProtocol)
   const operation = createAgentSessionCreateOperation()
   const launchPreferences = toAgentLaunchPreferences(args.sessionOptions)
   return await runRemoteAgentSessionLaunch({
     environmentId: args.environmentId,
-    requiredHostAuthorityCapabilities: [TERMINAL_ATTRIBUTION_REMOVED_RUNTIME_CAPABILITY],
-    hostAuthority: (authority) =>
-      operation.run((clientOperationId) =>
+    hostAuthority: () =>
+      operation.run(async (clientOperationId) =>
         callRuntimeRpc<{ terminal: RuntimeTerminalCreate }>(
           { kind: 'environment', environmentId: args.environmentId },
           'terminal.createAgentSession',
           withAgentSessionCreateOperationId(
             {
+              ...(await keyboardOptions(args.environmentId)),
               worktree: toRuntimeWorktreeSelector(args.worktreeId),
               agent: args.agent,
               ...(args.prompt
@@ -58,25 +57,21 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
             },
             clientOperationId
           ),
-          {
-            timeoutMs: 15_000,
-            expectedEnvironmentPairingRevision: authority.expectedEnvironmentPairingRevision,
-            expectedRuntimeId: authority.runtimeId
-          }
+          { timeoutMs: 15_000 }
         )
       ),
-    legacy: ({ skipCompatibilityCheck, authority }) =>
+    legacy: ({ skipCompatibilityCheck }) =>
       callRuntimeRpc<{ terminal: RuntimeTerminalCreate }>(
         { kind: 'environment', environmentId: args.environmentId },
         'terminal.create',
         {
           worktree: toRuntimeWorktreeSelector(args.worktreeId),
           command: args.legacy.command,
+          ...(keyboardProtocol === true ? { terminalKittyKeyboardProtocol: true } : {}),
           ...(args.legacy.startupCommandDelivery
             ? { startupCommandDelivery: args.legacy.startupCommandDelivery }
             : {}),
-          env: withLegacyTerminalAttributionDisabledEnv(args.legacy.env),
-          envToDelete: addLegacyTerminalAttributionDisableRequest(undefined),
+          env: args.legacy.env,
           launchConfig: args.legacy.launchConfig,
           launchToken: args.legacy.launchToken,
           launchAgent: args.agent,
@@ -85,12 +80,7 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
           leafId: args.leafId,
           presentation: 'background'
         },
-        {
-          timeoutMs: 15_000,
-          skipCompatibilityCheck,
-          expectedEnvironmentPairingRevision: authority.expectedEnvironmentPairingRevision,
-          expectedRuntimeId: authority.runtimeId
-        }
+        { timeoutMs: 15_000, skipCompatibilityCheck }
       )
   })
 }

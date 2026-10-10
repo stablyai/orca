@@ -14,7 +14,8 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
 
 // Why: await import() is required so vi.mock() above registers before the
 // module under test is evaluated. Static import would bypass the mock.
-const { resolveRemoteNodePath } = await import('./ssh-remote-node-resolution')
+const { RemoteNodeNotFoundError, resolveRemoteNodePath } =
+  await import('./ssh-remote-node-resolution')
 
 const conn = {} as SshConnection
 
@@ -133,8 +134,108 @@ describe('resolveRemoteNodePath', () => {
 
     const callScript = execCommandMock.mock.calls[0]![1] as string
     expect(callScript).toContain('nvm_dirs=${NVM_DIR:-"$HOME/.nvm"}')
-    expect(callScript).toContain('NVM_DIR[[:space:]]*=')
+    expect(callScript).toContain('orca_dotfile_dirs NVM_DIR')
     expect(callScript).toContain('"$nvm_dir"/versions/node/*/bin/node')
+  })
+
+  it('respects a custom MISE_DATA_DIR instead of hardcoding $HOME/.local/share/mise', async () => {
+    execCommandMock
+      .mockResolvedValueOnce('/opt/mise-data/installs/node/v20.11.0/bin/node\n')
+      .mockResolvedValueOnce('v20.11.0\n')
+
+    await resolveRemoteNodePath(conn)
+
+    const callScript = execCommandMock.mock.calls[0]![1] as string
+    expect(callScript).toContain('mise_dirs=${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}')
+    expect(callScript).toContain('orca_dotfile_dirs MISE_DATA_DIR')
+    expect(callScript).toContain('"$mise_dir"/installs/node/*/bin/node')
+    expect(callScript).toContain('"$mise_dir/shims/node"')
+  })
+
+  it('finds node under a MISE_DATA_DIR exported from a shell dotfile', async () => {
+    execCommandMock
+      .mockResolvedValueOnce('/home/u/.local/share/mise/shims/node\n')
+      .mockResolvedValueOnce('v20.11.0\n')
+
+    await resolveRemoteNodePath(conn)
+
+    const callScript = execCommandMock.mock.calls[0]![1] as string
+    const home = mkdtempSync(path.join(os.tmpdir(), 'orca-mise-probe-'))
+    try {
+      const shimPath = path.join(home, 'custom-mise/shims/node')
+      const installPath = path.join(home, 'custom-mise/installs/node/v20.11.0/bin/node')
+      for (const target of [shimPath, installPath]) {
+        mkdirSync(path.dirname(target), { recursive: true })
+        writeFileSync(target, '#!/bin/sh\nprintf "v20.11.0\\n"\n')
+        chmodSync(target, 0o755)
+      }
+      writeFileSync(path.join(home, '.zshrc'), 'export MISE_DATA_DIR=~/custom-mise\n')
+
+      const output = execFileSync('/bin/sh', ['-c', callScript], {
+        encoding: 'utf8',
+        env: { HOME: home, PATH: '/usr/bin:/bin' }
+      })
+
+      const lines = output.split('\n')
+      expect(lines).toContain(shimPath)
+      expect(lines).toContain(installPath)
+    } finally {
+      rmSync(home, { recursive: true, force: true })
+    }
+  })
+
+  it('finds node under a MISE_DATA_DIR present only in the probe environment', async () => {
+    execCommandMock
+      .mockResolvedValueOnce('/home/u/.local/share/mise/shims/node\n')
+      .mockResolvedValueOnce('v20.11.0\n')
+
+    await resolveRemoteNodePath(conn)
+
+    const callScript = execCommandMock.mock.calls[0]![1] as string
+    const home = mkdtempSync(path.join(os.tmpdir(), 'orca-mise-env-probe-'))
+    try {
+      const miseDataDir = path.join(home, 'env-mise')
+      const installPath = path.join(miseDataDir, 'installs/node/v20.11.0/bin/node')
+      mkdirSync(path.dirname(installPath), { recursive: true })
+      writeFileSync(installPath, '#!/bin/sh\nprintf "v20.11.0\\n"\n')
+      chmodSync(installPath, 0o755)
+
+      const output = execFileSync('/bin/sh', ['-c', callScript], {
+        encoding: 'utf8',
+        env: { HOME: home, MISE_DATA_DIR: miseDataDir, PATH: '/usr/bin:/bin' }
+      })
+
+      expect(output.split('\n')).toContain(installPath)
+    } finally {
+      rmSync(home, { recursive: true, force: true })
+    }
+  })
+
+  it('falls back to XDG_DATA_HOME for mise installs when MISE_DATA_DIR is unset', async () => {
+    execCommandMock
+      .mockResolvedValueOnce('/home/u/.local/share/mise/shims/node\n')
+      .mockResolvedValueOnce('v20.11.0\n')
+
+    await resolveRemoteNodePath(conn)
+
+    const callScript = execCommandMock.mock.calls[0]![1] as string
+    const home = mkdtempSync(path.join(os.tmpdir(), 'orca-mise-xdg-probe-'))
+    try {
+      const xdgDataHome = path.join(home, 'xdg')
+      const installPath = path.join(xdgDataHome, 'mise/installs/node/v20.11.0/bin/node')
+      mkdirSync(path.dirname(installPath), { recursive: true })
+      writeFileSync(installPath, '#!/bin/sh\nprintf "v20.11.0\\n"\n')
+      chmodSync(installPath, 0o755)
+
+      const output = execFileSync('/bin/sh', ['-c', callScript], {
+        encoding: 'utf8',
+        env: { HOME: home, XDG_DATA_HOME: xdgDataHome, PATH: '/usr/bin:/bin' }
+      })
+
+      expect(output.split('\n')).toContain(installPath)
+    } finally {
+      rmSync(home, { recursive: true, force: true })
+    }
   })
 
   it('quotes version-manager directory prefixes while leaving globs active', async () => {
@@ -200,6 +301,67 @@ describe('resolveRemoteNodePath', () => {
       writeFileSync(nodePath, '#!/bin/sh\nprintf "v20.11.0\\n"\n')
       chmodSync(nodePath, 0o755)
       writeFileSync(path.join(home, '.zshrc'), 'export NVM_DIR=~/tilde-nvm\n')
+
+      const output = execFileSync('/bin/sh', ['-c', callScript], {
+        encoding: 'utf8',
+        env: { HOME: home, PATH: '/usr/bin:/bin' }
+      })
+
+      expect(output.split('\n')).toContain(nodePath)
+    } finally {
+      rmSync(home, { recursive: true, force: true })
+    }
+  })
+
+  it('expands an $XDG_DATA_HOME-relative MISE_DATA_DIR assignment from shell dotfiles', async () => {
+    execCommandMock
+      .mockResolvedValueOnce('/home/u/.local/share/mise/shims/node\n')
+      .mockResolvedValueOnce('v20.11.0\n')
+
+    await resolveRemoteNodePath(conn)
+
+    const callScript = execCommandMock.mock.calls[0]![1] as string
+    const home = mkdtempSync(path.join(os.tmpdir(), 'orca-xdg-probe-'))
+    try {
+      // A name the seeded `${XDG_DATA_HOME:-$HOME/.local/share}/mise` default cannot reach, so
+      // only the dotfile arm can find it.
+      const nodePath = path.join(home, 'xdg-data/custom-mise/installs/node/20.11.0/bin/node')
+      mkdirSync(path.dirname(nodePath), { recursive: true })
+      writeFileSync(nodePath, '#!/bin/sh\nprintf "v20.11.0\\n"\n')
+      chmodSync(nodePath, 0o755)
+      writeFileSync(path.join(home, '.zshrc'), 'export MISE_DATA_DIR=$XDG_DATA_HOME/custom-mise\n')
+
+      const output = execFileSync('/bin/sh', ['-c', callScript], {
+        encoding: 'utf8',
+        env: {
+          HOME: home,
+          PATH: '/usr/bin:/bin',
+          XDG_DATA_HOME: path.join(home, 'xdg-data')
+        }
+      })
+
+      expect(output.split('\n')).toContain(nodePath)
+    } finally {
+      rmSync(home, { recursive: true, force: true })
+    }
+  })
+
+  it('falls back to the POSIX default when an $XDG_DATA_HOME assignment has no env value', async () => {
+    execCommandMock
+      .mockResolvedValueOnce('/home/u/.local/share/mise/shims/node\n')
+      .mockResolvedValueOnce('v20.11.0\n')
+
+    await resolveRemoteNodePath(conn)
+
+    const callScript = execCommandMock.mock.calls[0]![1] as string
+    const home = mkdtempSync(path.join(os.tmpdir(), 'orca-xdg-default-probe-'))
+    try {
+      // sshd's exec channel runs without the profile, so XDG_DATA_HOME is often simply absent.
+      const nodePath = path.join(home, '.local/share/custom-mise/installs/node/20.11.0/bin/node')
+      mkdirSync(path.dirname(nodePath), { recursive: true })
+      writeFileSync(nodePath, '#!/bin/sh\nprintf "v20.11.0\\n"\n')
+      chmodSync(nodePath, 0o755)
+      writeFileSync(path.join(home, '.zshrc'), 'export MISE_DATA_DIR=$XDG_DATA_HOME/custom-mise\n')
 
       const output = execFileSync('/bin/sh', ['-c', callScript], {
         encoding: 'utf8',
@@ -522,5 +684,76 @@ describe('resolveRemoteNodePath', () => {
 
     const discoveryScript = decodePowerShellCommand(execCommandMock.mock.calls[0]![1] as string)
     expect(discoveryScript).not.toMatch(/Write-Output \$path\s+exit 0/)
+  })
+
+  describe('strict resolution, which settles rung D only on an answered "no Node"', () => {
+    const lostChannel = (): Error =>
+      Object.assign(new Error('channel closed'), { sshChannelCloseConfirmed: false })
+
+    it('proves a Windows host has no Node when the discovery script answers none', async () => {
+      execCommandMock.mockRejectedValueOnce(
+        Object.assign(new Error('Node.js not found (exit 1)'), { exitCode: 1, stdout: '' })
+      )
+
+      await expect(
+        resolveRemoteNodePath(conn, getRemoteHostPlatform('win32-x64'), { strict: true })
+      ).rejects.toBeInstanceOf(RemoteNodeNotFoundError)
+    })
+
+    it('rethrows a refused channel (MaxSessions) instead of calling it "no Node"', async () => {
+      const refused = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
+        reason: 2
+      })
+      execCommandMock.mockRejectedValueOnce(refused)
+
+      await expect(
+        resolveRemoteNodePath(conn, getRemoteHostPlatform('win32-x64'), { strict: true })
+      ).rejects.toBe(refused)
+    })
+
+    it('rethrows a Windows probe the host never answered', async () => {
+      const lost = lostChannel()
+      execCommandMock.mockRejectedValueOnce(lost)
+
+      await expect(
+        resolveRemoteNodePath(conn, getRemoteHostPlatform('win32-x64'), { strict: true })
+      ).rejects.toBe(lost)
+    })
+
+    it('rethrows a lost POSIX version check rather than calling the candidate unusable', async () => {
+      const lost = lostChannel()
+      execCommandMock.mockResolvedValueOnce('/usr/local/bin/node\n').mockRejectedValueOnce(lost)
+
+      await expect(resolveRemoteNodePath(conn, undefined, { strict: true })).rejects.toBe(lost)
+    })
+
+    it('probes a Node the login shell names again only once', async () => {
+      execCommandMock
+        .mockResolvedValueOnce('/usr/local/bin/node\n') // path probe
+        .mockResolvedValueOnce('__node__\nv20.0.0\n') // toolchain probe: npm missing
+        .mockResolvedValueOnce('/bin/bash') // $SHELL
+        .mockResolvedValueOnce('/usr/local/bin/node\n') // login shell: the same Node
+        .mockResolvedValueOnce('') // package manager hint probe
+
+      await expect(resolveRemoteNodePath(conn, undefined, { strict: true })).rejects.toBeInstanceOf(
+        RemoteNodeNotFoundError
+      )
+      const npmProbes = execCommandMock.mock.calls.filter(([, command]) =>
+        String(command).includes('npm --version')
+      )
+      expect(npmProbes).toHaveLength(1)
+    })
+
+    it('proves a POSIX host has no Node when every probe answered', async () => {
+      execCommandMock
+        .mockResolvedValueOnce('') // path probe: nothing
+        .mockResolvedValueOnce('/bin/bash') // $SHELL
+        .mockResolvedValueOnce('') // login shell: nothing
+        .mockResolvedValueOnce('') // package manager hint probe
+
+      await expect(resolveRemoteNodePath(conn, undefined, { strict: true })).rejects.toBeInstanceOf(
+        RemoteNodeNotFoundError
+      )
+    })
   })
 })

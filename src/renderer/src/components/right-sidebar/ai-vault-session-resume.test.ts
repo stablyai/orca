@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { AiVaultSessionWorktreeInfo } from './ai-vault-session-worktree'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { resolveAiVaultSessionLaunchTarget } from './ai-vault-session-launch-actions'
+import { resolveAiVaultSessionLaunchTarget } from './ai-vault-session-launch-target'
 import {
   aiVaultSessionResumeLabel,
   aiVaultSessionRowResumeGating,
@@ -588,6 +589,21 @@ describe('aiVaultSessionRowResumeGating', () => {
     expect(aiVaultSessionRowResumeGating(sessionWithTurns, null)).toEqual({
       resumeDisabled: true,
       canCopyResumeCommand: true
+    })
+  })
+
+  it('withholds copy-resume from a native structured session', () => {
+    expect(
+      aiVaultSessionRowResumeGating(
+        {
+          ...sessionWithTurns,
+          structuredSession: { sessionId: 'session-1', workspaceId: 'worktree-1' }
+        },
+        unblocked
+      )
+    ).toEqual({
+      resumeDisabled: false,
+      canCopyResumeCommand: false
     })
   })
 

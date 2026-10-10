@@ -1,4 +1,5 @@
 import { test, expect } from './helpers/orca-app'
+import { getFirstWslDistro, useWslRuntimeForActiveProject } from './helpers/wsl-golden-stub-agent'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   execInTerminal,
@@ -27,7 +28,9 @@ test.describe('Windows terminal env and shell identity', () => {
     await waitForTerminalOutput(orcaPage, marker, 15_000)
   })
 
-  test('Windows tab icons stay pinned to the shell used at tab creation', async ({ orcaPage }) => {
+  test('native Windows tab icons stay pinned to the effective shell at tab creation', async ({
+    orcaPage
+  }) => {
     test.skip(process.platform !== 'win32', 'Windows shell icons only render on Windows')
 
     const tabIds = await orcaPage.evaluate(() => {
@@ -41,10 +44,11 @@ test.describe('Windows terminal env and shell identity', () => {
         throw new Error('No active worktree')
       }
 
+      // Native project ownership makes a global WSL shell fall back to PowerShell.
       store.setState({
         settings: { ...state.settings!, terminalWindowsShell: 'wsl.exe' }
       })
-      const wslTab = store.getState().createTab(worktreeId, undefined, undefined, {
+      const fallbackTab = store.getState().createTab(worktreeId, undefined, undefined, {
         activate: false
       })
 
@@ -55,33 +59,68 @@ test.describe('Windows terminal env and shell identity', () => {
         activate: false
       })
 
-      return { wslTabId: wslTab.id, cmdTabId: cmdTab.id }
+      return { fallbackTabId: fallbackTab.id, cmdTabId: cmdTab.id }
     })
 
-    const tabSnapshot = await orcaPage.evaluate(({ wslTabId, cmdTabId }) => {
+    const tabSnapshot = await orcaPage.evaluate(({ fallbackTabId, cmdTabId }) => {
       const state = window.__store!.getState()
       const tabs = Object.values(state.tabsByWorktree).flat()
       return {
-        wslShell: tabs.find((tab) => tab.id === wslTabId)?.shellOverride,
+        fallbackShell: tabs.find((tab) => tab.id === fallbackTabId)?.shellOverride,
         cmdShell: tabs.find((tab) => tab.id === cmdTabId)?.shellOverride
       }
     }, tabIds)
 
     expect(tabSnapshot).toEqual({
-      wslShell: 'wsl.exe',
+      fallbackShell: 'powershell.exe',
       cmdShell: 'cmd.exe'
     })
 
-    const wslTab = orcaPage.locator(
-      `[data-testid="sortable-tab"][data-tab-id="${tabIds.wslTabId}"]`
+    const fallbackTab = orcaPage.locator(
+      `[data-testid="sortable-tab"][data-tab-id="${tabIds.fallbackTabId}"]`
     )
     const cmdTab = orcaPage.locator(
       `[data-testid="sortable-tab"][data-tab-id="${tabIds.cmdTabId}"]`
     )
-    await expect(wslTab).toBeVisible()
+    await expect(fallbackTab).toBeVisible()
     await expect(cmdTab).toBeVisible()
 
-    await expect(wslTab.locator('[data-shell-icon]')).toHaveAttribute('data-shell-icon', 'wsl.exe')
+    await expect(fallbackTab.locator('[data-shell-icon]')).toHaveAttribute(
+      'data-shell-icon',
+      'powershell.exe'
+    )
     await expect(cmdTab.locator('[data-shell-icon]')).toHaveAttribute('data-shell-icon', 'cmd.exe')
+  })
+
+  test('WSL project tab icons retain runtime ownership across global shell changes', async ({
+    orcaPage
+  }) => {
+    test.skip(process.platform !== 'win32', 'WSL shell icons require Windows')
+    const distro = await getFirstWslDistro(orcaPage)
+    test.skip(!distro, 'WSL icon coverage requires an installed distro')
+    await useWslRuntimeForActiveProject(orcaPage, distro!)
+
+    const tabIds = await orcaPage.evaluate(async () => {
+      const store = window.__store!
+      const worktreeId = store.getState().activeWorktreeId!
+      const ids: string[] = []
+      for (const shell of ['powershell.exe', 'cmd.exe'] as const) {
+        await store.getState().updateSettings({ terminalWindowsShell: shell })
+        ids.push(
+          store.getState().createTab(worktreeId, undefined, undefined, { activate: false }).id
+        )
+      }
+      return ids
+    })
+    const shells = await orcaPage.evaluate((ids) => {
+      const tabs = Object.values(window.__store!.getState().tabsByWorktree).flat()
+      return ids.map((id) => tabs.find((tab) => tab.id === id)?.shellOverride)
+    }, tabIds)
+    expect(shells).toEqual(['wsl.exe', 'wsl.exe'])
+    for (const id of tabIds) {
+      const tab = orcaPage.locator(`[data-testid="sortable-tab"][data-tab-id="${id}"]`)
+      await expect(tab).toBeVisible()
+      await expect(tab.locator('[data-shell-icon]')).toHaveAttribute('data-shell-icon', 'wsl.exe')
+    }
   })
 })

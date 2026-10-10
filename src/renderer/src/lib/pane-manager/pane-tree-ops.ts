@@ -1,10 +1,10 @@
-/* eslint-disable max-lines -- Why: split-tree DOM reparent, promote, and equalize rules need one consistent owner. */
 import type {
   DropZone,
   ManagedPane,
   ManagedPaneInternal,
   PaneStyleOptions
 } from './pane-manager-types'
+import type { PaneLayoutEditIntent } from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 import { createDivider, disposeDivider } from './pane-divider'
 import { disposeWebgl, attachWebgl } from './pane-webgl-renderer'
 import { safeFit } from './pane-fit'
@@ -16,6 +16,7 @@ export {
   type SafeFitContinuationHandle
 } from './pane-fit'
 export { captureScrollState, restoreScrollState } from './pane-scroll'
+export { equalizePaneSplitSizes, findPaneChildren } from './pane-tree-equalization'
 
 // ---------------------------------------------------------------------------
 // Split-tree manipulation: detach, insert, promote sibling
@@ -26,7 +27,7 @@ type TreeOpsCallbacks = {
   getStyleOptions: () => PaneStyleOptions
   safeFit: (pane: ManagedPane) => void
   refitPanesUnder: (el: HTMLElement) => void
-  onLayoutChanged?: () => void
+  onLayoutChanged?: (intent?: PaneLayoutEditIntent) => void
   onDragActiveChange?: (active: boolean) => void
   isDestroyed?: () => boolean
   requestPaneReparentFrame?: (callback: FrameRequestCallback) => void
@@ -242,76 +243,16 @@ export function removeDividers(parent: HTMLElement): void {
   }
 }
 
-/** Find non-divider children (panes and splits) of an element. */
-export function findPaneChildren(parent: HTMLElement): HTMLElement[] {
-  return Array.from(parent.children).filter(
-    (child): child is HTMLElement =>
-      child instanceof HTMLElement &&
-      (child.classList.contains('pane') || child.classList.contains('pane-split'))
-  )
-}
-
-function getSplitDirection(split: HTMLElement): 'vertical' | 'horizontal' {
-  return split.classList.contains('is-horizontal') ? 'horizontal' : 'vertical'
-}
-
-function getEqualizeWeight(el: HTMLElement, direction: 'vertical' | 'horizontal'): number {
-  if (!el.classList.contains('pane-split') || getSplitDirection(el) !== direction) {
-    return 1
-  }
-
-  const children = findPaneChildren(el)
-  return Math.max(
-    1,
-    children.reduce((sum, child) => sum + getEqualizeWeight(child, direction), 0)
-  )
-}
-
-export function equalizePaneSplitSizes(root: HTMLElement | null): boolean {
-  if (!root) {
-    return false
-  }
-
-  let changed = false
-  const visit = (el: HTMLElement): void => {
-    if (!el.classList.contains('pane-split')) {
-      return
-    }
-
-    const direction = getSplitDirection(el)
-    const children = findPaneChildren(el)
-    if (children.length >= 2) {
-      for (const child of children) {
-        // Why: same-axis nested splits need pane-count weighting so three
-        // side-by-side panes become thirds, not 50/25/25.
-        const weight = getEqualizeWeight(child, direction)
-        const nextFlex = `${weight} 1 0%`
-        if (child.style.flex !== nextFlex) {
-          child.style.flex = nextFlex
-          changed = true
-        }
-      }
-    }
-
-    for (const child of children) {
-      visit(child)
-    }
-  }
-
-  visit(root)
-  return changed
-}
-
 /**
  * Create a flex split wrapper that replaces `existingContainer` in the DOM,
- * then places [existing] [divider] [new] inside it.
+ * then places [existing] [divider] [new] inside it ([new] first when `newPaneFirst`).
  */
 export function wrapInSplit(
   existingContainer: HTMLElement,
   newContainer: HTMLElement,
   isVertical: boolean,
   divider: HTMLElement,
-  opts?: { ratio?: number }
+  opts?: { ratio?: number; newPaneFirst?: boolean }
 ): void {
   const parent = existingContainer.parentElement
   if (!parent) {
@@ -351,7 +292,9 @@ export function wrapInSplit(
 
   // Replace existing with split in the DOM, then build children
   parent.replaceChild(split, existingContainer)
-  split.appendChild(existingContainer)
-  split.appendChild(divider)
-  split.appendChild(newContainer)
+  if (opts?.newPaneFirst) {
+    split.append(newContainer, divider, existingContainer)
+  } else {
+    split.append(existingContainer, divider, newContainer)
+  }
 }

@@ -4,8 +4,9 @@ import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
-import type { ProjectHostSetup, ProjectHostSetupState } from '../../../../shared/types'
+import type { ProjectHostSetup, ProjectHostSetupState } from '../../../../shared/project-types'
 import { translate } from '@/i18n/i18n'
+import { pickerExecutionHosts } from '../../../../shared/managed-orcad-execution-host'
 
 export type SetupHostOption = {
   id: ExecutionHostId
@@ -47,8 +48,13 @@ export function buildSetupHostOptions({
   hostOptions: readonly ExecutionHostRegistryEntry[]
 }): SetupHostOption[] {
   const setupHostIds = new Set(projectHostSetups.map((setup) => setup.hostId))
-  return hostOptions
-    .filter((host) => !setupHostIds.has(host.id))
+  return pickerExecutionHosts(hostOptions)
+    .filter(
+      (host) =>
+        !setupHostIds.has(host.id) &&
+        // Why: one machine; the project already set up under its other id needs no second offer.
+        !host.aliasHostIds?.some((aliasHostId) => setupHostIds.has(aliasHostId))
+    )
     .map((host) => {
       const availability = getHostSetupAvailability(host)
       // Why: import and clone require live remote providers, while an offline

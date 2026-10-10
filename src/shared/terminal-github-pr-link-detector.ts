@@ -8,8 +8,8 @@
  * path. Both paths must share the carry/dedupe semantics or links split across
  * chunks would resolve differently per authority mode.
  */
-import type { RepoSlug } from './github-links'
-import { parseGitHubIssueOrPRLink } from './github-links'
+import type { RepoSlug } from './github/links'
+import { parseGitHubIssueOrPRLink } from './github/links'
 
 const GITHUB_PR_PATH_MARKER = '/pull/'
 const TERMINAL_SGR_PATTERN = /\x1b\[[0-?]*[ -/]*m/g

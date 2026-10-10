@@ -1,10 +1,10 @@
-import {
-  workItemsCacheKey,
-  type CacheEntry,
-  type WorkItemsCacheError,
-  type WorkItemsCacheSources
-} from '@/store/slices/github'
-import type { GitHubWorkItem } from '../../../shared/types'
+import { workItemsCacheKey } from '@/store/github/cache-identity'
+import type {
+  CacheEntry,
+  WorkItemsCacheError,
+  WorkItemsCacheSources
+} from '@/store/github/cache-model'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import {
   taskPageWorkItemKey,
   taskPageWorkItemStatusSignature,
@@ -28,6 +28,7 @@ export type TaskPageRepoCacheInput = {
 export type TaskPageDialogWorkItemKey = {
   id: string
   repoId: string
+  url: string
 } | null
 
 export type TaskPageRepoSourceState = {
@@ -240,7 +241,10 @@ export function findTaskPageDialogWorkItem(
 
   for (const entry of Object.values(workItemsCache)) {
     const found = entry?.data?.find(
-      (wi) => wi.id === dialogWorkItemKey.id && wi.repoId === dialogWorkItemKey.repoId
+      (wi) =>
+        wi.id === dialogWorkItemKey.id &&
+        wi.repoId === dialogWorkItemKey.repoId &&
+        wi.url === dialogWorkItemKey.url
     )
     if (found) {
       return found

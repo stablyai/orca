@@ -7,7 +7,7 @@ import { translate } from '@/i18n/i18n'
 import type { LocalizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { COMPOSER_FIELD_CLASS } from './create-hosted-review-composer-field-class'
 import { CreateHostedReviewComposerMessage } from './CreateHostedReviewComposerMessage'
-import { stripBaseRef } from './useCreatePullRequestDialogFields'
+import { stripBaseRef } from './create-pull-request-base-ref-normalization'
 
 type CreateHostedReviewBasePickerProps = {
   copy: LocalizedHostedReviewCopy

@@ -2,15 +2,17 @@
 // String normalizers shared by every agent-status payload field: trim/fold to
 // a single line for previews, preserve structure for multiline bodies, and
 // truncate without splitting surrogate pairs. Extracted from
-// agent-status-types.ts, which owns the payload shapes and per-field caps.
+// agent-status-types.ts, which owns the payload shapes and the caps no other module applies.
 
-import {
-  compactDispatchPromptForStatus,
-  isOrcaDispatchStatusPrompt
-} from './orca-dispatch-status-prompt'
+import { compactDispatchPromptForStatus } from './orca-dispatch-status-prompt'
 
 /** Maximum character length for the prompt field. Truncated on parse. */
 export const AGENT_STATUS_MAX_FIELD_LENGTH = 200
+/** Maximum character length for the toolInput preview. */
+export const AGENT_STATUS_TOOL_INPUT_MAX_LENGTH = 160
+/** Maximum character length for the agentType label. Truncated on parse. */
+export const AGENT_TYPE_MAX_LENGTH = 40
+export const AGENT_MODEL_MAX_LENGTH = 120
 
 const SINGLE_LINE_FIELD_SCAN_OVERHEAD = 64
 const SINGLE_LINE_FIELD_SCAN_MULTIPLIER = 8
@@ -45,14 +47,13 @@ export function normalizePromptField(value: unknown): string {
   if (typeof value !== 'string') {
     return ''
   }
-  if (isOrcaDispatchStatusPrompt(value)) {
-    return compactDispatchPromptForStatus(
+  return (
+    compactDispatchPromptForStatus(
       value,
       AGENT_STATUS_MAX_FIELD_LENGTH,
       normalizeSingleLinePreview
-    )
-  }
-  return normalizeSingleLinePreview(value, AGENT_STATUS_MAX_FIELD_LENGTH)
+    ) ?? normalizeSingleLinePreview(value, AGENT_STATUS_MAX_FIELD_LENGTH)
+  )
 }
 
 function normalizeSingleLinePreview(value: string, maxLength: number): string {
@@ -210,4 +211,12 @@ export function normalizeOptionalMultilineField(
   }
   const normalized = normalizeMultilineField(value, maxLength)
   return normalized.length > 0 ? normalized : undefined
+}
+
+/** Keep a lead turn's end time only on the gated `working` row and that turn's later all-clear `done`. */
+export function normalizeTurnCompletedAtField(value: unknown, state: string): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined
+  }
+  return state === 'working' || state === 'done' ? value : undefined
 }

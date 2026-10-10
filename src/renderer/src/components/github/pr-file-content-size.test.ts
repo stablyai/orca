@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { GitHubPRFileContents } from '../../../../shared/types'
+import type { GitHubPRFileContents } from '../../../../shared/github/pull-request-types'
 import { getPRFileContentsCacheByteCount } from './pr-file-content-size'
 
 describe('PR file content size', () => {

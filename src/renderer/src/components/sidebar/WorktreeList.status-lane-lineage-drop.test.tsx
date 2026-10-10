@@ -1,16 +1,18 @@
 // @vitest-environment happy-dom
 
+vi.mock('@/components/confirmation-dialog-context', () => ({
+  useConfirmationDialog: () => vi.fn().mockResolvedValue(false)
+}))
+
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  Repo,
-  WorkspaceStatus,
-  Worktree,
-  WorktreeCardProperty,
-  WorktreeLineage,
-  WorktreeMeta
-} from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
+import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/types'
+import type { WorktreeMetaBatchUpdate } from '../../store/slices/worktree-helpers'
 import { DEFAULT_WORKSPACE_STATUSES } from '../../../../shared/workspace-status-defaults'
 import {
   WORKSPACE_STATUS_DRAG_IDS_TYPE,
@@ -21,6 +23,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const mockStore = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
+  setVisibleReviewCardWorktreeIds: vi.fn<(ids: readonly string[]) => void>(),
   activateWorktreeFromSidebar: vi.fn(),
   openModal: vi.fn(),
   updateWorktreeMeta: vi.fn(),
@@ -145,7 +148,6 @@ vi.mock('./WorktreeCardAgents', () => ({
 
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
-  CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope',
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR: 'data-worktree-native-context-menu'
 }))
@@ -278,6 +280,7 @@ function setStatusLaneState(): void {
     remoteBranchConflictByWorktreeId: {},
     reorderRepos: vi.fn(),
     reportVisibleGitHubPRRefreshCandidates: vi.fn(),
+    setVisibleReviewCardWorktreeIds: mockStore.setVisibleReviewCardWorktreeIds,
     repos: [repo],
     retainedAgentsByPaneKey: {},
     revealWorktreeInSidebar: vi.fn(),
@@ -359,11 +362,12 @@ function findStatusLaneHeader(container: HTMLElement, status: WorkspaceStatus): 
 
 async function dropWorktreesOnStatusLane(
   header: HTMLElement,
-  worktreeIds: readonly string[]
+  worktreeIds: readonly string[],
+  dataTransfer: DataTransfer = makeWorktreeIdDataTransfer(worktreeIds)
 ): Promise<void> {
   const event = new Event('drop', { bubbles: true, cancelable: true })
   Object.defineProperty(event, 'dataTransfer', {
-    value: makeWorktreeIdDataTransfer(worktreeIds)
+    value: dataTransfer
   })
   await act(async () => {
     header.dispatchEvent(event)
@@ -372,7 +376,13 @@ async function dropWorktreesOnStatusLane(
 
 function committedStatusUpdates(): Map<string, Partial<WorktreeMeta>> {
   expect(mockStore.updateWorktreesMeta).toHaveBeenCalledTimes(1)
-  return mockStore.updateWorktreesMeta.mock.calls[0]![0] as Map<string, Partial<WorktreeMeta>>
+  const input = mockStore.updateWorktreesMeta.mock.calls[0]![0] as
+    | readonly WorktreeMetaBatchUpdate[]
+    | ReadonlyMap<string, Partial<WorktreeMeta>>
+  if ('get' in input) {
+    return new Map(input)
+  }
+  return new Map(input.map((entry) => [entry.worktreeId, entry.updates]))
 }
 
 describe('WorktreeList status-lane drop carries visible lineage children (#9083)', () => {
@@ -404,6 +414,23 @@ describe('WorktreeList status-lane drop carries visible lineage children (#9083)
     const updates = committedStatusUpdates()
     expect(updates.get('parent')).toEqual({ workspaceStatus: 'todo' })
     expect(updates.get('child')).toEqual({ workspaceStatus: 'todo' })
+  })
+
+  it('ignores a hybrid file drag with a workspace id in plain text', async () => {
+    const container = await renderWorktreeList()
+    const todoHeader = findStatusLaneHeader(container, 'todo')
+    const hybridTransfer = {
+      types: ['Files', 'text/plain'],
+      files: [{ name: 'notes.txt' }],
+      getData: (type: string) => (type === 'text/plain' ? 'parent' : '')
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The drop reader uses only types and getData from this fixture.
+    const dataTransfer = hybridTransfer as unknown as DataTransfer
+
+    await dropWorktreesOnStatusLane(todoHeader, ['parent'], dataTransfer)
+
+    expect(mockStore.updateWorktreeMeta).not.toHaveBeenCalled()
+    expect(mockStore.updateWorktreesMeta).not.toHaveBeenCalled()
   })
 
   it('leaves worktrees in other lanes untouched', async () => {

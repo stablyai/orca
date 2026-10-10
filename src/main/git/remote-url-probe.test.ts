@@ -44,7 +44,6 @@ describe('remote URL probe', () => {
       cwd: '/repo',
       timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
-    expect(REMOTE_URL_PROBE_TIMEOUT_MS).toBe(30_000)
   })
 
   it('bounds the SSH remote read with the same deadline as the local one', async () => {
@@ -95,6 +94,15 @@ describe('remote URL probe', () => {
     gitExecFileAsyncMock.mockRejectedValue(new Error("fatal: No such remote 'origin'"))
 
     await expect(assertRemoteUrlReadable({ repoPath: '/repo' })).resolves.toBeUndefined()
+  })
+
+  it('keeps a failed SSH command unverifiable even without a transport error string', async () => {
+    const failure = new Error('relay request failed')
+    getSshGitProviderMock.mockReturnValue({ exec: vi.fn().mockRejectedValue(failure) })
+
+    await expect(
+      assertRemoteUrlReadable({ repoPath: '/repo', connectionId: 'ssh-1' })
+    ).rejects.toBe(failure)
   })
 
   it('does not turn a missing SSH provider into a false readable result', async () => {

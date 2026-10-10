@@ -4,6 +4,11 @@ import { lstat, open, readdir, realpath } from 'node:fs/promises'
 import { isAbsolute, join as pathJoin, relative, sep } from 'node:path'
 import { finished } from 'node:stream/promises'
 import type { SFTPWrapper } from 'ssh2'
+import {
+  latchLateSftpSessionErrors,
+  latchLateSftpStreamErrors,
+  type SftpStreamErrorLatch
+} from './sftp-stream-late-error'
 
 export function mkdirSftp(
   sftp: SFTPWrapper,
@@ -44,6 +49,7 @@ async function uploadFileAndJoinTeardown(
   let handleClose: Promise<void> | undefined
   let readStream: ReadStream | undefined
   let writeStream: ReturnType<SFTPWrapper['createWriteStream']> | undefined
+  let writeStreamErrors: SftpStreamErrorLatch | undefined
   const closeHandle = (): Promise<void> => {
     handleClose ??= handle.close()
     return handleClose
@@ -67,7 +73,14 @@ async function uploadFileAndJoinTeardown(
     writeStream = sftp.createWriteStream(remotePath, {
       flags: options?.exclusive ? 'wx' : 'w'
     })
+    // Why: the OPEN reply can land after this transfer settles; without a listener that
+    // outlives it, ssh2 throws it synchronously into the socket handler (#15479).
+    writeStreamErrors = latchLateSftpStreamErrors(writeStream, remotePath)
     readStream = handle.createReadStream({ autoClose: false })
+    // Why: `finished` drops its listeners once the read ends; an abort (a quit's disconnect) that
+    // destroys the ended stream with the signal's reason would then emit an unhandled 'error' that
+    // takes main down mid-shutdown. The transfer's outcome is read from `finished`, not from here.
+    readStream.on('error', () => {})
     const abortTransfer = (): void => {
       const reason =
         options?.signal?.reason instanceof Error
@@ -100,6 +113,7 @@ async function uploadFileAndJoinTeardown(
       options?.signal?.removeEventListener('abort', abortTransfer)
     }
   } finally {
+    writeStreamErrors?.markTransferSettled()
     readStream?.destroy()
     writeStream?.destroy()
     await closeHandle()
@@ -117,8 +131,10 @@ export function uploadBuffer(
     const writeStream = sftp.createWriteStream(remotePath, {
       flags: options?.append ? 'a' : options?.exclusive ? 'wx' : 'w'
     })
+    const lateErrors = latchLateSftpStreamErrors(writeStream, remotePath)
 
     const cleanupListeners = (): void => {
+      lateErrors.markTransferSettled()
       writeStream.off('close', onClose)
       writeStream.off('error', onError)
     }
@@ -147,8 +163,10 @@ export function writeStringViaSftp(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const ws = sftp.createWriteStream(remotePath)
+    const lateErrors = latchLateSftpStreamErrors(ws, remotePath)
     let settled = false
     const cleanup = (): void => {
+      lateErrors.markTransferSettled()
       sftp.removeListener('error', onError)
       ws.removeListener('close', onClose)
       ws.removeListener('error', onError)
@@ -177,11 +195,47 @@ export function writeStringViaSftp(
   })
 }
 
+/**
+ * Write several files over one SFTP session, ending it when they are all done.
+ *
+ * Owns the session's late-error latch, which is why a caller must not hand-roll this
+ * loop: `writeStringViaSftp` drops its own session listener at each settle, so between
+ * files and after the last one the emitter would carry none, and a late STATUS reply
+ * throws synchronously out of ssh2's parser into main (#15479).
+ */
+export async function writeStringsViaSftp(
+  conn: { sftp(): Promise<SFTPWrapper> },
+  files: readonly { path: string; contents: string }[]
+): Promise<void> {
+  const sftp = await conn.sftp()
+  latchLateSftpSessionErrors(sftp)
+  try {
+    for (const file of files) {
+      await writeStringViaSftp(sftp, file.path, file.contents)
+    }
+  } finally {
+    sftp.end()
+  }
+}
+
 export async function uploadDirectory(
   sftp: SFTPWrapper,
   localDir: string,
   remoteDir: string,
-  rootRealPath = localDir,
+  root = localDir,
+  options?: { exclusive?: boolean; signal?: AbortSignal }
+): Promise<void> {
+  options?.signal?.throwIfAborted()
+  // Why resolve the root: entries are compared by realpath, so a root under a symlink, junction or
+  // Windows 8.3 short name (RUNNER~1 in TEMP) would otherwise reject every entry as escaped.
+  await uploadDirectoryWithinRoot(sftp, localDir, remoteDir, await realpath(root), options)
+}
+
+async function uploadDirectoryWithinRoot(
+  sftp: SFTPWrapper,
+  localDir: string,
+  remoteDir: string,
+  rootRealPath: string,
   options?: { exclusive?: boolean; signal?: AbortSignal }
 ): Promise<void> {
   options?.signal?.throwIfAborted()
@@ -204,7 +258,7 @@ export async function uploadDirectory(
 
     if (statResult.isDirectory()) {
       await mkdirSftp(sftp, remotePath, { allowExisting: !options?.exclusive })
-      await uploadDirectory(sftp, localPath, remotePath, rootRealPath, options)
+      await uploadDirectoryWithinRoot(sftp, localPath, remotePath, rootRealPath, options)
     } else {
       await uploadFile(sftp, localPath, remotePath, options)
     }

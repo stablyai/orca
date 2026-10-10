@@ -1,7 +1,7 @@
 // STA-4028 (regression from #13925): quarter circles are ordinary progress glyphs —
 // ora, installers, any TUI animates them — so a title carrying nothing else must not
 // authorize a guarded send, which auto-submits with Enter into whatever owns the pane.
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { assertTerminalAgentSendable } from './rpc/terminal-agent-send-guard'
 import { detectAgentStatusFromTitle } from '../../shared/agent-detection'
@@ -17,6 +17,11 @@ const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const TAB_ID = 'tab-1'
 const WORKTREE_ID = 'wt-1'
 const PTY_ID = 'pty-1'
+
+afterEach(() => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
 
 // Captured from Claude Code 2.1.228 while it read this repository's package.json.
 const SPINNER_ONLY_TITLE = '◑ Check package version in package.json'
@@ -91,6 +96,42 @@ async function createRuntimeWithTitle(
 
 const AUTHORIZED = 'authorized'
 
+// The 150ms foreground tick first crosses its unchanged 6,500ms budget at 6,600ms.
+const WRAPPER_REJECTION_TICK_MS = 6_600
+const NO_AGENT_GUARD_DEADLINE_MS = 1_050
+
+async function readAgentEvidenceAtDeadline<T>(
+  read: () => Promise<T>,
+  deadlineMs: number
+): Promise<T> {
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  try {
+    let settled = false
+    const result = read()
+    void result.then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      }
+    )
+    await vi.advanceTimersByTimeAsync(deadlineMs - 1)
+    expect(settled, 'agent evidence settled before its deadline').toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(settled, 'agent evidence did not settle at its deadline').toBe(true)
+    expect(vi.getTimerCount()).toBe(0)
+    return await result
+  } finally {
+    try {
+      await vi.runOnlyPendingTimersAsync()
+    } finally {
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
+  }
+}
+
 async function guardedSendResult(runtime: OrcaRuntimeService, handle: string): Promise<string> {
   try {
     await assertTerminalAgentSendable({ runtime, handle, assertWritable: () => {} })
@@ -104,10 +145,18 @@ describe('quarter-circle title send authorization (STA-4028)', () => {
   it('refuses a guarded send when a quarter-circle spinner is the only agent evidence', async () => {
     const { runtime, handle } = await createRuntimeWithTitle(SPINNER_ONLY_TITLE, 'node')
 
-    await expect(runtime.getTerminalAgentStatus(handle)).resolves.toMatchObject({
-      isRunningAgent: false
-    })
-    await expect(guardedSendResult(runtime, handle)).resolves.toBe('terminal_guard_no_agent')
+    expect(
+      await readAgentEvidenceAtDeadline(
+        () => runtime.getTerminalAgentStatus(handle),
+        WRAPPER_REJECTION_TICK_MS
+      )
+    ).toMatchObject({ isRunningAgent: false })
+    expect(
+      await readAgentEvidenceAtDeadline(
+        () => guardedSendResult(runtime, handle),
+        WRAPPER_REJECTION_TICK_MS
+      )
+    ).toBe('terminal_guard_no_agent')
   })
 
   it('refuses a guarded send when the foreground process cannot be read at all', async () => {
@@ -115,7 +164,12 @@ describe('quarter-circle title send authorization (STA-4028)', () => {
     // stays a refusal rather than falling back to the glyph.
     const { runtime, handle } = await createRuntimeWithTitle(SPINNER_ONLY_TITLE, null)
 
-    await expect(guardedSendResult(runtime, handle)).resolves.toBe('terminal_guard_no_agent')
+    expect(
+      await readAgentEvidenceAtDeadline(
+        () => guardedSendResult(runtime, handle),
+        NO_AGENT_GUARD_DEADLINE_MS
+      )
+    ).toBe('terminal_guard_no_agent')
   })
 
   it('authorizes a guarded send when the foreground process is a recognized agent', async () => {
@@ -158,7 +212,12 @@ describe('quarter-circle title send authorization (STA-4028)', () => {
       false
     )
 
-    await expect(guardedSendResult(runtime, handle)).resolves.toBe('terminal_guard_no_agent')
+    expect(
+      await readAgentEvidenceAtDeadline(
+        () => guardedSendResult(runtime, handle),
+        NO_AGENT_GUARD_DEADLINE_MS
+      )
+    ).toBe('terminal_guard_no_agent')
   })
 
   it('does not carry managed Claude identity into a replacement PTY incarnation', async () => {
@@ -183,10 +242,27 @@ describe('quarter-circle title send authorization (STA-4028)', () => {
       launchIncarnationId: 'initial-incarnation',
       launchToken: expect.any(String)
     })
-    await expect(runtime.getTerminalAgentStatus(handle)).resolves.toMatchObject({
+    await expect(runtime.getTerminalAgentStatus(handle)).rejects.toThrow('terminal_handle_stale')
+
+    runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
+      tabId: TAB_ID,
+      leafId: LEAF_ID,
+      incarnationId: 'replacement-incarnation'
+    })
+    const replacementHandle = runtime.getTerminalHandleForPaneKey(`${TAB_ID}:${LEAF_ID}`)
+    if (replacementHandle === null) {
+      throw new Error('replacement terminal handle was not registered')
+    }
+    expect(replacementHandle).not.toBe(handle)
+    await expect(runtime.getTerminalAgentStatus(replacementHandle)).resolves.toMatchObject({
       isRunningAgent: false
     })
-    await expect(guardedSendResult(runtime, handle)).resolves.toBe('terminal_guard_no_agent')
+    expect(
+      await readAgentEvidenceAtDeadline(
+        () => guardedSendResult(runtime, replacementHandle),
+        NO_AGENT_GUARD_DEADLINE_MS
+      )
+    ).toBe('terminal_guard_no_agent')
   })
 
   it('authorizes a guarded send when the busy title itself names the agent', async () => {

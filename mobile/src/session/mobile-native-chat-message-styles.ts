@@ -29,25 +29,51 @@ export const styles = StyleSheet.create({
     lineHeight: TEXT_SIZE + 6,
     fontWeight: '500'
   },
-  controls: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing.xs,
-    marginBottom: 2,
-    opacity: 0.7
+  contextBoundary: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
+    paddingTop: spacing.sm
   },
-  controlButton: {
-    padding: 3
-  },
-  controlPressed: {
-    opacity: 0.5
-  },
-  copied: {
-    backgroundColor: colors.diffAddedBg,
-    borderRadius: radii.card
+  hostNotice: {
+    color: colors.textMuted,
+    fontSize: TEXT_SIZE,
+    lineHeight: TEXT_SIZE + 6
   },
   reasoning: {
-    opacity: 0.7
+    opacity: 0.7,
+    // Starts under the headline, past the 15 pt brain and its gap.
+    paddingLeft: 15 + spacing.sm
+  },
+  reasoningToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    // With the toggle's 6 pt hitSlop above and below, a 44 pt touch target.
+    minHeight: 32
+  },
+  reasoningPressed: {
+    opacity: 0.6
+  },
+  reasoningHeadline: {
+    color: colors.textMuted,
+    fontSize: typography.bodySize,
+    flexShrink: 1
+  },
+  reasoningCaretOpen: {
+    transform: [{ rotate: '90deg' }]
+  },
+  reasoningBody: {
+    // The common cap for an open reasoning block (about ten lines).
+    maxHeight: 240
+  },
+  agentMessage: {
+    paddingLeft: spacing.md,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.borderSubtle
+  },
+  agentAttribution: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize
   },
   toolRun: {
     marginTop: spacing.xs
@@ -64,10 +90,6 @@ export const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingVertical: 3
   },
-  controlsRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end'
-  },
   toolRunCount: {
     color: colors.statusGreen,
     fontFamily: typography.monoFamily,
@@ -79,6 +101,18 @@ export const styles = StyleSheet.create({
     color: colors.textMuted,
     fontFamily: typography.monoFamily,
     fontSize: MONO_SIZE
+  },
+  toolRunActive: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: 3
+  },
+  toolRunActiveLabel: {
+    flex: 1,
+    color: colors.textSecondary,
+    fontSize: typography.bodySize
   },
   toolRunBody: {
     paddingLeft: spacing.sm,

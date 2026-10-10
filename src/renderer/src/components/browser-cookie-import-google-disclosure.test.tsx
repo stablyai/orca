@@ -4,7 +4,7 @@
  * STA-3811: imports never touch the Google cookie family, so every import menu must disclose it
  * at the moment of decision.
  */
-import { act, type ReactNode } from 'react'
+import { act, createRef, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import en from '@/i18n/locales/en.json'
@@ -20,8 +20,8 @@ vi.mock('../../store', () => ({ useAppStore: appStoreStub() }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 import { BrowserCookieImportDisclosure } from './BrowserCookieImportDisclosure'
-import { BrowserImportHintButton } from './browser-pane/BrowserImportHintButton'
-import { BrowserToolbarMenuDropdown } from './browser-pane/browser-toolbar-menu-dropdown'
+import { BrowserImportHintButton } from './browser-pane/assemble-chrome/BrowserImportHintButton'
+import { BrowserToolbarMenuDropdown } from './browser-pane/assemble-chrome/browser-toolbar-menu-dropdown'
 import { BrowserProfileRow } from './settings/BrowserProfileRow'
 import { BrowserUseCookieImportStep } from './settings/BrowserUseCookieImportStep'
 
@@ -67,6 +67,12 @@ describe('cookie-import Google disclosure footer', () => {
           onImportFromFile={vi.fn()}
           viewportPresetId={null}
           onApplyViewportPreset={vi.fn()}
+          overflow={{
+            triggerRef: createRef<HTMLButtonElement>(),
+            tools: [],
+            deferUntilClose: vi.fn(),
+            onMenuCloseAutoFocus: vi.fn()
+          }}
         />
       )
     ],
@@ -77,7 +83,7 @@ describe('cookie-import Google disclosure footer', () => {
         <BrowserUseCookieImportStep
           cookiesImported={false}
           isImportingDefault={false}
-          step3Blocked={false}
+          disabled={false}
           sourceLabel={null}
         />
       )

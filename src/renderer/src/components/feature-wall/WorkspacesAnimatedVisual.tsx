@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { JSX } from 'react'
 import { AgentStateDot } from '@/components/AgentStateDot'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { ClaudeIcon, OpenCodeGoIcon } from '../status-bar/icons'
 
 type AgentKind = 'claude' | 'codex' | 'opencode'
@@ -87,18 +88,23 @@ export function WorkspacesAnimatedVisual(props: { reducedMotion: boolean }): JSX
     if (reducedMotion) {
       return
     }
-    const id = window.setInterval(() => {
-      setVisualState((current) => {
-        const next = current.order.slice()
-        const finishing = next.pop()
-        if (!finishing) {
-          return current
-        }
-        next.unshift(finishing)
-        return { order: next, promotedWorkspaceId: finishing.id }
-      })
-    }, STEP_MS)
-    return () => window.clearInterval(id)
+    // Why: nobody watches an animation in a hidden window. `runOnVisible` is a
+    // no-op so revealing the window resumes the cycle instead of skipping a card.
+    return installWindowVisibilityInterval({
+      run: () => {
+        setVisualState((current) => {
+          const next = current.order.slice()
+          const finishing = next.pop()
+          if (!finishing) {
+            return current
+          }
+          next.unshift(finishing)
+          return { order: next, promotedWorkspaceId: finishing.id }
+        })
+      },
+      runOnVisible: () => {},
+      intervalMs: STEP_MS
+    })
   }, [reducedMotion])
   // Why: reduced-motion mode should display the static stack without a
   // post-render repair; only the animated interval needs promoted z-order.

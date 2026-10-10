@@ -12,7 +12,6 @@ import type { TerminalViewAttributes } from '../../shared/terminal-view-attribut
 import { collectHeadlessOscLinkRanges } from './headless-osc-link-ranges'
 import { readTerminalModes } from './headless-emulator-modes'
 import { buildRehydrateSequences } from './terminal-mode-rehydrate-sequences'
-import { TerminalMouseModeMirror } from './terminal-mouse-mode-mirror'
 import { TerminalOscCwdTitleScanner } from './terminal-osc-cwd-title-scanner'
 import { buildFrameRestoreSnapshotFields } from './terminal-frame-restore-sequences'
 import { splitTerminalSnapshotAnsi } from './terminal-snapshot-ansi-buffers'
@@ -23,6 +22,8 @@ import {
 import { installDeviceAttributesResponder } from './startup-device-attributes-responder'
 import type { TerminalSnapshot, TerminalModes } from './types'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+import type { TerminalCursorContext } from '../../shared/terminal-composer-draft'
+import { readTerminalCursorLineContext } from '../../shared/terminal-cursor-line-context'
 
 export type HeadlessEmulatorOptions = {
   cols: number
@@ -55,10 +56,9 @@ const DEFAULT_SCROLLBACK = 5000
 const CONPTY_DA1_RESPONSE = '\x1b[?61;4c'
 
 export class HeadlessEmulator {
-  private terminal: Terminal
-  private serializer: SerializeAddon
+  protected terminal: Terminal
+  protected serializer: SerializeAddon
   private oscText: TerminalOscCwdTitleScanner
-  private mouseModes = new TerminalMouseModeMirror()
   private readonly pathFlavor?: 'posix' | 'win32'
   private readonly remotePosixFileUriAuthority: boolean
   private restoredOscLinks: TerminalOscLinkRange[] = []
@@ -186,8 +186,6 @@ export class HeadlessEmulator {
         if (forwardQueryReplies) {
           this.queryReplyForwardingDepth -= 1
         }
-        // Why: commit the mouse-mode mirror only after xterm has parsed the same bytes (snapshots combine both).
-        this.mouseModes.scan(data)
         this.partialEscapeTail = advancePartialEscapeTail(this.partialEscapeTail, data)
         resolve()
       })
@@ -220,13 +218,21 @@ export class HeadlessEmulator {
         this.queryReplyForwardingDepth -= 1
       }
     }
-    this.mouseModes.scan(data)
     this.partialEscapeTail = advancePartialEscapeTail(this.partialEscapeTail, data)
     return true
   }
 
   resize(cols: number, rows: number): void {
     if (this.disposed) {
+      return
+    }
+    // Why gated: restored OSC-8 ranges are row-indexed, so a reflow
+    // invalidates them — but a resize to the size already applied is not a
+    // reflow. Cold restore seeds the ranges and then replays records that
+    // resize, and same-size records reach the durable log because every
+    // attach re-asserts the pane's dimensions, so clearing unconditionally
+    // dropped the links a restore had just recovered.
+    if (this.terminal.cols === cols && this.terminal.rows === rows) {
       return
     }
     this.restoredOscLinks = []
@@ -302,6 +308,20 @@ export class HeadlessEmulator {
     return lines
   }
 
+  getVisibleBufferRange(): { start: number; endExclusive: number; totalLength: number } {
+    const buffer = this.terminal.buffer.active
+    const start = buffer.viewportY
+    return {
+      start,
+      endExclusive: Math.min(buffer.length, start + this.terminal.rows),
+      totalLength: buffer.length
+    }
+  }
+
+  getCursorLineContext(rowsAbove = this.terminal.rows): TerminalCursorContext | null {
+    return readTerminalCursorLineContext(this.terminal, rowsAbove)
+  }
+
   getBufferTailLines(limit: number): string[] {
     const buffer = this.terminal.buffer.active
     const start = Math.max(0, buffer.length - Math.max(0, Math.floor(limit)))
@@ -339,6 +359,6 @@ export class HeadlessEmulator {
   }
 
   private getModes(): TerminalModes {
-    return readTerminalModes(this.terminal, this.mouseModes)
+    return readTerminalModes(this.terminal)
   }
 }

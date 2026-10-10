@@ -1,15 +1,12 @@
-import { execFile } from 'node:child_process'
+import { runProcess } from '../shared/child-process/run-process'
 import { lstat, readFile } from 'node:fs/promises'
-import {
-  buildWslLoginShellCommand,
-  escapeWslShCommandForWindows,
-  quotePosixShell
-} from '../shared/wsl-login-shell-command'
+import { buildWslExecArgs, quotePosixShell } from '../shared/wsl-login-shell-command'
 import { removeHostTree } from './host-tree-removal'
 import { toLinuxPath } from './wsl'
+import { resolveWslInteropSpawnCwd } from './wsl-interop-spawn-directory'
 import type { ReadPath, StatPath } from './worktree-orphan-gitdir-proof'
 
-export { toHostRemovalPath } from './host-tree-removal'
+export { toHostFilesystemPath, toHostRemovalPath } from './host-tree-removal'
 
 export type LocalWorktreeFilesystemOptions = {
   wslDistro?: string
@@ -20,64 +17,56 @@ type LocalWorktreePathAccess = {
   readPath: ReadPath
 }
 
-type ExecFileTextResult = {
-  stdout: string
-  stderr: string
-}
-
 const WSL_FILE_OPERATION_TIMEOUT_MS = 30_000
 
 function shouldUseWslFilesystem(options: LocalWorktreeFilesystemOptions): boolean {
   return process.platform === 'win32' && !!options.wslDistro?.trim()
 }
 
-function execFileText(
-  file: string,
-  args: string[],
-  options: { timeout: number }
-): Promise<ExecFileTextResult> {
-  return new Promise((resolve, reject) => {
-    execFile(
-      file,
-      args,
-      { encoding: 'utf8', timeout: options.timeout },
-      (error, stdout, stderr) => {
-        if (error) {
-          reject(error)
-          return
-        }
-        resolve({
-          stdout: typeof stdout === 'string' ? stdout : String(stdout ?? ''),
-          stderr: typeof stderr === 'string' ? stderr : String(stderr ?? '')
-        })
-      }
-    )
+/**
+ * Run a filesystem command inside the distro.
+ *
+ * Why no login shell: these are coreutils at standard paths plus shell builtins,
+ * and need nothing from the user's PATH. A login shell would only add its rc/motd
+ * output to the stdout these callers parse -- the banner problem -- so the fix is
+ * to not start one rather than to fence what it prints.
+ */
+async function runWslCommand(distro: string, command: string): Promise<string> {
+  const result = await runProcess({
+    program: 'wsl.exe',
+    args: buildWslExecArgs(distro, ['sh', '-c', command]),
+    // Why explicit (#16463): the guest path is inside `command`, so this only
+    // decides whether CreateProcessW succeeds -- and these calls run while a
+    // worktree is being removed, which is the cwd an inherited one would be.
+    cwd: resolveWslInteropSpawnCwd(),
+    timeoutMs: WSL_FILE_OPERATION_TIMEOUT_MS
   })
+  if (result.timedOut) {
+    throw new Error(`WSL filesystem command timed out after ${WSL_FILE_OPERATION_TIMEOUT_MS}ms`)
+  }
+  if (result.code !== 0) {
+    throw Object.assign(new Error(result.stderr.trim() || `wsl.exe exited ${result.code}`), {
+      exitCode: result.code,
+      stderr: result.stderr
+    })
+  }
+  return result.stdout
 }
 
-function runWslLoginShellCommand(distro: string, command: string): Promise<ExecFileTextResult> {
-  return execFileText(
-    'wsl.exe',
-    [
-      '-d',
-      distro,
-      '--',
-      'sh',
-      '-lc',
-      escapeWslShCommandForWindows(buildWslLoginShellCommand(command))
-    ],
-    { timeout: WSL_FILE_OPERATION_TIMEOUT_MS }
-  )
-}
+/**
+ * Only stat's trailing strerror text is portable: GNU coreutils says `cannot statx`,
+ * BusyBox says `can't stat`, so matching the verb made a BusyBox distro report a
+ * successful cleanup as a permanent failure. The tail stays English because the probe
+ * pins LC_ALL=C, and stat is the only thing in that probe that writes to stderr.
+ */
+const WSL_MISSING_PATH_STDERR = /: (?:No such file or directory|Not a directory)\r?\n?$/
 
 function isWslMissingPathError(error: unknown): boolean {
-  // Why: the WSL stat probe exits 2 for its explicit "missing path" branch;
-  // normalize that shell-specific result so callers can handle it like fs.lstat.
-  const code =
-    error && typeof error === 'object' && 'code' in error
-      ? String((error as NodeJS.ErrnoException).code)
-      : ''
-  return code === '2'
+  if (typeof error !== 'object' || error === null || !('exitCode' in error)) {
+    return false
+  }
+  const stderr = 'stderr' in error && typeof error.stderr === 'string' ? error.stderr : ''
+  return error.exitCode === 1 && WSL_MISSING_PATH_STDERR.test(stderr)
 }
 
 export function toLocalWorktreeRuntimePath(
@@ -101,23 +90,30 @@ export function getLocalWorktreePathAccess(
   return {
     statPath: async (path) => {
       const target = quotePosixShell(toLinuxPath(path))
-      const { stdout } = await runWslLoginShellCommand(
-        distro,
-        [
-          `target=${target}`,
-          'if [ -L "$target" ]; then printf symlink; elif [ -f "$target" ]; then printf file; elif [ -d "$target" ]; then printf directory; else exit 2; fi'
-        ].join('\n')
-      ).catch((error) => {
-        if (isWslMissingPathError(error)) {
-          throw Object.assign(new Error(`missing ${path}`), { code: 'ENOENT' })
+      // Shell file tests conflate permission failures with absence; stat preserves the reason.
+      const stdout = await runWslCommand(distro, `LC_ALL=C stat -c %F -- ${target}`).catch(
+        (error: unknown) => {
+          if (isWslMissingPathError(error)) {
+            throw Object.assign(new Error(`missing ${path}`), { code: 'ENOENT' })
+          }
+          throw error
         }
-        throw error
-      })
-      return { type: stdout.trim() }
+      )
+      const kind = stdout.trim()
+      return {
+        type:
+          kind === 'symbolic link'
+            ? 'symlink'
+            : kind === 'regular file' || kind === 'regular empty file'
+              ? 'file'
+              : kind === 'directory'
+                ? 'directory'
+                : 'other'
+      }
     },
     readPath: async (path) => {
       const target = quotePosixShell(toLinuxPath(path))
-      const { stdout } = await runWslLoginShellCommand(distro, `cat -- ${target}`)
+      const stdout = await runWslCommand(distro, `cat -- ${target}`)
       return stdout
     }
   }
@@ -135,5 +131,5 @@ export async function removeLocalWorktreePath(
 
   // Why: WSL-owned worktree directories may be POSIX paths that Node on
   // Windows cannot delete safely. Run the deletion inside the selected distro.
-  await runWslLoginShellCommand(distro, `rm -rf -- ${quotePosixShell(toLinuxPath(targetPath))}`)
+  await runWslCommand(distro, `rm -rf -- ${quotePosixShell(toLinuxPath(targetPath))}`)
 }

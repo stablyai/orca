@@ -1,0 +1,803 @@
+import { execFileSync } from 'node:child_process'
+import { existsSync, watch, type FSWatcher } from 'node:fs'
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import * as gitRunner from './runner'
+import {
+  createWorktreePreparationLockReason,
+  isWorktreeCreatePreparation,
+  WORKTREE_CREATE_PREPARATION_DIRECTORY
+} from '../../shared/worktree/create-preparation'
+import { listWorktrees } from './worktree'
+import {
+  discardPreparedWorktree,
+  finalizePreparedWorktree,
+  prepareWorktreeCreateCheckout
+} from './worktree-create-preparation'
+import { areWorktreePathsEqual } from './worktree-path-comparison'
+import {
+  _resetPreparationPoolForTests,
+  listPreparations,
+  startPreparation,
+  takePreparation
+} from '../worktree-create-preparation-pool'
+import { hasPendingStalePreparationCleanup } from '../worktree-create-preparation-stale-cleanup'
+
+const tempRoots: string[] = []
+
+function git(cwd: string, args: string[]): string {
+  return execFileSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    stdio: ['pipe', 'pipe', 'pipe']
+  }).trim()
+}
+
+async function createRepo(): Promise<{ repoPath: string; root: string }> {
+  const root = await mkdtemp(join(tmpdir(), 'orca-prepared-worktree-'))
+  tempRoots.push(root)
+  const repoPath = join(root, 'repo')
+  execFileSync('git', ['init', '--quiet', repoPath])
+  git(repoPath, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
+  git(repoPath, ['config', 'user.email', 'test@example.com'])
+  git(repoPath, ['config', 'user.name', 'Test User'])
+  git(repoPath, ['config', 'core.autocrlf', 'false'])
+  await writeFile(join(repoPath, 'version.txt'), 'one\n')
+  git(repoPath, ['add', 'version.txt'])
+  git(repoPath, ['commit', '--quiet', '-m', 'initial'])
+  return { repoPath, root }
+}
+
+afterEach(async () => {
+  await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+})
+
+describe('prepared worktree creation with real Git', () => {
+  it('registers during fetch and materializes its settled tip only once before the final hook', async () => {
+    const { repoPath, root } = await createRepo()
+    const preparedPath = join(root, 'prepared-barrier')
+    const finalPath = join(root, 'final-barrier')
+    const base = 'refs/remotes/origin/main'
+    const reason = createWorktreePreparationLockReason('barrier-tip')
+    const originalHead = git(repoPath, ['rev-parse', 'HEAD'])
+    git(repoPath, ['update-ref', base, originalHead])
+    const hooksPath = join(root, 'hooks')
+    await mkdir(hooksPath)
+    await writeFile(
+      join(hooksPath, 'post-checkout'),
+      '#!/bin/sh\nprintf \'%s\\n\' "$@" >> checkout-hook.txt\n',
+      { mode: 0o755 }
+    )
+    git(repoPath, ['config', 'core.hooksPath', hooksPath])
+    let release!: () => void
+    const barrier = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const spy = vi.spyOn(gitRunner, 'gitExecFileAsync')
+    const preparing = prepareWorktreeCreateCheckout(
+      repoPath,
+      preparedPath,
+      base,
+      reason,
+      {},
+      barrier
+    )
+    await vi.waitFor(() => expect(existsSync(join(preparedPath, '.git'))).toBe(true))
+    await expect(readFile(join(preparedPath, 'version.txt'))).rejects.toMatchObject({
+      code: 'ENOENT'
+    })
+    expect(spy.mock.calls.some(([args]) => args.includes('reset'))).toBe(false)
+    await writeFile(join(repoPath, 'version.txt'), 'fetched\n')
+    git(repoPath, ['commit', '--quiet', '-am', 'fetched tip'])
+    const fetchedHead = git(repoPath, ['rev-parse', 'HEAD'])
+    git(repoPath, ['update-ref', base, fetchedHead])
+    release()
+    try {
+      await preparing
+      expect(git(preparedPath, ['rev-parse', 'HEAD'])).toBe(fetchedHead)
+      expect(await readFile(join(preparedPath, 'version.txt'), 'utf8')).toBe('fetched\n')
+      expect(existsSync(join(preparedPath, 'checkout-hook.txt'))).toBe(false)
+      await finalizePreparedWorktree(
+        repoPath,
+        preparedPath,
+        finalPath,
+        'feature/barrier',
+        base,
+        false,
+        {},
+        reason
+      )
+      const resets = spy.mock.calls.filter(([args]) => args.includes('reset'))
+      expect(resets).toHaveLength(1)
+      expect(resets[0]?.[0].at(-1)).toBe(fetchedHead)
+      expect(await readFile(join(finalPath, 'checkout-hook.txt'), 'utf8')).toBe(
+        `${fetchedHead}\n${fetchedHead}\n1\n`
+      )
+      expect(git(finalPath, ['symbolic-ref', '--short', 'HEAD'])).toBe('feature/barrier')
+      await rm(join(finalPath, 'checkout-hook.txt'))
+      expect(git(finalPath, ['status', '--porcelain'])).toBe('')
+    } finally {
+      release()
+      spy.mockRestore()
+    }
+  })
+
+  it('cancels a never-settling fetch barrier and cleans the registered checkout before it resolves', async () => {
+    const { repoPath, root } = await createRepo()
+    const preparedPath = join(root, 'canceled-barrier')
+    const reason = createWorktreePreparationLockReason('barrier-cancel')
+    const controller = new AbortController()
+    let release!: () => void
+    const barrier = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const barrierSubscribed = vi.spyOn(barrier, 'then')
+    const spy = vi.spyOn(gitRunner, 'gitExecFileAsync')
+    const preparing = prepareWorktreeCreateCheckout(
+      repoPath,
+      preparedPath,
+      'main',
+      reason,
+      { signal: controller.signal },
+      barrier
+    )
+    const assertion = expect(preparing).rejects.toThrow('expired while fetching')
+    try {
+      await vi.waitFor(() => expect(existsSync(join(preparedPath, '.git'))).toBe(true))
+      const lock = git(preparedPath, ['rev-parse', '--git-path', 'locked'])
+      await vi.waitFor(async () => expect(await readFile(lock, 'utf8')).toBe(`${reason}\n`))
+      await vi.waitFor(() =>
+        expect(
+          barrierSubscribed.mock.calls.some(([onFulfilled]) => typeof onFulfilled === 'function')
+        ).toBe(true)
+      )
+      controller.abort(new Error('expired while fetching'))
+      await assertion
+      expect(existsSync(preparedPath)).toBe(false)
+      expect(git(repoPath, ['worktree', 'list', '--porcelain'])).not.toContain(preparedPath)
+      release()
+      await Promise.resolve()
+      expect(spy.mock.calls.some(([args]) => args.includes('reset'))).toBe(false)
+    } finally {
+      release()
+      barrierSubscribed.mockRestore()
+      spy.mockRestore()
+    }
+  })
+
+  it('preserves a replacement owner after the fetch barrier before probing or materializing', async () => {
+    const { repoPath, root } = await createRepo()
+    const preparedPath = join(root, 'replaced-barrier')
+    const reason = createWorktreePreparationLockReason('barrier-replacement')
+    let release!: () => void
+    const barrier = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const preparing = prepareWorktreeCreateCheckout(
+      repoPath,
+      preparedPath,
+      'main',
+      reason,
+      {},
+      barrier
+    )
+    const assertion = expect(preparing).rejects.toThrow('lock owner changed')
+    await vi.waitFor(() => expect(existsSync(join(preparedPath, '.git'))).toBe(true))
+    const lock = git(preparedPath, ['rev-parse', '--git-path', 'locked'])
+    await vi.waitFor(async () => expect(await readFile(lock, 'utf8')).toBe(`${reason}\n`))
+    await writeFile(lock, 'manual barrier owner\n')
+    await writeFile(join(preparedPath, 'version.txt'), 'manual content\n')
+    const spy = vi.spyOn(gitRunner, 'gitExecFileAsync')
+    try {
+      release()
+      await assertion
+      expect(spy).not.toHaveBeenCalled()
+      expect(await readFile(lock, 'utf8')).toBe('manual barrier owner\n')
+      expect(await readFile(join(preparedPath, 'version.txt'), 'utf8')).toBe('manual content\n')
+    } finally {
+      release()
+      spy.mockRestore()
+    }
+  })
+
+  it('reports an unrelated barrier failure and removes only its owned registration', async () => {
+    const { repoPath, root } = await createRepo()
+    const preparedPath = join(root, 'failed-barrier')
+    const failure = new Error('unexpected barrier failure')
+    const spy = vi.spyOn(gitRunner, 'gitExecFileAsync')
+    try {
+      await expect(
+        prepareWorktreeCreateCheckout(
+          repoPath,
+          preparedPath,
+          'main',
+          createWorktreePreparationLockReason('barrier-failure'),
+          {},
+          Promise.reject(failure)
+        )
+      ).rejects.toBe(failure)
+      expect(existsSync(preparedPath)).toBe(false)
+      expect(spy.mock.calls.some(([args]) => args.includes('reset'))).toBe(false)
+      expect(git(repoPath, ['worktree', 'list', '--porcelain'])).not.toContain(preparedPath)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('pins first materialization to the resolved fetched OID when the ref moves before reset', async () => {
+    const { repoPath, root } = await createRepo()
+    const preparedPath = join(root, 'moving-barrier-tip')
+    const originalHead = git(repoPath, ['rev-parse', 'HEAD'])
+    await writeFile(join(repoPath, 'version.txt'), 'newer\n')
+    git(repoPath, ['commit', '--quiet', '-am', 'later tip'])
+    const newerHead = git(repoPath, ['rev-parse', 'HEAD'])
+    git(repoPath, ['update-ref', 'refs/remotes/origin/main', originalHead])
+    const run = gitRunner.gitExecFileAsync
+    const spy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation((args, options) => {
+      if (args.includes('reset')) {
+        git(repoPath, ['update-ref', 'refs/remotes/origin/main', newerHead])
+      }
+      return run(args, options)
+    })
+    try {
+      await prepareWorktreeCreateCheckout(
+        repoPath,
+        preparedPath,
+        'refs/remotes/origin/main',
+        createWorktreePreparationLockReason('barrier-oid-race'),
+        {},
+        Promise.resolve()
+      )
+      expect(git(preparedPath, ['rev-parse', 'HEAD'])).toBe(originalHead)
+      expect(await readFile(join(preparedPath, 'version.txt'), 'utf8')).toBe('one\n')
+      expect(spy.mock.calls.find(([args]) => args.includes('reset'))?.[0].at(-1)).toBe(originalHead)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('rechecks the barrier marker after reading the fresh commit before the first reset', async () => {
+    const { repoPath, root } = await createRepo()
+    const preparedPath = join(root, 'replaced-after-tip-read')
+    const reason = createWorktreePreparationLockReason('barrier-tip-owner')
+    const run = gitRunner.gitExecFileAsync
+    let lock = ''
+    const spy = vi
+      .spyOn(gitRunner, 'gitExecFileAsync')
+      .mockImplementation(async (args, options) => {
+        const result = await run(args, options)
+        if (args[0] === 'rev-parse' && args.includes('refs/heads/main^{commit}')) {
+          lock = git(preparedPath, ['rev-parse', '--git-path', 'locked'])
+          await writeFile(lock, 'manual after tip read\n')
+        }
+        return result
+      })
+    try {
+      await expect(
+        prepareWorktreeCreateCheckout(
+          repoPath,
+          preparedPath,
+          'refs/heads/main',
+          reason,
+          {},
+          Promise.resolve()
+        )
+      ).rejects.toThrow('lock owner changed')
+      expect(
+        spy.mock.calls.some(([args]) => args.includes('reset') || args.includes('remove'))
+      ).toBe(false)
+      expect(await readFile(lock, 'utf8')).toBe('manual after tip read\n')
+      await expect(readFile(join(preparedPath, 'version.txt'))).rejects.toMatchObject({
+        code: 'ENOENT'
+      })
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it.each([false, true])(
+    'attaches the prepared HEAD and runs the hook (base advanced: %s)',
+    async (advanceBase) => {
+      const { repoPath, root } = await createRepo()
+      const preparedPath = join(root, 'prepared checkout')
+      const finalPath = join(root, 'final checkout')
+      const hooksPath = join(root, 'hooks')
+      await mkdir(hooksPath)
+      await writeFile(
+        join(hooksPath, 'post-checkout'),
+        '#!/bin/sh\nprintf \'%s\\n\' "$@" >> checkout-hook.txt\ngit symbolic-ref --short HEAD >> checkout-hook.txt\n',
+        { mode: 0o755 }
+      )
+      git(repoPath, ['config', 'core.hooksPath', hooksPath])
+      git(repoPath, ['config', 'branch.autoSetupMerge', 'always'])
+      const lockReason = createWorktreePreparationLockReason('attach-with-hook')
+      await prepareWorktreeCreateCheckout(repoPath, preparedPath, 'main', lockReason)
+      expect(existsSync(join(preparedPath, 'checkout-hook.txt'))).toBe(false)
+      if (advanceBase) {
+        await writeFile(join(repoPath, 'version.txt'), 'advanced\n')
+        git(repoPath, ['commit', '--quiet', '-am', 'advance base'])
+      }
+      const targetHead = git(repoPath, ['rev-parse', 'HEAD'])
+      await finalizePreparedWorktree(
+        repoPath,
+        preparedPath,
+        finalPath,
+        'feature/attached',
+        'main',
+        false,
+        {},
+        lockReason
+      )
+
+      expect(git(finalPath, ['rev-parse', 'HEAD'])).toBe(targetHead)
+      expect(git(finalPath, ['symbolic-ref', '--short', 'HEAD'])).toBe('feature/attached')
+      expect(
+        git(finalPath, ['for-each-ref', '--format=%(upstream)', 'refs/heads/feature/attached'])
+      ).toBe('')
+      expect(await readFile(join(finalPath, 'checkout-hook.txt'), 'utf8')).toBe(
+        `${targetHead}\n${targetHead}\n1\nfeature/attached\n`
+      )
+      await rm(join(finalPath, 'checkout-hook.txt'))
+      expect(await readFile(join(finalPath, 'version.txt'), 'utf8')).toBe(
+        advanceBase ? 'advanced\n' : 'one\n'
+      )
+      expect(git(finalPath, ['status', '--porcelain'])).toBe('')
+    }
+  )
+
+  it('never publishes a branch at a HEAD changed before attachment', async () => {
+    const { repoPath, root } = await createRepo()
+    const preparedPath = join(root, 'prepared-race')
+    const finalPath = join(root, 'final-race')
+    const lockReason = createWorktreePreparationLockReason('head-race')
+    await prepareWorktreeCreateCheckout(repoPath, preparedPath, 'main', lockReason)
+    const expectedHead = git(repoPath, ['rev-parse', 'HEAD'])
+    git(repoPath, ['checkout', '--quiet', '-b', 'other'])
+    await writeFile(join(repoPath, 'version.txt'), 'other\n')
+    git(repoPath, ['commit', '--quiet', '-am', 'other commit'])
+    const otherHead = git(repoPath, ['rev-parse', 'HEAD'])
+    git(repoPath, ['checkout', '--quiet', 'main'])
+
+    const original = gitRunner.gitExecFileAsync
+    const spy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation((args, options) => {
+      if (args.includes('checkout') || args.includes('switch')) {
+        git(finalPath, ['reset', '--hard', otherHead])
+      }
+      return original(args, options)
+    })
+    try {
+      await finalizePreparedWorktree(
+        repoPath,
+        preparedPath,
+        finalPath,
+        'feature/race',
+        'main',
+        false,
+        {},
+        lockReason
+      )
+    } finally {
+      spy.mockRestore()
+    }
+    expect(git(repoPath, ['rev-parse', 'main'])).toBe(expectedHead)
+    expect(git(finalPath, ['rev-parse', 'HEAD'])).toBe(expectedHead)
+    expect(git(finalPath, ['symbolic-ref', '--short', 'HEAD'])).toBe('feature/race')
+    expect(await readFile(join(finalPath, 'version.txt'), 'utf8')).toBe('one\n')
+  })
+
+  it('accepts a commit made by the post-checkout hook during attachment', async () => {
+    const { repoPath, root } = await createRepo()
+    const preparedPath = join(root, 'prepared-hook-commit')
+    const finalPath = join(root, 'final-hook-commit')
+    const hooksPath = join(root, 'hooks')
+    await mkdir(hooksPath)
+    await writeFile(
+      join(hooksPath, 'post-checkout'),
+      '#!/bin/sh\nprintf "invoked\\n" >> hook-invocations.txt\ngit add hook-invocations.txt\ngit commit --quiet -m "hook commit"\n',
+      { mode: 0o755 }
+    )
+    git(repoPath, ['config', 'core.hooksPath', hooksPath])
+    const lockReason = createWorktreePreparationLockReason('hook-commit')
+    await prepareWorktreeCreateCheckout(repoPath, preparedPath, 'main', lockReason)
+    const baseHead = git(repoPath, ['rev-parse', 'HEAD'])
+
+    await finalizePreparedWorktree(
+      repoPath,
+      preparedPath,
+      finalPath,
+      'feature/hook-commit',
+      'main',
+      false,
+      {},
+      lockReason
+    )
+
+    expect(git(finalPath, ['symbolic-ref', '--short', 'HEAD'])).toBe('feature/hook-commit')
+    expect(git(finalPath, ['rev-parse', 'HEAD^'])).toBe(baseHead)
+    expect(git(finalPath, ['show', '-s', '--format=%s', 'HEAD'])).toBe('hook commit')
+    expect(await readFile(join(finalPath, 'hook-invocations.txt'), 'utf8')).toBe('invoked\n')
+    expect(git(finalPath, ['status', '--porcelain'])).toBe('')
+  })
+
+  it('cleans up a branch when post-checkout rejects the attachment', async () => {
+    const { repoPath, root } = await createRepo()
+    const preparedPath = join(root, 'prepared-hook-failure')
+    const finalPath = join(root, 'final-hook-failure')
+    const hooksPath = join(root, 'hooks')
+    await mkdir(hooksPath)
+    await writeFile(join(hooksPath, 'post-checkout'), '#!/bin/sh\nexit 1\n', { mode: 0o755 })
+    git(repoPath, ['config', 'core.hooksPath', hooksPath])
+    const lockReason = createWorktreePreparationLockReason('hook-failure')
+    await prepareWorktreeCreateCheckout(repoPath, preparedPath, 'main', lockReason)
+
+    await expect(
+      finalizePreparedWorktree(
+        repoPath,
+        preparedPath,
+        finalPath,
+        'feature/hook-failure',
+        'main',
+        false,
+        {},
+        lockReason
+      )
+    ).rejects.toThrow()
+    expect(existsSync(finalPath)).toBe(false)
+    expect(git(repoPath, ['branch', '--list', 'feature/hook-failure'])).toBe('')
+  })
+
+  it('retains preparation ownership when the removal command cannot start', async () => {
+    const fixture = await createRepo()
+    const repoPath = await realpath(fixture.repoPath)
+    const root = await realpath(fixture.root)
+    const preparedPath = join(root, WORKTREE_CREATE_PREPARATION_DIRECTORY, 'owned-removal')
+    await mkdir(join(root, WORKTREE_CREATE_PREPARATION_DIRECTORY), { recursive: true })
+    const lockReason = createWorktreePreparationLockReason('removal-failure')
+    await prepareWorktreeCreateCheckout(repoPath, preparedPath, 'main', lockReason)
+    const original = gitRunner.gitExecFileAsync
+    const spy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation((args, options) => {
+      if (args.includes('remove') && args.some((arg) => areWorktreePathsEqual(arg, preparedPath))) {
+        return Promise.reject(new Error('injected removal launch failure'))
+      }
+      return original(args, options)
+    })
+    try {
+      await expect(discardPreparedWorktree(repoPath, preparedPath, {}, lockReason)).rejects.toThrow(
+        'injected removal launch failure'
+      )
+      const remaining = await listWorktrees(repoPath, { includeCreatePreparations: true })
+      const prepared = remaining.find((worktree) =>
+        areWorktreePathsEqual(worktree.path, preparedPath)
+      )
+      expect(prepared).toBeDefined()
+      expect(prepared?.lockReason).toBe(lockReason)
+      expect(await readFile(join(preparedPath, 'version.txt'), 'utf8')).toBe('one\n')
+    } finally {
+      spy.mockRestore()
+      await discardPreparedWorktree(repoPath, preparedPath, {}, lockReason)
+    }
+    expect(existsSync(preparedPath)).toBe(false)
+  })
+
+  it('creates and finalizes while dead-owner reclamation is stalled', async () => {
+    const fixture = await createRepo()
+    const repoPath = await realpath(fixture.repoPath)
+    const root = await realpath(fixture.root)
+    const preparationRoot = join(root, WORKTREE_CREATE_PREPARATION_DIRECTORY)
+    const stalePath = join(preparationRoot, '999999999-11111111-1111-4111-8111-111111111111')
+    await mkdir(preparationRoot, { recursive: true })
+    await prepareWorktreeCreateCheckout(
+      repoPath,
+      stalePath,
+      'main',
+      'orca-create-preparation:v1:999999999:stale'
+    )
+    let releaseRemoval!: () => void
+    const removalGate = new Promise<void>((resolve) => {
+      releaseRemoval = resolve
+    })
+    let markRemovalStarted!: () => void
+    const removalStarted = new Promise<void>((resolve) => {
+      markRemovalStarted = resolve
+    })
+    const original = gitRunner.gitExecFileAsync
+    const spy = vi
+      .spyOn(gitRunner, 'gitExecFileAsync')
+      .mockImplementation(async (args, options) => {
+        if (args.includes('remove') && args.some((arg) => areWorktreePathsEqual(arg, stalePath))) {
+          markRemovalStarted()
+          await removalGate
+        }
+        return original(args, options)
+      })
+    try {
+      const preparing = startPreparation({
+        repoPath,
+        workspaceRoot: root,
+        baseBranch: 'main',
+        canonicalBase: 'refs/heads/main',
+        options: {}
+      })
+      await removalStarted
+      expect(hasPendingStalePreparationCleanup()).toBe(true)
+      await preparing
+      const [entry] = listPreparations()
+      expect(entry).toBeDefined()
+      takePreparation(entry)
+      const finalPath = join(root, 'fresh-worktree')
+      await finalizePreparedWorktree(
+        repoPath,
+        entry.preparedPath,
+        finalPath,
+        'fresh',
+        'main',
+        false,
+        {},
+        entry.lockReason
+      )
+      expect(git(finalPath, ['status', '--porcelain'])).toBe('')
+      expect(git(finalPath, ['symbolic-ref', '--short', 'HEAD'])).toBe('fresh')
+      expect(await readFile(join(finalPath, 'version.txt'), 'utf8')).toBe('one\n')
+      expect(existsSync(stalePath)).toBe(true)
+      expect(hasPendingStalePreparationCleanup()).toBe(true)
+      releaseRemoval()
+      await _resetPreparationPoolForTests()
+      expect(existsSync(stalePath)).toBe(false)
+      const remaining = await listWorktrees(repoPath, { includeCreatePreparations: true })
+      expect(remaining).toHaveLength(2)
+      expect(remaining.some((w) => areWorktreePathsEqual(w.path, repoPath))).toBe(true)
+      expect(remaining.some((w) => areWorktreePathsEqual(w.path, finalPath))).toBe(true)
+      expect(hasPendingStalePreparationCleanup()).toBe(false)
+    } finally {
+      releaseRemoval()
+      await _resetPreparationPoolForTests()
+      spy.mockRestore()
+    }
+  })
+
+  it('removes partial checkout files and registration after materialization is aborted', async () => {
+    const { repoPath, root } = await createRepo()
+    await Promise.all(
+      Array.from({ length: 1000 }, (_, index) =>
+        writeFile(
+          join(repoPath, `payload-${index.toString().padStart(4, '0')}.txt`),
+          'payload'.repeat(128)
+        )
+      )
+    )
+    git(repoPath, ['add', '.'])
+    git(repoPath, ['commit', '--quiet', '-m', 'materialization fixture'])
+    const preparationRoot = join(root, WORKTREE_CREATE_PREPARATION_DIRECTORY)
+    const preparedPath = join(preparationRoot, `${process.pid}-partial`)
+    await mkdir(preparationRoot, { recursive: true })
+    const controller = new AbortController()
+    const original = gitRunner.gitExecFileAsync
+    let watcher: FSWatcher | undefined
+    let observedMaterialization = false
+    const calls: string[][] = []
+    const spy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation((args, options) => {
+      calls.push([...args])
+      if (args.includes('reset')) {
+        watcher = watch(preparedPath, (_event, filename) => {
+          // Only the reset writes here, so an event without a filename is still materialization.
+          if (filename === null || filename.toString().startsWith('payload-')) {
+            observedMaterialization = true
+            watcher?.close()
+            controller.abort()
+          }
+        })
+      }
+      return original(args, options)
+    })
+    try {
+      await expect(
+        prepareWorktreeCreateCheckout(
+          repoPath,
+          preparedPath,
+          'main',
+          createWorktreePreparationLockReason('partial-test'),
+          { signal: controller.signal }
+        )
+      ).rejects.toThrow()
+      expect(observedMaterialization).toBe(true)
+      expect(calls.some((args) => args[args.indexOf('worktree') + 1] === 'lock')).toBe(false)
+      expect(existsSync(preparedPath)).toBe(false)
+      expect(await listWorktrees(repoPath, { includeCreatePreparations: true })).toHaveLength(1)
+    } finally {
+      watcher?.close()
+      spy.mockRestore()
+    }
+  })
+
+  it('cleans up when the create signal is canceled', async () => {
+    const { repoPath, root } = await createRepo()
+    const preparationRoot = join(root, WORKTREE_CREATE_PREPARATION_DIRECTORY)
+    const preparedPath = join(preparationRoot, `${process.pid}-canceled`)
+    await mkdir(preparationRoot, { recursive: true })
+
+    const lockReason = createWorktreePreparationLockReason('canceled-test')
+    await prepareWorktreeCreateCheckout(repoPath, preparedPath, 'main', lockReason)
+
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      discardPreparedWorktree(repoPath, preparedPath, { signal: controller.signal }, lockReason)
+    ).resolves.toBeUndefined()
+
+    expect(await listWorktrees(repoPath, { includeCreatePreparations: true })).toHaveLength(1)
+  })
+
+  it('lands a cross-base retarget on exactly the requested commit', async () => {
+    const { repoPath, root } = await createRepo()
+    const preparationRoot = join(root, WORKTREE_CREATE_PREPARATION_DIRECTORY)
+    const preparedPath = join(preparationRoot, `${process.pid}-retarget`)
+    const finalPath = join(root, 'retargeted-worktree')
+    await mkdir(preparationRoot, { recursive: true })
+
+    await writeFile(join(repoPath, 'shared.txt'), 'kept\n')
+    git(repoPath, ['add', 'shared.txt'])
+    git(repoPath, ['commit', '--quiet', '-m', 'local main'])
+    const localMainHead = git(repoPath, ['rev-parse', 'HEAD'])
+
+    // A remote-tracking `main` that diverged: different content, an extra file, and one deletion.
+    git(repoPath, ['checkout', '--quiet', '-b', 'upstream-main'])
+    await writeFile(join(repoPath, 'version.txt'), 'two\n')
+    await writeFile(join(repoPath, 'only-upstream.txt'), 'upstream\n')
+    git(repoPath, ['rm', '--quiet', 'shared.txt'])
+    git(repoPath, ['add', 'version.txt', 'only-upstream.txt'])
+    git(repoPath, ['commit', '--quiet', '-m', 'upstream main'])
+    git(repoPath, ['update-ref', 'refs/remotes/origin/main', 'HEAD'])
+    git(repoPath, ['checkout', '--quiet', 'main'])
+    git(repoPath, ['branch', '--quiet', '-D', 'upstream-main'])
+
+    await prepareWorktreeCreateCheckout(
+      repoPath,
+      preparedPath,
+      'refs/remotes/origin/main',
+      createWorktreePreparationLockReason('retarget-test')
+    )
+    expect(git(preparedPath, ['rev-parse', 'HEAD'])).not.toBe(localMainHead)
+
+    await finalizePreparedWorktree(
+      repoPath,
+      preparedPath,
+      finalPath,
+      'feature/retargeted',
+      'main',
+      false,
+      {},
+      createWorktreePreparationLockReason('retarget-test')
+    )
+
+    expect(git(finalPath, ['rev-parse', 'HEAD'])).toBe(localMainHead)
+    // A retarget that left stale files behind would be a wrong checkout, not just a slow one.
+    expect(git(finalPath, ['status', '--porcelain'])).toBe('')
+    expect((await readFile(join(finalPath, 'version.txt'), 'utf8')).replaceAll('\r\n', '\n')).toBe(
+      'one\n'
+    )
+    expect((await readFile(join(finalPath, 'shared.txt'), 'utf8')).replaceAll('\r\n', '\n')).toBe(
+      'kept\n'
+    )
+    await expect(readFile(join(finalPath, 'only-upstream.txt'), 'utf8')).rejects.toThrow()
+    expect(git(finalPath, ['branch', '--show-current'])).toBe('feature/retargeted')
+    expect(git(finalPath, ['config', '--get', 'branch.feature/retargeted.base'])).toBe(
+      'refs/heads/main'
+    )
+  })
+
+  it.each(['before reset', 'after reset'])(
+    'finalizes refreshed content when the base moves %s',
+    async (when) => {
+      const { repoPath, root } = await createRepo()
+      const preparedPath = join(root, WORKTREE_CREATE_PREPARATION_DIRECTORY, 'fetch-overlap')
+      const finalPath = join(root, 'final-overlap')
+      await mkdir(join(root, WORKTREE_CREATE_PREPARATION_DIRECTORY), { recursive: true })
+      const original = git(repoPath, ['rev-parse', 'HEAD'])
+      await writeFile(join(repoPath, 'version.txt'), 'refreshed\n')
+      git(repoPath, ['commit', '-am', 'remote update'])
+      const refreshed = git(repoPath, ['rev-parse', 'HEAD'])
+      git(repoPath, ['update-ref', 'refs/remotes/origin/main', original])
+      const exec = gitRunner.gitExecFileAsync
+      let moved = false
+      const spy = vi
+        .spyOn(gitRunner, 'gitExecFileAsync')
+        .mockImplementation(async (args, options) => {
+          if (!moved && args.includes('reset') && when === 'before reset') {
+            git(repoPath, ['update-ref', 'refs/remotes/origin/main', refreshed])
+            moved = true
+          }
+          const result = await exec(args, options)
+          if (!moved && args.includes('reset') && when === 'after reset') {
+            git(repoPath, ['update-ref', 'refs/remotes/origin/main', refreshed])
+            moved = true
+          }
+          return result
+        })
+      try {
+        await prepareWorktreeCreateCheckout(
+          repoPath,
+          preparedPath,
+          'refs/remotes/origin/main',
+          createWorktreePreparationLockReason('fetch-overlap')
+        )
+        expect(moved).toBe(true)
+        await finalizePreparedWorktree(
+          repoPath,
+          preparedPath,
+          finalPath,
+          'feature/overlap',
+          'refs/remotes/origin/main',
+          false,
+          {},
+          createWorktreePreparationLockReason('fetch-overlap')
+        )
+        expect(git(finalPath, ['rev-parse', 'HEAD'])).toBe(refreshed)
+        expect(await readFile(join(finalPath, 'version.txt'), 'utf8')).toBe('refreshed\n')
+        expect(git(finalPath, ['status', '--porcelain'])).toBe('')
+      } finally {
+        spy.mockRestore()
+      }
+    }
+  )
+
+  it('hides the preparation, retargets an advanced base, and attaches the final branch', async () => {
+    const { repoPath, root } = await createRepo()
+    const preparationRoot = join(root, WORKTREE_CREATE_PREPARATION_DIRECTORY)
+    const preparedPath = join(preparationRoot, `${process.pid}-test`)
+    const finalPath = join(root, 'final-worktree')
+    await mkdir(preparationRoot, { recursive: true })
+
+    await prepareWorktreeCreateCheckout(
+      repoPath,
+      preparedPath,
+      'main',
+      createWorktreePreparationLockReason('real-git-test')
+    )
+
+    const visibleBeforeSubmit = await listWorktrees(repoPath)
+    const allBeforeSubmit = await listWorktrees(repoPath, { includeCreatePreparations: true })
+    expect(visibleBeforeSubmit).toHaveLength(1)
+    expect(allBeforeSubmit).toHaveLength(2)
+    expect(allBeforeSubmit.find(isWorktreeCreatePreparation)).toMatchObject({
+      locked: true,
+      lockReason: expect.stringContaining('orca-create-preparation:v1:')
+    })
+
+    await writeFile(join(repoPath, 'version.txt'), 'two\n')
+    git(repoPath, ['add', 'version.txt'])
+    git(repoPath, ['commit', '--quiet', '-m', 'advance base'])
+    const latestHead = git(repoPath, ['rev-parse', 'HEAD'])
+
+    await finalizePreparedWorktree(
+      repoPath,
+      preparedPath,
+      finalPath,
+      'feature/prepared',
+      'main',
+      false,
+      {},
+      createWorktreePreparationLockReason('real-git-test')
+    )
+
+    expect(git(finalPath, ['rev-parse', 'HEAD'])).toBe(latestHead)
+    expect(git(finalPath, ['branch', '--show-current'])).toBe('feature/prepared')
+    expect((await readFile(join(finalPath, 'version.txt'), 'utf8')).replaceAll('\r\n', '\n')).toBe(
+      'two\n'
+    )
+    expect(git(finalPath, ['config', '--get', 'branch.feature/prepared.base'])).toBe(
+      'refs/heads/main'
+    )
+    expect(git(finalPath, ['config', '--get', 'push.autoSetupRemote'])).toBe('true')
+    const listedWorktrees = await listWorktrees(repoPath)
+    const resolvedFinalPath = await realpath(finalPath)
+    expect(
+      listedWorktrees.some((worktree) => areWorktreePathsEqual(worktree.path, resolvedFinalPath))
+    ).toBe(true)
+    expect(
+      listedWorktrees.find((worktree) => areWorktreePathsEqual(worktree.path, resolvedFinalPath))
+        ?.locked
+    ).not.toBe(true)
+  })
+})

@@ -1,8 +1,8 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { ChevronRight, ListFilter, X } from 'lucide-react'
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
+import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { PaletteFilterModel } from './palette-filter-options'
 import {
@@ -25,7 +25,7 @@ function CategoryRoot({
   onOpenField: (field: PaletteFilterField) => void
 }): React.JSX.Element {
   return (
-    <CommandList className="popover-scroll-content scrollbar-sleek max-h-[280px] py-1">
+    <CommandList className="scrollbar-sleek max-h-[280px] py-1">
       <CommandGroup>
         {groups.map((group) => {
           const selectedCount = group.selected.length
@@ -78,7 +78,7 @@ export default function PaletteFilterMenu({
 
   const groups = useMemo<PaletteFilterGroup[]>(() => {
     const entries: PaletteFilterGroup[] = []
-    // Why: a single host (or single project) is nothing to disambiguate between,
+    // Why: a single host (or single repository) is nothing to disambiguate between,
     // so that axis stays hidden rather than offering a no-op checkbox.
     if (model.hosts.length > 1) {
       entries.push({
@@ -88,16 +88,17 @@ export default function PaletteFilterMenu({
         selected: filter.hostIds
       })
     }
-    if (model.projects.length > 1) {
+    if (model.repositories.length > 1) {
       entries.push({
-        field: 'project',
+        field: 'repository',
+        // "Projects" is the user-facing term for repository-granular choices; see filter.emptySubtitle.
         heading: translate('worktreeJumpPalette.filter.projects', 'Projects'),
-        options: model.projects,
-        selected: filter.projectKeys
+        options: model.repositories,
+        selected: filter.repoIds
       })
     }
     return entries
-  }, [filter.hostIds, filter.projectKeys, model.hosts, model.projects])
+  }, [filter.hostIds, filter.repoIds, model.hosts, model.repositories])
 
   // Stale field falls back to root if its group disappeared mid-session.
   const activeGroup =
@@ -159,22 +160,23 @@ export default function PaletteFilterMenu({
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
-      <PopoverTrigger
-        type="button"
-        aria-label={translate('worktreeJumpPalette.filter.trigger', 'Filter results')}
-        data-active={active ? 'true' : undefined}
-        className={cn(
-          'ml-2 flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-border/55 px-2 text-[12px] text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50',
-          active && 'border-primary/45 bg-primary/12 text-foreground'
-        )}
-      >
-        <ListFilter className="size-3.5" aria-hidden="true" />
-        <span>{translate('worktreeJumpPalette.filter.label', 'Filter')}</span>
-        {active ? (
-          <span className="rounded-full bg-primary/85 px-1.5 text-[10px] font-semibold tabular-nums text-primary-foreground">
-            {selectionCount}
-          </span>
-        ) : null}
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant={active ? 'secondary' : 'outline'}
+          size="xs"
+          aria-label={translate('worktreeJumpPalette.filter.trigger', 'Filter results')}
+          data-active={active ? 'true' : undefined}
+          className="ml-2"
+        >
+          <ListFilter className="size-3.5" aria-hidden="true" />
+          <span>{translate('worktreeJumpPalette.filter.label', 'Filter')}</span>
+          {active ? (
+            <span className="rounded-full bg-primary/85 px-1.5 text-[10px] font-semibold tabular-nums text-primary-foreground">
+              {selectionCount}
+            </span>
+          ) : null}
+        </Button>
       </PopoverTrigger>
       <PopoverContent
         align="end"
@@ -183,7 +185,7 @@ export default function PaletteFilterMenu({
         collisionBoundary={portalContainer ?? undefined}
         onKeyDown={handleKeyDown}
         onCloseAutoFocus={handleCloseAutoFocus}
-        className="w-[290px] p-0"
+        className="popover-wheel-scroll w-[290px] p-0"
       >
         <Command shouldFilter={false} className="bg-transparent">
           {activeGroup == null ? (

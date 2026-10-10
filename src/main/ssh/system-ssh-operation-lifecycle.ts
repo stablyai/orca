@@ -3,13 +3,49 @@ import type { SystemSshCommandChannel } from './system-ssh-command'
 
 export type ProcessResult = { label: string; stderr: string }
 
+/** OpenSSH's own exit status for a connection-level failure, never the remote command's. */
+const SYSTEM_SSH_TRANSPORT_EXIT_CODE = 255
+
+export class SystemSshCommandExitError extends Error {
+  constructor(
+    label: string,
+    readonly exitCode: number | null,
+    readonly stderr: string,
+    signal?: NodeJS.Signals | null
+  ) {
+    const detail = exitCode === null ? `signal ${signal ?? 'unknown'}` : `exit ${exitCode}`
+    super(`${label} failed (${detail}): ${stderr.trim()}`)
+  }
+}
+
+/** The remote command, not OpenSSH, produced this exit. */
+export function isHostAnsweredSystemSshExit(err: unknown): err is SystemSshCommandExitError {
+  return (
+    err instanceof SystemSshCommandExitError &&
+    err.exitCode !== null &&
+    err.exitCode !== SYSTEM_SSH_TRANSPORT_EXIT_CODE
+  )
+}
+
+/**
+ * `timeoutMs` bounds a remote consumer that never returns. Windows PowerShell 5.1 cannot drain a
+ * large redirected stdin over a non-pty ssh exec (#16432): the remote process stays alive at idle
+ * CPU, writes nothing, and never closes — so without a bound this promise is simply never settled
+ * and the caller waits forever with no error to show.
+ */
 export function waitForChannelClose(
   channel: SystemSshCommandChannel,
-  label: string
+  label: string,
+  timeoutMs?: number
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     let stderr = ''
+    let timer: ReturnType<typeof setTimeout> | null = null
     const cleanup = (): void => {
+      if (timer) {
+        clearTimeout(timer)
+        timer = null
+      }
       channel.stderr.off('data', onStderrData)
       channel.off('error', onError)
       channel.off('close', onClose)
@@ -17,6 +53,20 @@ export function waitForChannelClose(
     const settle = (fn: typeof resolve | typeof reject, val?: unknown): void => {
       cleanup()
       fn(val as never)
+    }
+    if (timeoutMs !== undefined) {
+      timer = setTimeout(() => {
+        // Settle before closing: the close we request would otherwise come back as a SIGTERM
+        // failure and mask the timeout, which is the only diagnosis a wedged remote gives.
+        settle(
+          reject,
+          new Error(
+            `${label} timed out after ${timeoutMs}ms with no response from the remote host: ${stderr.trim()}`
+          )
+        )
+        channel.close()
+      }, timeoutMs)
+      timer.unref?.()
     }
     const onStderrData = (data: Buffer): void => {
       stderr += data.toString('utf-8')
@@ -26,8 +76,7 @@ export function waitForChannelClose(
     }
     const onClose = (code: number | null, signal?: NodeJS.Signals | null): void => {
       if (code !== 0) {
-        const detail = code === null ? `signal ${signal ?? 'unknown'}` : `exit ${code}`
-        settle(reject, new Error(`${label} failed (${detail}): ${stderr.trim()}`))
+        settle(reject, new SystemSshCommandExitError(label, code, stderr, signal))
         return
       }
       settle(resolve)
@@ -39,7 +88,12 @@ export function waitForChannelClose(
   })
 }
 
-export function waitForProcess(proc: ChildProcess, label: string): Promise<ProcessResult> {
+/** `remote`: the process is ssh running a host command, so its exit status is the host's answer. */
+export function waitForProcess(
+  proc: ChildProcess,
+  label: string,
+  origin: 'local' | 'remote' = 'local'
+): Promise<ProcessResult> {
   return new Promise((resolve, reject) => {
     let stderr = ''
     const cleanup = (): void => {
@@ -57,9 +111,14 @@ export function waitForProcess(proc: ChildProcess, label: string): Promise<Proce
     const onError = (err: Error): void => {
       settle(reject, err)
     }
-    const onClose = (code: number | null): void => {
+    const onClose = (code: number | null, signal?: NodeJS.Signals | null): void => {
       if (code !== 0) {
-        settle(reject, new Error(`${label} failed (exit ${code}): ${stderr.trim()}`))
+        settle(
+          reject,
+          origin === 'remote'
+            ? new SystemSshCommandExitError(label, code, stderr, signal)
+            : new Error(`${label} failed (exit ${code}): ${stderr.trim()}`)
+        )
         return
       }
       settle(resolve, { label, stderr })

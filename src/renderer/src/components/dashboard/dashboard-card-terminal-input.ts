@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { getConnectionIdFromState } from '@/lib/connection-context'
@@ -11,6 +11,7 @@ import { resolveTerminalInputHostPlatform } from '@/components/terminal-pane/ter
 import { resolveWindowsShiftEnterEncodingForPane } from '@/components/terminal-pane/terminal-windows-shift-enter'
 import { hasCtrlEnterCsiUAuthorityForPane } from '@/components/terminal-pane/terminal-ctrl-enter'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
+import { resolveProtectedMultilinePasteOptionsForAgentEvidence } from '@/components/terminal-pane/terminal-agent-paste-bracketing'
 
 /** Store slices the pane's own input helpers read. */
 export type DashboardCardTerminalInputState = Pick<
@@ -29,6 +30,7 @@ export type DashboardCardTerminalInputState = Pick<
   | 'runtimeEnvironmentCatalogHydrated'
   | 'removedRuntimeEnvironmentIds'
   | 'paneForegroundAgentByPaneKey'
+  | 'agentStatusByPaneKey'
   | 'agentLaunchConfigByPaneKey'
 >
 
@@ -55,6 +57,7 @@ function withHydratedSlices(
     runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated ?? false,
     removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds ?? new Set(),
     paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey ?? EMPTY_RECORD,
+    agentStatusByPaneKey: state.agentStatusByPaneKey ?? EMPTY_RECORD,
     agentLaunchConfigByPaneKey: state.agentLaunchConfigByPaneKey ?? EMPTY_RECORD
   }
 }
@@ -99,30 +102,43 @@ export function resolveDashboardCardTerminalInput(
     shellOverride: args.shellOverride,
     executionHostId
   }
+  const hostPlatform = resolveTerminalInputHostPlatform({
+    clientPlatform: args.clientPlatform,
+    state,
+    worktreeId: args.worktreeId,
+    transport: {
+      getConnectionId: () => connectionId,
+      getPtyId: () => args.ptyId,
+      getExecutionHostId: () => executionHostId,
+      // Why: gated exactly like the pane transport's own accessor — without
+      // it a WSL pty on a Windows client resolves to win32 and Shift+Enter
+      // would encode CSI-u where the pane sends alt-enter.
+      getLocalSessionMetadata: () =>
+        connectionId
+          ? null
+          : {
+              ...(args.cwd ? { cwd: args.cwd } : {}),
+              ...(args.shellOverride ? { shellOverride: args.shellOverride } : {})
+            }
+    }
+  })
+  const protectedPaste = resolveProtectedMultilinePasteOptionsForAgentEvidence({
+    isWindowsClient: args.clientPlatform === 'win32',
+    hostPlatform,
+    foregroundAgent: state.paneForegroundAgentByPaneKey[args.paneKey]?.agent,
+    entry: state.agentStatusByPaneKey[args.paneKey]
+  })
   return {
-    hostPlatform: resolveTerminalInputHostPlatform({
-      clientPlatform: args.clientPlatform,
-      state,
-      worktreeId: args.worktreeId,
-      transport: {
-        getConnectionId: () => connectionId,
-        getPtyId: () => args.ptyId,
-        getExecutionHostId: () => executionHostId,
-        // Why: gated exactly like the pane transport's own accessor — without
-        // it a WSL pty on a Windows client resolves to win32 and Shift+Enter
-        // would encode CSI-u where the pane sends alt-enter.
-        getLocalSessionMetadata: () =>
-          connectionId
-            ? null
-            : {
-                ...(args.cwd ? { cwd: args.cwd } : {}),
-                ...(args.shellOverride ? { shellOverride: args.shellOverride } : {})
-              }
-      }
-    }),
+    hostPlatform,
     localWindowsConpty: isLocalNativeWindowsConpty(windowsPtyContext),
     ...(args.osRelease === undefined ? {} : { osRelease: args.osRelease }),
     windowsShiftEnterEncoding: resolveWindowsShiftEnterEncodingForPane(state, args.paneKey),
+    ...(protectedPaste?.forceBracketedPasteForMultiline
+      ? { forceBracketedMultilineTextPaste: true as const }
+      : {}),
+    ...(protectedPaste?.windowsInputRecordNewline
+      ? { windowsInputRecordPasteNewline: protectedPaste.windowsInputRecordNewline }
+      : {}),
     ctrlEnterCsiU: hasCtrlEnterCsiUAuthorityForPane(state, args.paneKey),
     kittyKeyboardAdvertised: !shouldDisableKittyKeyboardForTerminal({
       ...windowsPtyContext,

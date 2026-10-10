@@ -1,5 +1,7 @@
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
-import type { Project, ProjectGroup, ProjectHostSetup, Repo } from '../../../shared/types'
+import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { Project, ProjectHostSetup } from '../../../shared/project-types'
+import type { Repo } from '../../../shared/repo-types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
 import {
@@ -14,7 +16,6 @@ import {
 } from './new-workspace-duplicate-project-details'
 
 export const NEW_WORKSPACE_PROJECT_GROUP_OPTION_PREFIX = 'project-group:'
-export const NEW_WORKSPACE_FOLDER_SOURCE_OPTION_PREFIX = 'folder-source:'
 
 export type NewWorkspaceProjectOption =
   | {
@@ -35,13 +36,6 @@ export type NewWorkspaceProjectOption =
       parentPath: string
       connectionId: string | null
     }
-
-type NewWorkspaceProjectOptionBase = {
-  id: string
-  displayName: string
-  badgeColor: string
-  detail: string
-}
 
 export const NEW_WORKSPACE_PROJECT_OPTION_QUERY_MAX_BYTES = 2 * 1024
 
@@ -149,16 +143,6 @@ function getProjectGroupOptionId(projectGroupId: string): string {
   return `${NEW_WORKSPACE_PROJECT_GROUP_OPTION_PREFIX}${projectGroupId}`
 }
 
-function getFolderSourceOptionId(repoId: string): string {
-  return `${NEW_WORKSPACE_FOLDER_SOURCE_OPTION_PREFIX}${repoId}`
-}
-
-export function getRepoIdFromNewWorkspaceFolderSourceOptionId(optionId: string): string | null {
-  return optionId.startsWith(NEW_WORKSPACE_FOLDER_SOURCE_OPTION_PREFIX)
-    ? optionId.slice(NEW_WORKSPACE_FOLDER_SOURCE_OPTION_PREFIX.length)
-    : null
-}
-
 export function getProjectGroupIdFromNewWorkspaceOptionId(optionId: string): string | null {
   return optionId.startsWith(NEW_WORKSPACE_PROJECT_GROUP_OPTION_PREFIX)
     ? optionId.slice(NEW_WORKSPACE_PROJECT_GROUP_OPTION_PREFIX.length)
@@ -204,21 +188,6 @@ export function findActionableFolderProjectGroup({
   )
 }
 
-export function buildNewWorkspaceFolderSourceOptions(
-  repos: readonly Repo[]
-): NewWorkspaceProjectOption[] {
-  return repos
-    .map((repo) => ({
-      kind: 'project' as const,
-      id: getFolderSourceOptionId(repo.id),
-      projectId: repo.id,
-      displayName: repo.displayName,
-      badgeColor: repo.badgeColor,
-      detail: repo.path
-    }))
-    .sort((a, b) => a.displayName.localeCompare(b.displayName) || a.detail.localeCompare(b.detail))
-}
-
 export function buildNewWorkspaceCreateTargetOptions({
   projectGroups,
   ...projectInput
@@ -247,21 +216,5 @@ export function buildNewWorkspaceCreateTargetOptions({
       a.displayName.localeCompare(b.displayName) ||
       a.detail.localeCompare(b.detail) ||
       a.id.localeCompare(b.id)
-  )
-}
-
-export function searchNewWorkspaceProjectOptions(
-  options: readonly NewWorkspaceProjectOption[],
-  rawQuery: string
-): NewWorkspaceProjectOption[] {
-  if (isNewWorkspaceProjectOptionQueryTooLarge(rawQuery)) {
-    return []
-  }
-  const query = rawQuery.trim().toLowerCase()
-  if (!query) {
-    return [...options]
-  }
-  return options.filter((option: NewWorkspaceProjectOptionBase) =>
-    [option.displayName, option.detail].some((value) => value.toLowerCase().includes(query))
   )
 }

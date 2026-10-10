@@ -55,14 +55,6 @@ describe('prepareMobileAiVaultSessionResume', () => {
       .mockResolvedValueOnce({ ok: false, error })
       .mockResolvedValueOnce({
         ok: true,
-        result: {
-          runtimeId: 'runtime-1',
-          appVersion: '1.4.90',
-          capabilities: ['terminal.attribution-removed.v1']
-        }
-      })
-      .mockResolvedValueOnce({
-        ok: true,
         result: { tab: { type: 'terminal', id: 'tab-1', terminal: 'pty-1', title: 'Terminal' } }
       })
       .mockResolvedValueOnce({ ok: true, result: { send: { accepted: true } } })
@@ -72,12 +64,9 @@ describe('prepareMobileAiVaultSessionResume', () => {
     await resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', launch)
 
     expect(prepared).toBe(legacy)
-    expect(sendRequest.mock.calls[2]?.[1]).toMatchObject({
-      env: { ORCA_ATTRIBUTION_BYPASS: '1' },
-      envToDelete: ['ORCA_ENABLE_GIT_ATTRIBUTION']
-    })
+    expect(sendRequest.mock.calls[1]?.[1]).not.toHaveProperty('envToDelete')
     expect(sendRequest).toHaveBeenNthCalledWith(
-      4,
+      3,
       'terminal.send',
       {
         terminal: 'pty-1',

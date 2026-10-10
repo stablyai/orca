@@ -8,16 +8,28 @@ import {
 } from '@/lib/agent-status-worktree-attribution'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry,
   type AgentStatusOrchestrationContext
 } from '../../../../shared/agent-status-types'
+import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
+import { applyAgentPaneActivityFlags } from '@/lib/agent-pane-activity-flags'
 
 export type WorktreeAgentActivitySummary = {
   hasPermission: boolean
   hasLiveWorking: boolean
+  hasLiveMonitoring: boolean
+  /** A fresh failed main agent, also while its subagents run; kept apart from clean done. */
+  hasFailed: boolean
+  /** Fresh interrupted completion, kept separate from clean done outcomes. */
+  hasInterrupted: boolean
+  /** A fresh end Orca cannot prove, likewise never a clean done. */
+  hasUnconfirmed: boolean
   hasLiveDone: boolean
   hasRetainedDone: boolean
+  /** A departed agent's failure; unlike `hasFailed` it yields to live work. */
+  hasRetainedFailed: boolean
   agentStatusPaneIdsByTabId: Record<string, ReadonlySet<string>>
+  /** Stale rows suppress generated permission labels while preserving native title fallback. */
+  stalePaneIdsByTabId: Record<string, ReadonlySet<string>>
 }
 
 const EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID: Record<string, ReadonlySet<string>> = {}
@@ -25,9 +37,15 @@ const EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID: Record<string, ReadonlySet<string>>
 const EMPTY_SUMMARY: WorktreeAgentActivitySummary = {
   hasPermission: false,
   hasLiveWorking: false,
+  hasLiveMonitoring: false,
+  hasFailed: false,
+  hasInterrupted: false,
+  hasUnconfirmed: false,
   hasLiveDone: false,
   hasRetainedDone: false,
-  agentStatusPaneIdsByTabId: EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID
+  hasRetainedFailed: false,
+  agentStatusPaneIdsByTabId: EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID,
+  stalePaneIdsByTabId: EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID
 }
 
 type AgentActivityTabsByWorktree = Record<string, readonly { id: string }[]>
@@ -116,13 +134,17 @@ function getWorktreeAgentActivitySummaries(
       continue
     }
     if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+      // Why: staleness ends this row's authority but not the pane's identity — see
+      // `stalePaneIdsByTabId`. Dropping both let Orca's self-authored permission title outlive
+      // the row it came from and pin the card to a question nobody was asking.
+      addStalePaneId(summary, paneIdentity.tabId, paneIdentity.paneId)
       continue
     }
     addAgentStatusPaneId(summary, paneIdentity.tabId, paneIdentity.paneId)
     if (entry.state === 'done') {
       addParentPaneId(summary, orchestration, worktreeId, tabIdToWorktreeId)
     }
-    applyLiveAgentState(summary, entry)
+    applyAgentPaneActivityFlags(summary, entry)
   }
 
   for (const unsupported of Object.values(state.migrationUnsupportedByPtyId ?? {})) {
@@ -135,7 +157,12 @@ function getWorktreeAgentActivitySummaries(
 
   for (const retained of Object.values(state.retainedAgentsByPaneKey ?? {})) {
     const summary = summaryForWorktree(retained.worktreeId)
-    summary.hasRetainedDone = true
+    // Why: a failed agent is retained so its failure stays visible, not so it reads done.
+    if (agentVerdictDisplayMark(retained.entry) === 'failed') {
+      summary.hasRetainedFailed = true
+    } else {
+      summary.hasRetainedDone = true
+    }
     const paneIdentity = parseAgentStatusPaneIdentity(retained.entry?.paneKey)
     if (paneIdentity) {
       addAgentStatusPaneId(summary, paneIdentity.tabId, paneIdentity.paneId)
@@ -177,12 +204,18 @@ function summariesEqual(
   return (
     previous.hasPermission === next.hasPermission &&
     previous.hasLiveWorking === next.hasLiveWorking &&
+    previous.hasLiveMonitoring === next.hasLiveMonitoring &&
+    previous.hasFailed === next.hasFailed &&
+    previous.hasInterrupted === next.hasInterrupted &&
+    previous.hasUnconfirmed === next.hasUnconfirmed &&
     previous.hasLiveDone === next.hasLiveDone &&
     previous.hasRetainedDone === next.hasRetainedDone &&
+    previous.hasRetainedFailed === next.hasRetainedFailed &&
     agentStatusPaneIdsByTabIdEqual(
       previous.agentStatusPaneIdsByTabId,
       next.agentStatusPaneIdsByTabId
-    )
+    ) &&
+    agentStatusPaneIdsByTabIdEqual(previous.stalePaneIdsByTabId, next.stalePaneIdsByTabId)
   )
 }
 
@@ -212,33 +245,36 @@ function agentStatusPaneIdsByTabIdEqual(
   return true
 }
 
-function applyLiveAgentState(
-  summary: WorktreeAgentActivitySummary,
-  entry: Pick<AgentStatusEntry, 'state'>
-): void {
-  if (entry.state === 'blocked' || entry.state === 'waiting') {
-    summary.hasPermission = true
-  } else if (entry.state === 'working') {
-    summary.hasLiveWorking = true
-  } else if (entry.state === 'done') {
-    summary.hasLiveDone = true
-  }
-}
-
 function addAgentStatusPaneId(
   summary: WorktreeAgentActivitySummary,
   tabId: string,
   paneId: string
 ): void {
-  if (summary.agentStatusPaneIdsByTabId === EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID) {
-    summary.agentStatusPaneIdsByTabId = {}
-  }
-  let paneIds = summary.agentStatusPaneIdsByTabId[tabId] as Set<string> | undefined
+  summary.agentStatusPaneIdsByTabId = withPaneId(summary.agentStatusPaneIdsByTabId, tabId, paneId)
+}
+
+function addStalePaneId(
+  summary: WorktreeAgentActivitySummary,
+  tabId: string,
+  paneId: string
+): void {
+  summary.stalePaneIdsByTabId = withPaneId(summary.stalePaneIdsByTabId, tabId, paneId)
+}
+
+function withPaneId(
+  byTabId: Record<string, ReadonlySet<string>>,
+  tabId: string,
+  paneId: string
+): Record<string, ReadonlySet<string>> {
+  // Why: the shared empty record is the frozen default for every summary; copy on first write.
+  const next = byTabId === EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID ? {} : byTabId
+  let paneIds = next[tabId] as Set<string> | undefined
   if (!paneIds) {
     paneIds = new Set<string>()
-    summary.agentStatusPaneIdsByTabId[tabId] = paneIds
+    next[tabId] = paneIds
   }
   paneIds.add(paneId)
+  return next
 }
 
 function worktreeIdForPaneKey(

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import { resolveConsent, _resetMisconfigWarnCacheForTests } from './consent'
 
 // A minimal GlobalSettings stub — the resolver only reads `settings.telemetry`,

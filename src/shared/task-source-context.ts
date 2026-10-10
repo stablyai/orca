@@ -14,7 +14,8 @@ import {
   type TaskProviderIdentity
 } from './task-provider-identity'
 import type { TaskProvider } from './task-providers'
-import type { GlobalSettings, Repo } from './types'
+import type { GlobalSettings } from './global-settings-types'
+import type { Repo } from './repo-types'
 
 export type {
   GitHubTaskProviderIdentity,
@@ -154,6 +155,7 @@ export function getTaskSourceCacheScope(
   context: Pick<TaskSourceContext, 'provider' | 'hostId' | 'projectId' | 'projectHostSetupId'> & {
     providerIdentity?: TaskProviderIdentity | null
     repoId?: string | null
+    accountLabel?: string | null
   }
 ): string {
   return [
@@ -162,7 +164,8 @@ export function getTaskSourceCacheScope(
     context.projectId,
     context.projectHostSetupId ?? '',
     context.repoId ?? '',
-    taskProviderIdentityCachePart(context.providerIdentity)
+    taskProviderIdentityCachePart(context.providerIdentity),
+    ...(context.accountLabel?.trim() ? [context.accountLabel.trim()] : [])
   ]
     .map(encodeCachePart)
     .join(':')

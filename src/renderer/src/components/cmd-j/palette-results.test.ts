@@ -4,6 +4,7 @@ import { Globe, Settings } from 'lucide-react'
 import type { CmdJQuickAction } from './quick-actions'
 import {
   CMD_J_PALETTE_QUERY_MAX_BYTES,
+  bestCmdJPaletteSectionQualityClass,
   buildCmdJActionResults,
   buildCmdJSettingsResults,
   isCmdJPaletteQueryTooLarge,
@@ -12,8 +13,11 @@ import {
   type CmdJSettingsResult
 } from './palette-results'
 import { hasCmdJProjectSearchCandidates, searchCmdJProjectResults } from './palette-project-results'
+import { PALETTE_QUERY_MAX_TOKENS } from '@/lib/palette-match/palette-query'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
-import type { Project, ProjectGroup, ProjectHostSetup, Repo } from '../../../../shared/types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 
 const noopRun: CmdJQuickAction['run'] = async () => ({ status: 'ok' })
 const available: CmdJQuickAction['isAvailable'] = () => ({ available: true })
@@ -156,12 +160,69 @@ const sections: SettingsNavSection[] = [
   }
 ]
 
-function top(query: string): string | undefined {
+function rankMiddle(query: string): ReturnType<typeof rankCmdJMiddleResults> {
   return rankCmdJMiddleResults({
     query,
     settingsResults: buildCmdJSettingsResults(sections),
     actionResults: buildCmdJActionResults(actions)
-  })[0]?.id
+  })
+}
+
+function top(query: string): string | undefined {
+  return rankMiddle(query)[0]?.id
+}
+
+describe('action keyword folding', () => {
+  it('folds verbKeywords so a raw-cased command still reaches exact-intent', () => {
+    // Why: the query is folded before ranking, so a plugin command titled `Format Document`
+    // could never satisfy rules 1/3/4 and sank below any prefix-matching workspace.
+    const [folded] = buildCmdJActionResults([
+      {
+        id: 'quick-action:format',
+        kind: 'action',
+        title: 'Format Document',
+        description: 'Format the open file',
+        verbKeywords: ['Format Document', 'FORMAT  DOC']
+      } as (typeof actions)[number]
+    ])
+    expect(folded.verbKeywords).toEqual(['format document', 'format doc'])
+  })
+})
+
+const overTokenLimitQuery = Array.from(
+  { length: PALETTE_QUERY_MAX_TOKENS + 1 },
+  (_, index) => `token${index}`
+).join(' ')
+
+function throwingSettingsResult(): CmdJSettingsResult {
+  return {
+    id: 'settings:throwing',
+    kind: 'settings',
+    title: 'Throwing Setting',
+    description: '',
+    icon: Settings,
+    sectionId: 'general',
+    order: 0,
+    get configKeywords(): string[] {
+      throw new Error('rejected palette queries must not scan settings keywords')
+    }
+  } as CmdJSettingsResult
+}
+
+function throwingActionResult(): CmdJActionResult {
+  return {
+    id: 'throwing-action',
+    kind: 'action',
+    title: 'Throwing Action',
+    description: '',
+    icon: Globe,
+    order: 0,
+    isAvailable: available,
+    run: noopRun,
+    get verbKeywords(): string[] {
+      throw new Error('rejected palette queries must not scan action keywords')
+    }
+  } as CmdJActionResult
 }
 
 afterEach(() => {
@@ -286,40 +347,52 @@ describe('Cmd+J palette middle-band ranking', () => {
 
   it('rejects oversized pasted queries before reading candidate keywords', () => {
     const oversizedQuery = 'secret-palette-query'.repeat(CMD_J_PALETTE_QUERY_MAX_BYTES)
-    const setting = {
-      id: 'settings:throwing',
-      kind: 'settings',
-      title: 'Throwing Setting',
-      description: '',
-      icon: Settings,
-      sectionId: 'general',
-      order: 0,
-      get configKeywords(): string[] {
-        throw new Error('oversized palette queries must not scan settings keywords')
-      }
-    } as CmdJSettingsResult
-    const action = {
-      id: 'throwing-action',
-      kind: 'action',
-      title: 'Throwing Action',
-      description: '',
-      icon: Globe,
-      order: 0,
-      isAvailable: available,
-      run: noopRun,
-      get verbKeywords(): string[] {
-        throw new Error('oversized palette queries must not scan action keywords')
-      }
-    } as CmdJActionResult
 
     expect(isCmdJPaletteQueryTooLarge(oversizedQuery)).toBe(true)
     expect(
       rankCmdJMiddleResults({
         query: oversizedQuery,
-        settingsResults: [setting],
-        actionResults: [action]
+        settingsResults: [throwingSettingsResult()],
+        actionResults: [throwingActionResult()]
       })
     ).toEqual([])
+  })
+
+  it('rejects queries past the shared unique-token ceiling before reading keywords', () => {
+    expect(
+      rankCmdJMiddleResults({
+        query: overTokenLimitQuery,
+        settingsResults: [throwingSettingsResult()],
+        actionResults: [throwingActionResult()]
+      })
+    ).toEqual([])
+    // Why: the ceiling counts unique tokens, so a repeated phrase still ranks.
+    expect(top('terminal settings '.repeat(PALETTE_QUERY_MAX_TOKENS))).toBe('settings:terminal')
+  })
+
+  it('classifies exact, prefix, and token-score hits for cross-section leadership', () => {
+    expect(rankMiddle('terminal settings')[0]).toMatchObject({
+      id: 'settings:terminal',
+      qualityClass: 'exact-intent'
+    })
+    expect(rankMiddle('new terminal settings')[0]).toMatchObject({
+      id: 'settings:terminal',
+      qualityClass: 'exact-intent'
+    })
+    expect(rankMiddle('appear')[0]).toMatchObject({
+      id: 'settings:appearance',
+      qualityClass: 'visible-prefix'
+    })
+    expect(rankMiddle('font term')[0]).toMatchObject({
+      id: 'settings:terminal',
+      qualityClass: 'partial-evidence'
+    })
+  })
+
+  it('reports the strongest quality class in a section', () => {
+    expect(bestCmdJPaletteSectionQualityClass([])).toBeNull()
+    expect(bestCmdJPaletteSectionQualityClass(rankMiddle('terminal settings'))).toBe('exact-intent')
+    expect(bestCmdJPaletteSectionQualityClass(rankMiddle('font term'))).toBe('partial-evidence')
   })
 })
 
@@ -546,5 +619,41 @@ describe('Cmd+J project and repo-group search', () => {
         projectHostSetups: []
       })
     ).toEqual([])
+  })
+
+  it('rejects queries past the shared unique-token ceiling', () => {
+    expect(
+      searchCmdJProjectResults({
+        query: overTokenLimitQuery,
+        projectGroups: [projectGroup('group-1', 'Infrastructure')],
+        repos: [repo('repo-1', 'linear-sync')],
+        projects: [],
+        projectHostSetups: []
+      })
+    ).toEqual([])
+  })
+
+  it('classifies exact, prefix, and token-score hits for cross-section leadership', () => {
+    const search = (query: string): { title: string; qualityClass: string }[] =>
+      searchCmdJProjectResults({
+        query,
+        projectGroups: [projectGroup('group-1', 'Infrastructure')],
+        repos: [repo('repo-1', 'linear-sync')],
+        projects: [],
+        projectHostSetups: []
+      }).map((result) => ({ title: result.title, qualityClass: result.qualityClass }))
+
+    expect(search('infrastructure')[0]).toEqual({
+      title: 'Infrastructure',
+      qualityClass: 'exact-intent'
+    })
+    expect(search('infra')[0]).toEqual({ title: 'Infrastructure', qualityClass: 'visible-prefix' })
+    // Why not exact-intent: 'repo' is a generic alias every project shares, so it
+    // must not let the whole section outrank a named entity hit.
+    expect(search('repo')[0]).toEqual({ title: 'linear-sync', qualityClass: 'visible-prefix' })
+    expect(search('linear repo')[0]).toEqual({
+      title: 'linear-sync',
+      qualityClass: 'partial-evidence'
+    })
   })
 })

@@ -8,12 +8,18 @@ const isAuthError = vi.fn()
 const acquire = vi.fn().mockResolvedValue(undefined)
 const release = vi.fn()
 
-vi.mock('./client', () => ({
+vi.mock('./linear-request-concurrency', () => ({
   acquire,
-  release,
-  getClients: (...args: unknown[]) => getClients(...args),
-  isAuthError: (...args: unknown[]) => isAuthError(...args),
+  release
+}))
+
+vi.mock('./linear-token-store', () => ({
   clearToken: (...args: unknown[]) => clearToken(...args)
+}))
+
+vi.mock('./client', () => ({
+  getClients: (...args: unknown[]) => getClients(...args),
+  isAuthError: (...args: unknown[]) => isAuthError(...args)
 }))
 
 type TeamNode = {
@@ -66,16 +72,15 @@ function makeConnection<TNode>(pages: TNode[][]) {
   return {
     nodes,
     pageInfo: { hasNextPage: pages.length > 1 },
-    fetchNext: vi
-      .fn()
-      .mockImplementation(
-        async function fetchNext(this: { nodes: TNode[]; pageInfo: { hasNextPage: boolean } }) {
-          pageIndex += 1
-          this.nodes.push(...(pages[pageIndex] ?? []))
-          this.pageInfo.hasNextPage = pageIndex < pages.length - 1
-          return this
-        }
-      )
+    fetchNext: vi.fn().mockImplementation(async function fetchNext(this: {
+      nodes: TNode[]
+      pageInfo: { hasNextPage: boolean }
+    }) {
+      pageIndex += 1
+      this.nodes.push(...(pages[pageIndex] ?? []))
+      this.pageInfo.hasNextPage = pageIndex < pages.length - 1
+      return this
+    })
   }
 }
 

@@ -1,5 +1,5 @@
 import { getRuntimeMetadataPath, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
-import { readRuntimeMetadata } from './runtime-metadata'
+import { readRuntimeMetadataAsync } from './runtime-metadata'
 
 /**
  * Why: `orca-runtime.json` is the CLI's only pointer at a live runtime, and it
@@ -18,7 +18,7 @@ export const RUNTIME_METADATA_OWNERSHIP_POLL_MS = 10_000
 
 export type RuntimeMetadataOwnershipWatch = {
   /** Runs one ownership check immediately; exposed for tests and eager repair. */
-  check: () => void
+  check: () => Promise<void>
   stop: () => void
 }
 
@@ -56,8 +56,9 @@ export function watchRuntimeMetadataOwnership(
   options: RuntimeMetadataOwnershipWatchOptions
 ): RuntimeMetadataOwnershipWatch {
   const isProcessRunning = options.isProcessRunning ?? isPidRunning
-  const check = (): void => {
-    const current = tryReadRuntimeMetadata(options.userDataPath)
+  let inFlight: Promise<void> | null = null
+  const runCheck = async (): Promise<void> => {
+    const current = await tryReadRuntimeMetadata(options.userDataPath)
     if (
       !shouldReclaimRuntimeMetadata(
         current,
@@ -77,8 +78,18 @@ export function watchRuntimeMetadataOwnership(
     }
     options.onReclaim?.(current)
   }
+  // Why: the read is off-thread now, so a slow volume could otherwise stack ticks on one file.
+  const check = (): Promise<void> => {
+    inFlight ??= runCheck().finally(() => {
+      inFlight = null
+    })
+    return inFlight
+  }
 
-  const timer = setInterval(check, options.pollIntervalMs ?? RUNTIME_METADATA_OWNERSHIP_POLL_MS)
+  const timer = setInterval(
+    () => void check(),
+    options.pollIntervalMs ?? RUNTIME_METADATA_OWNERSHIP_POLL_MS
+  )
   // Why: discovery bookkeeping must never be the reason the process stays alive.
   timer.unref?.()
   return {
@@ -87,9 +98,9 @@ export function watchRuntimeMetadataOwnership(
   }
 }
 
-function tryReadRuntimeMetadata(userDataPath: string): RuntimeMetadata | null {
+async function tryReadRuntimeMetadata(userDataPath: string): Promise<RuntimeMetadata | null> {
   try {
-    return readRuntimeMetadata(userDataPath)
+    return await readRuntimeMetadataAsync(userDataPath)
   } catch (error) {
     // Why: an unparseable record is as useless to the CLI as a missing one, so treat it as reclaimable.
     console.warn(

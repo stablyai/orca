@@ -1,0 +1,12 @@
+{
+  "title": "The Orca Model",
+  "defaultOpen": true,
+  "pages": [
+    "worktrees",
+    "orca-yaml",
+    "tabs-panes-splits",
+    "agents-sessions",
+    "session-restore",
+    "quick-open"
+  ]
+}

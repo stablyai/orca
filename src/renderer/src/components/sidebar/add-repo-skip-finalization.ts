@@ -1,16 +1,17 @@
-import type { Worktree } from '../../../../shared/types'
-import { isDefaultBranchWorkspace } from './visible-worktrees'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { isDefaultBranchWorkspace } from './default-branch-workspace'
+import { revealRepoInProjectFilter, type ProjectFilterRevealState } from './project-filter-reveal'
 
-export type AddRepoSkipFinalizationState = {
+export type AddRepoSkipFinalizationState = ProjectFilterRevealState & {
   activeRepoId: string | null
-  filterRepoIds: readonly string[]
   showActiveOnly: boolean
   hideDefaultBranchWorkspace: boolean
   showSleepingWorkspaces: boolean
   alwaysShowDefaultBranchWorkspace: boolean
+  repos: readonly Pick<Repo, 'id' | 'kind'>[]
   worktreesByRepo: Record<string, Worktree[]>
   setActiveRepo: (repoId: string | null) => void
-  setFilterRepoIds: (repoIds: string[]) => void
   setShowActiveOnly: (value: boolean) => void
   setHideDefaultBranchWorkspace: (value: boolean) => void
   setAlwaysShowDefaultBranchWorkspace: (value: boolean) => void
@@ -20,23 +21,24 @@ export function finalizeImportedRepoAfterSkip(
   state: AddRepoSkipFinalizationState,
   importedRepoId: string
 ): void {
-  const importedWorktrees = state.worktreesByRepo[importedRepoId] ?? []
+  const importedWorktrees = (state.worktreesByRepo[importedRepoId] ?? []).filter(
+    (worktree) => !worktree.isArchived
+  )
+  const importedRepo = state.repos.find((repo) => repo.id === importedRepoId)
 
   // Why: Skip means "do not open or create a worktree", not "hide the
   // imported project behind sidebar filters so it looks like nothing landed."
   if (state.activeRepoId !== importedRepoId) {
     state.setActiveRepo(importedRepoId)
   }
-  if (state.filterRepoIds.length > 0 && !state.filterRepoIds.includes(importedRepoId)) {
-    state.setFilterRepoIds([])
-  }
+  revealRepoInProjectFilter(state, importedRepoId)
   if (state.showActiveOnly) {
     state.setShowActiveOnly(false)
   }
   if (
     importedWorktrees.length > 0 &&
     state.hideDefaultBranchWorkspace &&
-    importedWorktrees.every((worktree) => isDefaultBranchWorkspace(worktree))
+    importedWorktrees.every((worktree) => isDefaultBranchWorkspace(worktree, importedRepo))
   ) {
     state.setHideDefaultBranchWorkspace(false)
   }

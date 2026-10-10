@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ app: { getAppPath: () => '/mock/app' } }))
 vi.mock('fs', () => ({
@@ -19,7 +19,10 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
     onData: vi.fn(),
     onClose: vi.fn()
   }),
-  isUnconfirmedSshCommandTermination: () => false,
+  isUnconfirmedSshCommandTermination: (error: unknown) =>
+    error instanceof Error &&
+    'sshChannelCloseConfirmed' in error &&
+    error.sshChannelCloseConfirmed === false,
   execCommand: vi.fn()
 }))
 vi.mock('./ssh-remote-node-resolution', () => ({
@@ -75,8 +78,11 @@ function makeConnection(): SshConnection {
 }
 
 describe('relay GC deploy retry', () => {
+  afterEach(() => vi.unstubAllEnvs())
   beforeEach(() => {
     vi.clearAllMocks()
+    // The host-npm path is opt-in; these cases cover it.
+    vi.stubEnv('ORCA_SSH_REMOTE_RUNTIME', 'legacy')
   })
 
   it('recomputes install state when GC wins before a healthy relay launch', async () => {
@@ -243,6 +249,72 @@ describe('relay GC deploy retry', () => {
     expect(abandonInstall).not.toHaveBeenCalled()
     expect(releaseRelayGcClaimWithRetry).not.toHaveBeenCalled()
   })
+
+  it.each(['acquired', 'busy'] as const)(
+    'keeps the connected relay but stops setup after uncertain %s fence release',
+    async (lockResult) => {
+      const conn = makeConnection()
+      const error = Object.assign(new Error('release still running'), {
+        sshChannelCloseConfirmed: false
+      })
+      vi.mocked(tryAcquireRelayRepairLock).mockResolvedValueOnce(lockResult)
+      const release =
+        lockResult === 'acquired'
+          ? vi.mocked(abandonInstall)
+          : vi.mocked(releaseRelayGcClaimWithRetry)
+      release.mockRejectedValueOnce(error)
+      vi.mocked(execCommand).mockImplementation(async (_conn, command) => {
+        if (command.includes('__ORCA_REMOTE_PLATFORM__')) {
+          return '__ORCA_REMOTE_PLATFORM__ Linux x86_64'
+        }
+        if (command === 'echo $HOME') {
+          return '/home/user'
+        }
+        if (command.includes('node-pty')) {
+          return 'ORCA-NATIVE-DEPS-OK'
+        }
+        if (command.includes('var s=require("net").connect')) {
+          return 'READY'
+        }
+        return command.includes('test -S') ? 'DEAD' : ''
+      })
+
+      const deployed = await deployAndLaunchRelay(conn)
+      expect(deployed.transport).toBeDefined()
+      expect(release).toHaveBeenCalledOnce()
+      const execCount = vi.mocked(execCommand).mock.calls.length
+      await deployed.prepareOpenCodeRuntime?.(new AbortController().signal)
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      expect(execCommand).toHaveBeenCalledTimes(execCount)
+    }
+  )
+
+  it.each(['acquired', 'busy'] as const)(
+    'preserves the %s fence after an unconfirmed installed-state recheck',
+    async (lockResult) => {
+      const conn = makeConnection()
+      const error = Object.assign(new Error('recheck still running'), {
+        sshChannelCloseConfirmed: false
+      })
+      vi.mocked(tryAcquireRelayRepairLock).mockResolvedValueOnce(lockResult)
+      vi.mocked(isRelayAlreadyInstalled).mockResolvedValueOnce(true).mockRejectedValueOnce(error)
+      vi.mocked(execCommand).mockImplementation(async (_conn, command) => {
+        if (command.includes('__ORCA_REMOTE_PLATFORM__')) {
+          return '__ORCA_REMOTE_PLATFORM__ Linux x86_64'
+        }
+        if (command === 'echo $HOME') {
+          return '/home/user'
+        }
+        return 'ORCA-NATIVE-DEPS-OK'
+      })
+
+      await expect(deployAndLaunchRelay(conn)).rejects.toBe(error)
+      expect(abandonInstall).not.toHaveBeenCalled()
+      expect(releaseRelayGcClaimWithRetry).not.toHaveBeenCalled()
+      expect(waitForRelayGcClaimRelease).not.toHaveBeenCalled()
+      expect(conn.exec).not.toHaveBeenCalled()
+    }
+  )
 
   it('keeps retrying repeated launch-claim contention within the deploy bound', async () => {
     const conn = makeConnection()

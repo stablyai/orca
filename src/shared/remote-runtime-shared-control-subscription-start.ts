@@ -1,8 +1,8 @@
+import { throwIfSignalAborted } from './abort-signal-reason'
 import { randomUUID } from 'node:crypto'
 import { remoteRuntimeUnavailableError } from './remote-runtime-request-frames'
 import { admitSharedControlSubscription } from './remote-runtime-shared-control-admission'
 import { createSharedControlSubscription } from './remote-runtime-shared-control-subscriptions'
-import { finishSharedControlSubscription } from './remote-runtime-shared-control-state'
 import type {
   RemoteRuntimeSharedSubscription,
   SharedControlLogicalSubscription,
@@ -14,37 +14,33 @@ export async function startSharedControlSubscription<TResult>(args: {
   deviceToken: string
   method: string
   params: unknown
-  expectedRuntimeId?: string
   callbacks: SharedControlSubscriptionCallbacks<TResult>
+  signal?: AbortSignal
   ensureReady: () => Promise<void>
   sendSubscription: (subscription: SharedControlLogicalSubscription<unknown>) => void
   closeSubscription: (requestId: string) => void
 }): Promise<RemoteRuntimeSharedSubscription> {
+  throwIfSignalAborted(args.signal)
   const retainedParamsBytes = admitSharedControlSubscription({
     subscriptions: args.subscriptions,
     deviceToken: args.deviceToken,
     method: args.method,
-    params: args.params,
-    expectedRuntimeId: args.expectedRuntimeId
+    params: args.params
   })
   const requestId = randomUUID()
   const subscription = createSharedControlSubscription({
     requestId,
     method: args.method,
     params: args.params,
-    expectedRuntimeId: args.expectedRuntimeId,
     retainedParamsBytes,
     callbacks: args.callbacks
   })
   args.subscriptions.set(requestId, subscription as SharedControlLogicalSubscription<unknown>)
   try {
     await args.ensureReady()
+    throwIfSignalAborted(args.signal)
   } catch (error) {
-    finishSharedControlSubscription(
-      args.subscriptions,
-      subscription as SharedControlLogicalSubscription<unknown>,
-      false
-    )
+    args.closeSubscription(requestId)
     throw error
   }
   if (args.subscriptions.get(requestId) !== subscription) {

@@ -9,7 +9,8 @@ import {
   summarizeProviderChecks
 } from '../../../shared/provider-check-summary'
 import type { GitLabPipelineJob } from '../../../shared/gitlab-types'
-import type { PRCheckDetail, ProviderCheckSummary } from '../../../shared/types'
+import type { PRCheckDetail } from '../../../shared/github/check-types'
+import type { ProviderCheckSummary } from '../../../shared/github/pull-request-types'
 
 function completed(conclusion: string): PRCheckDetail {
   return {
@@ -22,16 +23,14 @@ function completed(conclusion: string): PRCheckDetail {
 
 function gitLabJobs(...statuses: string[]): PRCheckDetail[] {
   return gitLabPipelineJobsToPRChecks(
-    statuses.map(
-      (status, index): GitLabPipelineJob => ({
-        id: index,
-        name: status,
-        stage: 'deploy',
-        status,
-        webUrl: '',
-        duration: null
-      })
-    )
+    statuses.map((status, index): GitLabPipelineJob => ({
+      id: index,
+      name: status,
+      stage: 'deploy',
+      status,
+      webUrl: '',
+      duration: null
+    }))
   )
 }
 

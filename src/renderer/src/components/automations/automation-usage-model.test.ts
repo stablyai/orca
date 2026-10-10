@@ -85,7 +85,9 @@ describe('automation usage model', () => {
       cacheTokens: 400,
       reasoningOutputTokens: 50,
       totalTokens: 1350,
-      estimatedCostUsd: 0.0042
+      estimatedCostUsd: 0.0042,
+      lastRunStatus: 'completed',
+      lastRunAt: 1
     })
   })
 

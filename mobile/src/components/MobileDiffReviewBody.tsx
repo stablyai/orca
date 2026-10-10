@@ -1,7 +1,7 @@
 import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native'
 import { RefreshCw } from 'lucide-react-native'
 import type { RefObject } from 'react'
-import type { DiffComment } from '../../../src/shared/types'
+import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import { colors } from '../theme/mobile-theme'
 import { MobileDiffReviewLine } from './MobileDiffReviewLine'
 import type {
@@ -23,7 +23,7 @@ type Props = {
   staleCommentIds: ReadonlySet<string>
   onAddNote: (lineNumber: number) => void
   onEditNote: (comment: DiffComment) => void
-  onRetry: () => void
+  onRetry: (() => void) | undefined
 }
 
 export function MobileDiffReviewBody({
@@ -103,7 +103,7 @@ function DiffUnavailableState({
   onRetry
 }: {
   diffState: ReviewDiffState
-  onRetry: () => void
+  onRetry: (() => void) | undefined
 }) {
   const title =
     diffState.kind === 'binary'

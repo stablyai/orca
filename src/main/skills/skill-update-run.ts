@@ -5,6 +5,7 @@ import {
   type SkillUpdateStartResult
 } from '../../shared/skill-freshness'
 import { resolveCliCommand } from '../codex-cli/command'
+import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { killWithDescendantSweep } from '../pty-descendant-termination'
 import { getSpawnArgsForWindows, WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL } from '../win32-utils'
 
@@ -128,7 +129,9 @@ export class SkillUpdateRunner {
       // is the second half of the CLI's non-interactive gate.
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
-      env: process.env
+      // Why: npx is an `#!/usr/bin/env node` script — without its own node ahead of
+      // PATH it loads under whatever version leads, and a native dep dies on ABI.
+      env: withCliRuntimeOnPath(npxCommand, { ...process.env })
     })
     this.child = child
 

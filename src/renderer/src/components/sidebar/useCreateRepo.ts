@@ -8,7 +8,7 @@ import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
@@ -86,7 +86,9 @@ export function useCreateRepo(
   const handleCreate = useCallback(async () => {
     const name = createName.trim()
     const parentPath = createParent.trim()
-    if (!name || !parentPath) {
+    // Why: null means the chosen host is unresolved (e.g. its server is coming up); without a
+    // host id the request below would run on this computer.
+    if (!name || !parentPath || options.hostId === null) {
       return
     }
     const requestHostToken = hostTokenRef.current
@@ -249,6 +251,7 @@ export function useCreateRepo(
     mountedRef,
     closeModal,
     onGitRepoReady,
+    options.hostId,
     options.runtimeEnvironmentId,
     options.sshTargetId
   ])

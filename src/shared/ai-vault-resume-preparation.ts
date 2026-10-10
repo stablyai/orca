@@ -3,7 +3,12 @@ import type { AiVaultSession } from './ai-vault-types'
 export type AiVaultPrepareSessionResumeArgs = Pick<
   AiVaultSession,
   'agent' | 'filePath' | 'codexHome' | 'executionHostId'
->
+> &
+  Partial<Pick<AiVaultSession, 'sessionId'>> & {
+    /** A fork only reads the conversation, so a native chat that owns it does not refuse it.
+     *  Older hosts drop the field and refuse as for a resume. */
+    fork?: boolean
+  }
 
 export type AiVaultPrepareSessionResumeResult = {
   useRealCodexHome: boolean

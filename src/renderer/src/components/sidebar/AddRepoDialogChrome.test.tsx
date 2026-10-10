@@ -1,103 +1,118 @@
 // @vitest-environment happy-dom
 
-// Why: react-dom act() requires this flag outside react-test-renderer setups.
-;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-
-import { act } from 'react'
-import type { ReactNode } from 'react'
-import { createRoot, type Root } from 'react-dom/client'
-import { describe, expect, it, vi } from 'vitest'
-
-// Why: capture the props AddRepoDialogChrome passes to DialogContent so the
-// Radix dismissal handlers can be invoked directly without a real portal.
-const contentProps = vi.hoisted(() => ({ capture: vi.fn() }))
-
-vi.mock('@/components/ui/dialog', () => {
-  const Dialog = ({ children }: { children: ReactNode }) => <>{children}</>
-  const DialogContent = (props: { children?: ReactNode } & Record<string, unknown>) => {
-    contentProps.capture(props)
-    return <div data-dialog-content>{props.children}</div>
-  }
-  return { Dialog, DialogContent }
-})
-
+import { cleanup, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { AddRepoDialogChrome } from './AddRepoDialogChrome'
 
-type ChromeProps = Parameters<typeof AddRepoDialogChrome>[0]
+afterEach(cleanup)
 
-function renderChrome(overrides: Partial<ChromeProps>): { root: Root; container: HTMLElement } {
-  const props: ChromeProps = {
-    children: <div>step content</div>,
-    isAdding: false,
-    isCloning: false,
-    isOpen: true,
-    onBack: vi.fn(),
-    onOpenChange: vi.fn(),
-    step: 'clone',
-    ...overrides
+function CloneDialog({
+  isCloning,
+  onOpenChange
+}: {
+  isCloning: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const [isOpen, setIsOpen] = useState(true)
+  return (
+    <AddRepoDialogChrome
+      isCloning={isCloning}
+      isAdding={false}
+      isOpen={isOpen}
+      step="clone"
+      onBack={() => {}}
+      onOpenChange={(open) => {
+        onOpenChange(open)
+        setIsOpen(open)
+      }}
+    >
+      <DialogTitle>Clone from URL</DialogTitle>
+      <DialogDescription>Clone progress</DialogDescription>
+    </AddRepoDialogChrome>
+  )
+}
+
+function backdrop(): Element {
+  const overlay = document.querySelector('[data-slot="dialog-overlay"]')
+  if (!overlay) {
+    throw new Error('Missing dialog backdrop')
   }
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  const root = createRoot(container)
-  act(() => {
-    root.render(<AddRepoDialogChrome {...props} />)
-  })
-  return { root, container }
+  return overlay
 }
 
-function lastContentProps(): Record<string, unknown> {
-  const calls = contentProps.capture.mock.calls
-  return calls.at(-1)![0] as Record<string, unknown>
-}
+describe('AddRepoDialogChrome dismissal', () => {
+  it('keeps an in-flight clone open after a backdrop click', async () => {
+    const user = userEvent.setup()
+    const onOpenChange = vi.fn()
+    render(<CloneDialog isCloning onOpenChange={onOpenChange} />)
 
-function dismissalHandlers(): [
-  string,
-  ((event: { preventDefault: () => void }) => void) | undefined
-][] {
-  const props = lastContentProps()
-  return [
-    [
-      'onPointerDownOutside',
-      props.onPointerDownOutside as ((event: { preventDefault: () => void }) => void) | undefined
-    ],
-    [
-      'onInteractOutside',
-      props.onInteractOutside as ((event: { preventDefault: () => void }) => void) | undefined
-    ],
-    [
-      'onEscapeKeyDown',
-      props.onEscapeKeyDown as ((event: { preventDefault: () => void }) => void) | undefined
-    ]
-  ]
-}
+    await user.click(backdrop())
 
-describe('AddRepoDialogChrome dismissal guard', () => {
-  it('prevents dismissal events while a clone is in flight', () => {
-    const { root, container } = renderChrome({ isCloning: true })
-
-    for (const [name, handler] of dismissalHandlers()) {
-      expect(handler, `${name} must be wired`).toBeTypeOf('function')
-      const preventDefault = vi.fn()
-      handler!({ preventDefault })
-      expect(preventDefault, `${name} must preventDefault during clone`).toHaveBeenCalledTimes(1)
-    }
-    unmount(root, container)
+    expect(onOpenChange).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog', { name: 'Clone from URL' })).not.toBeNull()
   })
 
-  it('lets dismissal events through when no clone is running', () => {
-    const { root, container } = renderChrome({ isCloning: false })
+  it('allows backdrop dismissal when no clone is running', async () => {
+    const user = userEvent.setup()
+    const onOpenChange = vi.fn()
+    render(<CloneDialog isCloning={false} onOpenChange={onOpenChange} />)
 
-    for (const [name, handler] of dismissalHandlers()) {
-      expect(handler, `${name} must be wired`).toBeTypeOf('function')
-      const preventDefault = vi.fn()
-      handler!({ preventDefault })
-      expect(preventDefault, `${name} must not preventDefault without clone`).not.toHaveBeenCalled()
-    }
-    unmount(root, container)
+    await user.click(backdrop())
+
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(screen.queryByRole('dialog', { name: 'Clone from URL' })).toBeNull()
+  })
+
+  it('allows backdrop dismissal after the clone settles', async () => {
+    const user = userEvent.setup()
+    const onOpenChange = vi.fn()
+    const view = render(<CloneDialog isCloning onOpenChange={onOpenChange} />)
+    await user.click(backdrop())
+    expect(onOpenChange).not.toHaveBeenCalled()
+
+    view.rerender(<CloneDialog isCloning={false} onOpenChange={onOpenChange} />)
+    await user.click(backdrop())
+
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(screen.queryByRole('dialog', { name: 'Clone from URL' })).toBeNull()
+  })
+
+  it('keeps an in-flight clone open after a stray ESC', async () => {
+    const user = userEvent.setup()
+    const onOpenChange = vi.fn()
+    render(<CloneDialog isCloning onOpenChange={onOpenChange} />)
+
+    await user.keyboard('{Escape}')
+
+    expect(onOpenChange).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog', { name: 'Clone from URL' })).not.toBeNull()
+  })
+
+  it('allows ESC dismissal after the clone settles', async () => {
+    const user = userEvent.setup()
+    const onOpenChange = vi.fn()
+    const view = render(<CloneDialog isCloning onOpenChange={onOpenChange} />)
+    await user.keyboard('{Escape}')
+    expect(onOpenChange).not.toHaveBeenCalled()
+
+    view.rerender(<CloneDialog isCloning={false} onOpenChange={onOpenChange} />)
+    await user.keyboard('{Escape}')
+
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(screen.queryByRole('dialog', { name: 'Clone from URL' })).toBeNull()
+  })
+
+  it('keeps explicit Close dismissal available during a clone', async () => {
+    const user = userEvent.setup()
+    const onOpenChange = vi.fn()
+    render(<CloneDialog isCloning onOpenChange={onOpenChange} />)
+
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(screen.queryByRole('dialog', { name: 'Clone from URL' })).toBeNull()
   })
 })
-
-function unmount(root: Root, container: HTMLElement): void {
-  act(() => root.unmount())
-  container.remove()
-}

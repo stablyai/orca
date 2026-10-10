@@ -71,4 +71,44 @@ describe('reuseEqualCatalogRows', () => {
     expect(reconciled[0]).toBe(current[1])
     expect(reconciled[1]).toBe(current[0])
   })
+
+  it('reuses a match inside the duplicate-id scan window', () => {
+    const current = [
+      { id: 'dup', marker: 'a' },
+      { id: 'dup', marker: 'b' },
+      { id: 'dup', marker: 'c' }
+    ]
+
+    const reconciled = reuseEqualCatalogRows(current, [{ id: 'dup', marker: 'c' }])
+
+    expect(reconciled[0]).toBe(current[2])
+  })
+
+  // Without the cap this walks the whole bucket, so a 64-row bucket costs 64
+  // deep compares per incoming row. Counting reads keeps the guard deterministic
+  // — a wall-clock assertion would be flaky on shared CI runners.
+  it('caps the deep compares for one id instead of scanning the whole bucket', () => {
+    const bucketSize = 64
+    const current = Array.from({ length: bucketSize }, (_, index) => ({
+      id: 'dup',
+      marker: `previous-${index}`
+    }))
+    let reads = 0
+    const incoming = [
+      {
+        id: 'dup',
+        get marker(): string {
+          reads++
+          return 'matches-nothing'
+        }
+      }
+    ]
+
+    const reconciled = reuseEqualCatalogRows(current, incoming)
+
+    // No match, so the incoming row is kept — a missed reuse costs identity, never correctness.
+    expect(reconciled[0]).toBe(incoming[0])
+    expect(reads).toBeLessThanOrEqual(8)
+    expect(reads).toBeLessThan(bucketSize)
+  })
 })

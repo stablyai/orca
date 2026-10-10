@@ -1,0 +1,159 @@
+# Translation scan tracker
+
+Recurring task: after a batch of merged PRs, scan for i18n gaps and fix them:
+1. unkeyed user-visible UI strings (gate: `audit:localization` / `verify:localization-coverage`),
+2. keyed strings missing target-locale translations (en.json has the key, es/fr/ja/ko/zh does not),
+3. badly translated target values (placeholder mismatch, brand/term policy violations).
+
+Method (reproducible):
+- `node config/scripts/verify-localization-catalog.mjs` — key references vs en.json,
+  per-locale coverage, interpolation mismatches, generic-term regressions.
+- `node config/scripts/audit-localization-coverage.mjs --check` — unkeyed strings.
+- `node config/scripts/verify-localization-extraction.mjs` — en.json in sync with code.
+- Missing-key delta since last scan: flatten en.json at HEAD vs at the last-scanned
+  base commit, keep keys absent from each target locale.
+- Translate the delta per `config/i18n-translation-source.md` policy and the overrides in
+  `config/scripts/locale-*-overrides.mjs` / `locale-*-fixes.mjs` / `locale-generic-ui-terms.mjs`
+  (brands such as Orca/OpenCode/Git/Python stay Latin; `{{placeholders}}`, markdown links,
+  backtick code spans, and `[python.org](...)` links are preserved verbatim).
+- Apply with `node config/scripts/apply-translation-delta.mjs /tmp/translations.json`
+  (validates placeholder parity and runs every value through `repairTranslatedValue`
+  so CJK spacing, brand-mistranslation fixes, and phrase fixes match the repo pipeline).
+- Re-run all four gates plus the vitest locale suites before finishing.
+- Mobile (`mobile/`) has no locale catalogs (only SVG `translate()` transforms); out of scope
+  until the mobile catalog migration lands. Missing keys fall back to English at runtime
+  (sparse-catalog architecture, PR #8512), so untranslated leftovers are safe, not broken.
+
+## Scan 2026-09-25 (first tracked scan; no prior file existed)
+
+- HEAD scanned: 80e0bee23b (2026-09-24)
+- Window covered: 519bde81df^ .. HEAD (all PRs merged 2026-09-23..2026-09-24 back to and
+  including #22519; en.json deltas computed per commit, full commit list below).
+- Gates before fix: catalog verify PASS, coverage --check PASS (58 allowlisted), extraction
+  PASS, runtime-catalog PASS. So no unkeyed strings and en.json in sync; the gap was
+  target-locale coverage only.
+
+## Scan 2026-09-26
+
+- HEAD scanned: a15a5c8c1a6 (origin/main @ 067975bfd1 plus merge; 12 newest main
+  commits add zero en keys, verified).
+- Window covered: 80e0bee23b .. HEAD. Note: the previous scan's own branch commits
+  (chat-resume/Git-toolchain/notebook translations + fr/ko terminology fixes +
+  jupyter fix) have since landed upstream as #22746, so this scan's base-to-HEAD
+  delta already includes them; the merge was resolved with --theirs on
+  es/fr/ja/zh (our stale native-chat.handoff.* translations correctly dropped:
+  the keys were removed from en.json by upstream #22783).
+- Delta since base: 113 new en keys (mostly sessionSearch x44, resume-modal
+  activity, ipynb venv, Cursor accounts, feature-tips), 4 changed en values
+  (3x "mid-turn" -> "working" resume copy; screenshotsHint gained {{maxSize}}).
+  fr/ja/ko/zh translations of the 3 resume keys already matched new semantics.
+- Applied: es +111 (107 new + 3 resume + screenshotsHint), fr/ja/ko/zh +100 each
+  (99 new + screenshotsHint) via apply-translation-delta.mjs (pipeline repaired
+  ja 使用状況->使用量 x1, ja phrase x2, zh 智能体->代理 x5). Strictly additive:
+  +511 keys, 0 removed.
+- Gates after fix: catalog verify PASS (fr/ja/ko/zh 14733/14733 = 100%;
+  es 12328/14733, remaining 2405 missing are pre-existing es backlog, out of
+  delta scope), coverage --check PASS (58 allowlisted), extraction PASS,
+  locale vitest suites PASS (policy x7 files, ko overrides, generic terms,
+  frozen keywords, native-chat locales).
+- Reviews (3 of max 4 rounds, subagents; round 0 = 5 parallel translators):
+  R1 fixed 20 (es kw.rateLimit->EN per 10-hit precedent; fr NBSP guillemets;
+  ja settingsLink/progressStarting; ko demo-snippet localization x8 +
+  consentInstruction fragment; zh x6 incl. 仪表盘/表结构/工作流程).
+  R2 fixed 5 and reverted fr NBSP->plain spaces (91-vs-7 file convention;
+  R1 evidence was circular) + ja kw.spend->追加料金 + ja particle fix +
+  ko 색인화. R3 sign-off clean on all locales (R2 fixes byte-verified,
+  full placeholder parity 0 mismatches, 0 missing keys).
+
+## Scan 2026-10-05
+
+- HEAD scanned: d3943c6d81 (origin/main; branch rebased onto it). Base: a15a5c8c1a6.
+  Window: a15a5c8c1a6 .. HEAD (~1008 commits). Note: origin/main was still advancing
+  during the scan; the one en key added in the last 13 commits (browser markup
+  `...tool.eraser`) already shipped translated upstream in all five locales.
+- Gates before fix: catalog verify PASS (all five locales missing the SAME 87 keys),
+  coverage --check PASS (13 allowlisted), extraction PASS, runtime-catalog PASS.
+  So no unkeyed strings and en.json in sync; the gap was target-locale coverage only.
+- Delta since base: 87 new en keys (csv editor x34, provider credit balance x11,
+  activity x31, jira assignee x3, workspace-delete change checks x5, nested-worktree
+  removal x10) plus 18 changed en values (Gemini CLI legacy, structured-chat copy/scope,
+  markdown notes, unverifiable -> "no recent update", onboarding casing, arrow spacing).
+  es had fully caught up to fr/ja/ko/zh, so all five shared the same 87-key gap.
+- **11 of the 87 are intentionally untranslated**: the provider credit-balance keys
+  (`auto.components.status.bar.{StatusBar.*,tooltip.*,provider.extra.usage.section.*}`)
+  are pinned as sparse-fallback by `provider-credit-balance-locales.test.ts` (#25408),
+  which asserts every target catalog OMITS them and falls back to English at runtime.
+  Translated the remaining 76 new keys (x5) and left the 11 balance keys absent.
+- Changed-value review: 15 of the 18 already matched the new English upstream; only 3
+  were stale (AccountsPane Gemini legacy description + label, onboarding arrow spacing).
+- Applied 76 new keys x5 via apply-translation-delta.mjs (pipeline repaired ja
+  open->オープン, zh 智能体->代理 xN, ko refreshFailed spacing) + 3 stale updates x5 via
+  the same repairTranslatedValue gate. Strictly additive: +380 new keys, 0 removed.
+- Gates after fix: catalog verify PASS (all five 15268/15279; the 11 omissions are the
+  pinned balance keys), coverage --check PASS (13 allowlisted), extraction PASS,
+  runtime-catalog PASS, locale vitest suites PASS (34 files, 288 tests).
+- Reviews (3 of max 4 rounds; round 0 = 5 parallel translators, then 5 reviewers/round):
+  R1 applied 11 fixes (es structuredCopy "Off"->"Si está desactivado", structuredScope
+  semicolon lowercase, 5f02e6fb21 review->"de revisión"; fr nestedRemoval pronoun
+  agreement; ja f80603d293 compound-word space + csv.indexProgress->インデックス作成中;
+  ko f80603d293 agent->에이전트 + structuredScope fallback + structuredCopy 지원->기반;
+  zh f80603d293 切换->交接/注释->笔记 + threadListOptionsActive->个生效).
+  R1 rejected 2 as repo-convention conflicts: ja TaskPage half-width 例: (28 existing
+  occurrences) and ko showMoreAgents (pinned Latin "agents" by
+  config/scripts/locale-ko-key-overrides.json, so no locale change).
+  R2 applied 3 (es structuredScope unified "chat de terminal"; zh structuredCopy
+  ->基于终端的 + activity hideAutomation/CLI-created re-add 工作区 to match ja/ko);
+  ko re-flagged the pinned override, rejected again.
+  R3 sign-off clean on all five locales (0 errors, 0 warns; placeholders byte-identical,
+  0 stale changed keys, 0 generic-term regressions).
+
+## Terminology change 2026-10-06 — zh Agent is 智能体, not 代理
+
+- Standardized Simplified Chinese on 智能体 for the Agent concept. Converted 131 zh values
+  (incl. 子代理 -> 子智能体) and updated the pipeline so it is not reverted:
+  `locale-phrase-fixes.mjs` now maps 客服人员/代理商/座席 -> 智能体 and replaces 代理 -> 智能体
+  when the English names an agent (guarded to exclude "user agent"); the old
+  智能体 -> 代理 rule was removed.
+- 代理 stays for proxy senses: HTTP/network proxy, SSH Proxy Command, reverse proxy, and
+  browser "user agent" (26 zh values left untouched). Overrides updated to match
+  (locale-value-overrides, locale-key-overrides, locale-macos-tcc-key-overrides,
+  locale-zh-value-overrides, locale-search-keyword-overrides agent/agents -> 智能体, proxy -> 代理).
+- Gates: catalog verify, coverage --check, extraction, runtime-catalog pass; 296 locale
+  tests pass (policy, zh-round5, generic-terms, etc.).
+
+## Scan 2026-10-07
+
+- HEAD scanned: de4ee59cba (origin/main; branch rebased onto it). Base: d3943c6d81
+  (the 2026-10-05 scan's HEAD). Window: d3943c6d81 .. HEAD (244 commits). Note: the last
+  5 commits that landed during the scan touch no locale catalog and add no en key.
+- Gates before fix: catalog verify PASS, coverage --check PASS (13 allowlisted), extraction
+  PASS, runtime-catalog PASS. No unkeyed strings and en.json in sync; the gap was
+  target-locale coverage only.
+- Delta since base: 331 new en keys (native-chat incl. rewind/composer/notices/visuals,
+  managed servers + SSH move, settings appearance chat, project board/views, markdown
+  callouts, media preview), 33 removed, 15 changed en values. All five locales were
+  missing the SAME 187 keys; es one extra (TerminalErrorToast.heldByPreviousRelay) —
+  177 vs 176. 11 of the 187 are intentionally untranslated provider credit-balance keys
+  pinned by provider-credit-balance-locales.test.ts (#25408). Translated the remaining
+  176 new keys x5 (es 177).
+- Changed-value review: the 15 new English values were already reflected in the locales,
+  except the two `Settings.*` unsaved-AI-settings keys, which still read "AI changes" /
+  "移動" from the retired "Git AI Author changes" wording — fixed in es/fr/ja (and the
+  ko/zh "them" pronoun re-pointed at the settings).
+- Applied 176 new keys x5 (+1 es) via apply-translation-delta.mjs (the pipeline repaired
+  ja 新しい->新規, エージェント->Agent, retry/待っている; ko/es/zh needed none). Strictly
+  additive: +881 keys, 0 removed.
+- Gates after fix: catalog verify PASS (all five 15566/15577; the 11 omissions are the
+  pinned balance keys), coverage --check PASS (13 allowlisted), extraction PASS,
+  runtime-catalog PASS, locale vitest suites PASS (43 files, 386 tests).
+- Reviews (3 of max 4 rounds; round 0 = 5 parallel translators, then 5 reviewers/round):
+  R1 applied 14 (es {{sources}} agreement via a parse-safe rephrase + informal-tú register
+  + idiomatic port-forward copy; fr rewind pronoun/coordination; ja MT artifacts the
+  pipeline's 新しい/待っている rewrites introduced, "Host locked" phase label, hostNewer
+  comparison sense, deltaMove missing object; ko old-chat wording + comma-splice; zh
+  sourceChanged until-clause + older-chat wording).
+  R2 applied 13 (all-locale unsaved-AI-settings staleness; es structuredCopy usted->tú;
+  fr {{sources}} agreement, pane->volet, comma-splice; ja outcome.deferred referent).
+  R3 sign-off clean on all five locales (0 errors, 0 warns; placeholders byte-identical,
+  0 untranslated leftovers, agent/proxy terminology verified).
+

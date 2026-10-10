@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState } from 'react'
-import { View, Text, Pressable, TextInput, StyleSheet, Switch } from 'react-native'
+import { View, Text, Pressable, TextInput, Switch } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { colors } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
 import {
   buildTerminalShortcutKey,
@@ -11,6 +11,8 @@ import {
   type TerminalShortcutModifier,
   type TerminalShortcutSpecialKey
 } from '../terminal/terminal-accessory-keys'
+import { customKeyModalStyles as styles } from './CustomKeyModal.styles'
+import { persistMirrored } from '../storage/mirrored-storage-keys'
 
 const CUSTOM_ACCESSORY_KEYS_STORAGE_KEY = 'orca:custom-accessory-keys'
 
@@ -74,7 +76,10 @@ export async function loadCustomKeys(): Promise<CustomKey[]> {
 }
 
 export async function saveCustomKeys(keys: CustomKey[]): Promise<void> {
-  await AsyncStorage.setItem(CUSTOM_ACCESSORY_KEYS_STORAGE_KEY, JSON.stringify(keys))
+  // Through the one write path, which notes the mirror on an accepted write and on nothing else
+  // (ruling 35). There is no rollback here any more because there is nothing to undo: on the page
+  // a value over the cap rejects, and a rejected write never reached the map.
+  await persistMirrored(CUSTOM_ACCESSORY_KEYS_STORAGE_KEY, JSON.stringify(keys))
 }
 
 export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortcuts }: Props) {
@@ -105,7 +110,20 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
       const existing = await loadCustomKeys()
       const newKey: CustomKey = { ...key, id: `custom-${Date.now()}` }
       const updated = [...existing, newKey]
-      await saveCustomKeys(updated)
+      // Caught here because both callers are `void addKey(...)`, which leaves a rejection nowhere
+      // to go. On the page this key is allowlisted and its write rejects for size — the contract
+      // `page-async-storage` states, and the one ruling 33.6 extends to a key `init` could not
+      // carry at all — so an uncaught save here reaches the document's unhandled-rejection
+      // handler, which reports a page fault and drops the generation for a key nobody could add.
+      // Every other allowlisted writer in this closure already catches its own save.
+      try {
+        await saveCustomKeys(updated)
+      } catch (error) {
+        // Neither reported nor closed: a drawer that dismissed itself and announced the key would
+        // put a row on the accessory bar that no store holds and the next load would not have.
+        console.warn('[custom-keys] the store would not take this key', error)
+        return
+      }
       onKeysChanged(updated)
       onClose()
     },
@@ -190,6 +208,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
           <Pressable
             style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
             onPress={onBack}
+            accessibilityRole="button"
             accessibilityLabel="Back"
           >
             <ChevronLeft size={18} color={colors.textSecondary} />
@@ -409,277 +428,3 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
     </BottomDrawer>
   )
 }
-
-const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingBottom: spacing.sm
-  },
-  backButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  backButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  backSpacer: {
-    width: 30
-  },
-  title: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    textAlign: 'center'
-  },
-  group: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden'
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  row: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  rowLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary,
-    marginBottom: 1
-  },
-  rowHint: {
-    fontSize: 12,
-    color: colors.textMuted
-  },
-  shortcutForm: {
-    paddingTop: spacing.sm
-  },
-  preview: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.lg + spacing.xs,
-    flexWrap: 'wrap'
-  },
-  previewKeycapRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  previewPlus: {
-    color: colors.textMuted,
-    fontSize: 16
-  },
-  keycap: {
-    minWidth: 48,
-    height: 48,
-    paddingHorizontal: spacing.md,
-    borderRadius: 10,
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  keycapModifier: {
-    minWidth: 0
-  },
-  keycapWarn: {
-    borderColor: colors.statusAmber
-  },
-  keycapText: {
-    color: colors.textPrimary,
-    fontFamily: typography.monoFamily,
-    fontSize: 17,
-    fontWeight: '600'
-  },
-  keycapTextWarn: {
-    color: colors.statusAmber
-  },
-  keycapModifierText: {
-    color: colors.textSecondary,
-    fontFamily: typography.monoFamily,
-    fontSize: 14,
-    fontWeight: '600'
-  },
-  section: {
-    marginTop: spacing.md
-  },
-  sectionLabel: {
-    fontSize: 11,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: spacing.sm,
-    paddingLeft: 2
-  },
-  mods: {
-    flexDirection: 'row',
-    gap: spacing.sm
-  },
-  chip: {
-    flex: 1,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: colors.bgPanel,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4
-  },
-  chipSelected: {
-    backgroundColor: colors.textPrimary
-  },
-  chipPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  chipText: {
-    color: colors.textSecondary,
-    fontSize: 14,
-    fontWeight: '500'
-  },
-  chipTextSelected: {
-    color: colors.bgBase
-  },
-  chipGlyph: {
-    color: colors.textMuted,
-    fontSize: 13,
-    fontFamily: typography.monoFamily
-  },
-  chipGlyphSelected: {
-    color: 'rgba(10,10,10,0.5)'
-  },
-  keyInput: {
-    width: '100%',
-    height: 56,
-    borderRadius: 10,
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    color: colors.textPrimary,
-    fontFamily: typography.monoFamily,
-    fontSize: 22,
-    fontWeight: '600',
-    textAlign: 'center'
-  },
-  moreLink: {
-    paddingVertical: spacing.sm,
-    alignItems: 'center'
-  },
-  moreLinkPressed: {
-    opacity: 0.6
-  },
-  moreLinkText: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    textDecorationLine: 'underline'
-  },
-  specialKeysForm: {
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.md,
-    gap: spacing.md
-  },
-  specialGroup: {
-    gap: spacing.xs
-  },
-  specialGroupTitle: {
-    fontSize: 11,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    paddingLeft: 2,
-    marginBottom: spacing.xs
-  },
-  keyGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: -spacing.xs / 2
-  },
-  keyCellWrap: {
-    paddingHorizontal: spacing.xs / 2,
-    paddingVertical: spacing.xs / 2
-  },
-  keyCell: {
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: colors.bgPanel,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  keyCellPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  keyCellSelected: {
-    backgroundColor: colors.textPrimary
-  },
-  keyCellText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    fontFamily: typography.monoFamily
-  },
-  keyCellTextSelected: {
-    color: colors.bgBase
-  },
-  macroForm: {
-    padding: spacing.md,
-    gap: spacing.sm
-  },
-  fieldLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textSecondary
-  },
-  fieldInput: {
-    backgroundColor: colors.bgBase,
-    color: colors.textPrimary,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: 14,
-    fontFamily: typography.monoFamily,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.xs
-  },
-  switchLabel: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  saveButton: {
-    marginTop: spacing.md,
-    backgroundColor: colors.textPrimary,
-    paddingVertical: spacing.md,
-    borderRadius: 10,
-    alignItems: 'center'
-  },
-  saveButtonDisabled: {
-    backgroundColor: colors.bgRaised
-  },
-  saveButtonText: {
-    color: colors.bgBase,
-    fontSize: 15,
-    fontWeight: '600'
-  },
-  saveButtonTextDisabled: {
-    color: colors.textMuted
-  }
-})

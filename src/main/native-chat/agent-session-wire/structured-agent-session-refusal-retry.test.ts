@@ -1,0 +1,354 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../shared/agent-session-host-authority'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import {
+  AGENT_SESSION_WIRE_REFUSAL_CODES,
+  type AgentSessionMutationEnvelope,
+  type AgentSessionMutationResult,
+  type AgentSessionWireRefusalCode
+} from '../../../shared/agent-session-wire'
+import {
+  agentSessionRefusalOperationState,
+  type AgentSessionRefusalOperationState
+} from '../../../shared/agent-session-refusal-retry'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { abandonStructuredAgentSessionHost } from './structured-agent-session-host-test-abandon'
+import {
+  HOST_TEST_NOW as NOW,
+  HOST_TEST_SESSION as SESSION,
+  HOST_TEST_THREAD as THREAD,
+  hostTestAttachParams,
+  hostTestMessage
+} from './structured-agent-session-host-test-data'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { AgentSessionJournal } from '../agent-session-journal/journal-store'
+
+const CALLER = { callerKey: 'client-1' }
+const METHODS = ['agentSession.setOption', 'agentSession.send'] as const
+type Method = (typeof METHODS)[number]
+type Pair = `${Method}:${AgentSessionWireRefusalCode}`
+
+type CallSpec = {
+  method: Method
+  operationId: string
+  expectedRuntimeFence?: number
+  payloadFingerprint?: string
+}
+
+type Harness = {
+  root: string
+  store: AgentSessionRecordStore
+  host: StructuredAgentSessionHost
+  setOption: Mock<StructuredAgentSessionAdapter['setOption']>
+}
+
+const harnesses: Harness[] = []
+let operationSequence = 1_000
+
+function operationId(timestamp = NOW): string {
+  operationSequence += 1
+  return `${timestamp}-${operationSequence.toString(16).padStart(32, '0')}`
+}
+
+async function createHarness(options: { attached?: boolean } = {}) {
+  const root = await mkdtemp(join(tmpdir(), 'orca-refusal-oracle-'))
+  const store = await openTestAgentSessionRecordStore(root)
+  const setOption = vi.fn<StructuredAgentSessionAdapter['setOption']>(async () => undefined)
+  const adapter: StructuredAgentSessionAdapter = {
+    acquire: async ({ fence }) => ({
+      process: {
+        hostId: 'local',
+        pid: 4242,
+        processStartTimeMs: NOW - 1_000,
+        spawnToken: store.getRecord(SESSION)?.lease.reservedSpawnToken ?? 'spawn-a'
+      },
+      link: {
+        linkId: `link-${fence}`,
+        handle: codexProviderHandle(THREAD),
+        origin: 'created',
+        mintedAtFence: fence,
+        observedAt: NOW
+      }
+    }),
+    dispatch: async () => ({
+      state: 'accepted',
+      providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 1 }
+    }),
+    cancelTurn: async () => ({ cancelled: true }),
+    answerPrompt: async () => undefined,
+    // A failed acquisition is proven gone, as the real adapters prove it.
+    releaseAcquisition: async () => true,
+    setOption
+  }
+  const host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
+    logger: createStructuredAgentSessionLogger(),
+    store,
+    adapter,
+    journalDatabase: openTestJournalHostDatabase(root),
+    claimKeyId: 'key-1',
+    mintSpawnToken: () => 'spawn-a',
+    now: () => NOW
+  })
+  const harness = { root, store, host, setOption }
+  harnesses.push(harness)
+  if (options.attached !== false) {
+    expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
+  }
+  return harness
+}
+
+afterEach(async () => {
+  const completed = harnesses.splice(0)
+  await Promise.all(completed.map(async ({ host }) => abandonStructuredAgentSessionHost(host)))
+  await Promise.all(completed.map(async ({ root }) => rm(root, { recursive: true })))
+})
+
+function callFields(spec: CallSpec): Record<string, unknown> {
+  if (spec.method === 'agentSession.send') {
+    return { body: hostTestMessage('host oracle') }
+  }
+  return { key: 'model', value: 'gpt-5' }
+}
+
+function envelope(harness: Harness, spec: CallSpec): AgentSessionMutationEnvelope {
+  const fields = callFields(spec)
+  return {
+    sessionId: SESSION,
+    clientOperationId: spec.operationId,
+    expectedRuntimeFence:
+      spec.expectedRuntimeFence ?? harness.store.getRecord(SESSION)?.lease.runtimeFence ?? 1,
+    payloadFingerprint:
+      spec.payloadFingerprint ??
+      computeAgentSessionPayloadFingerprint({ method: spec.method, sessionId: SESSION, fields })
+  }
+}
+
+function invoke(harness: Harness, spec: CallSpec): Promise<AgentSessionMutationResult<unknown>> {
+  const fields = callFields(spec)
+  const mutationEnvelope = envelope(harness, spec)
+  if (spec.method === 'agentSession.send') {
+    return harness.host.send(CALLER, {
+      envelope: mutationEnvelope,
+      body: fields.body as ReturnType<typeof hostTestMessage>
+    })
+  }
+  return harness.host.setOption(CALLER, {
+    envelope: mutationEnvelope,
+    key: fields.key as string,
+    value: fields.value as string
+  })
+}
+
+function operationState(harness: Harness, operation: string) {
+  return harness.store
+    .listOperationRows()
+    .find((row) => row.callerKey === CALLER.callerKey && row.operationId === operation)?.outcome
+}
+
+async function assertHostAgreement(
+  harness: Harness,
+  spec: CallSpec,
+  code: AgentSessionWireRefusalCode,
+  retry?: () => Promise<{ harness: Harness; spec: CallSpec }>
+): Promise<Pair> {
+  try {
+    const result = await invoke(harness, spec)
+    expect(result, `${spec.method}:${code}`).toMatchObject({ ok: false, refusal: { code } })
+  } catch (error) {
+    expect(error).toMatchObject({ message: code })
+  }
+  const outcome = operationState(harness, spec.operationId)
+  let oracle: AgentSessionRefusalOperationState
+  if (outcome?.status === 'failed') {
+    oracle = 'settled-rejected'
+  } else if (outcome?.status === 'unknown') {
+    oracle = 'unknown'
+  } else if (outcome?.status === 'pending') {
+    oracle = 'pending-admission'
+  } else if (retry) {
+    const next = await retry()
+    await expect(invoke(next.harness, next.spec)).resolves.toMatchObject({
+      ok: true,
+      replayed: false
+    })
+    oracle = 'pending-admission'
+  } else {
+    oracle = 'settled-rejected'
+  }
+  expect(agentSessionRefusalOperationState(code), `${spec.method}:${code}`).toBe(oracle)
+  return `${spec.method}:${code}`
+}
+
+async function setLease(
+  harness: Harness,
+  update: (record: AgentSessionRecord) => AgentSessionRecord
+): Promise<void> {
+  await harness.store.transitionHandoff(SESSION, update)
+}
+
+// sendPlan and setOptionPlan have no unsupported branch.
+const UNREACHABLE = new Set<Pair>([
+  'agentSession.send:structured_agent_session_unsupported',
+  'agentSession.setOption:structured_agent_session_unsupported',
+  // performPrompt is the sole producer of prompt revision and resolution refusals.
+  'agentSession.setOption:agent_session_item_revision_stale',
+  'agentSession.send:agent_session_item_revision_stale',
+  'agentSession.setOption:agent_session_already_resolved',
+  'agentSession.send:agent_session_already_resolved',
+  // StructuredAgentSessionHost.mutate maps an absent record to AGENT_SESSION_NOT_ATTACHED.
+  'agentSession.setOption:agent_session_identity_required',
+  'agentSession.send:agent_session_identity_required',
+  // Only a send opens the conversation it writes to.
+  'agentSession.setOption:agent_session_journal_unreadable',
+  // Send reconstructs doubt from its global tombstone instead of refusing it.
+  'agentSession.send:agent_session_operation_unknown',
+  // Only a send restarts a lost owner.
+  'agentSession.setOption:agent_session_owner_restart_failed',
+  // A write names its target, not an owner generation; only an attach compares fences.
+  'agentSession.setOption:agent_session_checkpoint_stale',
+  'agentSession.send:agent_session_checkpoint_stale',
+  // A send is a conversation write: admitted whoever owns the lease, and a start it needs that
+  // fails rejects the accepted message rather than refusing the call.
+  'agentSession.send:agent_session_conflict',
+  'agentSession.send:execution_owner_reconciling',
+  'agentSession.send:agent_session_owner_restart_failed',
+  // The ledger has no count limit; only an older host still refuses with it.
+  'agentSession.setOption:agent_session_operation_capacity',
+  'agentSession.send:agent_session_operation_capacity'
+])
+
+describe('agentSessionRefusalOperationState host oracle', () => {
+  // Full host retries touch the durable store and successful cases rotate its backup.
+  it('agrees with every refusal the real host path can produce', { timeout: 90_000 }, async () => {
+    const produced = new Set<Pair>()
+    const record = (pair: Pair) => produced.add(pair)
+
+    const stale = await createHarness()
+    for (const method of METHODS) {
+      const spec = { method, operationId: operationId(), expectedRuntimeFence: 99 }
+      await expect(invoke(stale, spec), method).resolves.toMatchObject({ ok: true })
+    }
+    expect(stale.setOption).toHaveBeenCalledTimes(1)
+
+    const conflict = await createHarness()
+    for (const method of ['agentSession.setOption'] as const) {
+      await setLease(conflict, (current) => ({
+        ...current,
+        lease: { ...current.lease, handoffStage: 'new-owner-proving' }
+      }))
+      const spec = { method, operationId: operationId() }
+      record(
+        await assertHostAgreement(conflict, spec, 'agent_session_conflict', async () => {
+          await setLease(conflict, (current) => ({
+            ...current,
+            lease: { ...current.lease, handoffStage: null }
+          }))
+          return { harness: conflict, spec }
+        })
+      )
+    }
+
+    const absent = await createHarness({ attached: false })
+    for (const method of METHODS) {
+      const spec = { method, operationId: operationId() }
+      record(
+        await assertHostAgreement(absent, spec, 'agent_session_ownership_unknown', async () => ({
+          harness: await createHarness(),
+          spec
+        }))
+      )
+    }
+
+    const operationConflict = await createHarness()
+    for (const method of ['agentSession.setOption', 'agentSession.send'] as const) {
+      record(
+        await assertHostAgreement(
+          operationConflict,
+          {
+            method,
+            operationId: operationId(),
+            payloadFingerprint: 'wrong'
+          },
+          'agent_session_operation_conflict'
+        )
+      )
+    }
+    const ledgerRefusals = await createHarness()
+    for (const [code, timestamp] of [
+      ['agent_session_operation_expired', NOW - AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS - 1],
+      ['agent_session_operation_invalid', null]
+    ] as const) {
+      for (const method of METHODS) {
+        record(
+          await assertHostAgreement(
+            ledgerRefusals,
+            {
+              method,
+              operationId: timestamp === null ? 'invalid-operation-id' : operationId(timestamp)
+            },
+            code
+          )
+        )
+      }
+    }
+
+    const unknown = await createHarness()
+    unknown.setOption.mockRejectedValueOnce(new Error('reply lost'))
+    const optionUnknown = { method: 'agentSession.setOption' as const, operationId: operationId() }
+    await expect(invoke(unknown, optionUnknown)).rejects.toThrow('reply lost')
+    record(await assertHostAgreement(unknown, optionUnknown, 'agent_session_operation_unknown'))
+
+    const reconciling = await createHarness()
+    for (const method of ['agentSession.setOption'] as const) {
+      await setLease(reconciling, (current) => ({
+        ...current,
+        lease: { ...current.lease, unreconciled: true }
+      }))
+      const spec = { method, operationId: operationId() }
+      record(
+        await assertHostAgreement(reconciling, spec, 'execution_owner_reconciling', async () => {
+          await setLease(reconciling, (current) => ({
+            ...current,
+            lease: { ...current.lease, unreconciled: false }
+          }))
+          return { harness: reconciling, spec }
+        })
+      )
+    }
+
+    const unreadable = await createHarness()
+    await unreadable.host.close(SESSION, 'evict')
+    const unreadableOpen = vi
+      .spyOn(AgentSessionJournal.prototype, 'open')
+      .mockRejectedValue(new Error('journal path unreadable'))
+    const unreadableSend = { method: 'agentSession.send' as const, operationId: operationId() }
+    record(
+      await assertHostAgreement(
+        unreadable,
+        unreadableSend,
+        'agent_session_journal_unreadable',
+        async () => {
+          unreadableOpen.mockRestore()
+          return { harness: unreadable, spec: unreadableSend }
+        }
+      )
+    )
+
+    const allPairs = METHODS.flatMap((method) =>
+      AGENT_SESSION_WIRE_REFUSAL_CODES.map((code) => `${method}:${code}` as Pair)
+    )
+    expect(new Set([...produced, ...UNREACHABLE])).toEqual(new Set(allPairs))
+    expect([...produced].filter((pair) => UNREACHABLE.has(pair))).toEqual([])
+  })
+})

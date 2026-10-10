@@ -1,0 +1,60 @@
+diff --git a/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm b/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm
+index d02e003a439e410ddab597b2c036256c80db0395..3caff21b0d00bfbc6dea3f8470e812b8343ac3a2 100644
+--- a/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm
++++ b/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm
+@@ -703,6 +703,7 @@ static NSSet<NSNumber *> *returnKeyTypesSet;
+ {
+   return {
+       .text = RCTStringFromNSString(_backedTextInputView.attributedText.string),
++      .isComposing = _backedTextInputView.markedTextRange != nil,
+       .selectionRange = [self _selectionRange],
+       .eventCount = static_cast<int>(_mostRecentEventCount),
+       .contentOffset = RCTPointFromCGPoint(_backedTextInputView.contentOffset),
+diff --git a/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.cpp b/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.cpp
+index a9bc219f8bf729111e907423ca61b991fd712b46..60e9c6f54edb295295d6e48d1d554499106b7e57 100644
+--- a/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.cpp
++++ b/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.cpp
+@@ -24,6 +24,10 @@ static jsi::Value textInputMetricsPayload(
+ 
+   payload.setProperty(runtime, "eventCount", textInputMetrics.eventCount);
+ 
++  if (textInputMetrics.isComposing.has_value()) {
++    payload.setProperty(runtime, "isComposing", *textInputMetrics.isComposing);
++  }
++
+   if (includeSelectionState) {
+     auto selection = jsi::Object(runtime);
+     selection.setProperty(
+diff --git a/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.h b/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.h
+index a3f2e01c130c1a53aee0b39e72927d21f2a6973d..c9d34f8b42644800b5c85e5be45b6ebfbe94a54d 100644
+--- a/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.h
++++ b/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.h
+@@ -7,6 +7,8 @@
+ 
+ #pragma once
+ 
++#include <optional>
++
+ #include <react/renderer/attributedstring/AttributedString.h>
+ #include <react/renderer/components/view/ViewEventEmitter.h>
+ 
+@@ -18,6 +20,7 @@ class TextInputEventEmitter : public ViewEventEmitter {
+ 
+   struct Metrics {
+     std::string text;
++    std::optional<bool> isComposing;
+     AttributedString::Range selectionRange;
+     // ScrollView-like metrics
+     Size contentSize;
+diff --git a/React/Fabric/Mounting/ComponentViews/Text/RCTParagraphComponentView.mm b/React/Fabric/Mounting/ComponentViews/Text/RCTParagraphComponentView.mm
+index 79ee7ffe43..956f189a1c 100644
+--- a/React/Fabric/Mounting/ComponentViews/Text/RCTParagraphComponentView.mm
++++ b/React/Fabric/Mounting/ComponentViews/Text/RCTParagraphComponentView.mm
+@@ -136,6 +136,7 @@ using namespace facebook::react;
+ - (void)prepareForRecycle
+ {
+   [super prepareForRecycle];
+   _textView.state = nullptr;
++  _textView.layoutMetrics = EmptyLayoutMetrics;
+   _accessibilityProvider = nil;
+ }

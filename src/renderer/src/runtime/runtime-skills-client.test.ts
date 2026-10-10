@@ -21,7 +21,6 @@ function discoveryResult(skillName: string): SkillDiscoveryResult {
         directoryPath: `/home/dev/.agents/skills/${skillName}`,
         skillFilePath: `/home/dev/.agents/skills/${skillName}/SKILL.md`,
         installed: true,
-        fileCount: 1,
         updatedAt: null
       }
     ],
@@ -78,6 +77,28 @@ describe('discoverSkillsForRuntimeTarget', () => {
     expect(discover).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
       expect.objectContaining({ selector: 'env-1', method: 'skills.discover', params: {} })
+    )
+  })
+
+  it('forwards portable inventory filters without client runtime identity', async () => {
+    const result = discoveryResult('orchestration')
+    runtimeEnvironmentCall.mockResolvedValueOnce({ id: 'skills', ok: true, result })
+
+    await discoverSkillsForRuntimeTarget(
+      { kind: 'environment', environmentId: 'env-1' },
+      {
+        runtime: 'wsl',
+        wslDistro: 'Ubuntu',
+        names: ['orchestration'],
+        sourceKinds: ['home']
+      }
+    )
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'skills.discover',
+        params: { names: ['orchestration'], sourceKinds: ['home'] }
+      })
     )
   })
 

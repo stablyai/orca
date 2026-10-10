@@ -36,6 +36,24 @@ describe('dropAgentResumeArgvFromCommand', () => {
     }
   })
 
+  it('leaves the Codex folder setting behind when dropping an AI Vault resume', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'codex',
+      providerSession: CODEX_SESSION,
+      cmdOverrides: {},
+      platform: 'darwin',
+      resumeInLaunchCwd: true
+    })
+
+    expect(
+      dropAgentResumeArgvFromCommand({
+        command: plan?.launchCommand ?? '',
+        agent: 'codex',
+        providerSession: CODEX_SESSION
+      })
+    ).toEqual({ status: 'dropped', command: "codex '-c' 'tui.resume_cwd=current'" })
+  })
+
   it('keeps the user CLI args that precede the resume argv', () => {
     expect(
       dropAgentResumeArgvFromCommand({
@@ -54,6 +72,27 @@ describe('dropAgentResumeArgvFromCommand', () => {
         providerSession: CODEX_SESSION
       })
     ).toEqual({ status: 'dropped', command: 'codex' })
+  })
+
+  it('drops the joined Copilot resume token and keeps the user args', () => {
+    const providerSession = {
+      key: 'session_id' as const,
+      id: '940237d9-c712-48e8-bca1-fd75fc4a8d4b'
+    }
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'copilot',
+      providerSession,
+      cmdOverrides: {},
+      agentArgs: '--yolo',
+      platform: 'darwin'
+    })
+    expect(
+      dropAgentResumeArgvFromCommand({
+        command: plan?.launchCommand ?? '',
+        agent: 'copilot',
+        providerSession
+      })
+    ).toEqual({ status: 'dropped', command: "copilot '--yolo'" })
   })
 
   it('reports absent when the command never carried the resume locator', () => {

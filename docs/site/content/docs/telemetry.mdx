@@ -1,0 +1,60 @@
+---
+title: Privacy & Telemetry
+description: What anonymous usage data Orca collects, what it never collects, and how to opt out.
+---
+
+import { ImagePlaceholder } from '@/components/docs/prose'
+
+This page describes the anonymous product-usage telemetry we collect in packaged Orca builds, what we never collect, and how to opt out.
+
+## Summary
+
+- **Anonymous.** Events are keyed by a random ID stored locally on your machine. No account, email, IP address, or user name is collected.
+- **No content.** We never transmit file contents, prompts, agent output, terminal output, repo names, branch names, URLs, paths, or commit messages.
+- **Always off when:** `DO_NOT_TRACK=1` or `ORCA_TELEMETRY_DISABLED=1` is set.
+
+## What we collect
+
+Alongside each event we include basic build and platform information: the Orca version, your operating system (e.g. `darwin` / `win32` / `linux`), CPU architecture, coarse OS release string, release channel (`stable` or `rc`), and the anonymous local ID described above. No hostname, no username, no IP.
+
+The categories of behavior we observe:
+
+- **Lifecycle** — when the app opens. Used to estimate daily, weekly, and monthly active users.
+- **Repos and workspaces** — when you add a repo or create a workspace. We record _how_ you did it (e.g. folder picker vs. clone URL; command palette vs. drag-and-drop), never the repo name, URL, path, branch name, or any free-form text. For a workspace create we also record how long it took and how that time split across its steps, whether a checkout Orca had prepared in advance was reused (and if so, what reset it needed, what prepared it, how long it took to prepare and how long it waited unused; if not, a fixed reason code), for a failed create which step it stopped in, plus coarse context: whether it came from the Orca window or from the CLI, phone or agent interface, whether Git ran locally, in WSL or over SSH, a bucketed worktree count, a bucketed count of the files the repo tracks, how many other creates and prepared-checkout jobs were running, and whether the repo has a post-checkout hook (never its contents).
+- **Agents** — which agents you use and their token counts. Never prompts or agent output.
+- **Agent errors** — a coarse error category and which agent kind was involved. We never see raw error messages or stack traces; per-incident detail stays in a local diagnostic trace file on your machine and only reaches Orca if you explicitly share a diagnostic bundle.
+- **Settings** — when you toggle one of a small whitelisted set of feature-flag or UX preferences. We record which preference changed and whether it's a boolean or an enum, never the raw value of any free-form setting.
+- **Privacy controls** — when you opt in or out of telemetry, so we can tell from aggregate data whether our consent UI is working.
+- **SSH remote runtime** — once per SSH host and outcome per app session, which runtime Orca used to run on that host and why, or that its runtime check could not be confirmed or failed: coarse host facts (operating system, CPU architecture, C library family and glibc minor version, and the host's Node.js major version when Orca runs on it), the category of any refusal (including security software blocking the runtime on Windows), whether a runtime was uploaded, and a coarse duration bucket. Never the hostname, user name, paths, or raw error text.
+
+Fields include fixed enum values, version strings, numeric counts and revisions, and random local IDs. Conversation IDs allow repeated token summaries for the same conversation to be associated; they are pseudonymous. No free-form strings from any UI input ever leave your machine.
+
+## What we never send
+
+- No file paths, repo names, branch names, URLs, commit messages, or current working directory.
+- No agent prompts, responses, or terminal contents.
+- No raw error messages or stack frames. Per-incident error context stays in a local diagnostic trace file on your machine and only reaches us if you explicitly share a diagnostic bundle.
+- No user account information (Orca has no account system).
+- No IP address and no precise geoip; country is the only geographic signal derived from the request.
+- No vendor-side user profile tied to your anonymous ID.
+
+## How to opt out
+
+You can disable telemetry in three ways. Any one of them is sufficient; they compose.
+
+1. **In the app.** Settings → Privacy → toggle "Share anonymous usage data" off. The change is immediate and persistent.
+
+<ImagePlaceholder
+  src="/docs/privacy-toggle.png"
+  caption="Settings → Privacy — toggle 'Share anonymous usage data' off to disable telemetry."
+/>
+2. **`DO_NOT_TRACK=1`** — community-standard environment variable. Disables transmission for that
+launch. Unsetting it restores your stored preference on the next launch. 3.
+**`ORCA_TELEMETRY_DISABLED=1`** — Orca-specific kill switch with the same semantics as
+`DO_NOT_TRACK`.
+
+## Where the data goes
+
+- **Vendor:** PostHog Cloud, **United States** region.
+- **Retention:** PostHog Cloud's plan-level default per their pricing page. We do not set a custom retention window.
+- **Access:** project membership is restricted to a small number of Orca maintainers.

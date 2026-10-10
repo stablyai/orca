@@ -1,0 +1,590 @@
+import { describe, expect, it, vi } from 'vitest'
+import { createStoreWithState, setupCodexUsageStoreEnv } from './store-test-harness'
+
+const { getPathMock } = vi.hoisted(() => ({
+  getPathMock: vi.fn(() => '/tmp/orca-test-userdata')
+}))
+
+vi.mock('electron', () => ({
+  app: {
+    getPath: getPathMock
+  }
+}))
+
+vi.mock('../usage/usage-scan-worker-spawn', () => ({
+  scanCodexUsageFilesViaWorker: vi.fn()
+}))
+
+describe('CodexUsageStore', () => {
+  setupCodexUsageStoreEnv(getPathMock)
+
+  it('calculates cost from uncached input plus cached input without double billing', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: [
+        {
+          day: '2026-04-09',
+          model: 'gpt-5',
+          projectKey: 'worktree:repo-1::/workspace/repo',
+          projectLabel: 'Repo',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo',
+          eventCount: 2,
+          inputTokens: 1000,
+          cachedInputTokens: 400,
+          outputTokens: 250,
+          reasoningOutputTokens: 100,
+          totalTokens: 1250,
+          hasInferredPricing: false,
+          longContextInputTokens: 0,
+          longContextCachedInputTokens: 0,
+          longContextOutputTokens: 0
+        }
+      ]
+    })
+
+    const summary = await store.getSummary('orca', '30d')
+
+    expect(summary.estimatedCostUsd).toBeCloseTo(0.0014)
+    expect(summary.totalTokens).toBe(1250)
+    expect(summary.reasoningOutputTokens).toBe(100)
+  })
+
+  it('prices current Codex models with current model rates', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: [
+        {
+          day: '2026-04-09',
+          model: 'gpt-5.2-codex',
+          projectKey: 'worktree:repo-1::/workspace/repo',
+          projectLabel: 'Repo',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo',
+          eventCount: 1,
+          inputTokens: 2_000_000,
+          cachedInputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+          reasoningOutputTokens: 100_000,
+          totalTokens: 3_000_000,
+          hasInferredPricing: false,
+          longContextInputTokens: 0,
+          longContextCachedInputTokens: 0,
+          longContextOutputTokens: 0
+        },
+        {
+          day: '2026-04-09',
+          model: 'gpt-5.3-codex',
+          projectKey: 'worktree:repo-1::/workspace/repo',
+          projectLabel: 'Repo',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo',
+          eventCount: 1,
+          inputTokens: 2_000_000,
+          cachedInputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+          reasoningOutputTokens: 100_000,
+          totalTokens: 3_000_000,
+          hasInferredPricing: false,
+          longContextInputTokens: 0,
+          longContextCachedInputTokens: 0,
+          longContextOutputTokens: 0
+        },
+        {
+          day: '2026-04-09',
+          model: 'gpt-5.4',
+          projectKey: 'worktree:repo-1::/workspace/repo',
+          projectLabel: 'Repo',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo',
+          eventCount: 1,
+          inputTokens: 2_000_000,
+          cachedInputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+          reasoningOutputTokens: 100_000,
+          totalTokens: 3_000_000,
+          hasInferredPricing: false,
+          longContextInputTokens: 0,
+          longContextCachedInputTokens: 0,
+          longContextOutputTokens: 0
+        },
+        {
+          day: '2026-04-09',
+          model: 'gpt-5.5',
+          projectKey: 'worktree:repo-1::/workspace/repo',
+          projectLabel: 'Repo',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo',
+          eventCount: 1,
+          inputTokens: 2_000_000,
+          cachedInputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+          reasoningOutputTokens: 100_000,
+          totalTokens: 3_000_000,
+          hasInferredPricing: false,
+          longContextInputTokens: 0,
+          longContextCachedInputTokens: 0,
+          longContextOutputTokens: 0
+        }
+      ]
+    })
+
+    const summary = await store.getSummary('orca', '30d')
+    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+
+    expect(summary.estimatedCostUsd).toBeCloseTo(85.1)
+    expect(breakdown.find((row) => row.key === 'gpt-5.2-codex')?.estimatedCostUsd).toBeCloseTo(
+      15.925
+    )
+    expect(breakdown.find((row) => row.key === 'gpt-5.3-codex')?.estimatedCostUsd).toBeCloseTo(
+      15.925
+    )
+    expect(breakdown.find((row) => row.key === 'gpt-5.4')?.estimatedCostUsd).toBeCloseTo(17.75)
+    expect(breakdown.find((row) => row.key === 'gpt-5.5')?.estimatedCostUsd).toBeCloseTo(35.5)
+  })
+
+  it('prices GPT-5.6 sol, terra, and luna with current OpenAI rates', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'].map((model) => ({
+        day: '2026-04-09',
+        model,
+        projectKey: 'worktree:repo-1::/workspace/repo',
+        projectLabel: 'Repo',
+        repoId: 'repo-1',
+        worktreeId: 'repo-1::/workspace/repo',
+        eventCount: 1,
+        inputTokens: 2_000_000,
+        cachedInputTokens: 1_000_000,
+        outputTokens: 1_000_000,
+        reasoningOutputTokens: 100_000,
+        totalTokens: 3_000_000,
+        hasInferredPricing: false,
+        longContextInputTokens: 0,
+        longContextCachedInputTokens: 0,
+        longContextOutputTokens: 0
+      }))
+    })
+
+    const summary = await store.getSummary('orca', '30d')
+    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+
+    expect(summary.estimatedCostUsd).toBeCloseTo(40.02)
+    expect(breakdown.find((row) => row.key === 'gpt-5.6-sol')?.estimatedCostUsd).toBeCloseTo(24.4)
+    expect(breakdown.find((row) => row.key === 'gpt-5.6-terra')?.estimatedCostUsd).toBeCloseTo(14.2)
+    expect(breakdown.find((row) => row.key === 'gpt-5.6-luna')?.estimatedCostUsd).toBeCloseTo(1.42)
+  })
+
+  it('normalizes GPT-5.6 reasoning suffixes before pricing', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: ['gpt-5.6-terra-high', 'gpt-5.6-luna(medium)'].map((model) => ({
+        day: '2026-04-09',
+        model,
+        projectKey: 'worktree:repo-1::/workspace/repo',
+        projectLabel: 'Repo',
+        repoId: 'repo-1',
+        worktreeId: 'repo-1::/workspace/repo',
+        eventCount: 1,
+        inputTokens: 100_000,
+        cachedInputTokens: 50_000,
+        outputTokens: 25_000,
+        reasoningOutputTokens: 5_000,
+        totalTokens: 125_000,
+        hasInferredPricing: false,
+        longContextInputTokens: 0,
+        longContextCachedInputTokens: 0,
+        longContextOutputTokens: 0
+      }))
+    })
+
+    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+
+    expect(breakdown.find((row) => row.key === 'gpt-5.6-terra-high')?.estimatedCostUsd).toBeCloseTo(
+      0.41
+    )
+    expect(
+      breakdown.find((row) => row.key === 'gpt-5.6-luna(medium)')?.estimatedCostUsd
+    ).toBeCloseTo(0.041)
+  })
+
+  it('prices the bare gpt-5.6 alias at Sol rates without shadowing the tier IDs', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: ['gpt-5.6', 'gpt-5.6-luna'].map((model) => ({
+        day: '2026-04-09',
+        model,
+        projectKey: 'worktree:repo-1::/workspace/repo',
+        projectLabel: 'Repo',
+        repoId: 'repo-1',
+        worktreeId: 'repo-1::/workspace/repo',
+        eventCount: 1,
+        inputTokens: 100_000,
+        cachedInputTokens: 50_000,
+        outputTokens: 25_000,
+        reasoningOutputTokens: 5_000,
+        totalTokens: 125_000,
+        hasInferredPricing: false,
+        longContextInputTokens: 0,
+        longContextCachedInputTokens: 0,
+        longContextOutputTokens: 0
+      }))
+    })
+
+    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+
+    expect(breakdown.find((row) => row.key === 'gpt-5.6')?.estimatedCostUsd).toBeCloseTo(0.72)
+    expect(breakdown.find((row) => row.key === 'gpt-5.6-luna')?.estimatedCostUsd).toBeCloseTo(0.041)
+  })
+
+  it('prices GPT-6 Astra with current OpenAI rates', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: [
+        {
+          day: '2026-04-09',
+          model: 'gpt-6-astra',
+          projectKey: 'worktree:repo-1::/workspace/repo',
+          projectLabel: 'Repo',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo',
+          eventCount: 1,
+          inputTokens: 2_000_000,
+          cachedInputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+          reasoningOutputTokens: 100_000,
+          totalTokens: 3_000_000,
+          hasInferredPricing: false,
+          longContextInputTokens: 0,
+          longContextCachedInputTokens: 0,
+          longContextOutputTokens: 0
+        }
+      ]
+    })
+
+    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+
+    expect(breakdown.find((row) => row.key === 'gpt-6-astra')?.estimatedCostUsd).toBeCloseTo(61)
+  })
+
+  it('normalizes GPT-6 Astra reasoning suffixes and snapshot IDs before pricing', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: ['gpt-6-astra-high', 'gpt-6-astra-2026-09-01'].map((model) => ({
+        day: '2026-04-09',
+        model,
+        projectKey: 'worktree:repo-1::/workspace/repo',
+        projectLabel: 'Repo',
+        repoId: 'repo-1',
+        worktreeId: 'repo-1::/workspace/repo',
+        eventCount: 1,
+        inputTokens: 100_000,
+        cachedInputTokens: 50_000,
+        outputTokens: 25_000,
+        reasoningOutputTokens: 5_000,
+        totalTokens: 125_000,
+        hasInferredPricing: false,
+        longContextInputTokens: 0,
+        longContextCachedInputTokens: 0,
+        longContextOutputTokens: 0
+      }))
+    })
+
+    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+
+    expect(breakdown.find((row) => row.key === 'gpt-6-astra-high')?.estimatedCostUsd).toBeCloseTo(
+      1.8
+    )
+    expect(
+      breakdown.find((row) => row.key === 'gpt-6-astra-2026-09-01')?.estimatedCostUsd
+    ).toBeCloseTo(1.8)
+  })
+
+  it('prices GPT-6 Sol and Luna with current OpenAI rates', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: ['gpt-6-sol', 'gpt-6-luna'].map((model) => ({
+        day: '2026-04-09',
+        model,
+        projectKey: 'worktree:repo-1::/workspace/repo',
+        projectLabel: 'Repo',
+        repoId: 'repo-1',
+        worktreeId: 'repo-1::/workspace/repo',
+        eventCount: 1,
+        inputTokens: 2_000_000,
+        cachedInputTokens: 1_000_000,
+        outputTokens: 1_000_000,
+        reasoningOutputTokens: 100_000,
+        totalTokens: 3_000_000,
+        hasInferredPricing: false,
+        longContextInputTokens: 0,
+        longContextCachedInputTokens: 0,
+        longContextOutputTokens: 0
+      }))
+    })
+
+    const summary = await store.getSummary('orca', '30d')
+    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+
+    expect(summary.hasUnpricedModels).toBe(false)
+    expect(breakdown.find((row) => row.key === 'gpt-6-sol')?.estimatedCostUsd).toBeCloseTo(12.2)
+    expect(breakdown.find((row) => row.key === 'gpt-6-luna')?.estimatedCostUsd).toBeCloseTo(0.61)
+  })
+
+  it('normalizes GPT-6 Sol and Luna reasoning suffixes before pricing', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: ['gpt-6-sol-high', 'gpt-6-luna(low)'].map((model) => ({
+        day: '2026-04-09',
+        model,
+        projectKey: 'worktree:repo-1::/workspace/repo',
+        projectLabel: 'Repo',
+        repoId: 'repo-1',
+        worktreeId: 'repo-1::/workspace/repo',
+        eventCount: 1,
+        inputTokens: 100_000,
+        cachedInputTokens: 50_000,
+        outputTokens: 25_000,
+        reasoningOutputTokens: 5_000,
+        totalTokens: 125_000,
+        hasInferredPricing: false,
+        longContextInputTokens: 0,
+        longContextCachedInputTokens: 0,
+        longContextOutputTokens: 0
+      }))
+    })
+
+    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+
+    expect(breakdown.find((row) => row.key === 'gpt-6-sol-high')?.estimatedCostUsd).toBeCloseTo(
+      0.36
+    )
+    expect(breakdown.find((row) => row.key === 'gpt-6-luna(low)')?.estimatedCostUsd).toBeCloseTo(
+      0.018
+    )
+  })
+
+  it('prices gpt-5.2-pro at its own rate and accepts parenthesized max/ultra tiers', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: ['gpt-5.2-pro', 'gpt-6-sol(ultra)', 'gpt-5.6-luna(max)'].map((model) => ({
+        day: '2026-04-09',
+        model,
+        projectKey: 'worktree:repo-1::/workspace/repo',
+        projectLabel: 'Repo',
+        repoId: 'repo-1',
+        worktreeId: 'repo-1::/workspace/repo',
+        eventCount: 1,
+        inputTokens: 100_000,
+        cachedInputTokens: 50_000,
+        outputTokens: 25_000,
+        reasoningOutputTokens: 5_000,
+        totalTokens: 125_000,
+        hasInferredPricing: false,
+        longContextInputTokens: 0,
+        longContextCachedInputTokens: 0,
+        longContextOutputTokens: 0
+      }))
+    })
+
+    const summary = await store.getSummary('orca', '30d')
+    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+
+    expect(summary.hasUnpricedModels).toBe(false)
+    expect(breakdown.find((row) => row.key === 'gpt-5.2-pro')?.estimatedCostUsd).toBeCloseTo(6.3)
+    expect(breakdown.find((row) => row.key === 'gpt-6-sol(ultra)')?.estimatedCostUsd).toBeCloseTo(
+      0.36
+    )
+    expect(breakdown.find((row) => row.key === 'gpt-5.6-luna(max)')?.estimatedCostUsd).toBeCloseTo(
+      0.041
+    )
+  })
+
+  it('flags a named model with no pricing entry so its missing tokens are declared', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: [
+        {
+          day: '2026-04-09',
+          model: 'gpt-5',
+          projectKey: 'worktree:repo-1::/workspace/repo',
+          projectLabel: 'Repo',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo',
+          eventCount: 1,
+          inputTokens: 1000,
+          cachedInputTokens: 400,
+          outputTokens: 250,
+          reasoningOutputTokens: 100,
+          totalTokens: 1250,
+          hasInferredPricing: false,
+          longContextInputTokens: 0,
+          longContextCachedInputTokens: 0,
+          longContextOutputTokens: 0
+        },
+        {
+          day: '2026-04-09',
+          model: 'gpt-7-unreleased',
+          projectKey: 'worktree:repo-1::/workspace/repo',
+          projectLabel: 'Repo',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo',
+          eventCount: 1,
+          inputTokens: 5_000_000,
+          cachedInputTokens: 0,
+          outputTokens: 5_000_000,
+          reasoningOutputTokens: 0,
+          totalTokens: 10_000_000,
+          hasInferredPricing: false,
+          longContextInputTokens: 0,
+          longContextCachedInputTokens: 0,
+          longContextOutputTokens: 0
+        }
+      ]
+    })
+
+    const summary = await store.getSummary('orca', '30d')
+
+    expect(summary.hasUnpricedModels).toBe(true)
+    // The unpriced row's ten million tokens are absent from the total it sits beside.
+    expect(summary.estimatedCostUsd).toBeCloseTo(0.0033, 6)
+  })
+
+  it('keeps the unpriced flag off for priced rows and for rows with no model name', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: [
+        {
+          day: '2026-04-09',
+          model: 'gpt-6-astra',
+          projectKey: 'worktree:repo-1::/workspace/repo',
+          projectLabel: 'Repo',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo',
+          eventCount: 1,
+          inputTokens: 1000,
+          cachedInputTokens: 400,
+          outputTokens: 250,
+          reasoningOutputTokens: 100,
+          totalTokens: 1250,
+          hasInferredPricing: false,
+          longContextInputTokens: 0,
+          longContextCachedInputTokens: 0,
+          longContextOutputTokens: 0
+        },
+        {
+          day: '2026-04-09',
+          model: null,
+          projectKey: 'worktree:repo-1::/workspace/repo',
+          projectLabel: 'Repo',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo',
+          eventCount: 1,
+          inputTokens: 1000,
+          cachedInputTokens: 0,
+          outputTokens: 500,
+          reasoningOutputTokens: 0,
+          totalTokens: 1500,
+          hasInferredPricing: true,
+          longContextInputTokens: 0,
+          longContextCachedInputTokens: 0,
+          longContextOutputTokens: 0
+        }
+      ]
+    })
+
+    const summary = await store.getSummary('orca', '30d')
+
+    expect(summary.hasUnpricedModels).toBe(false)
+  })
+
+  it('normalizes Codex model variants and reasoning suffixes before pricing', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: [
+        {
+          day: '2026-04-09',
+          model: 'gpt-5.4-mini-high',
+          projectKey: 'worktree:repo-1::/workspace/repo',
+          projectLabel: 'Repo',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo',
+          eventCount: 1,
+          inputTokens: 1_000_000,
+          cachedInputTokens: 500_000,
+          outputTokens: 1_000_000,
+          reasoningOutputTokens: 100_000,
+          totalTokens: 2_000_000,
+          hasInferredPricing: false,
+          longContextInputTokens: 0,
+          longContextCachedInputTokens: 0,
+          longContextOutputTokens: 0
+        },
+        {
+          day: '2026-04-09',
+          model: 'gpt-5.3-codex-spark-xhigh',
+          projectKey: 'worktree:repo-1::/workspace/repo',
+          projectLabel: 'Repo',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo',
+          eventCount: 1,
+          inputTokens: 2_000_000,
+          cachedInputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+          reasoningOutputTokens: 100_000,
+          totalTokens: 3_000_000,
+          hasInferredPricing: false,
+          longContextInputTokens: 0,
+          longContextCachedInputTokens: 0,
+          longContextOutputTokens: 0
+        },
+        {
+          day: '2026-04-09',
+          model: 'gpt-5.5(xhigh)',
+          projectKey: 'worktree:repo-1::/workspace/repo',
+          projectLabel: 'Repo',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo',
+          eventCount: 1,
+          inputTokens: 100_000,
+          cachedInputTokens: 50_000,
+          outputTokens: 25_000,
+          reasoningOutputTokens: 5_000,
+          totalTokens: 125_000,
+          hasInferredPricing: false,
+          longContextInputTokens: 0,
+          longContextCachedInputTokens: 0,
+          longContextOutputTokens: 0
+        }
+      ]
+    })
+
+    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+
+    expect(breakdown.find((row) => row.key === 'gpt-5.4-mini-high')?.estimatedCostUsd).toBeCloseTo(
+      4.9125
+    )
+    expect(
+      breakdown.find((row) => row.key === 'gpt-5.3-codex-spark-xhigh')?.estimatedCostUsd
+    ).toBeCloseTo(15.925)
+    expect(breakdown.find((row) => row.key === 'gpt-5.5(xhigh)')?.estimatedCostUsd).toBeCloseTo(
+      1.025
+    )
+  })
+
+  it('keeps cached input out of the full-price input bucket for GPT-5.5 totals', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: [
+        {
+          day: '2026-04-09',
+          model: 'gpt-5.5',
+          projectKey: 'worktree:repo-1::/workspace/repo',
+          projectLabel: 'Repo',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo',
+          eventCount: 1,
+          inputTokens: 491_053_514,
+          cachedInputTokens: 459_283_584,
+          outputTokens: 1_944_952,
+          reasoningOutputTokens: 551_764,
+          totalTokens: 492_998_466,
+          hasInferredPricing: false,
+          longContextInputTokens: 0,
+          longContextCachedInputTokens: 0,
+          longContextOutputTokens: 0
+        }
+      ]
+    })
+
+    const summary = await store.getSummary('orca', '30d')
+
+    expect(summary.estimatedCostUsd).toBeCloseTo(446.840002)
+  })
+})

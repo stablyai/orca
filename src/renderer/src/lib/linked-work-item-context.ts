@@ -1,4 +1,4 @@
-import type { TaskProvider } from '../../../shared/types'
+import type { TaskProvider } from '../../../shared/task-providers'
 
 export type LinkedWorkItemContext = {
   provider: TaskProvider
@@ -148,32 +148,6 @@ function capLinkedContextSourceLines(args: { sourceLines: string; fixedChars: nu
   const contentBudget = Math.max(0, sourceBudget - truncationLine.length - 1)
   const capped = sourceLines.slice(0, contentBudget).trimEnd()
   return [capped, truncationLine].filter(Boolean).join('\n')
-}
-
-export function getLinkedWorkItemPromptContext(
-  linkedWorkItem:
-    | (Pick<
-        { provider?: TaskProvider; url: string; title?: string; linearIdentifier?: string },
-        'provider' | 'url' | 'title' | 'linearIdentifier'
-      > & { linkedContext?: LinkedWorkItemContext })
-    | null
-    | undefined
-): { linkedUrls: string[]; linkedContextBlocks: string[] } {
-  if (isLinearWorkItemReference(linkedWorkItem)) {
-    const linearBlock = buildLinearLaunchContextBlock({
-      provider: linkedWorkItem?.provider,
-      identifier: linkedWorkItem?.linearIdentifier,
-      title: linkedWorkItem?.title,
-      url: linkedWorkItem?.url
-    })
-    return linearBlock
-      ? { linkedUrls: [], linkedContextBlocks: [linearBlock] }
-      : { linkedUrls: [], linkedContextBlocks: [] }
-  }
-  const linkedUrl = linkedWorkItem?.url?.trim()
-  return linkedUrl
-    ? { linkedUrls: [linkedUrl], linkedContextBlocks: [] }
-    : { linkedUrls: [], linkedContextBlocks: [] }
 }
 
 export function getLaunchableWorkItemDraftContent(args: {

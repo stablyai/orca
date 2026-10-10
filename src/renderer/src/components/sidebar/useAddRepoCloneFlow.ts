@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { getCloneDestinationAutoFill } from './clone-defaults'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import { translate } from '@/i18n/i18n'
@@ -14,6 +14,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export function useAddRepoCloneFlow({
   step,
+  hostId,
   activeRuntimeEnvironmentId,
   sshTargetId,
   workspaceDir,
@@ -21,6 +22,8 @@ export function useAddRepoCloneFlow({
   onGitRepoReady
 }: {
   step: AddRepoDialogStep
+  /** The dialog's chosen host; null while it is unresolved, which blocks the clone. */
+  hostId?: string | null
   activeRuntimeEnvironmentId: string | null | undefined
   sshTargetId?: string | null
   workspaceDir: string | null | undefined
@@ -117,7 +120,8 @@ export function useAddRepoCloneFlow({
 
   const handleClone = useCallback(async (): Promise<void> => {
     const trimmedUrl = cloneUrl.trim()
-    if (!trimmedUrl || !cloneDestination.trim()) {
+    // Why: without a resolved host the clone below would land on this computer.
+    if (!trimmedUrl || !cloneDestination.trim() || hostId === null) {
       return
     }
     const requestHostToken = hostTokenRef.current
@@ -189,6 +193,7 @@ export function useAddRepoCloneFlow({
     cloneUrl,
     cloneDestination,
     fetchWorktrees,
+    hostId,
     onGitRepoReady,
     sshTargetId
   ])

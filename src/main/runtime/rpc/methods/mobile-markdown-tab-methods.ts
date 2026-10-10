@@ -1,0 +1,24 @@
+import { defineMethod } from '../core'
+import { ActivateTab, SaveMarkdownTab } from './session-tabs-schemas'
+
+export const MOBILE_MARKDOWN_TAB_METHODS = [
+  defineMethod({
+    name: 'markdown.readTab',
+    permission: 'workspace',
+    params: ActivateTab,
+    handler: async (params, { runtime }) =>
+      runtime.readMobileMarkdownTab(params.worktree, params.tabId)
+  }),
+  defineMethod({
+    name: 'markdown.saveTab',
+    permission: 'workspace',
+    params: SaveMarkdownTab,
+    handler: async (params, { runtime }) =>
+      runtime.saveMobileMarkdownTab(
+        params.worktree,
+        params.tabId,
+        params.baseVersion,
+        params.content
+      )
+  })
+]

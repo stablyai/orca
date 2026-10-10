@@ -1,4 +1,4 @@
-import type { DiffComment } from '../../../shared/types'
+import type { DiffComment } from '../../../shared/diff-comment-types'
 import type { AppState } from './types'
 import { getIndexedWorktreeById } from './worktree-repo-index'
 import { findFolderWorkspaceOwner } from '@/lib/folder-workspace-runtime-owner'

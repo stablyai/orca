@@ -1,13 +1,8 @@
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
-import {
-  getWorkspaceCleanupGitLabel,
-  hasWorkspaceCleanupLocalContext,
-  type WorkspaceCleanupReviewInfo
-} from './workspace-cleanup-presentation'
+import { getWorkspaceCleanupGitLabel } from './workspace-cleanup-presentation'
 import {
   formatUnpushedCommitCount,
-  formatWorkspaceCleanupContextCount,
   formatWorkspaceCleanupContextDetail,
   formatWorkspaceCleanupGitStatusLabel,
   getGitStatusUnknownLabel,
@@ -23,70 +18,56 @@ export function getWorkspaceCleanupBlockerLabels(candidate: WorkspaceCleanupCand
   return candidate.blockers.map((blocker) => getWorkspaceCleanupBlockerLabel(blocker))
 }
 
-export function getCandidateStatus(candidate: WorkspaceCleanupCandidate): {
+export function getCandidateFactStatuses(candidate: WorkspaceCleanupCandidate): {
   label: string
   tone: StatusPillTone
-} {
-  if (candidate.blockers.includes('dismissed')) {
-    return {
-      label: translate(
-        'auto.components.workspace.cleanup.WorkspaceCleanupDialog.e8b3741ff7',
-        'Ignored'
-      ),
-      tone: 'neutral'
-    }
-  }
-  if (candidate.tier === 'ready') {
-    return {
-      label: candidate.reasons.includes('archived')
-        ? translate(
-            'auto.components.workspace.cleanup.WorkspaceCleanupDialog.archivedStatus',
-            'Archived'
-          )
-        : translate(
-            'auto.components.workspace.cleanup.WorkspaceCleanupDialog.readyStatus',
-            'Ready'
-          ),
-      tone: 'ready'
-    }
-  }
+}[] {
   if (candidate.blockers.length > 0) {
-    return { label: getWorkspaceCleanupBlockerLabel(candidate.blockers[0]), tone: 'neutral' }
+    return candidate.blockers.map((blocker) => ({
+      label:
+        blocker === 'dismissed'
+          ? translate(
+              'auto.components.workspace.cleanup.WorkspaceCleanupDialog.e8b3741ff7',
+              'Ignored'
+            )
+          : getWorkspaceCleanupBlockerLabel(blocker),
+      tone: blocker === 'git-status-error' || blocker === 'unknown-base' ? 'destructive' : 'neutral'
+    }))
   }
   if (candidate.git.upstreamAhead && candidate.git.upstreamAhead > 0) {
-    return {
-      label: translate(
-        'auto.components.workspace.cleanup.WorkspaceCleanupDialog.9623a5107d',
-        'Unpushed commits'
-      ),
-      tone: 'review'
-    }
+    return [
+      {
+        label: translate(
+          'auto.components.workspace.cleanup.WorkspaceCleanupDialog.9623a5107d',
+          'Unpushed commits'
+        ),
+        tone: 'review'
+      }
+    ]
   }
   if (candidate.git.clean === false) {
-    return {
-      label: translate(
-        'auto.components.workspace.cleanup.WorkspaceCleanupDialog.e97e4580c7',
-        'Dirty'
-      ),
-      tone: 'review'
-    }
+    return [
+      {
+        label: translate(
+          'auto.components.workspace.cleanup.WorkspaceCleanupDialog.e97e4580c7',
+          'Dirty'
+        ),
+        tone: 'review'
+      }
+    ]
   }
-  if (candidate.tier === 'review') {
-    return {
-      label: translate(
-        'auto.components.workspace.cleanup.WorkspaceCleanupDialog.0a2e3c7cba',
-        'Review'
-      ),
-      tone: 'review'
-    }
+  if (candidate.reasons.includes('archived')) {
+    return [
+      {
+        label: translate(
+          'auto.components.workspace.cleanup.WorkspaceCleanupDialog.archivedStatus',
+          'Archived'
+        ),
+        tone: 'neutral'
+      }
+    ]
   }
-  return {
-    label: translate(
-      'auto.components.workspace.cleanup.WorkspaceCleanupDialog.c4f4782c02',
-      'Not suggested'
-    ),
-    tone: 'neutral'
-  }
+  return []
 }
 
 export function formatGitStatus(candidate: WorkspaceCleanupCandidate): string {
@@ -105,7 +86,7 @@ export function formatBranchSafetyDetails(candidate: WorkspaceCleanupCandidate):
   return details
 }
 
-export function formatContextDetails(candidate: WorkspaceCleanupCandidate): string | null {
+export function formatContextDetailLabels(candidate: WorkspaceCleanupCandidate): string[] {
   const parts: string[] = []
   if (candidate.localContext.terminalTabCount > 0) {
     parts.push(
@@ -130,15 +111,26 @@ export function formatContextDetails(candidate: WorkspaceCleanupCandidate): stri
       formatWorkspaceCleanupContextDetail('agent', candidate.localContext.retainedDoneAgentCount)
     )
   }
+  return parts
+}
+
+export function formatContextDetails(candidate: WorkspaceCleanupCandidate): string | null {
+  const parts = formatContextDetailLabels(candidate)
   return parts.length > 0 ? parts.join(', ') : null
 }
 
 export function getDirtyGitLabel(candidate: WorkspaceCleanupCandidate): string | null {
-  if (
-    candidate.blockers.includes('unknown-base') ||
-    candidate.blockers.includes('git-status-error')
-  ) {
-    return null
+  if (candidate.blockers.includes('git-status-error')) {
+    return translate(
+      'components.workspace.cleanup.browse.gitStatusCheckFailed',
+      'Git status check failed'
+    )
+  }
+  if (candidate.blockers.includes('unknown-base')) {
+    return translate(
+      'components.workspace.cleanup.browse.gitStatusUnverified',
+      'Git status could not be verified'
+    )
   }
   if (candidate.blockers.includes('unpushed-commits')) {
     if (candidate.git.upstreamAhead && candidate.git.upstreamAhead > 0) {
@@ -159,38 +151,22 @@ export function getDirtyGitLabel(candidate: WorkspaceCleanupCandidate): string |
 }
 
 export function shouldShowGitMetadataChip(candidate: WorkspaceCleanupCandidate): boolean {
-  return (
-    !candidate.blockers.includes('unknown-base') &&
-    !candidate.blockers.includes('git-status-error') &&
-    !hasGitStatusPill(candidate)
-  )
+  return !hasGitStatusPill(candidate)
 }
 
 function hasGitStatusPill(candidate: WorkspaceCleanupCandidate): boolean {
   if (
     candidate.blockers.includes('dirty-files') ||
-    candidate.blockers.includes('unpushed-commits')
+    candidate.blockers.includes('unpushed-commits') ||
+    candidate.blockers.includes('unknown-base') ||
+    candidate.blockers.includes('git-status-error')
   ) {
     return true
   }
-  if (candidate.blockers.length > 0 || candidate.tier === 'ready') {
+  if (candidate.blockers.length > 0) {
     return false
   }
   return (candidate.git.upstreamAhead ?? 0) > 0 || candidate.git.clean === false
-}
-
-export function getReviewPillTone(reviewInfo: WorkspaceCleanupReviewInfo): StatusPillTone {
-  if (reviewInfo.state === 'open' || reviewInfo.state === 'draft') {
-    return 'review'
-  }
-  return 'neutral'
-}
-
-export function getContextPillLabel(candidate: WorkspaceCleanupCandidate): string | null {
-  if (!hasWorkspaceCleanupLocalContext(candidate)) {
-    return null
-  }
-  return formatWorkspaceCleanupContextCount(getContextCount(candidate))
 }
 
 export function getContextCount(candidate: WorkspaceCleanupCandidate): number {

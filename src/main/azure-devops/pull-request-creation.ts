@@ -1,3 +1,5 @@
+import type { ExecutionHostId } from '../../shared/execution-host'
+import { hostedReviewSshConnectionId } from '../source-control/hosted-review-execution-host'
 import { Buffer } from 'node:buffer'
 import type { CreateHostedReviewInput, CreateHostedReviewResult } from '../../shared/hosted-review'
 import {
@@ -169,7 +171,7 @@ async function findExistingPullRequest(
 export async function createAzureDevOpsPullRequest(
   repoPath: string,
   input: CreateHostedReviewInput,
-  connectionId?: string | null
+  executionHostId: ExecutionHostId
 ): Promise<CreateHostedReviewResult> {
   if (input.provider !== 'azure-devops') {
     return {
@@ -178,6 +180,9 @@ export async function createAzureDevOpsPullRequest(
       error: 'Creating reviews for this provider is not supported yet.'
     }
   }
+
+  // The Azure DevOps REST calls run on this client; only the git reads under them are routed.
+  const connectionId = hostedReviewSshConnectionId(executionHostId)
 
   const repo = await getAzureDevOpsRepoRef(repoPath, connectionId)
   if (!repo) {

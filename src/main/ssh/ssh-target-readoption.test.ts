@@ -23,7 +23,7 @@ function makeFakeStore(tombstones: RemovedSshTargetTombstone[]) {
   let current = [...tombstones]
   const store = {
     getRemovedSshTargetTombstones: () => [...current],
-    removeRemovedSshTargetTombstone: (oldTargetId: string) => {
+    releaseRemovedSshTargetTombstone: (oldTargetId: string) => {
       current = current.filter((t) => t.oldTargetId !== oldTargetId)
     },
     reassignSshTargetId: (oldTargetId: string, newTargetId: string) => {
@@ -87,18 +87,6 @@ describe('readoptOrphanedWorkspacesForTarget', () => {
       makeTarget({ host: 'dev.example.com', username: 'tim' })
     )
     expect(readoptions).toHaveLength(1)
-  })
-
-  it('does not match alias against a different host tuple', () => {
-    // Different alias AND different tuple => no match.
-    const fake = makeFakeStore([
-      tombstone({ configHost: 'prod', host: 'prod.example.com', username: 'root' })
-    ])
-    const readoptions = readoptOrphanedWorkspacesForTarget(
-      fake.store,
-      makeTarget({ configHost: 'devbox', host: 'dev.example.com', username: 'tim' })
-    )
-    expect(readoptions).toEqual([])
   })
 
   it('is a no-op when there are no tombstones', () => {

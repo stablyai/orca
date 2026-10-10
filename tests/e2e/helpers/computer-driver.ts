@@ -10,6 +10,7 @@ import {
   stopOrcaRuntime,
   type CliResult
 } from './computer-cli-driver'
+import { quotePowerShellLiteral } from '../../../src/shared/powershell-native-argument'
 
 const execFileAsync = promisify(execFile)
 let textEditTempDir: string | null = null
@@ -185,7 +186,7 @@ export async function ensureNotepadLaunched(): Promise<void> {
     '-NoProfile',
     '-NonInteractive',
     '-Command',
-    `Start-Process notepad.exe -ArgumentList ${powerShellSingleQuoted(filePath)}`
+    `Start-Process notepad.exe -ArgumentList ${quotePowerShellLiteral(filePath)}`
   ])
   notepadAppSelector = `pid:${await findNotepadWindowPid(filePath)}`
 }
@@ -232,7 +233,7 @@ function delay(ms: number): Promise<void> {
 async function findNotepadWindowPid(filePath: string): Promise<number> {
   const targetName = filePath.split(/[\\/]/).at(-1) ?? filePath
   const script = [
-    `$targetName = ${powerShellSingleQuoted(targetName)}`,
+    `$targetName = ${quotePowerShellLiteral(targetName)}`,
     '$deadline = (Get-Date).AddSeconds(15)',
     '$target = $null',
     'while ((Get-Date) -lt $deadline -and $null -eq $target) {',
@@ -260,10 +261,6 @@ async function findNotepadWindowPid(filePath: string): Promise<number> {
   return Number.parseInt(result.stdout.trim(), 10)
 }
 
-function powerShellSingleQuoted(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`
-}
-
 function escapeAppleScript(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')
 }
@@ -283,6 +280,8 @@ function safariDraftFixtureHtml(title: string): string {
     '<label>Body <textarea id="body" aria-label="Body"></textarea></label>',
     "<button id=\"save\" onclick=\"document.getElementById('status').textContent = 'Draft ready: ' + document.getElementById('recipient').value + ' / ' + document.getElementById('body').value\">Save draft</button>",
     '<p id="status" role="status">Draft empty</p>',
+    '<button id="middle-click-target" onauxclick="if (event.button === 1) document.getElementById(\'middle-click-status\').textContent = \'Middle click received\'">Middle click receiver</button>',
+    '<p id="middle-click-status" role="status">Middle click waiting</p>',
     '</main>',
     '</body>',
     '</html>'

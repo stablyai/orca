@@ -159,7 +159,11 @@ function buildQueryCommand(argv: string[], shell: AgentStartupShell): string {
   // Why: a fixed single-quote-safe wrapper parses in POSIX shells and pwsh;
   // the dynamic argv is decoded only after entering the known `sh` grammar.
   const script = `${POSIX_QUERY_VARIABLE}="\${${ORCA_HERMES_STARTUP_QUERY_ENV}}"; unset ${ORCA_HERMES_STARTUP_QUERY_ENV}; eval "$(printf %b "${encodedInvocation}")"`
-  return `sh -c ${quoteStartupArg(script, 'posix')}`
+  // Why `shell` and not 'posix': the body runs under `sh`, but the quoting around
+  // it is parsed by the shell that types the line. Today's payload survives sh
+  // quoting in fish only because its escapes happen to be `\0NNN` and never `\\`
+  // — quote for the real dialect so that stays an implementation detail.
+  return `sh -c ${quoteStartupArg(script, shell)}`
 }
 
 export function planHermesStartupQuery(args: {
@@ -181,7 +185,10 @@ export function planHermesStartupQuery(args: {
     return null
   }
   const command = buildQueryCommand(argv, args.shell)
-  const env = { ...args.agentEnv, [ORCA_HERMES_STARTUP_QUERY_ENV]: args.prompt }
+  const env = {
+    ...args.agentEnv,
+    [ORCA_HERMES_STARTUP_QUERY_ENV]: args.prompt
+  }
   const envSize = Object.entries(env).reduce((total, [key, value]) => {
     if (args.platform === 'win32') {
       return total + key.length + value.length + 2

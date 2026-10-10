@@ -17,6 +17,8 @@ import type Database from '../sqlite/sync-database'
 import type { HostCliPassthroughOptions } from './ssh-remote-cli-host-passthrough'
 import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
 import { acknowledgeRemoteOrcaCliPostOutput } from './ssh-remote-orchestration-post-output'
+import { CONTROL_GRANTED_SSH_BRIDGE_SCOPE } from './ssh-bridge-caller-scope.test-fixture'
+import { createRootDispatch } from '../runtime/orchestration/db/root-dispatch-test-fixture'
 
 const LEGACY_FALLBACK_OPTIONS: HostCliPassthroughOptions = {
   execPath: '/host/electron',
@@ -57,7 +59,7 @@ function createLegacyRuntime() {
     runId: run.id,
     createdByTerminalHandle: COORDINATOR_HANDLE
   })
-  const dispatch = db.createDispatchContext(task.id, WORKER_HANDLE, WORKER_PANE)
+  const dispatch = createRootDispatch(db, task.id, WORKER_HANDLE, WORKER_PANE)
   const sqlite = (db as unknown as { db: Database.Database }).db
   sqlite
     .prepare(
@@ -136,6 +138,7 @@ describe('legacy SSH orchestration fallback', () => {
       subject: 'retained SSH mail'
     })
     const request = {
+      callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
       argv: ['orchestration', 'check', '--unread', '--inject', '--json'],
       cwd: '/home/alice/repo',
       env: WORKER_ENV,
@@ -163,6 +166,7 @@ describe('legacy SSH orchestration fallback', () => {
       expect(db.getMessageById(message.id)?.read).toBe(0)
 
       await acknowledgeRemoteOrcaCliPostOutput(runtime, {
+        callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
         postOutput: first.postOutput!,
         env: WORKER_ENV,
         runtimeAuthority: RUNTIME_AUTHORITY
@@ -191,6 +195,7 @@ describe('legacy SSH orchestration fallback', () => {
       const peek = await runRemoteOrcaCli(
         runtime,
         {
+          callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
           argv: ['orchestration', 'check', '--peek', '--format', '--json'],
           cwd: '/home/alice/repo',
           env: WORKER_ENV,
@@ -245,6 +250,7 @@ describe('legacy SSH orchestration fallback', () => {
       const checked = await runRemoteOrcaCli(
         runtime,
         {
+          callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
           ...baseRequest,
           argv: ['orchestration', 'check', '--run', run.id]
         },
@@ -257,6 +263,7 @@ describe('legacy SSH orchestration fallback', () => {
       const checkedJson = await runRemoteOrcaCli(
         runtime,
         {
+          callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
           ...baseRequest,
           argv: ['orchestration', 'check', '--run', run.id, '--json']
         },
@@ -270,6 +277,7 @@ describe('legacy SSH orchestration fallback', () => {
       const acknowledged = await runRemoteOrcaCli(
         runtime,
         {
+          callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
           ...baseRequest,
           argv: [
             'orchestration',
@@ -305,10 +313,11 @@ describe('legacy SSH orchestration fallback', () => {
       '--timeout-ms',
       '1',
       '--retry-request',
-      'ssh-question-1',
+      '55555555-5555-4555-8555-555555555555',
       '--json'
     ]
     const request = {
+      callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
       argv,
       cwd: '/home/alice/repo',
       env: WORKER_ENV,
@@ -365,6 +374,7 @@ describe('legacy SSH orchestration fallback', () => {
       const result = await runRemoteOrcaCli(
         runtime,
         {
+          callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
           argv: ['orchestration', 'ask', '--resume', pending.question.message_id, '--json'],
           cwd: '/home/alice/repo',
           env: WORKER_ENV,
@@ -388,12 +398,99 @@ describe('legacy SSH orchestration fallback', () => {
       expect(db.getMessageById(answer.message.id)?.read).toBe(0)
 
       await acknowledgeRemoteOrcaCliPostOutput(runtime, {
+        callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
         postOutput: result.postOutput!,
         env: WORKER_ENV,
         runtimeAuthority: RUNTIME_AUTHORITY
       })
 
       expect(db.getMessageById(answer.message.id)?.read).toBe(1)
+    } finally {
+      db.close()
+    }
+  })
+
+  // Why: the shim parses its own argv, so a shell-emptied --retry-request used to fall through to
+  // undefined and send worker_done under a fresh identity (#15180).
+  it.each([
+    ['valueless', ['--retry-request', '--json'], 'requires a value'],
+    ['non-UUID', ['--retry-request', 'ssh-worker-done-1', '--json'], 'must be the UUID']
+  ])(
+    'refuses a %s --retry-request instead of minting a new send identity',
+    async (_label, retryArgv, expectedMessage) => {
+      const { db, runtime } = createLegacyRuntime()
+      const sqlite = (db as unknown as { db: Database.Database }).db
+      const countMessages = (): number =>
+        (sqlite.prepare('SELECT COUNT(*) AS count FROM messages').get() as { count: number }).count
+      const before = countMessages()
+
+      try {
+        const result = await runRemoteOrcaCli(
+          runtime,
+          {
+            callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
+            argv: [
+              'orchestration',
+              'send',
+              '--to',
+              COORDINATOR_HANDLE,
+              '--type',
+              'worker_done',
+              '--subject',
+              'done',
+              ...retryArgv
+            ],
+            cwd: '/home/alice/repo',
+            env: WORKER_ENV,
+            runtimeAuthority: RUNTIME_AUTHORITY
+          },
+          LEGACY_FALLBACK_OPTIONS
+        )
+
+        expect(result.exitCode).toBe(1)
+        expect(JSON.parse(result.stdout)).toMatchObject({
+          error: { code: 'invalid_argument', message: expect.stringContaining(expectedMessage) }
+        })
+        expect(countMessages()).toBe(before)
+      } finally {
+        db.close()
+      }
+    }
+  )
+
+  // `check` and `ask` mint their own mutation identity when the flag is absent, so a rejected
+  // value must not fall through to a fresh one and re-run the mutation.
+  it.each([
+    ['check', ['orchestration', 'check', '--terminal', COORDINATOR_HANDLE]],
+    ['ask', ['orchestration', 'ask', '--from', WORKER_HANDLE, '--question', 'continue?']]
+  ])('refuses a valueless --retry-request on orchestration %s', async (_label, commandArgv) => {
+    const { db, runtime } = createLegacyRuntime()
+    const sqlite = (db as unknown as { db: Database.Database }).db
+    const countMessages = (): number =>
+      (sqlite.prepare('SELECT COUNT(*) AS count FROM messages').get() as { count: number }).count
+    const before = countMessages()
+
+    try {
+      const result = await runRemoteOrcaCli(
+        runtime,
+        {
+          callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
+          argv: [...commandArgv, '--retry-request', '--json'],
+          cwd: '/home/alice/repo',
+          env: WORKER_ENV,
+          runtimeAuthority: RUNTIME_AUTHORITY
+        },
+        LEGACY_FALLBACK_OPTIONS
+      )
+
+      expect(result.exitCode).toBe(1)
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        error: {
+          code: 'invalid_argument',
+          message: expect.stringContaining('requires a value')
+        }
+      })
+      expect(countMessages()).toBe(before)
     } finally {
       db.close()
     }

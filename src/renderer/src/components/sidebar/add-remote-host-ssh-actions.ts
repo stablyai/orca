@@ -19,13 +19,14 @@ import type {
   SshConfigHostResolution,
   SshRepoReadoption,
   SshTarget,
-  SshTargetAddResult
+  SshTargetAddResult,
+  SshTargetCreateInput
 } from '../../../../shared/ssh-types'
 import { isDuplicateSshTargetAlias } from './ssh-target-duplicate'
 
 type SshApi = {
   listTargets: () => Promise<SshTarget[]>
-  addTarget: (args: { target: Omit<SshTarget, 'id'> }) => Promise<SshTargetAddResult>
+  addTarget: (args: { target: SshTargetCreateInput }) => Promise<SshTargetAddResult>
   listConfigHosts: (args?: SshConfigHostListArgs) => Promise<SshConfigHostListResult>
   resolveConfigHost: (args: { alias: string }) => Promise<SshConfigHostResolution | null>
   importConfig: (args?: { reAdopt?: boolean }) => Promise<{
@@ -82,6 +83,7 @@ export async function saveNewSshHostFromForm({
   const proxyCommand = form.proxyCommand.trim() || undefined
   const jumpHost = form.jumpHost.trim() || undefined
   const systemSshConnectionReuse = form.systemSshConnectionReuse ? undefined : false
+  const remoteRuntime = form.remoteRuntime === 'auto' ? undefined : form.remoteRuntime
   const target = {
     label: form.label.trim() || (username ? `${username}@${host}` : configHost || host),
     configHost,
@@ -93,7 +95,8 @@ export async function saveNewSshHostFromForm({
     ...(identityFile ? { identityFile } : {}),
     ...(proxyCommand ? { proxyCommand } : {}),
     ...(jumpHost ? { jumpHost } : {}),
-    ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {})
+    ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {}),
+    ...(remoteRuntime ? { remoteRuntime } : {})
   }
 
   try {

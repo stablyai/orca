@@ -1,23 +1,8 @@
 import type { AppState } from '../types'
-import type { SshConnectionState, SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget, SshTargetSummary } from '../../../../shared/ssh-types'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { sanitizeSshTargetGeneration } from '../../../../shared/ssh-target-generation'
 import { resolveDirectSshTargetScope } from '../../lib/direct-ssh-target-scope'
-
-export function sshConnectionStatesEqual(
-  a: SshConnectionState | undefined,
-  b: SshConnectionState
-): boolean {
-  return (
-    a?.targetId === b.targetId &&
-    a?.status === b.status &&
-    a?.error === b.error &&
-    a?.reconnectAttempt === b.reconnectAttempt &&
-    a?.providerEpoch === b.providerEpoch &&
-    a?.connectionGeneration === b.connectionGeneration &&
-    a?.supportsFolderDownload === b.supportsFolderDownload &&
-    a?.remotePlatform === b.remotePlatform
-  )
-}
 
 export function sshTargetLabelsEqual(
   labels: Map<string, string>,
@@ -27,6 +12,34 @@ export function sshTargetLabelsEqual(
     return false
   }
   return targets.every((target) => labels.get(target.id) === target.label)
+}
+
+/**
+ * Registration generations by target ID, dropping any the sanitizer rejects.
+ *
+ * An absent generation is left absent rather than defaulted: only a generation
+ * makes a target fenceable, and a guessed one would fence an automation against
+ * a registration that never existed.
+ */
+export function collectSshTargetGenerations(targets: SshTargetSummary[]): Map<string, number> {
+  const generations = new Map<string, number>()
+  for (const target of targets) {
+    const generation = sanitizeSshTargetGeneration(target.generation)
+    if (generation !== undefined) {
+      generations.set(target.id, generation)
+    }
+  }
+  return generations
+}
+
+export function sshTargetGenerationsEqual(
+  current: Map<string, number>,
+  next: Map<string, number>
+): boolean {
+  return (
+    current.size === next.size &&
+    [...next].every(([targetId, generation]) => current.get(targetId) === generation)
+  )
 }
 
 function collectSshTargetTerminalTabIds(state: AppState, targetId: string): Set<string> {
@@ -153,7 +166,10 @@ function clearSshTargetTabPtyState(
       }
     }
     if (nextTabs !== tabs) {
-      nextTabsByWorktree = { ...nextTabsByWorktree, [worktreeId]: nextTabs }
+      if (nextTabsByWorktree === state.tabsByWorktree) {
+        nextTabsByWorktree = { ...nextTabsByWorktree }
+      }
+      nextTabsByWorktree[worktreeId] = nextTabs
     }
   }
 
@@ -195,6 +211,14 @@ export function buildRemovedSshTargetCleanupPatch(
     targetId,
     targetTabIds
   )
+  const nextPendingLayoutEdits = Object.fromEntries(
+    Object.entries(state.pendingDirectSshLayoutEditsByTabId ?? {}).filter(
+      ([, entry]) => entry.targetId !== targetId
+    )
+  )
+  const removedPendingLayoutEdits =
+    Object.keys(nextPendingLayoutEdits).length !==
+    Object.keys(state.pendingDirectSshLayoutEditsByTabId ?? {}).length
 
   const nextDeferredTargets = state.deferredSshReconnectTargets.filter((id) => id !== targetId)
   const nextTransientClearedConnections = {
@@ -206,6 +230,10 @@ export function buildRemovedSshTargetCleanupPatch(
   const removedConnectionState = nextConnectionStates.delete(targetId)
   const nextLabels = new Map(state.sshTargetLabels)
   const removedLabel = nextLabels.delete(targetId)
+  // Why: a lingering generation would keep a deleted registration fenceable, and
+  // the id is reissued fresh on re-add, so the old value can never become right.
+  const nextGenerations = new Map(state.sshTargetGenerations)
+  const removedGeneration = nextGenerations.delete(targetId)
   const nextHydrated = new Set(state.remoteWorkspaceHydratedTargetIds)
   const removedHydrated = nextHydrated.delete(targetId)
   const removedSyncStatus = Object.hasOwn(state.remoteWorkspaceSyncStatusByTargetId, targetId)
@@ -225,6 +253,7 @@ export function buildRemovedSshTargetCleanupPatch(
     removedTransientClearBlock ||
     removedConnectionState ||
     removedLabel ||
+    removedGeneration ||
     removedHydrated ||
     removedSyncStatus ||
     removedPortForwards ||
@@ -236,7 +265,8 @@ export function buildRemovedSshTargetCleanupPatch(
     removedPendingReconnect ||
     removedPaneRetries ||
     removedLiveBindings ||
-    removedRetryHistory
+    removedRetryHistory ||
+    removedPendingLayoutEdits
   if (!changed) {
     return null
   }
@@ -247,6 +277,7 @@ export function buildRemovedSshTargetCleanupPatch(
       : {}),
     ...(removedConnectionState ? { sshConnectionStates: nextConnectionStates } : {}),
     ...(removedLabel ? { sshTargetLabels: nextLabels } : {}),
+    ...(removedGeneration ? { sshTargetGenerations: nextGenerations } : {}),
     ...(removedHydrated ? { remoteWorkspaceHydratedTargetIds: nextHydrated } : {}),
     ...(removedSyncStatus ? { remoteWorkspaceSyncStatusByTargetId: nextSyncStatus } : {}),
     ...(removedPortForwards ? { portForwardsByConnection: nextPortForwards } : {}),
@@ -266,6 +297,9 @@ export function buildRemovedSshTargetCleanupPatch(
     ...(removedPendingReconnect ? { pendingReconnectPtyIdByTabId: nextPendingReconnect } : {}),
     ...(removedPaneRetries ? { directSshPaneRetryByTabId: nextPaneRetries } : {}),
     ...(removedLiveBindings ? { directSshLivePtyBindingByTabId: nextLiveBindings } : {}),
-    ...(removedRetryHistory ? { directSshPaneRetryHistoryByTabId: nextRetryHistory } : {})
+    ...(removedRetryHistory ? { directSshPaneRetryHistoryByTabId: nextRetryHistory } : {}),
+    ...(removedPendingLayoutEdits
+      ? { pendingDirectSshLayoutEditsByTabId: nextPendingLayoutEdits }
+      : {})
   }
 }

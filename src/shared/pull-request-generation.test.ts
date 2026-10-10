@@ -173,6 +173,20 @@ describe('parseGeneratedPullRequestFields', () => {
     })
   })
 
+  it('keeps an explicitly empty body instead of falling back', () => {
+    const fields = parseGeneratedPullRequestFields(
+      '{"base":"main","title":"chore: add new app config","body":"","draft":false}',
+      context
+    )
+
+    expect(fields).toEqual({
+      base: 'main',
+      title: 'chore: add new app config',
+      body: '',
+      draft: false
+    })
+  })
+
   it('rejects excessive nesting before JSON.parse', () => {
     const parseSpy = vi.spyOn(JSON, 'parse')
     const depth = GENERATED_PULL_REQUEST_JSON_STRUCTURE_LIMITS.nestingDepth + 1

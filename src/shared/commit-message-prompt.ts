@@ -1,3 +1,4 @@
+import { extractLeadingEnvAssignments } from './command-environment'
 // Why: keeping the base prompt and assembly here (in shared) lets both the
 // renderer (preview/tests) and main (actual generation) reach the exact same
 // string without duplicating the wording.
@@ -19,7 +20,9 @@ Staged diff:
 
 export {
   cleanGeneratedCommitMessage,
-  excerptAgentFailureOutput
+  excerptAgentFailureOutput,
+  sanitizeAgentFailureDetail,
+  stripPrefilledReasoningPreamble
 } from './commit-message-agent-output'
 
 /** Builds the final prompt sent to the agent. The custom suffix is appended verbatim
@@ -149,7 +152,23 @@ export type TokenizeCustomCommandResult =
 // "spawn this exact CLI" — adding shell semantics on top would create
 // surprising behavior across platforms (especially Windows) and a security
 // surface we don't need.
-export function tokenizeCustomCommandTemplate(template: string): TokenizeCustomCommandResult {
+/**
+ * `'escape'` (default) is POSIX: a backslash quotes the next byte, so `foo\ bar`
+ * is one token. `'literal'` is for a command that will run on native Windows,
+ * where `\` is the path separator — eating it turns
+ * `C:\Windows\System32\powershell.exe` into `C:WindowsSystem32powershell.exe`,
+ * a path that then "cannot be found" (#11375).
+ *
+ * Opt-in rather than sniffed from `process.platform` here, because the same
+ * template can be parsed on one host and executed on another.
+ */
+export type CommandTemplateBackslash = 'escape' | 'literal'
+
+export function tokenizeCustomCommandTemplate(
+  template: string,
+  backslash: CommandTemplateBackslash = 'escape'
+): TokenizeCustomCommandResult {
+  const backslashEscapes = backslash === 'escape'
   const tokens: string[] = []
   const spans: CommandTokenSpan[] = []
   let current = ''
@@ -162,7 +181,7 @@ export function tokenizeCustomCommandTemplate(template: string): TokenizeCustomC
   while (i < template.length) {
     const ch = template[i]
     if (quote) {
-      if (ch === '\\' && quote === '"' && i + 1 < template.length) {
+      if (backslashEscapes && ch === '\\' && quote === '"' && i + 1 < template.length) {
         // Why: inside double quotes the shell only consumes the backslash
         // before these; elsewhere it stays a literal byte this tokenizer drops.
         divergesFromShell ||= !'$`"\\'.includes(template[i + 1])
@@ -197,7 +216,7 @@ export function tokenizeCustomCommandTemplate(template: string): TokenizeCustomC
       continue
     }
 
-    if (ch === '\\' && i + 1 < template.length) {
+    if (backslashEscapes && ch === '\\' && i + 1 < template.length) {
       // Why: an unquoted line continuation joins words the shell splits, so a
       // selector can hide inside the joined token and skip the gap check.
       divergesFromShell ||= template[i + 1] === '\n'
@@ -227,7 +246,7 @@ export function tokenizeCustomCommandTemplate(template: string): TokenizeCustomC
     }
     // Why: a trailing unpaired escape swallows whatever a consumer appends
     // after the base, so the base is not safe to build on.
-    divergesFromShell ||= ch === '\\' && i + 1 >= template.length
+    divergesFromShell ||= backslashEscapes && ch === '\\' && i + 1 >= template.length
     divergesFromShell ||=
       ';&|<>`'.includes(ch) ||
       (ch === '#' && !inToken) ||
@@ -248,7 +267,13 @@ export function tokenizeCustomCommandTemplate(template: string): TokenizeCustomC
 }
 
 export type CustomCommandPlan =
-  | { ok: true; binary: string; args: string[]; stdinPayload: string | null }
+  | {
+      ok: true
+      binary: string
+      args: string[]
+      stdinPayload: string | null
+      env?: Record<string, string>
+    }
   | { ok: false; error: string }
 
 /**
@@ -260,15 +285,20 @@ export type CustomCommandPlan =
  * substituted prompt is always passed as a single argument regardless of
  * whether the template wrote `{prompt}` or `"{prompt}"`.
  */
-export function planCustomCommand(template: string, prompt: string): CustomCommandPlan {
-  const tokenized = tokenizeCustomCommandTemplate(template)
+export function planCustomCommand(
+  template: string,
+  prompt: string,
+  backslash: CommandTemplateBackslash = 'escape'
+): CustomCommandPlan {
+  const tokenized = tokenizeCustomCommandTemplate(template, backslash)
   if (!tokenized.ok) {
     return { ok: false, error: tokenized.error }
   }
   if (tokenized.tokens.length === 0) {
     return { ok: false, error: 'Custom command is empty.' }
   }
-  const [binary, ...rest] = tokenized.tokens
+  const { env, rest: commandTokens } = extractLeadingEnvAssignments(tokenized.tokens)
+  const [binary, ...rest] = commandTokens
   if (!binary) {
     return { ok: false, error: 'Custom command must start with a binary name.' }
   }
@@ -277,14 +307,15 @@ export function planCustomCommand(template: string, prompt: string): CustomComma
     token.includes(CUSTOM_PROMPT_PLACEHOLDER)
       ? token.split(CUSTOM_PROMPT_PLACEHOLDER).join(prompt)
       : token
-  const usesPlaceholder = tokenized.tokens.some((t) => t.includes(CUSTOM_PROMPT_PLACEHOLDER))
+  const usesPlaceholder = commandTokens.some((t) => t.includes(CUSTOM_PROMPT_PLACEHOLDER))
   if (usesPlaceholder) {
     return {
       ok: true,
       binary: substitute(binary),
       args: rest.map(substitute),
-      stdinPayload: null
+      stdinPayload: null,
+      ...(env ? { env } : {})
     }
   }
-  return { ok: true, binary, args: rest, stdinPayload: prompt }
+  return { ok: true, binary, args: rest, stdinPayload: prompt, ...(env ? { env } : {}) }
 }

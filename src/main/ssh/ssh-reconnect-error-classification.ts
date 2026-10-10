@@ -1,4 +1,5 @@
 import { isAuthError, isPassphraseError, isTransientError } from './ssh-connection-utils'
+import { isHostKeyVerificationError } from './ssh-host-key-decision'
 
 // Why: the system-SSH transport reports network failures as OpenSSH prose, not errno codes, so its
 // probe timeouts and connect failures never match isTransientError's code table.
@@ -22,6 +23,9 @@ const NETWORK_LIKE_ERROR_FRAGMENTS = [
   // Pre-7.x OpenSSH wording for the same banner-exchange failure.
   'ssh_exchange_identification',
   'lost connection',
+  // ssh2's wording when TCP connects but the socket closes before the server's banner, as it does
+  // while a port forwarder or NAT still accepts connections for a host it can no longer reach.
+  'connection lost before handshake',
   'remote end closed',
   // Deliberately not the bare 'connection closed by': OpenSSH prints "Connection closed by <ip> port 22"
   // for server-side rejections (MaxStartups, DenyUsers) too, and those must stay permanent.
@@ -53,6 +57,12 @@ const EMPTY_SYSTEM_SSH_PROBE_EXIT_255 = /^system ssh probe failed \(exit 255\)\.
  * network-shaped failure as recoverable. Auth stays permanent on both paths.
  */
 export function isTransientReconnectError(err: Error): boolean {
+  // A denied host key is a decision, not a fault: retrying re-derives the same answer, so the ladder
+  // would back off forever against a host it has already refused. Checked by type rather than left
+  // to the fragment lists below, which would silently start retrying if the wording changed.
+  if (isHostKeyVerificationError(err)) {
+    return false
+  }
   if (isAuthError(err) || isPassphraseError(err)) {
     return false
   }

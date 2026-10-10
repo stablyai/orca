@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
-import type { FolderWorkspace, ProjectGroup, Repo } from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -29,6 +31,7 @@ const projectGroup: ProjectGroup = {
 }
 
 const reposRemove = vi.fn()
+const reposRemoveForHost = vi.fn()
 const projectGroupsDelete = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
@@ -36,6 +39,8 @@ const runtimeEnvironmentTransportCall = vi.fn()
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   reposRemove.mockReset()
+  reposRemoveForHost.mockReset()
+  reposRemoveForHost.mockResolvedValue(undefined)
   reposRemove.mockResolvedValue(undefined)
   projectGroupsDelete.mockReset()
   runtimeEnvironmentCall.mockReset()
@@ -45,7 +50,7 @@ beforeEach(() => {
   })
   vi.stubGlobal('window', {
     api: {
-      repos: { remove: reposRemove },
+      repos: { remove: reposRemove, removeForHost: reposRemoveForHost },
       projectGroups: { delete: projectGroupsDelete },
       runtimeEnvironments: { call: runtimeEnvironmentTransportCall }
     }
@@ -186,9 +191,56 @@ describe('project group deletion store routing', () => {
       failedProjectRemovals: []
     })
 
-    expect(reposRemove).toHaveBeenCalledWith({ repoId: 'direct' })
-    expect(reposRemove).toHaveBeenCalledWith({ repoId: 'nested' })
+    expect(reposRemoveForHost).toHaveBeenCalledWith({ repoId: 'direct', hostId: 'local' })
+    expect(reposRemoveForHost).toHaveBeenCalledWith({ repoId: 'nested', hostId: 'local' })
+    expect(reposRemove).not.toHaveBeenCalled()
     expect(store.getState().repos).toEqual([siblingRepo])
+  })
+
+  it('processes local/direct-SSH same-ID contained rows sequentially', async () => {
+    const localRepo = {
+      ...remoteRepo,
+      id: 'shared',
+      path: '/local/shared',
+      projectGroupId: projectGroup.id,
+      executionHostId: 'local' as const
+    }
+    const sshRepo = {
+      ...localRepo,
+      path: '/ssh/shared',
+      connectionId: 'ssh-1',
+      executionHostId: 'ssh:ssh-1' as const
+    }
+    projectGroupsDelete.mockResolvedValue(true)
+    const store = createTestStore()
+    store.setState({
+      projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
+      repos: [localRepo, sshRepo],
+      settings: { activeRuntimeEnvironmentId: null } as never
+    })
+
+    await expect(
+      store.getState().deleteProjectGroupWithContainedProjects(projectGroup.id, {
+        removeContainedProjects: true
+      })
+    ).resolves.toEqual({
+      status: 'deleted-group',
+      groupId: projectGroup.id,
+      requestedProjectIds: ['shared', 'shared'],
+      removedProjectIds: ['shared'],
+      failedProjectRemovals: []
+    })
+
+    expect(reposRemoveForHost).toHaveBeenCalledWith({
+      repoId: 'shared',
+      hostId: 'local'
+    })
+    expect(reposRemoveForHost).toHaveBeenCalledWith({
+      repoId: 'shared',
+      hostId: 'ssh:ssh-1'
+    })
+    expect(reposRemove).not.toHaveBeenCalled()
+    expect(store.getState().repos).toEqual([])
   })
 
   it('does not remove contained projects when group deletion fails', async () => {
@@ -218,7 +270,7 @@ describe('project group deletion store routing', () => {
 
   it('reports project removal failures by comparing store state after removeProject', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    reposRemove.mockImplementation(async ({ repoId }: { repoId: string }) => {
+    reposRemoveForHost.mockImplementation(async ({ repoId }: { repoId: string }) => {
       if (repoId === 'nested') {
         throw new Error('remove failed')
       }

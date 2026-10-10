@@ -1,3 +1,4 @@
+import { SshPtyClosedGenerationRanges } from './ssh-pty-closed-generation-ranges'
 import type {
   SshPtyModelAdmissionKey,
   SshPtyModelAdmissionOptions,
@@ -27,7 +28,15 @@ export class SshPtyModelAdmission {
   private readonly usageByPty = new Map<string, PtyUsage>()
   private readonly pressure: SshPtyModelAdmissionPressure
   private readonly idleWaiters = new Map<string, Set<() => void>>()
-  private readonly closingGenerations = new Set<number>()
+  // Why ranges rather than a Set: provider generations are a process-global monotonic counter
+  // shared by every SSH target, so this grew one entry per relay reconnect for the life of the
+  // process. Because a reconnect closes the generation it replaces, the closed run stays
+  // contiguous apart from the generations that are still live, which bounds the list at roughly
+  // one range per concurrently connected target however hosts interleave. Membership stays exact:
+  // generations below the high-water mark can still be live on another host, so a high-water
+  // approximation would reject a healthy target's output. Do not scope this per target -- with a
+  // global counter each target's own closes are non-adjacent, which is the growth this avoids.
+  private readonly closingGenerations = new SshPtyClosedGenerationRanges()
   private readonly migratingPtys = new Set<string>()
   private globalSourceUnits = 0
   private globalBytes = 0

@@ -31,7 +31,7 @@ import {
 } from '@/lib/launch-agent-session-continuation'
 import { useAppStore } from '@/store'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { chooseInitialContinuationAgent } from './agent-session-continuation-selection'
 
 type AgentSessionContinuationDialogProps = {
@@ -134,7 +134,6 @@ export function AgentSessionContinuationDialog({
       prompt,
       worktreeId: request.worktreeId,
       groupId: request.groupId,
-      workspacePath: request.workspacePath,
       initialCwd: request.initialCwd,
       launchSource: request.launchSource
     })
@@ -165,7 +164,7 @@ export function AgentSessionContinuationDialog({
             <MessageSquarePlus className="size-4" />
             {translate(
               'components.agentSessionContinuation.dialogTitle',
-              'Continue in New Session'
+              'Hand Off to Another Agent'
             )}
           </DialogTitle>
           <DialogDescription className="text-xs">

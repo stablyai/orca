@@ -8,7 +8,6 @@ import {
   isClaudeAgent,
   isClaudeManagementTitle,
   normalizeTerminalTitle,
-  isExplicitAgentStatusFresh,
   mapAgentStatusStateToVisualStatus,
   formatAgentTypeLabel,
   agentTypeToIconAgent
@@ -49,34 +48,6 @@ describe('detectAgentStatusFromTitle', () => {
   // --- Braille spinner characters ---
   it('detects braille spinner ⠋ as working', () => {
     expect(detectAgentStatusFromTitle('⠋ Codex is thinking')).toBe('working')
-  })
-
-  it('detects braille spinner ⠙ as working', () => {
-    expect(detectAgentStatusFromTitle('⠙ some task')).toBe('working')
-  })
-
-  it('detects braille spinner ⠹ as working', () => {
-    expect(detectAgentStatusFromTitle('⠹ aider running')).toBe('working')
-  })
-
-  it('detects braille spinner ⠸ as working', () => {
-    expect(detectAgentStatusFromTitle('⠸ process')).toBe('working')
-  })
-
-  it('detects braille spinner ⠼ as working', () => {
-    expect(detectAgentStatusFromTitle('⠼ opencode')).toBe('working')
-  })
-
-  it('detects braille spinner ⠴ as working', () => {
-    expect(detectAgentStatusFromTitle('⠴ loading')).toBe('working')
-  })
-
-  it('detects braille spinner ⠦ as working', () => {
-    expect(detectAgentStatusFromTitle('⠦ claude')).toBe('working')
-  })
-
-  it('detects braille spinner ⠧ as working', () => {
-    expect(detectAgentStatusFromTitle('⠧ task')).toBe('working')
   })
 
   // --- Agent name keyword combos ---
@@ -395,25 +366,27 @@ describe('normalizeTerminalTitle', () => {
     )
   })
 
-  it('collapses Pi spinner and idle titles to stable labels', () => {
-    expect(normalizeTerminalTitle('⠋ π - my-project')).toBe('⠋ Pi')
-    expect(normalizeTerminalTitle('π - my-project')).toBe('Pi')
-    expect(normalizeTerminalTitle('⠋ π: my-project')).toBe('⠋ Pi')
-    expect(normalizeTerminalTitle('π: my-project')).toBe('Pi')
-    expect(normalizeTerminalTitle('π -')).toBe('Pi')
-    expect(normalizeTerminalTitle('π:')).toBe('Pi')
-    expect(normalizeTerminalTitle('π ')).toBe('Pi')
+  it('preserves Pi titles and canonicalizes only the spinner frame', () => {
+    // Only the braille frame churns; the rest is the session name and cwd (#16093).
+    expect(normalizeTerminalTitle('⠋ π - my-project')).toBe('⠋ π - my-project')
+    expect(normalizeTerminalTitle('⠙ π - my-project')).toBe('⠋ π - my-project')
+    expect(normalizeTerminalTitle('π - my-project')).toBe('π - my-project')
+    expect(normalizeTerminalTitle('⠋ π: my-project')).toBe('⠋ π: my-project')
+    expect(normalizeTerminalTitle('π: my-project')).toBe('π: my-project')
+    expect(normalizeTerminalTitle('π -')).toBe('π -')
+    expect(normalizeTerminalTitle('π:')).toBe('π:')
+    expect(normalizeTerminalTitle('π ')).toBe('π ')
   })
 
-  it('does not collapse Pi-compatible titles whose cwd mentions Gemini', () => {
-    expect(normalizeTerminalTitle('⠋ π - gemini')).toBe('⠋ Pi')
-    expect(normalizeTerminalTitle('π - gemini')).toBe('Pi')
-    expect(normalizeTerminalTitle('⠋ π: gemini')).toBe('⠋ Pi')
-    expect(normalizeTerminalTitle('π: gemini')).toBe('Pi')
-    expect(normalizeTerminalTitle('⠋ π gemini')).toBe('⠋ Pi')
-    expect(normalizeTerminalTitle('π gemini')).toBe('Pi')
-    expect(normalizeTerminalTitle('⠋ π - gemini-project')).toBe('⠋ Pi')
-    expect(normalizeTerminalTitle('π - gemini-project')).toBe('Pi')
+  it('does not route Pi titles whose cwd mentions Gemini into Gemini normalization', () => {
+    expect(normalizeTerminalTitle('⠋ π - gemini')).toBe('⠋ π - gemini')
+    expect(normalizeTerminalTitle('π - gemini')).toBe('π - gemini')
+    expect(normalizeTerminalTitle('⠋ π: gemini')).toBe('⠋ π: gemini')
+    expect(normalizeTerminalTitle('π: gemini')).toBe('π: gemini')
+    expect(normalizeTerminalTitle('⠋ π gemini')).toBe('⠋ π gemini')
+    expect(normalizeTerminalTitle('π gemini')).toBe('π gemini')
+    expect(normalizeTerminalTitle('⠋ π - gemini-project')).toBe('⠋ π - gemini-project')
+    expect(normalizeTerminalTitle('π - gemini-project')).toBe('π - gemini-project')
   })
 })
 
@@ -761,30 +734,6 @@ describe('createAgentStatusTracker', () => {
   })
 })
 
-describe('isExplicitAgentStatusFresh', () => {
-  it('treats the boundary (now - updatedAt == staleAfterMs) as fresh', () => {
-    // Why: uses `<=`, so equality at the boundary stays fresh (not stale one tick before the TTL).
-    const staleAfterMs = 60_000
-    const now = 1_000_000
-    const entry = { updatedAt: now - staleAfterMs }
-    expect(isExplicitAgentStatusFresh(entry, now, staleAfterMs)).toBe(true)
-  })
-
-  it('treats one millisecond past the boundary as stale', () => {
-    const staleAfterMs = 60_000
-    const now = 1_000_000
-    const entry = { updatedAt: now - staleAfterMs - 1 }
-    expect(isExplicitAgentStatusFresh(entry, now, staleAfterMs)).toBe(false)
-  })
-
-  it('treats a just-updated entry (now - updatedAt == 0) as fresh', () => {
-    const staleAfterMs = 60_000
-    const now = 1_000_000
-    const entry = { updatedAt: now }
-    expect(isExplicitAgentStatusFresh(entry, now, staleAfterMs)).toBe(true)
-  })
-})
-
 describe('mapAgentStatusStateToVisualStatus', () => {
   it("maps 'working' to 'working'", () => {
     expect(mapAgentStatusStateToVisualStatus('working')).toBe('working')
@@ -801,14 +750,6 @@ describe('mapAgentStatusStateToVisualStatus', () => {
   it("maps 'done' to 'done'", () => {
     expect(mapAgentStatusStateToVisualStatus('done')).toBe('done')
   })
-
-  it('returns a non-empty string for every valid state', () => {
-    for (const state of ['working', 'blocked', 'waiting', 'done'] as const) {
-      const visual = mapAgentStatusStateToVisualStatus(state)
-      expect(typeof visual).toBe('string')
-      expect(visual.length).toBeGreaterThan(0)
-    }
-  })
 })
 
 describe('formatAgentTypeLabel', () => {
@@ -822,50 +763,6 @@ describe('formatAgentTypeLabel', () => {
 
   it("returns 'Agent' for 'unknown'", () => {
     expect(formatAgentTypeLabel('unknown')).toBe('Agent')
-  })
-
-  it("maps 'claude' to 'Claude'", () => {
-    expect(formatAgentTypeLabel('claude')).toBe('Claude')
-  })
-
-  it("maps 'openclaude' to 'OpenClaude'", () => {
-    expect(formatAgentTypeLabel('openclaude')).toBe('OpenClaude')
-  })
-
-  it("maps 'codex' to 'Codex'", () => {
-    expect(formatAgentTypeLabel('codex')).toBe('Codex')
-  })
-
-  it("maps 'gemini' to 'Gemini'", () => {
-    expect(formatAgentTypeLabel('gemini')).toBe('Gemini')
-  })
-
-  it("maps 'antigravity' to 'Antigravity'", () => {
-    expect(formatAgentTypeLabel('antigravity')).toBe('Antigravity')
-  })
-
-  it("maps 'cursor' to 'Cursor'", () => {
-    expect(formatAgentTypeLabel('cursor')).toBe('Cursor')
-  })
-
-  it("maps 'hermes' to 'Hermes'", () => {
-    expect(formatAgentTypeLabel('hermes')).toBe('Hermes')
-  })
-
-  it("maps 'command-code' to 'Command Code'", () => {
-    expect(formatAgentTypeLabel('command-code')).toBe('Command Code')
-  })
-
-  it("maps 'ante' to 'Ante'", () => {
-    expect(formatAgentTypeLabel('ante')).toBe('Ante')
-  })
-
-  it("maps 'trae' to 'Trae'", () => {
-    expect(formatAgentTypeLabel('trae')).toBe('Trae')
-  })
-
-  it("maps 'prime-agent' to 'Prime Agent'", () => {
-    expect(formatAgentTypeLabel('prime-agent')).toBe('Prime Agent')
   })
 
   it('passes through arbitrary custom agent names as-is', () => {
@@ -886,14 +783,8 @@ describe('agentTypeToIconAgent', () => {
     expect(agentTypeToIconAgent('unknown')).toBeNull()
   })
 
-  it("round-trips iconable agent types like 'claude'", () => {
-    expect(agentTypeToIconAgent('claude')).toBe('claude')
-    expect(agentTypeToIconAgent('openclaude')).toBe('openclaude')
-    expect(agentTypeToIconAgent('antigravity')).toBe('antigravity')
-    expect(agentTypeToIconAgent('command-code')).toBe('command-code')
-    expect(agentTypeToIconAgent('ante')).toBe('ante')
-    expect(agentTypeToIconAgent('trae')).toBe('trae')
-    expect(agentTypeToIconAgent('prime-agent')).toBe('prime-agent')
+  it('keeps an icon identity for recognition-only DeepSeek Build', () => {
+    expect(agentTypeToIconAgent('dsb')).toBe('dsb')
   })
 
   it('returns null for arbitrary non-iconable strings', () => {

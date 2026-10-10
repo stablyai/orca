@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { matchWorktreePaletteReview } from './worktree-palette-review-match'
 import { searchWorktrees } from './worktree-palette-search'
-import type { Repo, Worktree } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import type { HostedReviewInfo } from '../../../shared/hosted-review'
 
 // Regression tests for the production crash (report c5d87873, macOS, Orca 1.4.147):
@@ -88,15 +89,11 @@ describe('searchWorktrees with a titleless cached review (Cmd+J palette crash pa
     ])
 
     expect(() =>
-      searchWorktrees(
-        [worktree],
-        'nonmatchingtext',
-        repoMap,
-        null,
-        null,
-        undefined,
-        checksReviewByWorktree
-      )
+      searchWorktrees([worktree], 'nonmatchingtext', repoMap, { checksReviewByWorktree })
     ).not.toThrow()
+    // The number still indexes, so the titleless review stays reachable.
+    expect(
+      searchWorktrees([worktree], '#7', repoMap, { checksReviewByWorktree })[0].supportingText
+    ).toMatchObject({ labelKind: 'pr', text: '#7' })
   })
 })

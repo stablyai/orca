@@ -1,3 +1,6 @@
+import type { SshPendingPtyKill } from './ssh-pending-pty-kill'
+import type { OrcadSshProvisioningIntent } from './orcad-ssh-provisioning'
+
 // ─── SSH Connection Types ───────────────────────────────────────────
 
 export const MIN_SSH_RELAY_GRACE_PERIOD_SECONDS = 60
@@ -6,6 +9,33 @@ export const LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS = 3 * 60 * 60
 export const DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS = 24 * 60 * 60
 export const DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS = 0
 export const SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD = 'relay.configureGraceTime'
+
+/**
+ * Which runtime executes the SSH relay. `pinned-node` runs the D6 ladder on Orca's uploaded Node and
+ * prebuilt addons (design D5); `legacy` is the opt-in host Node with native deps installed by npm.
+ */
+export const SSH_REMOTE_RUNTIMES = ['legacy', 'pinned-node'] as const
+export type SshRemoteRuntime = (typeof SSH_REMOTE_RUNTIMES)[number]
+export const DEFAULT_SSH_REMOTE_RUNTIME: SshRemoteRuntime = 'pinned-node'
+
+/** Where the design D6 fallback ladder landed; `legacy` is the opt-in host-npm path outside it. */
+export const SSH_REMOTE_RUNTIME_RUNGS = ['A', 'B', 'C', 'D', 'legacy'] as const
+export type SshRemoteRuntimeRung = (typeof SSH_REMOTE_RUNTIME_RUNGS)[number]
+
+/**
+ * Main-owned record of the last ladder decision for a host. Valid only while its key
+ * (glibc, pinned runtime hash, Orca major) still matches, so an upgrade re-evaluates.
+ */
+export type SshRemoteRuntimeResolution = {
+  rung: SshRemoteRuntimeRung
+  /** The classified refusal that stepped off Orca's pinned Node, when one did. */
+  pinnedRefusal?: string
+  /** Epoch ms the refusal was proved; a refusal the host can lose expires from it. */
+  refusedAt?: number
+  glibc: string | null
+  runtimeSha256: string
+  orcaMajor: number
+}
 
 export type SshTarget = {
   id: string
@@ -42,6 +72,9 @@ export type SshTarget = {
   /** Grace period in seconds before relay shuts down after disconnect.
    *  0 disables expiry. Default: 0 (until reset). Max: 604800 (7 days). */
   relayGracePeriodSeconds?: number
+  /** Lets this host's relayed `orca` CLI control this Orca beyond its own terminals (other hosts,
+   *  orchestration, files). Off by default: the host is a guest, not an owner. */
+  allowRemoteCliControl?: boolean
   /** Set to true after a successful connection that triggered a credential
    *  prompt (passphrase or password). Persisted so startup reconnect can
    *  partition targets into eager (no passphrase) vs deferred (passphrase)
@@ -53,10 +86,55 @@ export type SshTarget = {
   /** Reuse a system OpenSSH connection across setup commands. Undefined means
    *  enabled; false is an explicit per-target compatibility opt-out. */
   systemSshConnectionReuse?: boolean
+  /** Relay runtime for this host; undefined means DEFAULT_SSH_REMOTE_RUNTIME. */
+  remoteRuntime?: SshRemoteRuntime
+  /** Main-owned ladder cache; renderer updates never set it. */
+  remoteRuntimeResolution?: SshRemoteRuntimeResolution
+  /** Durable registration incarnation. Advances on create / re-create / explicit
+   *  re-adopt only, so automations fenced on an old registration cannot run on a
+   *  later target that happens to reuse the id. Never advanced by connect state. */
+  generation?: number
+  /** Main-owned provisioning intent; never fall back to a relay while it exists. */
+  orcadProvisioning?: OrcadSshProvisioningIntent
+  /**
+   * Main-owned: this host serves a managed Orca server. Deliberately not `owner`: shipped builds
+   * hide owned targets, and a downgraded build must still see and reach the host over its relay.
+   */
+  /** Main-owned: managed orcad can't run on this host; retried once this app version changes. */
+  managedServerUnavailable?: { reason: string; appVersion: string }
+  /** Main-owned: the one-time "move now" offer was shown under this app version. */
+  managedServerMoveOffered?: { appVersion: string }
+  /** Main-owned: updating the managed server to this app version failed; retried once it changes. */
+  managedServerUpdateFailure?: { reason: string; appVersion: string }
+  orcadFence?: {
+    environmentId: string
+    /** An older build changed the retained source rows: the host stays on the relay until moved again. */
+    sourceChangedAt?: string
+  }
 }
 
-/** Public target identity safe to mirror to a paired client. */
-export type SshTargetSummary = Pick<SshTarget, 'id' | 'label'>
+/** Renderer-authored target fields; registration generations are allocated and owned by main. */
+export type SshTargetCreateInput = Omit<
+  SshTarget,
+  | 'id'
+  | 'generation'
+  | 'orcadProvisioning'
+  | 'orcadFence'
+  | 'managedServerUnavailable'
+  | 'managedServerMoveOffered'
+  | 'managedServerUpdateFailure'
+>
+export type SshTargetUpdateInput = Partial<SshTargetCreateInput>
+
+/** Public target identity and observed host metadata safe to mirror to a paired client. */
+export type SshTargetSummary = Pick<SshTarget, 'id' | 'label' | 'generation'> & {
+  /** The SSH host's OS, when it has connected and the relay has detected it. */
+  remotePlatform?: SshRemotePlatform
+  /** Whether the target currently has a host-owned connected SSH lifecycle. */
+  connected?: boolean
+  /** Current SSH lifecycle state, when the desktop has one for this target. */
+  connectionStatus?: SshConnectionStatus
+}
 
 /** Identity of a removed SSH target, recorded so that re-adding the same host
  *  can re-point orphaned repos/worktrees from the old (deleted) target id to
@@ -181,6 +259,71 @@ export type SshConnectionState = {
   supportsFolderDownload?: boolean
   /** Remote OS detected by the SSH relay once available. */
   remotePlatform?: SshRemotePlatform
+  /** Set while connected without the Orca remote server (runtime ladder rung D). */
+  plainSsh?: SshPlainSshMode
+  /** Set while the relay runs on the opt-in host-Node runtime, an unsupported configuration. */
+  hostNodeRuntime?: boolean
+  /** Which server this host runs; optional so older clients simply ignore it. */
+  managedServer?: SshManagedServerStatus
+}
+
+export const SSH_MANAGED_SERVER_PHASES = [
+  'deploying',
+  'converting',
+  'connecting',
+  'updating',
+  'starting'
+] as const
+
+export const SSH_MANAGED_SERVER_UPDATE_STATES = ['host-newer', 'deferred', 'failed'] as const
+
+/** Why a managed server kept its version on this connect; absent when it is current or updated. */
+export type SshManagedServerUpdateNote = {
+  state: (typeof SSH_MANAGED_SERVER_UPDATE_STATES)[number]
+  detail?: string
+}
+
+/** A managed server that did not answer and was not proven serving, with why (and orcad.log's tail). */
+export type SshManagedServerServingNote = { state: 'unverifiable'; detail: string }
+
+export const SSH_MANAGED_SERVER_RELAY_REASONS = [
+  'orcad_unavailable',
+  'relay_terminals_live',
+  'relay_terminals_unverifiable',
+  'source_changed',
+  'deferred',
+  'refused',
+  'failed'
+] as const
+
+export type SshManagedServerRelayReason = (typeof SSH_MANAGED_SERVER_RELAY_REASONS)[number]
+
+export type SshManagedServerStatus =
+  | {
+      kind: 'managed'
+      environmentId: string
+      update?: SshManagedServerUpdateNote
+      /** Set when the server did not answer and no start brought it up; never a terminal verdict. */
+      serving?: SshManagedServerServingNote
+    }
+  | { kind: 'setting-up'; phase: (typeof SSH_MANAGED_SERVER_PHASES)[number] }
+  /** `detail` names the blocker for a refusal, or why orcad can't run on the host. */
+  | {
+      kind: 'relay'
+      reason: SshManagedServerRelayReason
+      detail?: string
+      /** Relay terminals still running, when that is what keeps the host on the relay. */
+      terminals?: number
+      /** Show the one-time offer to move now, restarting those terminals. */
+      offerMove?: boolean
+      /** Those terminals belong to another Orca desktop or session, so this one offers no move. */
+      terminalsElsewhere?: boolean
+    }
+
+/** Plain SSH terminals and SFTP browsing only; `reason` is the ladder's classified cause. */
+export type SshPlainSshMode = {
+  reason: string
+  message: string
 }
 
 /** Non-secret mutation provenance. Both fields are required when an SSH provider is selected. */
@@ -203,14 +346,36 @@ export type SshRemotePtyLease = {
   updatedAt: number
   lastAttachedAt?: number
   lastDetachedAt?: number
-  /**
-   * The shell this record names, as the HOST identified it. `ptyId` alone cannot: a replaced relay
-   * restarts its ids at `pty-1`, so the same id can name somebody else's shell. Only a host-attested
-   * value is stored — a locally synthesized stand-in is not stable across reconnects and would read
-   * as a different shell. Absent on legacy rows and on hosts that report none, which stays
-   * adoption-eligible and must never act as a claim that subtracts a shell.
-   */
-  incarnationId?: string
+  /** A stop this client asked for and could not confirm, replayed on the next handshake to this
+   *  same target. See `shared/ssh-pending-pty-kill.ts`. Never on the wire — client-local. */
+  pendingKill?: SshPendingPtyKill
+  /** Stored-form ptyId of the newer lease that won this pane, written only by supersession — which
+   *  already holds the winner in hand. Cleared whenever this id is re-upserted live, so a RECYCLED
+   *  relay id cannot inherit its predecessor's mark. */
+  supersededBy?: string
+  /** The host listed this ptyId under a different PTY incarnation, so the id no longer routes to
+   *  this lease's shell. Written only by the pending-stop replay's `relay-id-recycled` retirement. */
+  relayIdRecycled?: true
+}
+
+/**
+ * `expired` says only that the CLIENT lost its route, never that the remote shell died
+ * (docs/reference/ssh-execution-boundary.md), so it covers two unrelated cases. Two writers can
+ * prove the route is dead for good — a newer lease won the pane, or the relay handed the id to
+ * another shell — and re-adopting either is the 2 -> 19 -> 20 lease fan-out or a pane handed to a
+ * stranger's process. An `expired` lease carrying neither mark is an orphan, not a corpse, and a
+ * reattach is the only thing that can tell those apart.
+ */
+export function sshRemotePtyLeaseAllowsReattach(
+  lease: Pick<SshRemotePtyLease, 'state' | 'supersededBy' | 'relayIdRecycled'>
+): boolean {
+  if (lease.state === 'terminated') {
+    return false
+  }
+  return (
+    lease.state !== 'expired' ||
+    (lease.supersededBy === undefined && lease.relayIdRecycled !== true)
+  )
 }
 
 /** Main-owned relay lease needed to reclaim PTY delivery after a desktop restart. */
@@ -260,4 +425,14 @@ export type DetectedPort = {
 export type EnrichedDetectedPort = DetectedPort & {
   advertisedUrl?: string
   advertisedProtocol?: 'http' | 'https'
+}
+
+/** Outcome of `ssh:terminateSessions`. Uses the fixed verdict vocabulary from
+ *  docs/reference/ssh-execution-boundary.md: a host we could not reach yields `unverifiable`,
+ *  never `exited`, so an offline sweep can never be read as a successful remote kill (issue #12661). */
+export type SshTerminateSessionsResult = {
+  /** Remote PTYs the host acknowledged stopping. */
+  terminated: number
+  /** Leases whose remote shells were never reached because the relay was offline. */
+  unverifiable: number
 }

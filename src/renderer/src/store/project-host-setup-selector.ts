@@ -1,4 +1,4 @@
-import type { Project, ProjectHostSetup } from '../../../shared/types'
+import type { Project, ProjectHostSetup } from '../../../shared/project-types'
 import {
   projectHostSetupProjectionFromRepos,
   type ProjectHostSetupProjection
@@ -19,6 +19,38 @@ const normalizedProjectHostSetupProjectionCache = new WeakMap<
   AppState['repos'],
   WeakMap<Project[], WeakMap<ProjectHostSetup[], ProjectHostSetupProjection>>
 >()
+// Catalog writers replace these readonly arrays; their identities are the invalidation boundary.
+type StateProjectHostSetupProjectionCache = {
+  repos: AppState['repos']
+  projects: AppState['projects']
+  setups: AppState['projectHostSetups']
+  projection: ProjectHostSetupProjection
+}
+
+let stateProjectHostSetupProjectionCache: StateProjectHostSetupProjectionCache | null = null
+
+function getCachedStateProjectHostSetupProjection(
+  repos: AppState['repos'],
+  projects: AppState['projects'],
+  setups: AppState['projectHostSetups']
+): ProjectHostSetupProjection | undefined {
+  const cached = stateProjectHostSetupProjectionCache
+  return cached &&
+    cached.repos === repos &&
+    cached.projects === projects &&
+    cached.setups === setups
+    ? cached.projection
+    : undefined
+}
+
+function cacheStateProjectHostSetupProjection(
+  repos: AppState['repos'],
+  projects: AppState['projects'],
+  setups: AppState['projectHostSetups'],
+  projection: ProjectHostSetupProjection
+): void {
+  stateProjectHostSetupProjectionCache = { repos, projects, setups, projection }
+}
 
 function getCachedProjectHostSetupProjection(repos: AppState['repos']): ProjectHostSetupProjection {
   const cachedProjection = projectHostSetupProjectionCache.get(repos)
@@ -135,10 +167,21 @@ function getCachedNormalizedProjectHostSetupProjection(
 export function getProjectHostSetupProjectionFromState(
   state: Pick<AppState, 'repos'> & Partial<Pick<AppState, 'projects' | 'projectHostSetups'>>
 ): ProjectHostSetupProjection {
-  if (state.projects && state.projectHostSetups) {
+  const projects = state.projects
+  const projectHostSetups = state.projectHostSetups
+  if (projects && projectHostSetups) {
+    const cachedProjection = getCachedStateProjectHostSetupProjection(
+      state.repos,
+      projects,
+      projectHostSetups
+    )
+    if (cachedProjection) {
+      return cachedProjection
+    }
+
     const repoIds = new Set(state.repos.map((repo) => repo.id))
     const coveredRepoIds = new Set<string>()
-    for (const setup of state.projectHostSetups) {
+    for (const setup of projectHostSetups) {
       const repoId = typeof setup.repoId === 'string' ? setup.repoId : ''
       if (repoIds.has(repoId)) {
         coveredRepoIds.add(repoId)
@@ -147,36 +190,39 @@ export function getProjectHostSetupProjectionFromState(
         coveredRepoIds.add(setup.id)
       }
     }
+    let projection: ProjectHostSetupProjection
     if (state.repos.length > 0 && coveredRepoIds.size < repoIds.size) {
-      return mergeProjectHostSetupProjection(
+      projection = mergeProjectHostSetupProjection(
         state.repos,
-        state.projects as Project[],
-        state.projectHostSetups as ProjectHostSetup[]
+        projects as Project[],
+        projectHostSetups as ProjectHostSetup[]
       )
-    }
-    const derived = getCachedProjectHostSetupProjection(state.repos)
-    const normalized = normalizeHydratedProjectHostSetupProjection(
-      state.repos,
-      state.projects as Project[],
-      state.projectHostSetups as ProjectHostSetup[],
-      derived
-    )
-    if (normalized.changed) {
+    } else {
+      const derived = getCachedProjectHostSetupProjection(state.repos)
+      const normalized = normalizeHydratedProjectHostSetupProjection(
+        state.repos,
+        projects as Project[],
+        projectHostSetups as ProjectHostSetup[],
+        derived
+      )
       // Why: this is a zustand selector compared with Object.is, so the merged
       // result must be reference-stable per (repos, projects, setups) input or
       // every render returns a fresh object and triggers a re-render storm.
-      return getCachedNormalizedProjectHostSetupProjection(
-        state.repos,
-        state.projects as Project[],
-        state.projectHostSetups as ProjectHostSetup[],
-        derived,
-        normalized
-      )
+      projection = normalized.changed
+        ? getCachedNormalizedProjectHostSetupProjection(
+            state.repos,
+            projects as Project[],
+            projectHostSetups as ProjectHostSetup[],
+            derived,
+            normalized
+          )
+        : getCachedProvidedProjectHostSetupProjection(
+            projects as Project[],
+            projectHostSetups as ProjectHostSetup[]
+          )
     }
-    return getCachedProvidedProjectHostSetupProjection(
-      state.projects as Project[],
-      state.projectHostSetups as ProjectHostSetup[]
-    )
+    cacheStateProjectHostSetupProjection(state.repos, projects, projectHostSetups, projection)
+    return projection
   }
   return getCachedProjectHostSetupProjection(state.repos)
 }

@@ -3,6 +3,11 @@ import { access, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { parse } from 'yaml'
+import {
+  SHARED_STUB_SOURCE,
+  parseSharedStubBlocks,
+  renderSharedStubBody
+} from './skill-stub-composition.mjs'
 
 const SCRIPT_DIR = import.meta.dirname
 const REPO_ROOT = path.resolve(SCRIPT_DIR, '..', '..')
@@ -90,40 +95,142 @@ function frontmatterBlock(markdown, sourcePath) {
 
 // Why: the stub's routing frontmatter (name + description) must stay byte-identical to the
 // guide's — it is the unchanged discovery surface — so we reuse the guide's own block and
-// replace only the body. Body normalized to LF with exactly one trailing newline.
-function composeStubProjection(guideMarkdown, stubBody, sourcePath) {
+// replace only the body. The body is the per-topic stub with its shared markers expanded,
+// normalized to LF with exactly one trailing newline.
+function composeStubProjection(guideMarkdown, stubBody, sourcePath, { sharedBlocks }) {
   const block = frontmatterBlock(guideMarkdown, sourcePath)
-  const body = normalizeMarkdown(stubBody).replace(/^\n+/, '').replace(/\n*$/, '\n')
+  const composed = renderSharedStubBody(normalizeMarkdown(stubBody), {
+    blocks: sharedBlocks,
+    sourcePath
+  })
+  const body = composed.replace(/^\n+/, '').replace(/\n*$/, '\n')
   return `${block}\n${body}`
+}
+
+async function readSharedStubBlocks(repoRoot) {
+  const sourcePath = path.join(repoRoot, ...SHARED_STUB_SOURCE.split('/'))
+  let markdown
+  try {
+    markdown = normalizeMarkdown(await readFile(sourcePath, 'utf8'))
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      throw new Error(`Stub topics require the shared fragment: ${SHARED_STUB_SOURCE}`)
+    }
+    throw error
+  }
+  return parseSharedStubBlocks(markdown, SHARED_STUB_SOURCE)
 }
 
 function constantName(name) {
   return `${name.replace(/-/g, '_').toUpperCase()}_MARKDOWN`
 }
 
-function serializeEmbeddedModule(guides) {
-  const markdownConstants = guides
+function fullConstantName(name) {
+  return `${name.replace(/-/g, '_').toUpperCase()}_FULL_MARKDOWN`
+}
+
+function referenceConstantName(guideName, referenceName) {
+  return `${`${guideName}_${referenceName}`.replace(/-/g, '_').toUpperCase()}_REFERENCE_MARKDOWN`
+}
+
+function composeFullMarkdown(markdown, references) {
+  if (references.length === 0) {
+    return markdown
+  }
+  const packageHeader =
+    '\n\n---\n\n# Bundled references\n\n' +
+    'These references belong to the version-matched guide above. Read only the documents ' +
+    'named by its action gates.\n'
+  const documents = references
     .map(
-      (guide) =>
-        `// oxfmt-ignore\nconst ${constantName(guide.name)} = ${JSON.stringify(guide.markdown)}`
+      ({ relativePath, markdown: referenceMarkdown }) =>
+        `\n<!-- bundled-reference: ${relativePath} -->\n\n${referenceMarkdown.trimEnd()}\n`
     )
+    .join('')
+  return `${markdown.trimEnd()}${packageHeader}${documents}`
+}
+
+function serializeEmbeddedModule(guides) {
+  const referenceConstants = guides.flatMap((guide) =>
+    guide.references.map((reference) => referenceConstantName(guide.name, reference.name))
+  )
+  // Why: the constant name flattens guide and reference names, so two topics could otherwise
+  // produce one identifier and silently serve the wrong reference.
+  if (new Set(referenceConstants).size !== referenceConstants.length) {
+    throw new Error(`Guide reference constant names collide: ${referenceConstants.join(', ')}`)
+  }
+  const markdownConstants = guides
+    .flatMap((guide) => {
+      const constants = [
+        `// oxfmt-ignore\nconst ${constantName(guide.name)} = ${JSON.stringify(guide.markdown)}`
+      ]
+      if (guide.fullMarkdown !== guide.markdown) {
+        constants.push(
+          `// oxfmt-ignore\nconst ${fullConstantName(guide.name)} = ${JSON.stringify(guide.fullMarkdown)}`
+        )
+      }
+      for (const reference of guide.references) {
+        constants.push(
+          `// oxfmt-ignore\nconst ${referenceConstantName(guide.name, reference.name)} = ${JSON.stringify(reference.markdown)}`
+        )
+      }
+      return constants
+    })
     .join('\n\n')
   const guideEntries = guides
     .map((guide) => {
       const markdownConstant = constantName(guide.name)
+      const referenceEntries = guide.references
+        .map(
+          (reference) =>
+            `{ name: ${JSON.stringify(reference.name)}, markdown: ${referenceConstantName(guide.name, reference.name)} }`
+        )
+        .join(', ')
       return [
         '  {',
         `    name: ${JSON.stringify(guide.name)},`,
         `    description: ${JSON.stringify(guide.description)},`,
         `    markdown: ${markdownConstant},`,
-        `    fullMarkdown: ${markdownConstant},`,
-        `    aliases: ${JSON.stringify(guide.aliases)}`,
+        `    fullMarkdown: ${guide.fullMarkdown === guide.markdown ? markdownConstant : fullConstantName(guide.name)},`,
+        `    aliases: ${JSON.stringify(guide.aliases)},`,
+        `    references: [${referenceEntries}]`,
         '  }'
       ].join('\n')
     })
     .join(',\n')
 
-  return `// Generated by config/scripts/generate-bundled-skill-guides.mjs. Do not edit.\n\nexport type BundledSkillGuide = {\n  readonly name: string\n  readonly description: string\n  readonly markdown: string\n  readonly fullMarkdown: string\n  readonly aliases: readonly string[]\n}\n\n${markdownConstants}\n\n// Why: no current guide has bundled reference documents, so --full is byte-identical for now.\n// oxfmt-ignore\nexport const BUNDLED_SKILL_GUIDES = [\n${guideEntries}\n] as const satisfies readonly BundledSkillGuide[]\n`
+  return `// Generated by config/scripts/generate-bundled-skill-guides.mjs. Do not edit.\n\nexport type BundledSkillGuideReference = {\n  readonly name: string\n  readonly markdown: string\n}\n\nexport type BundledSkillGuide = {\n  readonly name: string\n  readonly description: string\n  readonly markdown: string\n  readonly fullMarkdown: string\n  readonly aliases: readonly string[]\n  readonly references: readonly BundledSkillGuideReference[]\n}\n\n${markdownConstants}\n\n// oxfmt-ignore\nexport const BUNDLED_SKILL_GUIDES = [\n${guideEntries}\n] as const satisfies readonly BundledSkillGuide[]\n`
+}
+
+async function readGuideReferences(repoRoot, guideName) {
+  const referenceRoot = path.join(repoRoot, 'skill-guides', guideName, 'references')
+  let entries
+  try {
+    entries = await readdir(referenceRoot, { withFileTypes: true })
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return []
+    }
+    throw error
+  }
+  const unsupported = entries.find((entry) => !entry.isFile() || !entry.name.endsWith('.md'))
+  if (unsupported) {
+    throw new Error(
+      `Guide references must be Markdown files: skill-guides/${guideName}/references/${unsupported.name}`
+    )
+  }
+  return Promise.all(
+    entries
+      .sort((left, right) => left.name.localeCompare(right.name, 'en'))
+      .map(async (entry) => {
+        const sourcePath = path.join(referenceRoot, entry.name)
+        const markdown = normalizeMarkdown(await readFile(sourcePath, 'utf8'))
+        if (!markdown.trim()) {
+          throw new Error(`Guide reference is empty: ${toPosixRelativePath(repoRoot, sourcePath)}`)
+        }
+        return { name: entry.name.slice(0, -3), relativePath: `references/${entry.name}`, markdown }
+      })
+  )
 }
 
 function assertAliasContract(guides) {
@@ -169,6 +276,12 @@ async function assertStubSourcesMatchTopics(repoRoot) {
   }
 }
 
+// Why: path.relative yields `\` on Windows, but these paths are asserted in tests and pasted into commands.
+// split(sep) rather than replaceAll('\\', '/') so a POSIX filename containing a backslash survives intact.
+function toPosixRelativePath(repoRoot, filePath, pathModule = path) {
+  return pathModule.relative(repoRoot, filePath).split(pathModule.sep).join('/')
+}
+
 async function buildArtifacts(repoRoot = REPO_ROOT) {
   const guideRoot = path.join(repoRoot, 'skill-guides')
   const sourceFiles = (await readdir(guideRoot, { withFileTypes: true }))
@@ -186,6 +299,7 @@ async function buildArtifacts(repoRoot = REPO_ROOT) {
   await assertStubSourcesMatchTopics(repoRoot)
 
   const stubTopics = new Set(STUB_TOPICS)
+  const sharedBlocks = stubTopics.size > 0 ? await readSharedStubBlocks(repoRoot) : new Map()
   const guides = []
   const projections = []
   for (const name of expectedNames) {
@@ -193,17 +307,35 @@ async function buildArtifacts(repoRoot = REPO_ROOT) {
     // Why: Git may render text with native EOLs despite repository policy; the
     // embedded guide and generated projection must have one platform-neutral identity.
     const markdown = normalizeMarkdown(await readFile(sourcePath, 'utf8'))
-    const frontmatter = parseFrontmatter(markdown, path.relative(repoRoot, sourcePath))
+    const frontmatter = parseFrontmatter(markdown, toPosixRelativePath(repoRoot, sourcePath))
     if (frontmatter.name !== name) {
       throw new Error(`Guide source ${name}.md declares mismatched name ${frontmatter.name}`)
     }
     const aliases = GUIDE_ALIASES[name]
+    const references = await readGuideReferences(repoRoot, name)
     // Why: the embedded table always carries the full guide (served by `skills get`);
     // only the installable projection thins to a stub once a topic is in STUB_TOPICS.
-    guides.push({ name, description: frontmatter.description, markdown, aliases })
+    guides.push({
+      name,
+      description: frontmatter.description,
+      markdown,
+      fullMarkdown: composeFullMarkdown(markdown, references),
+      aliases,
+      // Why: `skills get --reference` serves one of these alone, so it keeps the
+      // per-file identity that fullMarkdown's concatenation erases.
+      references: references.map(({ name: referenceName, markdown: referenceMarkdown }) => ({
+        name: referenceName,
+        markdown: referenceMarkdown
+      }))
+    })
     const stubPath = path.join(repoRoot, 'skill-stubs', `${name}.md`)
     const content = stubTopics.has(name)
-      ? composeStubProjection(markdown, await readFile(stubPath, 'utf8'), `skill-stubs/${name}.md`)
+      ? composeStubProjection(
+          markdown,
+          await readFile(stubPath, 'utf8'),
+          `skill-stubs/${name}.md`,
+          { sharedBlocks }
+        )
       : markdown
     projections.push({
       path: path.join(repoRoot, 'skills', name, 'SKILL.md'),
@@ -243,7 +375,7 @@ async function verifyArtifacts(artifacts, repoRoot = REPO_ROOT) {
   if (stale.length > 0) {
     throw new Error(
       `Generated bundled skill guides are stale:\n${stale
-        .map((filePath) => path.relative(repoRoot, filePath))
+        .map((filePath) => toPosixRelativePath(repoRoot, filePath))
         .join('\n')}\nRun node config/scripts/generate-bundled-skill-guides.mjs --write.`
     )
   }
@@ -267,11 +399,14 @@ export {
   STUB_TOPICS,
   assertAliasContract,
   buildArtifacts,
+  composeFullMarkdown,
   composeStubProjection,
   frontmatterBlock,
   normalizeMarkdown,
   parseFrontmatter,
+  readSharedStubBlocks,
   serializeEmbeddedModule,
+  toPosixRelativePath,
   verifyArtifacts,
   writeArtifacts
 }

@@ -1,7 +1,7 @@
-import type { RepoSlice } from './slices/repos'
+import type { RepoSlice } from './repos/repo-state'
 import type { SparsePresetsSlice } from './slices/sparse-presets'
 import type { WorktreeSlice } from './slices/worktrees'
-import type { TerminalSlice } from './slices/terminals'
+import type { TerminalSlice } from './terminals/terminal-state'
 import type { TabsSlice } from './slices/tabs'
 import type { UISlice } from './slices/ui'
 import type { SettingsSlice } from './slices/settings'
@@ -18,6 +18,7 @@ import type { WorkspaceSpaceSlice } from './slices/workspace-space'
 import type {
   ClaudeUsageSlice,
   CodexUsageSlice,
+  MuseUsageSlice,
   OpenCodeUsageSlice
 } from './slices/usage-provider-slices'
 import type { BrowserSlice } from './slices/browser'
@@ -32,6 +33,7 @@ import type { RuntimeDetectedAgentsSlice } from './slices/runtime-detected-agent
 import type { WorktreeNavHistorySlice } from './slices/worktree-nav-history'
 import type { DictationSlice } from './slices/dictation'
 import type { WorkspaceCleanupSlice } from './slices/workspace-cleanup'
+import type { WorkspaceCleanupBrowseSlice } from './slices/workspace-cleanup-browse'
 import type { RuntimeStatusSlice } from './slices/runtime-status'
 import type { PullRequestGenerationSlice } from './slices/pull-request-generation'
 import type { CommitMessageGenerationSlice } from './slices/commit-message-generation'
@@ -39,9 +41,11 @@ import type { PinnedTabCloseConfirmSlice } from './slices/pinned-tab-close-confi
 import type { RecentlyClosedTabsSlice } from './slices/recently-closed-tabs'
 import type { OrcaProfilesSlice } from './slices/orca-profiles'
 import type { NewIssueDraftSlice } from './slices/new-issue-draft'
+import type { FeedbackDraftSlice } from './slices/feedback-draft'
 import type { TaskCreationDraftsSlice } from './slices/task-creation-drafts'
 import type { RemoteServerUpdatesSlice } from './slices/remote-server-updates'
 import type { TerminalQuickCommandHostsSlice } from './slices/terminal-quick-command-hosts'
+import type { StructuredSessionLaunchDirectorySlice } from './slices/structured-session-launch-directories'
 
 export type AppState = RepoSlice &
   SparsePresetsSlice &
@@ -63,6 +67,7 @@ export type AppState = RepoSlice &
   ClaudeUsageSlice &
   CodexUsageSlice &
   OpenCodeUsageSlice &
+  MuseUsageSlice &
   BrowserSlice &
   RateLimitSlice &
   SshSlice &
@@ -75,6 +80,7 @@ export type AppState = RepoSlice &
   WorktreeNavHistorySlice &
   DictationSlice &
   WorkspaceCleanupSlice &
+  WorkspaceCleanupBrowseSlice &
   RuntimeStatusSlice &
   PullRequestGenerationSlice &
   CommitMessageGenerationSlice &
@@ -82,6 +88,8 @@ export type AppState = RepoSlice &
   RecentlyClosedTabsSlice &
   OrcaProfilesSlice &
   NewIssueDraftSlice &
+  FeedbackDraftSlice &
   TaskCreationDraftsSlice &
   RemoteServerUpdatesSlice &
-  TerminalQuickCommandHostsSlice
+  TerminalQuickCommandHostsSlice &
+  StructuredSessionLaunchDirectorySlice

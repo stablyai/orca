@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { FolderWorkspace } from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import { filterFolderWorkspacesFromOtherDevices } from './workspace-creator-visibility'
 
 function makeFolderWorkspace(

@@ -4,7 +4,7 @@ import { CircleCheck, CircleDot, CircleX, Clock, GitMerge } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PullRequestIcon, checksLabel } from './WorktreeCardHelpers'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
-import type { IssueInfo } from '../../../../shared/types'
+import type { IssueInfo } from '../../../../shared/github/pull-request-types'
 import { translate } from '@/i18n/i18n'
 
 function MetadataStatusBadge({
@@ -58,11 +58,23 @@ export function IssueStateBadge({ state }: { state: IssueInfo['state'] }): React
   )
 }
 
-export function LinearStateBadge({ stateName }: { stateName: string }): React.JSX.Element {
+export function LinearStateBadge({
+  stateName,
+  stateType
+}: {
+  stateName: string
+  stateType?: string
+}): React.JSX.Element {
   const normalized = stateName.toLowerCase()
-  const done = /done|closed|complete|completed|merged|resolved/.test(normalized)
-  const cancelled = /cancel|canceled|duplicate|wontfix/.test(normalized)
-  const active = /progress|doing|started|active/.test(normalized)
+  const done = stateType
+    ? stateType === 'completed'
+    : /done|closed|complete|completed|merged|resolved/.test(normalized)
+  const cancelled = stateType
+    ? stateType === 'canceled'
+    : /cancel|canceled|duplicate|wontfix/.test(normalized)
+  const active = stateType
+    ? stateType === 'started'
+    : /progress|doing|started|active/.test(normalized)
   const Icon = done ? CircleCheck : cancelled ? CircleX : active ? Clock : CircleDot
   const tone = done
     ? 'border-purple-500/25 bg-purple-500/5 text-purple-600 dark:text-purple-300'

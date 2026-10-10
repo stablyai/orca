@@ -12,7 +12,6 @@ export function admitSharedControlSubscription(args: {
   deviceToken: string
   method: string
   params: unknown
-  expectedRuntimeId?: string
 }): number {
   if (args.subscriptions.size >= REMOTE_RUNTIME_MAX_SUBSCRIPTIONS) {
     throw new RemoteRuntimeClientError(
@@ -34,18 +33,12 @@ export function admitSharedControlSubscription(args: {
   return retainedParamsBytes
 }
 
-function serializeRequest(args: {
-  deviceToken: string
-  method: string
-  params: unknown
-  expectedRuntimeId?: string
-}): void {
+function serializeRequest(args: { deviceToken: string; method: string; params: unknown }): void {
   serializeRemoteRuntimeRpcRequest({
     requestId: '00000000-0000-4000-8000-000000000000',
     deviceToken: args.deviceToken,
     method: args.method,
-    params: args.params,
-    envelope: { expectedRuntimeId: args.expectedRuntimeId }
+    params: args.params
   })
 }
 

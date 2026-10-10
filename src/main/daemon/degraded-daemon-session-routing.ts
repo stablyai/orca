@@ -1,6 +1,6 @@
 import type { IPtyProvider } from '../providers/types'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
-import { SessionNotFoundError, TerminalSessionOwnerUnverifiedError } from './daemon-errors'
+import { SessionNotFoundError } from './daemon-errors'
 
 export function listProviderSessionIds(
   sessionProviders: ReadonlyMap<string, IPtyProvider>,
@@ -24,29 +24,6 @@ export async function attachDaemonOwnedSession(
     throw new SessionNotFoundError(sessionId)
   }
   return await owner.attach(sessionId)
-}
-
-/**
- * Session operations that must never be answered by the in-process fallback on another
- * provider's behalf. An unknown id resolves to the fallback, whose shutdown returns
- * silently and whose write/resize are no-ops — so a daemon-owned session reads as closed
- * while its agent keeps running, and typing into it disappears. Route there only when the
- * fallback genuinely owns the pty; otherwise say the session cannot be reached.
- *
- * Why not SessionNotFoundError: pty:kill treats "Session not found" as proof the pty is
- * already gone and synthesizes an exit, which is the same lie by another route. This one
- * means "still there, we just cannot reach its host", so the kill is reported as failed and
- * ownership is kept for a retry.
- */
-export function ownerForDaemonOwnedOperation(
-  owner: IPtyProvider,
-  fallback: IPtyProvider,
-  sessionId: string
-): IPtyProvider {
-  if (owner === fallback && fallback.hasPty?.(sessionId) !== true) {
-    throw new TerminalSessionOwnerUnverifiedError(sessionId)
-  }
-  return owner
 }
 
 /** Probes providers for an id absent from the routing map and adopts the

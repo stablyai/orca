@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { TaskProvider } from '../../../../shared/types'
+import type { TaskProvider } from '../../../../shared/task-providers'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkillNames
@@ -36,7 +36,8 @@ export function useTaskSourceProviderReadiness(
   const {
     installed: linearSkillInstalled,
     loading: linearSkillLoading,
-    settled: linearSkillSettled
+    settled: linearSkillSettled,
+    installedUnverifiable: linearSkillUnverifiable
   } = useInstalledAgentSkillNames(LINEAR_AGENT_SKILL_NAMES, {
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
@@ -83,6 +84,7 @@ export function useTaskSourceProviderReadiness(
         checking: linearChecking,
         skillInstalled: linearSkillInstalled,
         skillChecking: linearSkillLoading && !linearSkillSettled,
+        skillUnverifiable: linearSkillUnverifiable,
         visible: visible.has('linear')
       },
       jira: {
@@ -101,6 +103,7 @@ export function useTaskSourceProviderReadiness(
     linearSkillInstalled,
     linearSkillLoading,
     linearSkillSettled,
+    linearSkillUnverifiable,
     reviewChecking,
     reviewUnavailable,
     visibleProvidersKey

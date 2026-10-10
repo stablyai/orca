@@ -39,11 +39,33 @@ export async function snapshotGitCommonEntry(
   previous: GitCommonEntrySnapshot | undefined,
   forceFullScan: boolean
 ): Promise<GitCommonEntrySnapshot> {
-  // Structural leaves change in place every tick; only index uses the entry-dir gate.
+  // Git writes HEAD/index/config.worktree/locked via a lock file + rename inside the
+  // entry dir, so the entry dir's own signature moves on every one of those writes
+  // (verified against git 2.55: checkout, commit, amend, reset, ref updates, stash,
+  // worktree lock/unlock, config --worktree, index writes all move it). The one
+  // in-place exception is `gitdir` (worktree move/repair), which the periodic
+  // forceFullScan backstop (INDEX_BACKSTOP_TICKS) below re-stats regardless of this
+  // gate. Gating all of these leaves on the entry-dir signature turns an unchanged
+  // entry into a single stat per tick instead of stat-ing every leaf every tick.
+  const nextDirSignature = await gitCommonDirectorySignature(entryPath)
+  if (nextDirSignature === 'missing') {
+    return (
+      previous ?? {
+        dirSignature: nextDirSignature,
+        structuralSignatures: new Map(),
+        indexSignature: null,
+        headLogSignature: null
+      }
+    )
+  }
+  const shouldRescan = forceFullScan || !previous || previous.dirSignature !== nextDirSignature
+  if (!shouldRescan) {
+    return previous
+  }
   const structuralSignatures = new Map<string, string>()
-  const [nextDirSignature, headLogSignature] = await Promise.all([
-    gitCommonDirectorySignature(entryPath),
+  const [headLogSignature, indexSignature] = await Promise.all([
     gitCommonFileSignature(join(entryPath, HEAD_LOG_FILE)),
+    gitCommonFileSignature(join(entryPath, INDEX_FILE)),
     Promise.all(
       STRUCTURAL_METADATA_FILES.map(async (name) => {
         const signature = await gitCommonFileSignature(join(entryPath, name))
@@ -53,20 +75,6 @@ export async function snapshotGitCommonEntry(
       })
     )
   ])
-  if (nextDirSignature === 'missing') {
-    return (
-      previous ?? {
-        dirSignature: nextDirSignature,
-        structuralSignatures,
-        indexSignature: null,
-        headLogSignature
-      }
-    )
-  }
-  const shouldReadIndex = forceFullScan || !previous || previous.dirSignature !== nextDirSignature
-  const indexSignature = shouldReadIndex
-    ? await gitCommonFileSignature(join(entryPath, INDEX_FILE))
-    : previous.indexSignature
   return {
     dirSignature: nextDirSignature,
     structuralSignatures,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { JiraIssue, JiraSite } from '../../../shared/types'
+import type { JiraIssue, JiraSite } from '../../../shared/jira-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { bindTaskPageJiraItemSourceContext } from './task-page-jira-item-source-context'
 

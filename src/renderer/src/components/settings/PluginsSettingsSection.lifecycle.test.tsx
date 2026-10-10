@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PluginHostListEntry } from '../../../../preload/api-types'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { PluginsSettingsSection } from './PluginsSettingsSection'
 
 vi.mock('./SettingsSection', () => ({

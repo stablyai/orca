@@ -1,24 +1,34 @@
-import { z } from 'zod'
 import {
   connectRegisteredSshTarget,
   getRegisteredSshState,
   listRegisteredRemovedSshTargetLabels,
   listRegisteredSshTargets
-} from '../../../ipc/ssh'
-import { defineMethod, type RpcMethod } from '../core'
+} from '../../../ssh/ssh-target-registry'
+import { defineMethod } from '../core'
 import { getPublicSshError, getPublicSshState } from '../../public-ssh-state'
+import type { SshTargetSummary } from '../../../../shared/ssh-types'
+import { SshTarget } from '../../../../shared/rpc-contract/ssh-params'
 
-const SshTarget = z.object({
-  targetId: z.string().min(1)
-})
-
-function listRegisteredSshTargetSummaries(): { id: string; label: string }[] {
-  return listRegisteredSshTargets().map(({ id, label }) => ({ id, label }))
+// Why: `generation` stays optional on the wire — an old server simply omits it and its rows key on target id alone.
+function listRegisteredSshTargetSummaries(): SshTargetSummary[] {
+  return listRegisteredSshTargets().map(({ id, label, generation }) => {
+    const state = getRegisteredSshState(id)
+    const remotePlatform = state?.remotePlatform
+    return {
+      id,
+      label,
+      ...(generation === undefined ? {} : { generation }),
+      connected: state?.status === 'connected',
+      ...(state?.status === undefined ? {} : { connectionStatus: state.status }),
+      ...(remotePlatform === undefined ? {} : { remotePlatform })
+    }
+  })
 }
 
-export const SSH_METHODS: RpcMethod[] = [
+export const SSH_METHODS = [
   defineMethod({
     name: 'ssh.getState',
+    permission: 'workspace',
     params: SshTarget,
     handler: (params) => ({
       state: getPublicSshState(getRegisteredSshState(params.targetId) ?? null)
@@ -26,6 +36,7 @@ export const SSH_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'ssh.connect',
+    permission: 'host-admin',
     params: SshTarget,
     handler: async (params) => {
       try {
@@ -38,18 +49,21 @@ export const SSH_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'ssh.listTargets',
+    permission: 'workspace',
     params: null,
     // Why: legacy clients can call this method directly, so it must preserve the same HUB-private secret boundary.
     handler: () => ({ targets: listRegisteredSshTargetSummaries() })
   }),
   defineMethod({
     name: 'ssh.listTargetSummaries',
+    permission: 'workspace',
     params: null,
     // Why: paired clients need display identity only; SSH addresses, jump chains, and credentials remain HUB-private.
     handler: () => ({ targets: listRegisteredSshTargetSummaries() })
   }),
   defineMethod({
     name: 'ssh.listRemovedTargetLabels',
+    permission: 'workspace',
     params: null,
     handler: () => ({ labels: listRegisteredRemovedSshTargetLabels() })
   })

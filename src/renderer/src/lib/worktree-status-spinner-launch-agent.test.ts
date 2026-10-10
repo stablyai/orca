@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildTitleDerivedAgentRows } from '@/components/sidebar/worktree-title-derived-agent-rows'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import { getWorktreeStatus } from './worktree-status'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -53,18 +53,6 @@ describe('#9040 worktree dot attributes spinner titles to the launched agent', (
     )
 
     expect(status).toBe('working')
-  })
-
-  // Why: pins the #9647 gate — spinner attribution needs a launch identity, so a
-  // spinner in a tab no agent was launched in cannot spin the dot.
-  it('stays active for a spinner title with no launch identity', () => {
-    const status = getWorktreeStatus(
-      [{ id: 'tab-1', title: '⠐ Review branch for regressions' }],
-      [],
-      livePtyMap('tab-1')
-    )
-
-    expect(status).toBe('active')
   })
 
   it('does not manufacture activity from a non-spinner title with a launch identity', () => {

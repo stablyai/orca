@@ -1,4 +1,4 @@
-import type { FsChangeEvent } from '../../shared/types'
+import type { FsChangeEvent } from '../../shared/filesystem-entry-types'
 import {
   forgetRuntimeWatcherProcessRoot,
   resetRuntimeWatcherProcessForTest,

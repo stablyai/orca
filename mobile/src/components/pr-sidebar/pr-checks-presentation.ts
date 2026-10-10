@@ -1,4 +1,8 @@
-import type { PRCheckDetail, PRState, ProviderCheckSummary } from '../../../../src/shared/types'
+import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
+import type {
+  PRState,
+  ProviderCheckSummary
+} from '../../../../src/shared/github/pull-request-types'
 import {
   classifyCheckOutcome,
   summarizeProviderChecks,
@@ -99,6 +103,11 @@ export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSum
     outcome,
     label: parts.join(' · ')
   }
+}
+
+/** An unreadable checks reply is not an absent one, so the header must not read "No checks". */
+export function prChecksSummaryLabel(summary: PRChecksSummary, checksError: string | null): string {
+  return checksError === null ? summary.label : 'Checks unavailable'
 }
 
 // Per-row status word shown beside each check (desktop ChecksList parity), so the

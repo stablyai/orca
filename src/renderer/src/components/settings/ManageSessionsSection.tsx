@@ -8,7 +8,6 @@ import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { useDaemonActions, DaemonActionDialog } from '../shared/useDaemonActions'
 import { ManageSessionKillDialog } from './ManageSessionKillDialog'
-import { DaemonDegradedNotice } from './DaemonDegradedNotice'
 import { ManageSessionsTable } from './ManageSessionsTable'
 import { notifyDaemonSessionInventoryInvalidated } from '../status-bar/daemon-session-inventory-invalidation'
 import {
@@ -21,7 +20,6 @@ type ConfirmKind = 'killOne'
 
 export function ManageSessionsSection(): React.JSX.Element {
   const [sessions, setSessions] = useState<PtyManagementSession[]>([])
-  const [isDaemonDegraded, setIsDaemonDegraded] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(true)
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
   const [pendingKillSession, setPendingKillSession] = useState<PtyManagementSession | null>(null)
@@ -83,7 +81,6 @@ export function ManageSessionsSection(): React.JSX.Element {
       if (!isMounted.current || mutationInFlight.current) {
         return result.sessions
       }
-      setIsDaemonDegraded(result.degraded === true)
       setSessions(result.sessions)
       return result.sessions
     } catch (err) {
@@ -110,19 +107,6 @@ export function ManageSessionsSection(): React.JSX.Element {
 
   useEffect(() => {
     void refresh()
-  }, [refresh])
-
-  // Why refetch on focus: the degraded flag is computed in the main process and never pushed.
-  // DegradedDaemonFreshSpawnRouter.recover() clears it the moment the daemon answers a health
-  // check, so a banner rendered at mount can outlive the condition — and it arms a Restart that
-  // ends every live session. Matches TerminalTccAttributionNotice, which refetches for the same
-  // reason: a daemon restart or drain changes the verdict without a pane remount.
-  useEffect(() => {
-    const onFocus = (): void => {
-      void refresh()
-    }
-    window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
   }, [refresh])
 
   const sessionCount = sessions.length
@@ -233,11 +217,6 @@ export function ManageSessionsSection(): React.JSX.Element {
         <TerminalTccAttributionNotice
           showManageSessionsButton={false}
           refreshRevision={attributionRefreshRevision}
-        />
-        <DaemonDegradedNotice
-          degraded={isDaemonDegraded}
-          isBusy={isBusy}
-          onRestartDaemon={() => daemonActions.setPending('restart')}
         />
         <ManageSessionsTable
           sessions={sessions}

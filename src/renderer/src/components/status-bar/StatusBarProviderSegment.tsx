@@ -1,0 +1,391 @@
+import { AlertTriangle } from 'lucide-react'
+import React from 'react'
+import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
+import {
+  getDisplayedUsagePercentage,
+  type UsagePercentageDisplay
+} from '../../../../shared/usage-percentage-display'
+import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
+import { formatCurrencyAmount } from '../../../../shared/currency-format'
+import { formatCreditCount } from '../../../../shared/credit-count-format'
+import {
+  ProviderIcon,
+  USAGE_URGENT_PERCENT,
+  USAGE_WARNING_PERCENT,
+  clampUsedPercent,
+  getProviderDisplayName,
+  getProviderUsageStatusLabel
+} from './tooltip'
+import { getTightestUsageSection, getUsageHeadlineSection } from './UsageRosterPanel'
+import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
+import { formatUsagePercentageLabel } from './usage-percentage-label'
+import { translate } from '@/i18n/i18n'
+import { isCursorUsageBucket } from '../../../../shared/cursor-usage-buckets'
+
+function MiniBar({
+  usedPct,
+  display
+}: {
+  usedPct: number
+  display: UsagePercentageDisplay
+}): React.JSX.Element {
+  return (
+    <div
+      data-usage-bar
+      className="w-[48px] h-[6px] rounded-full bg-muted overflow-hidden flex-shrink-0"
+    >
+      <div
+        className="h-full rounded-full transition-all duration-300 bg-muted-foreground/40"
+        style={{ width: `${getDisplayedUsagePercentage(usedPct, display)}%` }}
+      />
+    </div>
+  )
+}
+
+function WindowLabel({
+  w,
+  label,
+  display,
+  showLabel = true
+}: {
+  w: RateLimitWindow
+  label: string
+  display: UsagePercentageDisplay
+  showLabel?: boolean
+}): React.JSX.Element {
+  return (
+    <span className="tabular-nums">
+      {formatUsagePercentageLabel(w.usedPercent, display)}
+      {showLabel ? ` ${label}` : ''}
+    </span>
+  )
+}
+
+// Single-letter provider badge for the icon-only (narrow) status bar. Shared by
+// the roster trigger and ProviderDetailsMenu so the dot's has-data condition
+// and markup can't drift between the two.
+export function ProviderLetterBadge({ p }: { p: ProviderRateLimits }): React.JSX.Element {
+  const hasData = Boolean(p.session || p.weekly || p.fableWeekly || p.monthly || p.buckets?.length)
+  return (
+    <span className="inline-flex items-center gap-1 text-muted-foreground">
+      <span
+        className={`inline-block h-2 w-2 rounded-full ${hasData ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
+      />
+      {getProviderLetter(p.provider)}
+    </span>
+  )
+}
+
+export type UsageTone = 'urgent' | 'warning' | 'normal'
+
+/** Urgency by consumption, matching the usage bar colors, whatever % display the user chose. */
+export function getUsageTone(p: ProviderRateLimits): UsageTone {
+  const tightest = getTightestUsageSection(p)
+  const used = tightest ? clampUsedPercent(tightest.window.usedPercent) : 0
+  return used >= USAGE_URGENT_PERCENT
+    ? 'urgent'
+    : used >= USAGE_WARNING_PERCENT
+      ? 'warning'
+      : 'normal'
+}
+
+/**
+ * Stands in for usage chips a narrow bar can't fit. Always rendered at the collapsing
+ * density so its width is known before anything collapses; out of the row while empty.
+ */
+export function UsageOverflowChip({
+  hidden,
+  display
+}: {
+  hidden: readonly ProviderRateLimits[]
+  display: UsagePercentageDisplay
+}): React.JSX.Element {
+  const tones = hidden.map(getUsageTone)
+  const tone = tones.includes('urgent')
+    ? 'urgent'
+    : tones.includes('warning')
+      ? 'warning'
+      : 'normal'
+  const names = hidden
+    .map((p) => {
+      const tightest = getTightestUsageSection(p)
+      const name = getProviderDisplayName(p.provider)
+      return tightest
+        ? `${name} ${formatUsagePercentageLabel(tightest.window.usedPercent, display)}`
+        : name
+    })
+    .join(', ')
+  return (
+    <span
+      data-usage-more
+      data-usage-collapsed={hidden.length === 0}
+      data-tone={tone}
+      aria-hidden={hidden.length === 0}
+      title={translate(
+        'auto.components.status.bar.StatusBar.hiddenUsageProviders',
+        'Also: {{value0}}',
+        {
+          value0: names
+        }
+      )}
+      className="inline-flex h-4 items-center rounded-full border border-border px-1.5 text-[11px] font-medium tabular-nums text-foreground data-[tone=urgent]:border-destructive/40 data-[tone=urgent]:text-destructive data-[tone=warning]:border-status-warning-border data-[tone=warning]:text-status-warning data-[usage-collapsed=true]:invisible data-[usage-collapsed=true]:absolute"
+    >
+      +{Math.max(1, hidden.length)}
+    </span>
+  )
+}
+
+function getProviderLetter(provider: ProviderRateLimits['provider']): string {
+  switch (provider) {
+    case 'claude':
+      return 'C'
+    case 'gemini':
+      return 'G'
+    case 'opencode-go':
+      return 'O'
+    case 'kimi':
+      return 'K'
+    case 'antigravity':
+      return 'A'
+    case 'minimax':
+      return 'M'
+    case 'grok':
+      return 'R'
+    case 'cursor':
+      return 'U'
+    case 'zcode':
+      return 'Z'
+    case 'codex':
+      return 'X'
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Provider segment
+// ---------------------------------------------------------------------------
+
+// Why: Gemini exposes extra experimental buckets that made the pre-existing verbose footer noisy.
+const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
+
+/**
+ * Why Antigravity is matched by provider and not by name: its pools are one per model group, and the
+ * group names come from the account's own tier ("Gemini Models", "Claude and GPT models" today), so
+ * there is no list to allow. Cursor stays name-matched on purpose — a pool Orca does not recognise
+ * is filtered so the segment can fall back to the plan total instead of showing an unlabelled row.
+ */
+function isVisibleStatusBarBucket(name: string, provider: ProviderRateLimits['provider']): boolean {
+  if (provider === 'antigravity') {
+    return true
+  }
+  return STATUS_BAR_BUCKET_NAMES.has(name) || isCursorUsageBucket(name)
+}
+
+function VerboseProviderUsage({
+  p,
+  display
+}: {
+  p: ProviderRateLimits
+  display: UsagePercentageDisplay
+}): React.JSX.Element {
+  if (p.buckets && p.buckets.length > 0) {
+    const visibleBuckets = p.buckets.filter((bucket) =>
+      isVisibleStatusBarBucket(bucket.name, p.provider)
+    )
+    // Why: a provider whose buckets are all filtered out still has a headline
+    // window worth showing rather than rendering an empty segment.
+    // Why weekly is in the chain: a tier metered weekly only (Antigravity reports no 5h pool on
+    // some tiers) has no session window, and omitting weekly rendered an empty segment for an
+    // account that does have a limit worth showing.
+    const fallbackWindow = p.session ?? p.monthly ?? p.weekly ?? null
+    return (
+      <>
+        {visibleBuckets.map((bucket, index) => (
+          <React.Fragment key={bucket.name}>
+            {index > 0 ? <span className="text-muted-foreground">·</span> : null}
+            <span className="tabular-nums">
+              {bucket.name} {formatUsagePercentageLabel(bucket.usedPercent, display)}
+            </span>
+          </React.Fragment>
+        ))}
+        {visibleBuckets.length === 0 && fallbackWindow ? (
+          <WindowLabel
+            w={fallbackWindow}
+            label={formatRateLimitWindowChipLabel(fallbackWindow)}
+            display={display}
+          />
+        ) : null}
+      </>
+    )
+  }
+
+  const visibleWindows = [
+    p.session
+      ? {
+          key: 'session',
+          window: p.session,
+          label: formatRateLimitWindowChipLabel(p.session)
+        }
+      : null,
+    p.weekly
+      ? {
+          key: 'weekly',
+          window: p.weekly,
+          label: formatRateLimitWindowChipLabel(p.weekly)
+        }
+      : null,
+    p.fableWeekly
+      ? {
+          key: 'fableWeekly',
+          window: p.fableWeekly,
+          label: translate('auto.components.status.bar.StatusBar.a79c64f87e', 'Fable')
+        }
+      : null,
+    // Why: monthly stays inline for monthly-only providers; otherwise the detail panel carries it.
+    p.monthly && !p.session && !p.weekly
+      ? {
+          key: 'monthly',
+          window: p.monthly,
+          label: formatRateLimitWindowChipLabel(p.monthly)
+        }
+      : null
+  ].filter((window): window is { key: string; window: RateLimitWindow; label: string } => {
+    return window !== null
+  })
+
+  return (
+    <>
+      {visibleWindows.map((window, index) => (
+        <React.Fragment key={window.key}>
+          {index > 0 ? <span className="text-muted-foreground">·</span> : null}
+          <WindowLabel w={window.window} label={window.label} display={display} />
+        </React.Fragment>
+      ))}
+    </>
+  )
+}
+
+// A plan spends into its overage balance only once an included window is
+// exhausted. Treat ~100% as capped to tolerate provider rounding.
+const CAP_THRESHOLD_PERCENT = 99.5
+
+// Why: only reveal the compact balance once a capped window can spend it.
+function isExtraUsageActive(p: ProviderRateLimits): boolean {
+  if (
+    !p.extraUsage ||
+    !p.extraUsage.enabled ||
+    (p.extraUsage.unit === 'currency' &&
+      (p.extraUsage.balance === null || p.extraUsage.balance <= 0))
+  ) {
+    return false
+  }
+  return [p.session, p.weekly, p.monthly, p.fableWeekly].some(
+    (w) => w != null && clampUsedPercent(w.usedPercent) >= CAP_THRESHOLD_PERCENT
+  )
+}
+
+function formatCompactExtraUsage(balance: ProviderRateLimits['extraUsage']): string {
+  if (!balance) {
+    return ''
+  }
+  if (balance.unit === 'credits') {
+    return balance.unlimited
+      ? translate('auto.components.status.bar.StatusBar.4025a6f62f', 'Unlimited')
+      : translate('auto.components.status.bar.StatusBar.a95969101f', '{{value0}} credits', {
+          value0: formatCreditCount(balance.balance)
+        })
+  }
+  return balance.balance === null
+    ? ''
+    : translate('auto.components.status.bar.StatusBar.4fba7dc1e7', '{{value0}} bal', {
+        value0: formatCurrencyAmount(balance.balance, balance.currencyCode)
+      })
+}
+
+export function ProviderSegment({
+  p,
+  compact,
+  display,
+  mode = 'verbose'
+}: {
+  p: ProviderRateLimits | null
+  compact: boolean
+  display: UsagePercentageDisplay
+  mode?: StatusBarUsageMode
+}): React.JSX.Element {
+  const provider = p?.provider ?? 'claude'
+  const statusLabel = p ? getProviderUsageStatusLabel(p) : ''
+
+  // Idle / initial load
+  if (!p || p.status === 'idle') {
+    return (
+      <span className="inline-flex items-center gap-1 text-muted-foreground">
+        <ProviderIcon provider={provider} />
+        <span className="animate-pulse">···</span>
+      </span>
+    )
+  }
+
+  const tightest = mode === 'compact' ? getUsageHeadlineSection(p) : getTightestUsageSection(p)
+
+  // Fetching with no prior data
+  if (p.status === 'fetching' && !tightest) {
+    return (
+      <span className="inline-flex items-center gap-1 text-muted-foreground">
+        <ProviderIcon provider={provider} />
+        <span className="animate-pulse">···</span>
+      </span>
+    )
+  }
+
+  // Unavailable (CLI not installed)
+  if (p.status === 'unavailable') {
+    return (
+      <span className="inline-flex items-center gap-1 text-muted-foreground/50">
+        <ProviderIcon provider={provider} /> --
+      </span>
+    )
+  }
+
+  // Error with no data
+  if (p.status === 'error' && !tightest) {
+    return (
+      <span className="inline-flex items-center gap-1 text-muted-foreground">
+        <ProviderIcon provider={provider} />
+        <AlertTriangle size={11} className="text-muted-foreground/80" />
+        {!compact && <span className="text-[11px] font-medium">{statusLabel}</span>}
+      </span>
+    )
+  }
+
+  // Has data (ok, fetching with stale data, or error with stale data)
+  const isStale = p.status === 'error'
+  const showBalance = isExtraUsageActive(p)
+
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <ProviderIcon provider={provider} />
+      {mode === 'verbose' ? (
+        <>
+          {tightest && !compact ? (
+            <MiniBar usedPct={clampUsedPercent(tightest.window.usedPercent)} display={display} />
+          ) : null}
+          <VerboseProviderUsage p={p} display={display} />
+        </>
+      ) : tightest ? (
+        <WindowLabel
+          w={tightest.window}
+          label={tightest.label}
+          display={display}
+          showLabel={!compact}
+        />
+      ) : null}
+      {showBalance && p.extraUsage ? (
+        <>
+          <span className="text-muted-foreground">·</span>
+          <span className="tabular-nums">{formatCompactExtraUsage(p.extraUsage)}</span>
+        </>
+      ) : null}
+      {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
+    </span>
+  )
+}

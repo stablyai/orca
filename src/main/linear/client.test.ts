@@ -90,13 +90,13 @@ async function loadClientModule(options: SafeStorageMockOptions = {}) {
       })
     })
   })
-  vi.doMock('electron', () => ({
-    safeStorage: {
-      isEncryptionAvailable: () => options.encryptionAvailable ?? false,
-      encryptString: (value: string) => Buffer.from(value),
-      decryptString: options.decryptString ?? ((value: Buffer) => value.toString('utf-8'))
-    }
-  }))
+  const { setSecretStore } = await import('../../shared/secret-store')
+  setSecretStore({
+    isEncryptionAvailable: () => options.encryptionAvailable ?? false,
+    encryptString: (value) => Buffer.from(value),
+    decryptString: options.decryptString ?? ((value) => value.toString('utf-8')),
+    describeProtectionGap: () => null
+  })
   vi.doMock('os', async () => {
     const actual = await vi.importActual<typeof Os>('os')
     return { ...actual, homedir: () => tempHome }
@@ -146,6 +146,34 @@ function mkdtempLike(prefix: string): string {
 }
 
 describe('Linear client workspace storage', () => {
+  it('forwards an optional detail deadline to both SDK clients', async () => {
+    const linear = await loadClientModule()
+    await linear.connect('token-alpha')
+    const signal = new AbortController().signal
+    const entry = linear.getClients('org-alpha', signal)[0]
+    expect(linearClientMock).toHaveBeenLastCalledWith({ apiKey: 'token-alpha', signal })
+    linear.getPublicFileUrlClient(entry, signal)
+    expect(linearClientMock).toHaveBeenLastCalledWith({
+      apiKey: 'token-alpha',
+      signal,
+      headers: {
+        'public-file-urls-expire-in': String(linear.LINEAR_PUBLIC_FILE_URL_EXPIRY_SECONDS)
+      }
+    })
+  })
+  it('requests temporary file URLs using only the selected workspace credential', async () => {
+    const linear = await loadClientModule()
+    await linear.connect('token-alpha')
+    await linear.connect('token-beta')
+    const entry = linear.getClients('org-alpha')[0]
+    linear.getPublicFileUrlClient(entry)
+    expect(linearClientMock).toHaveBeenLastCalledWith({
+      apiKey: 'token-alpha',
+      headers: {
+        'public-file-urls-expire-in': String(linear.LINEAR_PUBLIC_FILE_URL_EXPIRY_SECONDS)
+      }
+    })
+  })
   it('stores multiple workspaces and remembers the selected workspace', async () => {
     const linear = await loadClientModule()
 

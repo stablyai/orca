@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest'
 import {
   sanitizeWorktreeName,
   sanitizeWorktreeDisplayName,
+  resolveWorktreeCreateDisplayName,
+  resolveWorktreeCreateDisplayNameRequest,
+  resolveWorktreeCreateDisplayNameMeta,
   ensurePathWithinWorkspace,
   computeBranchName,
   getConfiguredBranchPrefix,
@@ -128,6 +131,101 @@ describe('sanitizeWorktreeDisplayName', () => {
   it('returns undefined when nothing displayable remains', () => {
     expect(sanitizeWorktreeDisplayName('\u0000\n\t')).toBeUndefined()
   })
+
+  it('returns undefined for an unusable user label', () => {
+    expect(resolveWorktreeCreateDisplayName('\u0000\u202e', 'user')).toBeUndefined()
+  })
+})
+
+describe('worktree create display-name provenance', () => {
+  it('recovers the name-only contract from an older CLI request', () => {
+    expect(resolveWorktreeCreateDisplayNameRequest(undefined, undefined, 'feature', true)).toEqual({
+      value: 'feature',
+      kind: 'user'
+    })
+  })
+
+  it('recovers a legacy name-only user create without CLI provenance', () => {
+    expect(resolveWorktreeCreateDisplayNameRequest(undefined, undefined, 'feature', false)).toEqual(
+      {
+        value: 'feature',
+        kind: 'user'
+      }
+    )
+    expect(
+      resolveWorktreeCreateDisplayNameMeta('feature', 'feature', 'user', {
+        requestedName: 'feature',
+        sanitizedName: 'feature'
+      })
+    ).toEqual({ displayName: 'feature', displayNameIsPinned: true })
+  })
+
+  it('keeps a legacy generated name automatic when nameWasGenerated is set', () => {
+    expect(
+      resolveWorktreeCreateDisplayNameRequest(undefined, undefined, 'nautilus', false, true)
+    ).toEqual({
+      value: undefined,
+      kind: 'generated'
+    })
+  })
+
+  it('keeps a legacy artifact display name generated when its kind is absent', () => {
+    expect(
+      resolveWorktreeCreateDisplayNameRequest('Issue title', undefined, 'feature', false)
+    ).toEqual({ value: 'Issue title', kind: 'generated' })
+  })
+
+  it('treats a CLI name as intentional even if a caller supplies generated provenance', () => {
+    expect(
+      resolveWorktreeCreateDisplayNameRequest('Agent label', 'generated', 'feature', true)
+    ).toEqual({ value: 'Agent label', kind: 'user' })
+  })
+
+  it('preserves exact user text apart from edge whitespace and controls', () => {
+    expect(resolveWorktreeCreateDisplayName('  My  Label\n', 'user')).toBe('My  Label')
+  })
+
+  it('pins user labels without adding collision suffixes to visible text', () => {
+    expect(
+      resolveWorktreeCreateDisplayNameMeta('My Label', 'my-label-2', 'user', {
+        requestedName: 'My Label',
+        sanitizedName: 'my-label-2'
+      })
+    ).toEqual({ displayName: 'My Label', displayNameIsPinned: true })
+  })
+
+  it('keeps generated labels automatic only when they equal the branch', () => {
+    expect(
+      resolveWorktreeCreateDisplayNameMeta('Issue title', 'feature-2', 'generated', {
+        requestedName: 'feature-2',
+        sanitizedName: 'feature-2'
+      })
+    ).toEqual({ displayName: 'Issue title', displayNameIsPinned: true })
+    expect(
+      resolveWorktreeCreateDisplayNameMeta('feature-2', 'feature-2', 'generated', {
+        requestedName: 'feature-2',
+        sanitizedName: 'feature-2'
+      })
+    ).toEqual({})
+  })
+
+  it('keeps a slashy branch label automatic when only its folder is sanitized', () => {
+    expect(
+      resolveWorktreeCreateDisplayNameMeta(undefined, 'feature/login', undefined, {
+        requestedName: 'feature/login',
+        sanitizedName: 'feature-login'
+      })
+    ).toEqual({ displayName: 'feature/login', displayNameIsPinned: false })
+  })
+
+  it('keeps a user label that sanitizes away automatic', () => {
+    expect(
+      resolveWorktreeCreateDisplayNameMeta(undefined, 'feature-2', 'user', {
+        requestedName: 'feature',
+        sanitizedName: 'feature-2'
+      })
+    ).toEqual({ displayNameIsPinned: false })
+  })
 })
 
 describe('ensurePathWithinWorkspace', () => {
@@ -190,28 +288,10 @@ describe('computeBranchName', () => {
 })
 
 describe('getConfiguredBranchPrefix', () => {
-  it('returns the git username for the git-username strategy', () => {
-    expect(getConfiguredBranchPrefix({ branchPrefix: 'git-username' }, 'jdoe')).toBe('jdoe')
-  })
-
-  it('returns null for git-username when no username is available', () => {
-    expect(getConfiguredBranchPrefix({ branchPrefix: 'git-username' }, null)).toBeNull()
-  })
-
-  it('returns the custom value for the custom strategy', () => {
-    expect(
-      getConfiguredBranchPrefix({ branchPrefix: 'custom', branchPrefixCustom: 'team' }, null)
-    ).toBe('team')
-  })
-
   it('returns null for custom strategy with an empty value', () => {
     expect(
       getConfiguredBranchPrefix({ branchPrefix: 'custom', branchPrefixCustom: '' }, null)
     ).toBeNull()
-  })
-
-  it('returns null when no prefix strategy applies', () => {
-    expect(getConfiguredBranchPrefix({ branchPrefix: 'none' }, 'jdoe')).toBeNull()
   })
 
   it('normalizes a trailing slash out of the custom prefix', () => {
@@ -459,6 +539,7 @@ describe('mergeWorktree', () => {
   it('merges with full metadata', () => {
     const meta = {
       displayName: 'My Feature',
+      displayNameIsPinned: true,
       comment: 'WIP',
       linkedIssue: 42,
       linkedPR: 10,
@@ -500,6 +581,7 @@ describe('mergeWorktree', () => {
       isBare: false,
       isMainWorktree: false,
       displayName: 'My Feature',
+      displayNameMode: 'fixed',
       comment: 'WIP',
       linkedIssue: 42,
       linkedPR: 10,
