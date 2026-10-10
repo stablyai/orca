@@ -18424,7 +18424,6 @@
         "alreadySent": "이 메시지는 이미 전송되었습니다.",
         "listLabel": "대기 중인 메시지",
         "behindReturnedHold": "대기 중 — 앞의 메시지에 확인이 필요합니다",
-        "awaitingAnswerHold": "답변을 기다리는 중",
         "steer": "지금 보내기",
         "send": "보내기",
         "steerHint": "모델을 중단하지 않고 보냅니다",

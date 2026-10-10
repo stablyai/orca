@@ -120,7 +120,7 @@ describe('NativeChatQueuedMessageList inline edit', () => {
     const cards = [
       card({
         messageId: 'mail',
-        hold: 'awaiting-answer',
+        hold: 'behind-returned',
         from: { kind: 'agent', senders: [], orchestration: null }
       })
     ]
@@ -128,7 +128,7 @@ describe('NativeChatQueuedMessageList inline edit', () => {
     const row = screen.getByRole('listitem')
     expect(within(row).getByText('Editing message')).toBeTruthy()
     expect(within(row).getByText('From')).toBeTruthy()
-    expect(within(row).queryByText('Waiting for your answer')).toBeNull()
+    expect(within(row).queryByText('Waiting — a message ahead needs attention')).toBeNull()
     fireEvent.click(within(row).getByRole('button', { name: 'Cancel editing' }))
     expect(editor.cancel).toHaveBeenCalledOnce()
     rerender(
@@ -142,7 +142,7 @@ describe('NativeChatQueuedMessageList inline edit', () => {
         />
       </TooltipProvider>
     )
-    expect(screen.getByText('Waiting for your answer')).toBeTruthy()
+    expect(screen.getByText('Waiting — a message ahead needs attention')).toBeTruthy()
     expect(screen.queryByText('Editing message')).toBeNull()
   })
 

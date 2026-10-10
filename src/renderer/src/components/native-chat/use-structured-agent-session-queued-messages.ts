@@ -99,7 +99,6 @@ export function useStructuredAgentSessionQueuedMessages(args: {
   const cards = useMemo(
     () => [
       ...projectQueuedMessageCards(queuedMessages, submissions, {
-        hasPendingPrompt,
         // A command card offers no send while the agent works.
         agentWorking: isWorking,
         queuePaused: queuePause !== null
@@ -113,7 +112,7 @@ export function useStructuredAgentSessionQueuedMessages(args: {
         )
       )
     ],
-    [hasPendingPrompt, isWorking, sending, queuePause, queuedMessages, submissions]
+    [isWorking, sending, queuePause, queuedMessages, submissions]
   )
   const cardsRef = useRef(cards)
   useEffect(() => {
