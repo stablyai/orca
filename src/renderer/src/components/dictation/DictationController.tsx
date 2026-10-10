@@ -9,9 +9,13 @@ import {
   type DictationInsertionTarget
 } from './dictation-insertion-target'
 import { formatFinalTranscriptSegment } from './dictation-final-segments'
-import { recordStoppedSession, waitForStoppedSession } from './dictation-stopped-sessions'
+import {
+  recordStoppedSession,
+  waitForStoppedSession,
+  type StoppedSessionWaiters
+} from './dictation-stopped-sessions'
 import { translate } from '@/i18n/i18n'
-import { showDictationStartErrorToast } from './dictation-start-error-toast'
+import { showDictationStartErrorToast, showNoSpeechModelToast } from './dictation-start-error-toast'
 import { useHoldDictationGesture } from './use-hold-dictation-gesture'
 import { DICTATION_CONTROL_EVENT, type DictationControlAction } from './dictation-control-events'
 import { publishDictationMeter } from './dictation-meter-store'
@@ -37,8 +41,10 @@ export function DictationController() {
   const holdGestureActiveRef = useRef(false)
   const insertionTargetRef = useRef<DictationInsertionTarget | null>(null)
   const activeSessionIdRef = useRef<string | null>(null)
+  // Why: after an error (e.g. a duration cap) the stop still yields the text so far; keep accepting it.
+  const salvageSessionIdRef = useRef<string | null>(null)
   const stoppedSessionIdsRef = useRef(new Set<string>())
-  const stoppedResolversRef = useRef(new Map<string, () => void>())
+  const stoppedResolversRef = useRef<StoppedSessionWaiters>(new Map())
   const stopRequestedDuringStartRef = useRef(false)
   const finalTranscriptReceivedRef = useRef(false)
   const erroredSessionIdsRef = useRef(new Set<string>())
@@ -55,6 +61,7 @@ export function DictationController() {
 
   const finishDictationSession = useCallback(
     async (sessionId: string) => {
+      const runId = dictationRunRef.current
       dictationStateRef.current = 'stopping'
       setDictationState('stopping')
       stopCapture()
@@ -68,6 +75,10 @@ export function DictationController() {
       // event so old finals cannot be mistaken for the next dictation run.
       await waitForStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef)
       const sessionErrored = erroredSessionIdsRef.current.delete(sessionId)
+      // Why: an error during the flush hands cleanup to the error handler, which may have finished and let a new run start.
+      if (dictationRunRef.current !== runId) {
+        return
+      }
       if (!sessionErrored && !finalTranscriptReceivedRef.current && getCapturedChunkCount() > 0) {
         toast.message(
           translate(
@@ -98,18 +109,7 @@ export function DictationController() {
 
     const modelId = settings?.voice?.sttModel
     if (!modelId) {
-      toast('No speech model selected. Download one in Settings > Voice.', {
-        action: {
-          label: translate(
-            'auto.components.dictation.DictationController.bb7f599ee7',
-            'Open Settings'
-          ),
-          onClick: () => {
-            useAppStore.getState().openSettingsTarget({ pane: 'voice', repoId: null })
-            useAppStore.getState().openSettingsPage()
-          }
-        }
-      })
+      showNoSpeechModelToast()
       return
     }
 
@@ -177,17 +177,16 @@ export function DictationController() {
       if (stopRequestedDuringStartRef.current) {
         stopCapture({ preserveBufferedAudio: true })
       }
+      // Why: a run mismatch means the error handler owns this session and still inserts its salvaged final.
       if (dictationRunRef.current !== runId) {
         discardBufferedAudio()
         stopCapture()
-        insertionTargetRef.current = null
         return
       }
 
       await window.api.speech.startDictation(modelId, undefined, sessionId)
       if (dictationRunRef.current !== runId) {
         discardBufferedAudio()
-        insertionTargetRef.current = null
         stopCapture()
         await window.api.speech.stopDictation(sessionId).catch(() => undefined)
         drainStoppedSession(sessionId)
@@ -197,7 +196,6 @@ export function DictationController() {
       await flushBufferedAudio()
       if (dictationRunRef.current !== runId) {
         discardBufferedAudio()
-        insertionTargetRef.current = null
         stopCapture()
         await window.api.speech.stopDictation(sessionId).catch(() => undefined)
         drainStoppedSession(sessionId)
@@ -360,7 +358,10 @@ export function DictationController() {
     })
 
     const cleanupFinal = window.api.speech.onFinalTranscript((data) => {
-      if (data.sessionId !== activeSessionIdRef.current || !data.text) {
+      const accepted =
+        data.sessionId === activeSessionIdRef.current ||
+        data.sessionId === salvageSessionIdRef.current
+      if (!accepted || !data.text) {
         return
       }
       setPartialTranscript('')
@@ -394,7 +395,9 @@ export function DictationController() {
       const sessionId = data.sessionId
       erroredSessionIdsRef.current.add(sessionId)
       dictationRunRef.current += 1
+      const errorRunId = dictationRunRef.current
       activeSessionIdRef.current = null
+      salvageSessionIdRef.current = sessionId
       toast.error(
         translate(
           'auto.components.dictation.DictationController.de136f1199',
@@ -409,6 +412,13 @@ export function DictationController() {
       void (async () => {
         await window.api.speech.stopDictation(sessionId).catch(() => undefined)
         await waitForStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef)
+        if (salvageSessionIdRef.current === sessionId) {
+          salvageSessionIdRef.current = null
+        }
+        // Why: a dictation started after the error owns the shared refs and state now.
+        if (dictationRunRef.current !== errorRunId) {
+          return
+        }
         insertionTargetRef.current = null
         intentionalTargetCancellationRef.current = false
         stopRequestedDuringStartRef.current = false

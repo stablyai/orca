@@ -1,5 +1,13 @@
 import { z } from 'zod'
 import { OptionalString, requiredString } from './rpc-param-primitives'
+import {
+  isWellFormedCloudSpeechApiKey,
+  MALFORMED_CLOUD_SPEECH_API_KEY_MESSAGE
+} from '../cloud-speech-providers'
+import {
+  MAX_DICTATION_INPUT_SAMPLE_RATE,
+  MIN_DICTATION_INPUT_SAMPLE_RATE
+} from '../speech-audio-sample-rate'
 
 export const AUDIO_BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
 
@@ -36,7 +44,11 @@ export const DictationChunk = z.object({
     // Why: Buffer.from(..., 'base64') silently drops malformed bytes; reject
     // bad mobile audio chunks instead of feeding empty/corrupt PCM.
     .refine(isValidAudioBase64, 'Audio chunk must be base64'),
-  sampleRate: z.number().finite().positive()
+  sampleRate: z
+    .number()
+    .int()
+    .min(MIN_DICTATION_INPUT_SAMPLE_RATE)
+    .max(MAX_DICTATION_INPUT_SAMPLE_RATE)
 })
 
 export const DictationHandle = z.object({
@@ -51,4 +63,26 @@ export const DictationSetup = z.object({
   enabled: z.boolean().optional(),
   modelId: OptionalString,
   dictationMode: z.enum(['toggle', 'hold']).optional()
+})
+
+export const MAX_CLOUD_SPEECH_API_KEY_LENGTH = 512
+
+export const SpeechProviderAction = z.object({
+  providerId: requiredString('Missing provider ID')
+})
+
+export const SpeechProviderKeySave = z.object({
+  providerId: requiredString('Missing provider ID'),
+  apiKey: requiredString('Missing API key')
+    // Why: the key rides in every request header; real provider keys are well under this.
+    .refine((value) => value.length <= MAX_CLOUD_SPEECH_API_KEY_LENGTH, 'API key is too long')
+    .refine(isWellFormedCloudSpeechApiKey, {
+      message: MALFORMED_CLOUD_SPEECH_API_KEY_MESSAGE
+    }),
+  // Why: verify-then-save keeps a typo from silently replacing a working key; omitted means verify.
+  verify: z.boolean().optional()
+})
+
+export const SpeechProviderConfigure = z.object({
+  language: OptionalString
 })

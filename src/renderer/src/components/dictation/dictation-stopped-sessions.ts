@@ -1,22 +1,24 @@
 type RefLike<T> = { current: T }
 
+export type StoppedSessionWaiters = Map<string, Set<() => void>>
+
 const STOPPED_SESSION_WAIT_MS = 1000
 const MAX_EARLY_STOPPED_SESSION_IDS = 16
 
 export function recordStoppedSession(
   sessionId: string,
   stoppedSessionIdsRef: RefLike<Set<string>>,
-  stoppedResolversRef: RefLike<Map<string, () => void>>
+  stoppedResolversRef: RefLike<StoppedSessionWaiters>
 ): void {
-  const resolver = stoppedResolversRef.current.get(sessionId)
-  if (resolver) {
+  const waiters = stoppedResolversRef.current.get(sessionId)
+  if (waiters) {
     stoppedResolversRef.current.delete(sessionId)
-    resolver()
-    return
+    for (const resolve of waiters) {
+      resolve()
+    }
   }
 
-  // Why: stopped events can arrive for abandoned startup attempts that will
-  // never wait on the id. Keep the early-event cache bounded across sessions.
+  // Why: cached even after waking waiters so later ones resolve at once; bounded for abandoned startups.
   stoppedSessionIdsRef.current.delete(sessionId)
   stoppedSessionIdsRef.current.add(sessionId)
   while (stoppedSessionIdsRef.current.size > MAX_EARLY_STOPPED_SESSION_IDS) {
@@ -31,20 +33,28 @@ export function recordStoppedSession(
 export function waitForStoppedSession(
   sessionId: string,
   stoppedSessionIdsRef: RefLike<Set<string>>,
-  stoppedResolversRef: RefLike<Map<string, () => void>>
+  stoppedResolversRef: RefLike<StoppedSessionWaiters>
 ): Promise<void> {
-  if (stoppedSessionIdsRef.current.delete(sessionId)) {
+  // Why: kept (bounded) rather than consumed so a second waiter on the same session also resolves.
+  if (stoppedSessionIdsRef.current.has(sessionId)) {
     return Promise.resolve()
   }
 
   return new Promise((resolve) => {
-    const timeoutId = window.setTimeout(() => {
-      stoppedResolversRef.current.delete(sessionId)
-      resolve()
-    }, STOPPED_SESSION_WAIT_MS)
-    stoppedResolversRef.current.set(sessionId, () => {
+    // Why: the user's stop and an error cleanup can both wait on one session; each needs the event.
+    const waiters = stoppedResolversRef.current.get(sessionId) ?? new Set<() => void>()
+    stoppedResolversRef.current.set(sessionId, waiters)
+    const waiter = (): void => {
       window.clearTimeout(timeoutId)
       resolve()
-    })
+    }
+    const timeoutId = window.setTimeout(() => {
+      waiters.delete(waiter)
+      if (waiters.size === 0 && stoppedResolversRef.current.get(sessionId) === waiters) {
+        stoppedResolversRef.current.delete(sessionId)
+      }
+      resolve()
+    }, STOPPED_SESSION_WAIT_MS)
+    waiters.add(waiter)
   })
 }

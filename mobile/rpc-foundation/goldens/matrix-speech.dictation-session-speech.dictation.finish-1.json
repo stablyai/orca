@@ -48,6 +48,13 @@
       "status": "error",
       "transcripts": []
     },
+    "120e3b7b7bf3": {
+      "name": "dictation-error",
+      "ordinal": 5,
+      "value": {
+        "message": "inner refused"
+      }
+    },
     "16ac55dedee8": {
       "name": "dictation-error",
       "ordinal": 6,
@@ -59,6 +66,11 @@
       "name": "speech.dictation.finish#1",
       "ordinal": 4,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.finish\",\"params\":{\"dictationId\":\"mobile-dictation-1767225600000-8ig2henseon\"}}"
+    },
+    "25ea301495aa": {
+      "error": "refused",
+      "status": "error",
+      "transcripts": []
     },
     "349e2cfd1a1f": {
       "name": "speech.dictation.finish#1",
@@ -269,6 +281,13 @@
         "message": "transport failure"
       }
     },
+    "98a49063168c": {
+      "name": "dictation-error",
+      "ordinal": 5,
+      "value": {
+        "message": "refused"
+      }
+    },
     "9fce1a80008e": {
       "name": "speech.dictation.finish#1",
       "ordinal": 3,
@@ -376,6 +395,11 @@
         "status": "pending",
         "startedAt": 0
       }
+    },
+    "a8cf16eeb05c": {
+      "error": "inner refused",
+      "status": "error",
+      "transcripts": []
     },
     "aca401ac072e": {
       "name": "speech.dictation.start#1",
@@ -608,8 +632,8 @@
             "start": "eb79a9b3682a",
             "stop": "eb79a9b3682a"
           },
-          "state": "11c21b92d88c",
-          "effects": ["855dd6b38d06"]
+          "state": "25ea301495aa",
+          "effects": ["98a49063168c"]
         }
       },
       {
@@ -622,8 +646,8 @@
             "start": "eb79a9b3682a",
             "stop": "eb79a9b3682a"
           },
-          "state": "11c21b92d88c",
-          "effects": ["855dd6b38d06"]
+          "state": "a8cf16eeb05c",
+          "effects": ["120e3b7b7bf3"]
         }
       },
       {

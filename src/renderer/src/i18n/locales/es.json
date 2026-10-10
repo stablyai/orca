@@ -1104,7 +1104,7 @@
         "17005c73d4": "Abre la lista de configuración inicial para ver pasos de setup e hitos.",
         "ded9e9032f": "Lista de configuración inicial",
         "5f32ac08f3": "Completa la lista de configuración inicial para los flujos de trabajo principales de Orca.",
-        "8ac3de82f5": "Dictado local de voz a texto con modelos en el dispositivo.",
+        "8ac3de82f5": "Dictado de voz a texto con modelos en el dispositivo o en la nube.",
         "6a50cdcd7c": "Voz",
         "0059bd17f3": "Permite que los agentes controlen cualquier app en tu computadora.",
         "b35e92364b": "Computer Use",
@@ -7728,23 +7728,13 @@
           "d3756cf5bc": "desactivado"
         },
         "OpenAiTranscriptionKeyDialog": {
-          "fa83512e48": "Guardar clave",
-          "07b26f2742": "Borrar clave",
           "d246b2bdb3": "Las claves del runtime local se almacenan en ~/.orca mediante el almacenamiento cifrado de Electron cuando está disponible.",
-          "c3380e4ca5": "sk-...",
-          "2f797018f0": "Clave API configurada",
-          "16015322f9": "Clave API",
-          "07ed3e512e": "El audio se envía a OpenAI solo cuando se selecciona un modelo de voz de OpenAI.",
-          "439e91879e": "Transcripción OpenAI"
+          "16015322f9": "Clave API"
         },
         "OpenAiTranscriptionSettingsRow": {
           "85c589cd61": "Agregar clave API",
-          "ae2df8f511": "Desconectar la clave API de OpenAI",
           "a622bc3b37": "Reemplazar clave",
-          "3b0ab3fc0b": "Conectado",
-          "27e0cb656d": "Transcripción OpenAI",
-          "893790e13b": "Agrega una clave API de OpenAI antes de seleccionar modelos de conversión de voz a texto en la nube.",
-          "b59b9b2b51": "Clave API configurada para modelos de conversión de voz a texto en la nube."
+          "3b0ab3fc0b": "Conectado"
         },
         "OpenInMenuSetting": {
           "03b00b1f64": "Aplicación personalizada",
@@ -8323,7 +8313,7 @@
           "7807c11c4d": "General",
           "6855b0f77d": "Termina los flujos de trabajo principales que hacen que Orca sea útil para el trabajo de agentes en paralelo.",
           "6d119427ef": "Lista de verificación de incorporación",
-          "eb1176a14e": "Dictado local de voz a texto con modelos en el dispositivo.",
+          "eb1176a14e": "Dictado de voz a texto con modelos en el dispositivo o en la nube.",
           "5063bb47a5": "Voz",
           "7118953f14": "Permite que los agentes controlen cualquier app en tu computadora.",
           "c9841721cb": "Computer Use",
@@ -8920,10 +8910,6 @@
           "0121960365": "Habilitar dictado de voz",
           "366e1b4f36": "para dictar texto en cualquier panel con foco.",
           "4465596675": "Pulsa",
-          "62d2a84d31": "No se pudo borrar la clave API de OpenAI",
-          "37aba8bb63": "Clave API de OpenAI borrada",
-          "8572bbb537": "No se pudo guardar la clave API de OpenAI",
-          "506df81ba6": "Clave API de OpenAI guardada",
           "91980ce124": "{{value0}} MB",
           "61a16c8141": "Extrayendo...",
           "b6536a1d12": "extrayendo",
@@ -8938,8 +8924,7 @@
           "f9a9cf6928": "Se requiere permiso del micrófono antes de habilitar el dictado de voz.",
           "1eac933202": "Se abrió Privacidad y seguridad de macOS. Vuelve a habilitar el dictado después de otorgar acceso.",
           "cd9fe37556": "Permiso de micrófono concedido",
-          "6fa734ed95": "Eliminar {{value0}}",
-          "openAiKeyName": "Su clave de transcripción OpenAI"
+          "6fa734ed95": "Eliminar {{value0}}"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Quitar {{value0}}",
@@ -10843,8 +10828,6 @@
               "698376a38d": "Interruptor principal para las funciones de dictado por voz.",
               "20574cbc72": "Habilitar dictado de voz",
               "322d457a0d": "transcripción",
-              "dcc7846641": "Configure la clave API de OpenAI utilizada para los modelos de voz a texto en la nube.",
-              "ebfd0b32e5": "Transcripción OpenAI",
               "microphoneTitle": "Micrófono",
               "microphoneDescription": "Elija qué dispositivo de entrada utiliza el dictado de voz.",
               "micInput": "aporte",

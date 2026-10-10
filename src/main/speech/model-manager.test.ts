@@ -20,8 +20,8 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('./openai-api-key-store', () => ({
-  hasOpenAiSpeechApiKey: hasOpenAiSpeechApiKeyMock
+vi.mock('./cloud-speech-key-store', () => ({
+  hasCloudSpeechApiKey: hasOpenAiSpeechApiKeyMock
 }))
 
 type ModelManagerInternals = {
@@ -164,6 +164,25 @@ describe('ModelManager', () => {
       await expect(manager.getModelState('openai-gpt-4o-mini-transcribe')).resolves.toEqual({
         id: 'openai-gpt-4o-mini-transcribe',
         status: 'ready'
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('checks the key of the provider that owns a cloud model', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+    try {
+      const manager = new ModelManager(dir)
+      hasOpenAiSpeechApiKeyMock.mockImplementation((provider: string) => provider === 'soniox')
+
+      await expect(manager.getModelState('soniox-stt-rt-v5')).resolves.toEqual({
+        id: 'soniox-stt-rt-v5',
+        status: 'ready'
+      })
+      await expect(manager.getModelState('groq-whisper-large-v3-turbo')).resolves.toEqual({
+        id: 'groq-whisper-large-v3-turbo',
+        status: 'not-downloaded'
       })
     } finally {
       rmSync(dir, { recursive: true, force: true })

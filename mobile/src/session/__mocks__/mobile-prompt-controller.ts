@@ -226,7 +226,7 @@ function Harness(props: HarnessProps) {
     onMicPress: vi.fn(),
     onMicPressOut: vi.fn(),
     onMicPressIn: vi.fn(),
-    micActive: false,
+    dictationPhase: 'idle',
     dictationMode: 'toggle',
     inputLockReason: connState === 'connected' ? null : 'disconnected',
     sendErrorMessage: null,

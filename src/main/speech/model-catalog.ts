@@ -1,5 +1,6 @@
 import type { SpeechModelManifest } from '../../shared/speech-types'
 import { getSpeechModelDownloadMetadata } from './model-download-catalog'
+import { CLOUD_SPEECH_MODEL_CATALOG } from './cloud-speech-model-catalog'
 
 export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
   {
@@ -123,27 +124,7 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     sampleRate: 16000,
     streaming: false
   },
-  {
-    id: 'openai-gpt-4o-mini-transcribe',
-    label: 'GPT-4o mini Transcribe',
-    description:
-      'Cloud transcription with strong accuracy and low cost. Requires an OpenAI API key.',
-    type: 'openai',
-    provider: 'openai',
-    language: 'multilingual',
-    sampleRate: 16000,
-    streaming: false
-  },
-  {
-    id: 'openai-gpt-4o-transcribe',
-    label: 'GPT-4o Transcribe',
-    description: 'Cloud transcription with higher accuracy. Requires an OpenAI API key.',
-    type: 'openai',
-    provider: 'openai',
-    language: 'multilingual',
-    sampleRate: 16000,
-    streaming: false
-  }
+  ...CLOUD_SPEECH_MODEL_CATALOG
 ]
 
 export function getCatalogModel(id: string): SpeechModelManifest | undefined {
@@ -152,4 +133,8 @@ export function getCatalogModel(id: string): SpeechModelManifest | undefined {
 
 export function isLocalSpeechModel(manifest: SpeechModelManifest): boolean {
   return manifest.provider === 'local'
+}
+
+export function isCloudSpeechModel(manifest: SpeechModelManifest): boolean {
+  return manifest.provider !== 'local'
 }

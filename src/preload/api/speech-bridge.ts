@@ -1,4 +1,9 @@
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
+import type {
+  CloudSpeechKeyStatus,
+  CloudSpeechKeyTestResult,
+  CloudSpeechProviderId
+} from '../../shared/cloud-speech-providers'
 import { ipcRenderer } from 'electron'
 import type {
   SpeechErrorEvent,
@@ -20,6 +25,18 @@ export const speechApi = {
     ipcRenderer.invoke('speech:saveOpenAiApiKey', apiKey),
   clearOpenAiApiKey: (): Promise<{ configured: boolean }> =>
     ipcRenderer.invoke('speech:clearOpenAiApiKey'),
+  getCloudKeyStatuses: (): Promise<CloudSpeechKeyStatus[]> =>
+    ipcRenderer.invoke('speech:getCloudKeyStatuses'),
+  saveCloudKey: (
+    providerId: CloudSpeechProviderId,
+    apiKey: string,
+    verify: boolean
+  ): Promise<CloudSpeechKeyStatus> =>
+    ipcRenderer.invoke('speech:saveCloudKey', providerId, apiKey, verify),
+  clearCloudKey: (providerId: CloudSpeechProviderId): Promise<CloudSpeechKeyStatus> =>
+    ipcRenderer.invoke('speech:clearCloudKey', providerId),
+  testCloudKey: (providerId: CloudSpeechProviderId): Promise<CloudSpeechKeyTestResult> =>
+    ipcRenderer.invoke('speech:testCloudKey', providerId),
   downloadModel: (modelId: string): Promise<void> =>
     ipcRenderer.invoke('speech:downloadModel', modelId),
   cancelDownload: (modelId: string): Promise<void> =>

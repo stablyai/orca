@@ -73,6 +73,28 @@ describe('speech RPC methods', () => {
     expect(runtime.feedMobileDictation).not.toHaveBeenCalled()
   })
 
+  it.each([1, 7_999, 16_000.5, 192_001])(
+    'rejects dictation chunks with an unsupported %s Hz sample rate',
+    async (sampleRate) => {
+      const runtime = {
+        getRuntimeId: () => 'test-runtime',
+        feedMobileDictation: vi.fn().mockReturnValue({ dictationId: 'dict-1' })
+      } as unknown as OrcaRuntimeService
+      const dispatcher = new RpcDispatcher({ runtime, methods: SPEECH_METHODS })
+
+      const response = await dispatcher.dispatch(
+        makeRequest('speech.dictation.chunk', {
+          dictationId: 'dict-1',
+          audioBase64: 'AAAA',
+          sampleRate
+        })
+      )
+
+      expect(response).toMatchObject({ ok: false })
+      expect(runtime.feedMobileDictation).not.toHaveBeenCalled()
+    }
+  )
+
   it('lists speech models', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

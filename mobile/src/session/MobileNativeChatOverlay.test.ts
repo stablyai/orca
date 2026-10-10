@@ -66,7 +66,7 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
     controller,
     images: {} as never,
     onMicPress: vi.fn(),
-    micActive: false,
+    dictationPhase: 'idle',
     dictationMode: 'toggle',
     onMicPressIn: vi.fn(),
     onMicPressOut: vi.fn(),

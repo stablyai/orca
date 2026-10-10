@@ -3,6 +3,8 @@
 import { Buffer } from 'buffer'
 
 import type { RpcClient } from '../transport/rpc-client'
+import type { MobileDictationCaptionStore } from './mobile-dictation-caption-store'
+import type { FailedStreamFinishPhase } from './mobile-dictation-stream-salvage'
 
 export type DictationStatus = 'idle' | 'starting' | 'recording' | 'processing' | 'error'
 
@@ -18,7 +20,11 @@ export type UseMobileDictationResult = {
   isStarting: boolean
   isRecording: boolean
   isProcessing: boolean
+  /** Whether processing is a failed provider stream's finish keeping its committed text. */
+  failedStreamFinish: FailedStreamFinishPhase
   error: string | null
+  /** Live transcript so far while recording (realtime cloud models); read it with useMobileDictationCaption. */
+  captionStore: MobileDictationCaptionStore
   start: () => Promise<void>
   stop: () => Promise<void>
   cancel: () => Promise<void>

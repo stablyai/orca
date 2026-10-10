@@ -1,13 +1,14 @@
 import { ActivityIndicator, Pressable, type StyleProp, type ViewStyle } from 'react-native'
 import { ImagePlus, Mic } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import type { UseMobileDictationResult } from '../hooks/use-mobile-dictation'
 import { keepHeldPressThroughLongPress } from './held-press-long-press'
+import { nativeChatDictationPhase } from './native-chat-dictation-toggle'
 
-type DictationState = {
-  readonly isStarting: boolean
-  readonly isRecording: boolean
-  readonly isProcessing: boolean
-}
+type DictationState = Pick<
+  UseMobileDictationResult,
+  'status' | 'failedStreamFinish' | 'isStarting' | 'isRecording' | 'isProcessing'
+>
 
 type MobileTerminalInputActionsProps = {
   readonly canSend: boolean
@@ -43,6 +44,8 @@ export function MobileTerminalInputActions({
   onDictationCancel
 }: MobileTerminalInputActionsProps) {
   const dictationActive = dictation.isStarting || dictation.isRecording
+  // Why: a failed stream finishing within its grace keeps its text, so no press may cancel it.
+  const salvaging = nativeChatDictationPhase(dictation) === 'salvaging'
   return (
     <>
       <Pressable
@@ -64,7 +67,7 @@ export function MobileTerminalInputActions({
       </Pressable>
       <Pressable
         style={[buttonStyle, dictationActive && activeButtonStyle, !canSend && disabledButtonStyle]}
-        disabled={!canSend}
+        disabled={!canSend || salvaging}
         onPress={dictationMode === 'toggle' ? onDictationToggle : undefined}
         onPressIn={dictationMode === 'hold' ? onDictationPressIn : undefined}
         onPressOut={dictationMode === 'hold' ? onDictationPressOut : undefined}
@@ -80,11 +83,13 @@ export function MobileTerminalInputActions({
         accessibilityLabel={
           dictation.isRecording
             ? 'Stop voice dictation'
-            : dictation.isProcessing
-              ? 'Cancel voice dictation'
-              : dictation.isStarting
-                ? 'Starting voice dictation'
-                : 'Start voice dictation'
+            : salvaging
+              ? 'Finishing voice dictation'
+              : dictation.isProcessing
+                ? 'Cancel voice dictation'
+                : dictation.isStarting
+                  ? 'Starting voice dictation'
+                  : 'Start voice dictation'
         }
       >
         {dictation.isProcessing ? (

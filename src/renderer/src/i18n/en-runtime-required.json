@@ -1565,6 +1565,9 @@
           "901985625d": "toggle",
           "b6536a1d12": "extracting"
         },
+        "VoiceSpeechModelMenuItem": {
+          "addKey": "Add key"
+        },
         "WarpThemeImportModal": {
           "found_theme_one": "Found 1 theme",
           "found_theme_other": "Found {{value0}} themes",

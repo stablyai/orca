@@ -134,6 +134,7 @@ export function getDefaultVoiceSettings(): VoiceSettings {
     terminalConfirmBeforeInsert: false,
     userModels: [],
     openAiApiKeyConfigured: false,
+    transcriptionLanguage: 'auto',
     microphoneDeviceId: null,
     microphoneDeviceLabel: null
   }

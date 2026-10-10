@@ -4,7 +4,10 @@ import {
   DictationHandle,
   DictationSetup,
   DictationStart,
-  SpeechModelAction
+  SpeechModelAction,
+  SpeechProviderAction,
+  SpeechProviderConfigure,
+  SpeechProviderKeySave
 } from '../../../../shared/rpc-contract/speech-params'
 
 export const SPEECH_METHODS = [
@@ -64,5 +67,38 @@ export const SPEECH_METHODS = [
     params: DictationHandle,
     handler: async (params, { runtime, clientId, connectionId }) =>
       runtime.cancelMobileDictation({ ...params, clientId, connectionId })
+  }),
+  defineMethod({
+    name: 'speech.providers.list',
+    permission: 'workspace',
+    params: null,
+    handler: async (_params, { runtime }) => runtime.listMobileSpeechProviders()
+  }),
+  defineMethod({
+    name: 'speech.providers.saveKey',
+    permission: 'settings-write',
+    params: SpeechProviderKeySave,
+    handler: async (params, { runtime }) => runtime.saveMobileSpeechProviderKey(params)
+  }),
+  defineMethod({
+    name: 'speech.providers.clearKey',
+    permission: 'settings-write',
+    params: SpeechProviderAction,
+    handler: async (params, { runtime }) => runtime.clearMobileSpeechProviderKey(params)
+  }),
+  defineMethod({
+    name: 'speech.providers.testKey',
+    permission: 'workspace',
+    params: SpeechProviderAction,
+    handler: async (params, { runtime }) => runtime.testMobileSpeechProviderKey(params)
+  }),
+  defineMethod({
+    name: 'speech.providers.configure',
+    permission: 'settings-write',
+    params: SpeechProviderConfigure,
+    handler: async (params, { runtime }) =>
+      runtime.configureMobileSpeechProviders(
+        params.language !== undefined ? { language: params.language } : {}
+      )
   })
 ]

@@ -17,14 +17,18 @@ vi.mock('sonner', () => ({
 }))
 
 vi.mock('@/i18n/i18n', () => ({
-  translate: (_key: string, fallback: string, values?: Record<string, string>) =>
-    values ? fallback.replace('{{value0}}', values.value0) : fallback
+  translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
+    fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(values?.[name] ?? ''))
 }))
 
 vi.mock('../ui/dropdown-menu', () => ({
   DropdownMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
   DropdownMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DropdownMenuLabel: ({ children }: { children: ReactNode }) => (
+    <div data-testid="group-label">{children}</div>
+  ),
+  DropdownMenuSeparator: () => <hr />,
   DropdownMenuItem: ({
     children,
     disabled,
@@ -70,6 +74,26 @@ const localModel: SpeechModelManifest = {
   files: ['encoder.onnx']
 }
 
+const sonioxModel: SpeechModelManifest = {
+  id: 'soniox-stt-rt',
+  label: 'Soniox Real-time',
+  description: 'Live captions',
+  provider: 'soniox',
+  language: 'multilingual',
+  type: 'cloud',
+  streaming: false,
+  realtime: true,
+  sampleRate: 16000
+}
+
+const openAiModel: SpeechModelManifest = {
+  ...sonioxModel,
+  id: 'openai-gpt-4o-transcribe',
+  label: 'GPT-4o Transcribe',
+  provider: 'openai',
+  realtime: false
+}
+
 const secondLocalModel: SpeechModelManifest = {
   ...localModel,
   id: 'model-b',
@@ -82,6 +106,8 @@ function renderSection(args: {
   catalog?: SpeechModelManifest[]
   modelStates?: SpeechModelState[]
   refreshModelStates?: () => void
+  openCloudKeyDialog?: (providerId: string, modelId: string) => void
+  updateVoiceSettings?: (updates: Record<string, unknown>) => void
 }): { container: HTMLDivElement; root: Root } {
   Object.assign(window, {
     api: {
@@ -104,8 +130,8 @@ function renderSection(args: {
         voiceSettings={voiceSettings}
         catalog={catalog}
         modelStates={modelStates}
-        onUpdateVoiceSettings={vi.fn()}
-        onOpenOpenAiDialog={vi.fn()}
+        onUpdateVoiceSettings={args.updateVoiceSettings ?? vi.fn()}
+        onOpenCloudKeyDialog={args.openCloudKeyDialog ?? vi.fn()}
         onRefreshModelStates={args.refreshModelStates ?? vi.fn()}
       />
     )
@@ -240,6 +266,70 @@ describe('VoiceSpeechModelSection', () => {
 
     expect(window.api.speech.downloadModel).toHaveBeenCalledWith(localModel.id)
     expect(menuDismissMock).not.toHaveBeenCalled()
+    root.unmount()
+  })
+
+  it('groups models by provider with on-device first and marks realtime models live', () => {
+    const { container, root } = renderSection({
+      deleteModel: () => Promise.resolve(),
+      catalog: [openAiModel, sonioxModel, localModel],
+      modelStates: [{ id: localModel.id, status: 'ready' }]
+    })
+
+    const groupLabels = [...container.querySelectorAll('[data-testid="group-label"]')]
+    expect(groupLabels.map((node) => node.querySelector('span')?.textContent)).toEqual([
+      'On-device',
+      'Soniox',
+      'OpenAI'
+    ])
+    // One key per provider: the prompt sits on the group, never on each model row.
+    expect(groupLabels[0].textContent).not.toContain('API key needed')
+    expect(groupLabels[1].textContent).toContain('API key needed')
+    const options = [...container.querySelectorAll<HTMLElement>('[role="option"]')]
+    expect(options[1].textContent).toContain('live')
+    expect(options[1].textContent).not.toContain('Add key')
+    expect(options[2].textContent).not.toContain('live')
+    root.unmount()
+  })
+
+  it('opens the key dialog for the model provider when its key is missing', async () => {
+    const openCloudKeyDialog = vi.fn()
+    const updateVoiceSettings = vi.fn()
+    const { container, root } = renderSection({
+      deleteModel: () => Promise.resolve(),
+      catalog: [sonioxModel],
+      modelStates: [{ id: sonioxModel.id, status: 'not-downloaded' }],
+      openCloudKeyDialog,
+      updateVoiceSettings
+    })
+
+    await act(async () => {
+      container.querySelector<HTMLElement>('[role="option"]')!.click()
+    })
+
+    expect(openCloudKeyDialog).toHaveBeenCalledWith('soniox', sonioxModel.id)
+    expect(updateVoiceSettings).not.toHaveBeenCalled()
+    expect(window.api.speech.downloadModel).not.toHaveBeenCalled()
+    root.unmount()
+  })
+
+  it('selects a cloud model directly once its provider key is configured', async () => {
+    const openCloudKeyDialog = vi.fn()
+    const updateVoiceSettings = vi.fn()
+    const { container, root } = renderSection({
+      deleteModel: () => Promise.resolve(),
+      catalog: [sonioxModel],
+      modelStates: [{ id: sonioxModel.id, status: 'ready' }],
+      openCloudKeyDialog,
+      updateVoiceSettings
+    })
+
+    await act(async () => {
+      container.querySelector<HTMLElement>('[role="option"]')!.click()
+    })
+
+    expect(updateVoiceSettings).toHaveBeenCalledWith({ sttModel: sonioxModel.id })
+    expect(openCloudKeyDialog).not.toHaveBeenCalled()
     root.unmount()
   })
 })

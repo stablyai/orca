@@ -119,7 +119,10 @@ describe('shared settings screen state', () => {
               resolveStalePoll = resolve
             })
         ),
-      configure: vi.fn().mockImplementation(() => new Promise(() => {})),
+      configure: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('busy'))
+        .mockImplementation(() => new Promise(() => {})),
       download: vi.fn(),
       delete: vi.fn()
     }
@@ -132,12 +135,9 @@ describe('shared settings screen state', () => {
     const switchProps = () => renderer.root.findByProps({ testID: 'voice-enabled' }).props
     expect(switchProps().value).toBe(true)
 
-    // A new operations identity restarts the poller, so a read is in flight below.
-    const second = { ...shared } as VoiceSettingsOperations
+    // A failed write re-reads the desktop, so a read is in flight below.
     await act(async () => {
-      renderer.update(
-        createElement(VoiceSettingsScreen, { operations: second, focused: true, onBack: vi.fn() })
-      )
+      switchProps().onValueChange(false)
     })
     expect(shared.load).toHaveBeenCalledTimes(2)
 

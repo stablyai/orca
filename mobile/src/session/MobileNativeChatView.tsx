@@ -45,6 +45,7 @@ import type { MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
+import type { MobileDictationPhase } from './native-chat-dictation-toggle'
 
 /** Why the composer input is locked: the transport is disconnected, or the
  *  terminal subscription has not acknowledged its input lease yet. */
@@ -103,7 +104,7 @@ type Props = ComposerTrayProps & {
   onRemoveAttachment?: (id: string) => void
   isAttaching?: boolean
   onMicPress?: () => void
-  micActive?: boolean
+  dictationPhase?: MobileDictationPhase
   dictationMode?: string
   onMicPressIn?: () => void
   onMicPressOut?: () => void
@@ -182,7 +183,7 @@ export function MobileNativeChatView({
   onRemoveAttachment,
   isAttaching,
   onMicPress,
-  micActive,
+  dictationPhase,
   dictationMode,
   onMicPressIn,
   onMicPressOut,
@@ -460,7 +461,7 @@ export function MobileNativeChatView({
         onRemoveAttachment={onRemoveAttachment}
         isAttaching={isAttaching}
         onMicPress={onMicPress}
-        micActive={micActive}
+        dictationPhase={dictationPhase}
         dictationMode={dictationMode}
         onMicPressIn={onMicPressIn}
         onMicPressOut={onMicPressOut}

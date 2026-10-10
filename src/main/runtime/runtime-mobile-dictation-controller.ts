@@ -1,4 +1,10 @@
 import { getDefaultVoiceSettings } from '../../shared/constants'
+import type {
+  RuntimeDictationChunkReply,
+  RuntimeDictationFinishReply
+} from '../../shared/runtime-speech-provider-contracts'
+import { resolveTranscriptionLanguageHint } from '../../shared/speech-transcription-languages'
+import { formatDictationStreamFailure } from '../../shared/dictation-stream-failure'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
 import type { RuntimeStore } from './runtime-store-contract'
 
@@ -11,6 +17,8 @@ type MobileDictationSession = {
   partialText: string
   finalTexts: string[]
   errors: string[]
+  captionRevision: number
+  sentCaptionRevision: number
 }
 
 export class RuntimeMobileDictationController {
@@ -53,14 +61,17 @@ export class RuntimeMobileDictationController {
       state: 'starting',
       partialText: '',
       finalTexts: [],
-      errors: []
+      errors: [],
+      captionRevision: 0,
+      sentCaptionRevision: 0
     }
     try {
       await getSpeechSttService(store).startDictation(
         modelId,
         (event) => this.acceptEvent(params.dictationId, event),
         undefined,
-        owner
+        owner,
+        { language: resolveTranscriptionLanguageHint(voice.transcriptionLanguage) }
       )
       if (this.session?.id !== params.dictationId) {
         throw new Error('dictation_canceled')
@@ -81,39 +92,57 @@ export class RuntimeMobileDictationController {
     sampleRate: number
     clientId?: string
     connectionId?: string
-  }): { dictationId: string } {
+  }): RuntimeDictationChunkReply {
     const session = this.requireOwnedSession(params)
     if (session.state !== 'active') {
       throw new Error('dictation_stream_closing')
     }
     if (session.errors.length > 0) {
-      throw new Error(session.errors[0])
+      throw new Error(formatDictationStreamFailure(session.errors[0]))
     }
     const pcm = Buffer.from(params.audioBase64, 'base64')
     const samples = new Float32Array(Math.floor(pcm.length / 2))
     for (let i = 0; i < samples.length; i += 1) {
       samples[i] = pcm.readInt16LE(i * 2) / 32768
     }
-    getSpeechSttService(this.requireStore()).feedAudio(samples, params.sampleRate, session.owner)
-    return { dictationId: params.dictationId }
+    try {
+      getSpeechSttService(this.requireStore()).feedAudio(samples, params.sampleRate, session.owner)
+    } catch (error) {
+      // Why: a feed failure the session recorded (duration cap, send error) still leaves text to finish.
+      if (session.errors.length > 0) {
+        throw new Error(formatDictationStreamFailure(session.errors[0]))
+      }
+      throw error
+    }
+    // Why: chunks arrive ~31/s; resend the whole transcript only when it changed, including to ''.
+    if (session.captionRevision === session.sentCaptionRevision) {
+      return { dictationId: params.dictationId }
+    }
+    session.sentCaptionRevision = session.captionRevision
+    return {
+      dictationId: params.dictationId,
+      caption: { text: joinTranscript(session), revision: session.captionRevision }
+    }
   }
 
   async finish(params: {
     dictationId: string
     clientId?: string
     connectionId?: string
-  }): Promise<{ dictationId: string; text: string }> {
+  }): Promise<RuntimeDictationFinishReply> {
     const session = this.requireOwnedSession(params)
     session.state = 'closing'
     try {
       await getSpeechSttService(this.requireStore()).stopDictation(session.owner)
-      if (session.errors.length > 0) {
-        throw new Error(session.errors[0])
+      const text = joinTranscript(session)
+      // Why: a stream that failed mid-dictation already committed text; returning it beats losing it.
+      const error = session.errors[0]
+      if (error !== undefined && !text) {
+        throw new Error(error)
       }
-      return {
-        dictationId: params.dictationId,
-        text: [...session.finalTexts, session.partialText].join(' ').trim()
-      }
+      return error === undefined
+        ? { dictationId: params.dictationId, text }
+        : { dictationId: params.dictationId, text, error }
     } finally {
       if (this.session?.id === session.id) {
         this.session = null
@@ -135,7 +164,10 @@ export class RuntimeMobileDictationController {
     ) {
       session.state = 'closing'
       try {
-        await getSpeechSttService(this.requireStore()).stopDictation(session.owner)
+        // Why: a canceled dictation must not upload or bill the buffered audio.
+        await getSpeechSttService(this.requireStore()).stopDictation(session.owner, {
+          discard: true
+        })
       } finally {
         if (this.session?.id === session.id) {
           this.session = null
@@ -166,12 +198,17 @@ export class RuntimeMobileDictationController {
       return
     }
     if (event.type === 'partial') {
-      session.partialText = event.text ?? ''
+      const text = event.text ?? ''
+      if (text !== session.partialText) {
+        session.partialText = text
+        session.captionRevision += 1
+      }
     } else if (event.type === 'final') {
       const text = event.text?.trim()
       if (text) {
         session.finalTexts.push(text)
         session.partialText = ''
+        session.captionRevision += 1
       }
     } else if (event.type === 'error') {
       session.errors.push(event.error ?? 'Speech worker error')
@@ -197,12 +234,10 @@ export class RuntimeMobileDictationController {
   }
 
   private cancelSession(session: MobileDictationSession): void {
-    if (session.state === 'closing') {
-      return
-    }
+    // Why: a finish may still be uploading; the discard stop aborts it since nobody will read the text.
     session.state = 'closing'
     void getSpeechSttService(this.requireStore())
-      .stopDictation(session.owner)
+      .stopDictation(session.owner, { discard: true })
       .finally(() => {
         if (this.session?.id === session.id) {
           this.session = null
@@ -217,4 +252,8 @@ export class RuntimeMobileDictationController {
     }
     return store
   }
+}
+
+function joinTranscript(session: MobileDictationSession): string {
+  return [...session.finalTexts, session.partialText].join(' ').trim()
 }

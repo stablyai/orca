@@ -1,25 +1,30 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'expo-router'
-import { loadHosts } from '../src/transport/host-store'
-import type { HostProfile } from '../src/transport/types'
-import { useFocusedSettingsHostClients } from '../src/transport/settings-host-client-connections'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import VoiceSettingsScreen from '../src/settings/voice-settings-screen'
-import { nativeVoiceSettingsOperations } from '../src/settings/native-voice-settings-operations'
+import { useVoiceSettingsOperations } from '../src/settings/use-voice-settings-operations'
 
 export default function NativeVoiceSettingsRoute() {
   const router = useRouter()
-  const [hosts, setHosts] = useState<HostProfile[]>([])
-  useEffect(() => {
-    void loadHosts().then(setHosts)
-  }, [])
-  const hostIds = useMemo(() => hosts.map((host) => host.id), [hosts])
-  const { clients, focused } = useFocusedSettingsHostClients(hostIds)
-  const client = clients.find((entry) => entry.state === 'connected')?.client ?? null
-  const operations = useMemo(
-    () => (client ? nativeVoiceSettingsOperations(client) : null),
-    [client]
-  )
+  const params = useLocalSearchParams<{ hostId?: string }>()
+  const hostId = typeof params.hostId === 'string' ? params.hostId : undefined
+  const { operations, focused, unpaired } = useVoiceSettingsOperations(hostId)
   return (
-    <VoiceSettingsScreen operations={operations} focused={focused} onBack={() => router.back()} />
+    <VoiceSettingsScreen
+      operations={operations}
+      focused={focused}
+      unpaired={unpaired}
+      onBack={() => router.back()}
+      onOpenProvider={(providerId) =>
+        router.push({
+          pathname: '/voice-provider',
+          params: hostId ? { providerId, hostId } : { providerId }
+        })
+      }
+      onOpenCloudProviders={() =>
+        router.push({
+          pathname: '/voice-cloud-providers',
+          params: hostId ? { hostId } : {}
+        })
+      }
+    />
   )
 }

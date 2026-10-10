@@ -8,16 +8,26 @@ import {
   getSpeechModelDeletionErrorCode
 } from '../speech/speech-model-deletion'
 import type { RuntimeStore } from './runtime-store-contract'
+import { RuntimeMobileSpeechProviders } from './runtime-mobile-speech-providers'
 
 export class RuntimeMobileSpeechCatalog {
-  constructor(private readonly getStore: () => RuntimeStore | null) {}
+  /** Cloud provider cabinet; owned here so the runtime wiring keeps one speech owner. */
+  readonly providers: RuntimeMobileSpeechProviders
+
+  constructor(private readonly getStore: () => RuntimeStore | null) {
+    this.providers = new RuntimeMobileSpeechProviders(getStore)
+  }
 
   async list(): Promise<RuntimeSpeechSetupState> {
     const store = this.requireStore()
     const voice = store.getSettings().voice ?? getDefaultVoiceSettings()
     const states = await getSpeechModelManager(store).getModelStates()
     const stateById = new Map(states.map((state) => [state.id, state]))
-    const models: RuntimeSpeechModelSummary[] = SPEECH_MODEL_CATALOG.map((manifest) => {
+    // Why: shipped phones pin the 'local' | 'openai' arm set; other providers go through speech.providers.list.
+    const legacyManifests = SPEECH_MODEL_CATALOG.filter(
+      (manifest) => manifest.provider === 'local' || manifest.provider === 'openai'
+    )
+    const models: RuntimeSpeechModelSummary[] = legacyManifests.map((manifest) => {
       const state = stateById.get(manifest.id)
       return {
         id: manifest.id,

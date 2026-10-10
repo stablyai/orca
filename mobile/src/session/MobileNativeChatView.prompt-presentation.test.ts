@@ -210,8 +210,14 @@ describe('terminal prompt presentation with the production view, card and compos
     async (dictationMode) => {
       const onMicPress = vi.fn()
       const onMicPressOut = vi.fn()
-      await render({ micActive: true, onMicPress, onMicPressOut, dictationMode })
-      await render({ permission, micActive: true, onMicPress, onMicPressOut, dictationMode })
+      await render({ dictationPhase: 'recording', onMicPress, onMicPressOut, dictationMode })
+      await render({
+        permission,
+        dictationPhase: 'recording',
+        onMicPress,
+        onMicPressOut,
+        dictationMode
+      })
       const stop = tree!.root.findByProps({ accessibilityLabel: 'Stop dictation' })
       expect(stop.props.disabled).toBe(false)
       act(() => {

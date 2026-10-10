@@ -6,6 +6,7 @@ import type { RuntimeMessageWaiters } from './runtime-message-waiters'
 import type { RuntimeMobileDictationController } from './runtime-mobile-dictation-controller'
 import type { RuntimeMobileNotificationController } from './runtime-mobile-notification-controller'
 import type { RuntimeMobileSpeechCatalog } from './runtime-mobile-speech-catalog'
+import type { RuntimeMobileSpeechProviders } from './runtime-mobile-speech-providers'
 import type { RuntimeNativeChatDraftResolutions } from './runtime-native-chat-draft-resolutions'
 import type { RuntimeSessionSearchSettingsController } from './runtime-session-search-settings'
 import type { RuntimeSubscriptionRegistry } from './runtime-subscription-registry'
@@ -67,6 +68,11 @@ export type RuntimeServiceCommandSurface = {
   downloadMobileSpeechModel: RuntimeMobileSpeechCatalog['download']
   deleteMobileSpeechModel: RuntimeMobileSpeechCatalog['delete']
   configureMobileDictation: RuntimeMobileSpeechCatalog['configure']
+  listMobileSpeechProviders: RuntimeMobileSpeechProviders['list']
+  saveMobileSpeechProviderKey: RuntimeMobileSpeechProviders['saveKey']
+  clearMobileSpeechProviderKey: RuntimeMobileSpeechProviders['clearKey']
+  testMobileSpeechProviderKey: RuntimeMobileSpeechProviders['testKey']
+  configureMobileSpeechProviders: RuntimeMobileSpeechProviders['configure']
   startMobileDictation: RuntimeMobileDictationController['start']
   feedMobileDictation: RuntimeMobileDictationController['feed']
   finishMobileDictation: RuntimeMobileDictationController['finish']
@@ -169,6 +175,11 @@ export function installRuntimeServiceCommandSurface(
     downloadMobileSpeechModel: speech.download.bind(speech),
     deleteMobileSpeechModel: speech.delete.bind(speech),
     configureMobileDictation: speech.configure.bind(speech),
+    listMobileSpeechProviders: speech.providers.list.bind(speech.providers),
+    saveMobileSpeechProviderKey: speech.providers.saveKey.bind(speech.providers),
+    clearMobileSpeechProviderKey: speech.providers.clearKey.bind(speech.providers),
+    testMobileSpeechProviderKey: speech.providers.testKey.bind(speech.providers),
+    configureMobileSpeechProviders: speech.providers.configure.bind(speech.providers),
     startMobileDictation: dictation.start.bind(dictation),
     feedMobileDictation: dictation.feed.bind(dictation),
     finishMobileDictation: dictation.finish.bind(dictation),

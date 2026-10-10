@@ -12,6 +12,12 @@ import {
   saveOpenAiSpeechApiKey
 } from '../speech/openai-api-key-store'
 import type { Store } from '../persistence'
+import { resolveTranscriptionLanguageHint } from '../../shared/speech-transcription-languages'
+import {
+  assertSupportedDictationSampleRate,
+  MAX_DESKTOP_CAPTURE_SAMPLE_RATE
+} from '../../shared/speech-audio-sample-rate'
+import { registerCloudSpeechKeyHandlers } from './speech-cloud-keys'
 
 export function registerSpeechHandlers(store: Store): void {
   ipcMain.handle('speech:getCatalog', () => {
@@ -21,6 +27,8 @@ export function registerSpeechHandlers(store: Store): void {
   ipcMain.handle('speech:getModelStates', async () => {
     return getSpeechModelManager(store).getModelStates()
   })
+
+  registerCloudSpeechKeyHandlers()
 
   ipcMain.handle('speech:getOpenAiApiKeyStatus', async () => {
     return { configured: hasOpenAiSpeechApiKey(), protection: getOpenAiSpeechApiKeyProtection() }
@@ -102,7 +110,7 @@ export function registerSpeechHandlers(store: Store): void {
       const cleanupOnWindowClosed = (): void => {
         windowClosed = true
         void getSpeechSttService(store)
-          .stopDictation(owner)
+          .stopDictation(owner, { discard: true })
           .finally(() => {
             if (resolvedHotwordsPath) {
               unlink(resolvedHotwordsPath).catch(() => {})
@@ -179,7 +187,12 @@ export function registerSpeechHandlers(store: Store): void {
             }
           },
           resolvedHotwordsPath,
-          owner
+          owner,
+          {
+            language: resolveTranscriptionLanguageHint(
+              store.getSettings().voice?.transcriptionLanguage
+            )
+          }
         )
         if (resolvedHotwordsPath) {
           unlink(resolvedHotwordsPath).catch(() => {})
@@ -197,6 +210,8 @@ export function registerSpeechHandlers(store: Store): void {
   ipcMain.handle(
     'speech:feedAudio',
     async (_event, buffer: Buffer, sampleRate: number, sessionId = 'desktop') => {
+      // Why: renderer input is untrusted; cloud paths re-check the tighter 192 kHz resample cap.
+      assertSupportedDictationSampleRate(sampleRate, MAX_DESKTOP_CAPTURE_SAMPLE_RATE)
       // Why: the preload sends audio as a Buffer to avoid Float32Array data
       // being zeroed out during contextBridge + IPC serialization.
       const samples = new Float32Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 4)

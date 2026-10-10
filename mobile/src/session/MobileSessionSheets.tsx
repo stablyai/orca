@@ -19,6 +19,7 @@ import type { MobileSessionController } from './use-mobile-session-controller'
 
 export function MobileSessionSheets({ controller }: { controller: MobileSessionController }) {
   const {
+    hostId,
     worktreeId,
     isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
@@ -359,6 +360,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
       <MobileDictationSetupSheet
         visible={showDictationSetup}
         client={client}
+        hostId={hostId}
         onClose={() => setShowDictationSetup(false)}
         onReady={() => setShowDictationSetup(false)}
       />

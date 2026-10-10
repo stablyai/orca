@@ -102,6 +102,5 @@ export const voiceSettingsStyles = StyleSheet.create({
   },
   segmentActive: { backgroundColor: colors.bgRaised },
   segmentText: { fontSize: typography.metaSize, color: colors.textSecondary, fontWeight: '600' },
-  segmentTextActive: { color: colors.textPrimary },
-  error: { color: colors.statusRed, fontSize: typography.metaSize, marginTop: spacing.md }
+  segmentTextActive: { color: colors.textPrimary }
 })

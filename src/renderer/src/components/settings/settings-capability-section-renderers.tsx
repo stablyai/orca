@@ -125,7 +125,7 @@ export function renderDesktopCapabilitySettingsSections(
         title={translate('auto.components.settings.Settings.5063bb47a5', 'Voice')}
         description={translate(
           'auto.components.settings.Settings.eb1176a14e',
-          'Local speech-to-text dictation with on-device models.'
+          'Speech-to-text dictation with on-device or cloud models.'
         )}
         searchEntries={navigation.getSectionSearchEntries('voice')}
       >

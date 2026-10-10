@@ -5,6 +5,7 @@ import {
 import { bytesToBase64 } from './mobile-dictation-session-state'
 import { dictationAudioChunkSend } from '../dictation/mobile-dictation-operations'
 import type { DictationCaptureChunk } from '../platform/dictation-capture-contract'
+import type { MobileDictationCaptionReply } from '../dictation/dictation-reply-schema'
 import type { MobileDictationPendingAudioBudget } from './mobile-dictation-pending-audio-budget'
 import type { RpcClient } from '../transport/rpc-client'
 
@@ -13,6 +14,7 @@ type MobileDictationAudioChunkQueue = {
   pendingAudioBudget: MobileDictationPendingAudioBudget
   shouldReleaseBudget: (dictationId: string) => boolean
   failActiveDictation: (dictationId: string, err: unknown) => void
+  onCaption?: (dictationId: string, caption: MobileDictationCaptionReply) => void
 }
 
 export function enqueueMobileDictationAudioChunk(
@@ -38,7 +40,10 @@ export function enqueueMobileDictationAudioChunk(
       sampleRate: MOBILE_DICTATION_PCM_SAMPLE_RATE
     })
     .then((reply) => {
-      dictationAudioChunkSend.interpret(reply)
+      const { caption } = dictationAudioChunkSend.interpret(reply)
+      if (caption) {
+        queue.onCaption?.(dictationId, caption)
+      }
     })
     .catch((err) => queue.failActiveDictation(dictationId, err))
     .finally(() => {

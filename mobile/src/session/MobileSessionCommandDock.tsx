@@ -16,6 +16,7 @@ import {
   getTerminalLiveInputKeyboardType
 } from '../terminal/terminal-keyboard-type'
 import { MobileTerminalLiveInputStatus } from './MobileTerminalLiveInputStatus'
+import { MobileDictationCaptionStrip } from './MobileDictationCaptionStrip'
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
 import { keepHeldPressThroughLongPress } from './held-press-long-press'
 import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
@@ -316,60 +317,63 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
             />
           </View>
         ) : (
-          <View style={styles.inputBar}>
-            <TextInput
-              ref={bindCommandField}
-              // Why: Android caches IME inputType at mount, so toggling autocomplete must remount there; iOS updates in place.
-              key={
-                hostOs() === 'android'
-                  ? autocompleteEnabled
-                    ? 'cmd-input-ac-on'
-                    : 'cmd-input-ac-off'
-                  : 'cmd-input'
-              }
-              style={styles.textInput}
-              value={bufferedTerminalDraftState.input}
-              // Why: iOS kills active dictation/IME if JS writes a value differing from native text; store raw, normalize at send.
-              onChangeText={bufferedTerminalDraftState.setInput}
-              placeholder="Type a command…"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-              autoCorrect={autocompleteEnabled}
-              spellCheck={autocompleteEnabled}
-              smartInsertDelete={false}
-              // Why: not autofill content, but keyboard must stay default so non-Latin IMEs remain selectable.
-              autoComplete="off"
-              keyboardType={getTerminalCommandKeyboardType(hostOs(), autocompleteEnabled)}
-              returnKeyType="send"
-              blurOnSubmit={false}
-              // Why: composing is local — an outage must not lock the field or discard typed text (#6713).
-              editable={canCompose}
-              onSubmitEditing={() => void handleSend()}
-            />
-            <MobileTerminalInputActions
-              canSend={canSend}
-              isAttaching={isAttaching}
-              dictation={dictation}
-              dictationMode={dictationMode}
-              buttonStyle={styles.dictationButton}
-              activeButtonStyle={styles.dictationButtonActive}
-              disabledButtonStyle={styles.sendButtonDisabled}
-              onAttachImage={() => void attachImage('library')}
-              onAttachFile={() => void attachImage('files')}
-              onDictationToggle={handleDictationToggle}
-              onDictationPressIn={handleDictationPressIn}
-              onDictationPressOut={handleDictationPressOut}
-              onDictationCancel={cancelDictation}
-            />
-            <Pressable
-              style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
-              disabled={!canSend}
-              onPress={() => void handleSend()}
-              accessibilityLabel="Send command"
-            >
-              <ArrowUp size={18} color={colors.textSecondary} strokeWidth={2.5} />
-            </Pressable>
-          </View>
+          <>
+            <MobileDictationCaptionStrip dictation={dictation} variant="dock" />
+            <View style={styles.inputBar}>
+              <TextInput
+                ref={bindCommandField}
+                // Why: Android caches IME inputType at mount, so toggling autocomplete must remount there; iOS updates in place.
+                key={
+                  hostOs() === 'android'
+                    ? autocompleteEnabled
+                      ? 'cmd-input-ac-on'
+                      : 'cmd-input-ac-off'
+                    : 'cmd-input'
+                }
+                style={styles.textInput}
+                value={bufferedTerminalDraftState.input}
+                // Why: iOS kills active dictation/IME if JS writes a value differing from native text; store raw, normalize at send.
+                onChangeText={bufferedTerminalDraftState.setInput}
+                placeholder="Type a command…"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                autoCorrect={autocompleteEnabled}
+                spellCheck={autocompleteEnabled}
+                smartInsertDelete={false}
+                // Why: not autofill content, but keyboard must stay default so non-Latin IMEs remain selectable.
+                autoComplete="off"
+                keyboardType={getTerminalCommandKeyboardType(hostOs(), autocompleteEnabled)}
+                returnKeyType="send"
+                blurOnSubmit={false}
+                // Why: composing is local — an outage must not lock the field or discard typed text (#6713).
+                editable={canCompose}
+                onSubmitEditing={() => void handleSend()}
+              />
+              <MobileTerminalInputActions
+                canSend={canSend}
+                isAttaching={isAttaching}
+                dictation={dictation}
+                dictationMode={dictationMode}
+                buttonStyle={styles.dictationButton}
+                activeButtonStyle={styles.dictationButtonActive}
+                disabledButtonStyle={styles.sendButtonDisabled}
+                onAttachImage={() => void attachImage('library')}
+                onAttachFile={() => void attachImage('files')}
+                onDictationToggle={handleDictationToggle}
+                onDictationPressIn={handleDictationPressIn}
+                onDictationPressOut={handleDictationPressOut}
+                onDictationCancel={cancelDictation}
+              />
+              <Pressable
+                style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
+                disabled={!canSend}
+                onPress={() => void handleSend()}
+                accessibilityLabel="Send command"
+              >
+                <ArrowUp size={18} color={colors.textSecondary} strokeWidth={2.5} />
+              </Pressable>
+            </View>
+          </>
         )}
       </View>
     )

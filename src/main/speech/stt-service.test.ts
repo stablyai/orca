@@ -84,10 +84,14 @@ const {
 
     constructor(
       readonly modelId: string,
-      readonly readApiKey: () => string
+      readonly readApiKey: () => string,
+      readonly language?: string,
+      readonly sink?: (event: { type: 'partial'; text: string }) => void
     ) {
       HoistedMockOpenAiTranscriptionSession.instances.push(this)
     }
+
+    cancel(): void {}
 
     feedAudio(samples: Float32Array, sampleRate: number): void {
       this.feedCalls.push({ samples, sampleRate })
@@ -130,13 +134,14 @@ vi.mock('worker_threads', () => ({
 
 vi.mock('./model-catalog', () => ({
   getCatalogModel: (id: string) =>
-    id === 'openai-model'
+    id === 'openai-model' || id === 'narrow-cloud-model'
       ? {
           id,
           type: 'openai',
           provider: 'openai',
           streaming: false,
-          sampleRate: 16000
+          sampleRate: 16000,
+          transcriptionLanguages: id === 'openai-model' ? 'any' : ['en', 'de']
         }
       : {
           id: 'model-a',
@@ -148,12 +153,21 @@ vi.mock('./model-catalog', () => ({
         }
 }))
 
-vi.mock('./openai-api-key-store', () => ({
-  readOpenAiSpeechApiKey: readOpenAiSpeechApiKeyMock
+vi.mock('./cloud-speech-key-store', () => ({
+  readCloudSpeechApiKey: readOpenAiSpeechApiKeyMock
 }))
 
-vi.mock('./openai-transcription-client', () => ({
-  OpenAiTranscriptionSession: MockOpenAiTranscriptionSession
+vi.mock('./cloud-speech-session-factory', () => ({
+  createCloudSpeechSession: (
+    manifest: { id: string },
+    options: { readApiKey: () => string; language?: string; sink: SttEventSink }
+  ) =>
+    new MockOpenAiTranscriptionSession(
+      manifest.id,
+      options.readApiKey,
+      options.language,
+      options.sink
+    )
 }))
 
 import {
@@ -369,6 +383,87 @@ describe('SttService', () => {
     await service.stopDictation('desktop')
 
     expect(readOpenAiSpeechApiKeyMock).toHaveBeenCalledOnce()
+  })
+
+  it('discards a canceled cloud dictation without finishing it', async () => {
+    const sink = vi.fn()
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'openai-model', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    await service.startDictation('openai-model', sink, undefined, 'desktop')
+    const session = getCloudSessions()[0]
+    const cancel = vi.spyOn(session, 'cancel')
+    service.feedAudio(new Float32Array([0.25]), 16000, 'desktop')
+    await service.stopDictation('desktop', { discard: true })
+
+    expect(cancel).toHaveBeenCalledOnce()
+    expect(readOpenAiSpeechApiKeyMock).not.toHaveBeenCalled()
+    expect(sink).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'final' }))
+    expect(sink).toHaveBeenCalledWith({ type: 'stopped' })
+    expect(service.isActive()).toBe(false)
+  })
+
+  it('refuses another owner while a cloud finish is still uploading', async () => {
+    const mobileSink = vi.fn()
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'openai-model', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    await service.startDictation('openai-model', mobileSink, undefined, 'mobile:a')
+    let releaseFinish!: (text: string) => void
+    vi.spyOn(getCloudSessions()[0], 'finish').mockReturnValue(
+      new Promise<string>((resolve) => {
+        releaseFinish = resolve
+      })
+    )
+    const stopping = service.stopDictation('mobile:a')
+
+    await expect(
+      service.startDictation('openai-model', vi.fn(), undefined, 'desktop')
+    ).rejects.toThrow('dictation_already_active')
+
+    releaseFinish('phone words')
+    await stopping
+    expect(mobileSink).toHaveBeenCalledWith({ type: 'final', text: 'phone words' })
+  })
+
+  it('passes the language hint and forwards provider partials only while active', async () => {
+    const sink = vi.fn()
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'openai-model', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    await service.startDictation('openai-model', sink, undefined, 'desktop', { language: 'uk' })
+    const session = getCloudSessions()[0]
+    expect(session.language).toBe('uk')
+
+    session.sink?.({ type: 'partial', text: 'привіт' })
+    expect(sink).toHaveBeenCalledWith({ type: 'partial', text: 'привіт' })
+
+    await service.stopDictation('desktop')
+    sink.mockClear()
+    session.sink?.({ type: 'partial', text: 'late' })
+    expect(sink).not.toHaveBeenCalled()
+  })
+
+  it('falls back to auto-detect when the model cannot honour the language hint', async () => {
+    const models = {
+      getModelState: vi.fn().mockResolvedValue({ id: 'narrow-cloud-model', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the cloud start path reads only getModelState on the model manager.
+    const service = new SttService(models as unknown as ModelManager)
+
+    await service.startDictation('narrow-cloud-model', vi.fn(), undefined, 'desktop', {
+      language: 'uk'
+    })
+
+    expect(getCloudSessions()[0].language).toBeUndefined()
+    await service.stopDictation('desktop')
   })
 
   it('keeps startup cancellation tombstoned after the worker has been created', async () => {

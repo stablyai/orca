@@ -1205,7 +1205,7 @@
         "17005c73d4": "Ouvrez la checklist d'intégration pour les étapes de configuration et les jalons.",
         "ded9e9032f": "Checklist d'intégration",
         "5f32ac08f3": "Terminez la checklist d'intégration pour les workflows essentiels d'Orca.",
-        "8ac3de82f5": "Dictée vocale locale avec modèles embarqués sur l'appareil.",
+        "8ac3de82f5": "Dictée vocale avec des modèles sur l'appareil ou dans le cloud.",
         "6a50cdcd7c": "Voix",
         "0059bd17f3": "Permettez aux agents de contrôler n'importe quelle app de votre ordinateur.",
         "b35e92364b": "Computer Use",
@@ -7866,23 +7866,13 @@
           "d3756cf5bc": "désactivé"
         },
         "OpenAiTranscriptionKeyDialog": {
-          "fa83512e48": "Enregistrer la clé",
-          "07b26f2742": "Effacer la clé",
           "d246b2bdb3": "Les clés locales d'exécution sont stockées dans ~/.orca via le stockage chiffré d'Electron quand celui-ci est disponible.",
-          "c3380e4ca5": "sk-...",
-          "2f797018f0": "Clé API configurée",
-          "16015322f9": "Clé API",
-          "07ed3e512e": "L'audio n'est envoyé à OpenAI que lorsqu'un modèle vocal OpenAI est sélectionné.",
-          "439e91879e": "Transcription OpenAI"
+          "16015322f9": "Clé API"
         },
         "OpenAiTranscriptionSettingsRow": {
           "85c589cd61": "Ajouter une clé API",
-          "ae2df8f511": "Déconnecter la clé API OpenAI",
           "a622bc3b37": "Remplacer la clé",
-          "3b0ab3fc0b": "Connecté",
-          "27e0cb656d": "Transcription OpenAI",
-          "893790e13b": "Ajoutez une clé API OpenAI avant de sélectionner des modèles de transcription vocale cloud.",
-          "b59b9b2b51": "Clé API configurée pour les modèles de transcription vocale cloud."
+          "3b0ab3fc0b": "Connecté"
         },
         "OpenInMenuSetting": {
           "03b00b1f64": "App personnalisée",
@@ -8467,7 +8457,7 @@
           "7807c11c4d": "Général",
           "6855b0f77d": "Terminez les workflows essentiels qui rendent Orca utile au travail parallèle avec des agents.",
           "6d119427ef": "Checklist d'intégration",
-          "eb1176a14e": "Dictée vocale locale avec modèles embarqués sur l'appareil.",
+          "eb1176a14e": "Dictée vocale avec des modèles sur l'appareil ou dans le cloud.",
           "5063bb47a5": "Voix",
           "7118953f14": "Permettez aux agents de contrôler n'importe quelle app de votre ordinateur.",
           "c9841721cb": "Computer Use",
@@ -9069,10 +9059,6 @@
           "0121960365": "Activer la dictée vocale",
           "366e1b4f36": "pour dicter du texte dans n'importe quel volet actif.",
           "4465596675": "Appuyez",
-          "62d2a84d31": "Échec de l'effacement de la clé API OpenAI",
-          "37aba8bb63": "Clé API OpenAI effacée",
-          "8572bbb537": "Échec de l'enregistrement de la clé API OpenAI",
-          "506df81ba6": "Clé API OpenAI enregistrée",
           "91980ce124": "{{value0}} Mo",
           "61a16c8141": "Extraction...",
           "b6536a1d12": "extraction",
@@ -9086,8 +9072,7 @@
           "ad5d036ecc": "Impossible de demander l'autorisation d'accès au micro. La dictée vocale n'a pas été activée.",
           "f9a9cf6928": "L'autorisation d'accès au micro est requise avant d'activer la dictée vocale.",
           "1eac933202": "Panneau Confidentialité et sécurité de macOS ouvert. Réactivez la dictée après avoir accordé l'accès.",
-          "cd9fe37556": "Autorisation d'accès au micro accordée",
-          "openAiKeyName": "Votre clé de transcription OpenAI"
+          "cd9fe37556": "Autorisation d'accès au micro accordée"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Supprimer {{value0}}",
@@ -10988,8 +10973,6 @@
               "698376a38d": "Interrupteur principal des fonctions de dictée vocale.",
               "20574cbc72": "Activer la dictée vocale",
               "322d457a0d": "transcription",
-              "dcc7846641": "Configurez la clé d'API OpenAI utilisée pour les modèles de reconnaissance vocale dans le cloud.",
-              "ebfd0b32e5": "Transcription OpenAI",
               "microphoneTitle": "Microphone",
               "microphoneDescription": "Choisissez le périphérique d'entrée utilisé par la dictée vocale.",
               "micInput": "entrée",

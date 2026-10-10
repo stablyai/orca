@@ -220,7 +220,7 @@ async function mountPhone(): Promise<Phone> {
       onOpenFile: () => {},
       images: OVERLAY_IMAGES,
       onMicPress: () => {},
-      micActive: false,
+      dictationPhase: 'idle',
       dictationMode: 'toggle',
       onMicPressIn: () => {},
       onMicPressOut: () => {},

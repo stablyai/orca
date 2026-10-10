@@ -2,28 +2,30 @@ import type { SettingsSearchEntry } from './settings-search'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { CLOUD_SPEECH_PROVIDERS } from '../../../../shared/cloud-speech-providers'
 
-export const getOpenaiTranscriptionSearchEntry = createLocalizedCatalog(
+export const getCloudSpeechProvidersSearchEntry = createLocalizedCatalog(
   (): SettingsSearchEntry => ({
     title: translate(
-      'auto.components.settings.voice.pane.search.ebfd0b32e5',
-      'OpenAI Transcription'
+      'auto.components.settings.voice.pane.search.cloudProvidersTitle',
+      'Cloud Speech Providers'
     ),
     description: translate(
-      'auto.components.settings.voice.pane.search.dcc7846641',
-      'Configure the OpenAI API key used for cloud speech-to-text models.'
+      'auto.components.settings.voice.pane.search.cloudProvidersDescription',
+      'Add, test, or remove API keys for cloud speech-to-text providers.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
       ...translateSearchKeyword('auto.components.settings.voice.pane.search.3d8b853963', 'speech'),
       ...translateSearchKeyword('auto.components.settings.voice.pane.search.10d45a9fce', 'stt'),
-      ...translateSearchKeyword('auto.components.settings.voice.pane.search.04c25a6fb0', 'openai'),
       ...translateSearchKeyword('auto.components.settings.voice.pane.search.2d206de105', 'api key'),
       ...translateSearchKeyword('auto.components.settings.voice.pane.search.f6e0dfa61c', 'cloud'),
       ...translateSearchKeyword(
         'auto.components.settings.voice.pane.search.322d457a0d',
         'transcription'
-      )
+      ),
+      // Why: provider names are brands, identical in every locale.
+      ...CLOUD_SPEECH_PROVIDERS.map((provider) => provider.label.toLowerCase())
     ]
   })
 )
@@ -98,7 +100,26 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
       )
     ]
   },
-  getOpenaiTranscriptionSearchEntry(),
+  getCloudSpeechProvidersSearchEntry(),
+  {
+    title: translate(
+      'auto.components.settings.voice.pane.search.languageTitle',
+      'Transcription Language'
+    ),
+    description: translate(
+      'auto.components.settings.voice.pane.search.languageDescription',
+      'Language hint sent to cloud speech models, or auto-detect.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.3d8b853963', 'speech'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.languageKeyword',
+        'language'
+      ),
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.f6e0dfa61c', 'cloud')
+    ]
+  },
   {
     title: translate('auto.components.settings.voice.pane.search.7e62cd7c41', 'Speech Model'),
     description: translate(

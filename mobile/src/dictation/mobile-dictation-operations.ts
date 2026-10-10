@@ -1,16 +1,20 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
-import { dictationSetupSchema, dictationUnreadReplySchema } from './dictation-reply-schema'
+import {
+  dictationChunkReplySchema,
+  dictationSetupSchema,
+  dictationUnreadReplySchema
+} from './dictation-reply-schema'
 
 // The dictation setup sheet's reads and writes, and the three sends one dictation session makes.
 // Every refusing site here surfaces the host's own message with a screen fallback, so they share
 // one policy and differ only in the copy they fall back to, which stays at the call site.
 //
-// Three of the eight read a setup the sheet renders, and those are checked. The other five read no
-// reply body at all, or read it past a guard whose order is load-bearing; dictation-reply-schema.ts
-// says which and why. An unreadable setup now reaches the sheet's own catch through
-// `interpretOrThrowRefusalMessage`, which shows the host-reply message where main showed
-// `undefined` models and then crashed the refresh on `.some`.
+// Three of the eight read a setup the sheet renders, and those are checked; the chunk reply is read
+// for its optional live caption. The other four read no reply body at all, or read it past a guard
+// whose order is load-bearing; dictation-reply-schema.ts says which and why. An unreadable setup
+// now reaches the sheet's own catch through `interpretOrThrowRefusalMessage`, which shows the
+// host-reply message where main showed `undefined` models and then crashed the refresh on `.some`.
 
 export const dictationSetupRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -70,7 +74,7 @@ export const dictationAudioChunkSend = bindDeferredRpcOperation(
     method: 'speech.dictation.chunk',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcResultVariant('dictation-chunk-received', dictationUnreadReplySchema)
+    read: rpcResultVariant('dictation-chunk-received', dictationChunkReplySchema)
   })
 )
 

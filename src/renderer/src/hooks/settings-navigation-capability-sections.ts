@@ -111,7 +111,7 @@ export function buildCapabilitySettingsSections({
             title: translate('auto.hooks.useSettingsNavigationMetadata.6a50cdcd7c', 'Voice'),
             description: translate(
               'auto.hooks.useSettingsNavigationMetadata.8ac3de82f5',
-              'Local speech-to-text dictation with on-device models.'
+              'Speech-to-text dictation with on-device or cloud models.'
             ),
             icon: Mic,
             searchEntries: getVoicePaneSearchEntries(),

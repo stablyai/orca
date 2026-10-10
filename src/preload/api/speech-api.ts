@@ -1,5 +1,10 @@
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 import type {
+  CloudSpeechKeyStatus,
+  CloudSpeechKeyTestResult,
+  CloudSpeechProviderId
+} from '../../shared/cloud-speech-providers'
+import type {
   SpeechErrorEvent,
   SpeechLifecycleEvent,
   SpeechModelManifest,
@@ -16,6 +21,15 @@ export type SpeechApi = {
   }>
   saveOpenAiApiKey: (apiKey: string) => Promise<{ configured: boolean }>
   clearOpenAiApiKey: () => Promise<{ configured: boolean }>
+  getCloudKeyStatuses: () => Promise<CloudSpeechKeyStatus[]>
+  /** Rejects with the provider's sanitized reason when verify is true and the key is refused. */
+  saveCloudKey: (
+    providerId: CloudSpeechProviderId,
+    apiKey: string,
+    verify: boolean
+  ) => Promise<CloudSpeechKeyStatus>
+  clearCloudKey: (providerId: CloudSpeechProviderId) => Promise<CloudSpeechKeyStatus>
+  testCloudKey: (providerId: CloudSpeechProviderId) => Promise<CloudSpeechKeyTestResult>
   downloadModel: (modelId: string) => Promise<void>
   cancelDownload: (modelId: string) => Promise<void>
   deleteModel: (modelId: string) => Promise<void>

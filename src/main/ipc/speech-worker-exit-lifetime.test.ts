@@ -149,8 +149,8 @@ describe('speech worker exit ownership', () => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Local startup reads only these two model-manager methods.
       modelManager as ModelManager
     )
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Mocked runtime accessors do not read the store.
-    registerSpeechHandlers({} as Store)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Handlers read only voice settings; mocked runtime accessors ignore the rest.
+    registerSpeechHandlers({ getSettings: () => ({}) } as unknown as Store)
   })
   afterEach(async () => {
     window.destroyed = true
