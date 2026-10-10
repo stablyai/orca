@@ -17798,6 +17798,8 @@
         "couldNotStart": "{{agent}} no pudo iniciarse.",
         "editSavedArguments": "Edítalos en Ajustes > Agentes > Argumentos.",
         "couldNotRestart": "{{agent}} no pudo reiniciarse.",
+        "codexCliMissing": "Codex no está instalado.",
+        "codexCliTooOld": "Codex {{installedVersion}} es demasiado antiguo para los chats. Actualiza a {{minimumVersion}} o una versión posterior.",
         "notSignedIn": "{{agent}} no ha iniciado sesión.",
         "claudeSystemNotSignedIn": "Claude no ha iniciado sesión. Ejecuta `{{loginCommand}}` o elige una cuenta en los ajustes de Cuentas de Claude.",
         "claudeManagedNotSignedIn": "Esta cuenta de Claude no ha iniciado sesión. Vuelve a iniciar sesión en la configuración de Cuentas de Claude.",
@@ -19568,5 +19570,17 @@
   },
   "projectField": {
     "updateFailed": "No se pudo actualizar el campo del proyecto"
+  },
+  "codex": {
+    "maintenance": {
+      "installing": "Instalando…",
+      "install": "Instalar Codex",
+      "exitCode": "El comando terminó con el código {{code}}",
+      "logTitle": "Registro de configuración de Codex",
+      "copyLog": "Copiar registro",
+      "updatedRetry": "Codex está actualizado. Vuelve a intentarlo.",
+      "updatedSendAgain": "Codex está actualizado. Envía tu mensaje de nuevo.",
+      "installFailed": "No se pudo instalar Codex. Vuelve a intentarlo."
+    }
   }
 }

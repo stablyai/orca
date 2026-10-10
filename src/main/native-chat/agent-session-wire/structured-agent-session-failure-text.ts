@@ -22,6 +22,7 @@ import {
 import { AgentSessionAcquisitionRefusal } from './structured-agent-session-adapter'
 import { providerExecutableMissing } from '../../provider-process/provider-executable-missing'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
+import { codexInstallationProblemOf } from '../../codex/codex-cli-installation-error'
 
 /** Start refusals whose situation is itself what the person reads, with its own next step. */
 const TYPED_START_REFUSALS = [
@@ -72,6 +73,15 @@ export function providerExitObserved(error: unknown, depth = 0): boolean {
  *  adapter observed says the provider stopped; anything else blames no one — it may be Orca's, or
  *  a spawn that failed. Either keeps the provider's diagnostic when the error carried one. */
 export function providerStartupFailureFact(cause?: unknown): SubmissionRejectionFact {
+  const codexInstallation = codexInstallationProblemOf(cause)
+  if (codexInstallation) {
+    return agentSessionFailureFact('startFailed', {
+      refusal: {
+        code: 'agent_session_operation_invalid',
+        details: { reason: 'attachFailed', codexInstallation }
+      }
+    })
+  }
   const typed = typedStartRefusal(
     cause instanceof AgentSessionAcquisitionRefusal ? cause.reason : undefined
   )

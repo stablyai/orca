@@ -1,5 +1,6 @@
 import { useCallback, useEffect } from 'react'
 import { Toaster } from '@/components/ui/sonner'
+import { CodexMaintenanceLogDialog } from '@/components/native-chat/CodexMaintenanceLogDialog'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmationDialogProvider } from './components/confirmation-dialog'
 import { BrowserWebAuthnAccountDialog } from './components/browser-webauthn-account-dialog'
@@ -102,6 +103,7 @@ function App(): React.JSX.Element {
           </LinkRoutingPreferenceDialogProvider>
         </ConfirmationDialogProvider>
         <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />
+        <CodexMaintenanceLogDialog />
       </TooltipProvider>
       <SkillFreshnessNudge />
       <WorktreeBaseFallbackDialog />

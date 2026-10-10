@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { ChildProcess } from 'node:child_process'
 import type * as ChildProcessModule from 'node:child_process'
+import { win32 } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
@@ -63,7 +64,11 @@ describe('forceTerminateProcessTree', () => {
       expect(spawnMock).toHaveBeenCalledWith(
         windowsSystem32Binary('taskkill.exe'),
         ['/pid', '1234', '/t', '/f'],
-        expect.objectContaining({ shell: false, windowsHide: true })
+        expect.objectContaining({
+          shell: false,
+          windowsHide: true,
+          cwd: win32.dirname(windowsSystem32Binary('taskkill.exe'))
+        })
       )
 
       taskkill.emit('close', 0)
@@ -85,7 +90,7 @@ describe('forceTerminateProcessTree', () => {
       expect(spawnMock).toHaveBeenCalledWith(
         'D:\\Windows\\System32\\taskkill.exe',
         ['/pid', '1234', '/t', '/f'],
-        expect.objectContaining({ shell: false, windowsHide: true })
+        expect.objectContaining({ shell: false, windowsHide: true, cwd: 'D:\\Windows\\System32' })
       )
       taskkill.emit('close', 0)
       await expect(pending).resolves.toBe(true)

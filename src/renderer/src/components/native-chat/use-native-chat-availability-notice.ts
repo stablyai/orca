@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react'
 import type { AgentSessionUnavailable } from '../../../../shared/agent-session-availability'
-import { readAgentSessionFailureFact } from '../../../../shared/agent-session-failure'
+import {
+  readAgentSessionFailureFact,
+  type AgentSessionFailureFact
+} from '../../../../shared/agent-session-failure'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -10,10 +13,27 @@ import { agentJournalSubmissionKey } from '../../../../shared/agent-session-jour
 import { inSendOrder } from '../../../../shared/native-chat-send-order'
 import { agentSessionRefusalReasonWords } from '../../../../shared/agent-session-refusal-reason-words'
 import type { AgentSessionWriteRefusal } from '../../../../shared/agent-session-write-failure'
+import type { AgentSessionRefusalReference } from '../../../../shared/agent-session-wire-refusals'
 import { isStructuredAgentSessionStartFailureRow } from '../../../../shared/structured-agent-session-start-failure-row-key'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { notSignedInSentence } from '../../../../shared/agent-session-availability-sentences'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
+
+function isMissingCodexInstallationRefusal(
+  refusal: AgentSessionRefusalReference | null | undefined
+): boolean {
+  return (
+    refusal?.code === 'agent_session_operation_invalid' &&
+    refusal.details?.codexInstallation?.installedVersion === null
+  )
+}
+
+/** The availability reason a failure already states: a missing Codex reads as `cliMissing`. */
+function statedReason(failure: AgentSessionFailureFact | undefined): string | null {
+  return isMissingCodexInstallationRefusal(failure?.refusal)
+    ? 'cliMissing'
+    : (failure?.kind ?? null)
+}
 
 /** Why the chat's latest start failed, unless a turn has run since. */
 function failedStartReason(items: readonly AgentJournalRenderItem[] | undefined): string | null {
@@ -24,7 +44,7 @@ function failedStartReason(items: readonly AgentJournalRenderItem[] | undefined)
     } else if (item.body.kind === 'status') {
       const failure = readAgentSessionFailureFact(item.body.failure)
       if (isStructuredAgentSessionStartFailureRow(item.itemId) || failure?.kind === 'notSignedIn') {
-        reason = failure?.kind ?? null
+        reason = statedReason(failure)
       }
     }
   }
@@ -49,7 +69,7 @@ function shownRejectionReason(
     key !== undefined &&
     shownLines.has(key) &&
     items.some((item) => item.itemId === key)
-    ? (readAgentSessionFailureFact(newest.rejection)?.kind ?? null)
+    ? statedReason(readAgentSessionFailureFact(newest.rejection))
     : null
 }
 
@@ -90,7 +110,11 @@ export function useNativeChatAvailabilityNotice(input: {
     return null
   }
   const launchWords = input.launchFailure && agentSessionRefusalReasonWords(input.launchFailure)
-  const launchReason = launchWords && 'fact' in launchWords ? launchWords.fact : null
+  const launchReason = isMissingCodexInstallationRefusal(input.launchFailure)
+    ? 'cliMissing'
+    : launchWords && 'fact' in launchWords
+      ? launchWords.fact
+      : null
   if (
     launchReason === unavailable.reason ||
     rowReason === unavailable.reason ||

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import { isStructuredAgentSessionStartFailureRow } from '../../../../shared/structured-agent-session-start-failure-row-key'
 import {
   sameAgentSessionFailureFact,
   structuredAgentSessionStartFailureFacts
@@ -8,15 +9,19 @@ import {
 
 const NO_FACTS: readonly AgentSessionFailureFact[] = []
 
-/** What the loaded start-failure rows state, read only while `enabled`. Held while unchanged, so a
- *  streaming turn does not rebuild every row's delivery notice. */
+/** Loaded failure facts stay shared while unchanged; startup observation waits for a startup row. */
 export function useStructuredAgentSessionStartFailureFacts(
   items: readonly AgentJournalRenderItem[],
-  enabled: boolean
+  enabled: boolean,
+  observeStarts = false
 ): readonly AgentSessionFailureFact[] {
   const facts = useMemo(
-    () => (enabled ? structuredAgentSessionStartFailureFacts(items) : NO_FACTS),
-    [enabled, items]
+    () =>
+      enabled ||
+      (observeStarts && items.some((item) => isStructuredAgentSessionStartFailureRow(item.itemId)))
+        ? structuredAgentSessionStartFailureFacts(items)
+        : NO_FACTS,
+    [enabled, observeStarts, items]
   )
   const previousRef = useRef<readonly AgentSessionFailureFact[]>(NO_FACTS)
   const previous = previousRef.current

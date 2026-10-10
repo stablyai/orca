@@ -267,7 +267,7 @@ function QuickTabBody({
       if (!shouldAllowComposerEnterSubmitTarget(target, composerRef.current)) {
         return
       }
-      if (createDisabled || composerRef.current?.hasAttribute('data-sparse-preset-editing')) {
+      if (createDisabled || composerRef.current?.hasAttribute('data-workspace-submit-blocked')) {
         return
       }
       event.preventDefault()

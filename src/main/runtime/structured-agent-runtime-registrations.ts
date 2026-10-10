@@ -1,6 +1,7 @@
 // Each runtime registration owns its adapter, location support and account resolution at start.
 
 import { createCodexStructuredLaunchResolver } from '../codex/codex-structured-launch-resolution'
+import { requireSupportedCodexCli } from '../codex/codex-cli-installation-error'
 import { supportsCodexStructuredLocation } from '../codex/codex-structured-location-support'
 import { supportsClaudeStructuredLocation } from '../claude/claude-structured-location-support'
 import { supportsSupervisedProviderChildLocation } from '../provider-process/supervised-provider-child-location'
@@ -138,8 +139,19 @@ function nativeChatVisualsFor(deps: StructuredAgentSessionRuntimeDeps): {
     : {}
 }
 
+export const SCRIPTED_CODEX_INSTALLATION_REQUIRED =
+  'a scripted Codex transport requires readCodexInstallation'
+
+/** Without it the version check would run whatever real codex is on this machine's PATH. */
+export function assertScriptedCodexInstallation(deps: StructuredAgentSessionRuntimeDeps): void {
+  if (deps.openCodexConnection && !deps.readCodexInstallation) {
+    throw new Error(SCRIPTED_CODEX_INSTALLATION_REQUIRED)
+  }
+}
+
 function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredAgentRuntimeAdapter {
   const { deps, store, followUps, host } = context
+  const { readCodexInstallation } = deps
   return new CodexStructuredSessionAdapter({
     resolveAccountKind: deps.resolveCodexAccountKind,
     resolveLaunch: createCodexStructuredLaunchResolver({
@@ -151,6 +163,9 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
         ? { resolvePermissionPolicy: deps.resolveCodexPermissionPolicy }
         : {}),
       ...(deps.resolveCodexCommand ? { resolveCommand: deps.resolveCodexCommand } : {}),
+      ...(readCodexInstallation
+        ? { requireSupportedCli: (input) => requireSupportedCodexCli(input, readCodexInstallation) }
+        : {}),
       ...nativeChatVisualsFor(deps)
     }),
     ...(deps.openCodexConnection ? { openConnection: deps.openCodexConnection } : {}),

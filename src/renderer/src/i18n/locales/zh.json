@@ -17798,6 +17798,8 @@
         "couldNotStart": "{{agent}} 无法启动。",
         "editSavedArguments": "请在设置 > 智能体 > 参数中编辑。",
         "couldNotRestart": "{{agent}} 无法重新启动。",
+        "codexCliMissing": "尚未安装 Codex。",
+        "codexCliTooOld": "Codex {{installedVersion}} 版本过旧，无法用于聊天。请更新到 {{minimumVersion}} 或更高版本。",
         "notSignedIn": "{{agent}} 尚未登录。",
         "claudeSystemNotSignedIn": "Claude 尚未登录。请运行 `{{loginCommand}}`，或在 Claude 账户设置中选择账户。",
         "claudeManagedNotSignedIn": "此 Claude 账户尚未登录。请在 Claude 账户设置中重新登录。",
@@ -19568,5 +19570,17 @@
   },
   "projectField": {
     "updateFailed": "无法更新项目字段"
+  },
+  "codex": {
+    "maintenance": {
+      "installing": "正在安装…",
+      "install": "安装 Codex",
+      "exitCode": "命令已退出，退出代码为 {{code}}",
+      "logTitle": "Codex 设置日志",
+      "copyLog": "复制日志",
+      "updatedRetry": "Codex 已更新。请重试。",
+      "updatedSendAgain": "Codex 已更新。请重新发送消息。",
+      "installFailed": "无法安装 Codex。请重试。"
+    }
   }
 }

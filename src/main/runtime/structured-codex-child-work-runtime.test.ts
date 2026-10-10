@@ -20,6 +20,7 @@ import {
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { scriptedCodexTransport } from './scripted-codex-transport.test-fixture'
 
 const THREAD = 'thread-runtime-child-work'
 const CHILD = 'thread-runtime-reviewer'
@@ -80,8 +81,7 @@ describe('structured Codex child work through the production runtime', () => {
       resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
       resolveCodexCommand: () => 'codex',
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
-      openCodexConnection: openConnection,
-      readProcessStartTime: async () => 1_700_000_000_000,
+      ...scriptedCodexTransport(openConnection),
       statusSink: {
         publish: () => {},
         forget: () => {},

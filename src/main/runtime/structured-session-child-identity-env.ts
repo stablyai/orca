@@ -61,6 +61,15 @@ export function structuredSessionChildIdentityEnv(
     [ORCA_AGENT_SESSION_ID_ENV]: sessionId,
     [ORCA_STRUCTURED_SESSION_ENV]: '1'
   }
+  return structuredSessionCliEnvironment(env)
+}
+
+export function structuredSessionCliEnvironment(
+  childEnv: NodeJS.ProcessEnv
+): Record<string, string> {
+  const env = Object.fromEntries(
+    Object.entries(childEnv).filter((pair): pair is [string, string] => pair[1] !== undefined)
+  )
   applyThisAppCli(env)
   return env
 }

@@ -125,37 +125,23 @@ describe('openCodexThread', () => {
     )
   })
 
-  it('caches a narrowly proven excludeTurns refusal and uses one bounded fallback', async () => {
-    const request = vi.fn(async (_method: string, params?: Record<string, unknown>) => {
-      if (params?.excludeTurns) {
-        throw new CodexAppServerRequestError(
-          'thread/resume',
-          -32602,
-          'codex app-server thread/resume failed: unknown field `excludeTurns`'
-        )
-      }
-      return { thread: { id: 'thread-1', turns: [{ id: 'turn-1', items: [] }] } }
+  it('does not retry without excludeTurns after an unsupported-field refusal', async () => {
+    const refusal = new CodexAppServerRequestError(
+      'thread/resume',
+      -32602,
+      'unknown field excludeTurns'
+    )
+    const request = vi.fn(async () => {
+      throw refusal
     })
-    const connection = connectionFor(request)
-
-    const first = await openCodexThread(
-      connection,
-      { cwd: '/workspace', resumeThreadId: 'thread-1' },
-      2_000
-    )
-    const second = await openCodexThread(
-      connection,
-      { cwd: '/workspace', resumeThreadId: 'thread-1' },
-      2_000
-    )
-
-    expect(first.thread?.turns).toHaveLength(1)
-    expect(second.thread?.turns).toHaveLength(1)
-    expect(request.mock.calls.map(([, params]) => params)).toEqual([
-      expect.objectContaining({ excludeTurns: true }),
-      { threadId: 'thread-1', cwd: '/workspace' },
-      { threadId: 'thread-1', cwd: '/workspace' }
-    ])
+    await expect(
+      openCodexThread(
+        connectionFor(request),
+        { cwd: '/workspace', resumeThreadId: 'thread-1' },
+        2_000
+      )
+    ).rejects.toBe(refusal)
+    expect(request).toHaveBeenCalledOnce()
   })
 
   it('does not retry ambiguous invalid params or oversized history responses', async () => {
@@ -188,33 +174,6 @@ describe('openCodexThread', () => {
       )
     ).rejects.toBe(oversized)
     expect(oversizedRequest).toHaveBeenCalledOnce()
-  })
-
-  it('accepts a fallback result beyond the daemon wire limit', async () => {
-    const request = vi.fn(async (_method: string, params?: Record<string, unknown>) => {
-      if (params?.excludeTurns) {
-        throw new CodexAppServerRequestError(
-          'thread/resume',
-          -32602,
-          'codex app-server thread/resume failed: unsupported excludeTurns parameter'
-        )
-      }
-      return {
-        thread: {
-          id: 'thread-1',
-          turns: [{ id: 'turn-1', items: [{ output: 'x'.repeat(16 * 1024 * 1024 + 1) }] }]
-        }
-      }
-    })
-
-    await expect(
-      openCodexThread(
-        connectionFor(request),
-        { cwd: '/workspace', resumeThreadId: 'thread-1' },
-        2_000
-      )
-    ).resolves.toMatchObject({ threadId: 'thread-1' })
-    expect(request).toHaveBeenCalledTimes(2)
   })
 
   describe('a thread Codex never saved', () => {

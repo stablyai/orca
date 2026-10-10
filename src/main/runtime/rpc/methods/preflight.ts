@@ -1,4 +1,6 @@
 import { defineMethod } from '../core'
+import { CodexMaintenanceRequest } from '../../../../shared/codex-cli-maintenance'
+import { codexMaintenanceOnHost } from '../../../preflight/codex-maintenance-host'
 import {
   detectRemoteWindowsTerminalCapabilities,
   runPreflightCheck
@@ -15,6 +17,13 @@ import {
 } from '../../../../shared/rpc-contract/preflight-params'
 
 export const PREFLIGHT_METHODS = [
+  defineMethod({
+    name: 'preflight.codexMaintenance',
+    permission: 'host-admin',
+    params: CodexMaintenanceRequest,
+    handler: async (params, { runtime }) =>
+      codexMaintenanceOnHost(params, runtime.getCodexMaintenanceSettings())
+  }),
   defineMethod({
     name: 'preflight.check',
     permission: 'workspace',

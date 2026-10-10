@@ -35,6 +35,7 @@ import {
   type FakeConnection
 } from './structured-chat-coordinator-fake-codex-fixture'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { scriptedCodexTransport } from './scripted-codex-transport.test-fixture'
 
 export const COORDINATOR = '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
 export const PEER_CHAT = '7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64'
@@ -257,8 +258,7 @@ beforeEach(async () => {
     resolveLaunchArgs: () => [],
     resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
     resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
-    openCodexConnection: codex.openConnection,
-    readProcessStartTime: async () => 1_700_000_000_000,
+    ...scriptedCodexTransport(codex.openConnection),
     // The same calls the runtime's own host install makes.
     onSessionStatusChanged: (summary) => runtime.onStructuredSessionStatusForMail(summary),
     onSessionTabHidden: (sessionId) => runtime.onStructuredSessionTabHidden(sessionId)

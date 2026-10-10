@@ -1,3 +1,4 @@
+import { delimiter } from 'node:path'
 import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { describe, expect, it, vi } from 'vitest'
 import { createCodexModelCatalogProbe } from './codex-model-catalog-probe'
@@ -58,11 +59,20 @@ describe('codex model catalog probe', () => {
       expect(invocations).toHaveLength(1)
       expect(invocations[0]!.cliPath).toBe(sessionInvocation.command)
       expect(invocations[0]!.env).toEqual({
-        PATH: '/resolved/bin',
-        HOME: '/homes/user',
-        OPENAI_BASE_URL: 'https://gateway.example',
+        ...sessionInvocation.environment,
         CODEX_HOME: '/homes/account-a'
       })
+      expect(invocations[0]!.env).toMatchObject({
+        HOME: '/homes/user',
+        OPENAI_BASE_URL: 'https://gateway.example'
+      })
+      const searchPaths = Object.entries(invocations[0]!.env ?? {}).filter(
+        ([key]) => key.toUpperCase() === 'PATH'
+      )
+      expect(
+        searchPaths.some(([, value]) => value.split(delimiter).includes('/resolved/bin'))
+      ).toBe(true)
+      expect(invocations[0]!.env).not.toHaveProperty('DROPPED')
       // A short-lived probe must not start plugin marketplace clones that outlive its teardown.
       expect(invocations[0]!.args.join(' ')).toContain('features.plugins=false')
     }

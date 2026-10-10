@@ -60,6 +60,11 @@
       "types": "./dist/windows-system-binary.d.ts",
       "default": "./dist/windows-system-binary.js"
     },
+    "./spawn-resolution": {
+      "orca-source": "./src/spawn-resolution.ts",
+      "types": "./dist/spawn-resolution.d.ts",
+      "default": "./dist/spawn-resolution.js"
+    },
     "./windows-cmd-shim-resolution": {
       "orca-source": "./src/windows-cmd-shim-resolution.ts",
       "types": "./dist/windows-cmd-shim-resolution.d.ts",

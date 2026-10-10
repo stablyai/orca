@@ -1,4 +1,6 @@
 import { ipcMain } from 'electron'
+import { CodexMaintenanceRequest } from '../../shared/codex-cli-maintenance'
+import { codexMaintenanceOnHost } from '../preflight/codex-maintenance-host'
 import {
   detectRemoteWindowsTerminalCapabilities,
   runPreflightCheck
@@ -15,8 +17,14 @@ import type {
 // Re-exported here so existing importers of `ipc/preflight` keep working.
 export * from '../preflight/agent-detection'
 import { readZCodeInteractiveCapability } from '../zcode/interactive-capability'
+import type { CodexCommandSettings } from '../codex/configured-codex-invocation'
 
-export function registerPreflightHandlers(): void {
+export function registerPreflightHandlers(
+  getSettings: () => CodexCommandSettings = () => ({})
+): void {
+  ipcMain.handle('preflight:codexMaintenance', (_event, args: unknown) =>
+    codexMaintenanceOnHost(CodexMaintenanceRequest.parse(args), getSettings())
+  )
   ipcMain.handle(
     'preflight:check',
     async (

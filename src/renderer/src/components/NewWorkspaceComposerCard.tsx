@@ -38,6 +38,7 @@ import {
 import { getSshStatusLabel } from './new-workspace/new-workspace-composer-ssh-status'
 import { useNewWorkspaceComposerFileDrop } from './new-workspace/use-new-workspace-composer-file-drop'
 import { useComposerFileDragOver } from './new-workspace/use-composer-file-drag-over'
+import { useNewWorkspaceCodexMaintenance } from './new-workspace/use-new-workspace-codex-maintenance'
 
 // Why lazy: this pulls the ~41 KB project-location browser onto the boot graph, and nothing
 // reaches it without an explicit "Set location" click. Shared with the warm below so both hit
@@ -54,8 +55,18 @@ const SetProjectLocationDialog = lazyWithRetry(
 )
 
 export default function NewWorkspaceComposerCard(
-  props: NewWorkspaceComposerCardProps
+  originalProps: NewWorkspaceComposerCardProps
 ): React.JSX.Element {
+  const maintenance = useNewWorkspaceCodexMaintenance(originalProps)
+  const props = {
+    ...originalProps,
+    createDisabled: originalProps.createDisabled || maintenance.blocked,
+    onCreate: () => {
+      if (!maintenance.blocked) {
+        originalProps.onCreate()
+      }
+    }
+  }
   useTranslation()
   const {
     contextualTourSource,
@@ -297,6 +308,7 @@ export default function NewWorkspaceComposerCard(
       ref={setComposerNode}
       data-workspace-composer-root="true"
       data-sparse-preset-editing={sparseEditing ? 'true' : undefined}
+      data-workspace-submit-blocked={props.createDisabled || sparseEditing ? 'true' : undefined}
       onDragEnter={dragHandlers.onDragEnter}
       onDragLeave={dragHandlers.onDragLeave}
       className={cn(
@@ -360,6 +372,7 @@ export default function NewWorkspaceComposerCard(
         <div className="shrink-0 space-y-1">
           <NewWorkspaceComposerFooter
             {...props}
+            maintenanceNotice={maintenance.notice}
             submitShortcutModifierLabel={getScreenSubmitModifierLabel()}
           />
         </div>

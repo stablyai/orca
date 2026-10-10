@@ -1,4 +1,14 @@
+import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITIES } from './browser-client-host-capabilities'
+export {
+  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
+  BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
+  BROWSER_CLIENT_AUTOMATION_RUNTIME_CAPABILITY,
+  BROWSER_CLIENT_FILE_CHANNEL_RUNTIME_CAPABILITY,
+  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
+  BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY
+} from './browser-client-host-capabilities'
 import { WORKSPACE_ATTACHMENT_RUNTIME_CAPABILITIES } from './workspace-attachment-capabilities'
+import { CODEX_MAINTENANCE_CAPABILITY } from './codex-cli-maintenance'
 import {
   AUTOMATION_RUNTIME_CAPABILITIES,
   AUTOMATION_RUNTIME_CLIENT_CAPABILITIES
@@ -126,17 +136,6 @@ export const BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY = 'browser.certificate
 // treat a preallocated page ID as canonical when this is advertised.
 export const BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY =
   'browser.tab-create-known-id.v1' as const
-export const BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY = 'browser.clientHost.v1' as const
-export const BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY =
-  'browser.clientHost.pageMetadata.v1' as const
-export const BROWSER_CLIENT_AUTOMATION_RUNTIME_CAPABILITY =
-  'browser.clientHost.automation.v1' as const
-// Why: without it a client-placed browser.upload would resolve remote paths on the desktop filesystem, so uploads fail closed instead.
-export const BROWSER_CLIENT_FILE_CHANNEL_RUNTIME_CAPABILITY =
-  'browser.clientHost.fileChannel.v1' as const
-export const BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY = 'network.browserTunnel.v1' as const
-export const BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY =
-  'network.browserTunnel.executionHosts.v1' as const
 // Why: hosts without this strip terminal.send's inputKind (zod object drops
 // unknown keys), so a mobile xterm query reply would land as ordinary
 // floor-taking input. Mobile must not forward replies unless advertised.
@@ -348,6 +347,7 @@ export const ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY =
   'git.antigravity-configured-model.v1' as const
 
 export const RUNTIME_CAPABILITIES = [
+  CODEX_MAINTENANCE_CAPABILITY,
   ...ORCAD_RUNTIME_CAPABILITIES,
   QODER_OWNED_TERMINAL_CREATE_CAPABILITY,
   ...AGENT_SESSION_STOP_RUNTIME_CAPABILITIES,
@@ -360,12 +360,7 @@ export const RUNTIME_CAPABILITIES = [
   ...ORCHESTRATION_RUNTIME_CAPABILITIES,
   BROWSER_SCREENCAST_RUNTIME_CAPABILITY,
   BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY,
-  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
-  BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
-  BROWSER_CLIENT_AUTOMATION_RUNTIME_CAPABILITY,
-  BROWSER_CLIENT_FILE_CHANNEL_RUNTIME_CAPABILITY,
-  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
-  BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
+  ...BROWSER_CLIENT_HOST_RUNTIME_CAPABILITIES,
   'terminal.binary-stream.v1',
   'terminal.multiplex.v1',
   'workspace-ports.v1',

@@ -9,6 +9,8 @@ import { SettingsBadge, SettingsSegmentedControl } from './SettingsFormControls'
 import type { AgentSessionSourceHomeControl } from './codex-session-source-home-control'
 import { AgentSessionSourceHomeInput } from './codex-session-source-home-control'
 import { stringifyAgentDefaultEnvDraft } from './agent-default-env-draft'
+import { CodexMaintenanceRow } from './CodexMaintenanceRow'
+import type { CodexMaintenanceTarget } from '@/lib/codex-maintenance-client'
 import {
   AgentCommandOverrideInput,
   AgentDefaultArgsInput,
@@ -74,6 +76,7 @@ export type AgentCatalogRowProps = {
   onSaveArgs: (value: string) => void
   onSaveEnv: (value: Record<string, string>) => void
   sessionSourceHome?: AgentSessionSourceHomeControl
+  maintenanceTarget?: CodexMaintenanceTarget
 }
 
 export function AgentCatalogRow({
@@ -94,7 +97,8 @@ export function AgentCatalogRow({
   onSaveOverride,
   onSaveArgs,
   onSaveEnv,
-  sessionSourceHome
+  sessionSourceHome,
+  maintenanceTarget
 }: AgentCatalogRowProps): React.JSX.Element {
   const envSummary = stringifyAgentDefaultEnvDraft(envOverride)
   const defaultEnvSummary = stringifyAgentDefaultEnvDraft(defaultEnv)
@@ -129,6 +133,9 @@ export function AgentCatalogRow({
             {argsOverride && <span className="ml-1.5 text-foreground/70">{argsOverride}</span>}
             {envSummary && <span className="ml-1.5 text-foreground/60">{envSummary}</span>}
           </div>
+          {agentId === 'codex' && maintenanceTarget ? (
+            <CodexMaintenanceRow target={maintenanceTarget} />
+          ) : null}
         </div>
 
         <div className="ml-auto grid shrink-0 grid-cols-[max-content_6.5rem_1.75rem_1.75rem] items-center gap-1.5">

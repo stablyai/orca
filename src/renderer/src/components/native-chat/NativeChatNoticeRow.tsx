@@ -1,4 +1,6 @@
+import { useContext } from 'react'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
+import { NativeChatCodexMaintenanceContext } from '@/hooks/useCodexMaintenance'
 import { useTranslation } from 'react-i18next'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
@@ -51,6 +53,7 @@ export function NativeChatNoticeRow({
   allowFileUriLinks?: boolean
 }): React.JSX.Element {
   useTranslation()
+  const codexMaintenance = useContext(NativeChatCodexMaintenanceContext)
   const orcaStopView = useNativeChatOrcaStopView()
   const claudeSignIn = useNativeChatClaudeSignInView()
   if (block.presentation === 'compaction' || block.presentation === 'context-cleared') {
@@ -114,6 +117,19 @@ export function NativeChatNoticeRow({
   const { hostLabel, remoteHost, continueAvailable } = orcaStopView
   const named = orcaStop !== undefined && hostLabel !== null
   const failure = readWholeAgentSessionFailureFact(block.failure)
+  const codexRefusal =
+    failure?.refusal?.code === 'agent_session_operation_invalid' &&
+    failure.refusal.details?.codexInstallation
+  const repairNotice = codexRefusal ? codexMaintenance : null
+  const rowAction =
+    repairNotice?.action ??
+    (claudeSignIn && isClaudeSignInFailureKind(block.failure?.kind)
+      ? {
+          label: nativeChatClaudeSignInLabel(claudeSignIn),
+          disabled: claudeSignIn.signingIn,
+          onClick: claudeSignIn.signIn
+        }
+      : undefined)
   // Only reword auth text fully described by its fact; host text may also carry command advice.
   const authSurface =
     failure?.kind === 'notSignedIn'
@@ -121,16 +137,18 @@ export function NativeChatNoticeRow({
           (surface) => block.text === agentSessionFailureSentence(failure, surface, { agentName })
         )
       : undefined
-  const text = named
-    ? nativeChatOrcaStopRowText(orcaStop.cause, hostLabel, { continueAvailable, remoteHost })
-    : failure && authSurface
-      ? agentSessionFailureSentence(
-          failure,
-          authSurface,
-          { agentName },
-          sayAgentSessionFailureTranslated
-        )
-      : block.text
+  const text =
+    repairNotice?.text ??
+    (named
+      ? nativeChatOrcaStopRowText(orcaStop.cause, hostLabel, { continueAvailable, remoteHost })
+      : failure && authSurface
+        ? agentSessionFailureSentence(
+            failure,
+            authSurface,
+            { agentName },
+            sayAgentSessionFailureTranslated
+          )
+        : block.text)
   const tone =
     named || block.presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION ? 'notice' : block.tone
   const Icon =
@@ -155,15 +173,15 @@ export function NativeChatNoticeRow({
         {Icon ? <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> : null}
         <p className="min-w-0 whitespace-pre-wrap break-words">{text}</p>
       </div>
-      {claudeSignIn && isClaudeSignInFailureKind(block.failure?.kind) ? (
+      {rowAction ? (
         <Button
           type="button"
           variant="outline"
           size="xs"
-          disabled={claudeSignIn.signingIn}
-          onClick={claudeSignIn.signIn}
+          disabled={rowAction.disabled}
+          onClick={rowAction.onClick}
         >
-          {nativeChatClaudeSignInLabel(claudeSignIn)}
+          {rowAction.label}
         </Button>
       ) : null}
       {block.providerFrame ? (

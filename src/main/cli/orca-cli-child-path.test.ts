@@ -164,4 +164,17 @@ describe('prependOrcaCliDirToChildPath', () => {
     // Why: an empty trailing segment resolves as `.` in some shells.
     expect(env.PATH).toBe(join(USER_DATA, 'cli', 'bin'))
   })
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'does not change the effective PATH when applied again on %s',
+    (platform) => {
+      for (const isPackaged of [false, true]) {
+        const env: Record<string, string> = { PATH: platform === 'win32' ? 'C:\\tools' : '/tools' }
+        const options = { platform, isPackaged, userDataPath: USER_DATA, resourcesPath: RESOURCES }
+        prependOrcaCliDirToChildPath(env, options)
+        const path = env.PATH
+        prependOrcaCliDirToChildPath(env, options)
+        expect(env.PATH).toBe(path)
+      }
+    }
+  )
 })

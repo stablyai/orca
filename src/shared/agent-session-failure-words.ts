@@ -29,6 +29,7 @@ import type { AgentSessionWireRefusalCode } from './agent-session-wire-refusals'
 import { providerRetryWords, withRetryCause } from './agent-session-provider-retry-words'
 import { commandRefusedByReason } from './agent-session-command-refusal-words'
 import { joinSentences } from './sentence-joining'
+import { codexInstallationFailureWords } from './codex-installation-failure-words'
 import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_CODEX_QUEUE_FULL,
@@ -145,6 +146,10 @@ function startRetry(
 
 function couldNot(verb: 'couldNotStart' | 'couldNotRestart'): Sentence {
   return (context, fact, _surface, say) => {
+    const installationFailure = codexInstallationFailureWords(fact.refusal, say)
+    if (installationFailure) {
+      return installationFailure
+    }
     const failed = say(verb, agent(say, context))
     if (fact.argumentProblem) {
       const problemCopy = {

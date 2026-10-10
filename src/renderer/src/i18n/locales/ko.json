@@ -17833,6 +17833,8 @@
         "couldNotStart": "{{agent}}을(를) 시작하지 못했습니다.",
         "editSavedArguments": "설정 > 에이전트 > 인수에서 수정하세요.",
         "couldNotRestart": "{{agent}}을(를) 다시 시작하지 못했습니다.",
+        "codexCliMissing": "Codex가 설치되어 있지 않습니다.",
+        "codexCliTooOld": "Codex {{installedVersion}}은 채팅에 사용하기에는 너무 오래된 버전입니다. {{minimumVersion}} 이상으로 업데이트하세요.",
         "notSignedIn": "{{agent}}에 로그인되어 있지 않습니다.",
         "claudeSystemNotSignedIn": "Claude에 로그인되어 있지 않습니다. `{{loginCommand}}`을 실행하거나 Claude 계정 설정에서 계정을 선택하세요.",
         "claudeManagedNotSignedIn": "이 Claude 계정에 로그인하지 않았습니다. Claude 계정 설정에서 다시 로그인하세요.",
@@ -19568,5 +19570,17 @@
   },
   "projectField": {
     "updateFailed": "프로젝트 필드를 업데이트하지 못했습니다"
+  },
+  "codex": {
+    "maintenance": {
+      "installing": "설치 중…",
+      "install": "Codex 설치",
+      "exitCode": "명령이 종료 코드 {{code}}로 종료되었습니다",
+      "logTitle": "Codex 설정 로그",
+      "copyLog": "로그 복사",
+      "updatedRetry": "Codex가 업데이트되었습니다. 다시 시도하세요.",
+      "updatedSendAgain": "Codex가 업데이트되었습니다. 메시지를 다시 보내세요.",
+      "installFailed": "Codex를 설치하지 못했습니다. 다시 시도하세요."
+    }
   }
 }

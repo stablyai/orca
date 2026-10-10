@@ -11,6 +11,11 @@ import type { SkillFreshnessInventory } from '../../../../shared/skill-freshness
 import type { SkillDiscoveryResult } from '../../../../shared/skills'
 import type { SkillDeletePlan, SkillDeleteResult } from '../../../../shared/skill-delete-contract'
 import { SKILL_DELETE_CAPABILITY } from '../../../../shared/skill-install-capability'
+import {
+  CODEX_MAINTENANCE_CAPABILITY,
+  CodexMaintenanceStateSchema
+} from '../../../../shared/codex-cli-maintenance'
+import { codexCliInstallation } from '../../../../shared/codex-cli-installation'
 import { callRuntimeResult, getRemoteRuntimeStatus } from './web-runtime-calls'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import { getBrowserPlatform } from './web-storage'
@@ -58,6 +63,22 @@ export function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight
     hostPlatform: null
   }
   return {
+    codexMaintenance: async (args) => {
+      const status = await getRemoteRuntimeStatus()
+      if (!status.capabilities?.includes(CODEX_MAINTENANCE_CAPABILITY)) {
+        if (args.operation === 'start') {
+          throw new Error('Execution host does not support Codex maintenance.')
+        }
+        return {
+          installation: codexCliInstallation(true, null),
+          canRun: false,
+          job: null
+        }
+      }
+      return CodexMaintenanceStateSchema.parse(
+        await callRuntimeResult('preflight.codexMaintenance', args)
+      )
+    },
     check: async (args) => {
       if (!requireActiveEnvironmentOrNull()) {
         return fallbackStatus

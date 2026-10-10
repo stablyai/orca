@@ -18042,6 +18042,8 @@
         "sendAgainToTryOnceMore": "Send your message again to try once more.",
         "couldNotStart": "{{agent}} couldn't start.",
         "couldNotRestart": "{{agent}} couldn't restart.",
+        "codexCliMissing": "Codex isn't installed.",
+        "codexCliTooOld": "Codex {{installedVersion}} is too old for chats. Update to {{minimumVersion}} or newer.",
         "notSignedIn": "{{agent}} is not signed in.",
         "claudeSystemNotSignedIn": "Claude isn't signed in. Run `{{loginCommand}}`, or choose an account in Claude Accounts settings.",
         "claudeManagedNotSignedIn": "This Claude account isn't signed in. Sign in again in Claude Accounts settings.",
@@ -19723,6 +19725,18 @@
     "attachments": {
       "updateRuntime": "Update the remote runtime to change workspace links",
       "updateRuntimeSafely": "Update the remote runtime to safely change workspace links"
+    }
+  },
+  "codex": {
+    "maintenance": {
+      "installing": "Installing…",
+      "install": "Install Codex",
+      "exitCode": "Command exited with code {{code}}",
+      "logTitle": "Codex setup log",
+      "copyLog": "Copy log",
+      "updatedRetry": "Codex is updated. Retry.",
+      "updatedSendAgain": "Codex is updated. Send your message again.",
+      "installFailed": "Codex could not be installed. Try again."
     }
   },
   "tabHoverCard": {

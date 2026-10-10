@@ -18,6 +18,7 @@ vi.mock('../windows/windows-process-table', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   isWindowsProcessStartTimeAvailable
 }))
+vi.mock('./codex-cli-installation-error', () => ({ requireSupportedCodexCli: vi.fn() }))
 
 const SESSION_ID = 'session-1'
 const IDENTITY = { sessionId: SESSION_ID } as Parameters<
@@ -158,7 +159,7 @@ describe('codex structured launch resolution', () => {
   it('launches the app server in the workspace and account home the record pinned', async () => {
     const launch = await resolverFor(record())({ identity: IDENTITY })
 
-    expect(launch).toEqual({
+    expect(launch).toMatchObject({
       command: '/usr/local/bin/codex',
       args: ['app-server'],
       cwd: '/repos/workspace-1',

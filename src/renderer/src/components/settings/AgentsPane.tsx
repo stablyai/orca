@@ -237,7 +237,10 @@ export function AgentsPane({
     sessionSourceHome:
       isDetected && agent.id === 'codex'
         ? buildCodexSessionSourceHomeControl(settings, updateSettings)
-        : undefined
+        : undefined,
+    maintenanceTarget: activeServerEnvironmentId
+      ? { kind: 'environment', environmentId: activeServerEnvironmentId }
+      : { kind: 'local' }
   })
 
   return (

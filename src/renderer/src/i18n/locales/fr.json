@@ -17900,6 +17900,8 @@
         "couldNotStart": "{{agent}} n'a pas pu démarrer.",
         "editSavedArguments": "Modifiez-les dans Paramètres > Agents > Arguments.",
         "couldNotRestart": "{{agent}} n'a pas pu redémarrer.",
+        "codexCliMissing": "Codex n’est pas installé.",
+        "codexCliTooOld": "Codex {{installedVersion}} est trop ancien pour les conversations. Mettez-le à jour vers {{minimumVersion}} ou une version ultérieure.",
         "notSignedIn": "{{agent}} n’est pas connecté.",
         "claudeSystemNotSignedIn": "Claude n’est pas connecté. Exécutez `{{loginCommand}}`, ou choisissez un compte dans les paramètres des Comptes Claude.",
         "claudeManagedNotSignedIn": "Ce compte Claude n’est pas connecté. Reconnectez-vous dans les paramètres des Comptes Claude.",
@@ -19569,5 +19571,17 @@
   },
   "projectField": {
     "updateFailed": "Échec de la mise à jour du champ du projet"
+  },
+  "codex": {
+    "maintenance": {
+      "installing": "Installation…",
+      "install": "Installer Codex",
+      "exitCode": "La commande s’est terminée avec le code {{code}}",
+      "logTitle": "Journal de configuration de Codex",
+      "copyLog": "Copier le journal",
+      "updatedRetry": "Codex est à jour. Réessayez.",
+      "updatedSendAgain": "Codex est à jour. Envoyez à nouveau votre message.",
+      "installFailed": "Codex n’a pas pu être installé. Réessayez."
+    }
   }
 }

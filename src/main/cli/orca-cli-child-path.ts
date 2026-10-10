@@ -65,6 +65,9 @@ export function prependOrcaCliDirToChildPath(
       env.ORCA_CLI_BIN_DIR = devCliBin
     }
     const inheritedPath = readInheritedPath(env, platform)
+      .split(pathDelimiter)
+      .filter((entry) => entry && entry !== devCliBin)
+      .join(pathDelimiter)
     // Why: an empty PATH segment resolves as `.` in some shells (commands run from cwd); avoid a trailing delimiter.
     env[resolvePathEnvKey(env, platform)] = inheritedPath
       ? `${devCliBin}${pathDelimiter}${inheritedPath}`
@@ -88,6 +91,9 @@ export function prependOrcaCliDirToChildPath(
       env.ORCA_CLI_BIN_DIR = bundledCliBin
     }
     const inheritedPath = readInheritedPath(env, platform)
+      .split(pathDelimiter)
+      .filter((entry) => entry && entry !== bundledCliBin)
+      .join(pathDelimiter)
     env[resolvePathEnvKey(env, platform)] = inheritedPath
       ? `${bundledCliBin}${pathDelimiter}${inheritedPath}`
       : bundledCliBin

@@ -42,11 +42,11 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../shared/tui-agent-launch-defaults'
 import { isTuiAgent } from '../../shared/tui-agent-config'
-import { nativeChatShellEnvironmentPolicy } from '../../shared/native-chat-shell-environment'
 import { claudeStructuredPermissionModeForSettings } from '../claude/claude-structured-permission-mode'
 import { codexStructuredPermissionPolicyForSettings } from '../codex/codex-structured-permission-policy'
 import { claudeStructuredAuthPolicyForSettings } from '../claude-accounts/claude-structured-auth-policy'
 import { resolveStructuredAgentCommand } from '../native-chat/structured-agent-command-resolution'
+import { configuredCodexInvocationSources } from '../codex/configured-codex-invocation'
 import { structuredAgentConfiguredArgs } from '../native-chat/structured-agent-configured-args'
 import { claudeCliFlagSupport } from '../claude/claude-cli-flag-support'
 import {
@@ -55,6 +55,10 @@ import {
 } from './native-chat-visuals-workspace-verdict'
 
 export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVisibleReadProbe {
+  getCodexMaintenanceSettings() {
+    return this.requireStore().getSettings()
+  }
+
   async getWorktreePs(
     limit = DEFAULT_WORKTREE_PS_LIMIT,
     sourceDefaultsSupported = true
@@ -194,6 +198,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
         logger
       )
     )
+    const codexSources = configuredCodexInvocationSources(() => this.requireStore().getSettings())
     await installStructuredAgentSessionHost({
       stateDirectory: getProfileUserDataPath(),
       hostId: LOCAL_EXECUTION_HOST_ID,
@@ -206,12 +211,10 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
         (await this.resolveRuntimeFileTarget(`id:${workspaceId}`)).worktree.path,
       resolveClaudeCommand: () =>
         resolveStructuredAgentCommand('claude', this.requireStore().getSettings()),
-      resolveCodexCommand: (options) =>
-        resolveStructuredAgentCommand('codex', this.requireStore().getSettings(), options),
+      resolveCodexCommand: codexSources.resolveCommand,
       resolveLaunchArgs: (agent) =>
         structuredAgentConfiguredArgs(agent, this.requireStore().getSettings()),
-      resolveLaunchEnvOverlay: () =>
-        resolveTuiAgentLaunchEnv('codex', this.requireStore().getSettings().agentDefaultEnv),
+      resolveLaunchEnvOverlay: codexSources.resolveLaunchEnvOverlay,
       resolveClaudeLaunchEnv: () =>
         resolveTuiAgentLaunchEnv('claude', this.requireStore().getSettings().agentDefaultEnv),
       // Wired only here, so a test runtime never runs a real `claude --version`.
@@ -223,8 +226,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
           this.store ? readNativeChatVisualsWorkspaceCatalogs(this.store) : null
         )
       },
-      resolveShellEnvironmentPolicy: () =>
-        nativeChatShellEnvironmentPolicy(this.requireStore().getSettings()),
+      resolveShellEnvironmentPolicy: codexSources.resolveShellEnvironmentPolicy,
       resolveClaudeAuthPolicy: () =>
         claudeStructuredAuthPolicyForSettings(this.requireStore().getSettings()),
       // Re-read per acquisition, like the auth policy above it: the Agent Permissions setting is

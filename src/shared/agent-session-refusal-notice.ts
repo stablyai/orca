@@ -100,6 +100,16 @@ function reasonParts(
 ): AgentSessionWriteNoticePart[] | undefined {
   if (
     failure.code === 'agent_session_operation_invalid' &&
+    failure.details?.codexInstallation &&
+    (write === 'send' || write === 'composer-send')
+  ) {
+    return [
+      NOT_DONE[write],
+      { failure: { kind: 'startFailed', refusal: failure }, surface: 'rejection', context }
+    ]
+  }
+  if (
+    failure.code === 'agent_session_operation_invalid' &&
     failure.details?.argumentProblem &&
     (write === 'send' || write === 'composer-send')
   ) {

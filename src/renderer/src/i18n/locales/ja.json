@@ -17833,6 +17833,8 @@
         "couldNotStart": "{{agent}} を起動できませんでした。",
         "editSavedArguments": "設定 > Agent > 引数で編集してください。",
         "couldNotRestart": "{{agent}} を再起動できませんでした。",
+        "codexCliMissing": "Codex がインストールされていません。",
+        "codexCliTooOld": "Codex {{installedVersion}} はチャットには古すぎます。{{minimumVersion}} 以降に更新してください。",
         "notSignedIn": "{{agent}} にサインインしていません。",
         "claudeSystemNotSignedIn": "Claude にサインインしていません。`{{loginCommand}}` を実行するか、Claude アカウント設定でアカウントを選択してください。",
         "claudeManagedNotSignedIn": "この Claude アカウントにサインインしていません。設定の Claude アカウントで再度サインインしてください。",
@@ -19568,5 +19570,17 @@
   },
   "projectField": {
     "updateFailed": "プロジェクトフィールドを更新できませんでした"
+  },
+  "codex": {
+    "maintenance": {
+      "installing": "インストール中…",
+      "install": "Codex をインストール",
+      "exitCode": "コマンドが終了コード {{code}} で終了しました",
+      "logTitle": "Codex セットアップログ",
+      "copyLog": "ログをコピー",
+      "updatedRetry": "Codex は更新済みです。再試行してください。",
+      "updatedSendAgain": "Codex は更新済みです。メッセージをもう一度送信してください。",
+      "installFailed": "Codex をインストールできませんでした。再試行してください。"
+    }
   }
 }
