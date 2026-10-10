@@ -34,6 +34,19 @@ describe('SPEECH_MODEL_CATALOG', () => {
     expect(model?.streaming).toBe(false)
   })
 
+  it('registers GPT Transcribe as a non-streaming OpenAI model', () => {
+    const model = getCatalogModel('openai-gpt-transcribe')
+
+    expect(model).toMatchObject({
+      label: 'GPT Transcribe',
+      type: 'openai',
+      provider: 'openai',
+      language: 'multilingual',
+      sampleRate: 16000,
+      streaming: false
+    })
+  })
+
   it('ships the single-file SenseVoice model layout the loader resolves', () => {
     const model = getCatalogModel('sense-voice-zh-en-ja-ko-yue')
     expect(model?.files).toEqual(['model.int8.onnx', 'tokens.txt'])
