@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DirCache, TreeNode } from './file-explorer-types'
+import { isPathIgnored } from './status-display'
 import {
   createVisibleFileExplorerRowProjection,
   getFileExplorerIgnoredQueryRelativePaths
@@ -334,6 +335,64 @@ describe('file explorer visible row projection', () => {
       'collapsed'
     ])
   })
+
+  it.each([false, true])(
+    'inherits the link ignored state (%s) without querying descendants',
+    (ignored) => {
+      const treeInput = input(
+        {
+          '/repo': [row('.DS_Store'), row('config', true)],
+          '/repo/config': [
+            { ...row('config/.agents', true), isSymlink: true },
+            row('config/.agents-extra', true),
+            row('config/.claude', true)
+          ],
+          '/repo/config/.agents': [row('config/.agents/skills', true)],
+          '/repo/config/.agents/skills': [row('config/.agents/skills/SKILL.md')],
+          '/repo/config/.agents-extra': [row('config/.agents-extra/settings.json')],
+          '/repo/config/.claude': [row('config/.claude/settings.json')]
+        },
+        [
+          '/repo/config',
+          '/repo/config/.agents',
+          '/repo/config/.agents/skills',
+          '/repo/config/.agents-extra',
+          '/repo/config/.claude'
+        ]
+      )
+
+      expect(getFileExplorerIgnoredQueryRelativePaths(treeInput, true)).toEqual([
+        '.DS_Store',
+        'config',
+        'config/.agents',
+        'config/.agents-extra',
+        'config/.agents-extra/settings.json',
+        'config/.claude',
+        'config/.claude/settings.json'
+      ])
+
+      const ignoredSet = new Set(['.DS_Store', 'config/.claude/settings.json'])
+      if (ignored) {
+        ignoredSet.add('config/.agents')
+      }
+      const options = { ignoredSet, showDotfiles: true, showGitIgnoredFiles: true }
+      const shown = createVisibleFileExplorerRowProjection(treeInput, options)
+      const childPath = '/repo/config/.agents/skills/SKILL.md'
+      expect(shown.hasPath(childPath)).toBe(true)
+      expect(isPathIgnored(ignoredSet, 'config/.agents/skills/SKILL.md')).toBe(ignored)
+      expect(isPathIgnored(ignoredSet, 'config/.agents-extra/settings.json')).toBe(false)
+      expect(isPathIgnored(ignoredSet, '.DS_Store')).toBe(true)
+
+      const hidden = createVisibleFileExplorerRowProjection(treeInput, {
+        ...options,
+        showGitIgnoredFiles: false
+      })
+      expect(hidden.hasPath('/repo/config/.agents')).toBe(!ignored)
+      expect(hidden.hasPath(childPath)).toBe(!ignored)
+      expect(hidden.hasPath('/repo/.DS_Store')).toBe(false)
+      expect(hidden.hasPath('/repo/config/.agents-extra/settings.json')).toBe(true)
+    }
+  )
 
   it('keeps same-worktree ignored paths while an expanded-folder query is loading', () => {
     expect(
