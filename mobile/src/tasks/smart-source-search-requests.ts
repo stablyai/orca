@@ -3,6 +3,13 @@ import type { GitLabWorkItem } from '../../../src/shared/gitlab-types'
 import type { LinearIssue } from '../../../src/shared/linear/issue-types'
 import type { BaseRefSearchResult } from '../../../src/shared/repo-types'
 import type { RpcClient } from '../transport/rpc-client'
+import type { JiraIssue, JiraSiteSelection } from '../../../src/shared/jira-types'
+import { getJiraIssueSearchQuery } from '../../../src/shared/new-workspace/smart-workspace-source-results'
+import {
+  buildJiraIssueKeyJql,
+  buildJiraTextMatchJql
+} from '../../../src/shared/jira-search-input-jql'
+import { jiraIssueSearchRead } from './mobile-jira-operations'
 import { repoBaseRefSearchRead } from './mobile-workspace-source-operations'
 import {
   githubWorkItemSearchRead,
@@ -15,6 +22,7 @@ import type { MrStateFilter } from './mobile-composer-source-types'
 
 const GITLAB_PER_PAGE = 50
 const LINEAR_LIMIT = 50
+const JIRA_LIMIT = 50
 const BRANCH_LIMIT = 20
 
 // Why: the desktop Smart picker returns BOTH issues and PRs — the runtime's
@@ -91,6 +99,29 @@ export async function searchLinearIssues(
       )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: linearIssueRowSchema requires all nine members this row is read for (`id`, `identifier`, `title`, `url`, `updatedAt`, `priority`, `labels`, `state`, `team`), so the only gap left is `labelIds`: the schema salvages it to `string[] | undefined` while the shared LinearIssue declares it `string[]`. No mobile code reads it.
   return issues as LinearIssue[]
+}
+
+// Unlike the Tasks search box (raw JQL), the composer field is free text turned into a key or
+// text-match query — same as desktop. The gate rejects an empty, over-long, or wordless query,
+// so the tab stays empty until something searchable is typed.
+export async function searchJiraIssues(
+  client: RpcClient,
+  query: string,
+  siteId: JiraSiteSelection | null | undefined
+): Promise<JiraIssue[]> {
+  const searchable = getJiraIssueSearchQuery(query)
+  if (!searchable) {
+    return []
+  }
+  // Key first, as the desktop does: an issue key is an exact lookup, not a text match.
+  const jql = buildJiraIssueKeyJql(searchable) ?? buildJiraTextMatchJql(searchable)
+  return jiraIssueSearchRead.interpret(
+    await jiraIssueSearchRead.request(client, {
+      jql,
+      limit: JIRA_LIMIT,
+      siteId: siteId ?? undefined
+    })
+  )
 }
 
 export async function searchBranches(

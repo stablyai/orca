@@ -128,6 +128,8 @@ function createModel(input: ProbeInput): PickerProjectionModel {
     githubProjects: [],
     gitlabFilter: 'opened',
     hostedRepos: [],
+    jiraConnection: { connected: false, sites: [], selection: null, credentialError: null },
+    jiraFilter: 'assigned',
     items: input.items,
     linearDisplayProperties: new Set(['state', 'priority']),
     linearFilter: 'all',

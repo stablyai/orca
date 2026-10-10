@@ -11,6 +11,7 @@ import type {
   LinearFilter
 } from './mobile-tasks-view-state-types'
 import type { TaskItem } from './mobile-tasks-project-workspace-types'
+import type { JiraIssue } from '../../../src/shared/jira-types'
 import type {
   GitHubWorkItem,
   GitLabTodo,
@@ -286,6 +287,21 @@ export async function mapWithConcurrency<T, R>(
   }
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => run()))
   return results
+}
+
+export function createJiraTask(issue: JiraIssue): TaskItem {
+  const project = issue.project.name.trim() || issue.project.key
+  return {
+    // Keys are site-qualified because the 'all' selection fans out across sites
+    // and two sites can hand back the same issue id.
+    key: `jira:${issue.siteId ?? 'site'}:${issue.id}`,
+    provider: 'jira',
+    title: issue.title,
+    subtitle: `${issue.key} · ${project}`,
+    status: issue.status.name,
+    updatedAt: issue.updatedAt,
+    source: issue
+  }
 }
 
 export function createLinearTask(issue: LinearIssue): TaskItem {
