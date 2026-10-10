@@ -2,7 +2,6 @@ import type { AutomationSchedulePreset } from './automations-types'
 import { parseSchedule, type ParsedRrule } from './automation-schedule-parsing'
 import { cronMatches, floorToMinute, startOfLocalDay } from './automation-cron-occurrence'
 
-const DAY_MS = 24 * 60 * 60 * 1000
 const HOUR_MS = 60 * 60 * 1000
 const MINUTE_MS = 60 * 1000
 // Why: valid cron expressions like Feb 29 can have an 8-year gap across non-leap centuries.
@@ -35,7 +34,9 @@ function scanDayCandidates(rule: ParsedRrule, anchor: number, direction: 1 | -1)
         return candidate
       }
     }
-    day += direction * DAY_MS
+    const nextDay = new Date(day)
+    nextDay.setDate(nextDay.getDate() + direction)
+    day = startOfLocalDay(nextDay.getTime())
   }
   return null
 }
