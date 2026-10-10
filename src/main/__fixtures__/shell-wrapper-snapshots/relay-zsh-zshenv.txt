@@ -243,14 +243,6 @@ __orca_deferred_init() {
   fi
   builtin unset _orca_shell_features _orca_histfile
   (( $+__orca_deferred_sched_armed )) || builtin unfunction __orca_deferred_sched_init
-  local __orca_widget __orca_line_init_bound=0
-  for __orca_widget in "${(v)widgets[@]}"; do
-    if [[ "$__orca_widget" == user:__orca_deferred_line_init ]]; then
-      __orca_line_init_bound=1
-      break
-    fi
-  done
-  (( __orca_line_init_bound )) || builtin unfunction __orca_deferred_line_init
   builtin unfunction __orca_deferred_init __orca_has_feature __orca_arm_deferred_line_init
 }
 {

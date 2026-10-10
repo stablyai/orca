@@ -165,7 +165,6 @@ describe('zsh deferred startup after prompt-hook replacement', () => {
             ? ['source -- "$HOME/wrapper/.zshenv"', 'source -- "$HOME/wrapper/.zshenv"']
             : []),
           'O_LK=$(command -v orca-dev)',
-          'O_IR=${+functions[__orca_deferred_line_init]}',
           'O_SR=${+widgets[__orca_saved_line_init]}',
           ...(scheduleCleanup
             ? [
@@ -183,7 +182,6 @@ describe('zsh deferred startup after prompt-hook replacement', () => {
           'O_LK',
           'O_UC',
           'O_UN',
-          'O_IR',
           'O_SR',
           ...(scheduleCleanup ? ['O_SC', 'O_SE'] : []),
           ...(scheduledPrecmd ? ['O_EV', 'O_EO'] : []),
@@ -203,9 +201,6 @@ describe('zsh deferred startup after prompt-hook replacement', () => {
       expect(Number(result.values.O_UC)).toBeGreaterThan(0)
       if (!chainedLineInit) {
         expect(result.values.O_UN).toBe('zle-line-init')
-      }
-      if (!chainedLineInit && !chainedRedraw && !repeatSource) {
-        expect(result.values.O_IR).toBe('0')
       }
       expect(result.values.O_SR).toBe('0')
       if (repeatSource) {
@@ -278,4 +273,45 @@ describe('zsh deferred startup after prompt-hook replacement', () => {
       }
     }
   )
+
+  // zimfw/input chains line-init by splicing the bound function's name into its own body.
+  itWithZsh('keeps line-init callable for a plugin that wraps it by name', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'orca-deferred-line-init-'))
+    roots.push(home)
+    const wrapperDir = join(home, 'wrapper')
+    mkdirSync(wrapperDir, { recursive: true })
+    writeFileSync(
+      join(home, '.zshrc'),
+      `functions[orca_test_app_mode]=\${widgets[zle-line-init]#user:}'
+  O_AM=$((\${O_AM:-0}+1))'
+zle -N zle-line-init orca_test_app_mode
+`
+    )
+    writeFileSync(join(wrapperDir, '.zshenv'), getZshShellReadyWrapperFile())
+    writeFileSync(join(wrapperDir, ZSH_WRAPPER_DIR_MARKER_FILE), '')
+    const env: Record<string, string> = {
+      ...process.env,
+      HOME: home,
+      USERPROFILE: home,
+      PATH: '/usr/bin:/bin',
+      ZDOTDIR: wrapperDir
+    }
+    env.ORCA_SHELL_FEATURES = encodeShellStartupFeatures(
+      selectShellStartupFeatures({
+        shellPath: ZSH_PATH,
+        env,
+        hasStartupCommand: true,
+        waitsForShellReady: true,
+        emitsStartupIdentity: false
+      })
+    )
+    env[POSIX_SHELL_STARTUP_COMMAND_ENV] = 'O_SU=1'
+
+    const result = await runZshPty({ env, commands: ['true', 'true'], report: ['O_AM', 'O_SU'] })
+
+    expect(result.output).not.toContain('command not found')
+    expect(result.output).toContain(MARKERS.ready)
+    expect(result.values.O_SU).toBe('1')
+    expect(Number(result.values.O_AM)).toBeGreaterThan(2)
+  })
 })
