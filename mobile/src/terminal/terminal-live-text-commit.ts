@@ -1,4 +1,5 @@
 import { getTerminalLiveSpecialKeyBytes } from './terminal-live-input'
+import type { TerminalShortcutModifier } from './terminal-accessory-keys'
 import { readUtf8CodePointAt } from '../../../src/shared/utf8-byte-limits'
 
 export type TerminalLiveSpecialKeyDecision =
@@ -9,6 +10,7 @@ export type TerminalLiveSpecialKeyDecision =
 
 export type TerminalLiveSpecialKeyDecisionInput = {
   readonly key: string
+  readonly modifiers?: readonly TerminalShortcutModifier[]
   readonly heldText: string
   readonly sentText: string
 }
@@ -29,17 +31,22 @@ export type TerminalLiveAccessoryBytesDecisionInput = {
 
 export function getTerminalLiveSpecialKeyDecision({
   key,
+  modifiers = [],
   heldText,
   sentText
 }: TerminalLiveSpecialKeyDecisionInput): TerminalLiveSpecialKeyDecision {
-  const bytes = getTerminalLiveSpecialKeyBytes(key)
+  const bytes = getTerminalLiveSpecialKeyBytes(key, modifiers)
   if (bytes === null) {
     return { kind: 'ignore' }
   }
 
   // Why: native field edits fire onChangeText and the mirror diff emits the
   // matching PTY erase; sending raw DEL here as well would double-erase.
-  if ((key === 'Backspace' || key === 'Delete') && (heldText.length > 0 || sentText.length > 0)) {
+  if (
+    (key === 'Backspace' || key === 'Delete') &&
+    modifiers.length === 0 &&
+    (heldText.length > 0 || sentText.length > 0)
+  ) {
     return { kind: 'local-edit' }
   }
 

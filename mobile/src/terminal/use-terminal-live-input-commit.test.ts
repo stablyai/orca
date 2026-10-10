@@ -474,6 +474,39 @@ describe('terminal live input commit hook', () => {
     await vi.waitFor(() => expect(sent).toEqual(['한', '\t']))
   })
 
+  it('Given a hardware Ctrl+C after typed text When the key arrives Then sends ETX after the text', async () => {
+    // Given
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    changeLiveInput(handlers, 'sleep')
+
+    // When
+    handlers.handleLiveInputHardwareKey({
+      nativeEvent: { key: 'c', ctrl: true, alt: false, shift: false }
+    })
+
+    // Then
+    await vi.waitFor(() => expect(sent).toEqual(['sleep', '\x03']))
+  })
+
+  it('Given hardware Esc, Shift+Tab and Alt+B When the keys arrive Then each sends its terminal bytes', async () => {
+    // Given
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+
+    // When
+    handlers.handleLiveInputHardwareKey({
+      nativeEvent: { key: 'Escape', ctrl: false, alt: false, shift: false }
+    })
+    handlers.handleLiveInputHardwareKey({
+      nativeEvent: { key: 'Tab', ctrl: false, alt: false, shift: true }
+    })
+    handlers.handleLiveInputHardwareKey({
+      nativeEvent: { key: 'b', ctrl: false, alt: true, shift: false }
+    })
+
+    // Then
+    await vi.waitFor(() => expect(sent).toEqual(['\x1b', '\x1b[Z', '\x1bb']))
+  })
+
   it('Given Hangul pending When the tab type lags to undefined Then keeps the composition state', async () => {
     // Given: '한' held while the active tab is still a terminal
     const { handlers, sent, setActiveSessionTabType } = createTerminalLiveInputCommitHarness()

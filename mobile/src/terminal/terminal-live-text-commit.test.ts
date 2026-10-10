@@ -49,6 +49,16 @@ describe('terminal live special key decision', () => {
     })
     expect(decision.kind).toBe('send-now')
   })
+
+  it('Given a modified Delete with field text Then sends it rather than editing locally', () => {
+    const decision = getTerminalLiveSpecialKeyDecision({
+      key: 'Delete',
+      modifiers: ['ctrl'],
+      heldText: '',
+      sentText: 'abc'
+    })
+    expect(decision).toEqual({ kind: 'send-now', bytes: '\x1b[3;5~' })
+  })
 })
 
 describe('terminal live accessory bytes decision', () => {

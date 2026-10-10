@@ -4,6 +4,7 @@ import { reportedLiveInputComposing } from '../platform/live-input-composing-ran
 import { getTerminalLiveSpecialKeyDecision } from './terminal-live-text-commit'
 import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
+import type { TerminalShortcutModifier } from './terminal-accessory-keys'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
 import { normalizeTerminalTextInput } from './terminal-text-input-normalization'
 import { useTerminalLivePendingInputFlush } from './use-terminal-live-pending-input-flush'
@@ -15,6 +16,18 @@ import {
 type TerminalLiveInputKeyPressEvent = {
   readonly nativeEvent: {
     readonly key: string
+  }
+}
+
+const TERMINAL_HARDWARE_KEY_MODIFIERS = ['ctrl', 'alt', 'shift'] as const
+
+/** A key the Android capture view took from the field before `TextView` could drop it. */
+export type TerminalLiveInputHardwareKeyEvent = {
+  readonly nativeEvent: {
+    readonly key: string
+    readonly ctrl: boolean
+    readonly alt: boolean
+    readonly shift: boolean
   }
 }
 
@@ -49,6 +62,7 @@ type TerminalLiveInputCommitHandlers = {
     input: TerminalLiveAccessoryInput
   ) => Promise<TerminalLiveAccessoryInputCommitResult>
   readonly handleLiveInputChange: (event: TerminalLiveInputChangeEvent) => void
+  readonly handleLiveInputHardwareKey: (event: TerminalLiveInputHardwareKeyEvent) => void
   readonly handleLiveInputKeyPress: (event: TerminalLiveInputKeyPressEvent) => void
   readonly handleLiveInputSubmit: () => Promise<boolean>
 }
@@ -167,8 +181,8 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     []
   )
 
-  const handleLiveInputKeyPress = useCallback(
-    (event: TerminalLiveInputKeyPressEvent) => {
+  const sendLiveInputKey = useCallback(
+    (key: string, modifiers: readonly TerminalShortcutModifier[]) => {
       if (!activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
         return
       }
@@ -178,7 +192,8 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
         clearPendingLiveInputCommit()
       }
       const decision = getTerminalLiveSpecialKeyDecision({
-        key: event.nativeEvent.key,
+        key,
+        modifiers,
         heldText: ownsPendingState ? heldLiveInputTextRef.current : '',
         sentText: ownsPendingState ? sentLiveInputTextRef.current : ''
       })
@@ -210,6 +225,19 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       sendLiveTerminalInputRef,
       waitForPendingLiveInputFlush
     ]
+  )
+
+  const handleLiveInputKeyPress = useCallback(
+    (event: TerminalLiveInputKeyPressEvent) => sendLiveInputKey(event.nativeEvent.key, []),
+    [sendLiveInputKey]
+  )
+
+  const handleLiveInputHardwareKey = useCallback(
+    ({ nativeEvent }: TerminalLiveInputHardwareKeyEvent) => {
+      const modifiers = TERMINAL_HARDWARE_KEY_MODIFIERS.filter((modifier) => nativeEvent[modifier])
+      sendLiveInputKey(nativeEvent.key, modifiers)
+    },
+    [sendLiveInputKey]
   )
 
   const handleLiveInputAccessoryBytes = useTerminalLiveAccessoryInputCommit({
@@ -252,6 +280,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     getLiveInputInteractionGeneration,
     handleLiveInputAccessoryBytes,
     handleLiveInputChange,
+    handleLiveInputHardwareKey,
     handleLiveInputKeyPress,
     handleLiveInputSubmit
   }
