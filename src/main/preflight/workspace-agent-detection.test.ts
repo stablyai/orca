@@ -10,6 +10,7 @@ import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../shared/workspace-scope'
 import { splitWorktreeId } from '../../shared/worktree/id'
+import { WORKSPACE_ON_OTHER_RUNTIME } from '../../shared/agent-detection-refusal'
 import {
   resolveWorkspaceAgentDetectionHost,
   type WorkspaceAgentDetectionStore
@@ -245,6 +246,25 @@ describe('resolveWorkspaceAgentDetectionHost on a Windows host', () => {
       'worktree_execution_host_unresolved'
     )
   })
+  it('#13752: refuses a worktree or folder another runtime owns instead of probing here', () => {
+    const s = store({
+      repos: [
+        repo({ id: 'r1', path: '/srv/r1', executionHostId: 'runtime:env-b' }),
+        repo({
+          id: 'r2',
+          path: '/srv/r2',
+          executionHostId: 'runtime:env-b',
+          connectionId: 'b-ssh',
+          projectGroupId: 'g1'
+        })
+      ],
+      projectGroups: [GROUP],
+      folderWorkspaces: [{ ...FOLDER, folderPath: '/srv', executionHostId: 'runtime:env-b' }]
+    })
+    expect(() => resolveFor(s, 'r1::/srv/r1')).toThrow(WORKSPACE_ON_OTHER_RUNTIME)
+    expect(() => resolveFor(s, 'r2::/srv/r2')).toThrow(WORKSPACE_ON_OTHER_RUNTIME)
+    expect(() => resolveFor(s, folderWorkspaceKey('f1'))).toThrow(WORKSPACE_ON_OTHER_RUNTIME)
+  })
 })
 
 describe('preflight.detectAgents resolves the workspace on the host', () => {
@@ -295,5 +315,19 @@ describe('preflight.detectAgents resolves the workspace on the host', () => {
       params: { worktreeId: 'r1::C:\\src\\r1' }
     })
     expect(refreshMock).toHaveBeenCalledWith(wslContext('Ubuntu', 'p1', 'global-default'))
+  })
+
+  it('#13752: a paired client naming a workspace another runtime owns gets a refusal', async () => {
+    const dispatcher = dispatcherFor(
+      store({ repos: [repo({ id: 'r1', path: '/srv/r1', executionHostId: 'runtime:env-b' })] })
+    )
+    const response = await dispatcher.dispatch({
+      id: '1',
+      authToken: 't',
+      method: 'preflight.detectAgents',
+      params: { worktreeId: 'r1::/srv/r1' }
+    })
+    expect(detectInstalledMock).not.toHaveBeenCalled()
+    expect(response).toMatchObject({ ok: false, error: { message: WORKSPACE_ON_OTHER_RUNTIME } })
   })
 })

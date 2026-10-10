@@ -1,3 +1,5 @@
+import { WORKSPACE_ON_OTHER_RUNTIME } from '../../../src/shared/agent-detection-refusal'
+import { parseExecutionHostId } from '../../../src/shared/execution-host'
 import { newTabSettingsRead } from '../transport/settings-read-operations'
 import {
   type MobileRuntimeRepoSummary,
@@ -14,6 +16,17 @@ import {
   type MobileNewTabAgentOption,
   type MobileNewTabAgentSettings
 } from './mobile-new-tab-agent-options'
+
+const WORKSPACE_ON_OTHER_RUNTIME_MESSAGE =
+  'This workspace runs on another Orca server. Pair that server directly to see its agents.'
+
+/** The paired host does not own this workspace, so its agents are unverifiable from here. */
+export class MobileWorkspaceOnOtherRuntimeError extends Error {
+  constructor() {
+    super(WORKSPACE_ON_OTHER_RUNTIME_MESSAGE)
+    this.name = 'MobileWorkspaceOnOtherRuntimeError'
+  }
+}
 
 /** What a launch in this workspace can choose from: the host's settings, the agents detected on
  *  the workspace's execution host, and the workspace's repo (absent for the floating workspace). */
@@ -38,7 +51,7 @@ export async function loadMobileAgentLaunchContext(args: {
   const readSettings = newTabSettingsRead.interpret(settingsResponse)
   // Interpreted after the group, not inside it: whichever peer failed first must not decide the
   // error the sheet shows, and main raised the detection refusal only once settings had settled.
-  const detected = detectedAgents.interpret(detectedAgents.reply)
+  const detected = interpretDetectedAgents(detectedAgents)
   return { settings: readSettings(), detectedAgents: detected, repo: detectedAgents.repo }
 }
 
@@ -81,6 +94,16 @@ async function loadDetectedAgents(
   if (!repo) {
     throw new Error('worktree_repo_not_found')
   }
+  // Why every row: rows on several hosts can share a repo id, and then only the host can tell.
+  if (
+    repos.every(
+      (candidate) =>
+        candidate.id !== repoId ||
+        parseExecutionHostId(candidate.executionHostId)?.kind === 'runtime'
+    )
+  ) {
+    throw new MobileWorkspaceOnOtherRuntimeError()
+  }
   const connectionId = repo.connectionId?.trim() || null
   return connectionId
     ? {
@@ -95,4 +118,16 @@ async function loadDetectedAgents(
         interpret: preflightDetectAgentsRead.interpret,
         repo
       }
+}
+
+function interpretDetectedAgents(detected: DetectedAgentsReply): unknown[] {
+  try {
+    return detected.interpret(detected.reply)
+  } catch (error) {
+    // A host with the refusal answers it for a workspace another runtime owns.
+    if (error instanceof Error && error.message === WORKSPACE_ON_OTHER_RUNTIME) {
+      throw new MobileWorkspaceOnOtherRuntimeError()
+    }
+    throw error
+  }
 }

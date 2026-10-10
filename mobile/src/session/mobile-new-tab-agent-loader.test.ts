@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { FLOATING_WORKSPACE_WORKTREE_ID } from './floating-workspace'
-import { loadMobileNewTabAgentOptions } from './mobile-new-tab-agent-loader'
+import { WORKSPACE_ON_OTHER_RUNTIME } from '../../../src/shared/agent-detection-refusal'
+import {
+  loadMobileNewTabAgentOptions,
+  MobileWorkspaceOnOtherRuntimeError
+} from './mobile-new-tab-agent-loader'
 
 function createClient(
   handler: (method: string, params?: unknown) => Promise<unknown>
@@ -68,5 +72,62 @@ describe('mobile new-tab agent loading', () => {
       'settings.get',
       'preflight.detectRemoteAgents'
     ])
+  })
+
+  it('#13752: names another runtime instead of listing the paired host for its workspace', async () => {
+    const client = createClient(async (method) => {
+      if (method === 'settings.get') {
+        return { ok: true, result: { settings: {} } }
+      }
+      if (method === 'repo.list') {
+        return {
+          ok: true,
+          result: {
+            repos: [{ id: 'repo-1', executionHostId: 'runtime:env-b', connectionId: 'b-ssh' }]
+          }
+        }
+      }
+      throw new Error(`unexpected request: ${method}`)
+    })
+
+    await expect(
+      loadMobileNewTabAgentOptions({ client, worktreeId: 'repo-1::/srv/worktree' })
+    ).rejects.toBeInstanceOf(MobileWorkspaceOnOtherRuntimeError)
+    // Neither the paired host nor its SSH targets are probed for a workspace it does not own.
+    expect(client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
+      'repo.list',
+      'settings.get'
+    ])
+  })
+
+  it("#13752: reads the host's other-runtime refusal as the same answer", async () => {
+    const client = createClient(async (method) => {
+      if (method === 'settings.get') {
+        return { ok: true, result: { settings: {} } }
+      }
+      if (method === 'repo.list') {
+        // Rows on two hosts share the id, so only the host can tell which owns the worktree.
+        return {
+          ok: true,
+          result: {
+            repos: [
+              { id: 'repo-1', executionHostId: 'runtime:env-b' },
+              { id: 'repo-1', executionHostId: 'local' }
+            ]
+          }
+        }
+      }
+      if (method === 'preflight.detectAgents') {
+        return {
+          ok: false,
+          error: { code: 'runtime_error', message: WORKSPACE_ON_OTHER_RUNTIME }
+        }
+      }
+      throw new Error(`unexpected request: ${method}`)
+    })
+
+    await expect(
+      loadMobileNewTabAgentOptions({ client, worktreeId: 'repo-1::/srv/worktree' })
+    ).rejects.toBeInstanceOf(MobileWorkspaceOnOtherRuntimeError)
   })
 })

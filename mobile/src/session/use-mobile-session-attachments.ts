@@ -2,7 +2,10 @@ import { useEffect } from 'react'
 import { AppState, type AppStateStatus } from 'react-native'
 import { useClipboardReader } from '../platform/clipboard'
 import { triggerSelection, triggerError } from '../platform/haptics'
-import { loadMobileNewTabAgentOptions } from './mobile-new-tab-agent-loader'
+import {
+  loadMobileNewTabAgentOptions,
+  MobileWorkspaceOnOtherRuntimeError
+} from './mobile-new-tab-agent-loader'
 import { useMobileSessionImageAttachments } from './use-mobile-session-image-attachments'
 import { useMobileAttachmentInputLeaseGate } from './use-mobile-attachment-input-lease-gate'
 import { useMobileTerminalPaste } from './use-mobile-terminal-paste'
@@ -147,10 +150,12 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
       }
       setCreateTabAgentOptions(options)
       setCreateTabAgentLoadState('loaded')
-    })().catch(() => {
+    })().catch((error: unknown) => {
       if (!stale) {
         setCreateTabAgentOptions([])
-        setCreateTabAgentLoadState('error')
+        setCreateTabAgentLoadState(
+          error instanceof MobileWorkspaceOnOtherRuntimeError ? 'other-runtime' : 'error'
+        )
       }
     })
 
