@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { useIssueSourceActions } from './issue-source-actions'
 import { resolveDraftBaseBranchNamesWorkspace } from './workspace-identity-state'
 import { useGitHubProviderSelection } from './github-provider-selection'
+import { useGitHubSourceApplication } from './github-source-application'
 
 type Input = Parameters<typeof useIssueSourceActions>[0]
 
@@ -163,6 +164,53 @@ describe('composer name source selection', () => {
     )
 
     expect(result.current.smartNameSelection?.kind).toBe('github-issue')
+  })
+})
+
+describe('GitHub selection over a typed all-digits name', () => {
+  const issue42 = {
+    id: 'issue-42',
+    type: 'issue' as const,
+    number: 42,
+    title: 'Fix export',
+    state: 'open' as const,
+    url: 'https://github.com/o/r/issues/42',
+    labels: [],
+    updatedAt: '',
+    author: null,
+    repoId: 'repo-1'
+  }
+
+  it.each([
+    ['347', false],
+    ['42', true]
+  ])('applies the auto-name over "%s" only when it is the item number', (name, renamed) => {
+    const input = { ...createInput({ name }), selectedRepoGitHubSourceContext: null }
+    const { result } = renderHook(() => useGitHubSourceApplication(input))
+
+    act(() => result.current.applyLinkedWorkItem(issue42))
+
+    expect(input.setName).toHaveBeenCalledTimes(renamed ? 1 : 0)
+  })
+
+  it.each([
+    ['347', false],
+    ['42', true]
+  ])('applies the folder auto-name over "%s" only when it is the item number', (name, renamed) => {
+    const input = {
+      ...createInput({ name, isProjectGroupTarget: true }),
+      applyLinkedWorkItem: vi.fn(),
+      eligibleRepos: [],
+      handleBaseBranchPrSelect: vi.fn(),
+      selectedRepo: undefined,
+      selectedRepoGitHubSourceContext: null,
+      settings: null
+    }
+    const { result } = renderHook(() => useGitHubProviderSelection(input))
+
+    act(() => result.current.handleSmartGitHubItemSelect(issue42))
+
+    expect(input.setName).toHaveBeenCalledTimes(renamed ? 1 : 0)
   })
 })
 

@@ -66,6 +66,7 @@ describe('shouldApplyAutoName', () => {
     expect(shouldApplyAutoName({ currentName: 'my custom name', lastAutoName: 'other' })).toBe(
       false
     )
+    expect(shouldApplyAutoName({ currentName: '347', lastAutoName: 'x' })).toBe(false)
   })
 })
 

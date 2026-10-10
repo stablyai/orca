@@ -63,6 +63,7 @@ describe('useComposerState host-context boundaries', () => {
         lastAutoName: 'keep-my-name'
       })
     ).toBe(false)
+    expect(isExplicitWorkspaceNameInput({ name: '1234', lastAutoName: '' })).toBe(true)
     expect(isExplicitWorkspaceNameInput({ name: '#1234', lastAutoName: '' })).toBe(false)
     expect(
       isExplicitWorkspaceNameInput({

@@ -73,7 +73,8 @@ export function useGitHubSourceApplication(input: GitHubSourceApplicationInput) 
         suggestedName &&
         shouldApplyWorkspaceSourceAutoName({
           currentName: name,
-          lastAutoName: lastAutoNameRef.current
+          lastAutoName: lastAutoNameRef.current,
+          itemNumber: identity.number
         })
       ) {
         setName(suggestedName)

@@ -96,7 +96,8 @@ export function useGitHubProviderSelection(input: GitHubProviderSelectionInput) 
           nextName &&
           shouldApplyWorkspaceSourceAutoName({
             currentName: name,
-            lastAutoName: lastAutoNameRef.current
+            lastAutoName: lastAutoNameRef.current,
+            itemNumber: identity.number
           })
         ) {
           setName(nextName)

@@ -123,4 +123,21 @@ describe('workspace source policy', () => {
       shouldApplyWorkspaceSourceAutoName({ currentName: 'my workspace', lastAutoName: 'old' })
     ).toBe(false)
   })
+
+  it('keeps a typed all-digits name unless it is the number of the item being applied', () => {
+    expect(shouldApplyWorkspaceSourceAutoName({ currentName: '347', lastAutoName: '' })).toBe(false)
+    expect(
+      shouldApplyWorkspaceSourceAutoName({ currentName: '347', lastAutoName: '', itemNumber: 42 })
+    ).toBe(false)
+    expect(
+      shouldApplyWorkspaceSourceAutoName({ currentName: ' 42 ', lastAutoName: '', itemNumber: 42 })
+    ).toBe(true)
+    // Why: search parses "002" as #2, so picking #2 from that search is still a lookup.
+    expect(
+      shouldApplyWorkspaceSourceAutoName({ currentName: '002', lastAutoName: '', itemNumber: 2 })
+    ).toBe(true)
+    expect(
+      shouldApplyWorkspaceSourceAutoName({ currentName: '002', lastAutoName: '', itemNumber: 20 })
+    ).toBe(false)
+  })
 })

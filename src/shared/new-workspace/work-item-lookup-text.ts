@@ -8,7 +8,9 @@ const GITHUB_ITEM_URL_IN_TEXT_RE =
 const TRAILING_URL_PUNCTUATION_RE = /[),.;:!?]+$/
 
 function hasGitHubLookup(value: string): boolean {
-  if (parseGitHubIssueOrPRNumber(value) !== null || parseGitHubIssueOrPRLink(value) !== null) {
+  // Why: a bare number is a deliberate name (teams name workspaces "347"); only "#347" is a lookup.
+  const isHashNumber = value.startsWith('#') && parseGitHubIssueOrPRNumber(value) !== null
+  if (isHashNumber || parseGitHubIssueOrPRLink(value) !== null) {
     return true
   }
   const embedded = GITHUB_ITEM_URL_IN_TEXT_RE.exec(value)?.[0]
