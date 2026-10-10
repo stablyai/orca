@@ -33,6 +33,7 @@ import { HOSTED_REVIEW_METHODS } from './hosted-review'
 import { LINEAR_METHODS } from './linear'
 import { LINEAR_AGENT_ACCESS_METHODS } from './linear-agent-access'
 import { JIRA_METHODS } from './jira'
+import { REDMINE_METHODS } from './redmine'
 import { SSH_METHODS } from './ssh'
 import { MANAGED_SERVER_METHODS } from './managed-server'
 import { SPEECH_METHODS } from './speech'
@@ -106,6 +107,7 @@ export const ALL_RPC_METHODS = [
   ...LINEAR_METHODS,
   ...LINEAR_AGENT_ACCESS_METHODS,
   ...JIRA_METHODS,
+  ...REDMINE_METHODS,
   ...SSH_METHODS,
   ...MANAGED_SERVER_METHODS,
   ...SPEECH_METHODS,
