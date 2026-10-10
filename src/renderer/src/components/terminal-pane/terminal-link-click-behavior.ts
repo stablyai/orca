@@ -9,11 +9,9 @@ export function terminalLinkClickBehaviorFor(
     | null
     | undefined
 ): TerminalLinkClickBehavior {
-  if (settings?.terminalLinkClickBehavior === 'open') {
-    return 'open'
-  }
-  if (settings?.terminalLinkClickBehavior === 'none') {
-    return 'none'
+  const behavior = settings?.terminalLinkClickBehavior
+  if (behavior === 'actions' || behavior === 'open' || behavior === 'none') {
+    return behavior
   }
   return settings?.terminalLinkActionPopoverEnabled === false ? 'none' : 'actions'
 }
