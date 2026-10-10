@@ -4,6 +4,7 @@ import { worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { splitWorktreeId } from '../../shared/worktree/id'
 import { planWorktreeSortOrderUpdates } from '../../shared/worktree/sort-order-update'
 import { stripOrcaProvenanceMetaUpdates } from '../worktree-removal-safety'
+import { isRemovedFolderWorkspaceInstance } from '../folder-workspace-meta-presence'
 import type { RuntimeStore } from './runtime-store-contract'
 import { RuntimeLineageError } from './runtime-worktree-lineage-resolution'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
@@ -91,6 +92,10 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
   }
   const metadataUpdates = stripOrcaProvenanceMetaUpdates(persisted)
   const executionHostId = worktree.identity?.executionHostId ?? worktree.hostId
+  // Why: a resolution snapshot taken before a removal still returns the workspace (#22712).
+  if (isRemovedFolderWorkspaceInstance(args.store, worktree.id, executionHostId)) {
+    throw new Error('selector_not_found')
+  }
   if (executionHostId && args.store.setWorktreeMetaForHost) {
     args.store.setWorktreeMetaForHost(worktree.id, executionHostId, metadataUpdates)
   } else {

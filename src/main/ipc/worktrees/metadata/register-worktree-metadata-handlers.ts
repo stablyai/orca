@@ -13,6 +13,7 @@ import { parseWorktreeId } from '../../worktree-logic'
 import { planWorktreeSortOrderUpdates } from '../../../../shared/worktree/sort-order-update'
 import { readBranchRenameFailureOutputForDisplay } from '../../../agent-hooks/branch-rename-failure-output'
 import { normalizeLinkedWorkItemFields } from '../ipc-context-schemas'
+import { isRemovedFolderWorkspaceInstance } from '../../../folder-workspace-meta-presence'
 import { listDesktopLineageForHost } from './host-lineage-listing'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 
@@ -47,6 +48,10 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
             }
           : validatedUpdates
       const sanitizedUpdates = stripOrcaProvenanceMetaUpdates(updates)
+      // Why: a late write from a terminal still bound to a removed folder workspace (#22712).
+      if (isRemovedFolderWorkspaceInstance(store, args.worktreeId, executionHostId)) {
+        return null
+      }
       const meta = executionHostId
         ? store.setWorktreeMetaForHost(args.worktreeId, executionHostId, sanitizedUpdates)
         : store.setWorktreeMeta(args.worktreeId, sanitizedUpdates)
