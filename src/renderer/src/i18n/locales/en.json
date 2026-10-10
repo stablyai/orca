@@ -3869,6 +3869,8 @@
             "c9382662bb": "Restart daemon",
             "59f178fe11": "{{value0}}, daemon unreachable",
             "21cacb16d1": "· remote",
+            "8a0472ab54": "Couldn't reach {{value0}}; its resources are unknown.",
+            "1ea066b73f": "Update {{value0}} to see its resources.",
             "73a3fd68a9": "Collapse repo",
             "b12e31dfcb": "Expand repo",
             "d659d71d2d": "Resume workspace {{value0}}",
