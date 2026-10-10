@@ -13,6 +13,7 @@ import { OrchestrationDb } from '../../../../orchestration/db'
 import type { RpcRequest } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
+import * as FailedStartTeardown from './failed-worker-start-teardown'
 
 vi.mock('../../../../../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([
@@ -264,6 +265,59 @@ describe('orchestration worker-start prompt contract', () => {
       outcome === 'succeeded' ? 'completed' : 'failed'
     )
   })
+
+  it.each([
+    ['succeeded', false],
+    ['failed', false],
+    ['succeeded', true],
+    ['failed', true]
+  ] as const)(
+    'preserves an early %s report when the prompt receipt subsequently rejects (unknown=%s)',
+    async (outcome, unknown) => {
+      vi.useFakeTimers()
+      const teardown = vi.spyOn(FailedStartTeardown, 'tearDownFailedWorkerStart')
+      const harness = await createPromptContractHarness('swallowed')
+      vi.spyOn(harness.runtime, 'sendTerminalAgentPrompt').mockImplementation(async () => {
+        const dispatch = harness.db.findActiveDispatchForAssignee(harness.handle)
+        if (!dispatch) {
+          throw new Error('Missing starting dispatch')
+        }
+        expect(
+          harness.db.settleWorkerReport({
+            taskId: harness.taskId,
+            dispatchId: dispatch.id,
+            outcome,
+            result: 'Finished before receipt'
+          })
+        ).toMatchObject({ action: 'settled', outcome })
+        throw Object.assign(
+          new Error('terminal_handle_stale'),
+          unknown ? { code: 'operation_unknown' } : {}
+        )
+      })
+      const pending = harness.dispatcher.dispatch(harness.request)
+      await vi.runAllTimersAsync()
+      const response = await pending
+      expect(response).toMatchObject({
+        ok: true,
+        result: { state: 'ready', stage: 'settled', workerOutcome: outcome }
+      })
+      if (!response.ok) {
+        throw new Error(response.error.message)
+      }
+      expect(response.result).not.toHaveProperty('lastError')
+      expect(response.result).not.toHaveProperty('failedStage')
+      expect(teardown).not.toHaveBeenCalled()
+      expect(harness.db.getTask(harness.taskId)?.status).toBe(
+        outcome === 'succeeded' ? 'completed' : 'failed'
+      )
+      const replay = await harness.dispatcher.dispatch({ ...harness.request, id: 'retry' })
+      expect(replay).toMatchObject({
+        ok: true,
+        result: { state: 'ready', workerOutcome: outcome, mutation: { replayed: true } }
+      })
+    }
+  )
 
   it('retains accepted authority when the observation binding becomes stale', async () => {
     vi.useFakeTimers()

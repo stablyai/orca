@@ -14,7 +14,28 @@ export function failWorkerStartWithReceipt(args: {
   setup: WorkerSetupReceipt
   launch: OrchestrationWorkerLaunchReceipt
   mode: WorkerStartModeReceipt
-}): unknown {
+}) {
+  // A settled result proves startup happened even when its prompt acknowledgement was lost.
+  const settled = args.db.getWorkerDispatch(args.dispatchId)
+  if (
+    settled?.stage === 'settled' &&
+    (settled.state === 'succeeded' || settled.state === 'failed')
+  ) {
+    const effects: unknown[] = JSON.parse(settled.effects)
+    return {
+      runId: args.runId,
+      taskId: args.taskId,
+      dispatchId: args.dispatchId,
+      state: 'ready' as const,
+      stage: settled.stage,
+      workerOutcome: settled.state,
+      setup: args.setup,
+      launch: args.launch,
+      mode: args.mode,
+      effects,
+      residualResources: []
+    }
+  }
   const reason = args.error instanceof Error ? args.error.message : String(args.error)
   const unknown = isUnknownWorkerStartOutcome(args.error, args.failedStage)
   const worker = unknown
