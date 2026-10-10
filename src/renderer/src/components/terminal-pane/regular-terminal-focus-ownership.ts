@@ -149,7 +149,7 @@ export function resyncTerminalFocusForWindowFocus(args: {
   return true
 }
 
-function syncFocusAfterFailedReclaim(
+export function syncFocusAfterFailedReclaim(
   activeElement: Element | null,
   syncFocused: TerminalInputFocusSync
 ): void {
