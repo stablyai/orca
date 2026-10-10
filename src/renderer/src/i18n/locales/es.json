@@ -5295,7 +5295,9 @@
           "eeabb8e8e4": "Quitar {{value0}} {{value1}} contenidos de Orca",
           "55f75628c0": "Las carpetas de los proyectos en el disco no se eliminan.",
           "897e5d3d4c": "Eliminar grupo y quitar proyectos",
-          "fec7e9c8ae": "Eliminar grupo"
+          "fec7e9c8ae": "Eliminar grupo",
+          "2de0de1df6": "También se eliminará su subgrupo.",
+          "0e0d4bb72d": "También se eliminarán sus {{value0}} subgrupos."
         },
         "ProjectGroupNameDialog": {
           "d99a034073": "Cancelar",
@@ -6045,6 +6047,33 @@
               "7c2f009786": "En curso",
               "6798dc7c94": "En revisión",
               "5076efc3d2": "Hecho"
+            },
+            "rows": {
+              "project": {
+                "group": {
+                  "header": {
+                    "actions": {
+                      "dd93986e77": "Nuevo subgrupo"
+                    }
+                  }
+                }
+              },
+              "ProjectGroupDialogs": {
+                "dc04680eef": "Nuevo subgrupo",
+                "1c1d0b3021": "Crea un grupo dentro de \"{{value0}}\"."
+              },
+              "use": {
+                "project": {
+                  "group": {
+                    "dialogs": {
+                      "009a0dfef9": "No se pudo mover el grupo",
+                      "b1ba3948b3": "Orca no pudo confirmar el movimiento con el host del grupo. Vuelva a verificar el grupo después de volver a conectarse o actualice Orca en ese host.",
+                      "8269fcd14a": "No se pudo crear el subgrupo",
+                      "daf08d9e4e": "Orca no pudo confirmar el nuevo grupo con el host del grupo padre. Vuelva a verificar la barra lateral después de volver a conectarse."
+                    }
+                  }
+                }
+              }
             }
           }
         },
@@ -6426,6 +6455,9 @@
           "title": "Orden cambiado a Manual",
           "description": "Manual mantiene los espacios de trabajo donde los colocas.",
           "restore": "Volver a {{label}}"
+        },
+        "ProjectGroupMoveSubmenu": {
+          "5f1e73c267": "Nivel superior"
         }
       },
       "shared": {

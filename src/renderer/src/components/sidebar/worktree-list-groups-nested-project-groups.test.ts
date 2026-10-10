@@ -72,6 +72,59 @@ describe('project groups', () => {
     })
   })
 
+  it('links subgroups to a parent on their own host when group ids repeat across hosts', () => {
+    const group: ProjectGroup = {
+      id: 'group-x',
+      name: 'X',
+      parentPath: null,
+      parentGroupId: null,
+      createdFrom: 'manual',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    // Each host is acyclic on its own; linking by bare id would loop Y -> X -> Y.
+    const groups: ProjectGroup[] = [
+      { ...group, name: 'Local X', parentGroupId: 'group-y', executionHostId: 'local' },
+      { ...group, id: 'group-y', name: 'Local Y', executionHostId: 'local' },
+      { ...group, name: 'Remote X', tabOrder: 1, executionHostId: 'runtime:env-1' },
+      {
+        ...group,
+        id: 'group-y',
+        name: 'Remote Y',
+        parentGroupId: 'group-x',
+        executionHostId: 'runtime:env-1'
+      }
+    ]
+
+    const rows = buildRows(
+      'repo',
+      [],
+      new Map(),
+      null,
+      new Set(),
+      new Map(),
+      undefined,
+      'manual',
+      undefined,
+      undefined,
+      false,
+      undefined,
+      groups
+    )
+
+    expect(
+      rows.flatMap((row) => (row.type === 'header' ? [[row.label, row.projectGroupDepth]] : []))
+    ).toEqual([
+      ['Local Y', 0],
+      ['Local X', 1],
+      ['Remote X', 0],
+      ['Remote Y', 1]
+    ])
+  })
+
   it('renders folder workspaces under their owning folder-backed Project Group', () => {
     const group: ProjectGroup = {
       id: 'group-root',

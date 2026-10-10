@@ -10,6 +10,7 @@ import {
   RUNTIME_CAPABILITIES,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
+import { PROJECT_GROUP_NESTING_RUNTIME_CAPABILITY } from '../../../../shared/project-group-nesting-capability'
 import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime-client-capabilities'
 import { REPO_SEARCH_REFS_MAX_LIMIT } from '../../../../shared/repo-search-limits'
 
@@ -739,6 +740,29 @@ describe('repo RPC methods', () => {
       ok: true,
       result: { status: { path: '/srv/platform', exists: true } }
     })
+  })
+
+  it('passes project group moves to the runtime, including to the top level', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: projectGroup.update only calls the fixture methods defined below.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateProjectGroup: vi.fn().mockResolvedValue({ id: 'group-1' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    for (const parentGroupId of ['group-2', null]) {
+      await dispatcher.dispatch(
+        makeRequest('projectGroup.update', { groupId: 'group-1', updates: { parentGroupId } })
+      )
+    }
+
+    expect(runtime.updateProjectGroup).toHaveBeenNthCalledWith(1, 'group-1', {
+      parentGroupId: 'group-2'
+    })
+    expect(runtime.updateProjectGroup).toHaveBeenNthCalledWith(2, 'group-1', {
+      parentGroupId: null
+    })
+    expect(RUNTIME_CAPABILITIES).toContain(PROJECT_GROUP_NESTING_RUNTIME_CAPABILITY)
   })
 
   it('allows separate nested-repo imports without a group name', async () => {

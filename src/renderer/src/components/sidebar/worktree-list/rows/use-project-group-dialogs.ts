@@ -6,11 +6,14 @@ import { selectProjectGroupRemovalTargets } from '@/store/slices/project-group-r
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { getProjectGroupHeaderKey } from '../grouping/group-keys'
+import type { ProjectGroupHeaderActions } from './project-group-header-actions'
 
 export type ProjectGroupNameDialogState =
   | { type: 'create-from-repo'; repo: Repo }
   // hostId is the group row's owner host, so the mutation is not routed to whichever host has focus.
   | { type: 'rename'; groupId: string; currentName: string; hostId?: ExecutionHostId }
+  | { type: 'create-subgroup'; parentGroupId: string; parentName: string; hostId?: ExecutionHostId }
 
 export type ProjectGroupDeleteDialogState = {
   groupId: string
@@ -61,7 +64,38 @@ function reportProjectGroupDeleteFailures(result: {
   }
 }
 
-// Create/rename/delete flows for project groups, including the contained-project fan-out.
+// Why: a falsy result also covers RPC timeout/disconnect, so the copy must not assert the host refused.
+function reportProjectGroupMoveFailure(): void {
+  toast.error(
+    translate(
+      'auto.components.sidebar.worktree.list.rows.use.project.group.dialogs.009a0dfef9',
+      'Failed to move group'
+    ),
+    {
+      description: translate(
+        'auto.components.sidebar.worktree.list.rows.use.project.group.dialogs.b1ba3948b3',
+        "Orca could not confirm the move with the group's host. Recheck the group after reconnecting, or update Orca on that host."
+      )
+    }
+  )
+}
+
+function reportProjectSubgroupCreateFailure(): void {
+  toast.error(
+    translate(
+      'auto.components.sidebar.worktree.list.rows.use.project.group.dialogs.8269fcd14a',
+      'Failed to create subgroup'
+    ),
+    {
+      description: translate(
+        'auto.components.sidebar.worktree.list.rows.use.project.group.dialogs.daf08d9e4e',
+        "Orca could not confirm the new group with the parent group's host. Recheck the sidebar after reconnecting."
+      )
+    }
+  )
+}
+
+// Create/rename/move/delete flows for project groups, including the contained-project fan-out.
 export function useProjectGroupDialogs(args: {
   repos: readonly Repo[]
   repoMap: Map<string, Repo>
@@ -71,6 +105,8 @@ export function useProjectGroupDialogs(args: {
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
   const createProjectGroup = useAppStore((s) => s.createProjectGroup)
   const updateProjectGroup = useAppStore((s) => s.updateProjectGroup)
+  const moveProjectGroup = useAppStore((s) => s.moveProjectGroup)
+  const revealSidebarRow = useAppStore((s) => s.revealSidebarRow)
   const deleteProjectGroupWithContainedProjects = useAppStore(
     (s) => s.deleteProjectGroupWithContainedProjects
   )
@@ -105,9 +141,40 @@ export function useProjectGroupDialogs(args: {
     []
   )
 
+  const handleCreateProjectSubgroup = useCallback(
+    (parentGroupId: string, parentName: string, hostId?: ExecutionHostId) => {
+      setNameDialog({ type: 'create-subgroup', parentGroupId, parentName, hostId })
+    },
+    []
+  )
+
+  const handleMoveProjectGroup = useCallback(
+    async (groupId: string, parentGroupId: string | null, hostId?: ExecutionHostId) => {
+      if (await moveProjectGroup(groupId, parentGroupId, { hostId })) {
+        // Why: the new parent may be collapsed; revealing opens it so the group doesn't vanish.
+        revealSidebarRow(getProjectGroupHeaderKey(groupId))
+      } else {
+        reportProjectGroupMoveFailure()
+      }
+    },
+    [moveProjectGroup, revealSidebarRow]
+  )
+
   const handleSubmitProjectGroupName = useCallback(
     async (name: string) => {
       if (!nameDialog) {
+        return
+      }
+      if (nameDialog.type === 'create-subgroup') {
+        const group = await createProjectGroup(name, {
+          parentGroupId: nameDialog.parentGroupId,
+          hostId: nameDialog.hostId
+        })
+        if (group) {
+          revealSidebarRow(getProjectGroupHeaderKey(group.id))
+        } else {
+          reportProjectSubgroupCreateFailure()
+        }
         return
       }
       if (nameDialog.type === 'create-from-repo') {
@@ -138,7 +205,7 @@ export function useProjectGroupDialogs(args: {
         )
       }
     },
-    [createProjectGroup, moveProjectToGroup, nameDialog, updateProjectGroup]
+    [createProjectGroup, moveProjectToGroup, nameDialog, revealSidebarRow, updateProjectGroup]
   )
 
   const deleteTargets = useMemo(() => {
@@ -153,6 +220,7 @@ export function useProjectGroupDialogs(args: {
     )
   }, [deleteDialog, projectGroups, repos])
   const deleteProjectCount = deleteTargets?.projectIds.length ?? 0
+  const deleteSubgroupCount = Math.max(0, (deleteTargets?.deletedGroupIds.size ?? 0) - 1)
   const deleteProjectNames = useMemo(
     () =>
       (deleteTargets?.projectIds ?? []).map(
@@ -187,20 +255,38 @@ export function useProjectGroupDialogs(args: {
     }
   }, [deleteProjectGroupWithContainedProjects, removeContainedProjects, deleteDialog])
 
+  const projectGroupActions = useMemo<ProjectGroupHeaderActions>(
+    () => ({
+      onRename: handleRenameProjectGroup,
+      onCreateSubgroup: handleCreateProjectSubgroup,
+      onMove: handleMoveProjectGroup,
+      onDelete: handleDeleteProjectGroup
+    }),
+    [
+      handleCreateProjectSubgroup,
+      handleDeleteProjectGroup,
+      handleMoveProjectGroup,
+      handleRenameProjectGroup
+    ]
+  )
+
   return {
     nameDialog,
     setNameDialog,
     deleteDialog,
     setDeleteDialog,
     deleteProjectCount,
+    deleteSubgroupCount,
     deleteProjectNames,
     removeContainedProjects,
     handleCreateGroupFromRepo,
     handleMoveProjectToGroup,
     handleRemoveProjectFromGroup,
     handleRenameProjectGroup,
+    handleMoveProjectGroup,
     handleSubmitProjectGroupName,
     handleDeleteProjectGroup,
-    handleConfirmDeleteProjectGroup
+    handleConfirmDeleteProjectGroup,
+    projectGroupActions
   }
 }

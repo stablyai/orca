@@ -16,6 +16,8 @@ type ProjectGroupDeleteDialogProps = {
   open: boolean
   groupName: string
   projectCount: number
+  /** Groups nested under this one; the host deletes them with it. */
+  subgroupCount: number
   projectNames: string[]
   removeContainedProjects: boolean
   onRemoveContainedProjectsChange: (removeContainedProjects: boolean) => void
@@ -27,6 +29,7 @@ export function ProjectGroupDeleteDialog({
   open,
   groupName,
   projectCount,
+  subgroupCount,
   projectNames,
   removeContainedProjects,
   onRemoveContainedProjectsChange,
@@ -49,6 +52,19 @@ export function ProjectGroupDeleteDialog({
           'Remove {{value0}} contained projects',
           { value0: projectCount }
         )
+  const subgroupCopy =
+    subgroupCount === 0
+      ? null
+      : subgroupCount === 1
+        ? translate(
+            'auto.components.sidebar.ProjectGroupDeleteDialog.2de0de1df6',
+            'Its subgroup will also be deleted.'
+          )
+        : translate(
+            'auto.components.sidebar.ProjectGroupDeleteDialog.0e0d4bb72d',
+            'Its {{value0}} subgroups will also be deleted.',
+            { value0: subgroupCount }
+          )
 
   const handleDialogContentRef = useCallback((node: HTMLDivElement | null): void => {
     // Why: deleting can resolve after the dialog closes; the content ref keeps
@@ -116,6 +132,7 @@ export function ProjectGroupDeleteDialog({
           <DialogDescription className="text-xs">
             {translate('auto.components.sidebar.ProjectGroupDeleteDialog.69f5cb97d0', 'Delete')}{' '}
             <span className="break-all font-medium text-foreground">{groupName}</span>.
+            {subgroupCopy ? <> {subgroupCopy}</> : null}
           </DialogDescription>
         </DialogHeader>
         {projectCount > 0 && (

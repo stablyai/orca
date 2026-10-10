@@ -23,6 +23,11 @@ export function getProjectGroupHostId(group: ProjectGroupHostParts): ExecutionHo
   return getRepoExecutionHostId(group)
 }
 
+/** Local and direct-SSH rows share the local catalog; each runtime host keeps its own. */
+export function getCatalogHostId(hostId: ExecutionHostId): ExecutionHostId {
+  return parseExecutionHostId(hostId)?.kind === 'runtime' ? hostId : LOCAL_EXECUTION_HOST_ID
+}
+
 export function catalogOwnsHost(catalogHostId: string, rowHostId: string): boolean {
   if (catalogHostId !== LOCAL_EXECUTION_HOST_ID) {
     return catalogHostId === rowHostId

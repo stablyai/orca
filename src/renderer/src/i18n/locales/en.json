@@ -5546,7 +5546,9 @@
           "eeabb8e8e4": "Remove {{value0}} contained {{value1}} from Orca",
           "55f75628c0": "Project folders on disk are not deleted.",
           "897e5d3d4c": "Delete Group and Remove Projects",
-          "fec7e9c8ae": "Delete Group"
+          "fec7e9c8ae": "Delete Group",
+          "2de0de1df6": "Its subgroup will also be deleted.",
+          "0e0d4bb72d": "Its {{value0}} subgroups will also be deleted."
         },
         "ProjectGroupNameDialog": {
           "d99a034073": "Cancel",
@@ -6278,6 +6280,33 @@
               "7c2f009786": "In progress",
               "6798dc7c94": "In review",
               "5076efc3d2": "Done"
+            },
+            "rows": {
+              "ProjectGroupDialogs": {
+                "dc04680eef": "New Subgroup",
+                "1c1d0b3021": "Create a group inside \"{{value0}}\"."
+              },
+              "project": {
+                "group": {
+                  "header": {
+                    "actions": {
+                      "dd93986e77": "New subgroup"
+                    }
+                  }
+                }
+              },
+              "use": {
+                "project": {
+                  "group": {
+                    "dialogs": {
+                      "009a0dfef9": "Failed to move group",
+                      "b1ba3948b3": "Orca could not confirm the move with the group's host. Recheck the group after reconnecting, or update Orca on that host.",
+                      "8269fcd14a": "Failed to create subgroup",
+                      "daf08d9e4e": "Orca could not confirm the new group with the parent group's host. Recheck the sidebar after reconnecting."
+                    }
+                  }
+                }
+              }
             }
           }
         },
@@ -6662,6 +6691,9 @@
           "title": "Sort changed to Manual",
           "description": "Manual keeps workspaces where you drop them.",
           "restore": "Back to {{label}}"
+        },
+        "ProjectGroupMoveSubmenu": {
+          "5f1e73c267": "Top level"
         }
       },
       "shared": {

@@ -68,6 +68,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     updateFolderWorkspace: folderWorkspaceMutations.updateFolderWorkspace,
     deleteFolderWorkspace: folderWorkspaceMutations.deleteFolderWorkspace,
     updateProjectGroup: projectGroupMutations.updateProjectGroup,
+    moveProjectGroup: projectGroupMutations.moveProjectGroup,
     deleteProjectGroup: projectGroupMutations.deleteProjectGroup,
     deleteProjectGroupWithContainedProjects:
       projectGroupMutations.deleteProjectGroupWithContainedProjects,

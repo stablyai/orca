@@ -197,4 +197,20 @@ describe('projectGroups IPC validation', () => {
 
     expect(mockStore.updateProjectGroup).not.toHaveBeenCalled()
   })
+
+  it('passes group moves to persistence and rejects an empty parent id', () => {
+    const update = handlers.get('projectGroups:update')!
+    mockStore.updateProjectGroup.mockReturnValue({ id: 'group-1' })
+
+    update(null, { groupId: 'group-1', updates: { parentGroupId: 'group-2' } })
+    update(null, { groupId: 'group-1', updates: { parentGroupId: null } })
+    expect(() => update(null, { groupId: 'group-1', updates: { parentGroupId: '' } })).toThrow(
+      'invalid_project_group_update_args'
+    )
+
+    expect(mockStore.updateProjectGroup.mock.calls).toEqual([
+      ['group-1', { parentGroupId: 'group-2' }],
+      ['group-1', { parentGroupId: null }]
+    ])
+  })
 })

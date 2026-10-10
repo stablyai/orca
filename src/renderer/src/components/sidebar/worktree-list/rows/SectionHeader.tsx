@@ -8,8 +8,6 @@ import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
 import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspace-path-status'
 import { isConfirmedStaleFolderPathStatus } from '../../../../../../shared/folder-workspace-path-status'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { getProjectGroupHostId } from '@/store/slices/project-group-owner-routing'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition
@@ -29,7 +27,8 @@ import { FolderPathStatusIndicator } from './FolderPathStatusIndicator'
 import { RepoScanUnavailableIndicator } from './RepoScanUnavailableIndicator'
 import {
   ProjectGroupCreateWorkspaceButton,
-  ProjectGroupHeaderMenu
+  ProjectGroupHeaderMenu,
+  type ProjectGroupHeaderActions
 } from './project-group-header-actions'
 import {
   RepoHeaderCreateWorkspaceButton,
@@ -59,8 +58,7 @@ export type SectionHeaderRowContext = {
   }) => FolderWorkspacePathStatus | null
   toggleGroupWithScrollAnchor: (groupKey: string) => void
   projectActions: RepoHeaderProjectActions
-  onRenameProjectGroup: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
-  onDeleteProjectGroup: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
+  projectGroupActions: ProjectGroupHeaderActions
   onCreateFolderWorkspace: (projectGroup: ProjectGroup) => void
   onWorkspaceStatusDragOver: (event: React.DragEvent, status: WorkspaceStatus) => void
   onWorkspaceStatusDragLeave: (event: React.DragEvent) => void
@@ -91,15 +89,9 @@ export function renderWorktreeSectionHeaderRow(args: {
   const isRepoHeader = ctx.groupBy === 'repo' && row.repo !== undefined
   const isProjectGroupHeader = ctx.groupBy === 'repo' && row.projectGroup !== undefined
   const projectIdForHeader = isRepoHeader ? row.repo!.id : undefined
-  const projectGroupIdForHeader =
-    isProjectGroupHeader && !row.repo && typeof row.projectGroup?.id === 'string'
-      ? row.projectGroup.id
-      : undefined
-  // Why: rename/delete must route to the host that owns this row, not to whichever host has focus.
-  const projectGroupHostIdForHeader =
-    row.projectGroup && 'createdFrom' in row.projectGroup
-      ? getProjectGroupHostId(row.projectGroup)
-      : undefined
+  const projectGroupForHeader =
+    isProjectGroupHeader && !row.repo && row.projectGroup?.id != null ? row.projectGroup : undefined
+  const projectGroupIdForHeader = projectGroupForHeader?.id
   const repoHeaderIndex =
     projectIdForHeader !== undefined
       ? headerDrag.repoHeaderIndexByRepoId.get(projectIdForHeader)
@@ -360,13 +352,12 @@ export function renderWorktreeSectionHeaderRow(args: {
             </div>
           ) : null}
 
-          {isProjectGroupHeader && !row.repo && projectGroupIdForHeader ? (
+          {projectGroupForHeader ? (
             <ProjectGroupHeaderMenu
-              groupId={projectGroupIdForHeader}
-              hostId={projectGroupHostIdForHeader}
+              projectGroup={projectGroupForHeader}
               label={row.label}
-              onRename={ctx.onRenameProjectGroup}
-              onDelete={ctx.onDeleteProjectGroup}
+              projectGroups={ctx.projectGroups}
+              actions={ctx.projectGroupActions}
             />
           ) : null}
 

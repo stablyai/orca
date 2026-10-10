@@ -81,15 +81,52 @@ export function normalizeProjectGroups(value: unknown): ProjectGroup[] {
       ...(executionHostId ? { executionHostId } : {})
     })
   }
-  groups.sort(
-    (left, right) => left.tabOrder - right.tabOrder || left.name.localeCompare(right.name)
-  )
+  groups.sort(compareProjectGroupSiblings)
   for (const group of groups) {
     if (group.parentGroupId === group.id || !seen.has(group.parentGroupId ?? '')) {
       group.parentGroupId = null
     }
   }
+  // Why: the sidebar renders from roots, so a parent cycle would hide every group in it.
+  breakProjectGroupParentCycles(groups)
   return groups
+}
+
+/** Sidebar order among sibling groups: manual tab order, then name. */
+export function compareProjectGroupSiblings(
+  left: Pick<ProjectGroup, 'tabOrder' | 'name'>,
+  right: Pick<ProjectGroup, 'tabOrder' | 'name'>
+): number {
+  return left.tabOrder - right.tabOrder || left.name.localeCompare(right.name)
+}
+
+type ProjectGroupParentLink = Pick<ProjectGroup, 'id' | 'parentGroupId'>
+
+/** Cuts each parent cycle at its first member in `groups` order, so every group reaches a root. */
+export function breakProjectGroupParentCycles(groups: readonly ProjectGroupParentLink[]): void {
+  const byId = new Map(groups.map((group) => [group.id, group]))
+  const rankById = new Map(groups.map((group, index) => [group.id, index]))
+  const rank = (group: ProjectGroupParentLink): number => rankById.get(group.id) ?? 0
+  const reachesRoot = new Set<string>()
+  for (const start of groups) {
+    const path: ProjectGroupParentLink[] = []
+    const onPath = new Set<string>()
+    let current = byId.get(start.id)
+    while (current && !reachesRoot.has(current.id) && !onPath.has(current.id)) {
+      onPath.add(current.id)
+      path.push(current)
+      current = current.parentGroupId ? byId.get(current.parentGroupId) : undefined
+    }
+    if (current && onPath.has(current.id)) {
+      const cycle = path.slice(path.indexOf(current))
+      const cut = cycle.reduce((first, group) => (rank(group) < rank(first) ? group : first))
+      cut.parentGroupId = null
+    }
+    // Why: memoizing walks that reach a root keeps this linear on large catalogs.
+    for (const group of path) {
+      reachesRoot.add(group.id)
+    }
+  }
 }
 
 export function clearMissingProjectGroupMemberships(repos: Repo[], groups: ProjectGroup[]): Repo[] {

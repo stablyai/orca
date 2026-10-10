@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   moveProjectToGroup: vi.fn(),
   createProjectGroup: vi.fn(),
   updateProjectGroup: vi.fn(),
+  moveProjectGroup: vi.fn(),
+  revealSidebarRow: vi.fn(),
   deleteProjectGroupWithContainedProjects: vi.fn(),
   toastError: vi.fn()
 }))
@@ -20,6 +22,8 @@ vi.mock('@/store', () => ({
       moveProjectToGroup: mocks.moveProjectToGroup,
       createProjectGroup: mocks.createProjectGroup,
       updateProjectGroup: mocks.updateProjectGroup,
+      moveProjectGroup: mocks.moveProjectGroup,
+      revealSidebarRow: mocks.revealSidebarRow,
       deleteProjectGroupWithContainedProjects: mocks.deleteProjectGroupWithContainedProjects
     })
 }))
@@ -67,6 +71,7 @@ async function renderHookProbe(): Promise<void> {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.updateProjectGroup.mockResolvedValue(true)
+  mocks.moveProjectGroup.mockResolvedValue(true)
   mocks.deleteProjectGroupWithContainedProjects.mockResolvedValue({
     status: 'deleted-group',
     groupId: remoteGroup.id,
@@ -131,6 +136,80 @@ describe('project group dialogs carry the owner host', () => {
     expect(mocks.deleteProjectGroupWithContainedProjects).toHaveBeenCalledWith(remoteGroup.id, {
       removeContainedProjects: false,
       hostId: 'runtime:env-1'
+    })
+  })
+
+  it("creates a subgroup on the parent group's host and reveals it", async () => {
+    mocks.createProjectGroup.mockResolvedValue({
+      ...remoteGroup,
+      id: 'group-child',
+      parentGroupId: remoteGroup.id
+    })
+    await renderHookProbe()
+    await act(async () => {
+      latest!.projectGroupActions.onCreateSubgroup(
+        remoteGroup.id,
+        remoteGroup.name,
+        'runtime:env-1'
+      )
+    })
+    await act(async () => {
+      await latest!.handleSubmitProjectGroupName('Child')
+    })
+
+    expect(mocks.createProjectGroup).toHaveBeenCalledWith('Child', {
+      parentGroupId: remoteGroup.id,
+      hostId: 'runtime:env-1'
+    })
+    expect(mocks.revealSidebarRow).toHaveBeenCalledWith('project-group:group-child')
+    expect(mocks.toastError).not.toHaveBeenCalled()
+  })
+
+  it('surfaces an unconfirmed-subgroup toast when the parent host does not answer', async () => {
+    mocks.createProjectGroup.mockResolvedValue(null)
+    await renderHookProbe()
+    await act(async () => {
+      latest!.projectGroupActions.onCreateSubgroup(
+        remoteGroup.id,
+        remoteGroup.name,
+        'runtime:env-1'
+      )
+    })
+    await act(async () => {
+      await latest!.handleSubmitProjectGroupName('Child')
+    })
+
+    expect(mocks.revealSidebarRow).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledWith('Failed to create subgroup', {
+      description:
+        "Orca could not confirm the new group with the parent group's host. Recheck the sidebar after reconnecting."
+    })
+  })
+
+  it('moves through the host that owns the group row and reveals the moved group', async () => {
+    await renderHookProbe()
+    await act(async () => {
+      await latest!.handleMoveProjectGroup(remoteGroup.id, 'group-2', 'runtime:env-1')
+    })
+
+    expect(mocks.moveProjectGroup).toHaveBeenCalledWith(remoteGroup.id, 'group-2', {
+      hostId: 'runtime:env-1'
+    })
+    expect(mocks.revealSidebarRow).toHaveBeenCalledWith('project-group:group-1')
+    expect(mocks.toastError).not.toHaveBeenCalled()
+  })
+
+  it('surfaces an unconfirmed-move toast when the owner host does not apply the move', async () => {
+    mocks.moveProjectGroup.mockResolvedValue(false)
+    await renderHookProbe()
+    await act(async () => {
+      await latest!.handleMoveProjectGroup(remoteGroup.id, null, 'runtime:env-1')
+    })
+
+    expect(mocks.revealSidebarRow).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledWith('Failed to move group', {
+      description:
+        "Orca could not confirm the move with the group's host. Recheck the group after reconnecting, or update Orca on that host."
     })
   })
 })

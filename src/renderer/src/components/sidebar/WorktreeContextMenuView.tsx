@@ -5,9 +5,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -36,6 +33,7 @@ import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 import { WorktreeStatusMenuItems } from './WorktreeStatusMenuItems'
 import { WorktreeContextMenuOverlays } from './WorktreeContextMenuOverlays'
+import { ProjectGroupMoveSubmenu } from './ProjectGroupMoveSubmenu'
 import {
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR,
   getWorktreeParentPickerLabel,
@@ -219,28 +217,18 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                       'New group from project'
                     )}
                   </DropdownMenuItem>
-                  {projectGroups.length > 0 ? (
-                    <DropdownMenuSub>
-                      <DropdownMenuSubTrigger disabled={isDeleting}>
-                        <FolderInput className="size-3.5" />
-                        {translate(
-                          'auto.components.sidebar.WorktreeContextMenu.76865d827f',
-                          'Move to group'
-                        )}
-                      </DropdownMenuSubTrigger>
-                      <DropdownMenuSubContent>
-                        {projectGroups.map((group) => (
-                          <DropdownMenuItem
-                            key={group.id}
-                            disabled={repo.projectGroupId === group.id}
-                            onSelect={() => handleMoveProjectToGroup(group.id)}
-                          >
-                            <span className="max-w-48 truncate">{group.name}</span>
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuSubContent>
-                    </DropdownMenuSub>
-                  ) : null}
+                  <ProjectGroupMoveSubmenu
+                    projectGroups={projectGroups}
+                    movingProject={repo}
+                    disabled={isDeleting}
+                    onSelect={handleMoveProjectToGroup}
+                  >
+                    <FolderInput className="size-3.5" />
+                    {translate(
+                      'auto.components.sidebar.WorktreeContextMenu.76865d827f',
+                      'Move to group'
+                    )}
+                  </ProjectGroupMoveSubmenu>
                   {repo.projectGroupId ? (
                     <DropdownMenuItem onSelect={handleRemoveProjectFromGroup} disabled={isDeleting}>
                       <CircleX className="size-3.5" />

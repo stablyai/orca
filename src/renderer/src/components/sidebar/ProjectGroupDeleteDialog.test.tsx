@@ -30,6 +30,7 @@ function renderDialog(
         open={true}
         groupName="Platform"
         projectCount={2}
+        subgroupCount={0}
         projectNames={['API', 'Web app']}
         removeContainedProjects={false}
         onRemoveContainedProjectsChange={vi.fn()}
@@ -86,6 +87,22 @@ describe('ProjectGroupDeleteDialog', () => {
     })
 
     expect(onRemoveContainedProjectsChange).toHaveBeenCalledWith(true)
+  })
+
+  it('says that nested subgroups are deleted with the group', () => {
+    renderDialog({ projectCount: 0 })
+    expect(document.body.textContent).toContain('Delete Platform.')
+    expect(document.body.textContent).not.toContain('subgroup')
+
+    renderDialog({ projectCount: 0, subgroupCount: 1 })
+    expect(document.body.textContent).toContain(
+      'Delete Platform. Its subgroup will also be deleted.'
+    )
+
+    renderDialog({ projectCount: 0, subgroupCount: 3 })
+    expect(document.body.textContent).toContain(
+      'Delete Platform. Its 3 subgroups will also be deleted.'
+    )
   })
 
   it('focuses the delete group action when opened', () => {

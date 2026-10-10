@@ -5416,7 +5416,9 @@
           "eeabb8e8e4": "Retirer {{value0}} {{value1}} d'Orca",
           "55f75628c0": "Les dossiers de projets sur le disque ne sont pas supprimés.",
           "897e5d3d4c": "Supprimer le groupe et retirer les projets",
-          "fec7e9c8ae": "Supprimer le groupe"
+          "fec7e9c8ae": "Supprimer le groupe",
+          "2de0de1df6": "Son sous-groupe sera également supprimé.",
+          "0e0d4bb72d": "Ses {{value0}} sous-groupes seront également supprimés."
         },
         "ProjectGroupNameDialog": {
           "d99a034073": "Annuler",
@@ -6148,6 +6150,33 @@
               "7c2f009786": "En cours",
               "6798dc7c94": "En revue",
               "5076efc3d2": "Terminé"
+            },
+            "rows": {
+              "project": {
+                "group": {
+                  "header": {
+                    "actions": {
+                      "dd93986e77": "Nouveau sous-groupe"
+                    }
+                  }
+                }
+              },
+              "ProjectGroupDialogs": {
+                "dc04680eef": "Nouveau sous-groupe",
+                "1c1d0b3021": "Créez un groupe dans « {{value0}} »."
+              },
+              "use": {
+                "project": {
+                  "group": {
+                    "dialogs": {
+                      "009a0dfef9": "Échec du déplacement du groupe",
+                      "b1ba3948b3": "Orca n'a pas pu confirmer le déplacement auprès de l'hôte du groupe. Revérifiez le groupe après reconnexion, ou mettez à jour Orca sur cet hôte.",
+                      "8269fcd14a": "Échec de la création du sous-groupe",
+                      "daf08d9e4e": "Orca n'a pas pu confirmer le nouveau groupe auprès de l'hôte du groupe parent. Revérifiez la barre latérale après reconnexion."
+                    }
+                  }
+                }
+              }
             }
           }
         },
@@ -6532,6 +6561,9 @@
           "title": "Tri modifié en Manuel",
           "description": "Manuel conserve les espaces de travail là où vous les déposez.",
           "restore": "Retour à {{label}}"
+        },
+        "ProjectGroupMoveSubmenu": {
+          "5f1e73c267": "Premier niveau"
         }
       },
       "shared": {
