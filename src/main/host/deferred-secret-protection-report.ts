@@ -56,8 +56,8 @@ export function scheduleSecretProtectionGapReport({
   // Why swallow here and not in reportSecretProtectionGap: deferred, this no longer runs on
   // whenReady's promise chain, where a throw was an unhandled rejection the app survives
   // (#9441). Off that chain it is an uncaughtException, and installUncaughtPipeErrorGuard
-  // re-throws those fatally — killing the app over a diagnostic the module documents as
-  // deliberately not fatal. Serve still reports inline and keeps the old posture.
+  // re-throws those into Electron's handler, which raises a modal error box over a
+  // diagnostic the module documents as deliberately not fatal. Serve still reports inline.
   const report = (): void => {
     try {
       reportSecretProtectionGap(options)
