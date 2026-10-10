@@ -18236,9 +18236,7 @@
         "node config/scripts/runtime-file-watcher-fault-harness.mjs",
         "ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mjs",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
-        "pnpm run build:relay",
-        "node config/scripts/relay-watcher-fault-harness.mjs"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs"
       ],
       "testFiles": [
         "src/main/daemon/daemon-pty-adapter.test.ts",
@@ -18726,24 +18724,6 @@
           "date": "2026-07-13",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm run build:relay",
-          "result": "passed",
-          "durationSeconds": 0.38,
-          "summary": "Relay and adjacent watcher artifacts built for Linux, macOS, and Windows on x64 and arm64, plus the WSL hook relay."
-        },
-        {
-          "date": "2026-07-13",
-          "runner": "local",
-          "platform": "macos",
-          "command": "node config/scripts/relay-watcher-fault-harness.mjs",
-          "result": "passed",
-          "durationSeconds": 0.12,
-          "summary": "The relay and existing PTY survived watcher-child SIGSEGV; replacement delivered overflow and a precise post-crash event."
-        },
-        {
-          "date": "2026-07-13",
-          "runner": "local",
-          "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/main/ipc/pty-spawn-cwd-fallback.test.ts src/main/ipc/pty-listener-teardown-and-orphans.test.ts src/main/providers/local-pty-provider-shutdown.test.ts src/main/providers/local-pty-provider-session-inventory.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts",
           "result": "passed",
           "durationSeconds": 9.12,
@@ -18798,24 +18778,6 @@
           "date": "2026-07-13",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm run build:relay",
-          "result": "passed",
-          "durationSeconds": 0.39,
-          "summary": "Relay and adjacent watcher artifacts built for Linux, macOS, and Windows on x64 and arm64, plus the WSL hook relay."
-        },
-        {
-          "date": "2026-07-13",
-          "runner": "local",
-          "platform": "macos",
-          "command": "node config/scripts/relay-watcher-fault-harness.mjs",
-          "result": "passed",
-          "durationSeconds": 0.12,
-          "summary": "The relay and existing PTY survived watcher-child SIGSEGV; replacement delivered overflow and a precise post-crash event."
-        },
-        {
-          "date": "2026-07-13",
-          "runner": "local",
-          "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees-delete-pty-teardown.test.ts src/main/ipc/worktrees-orphan-directory-cleanup.test.ts src/main/ipc/worktrees-remove-preflight.test.ts src/main/ipc/worktrees-remove-archive-hooks.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/main/ipc/pty-spawn-cwd-fallback.test.ts src/main/ipc/pty-listener-teardown-and-orphans.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts",
           "result": "passed",
           "durationSeconds": 9.03,
@@ -18838,15 +18800,6 @@
           "result": "passed",
           "durationSeconds": 9.79,
           "summary": "Six relay registry, filesystem/Git handler, bundled subprocess, install, and package contract files passed with 225 tests, including terminal removal notification and recursive deletion fencing."
-        },
-        {
-          "date": "2026-07-12",
-          "runner": "local",
-          "platform": "macos",
-          "command": "node config/scripts/relay-watcher-fault-harness.mjs",
-          "result": "passed",
-          "durationSeconds": 0.61,
-          "summary": "The relay PID and existing PTY survived watcher-child SIGSEGV; overflow and precise events resumed from a replacement child."
         },
         {
           "date": "2026-07-13",

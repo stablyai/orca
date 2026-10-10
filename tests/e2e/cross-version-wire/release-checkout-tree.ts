@@ -24,7 +24,7 @@ const ARCHIVE_PATHS = [
   'src/types',
   'mobile/src/worktree/agent-row-display.ts'
 ]
-// Why optional: a release has only one of them, and `git archive` refuses a missing pathspec.
+// Why optional: a release may have either or both, and `git archive` refuses a missing pathspec.
 const OPTIONAL_ARCHIVE_PATHS = ['src/relay', 'src/wsl-guest']
 
 const WORKSPACE_POLICY = 'pnpm-workspace.yaml'
