@@ -27,6 +27,8 @@ import type { CodexStructuredPermissionPolicy } from '../codex/codex-structured-
 import type { StructuredAgentCommandSettings } from '../native-chat/structured-agent-command-resolution'
 import type { CodexStructuredSessionAdapterDeps } from '../codex/codex-structured-session-adapter'
 import type { ClaudeStructuredSessionAdapterDeps } from '../claude/claude-structured-session-adapter'
+import type { ZcodeStructuredSessionAdapterDeps } from '../zcode/zcode-structured-session-state'
+import type { ZcodeStructuredLaunchResolverDeps } from '../zcode/zcode-structured-launch-resolution'
 import {
   StructuredAgentSessionHost,
   type StructuredAgentSessionHostDeps
@@ -115,6 +117,8 @@ export type StructuredAgentSessionRuntimeDeps = {
   /** Provider transports are overridden only to drive the runtime against scripted children. */
   openCodexConnection?: CodexStructuredSessionAdapterDeps['openConnection']
   openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
+  openZcodeConnection?: ZcodeStructuredSessionAdapterDeps['openConnection']
+  resolveZcodeCommand?: ZcodeStructuredLaunchResolverDeps['resolveCommand']
   /** Scripted app-servers carry fake pids the real start-time read cannot answer for. */
   readProcessStartTime?: CodexStructuredSessionAdapterDeps['readProcessStartTime']
   /** Required, and asserted at install time — saved Arguments must never be silently omitted. */

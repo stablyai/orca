@@ -51,6 +51,7 @@ import {
 } from '../acp/acp-structured-launch-resolution'
 import { AcpStructuredSessionAdapter } from '../acp/acp-structured-session-adapter'
 import { PI_RPC_RUNTIME_REGISTRATION } from '../pi/rpc-runtime-registration'
+import { ZCODE_RUNTIME_REGISTRATION } from '../zcode/zcode-runtime-registration'
 
 /** What an agent's adapter is built from: the open store and the runtime around it. */
 export type StructuredAgentAdapterContext = {
@@ -298,7 +299,8 @@ export const STRUCTURED_AGENT_RUNTIME_REGISTRATIONS: readonly StructuredAgentRun
           })
         )
     },
-    ...ACP_LAUNCH_SPECS.map(acpRegistration)
+    ...ACP_LAUNCH_SPECS.map(acpRegistration),
+    ZCODE_RUNTIME_REGISTRATION
   ]
 
 /** The registration of `agent`; null for an agent this runtime does not drive. */

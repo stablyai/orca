@@ -82,6 +82,17 @@ export function codexProviderHandle(threadId: string): AgentSessionProviderHandl
   return { ...CODEX_STRUCTURED_HANDLE_NAMESPACE, nativeId: threadId }
 }
 
+/** ZCode rides the neutral (open) namespace: its handles store in the generic shape, so an older
+ *  build refuses them as unreadable instead of mistaking them for one of its own. */
+export const ZCODE_STRUCTURED_HANDLE_NAMESPACE = {
+  transport: 'zcode-app-server',
+  agent: 'zcode'
+} as const
+
+export function zcodeProviderHandle(providerSessionId: string): AgentSessionProviderHandle {
+  return { ...ZCODE_STRUCTURED_HANDLE_NAMESPACE, nativeId: providerSessionId }
+}
+
 // ─── Validation ─────────────────────────────────────────────────────────────
 
 const MAX_HANDLE_FIELD_LENGTH = 512

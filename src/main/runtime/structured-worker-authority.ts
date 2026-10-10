@@ -32,7 +32,10 @@ import {
   structuredWorkerAddressable
 } from './structured-worker-custody'
 import { AGENT_SESSION_FOUNDING_FENCE } from './agent-session-record-founding'
-import { isAgentSessionHandleProvider } from '../../shared/agent-session-provider-handle'
+import {
+  isAgentSessionHandleProvider,
+  type AgentSessionHandleProvider
+} from '../../shared/agent-session-provider-handle'
 import {
   isStructuredWorkerHandle,
   structuredWorkerIdentities,
@@ -221,7 +224,9 @@ export function resolveStructuredWorkerAuthority(
  * relabel every restarted Codex worker as Claude, permanently, because the startup release
  * reconciler stamps the frozen journal archive with whatever it is told here.
  */
-export function structuredWorkerAgent(identity: StructuredWorkerIdentity): 'claude' | 'codex' {
+export function structuredWorkerAgent(
+  identity: StructuredWorkerIdentity
+): AgentSessionHandleProvider {
   if (identity.agent) {
     return identity.agent
   }

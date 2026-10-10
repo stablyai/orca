@@ -44,7 +44,7 @@ export {
  * advertises that it does with the registered-agents capability, and lists them through
  * `agentSession.agents`. A client that has not learned a host's list knows only these.
  */
-export const AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS = ['claude', 'codex'] as const
+export const AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS = ['claude', 'codex', 'zcode'] as const
 
 export type AgentSessionHandleProvider = (typeof AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS)[number]
 
@@ -54,7 +54,7 @@ export type StructuredAgentId = string
 
 /** Runtime guard for persisted/remote provider metadata. Unknown values must not impersonate Codex. */
 export function isAgentSessionHandleProvider(value: unknown): value is AgentSessionHandleProvider {
-  return value === 'claude' || value === 'codex'
+  return value === 'claude' || value === 'codex' || value === 'zcode'
 }
 
 /** The protocol whose id space a handle's `nativeId` lives in. Open: a new transport adds no arm. */
