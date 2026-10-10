@@ -18,6 +18,8 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.handoffStatus',
   'agentSession.options',
   'agentSession.modelCatalog',
+  // Each registered agent's id and capability record (no params, no paths): gates the attach button.
+  'agentSession.agents',
   'agentSession.conversationCommand',
   'agentSession.commands',
   'agentSession.history',
