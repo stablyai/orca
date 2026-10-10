@@ -153,7 +153,10 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
     newLinearIssueTargetTeam?.workspaceId
   )
   useEffect(() => {
-    if (newLinearStates.data.length > 0 && !newLinearIssueStateId) {
+    // Why: a team switch nulls the state, but this effect can first run against the previous
+    // team's still-rendered states and restore an id that no longer applies. Reset whenever the
+    // selected state is not part of the current team's states (STA-9471). An empty list is a no-op.
+    if (!newLinearStates.data.some((s) => s.id === newLinearIssueStateId)) {
       const defaultState =
         newLinearStates.data.find((s) => s.type === 'unstarted') || newLinearStates.data[0]
       if (defaultState) {
