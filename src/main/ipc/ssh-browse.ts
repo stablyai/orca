@@ -125,6 +125,7 @@ async function runBrowseCommand(
     let stdout = ''
     let stderr = ''
     let exitCode: number | null = null
+    let exitObserved = false
     let settled = false
     let timeout: ReturnType<typeof setTimeout> | null = null
 
@@ -182,12 +183,16 @@ async function runBrowseCommand(
     }
     // `exit` fires before `close`; capture the code to tell a failed `ls` (that still printed `pwd`) from an empty listing.
     const onExit = (code: number | null): void => {
+      exitObserved = true
       exitCode = code
     }
     const onError = (error: Error): void => {
       rejectOnce(error)
     }
-    const onClose = (): void => {
+    const onClose = (code?: number | null): void => {
+      if (!exitObserved && typeof code === 'number') {
+        exitCode = code
+      }
       stdout = fence?.readStdout(stdout) ?? stdout
       // Why: a null exitCode (channel closed without exit status) isn't success; don't treat empty stdout as an empty dir.
       if (exitCode !== 0) {
