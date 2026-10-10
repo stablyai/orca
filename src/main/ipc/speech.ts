@@ -13,6 +13,7 @@ import {
 } from '../speech/openai-api-key-store'
 import type { Store } from '../persistence'
 
+/** Registers the speech model and dictation IPC handlers for desktop renderers. */
 export function registerSpeechHandlers(store: Store): void {
   ipcMain.handle('speech:getCatalog', () => {
     return SPEECH_MODEL_CATALOG
@@ -86,8 +87,13 @@ export function registerSpeechHandlers(store: Store): void {
     return join(getSpeechModelManager(store).getModelsDir(), `speech-hotwords-${digest}.txt`)
   }
 
+  /** STT owner key; scoping by sender keeps sessions from different windows apart. */
   const getDesktopOwner = (senderId: number, sessionId: string): string =>
     `desktop:${senderId}:${sessionId}`
+  // Why: only a stopped/error report removes a session's 'closed' listener, and stopDictation
+  // returns without reporting once the worker is gone. Keyed by sender, not owner: the renderer
+  // sends a fresh sessionId per run, and the STT service allows one active owner at a time.
+  const dictationListenerCleanups = new Map<number, () => void>()
 
   ipcMain.handle(
     'speech:startDictation',
@@ -98,9 +104,13 @@ export function registerSpeechHandlers(store: Store): void {
       }
       let resolvedHotwordsPath: string | undefined
       let windowClosed = false
-      const owner = getDesktopOwner(event.sender.id, sessionId)
+      const senderId = event.sender.id
+      const owner = getDesktopOwner(senderId, sessionId)
+      let sessionListenerRemoved = false
+      /** Stops this session when its window closes; no renderer is left to stop it. */
       const cleanupOnWindowClosed = (): void => {
         windowClosed = true
+        cleanupSessionListener()
         void getSpeechSttService(store)
           .stopDictation(owner)
           .finally(() => {
@@ -110,8 +120,13 @@ export function registerSpeechHandlers(store: Store): void {
           })
           .catch(() => {})
       }
+      /** Detaches this session's close hook; frees the sender slot only if no newer session took it. */
       const cleanupSessionListener = (): void => {
+        sessionListenerRemoved = true
         window.off('closed', cleanupOnWindowClosed)
+        if (dictationListenerCleanups.get(senderId) === cleanupSessionListener) {
+          dictationListenerCleanups.delete(senderId)
+        }
       }
       window.once('closed', cleanupOnWindowClosed)
 
@@ -181,6 +196,11 @@ export function registerSpeechHandlers(store: Store): void {
           resolvedHotwordsPath,
           owner
         )
+        // Why: supersede only after success; a failed start must not unhook a still-live session.
+        dictationListenerCleanups.get(senderId)?.()
+        if (!sessionListenerRemoved) {
+          dictationListenerCleanups.set(senderId, cleanupSessionListener)
+        }
         if (resolvedHotwordsPath) {
           unlink(resolvedHotwordsPath).catch(() => {})
         }
