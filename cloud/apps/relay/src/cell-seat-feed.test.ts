@@ -352,7 +352,7 @@ describe('cell seat feed', () => {
       // What the flag tool checks a write against before it writes.
       supportedFlags: {
         readinessLocal: { type: 'boolean' },
-        ticketCheck: { type: 'enum', values: ['off', 'shadow', 'enforce'] },
+        ticketCheck: { type: 'enum', values: ['off', 'shadow'] },
         rejectionFence: { type: 'boolean' },
         readTimeoutMarginMs: { type: 'number', min: 1_000, max: 60_000, integer: true },
         admitMode: { type: 'enum', values: ['db', 'reserve'] },

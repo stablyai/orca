@@ -58,6 +58,9 @@ export type SupportedCellFlag =
   | { type: 'enum'; values: string[] }
   | { type: 'number'; min?: number; max?: number; integer?: boolean }
 
+// Parsed, never offered: ticketCheck=enforce has no step that turns it on yet.
+const UNOFFERED_FLAG_VALUES: Record<string, string[]> = { ticketCheck: ['enforce'] }
+
 // What this image accepts, read from the schema itself: the flag tool refuses a key or value
 // the cell would drop or void before it writes.
 export function supportedCellFlags(): Record<string, SupportedCellFlag> {
@@ -68,7 +71,10 @@ export function supportedCellFlags(): Record<string, SupportedCellFlag> {
       inner = inner instanceof z.ZodDefault ? inner.removeDefault() : inner.unwrap()
     }
     if (inner instanceof z.ZodBoolean) supported[key] = { type: 'boolean' }
-    else if (inner instanceof z.ZodEnum) supported[key] = { type: 'enum', values: [...inner.options] }
+    else if (inner instanceof z.ZodEnum) {
+      const unoffered = UNOFFERED_FLAG_VALUES[key] ?? []
+      supported[key] = { type: 'enum', values: inner.options.filter((value: string) => !unoffered.includes(value)) }
+    }
     else if (inner instanceof z.ZodNumber) {
       supported[key] = {
         type: 'number',
