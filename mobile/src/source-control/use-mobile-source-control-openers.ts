@@ -14,13 +14,9 @@ import {
   type MobileGitBranchChangeEntry
 } from './mobile-branch-compare'
 import { gitBranchDiffRead } from './mobile-git-read-operations'
-import {
-  canOpenMobileGitStatusEntry,
-  isMobileGitUnavailableReply,
-  type MobileGitStatusEntry
-} from './mobile-git-status'
-import { sourceFileDiffOpenRun, sourceFileOpenRun } from './mobile-source-file-open-operations'
-import { buildMobileReviewFileRoute } from './mobile-review-route'
+import { canOpenMobileGitStatusEntry, type MobileGitStatusEntry } from './mobile-git-status'
+import { openSessionChangedFile } from './session-changed-file-open'
+import { buildMobileReviewFileRoute, type MobileReviewRouteTarget } from './mobile-review-route'
 import { revealMobileSourceControlSessionDiff } from './reveal-mobile-source-control-session-diff'
 import type {
   MobileBranchCompareState,
@@ -46,6 +42,15 @@ type Params = {
   mountedRef: MutableRefObject<boolean>
   busyActionRef: MutableRefObject<string | null>
   setActionError: (message: string | null) => void
+}
+
+function pushReviewRoute(
+  router: ReturnType<typeof useRouteHandoff>,
+  target: MobileReviewRouteTarget
+): void {
+  triggerSelection()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the builder emits the app's registered /h/[hostId]/review/[worktreeId] route as a string href.
+  router.push(buildMobileReviewFileRoute(target) as Parameters<typeof router.push>[0])
 }
 
 // Owns opening a changed file (diff or session replace) and previewing a
@@ -83,7 +88,8 @@ export function useMobileSourceControlOpeners(params: Params) {
       // Deletions are openable (pre-delete text/image via git.diff); only block
       // unresolved conflicts, matching canOpenMobileGitStatusEntry / row UI.
       // An entry with no area is in no section, so no row can reach this anyway.
-      if (!canOpenMobileGitStatusEntry(entry) || entry.area === undefined) {
+      const area = entry.area
+      if (!canOpenMobileGitStatusEntry(entry) || area === undefined) {
         return
       }
       if (openingPathRef.current || busyActionRef.current) {
@@ -100,48 +106,32 @@ export function useMobileSourceControlOpeners(params: Params) {
       setOpeningPath(entry.path)
       try {
         setActionError(null)
+        const openReviewRoute = (): void =>
+          pushReviewRoute(router, {
+            hostId,
+            worktreeId,
+            worktreeName: name,
+            filePath: entry.path,
+            area
+          })
         if (origin !== 'session') {
-          triggerSelection()
-          router.push(
-            buildMobileReviewFileRoute({
-              hostId,
-              worktreeId,
-              worktreeName: name,
-              filePath: entry.path,
-              area: entry.area
-            }) as Parameters<typeof router.push>[0]
-          )
+          openReviewRoute()
           return
         }
         // Snapshot the active tab now, at tap time, before the openDiff RPC —
         // the session uses it to avoid stealing focus if the user switches tabs
         // during the RPC window.
         onFileOpenStart?.()
-        const diffReply = await sourceFileDiffOpenRun.request(client, {
-          worktree: `id:${worktreeId}`,
+        const openedTabMode = await openSessionChangedFile(client, {
+          worktreeId,
           relativePath: entry.path,
-          staged: entry.area === 'staged'
+          staged: area === 'staged'
         })
-        // Why the raw refusal: a host too old to open a diff tab is a capability gap this flow
-        // falls back from, and no acceptance policy carries the code and message through.
-        const fallbackToEdit = isMobileGitUnavailableReply(diffReply)
-        const openedTabMode: 'diff' | 'edit' = fallbackToEdit ? 'edit' : 'diff'
-        const editReply = fallbackToEdit
-          ? await sourceFileOpenRun.request(client, {
-              worktree: `id:${worktreeId}`,
-              relativePath: entry.path
-            })
-          : undefined
-        try {
-          if (editReply) {
-            sourceFileOpenRun.interpret(editReply)
-          } else {
-            sourceFileDiffOpenRun.interpret(diffReply)
-          }
-        } catch (error) {
-          throw new Error(refusedRpcMessageOrFallback(error, 'Unable to open diff'))
-        }
         if (!mountedRef.current) {
+          return
+        }
+        if (openedTabMode === 'device-review') {
+          openReviewRoute()
           return
         }
         const revealResult = await revealMobileSourceControlSessionDiff({
@@ -227,16 +217,13 @@ export function useMobileSourceControlOpeners(params: Params) {
       openingBranchPathRef.current = entry.path
       setOpeningBranchPath(entry.path)
       if (origin !== 'session') {
-        triggerSelection()
-        router.push(
-          buildMobileReviewFileRoute({
-            hostId,
-            worktreeId,
-            worktreeName: name,
-            filePath: entry.path,
-            area: 'branch'
-          }) as Parameters<typeof router.push>[0]
-        )
+        pushReviewRoute(router, {
+          hostId,
+          worktreeId,
+          worktreeName: name,
+          filePath: entry.path,
+          area: 'branch'
+        })
         openingBranchPathRef.current = null
         if (mountedRef.current) {
           setOpeningBranchPath(null)

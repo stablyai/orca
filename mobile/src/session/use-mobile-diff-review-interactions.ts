@@ -17,6 +17,7 @@ import type {
 import type { ReviewSheetIntents } from './mobile-diff-review-sheets'
 import { sourceFileDiffOpenRun } from '../source-control/mobile-source-file-open-operations'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
+import { isRendererUnavailableRefusal } from '../transport/renderer-unavailable-refusal'
 import { useMobileDiffReviewCommentActions } from './use-mobile-diff-review-comment-actions'
 import { useMobileDiffReviewGitActions } from './use-mobile-diff-review-git-actions'
 import { useMobileDiffReviewSendActions } from './use-mobile-diff-review-send-actions'
@@ -51,6 +52,9 @@ type InteractionInput = {
   onOpenSession: () => void
   onReconnect: ((hostId: string) => void | Promise<void>) | null
 }
+
+export const SESSION_TABS_UNAVAILABLE_MESSAGE =
+  'This host has no desktop to open tabs in. The diff is shown here instead.'
 
 export function useMobileDiffReviewInteractions(input: InteractionInput) {
   const {
@@ -188,6 +192,12 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
         relativePath: currentItem.filePath,
         staged: currentItem.scope === 'staged'
       })
+      // Why: a host with no renderer (orca serve, orcad) has no tab to open; this screen is the diff view.
+      // Not latched: a serve host can gain a window, or the client be replaced, while this screen is open.
+      if (isRendererUnavailableRefusal(response)) {
+        setActionError(SESSION_TABS_UNAVAILABLE_MESSAGE)
+        return
+      }
       try {
         sourceFileDiffOpenRun.interpret(response)
       } catch (error) {

@@ -486,6 +486,63 @@ describe('openMobileFileTap', () => {
     expect(onOpenFailed).toHaveBeenCalledTimes(1)
   })
 
+  it('previews the file on the device when a headless host cannot open a tab', async () => {
+    const client = createClient([
+      ok({
+        worktree: 'wt-1',
+        relativePath: 'docs/plan.md',
+        absolutePath: '/repo/docs/plan.md',
+        exists: true,
+        isDirectory: false,
+        openTarget: {
+          kind: 'worktree-file',
+          provider: 'local',
+          relativePath: 'docs/plan.md',
+          absolutePath: '/repo/docs/plan.md'
+        }
+      }),
+      { ok: false, error: { code: 'runtime_error', message: 'renderer_unavailable' } }
+    ])
+    const pushPreviewRoute = vi.fn()
+    const onOpenFailed = vi.fn()
+
+    openMobileFileTap({
+      client,
+      hostId: 'host-1',
+      worktreeId: 'wt-1',
+      worktreeName: 'feature',
+      pathText: 'docs/plan.md',
+      line: null,
+      column: null,
+      pushPreviewRoute,
+      openBrowser: vi.fn(),
+      triggerOpenFeedback: vi.fn(),
+      fetchSessionTabs: vi.fn(),
+      getSessionTabs: () => [],
+      getActiveSessionTabId: () => null,
+      getActivationState: activeTerminalState,
+      switchSessionTab: vi.fn(),
+      scheduleDelayedAction: vi.fn(),
+      onOpenFailed
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(onOpenFailed).not.toHaveBeenCalled()
+    expect(pushPreviewRoute).toHaveBeenCalledWith({
+      pathname: '/h/[hostId]/files/preview/[worktreeId]',
+      params: expect.objectContaining({
+        hostId: 'host-1',
+        worktreeId: 'wt-1',
+        source: 'worktree',
+        relativePath: 'docs/plan.md',
+        name: 'plan.md',
+        worktreeName: 'feature'
+      })
+    })
+  })
+
   it('reports an unsupported file when files.open declines it', async () => {
     const client = createClient([
       ok({
