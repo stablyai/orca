@@ -234,6 +234,12 @@ describe('step 5 deterministic simulation', () => {
     durationMs: 25 * 60_000,
     oldDirectors: 1
   })
+  // Demote, re-assign, converge: without the floor the re-assign lands level with the row.
+  const rowAheadWithoutFloor = (): SimulationConfig => ({
+    ...mixed({ noDemoteFloor: true }),
+    durationMs: 25 * 60_000,
+    oldDirectors: 1
+  })
   const restartedMidQueue = (): SimulationConfig => ({
     ...mixed({ noBootReconcile: true }),
     durationMs: 2 * 60_000,
@@ -248,9 +254,16 @@ describe('step 5 deterministic simulation', () => {
     // A director restart mid-queue loses its booked joins' rows until its boot reconcile.
     [5, restartedMidQueue()],
     [8, rowAheadLeftAlone()],
+    [8, rowAheadWithoutFloor()],
     [7, mixed({ noEpochFloor: true })]
   ] as const)('invariant %i fires when its rule is broken', async (invariant, config) => {
     const report = await runReservePlacementSimulation(config)
     expect(report.violations.map((violation) => violation.invariant)).toContain(invariant)
+  }, 120_000)
+
+  it('re-places a host demoted behind its row above that row, so the repair converges', async () => {
+    const report = await runReservePlacementSimulation({ ...mixed(), durationMs: 25 * 60_000, oldDirectors: 1 })
+    expect(report.rowAheadDemotions).toBeGreaterThan(0)
+    expect(report.violations.filter((violation) => violation.invariant === 8)).toEqual([])
   }, 120_000)
 })

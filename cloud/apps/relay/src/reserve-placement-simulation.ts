@@ -116,6 +116,8 @@ export type SimulationFaults = {
   noBootReconcile?: boolean
   // The reconcile leaves a seat whose row is ahead of it alone.
   noRowAheadDemote?: boolean
+  // A director that demoted a seat behind its row does not mint that host above the row.
+  noDemoteFloor?: boolean
   unguardedLedger?: boolean
   noEpochFloor?: boolean
 }
@@ -377,6 +379,8 @@ class SimDirector {
   views = new Map<string, DirectorCellView>()
   recentlyLeft = new Map<string, { cellId: string; epoch: number; at: number; incarnation: number }>()
   reserveEpochs = new Map<string, number>()
+  // Row epochs this director demoted a host's seat behind: its next mint for the host clears them.
+  rowFloors = new Map<string, number>()
   ledgerQueue: Array<{ host: string; cellId: string; epoch: number }> = []
   answeredCells = new Set<string>()
   // Set by a restart: the lost ledger queue is rebuilt by one reconcile once the map is complete.
@@ -400,6 +404,7 @@ class SimDirector {
     this.views = new Map()
     this.recentlyLeft = new Map()
     this.reserveEpochs = new Map()
+    this.rowFloors = new Map()
     this.answeredCells = new Set()
     this.ledgerQueue = []
   }
@@ -672,7 +677,8 @@ export async function runReservePlacementSimulation(
   }
 
   // Invariant 8: a reserve seat behind its row (today's path wrote a newer epoch, and the
-  // desktop was answered the old seat from memory) is gone by the next reconcile.
+  // desktop was answered the old seat from memory), or level with it on another cell, is gone
+  // by the next reconcile, and the director that demoted it re-places the host above the row.
   const behindRow = new Map<string, number>()
   function reconcileLedger(director: SimDirector): void {
     if (!database.up || director.old) return
@@ -682,12 +688,14 @@ export async function runReservePlacementSimulation(
         if (seat.demoted || clock.now - seat.joinedAt < RECONCILE_SETTLE_MS) continue
         const row = database.rows.get(host)
         const live = cellById.get(cellId)!.seats.get(host)
-        if (row && row.epoch > seat.epoch && live && live.joinedAt === seat.joinedAt && !live.demoted) {
+        const diverged = row && (row.epoch > seat.epoch || (row.epoch === seat.epoch && row.cellId !== cellId))
+        if (row && diverged && live && live.joinedAt === seat.joinedAt && !live.demoted) {
           const key = `${director.id}\u0000${host}\u0000${cellId}\u0000${seat.joinedAt}`
           if (behindRow.has(key)) violate(8, `${host}@${seat.epoch} on ${cellId} still behind row @${row.epoch}`)
           behindRow.set(key, clock.now)
           if (faults.noRowAheadDemote) continue
           report.rowAheadDemotions += 1
+          director.rowFloors.set(host, Math.max(row.epoch, director.rowFloors.get(host) ?? 0))
           const cell = cellById.get(cellId)!
           clock.schedule(config.rttMs(cell.region), () =>
             cell.demote(host, seat.epoch, seat.joinedAt, () => onSeatClosed(host, cellId, seat.epoch))
@@ -746,7 +754,8 @@ export async function runReservePlacementSimulation(
     if (director.old) return databaseAssign(director, host, 0)
     if (!director.complete(cells)) return { kind: 'retry', afterMs: 1_000, calls: 0 }
     const now = clock.now
-    const known = director.knownEpochs(host.id)
+    const rowFloor = director.rowFloors.get(host.id)
+    const known = [...director.knownEpochs(host.id), ...(rowFloor === undefined || faults.noDemoteFloor ? [] : [rowFloor])]
     let floor: number
     if (known.length > 0) {
       floor = Math.max(...known)
@@ -755,7 +764,9 @@ export async function runReservePlacementSimulation(
       floor = database.rows.get(host.id)?.epoch ?? 0
     }
     if (reconnect) {
-      const sticky = stickyFromMemory(director, host, now)
+      const found = stickyFromMemory(director, host, now)
+      // The seat the reconcile demoted (or one level with its row) is never answered again.
+      const sticky = found && !faults.noDemoteFloor && rowFloor !== undefined && found.epoch <= rowFloor ? null : found
       if (sticky) {
         const cell = cellById.get(sticky.cellId)!
         // The map's own view of the cell's incarnation: a restart not yet polled answers stale,
@@ -787,6 +798,9 @@ export async function runReservePlacementSimulation(
     if (result.calls > RESERVE_MAX_TRIES) violate(6, `${result.calls} reserve calls in one request`)
     if (result.kind === 'placed') {
       report.reservePlacements += 1
+      if (rowFloor !== undefined && result.epoch <= rowFloor) {
+        violate(8, `${host.id} re-placed @${result.epoch}, not above the row @${rowFloor} it was demoted behind`)
+      }
       supersede(director, host.id, result.cellId, result.epoch)
       return { kind: 'cell', cellId: result.cellId, epoch: result.epoch, calls: result.calls }
     }
