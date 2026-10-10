@@ -11,7 +11,8 @@ export type {
   CodexAccountSummary,
   AccountsSnapshot,
   ProviderKey,
-  UsageBarState
+  UsageBarState,
+  UsageWindowKey
 } from './account-usage-state'
 export {
   decodeAccountsSnapshot,
