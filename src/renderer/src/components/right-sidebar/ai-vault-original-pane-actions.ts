@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import { findFolderWorkspaceOwner } from '@/lib/folder-workspace-runtime-owner'
 import { useAppStore } from '@/store'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import { findStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
@@ -117,10 +118,11 @@ function revealSessionWorkspace(workspaceId: string): boolean {
   if (activateAndRevealWorkspace(workspaceId) !== false) {
     return true
   }
-  // A folder that still exists was refused for its path, and folder activation already said why.
+  // Folder activation explains a refusal itself once it resolves the folder; anything else is gone.
+  const scope = parseWorkspaceKey(workspaceId)
   const reported =
-    parseWorkspaceKey(workspaceId)?.type === 'folder' &&
-    Boolean(useAppStore.getState().getKnownWorktreeById(workspaceId))
+    scope?.type === 'folder' &&
+    findFolderWorkspaceOwner(useAppStore.getState(), scope.folderWorkspaceId) !== null
   if (!reported) {
     toast.error(
       translate(

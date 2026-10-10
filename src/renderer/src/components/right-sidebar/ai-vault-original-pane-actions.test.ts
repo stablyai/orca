@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   activateAndRevealWorkspace: vi.fn<(workspaceId: string) => unknown>(),
   toastError: vi.fn<(message: string) => void>(),
-  knownWorkspaceIds: new Set<string>()
+  folderWorkspaces: [] as { id: string; projectGroupId: string; executionHostId: string }[]
 }))
 
 vi.mock('@/lib/worktree-activation', () => ({
@@ -27,7 +27,9 @@ vi.mock('@/store', () => {
     tabsByWorktree: {},
     terminalLayoutsByTabId: {},
     unifiedTabsByWorktree: {},
-    getKnownWorktreeById: (id: string) => (mocks.knownWorkspaceIds.has(id) ? { id } : undefined)
+    get folderWorkspaces() {
+      return mocks.folderWorkspaces
+    }
   }
   return {
     useAppStore: Object.assign((select: (s: typeof state) => unknown) => select(state), {
@@ -38,10 +40,14 @@ vi.mock('@/store', () => {
 
 import { useAiVaultOriginalPaneActions } from './ai-vault-original-pane-actions'
 
+function folder(executionHostId: string) {
+  return { id: 'folder-1', projectGroupId: 'group-1', executionHostId }
+}
+
 describe('jumpToWorktree', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.knownWorkspaceIds.clear()
+    mocks.folderWorkspaces = []
   })
 
   it('activates folder workspaces through the workspace activator', () => {
@@ -54,19 +60,22 @@ describe('jumpToWorktree', () => {
 
   it('leaves a refused folder to the toast folder activation already showed', () => {
     mocks.activateAndRevealWorkspace.mockReturnValue(false)
-    mocks.knownWorkspaceIds.add('folder:folder-1')
+    mocks.folderWorkspaces = [folder('local')]
     const { result } = renderHook(() => useAiVaultOriginalPaneActions())
     result.current.jumpToWorktree('folder:folder-1')
     expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
-  it.each(['folder:gone', 'repo-1::/repo/gone'])(
-    'reports a workspace that no longer exists (%s)',
-    (id) => {
-      mocks.activateAndRevealWorkspace.mockReturnValue(false)
-      const { result } = renderHook(() => useAiVaultOriginalPaneActions())
-      result.current.jumpToWorktree(id)
-      expect(mocks.toastError).toHaveBeenCalledWith('Worktree is no longer available.')
-    }
-  )
+  it.each([
+    ['folder:gone', []],
+    ['repo-1::/repo/gone', []],
+    // The same folder id on two hosts: activation cannot pick one and returns before any toast.
+    ['folder:folder-1', [folder('local'), folder('runtime:env-2')]]
+  ])('reports a workspace that is gone or has no single owner (%s)', (id, folders) => {
+    mocks.folderWorkspaces = folders
+    mocks.activateAndRevealWorkspace.mockReturnValue(false)
+    const { result } = renderHook(() => useAiVaultOriginalPaneActions())
+    result.current.jumpToWorktree(id)
+    expect(mocks.toastError).toHaveBeenCalledWith('Worktree is no longer available.')
+  })
 })
