@@ -64,7 +64,8 @@ function recordRendererError(event: ErrorEvent): void {
   if (
     /^ResizeObserver loop (?:limit exceeded|completed with undelivered notifications)\.?$/i.test(
       event.message
-    )
+    ) ||
+    /Invalid guestInstanceId/i.test(event.message)
   ) {
     event.preventDefault()
     return
