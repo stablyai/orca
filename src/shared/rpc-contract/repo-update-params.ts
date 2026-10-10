@@ -52,7 +52,8 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
         .optional(),
       upstream: RepoUpstream,
       hookSettings: z.unknown().optional(),
-      worktreeBaseRef: OptionalString,
+      // Why nullable: JSON drops an undefined key, so null is the wire sentinel that clears the pin.
+      worktreeBaseRef: OptionalString.nullable().optional(),
       worktreeBasePath: OptionalString,
       kind: z.enum(['git', 'folder']).optional(),
       symlinkPaths: z.array(z.string()).optional(),
