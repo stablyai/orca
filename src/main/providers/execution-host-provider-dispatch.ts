@@ -38,7 +38,7 @@ import {
 } from '../../shared/execution-host'
 import { createLocalFilesystemProvider } from './local-filesystem-provider'
 import { createLocalGitProvider } from './local-git-provider'
-import { getSshGitProvider, SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE } from './ssh-git-dispatch'
+import { getSshGitProvider, sshGitProviderMissingError } from './ssh-git-dispatch'
 import type { SshGitProvider } from './ssh-git-provider'
 import {
   getSshFilesystemProvider,
@@ -140,7 +140,7 @@ export function requireGitProviderForHost(hostId: string | null | undefined): IG
     throw new ExecutionHostNotDispatchableError(route.hostId)
   }
   if (!route.provider) {
-    throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+    throw sshGitProviderMissingError(route.connectionId)
   }
   return route.provider
 }
