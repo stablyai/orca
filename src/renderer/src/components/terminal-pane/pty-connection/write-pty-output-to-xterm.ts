@@ -1,15 +1,14 @@
 import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-delivery-credit'
 import { nativeWindowsRewriteNeedsFollowupRenderRefresh } from '@/lib/pane-manager/terminal-complex-script'
-import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
-import { RESET_TERMINAL_CURSOR_STYLE } from '../../../../../shared/terminal-mode-reset-profiles'
+import {
+  queueTerminalOutputParsedCallback,
+  writeTerminalOutput
+} from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import { resetTerminalCursorStyle } from '../terminal-cursor-style-reset'
 import { forceFullViewportPresent } from '@/lib/pane-manager/terminal-render-pause-release'
 
 import { FOREGROUND_SYNCHRONIZED_FRAME_INTERACTIVE_WINDOW_MS } from './foreground-output-budgets'
-import {
-  shouldWritePtyOutputForeground,
-  scanSynchronizedForegroundOutput,
-  containsCursorRestore
-} from './foreground-output-scan'
+import { scanSynchronizedForegroundOutput, containsCursorRestore } from './foreground-output-scan'
 import { containsHiddenStartupRendererQuery } from './hidden-startup-renderer-query'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -126,9 +125,19 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
     if (session.disposed) {
       return
     }
-    session.writePtyOutputToXterm(
-      RESET_TERMINAL_CURSOR_STYLE,
-      shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
-    )
+    const terminal = session.pane.terminal
+    const ptyId = session.transport.getPtyId()
+    const generation = session.transportStreamGeneration
+    queueTerminalOutputParsedCallback(terminal, () => {
+      if (
+        session.disposed ||
+        session.pane.terminal !== terminal ||
+        session.transport.getPtyId() !== ptyId ||
+        session.transportStreamGeneration !== generation
+      ) {
+        return
+      }
+      resetTerminalCursorStyle(terminal)
+    })
   }
 }

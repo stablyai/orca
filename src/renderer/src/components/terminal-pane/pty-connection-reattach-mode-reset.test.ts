@@ -851,14 +851,12 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(20)
 
     expect(window.api.pty.signal).toHaveBeenCalledWith('tab-pty', 'SIGWINCH')
-    expect(pane.terminal.write).not.toHaveBeenCalledWith(
-      RESET_TERMINAL_CURSOR_STYLE,
-      expect.any(Function)
-    )
+    pane.terminal.write.mockClear()
 
     await new Promise((resolve) => setTimeout(resolve, 300))
 
-    expect(pane.terminal.write).toHaveBeenCalledWith(
+    expect(pane.terminal.write).toHaveBeenCalledWith(new Uint8Array(0), expect.any(Function))
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
       RESET_TERMINAL_CURSOR_STYLE,
       expect.any(Function)
     )

@@ -1,3 +1,4 @@
+import type { Terminal } from '@xterm/xterm'
 import {
   failTerminalWriteStallWatch,
   isTerminalWritePipelineCertifiedDead,
@@ -8,12 +9,14 @@ import { flushTerminalOutputImpl } from './pane-terminal-output-flusher'
 import { writeTerminalOutputImpl } from './pane-terminal-output-writer'
 import {
   requestRegisteredTerminalBacklogRecovery,
+  queuedByTerminal,
   type TerminalOutputTarget,
   type WriteTerminalOutputOptions
 } from './pane-terminal-output-queue-registry'
 // Why this bare import: pane-terminal-output-drain registers the drain runner that the registry's
 // scheduleDrain invokes, and this facade is every consumer's entry point into the scheduler graph.
 import './pane-terminal-output-drain'
+import { runGuardedWriteCompletionStep } from './xterm-write-callback-guard'
 
 export {
   ALWAYS_REFRESH_FOREGROUND_SYNCHRONOUSLY,
@@ -66,6 +69,36 @@ export function flushTerminalOutput(
 export function requestTerminalBacklogRecovery(terminal: TerminalOutputTarget): void {
   exposeDebugApi()
   requestRegisteredTerminalBacklogRecovery(terminal)
+}
+
+/** Queue a parser-side action; discarding its pending output also cancels the action. */
+export function queueTerminalOutputParsedCallback(
+  terminal: Pick<Terminal, 'write'>,
+  callback: () => void
+): void {
+  if (isTerminalWritePipelineCertifiedDead(terminal)) {
+    return
+  }
+  const run = (): void => runGuardedWriteCompletionStep('queued-parser-action', callback)
+  const entry = queuedByTerminal.get(terminal)
+  const last = entry && entry.chunkIndex < entry.chunks.length ? entry.chunks.at(-1) : undefined
+  if (last) {
+    const previous = last.onParsed
+    last.parseBarrier = true
+    last.onParsed = () => {
+      if (previous) {
+        runGuardedWriteCompletionStep('before-queued-parser-action', previous)
+      }
+      run()
+    }
+    return
+  }
+  // A truthy empty buffer survives xterm's resize flush; an empty string stops its drain.
+  try {
+    terminal.write(new Uint8Array(0), run)
+  } catch {
+    failTerminalWriteStallWatch(terminal)
+  }
 }
 
 export function waitForTerminalOutputParsed(terminal: TerminalOutputTarget): Promise<void> {
