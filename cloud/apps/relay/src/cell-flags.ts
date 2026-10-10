@@ -36,6 +36,34 @@ const CellFlagsSchema = z.object({
 })
 const KNOWN_FLAG_KEYS = new Set(Object.keys(CellFlagsSchema.shape))
 
+export type SupportedCellFlag =
+  | { type: 'boolean' }
+  | { type: 'enum'; values: string[] }
+  | { type: 'number'; min?: number; max?: number; integer?: boolean }
+
+// What this image accepts, read from the schema itself: the flag tool refuses a key or value
+// the cell would drop or void before it writes.
+export function supportedCellFlags(): Record<string, SupportedCellFlag> {
+  const supported: Record<string, SupportedCellFlag> = {}
+  for (const [key, field] of Object.entries(CellFlagsSchema.shape)) {
+    let inner: z.ZodTypeAny = field
+    while (inner instanceof z.ZodDefault || inner instanceof z.ZodOptional) {
+      inner = inner instanceof z.ZodDefault ? inner.removeDefault() : inner.unwrap()
+    }
+    if (inner instanceof z.ZodBoolean) supported[key] = { type: 'boolean' }
+    else if (inner instanceof z.ZodEnum) supported[key] = { type: 'enum', values: [...inner.options] }
+    else if (inner instanceof z.ZodNumber) {
+      supported[key] = {
+        type: 'number',
+        ...(inner.minValue === null ? {} : { min: inner.minValue }),
+        ...(inner.maxValue === null ? {} : { max: inner.maxValue }),
+        ...(inner.isInt ? { integer: true } : {})
+      }
+    }
+  }
+  return supported
+}
+
 export function cellFlagObjectName(cellId: string): string {
   return `cells/${cellId}.json`
 }

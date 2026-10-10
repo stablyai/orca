@@ -345,7 +345,16 @@ describe('cell seat feed', () => {
       headers: { authorization: 'Bearer deploy-token', 'content-type': 'application/json' },
       body: JSON.stringify({ v: 1 })
     })
-    expect(await runtime.json()).toMatchObject({ flagsApplied: applied })
+    expect(await runtime.json()).toMatchObject({
+      flagsApplied: applied,
+      // What the flag tool checks a write against before it writes.
+      supportedFlags: {
+        readinessLocal: { type: 'boolean' },
+        ticketCheck: { type: 'enum', values: ['off', 'shadow'] },
+        rejectionFence: { type: 'boolean' },
+        readTimeoutMarginMs: { type: 'number', min: 1_000, max: 60_000, integer: true }
+      }
+    })
   })
 
   it('accepts only the directors rehome identity, verified once per poll', async () => {
