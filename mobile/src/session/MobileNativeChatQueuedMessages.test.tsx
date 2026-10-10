@@ -223,7 +223,7 @@ describe('MobileNativeChatQueuedMessages', () => {
         }
       ],
       [],
-      { pendingPrompt: false, agentWorking: false }
+      { agentWorking: false }
     )
     const mounted = await mount({ cards: [waiting!], onSend: vi.fn(async () => true) })
     expect(texts(mounted).filter((text) => text === 'Send' || text === 'Steer')).toEqual(['Steer'])
