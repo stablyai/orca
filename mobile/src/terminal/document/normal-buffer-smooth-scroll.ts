@@ -52,13 +52,6 @@ export function applyNormalBufferScrollDelta(scope: TerminalDocumentScope, delta
       scope.smoothScrollOffsetY = 0
     }
   }
-  const limit = effectiveCellH - 1
-  if (scope.smoothScrollOffsetY > limit) {
-    scope.smoothScrollOffsetY = limit
-  }
-  if (scope.smoothScrollOffsetY < -limit) {
-    scope.smoothScrollOffsetY = -limit
-  }
   updateScrollIndicator(scope, true)
   return true
 }
