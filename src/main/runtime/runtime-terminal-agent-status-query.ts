@@ -43,6 +43,8 @@ type Dependencies = {
   ): { status: AgentStatus | null; updatedAt: number } | null | undefined
   isRunning(handle: string): Promise<boolean>
   getTitleDisplayClear(ptyId: string): TitleDisplayClear | null
+  /** Stamps blocked text the PTY's throttled scan has not yet judged. */
+  flushPendingBlockedStamp(ptyId: string): void
 }
 
 export class RuntimeTerminalAgentStatusQuery {
@@ -171,6 +173,7 @@ export class RuntimeTerminalAgentStatusQuery {
     expectedPtyId: string,
     displayClear: TitleDisplayClear | null = null
   ): RuntimeTerminalAgentStatusSnapshot {
+    this.deps.flushPendingBlockedStamp(expectedPtyId)
     const live = this.deps.getLivePty(handle)
     if (live) {
       if (!live.pty.connected || live.pty.ptyId !== expectedPtyId) {
