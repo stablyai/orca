@@ -349,6 +349,7 @@ describe('cell seat feed', () => {
     })
     expect(await runtime.json()).toMatchObject({
       flagsApplied: applied,
+      databasePoolMax: expect.any(Number),
       // What the flag tool checks a write against before it writes.
       supportedFlags: {
         readinessLocal: { type: 'boolean' },
