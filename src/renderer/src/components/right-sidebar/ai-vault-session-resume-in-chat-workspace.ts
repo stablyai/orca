@@ -8,6 +8,7 @@ import { useAppStore } from '@/store'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { normalizeExecutionHostId } from '../../../../shared/execution-host'
 import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
+import { canOpenAiVaultSessionHistoryChat } from './ai-vault-session-history-chat'
 import { STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { resolveAiVaultTargetWorkspacePath } from './ai-vault-session-launch-target'
 import {
@@ -33,6 +34,16 @@ export function resolveAiVaultSessionResumeInChatForWorkspace(args: {
   const targetWorkspacePath = targetWorkspaceId
     ? resolveAiVaultTargetWorkspacePath(args.targetState, targetWorkspaceId)
     : null
+  // A read-only chat tab has no host conversation to find, so the owner/capability questions a
+  // structured resume asks do not apply; the eligibility answer alone decides.
+  if (canOpenAiVaultSessionHistoryChat(args.session)) {
+    return resolveAiVaultSessionResumeInChatEligibility({
+      session: args.session,
+      targetWorkspaceId,
+      targetWorkspacePath,
+      structuredRouteAvailable: targetWorkspaceId !== null
+    })
+  }
   const state = useAppStore.getState()
   // The conversation lives on the host that recorded it, so only a chat on that same host can
   // resume it, the rule the terminal resume follows; that host also answers for the capability.

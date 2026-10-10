@@ -1,4 +1,5 @@
 import { isAntigravityReferenceSession } from '../../../../shared/antigravity-session-origin'
+import { canOpenAiVaultSessionHistoryChat } from './ai-vault-session-history-chat'
 // Whether an Agent Session History row can be resumed into a structured native chat, and where.
 //
 // Separate from `ai-vault-session-resume.ts` because the answer is not the same question: the
@@ -71,6 +72,20 @@ export function resolveAiVaultSessionResumeInChatEligibility(args: {
   structuredRouteAvailable: boolean
 }): AiVaultResumeInChatEligibility {
   const { session } = args
+  // A read-only chat tab needs no host adoption — the conversation renders from the agent's own
+  // store — so the structured-route questions (host, capabilities, workspace) do not apply.
+  if (canOpenAiVaultSessionHistoryChat(session)) {
+    if (session.executionHostId !== LOCAL_EXECUTION_HOST_ID) {
+      return { available: false, reason: 'remote' }
+    }
+    if (!isAiVaultSessionResumableContent(session)) {
+      return { available: false, reason: 'empty' }
+    }
+    if (!args.targetWorkspaceId) {
+      return { available: false, reason: 'workspace' }
+    }
+    return { available: true, workspaceId: args.targetWorkspaceId }
+  }
   if (isAntigravityReferenceSession(session) || !isAgentSessionHandleProvider(session.agent)) {
     return { available: false, reason: 'agent' }
   }

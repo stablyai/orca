@@ -24,6 +24,7 @@ import { prepareAiVaultSessionContinuation } from './ai-vault-session-continuati
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
+import { openAiVaultSessionHistoryChatForRow } from './ai-vault-session-history-chat-open'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import {
   activateAiVaultResumeWorkspace,
@@ -197,6 +198,11 @@ export function useAiVaultSessionLaunchActions({
 
   const handleResumeInNewChat = useCallback(
     (session: AiVaultSession, targetWorktreeId?: string): void => {
+      // No structured host to adopt into: the row opens as a read-only chat tab over the
+      // agent's own store, which is the whole conversation, not a fork of it.
+      if (openAiVaultSessionHistoryChatForRow(session)) {
+        return
+      }
       if (!isAgentSessionHandleProvider(session.agent)) {
         return
       }
