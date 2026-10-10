@@ -14,6 +14,8 @@ test('latest input request shortcut opens the exact split pane and keeps the req
   orcaPage,
   electronApp
 }, testInfo) => {
+  // Isolated Electron profile setup and teardown can dominate this keyboard journey on loaded hosts.
+  test.setTimeout(180_000)
   await waitForSessionReady(orcaPage)
   await waitForActiveWorktree(orcaPage)
   await orcaPage.evaluate(async () => {
@@ -52,6 +54,7 @@ test('latest input request shortcut opens the exact split pane and keeps the req
   if (!olderPane || !latestPane) {
     throw new Error('Expected stable split pane identities')
   }
+  await orcaPage.clock.setFixedTime(new Date('2026-01-01T12:00:00Z'))
   await orcaPage.evaluate(
     ({ tabId, olderLeaf, latestLeaf }) => {
       const store = window.__store!
@@ -81,12 +84,16 @@ test('latest input request shortcut opens the exact split pane and keeps the req
   })
   await pressShortcut(orcaPage, 'KeyU', { shift: true })
   await expect(firstRow).toHaveAttribute('aria-current', 'page')
-  const clip = await orcaPage.evaluate(() => ({
-    x: 0,
-    y: 0,
-    width: Math.min(900, innerWidth),
-    height: Math.min(700, innerHeight)
-  }))
+  const sidebar = await orcaPage.locator('[data-worktree-sidebar]').boundingBox()
+  if (!sidebar) {
+    throw new Error('Expected visible workspace sidebar')
+  }
+  const clip = {
+    x: sidebar.x,
+    y: sidebar.y,
+    width: sidebar.width,
+    height: Math.min(650, sidebar.height)
+  }
   const before = testInfo.outputPath('latest-attention-before.png')
   await orcaPage.screenshot({ path: before, clip })
   await testInfo.attach('before', { path: before, contentType: 'image/png' })
