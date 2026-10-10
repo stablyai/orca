@@ -6,6 +6,11 @@ import { relayStatusCellUrl } from '../../../shared/mobile-relay-status'
 import type { RelayBrokerStatus } from './relay-session-broker'
 import type { RelayAccessTokenRefresh } from './relay-session-broker-contract'
 import { RelayHttpError, shouldRetryRelayConnectionError } from './relay-http-client'
+import {
+  RelayReadinessWaiters,
+  relayUnavailableReasonFor,
+  type RelayUnavailable
+} from './relay-readiness'
 import { RelayRetrySchedule } from './relay-retry-schedule'
 import { RelayLingerTimer } from './relay-linger-timer'
 import { relayIdentityKey, type RelayAuthContext } from './relay-auth-identity'
@@ -29,6 +34,10 @@ type RelayAuthCoordinatorOptions = {
   random?: () => number
 }
 
+export type RelayReadiness =
+  | { ready: true; broker: CoordinatedRelayBroker }
+  | ({ ready: false } & RelayUnavailable)
+
 type BrokerOwnership = {
   identityKey: string
   broker: CoordinatedRelayBroker | null
@@ -51,6 +60,9 @@ export class RelayAuthCoordinator {
   private latestReconcile: Promise<void> = Promise.resolve()
   private readonly linger = new RelayLingerTimer()
   private readonly retry: RelayRetrySchedule
+  // Why the latest reconcile left no live broker; cleared when one registers.
+  private unavailableReason: RelayUnavailable['reason'] | null = null
+  private readonly readinessWaiters = new RelayReadinessWaiters()
   private stopped = false
 
   constructor(options: RelayAuthCoordinatorOptions) {
@@ -87,6 +99,9 @@ export class RelayAuthCoordinator {
     this.retry.reset()
     this.invalidatePendingOwnerships()
     this.invalidateOwnership(hostCloseReason)
+    this.unavailableReason =
+      hostCloseReason === RELAY_HOST_CLOSE_REASON.SIGNED_OUT ? 'signed_out' : null
+    this.readinessWaiters.releaseAll()
     this.publish('offline')
   }
 
@@ -128,19 +143,45 @@ export class RelayAuthCoordinator {
     this.beginReconcile(false)
   }
 
+  readiness(): RelayReadiness {
+    const broker = this.getLiveBroker()
+    const reason = this.unavailableReason ?? 'control_not_active'
+    return broker ? { ready: true, broker } : { ready: false, reason, retryAt: this.retry.retryAt }
+  }
+
+  // Awaits the reconcile in flight (and any it was superseded by), never a retry.
   async waitForLiveBroker(): Promise<CoordinatedRelayBroker | null> {
-    while (!this.stopped) {
-      const broker = this.getLiveBroker()
-      if (broker) {
-        return broker
-      }
-      const pending = this.latestReconcile
+    let pending: Promise<void> | null = null
+    while (!this.stopped && !this.getLiveBroker() && pending !== this.latestReconcile) {
+      pending = this.latestReconcile
       await pending
-      if (pending === this.latestReconcile) {
-        return this.getLiveBroker()
+    }
+    return this.stopped ? null : this.getLiveBroker()
+  }
+
+  // Why waitMs: a cold start that fails once arms a retry seconds away; a caller
+  // with time to spare waits for it instead of reporting the first failure. The
+  // deadline bounds every wait, and a fence releases the caller at once.
+  async waitForReadiness(waitMs: number): Promise<RelayReadiness> {
+    const deadline = Date.now() + waitMs
+    while (!this.stopped && !this.getLiveBroker()) {
+      const pending = this.latestReconcile
+      if (!(await this.readinessWaiters.until(pending, deadline))) {
+        break
+      }
+      if (pending !== this.latestReconcile) {
+        continue
+      }
+      const retryAt = this.retry.retryAt
+      if (this.getLiveBroker() || retryAt === null || retryAt > deadline) {
+        break
+      }
+      const retried = await this.readinessWaiters.until(this.retry.settled(), deadline)
+      if (!retried || pending === this.latestReconcile) {
+        break
       }
     }
-    return null
+    return this.readiness()
   }
 
   stop(): void {
@@ -159,12 +200,14 @@ export class RelayAuthCoordinator {
         this.linger.cancel()
         this.retry.reset()
         this.invalidateOwnership(authLossCloseReason(context))
+        this.unavailableReason = context ? 'not_entitled' : 'signed_out'
         this.publish('offline')
         return
       }
       const nextIdentityKey = relayIdentityKey(context.identity)
       if (expectedIdentityKey && nextIdentityKey !== expectedIdentityKey) {
         this.retry.reset()
+        this.unavailableReason = 'identity_changed'
         this.publish('offline')
         return
       }
@@ -188,6 +231,7 @@ export class RelayAuthCoordinator {
         (this.ownership.broker?.isLive?.() ?? true)
       ) {
         this.retry.reset()
+        this.unavailableReason = null
         this.publish('registered')
         return
       }
@@ -221,6 +265,7 @@ export class RelayAuthCoordinator {
       }
       this.ownership = ownership
       this.retry.reset()
+      this.unavailableReason = null
       this.publish('registered')
     } catch (error) {
       if (this.isEpochCurrent(epoch)) {
@@ -230,6 +275,7 @@ export class RelayAuthCoordinator {
           '[relay] broker reconcile failed:',
           error instanceof Error ? error.message : String(error)
         )
+        this.unavailableReason = relayUnavailableReasonFor(error)
         this.publish('offline')
         if (shouldRetryRelayConnectionError(error)) {
           const retryAfterMs = error instanceof RelayHttpError ? (error.retryAfterMs ?? 0) : 0

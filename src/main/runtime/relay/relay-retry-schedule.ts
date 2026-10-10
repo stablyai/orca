@@ -6,11 +6,24 @@ const RETRY_MAX_MS = 5 * 60_000
 export class RelayRetrySchedule {
   private timer: ReturnType<typeof setTimeout> | null = null
   private attempt = 0
+  private dueAt: number | null = null
+  private readonly settledWaiters = new Set<() => void>()
 
   constructor(private readonly random: () => number = Math.random) {}
 
   get pending(): boolean {
     return this.timer !== null
+  }
+
+  get retryAt(): number | null {
+    return this.dueAt
+  }
+
+  // Resolves once the pending retry has run or was cancelled.
+  settled(): Promise<void> {
+    return this.timer
+      ? new Promise((resolve) => this.settledWaiters.add(resolve))
+      : Promise.resolve()
   }
 
   schedule(retryAfterMs: number, retry: () => void): void {
@@ -20,14 +33,13 @@ export class RelayRetrySchedule {
     const exponent = Math.min(this.attempt, Math.ceil(Math.log2(RETRY_MAX_MS / RETRY_BASE_MS)))
     const capMs = Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** exponent)
     this.attempt++
-    const jitterMs = Math.floor(this.random() * (capMs + 1))
-    this.timer = setTimeout(
-      () => {
-        this.timer = null
-        retry()
-      },
-      Math.max(jitterMs, retryAfterMs)
-    )
+    const delayMs = Math.max(Math.floor(this.random() * (capMs + 1)), retryAfterMs)
+    this.dueAt = Date.now() + delayMs
+    this.timer = setTimeout(() => {
+      this.clearTimer()
+      retry()
+      this.settle()
+    }, delayMs)
   }
 
   reset(): void {
@@ -37,8 +49,24 @@ export class RelayRetrySchedule {
   // Keeps the attempt count: a superseding reconcile still backs off from it.
   cancel(): void {
     if (this.timer) {
+      this.clearTimer()
+      this.settle()
+    }
+  }
+
+  private clearTimer(): void {
+    if (this.timer) {
       clearTimeout(this.timer)
-      this.timer = null
+    }
+    this.timer = null
+    this.dueAt = null
+  }
+
+  private settle(): void {
+    const waiters = [...this.settledWaiters]
+    this.settledWaiters.clear()
+    for (const resolve of waiters) {
+      resolve()
     }
   }
 }

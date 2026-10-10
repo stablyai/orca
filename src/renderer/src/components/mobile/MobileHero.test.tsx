@@ -235,6 +235,28 @@ describe('HeroFlow height', () => {
     expect(screen.getByRole('button', { name: 'Use LAN' })).toBeEnabled()
   })
 
+  it('names a signed-out or unentitled desktop instead of offering a futile retry', () => {
+    renderFlow(1, {
+      relayMintFailure: {
+        code: 'relay_signed_out',
+        stage: 'create_pairing_relay',
+        message: 'Relay pairing invite request failed'
+      }
+    })
+    expect(screen.getByRole('alert')).toHaveTextContent('Sign in again to use Orca Relay')
+    expect(screen.queryByRole('button', { name: 'Retry Relay' })).toBeNull()
+    cleanup()
+    renderFlow(1, {
+      relayMintFailure: {
+        code: 'relay_not_entitled',
+        stage: 'create_pairing_relay',
+        message: 'Relay pairing invite request failed'
+      }
+    })
+    expect(screen.getByRole('alert')).toHaveTextContent('isn’t included with this Orca account')
+    expect(screen.queryByRole('button', { name: 'Retry Relay' })).toBeNull()
+  })
+
   it('hides the mint-failure notice when a Relay QR is shown', () => {
     renderFlow(1, { pairQrDataUrl: 'data:image/png;base64,qr' })
     expect(screen.queryByTestId('relay-mint-failure-notice')).not.toBeInTheDocument()
