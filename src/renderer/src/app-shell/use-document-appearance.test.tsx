@@ -69,10 +69,29 @@ describe('useDocumentAppearance', () => {
       })
     })
 
-    expect(mocks.applyDocumentTheme).toHaveBeenLastCalledWith('light')
+    expect(mocks.applyDocumentTheme).toHaveBeenLastCalledWith('light', {
+      interfaceThemes: { dark: 'default', light: 'default' }
+    })
     expect(mocks.applyDocumentTheme).toHaveBeenCalledTimes(2)
     expect(mocks.buildAppFontFamily).toHaveBeenLastCalledWith('Monaco')
     expect(mocks.buildAppFontFamily).toHaveBeenCalledTimes(2)
+    unmount()
+  })
+
+  it('re-applies the theme when an interface theme changes', () => {
+    const { unmount } = renderHook(() => useDocumentAppearance())
+
+    act(() => {
+      const settings = useAppStore.getState().settings!
+      useAppStore.setState({
+        settings: { ...settings, interfaceThemeDark: 'catppuccin-mocha' }
+      })
+    })
+
+    expect(mocks.applyDocumentTheme).toHaveBeenCalledTimes(2)
+    expect(mocks.applyDocumentTheme).toHaveBeenLastCalledWith('dark', {
+      interfaceThemes: { dark: 'catppuccin-mocha', light: 'default' }
+    })
     unmount()
   })
 })

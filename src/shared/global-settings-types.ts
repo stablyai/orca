@@ -70,6 +70,10 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   branchPrefix: BranchPrefixStrategy
   branchPrefixCustom: string
   theme: 'system' | 'dark' | 'light'
+  /** Interface palette id used while the resolved theme is dark (see shared/interface-themes). */
+  interfaceThemeDark: string
+  /** Interface palette id used while the resolved theme is light. */
+  interfaceThemeLight: string
   /** Controls the left sidebar surface without changing terminal brightness. */
   leftSidebarAppearanceMode: LeftSidebarAppearanceMode
   leftSidebarTintColor?: string

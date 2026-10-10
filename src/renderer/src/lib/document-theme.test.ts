@@ -40,6 +40,10 @@ class FakeClassList {
   contains(token: string): boolean {
     return this.tokens.has(token)
   }
+
+  [Symbol.iterator](): Iterator<string> {
+    return this.tokens.values()
+  }
 }
 
 function createThemeRoot(): { classList: FakeClassList } {
@@ -151,5 +155,41 @@ describe('document theme', () => {
     frames.flushNextFrame()
     expect(root.classList.contains(THEME_TRANSITION_DISABLED_CLASS)).toBe(false)
     expect(frames.pendingCount()).toBe(0)
+  })
+
+  it('replaces interface theme classes when themes are given', () => {
+    const root = createThemeRoot()
+
+    applyDocumentTheme('dark', {
+      root,
+      disableTransitions: false,
+      interfaceThemes: { dark: 'catppuccin-mocha', light: 'default' }
+    })
+    expect(root.classList.contains('ui-dark-catppuccin-mocha')).toBe(true)
+    expect(root.classList.contains('ui-light-default')).toBe(true)
+
+    applyDocumentTheme('dark', {
+      root,
+      disableTransitions: false,
+      interfaceThemes: { dark: 'catppuccin-frappe', light: 'catppuccin-latte' }
+    })
+    expect([...root.classList].filter((token) => token.startsWith('ui-')).sort()).toEqual([
+      'ui-dark-catppuccin-frappe',
+      'ui-light-catppuccin-latte'
+    ])
+  })
+
+  it('leaves interface theme classes alone when themes are omitted', () => {
+    const root = createThemeRoot()
+
+    applyDocumentTheme('dark', {
+      root,
+      disableTransitions: false,
+      interfaceThemes: { dark: 'catppuccin-mocha', light: 'catppuccin-latte' }
+    })
+    applyDocumentTheme('light', { root, disableTransitions: false })
+
+    expect(root.classList.contains('ui-dark-catppuccin-mocha')).toBe(true)
+    expect(root.classList.contains('ui-light-catppuccin-latte')).toBe(true)
   })
 })
