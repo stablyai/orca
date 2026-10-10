@@ -11,6 +11,7 @@ import {
   type NativeChatPendingSend
 } from './native-chat-pending'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
+import type { ReadState } from './native-chat-live-session-contract'
 
 /** How long a send whose write acknowledgment was lost waits for its row; the phone's hold matches. */
 export const NATIVE_CHAT_UNCONFIRMED_SEND_HOLD_MS = 20_000
@@ -21,9 +22,12 @@ const NO_NOTICES: ReadonlyMap<string, NativeChatDeliveryNotice> = new Map()
 export function useNativeChatPendingDelivery(args: {
   paneKey: string
   agent: AgentType
-  messages: NativeChatMessage[]
+  /** `readPhase` 'ready' means an empty `messages` is real history, not a read still loading. */
+  session: { messages: NativeChatMessage[]; readPhase?: ReadState['phase'] }
 }) {
-  const { paneKey, agent, messages } = args
+  const { paneKey, agent } = args
+  const { messages } = args.session
+  const transcriptSettled = args.session.readPhase === 'ready'
   const scope = useMemo(() => ({ paneKey, agent }), [paneKey, agent])
   const [pending, setPending] = useState(() => readPendingSendCache(scope))
   useEffect(() => setPending(readPendingSendCache(scope)), [scope])
@@ -51,12 +55,13 @@ export function useNativeChatPendingDelivery(args: {
         sentAt,
         afterMessageId: boundary?.id ?? null,
         afterMessageTimestamp: boundary?.timestamp ?? null,
+        ...(!boundary && transcriptSettled ? { afterEmptyTranscript: true as const } : {}),
         ...(imagePaths ? { imagePaths } : {})
       }
       setPending(appendPendingSendCache(scope, entry))
       return entry.id
     },
-    [messages, scope]
+    [messages, scope, transcriptSettled]
   )
   const cancel = useCallback(
     (id: string) => save((entries) => entries.filter((entry) => entry.id !== id)),

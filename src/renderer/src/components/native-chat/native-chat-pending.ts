@@ -40,6 +40,9 @@ export type NativeChatPendingSend = {
   afterMessageId?: string | null
   /** Timestamp of that boundary in the transcript host's clock domain. */
   afterMessageTimestamp?: number | null
+  /** The transcript read had settled with no rows when this was sent, so every row is after
+   *  it. Distinct from a still-loading read, whose empty list says nothing about history. */
+  afterEmptyTranscript?: true
   /** 1-based occurrence among identical sends sharing the same boundary. */
   matchingOccurrence?: number
   /** Shared time boundary when that message boundary is unavailable. */
@@ -106,7 +109,10 @@ function messagesAfterPendingBoundary(
     return messages
   }
   if (pending.afterMessageId === null) {
-    return messages.filter((message) => messageIsAfterPendingTimestamp(message, pending))
+    // Why: the send time is this client's clock and row timestamps are the host's (#11519).
+    return pending.afterEmptyTranscript
+      ? messages
+      : messages.filter((message) => messageIsAfterPendingTimestamp(message, pending))
   }
   const boundaryIndex = messages.findIndex((message) => message.id === pending.afterMessageId)
   if (boundaryIndex !== -1) {

@@ -15,14 +15,17 @@ const boundary: NativeChatMessage = {
   timestamp: null,
   source: 'transcript'
 }
-const args = { paneKey: 'pane', agent: 'claude' as const, messages: [boundary] }
+const args = { paneKey: 'pane', agent: 'claude' as const }
 function userRow(text: string): NativeChatMessage {
   return { ...boundary, id: `user:${text}`, role: 'user', blocks: [{ type: 'text', text }] }
 }
 function render() {
-  return renderHook(({ messages }) => useNativeChatPendingDelivery({ ...args, messages }), {
-    initialProps: { messages: [boundary] }
-  })
+  return renderHook(
+    ({ messages }) => useNativeChatPendingDelivery({ ...args, session: { messages } }),
+    {
+      initialProps: { messages: [boundary] }
+    }
+  )
 }
 async function tick(ms: number) {
   await act(async () => {
@@ -39,6 +42,23 @@ afterEach(() => {
 })
 
 describe('terminal Chat pending delivery', () => {
+  it('records a send into a settled empty transcript as after every row', () => {
+    const { result } = renderHook(() =>
+      useNativeChatPendingDelivery({ ...args, session: { messages: [], readPhase: 'ready' } })
+    )
+    act(() => result.current.record('first'))
+    expect(result.current.pending[0]).toMatchObject({
+      afterMessageId: null,
+      afterEmptyTranscript: true
+    })
+  })
+  it('does not claim an empty boundary while the transcript is still loading', () => {
+    const { result } = renderHook(() =>
+      useNativeChatPendingDelivery({ ...args, session: { messages: [], readPhase: 'loading' } })
+    )
+    act(() => result.current.record('first'))
+    expect(result.current.pending[0]?.afterEmptyTranscript).toBeUndefined()
+  })
   it('never flags an ordinary send, such as one Claude queues mid-turn', async () => {
     const { result } = render()
     act(() => result.current.record('queued follow up'))

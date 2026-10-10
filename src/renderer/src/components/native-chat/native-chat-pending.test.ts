@@ -481,6 +481,27 @@ describe('pendingSendsAsMessages', () => {
     expect(prunePendingSends(pending, history)).toEqual(pending)
   })
 
+  // #11519: a first send into a settled empty transcript has no row to compare, and the
+  // host that writes the transcript may run a clock behind this one.
+  it('retires a send into a settled empty transcript whatever the host clock says', () => {
+    const fiveMinutes = 5 * 60_000
+    const pending = [
+      {
+        ...pendingOf('first-send', 'run tests'),
+        sentAt: 1_000_000,
+        afterMessageId: null,
+        afterEmptyTranscript: true as const
+      }
+    ]
+    const hostBehind = [
+      { ...userMessage('u1', 'run tests'), timestamp: 1_000_000 - fiveMinutes },
+      { ...assistantMessage('a1', 'passed'), timestamp: 1_000_000 - fiveMinutes + 10 }
+    ]
+
+    expect(pendingSendsAsMessages(pending, hostBehind)).toEqual([])
+    expect(prunePendingSends(pending, hostBehind)).toEqual([])
+  })
+
   it('uses the transcript boundary clock after pagination, not the renderer send clock', () => {
     const pending = [
       {
