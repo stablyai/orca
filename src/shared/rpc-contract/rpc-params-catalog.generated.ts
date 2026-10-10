@@ -560,7 +560,12 @@ import {
 } from './terminal-viewport-schemas-params'
 import { UpdaterCheckParams } from './updater-params'
 import { LayoutSubscribeParams, LayoutUnsubscribeParams } from './workspace-layout-params'
-import { WorkspacePortKillParams, WorkspacePortScanParams } from './workspace-ports-params'
+import {
+  WorkspacePortKillHostParams,
+  WorkspacePortKillParams,
+  WorkspacePortScanHostParams,
+  WorkspacePortScanParams
+} from './workspace-ports-params'
 import { WorktreeCreate, WorktreePrefetchCreateBase } from './worktree-create-params'
 import {
   WorktreeActivate,
@@ -1251,7 +1256,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'updater.getStatus': null,
   'updater.install': null,
   'workspacePorts.kill': WorkspacePortKillParams,
+  'workspacePorts.killHost': WorkspacePortKillHostParams,
   'workspacePorts.scan': WorkspacePortScanParams,
+  'workspacePorts.scanHost': WorkspacePortScanHostParams,
   'worktree.activate': WorktreeActivate,
   'worktree.create': WorktreeCreate,
   'worktree.detectedList': WorktreeDetectedListParams,
