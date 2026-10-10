@@ -31,8 +31,9 @@ const {
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scan reads only id, path and connectionId off the repo row.
 const repo = { id: 'repo-1', path: '/repos/one', displayName: 'one' } as Repo
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scan calls only the expectation capture; the metadata prune it feeds is mocked above.
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only ownership and expectation reads are real; pruning is mocked above.
 const store = {
+  getRepos: () => [repo],
   captureNativeLocalWorktreeMetadataScanExpectation: () => ({ repo: { id: repo.id }, metadata: [] })
 } as never
 

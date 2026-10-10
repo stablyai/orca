@@ -35,6 +35,10 @@ import { listRuntimeFolderWorkspaces } from './runtime-worktree-filesystem'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { resolveConfiguredWorktreeBasePaths } from '../../shared/worktree/configured-worktree-base-path'
 import { getRetiredNameRegistryForRepo } from '../worktree-name-retirement'
+import {
+  resolveRepoForConnection,
+  isCapturedRepoCurrent
+} from '../ipc/worktrees/listing/worktree-host-ownership'
 
 type Dependencies = {
   getStore(): RuntimeStore | null
@@ -42,6 +46,7 @@ type Dependencies = {
   resolveRepo(selector: string): Promise<Repo>
   selectRepos(selector: string): Repo[]
   scanRepo(repo: Repo): Promise<RuntimeWorktreeScanResult>
+  isRepoCurrent?(repo: Repo): boolean
   /** Hosts this runtime has repos or workspaces on, so a host with no rows is still named. */
   listKnownHostIds(): Iterable<ExecutionHostId>
 }
@@ -94,17 +99,7 @@ export class RuntimeManagedWorktreeQueries {
   }
 
   resolveRepoForConnection(selector: string, connectionId?: string | null): Promise<Repo> {
-    if (connectionId === undefined) {
-      return this.deps.resolveRepo(selector)
-    }
-    const wanted = connectionId?.trim() || null
-    const matches = this.deps
-      .selectRepos(selector)
-      .filter((repo) => (repo.connectionId?.trim() || null) === wanted)
-    if (matches.length !== 1) {
-      throw new Error(matches.length > 1 ? 'selector_ambiguous' : 'repo_not_found')
-    }
-    return Promise.resolve(matches[0])
+    return resolveRepoForConnection(this.deps, selector, connectionId)
   }
 
   async listDetected(
@@ -114,6 +109,19 @@ export class RuntimeManagedWorktreeQueries {
     const store = this.deps.getStore()
     if (!store) {
       throw new Error('runtime_unavailable')
+    }
+    const capturedRepo = { ...repo }
+    const isCurrent = () =>
+      this.deps.isRepoCurrent?.(capturedRepo) ??
+      isCapturedRepoCurrent(store, capturedRepo, getRepoExecutionHostId(capturedRepo))
+    const staleResult = (): DetectedWorktreeListResult => ({
+      repoId: repo.id,
+      authoritative: false,
+      source: 'metadata-fallback',
+      worktrees: []
+    })
+    if (!isCurrent()) {
+      return staleResult()
     }
     const settings = store.getSettings()
     const visibilityDefaults = this.visibilityDefaults(sourceDefaultsSupported)
@@ -145,9 +153,15 @@ export class RuntimeManagedWorktreeQueries {
         worktrees: projectResolvedWorktreeLineage(detected, store.getAllWorktreeLineage?.() ?? {})
       }
     }
-    const scan = await scanRuntimeWorktreesUntilNotOvertaken(store, repo, (target) =>
-      this.deps.scanRepo(target)
+    const scan = await scanRuntimeWorktreesUntilNotOvertaken(
+      store,
+      capturedRepo,
+      (target) => this.deps.scanRepo(target),
+      isCurrent
     )
+    if (!isCurrent()) {
+      return staleResult()
+    }
     // Why a still-overtaken scan is published non-authoritative rather than rejected: this method
     // has no stale reply, and a thrown error makes the client drop the repo's rows. Non-authoritative
     // rows purge nothing and light no indicator; the overtaking mutation's own change event, sent
@@ -162,8 +176,12 @@ export class RuntimeManagedWorktreeQueries {
           repo,
           gitWorktrees: scan.worktrees,
           scan: scan.metadataPruneExpectation,
-          scanGeneration: scan.scanGeneration
+          scanGeneration: scan.scanGeneration,
+          isCallerCurrent: isCurrent
         })
+      }
+      if (!isCurrent()) {
+        return staleResult()
       }
       pruneLineageForMissingRepoWorktrees(store as unknown as Store, repo, scan.worktrees)
     }

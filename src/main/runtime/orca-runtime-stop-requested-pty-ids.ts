@@ -151,6 +151,7 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     selectRepos: (selector) => this.selectReposBySelector(selector),
     scanRepo: (repo) => this.listRepoWorktreesForListing(repo),
+    isRepoCurrent: (repo) => this.isCurrentRepoRegistration(repo),
     listKnownHostIds: () => this.listKnownExecutionHostIds()
   })
 

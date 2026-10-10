@@ -27,6 +27,7 @@ import type { RepoLifecycleOperations } from './repo-lifecycle-operations'
 import { syncProjectHostSetupCompatibilityState } from './repo-lifecycle-operations'
 import { scheduleSave } from './write-scheduling'
 import { forgetSshConnectionGeneration } from '../../ssh/ssh-connection-generation'
+import { bumpLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
 
 type SshProfileOperationsRuntime = Pick<StoreRuntimeState, 'protectedSecrets' | 'state'>
 
@@ -119,7 +120,11 @@ export class SshProfileOperations {
         syncProjectHostSetupCompatibilityState(this[sshProfileOperationsContext].repos),
       scheduleSave: () => scheduleSave(this[sshProfileOperationsContext].scheduling)
     }
-    return reassignSshTargetIdOperation(operations, oldTargetId, newTargetId)
+    const repoIds = reassignSshTargetIdOperation(operations, oldTargetId, newTargetId)
+    for (const repoId of repoIds) {
+      bumpLocalWorktreeScanGeneration(repoId)
+    }
+    return repoIds
   }
 }
 

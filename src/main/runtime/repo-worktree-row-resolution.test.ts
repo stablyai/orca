@@ -6,6 +6,8 @@ import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import type { Store } from '../persistence'
 import { mergeWorktreeMetaForWrite } from '../persistence/loading-store/worktree-meta-write-normalization'
 import { buildDetectedGitWorktrees } from '../ipc/worktrees/listing/ssh-worktree-fallback'
+import { createCapturedRepoCurrentGuard } from '../ipc/worktrees/listing/worktree-host-ownership'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
 import {
   listStoredWorktreeRowsForRepo,
   resolveRepoWorktreeRows,
@@ -61,7 +63,14 @@ function createDeps(repos: Repo[]): RepoWorktreeRowDeps & {
     worktrees: [gitWorktree(owner.id === 'unrelated' ? '/unrelated/worktree' : '/same/worktree')]
   }))
   const listFolderWorkspaces = vi.fn<RepoWorktreeRowDeps['listFolderWorkspaces']>(() => [])
-  return { store, metaById, scanRepo, listFolderWorkspaces }
+  const isCurrent = createCapturedRepoCurrentGuard(store, repos)
+  return {
+    store,
+    metaById,
+    scanRepo,
+    listFolderWorkspaces,
+    isRepoCurrent: (owner) => isCurrent(owner, getRepoExecutionHostId(owner))
+  }
 }
 
 describe('host-qualified scoped worktree resolution', () => {
