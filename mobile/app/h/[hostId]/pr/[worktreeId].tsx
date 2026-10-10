@@ -1,5 +1,5 @@
 import { Redirect, useLocalSearchParams } from 'expo-router'
-import { firstParam } from '../../../../src/source-control/mobile-source-control-screen-state'
+import { firstParam } from '../../../../src/navigation/route-param-reader'
 
 // The Pull Request view is now a segment of the Source Control hub. This route
 // stays as a thin redirect so existing deep links land on the hub with the Pull

@@ -1,17 +1,13 @@
-import { z } from 'zod'
 import {
   connectRegisteredSshTarget,
   getRegisteredSshState,
   listRegisteredRemovedSshTargetLabels,
   listRegisteredSshTargets
 } from '../../../ssh/ssh-target-registry'
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import { getPublicSshError, getPublicSshState } from '../../public-ssh-state'
 import type { SshTargetSummary } from '../../../../shared/ssh-types'
-
-const SshTarget = z.object({
-  targetId: z.string().min(1)
-})
+import { SshTarget } from '../../../../shared/rpc-contract/ssh-params'
 
 // Why: `generation` stays optional on the wire — an old server simply omits it and its rows key on target id alone.
 function listRegisteredSshTargetSummaries(): SshTargetSummary[] {
@@ -29,9 +25,10 @@ function listRegisteredSshTargetSummaries(): SshTargetSummary[] {
   })
 }
 
-export const SSH_METHODS: RpcMethod[] = [
+export const SSH_METHODS = [
   defineMethod({
     name: 'ssh.getState',
+    permission: 'workspace',
     params: SshTarget,
     handler: (params) => ({
       state: getPublicSshState(getRegisteredSshState(params.targetId) ?? null)
@@ -39,6 +36,7 @@ export const SSH_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'ssh.connect',
+    permission: 'host-admin',
     params: SshTarget,
     handler: async (params) => {
       try {
@@ -51,18 +49,21 @@ export const SSH_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'ssh.listTargets',
+    permission: 'workspace',
     params: null,
     // Why: legacy clients can call this method directly, so it must preserve the same HUB-private secret boundary.
     handler: () => ({ targets: listRegisteredSshTargetSummaries() })
   }),
   defineMethod({
     name: 'ssh.listTargetSummaries',
+    permission: 'workspace',
     params: null,
     // Why: paired clients need display identity only; SSH addresses, jump chains, and credentials remain HUB-private.
     handler: () => ({ targets: listRegisteredSshTargetSummaries() })
   }),
   defineMethod({
     name: 'ssh.listRemovedTargetLabels',
+    permission: 'workspace',
     params: null,
     handler: () => ({ labels: listRegisteredRemovedSshTargetLabels() })
   })

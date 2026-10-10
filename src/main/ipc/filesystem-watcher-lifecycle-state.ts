@@ -65,7 +65,7 @@ export const watcherLifecycleState = {
   watchedRoots: new Map<string, WatchedRoot>(),
   unwatchableRoots: new Set<string>(),
   // Why: key cleanup by sender WebContents (not per root) to avoid MaxListeners warnings when a workspace has many worktrees open.
-  senderCleanupRegistered: new Set<number>(),
+  senderLifetimes: new Map<number, { signal: AbortSignal; dispose: () => void }>(),
   pendingTeardowns: new Map<string, ReturnType<typeof setTimeout>>(),
   // Why: @parcel/watcher unsubscribe does native async work that sender-destroy can start before shutdown, so will-quit must still await it.
   pendingLocalUnsubscribes: new Set<Promise<void>>(),

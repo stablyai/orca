@@ -25,7 +25,6 @@ export {
   mapRestoredPaneTitlesByPaneId,
   paneOwnsQueuedStartup,
   replayLayoutWithOneShotParkIntent,
-  resetTerminalKeyboardProtocolAfterInterrupt,
   resolvePaneLinkCwd,
   resolvePaneSeedCwd,
   resolveQueuedInitialCwd,

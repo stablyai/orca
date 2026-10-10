@@ -42,11 +42,9 @@ import {
   clearHostLiveTerminalProbesForTests,
   probeHostLiveTerminals
 } from './host-live-terminal-probe'
-import {
-  applyWebSessionTabsStorePatch,
-  clearWebSessionTabsTrackingForEnvironment,
-  type HostSessionMirrorSettle
-} from './web-session-tabs-sync'
+import { applyWebSessionTabsStorePatch } from './web-session-tabs-sync/store-patch'
+import { clearWebSessionTabsTrackingForEnvironment } from './web-session-tabs-sync/tracking-lifecycle'
+import type { HostSessionMirrorSettle } from './web-session-tabs-sync/mirror-settle'
 
 const WORKTREE = 'repo1::/path/wt1'
 

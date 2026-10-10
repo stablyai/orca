@@ -44,12 +44,3 @@ export class SparsePresetPersistence {
     scheduleSave(this[sparsePresetPersistenceContext].scheduling)
   }
 }
-
-export function installSparsePresetPersistenceContext(
-  target: object,
-  source: SparsePresetPersistence
-): void {
-  Object.defineProperty(target, sparsePresetPersistenceContext, {
-    value: source[sparsePresetPersistenceContext]
-  })
-}

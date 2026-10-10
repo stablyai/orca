@@ -1,148 +1,61 @@
 import { describe, expect, it } from 'vitest'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import {
-  hasExplicitTuiAgentArgs,
-  hasExplicitTuiLaunchCustomization,
-  hasSemanticallyNonEmptyAgentArgs,
-  resolveAgentLaunchRoute,
-  structuredAgentLaunchSupported
-} from './agent-launch-routing'
+  RUNTIME_CAPABILITIES,
+  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
+import { resolveAgentLaunchRoute, structuredAgentLaunchSupported } from './agent-launch-routing'
 
-const settings = {
-  experimentalNativeChat: true,
-  experimentalStructuredNativeChat: true,
-  openAgentTabsInChatByDefault: true
-}
+const settings = { experimentalNativeChat: true }
 
 function route(overrides: Partial<Parameters<typeof resolveAgentLaunchRoute>[0]> = {}) {
   return resolveAgentLaunchRoute({
     agent: 'codex',
     settings,
     executionHostId: 'local',
-    platform: 'darwin',
     hostCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
     workspaceKind: 'git-worktree',
-    nativeChatTranscriptIsLocalReadable: true,
     ...overrides
   })
 }
 
-describe('resolveAgentLaunchRoute', () => {
-  it.each(['claude', 'codex'] as const)(
-    'routes a supported local %s launch to structured native chat',
-    (agent) => {
-      expect(route({ agent })).toBe('structured-native-chat')
-      expect(route({ agent, initialSessionOptions: { model: 'gpt-5.6-sol' } })).toBe(
-        'structured-native-chat'
-      )
-      expect(
-        route({ agent, launchText: 'explain this change', promptDelivery: 'auto-submit' })
-      ).toBe('structured-native-chat')
-    }
-  )
-
-  /** Boundary guard between this lane and the one that owns Windows Codex. Codex's win32 refusal is
-   *  deliberate, so it is asserted against whatever currently lets Claude through rather than
-   *  against one host answer — a future gate swap must not be able to flip Codex on quietly. */
-  describe("Codex's Windows refusal", () => {
-    it('holds in the exact situation that routes Claude to structured', () => {
-      const onWindows = { platform: 'win32' } as const
-      expect(route({ ...onWindows, agent: 'claude' })).toBe('structured-native-chat')
-      expect(route({ ...onWindows, agent: 'codex' })).toBe('legacy-native-chat')
-    })
-
-    it('holds for every host capability set, including ones that carry extra gates', () => {
-      for (const hostCapabilities of [
-        [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
-        [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY, 'agent-session.structured.claude.v1'],
-        [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY, 'agent-session.structured.hold.v1']
-      ]) {
-        expect(route({ agent: 'codex', platform: 'win32', hostCapabilities })).toBe(
-          'legacy-native-chat'
-        )
-      }
-    })
-
-    it('holds for prompted and folder-workspace launches too', () => {
-      expect(
-        route({
-          agent: 'codex',
-          platform: 'win32',
-          launchText: 'go',
-          promptDelivery: 'auto-submit'
-        })
-      ).toBe('legacy-native-chat')
-      expect(route({ agent: 'codex', platform: 'win32', workspaceKind: 'folder' })).toBe(
-        'legacy-native-chat'
-      )
-    })
-  })
-
-  /** Pins Codex's whole platform answer, not just win32, so no platform silently changes here. */
-  it.each([
-    ['darwin', 'structured-native-chat'],
-    ['linux', 'structured-native-chat'],
-    ['win32', 'legacy-native-chat']
-  ] as const)('leaves Codex routing on %s unchanged', (platform, expected) => {
-    expect(route({ agent: 'codex', platform })).toBe(expected)
-  })
-
-  /** Claude's Windows answer is not a client-side platform guess: the route lets it through and the
-   *  executing host settles it with agentSession.createSupport at create time. */
-  it('lets a Windows Claude launch reach the host-measured create support check', () => {
-    expect(route({ agent: 'claude', platform: 'win32' })).toBe('structured-native-chat')
-  })
-
-  it('routes a supported local Codex launch to structured native chat', () => {
-    expect(route()).toBe('structured-native-chat')
-    expect(route({ launchText: 'explain this change', promptDelivery: 'auto-submit' })).toBe(
+describe('new agent launch routing', () => {
+  it.each(['claude', 'codex'] as const)('opens supported local %s in structured chat', (agent) => {
+    expect(route({ agent })).toBe('structured-native-chat')
+    expect(route({ agent, launchText: 'draft', promptDelivery: 'draft' })).toBe(
       'structured-native-chat'
     )
   })
 
-  it('keeps editable drafts on the terminal-backed native chat path', () => {
-    expect(route({ launchText: 'reviewable context', promptDelivery: 'draft' })).toBe(
-      'legacy-native-chat'
+  it('uses Chat UI alone even when an old selector is false or absent', () => {
+    const oldSelectorOff = { experimentalNativeChat: true, openAgentTabsInChatByDefault: false }
+    expect(route({ settings: oldSelectorOff })).toBe('structured-native-chat')
+    expect(route({ settings: { experimentalNativeChat: true } })).toBe('structured-native-chat')
+  })
+
+  // Why: a TUI caps a mirrored draft at forty lines; the structured composer has no such limit.
+  it('routes a draft longer than the terminal mirror cap to structured chat', () => {
+    const sixtyLineDraft = Array.from({ length: 60 }, (_, i) => `line ${i + 1}`).join('\n')
+    expect(route({ launchText: sixtyLineDraft, promptDelivery: 'draft' })).toBe(
+      'structured-native-chat'
     )
   })
 
-  it('preserves toggle-off and terminal-default behavior', () => {
-    expect(route({ settings: { ...settings, experimentalStructuredNativeChat: false } })).toBe(
-      'legacy-native-chat'
-    )
-    expect(route({ settings: { ...settings, openAgentTabsInChatByDefault: false } })).toBe(
-      'terminal-tui'
-    )
-    expect(route({ settings: { ...settings, experimentalNativeChat: false } })).toBe('terminal-tui')
+  it('opens the terminal when Chat UI is off', () => {
+    expect(route({ settings: { experimentalNativeChat: false } })).toBe('terminal-tui')
+    expect(route({ settings: null })).toBe('terminal-tui')
   })
 
-  it('fails closed for missing capability, unsupported providers, and explicit TUI options', () => {
-    expect(route({ hostCapabilities: [] })).toBe('legacy-native-chat')
-    // openclaude and grok render native chat but have no structured adapter.
-    expect(route({ agent: 'openclaude' })).toBe('legacy-native-chat')
-    expect(route({ agent: 'grok' })).toBe('legacy-native-chat')
-    expect(route({ requiresTuiLaunchCustomization: true })).toBe('legacy-native-chat')
-  })
-
-  it.each([
-    ['SSH', 'ssh:host-a'],
-    ['paired runtime', 'runtime:environment-a']
-  ])('preserves execution ownership on %s', (_name, executionHostId) => {
-    expect(route({ executionHostId })).toBe('legacy-native-chat')
-  })
-
-  it.each(['git-worktree', 'folder'] as const)(
-    'supports a local %s without widening floating-terminal scope',
-    (workspaceKind) => {
-      expect(route({ workspaceKind, platform: 'linux' })).toBe('structured-native-chat')
-    }
-  )
-
-  it('keeps floating, WSL, and repair-required launches terminal-backed', () => {
-    expect(route({ workspaceKind: 'floating' })).toBe('legacy-native-chat')
-    expect(route({ agent: 'claude', workspaceKind: 'floating', platform: 'win32' })).toBe(
-      'legacy-native-chat'
-    )
+  it('keeps unsupported and unverified launches in terminal UI', () => {
+    expect(route({ hostCapabilities: [] })).toBe('terminal-tui')
+    expect(route({ hostCapabilities: null })).toBe('terminal-tui')
+    expect(route({ agent: 'openclaude' })).toBe('terminal-tui')
+    // Grok has no built-in structured adapter; only a host agent list admits it.
+    expect(route({ agent: 'grok' })).toBe('terminal-tui')
+    expect(route({ startsOutsideWorkspaceRoot: true })).toBe('terminal-tui')
+    expect(route({ executionHostId: 'ssh:host-a' })).toBe('terminal-tui')
     expect(
       route({
         projectRuntime: {
@@ -157,7 +70,7 @@ describe('resolveAgentLaunchRoute', () => {
           }
         }
       })
-    ).toBe('legacy-native-chat')
+    ).toBe('terminal-tui')
     expect(
       route({
         projectRuntime: {
@@ -171,48 +84,89 @@ describe('resolveAgentLaunchRoute', () => {
           }
         }
       })
-    ).toBe('legacy-native-chat')
+    ).toBe('terminal-tui')
   })
 
-  it('normalizes semantically empty argument and settings customization', () => {
-    expect(hasSemanticallyNonEmptyAgentArgs('  \n\t')).toBe(false)
+  it('uses the host agent list for providers beyond Claude and Codex', () => {
     expect(
-      hasExplicitTuiLaunchCustomization(
-        { agentCmdOverrides: {}, agentDefaultArgs: { codex: '   ' }, agentDefaultEnv: {} },
-        'codex'
-      )
-    ).toBe(false)
+      route({
+        agent: 'grok',
+        hostCapabilities: [
+          STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+          STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+        ],
+        hostStructuredAgents: ['grok']
+      })
+    ).toBe('structured-native-chat')
   })
 
-  it('does not classify the resolved default TUI args as customization', () => {
-    expect(hasExplicitTuiAgentArgs('codex', '--dangerously-bypass-approvals-and-sandbox')).toBe(
-      false
-    )
-    expect(hasExplicitTuiAgentArgs('codex', '--model gpt-5.6-sol')).toBe(true)
+  it.each(['git-worktree', 'folder', 'floating'] as const)(
+    'allows a supported local %s workspace',
+    (workspaceKind) => expect(route({ workspaceKind })).toBe('structured-native-chat')
+  )
+
+  it('honors current paired-host capabilities and falls back on older hosts', () => {
+    expect(
+      route({
+        executionHostId: 'runtime:environment-a',
+        hostCapabilities: RUNTIME_CAPABILITIES,
+        clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+      })
+    ).toBe('structured-native-chat')
+    const negotiated = [
+      STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+      STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY
+    ]
+    expect(
+      route({
+        executionHostId: 'runtime:environment-a',
+        hostCapabilities: negotiated,
+        clientCapabilities: negotiated
+      })
+    ).toBe('structured-native-chat')
+    expect(
+      route({
+        executionHostId: 'runtime:environment-a',
+        hostCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
+        clientCapabilities: negotiated
+      })
+    ).toBe('terminal-tui')
+    const server = {
+      executionHostId: 'runtime:environment-a',
+      hostCapabilities: negotiated,
+      clientCapabilities: negotiated
+    }
+    // A client that never told the server it reads structured sessions keeps the host terminal.
+    expect(route({ ...server, clientCapabilities: [] })).toBe('terminal-tui')
+    expect(route({ ...server, clientCapabilities: undefined })).toBe('terminal-tui')
+    // The server has not answered yet, or answered without structured sessions.
+    expect(route({ ...server, hostCapabilities: null })).toBe('terminal-tui')
+    expect(route({ ...server, hostCapabilities: [] })).toBe('terminal-tui')
   })
 })
 
 describe('explicit structured chat requests', () => {
-  it.each(['claude', 'codex'] as const)(
-    'supports %s history resume when new tabs default to terminal',
-    (agent) => {
-      const input = {
-        agent,
-        settings: { ...settings, openAgentTabsInChatByDefault: false },
-        executionHostId: 'local',
-        platform: 'darwin' as const,
-        hostCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
-        workspaceKind: 'folder' as const
-      }
-      expect(resolveAgentLaunchRoute(input)).toBe('terminal-tui')
-      expect(structuredAgentLaunchSupported(input)).toBe(true)
-      expect(structuredAgentLaunchSupported({ ...input, hostCapabilities: [] })).toBe(false)
-      expect(
-        structuredAgentLaunchSupported({
-          ...input,
-          settings: { ...input.settings, experimentalStructuredNativeChat: false }
-        })
-      ).toBe(false)
+  it.each(['claude', 'codex'] as const)('supports %s history resume on a capable host', (agent) => {
+    const input = {
+      agent,
+      settings,
+      executionHostId: 'local',
+      hostCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
+      workspaceKind: 'folder' as const
     }
-  )
+    expect(structuredAgentLaunchSupported(input)).toBe(true)
+    expect(structuredAgentLaunchSupported({ ...input, hostCapabilities: [] })).toBe(false)
+  })
+
+  it('still permits an explicit structured history request while Chat UI is off', () => {
+    const input = {
+      agent: 'codex' as const,
+      settings: { experimentalNativeChat: false },
+      executionHostId: 'local',
+      hostCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+    }
+    expect(resolveAgentLaunchRoute(input)).toBe('terminal-tui')
+    expect(structuredAgentLaunchSupported(input)).toBe(true)
+    expect(structuredAgentLaunchSupported({ ...input, settings: null })).toBe(true)
+  })
 })

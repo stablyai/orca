@@ -2,36 +2,15 @@ import type { BrowserMouseModifier } from './agent-browser-bridge-types'
 import { BrowserError } from './cdp-bridge'
 import {
   normalizeCdpMouseButton,
-  cdpMouseButtonMask,
+  cdpPointerButtonMask,
   cdpMouseModifierMask,
   resolveMobileTouchClickPoint
 } from './agent-browser-bridge-mouse'
 import { acquireElectronDebugger } from './electron-debugger-lease'
-import { AgentBrowserBridgeInputCommands } from './agent-browser-bridge-input-commands'
+import { AgentBrowserBridgePointerCommands } from './agent-browser-bridge-pointer-commands'
 
-export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridgeInputCommands {
+export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridgePointerCommands {
   // ── Mouse commands ──
-
-  async mouseMove(
-    x: number,
-    y: number,
-    worktreeId?: string,
-    browserPageId?: string
-  ): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return await this.execAgentBrowser(sessionName, ['mouse', 'move', String(x), String(y)])
-    })
-  }
-
-  async mouseDown(button?: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      const args = ['mouse', 'down']
-      if (button) {
-        args.push(button)
-      }
-      return await this.execAgentBrowser(sessionName, args)
-    })
-  }
 
   async mouseClick(
     x: number,
@@ -54,7 +33,7 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
           )
         }
         const cdpButton = normalizeCdpMouseButton(button)
-        const buttons = cdpMouseButtonMask(cdpButton)
+        const buttons = cdpPointerButtonMask(cdpButton)
         const cdpModifiers = cdpMouseModifierMask(modifiers)
         const lease = acquireElectronDebugger(wc)
         try {
@@ -101,31 +80,6 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
       },
       { ensureSession: false }
     )
-  }
-
-  async mouseUp(button?: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      const args = ['mouse', 'up']
-      if (button) {
-        args.push(button)
-      }
-      return await this.execAgentBrowser(sessionName, args)
-    })
-  }
-
-  async mouseWheel(
-    dy: number,
-    dx?: number,
-    worktreeId?: string,
-    browserPageId?: string
-  ): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      const args = ['mouse', 'wheel', String(dy)]
-      if (dx != null) {
-        args.push(String(dx))
-      }
-      return await this.execAgentBrowser(sessionName, args)
-    })
   }
 
   // ── Find (semantic locators) ──

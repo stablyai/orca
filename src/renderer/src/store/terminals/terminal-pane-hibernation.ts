@@ -1,10 +1,10 @@
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import {
   restorePtyDataHandlersAfterFailedShutdown,
   unregisterPtyDataHandlers
 } from '@/components/terminal-pane/pty-transport'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
-import { isAutomaticHibernationAllowed } from '@/lib/live-resume-anchor-record'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import {
@@ -63,17 +63,6 @@ export function createTerminalPaneHibernationActions(
         // Why: killing the PTY with no persisted resume record strands the pane unwakeable; abort instead of hibernating unrecoverably.
         throw new Error('agent_hibernation_capture_missing')
       }
-      // Why: the planner's fence check happened before the coordinator's async re-plan;
-      // the fence can be set in that window. Capture below OVERWRITES the record, and
-      // sleepingRecordFromEntry does not copy the flag, so losing this race erases the
-      // fence and later auto-resumes work whose relaunch was explicitly prohibited.
-      const assertAutomaticHibernationStillAllowed = (): void => {
-        const record = get().sleepingAgentSessionsByPaneKey[opts.paneKey]
-        if (!isAutomaticHibernationAllowed(record)) {
-          throw new Error('agent_hibernation_automatic_resume_blocked')
-        }
-      }
-      assertAutomaticHibernationStillAllowed()
       const capture = shutdownBufferCaptures.get(opts.tabId)
       if (capture) {
         try {
@@ -82,8 +71,6 @@ export function createTerminalPaneHibernationActions(
           // Don't let one tab's capture failure block the pane hibernation.
         }
       }
-      // Why: the capture callback runs synchronously above and can itself fence the pane.
-      assertAutomaticHibernationStillAllowed()
       // Why: store sleeping records before kill, since pty:exit can arrive first.
       const sleepingRecordKeys = Object.keys(sleepingAgentSessionRecords)
       const replacedSleepingRecords: Record<string, (typeof sleepingAgentSessionRecords)[string]> =
@@ -168,7 +155,7 @@ export function createTerminalPaneHibernationActions(
         for (const snapshot of unregisterPtyDataHandlers(rendererShutdownPtyIds) ?? []) {
           snapshot.commit?.()
         }
-      } else if (!opts.ptyId.startsWith('remote:')) {
+      } else if (!isRemoteRuntimePtyId(opts.ptyId)) {
         // Why: pty.kill can flush final data before exit; unregister first so stale handlers can't fire phantom notifications during hibernation.
         const handlerSnapshots = unregisterPtyDataHandlers(rendererShutdownPtyIds) ?? []
         try {

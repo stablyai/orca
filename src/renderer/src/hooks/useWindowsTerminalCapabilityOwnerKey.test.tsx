@@ -15,7 +15,7 @@ const testState = vi.hoisted(() => ({
 }))
 
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: object) => unknown) => selector(testState)
+  useAppStore: (selector: (state: typeof testState) => unknown) => selector(testState)
 }))
 
 vi.mock('@/lib/web-client-location', () => ({

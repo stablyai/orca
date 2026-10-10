@@ -1,13 +1,13 @@
 import { AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { AutomationOwnerPrecondition } from '../../../../shared/automation-owner-precondition'
-import { defineMethod, type RpcContext, type RpcMethod } from '../core'
+import { defineMethod, type RpcContext } from '../core'
 import {
   AutomationCreate,
   AutomationId,
   AutomationList,
   AutomationRuns,
   AutomationUpdate
-} from './automation-schemas'
+} from '../../../../shared/rpc-contract/automation-params'
 
 function mutationOwner(
   id: string,
@@ -25,15 +25,17 @@ function mutationOwner(
   return context.runtime.automationOwnerPrecondition(id) ?? undefined
 }
 
-export const AUTOMATION_METHODS: RpcMethod[] = [
+export const AUTOMATION_METHODS = [
   defineMethod({
     name: 'automation.list',
+    permission: 'workspace',
     params: AutomationList,
     // The projection retains `automations`, so old clients ignore the added owner metadata.
     handler: (params, { runtime }) => runtime.listAutomationsForScope(params)
   }),
   defineMethod({
     name: 'automation.show',
+    permission: 'workspace',
     params: AutomationId,
     // Why: the owner rides along so a client that cannot project one itself — the
     // CLI — can echo it back on the mutation that follows. Optional: an older
@@ -46,6 +48,7 @@ export const AUTOMATION_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'automation.create',
+    permission: 'workspace',
     params: AutomationCreate,
     handler: async (params, { runtime }) => ({
       automation: await runtime.createAutomation(params)
@@ -53,6 +56,7 @@ export const AUTOMATION_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'automation.update',
+    permission: 'workspace',
     params: AutomationUpdate,
     handler: async (params, context) => ({
       automation: await context.runtime.updateAutomation(params.id, params.updates, {
@@ -63,6 +67,7 @@ export const AUTOMATION_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'automation.delete',
+    permission: 'workspace',
     params: AutomationId,
     handler: (params, context) =>
       context.runtime.deleteAutomation(
@@ -72,6 +77,7 @@ export const AUTOMATION_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'automation.runNow',
+    permission: 'workspace',
     params: AutomationId,
     handler: async (params, context) => ({
       run: await context.runtime.runAutomationNow(
@@ -82,6 +88,7 @@ export const AUTOMATION_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'automation.runs',
+    permission: 'workspace',
     params: AutomationRuns,
     handler: (params, { runtime }) => {
       if (params.limit !== undefined || params.cursor !== undefined) {

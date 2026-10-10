@@ -1,6 +1,10 @@
 import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { getRemoteHostPlatform } from '../main/ssh/ssh-remote-platform'
-import { parseUnameToRelayPlatform } from '../main/ssh/relay-protocol'
+import { parseUnameToRelayPlatform, RELAY_REMOTE_DIR } from '../main/ssh/relay-protocol'
+import { DEFAULT_AI_VAULT_SEARCH_SETTINGS } from '../shared/ai-vault-search-settings'
+import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
+import { installInProcessSessionSearchService } from '../main/ai-vault-search/session-search-in-process-service'
 import type { RelayDispatcher } from './dispatcher'
 import { RelayContext, expandTilde } from './context'
 import { PtyHandler } from './pty-handler'
@@ -20,6 +24,7 @@ import { RelayPtySourcePublication } from './relay-pty-source-publication'
 import { SkillInstallHandler } from './skill-install-handler'
 import { relayLogLine } from './relay-diagnostic-log'
 import { remoteCliRequestTimeoutMs } from './remote-cli-timeout'
+import { errorMessage } from '../shared/error-message'
 
 export class RelayRuntimeServices {
   readonly ptyHandler: PtyHandler
@@ -28,8 +33,10 @@ export class RelayRuntimeServices {
   readonly fsHandler: FsHandler
   readonly gitHandler: GitHandler
   readonly skillInstallHandler: SkillInstallHandler
+  readonly agentExecHandler: AgentExecHandler
+  private readonly responseStreams: GitResponseStreamRegistry
   private readonly aiVaultService: ReturnType<typeof createRelayAiVaultService> | null
-  private readonly registeredHandlers: readonly unknown[]
+  private readonly sessionSearch: { dispose(): void } | null
 
   constructor(
     readonly dispatcher: RelayDispatcher,
@@ -61,6 +68,7 @@ export class RelayRuntimeServices {
     // so two registries would hand out the same id, and only GitHandler routes the `git.responseAck`
     // credit every pump waits on. A second registry is not an option — see git-response-stream.ts.
     const responseStreams = new GitResponseStreamRegistry()
+    this.responseStreams = responseStreams
     this.fsHandler = new FsHandler(dispatcher, context, undefined, responseStreams)
     const watchRegistry = this.fsHandler.getWatchRegistry()
     this.ptyHandler.setWorktreeRemovalCoordinator(watchRegistry)
@@ -68,27 +76,29 @@ export class RelayRuntimeServices {
       this.ptyHandler.shutdownForWorktreePath(rootPath)
     )
     this.gitHandler = new GitHandler(dispatcher, context, watchRegistry, responseStreams)
-    const preflightHandler = new PreflightHandler(dispatcher)
+    new PreflightHandler(dispatcher)
     this.skillInstallHandler = new SkillInstallHandler(dispatcher)
-    const externalAutomationsHandler = new ExternalAutomationsHandler(dispatcher)
-    const portScanHandler = new PortScanHandler(dispatcher)
-    const agentExecHandler = new AgentExecHandler(dispatcher)
-    const workspaceSessionHandler = new WorkspaceSessionHandler(dispatcher)
+    new ExternalAutomationsHandler(dispatcher)
+    new PortScanHandler(dispatcher)
+    this.agentExecHandler = new AgentExecHandler(dispatcher)
+    new WorkspaceSessionHandler(dispatcher)
     const relayPlatform = parseUnameToRelayPlatform(process.platform, process.arch)
     const hostPlatform = relayPlatform ? getRemoteHostPlatform(relayPlatform) : undefined
     this.aiVaultService = hostPlatform ? createRelayAiVaultService(homedir(), hostPlatform) : null
-    this.registeredHandlers = [
-      preflightHandler,
-      this.skillInstallHandler,
-      externalAutomationsHandler,
-      portScanHandler,
-      agentExecHandler,
-      workspaceSessionHandler,
-      new AiVaultHandler(dispatcher, {
-        hostPlatform,
-        service: this.aiVaultService ?? undefined
-      })
-    ]
+    // Why beside the AI Vault sidecar and not inside it: that sidecar runs the
+    // remote scanner, which reads through a filesystem provider and publishes
+    // nothing to the transcript channel the index consumes. This process is the
+    // one that would drive the index's own reads, and the only writer on the file.
+    // Off until something can carry consent to a remote host (see the PR body);
+    // registering it anyway is what makes this host answer `disabled` and not
+    // `no-service`, which is the difference between off and too old.
+    this.sessionSearch = installInProcessSessionSearchService({
+      dataRoot: join(homedir(), RELAY_REMOTE_DIR),
+      roots: { executionHostId: LOCAL_EXECUTION_HOST_ID },
+      settings: DEFAULT_AI_VAULT_SEARCH_SETTINGS,
+      onError: (error) => relayLogLine(`[relay] session search: ${errorMessage(error)}`)
+    })
+    new AiVaultHandler(dispatcher, { hostPlatform, service: this.aiVaultService ?? undefined })
 
     registerRelayPluginHostCallHandlers(
       dispatcher,
@@ -98,42 +108,66 @@ export class RelayRuntimeServices {
     this.registerRemoteCliRoutes()
   }
 
+  // Why: answering a stream's request does not prove its detached pumps, descriptors or children
+  // are gone; only these registry drains do.
   async disposeOwnedProcesses(): Promise<void> {
+    const owned = await Promise.allSettled([
+      this.agentExecHandler.dispose(),
+      this.responseStreams.disposeAllAndWait(),
+      this.fsHandler.disposeFileStreams(),
+      this.fsHandler.disposeWatchers()
+    ])
+    const failures = owned.flatMap((result) =>
+      result.status === 'rejected' ? [result.reason] : []
+    )
+    // Why: an unclosed fd, watcher child or agent child defers shutdown so the next attempt retries it.
+    if (failures.length > 0) {
+      throw new AggregateError(failures, 'relay_owned_process_shutdown_incomplete')
+    }
+  }
+
+  /**
+   * One-way disposals, so they run only once shutdown can no longer defer; a deferred relay keeps
+   * serving reconnecting clients. Log-and-continue: they never hold the exit.
+   */
+  async disposeExitOnlyServices(): Promise<void> {
     await this.skillInstallHandler.dispose().catch((error) => {
-      relayLogLine(
-        `[relay] Skill upload cleanup failed: ${error instanceof Error ? error.message : String(error)}`
-      )
+      relayLogLine(`[relay] Skill upload cleanup failed: ${errorMessage(error)}`)
     })
     await this.aiVaultService?.dispose().catch((error) => {
-      relayLogLine(
-        `[relay] AI Vault sidecar shutdown failed: ${error instanceof Error ? error.message : String(error)}`
-      )
+      relayLogLine(`[relay] AI Vault sidecar shutdown failed: ${errorMessage(error)}`)
     })
+  }
+
+  reopenOwnedProcesses(): void {
+    this.agentExecHandler.reopen()
+    this.responseStreams.reopen()
+    this.fsHandler.reopen()
   }
 
   disposeHandlers(): void {
+    this.sessionSearch?.dispose()
     this.fsHandler.dispose()
     this.gitHandler.dispose()
-    void this.registeredHandlers
   }
 
   private registerSessionHandlers(context: RelayContext): void {
-    this.dispatcher.onNotification('session.registerRoot', (params) => {
-      const rootPath = params.rootPath as string
-      if (rootPath) {
-        context.registerRoot(rootPath)
+    const registerRoot = (params: Record<string, unknown>): void => {
+      if (typeof params.rootPath === 'string' && params.rootPath) {
+        context.registerRoot(params.rootPath)
       }
-    })
+    }
+    this.dispatcher.onNotification('session.registerRoot', (params) => registerRoot(params))
     this.dispatcher.onRequest('session.registerRoot', async (params) => {
-      const rootPath = params.rootPath as string
-      if (rootPath) {
-        context.registerRoot(rootPath)
-      }
+      registerRoot(params)
       return { ok: true }
     })
-    this.dispatcher.onRequest('session.resolveHome', async (params) => ({
-      resolvedPath: expandTilde(params.path as string)
-    }))
+    this.dispatcher.onRequest('session.resolveHome', async (params) => {
+      if (typeof params.path !== 'string') {
+        throw new Error('session.resolveHome: path must be a string')
+      }
+      return { resolvedPath: expandTilde(params.path) }
+    })
   }
 
   private registerRemoteCliRoutes(): void {

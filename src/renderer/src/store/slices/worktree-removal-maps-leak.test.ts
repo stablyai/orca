@@ -290,6 +290,7 @@ describe('worktree removal evicts the per-worktree + per-page maps it previously
         [WS2]: [makePage(P2, WS2, WT2)]
       },
       browserAnnotationsByPageId: { [P1]: [], [P2]: [] },
+      browserAnnotationMarkerIdsByPageId: { [P1]: ['note-1'], [P2]: ['note-2'] },
       remoteBrowserPageHandlesByPageId: {
         [P1]: { environmentId: 'env-1', remotePageId: 'r-1' },
         [P2]: { environmentId: 'env-2', remotePageId: 'r-2' }
@@ -308,6 +309,7 @@ describe('worktree removal evicts the per-worktree + per-page maps it previously
     const s = store.getState()
     // Removed worktree's workspace + page entries are gone.
     expect(s.browserAnnotationsByPageId[P1]).toBeUndefined()
+    expect(s.browserAnnotationMarkerIdsByPageId[P1]).toBeUndefined()
     expect(s.remoteBrowserPageHandlesByPageId[P1]).toBeUndefined()
     expect(s.pendingAddressBarFocusByPageId[P1]).toBeUndefined()
     expect(s.pendingAddressBarFocusByTabId[WS1]).toBeUndefined()
@@ -315,6 +317,7 @@ describe('worktree removal evicts the per-worktree + per-page maps it previously
     expect(s.recentlyClosedBrowserPagesByWorkspace[WS1]).toBeUndefined()
     // Surviving worktree's entries remain (guard over-eviction).
     expect(s.browserAnnotationsByPageId[P2]).toBeDefined()
+    expect(s.browserAnnotationMarkerIdsByPageId[P2]).toEqual(['note-2'])
     expect(s.remoteBrowserPageHandlesByPageId[P2]).toBeDefined()
     expect(s.pendingAddressBarFocusByPageId[P2]).toBe(true)
     expect(s.pendingAddressBarFocusByTabId[WS2]).toBe(true)

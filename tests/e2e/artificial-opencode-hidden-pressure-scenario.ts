@@ -16,11 +16,12 @@ import {
   waitForSessionReady
 } from './helpers/store'
 import {
-  getTerminalContent,
+  resolveActiveTabId,
   sendToTerminal,
   waitForActivePanePtyId,
   waitForActiveTerminalManager
 } from './helpers/terminal'
+import { readActiveScreen } from './helpers/alt-screen-frame'
 
 type HiddenPressurePane = {
   ptyId: string
@@ -83,9 +84,9 @@ type HiddenPressureAckGate = {
 
 // Why: restore still has to finish promptly, but parallel Electron workers on
 // Linux CI can overshoot the 1s product target without a responsiveness regression.
-// Main relaxed this to 4s for drain-plus-poll overhead on loaded OSS runners; this
-// branch keeps a far stricter budget with only a small margin for the whole-buffer
-// serialize-poll overhead (seen at ~1.5s), so a genuinely slow restore is still caught.
+// 4s covers drain-plus-poll overhead on loaded OSS runners. The post-flood repaint path
+// spends ~2.75s of that (750ms deadline + 2s suppression), so the poll below reads the
+// viewport on a fixed interval rather than serializing scrollback on a backoff.
 const MAX_HIDDEN_RESTORE_LATENCY_MS = 4_000
 // Why: Phase-4 hidden-delivery gate contract — hidden PTY bytes are dropped in
 // main after model ingestion, so renderer-delivery pressure must stay FAR
@@ -267,10 +268,15 @@ async function measureHiddenOutputRestoreLatency(
 ): Promise<number> {
   const restoreStart = performance.now()
   await switchToWorktree(orcaPage, worktreeId)
+  // Why resolve rather than read activeTabId: after a worktree switch the active tab can
+  // still be the previous worktree's, or a non-terminal one; this picks the worktree's own.
+  const tabId = (await resolveActiveTabId(orcaPage)) ?? ''
   await expect
-    .poll(() => getTerminalContent(orcaPage, 20_000), {
+    .poll(async () => (await readActiveScreen(orcaPage, tabId))?.rows.join('\n') ?? '', {
       timeout: 20_000,
-      message: 'Hidden PTY output was not restored from main buffer on return'
+      // One-second backoff can dominate the measured restore latency.
+      intervals: [50],
+      message: 'No restored output from main buffer on return (or no active terminal pane)'
     })
     .toContain(`OPENCODE_PRESSURE_DONE_${runId}_`)
   return performance.now() - restoreStart

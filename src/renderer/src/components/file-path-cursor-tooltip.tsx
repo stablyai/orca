@@ -1,5 +1,5 @@
 import React from 'react'
-import { Slot } from 'radix-ui'
+import * as Slot from 'radix-ui/slot'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 // Clears the pointer without putting the label under the cursor's own hotspot.
@@ -30,6 +30,21 @@ export function splitTrailingSegment(path: string): { directory: string; filenam
   return separatorIndex === -1
     ? { directory: '', filename: path }
     : { directory: path.slice(0, separatorIndex + 1), filename: path.slice(separatorIndex + 1) }
+}
+
+export function FilenameFirstPath({ path }: { path: string }): React.JSX.Element {
+  const { directory, filename } = splitTrailingSegment(path)
+
+  return (
+    <span className="flex min-w-0 flex-1 items-center gap-1">
+      {/* shrink-0 + max-w-full: the directory gives up all of its width before
+          the filename loses a character. */}
+      <span className="min-w-0 max-w-full shrink-0 truncate">{filename}</span>
+      {directory ? (
+        <span className="min-w-0 truncate text-muted-foreground/70">{directory}</span>
+      ) : null}
+    </span>
+  )
 }
 
 /**

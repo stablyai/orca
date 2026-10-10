@@ -32,7 +32,7 @@ export function isSafePushTargetRemoteUrl(remoteUrl: string): boolean {
   return GITHUB_CLONE_URL.test(remoteUrl) || GITHUB_SSH_URL.test(remoteUrl)
 }
 
-export function assertGitPushTargetShape(target: unknown): asserts target is GitPushTarget {
+export function assertValidGitPushTarget(target: unknown): asserts target is GitPushTarget {
   if (typeof target !== 'object' || target === null) {
     throw new Error('Invalid PR push target.')
   }

@@ -86,15 +86,6 @@ export function createForceDeletePreservedBranch(
             },
             { timeoutMs: 15_000 }
           ))
-      if (options?.suppressToast !== true) {
-        toast.success(translate('auto.store.slices.worktrees.19db0085fb', 'Local branch deleted'), {
-          description: translate(
-            'auto.store.slices.worktrees.5a58e03a26',
-            'Deleted "{{value0}}".',
-            { value0: branchName }
-          )
-        })
-      }
       preservedBranchRuntimeTargetByCleanupKey.delete(
         retainedTarget ? preservedBranchCleanupKey(retainedTarget.cleanup) : requestedCleanupKey
       )

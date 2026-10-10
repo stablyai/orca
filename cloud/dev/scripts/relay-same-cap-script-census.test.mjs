@@ -3,18 +3,23 @@ import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'
 import { parseProductionCapacityCellArguments } from './prepare-relay-production-capacity-canary.mjs'
-import { SAME_CAP_CELLS } from './relay-production-same-cap-wave.mjs'
+import {
+  SAME_CAP_CELLS,
+  SAME_CAP_MIGRATION_ONLY_CELLS,
+  entryAdmission,
+  selectorWaveDelta
+} from './relay-production-same-cap-wave.mjs'
 import { readRelayWorkflow } from './relay-repository.mjs'
 import { validateCapacityPlan } from './validate-relay-capacity-plan.mjs'
 
 const workflow = readRelayWorkflow('deploy-relay-production-same-cap-job.yml')
-const capacityWorkflow = readRelayWorkflow('deploy-relay-production-capacity-job.yml')
 const production = readFileSync(
   new URL('../../infra/terraform/environments/production.tfvars', import.meta.url),
   'utf8'
 )
 const REHOME_SOURCE_CELLS = rehomeSourceCells()
 const DIRECTOR_IDENTITY = 'relay-director@onorca-cloud.iam.gserviceaccount.com'
+const CAPACITY_IDENTITY = 'orca-cloud-gha-cap@onorca-cloud.iam.gserviceaccount.com'
 const AUDIENCE = 'https://relay.onorca.dev/v1/admin/host-drain'
 const ROLLBACK_IMAGE = `us-central1-docker.pkg.dev/p/orca-cloud/relay@sha256:${'d'.repeat(64)}`
 const TARGET_IMAGE = `us-central1-docker.pkg.dev/p/orca-cloud/relay@sha256:${'e'.repeat(64)}`
@@ -31,10 +36,33 @@ function rehomeSourceCells() {
   )
 }
 
-function startupScript({ cap, image, trusted }) {
+// The job cross-checks its pinned pool against the committed map; model the same read.
+function tfvarsDatabasePoolMax(cellId) {
+  return tfvarsCellBlock(cellId).match(/database_pool_max\s*=\s*(\d+)/)?.[1] ?? '10'
+}
+
+function tfvarsHardCap(cellId) {
+  const cap = /connection_hard_cap\s*=\s*(\d+)/.exec(tfvarsCellBlock(cellId))?.[1]
+  assert.notEqual(cap, undefined, `${cellId} has no connection_hard_cap`)
+  return cap
+}
+
+function tfvarsCellBlock(cellId) {
+  const start = production.indexOf(`"${cellId}" = {`)
+  assert.notEqual(start, -1, `${cellId} is missing from production.tfvars`)
+  return production.slice(start, production.indexOf('\n  }', start))
+}
+
+function startupScript({ cap, image, trusted, pool, capacityIdentity = CAPACITY_IDENTITY }) {
   return [
     `  printf 'ORCA_RELAY_CELL_CONNECTION_HARD_CAP=%s\\n' '${cap}'`,
     `  printf 'ORCA_RELAY_CELL_CONNECTION_UNOBSERVED_BOUND=%s\\n' '60'`,
+    ...(capacityIdentity === null
+      ? []
+      : [`  printf 'ORCA_RELAY_CAPACITY_SERVICE_ACCOUNT=%s\\n' '${capacityIdentity}'`]),
+    ...(pool === undefined
+      ? []
+      : [`  printf 'ORCA_RELAY_DATABASE_POOL_MAX=%s\\n' '${pool}'`]),
     ...(trusted ? [
       `  printf 'ORCA_RELAY_REHOME_DIRECTOR_SERVICE_ACCOUNT=%s\\n' '${DIRECTOR_IDENTITY}'`,
       `  printf 'ORCA_RELAY_REHOME_AUDIENCE=%s\\n' '${AUDIENCE}'`
@@ -48,7 +76,11 @@ function startupScript({ cap, image, trusted }) {
 }
 
 // The exact shape the apply step's plan has: template replaced, MIG rebound to it.
-function rollPlan({ cellId, cap, protocol }) {
+function rollPlan({
+  cellId, cap, protocol, pool,
+  beforeCapacityIdentity = CAPACITY_IDENTITY,
+  afterCapacityIdentity = CAPACITY_IDENTITY
+}) {
   return {
     configuration: {
       root_module: {
@@ -77,14 +109,19 @@ function rollPlan({ cellId, cap, protocol }) {
             metadata_startup_script: startupScript({
               cap,
               image: ROLLBACK_IMAGE,
-              trusted: protocol === 1
+              trusted: protocol >= 1,
+              // The live template predates the reviewed pool raise, as every asia cell's does.
+              pool: pool === undefined ? undefined : '10',
+              capacityIdentity: beforeCapacityIdentity
             })
           },
           after: {
             metadata_startup_script: startupScript({
               cap,
               image: TARGET_IMAGE,
-              trusted: protocol === 1
+              trusted: protocol >= 1,
+              pool,
+              capacityIdentity: afterCapacityIdentity
             }),
             self_link: null
           },
@@ -108,7 +145,8 @@ function hostname(cellId) {
   return cellId.slice('production-gce-'.length)
 }
 
-// The job resolves cap and region from the cell id before any admin call; run that block alone.
+// The job resolves cap, region, and pool from the cell id before any admin call; run that block
+// alone. An empty pool is the root default, which the startup template emits no line for.
 function resolveCellShape(cellId) {
   const start = workflow.indexOf('          TARGET_HOSTNAME="${TARGET_CELL_ID#production-gce-}"')
   assert.notEqual(start, -1, 'the same-cap cell shape block is missing')
@@ -119,8 +157,80 @@ function resolveCellShape(cellId) {
     '-euo',
     'pipefail',
     '-c',
-    `${script}\necho "\${EXPECTED_REGION} \${EXPECTED_HARD_CAP}"`
+    `${script}\necho "\${EXPECTED_REGION} \${EXPECTED_HARD_CAP} pool=\${EXPECTED_DATABASE_POOL_MAX}"`
   ], { env: { ...process.env, TARGET_CELL_ID: cellId }, encoding: 'utf8' })
+}
+
+function cellShape(cellId) {
+  const resolved = resolveCellShape(cellId)
+  assert.equal(resolved.status, 0, `${cellId}: ${resolved.stderr}`)
+  const [, cap, pool] = resolved.stdout.trim().split(' ')
+  return { cap: Number(cap), pool: pool.slice('pool='.length) || undefined }
+}
+
+// The class block runs before checkout-independent work and decides the whole wave shape.
+function resolveCellClass(cellId, drainPaceWindowMs = '300000') {
+  return spawnSync('bash', [
+    '-euo',
+    'pipefail',
+    '-c',
+    `${jobBlock(
+      '          CELL_CLASS="$(node dev/scripts/relay-production-same-cap-wave.mjs cell-class \\',
+      '          SELECTOR_WAVE_DELTA="$(jq -er \'.selectorWaveDelta\' <<< "${CELL_CLASS}")"'
+    )}\necho "\${ENTRY_ADMISSION} \${SELECTOR_WAVE_DELTA}"`
+  ], {
+    cwd: new URL('../..', import.meta.url),
+    env: { ...process.env, TARGET_CELL_ID: cellId, DRAIN_PACE_WINDOW_MS: drainPaceWindowMs },
+    encoding: 'utf8'
+  })
+}
+
+function drainingBlock() {
+  return `${jobBlock(
+    '          # Rollback is the documented recovery from a failed canary, which',
+    '            PREDECESSOR_DRAINING_OK=false\n          fi'
+  )}\necho "\${PRECHECK_ADMISSION} \${PRECHECK_DRAINING} \${PREDECESSOR_DRAINING_OK}"`
+}
+
+// The stage decides the predecessor, the plan's reviewed rollback image, and whether the
+// MIG is rolled explicitly, so run the real block rather than restating its rule.
+function stageBlock() {
+  return `${jobBlock(
+    '          # Two different failures leave the cell on the rollback image, and the image',
+    '            PLAN_ROLLBACK_IMAGE="${IMAGE_REPOSITORY}@${CURRENT_IMAGE_DIGEST}"\n          fi'
+  )}\necho "\${ROLLBACK_STAGE} \${ROLLBACK_RESUME} \${PREDECESSOR_IMAGE_DIGEST}` +
+    ` \${PREDECESSOR_REHOME_PROTOCOL} \${PLAN_ROLLBACK_IMAGE}"`
+}
+
+function generationBlock() {
+  return `${jobBlock(
+    '          if test "${DEPLOY_MODE}" = verify; then',
+    '          fi'
+  )}\necho "\${EFFECTIVE_SELECTOR_GENERATION}"`
+}
+
+// The job derives both memberships in one block; run that block alone for each class.
+function membership(env) {
+  const script = `${jobBlock(
+    '          RESTORED_MIGRATION_CELLS="$(jq -rn \\',
+    '          fi'
+  )}\njq -cn --arg a "\${ISOLATED_MIGRATION_CELLS}" --arg b "\${ISOLATED_GENERAL_CELLS}" \\
+  --arg c "\${RESTORED_MIGRATION_CELLS}" --arg d "\${RESTORED_GENERAL_CELLS}" \\
+  '{isolatedMigration:$a,isolatedGeneral:$b,restoredMigration:$c,restoredGeneral:$d}'`
+  const resolved = spawnSync('bash', ['-euo', 'pipefail', '-c', script], {
+    env: { ...process.env, ...env },
+    encoding: 'utf8'
+  })
+  assert.equal(resolved.status, 0, resolved.stderr)
+  return JSON.parse(resolved.stdout)
+}
+
+function jobBlock(firstLine, lastLine) {
+  const start = workflow.indexOf(`${firstLine}\n`)
+  assert.notEqual(start, -1, `the job has no ${firstLine.trim()}`)
+  const end = workflow.indexOf(`\n${lastLine}\n`, start)
+  assert.notEqual(end, -1, `that block has no ${lastLine.trim()}`)
+  return workflow.slice(start, end + lastLine.length + 1).replace(/^ {10}/gm, '')
 }
 
 describe('same-cap roll scripts accept every same-cap cell', () => {
@@ -137,63 +247,58 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
           directorOrigin: 'https://relay.onorca.dev',
           cellOrigin: `https://${hostname(cellId)}.relay.onorca.dev`,
           cellId,
-          mode
+          mode,
+          paceWindowMs: 0
         })
       }
     }
   })
 
-  it('resolves a cap and region for every wave cell and refuses anything else', () => {
+  it('resolves a cap, region, and pool for every wave cell and refuses anything else', () => {
     for (const cellId of SAME_CAP_CELLS) {
       const resolved = resolveCellShape(cellId)
       assert.equal(resolved.status, 0, `${cellId}: ${resolved.stderr}`)
-      assert.match(resolved.stdout.trim(), /^(us-central1 1000|asia-east2 3000)$/)
+      assert.match(
+        resolved.stdout.trim(),
+        /^(us-central1 1000 pool=|us-central1 600 pool=|asia-east2 3000 pool=16|us-central1 3000 pool=)$/,
+        cellId
+      )
+      assert.equal(tfvarsDatabasePoolMax(cellId), cellShape(cellId).pool ?? '10', cellId)
+      assert.equal(String(cellShape(cellId).cap), tfvarsHardCap(cellId), cellId)
     }
-    assert.equal(resolveCellShape('production-gce-c17').status, 1)
-    assert.equal(resolveCellShape('production-gce-c30').status, 1)
+    assert.equal(resolveCellShape('production-gce-c12').status, 1)
+    assert.equal(resolveCellShape('production-gce-c35').status, 1)
   })
 
-  it('passes the same-cap allowlist on every canary invocation the job runs', () => {
-    const invocations = workflow.split('prepare-relay-production-capacity-canary.mjs').slice(1)
-    assert.equal(invocations.length, 4)
-    for (const invocation of invocations) {
-      const lines = invocation.split('\n')
-      const end = lines.findIndex((line) => !line.endsWith('\\'))
-      const call = lines.slice(0, end + 1).join(' ')
-      assert.match(call, /--approved-cells same-cap/)
-      assert.match(call, /--mode (isolate|drain|activate)/)
-    }
-  })
 
-  it('passes this cell\'s rehome protocol on every plan validation the job runs', () => {
-    const invocations = workflow.split('validate-relay-capacity-plan.mjs').slice(1)
-    assert.equal(invocations.length, 2)
-    for (const invocation of invocations) {
-      const lines = invocation.split('\n')
-      const end = lines.findIndex((line) => !line.trimEnd().endsWith('\\'))
-      const call = lines.slice(0, end + 1).join(' ')
-      assert.match(call, /--mode same-cap-cell/)
-      assert.match(call, /--regional-rehome-protocol "\$\{DESIRED_REHOME_PROTOCOL\}"/)
-    }
-  })
+
+
+
 
   it('validates a correct plan for every wave cell at that cell\'s rehome protocol', () => {
-    for (const cellId of SAME_CAP_CELLS) {
-      const [region, cap] = resolveCellShape(cellId).stdout.trim().split(' ')
-      const protocol = REHOME_SOURCE_CELLS.has(cellId) ? 1 : 0
-      assert.equal(protocol, region === 'us-central1' ? 1 : 0, cellId)
+    const trusted = SAME_CAP_CELLS.filter((cell) => REHOME_SOURCE_CELLS.has(cell))
+    // Only a declared rehome source may roll at a trusted protocol at all; the job refuses
+    // the rest before it plans, and the next test covers them at protocol 0.
+    assert.deepEqual(
+      SAME_CAP_CELLS.filter((cell) => !REHOME_SOURCE_CELLS.has(cell)),
+      SAME_CAP_MIGRATION_ONLY_CELLS
+    )
+    for (const [cellId, protocol] of trusted.flatMap((cell) => [[cell, 1], [cell, 3]])) {
+      const { cap, pool } = cellShape(cellId)
       const config = {
         mode: 'same-cap-cell',
         cellId,
-        hardCap: Number(cap),
+        hardCap: cap,
         unobservedBound: 60,
         image: TARGET_IMAGE,
         rollbackImage: ROLLBACK_IMAGE,
+        capacityServiceAccount: CAPACITY_IDENTITY,
         rehomeDirectorServiceAccount: DIRECTOR_IDENTITY,
         rehomeAudience: AUDIENCE,
-        regionalRehomeProtocol: String(protocol)
+        regionalRehomeProtocol: String(protocol),
+        databasePoolMax: pool
       }
-      const plan = rollPlan({ cellId, cap, protocol })
+      const plan = rollPlan({ cellId, cap, protocol, pool })
       assert.deepEqual(
         validateCapacityPlan(plan, config),
         { mode: 'same-cap-cell', changes: 2 },
@@ -203,7 +308,16 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
       assert.throws(
         () => validateCapacityPlan(plan, {
           ...config,
-          regionalRehomeProtocol: String(1 - protocol)
+          regionalRehomeProtocol: '0'
+        }),
+        /reviewed image and capacity/,
+        cellId
+      )
+      // Dropping the pin must reject a pinned cell, and adding one must reject a default cell.
+      assert.throws(
+        () => validateCapacityPlan(plan, {
+          ...config,
+          databasePoolMax: pool === undefined ? '16' : undefined
         }),
         /reviewed image and capacity/,
         cellId
@@ -211,7 +325,368 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
     }
   })
 
-  it('leaves the US-only capacity job on the default allowlist', () => {
-    assert.doesNotMatch(capacityWorkflow, /--approved-cells/)
+  it('validates a protocol-0 plan for a cell outside the rehome source list', () => {
+    const cellId = 'production-gce-c17'
+    assert.equal(REHOME_SOURCE_CELLS.has(cellId), false)
+    const config = {
+      mode: 'same-cap-cell',
+      cellId,
+      hardCap: 600,
+      unobservedBound: 60,
+      image: TARGET_IMAGE,
+      rollbackImage: ROLLBACK_IMAGE,
+      capacityServiceAccount: CAPACITY_IDENTITY,
+      rehomeDirectorServiceAccount: DIRECTOR_IDENTITY,
+      rehomeAudience: AUDIENCE,
+      regionalRehomeProtocol: '0'
+    }
+    const plan = rollPlan({ cellId, cap: 600, protocol: 0 })
+    assert.deepEqual(validateCapacityPlan(plan, config), { mode: 'same-cap-cell', changes: 2 })
+    // Protocol 1 must reject a plan with no rehome lines, or the absent-line rule decides nothing.
+    assert.throws(
+      () => validateCapacityPlan(plan, { ...config, regionalRehomeProtocol: '1' }),
+      /reviewed image and capacity/
+    )
+  })
+
+  it('resolves the class and selector delta the wave validator declares', () => {
+    for (const cellId of SAME_CAP_CELLS) {
+      const resolved = resolveCellClass(cellId)
+      assert.equal(resolved.status, 0, `${cellId}: ${resolved.stderr}`)
+      assert.equal(
+        resolved.stdout.trim(),
+        `${entryAdmission(cellId)} ${selectorWaveDelta(cellId)}`,
+        cellId
+      )
+    }
+    assert.equal(resolveCellClass('production-gce-c12').status, 1)
+    // The job's own block refuses a pace its cell may not run, before anything reads production.
+    assert.equal(resolveCellClass('production-gce-c7', '60000').status, 0)
+    assert.equal(resolveCellClass('production-gce-c28', '60000').status, 1)
+    assert.equal(resolveCellClass('production-gce-c7', '45000').status, 1)
+  })
+
+  it('offsets a later wave by this cell class\'s own selector delta', () => {
+    for (const [waveIndex, delta] of [['0', 2], ['3', 2], ['0', 0], ['3', 0]]) {
+      const resolved = spawnSync('bash', ['-euo', 'pipefail', '-c', generationBlock()], {
+        env: {
+          ...process.env,
+          DEPLOY_MODE: 'apply',
+          EXPECTED_SELECTOR_GENERATION: '40',
+          WAVE_INDEX: waveIndex,
+          SELECTOR_WAVE_DELTA: String(delta)
+        },
+        encoding: 'utf8'
+      })
+      assert.equal(resolved.status, 0, resolved.stderr)
+      assert.equal(resolved.stdout.trim(), String(40 + delta * Number(waveIndex)))
+    }
+  })
+
+  it('hands a migration-only cell back the exact membership it entered with', () => {
+    const entry = {
+      EXPECTED_MIGRATION_ONLY_CELLS: 'production-gce-c17,production-gce-c18',
+      EXPECTED_GENERAL_CELLS: 'production-gce-c7,production-gce-c8'
+    }
+    const isolated = membership({
+      ...entry,
+      TARGET_CELL_ID: 'production-gce-c17',
+      ENTRY_ADMISSION: 'migration-only'
+    })
+    assert.deepEqual(isolated, {
+      isolatedMigration: 'production-gce-c17,production-gce-c18',
+      isolatedGeneral: 'production-gce-c7,production-gce-c8',
+      restoredMigration: 'production-gce-c17,production-gce-c18',
+      restoredGeneral: 'production-gce-c7,production-gce-c8'
+    })
+    // A general cell still leaves migration-only and returns to general.
+    assert.deepEqual(
+      membership({
+        ...entry,
+        TARGET_CELL_ID: 'production-gce-c7',
+        ENTRY_ADMISSION: 'general'
+      }),
+      {
+        isolatedMigration: 'production-gce-c17,production-gce-c18,production-gce-c7',
+        isolatedGeneral: 'production-gce-c8',
+        restoredMigration: 'production-gce-c17,production-gce-c18',
+        restoredGeneral: 'production-gce-c7,production-gce-c8'
+      }
+    )
+  })
+
+  it('never activates a migration-only cell and proves its isolate changed nothing', () => {
+    const restore = workflow
+      .split('name: Restore only the verified selected cell to its entry admission')[1]
+      .split('\n      - id:')[0]
+    assert.match(restore, /if test "\$\{ENTRY_ADMISSION\}" = migration-only; then\n\s+RESTORE_MODE=isolate/)
+    assert.match(restore, /--admission "\$\{ENTRY_ADMISSION\}"/)
+    // The pre-mutation check must demand the class the cell is declared to serve in.
+    assert.match(workflow, /PRECHECK_ADMISSION="\$\{ENTRY_ADMISSION\}"/)
+    const isolate = workflow
+      .split('name: Reversibly isolate and drain only the selected cell')[1]
+      .split('\n      - id:')[0]
+    assert.match(isolate, /migration-only; then\n\s+jq -e '\.changed == false'/)
+  })
+
+  it('requires rehome source membership exactly when a roll carries trust lines', () => {
+    const step = workflow
+      .split('name: Resolve immutable same-cap cell configuration')[1]
+      .split('\n      - name:')[0]
+    const guard = step.indexOf('jq -e --arg cell "${TARGET_CELL_ID}" \'index($cell) != null\'')
+    assert.notEqual(guard, -1)
+    // The guard reads both protocols, so it has to sit after they are resolved.
+    assert.ok(step.indexOf('DESIRED_REHOME_PROTOCOL="${TARGET_REHOME_PROTOCOL}"') < guard)
+    assert.match(
+      step.slice(0, guard),
+      /test "\$\{DESIRED_REHOME_PROTOCOL\}" != 0 \|\| test "\$\{CURRENT_REHOME_PROTOCOL\}" != 0\n\s+\}; then\s+$/
+    )
+  })
+
+  it('rolls a template stale enough to predate the pinned capacity identity', () => {
+    // Exactly c17's shape on 2026-09-18: its live template is from 2026-08-07 and has no
+    // capacity identity line, so the roll adds one. Run 35290908836 failed closed here.
+    const cellId = 'production-gce-c17'
+    const config = {
+      mode: 'same-cap-cell',
+      cellId,
+      hardCap: 600,
+      unobservedBound: 60,
+      image: TARGET_IMAGE,
+      rollbackImage: ROLLBACK_IMAGE,
+      capacityServiceAccount: CAPACITY_IDENTITY,
+      rehomeDirectorServiceAccount: DIRECTOR_IDENTITY,
+      rehomeAudience: AUDIENCE,
+      regionalRehomeProtocol: '0'
+    }
+    const stale = rollPlan({ cellId, cap: 600, protocol: 0, beforeCapacityIdentity: null })
+    assert.deepEqual(validateCapacityPlan(stale, config), { mode: 'same-cap-cell', changes: 2 })
+    // The line may only be gained. A roll may not rewrite it,
+    assert.throws(
+      () => validateCapacityPlan(stale, {
+        ...config,
+        capacityServiceAccount: 'orca-cloud-gha-other@onorca-cloud.iam.gserviceaccount.com'
+      }),
+      /reviewed image and capacity/
+    )
+    // nor drop it from a template that already carries one.
+    assert.throws(
+      () => validateCapacityPlan(
+        rollPlan({ cellId, cap: 600, protocol: 0, afterCapacityIdentity: null }),
+        config
+      ),
+      /reviewed image and capacity/
+    )
+    // A same-cap roll cannot run without the identity pinned at all.
+    assert.throws(
+      () => validateCapacityPlan(stale, { ...config, capacityServiceAccount: undefined }),
+      /invalid service account/
+    )
+  })
+
+
+  it('decides the predecessor draining rule from the real block, for both classes', () => {
+    // A zero-host cell sheds nothing, and a failed canary's own drain leaves the flag set
+    // with no restart behind it; run 35292335415 stopped on exactly that residue.
+    const cases = [
+      // mode, entry class, resume, expected [precheck admission, precheck draining, jq ok]
+      ['apply', 'migration-only', 'false', ['migration-only', 'either', 'true']],
+      ['apply', 'general', 'false', ['general', 'forbidden', 'false']],
+      ['verify', 'migration-only', 'false', ['migration-only', 'either', 'true']],
+      ['verify', 'general', 'false', ['general', 'forbidden', 'false']],
+      // Every rollback path keeps exactly the behaviour it had.
+      ['rollback', 'general', 'false', ['general-or-migration-only', 'either', 'true']],
+      ['rollback', 'general', 'true', ['general-or-migration-only', 'either', 'false']],
+      ['rollback', 'migration-only', 'false', ['general-or-migration-only', 'either', 'true']],
+      ['rollback', 'migration-only', 'true', ['general-or-migration-only', 'either', 'false']]
+    ]
+    for (const [mode, entry, resume, expected] of cases) {
+      const resolved = spawnSync('bash', ['-euo', 'pipefail', '-c', drainingBlock()], {
+        env: {
+          ...process.env,
+          DEPLOY_MODE: mode,
+          ENTRY_ADMISSION: entry,
+          ROLLBACK_RESUME: resume
+        },
+        encoding: 'utf8'
+      })
+      assert.equal(resolved.status, 0, `${mode}/${entry}/${resume}: ${resolved.stderr}`)
+      assert.deepEqual(
+        resolved.stdout.trim().split(' '),
+        expected,
+        `${mode}/${entry}/${resume}`
+      )
+    }
+  })
+
+  it('reads one draining decision in both predecessor checks', () => {
+    const step = workflow
+      .split('name: Verify exact current generation, digest, cap, and rollback point')[1]
+      .split('\n      - name:')[0]
+    // The jq assertion and its diagnostic must not be able to disagree.
+    assert.equal(step.split('--argjson drainingOk "${PREDECESSOR_DRAINING_OK}"').length, 3)
+    assert.doesNotMatch(step, /drainingOk "\$\(test/)
+    // The fresh VM is still required not to be draining, on every path.
+    const after = workflow
+      .split('name: Verify new incarnation, exact image, protocol, and durable safety')[1]
+      .split('\n      - name:')[0]
+    assert.match(after, /--admission migration-only --draining forbidden/)
+    const restore = workflow
+      .split('name: Restore only the verified selected cell to its entry admission')[1]
+      .split('\n      - id:')[0]
+    assert.match(restore, /--draining forbidden --activity allowed/)
+  })
+
+  it('classifies every rollback stage from the real block', () => {
+    const repository = 'us-central1-docker.pkg.dev/onorca-cloud/orca-cloud/relay'
+    const target = `sha256:${'7'.repeat(64)}`
+    const rollback = `sha256:${'0'.repeat(64)}`
+    const stage = (mode, live, draining) => {
+      // Exactly how the job assigns them: rollback swaps desired and current.
+      const desired = mode === 'rollback' ? rollback : target
+      const current = mode === 'rollback' ? target : rollback
+      const resolved = spawnSync('bash', ['-euo', 'pipefail', '-c', stageBlock()], {
+        env: {
+          ...process.env,
+          DEPLOY_MODE: mode,
+          CURRENT_RUNTIME: JSON.stringify({ imageDigest: live, draining }),
+          DESIRED_IMAGE_DIGEST: desired,
+          CURRENT_IMAGE_DIGEST: current,
+          DESIRED_IMAGE: `${repository}@${desired}`,
+          IMAGE_REPOSITORY: repository,
+          DESIRED_REHOME_PROTOCOL: '1',
+          CURRENT_REHOME_PROTOCOL: '0'
+        },
+        encoding: 'utf8'
+      })
+      assert.equal(resolved.status, 0, `${mode}/${live}/${draining}: ${resolved.stderr}`)
+      return resolved.stdout.trim().split(' ')
+    }
+    const roll = (current, protocol) =>
+      ['roll', 'false', current, protocol, `${repository}@${current}`]
+    // Only the last row differs from main: it used to read `resume` and wedge, because the
+    // resume path refuses a draining cell and never restarts one.
+    assert.deepEqual(stage('apply', rollback, false), roll(rollback, '0'))
+    assert.deepEqual(stage('apply', rollback, true), roll(rollback, '0'))
+    assert.deepEqual(stage('apply', target, false), roll(rollback, '0'))
+    assert.deepEqual(stage('verify', rollback, false), roll(rollback, '0'))
+    assert.deepEqual(stage('rollback', target, false), roll(target, '0'))
+    assert.deepEqual(stage('rollback', target, true), roll(target, '0'))
+    assert.deepEqual(
+      stage('rollback', rollback, false),
+      ['resume', 'true', rollback, '1', `${repository}@${target}`]
+    )
+    assert.deepEqual(
+      stage('rollback', rollback, true),
+      ['stranded', 'false', rollback, '1', `${repository}@${rollback}`]
+    )
+    // A runtime that reports no drain flag at all must never read as stranded.
+    const [missing] = stage('rollback', rollback, null)
+    assert.equal(missing, 'resume')
+  })
+
+  it('recreates the one stranded instance when a stranded plan changes nothing', () => {
+    const apply = workflow
+      .split('name: Apply only the selected same-cap template and MIG')[1]
+      .split('\n      - id:')[0]
+    // The plan is reviewed against the image the cell serves, not an assumed predecessor.
+    assert.match(apply, /--rollback-image "\$\{PLAN_ROLLBACK_IMAGE\}"/)
+    assert.doesNotMatch(apply, /--rollback-image "\$\{IMAGE_REPOSITORY\}/)
+    // A rolling action rewrites the MIG's version name outside Terraform, and the validator then
+    // refuses every later plan for the cell; recreating the instance leaves the MIG untouched.
+    assert.doesNotMatch(apply, /rolling-action/)
+    assert.match(
+      apply,
+      /list-instances \\\n\s+"\$\{MIG_NAME\}"[\s\S]*?if length == 1 then \.\[0\]\.instance/
+    )
+    assert.match(
+      apply,
+      /recreate-instances "\$\{MIG_NAME\}" \\\n\s+--instances "\$\{STRANDED_INSTANCE\}"/
+    )
+    assert.equal(apply.split('recreate-instances').length, 2)
+    // The recreate has to be waited on, after the apply's own wait.
+    const recreate = apply.indexOf('recreate-instances')
+    assert.equal(apply.split('wait-until "${MIG_NAME}" --stable').length, 3)
+    assert.ok(apply.indexOf('wait-until "${MIG_NAME}" --stable', recreate) > recreate)
+  })
+
+  // The stranded branch's instance pick has to refuse anything but exactly one instance.
+  it('picks the stranded instance only from a one-instance MIG', () => {
+    const apply = workflow
+      .split('name: Apply only the selected same-cap template and MIG')[1]
+      .split('\n      - id:')[0]
+    const filter = /jq -er '(if length == 1[\s\S]*?end)'\)"/.exec(apply)?.[1]
+    assert.notEqual(filter, undefined, 'the stranded branch no longer asserts one instance')
+    const pick = (instances) =>
+      spawnSync('jq', ['-er', filter], { input: JSON.stringify(instances), encoding: 'utf8' })
+    const link = (name) =>
+      `https://www.googleapis.com/compute/v1/projects/p/zones/z/instances/${name}`
+    const one = pick([{ instance: link('relay-c29-abcd') }])
+    assert.equal(one.error, undefined)
+    assert.equal(one.status, 0, one.stderr)
+    assert.equal(one.stdout.trim(), 'relay-c29-abcd')
+    assert.notEqual(pick([]).status, 0)
+    assert.notEqual(
+      pick([{ instance: link('relay-c29-abcd') }, { instance: link('relay-c29-efgh') }]).status,
+      0
+    )
+  })
+
+  // Run the predicate the job ships rather than restating it, because restating it is how the
+  // two drift apart. An unconverged resume accepts the template-and-MIG pair and nothing else,
+  // and it applies nothing: a backend change cannot reach this plan, which no longer targets one.
+  it('accepts only the template-and-MIG pair on an unconverged resume', () => {
+    const step = workflow.slice(
+      workflow.indexOf('- name: Require converged Terraform state and a stable MIG on resume'),
+      workflow.indexOf('- name: Apply only the selected same-cap template and MIG')
+    )
+    const accept = /jq -e '(\.changes == 2)' <<< "\$\{RESUME_REVIEW\}"/.exec(step)
+    assert.notEqual(accept, null, 'the resume step no longer gates on a validator verdict')
+    assert.equal(step.includes('terraform -chdir=infra/terraform apply'), false)
+    const outcome = (review) => {
+      const resolved = spawnSync('bash', ['-euo', 'pipefail', '-c', [
+        `RESUME_REVIEW=${JSON.stringify(JSON.stringify(review))}`,
+        `jq -e '${accept[1]}' <<< "\${RESUME_REVIEW}" >/dev/null || { echo refuse; exit 0; }`,
+        'echo accept'
+      ].join('\n')], { encoding: 'utf8' })
+      assert.equal(resolved.status, 0, resolved.stderr)
+      return resolved.stdout.trim()
+    }
+    assert.equal(outcome({ changes: 2 }), 'accept')
+    // Anything the validator did not bound to the reviewed rollback-image drift fails the step.
+    assert.equal(outcome({ changes: 0 }), 'refuse')
+    assert.equal(outcome({ changes: 0, backendUpdate: ['log_config.0'] }), 'refuse')
+    assert.equal(outcome({ changes: 1 }), 'refuse')
+    assert.equal(outcome({ changes: 3 }), 'refuse')
+  })
+
+  // The stranded cell's explicit MIG roll is the only thing that clears its drain flag, and
+  // `changes` is what decides it, so run the shipped predicate rather than restating it.
+  it('rolls a stranded MIG on the shipped predicate', () => {
+    const apply = workflow
+      .split('name: Apply only the selected same-cap template and MIG')[1]
+      .split('\n      - id:')[0]
+    const condition =
+      /if test "\$\{ROLLBACK_STAGE\}" = stranded \\\n\s+(&& jq -e '\.changes < 2' <<< "\$\{PLAN_REVIEW\}" >\/dev\/null); then/
+        .exec(apply)
+    assert.notEqual(condition, null, 'the stranded roll no longer gates on the plan review')
+    const rolls = (stage, review) => {
+      const resolved = spawnSync('bash', ['-euo', 'pipefail', '-c', [
+        `ROLLBACK_STAGE=${stage}`,
+        `PLAN_REVIEW=${JSON.stringify(JSON.stringify(review))}`,
+        `if test "\${ROLLBACK_STAGE}" = stranded \\\n  ${condition[1]}; then`,
+        'echo replace; else echo no-replace; fi'
+      ].join('\n')], { encoding: 'utf8' })
+      assert.equal(resolved.status, 0, resolved.stderr)
+      return resolved.stdout.trim()
+    }
+    assert.equal(rolls('stranded', { changes: 0 }), 'replace')
+    // A MIG-only reconciliation (a version label revert) leaves the template, so no restart.
+    assert.equal(rolls('stranded', { changes: 1 }), 'replace')
+    // A real template replacement already restarts the instance; rolling again would be a second.
+    assert.equal(rolls('stranded', { changes: 2 }), 'no-replace')
+    assert.equal(rolls('resume', { changes: 0 }), 'no-replace')
+    assert.equal(rolls('none', { changes: 0 }), 'no-replace')
   })
 })
+

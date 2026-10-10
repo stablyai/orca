@@ -66,14 +66,16 @@ describe('CLI runtime response framing', () => {
     const pending = sendRequest(metadata, 'terminal.read', {}, 30000)
     const originalIndexOf = String.prototype.indexOf
     let searchedCharacters = 0
-    const search = vi
-      .spyOn(String.prototype, 'indexOf')
-      .mockImplementation(function (this: string, value, position) {
-        if (value === '\n') {
-          searchedCharacters += this.length - (position ?? 0)
-        }
-        return originalIndexOf.call(this, value, position)
-      })
+    const search = vi.spyOn(String.prototype, 'indexOf').mockImplementation(function (
+      this: string,
+      value,
+      position
+    ) {
+      if (value === '\n') {
+        searchedCharacters += this.length - (position ?? 0)
+      }
+      return originalIndexOf.call(this, value, position)
+    })
     try {
       for (let offset = 0; offset < encoded.length; offset += 256) {
         socket.emit('data', encoded.slice(offset, offset + 256))

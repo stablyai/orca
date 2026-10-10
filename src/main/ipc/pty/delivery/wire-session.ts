@@ -38,12 +38,7 @@ import {
   syncPtyBackgroundedDelivery,
   updateProducerFlowControl
 } from './producer-sync'
-import {
-  acceptPtyDataForRenderer,
-  clearDeliveredHiddenRendererResizeOutput,
-  clearHiddenRendererResizeOutput,
-  rendererPtyIsKnownHidden
-} from './accept'
+import { acceptPtyDataForRenderer, rendererPtyIsKnownHidden } from './accept'
 import {
   consumeSyntheticKillExit,
   finalizePtyExitForRenderer,
@@ -89,9 +84,11 @@ export function wirePtyIpcSession(session: PtyIpcSession): void {
   session.requestSerializedBuffer = (ptyId, opts) => requestSerializedBuffer(session, ptyId, opts)
   session.shutdownProviderAndDetectExit = (provider, id, opts) =>
     shutdownProviderAndDetectExit(provider, id, opts)
-  session.rememberSyntheticKillExit = (id) => rememberSyntheticKillExit(session, id)
+  session.rememberSyntheticKillExit = (id, incarnationId) =>
+    rememberSyntheticKillExit(session, id, incarnationId)
   session.rememberRetiredRejectedPty = (id) => rememberRetiredRejectedPty(session, id)
-  session.consumeSyntheticKillExit = (id) => consumeSyntheticKillExit(session, id)
+  session.consumeSyntheticKillExit = (id, incarnationId) =>
+    consumeSyntheticKillExit(session, id, incarnationId)
   session.syncPtyBackgroundedDelivery = (id, caller) =>
     syncPtyBackgroundedDelivery(session, id, caller)
   session.resyncBackgroundedDeliveriesAfterGateReset = () =>
@@ -101,8 +98,6 @@ export function wirePtyIpcSession(session: PtyIpcSession): void {
   session.transitionSpawnHiddenRendererPtyDeliveryState = (id, hidden) =>
     transitionSpawnHiddenRendererPtyDeliveryState(session, id, hidden)
   session.rendererPtyIsKnownHidden = rendererPtyIsKnownHidden
-  session.clearHiddenRendererResizeOutput = clearHiddenRendererResizeOutput
-  session.clearDeliveredHiddenRendererResizeOutput = clearDeliveredHiddenRendererResizeOutput
   session.schedulePendingDataAfterCreditReport = (creditedAny) =>
     schedulePendingDataAfterCreditReport(session, creditedAny)
   session.writeOffLostRendererDelivery = (report) => writeOffLostRendererDelivery(session, report)

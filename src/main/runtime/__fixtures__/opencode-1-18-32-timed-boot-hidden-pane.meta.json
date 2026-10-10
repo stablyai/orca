@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-30T08:40:33.073309Z",
+  "platform": "darwin",
+  "command": ["opencode"],
+  "cols": 120,
+  "rows": 40,
+  "note": "1.18.32 on macOS 26.6.2 arm64, 120x40, alternate screen. Why this run: answered like a hidden Orca pane (silent on OSC colour queries), as a background worker pane is. Recorded with a Python PTY driver rather than the repo recorder, because the driver stamps every read with its time and answers the terminal queries OpenCode sends; responder 'headless' = Orca's hidden-pane replies, silent on OSC colour queries. Isolated HOME and XDG dirs, OPENCODE_DISABLE_AUTOUPDATE=1, OPENCODE_CONFIG_CONTENT {\"autoupdate\":false}, no model configured, env -i (no ORCA_*); version and binary sha256 unchanged before and after. No input typed. Recording ran 42.8 s; no bytes after the last chunk. <name>.timing.json holds each PTY read as [ms since spawn, UTF-16 length] and recordedUntilMs.",
+  "exitCode": null
+}

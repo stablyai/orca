@@ -19,7 +19,9 @@ locals {
     "deploy-relay-production-multi-target.yml",
     "deploy-relay-production.yml",
     "operate-relay-asia-admission.yml",
+    "operate-relay-production-cell-flags.yml",
     "publish-relay-production.yml"
+
   ]
   github_production_relay_capacity_workflow_file     = "deploy-relay-production-capacity.yml"
   github_production_relay_capacity_job_workflow_file = "deploy-relay-production-capacity-job.yml"

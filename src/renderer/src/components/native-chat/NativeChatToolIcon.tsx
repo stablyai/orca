@@ -1,21 +1,22 @@
 import {
   Bot,
+  Brain,
   Eye,
   Folder,
   Globe,
   ListChecks,
+  MessageSquareMore,
   Pencil,
   Plug,
   Search,
   SquareTerminal,
   Wrench
 } from 'lucide-react'
+import type { NativeChatMcpIdentity } from '../../../../shared/native-chat-tool-identity'
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import {
-  nativeChatToolIconName,
-  type NativeChatToolIconName
-} from '../../../../shared/native-chat-tool-icon'
+import type { NativeChatToolIconName } from '../../../../shared/native-chat-tool-icon'
+import { nativeChatToolIconName } from './native-chat-tool-category'
 
 /** Glyph name to component. */
 const NATIVE_CHAT_TOOL_GLYPHS: Record<NativeChatToolIconName, LucideIcon> = {
@@ -28,7 +29,9 @@ const NATIVE_CHAT_TOOL_GLYPHS: Record<NativeChatToolIconName, LucideIcon> = {
   plug: Plug,
   bot: Bot,
   'list-checks': ListChecks,
-  wrench: Wrench
+  wrench: Wrench,
+  'message-square-more': MessageSquareMore,
+  brain: Brain
 }
 
 /** The fixed 16px slot with a 14px glyph, which keeps every row left-aligned
@@ -57,15 +60,17 @@ function NativeChatGlyphSlot({
  */
 export function NativeChatToolIcon({
   rowWord,
+  mcpIdentity,
   className
 }: {
   /** The word the row renders, which is the row's whole identity. */
   rowWord: string
+  mcpIdentity?: NativeChatMcpIdentity
   className?: string
 }): React.JSX.Element {
   return (
     <NativeChatGlyphSlot
-      glyph={NATIVE_CHAT_TOOL_GLYPHS[nativeChatToolIconName(rowWord)]}
+      glyph={NATIVE_CHAT_TOOL_GLYPHS[nativeChatToolIconName(rowWord, mcpIdentity)]}
       className={className}
     />
   )

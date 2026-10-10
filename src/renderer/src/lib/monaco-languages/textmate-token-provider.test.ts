@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { createOnigScanner, createOnigString, loadWASM } from 'vscode-oniguruma'
 import type { IOnigLib, IRawGrammar } from 'vscode-textmate'
 import nimGrammar from './textmate-grammars/nim.tmLanguage.json'
+import { loadTypstTextMateGrammar } from './register-typst'
 import { createTextMateTokensProvider } from './textmate-token-provider'
 
 const require = createRequire(import.meta.url)
@@ -43,6 +44,107 @@ describe('createTextMateTokensProvider', () => {
     const commentLine = provider.tokenize('# hello', provider.getInitialState())
     expect(commentLine.tokens.map((token) => token.scopes)).toContain(
       'comment.line.number-sign.nim'
+    )
+  })
+
+  it('tokenizes Typst markup, code, and math through the lazy grammar loader', async () => {
+    const provider = await createTextMateTokensProvider({
+      scopeName: 'source.typst',
+      loadGrammar: loadTypstTextMateGrammar,
+      loadOniguruma: loadNodeOniguruma
+    })
+    const scopesOf = (line: string) =>
+      provider.tokenize(line, provider.getInitialState()).tokens.map((token) => token.scopes)
+
+    expect(scopesOf('#let width = 12pt')).toEqual(
+      expect.arrayContaining(['keyword.other.typst', 'constant.numeric.length.typst'])
+    )
+    expect(scopesOf('#set text(font: "Inter")')).toEqual(
+      expect.arrayContaining(['entity.name.function.typst', 'string.quoted.double.typst'])
+    )
+    expect(scopesOf('// note')).toContain('comment.line.double-slash.typst')
+    expect(scopesOf('$ sum_(k=0)^n k $')).toContain('string.other.math.typst')
+  })
+
+  it.each([
+    ['```rust', 'let x = 1', '```', '#let y = 2'],
+    ['````', '```', '````', '#let y = 2']
+  ])('carries a Typst raw block until its matching fence closes (%s)', async (...lines) => {
+    const provider = await createTextMateTokensProvider({
+      scopeName: 'source.typst',
+      loadGrammar: loadTypstTextMateGrammar,
+      loadOniguruma: loadNodeOniguruma
+    })
+
+    let state = provider.getInitialState()
+    const lineScopes = lines.map((line) => {
+      const result = provider.tokenize(line, state)
+      state = result.endState
+      return result.tokens.map((token) => token.scopes)
+    })
+
+    expect(lineScopes[1]).toEqual(['markup.raw.block.typst'])
+    expect(lineScopes[3]).toContain('keyword.other.typst')
+  })
+
+  it('carries Typst math across lines and returns to code after the closing dollar', async () => {
+    const provider = await createTextMateTokensProvider({
+      scopeName: 'source.typst',
+      loadGrammar: loadTypstTextMateGrammar,
+      loadOniguruma: loadNodeOniguruma
+    })
+    const opening = provider.tokenize('$', provider.getInitialState())
+    const clone = opening.endState.clone()
+    expect(clone.equals(opening.endState)).toBe(true)
+    const body = provider.tokenize('x^2 + y^2 = z^2', clone)
+    expect(body.tokens.map((token) => token.scopes)).toEqual(['string.other.math.typst'])
+    const closing = provider.tokenize('$', body.endState)
+    const after = provider.tokenize('#let y = 2', closing.endState)
+    expect(after.tokens.map((token) => token.scopes)).toContain('keyword.other.typst')
+    expect(after.tokens.map((token) => token.scopes)).not.toContain('string.other.math.typst')
+    expect(provider.tokenize('#let y = 2', provider.getInitialState()).tokens).toEqual(after.tokens)
+  })
+
+  it.each([
+    ['// Write /* to start a block comment.'],
+    ['/* documentation: // */'],
+    ['/* outer', '/* inner */ still outer', '*/'],
+    ['$ "cost $5" + x $'],
+    ['$ x + \\$ + y $'],
+    ['$ "escaped \\" $5" + x $'],
+    ['$ x + \\\\ $'],
+    ['$', '"cost $5" + \\$ + y', '$'],
+    ['$ x /* $ ignored */ + y $'],
+    ['$', '// $ ignored', 'x + y', '$'],
+    ['#let formula = $ "cost $5" + \\$ $']
+  ])('returns to Typst code after a comment or math region (%j)', async (...lines) => {
+    const provider = await createTextMateTokensProvider({
+      scopeName: 'source.typst',
+      loadGrammar: loadTypstTextMateGrammar,
+      loadOniguruma: loadNodeOniguruma
+    })
+    let state = provider.getInitialState()
+    for (const line of lines) {
+      state = provider.tokenize(line, state).endState
+    }
+    const after = '#let after = 12pt'
+    const tokens = provider.tokenize(after, state).tokens
+    expect(tokens).toEqual(provider.tokenize(after, provider.getInitialState()).tokens)
+    expect(tokens.map((token) => token.scopes)).toEqual(
+      expect.arrayContaining(['keyword.other.typst', 'constant.numeric.length.typst'])
+    )
+  })
+
+  it('keeps nested Typst block comments active until both closers', async () => {
+    const provider = await createTextMateTokensProvider({
+      scopeName: 'source.typst',
+      loadGrammar: loadTypstTextMateGrammar,
+      loadOniguruma: loadNodeOniguruma
+    })
+    let state = provider.tokenize('/* outer /* inner', provider.getInitialState()).endState
+    state = provider.tokenize('*/ still outer', state).endState
+    expect(provider.tokenize('#let hidden = 2', state).tokens.map((token) => token.scopes)).toEqual(
+      ['comment.block.typst']
     )
   })
 

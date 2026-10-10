@@ -52,23 +52,23 @@ Orca returns a clear message when the SDK is missing
 Use `--json` for agent-driven calls. Unqualified commands target the worktree's active
 device.
 
-| Goal                | Command                                                              | Constraint                                                                    |
-| ------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| List devices + AVDs | `ORCA emulator devices --json`                                       | Every backend's devices with a platform column, booted and shutdown.           |
-| Attach / make active | `ORCA emulator attach <avd-name-or-serial> --json`                   | Given an AVD name, boots it first. Makes the device active for the worktree.    |
-| Single tap          | `ORCA emulator tap <x> <y> --json`                                   | Normalized 0..1 coordinates.                                                   |
-| Swipe / gesture     | `ORCA emulator gesture '<json>' --json`                              | adb approximates the path by its endpoints, first point to last.               |
-| Type text           | `ORCA emulator type "user@example.com" --json`                       | US-ASCII, spaces handled, no newlines.                                         |
-| Hardware button     | `ORCA emulator button back --json`                                   | `home`, `back`, `recents`, `power`, `volume_up`, `volume_down`.                 |
-| Rotate              | `ORCA emulator rotate landscape_left --json`                         | Sets `user_rotation` and disables auto-rotate.                                  |
-| Install an APK      | `ORCA emulator install ./app-debug.apk --reinstall --json`           | `--reinstall` passes `-r`.                                                      |
-| Launch an app       | `ORCA emulator launch com.acme.app --activity .MainActivity --json`  | Omit `--activity` to launch the default LAUNCHER activity.                      |
-| Runtime permission  | `ORCA emulator permissions grant com.acme.app android.permission.CAMERA --json` | Positional order is `<grant\|revoke> <package> <permission>`; `reset` takes no positionals and clears all runtime grants. |
-| Accessibility tree  | `ORCA emulator ax --json`                                            | `uiautomator dump` parsed to a node tree.                                       |
-| Logcat (one-shot)   | `ORCA emulator logcat --lines 200 --json`                            | Dumps recent lines, parsed to entries.                                          |
-| Raw adb shell       | `ORCA emulator exec --command "getprop ro.build.version.sdk" --json` | Runs `adb -s <serial> shell <command>`.                                         |
-| Stop the helper     | `ORCA emulator kill --json`                                          | Leaves the device booted.                                                       |
-| Stop and power off  | `ORCA emulator shutdown --json`                                      | Stops the helper and shuts the device down.                                     |
+| Goal                 | Command                                                                         | Constraint                                                                                                                |
+| -------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| List devices + AVDs  | `ORCA emulator devices --json`                                                  | Every backend's devices with a platform column, booted and shutdown.                                                      |
+| Attach / make active | `ORCA emulator attach <avd-name-or-serial> --json`                              | Given an AVD name, boots it first. Makes the device active for the worktree.                                              |
+| Single tap           | `ORCA emulator tap <x> <y> --json`                                              | Normalized 0..1 coordinates.                                                                                              |
+| Swipe / gesture      | `ORCA emulator gesture '<json>' --json`                                         | adb approximates the path by its endpoints, first point to last.                                                          |
+| Type text            | `ORCA emulator type "user@example.com" --json`                                  | US-ASCII, spaces handled, no newlines.                                                                                    |
+| Hardware button      | `ORCA emulator button back --json`                                              | `home`, `back`, `recents`, `power`, `volume_up`, `volume_down`.                                                           |
+| Rotate               | `ORCA emulator rotate landscape_left --json`                                    | Sets `user_rotation` and disables auto-rotate.                                                                            |
+| Install an APK       | `ORCA emulator install ./app-debug.apk --reinstall --json`                      | `--reinstall` passes `-r`.                                                                                                |
+| Launch an app        | `ORCA emulator launch com.acme.app --activity .MainActivity --json`             | Omit `--activity` to launch the default LAUNCHER activity.                                                                |
+| Runtime permission   | `ORCA emulator permissions grant com.acme.app android.permission.CAMERA --json` | Positional order is `<grant\|revoke> <package> <permission>`; `reset` takes no positionals and clears all runtime grants. |
+| Accessibility tree   | `ORCA emulator ax --json`                                                       | `uiautomator dump` parsed to a node tree.                                                                                 |
+| Logcat (one-shot)    | `ORCA emulator logcat --lines 200 --json`                                       | Dumps recent lines, parsed to entries.                                                                                    |
+| Raw adb shell        | `ORCA emulator exec --command "getprop ro.build.version.sdk" --json`            | Runs `adb -s <serial> shell <command>`.                                                                                   |
+| Stop the helper      | `ORCA emulator kill --json`                                                     | Leaves the device booted.                                                                                                 |
+| Stop and power off   | `ORCA emulator shutdown --json`                                                 | Stops the helper and shuts the device down.                                                                               |
 
 ## Targeting
 

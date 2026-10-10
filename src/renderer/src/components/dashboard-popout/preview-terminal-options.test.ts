@@ -58,6 +58,43 @@ describe('buildPreviewTerminalOptions', () => {
     scrollback: 1000
   }
 
+  // #10754: the dashboard preview renders the agent's live buffer, so it has to reproduce the same
+  // contrast floor the pane used or a Powerline statusline looks different in the popout.
+  it('mirrors the automatic contrast floor when no override is set', () => {
+    expect(
+      buildPreviewTerminalOptions({
+        ...base,
+        terminalInput: null,
+        theme: { background: '#1e242a' }
+      }).minimumContrastRatio
+    ).toBe(3)
+    expect(
+      buildPreviewTerminalOptions({
+        ...base,
+        terminalInput: null,
+        theme: { background: '#ffffff' },
+        themeMode: 'light'
+      }).minimumContrastRatio
+    ).toBe(4.5)
+  })
+
+  it('honors the user contrast override, clamped to xterm range', () => {
+    expect(
+      buildPreviewTerminalOptions({
+        ...base,
+        terminalInput: null,
+        settings: { ...SETTINGS, terminalMinimumContrastRatio: 1 }
+      }).minimumContrastRatio
+    ).toBe(1)
+    expect(
+      buildPreviewTerminalOptions({
+        ...base,
+        terminalInput: null,
+        settings: { ...SETTINGS, terminalMinimumContrastRatio: 0 }
+      }).minimumContrastRatio
+    ).toBe(1)
+  })
+
   it('keeps the kitty advertisement and skips ConPTY options off Windows', () => {
     const options = buildPreviewTerminalOptions({
       ...base,

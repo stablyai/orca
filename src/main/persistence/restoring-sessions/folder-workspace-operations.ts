@@ -8,7 +8,9 @@ import { normalizeStoredTaskSourceContext } from '../../../shared/task-source-co
 import { normalizeWorkspaceLinkedItem } from '../../../shared/workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import { removeWorkspaceSessionOwner } from './session-owner-removal'
+import { removeWorkspaceSessionOwnerEverywhere } from './session-owner-removal'
+import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachment-mutation'
+import { normalizeWorkspaceAttachmentUpdate } from '../../../shared/workspace-attachments'
 
 export type FolderWorkspaceMutationOperations = {
   state: PersistedState
@@ -56,6 +58,7 @@ export class FolderWorkspacePersistenceOperations {
     name?: string
     folderPath?: string | null
     linkedTask?: FolderWorkspace['linkedTask']
+    linkedItems?: FolderWorkspace['linkedItems']
     linkedTaskSourceContext?: FolderWorkspace['linkedTaskSourceContext']
     connectionId?: string | null
     creatorProvenance?: FolderWorkspace['creatorProvenance']
@@ -76,6 +79,14 @@ export class FolderWorkspacePersistenceOperations {
     const now = Date.now()
     const linkedTask = normalizeWorkspaceLinkedItem(input.linkedTask)
     const sourceContext = normalizeStoredTaskSourceContext(input.linkedTaskSourceContext)
+    const attachmentUpdates =
+      input.linkedItems === undefined
+        ? undefined
+        : normalizeWorkspaceAttachmentUpdate(undefined, {
+            linkedItems: input.linkedItems,
+            linkedWorkItem: linkedTask,
+            linkedTaskSourceContext: sourceContext
+          })
     const workspace: FolderWorkspace = {
       id: randomUUID(),
       projectGroupId: group.id,
@@ -83,10 +94,13 @@ export class FolderWorkspacePersistenceOperations {
       folderPath,
       connectionId: input.connectionId ?? group.connectionId ?? null,
       ...(input.creatorProvenance ? { creatorProvenance: input.creatorProvenance } : {}),
-      linkedTask,
-      linkedTaskSourceContext: isWorkspaceLinkedItemSourceContextMatch(linkedTask, sourceContext)
-        ? sourceContext
-        : null,
+      linkedTask: attachmentUpdates ? (attachmentUpdates.linkedWorkItem ?? null) : linkedTask,
+      ...(attachmentUpdates ? { linkedItems: attachmentUpdates.linkedItems } : {}),
+      linkedTaskSourceContext: attachmentUpdates
+        ? attachmentUpdates.linkedTaskSourceContext
+        : isWorkspaceLinkedItemSourceContextMatch(linkedTask, sourceContext)
+          ? sourceContext
+          : null,
       comment: '',
       isArchived: false,
       isUnread: false,
@@ -113,6 +127,7 @@ export class FolderWorkspacePersistenceOperations {
         | 'name'
         | 'folderPath'
         | 'linkedTask'
+        | 'linkedItems'
         | 'linkedTaskSourceContext'
         | 'comment'
         | 'isArchived'
@@ -127,11 +142,34 @@ export class FolderWorkspacePersistenceOperations {
         | 'lastActivityAt'
         | 'diffComments'
       >
-    >
+    > &
+      WorkspaceAttachmentMutation
   ): FolderWorkspace | null {
     const workspace = this.getFolderWorkspace(id)
     if (!workspace) {
       return null
+    }
+    const linkedUpdates = normalizeWorkspaceAttachmentUpdate(
+      {
+        linkedItems: workspace.linkedItems,
+        linkedWorkItem: workspace.linkedTask,
+        linkedTaskSourceContext: workspace.linkedTaskSourceContext
+      },
+      {
+        linkedItemsBase: updates.linkedItemsBase,
+        linkedItems: updates.linkedItems,
+        linkedWorkItem: updates.linkedTask,
+        linkedTaskSourceContext: updates.linkedTaskSourceContext
+      }
+    )
+    if (linkedUpdates.linkedItems !== undefined) {
+      workspace.linkedItems = linkedUpdates.linkedItems
+    }
+    if (linkedUpdates.linkedWorkItem !== undefined) {
+      updates = { ...updates, linkedTask: linkedUpdates.linkedWorkItem }
+    }
+    if (linkedUpdates.linkedTaskSourceContext !== undefined) {
+      updates = { ...updates, linkedTaskSourceContext: linkedUpdates.linkedTaskSourceContext }
     }
     if (updates.name !== undefined) {
       workspace.name = normalizeFolderWorkspaceName(updates.name, workspace.name)
@@ -215,10 +253,7 @@ export class FolderWorkspacePersistenceOperations {
     if ((this.state.folderWorkspaces?.length ?? 0) === before) {
       return false
     }
-    this.state.workspaceSession = removeWorkspaceSessionOwner(
-      this.state.workspaceSession,
-      folderWorkspaceKey(id)
-    )!
+    removeWorkspaceSessionOwnerEverywhere(this.state, folderWorkspaceKey(id))
     this.removeWorkspaceLineageForFolderParent(id)
     this.pruneMobileClientTabSelections((worktreeId) => worktreeId === folderWorkspaceKey(id))
     this.scheduleSave()

@@ -140,9 +140,24 @@ export function shouldMountBackgroundWorktreeTab(
 // seconds (field trace: 200+ replay-guard stall releases in one activation
 // window). Deferred tabs behave like cold-parked tabs from birth: no view
 // until first reveal, parked byte watchers own their side effects meanwhile.
-export const COLD_ACTIVATION_TAB_DEFER_THRESHOLD = 4
+//
+// Why 0 and not a small budget: measured switch-to-first-paint scales linearly
+// with the tabs an activation mounts (~40ms/tab even without a GPU), and the
+// hidden ones buy the visible pane nothing. The old budget of 4 exempted the
+// 2-5 tab worktrees that make up almost every real switch, so they paid the
+// full fan-out. Nothing is traded away: useActivationDeferredTabAdmission
+// mounts the hidden siblings on idle frames right after the reveal, so the warm
+// working set (and later tab switches) ends up exactly where it was before.
+export const COLD_ACTIVATION_TAB_DEFER_THRESHOLD = 0
 
-export function canMountTerminalWorkspaceForStartup(args: {
+/**
+ * Whether restored terminal tabs may mount their panes. Why this fences panes and not the
+ * workspace surface: a pane binds a PTY on mount, and until startup restoration has fenced
+ * the daemon provider, reconnected SSH targets, and published PTY ownership, that bind would
+ * attach to a not-yet-restored session or spawn a duplicate shell. The tab strip and the
+ * chat, browser, and editor panes bind nothing, so they mount from the hydrated tab model.
+ */
+export function canAdmitTerminalTabsForStartup(args: {
   workspaceSessionReady: boolean
   hydrationSucceeded: boolean
   startupWorktreeRefreshCompleted: boolean

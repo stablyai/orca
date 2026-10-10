@@ -1,3 +1,4 @@
+import '../../../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protocol-version'
 import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
@@ -8,6 +9,7 @@ import type { RpcRequest } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
 import { fingerprintAuthenticatedPairingCredential } from '../../../orchestration-mutation-executor'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { syncFederationBarrier } from './federation-sync-barrier.test-support'
 
 describe('orchestration federation control mail', () => {
   const homeToken = 'run-home-device-token'
@@ -106,6 +108,7 @@ describe('orchestration federation control mail', () => {
     homeDb.markWorkerDispatchReady(dispatchId)
 
     workerDb.createRemoteDispatchAttachment({
+      runId: 'run-home',
       dispatchId,
       taskId: task.id,
       homePeerFingerprint: homeFingerprint,
@@ -160,7 +163,7 @@ describe('orchestration federation control mail', () => {
     })
     expect(homeDb.listPendingFederationRelay(dispatchId, 'to_worker')).toHaveLength(1)
 
-    await homeRuntime.syncOrchestrationFederation()
+    await syncFederationBarrier(homeRuntime, homeDb)
     const checked = await workerDispatcher.dispatch(checkRequest('check-imported'))
 
     expect(checked).toMatchObject({
@@ -252,7 +255,7 @@ describe('orchestration federation control mail', () => {
       settleRemoteOutcome: 'succeeded'
     })
 
-    await homeRuntime.syncOrchestrationFederation()
+    await syncFederationBarrier(homeRuntime, homeDb)
 
     expect(homeDb.getWorkerDispatch(dispatchId)?.state).toBe('succeeded')
     expect(workerDb.getUnreadMessages(`dispatch:${dispatchId}`)).toHaveLength(0)

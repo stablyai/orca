@@ -1,6 +1,7 @@
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { isFolderRepo } from '../../shared/repo-kind'
 import type { Repo } from '../../shared/repo-types'
+import type { GhAccountBinding } from '../../shared/github/account-binding'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -38,6 +39,8 @@ type RepositoryUpdates = Partial<
 > & {
   sourceControlAi?: Repo['sourceControlAi'] | null
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
+  /** Only `null` clears; `omitUndefined` drops a stripped (undefined) field so it never unbinds. */
+  ghAccount?: GhAccountBinding | null
 }
 
 function omitUndefined<T extends Record<string, unknown>>(value: T): Partial<T> {
@@ -102,22 +105,11 @@ export class RuntimeRepositorySettingsController {
 
   async remove(repoSelector: string): Promise<{ removed: true }> {
     const store = this.deps.getStore()
-    if (!store?.removeProject) {
+    if (!store?.removeProjectForHost) {
       throw new Error('runtime_unavailable')
     }
     const repo = await this.deps.resolveRepo(repoSelector)
-    const hostId = getRepoExecutionHostId(repo)
-    const idExistsOnOtherHost = store
-      .getRepos()
-      .some((entry) => entry.id === repo.id && getRepoExecutionHostId(entry) !== hostId)
-    if (idExistsOnOtherHost) {
-      if (!store.removeProjectForHost) {
-        throw new Error('runtime_unavailable')
-      }
-      store.removeProjectForHost(repo.id, hostId)
-    } else {
-      store.removeProject(repo.id)
-    }
+    store.removeProjectForHost(repo.id, getRepoExecutionHostId(repo))
     this.deps.forgetTerminalTopology(repo.id)
     this.deps.invalidateResolvedWorktrees()
     this.deps.invalidateWorktreeScan(repo.id)

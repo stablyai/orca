@@ -6,10 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Command, CommandInput, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
-import {
-  isImeCompositionKeyDown,
-  useImeEnterGestureOwnership
-} from '@/lib/ime-composition-keyboard-event'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import {
@@ -219,7 +215,6 @@ function ParentWorktreeCandidateList({
   const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
   const listRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const imeEnter = useImeEnterGestureOwnership()
   const optionIdPrefix = `${useId()}option`
   const [search, setSearch] = useState('')
   const [highlightedIndex, setHighlightedIndex] = useState(0)
@@ -307,11 +302,6 @@ function ParentWorktreeCandidateList({
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
       // Why: cmdk's root handler only knows the mounted virtual window, so own navigation here.
-      // A CJK confirm sends two Enter keydowns and only the first is marked, so the marked-only
-      // check must be paired with the gesture carry or the unmarked one commits a selection.
-      if (imeEnter.ownsKeyDown(event) || isImeCompositionKeyDown(event)) {
-        return
-      }
       const navigate = (nextIndex: number): void => {
         event.preventDefault()
         event.stopPropagation()
@@ -334,7 +324,7 @@ function ParentWorktreeCandidateList({
         }
       }
     },
-    [activeIndex, filtered, imeEnter, moveHighlight, onSelect]
+    [activeIndex, filtered, moveHighlight, onSelect]
   )
 
   // Why: cmdk's Input owns aria-activedescendant and points it at its own empty
@@ -352,9 +342,6 @@ function ParentWorktreeCandidateList({
         value={search}
         onValueChange={handleSearchChange}
         onKeyDown={handleKeyDown}
-        onKeyUp={imeEnter.onKeyUp}
-        onCompositionStart={() => imeEnter.setComposing(true)}
-        onCompositionEnd={() => imeEnter.setComposing(false)}
         wrapperClassName="shrink-0"
         placeholder={translate(
           'auto.components.ComposerParentWorktreePicker.searchPlaceholder',

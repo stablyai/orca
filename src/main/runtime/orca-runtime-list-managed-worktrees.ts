@@ -8,7 +8,11 @@ import { stopMissingWorktreeTerminals } from './missing-worktree-terminal-reconc
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 import type { WorktreeVisibilitySourceMatcher } from '../../shared/worktree/visibility-sources'
 import type { RuntimeStore } from './runtime-store-contract'
+import { getWorkspaceAttachments } from '../../shared/workspace-attachments'
+import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type {
+  WorkspacePortHostKillRequest,
+  WorkspacePortHostScanResult,
   WorkspacePortKillRequest,
   WorkspacePortKillResult,
   WorkspacePortProbe,
@@ -19,6 +23,14 @@ import {
   killWorkspacePort,
   scanWorkspacePortProbes
 } from '../ports/workspace-port-ownership'
+import {
+  killWorkspacePortOnExecutionHost,
+  scanWorkspacePortsOnExecutionHost,
+  type WorkspacePortExecutionHostDeps
+} from '../ports/workspace-port-execution-host'
+import { getActiveMultiplexer } from '../ssh/ssh-target-registry'
+import { resolveWorktreeHostRouting } from './worktree-launch-host-repo'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 
 export class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce {
   listManagedWorktrees(
@@ -115,15 +127,32 @@ export class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWithRestoreS
   }
 
   async showManagedWorktree(worktreeSelector: string) {
-    return await this.resolveWorktreeSelector(worktreeSelector)
+    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    return { ...worktree, linkedItems: getWorkspaceAttachments(worktree) }
   }
 
+  /**
+   * The git worktree record behind a terminal workspace. Refuses the floating sentinel, which has
+   * no such record — callers that only need to address the workspace want the scope below instead.
+   */
   async showManagedTerminalWorkspace(worktreeSelector: string) {
     const target = await this.resolveTerminalWorkspaceLaunchTarget(worktreeSelector)
     if (!target.managedWorktree) {
       throw new Error('selector_not_found')
     }
     return target.managedWorktree
+  }
+
+  /**
+   * Where a terminal workspace is, for every kind one can be: a git worktree, a folder workspace,
+   * or the floating sentinel. This is the general answer — `id` and `path` are resolved the same
+   * way for all three — so a caller that reads only those must ask for this rather than demand a
+   * worktree record it never reads and lose the floating workspace to a `selector_not_found`.
+   */
+  async showTerminalWorkspaceLaunchScope(
+    worktreeSelector: string
+  ): Promise<TerminalWorkspaceLaunchScope> {
+    return await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
   }
 
   async scanWorkspacePorts(repoId?: string): Promise<WorkspacePortScanResult> {
@@ -134,22 +163,45 @@ export class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWithRestoreS
     return killWorkspacePort(await this.getWorkspacePortProbes(args.repoId), args)
   }
 
+  // Why the workspace, not a client-named host: this server resolves where the workspace runs.
+  async scanWorkspacePortsOnHost(worktreeSelector: string): Promise<WorkspacePortHostScanResult> {
+    const { executionHostId } = await this.resolveRuntimeFileTarget(worktreeSelector)
+    return scanWorkspacePortsOnExecutionHost(executionHostId, this.getWorkspacePortHostDeps())
+  }
+
+  async killWorkspacePortOnHost(
+    args: WorkspacePortHostKillRequest
+  ): Promise<WorkspacePortKillResult> {
+    const { executionHostId } = await this.resolveRuntimeFileTarget(args.worktree)
+    return killWorkspacePortOnExecutionHost(executionHostId, args, this.getWorkspacePortHostDeps())
+  }
+
+  protected getWorkspacePortHostDeps(): WorkspacePortExecutionHostDeps {
+    return {
+      getLocalProbes: () => this.getWorkspacePortProbes(),
+      getSshMultiplexer: getActiveMultiplexer
+    }
+  }
+
   // Why: remote clients may invoke this over RPC, so the runtime derives
   // allowed worktree paths from its own store instead of trusting client paths.
   protected async getWorkspacePortProbes(repoId?: string): Promise<WorkspacePortProbe[]> {
-    const reposById = new Map(
-      this.requireStore()
-        .getRepos()
-        .map((repo) => [repo.id, repo])
-    )
+    const repos = this.requireStore().getRepos()
     return filterWorkspacePortProbes(
-      (await this.listResolvedWorktrees()).map((worktree) => ({
-        id: worktree.id,
-        repoId: worktree.repoId,
-        displayName: worktree.displayName,
-        path: worktree.git.path,
-        connectionId: reposById.get(worktree.repoId)?.connectionId ?? null
-      })),
+      (await this.listResolvedWorktrees()).map((worktree) => {
+        // Why host routing, not the repo-id row's connectionId: an SSH repo may carry only
+        // `executionHostId`, and its remote path must never authorize a local listener.
+        const routing = resolveWorktreeHostRouting(repos, worktree)
+        return {
+          id: worktree.id,
+          repoId: worktree.repoId,
+          displayName: worktree.displayName,
+          path: worktree.git.path,
+          runsHere:
+            routing.kind === 'unowned' ||
+            (routing.kind === 'resolved' && routing.hostId === LOCAL_EXECUTION_HOST_ID)
+        }
+      }),
       repoId
     )
   }

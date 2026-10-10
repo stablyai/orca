@@ -367,10 +367,10 @@ rejects `--reference`, run `ORCA skills get orca-per-workspace-env --full` once 
 this guide plus every reference from the same CLI build, so read only the named one. If `--full` is
 rejected too, keep these rules, use the command's `--help`, and do not guess flags.
 
-| Action gate | Bundled reference |
-| --- | --- |
-| Writing the base-snapshot, auth, or create script for a snapshot-capable cloud provider | `references/provider-vercel.md` |
-| The recipe connects over SSH instead of starting `orca serve`, including provisioned root | `references/ssh-host.md` |
-| The environment is a local Docker container reached over SSH | `references/docker-ssh.md` |
-| The user's desktop is Windows and you are scaffolding local-side scripts | `references/windows-scripts.md` |
-| A doctor, provision, clone, login, or snapshot step failed | `references/failure-modes.md` |
+| Action gate                                                                               | Bundled reference               |
+| ----------------------------------------------------------------------------------------- | ------------------------------- |
+| Writing the base-snapshot, auth, or create script for a snapshot-capable cloud provider   | `references/provider-vercel.md` |
+| The recipe connects over SSH instead of starting `orca serve`, including provisioned root | `references/ssh-host.md`        |
+| The environment is a local Docker container reached over SSH                              | `references/docker-ssh.md`      |
+| The user's desktop is Windows and you are scaffolding local-side scripts                  | `references/windows-scripts.md` |
+| A doctor, provision, clone, login, or snapshot step failed                                | `references/failure-modes.md`   |

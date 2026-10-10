@@ -1,4 +1,6 @@
 import { stat } from 'node:fs/promises'
+import { PrioritySemaphore } from '../../shared/priority-semaphore'
+import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import type { Event as ParcelWatcherEvent } from '@parcel/watcher'
 import { MAX_BATCHED_WATCHER_EVENTS } from './filesystem-watcher-event-batch'
 import type {
@@ -7,70 +9,38 @@ import type {
 } from './parcel-watcher-process-protocol'
 
 const DIRECTORY_STAT_CONCURRENCY = 8
-let activeDirectoryStats = 0
-const directoryStatWaiters: (() => void)[] = []
+const directoryStatSlots = new PrioritySemaphore(DIRECTORY_STAT_CONCURRENCY)
 
 export type WatcherProcessEventDeliveryQueue = {
   enqueue(events: readonly ParcelWatcherEvent[]): void
+  flush(): Promise<void>
   close(): void
 }
 
-async function acquireDirectoryStatSlot(): Promise<void> {
-  if (activeDirectoryStats < DIRECTORY_STAT_CONCURRENCY) {
-    activeDirectoryStats++
-    return
-  }
-  await new Promise<void>((resolve) => directoryStatWaiters.push(resolve))
-}
-
-function releaseDirectoryStatSlot(): void {
-  const next = directoryStatWaiters.shift()
-  if (next) {
-    // Transfer the existing slot directly so a newly arriving task cannot
-    // overtake this waiter and temporarily exceed the global budget.
-    next()
-    return
-  }
-  activeDirectoryStats--
-}
-
-async function statWatcherEventPath(eventPath: string): Promise<boolean> {
-  await acquireDirectoryStatSlot()
+async function statWatcherEventPath(eventPath: string, signal?: AbortSignal): Promise<boolean> {
+  const release = await directoryStatSlots.acquire(0, signal)
   try {
+    signal?.throwIfAborted()
     return (await stat(eventPath)).isDirectory()
   } finally {
-    releaseDirectoryStatSlot()
+    release()
   }
-}
-
-async function mapWithConcurrency<T, R>(
-  items: readonly T[],
-  limit: number,
-  mapper: (item: T) => Promise<R>
-): Promise<R[]> {
-  const results = Array.from<R>({ length: items.length })
-  let cursor = 0
-  const lane = async (): Promise<void> => {
-    while (cursor < items.length) {
-      const index = cursor++
-      results[index] = await mapper(items[index])
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, lane))
-  return results
 }
 
 async function mapWatcherEvent(
   event: ParcelWatcherEvent,
-  includeDirectoryMetadata: boolean
+  includeDirectoryMetadata: boolean,
+  signal?: AbortSignal
 ): Promise<WatcherProcessEvent> {
+  signal?.throwIfAborted()
   if (!includeDirectoryMetadata || event.type === 'delete') {
     return { type: event.type, path: event.path }
   }
   let isDirectory = false
   try {
-    isDirectory = await statWatcherEventPath(event.path)
+    isDirectory = await statWatcherEventPath(event.path, signal)
   } catch {
+    signal?.throwIfAborted()
     // Why: a path can vanish between the native event and metadata lookup.
     // Treat unknown metadata as a file-like event so parent invalidation still runs.
   }
@@ -79,8 +49,10 @@ async function mapWatcherEvent(
 
 export async function prepareWatcherProcessEvents(
   events: readonly ParcelWatcherEvent[],
-  delivery: WatcherProcessDeliveryOptions | undefined
+  delivery: WatcherProcessDeliveryOptions | undefined,
+  signal?: AbortSignal
 ): Promise<WatcherProcessEvent[] | null> {
+  signal?.throwIfAborted()
   if (delivery?.maxEventsPerBatch !== undefined && events.length > delivery.maxEventsPerBatch) {
     return null
   }
@@ -88,7 +60,7 @@ export async function prepareWatcherProcessEvents(
     return events.map((event) => ({ type: event.type, path: event.path }))
   }
   return mapWithConcurrency(events, DIRECTORY_STAT_CONCURRENCY, (event) =>
-    mapWatcherEvent(event, true)
+    mapWatcherEvent(event, true, signal)
   )
 }
 
@@ -99,10 +71,17 @@ export function createWatcherProcessEventDeliveryQueue(
   onError: (error: unknown) => void
 ): WatcherProcessEventDeliveryQueue {
   const eventLimit = delivery?.maxEventsPerBatch ?? MAX_BATCHED_WATCHER_EVENTS
+  const controller = new AbortController()
   let active = true
   let draining = false
   let pendingOverflow = false
   let pendingEvents: ParcelWatcherEvent[] = []
+  let flushCompletion: ReturnType<typeof Promise.withResolvers<void>> | undefined
+
+  const finishFlush = (): void => {
+    flushCompletion?.resolve()
+    flushCompletion = undefined
+  }
 
   const drain = async (): Promise<void> => {
     if (!active || draining) {
@@ -119,7 +98,7 @@ export function createWatcherProcessEventDeliveryQueue(
           await deliver(null)
           continue
         }
-        const prepared = await prepareWatcherProcessEvents(events, delivery)
+        const prepared = await prepareWatcherProcessEvents(events, delivery, controller.signal)
         if (active) {
           await deliver(prepared)
         }
@@ -132,6 +111,8 @@ export function createWatcherProcessEventDeliveryQueue(
       draining = false
       if (active && (pendingOverflow || pendingEvents.length > 0)) {
         void drain()
+      } else {
+        finishFlush()
       }
     }
   }
@@ -151,10 +132,19 @@ export function createWatcherProcessEventDeliveryQueue(
       }
       void drain()
     },
+    flush(): Promise<void> {
+      if (!active || !draining) {
+        return Promise.resolve()
+      }
+      flushCompletion ??= Promise.withResolvers<void>()
+      return flushCompletion.promise
+    },
     close(): void {
       active = false
+      controller.abort()
       pendingEvents = []
       pendingOverflow = false
+      finishFlush()
     }
   }
 }

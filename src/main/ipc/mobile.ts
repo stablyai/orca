@@ -13,7 +13,7 @@ import {
 } from '../runtime/pairing-network-interfaces'
 import { resolveAdvertisedPairingHostname } from '../runtime/pairing-endpoint'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
-import type { RelayBrokerStatus } from '../runtime/relay/relay-session-broker'
+import type { MobileRelayStatusDetail } from '../../shared/mobile-relay-status'
 import { encodeMobilePairingQr, type MobilePairingQrResult } from '../runtime/mobile-pairing-qr'
 import { getWindowsDefaultRouteInterfaceNames } from '../runtime/windows-default-route-interfaces'
 import {
@@ -51,7 +51,7 @@ function toRuntimeAccessGrant(device: DeviceEntry): RuntimeAccessGrant {
 export type MobileHandlerDependencies = {
   firewallEnvironment?: WindowsMobileFirewallEnvironment
   openWindowsNetworkSettings?: () => Promise<void>
-  getRelayStatus?: () => RelayBrokerStatus
+  getRelayStatus?: () => MobileRelayStatusDetail
   consumePendingUnpairedDeviceAuthFailure?: (webContentsId: number) => boolean
   encodePairingQr?: (pairingUrl: string) => Promise<MobilePairingQrResult>
   getDefaultRouteInterfaceNames?: DefaultRouteInterfaceLookup
@@ -287,9 +287,10 @@ export function registerMobileHandlers(
     return true
   })
 
-  ipcMain.handle('mobile:getRelayStatus', () => ({
-    status: dependencies.getRelayStatus?.() ?? 'offline'
-  }))
+  ipcMain.handle(
+    'mobile:getRelayStatus',
+    (): MobileRelayStatusDetail => dependencies.getRelayStatus?.() ?? { status: 'offline' }
+  )
 
   ipcMain.handle('mobile:consumePendingUnpairedDeviceAuthFailure', (event) => {
     if (!isWindowRenderer(event)) {

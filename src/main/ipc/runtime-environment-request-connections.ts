@@ -1,5 +1,10 @@
 import type { PairingOffer } from '../../shared/pairing'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/protocol-version'
+import { resolveEnvironment } from '../../shared/runtime-environment-store'
+import { getPreferredPairingOffer } from '../../shared/runtime-environments'
+import type { RuntimeHostStatusOwner } from '../../shared/runtime-host-status-owner'
+import type { RuntimeStatus } from '../../shared/runtime-types'
+import { createRuntimeEnvironmentStatusOwner } from './runtime-environment-status-owner'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
@@ -30,6 +35,56 @@ type CachedSharedControlConnection = {
 
 const requestConnections = new Map<string, CachedRuntimeConnection>()
 const sharedControlConnections = new Map<string, CachedSharedControlConnection>()
+const statusOwners = new Map<string, { key: string; owner: RuntimeHostStatusOwner }>()
+
+export function getRuntimeEnvironmentStatusOwner(
+  userDataPath: string,
+  selector: string
+): RuntimeHostStatusOwner {
+  const environment = resolveEnvironment(userDataPath, selector)
+  const pairing = getPreferredPairingOffer(environment)
+  const key = `${userDataPath}\0${environment.pairingRevision ?? environment.createdAt}\0${getPairingKey(pairing)}`
+  let cached = statusOwners.get(environment.id)
+  if (!cached || cached.key !== key || cached.owner.read().retired) {
+    if (cached) {
+      closeRemoteRuntimeRequestConnection(environment.id)
+    }
+    const owner = createRuntimeEnvironmentStatusOwner(userDataPath, environment, {
+      isReady: () => getRemoteRuntimeSharedControlDiagnostics(environment.id)?.state === 'ready',
+      request: (signal) =>
+        sendRemoteRuntimeSharedControlRequest<RuntimeStatus>(
+          environment.id,
+          pairing,
+          'status.get',
+          undefined,
+          15_000,
+          undefined,
+          signal
+        ),
+      establish: () => {
+        ensureRemoteRuntimeSharedControlConnection(environment.id, pairing)
+        reconnectRemoteRuntimeSharedControlConnection(environment.id)
+      },
+      pause: () => pauseRemoteRuntimeSharedControlRetry(environment.id)
+    })
+    cached = { key, owner }
+    statusOwners.set(environment.id, cached)
+    if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
+      owner.dispose()
+    }
+  }
+  return cached.owner
+}
+
+export function resetRuntimeEnvironmentStatusOwners(): void {
+  for (const id of statusOwners.keys()) {
+    closeRemoteRuntimeRequestConnection(id)
+  }
+}
+
+export function getRuntimeEnvironmentStatusSnapshots() {
+  return [...statusOwners.values()].map(({ owner }) => owner.read())
+}
 
 export function sendRemoteRuntimeConnectionRequest<TResult>(
   environmentId: string,
@@ -56,6 +111,9 @@ export function sendRemoteRuntimeConnectionRequest<TResult>(
 }
 
 export function closeRemoteRuntimeRequestConnection(environmentId: string): void {
+  const status = statusOwners.get(environmentId)
+  statusOwners.delete(environmentId)
+  status?.owner.dispose()
   const cached = requestConnections.get(environmentId)
   requestConnections.delete(environmentId)
   cached?.connection.close()
@@ -91,13 +149,15 @@ export function subscribeRemoteRuntimeSharedControlRequest<TResult>(
     onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
     onError: (error: { code: string; message: string }) => void
     onClose?: () => void
-  }
+  },
+  signal?: AbortSignal
 ): Promise<RemoteRuntimeSharedSubscription> {
   return getSharedControlConnection(environmentId, pairing).subscribe(
     method,
     params,
     timeoutMs,
-    callbacks
+    callbacks,
+    signal
   )
 }
 
@@ -166,6 +226,16 @@ function getSharedControlConnection(
             transportGeneration,
             diagnostics
           })
+          statusOwners
+            .get(environmentId)
+            ?.owner.connectionChanged(
+              diagnostics.state === 'ready'
+                ? 'ready'
+                : diagnostics.state === 'closed' || diagnostics.state === 'reconnecting'
+                  ? 'disconnected'
+                  : 'connecting',
+              diagnostics
+            )
         }
       })
     }

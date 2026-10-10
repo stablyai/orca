@@ -1,13 +1,12 @@
+import { resolveHostCapabilities, workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
 import {
-  structuredAgentLaunchSupported,
-  type AgentLaunchRoutingInput
-} from '@/lib/agent-launch-routing'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { readLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
+  structuredAgentSessionLaunchFeasible,
+  type AgentSessionStructuredFeasibilityRequest
+} from '@/lib/agent-session-launch-plan'
+import { resolveStructuredAgentSessionOwner } from '@/runtime/structured-agent-session-owner'
 import { useAppStore } from '@/store'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import { normalizeExecutionHostId } from '../../../../shared/execution-host'
 import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import { STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { resolveAiVaultTargetWorkspacePath } from './ai-vault-session-launch-target'
@@ -15,9 +14,10 @@ import {
   resolveAiVaultSessionResumeInChatEligibility,
   type AiVaultResumeInChatEligibility
 } from './ai-vault-session-resume-in-chat'
-import type {
-  AiVaultSessionResumeState,
-  AiVaultSessionResumeTargetState
+import {
+  resolveAiVaultHistorySessionResumeState,
+  type AiVaultSessionResumeState,
+  type AiVaultSessionResumeTargetState
 } from './ai-vault-session-resume'
 
 export function resolveAiVaultSessionResumeInChatForWorkspace(args: {
@@ -25,7 +25,7 @@ export function resolveAiVaultSessionResumeInChatForWorkspace(args: {
   resumeState: AiVaultSessionResumeState
   activeWorkspaceId: string | null
   targetState: AiVaultSessionResumeTargetState
-  settings: AgentLaunchRoutingInput['settings']
+  settings: AgentSessionStructuredFeasibilityRequest['settings']
 }): AiVaultResumeInChatEligibility {
   const targetWorkspaceId = args.resumeState.usesSessionWorktree
     ? args.resumeState.worktreeId
@@ -33,32 +33,53 @@ export function resolveAiVaultSessionResumeInChatForWorkspace(args: {
   const targetWorkspacePath = targetWorkspaceId
     ? resolveAiVaultTargetWorkspacePath(args.targetState, targetWorkspaceId)
     : null
+  const state = useAppStore.getState()
+  // The conversation lives on the host that recorded it, so only a chat on that same host can
+  // resume it, the rule the terminal resume follows; that host also answers for the capability.
+  const targetOwner = targetWorkspaceId
+    ? resolveStructuredAgentSessionOwner(state, targetWorkspaceId)
+    : null
   return resolveAiVaultSessionResumeInChatEligibility({
     session: args.session,
     targetWorkspaceId,
     targetWorkspacePath,
     structuredRouteAvailable:
       isAgentSessionHandleProvider(args.session.agent) &&
-      Boolean(targetWorkspaceId) &&
-      structuredAgentLaunchSupported({
+      targetWorkspaceId !== null &&
+      targetOwner !== null &&
+      targetOwner === normalizeExecutionHostId(args.session.executionHostId) &&
+      structuredAgentSessionLaunchFeasible(state, {
         agent: args.session.agent,
-        settings: args.settings,
-        executionHostId: getExecutionHostIdForWorktree(
-          useAppStore.getState(),
-          targetWorkspaceId as string
-        ),
-        platform: CLIENT_PLATFORM,
-        hostCapabilities: readLocalRuntimeCapabilities(),
-        workspaceKind: (targetWorkspaceId as string).startsWith('folder:')
-          ? 'folder'
-          : 'git-worktree',
-        projectRuntime: getLocalProjectExecutionRuntimeContext(
-          useAppStore.getState(),
-          targetWorkspaceId as string
-        )
+        workspace: {
+          kind: workspaceKindForWorktreeId(targetWorkspaceId),
+          worktreeId: targetWorkspaceId
+        },
+        settings: args.settings
       }) &&
-      readLocalRuntimeCapabilities().includes(
+      resolveHostCapabilities(state, targetOwner)?.includes(
         STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY
-      )
+      ) === true
   })
+}
+
+/** A history row's resume target and its resume-in-chat eligibility, composed once so every surface
+ *  offering the row's moves (the Session History panel, the tab menu) asks the same questions. */
+export function resolveAiVaultHistoryRowResume(
+  args: Parameters<typeof resolveAiVaultHistorySessionResumeState>[0] & {
+    targetState: AiVaultSessionResumeTargetState
+    settings: AgentSessionStructuredFeasibilityRequest['settings']
+  }
+): { resumeState: AiVaultSessionResumeState; resumeInChat: AiVaultResumeInChatEligibility } {
+  const { settings, ...resumeArgs } = args
+  const resumeState = resolveAiVaultHistorySessionResumeState(resumeArgs)
+  return {
+    resumeState,
+    resumeInChat: resolveAiVaultSessionResumeInChatForWorkspace({
+      session: args.session,
+      resumeState,
+      activeWorkspaceId: args.activeWorktreeId,
+      targetState: args.targetState,
+      settings
+    })
+  }
 }

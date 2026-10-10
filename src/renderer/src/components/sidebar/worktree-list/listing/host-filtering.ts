@@ -1,5 +1,6 @@
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
+  getConnectionExecutionHostId,
   normalizeExecutionHostId,
   parseExecutionHostId,
   toSshExecutionHostId,
@@ -110,7 +111,7 @@ function getProjectGroupExecutionHostIdForFolderPathStatus(
   if (executionHostId) {
     return executionHostId
   }
-  return group.connectionId ? toSshExecutionHostId(group.connectionId) : 'local'
+  return getConnectionExecutionHostId(group.connectionId)
 }
 
 export function getFolderPathStatusRouteOptionsForRows({

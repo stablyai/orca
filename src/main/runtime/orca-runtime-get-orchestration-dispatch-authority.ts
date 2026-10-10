@@ -2,21 +2,38 @@
 import { OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller } from './orca-runtime-verify-orchestration-compatibility-caller'
 import type { OrchestrationCompatibilityTerminalAuthority } from './runtime-terminal-contracts'
 import { createHash } from 'node:crypto'
-import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
+import {
+  isTerminalLeafId,
+  makePaneKey,
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
 import { RECENT_PTY_OUTPUT_LIMIT, RecentPtyOutputBuffer } from './recent-pty-output-buffer'
 import { appendRecentPtyPathCandidates } from './terminal-output-path-candidates'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
+import {
+  HOST_DEFAULT_AGENT_DETECTION,
+  resolveWorkspaceAgentDetectionHost,
+  type AgentDetectionHost
+} from '../preflight/workspace-agent-detection'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import {
+  localOrchestrationCliCommand,
   resolveTerminalOrchestrationCliCommand,
+  runtimeOrchestrationCliCommand,
   type OrchestrationCliCommand
 } from './orchestration/cli-command'
-import { getAppEnvironment } from '../../shared/app-environment'
 import type { FleetAgentStatusEvidence } from '../../shared/orchestration-fleet-agent-status-evidence'
 import { readOrchestrationFleetAgentStatusSnapshot } from './orchestration-fleet-agent-status-snapshot'
 import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
+import { isStructuredWorkerHandle } from './structured-worker-identity'
+import { parseOrcaSessionAddress } from '../../shared/orca-session-address'
+import { matchesProcessIncarnation } from './orchestration/worker-terminal-process-liveness'
 
 export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller {
   /** Every pane key this PTY could be addressed by, including restored receipts. */
@@ -33,6 +50,30 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
     for (const leaf of this.getLeavesForPty(ptyId)) {
       if (isValidTerminalTabId(leaf.tabId) && isTerminalLeafId(leaf.leafId)) {
         paneKeys.add(makePaneKey(leaf.tabId, leaf.leafId))
+      }
+    }
+    return paneKeys
+  }
+
+  /** Status cleanup also owns runtime-admitted legacy OSC rows; orchestration authority does not. */
+  protected collectAgentStatusPaneKeysForPty(ptyId: string): Set<string> {
+    const paneKeys = this.collectPaneKeysForPty(ptyId)
+    const terminalHandles = new Set(this.getExistingTerminalHandlesForPtyId(ptyId))
+    // The provider-session snapshot is the unfiltered store view, so certified exit can also
+    // retire a dismissed row's identity-only remnant after its pane binding moved.
+    for (const row of this.getAgentProviderSessionSnapshotFn?.() ?? []) {
+      if (row.terminalHandle && terminalHandles.has(row.terminalHandle)) {
+        paneKeys.add(row.paneKey)
+      }
+    }
+    const ptyPaneKey = this.ptysById.get(ptyId)?.paneKey
+    if (ptyPaneKey && parseLegacyNumericPaneKey(ptyPaneKey)) {
+      paneKeys.add(ptyPaneKey)
+    }
+    for (const leaf of this.getLeavesForPty(ptyId)) {
+      const paneKey = this.makeRuntimePaneKey(leaf)
+      if (parseLegacyNumericPaneKey(paneKey)) {
+        paneKeys.add(paneKey)
       }
     }
     return paneKeys
@@ -215,11 +256,50 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
       : undefined
   }
 
+  // Why the host's own worktree record: it carries the owning host and the real path, where the
+  // client's id alone could pick the wrong row for a repo id shared across hosts.
+  async resolveAgentDetectionHost(
+    worktreeId: string | null | undefined
+  ): Promise<AgentDetectionHost> {
+    if (!this.store || !worktreeId || worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+      return HOST_DEFAULT_AGENT_DETECTION
+    }
+    const store = this.requireStore()
+    const scope = parseWorkspaceKey(worktreeId)
+    if (scope?.type === 'folder') {
+      return resolveWorkspaceAgentDetectionHost(store, {
+        kind: 'folder',
+        folderWorkspaceId: scope.folderWorkspaceId
+      })
+    }
+    let worktree: ResolvedWorktree
+    try {
+      worktree = await this.resolveWorktreeSelector(`id:${worktreeId}`)
+    } catch (error) {
+      // Only an unknown workspace keeps the answer older clients always got; an ambiguous one
+      // has no single host, and probing this one would list another machine's agents.
+      if (error instanceof Error && error.message === 'selector_not_found') {
+        return HOST_DEFAULT_AGENT_DETECTION
+      }
+      throw error
+    }
+    return resolveWorkspaceAgentDetectionHost(store, {
+      kind: 'worktree',
+      repoId: worktree.repoId,
+      path: worktree.path,
+      hostId: worktree.hostId
+    })
+  }
+
   getOrchestrationFleetAgentStatusSnapshot(): readonly FleetAgentStatusEvidence[] {
     return readOrchestrationFleetAgentStatusSnapshot(this)
   }
 
   getTerminalOrchestrationCliCommand(handle: string): OrchestrationCliCommand {
+    // A structured session runs in this process: it is told what the structured mail lane types.
+    if (isStructuredWorkerHandle(handle) || parseOrcaSessionAddress(handle)) {
+      return localOrchestrationCliCommand()
+    }
     let pty: RuntimePtyWorktreeRecord | null = null
     try {
       const ptyId = this.resolveLeafForHandle(handle)?.ptyId
@@ -234,11 +314,44 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
       connectionId: pty.connectionId,
       isWsl: pty.isWsl,
       worktreeId: pty.worktreeId,
-      // Dev builds run the CLI as `orca-dev`; a packaged app must not advertise it.
-      runtimeCliCommand: getAppEnvironment().isPackaged() ? undefined : 'orca-dev',
+      runtimeCliCommand: runtimeOrchestrationCliCommand(),
       projectRuntime: this.store
         ? resolveLocalProjectRuntimeForWorktreeId(this.requireStore(), pty.worktreeId)
         : undefined
     })
+  }
+  /**
+   * Recover a live terminal handle for a worker whose durable handle stopped resolving
+   * (renderer graph epoch bump / handle invalidation) while its PTY is still tracked. Fences on
+   * the recorded process incarnation EXACTLY — never a bare ptyId, worktree, or pane — so a
+   * reused ptyId belonging to a different process can never be closed, and fails closed on an
+   * unknown host scope (this is also consumed by workerShow, which does no lease re-check).
+   * Returns a freshly minted live handle, or null when no live PTY carries that exact incarnation.
+   */
+  resolveTerminalHandleByProcessIncarnation(
+    processIncarnation: string,
+    serializedHostScope: string | null
+  ): string | null {
+    if (!processIncarnation || !serializedHostScope) {
+      return null
+    }
+    // Scan by the incarnation itself (startsWith + exact equality, mirroring
+    // classifyWorkerTerminalProcessIncarnation) rather than splitting on a colon, so relay/SSH
+    // ptyIds and colon-bearing incarnationIds still match. A pty with no incarnationId can never
+    // match, so the legacy `${runtimeId}:${ptyId}:${ptyGeneration}` fence stays fail-closed.
+    for (const [ptyId, pty] of this.ptysById) {
+      if (!matchesProcessIncarnation(ptyId, pty.incarnationId, processIncarnation)) {
+        continue
+      }
+      const hostScope = this.getOrchestrationCompatibilityHostScope(pty)
+      if (!hostScope || JSON.stringify(hostScope) !== serializedHostScope) {
+        // Keep scanning: a colon-ambiguous decoy pty in a different host scope that this
+        // incarnation string happens to prefix-match must not suppress the genuine same-scope
+        // pty later in ptysById. The scope check still fences the real match below.
+        continue
+      }
+      return this.issuePtyHandle(pty)
+    }
+    return null
   }
 }

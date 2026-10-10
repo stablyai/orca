@@ -202,7 +202,8 @@ describe('registerPtyHandlers', () => {
           tabId: 'tab-remote',
           leafId,
           ptyId: 'ssh:ssh-reattach-ok@@relay-pty',
-          hostAdmittedMembership: true
+          hostAdmittedMembership: true,
+          origin: 'reattach'
         },
         'ssh:ssh-reattach-ok'
       )
@@ -274,6 +275,7 @@ describe('registerPtyHandlers', () => {
       registerPty: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
+      noteRemoteDesktopHostInput: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -390,6 +392,7 @@ describe('registerPtyHandlers', () => {
       registerPty: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
+      noteRemoteDesktopHostInput: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -490,13 +493,14 @@ describe('registerPtyHandlers', () => {
       registerPty: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
+      noteRemoteDesktopHostInput: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
     }
 
     try {
-      setPtyOwnership(appPtyId, 'ssh-expired-runtime')
+      setPtyOwnership(appPtyId, 'ssh:ssh-expired-runtime')
       registerPtyHandlers(
         mainWindow as never,
         runtime as never,
@@ -597,13 +601,14 @@ describe('registerPtyHandlers', () => {
       registerPty: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
+      noteRemoteDesktopHostInput: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
     }
 
     try {
-      setPtyOwnership(appPtyId, 'ssh-live-runtime')
+      setPtyOwnership(appPtyId, 'ssh:ssh-live-runtime')
       registerPtyHandlers(
         mainWindow as never,
         runtime as never,

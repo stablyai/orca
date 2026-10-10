@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService, makePaneKey } from '../orca-runtime-test-mocks.spec'
+import { OrcaRuntimeService, electronMocks, makePaneKey } from '../orca-runtime-test-mocks.spec'
 import {
   HEADLESS_LEAF_ID,
   RESTORED_AUTHORITY_TOKEN,
@@ -16,6 +16,11 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal,
   store
 } from '../orca-runtime-test-fixtures.spec'
+import {
+  buildJcodeRuntimeDir,
+  JCODE_RUNTIME_DIR_ENV_KEY,
+  shouldInjectJcodeRuntimeDir
+} from '../../../shared/jcode-runtime-dir'
 
 describe('OrcaRuntimeService', () => {
   it('creates visible terminal sessions without asking the renderer to focus a tab', async () => {
@@ -78,6 +83,15 @@ describe('OrcaRuntimeService', () => {
     const spawnedLeafId = spawnedEnv.ORCA_PANE_KEY.slice(`${spawnedEnv.ORCA_TAB_ID}:`.length)
     expect(spawnedEnv.ORCA_WORKTREE_ID).toBe(TEST_WORKTREE_ID)
     expect(spawnedEnv.ORCA_AGENT_LAUNCH_TOKEN).toMatch(UUID_RE)
+    // Why: the runtime spawn path must stamp the per-pane jcode runtime dir
+    // exactly like the renderer pty:spawn path (unix platforms only).
+    if (shouldInjectJcodeRuntimeDir(process.platform)) {
+      expect(spawnedEnv[JCODE_RUNTIME_DIR_ENV_KEY]).toBe(
+        buildJcodeRuntimeDir(spawnedEnv.ORCA_PANE_KEY)
+      )
+    } else {
+      expect(spawnedEnv[JCODE_RUNTIME_DIR_ENV_KEY]).toBeUndefined()
+    }
     expect(revealTerminalSession).toHaveBeenCalledWith(TEST_WORKTREE_ID, {
       ptyId: 'pty-bg',
       title: 'worker',
@@ -90,6 +104,130 @@ describe('OrcaRuntimeService', () => {
       tabId: spawnedEnv.ORCA_TAB_ID,
       leafId: spawnedLeafId
     })
+  })
+
+  it('asks the pty controller for the requested shell instead of a startup command', async () => {
+    const hostPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      const spawn = vi.fn().mockResolvedValue({ id: 'pty-shell' })
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn,
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
+      await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        shellOverride: 'cmd.exe',
+        title: 'win shell'
+      })
+
+      // The defect this pins: a caller asking for cmd could only pass it as `command`, which the
+      // provider types into whatever shell it spawned — so the pty stayed the default shell and
+      // leaving cmd dropped the handle back onto a prompt the caller never asked for.
+      expect(spawn).toHaveBeenCalledWith(
+        expect.objectContaining({ shellOverride: 'cmd.exe', command: undefined })
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', hostPlatform)
+    }
+  })
+
+  it('refuses a requested shell the execution host cannot apply instead of spawning its default', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-unreachable-shell' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
+    // Host platform here is POSIX, which has no Windows shell to pick.
+    await expect(
+      runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { shellOverride: 'cmd.exe' })
+    ).rejects.toThrow(/--shell cmd\.exe names a Windows shell/)
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it('quotes the agent startup command for the requested shell, not the host default', async () => {
+    const hostPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      const spawn = vi.fn().mockResolvedValue({ id: 'pty-shell-quoting' })
+      const runtime = new OrcaRuntimeService({
+        ...store,
+        getSettings: () => ({
+          ...store.getSettings(),
+          disabledTuiAgents: [],
+          terminalWindowsShell: 'powershell.exe',
+          agentCmdOverrides: {},
+          agentDefaultArgs: { claude: '--dangerously-skip-permissions' },
+          agentDefaultEnv: {}
+        })
+      })
+      runtime.setPtyController({
+        spawn,
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
+      await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { command: 'claude' })
+      await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        command: 'claude',
+        shellOverride: 'cmd.exe'
+      })
+
+      // The setting alone still quotes for PowerShell; the requested shell is the one that will
+      // read the command, so it owns the quoting family. PowerShell quoting typed into cmd is a
+      // syntax error at the prompt.
+      expect(spawn).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ command: "claude '--dangerously-skip-permissions'" })
+      )
+      expect(spawn).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          shellOverride: 'cmd.exe',
+          command: 'claude "--dangerously-skip-permissions"'
+        })
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', hostPlatform)
+    }
+  })
+
+  it('refuses a requested shell with no workspace instead of creating a default-shell tab', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-no-workspace-shell' })
+    const send = vi.fn()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents: { send }
+    })
+
+    await expect(
+      runtime.createTerminal(undefined, { shellOverride: 'cmd.exe', rendererBacked: true })
+    ).rejects.toThrow(/--shell cmd\.exe needs a workspace/)
+    expect(send).not.toHaveBeenCalled()
+    expect(spawn).not.toHaveBeenCalled()
   })
 
   it('retires inherited launch authority when the agent command exits', async () => {
@@ -139,11 +277,6 @@ describe('OrcaRuntimeService', () => {
     }
 
     expect(runtime.verifyOrchestrationCompatibilityCaller(evidence)).not.toBeNull()
-    expect(
-      runtime.getAgentStatusLaunchConfigForPaneKey(spawnEnv.ORCA_PANE_KEY, {
-        launchToken: spawnEnv.ORCA_AGENT_LAUNCH_TOKEN
-      })
-    ).toBeDefined()
     expect((await runtime.listTerminals()).terminals).toEqual([
       expect.objectContaining({ handle: terminal.handle, agentIdentity: 'codex' })
     ])
@@ -152,11 +285,6 @@ describe('OrcaRuntimeService', () => {
 
     expect(retireAuthority).toHaveBeenCalledWith(spawnEnv.ORCA_PANE_KEY)
     expect(runtime.verifyOrchestrationCompatibilityCaller(evidence)).toBeNull()
-    expect(
-      runtime.getAgentStatusLaunchConfigForPaneKey(spawnEnv.ORCA_PANE_KEY, {
-        launchToken: spawnEnv.ORCA_AGENT_LAUNCH_TOKEN
-      })
-    ).toBeUndefined()
     expect((await runtime.listTerminals()).terminals).toEqual([
       expect.not.objectContaining({ agentIdentity: expect.anything() })
     ])

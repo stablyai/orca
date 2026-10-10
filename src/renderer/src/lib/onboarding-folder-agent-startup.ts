@@ -11,14 +11,6 @@ import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-re
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
-import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
-import {
-  hasExplicitTuiLaunchCustomization,
-  resolveAgentLaunchRoute,
-  type AgentLaunchRoute
-} from '@/lib/agent-launch-routing'
-import { readLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
 
 export type OnboardingFolderAgentStartup = {
   command: string
@@ -26,7 +18,6 @@ export type OnboardingFolderAgentStartup = {
   launchConfig?: SleepingAgentLaunchConfig
   launchAgent?: TuiAgent
   startupCommandDelivery?: StartupCommandDelivery
-  sessionOptions?: Record<string, SessionOptionValue>
   telemetry: AgentStartedTelemetry
 }
 
@@ -38,8 +29,7 @@ function getClientPlatform(): NodeJS.Platform {
 }
 
 export function buildOnboardingFolderAgentStartup(
-  settings: GlobalSettings | null,
-  nativeChatTranscriptIsLocalReadable = true
+  settings: GlobalSettings | null
 ): OnboardingFolderAgentStartup | undefined {
   const agent = settings?.defaultTuiAgent
   if (
@@ -57,10 +47,6 @@ export function buildOnboardingFolderAgentStartup(
     cmdOverrides: settings.agentCmdOverrides ?? {},
     agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
     agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
-    sessionOptions: resolveInitialNativeChatSessionOptions(settings, {
-      agent,
-      nativeChatTranscriptIsLocalReadable
-    }),
     platform: getClientPlatform(),
     allowEmptyPromptLaunch: true
   })
@@ -73,7 +59,6 @@ export function buildOnboardingFolderAgentStartup(
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
     launchConfig: startupPlan.launchConfig,
     launchAgent: agent,
-    ...(startupPlan.sessionOptions ? { sessionOptions: startupPlan.sessionOptions } : {}),
     ...(startupPlan.startupCommandDelivery
       ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
       : {}),
@@ -100,51 +85,10 @@ export function shouldSeedFolderAgentAfterDismissedOnboarding(
 export function buildDismissedOnboardingFolderAgentStartup(
   settings: GlobalSettings | null,
   onboarding: OnboardingState | null,
-  hasExistingProject: boolean,
-  nativeChatTranscriptIsLocalReadable = true
+  hasExistingProject: boolean
 ): OnboardingFolderAgentStartup | undefined {
   if (!shouldSeedFolderAgentAfterDismissedOnboarding(onboarding, hasExistingProject)) {
     return undefined
   }
-  return buildOnboardingFolderAgentStartup(settings, nativeChatTranscriptIsLocalReadable)
-}
-
-export function resolveDismissedOnboardingFolderAgentLaunch(args: {
-  settings: GlobalSettings | null
-  onboarding: OnboardingState | null
-  hasExistingProject: boolean
-  executionHostId: string
-  nativeChatTranscriptIsLocalReadable?: boolean
-}): {
-  agent: TuiAgent | null
-  route: AgentLaunchRoute
-  startup?: OnboardingFolderAgentStartup
-  fallbackStartup?: OnboardingFolderAgentStartup
-} {
-  const startup = buildDismissedOnboardingFolderAgentStartup(
-    args.settings,
-    args.onboarding,
-    args.hasExistingProject,
-    args.nativeChatTranscriptIsLocalReadable
-  )
-  const agent = startup?.launchAgent ?? null
-  if (!startup || !agent) {
-    return { agent: null, route: 'terminal-tui' }
-  }
-  const route = resolveAgentLaunchRoute({
-    agent,
-    settings: args.settings,
-    executionHostId: args.executionHostId,
-    platform: getClientPlatform(),
-    hostCapabilities: readLocalRuntimeCapabilities(),
-    workspaceKind: 'folder',
-    nativeChatTranscriptIsLocalReadable: args.nativeChatTranscriptIsLocalReadable,
-    requiresTuiLaunchCustomization: hasExplicitTuiLaunchCustomization(args.settings, agent),
-    initialSessionOptions: startup.sessionOptions
-  })
-  return {
-    agent,
-    route,
-    ...(route === 'structured-native-chat' ? { fallbackStartup: startup } : { startup })
-  }
+  return buildOnboardingFolderAgentStartup(settings)
 }

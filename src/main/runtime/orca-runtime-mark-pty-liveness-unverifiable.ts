@@ -2,6 +2,8 @@
 import { OrcaRuntimeWithOnPtyExit } from './orca-runtime-on-pty-exit'
 import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
 import type { DriverState } from './orca-runtime-core'
+import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import { isUntypedTerminalInput } from './terminal-run-facts'
 import { clampTerminalViewport } from './terminal-viewport'
 import { getPtyTerminalState, getTerminalState } from './terminal-wait-results'
 
@@ -27,6 +29,9 @@ export class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRuntimeWithO
     const tracked = this.ptyLivenessVerdictByPtyId.get(ptyId)
     if (observedNoLaterThan !== undefined && tracked && tracked.observedAt > observedNoLaterThan) {
       return
+    }
+    if (tracked?.verdict.status === 'unverifiable') {
+      void this.recheckHookAgentPresenceForPty(ptyId)
     }
     this.rememberPtyLivenessVerdict(ptyId, { status: 'live', ptyIds: [ptyId] })
   }
@@ -106,6 +111,28 @@ export class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRuntimeWithO
     return unsubscribe
   }
 
+  /** Resolves once a registered PTY's exit reaches its runtime record; false on timeout. */
+  waitForPtyExitRecord(ptyId: string, timeoutMs: number): Promise<boolean> {
+    if (!this.ptysById.has(ptyId) || this.isPtyKnownExited(ptyId)) {
+      return Promise.resolve(true)
+    }
+    return new Promise((resolve) => {
+      let unsubscribe = (): void => {}
+      const timer = setTimeout(
+        () => {
+          unsubscribe()
+          resolve(false)
+        },
+        Math.max(0, timeoutMs)
+      )
+      timer.unref?.()
+      unsubscribe = this.subscribeToPtyExit(ptyId, () => {
+        clearTimeout(timer)
+        resolve(true)
+      })
+    })
+  }
+
   protected rememberPtyLivenessVerdict(ptyId: string, verdict: PtyLivenessVerdict): void {
     // An earned death certificate is KEPT, not dropped, so the register is three-valued on disk as
     // well as in the type. Its only writer is a host-delivered exit frame; nothing weaker may
@@ -137,6 +164,10 @@ export class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRuntimeWithO
 
   protected forgetPtyLivenessVerdict(ptyId: string, observedNoLaterThan?: number): void {
     const tracked = this.ptyLivenessVerdictByPtyId.get(ptyId)
+    // An inventory's weak absence cannot revoke an earlier host-certified exit.
+    if (tracked?.verdict.status === 'exited') {
+      return
+    }
     if (observedNoLaterThan !== undefined && tracked && tracked.observedAt > observedNoLaterThan) {
       return
     }
@@ -216,6 +247,12 @@ export class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRuntimeWithO
 
   claimRemoteDesktopHost(ptyId: string, cols: number, rows: number): Promise<boolean> {
     return this.remoteDesktopFloor.claimHost(ptyId, cols, rows)
+  }
+
+  noteRemoteDesktopHostInput(ptyId: string, inputKind: TerminalInputKind, data: string): void {
+    if (inputKind === 'driving' && !isUntypedTerminalInput(data)) {
+      this.remoteDesktopFloor.noteHostInput(ptyId)
+    }
   }
 
   unregisterRemoteDesktopViewer(ptyId: string, subscriptionKey: string): Promise<boolean> {

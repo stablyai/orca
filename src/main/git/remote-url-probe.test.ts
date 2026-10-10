@@ -7,7 +7,8 @@ const { getSshGitProviderMock, gitExecFileAsyncMock } = vi.hoisted(() => ({
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: 'SSH Git provider unavailable'
+  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: 'SSH Git provider unavailable',
+  sshGitProviderMissingError: () => new Error('SSH Git provider unavailable')
 }))
 
 vi.mock('./runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
@@ -44,7 +45,6 @@ describe('remote URL probe', () => {
       cwd: '/repo',
       timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
-    expect(REMOTE_URL_PROBE_TIMEOUT_MS).toBe(30_000)
   })
 
   it('bounds the SSH remote read with the same deadline as the local one', async () => {

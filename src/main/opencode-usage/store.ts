@@ -1,3 +1,4 @@
+import { codexOpenCodeTokenSessions } from '../usage/agent-token-usage'
 import { app } from 'electron'
 import { join } from 'node:path'
 import type {
@@ -29,6 +30,7 @@ import {
   buildOpenCodeUsageSummary
 } from './snapshot-rollups'
 import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
+import { splitUsageCacheFileViaWorker } from '../usage/usage-scan-worker-spawn'
 
 let _openCodeUsageFile: string | null = null
 
@@ -50,14 +52,18 @@ export class OpenCodeUsageStore extends UsageProviderStoreLifecycle<
 > {
   constructor(store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>) {
     super(store, {
+      tokenUsage: {
+        provider: 'opencode',
+        selectSessions: (state) => codexOpenCodeTokenSessions(state.sessions)
+      },
       logTag: '[opencode-usage]',
       resolveCacheFile: getOpenCodeUsageFile,
       createDefaultState: getDefaultState,
       normalizeState: normalizePersistedState,
       sourceKey: 'processedDatabases',
       dataPresenceKey: 'hasAnyOpenCodeData',
-      jsonIndent: 2,
-      scan: openCodeUsageProvider.scan
+      scan: openCodeUsageProvider.scan,
+      splitCacheFile: splitUsageCacheFileViaWorker
     })
   }
 

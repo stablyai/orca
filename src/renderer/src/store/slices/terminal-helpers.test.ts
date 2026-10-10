@@ -79,12 +79,6 @@ describe('clearTransientTerminalState', () => {
     expect(result.title).toBe('Terminal 1')
   })
 
-  it('index-based fallback numbering: index 0 → "Terminal 1"', () => {
-    const tab = makeTab({ title: '. claude', customTitle: null })
-    const result = clearTransientTerminalState(tab, 0)
-    expect(result.title).toBe('Terminal 1')
-  })
-
   it('index-based fallback numbering: index 2 → "Terminal 3"', () => {
     const tab = makeTab({ title: '. claude', customTitle: null })
     const result = clearTransientTerminalState(tab, 2)

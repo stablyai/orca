@@ -38,6 +38,8 @@ export type AutomationDraft = {
   name: string
   prompt: string
   agentId: TuiAgent
+  /** Saved as-is; empty means none. */
+  extraAgentArgs: string
   projectId: string
   workspaceMode: AutomationWorkspaceMode
   workspaceId: string
@@ -50,6 +52,9 @@ export type AutomationDraft = {
   time: string
   dayOfWeek: string
   customSchedule: string
+  // The cadence this record was opened with, or null for a new one. The strict schedule gate
+  // judges new input; a saved cadence that still runs is not re-judged against it.
+  savedSchedule: string | null
   missedRunGraceMinutes: string
   scheduleWarning: string | null
 }

@@ -4,6 +4,15 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { getWatcherProcessEntryPath } from '../ipc/parcel-watcher-entry-path'
+import {
+  AI_VAULT_SERVICE_ENTRY_FILENAME,
+  getAiVaultServiceEntryPath
+} from '../ai-vault/session-scanner-service-entry-path'
+import {
+  FOREIGN_SQLITE_READER_ENTRY_FILENAME,
+  resolveForeignSqliteReaderEntryPath
+} from '../foreign-sqlite-readers/foreign-sqlite-reader-entry-path'
+import { currentWorkerEntryLayout } from '../worker-thread-entry-path'
 import { installOrcadHostAdapters } from './orcad-entry'
 
 /**
@@ -20,6 +29,8 @@ describe('orcad forked-child paths', () => {
     // The layout build-orcad.mjs emits: the bundle and its children side by side.
     writeFileSync(join(deployRoot, 'orcad.js'), '')
     writeFileSync(join(deployRoot, 'parcel-watcher-process-entry.js'), '')
+    writeFileSync(join(deployRoot, FOREIGN_SQLITE_READER_ENTRY_FILENAME), '')
+    writeFileSync(join(deployRoot, AI_VAULT_SERVICE_ENTRY_FILENAME), '')
     originalArgv = process.argv
     process.argv = [process.execPath, join(deployRoot, 'orcad.js')]
     installOrcadHostAdapters()
@@ -32,6 +43,18 @@ describe('orcad forked-child paths', () => {
 
   it('forks the watcher child shipped beside orcad.js', () => {
     expect(getWatcherProcessEntryPath()).toBe(join(deployRoot, 'parcel-watcher-process-entry.js'))
+  })
+
+  it('forks the session scanner child shipped beside orcad.js', () => {
+    // orcad reports isPackaged with no asar, which used to send this lookup to out/main.
+    expect(getAiVaultServiceEntryPath()).toBe(join(deployRoot, AI_VAULT_SERVICE_ENTRY_FILENAME))
+  })
+
+  it('starts the foreign SQLite reader worker shipped beside orcad.js', () => {
+    // orcad.js is one bundle, so its __dirname is the deploy root.
+    expect(resolveForeignSqliteReaderEntryPath(currentWorkerEntryLayout(deployRoot))).toBe(
+      join(deployRoot, FOREIGN_SQLITE_READER_ENTRY_FILENAME)
+    )
   })
 
   it('ignores a decoy child under the working directory', () => {

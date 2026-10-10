@@ -474,26 +474,76 @@ describe('terminal side-effect fact channel', () => {
     )
   })
 
-  it('treats synchronous foreground read failures as unavailable', async () => {
-    const { runtime, batches } = createSideEffectRuntime()
+  it.each([
+    { presence: 'unverifiable' as const, exited: true },
+    { presence: 'exited' as const, exited: true },
+    { presence: 'live' as const, exited: false }
+  ])('confirms an exit title from hook presence $presence', async ({ presence, exited }) => {
+    const checkPresence = vi.fn(async () => presence)
+    const { runtime, batches } = createSideEffectRuntime(checkPresence)
     syncSinglePty(runtime)
+    const getForegroundProcess = vi.fn(async () => 'zsh')
+    runtime.setPtyController({ write: () => true, kill: () => true, getForegroundProcess })
     runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;Codex ready\x07')
-    const getForegroundProcess = vi.fn(() => {
-      throw new TypeError('getForegroundProcess is unavailable')
-    })
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess
-    })
 
-    runtime.onPtyData('pty-1', '\x1b]0;bichir\x07', 100)
+    runtime.onPtyData('pty-1', '\x1b]0;~/repo\x07', 100)
 
-    await vi.waitFor(() =>
-      expect(batches.flatMap((batch) => batch.facts)).toContainEqual({ kind: 'agent-exited' })
+    await vi.waitFor(() => expect(checkPresence).toHaveBeenCalled())
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    // Why: an unanswered process check (Codex, SSH, Windows) must still reach the foreground read.
+    expect(batches.flatMap((batch) => batch.facts).some((f) => f.kind === 'agent-exited')).toBe(
+      exited
     )
-    expect(getForegroundProcess).toHaveBeenCalledOnce()
   })
+
+  it.each(['wsl.exe', 'tmux'])(
+    'confirms an exit when the foreground answers with non-agent %s',
+    async (foreground) => {
+      const { runtime, batches } = createSideEffectRuntime(async () => null)
+      syncSinglePty(runtime)
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: vi.fn(async () => foreground)
+      })
+      runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;Codex ready\x07')
+
+      runtime.onPtyData('pty-1', '\x1b]0;~/repo\x07', 100)
+
+      await vi.waitFor(() =>
+        expect(batches.flatMap((batch) => batch.facts)).toContainEqual({ kind: 'agent-exited' })
+      )
+    }
+  )
+
+  it.each([
+    { presence: null, exited: true },
+    { presence: 'unverifiable' as const, exited: false }
+  ])(
+    'treats synchronous foreground read failures as unavailable (hook presence $presence)',
+    async ({ presence, exited }) => {
+      // Why: only a pane with an identified owner keeps its agent on silence; others keep today's exit.
+      const { runtime, batches } = createSideEffectRuntime(async () => presence)
+      syncSinglePty(runtime)
+      runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;Codex ready\x07')
+      const getForegroundProcess = vi.fn(() => {
+        throw new TypeError('getForegroundProcess is unavailable')
+      })
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess
+      })
+
+      runtime.onPtyData('pty-1', '\x1b]0;bichir\x07', 100)
+
+      await vi.waitFor(() => expect(getForegroundProcess).toHaveBeenCalled())
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(
+        batches.flatMap((batch) => batch.facts).some((fact) => fact.kind === 'agent-exited')
+      ).toBe(exited)
+    }
+  )
 
   it('aligns a restored session and pre-response bytes to the provider sequence', async () => {
     const { runtime } = createSideEffectRuntime()

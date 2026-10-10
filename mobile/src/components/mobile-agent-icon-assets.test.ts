@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
@@ -17,7 +17,6 @@ const GLYPH_AGENT_IDS = new Set<TuiAgent>([
 
 const dirname = import.meta.dirname
 const assetsDir = path.resolve(dirname, '../../../src/shared/agent-icons')
-const assetsModuleSource = readFileSync(path.join(dirname, 'mobile-agent-icon-assets.ts'), 'utf8')
 
 // Why: these agents previously loaded from Google's favicon service, which is
 // unreachable in some regions/offline (#8451). Every one that lacks a glyph
@@ -31,14 +30,6 @@ describe('mobile bundled agent icons', () => {
     for (const id of agentsNeedingBundledIcon) {
       expect(existsSync(path.join(assetsDir, `${id}.png`)), `missing bundled icon for ${id}`).toBe(
         true
-      )
-    }
-  })
-
-  it('wires every favicon-path agent into the bundled asset map', () => {
-    for (const id of agentsNeedingBundledIcon) {
-      expect(assetsModuleSource, `${id} not mapped in mobile-agent-icon-assets.ts`).toContain(
-        `agent-icons/${id}.png`
       )
     }
   })

@@ -1,72 +1,50 @@
 import type { StoreRuntimeState } from './store-runtime-state'
+import type { Store } from './store'
 import { LoadedStateAdaptationOperations } from './loaded-state-adaptation'
-import { BackupRecoveryRotationOperations } from './backup-recovery-rotation'
 import { LoadedCohortMigrationOperations } from './loaded-cohort-migrations'
 import { LoadedStateParsingOperations } from './loaded-state-parsing'
 import { StateSerializationSecretHandlingOperations } from './state-serialization-secret-handling'
-import {
-  PrimaryStateWriteOperations,
-  installPrimaryStateWriteOperationsContext
-} from './primary-state-writes'
-import {
-  WriteSchedulingOperations,
-  installWriteSchedulingOperationsContext
-} from './write-scheduling'
-import {
-  WriteFlushBarrierOperations,
-  installWriteFlushBarrierOperationsContext
-} from './write-flush-barriers'
-import { ProfilePreferences, installProfilePreferencesContext } from './profile-preferences'
-import {
-  RepoLifecycleOperations,
-  installRepoLifecycleOperationsContext
-} from './repo-lifecycle-operations'
+import { PrimaryStateWriteOperations } from './primary-state-writes'
+import { WriteSchedulingOperations } from './write-scheduling'
+import { WriteFlushBarrierOperations } from './write-flush-barriers'
+import { ProfilePreferences } from './profile-preferences'
+import { RepoLifecycleOperations } from './repo-lifecycle-operations'
 import { TerminalBindingRecoveryOperations } from './terminal-binding-recovery'
-import {
-  SessionHostPartitionOperations,
-  installSessionHostPartitionOperationsContext
-} from './session-host-partitions'
-import {
-  SessionSnapshotOperations,
-  installSessionSnapshotOperationsContext
-} from './session-snapshot-operations'
-import {
-  MetadataLineageOperations,
-  installMetadataLineageOperationsContext
-} from './metadata-lineage-operations'
-import {
-  ProjectCollectionOperations,
-  installProjectCollectionOperationsContext
-} from './project-collection-operations'
-import {
-  AutomationPersistence,
-  installAutomationPersistenceContext
-} from './automation-persistence'
-import {
-  MobileTabSelectionPersistence,
-  installMobileTabSelectionPersistenceContext
-} from './mobile-tab-selection-persistence'
-import {
-  SparsePresetPersistence,
-  installSparsePresetPersistenceContext
-} from './sparse-preset-persistence'
-import {
-  PtyBindingPersistenceOperations,
-  installPtyBindingPersistenceOperationsContext
-} from './pty-binding-persistence'
-import { SshProfileOperations, installSshProfileOperationsContext } from './ssh-profile-operations'
-import {
-  RetiredWorktreeNamePersistence,
-  installRetiredWorktreeNamePersistenceContext
-} from './retired-worktree-name-persistence'
-import {
-  SshLeaseRecoveryOperations,
-  installSshLeaseRecoveryOperationsContext
-} from './ssh-lease-recovery-operations'
+import { SessionHostPartitionOperations } from './session-host-partitions'
+import { SessionSnapshotOperations } from './session-snapshot-operations'
+import { MetadataLineageOperations } from './metadata-lineage-operations'
+import { ProjectCollectionOperations } from './project-collection-operations'
+import { AutomationPersistence } from './automation-persistence'
+import { MobileTabSelectionPersistence } from './mobile-tab-selection-persistence'
+import { SparsePresetPersistence } from './sparse-preset-persistence'
+import { PtyBindingPersistenceOperations } from './pty-binding-persistence'
+import { SshProfileOperations } from './ssh-profile-operations'
+import { RetiredWorktreeNamePersistence } from './retired-worktree-name-persistence'
+import { SshLeaseRecoveryOperations } from './ssh-lease-recovery-operations'
+import { OrcadSourceExportPersistence } from '../migrating-orcad-catalog/orcad-source-export'
+import { OrcadCatalogImportPersistence } from '../migrating-orcad-catalog/orcad-catalog-import'
+
+export type StoreDomainOperations = WriteSchedulingOperations &
+  PrimaryStateWriteOperations &
+  ProjectCollectionOperations &
+  RepoLifecycleOperations &
+  MobileTabSelectionPersistence &
+  SparsePresetPersistence &
+  AutomationPersistence &
+  MetadataLineageOperations &
+  ProfilePreferences &
+  SessionHostPartitionOperations &
+  SessionSnapshotOperations &
+  PtyBindingPersistenceOperations &
+  SshProfileOperations &
+  RetiredWorktreeNamePersistence &
+  SshLeaseRecoveryOperations &
+  OrcadSourceExportPersistence &
+  OrcadCatalogImportPersistence &
+  WriteFlushBarrierOperations
 
 export type StoreDomains = {
   adaptation: LoadedStateAdaptationOperations
-  backups: BackupRecoveryRotationOperations
   cohorts: LoadedCohortMigrationOperations
   loader: LoadedStateParsingOperations
   serialization: StateSerializationSecretHandlingOperations
@@ -87,6 +65,8 @@ export type StoreDomains = {
   sshProfiles: SshProfileOperations
   retiredWorktreeNames: RetiredWorktreeNamePersistence
   sshLeases: SshLeaseRecoveryOperations
+  orcadSourceExport: OrcadSourceExportPersistence
+  orcadCatalogImports: OrcadCatalogImportPersistence
 }
 
 export const STORE_DOMAIN_OPERATION_CLASSES = [
@@ -105,35 +85,27 @@ export const STORE_DOMAIN_OPERATION_CLASSES = [
   SshProfileOperations,
   RetiredWorktreeNamePersistence,
   SshLeaseRecoveryOperations,
+  OrcadSourceExportPersistence,
+  OrcadCatalogImportPersistence,
   WriteFlushBarrierOperations
 ] as const
 
-export function installStoreDomainContexts(target: object, domains: StoreDomains): void {
-  installWriteSchedulingOperationsContext(target, domains.scheduling)
-  installPrimaryStateWriteOperationsContext(target, domains.writes)
-  installProjectCollectionOperationsContext(target, domains.projects)
-  installRepoLifecycleOperationsContext(target, domains.repos)
-  installMobileTabSelectionPersistenceContext(target, domains.mobileTabSelections)
-  installSparsePresetPersistenceContext(target, domains.sparsePresets)
-  installAutomationPersistenceContext(target, domains.automations)
-  installMetadataLineageOperationsContext(target, domains.metadata)
-  installProfilePreferencesContext(target, domains.preferences)
-  installSessionHostPartitionOperationsContext(target, domains.sessions)
-  installSessionSnapshotOperationsContext(target, domains.sessionSnapshots)
-  installPtyBindingPersistenceOperationsContext(target, domains.ptyBindings)
-  installSshProfileOperationsContext(target, domains.sshProfiles)
-  installRetiredWorktreeNamePersistenceContext(target, domains.retiredWorktreeNames)
-  installSshLeaseRecoveryOperationsContext(target, domains.sshLeases)
-  installWriteFlushBarrierOperationsContext(target, domains.flushBarriers)
+export function installStoreDomainContexts(target: Store, domains: StoreDomains): void {
+  // Each domain keeps its context under a module-private Symbol; the Store mixes in the domain methods, so it needs those symbols too.
+  for (const domain of Object.values(domains)) {
+    for (const key of Object.getOwnPropertySymbols(domain)) {
+      const { value } = Object.getOwnPropertyDescriptor(domain, key) ?? {}
+      Object.defineProperty(target, key, { value })
+    }
+  }
 }
 
 export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
   const adaptation = new LoadedStateAdaptationOperations(runtime)
-  const backups = new BackupRecoveryRotationOperations(runtime)
   const cohorts = new LoadedCohortMigrationOperations(runtime)
-  const loader = new LoadedStateParsingOperations(runtime, backups, cohorts)
+  const loader = new LoadedStateParsingOperations(runtime, cohorts)
   const serialization = new StateSerializationSecretHandlingOperations(runtime)
-  const writes = new PrimaryStateWriteOperations(runtime, serialization, backups)
+  const writes = new PrimaryStateWriteOperations(runtime, serialization)
   const scheduling = new WriteSchedulingOperations(runtime, writes)
   const flushBarriers = new WriteFlushBarrierOperations(runtime, writes)
   const preferences = new ProfilePreferences(runtime, scheduling)
@@ -152,7 +124,7 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
   const mobileTabSelections = new MobileTabSelectionPersistence(runtime, scheduling)
   const sparsePresets = new SparsePresetPersistence(runtime, scheduling)
   const ptyBindings = new PtyBindingPersistenceOperations(runtime, sessions)
-  const sshProfiles = new SshProfileOperations(runtime, scheduling, flushBarriers, repos)
+  const sshProfiles = new SshProfileOperations(runtime, scheduling, repos)
   const retiredWorktreeNames = new RetiredWorktreeNamePersistence(runtime, scheduling)
   const sshLeases = new SshLeaseRecoveryOperations(
     runtime,
@@ -160,9 +132,9 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     bindingRecovery,
     scheduling
   )
+  const orcadCatalogImports = new OrcadCatalogImportPersistence(runtime, repos, scheduling)
   return {
     adaptation,
-    backups,
     cohorts,
     loader,
     serialization,
@@ -182,6 +154,9 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     ptyBindings,
     sshProfiles,
     retiredWorktreeNames,
-    sshLeases
+    sshLeases,
+    // Read-only: holds the runtime state and nothing that writes.
+    orcadSourceExport: new OrcadSourceExportPersistence(runtime),
+    orcadCatalogImports
   }
 }

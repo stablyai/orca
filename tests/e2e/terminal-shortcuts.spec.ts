@@ -34,6 +34,11 @@ import {
   installTerminalPtyWriteSpy as installMainProcessPtyWriteSpy,
   readTerminalPtyWrites as getPtyWrites
 } from './helpers/terminal-pty-write-spy'
+import {
+  armKittyKeyboardFromPty,
+  getKittyKeyboardFlags,
+  interruptAndExpectEtx
+} from './helpers/terminal-kitty-keyboard'
 
 async function setActivePaneForegroundAgent(
   page: Page,
@@ -63,60 +68,6 @@ async function setActivePaneForegroundAgent(
     })
     return paneKey
   }, agent)
-}
-
-async function dispatchCtrlCToActiveTerminalTextarea(
-  page: Page,
-  options: { keyupCtrlKey?: boolean } = {}
-): Promise<{
-  keydownDefaultPrevented: boolean
-  keyupDefaultPrevented: boolean
-}> {
-  return page.evaluate((dispatchOptions) => {
-    const state = window.__store?.getState()
-    const worktreeId = state?.activeWorktreeId
-    const tabId =
-      state?.activeTabType === 'terminal'
-        ? state.activeTabId
-        : worktreeId
-          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
-          : null
-    const manager = tabId ? window.__paneManagers?.get(tabId) : null
-    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-    const textarea = pane?.container.querySelector(
-      '.xterm-helper-textarea'
-    ) as HTMLTextAreaElement | null
-    if (!pane || !textarea) {
-      throw new Error('No active terminal textarea for Ctrl+C dispatch')
-    }
-    pane.terminal.clearSelection()
-    pane.terminal.focus()
-    textarea.focus()
-
-    const createEvent = (type: 'keydown' | 'keyup', ctrlKey: boolean): KeyboardEvent => {
-      const event = new KeyboardEvent(type, {
-        key: 'c',
-        code: 'KeyC',
-        ctrlKey,
-        bubbles: true,
-        cancelable: true
-      })
-      Object.defineProperty(event, 'keyCode', { get: () => 67 })
-      Object.defineProperty(event, 'which', { get: () => 67 })
-      return event
-    }
-
-    // Why: Electron headless consumes real Ctrl+C before xterm in automation;
-    // synthetic DOM events still exercise Orca's installed xterm boundary.
-    const keydown = createEvent('keydown', true)
-    textarea.dispatchEvent(keydown)
-    const keyup = createEvent('keyup', dispatchOptions.keyupCtrlKey !== false)
-    textarea.dispatchEvent(keyup)
-    return {
-      keydownDefaultPrevented: keydown.defaultPrevented,
-      keyupDefaultPrevented: keyup.defaultPrevented
-    }
-  }, options)
 }
 
 async function focusFloatingTerminal(page: Page): Promise<void> {
@@ -152,7 +103,7 @@ async function seedFloatingTerminalTabSwitchScenario(page: Page): Promise<{
       state.createTab(backgroundWorktreeId)
     state.createTab(backgroundWorktreeId)
     state.setActiveTab(backgroundFirst.id)
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
 
     const floatingFirst = state.createTab(floatingWorktreeId, undefined, undefined, {
       activate: false
@@ -224,53 +175,6 @@ async function getActiveTerminalViewport(
       viewportY: buffer.viewportY,
       baseY: buffer.baseY
     }
-  })
-}
-
-async function enableKittyKeyboardReporting(page: Page, flags: number): Promise<void> {
-  await page.evaluate(async (flags) => {
-    const state = window.__store?.getState()
-    const worktreeId = state?.activeWorktreeId
-    const tabId =
-      state?.activeTabType === 'terminal'
-        ? state.activeTabId
-        : worktreeId
-          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
-          : null
-    const manager = tabId ? window.__paneManagers?.get(tabId) : null
-    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-    if (!pane) {
-      throw new Error('No active terminal pane for kitty keyboard setup')
-    }
-    await new Promise<void>((resolve) => {
-      pane.terminal.write(`\x1b[=${flags}u`, resolve)
-    })
-  }, flags)
-}
-
-async function getKittyKeyboardFlags(page: Page): Promise<number | null> {
-  return page.evaluate(() => {
-    const state = window.__store?.getState()
-    const worktreeId = state?.activeWorktreeId
-    const tabId =
-      state?.activeTabType === 'terminal'
-        ? state.activeTabId
-        : worktreeId
-          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
-          : null
-    const manager = tabId ? window.__paneManagers?.get(tabId) : null
-    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-    const terminal = pane?.terminal as
-      | {
-          core?: { coreService?: { kittyKeyboard?: { flags?: number } } }
-          _core?: { coreService?: { kittyKeyboard?: { flags?: number } } }
-        }
-      | undefined
-    return (
-      terminal?.core?.coreService?.kittyKeyboard?.flags ??
-      terminal?._core?.coreService?.kittyKeyboard?.flags ??
-      null
-    )
   })
 }
 
@@ -481,14 +385,12 @@ test.describe('Terminal Shortcuts', () => {
 
     // Why: exercise the production PTY-output tracker, not xterm's renderer-
     // local flag state, so the test covers the bytes the shortcut policy sees.
-    await execInTerminal(orcaPage, ptyId, "printf '\\033[>1u'")
+    // The command disarms its own flags: ones left armed at exit are grounded by the host.
+    await execInTerminal(orcaPage, ptyId, "printf '\\033[>1u'; read -r _; printf '\\033[<u'")
     await expect.poll(() => getKittyKeyboardFlags(orcaPage)).toBe(1)
     await pressAndExpectWrite(orcaPage, electronApp, 'Shift+Enter', '\x1b[13;2u')
 
-    // Clear the shell's unconsumed CSI-u line before resetting flags in a settled
-    // command; otherwise its line editor can swallow the reset bytes.
-    await sendToTerminal(orcaPage, ptyId, '\x15\x03')
-    await execInTerminal(orcaPage, ptyId, "printf '\\033[=0u'")
+    await sendToTerminal(orcaPage, ptyId, '\r')
     await expect.poll(() => getKittyKeyboardFlags(orcaPage)).toBe(0)
     await pressAndExpectWrite(orcaPage, electronApp, 'Shift+Enter', '\x1b\r')
   })
@@ -552,42 +454,55 @@ test.describe('Terminal Shortcuts', () => {
     await pressAndExpectWrite(orcaPage, electronApp, 'Control+Enter', '\x1b[13;5u')
   })
 
-  test('plain Ctrl+C sends ETX under kitty keyboard reporting', async ({
+  test('plain Ctrl+C sends ETX and leaves a surviving app its kitty flags', async ({
     orcaPage,
     electronApp
   }) => {
+    test.skip(process.platform === 'win32', 'POSIX trap and printf fixture')
     await installMainProcessPtyWriteSpy(electronApp)
-    await waitForActivePanePtyId(orcaPage)
-    await enableKittyKeyboardReporting(orcaPage, 31)
-    await clearPtyWriteLog(electronApp)
-    await focusActiveTerminalInput(orcaPage)
-    await orcaPage.keyboard.down('Control')
-    await orcaPage.keyboard.up('Control')
-    expect((await getPtyWrites(electronApp)).join('')).toBe('')
-    await clearPtyWriteLog(electronApp)
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    // SIGINT during shell startup kills the shell, so interrupt only a ready prompt.
+    await execInTerminal(orcaPage, ptyId, 'echo "CTRL_C_""READY"')
+    await waitForTerminalOutput(orcaPage, 'CTRL_C_READY')
+    // An app that survives SIGINT, like an agent TUI, and disarms its own flags on exit.
+    await armKittyKeyboardFromPty(
+      orcaPage,
+      ptyId,
+      `bash -c 'trap "" INT; printf "\\033[=31u"; read -r _; printf "\\033[=0u"'`
+    )
 
-    expect(await dispatchCtrlCToActiveTerminalTextarea(orcaPage, { keyupCtrlKey: false })).toEqual({
-      keydownDefaultPrevented: false,
-      keyupDefaultPrevented: false
-    })
+    await interruptAndExpectEtx(orcaPage, electronApp)
 
-    await expect
-      .poll(async () => (await getPtyWrites(electronApp)).some((write) => write.includes('\x03')), {
-        timeout: 5_000,
-        message: 'Ctrl+C did not reach the PTY as ETX'
-      })
-      .toBe(true)
-    const writes = (await getPtyWrites(electronApp)).join('')
-    expect(writes).not.toContain('\x1b[99;5u')
-    expect(writes).not.toContain('\x1b[99')
+    // Orca no longer guesses the app died: xterm keeps encoding for it, and the
+    // mirror the shortcut policy reads agrees (Shift+Enter stays CSI-u).
+    expect(await getKittyKeyboardFlags(orcaPage)).toBe(31)
+    await pressAndExpectWrite(orcaPage, electronApp, 'Shift+Enter', '\x1b[13;2u')
+
+    await sendToTerminal(orcaPage, ptyId, '\r')
+    await expect.poll(async () => await getKittyKeyboardFlags(orcaPage)).toBe(0)
+    await pressAndExpectWrite(orcaPage, electronApp, 'Shift+Enter', '\x1b\r')
+  })
+
+  test('the host grounds kitty flags an app killed by Ctrl+C left armed', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    test.skip(process.platform === 'win32', 'POSIX printf fixture')
+    await installMainProcessPtyWriteSpy(electronApp)
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    await execInTerminal(orcaPage, ptyId, 'echo "CTRL_C_""READY"')
+    await waitForTerminalOutput(orcaPage, 'CTRL_C_READY')
+    // `cat` dies on SIGINT with the flags still armed, like a crashed TUI.
+    await armKittyKeyboardFromPty(orcaPage, ptyId, `printf '\\033[=31u'; cat`)
+
+    await interruptAndExpectEtx(orcaPage, electronApp)
 
     await expect
       .poll(async () => await getKittyKeyboardFlags(orcaPage), {
         timeout: 5_000,
-        message: 'Ctrl+C did not clear stale Kitty keyboard flags'
+        message: 'the host did not ground the dead app kitty flags at command end'
       })
       .toBe(0)
-
     await clearPtyWriteLog(electronApp)
     await focusActiveTerminalInput(orcaPage)
     await orcaPage.keyboard.type('x')
@@ -597,9 +512,83 @@ test.describe('Terminal Shortcuts', () => {
         message: 'Post-interrupt keyboard input stayed in Kitty CSI-u mode'
       })
       .toBe(true)
-    const postInterruptWrites = (await getPtyWrites(electronApp)).join('')
-    expect(postInterruptWrites).not.toContain('\x1b[')
+    expect((await getPtyWrites(electronApp)).join('')).not.toContain('\x1b[')
     await orcaPage.keyboard.press('Backspace')
+  })
+
+  test('unselected Cmd+C reaches a Kitty app, including after Ctrl+C', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    test.skip(process.platform !== 'darwin', 'macOS copy binding')
+    await installMainProcessPtyWriteSpy(electronApp)
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    await execInTerminal(orcaPage, ptyId, 'echo "CMD_C_""READY"')
+    await waitForTerminalOutput(orcaPage, 'CMD_C_READY')
+    const select = (text: string | null): Promise<string> =>
+      orcaPage.evaluate(async (selectedText) => {
+        const state = window.__store!.getState()
+        const pane = window.__paneManagers!.get(state.activeTabId!)!.getActivePane()!
+        if (selectedText === null) {
+          pane.terminal.clearSelection()
+          return ''
+        }
+        await new Promise<void>((resolve) =>
+          pane.terminal.write(`\r\n${selectedText}\r\n`, resolve)
+        )
+        const buffer = pane.terminal.buffer.active
+        pane.terminal.select(0, buffer.baseY + buffer.cursorY - 1, selectedText.length)
+        return pane.terminal.getSelection()
+      }, text)
+    // Presses Cmd+C, then a marker chord whose write proves the Cmd+C bytes had their turn.
+    const pressCmdC = async (marker: string, markerWrite: string): Promise<string[]> => {
+      await clearPtyWriteLog(electronApp)
+      await focusActiveTerminalInput(orcaPage)
+      await orcaPage.keyboard.press('Meta+c')
+      await orcaPage.keyboard.press(marker)
+      await expect.poll(async () => await getPtyWrites(electronApp)).toContain(markerWrite)
+      const writes = await getPtyWrites(electronApp)
+      return writes.slice(0, writes.indexOf(markerWrite))
+    }
+    const kittyCmdC = ['\x1b[99;9;99u', '\x1b[99;9:3u']
+    const originalClipboard = await electronApp.evaluate(({ clipboard }) => clipboard.readText())
+    try {
+      await select(null)
+      expect(await pressCmdC('x', 'x')).toEqual([])
+      await orcaPage.keyboard.press('Backspace')
+
+      // An app that survives SIGINT, like an agent TUI, and disarms its own flags on exit.
+      await armKittyKeyboardFromPty(
+        orcaPage,
+        ptyId,
+        `bash -c 'trap "" INT; printf "\\033[=31u"; read -r _; printf "\\033[=0u"'`
+      )
+      await select(null)
+      expect(await pressCmdC('Shift+Enter', '\x1b[13;2u')).toEqual(kittyCmdC)
+
+      const selectedText = await select('Terminal copy selection')
+      expect(selectedText).toBe('Terminal copy selection')
+      await electronApp.evaluate(({ clipboard }) => clipboard.writeText(''))
+      expect(await pressCmdC('Shift+Enter', '\x1b[13;2u')).toEqual([])
+      await expect
+        .poll(() => electronApp.evaluate(({ clipboard }) => clipboard.readText()))
+        .toBe(selectedText)
+
+      await interruptAndExpectEtx(orcaPage, electronApp)
+      expect(await getKittyKeyboardFlags(orcaPage)).toBe(31)
+      await select(null)
+      expect(await pressCmdC('Shift+Enter', '\x1b[13;2u')).toEqual(kittyCmdC)
+
+      await sendToTerminal(orcaPage, ptyId, '\r')
+      await expect.poll(async () => await getKittyKeyboardFlags(orcaPage)).toBe(0)
+      expect(await pressCmdC('x', 'x')).toEqual([])
+      await orcaPage.keyboard.press('Backspace')
+    } finally {
+      await electronApp.evaluate(
+        ({ clipboard }, text) => clipboard.writeText(text),
+        originalClipboard
+      )
+    }
   })
 
   test('@headful Codex-like background output stays visible without disabling WebGL in auto mode', async ({
@@ -909,12 +898,13 @@ test.describe('Terminal Shortcuts', () => {
     orcaPage,
     electronApp
   }) => {
+    test.skip(process.platform === 'win32', 'ConPTY panes withhold the kitty protocol')
     await installMainProcessPtyWriteSpy(electronApp)
     // Why: CI can mount the xterm surface before the pane transport has a
     // live PTY. Probe first so xterm onData cannot race a disconnected
     // sendInput path, then clear the probe writes before the layout assertion.
-    await waitForActivePanePtyId(orcaPage)
-    await enableKittyKeyboardReporting(orcaPage, 31)
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    await armKittyKeyboardFromPty(orcaPage, ptyId, `printf '\\033[=31u'; cat`)
     await clearPtyWriteLog(electronApp)
 
     const dispatch = await pressShiftedRussianLayoutKey(orcaPage)
@@ -936,5 +926,6 @@ test.describe('Terminal Shortcuts', () => {
     const joinedWrites = writes.join('')
     expect(joinedWrites).not.toContain('\x1b[97:1060;2;1060u')
     expect(joinedWrites).not.toContain('\x1b[97:1060;2:3u')
+    await sendToTerminal(orcaPage, ptyId, '\x03')
   })
 })

@@ -4,16 +4,18 @@ import { isRuntimeSubscriptionReplayResponse } from '../../../../shared/runtime-
 import { useAppStore } from '../../store'
 import { recoverWebSessionTerminalOrphansBeforeApply } from '../web-session-terminal-orphan-recovery'
 import {
-  beginWebSessionTabsSnapshotRecovery,
   recordReceivedWebSessionTabsSnapshot,
+  sessionTabsFreshnessKey,
   shouldApplyRecoveredWebSessionTabsSnapshot
 } from './tracking'
 import { decideWebSessionTabsSnapshot } from './tracking-decisions'
 import { acceptReplayedWebSessionTabsSnapshot } from './tracking-lifecycle'
 import {
   acceptSessionTabsRuntimeId,
-  getSessionTabsRuntimeIdFromResponse
+  getSessionTabsRuntimeIdFromResponse,
+  isRetiredSessionTabsPublicationEpoch
 } from './publisher-identity-fences'
+import { scheduleRetiredEpochCensus } from './retired-epoch-census'
 import { applyWebSessionTabsSnapshot } from './snapshot-api'
 import { applyWebSessionTabsStorePatch } from './store-patch'
 import {
@@ -91,14 +93,33 @@ export function handleGlobalSessionEvent(args: GlobalSessionEventArgs): void {
     runtimeId
   )
   coordinator.recordSnapshotReceipt(environmentId, event, receivedFrame, runtimeId)
-  const finishRecovery = beginWebSessionTabsSnapshotRecovery(
-    environmentId,
-    event.worktree,
-    receivedFrame
-  )
+  if (
+    isRetiredSessionTabsPublicationEpoch(
+      sessionTabsFreshnessKey(environmentId, event.worktree),
+      event.publicationEpoch
+    )
+  ) {
+    // Why: the fence drops this frame; only the host's census can say whether its publisher lives.
+    scheduleRetiredEpochCensus(
+      {
+        environmentId,
+        expectedEnvironmentPairingRevision,
+        isCurrent,
+        applySnapshot: (snapshot, censusResponse) =>
+          handleGlobalSessionEvent({
+            ...args,
+            event: { ...snapshot, type: 'snapshot' },
+            response: censusResponse
+          })
+      },
+      event.worktree,
+      event.publicationEpoch
+    )
+  }
   let settleHydration: HostSessionMirrorSettle | null = null
   void recoverWebSessionTerminalOrphansBeforeApply(useAppStore.getState(), event, environmentId, {
     expectedEnvironmentPairingRevision,
+    expectedRuntimeId: runtimeId,
     getCurrentState: () => useAppStore.getState()
   })
     .then((recovered) => {
@@ -157,7 +178,6 @@ export function handleGlobalSessionEvent(args: GlobalSessionEventArgs): void {
       }
     })
     .finally(() => {
-      finishRecovery()
       if (isCurrent()) {
         settleHydration?.()
       }

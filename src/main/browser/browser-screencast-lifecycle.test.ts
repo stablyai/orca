@@ -21,7 +21,7 @@ function createWebContents() {
     attached = false
   })
   debuggerApi.sendCommand = vi.fn(async () => ({}))
-  return { isDestroyed: vi.fn(() => false), debugger: debuggerApi }
+  return { isDestroyed: vi.fn(() => false), isCrashed: vi.fn(() => false), debugger: debuggerApi }
 }
 
 describe('browser screencast lifecycle', () => {
@@ -143,7 +143,8 @@ describe('browser screencast lifecycle', () => {
       ackScreencastFrame,
       scheduleNavigationFrameCapture: vi.fn(),
       clearNavigationCaptureTimer: vi.fn(),
-      bumpSnapshotGeneration: vi.fn()
+      bumpSnapshotGeneration: vi.fn(),
+      setDialogOpen: vi.fn()
     })
 
     handler({}, 'Page.screencastFrame', { sessionId: 42, data: '' })

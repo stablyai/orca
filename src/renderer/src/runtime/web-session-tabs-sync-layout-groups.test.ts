@@ -3,7 +3,8 @@ import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { Tab } from '../../../shared/tab-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
-import { applyWebSessionTabsSnapshot, type WebSessionTabsSyncState } from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import {
   ENV,
   HOST_SURFACE_ID,
@@ -25,7 +26,7 @@ vi.mock('../store', () => ({
 describe('applyWebSessionTabsSnapshot', () => {
   beforeEach(resetWebSessionTabsSyncTestState)
 
-  it('removes stale scrollback refs from mirrored terminal layouts', () => {
+  it('carries the client scrollback refs through a mirrored terminal layout rebuild', () => {
     const mirroredId = toWebTerminalSurfaceTabId('host-tab-1')
     const ptyId = 'remote:web-env-1@@terminal-1'
     const existingTab: TerminalTab = {
@@ -70,13 +71,10 @@ describe('applyWebSessionTabsSnapshot', () => {
       NOW
     ) as Partial<WebSessionTabsSyncState>
 
-    expect(patch.terminalLayoutsByTabId?.[mirroredId]).toMatchObject({
-      root: { type: 'leaf', leafId: LEAF_ID },
-      activeLeafId: LEAF_ID,
-      expandedLeafId: null,
-      ptyIdsByLeafId: { [LEAF_ID]: ptyId }
-    })
-    expect(patch.terminalLayoutsByTabId?.[mirroredId]?.scrollbackRefsByLeafId).toBeUndefined()
+    // Why no layout write: a ref is this client's only pointer to a local scrollback file, so the
+    // rebuild carries it for every leaf the host still names. The rebuilt layout then equals the
+    // stored one and the write bails out instead of dropping the ref.
+    expect(patch.terminalLayoutsByTabId).toBeUndefined()
   })
 
   it('hydrates host split tab groups with mirrored terminal tab ids', () => {

@@ -1,9 +1,6 @@
-import { z } from 'zod'
-import { ORCHESTRATION_WORKER_READ_SOURCES } from '../../../../../../shared/orchestration-worker-output'
 import { contextOnlyAbandonWarning } from '../../../../orchestration/context-only-dispatch-release'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { defineMethod, type RpcMethod } from '../../../core'
-import { OptionalFiniteNumber, requiredString } from '../../../schemas'
+import { defineMethod } from '../../../core'
 import {
   exposeDispatchContext,
   exposeObservation,
@@ -16,20 +13,20 @@ import {
 import { readArchivedWorkerOutput } from './worker-archive-read'
 import { readStructuredWorkerOutput } from '../../orchestration-structured-worker-lifecycle'
 import { releaseStructuredWorkerSession } from '../../orchestration-structured-worker-session'
+import { sessionIdFromStructuredWorkerIncarnation } from '../../../../structured-worker-identity'
 import { readExactWorkerOutput } from './worker-output'
 import { exposeWorkerTerminalResource } from './worker-release-completion'
 import { readFederatedWorkerOutput } from '../federation/federated-worker-read'
 import { showFederatedWorker } from '../federation/federated-worker-show'
-const WorkerDispatchParams = z.object({ dispatch: requiredString('Missing --dispatch') })
-const WorkerReadParams = WorkerDispatchParams.extend({
-  cursor: z.union([z.number().int().nonnegative(), z.string().min(1).max(2_048)]).optional(),
-  limit: OptionalFiniteNumber,
-  source: z.enum(ORCHESTRATION_WORKER_READ_SOURCES).optional()
-})
+import {
+  WorkerDispatchParams,
+  WorkerReadParams
+} from '../../../../../../shared/rpc-contract/orchestration-worker-control-params'
 
-export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
   defineMethod({
     name: 'orchestration.workerShow',
+    permission: 'workspace',
     params: WorkerDispatchParams,
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
@@ -83,6 +80,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'orchestration.workerRead',
+    permission: 'workspace',
     params: WorkerReadParams,
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
@@ -148,7 +146,10 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
           `Worker Dispatch ${params.dispatch} no longer resolves to its exact process.`
         )
       }
-      const structured = readStructuredWorkerOutput({
+      // Read via the handle inspectWorkerTerminal proved live: the durable one, or a handle
+      // re-minted from the recorded incarnation after the durable handle went stale.
+      const liveHandle = observation.terminalHandle ?? terminalHandle
+      const structured = await readStructuredWorkerOutput({
         db,
         dispatchId: params.dispatch,
         workerState: worker?.state ?? 'unsupervised',
@@ -168,7 +169,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
       const output = await readExactWorkerOutput({
         runtime,
         dispatchId: params.dispatch,
-        terminalHandle,
+        terminalHandle: liveHandle,
         workerState: worker?.state ?? 'unsupervised',
         terminalStatus:
           observation.status === 'exited'
@@ -200,14 +201,20 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'orchestration.workerAbandon',
+    permission: 'workspace',
     params: WorkerDispatchParams,
-    handler: (params, { runtime }) => {
-      const abandoned = runtime.getOrchestrationDb().abandonWorkerDispatch(params.dispatch)
+    handler: (params, { runtime, orchestrationCaller }) => {
+      const db = runtime.getOrchestrationDb()
+      const abandoned = db.abandonWorkerDispatch(
+        params.dispatch,
+        runtime.getRuntimeId(),
+        // Why: only a session caller is verified; terminal env could name anyone.
+        orchestrationCaller?.address
+      )
       if (abandoned.disposition === 'context_only') {
         if (!abandoned.alreadySettled) {
-          // Abandon settles the Dispatch, so it owes the same hold release stop and release do.
-          // A surviving hold pins the provider child for the life of the app and makes host crash
-          // recovery respawn a worker nobody is waiting on.
+          // Abandon settles the Dispatch, so it owes the same binding release stop and release do:
+          // a surviving redrive subscription keeps nudging a worker nobody is waiting on.
           releaseStructuredWorkerSession(params.dispatch, runtime)
           runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
         }
@@ -223,19 +230,27 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
       }
       const worker = abandoned.worker
       if (abandoned.disposition === 'abandoned') {
-        releaseStructuredWorkerSession(params.dispatch, runtime)
+        // Only the worker's own Dispatch settles the worker; a side task's parked mail stays.
+        releaseStructuredWorkerSession(
+          params.dispatch,
+          runtime,
+          sessionIdFromStructuredWorkerIncarnation(
+            db.getDispatchContextById(params.dispatch)?.process_incarnation
+          )
+        )
         runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
       }
       return {
         dispatchId: params.dispatch,
         state: worker.state,
         alreadySettled: abandoned.disposition !== 'abandoned',
-        stale: abandoned.disposition === 'stale',
+        // Kept for --json readers: this attempt was no longer current, as main reported it.
+        stale: abandoned.superseded || abandoned.disposition === 'already_settled',
         processAction: 'none',
         warning:
-          abandoned.disposition === 'stale'
-            ? 'The Dispatch is no longer current; no state or process changed.'
-            : 'Possibly-live resources were retained; no process was stopped or deleted.',
+          abandoned.disposition === 'abandoned'
+            ? 'Possibly-live resources were retained; no process was stopped or deleted.'
+            : `The worker was already ${worker.state}; its terminal was left open and no process changed.`,
         residualResources: JSON.parse(worker.residual_resources) as unknown[]
       }
     }

@@ -118,7 +118,7 @@ describe('worktree create preparation cancellation', () => {
     expect(signal?.aborted).toBe(true)
     expect((await settled)[0].status).toBe('rejected')
     await flushBackgroundWork()
-    expect(mocks.discard).toHaveBeenCalledWith(repo.path, obsoletePath, {})
+    expect(mocks.discard).toHaveBeenCalledWith(repo.path, obsoletePath, {}, expect.any(String))
   })
 
   it('does not retry a discard whose registration the aborted checkout already removed', async () => {

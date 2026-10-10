@@ -3,31 +3,54 @@ import type {
   RuntimeTerminalWaitCondition
 } from '../../shared/runtime-types'
 import {
-  detectExplicitIdleStatusFromTitle,
-  detectTerminalWaitBlockedReason,
-  isKnownReadyPromptPreview
-} from './terminal-wait-detection'
-import {
   buildPtyTerminalWaitBlockedResult,
   buildPtyTerminalWaitResult,
   buildTerminalWaitBlockedResult,
   buildTerminalWaitResult,
   getTerminalState
 } from './terminal-wait-results'
+import { readsTrustedScreen } from './agent-state-rules/agent-state-rules-engine'
+import { showsScreenProbeBanner } from './agent-state-rules/agent-state-text-anchors'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
+import { evaluateTuiIdle, type TuiIdleVerdict } from './tui-idle-evidence'
+import {
+  leafTuiIdleEvidence,
+  ptyTuiIdleEvidence,
+  type TuiIdleEvidenceSource
+} from './tui-idle-evidence-source'
+import type { TuiAgent } from '../../shared/tui-agent'
 import type { TerminalWaiter } from './runtime-terminal-contracts'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
-import type { AgentStatus } from '../../shared/agent-detection'
 import type { RuntimeTerminalIdlePolls } from './runtime-terminal-idle-polls'
 import type { RuntimeTerminalWaiterRegistry } from './runtime-terminal-waiter-registry'
 
-type RuntimeTerminalWaitDependencies = {
+/**
+ * A pane with no retained bytes and no status has only its provider's screen to read, and one
+ * whose tail shows a rule file's `profile.screenProbeBanner` is probed as before screen rules. So
+ * is a clockless pane whose rules read the trusted screen, whatever its status: a re-attached
+ * pane's own model can be untrusted. A clocked one settles through the poll, once quiet.
+ */
+function shouldProbeVisibleScreen(
+  paneAgent: TuiAgent | null,
+  record: Pick<RuntimePtyWorktreeRecord, 'lastAgentStatus' | 'lastOutputAt'>,
+  waitText: string
+): boolean {
+  return (
+    (record.lastAgentStatus === null && waitText.length === 0) ||
+    showsScreenProbeBanner(waitText) ||
+    (readsTrustedScreen(paneAgent) && record.lastOutputAt === null)
+  )
+}
+
+type RuntimeTerminalWaitDependencies = TuiIdleEvidenceSource & {
   defaultTimeoutMs: number
   getLivePty(handle: string): { pty: RuntimePtyWorktreeRecord } | null
   getLiveLeaf(handle: string): { leaf: RuntimeLeafRecord }
-  getAdoptedPtyIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null
-  getTabTitle(tabId: string): string | null
-  startVisibleReadProbe(waiter: TerminalWaiter, waiterTimeoutMs: number): void
+  startVisibleReadProbe(
+    waiter: TerminalWaiter,
+    waiterTimeoutMs: number,
+    agent: TuiAgent | null
+  ): void
 }
 
 export class RuntimeTerminalWait {
@@ -37,12 +60,24 @@ export class RuntimeTerminalWait {
     private readonly polls: RuntimeTerminalIdlePolls
   ) {}
 
+  /** Why one helper per record kind: every satisfaction site must rank the same way,
+   *  or the immediate check and the poll disagree about the same pane. */
+  private evaluatePty(pty: RuntimePtyWorktreeRecord, waitText: string): TuiIdleVerdict {
+    return evaluateTuiIdle(ptyTuiIdleEvidence(this.deps, pty, () => waitText))
+  }
+
+  private evaluateLeaf(leaf: RuntimeLeafRecord, waitText: string): TuiIdleVerdict {
+    return evaluateTuiIdle(leafTuiIdleEvidence(this.deps, leaf, () => waitText))
+  }
+
   async wait(
     handle: string,
     options?: {
       condition?: RuntimeTerminalWaitCondition
       timeoutMs?: number
       signal?: AbortSignal
+      /** Main-internal, never on the wire: see `TerminalWaiter.launchReadiness`. */
+      launchReadiness?: boolean
     }
   ): Promise<RuntimeTerminalWaitResult> {
     const condition = options?.condition ?? 'exit'
@@ -56,18 +91,13 @@ export class RuntimeTerminalWait {
         pty.pty.tailPartialLine,
         pty.pty.preview
       )
-      const ptyBlockedReason = detectTerminalWaitBlockedReason(ptyWaitText)
-      if (condition === 'tui-idle' && ptyBlockedReason) {
-        return buildPtyTerminalWaitBlockedResult(handle, condition, pty.pty, ptyBlockedReason)
+      // Why strong verdicts only, here and at every other synchronous site: weak evidence
+      // cannot see a dialog the tail lost, so it settles only on the poll, after a screen read.
+      const ptyVerdict = condition === 'tui-idle' ? this.evaluatePty(pty.pty, ptyWaitText) : null
+      if (ptyVerdict?.kind === 'blocked') {
+        return buildPtyTerminalWaitBlockedResult(handle, condition, pty.pty, ptyVerdict.reason)
       }
-      if (condition === 'tui-idle' && pty.pty.lastAgentStatus === 'idle') {
-        return buildPtyTerminalWaitResult(handle, condition, pty.pty)
-      }
-      if (
-        condition === 'tui-idle' &&
-        (this.deps.getAdoptedPtyIdleStatus(pty.pty) === 'idle' ||
-          isKnownReadyPromptPreview(ptyWaitText))
-      ) {
+      if (ptyVerdict?.kind === 'ready-strong') {
         return buildPtyTerminalWaitResult(handle, condition, pty.pty)
       }
       return await new Promise<RuntimeTerminalWaitResult>((resolve, reject) => {
@@ -84,7 +114,8 @@ export class RuntimeTerminalWait {
           reject,
           timeout: null,
           cancelIdlePoll: null,
-          abortCleanup: null
+          abortCleanup: null,
+          ...(options?.launchReadiness ? { launchReadiness: true } : {})
         }
         if (!this.waiters.bindAbort(waiter, options?.signal)) {
           reject(new Error('request_aborted'))
@@ -109,23 +140,19 @@ export class RuntimeTerminalWait {
             live.pty.tailPartialLine,
             live.pty.preview
           )
-          const blockedReason = detectTerminalWaitBlockedReason(livePtyWaitText)
-          if (blockedReason) {
+          const verdict = this.evaluatePty(live.pty, livePtyWaitText)
+          if (verdict.kind === 'blocked') {
             this.waiters.resolve(
               waiter,
-              buildPtyTerminalWaitBlockedResult(handle, condition, live.pty, blockedReason)
+              buildPtyTerminalWaitBlockedResult(handle, condition, live.pty, verdict.reason)
             )
-          } else if (live.pty.lastAgentStatus === 'idle') {
-            this.waiters.resolve(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
-          } else if (
-            this.deps.getAdoptedPtyIdleStatus(live.pty) === 'idle' ||
-            isKnownReadyPromptPreview(livePtyWaitText)
-          ) {
+          } else if (verdict.kind === 'ready-strong') {
             this.waiters.resolve(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
           } else {
-            this.polls.startPty(waiter, live.pty)
-            if (live.pty.lastAgentStatus === null && livePtyWaitText.length === 0) {
-              this.deps.startVisibleReadProbe(waiter, effectiveTimeoutMs)
+            this.polls.startPty(waiter, live.pty, verdict)
+            const paneAgent = this.deps.getPaneAgent(live.pty.ptyId)
+            if (shouldProbeVisibleScreen(paneAgent, live.pty, livePtyWaitText)) {
+              this.deps.startVisibleReadProbe(waiter, effectiveTimeoutMs, paneAgent)
             }
           }
         }
@@ -137,27 +164,16 @@ export class RuntimeTerminalWait {
     }
 
     const leafWaitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
-    const leafBlockedReason = detectTerminalWaitBlockedReason(leafWaitText)
-    if (condition === 'tui-idle' && leafBlockedReason) {
-      return buildTerminalWaitBlockedResult(handle, condition, leaf, leafBlockedReason)
+    const leafVerdict = condition === 'tui-idle' ? this.evaluateLeaf(leaf, leafWaitText) : null
+    if (leafVerdict?.kind === 'blocked') {
+      return buildTerminalWaitBlockedResult(handle, condition, leaf, leafVerdict.reason)
     }
 
-    // Why: if the agent already transitioned to idle (or permission) before the
-    // waiter was registered, resolve immediately. This uses the same OSC title
-    // detection that powers the renderer's "Task complete" notifications.
-    // Why: only 'idle' satisfies tui-idle, not 'permission'. Permission means the
+    // Why: if the agent already announced rest before the waiter was registered, resolve
+    // immediately. Only 'idle' satisfies tui-idle, not 'permission'. Permission means the
     // agent is blocked on user approval, not finished with its task.
-    if (condition === 'tui-idle' && leaf.lastAgentStatus === 'idle') {
+    if (leafVerdict?.kind === 'ready-strong') {
       return buildTerminalWaitResult(handle, condition, leaf)
-    }
-    if (condition === 'tui-idle') {
-      const fastPathTitle = leaf.paneTitle ?? this.deps.getTabTitle(leaf.tabId)
-      if (
-        (fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
-        isKnownReadyPromptPreview(leafWaitText)
-      ) {
-        return buildTerminalWaitResult(handle, condition, leaf)
-      }
     }
 
     return await new Promise<RuntimeTerminalWaitResult>((resolve, reject) => {
@@ -178,7 +194,8 @@ export class RuntimeTerminalWait {
         reject,
         timeout: null,
         cancelIdlePoll: null,
-        abortCleanup: null
+        abortCleanup: null,
+        ...(options?.launchReadiness ? { launchReadiness: true } : {})
       }
 
       if (!this.waiters.bindAbort(waiter, options?.signal)) {
@@ -208,13 +225,13 @@ export class RuntimeTerminalWait {
             live.leaf.tailPartialLine,
             live.leaf.preview
           )
-          const blockedReason = detectTerminalWaitBlockedReason(liveLeafWaitText)
-          if (blockedReason) {
+          const verdict = this.evaluateLeaf(live.leaf, liveLeafWaitText)
+          if (verdict.kind === 'blocked') {
             this.waiters.resolve(
               waiter,
-              buildTerminalWaitBlockedResult(handle, condition, live.leaf, blockedReason)
+              buildTerminalWaitBlockedResult(handle, condition, live.leaf, verdict.reason)
             )
-          } else if (live.leaf.lastAgentStatus === 'idle') {
+          } else if (verdict.kind === 'ready-strong') {
             // Why: don't clear lastAgentStatus here. It's a factual record of the
             // last detected OSC state, not a one-shot signal. Clearing it causes
             // subsequent tui-idle waiters to hang even though the agent is idle —
@@ -224,17 +241,10 @@ export class RuntimeTerminalWait {
             // Why: renderer-synced previews can show a known ready prompt even
             // while the last OSC title is still "working"; keep polling the
             // preview/title until the waiter resolves or hits its timeout.
-            const fastPathTitle = live.leaf.paneTitle ?? this.deps.getTabTitle(live.leaf.tabId)
-            if (
-              (fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
-              isKnownReadyPromptPreview(liveLeafWaitText)
-            ) {
-              this.waiters.resolve(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
-            } else {
-              this.polls.startLeaf(waiter, live.leaf)
-              if (live.leaf.lastAgentStatus === null && liveLeafWaitText.length === 0) {
-                this.deps.startVisibleReadProbe(waiter, effectiveTimeoutMs)
-              }
+            this.polls.startLeaf(waiter, live.leaf, verdict)
+            const paneAgent = this.deps.getPaneAgent(live.leaf.ptyId)
+            if (shouldProbeVisibleScreen(paneAgent, live.leaf, liveLeafWaitText)) {
+              this.deps.startVisibleReadProbe(waiter, effectiveTimeoutMs, paneAgent)
             }
           }
         }

@@ -49,6 +49,27 @@ export async function jiraListAssignableUsers(
     : window.api.jira.listAssignableUsers(args)
 }
 
+// Remote hosts lack project search; use their capability-gated site search.
+export async function jiraListAssignableUsersForProject(
+  settings: RuntimeJiraSettings,
+  projectIdOrKey: string,
+  query?: string,
+  siteId?: string | null
+): Promise<JiraUser[]> {
+  if (!isRuntimeProviderSearchQueryWithinLimit(query)) {
+    return []
+  }
+  const target = getJiraRuntimeTarget(settings)
+  if (target.kind === 'environment') {
+    return jiraSearchUsers(settings, query, siteId)
+  }
+  return window.api.jira.listAssignableUsersForProject({
+    projectIdOrKey,
+    query,
+    siteId: siteId ?? undefined
+  })
+}
+
 export async function jiraSearchUsers(
   settings: RuntimeJiraSettings,
   query?: string,

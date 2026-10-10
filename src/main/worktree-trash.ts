@@ -1,10 +1,9 @@
-// Why: `git worktree remove` deletes the whole checkout (usually a multi-GB node_modules) inside the
-// remove IPC, so the UI sat on a spinner for 8-35s. Renaming the directory into a sibling trash root
-// is a metadata operation, and the recursive delete then runs after the IPC has already returned.
+// Why: releases before worktree removal ran inline renamed checkouts into a sibling trash root and
+// deleted them in the background; a quit mid-delete left entries behind. Nothing creates trash now,
+// so this sweep only drains those legacy entries.
 
-import { randomBytes } from 'node:crypto'
-import { lstat, mkdir, readdir, rename, rmdir } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { lstat, readdir, rmdir } from 'node:fs/promises'
+import { join } from 'node:path'
 import { removeHostTree } from './host-tree-removal'
 import { isFolderRepo } from '../shared/repo-kind'
 import { computeWorkspaceRoot, getWorktreePathSettings } from './ipc/worktree-logic'
@@ -14,88 +13,13 @@ import { parseWslPath } from './wsl'
 
 export const WORKTREE_TRASH_DIR_NAME = '.orca-worktree-trash'
 
-// `<epoch-ms>-<nonce>`: the nonce keeps concurrent removals of same-named worktrees from colliding.
+// `<epoch-ms>-<nonce>`: the only names the retired rename ever generated.
 const TRASH_ENTRY_PATTERN = /^wt-\d+-[0-9a-f]{8}$/
 
 // Why: the sweep must stay cheap on a workspace root holding many repo containers.
 const TRASH_SWEEP_MAX_CONTAINERS = 200
 
-/** Trash root for a worktree: a hidden sibling, so the rename always stays on one volume. */
-export function getWorktreeTrashRoot(worktreePath: string): string {
-  return join(dirname(worktreePath), WORKTREE_TRASH_DIR_NAME)
-}
-
-export function isWorktreeTrashEntryName(entryName: string): boolean {
-  return TRASH_ENTRY_PATTERN.test(entryName)
-}
-
-/**
- * Move a worktree directory aside so the caller can return before it is deleted.
- * Returns the trash path, or `undefined` when the rename is unavailable (a different
- * volume, or Windows open handles) and the caller must delete in place instead.
- */
-export async function moveWorktreeDirectoryToTrash(
-  worktreePath: string
-): Promise<string | undefined> {
-  const trashRoot = getWorktreeTrashRoot(worktreePath)
-  const trashPath = join(trashRoot, `wt-${Date.now()}-${randomBytes(4).toString('hex')}`)
-  try {
-    await mkdir(trashRoot, { recursive: true })
-    const trashRootStat = await lstat(trashRoot)
-    if (!trashRootStat.isDirectory() || trashRootStat.isSymbolicLink()) {
-      throw new Error(`Refusing non-directory worktree trash root: ${trashRoot}`)
-    }
-    await rename(worktreePath, trashPath)
-    return trashPath
-  } catch (error) {
-    console.warn(
-      `[worktrees] Deferred deletion unavailable for ${worktreePath}; deleting in place`,
-      error
-    )
-    // Leave no empty trash root behind when the rename never happened; rmdir keeps queued entries.
-    await rmdir(trashRoot).catch(() => {})
-    return undefined
-  }
-}
-
-/** Undo a trash rename so a failed registration cleanup leaves the worktree exactly as it was. */
-export async function restoreWorktreeDirectoryFromTrash(
-  trashPath: string,
-  worktreePath: string
-): Promise<boolean> {
-  try {
-    await rename(trashPath, worktreePath)
-    return true
-  } catch (error) {
-    console.warn(`[worktrees] Failed to restore ${worktreePath} from ${trashPath}`, error)
-    return false
-  }
-}
-
-// Why serialized: one background delete at a time keeps a burst of removals from saturating disk I/O
-// while the user keeps working.
-let queuedTrashDeletions: Promise<void> = Promise.resolve()
-
-export function scheduleWorktreeTrashDeletion(trashPath: string): void {
-  queuedTrashDeletions = queuedTrashDeletions.then(async () => {
-    try {
-      await removeHostTree(trashPath)
-    } catch (error) {
-      // Why only a warning: the directory is already invisible to the user, and the startup sweep retries it.
-      console.warn(`[worktrees] Failed to delete trashed worktree at ${trashPath}`, error)
-    }
-  })
-}
-
-/** Test/shutdown hook: resolves once every queued background deletion has settled. */
-export function whenWorktreeTrashDeletionsSettled(): Promise<void> {
-  return queuedTrashDeletions
-}
-
-/**
- * Delete trash entries left behind by a previous run (a crash or a kill during background deletion).
- * Only entries matching the generated name pattern inside a trash root are removed.
- */
+/** Delete legacy trash entries. Only entries matching the generated name pattern inside a trash root are removed. */
 export async function sweepStaleWorktreeTrash(
   workspaceRoots: readonly string[]
 ): Promise<{ removed: number }> {
@@ -112,7 +36,7 @@ export async function sweepStaleWorktreeTrash(
       continue
     }
     for (const entry of entries) {
-      if (!isWorktreeTrashEntryName(entry)) {
+      if (!TRASH_ENTRY_PATTERN.test(entry)) {
         continue
       }
       try {
@@ -125,6 +49,8 @@ export async function sweepStaleWorktreeTrash(
         )
       }
     }
+    // Why: nothing refills the root, so drop it once empty; rmdir keeps anything still inside.
+    await rmdir(trashRoot).catch(() => {})
   }
   if (removed > 0) {
     console.log(`[worktrees] Swept ${removed} leftover worktree director(ies) from a previous run`)
@@ -153,7 +79,7 @@ async function collectExistingTrashRoots(workspaceRoots: readonly string[]): Pro
   return [...trashRoots]
 }
 
-/** Workspace roots of local git repos — the only places Orca creates worktree trash. */
+/** Workspace roots of local git repos — the only places Orca ever created worktree trash. */
 export function collectWorktreeTrashSweepRoots(
   repos: readonly Repo[],
   settings: Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces'>

@@ -28,12 +28,14 @@ import {
 } from '@/store/slices/runtime-environment-ssh'
 import {
   isConnectedRuntimeHostState,
-  runtimeHostConnectionState
+  runtimeHostConnectionStateForEntry
 } from '@/runtime/runtime-host-connection-state'
 
 type RepositoryHostSetupsSectionProps = {
   repo: Repo
   selectedProjectSetupId?: string
+  settingsSelectionKey?: string
+  settingsEntryRepoIds?: ReadonlySet<string>
   forceVisible: boolean
   searchQuery: string
   searchEntries: SettingsSearchEntry[]
@@ -60,6 +62,8 @@ function setupsByOwnedExecutionHost(
 export function RepositoryHostSetupsSection({
   repo,
   selectedProjectSetupId,
+  settingsSelectionKey,
+  settingsEntryRepoIds,
   forceVisible,
   searchQuery,
   searchEntries
@@ -116,36 +120,43 @@ export function RepositoryHostSetupsSection({
         setup.repoId === repo.id &&
         setup.projectId === repoProjectHostSetup?.projectId
     ) ?? repoProjectHostSetup
-  const projectHostSetups = selectedProjectHostSetup
-    ? setupsByOwnedExecutionHost(
-        projectHostSetupProjection.setups.filter(
-          (setup) => setup.projectId === selectedProjectHostSetup.projectId
-        ),
-        selectedProjectHostSetup.id
+  const allProjectHostSetups = selectedProjectHostSetup
+    ? projectHostSetupProjection.setups.filter(
+        (setup) => setup.projectId === selectedProjectHostSetup.projectId
       )
     : []
+  // Why: a sibling entry's setups can't be opened from this pane; not-set-up
+  // placeholders belong to the project, not a checkout, so every entry keeps them.
+  const projectHostSetups = setupsByOwnedExecutionHost(
+    allProjectHostSetups.filter(
+      (setup) =>
+        !settingsEntryRepoIds || !setup.repoId.trim() || settingsEntryRepoIds.has(setup.repoId)
+    ),
+    selectedProjectHostSetup?.id ?? ''
+  )
   const openableProjectHostSetups = projectHostSetups.filter((setup) => setup.repoId.trim())
   const switchableProjectHostSetups = setupsByOwnedExecutionHost(
     openableProjectHostSetups,
     selectedProjectHostSetup?.id ?? ''
   )
   const setupHostOptions = buildSetupHostOptions({
-    projectHostSetups,
+    projectHostSetups: allProjectHostSetups,
     hostOptions
   })
   const hostOptionById = new Map(hostOptions.map((option) => [option.id, option]))
   const [deletingSetupId, setDeletingSetupId] = useState<string | null>(null)
-  const projectId = selectedProjectHostSetup?.projectId
+  // Why: split clone entries share a projectId, so each keeps its own selection.
+  const selectionKey = settingsSelectionKey ?? selectedProjectHostSetup?.projectId
   // Why: the single project pane switches host in place — set the ephemeral
-  // per-project selection instead of navigating to a separate repo section.
+  // per-entry selection instead of navigating to a separate repo section.
   const selectHost = (hostId: ExecutionHostId) => {
-    if (projectId) {
-      setSettingsProjectHostSelection(projectId, hostId)
+    if (selectionKey) {
+      setSettingsProjectHostSelection(selectionKey, hostId)
     }
   }
   const selectSetup = (setup: ProjectHostSetup) => {
-    if (projectId) {
-      setSettingsProjectHostSelection(projectId, setup.hostId, setup.id)
+    if (selectionKey) {
+      setSettingsProjectHostSelection(selectionKey, setup.hostId, setup.id)
     }
   }
   if (
@@ -227,14 +238,7 @@ export function RepositoryHostSetupsSection({
             ? runtimeStatusByEnvironmentId.get(runtimeOwnerEnvironmentId)
             : undefined
           const runtimeOwnerState = runtimeOwnerEnvironmentId
-            ? runtimeHostConnectionState({
-                hasStatusEntry: Boolean(runtimeOwnerStatusEntry),
-                status: runtimeOwnerStatusEntry?.status,
-                remoteControl:
-                  runtimeOwnerStatusEntry?.remoteControl ??
-                  runtimeOwnerStatusEntry?.status?.remoteControl ??
-                  null
-              })
+            ? runtimeHostConnectionStateForEntry(runtimeOwnerStatusEntry)
             : null
           const runtimeOwnerReachable =
             runtimeOwnerState === null || isConnectedRuntimeHostState(runtimeOwnerState)

@@ -16,6 +16,11 @@ import type {
 } from '../../../../../shared/browser-grab-types'
 import { formatBrowserAnnotationsAsMarkdown } from './browser-annotation-output'
 import { EMPTY_BROWSER_ANNOTATIONS } from '../describe-page/browser-annotation-geometry'
+import {
+  holdNotesForSend,
+  isNoteInFlight,
+  useNotesInFlightVersion
+} from '@/lib/notes-send-in-flight'
 
 export function useBrowserPageAnnotationSend({
   browserTabId,
@@ -42,6 +47,7 @@ export function useBrowserPageAnnotationSend({
     intent: BrowserAnnotationIntent
   ) => void
   handleBrowserAnnotationsSentToAgent: () => void
+  handleBrowserAnnotationsHandedOff: (delivered: Promise<unknown>) => void
   activeGroupId: string | undefined
 } {
   const browserAnnotations = useAppStore(
@@ -52,9 +58,19 @@ export function useBrowserPageAnnotationSend({
   const [browserAnnotationTrayOpen, setBrowserAnnotationTrayOpen] = useState(true)
   const [browserAnnotationsCopied, setBrowserAnnotationsCopied] = useState(false)
   const annotationCopyTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
-  const browserAnnotationsPrompt = useMemo(
+  const copyPrompt = useMemo(
     () => formatBrowserAnnotationsAsMarkdown(browserAnnotations),
     [browserAnnotations]
+  )
+  // Annotations another send holds are left out of the next one.
+  const inFlightVersion = useNotesInFlightVersion()
+  const sendableAnnotations = useMemo(() => {
+    void inFlightVersion
+    return browserAnnotations.filter((annotation) => !isNoteInFlight(annotation))
+  }, [browserAnnotations, inFlightVersion])
+  const browserAnnotationsPrompt = useMemo(
+    () => formatBrowserAnnotationsAsMarkdown(sendableAnnotations),
+    [sendableAnnotations]
   )
   const openAgentSendPopoverTargetMode = useAppStore((s) => s.openAgentSendPopoverTargetMode)
   const closeAgentSendPopoverTargetMode = useAppStore((s) => s.closeAgentSendPopoverTargetMode)
@@ -66,6 +82,9 @@ export function useBrowserPageAnnotationSend({
   const deleteBrowserPageAnnotation = useAppStore((s) => s.deleteBrowserPageAnnotation)
   const updateBrowserPageAnnotation = useAppStore((s) => s.updateBrowserPageAnnotation)
   const clearBrowserPageAnnotations = useAppStore((s) => s.clearBrowserPageAnnotations)
+  const removeDeliveredBrowserPageAnnotations = useAppStore(
+    (s) => s.removeDeliveredBrowserPageAnnotations
+  )
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
 
   useLayoutEffect(() => {
@@ -78,82 +97,32 @@ export function useBrowserPageAnnotationSend({
     }
   }, [])
 
-  const handleAnnotationBannerSendOpenChange = useCallback(
-    (open: boolean): void => {
-      if (open) {
-        openAgentSendPopoverTargetMode({
-          id: annotationBannerSendModeId,
-          worktreeId,
-          source: 'browser-annotations',
-          prompt: browserAnnotationsPrompt,
-          label: translate(
-            'auto.components.browser.pane.BrowserPane.27d863542c',
-            'Browser annotations'
-          ),
-          launchSource: 'notes_send'
-        })
-      } else {
-        closeAgentSendPopoverTargetMode(annotationBannerSendModeId)
-      }
-    },
-    [
-      annotationBannerSendModeId,
-      browserAnnotationsPrompt,
-      closeAgentSendPopoverTargetMode,
-      openAgentSendPopoverTargetMode,
-      worktreeId
-    ]
-  )
-
-  const handleAnnotationTraySendOpenChange = useCallback(
-    (open: boolean): void => {
-      if (open) {
-        openAgentSendPopoverTargetMode({
-          id: annotationTraySendModeId,
-          worktreeId,
-          source: 'browser-annotations',
-          prompt: browserAnnotationsPrompt,
-          label: translate(
-            'auto.components.browser.pane.BrowserPane.27d863542c',
-            'Browser annotations'
-          ),
-          launchSource: 'notes_send'
-        })
-      } else {
-        closeAgentSendPopoverTargetMode(annotationTraySendModeId)
-      }
-    },
-    [
-      annotationTraySendModeId,
-      browserAnnotationsPrompt,
-      closeAgentSendPopoverTargetMode,
-      openAgentSendPopoverTargetMode,
-      worktreeId
-    ]
-  )
-
-  useEffect(
-    () => () => {
-      closeAgentSendPopoverTargetMode(annotationBannerSendModeId)
-      closeAgentSendPopoverTargetMode(annotationTraySendModeId)
-    },
-    [annotationBannerSendModeId, annotationTraySendModeId, closeAgentSendPopoverTargetMode]
-  )
-
   const handleCopyBrowserAnnotations = useCallback((): void => {
-    if (!browserAnnotationsPrompt) {
+    if (!copyPrompt) {
       return
     }
-    void window.api.ui.writeClipboardText(browserAnnotationsPrompt)
+    void window.api.ui.writeClipboardText(copyPrompt)
     recordFeatureInteraction('browser-annotations')
     clearTimeout(annotationCopyTimerRef.current)
     setBrowserAnnotationsCopied(true)
     annotationCopyTimerRef.current = setTimeout(() => setBrowserAnnotationsCopied(false), 1400)
-  }, [browserAnnotationsPrompt, recordFeatureInteraction])
+  }, [copyPrompt, recordFeatureInteraction])
 
   const handleBrowserAnnotationsSentToAgent = useCallback((): void => {
     recordFeatureInteraction('browser-annotations-sent-to-agent')
-  }, [recordFeatureInteraction])
+    removeDeliveredBrowserPageAnnotations(browserTabId, sendableAnnotations)
+  }, [
+    sendableAnnotations,
+    browserTabId,
+    recordFeatureInteraction,
+    removeDeliveredBrowserPageAnnotations
+  ])
+
+  const handleBrowserAnnotationsHandedOff = useCallback(
+    (delivered: Promise<unknown>): void =>
+      holdNotesForSend(sendableAnnotations, delivered, handleBrowserAnnotationsSentToAgent),
+    [handleBrowserAnnotationsSentToAgent, sendableAnnotations]
+  )
 
   const handleClearBrowserAnnotations = useCallback((): void => {
     if (browserAnnotationsRef.current.length === 0) {
@@ -164,6 +133,58 @@ export function useBrowserPageAnnotationSend({
     recordFeatureInteraction('browser-annotations')
     clearBrowserPageAnnotations(browserTabId)
   }, [browserTabId, clearBrowserPageAnnotations, recordFeatureInteraction])
+
+  const handleAnnotationSendOpenChange = useCallback(
+    (modeId: string, open: boolean): void => {
+      if (open) {
+        // Every annotation may already be on its way: there is nothing to send.
+        if (!browserAnnotationsPrompt) {
+          return
+        }
+        openAgentSendPopoverTargetMode({
+          id: modeId,
+          worktreeId,
+          source: 'browser-annotations',
+          prompt: browserAnnotationsPrompt,
+          label: translate(
+            'auto.components.browser.pane.BrowserPane.27d863542c',
+            'Browser annotations'
+          ),
+          launchSource: 'notes_send',
+          onPromptDelivered: handleBrowserAnnotationsSentToAgent,
+          onPromptHandedOff: handleBrowserAnnotationsHandedOff
+        })
+      } else {
+        closeAgentSendPopoverTargetMode(modeId)
+      }
+    },
+    [
+      browserAnnotationsPrompt,
+      handleBrowserAnnotationsSentToAgent,
+      handleBrowserAnnotationsHandedOff,
+      closeAgentSendPopoverTargetMode,
+      openAgentSendPopoverTargetMode,
+      worktreeId
+    ]
+  )
+
+  const handleAnnotationBannerSendOpenChange = useCallback(
+    (open: boolean): void => handleAnnotationSendOpenChange(annotationBannerSendModeId, open),
+    [annotationBannerSendModeId, handleAnnotationSendOpenChange]
+  )
+
+  const handleAnnotationTraySendOpenChange = useCallback(
+    (open: boolean): void => handleAnnotationSendOpenChange(annotationTraySendModeId, open),
+    [annotationTraySendModeId, handleAnnotationSendOpenChange]
+  )
+
+  useEffect(
+    () => () => {
+      closeAgentSendPopoverTargetMode(annotationBannerSendModeId)
+      closeAgentSendPopoverTargetMode(annotationTraySendModeId)
+    },
+    [annotationBannerSendModeId, annotationTraySendModeId, closeAgentSendPopoverTargetMode]
+  )
 
   const handleDeleteBrowserAnnotation = useCallback(
     (annotationId: string): void => {
@@ -206,6 +227,7 @@ export function useBrowserPageAnnotationSend({
     handleDeleteBrowserAnnotation,
     handleUpdateBrowserAnnotation,
     handleBrowserAnnotationsSentToAgent,
+    handleBrowserAnnotationsHandedOff,
     activeGroupId
   }
 }

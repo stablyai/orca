@@ -1,7 +1,6 @@
 import type { TerminalPasteRuntime } from './terminal-paste-model'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
-
-const REMOTE_PTY_ID_PREFIX = 'remote:'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 
 type TerminalPasteRuntimeTransport = {
   getConnectionId?: () => string | null | undefined
@@ -34,7 +33,7 @@ export function resolveTerminalPasteRuntime({
 }: ResolveTerminalPasteRuntimeArgs): TerminalPasteRuntime {
   const windowsConpty = isWindowsConpty === undefined ? {} : { isWindowsConpty }
 
-  if (isRemoteRuntimePastePtyId(ptyId)) {
+  if (isRemoteRuntimePtyId(ptyId)) {
     return { platform, runtimeKey: `remote:${ptyId}`, kind: 'remote-runtime', ...windowsConpty }
   }
 
@@ -60,10 +59,6 @@ export function resolveTerminalPasteRuntime({
   }
 
   return { platform, runtimeKey: `local:${platform}`, kind: 'local', ...windowsConpty }
-}
-
-export function isRemoteRuntimePastePtyId(ptyId: string | null | undefined): boolean {
-  return typeof ptyId === 'string' && ptyId.startsWith(REMOTE_PTY_ID_PREFIX)
 }
 
 function resolveWslRuntimeKey(

@@ -131,7 +131,11 @@ export class OrcaRuntimeWithWaitForMobileTerminalSurface extends OrcaRuntimeWith
     if (!surface) {
       return null
     }
-    const session = this.getWorkspaceSessionForWorktree(authority.worktreeId)
+    const [hostId] = this.getWorkspaceSessionHostIdsForTab(
+      authority.worktreeId,
+      surface.tab.parentTabId
+    )
+    const session = hostId ? (this.store?.getWorkspaceSession?.(hostId) ?? null) : null
     const sessionWorktreeId = session
       ? resolveTerminalSessionWorktreeId(session, authority.worktreeId)
       : null

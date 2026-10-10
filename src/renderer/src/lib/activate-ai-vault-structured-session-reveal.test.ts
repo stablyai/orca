@@ -74,6 +74,22 @@ describe('revealStructuredSession', () => {
     )
   })
 
+  it('keeps a known recipient target when the active workspace would resolve locally', async () => {
+    const host = { kind: 'environment', environmentId: 'recipient-host' } as const
+    await expect(revealStructuredSession({ ...target, target: host })).resolves.toBe('revealed')
+    expect(mocks.supports).toHaveBeenCalledWith(
+      'recipient-host',
+      STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
+      expect.any(Number)
+    )
+    expect(mocks.call).toHaveBeenCalledWith(
+      host,
+      'agentSession.reveal',
+      { sessionId: 'session-1' },
+      expect.any(Object)
+    )
+  })
+
   it('reports a paired host that cannot open it rather than sending an unknown method', async () => {
     // The regression this guards: an older paired host answers method_not_found, which is
     // indistinguishable from a refusal, so the user is told the chat is gone when it is not.

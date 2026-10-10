@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { getAllWorktreesFromState } from '@/store/selectors'
 import { track } from '@/lib/telemetry'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { persistWorktreeSortOrderByHost } from '@/lib/worktree-sort-order-persistence'
 import type { Repo } from '../../../../../../shared/repo-types'
-import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   buildWorktreeComparator,
   buildWorktreeSortLabels,
@@ -19,9 +18,6 @@ import {
   type WorktreeAttention
 } from '../../smart-attention'
 import { useReusedArrayIdentity } from './use-reused-array-identity'
-
-// Debounce re-sort after a sortEpoch bump so background score changes don't jar row positions.
-const SORT_SETTLE_MS = 3_000
 
 function trackSmartClassDistribution(attention: ReadonlyMap<string, WorktreeAttention>): void {
   let class1 = 0
@@ -52,52 +48,16 @@ function trackSmartClassDistribution(attention: ReadonlyMap<string, WorktreeAtte
   })
 }
 
-// Why debounce: scores are time-decaying, so recomputing on every sortEpoch bump makes worktrees jump; settle to coalesce.
-// Structural changes (add/remove) bypass the debounce so a new worktree appears at its sorted position immediately.
-function useDebouncedSortEpoch(worktreeCount: number, sortBy: SortBy): number {
-  const sortEpoch = useAppStore((s) => s.sortEpoch)
-  const [debouncedSortEpoch, setDebouncedSortEpoch] = useState(sortEpoch)
-  const prevWorktreeCountRef = useRef(worktreeCount)
-  useEffect(() => {
-    if (debouncedSortEpoch === sortEpoch) {
-      return
-    }
-
-    const structuralChange = worktreeCount !== prevWorktreeCountRef.current
-    prevWorktreeCountRef.current = worktreeCount
-
-    // Why: manual drag/drop is direct manipulation; the settle-window delay would make a successful drop look broken.
-    if (structuralChange || sortBy === 'manual') {
-      setDebouncedSortEpoch(sortEpoch)
-      return
-    }
-
-    const timer = setTimeout(() => setDebouncedSortEpoch(sortEpoch), SORT_SETTLE_MS)
-    return () => clearTimeout(timer)
-  }, [sortEpoch, debouncedSortEpoch, worktreeCount, sortBy])
-  return debouncedSortEpoch
-}
-
 // ── Stable sort order ──────────────────────────────────────────
 // Why sortEpoch (not selection): selection side-effects (clearing isUnread, PR-cache refresh) must not reorder the sidebar under the user.
 // Why useMemo not useEffect: order must be computed synchronously before the worktrees memo reads it.
 export function useSidebarWorktreeSortOrder(args: {
-  allWorktrees: readonly Worktree[]
   repoMap: Map<string, Repo>
   sortBy: SortBy
 }): string[] {
-  const { allWorktrees, repoMap, sortBy } = args
-  // Non-archived count — detects structural changes (add/remove) so the debounce below can apply immediately.
-  const worktreeCount = useMemo(() => {
-    let count = 0
-    for (const worktree of allWorktrees) {
-      if (!worktree.isArchived) {
-        count++
-      }
-    }
-    return count
-  }, [allWorktrees])
-  const debouncedSortEpoch = useDebouncedSortEpoch(worktreeCount, sortBy)
+  const { repoMap, sortBy } = args
+  // Why settled (not live): the store coalesces bump bursts so rows don't jump (store/settled-sort-epoch.ts).
+  const settledSortEpoch = useAppStore((s) => s.settledSortEpoch)
 
   // Why a latching ref: a live signal makes Smart authoritative for the session, even after that activity ends.
   const sessionHasHadLiveSmartSignal = useRef(false)
@@ -157,9 +117,9 @@ export function useSidebarWorktreeSortOrder(args: {
       attentionByWorktree: sortBy === 'smart' ? attentionByWorktree : null,
       detectedLiveSmartSignal
     }
-    // debouncedSortEpoch is an intentional trigger not read in the memo; its change (debounced) signals a recompute.
+    // settledSortEpoch is an intentional trigger not read in the memo; its change signals a recompute.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSortEpoch, repoMap, sortBy])
+  }, [settledSortEpoch, repoMap, sortBy])
   // Why: stable ID order prevents rank-only refreshes from echoing an unchanged snapshot.
   const sortedIds = useReusedArrayIdentity(recomputedSort.sortedIds)
 

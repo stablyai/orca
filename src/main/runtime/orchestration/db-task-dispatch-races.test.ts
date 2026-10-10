@@ -29,7 +29,10 @@ describe('Task/Dispatch concurrency', () => {
   it('reads a concurrent Task result before applying an explicit status correction', () => {
     const first = createDatabase()
     const concurrent = createDatabase(first.path)
-    const task = first.db.createTask({ spec: 'concurrent status winner' })
+    const task = first.db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'concurrent status winner'
+    })
     const sqlite = sqliteFor(first.db)
     const exec = sqlite.exec.bind(sqlite)
     let concurrentWon = false
@@ -57,7 +60,7 @@ describe('Task/Dispatch concurrency', () => {
   it('holds the Task status writer reservation through its lifecycle reads', () => {
     const first = createDatabase()
     const concurrent = createDatabase(first.path)
-    const task = first.db.createTask({ spec: 'reserved status winner' })
+    const task = first.db.createTask({ runId: 'run_legacy_local', spec: 'reserved status winner' })
     const sqlite = sqliteFor(first.db)
     const exec = sqlite.exec.bind(sqlite)
     sqliteFor(concurrent.db).pragma('busy_timeout = 0')
@@ -86,7 +89,7 @@ describe('Task/Dispatch concurrency', () => {
 
   it('rolls back Dispatch failure when Task requeue fails', () => {
     const { db } = createDatabase()
-    const task = db.createTask({ spec: 'atomic retry failure' })
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'atomic retry failure' })
     const dispatch = createRootDispatch(db, task.id, 'term_worker')
     sqliteFor(db).exec(`
       CREATE TRIGGER reject_task_requeue
@@ -113,14 +116,17 @@ describe('Task/Dispatch concurrency', () => {
   it('does not let stale failure overwrite a completed worker report', () => {
     const first = createDatabase()
     const concurrent = createDatabase(first.path)
-    const task = first.db.createTask({ spec: 'worker completion wins' })
+    const task = first.db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'worker completion wins'
+    })
     const started = first.db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: {}
     })
-    const capability = first.db.prepareStartingWorkerAuthority({
+    first.db.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: 'term_worker',
       paneKey: 'tab_worker:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -165,19 +171,14 @@ describe('Task/Dispatch concurrency', () => {
       status: 'completed',
       last_failure: null
     })
-    expect(
-      first.db.verifyDispatchCapability({
-        dispatchId: started.dispatch.id,
-        capability,
-        paneKey: 'tab_worker:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-        processIncarnation: 'worker:1'
-      })
-    ).toMatchObject({ valid: false })
   })
 
   it('keeps nested dispatch failure atomic with its caller transaction', () => {
     const { db } = createDatabase()
-    const task = db.createTask({ spec: 'nested atomic failure' })
+    const task = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'nested atomic failure'
+    })
     const dispatch = createRootDispatch(db, task.id, 'term_worker')
     const sqlite = sqliteFor(db)
 
@@ -198,8 +199,14 @@ describe('Task/Dispatch concurrency', () => {
   it('serializes reminted-pane worker authority claims', () => {
     const first = createDatabase()
     const concurrent = createDatabase(first.path)
-    const losingTask = first.db.createTask({ spec: 'losing worker' })
-    const winningTask = first.db.createTask({ spec: 'winning worker' })
+    const losingTask = first.db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'losing worker'
+    })
+    const winningTask = first.db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'winning worker'
+    })
     const loser = first.db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
@@ -214,10 +221,11 @@ describe('Task/Dispatch concurrency', () => {
     })
     const sqlite = sqliteFor(first.db)
     const exec = sqlite.exec.bind(sqlite)
-    let winningCapability: string | undefined
+    let winnerClaimed = false
     vi.spyOn(sqlite, 'exec').mockImplementation((sql) => {
-      if (!winningCapability && sql === 'BEGIN IMMEDIATE') {
-        winningCapability = concurrent.db.prepareStartingWorkerAuthority({
+      if (!winnerClaimed && sql === 'BEGIN IMMEDIATE') {
+        winnerClaimed = true
+        concurrent.db.prepareStartingWorkerAuthority({
           dispatchId: winner.dispatch.id,
           handle: 'term_reminted',
           paneKey: 'tab_new:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
@@ -243,10 +251,9 @@ describe('Task/Dispatch concurrency', () => {
         terminalOwnership: 'created'
       })
     ).toThrow(`already has an active dispatch (${winner.dispatch.id} for task ${winningTask.id})`)
-    expect(winningCapability).toBeDefined()
     expect(first.db.getDispatchContextById(loser.dispatch.id)).toMatchObject({
       assignee_handle: null,
-      capability_hash: null
+      process_incarnation: null
     })
     expect(first.db.getWorkerDispatch(loser.dispatch.id)).toMatchObject({
       stage: 'accepted',
@@ -255,7 +262,7 @@ describe('Task/Dispatch concurrency', () => {
     expect(first.db.getWorkerTerminalResourceByOwner(loser.dispatch.id)).toBeUndefined()
     expect(first.db.getDispatchContextById(winner.dispatch.id)).toMatchObject({
       assignee_handle: 'term_reminted',
-      capability_hash: expect.any(String)
+      process_incarnation: 'winner:1'
     })
     expect(first.db.getWorkerTerminalResourceByOwner(winner.dispatch.id)).toMatchObject({
       terminal_handle: 'term_reminted',
@@ -265,7 +272,7 @@ describe('Task/Dispatch concurrency', () => {
       sqlite
         .prepare(
           `SELECT COUNT(*) AS count FROM dispatch_contexts
-           WHERE status IN ('pending', 'dispatched') AND capability_hash IS NOT NULL`
+           WHERE status IN ('pending', 'dispatched') AND process_incarnation IS NOT NULL`
         )
         .get()
     ).toEqual({ count: 1 })

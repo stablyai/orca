@@ -72,7 +72,7 @@ describe('discardChanges', () => {
     realpathMock.mockImplementation(async (targetPath: string) => path.resolve(targetPath))
   })
 
-  it('restores tracked files from HEAD', async () => {
+  it('restores tracked files from the index', async () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'src/file.ts\n' })
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })
 
@@ -87,7 +87,7 @@ describe('discardChanges', () => {
     )
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
-      ['restore', '--worktree', '--source=HEAD', '--', ':(literal)src/file.ts'],
+      ['restore', '--worktree', '--', ':(literal)src/file.ts'],
       {
         cwd: '/repo'
       }
@@ -135,46 +135,32 @@ describe('bulk git helpers', () => {
     realpathMock.mockImplementation(async (targetPath: string) => path.resolve(targetPath))
   })
 
-  it('chunks bulk stage requests to avoid oversized argv payloads', async () => {
+  it('stages more than 100 selected paths with one index write and bounded argv', async () => {
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
 
     const filePaths = Array.from({ length: 201 }, (_, i) => `src/file-${i}.ts`)
     await bulkStageFiles('/repo', filePaths)
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(3)
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
-      1,
-      ['add', '--', ...filePaths.slice(0, 100).map((filePath) => `:(literal)${filePath}`)],
+    expect(gitExecFileAsyncMock).toHaveBeenCalledExactlyOnceWith(
+      ['add', '--pathspec-from-file=-', '--pathspec-file-nul'],
       {
-        cwd: '/repo'
-      }
-    )
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
-      3,
-      ['add', '--', ...filePaths.slice(200).map((filePath) => `:(literal)${filePath}`)],
-      {
-        cwd: '/repo'
+        cwd: '/repo',
+        stdin: filePaths.map((filePath) => `:(literal)${filePath}\0`).join('')
       }
     )
   })
 
-  it('chunks bulk unstage requests to avoid oversized argv payloads', async () => {
+  it('unstages more than 100 selected paths with one index write and bounded argv', async () => {
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
 
     const filePaths = Array.from({ length: 101 }, (_, i) => `src/file-${i}.ts`)
     await bulkUnstageFiles('/repo', filePaths)
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
-      2,
-      [
-        'restore',
-        '--staged',
-        '--',
-        ...filePaths.slice(100).map((filePath) => `:(literal)${filePath}`)
-      ],
+    expect(gitExecFileAsyncMock).toHaveBeenCalledExactlyOnceWith(
+      ['reset', '--quiet', '--pathspec-from-file=-', '--pathspec-file-nul'],
       {
-        cwd: '/repo'
+        cwd: '/repo',
+        stdin: filePaths.map((filePath) => `:(literal)${filePath}\0`).join('')
       }
     )
   })
@@ -207,9 +193,10 @@ describe('bulk git helpers', () => {
     // tracked descendant, which keeps directory pathspecs on the restore path.
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
-      ['restore', '--worktree', '--source=HEAD', '--', ':(literal)src/file.ts', ':(literal)docs'],
+      ['restore', '--worktree', '--pathspec-from-file=-', '--pathspec-file-nul'],
       {
-        cwd: '/repo'
+        cwd: '/repo',
+        stdin: ':(literal)src/file.ts\0:(literal)docs\0'
       }
     )
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
@@ -218,6 +205,25 @@ describe('bulk git helpers', () => {
       {
         cwd: '/repo'
       }
+    )
+    expect(rmMock).not.toHaveBeenCalled()
+  })
+
+  it('preserves bulk discard action selection and original path order for path edges', async () => {
+    const filePaths = ['new', 'docs\\', '[ab].txt', 'docs///', 'new', 'src/file', 'docs\\']
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'docs/readme\0src/file-extra\0[ab].txt\0' })
+      .mockResolvedValue({ stdout: '' })
+
+    await bulkDiscardChanges('/repo', filePaths)
+
+    expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
+      ['ls-files', '-z', '--', ...filePaths.map((filePath) => `:(literal)${filePath}`)],
+      ['restore', '--worktree', '--pathspec-from-file=-', '--pathspec-file-nul'],
+      ['clean', '-ffdx', '--', ':(literal)new', ':(literal)new', ':(literal)src/file']
+    ])
+    expect(gitExecFileAsyncMock.mock.calls[1][1].stdin).toBe(
+      ':(literal)docs\\\0:(literal)[ab].txt\0:(literal)docs///\0:(literal)docs\\\0'
     )
     expect(rmMock).not.toHaveBeenCalled()
   })
@@ -234,9 +240,10 @@ describe('bulk git helpers', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
-      ['restore', '--worktree', '--source=HEAD', '--', ':(literal)docs'],
+      ['restore', '--worktree', '--pathspec-from-file=-', '--pathspec-file-nul'],
       {
-        cwd: '/repo'
+        cwd: '/repo',
+        stdin: ':(literal)docs\0'
       }
     )
     expect(rmMock).not.toHaveBeenCalled()
@@ -249,5 +256,20 @@ describe('bulk git helpers', () => {
 
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
     expect(rmMock).not.toHaveBeenCalled()
+  })
+
+  it('does not spawn mutations for empty selections', async () => {
+    await bulkStageFiles('/repo', [])
+    await bulkUnstageFiles('/repo', [])
+    await bulkDiscardChanges('/repo', [])
+
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects embedded NUL before staging or unstaging another path', async () => {
+    await expect(bulkStageFiles('/repo', ['one\0two'])).rejects.toThrow('NUL')
+    await expect(bulkUnstageFiles('/repo', ['one\0two'])).rejects.toThrow('NUL')
+
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 })

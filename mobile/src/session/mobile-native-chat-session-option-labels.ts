@@ -2,10 +2,11 @@
 // (src/renderer/src/components/native-chat/native-chat-session-option-labels.ts),
 // minus i18n — mobile renders plain strings throughout.
 
-import type {
-  SessionOptionDescriptor,
-  SessionOptionDisabledReason,
-  SessionOptionSelectChoice
+import {
+  isDefaultServiceTier,
+  type SessionOptionDescriptor,
+  type SessionOptionDisabledReason,
+  type SessionOptionSelectChoice
 } from '../../../src/shared/native-chat-session-options'
 
 export function mobileSessionOptionDisabledReason(
@@ -43,23 +44,22 @@ export function mobileModelPillLabel(descriptor: SessionOptionDescriptor): strin
 }
 
 export function mobileSessionOptionSummaryValue(descriptor: SessionOptionDescriptor): string {
+  // A boolean always has a value, so the summary states it and lets the sheet's
+  // marker say whether anything confirmed it. Reading "Not set" here while the
+  // sheet showed the switch on made the two screens disagree.
+  if (descriptor.kind.type === 'boolean') {
+    return descriptor.kind.currentValue ? 'On' : 'Off'
+  }
   if (descriptor.valueSource === 'unknown') {
     return 'Not set'
   }
-  if (descriptor.kind.type === 'select') {
-    return selectedChoiceLabel(descriptor) ?? 'Not set'
-  }
-  return descriptor.kind.currentValue === undefined
-    ? 'Not set'
-    : descriptor.kind.currentValue
-      ? 'On'
-      : 'Off'
+  return selectedChoiceLabel(descriptor) ?? 'Not set'
 }
 
 export function mobileOptionsPillLabel(descriptors: readonly SessionOptionDescriptor[]): string {
   const labels: string[] = []
   for (const descriptor of descriptors) {
-    if (descriptor.valueSource === 'unknown') {
+    if (descriptor.valueSource === 'unknown' || isDefaultServiceTier(descriptor)) {
       continue
     }
     if (descriptor.kind.type === 'select') {

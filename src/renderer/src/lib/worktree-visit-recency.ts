@@ -54,10 +54,6 @@ export function getWorktreeIdFromVisitKey(key: string): string {
   return key
 }
 
-export function isHostQualifiedVisitKey(key: string): boolean {
-  return getWorktreeIdFromVisitKey(key) !== key
-}
-
 /** Remove all recency entries belonging to one or more raw worktree ids. */
 export function removeWorktreeVisitEntries(
   timestamps: Readonly<Record<string, number>>,

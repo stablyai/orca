@@ -3,6 +3,7 @@ import { BrowserError } from './cdp-bridge'
 import { classifyErrorCode } from './agent-browser-bridge-process'
 import { AgentBrowserBridgeExecution } from './agent-browser-bridge-execution'
 import {
+  AGENT_BROWSER_EXIT_DRAIN_MS,
   CONSECUTIVE_TIMEOUT_LIMIT,
   EXEC_TIMEOUT_MS,
   type AgentBrowserExecOptions
@@ -22,6 +23,7 @@ export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeExe
     return new Promise<string>((resolve, reject) => {
       const session = this.sessions.get(sessionName)
       let child: ChildProcess | null = null
+      let exitDrainTimer: ReturnType<typeof setTimeout> | undefined
       child = execFile(
         this.agentBrowserBin,
         args,
@@ -37,6 +39,7 @@ export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeExe
             : this.agentBrowserEnv
         },
         (error, stdout, stderr) => {
+          clearTimeout(exitDrainTimer)
           if (session && session.activeProcess === child) {
             session.activeProcess = null
           }
@@ -95,6 +98,14 @@ export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeExe
           resolve(stdout)
         }
       )
+      // Why: a Windows daemon inherits the helper's stdio pipes (vercel-labs/agent-browser#1407), so
+      // EOF never arrives; after exit, drain briefly then release the pipes so execFile settles.
+      child.once('exit', () => {
+        exitDrainTimer = setTimeout(() => {
+          child.stdout?.destroy()
+          child.stderr?.destroy()
+        }, AGENT_BROWSER_EXIT_DRAIN_MS)
+      })
       if (session) {
         session.activeProcess = child
       }

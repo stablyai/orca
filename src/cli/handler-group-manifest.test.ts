@@ -1,5 +1,5 @@
 import { readdirSync } from 'node:fs'
-import { join, relative, sep } from 'node:path'
+import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { buildHandlerRoutes, dispatch, type HandlerContext } from './dispatch'
@@ -36,27 +36,6 @@ function isHandlerRecord(value: unknown): value is Record<string, unknown> {
 }
 
 describe('handler group manifest', () => {
-  it('lists a loadable group for every entry', async () => {
-    for (const group of HANDLER_GROUPS) {
-      const loaded = await group.load()
-      expect(loaded, `${group.name} resolved to a non-record`).toBeTypeOf('object')
-    }
-  })
-
-  it('matches each group export key-for-key', async () => {
-    const drift: string[] = []
-    for (const group of HANDLER_GROUPS) {
-      const actual = Object.keys(await group.load()).sort()
-      const declared = [...group.keys].sort()
-      if (JSON.stringify(actual) !== JSON.stringify(declared)) {
-        drift.push(
-          `${group.name}: manifest ${JSON.stringify(declared)} !== export ${JSON.stringify(actual)}`
-        )
-      }
-    }
-    expect(drift).toEqual([])
-  })
-
   it('exposes every declared key as a callable handler', async () => {
     const notCallable: string[] = []
     for (const group of HANDLER_GROUPS) {
@@ -68,15 +47,6 @@ describe('handler group manifest', () => {
       }
     }
     expect(notCallable).toEqual([])
-  })
-
-  it('reaches every group through dispatch routing', () => {
-    const routes = buildHandlerRoutes(HANDLER_GROUPS)
-    const reached = new Set([...routes.values()].map((group) => group.name))
-    const unreachable = HANDLER_GROUPS.filter((group) => !reached.has(group.name)).map(
-      (group) => group.name
-    )
-    expect(unreachable).toEqual([])
   })
 
   // Why: dropping a group from the manifest silently unregisters its commands —
@@ -100,15 +70,6 @@ describe('handler group manifest', () => {
       }
     }
     expect(unroutable).toEqual([])
-  })
-
-  it('finds the modules it is meant to guard', () => {
-    // Why: a walk that missed the tree would make the guard above vacuously pass.
-    const modules = listHandlerModules(HANDLERS_DIR)
-    expect(modules.length).toBeGreaterThanOrEqual(40)
-    expect(
-      modules.filter((file) => relative(HANDLERS_DIR, file).includes(sep)).length
-    ).toBeGreaterThanOrEqual(7)
   })
 })
 

@@ -6,7 +6,6 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 
@@ -58,12 +57,7 @@ export function getCatalogOwnerHostId(owner: {
   connectionId?: string | null
   executionHostId?: string | null
 }): ExecutionHostId {
-  const explicitHost = parseExecutionHostId(owner.executionHostId)
-  if (explicitHost) {
-    return explicitHost.id
-  }
-  const connectionId = owner.connectionId?.trim()
-  return connectionId ? toSshExecutionHostId(connectionId) : 'local'
+  return getRepoExecutionHostId(owner)
 }
 
 function buildCatalogOwnerIndex<
@@ -279,11 +273,11 @@ export function findIndexedRepoOwnerForHost<T extends RepoOwnerRecord>(
   return resolution?.kind === 'resolved' ? (resolution.owner as T) : null
 }
 
-export function findIndexedFolderWorkspaceOwner(
-  folderWorkspaces: readonly FolderWorkspaceOwnerRecord[] | undefined,
+export function findIndexedFolderWorkspaceOwner<T extends FolderWorkspaceOwnerRecord>(
+  folderWorkspaces: readonly T[] | undefined,
   folderWorkspaceId: string,
   executionHostId?: ExecutionHostId
-): FolderWorkspaceOwnerRecord | null {
+): T | null {
   if (!folderWorkspaces) {
     return null
   }
@@ -295,14 +289,15 @@ export function findIndexedFolderWorkspaceOwner(
   const resolution = index.get(
     executionHostId ? `${folderWorkspaceId}\0${executionHostId}` : folderWorkspaceId
   )
-  return resolution?.kind === 'resolved' ? resolution.owner : null
+  // The cache is keyed by this exact array, so its owner retains the caller's row type.
+  return resolution?.kind === 'resolved' ? (resolution.owner as T) : null
 }
 
-export function findIndexedProjectGroupOwner(
-  projectGroups: readonly ProjectGroupOwnerRecord[] | undefined,
+export function findIndexedProjectGroupOwner<T extends ProjectGroupOwnerRecord>(
+  projectGroups: readonly T[] | undefined,
   projectGroupId: string,
   executionHostId?: ExecutionHostId
-): ProjectGroupOwnerRecord | null {
+): T | null {
   if (!projectGroups) {
     return null
   }
@@ -314,5 +309,6 @@ export function findIndexedProjectGroupOwner(
   const resolution = index.get(
     executionHostId ? `${projectGroupId}\0${executionHostId}` : projectGroupId
   )
-  return resolution?.kind === 'resolved' ? resolution.owner : null
+  // The cache is keyed by this exact array, so its owner retains the caller's row type.
+  return resolution?.kind === 'resolved' ? (resolution.owner as T) : null
 }

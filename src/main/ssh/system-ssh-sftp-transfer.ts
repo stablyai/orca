@@ -13,8 +13,8 @@ import {
   toSftpRemotePath,
   UnsupportedSftpPathError
 } from './system-ssh-sftp-path'
-import { throwIfAborted } from './system-ssh-operation-lifecycle'
-import { runProcess } from '../../shared/child-process/run-process'
+import { SystemSshCommandExitError, throwIfAborted } from './system-ssh-operation-lifecycle'
+import { runProcess } from '@orca/process-host'
 
 /** The host answered, but not with an sftp subsystem. The caller must fall back, not fail. */
 export class SftpSubsystemUnavailableError extends Error {
@@ -167,8 +167,15 @@ export async function runSftpBatch(
   if (SUBSYSTEM_REFUSED_PATTERN.test(detail)) {
     throw new SftpSubsystemUnavailableError(detail)
   }
-  throw new Error(`sftp batch failed (exit ${result.code}): ${detail}`)
+  // Why typed only off-transport: the host answered this script; a dropped link said nothing.
+  if (CONTACT_LOST_PATTERN.test(detail)) {
+    throw new Error(`sftp batch failed (exit ${result.code}): ${detail}`)
+  }
+  throw new SystemSshCommandExitError('sftp batch', result.code, detail, result.signal)
 }
+
+const CONTACT_LOST_PATTERN =
+  /connection (?:closed|reset|lost|timed out|refused)|broken pipe|timeout, server .* not responding/i
 
 /**
  * Creates remote directories, parents first.

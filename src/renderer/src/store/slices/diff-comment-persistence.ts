@@ -239,13 +239,13 @@ export function mutateDiffComments(
     if (scope?.type === 'folder') {
       const target = findFolderWorkspaceOwner(s, scope.folderWorkspaceId)
       if (!target) {
-        return {}
+        return s
       }
       folderExecutionHostId = getExecutionHostIdForFolderWorkspace(s, scope.folderWorkspaceId)
       previous = target.diffComments
       const computed = mutate(previous ?? [])
       if (computed === null) {
-        return {}
+        return s
       }
       next = computed
       return {
@@ -256,16 +256,16 @@ export function mutateDiffComments(
     }
     const repoList = s.worktreesByRepo[repoId]
     if (!repoList) {
-      return {}
+      return s
     }
     const target = repoList.find((w) => w.id === worktreeId)
     if (!target) {
-      return {}
+      return s
     }
     previous = target.diffComments
     const computed = mutate(previous ?? [])
     if (computed === null) {
-      return {}
+      return s
     }
     next = computed
     const nextList: Worktree[] = repoList.map((w) =>
@@ -293,7 +293,7 @@ function rollback(
     if (scope?.type === 'folder') {
       const target = findFolderWorkspaceOwner(s, scope.folderWorkspaceId, folderExecutionHostId)
       if (!target || target.diffComments !== expectedCurrent) {
-        return {}
+        return s
       }
       return {
         folderWorkspaces: s.folderWorkspaces.map((workspace) =>
@@ -303,16 +303,16 @@ function rollback(
     }
     const repoList = s.worktreesByRepo[repoId]
     if (!repoList) {
-      return {}
+      return s
     }
     const target = repoList.find((w) => w.id === worktreeId)
     // Why: worktree gone since the mutation; bail before remapping so we don't allocate a new array identity and fire spurious notifications.
     if (!target) {
-      return {}
+      return s
     }
     // Why: only roll back if no later mutation replaced the array, else our stale `previous` would erase newer state.
     if (target.diffComments !== expectedCurrent) {
-      return {}
+      return s
     }
     const nextList: Worktree[] = repoList.map((w) =>
       w.id === worktreeId ? { ...w, diffComments: previous } : w

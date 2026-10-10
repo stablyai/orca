@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { NativeChatBlock, NativeChatMessage } from '../../../shared/native-chat-types'
+import { boundSubagentEntryId } from '../../native-chat/subagent-entry-id-bounds'
+import { boundWorkerTranscriptActivityBlock } from './worker-transcript-activity-block-bounds'
 
 export const DEFAULT_WORKER_TRANSCRIPT_MESSAGE_LIMIT = 40
 export const MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT = 50
@@ -7,6 +9,10 @@ const MAX_WORKER_TRANSCRIPT_BLOCKS = 6
 const MAX_WORKER_TRANSCRIPT_BLOCK_CHARS = 1_200
 const MAX_WORKER_TRANSCRIPT_INPUT_ITEMS = 20
 const MAX_WORKER_TRANSCRIPT_INPUT_NODES = 100
+// Message ids, turn ids, tool-call names and image urls, not only roster fields.
+// Equal to `MAX_SUBAGENT_FIELD_CHARS` today, kept a separate literal so a
+// roster-motivated change to that cap cannot silently move this one.
+const MAX_WORKER_TRANSCRIPT_METADATA_CHARS = 512
 const MAX_WORKER_TRANSCRIPT_RESPONSE_BYTES = 512 * 1024
 const TRUNCATION_MARKER = '\n… (truncated)'
 const DISPATCH_CAPABILITY_PATTERN = /\bdcap_[A-Za-z0-9_-]{20,}\b/g
@@ -102,10 +108,15 @@ function boundMessage(
   if (blocks.length < message.blocks.length) {
     markClipped(state, 'Some transcript blocks were omitted from oversized messages.')
   }
+  // The journal position only orders a live list; a worker read is already in order.
+  const { journalPosition: _journalPosition, ...served } = message
   return {
-    ...message,
+    ...served,
     id: boundIdentifier(message.id, transcriptPath, state),
     ...(message.turnId ? { turnId: boundIdentifier(message.turnId, transcriptPath, state) } : {}),
+    ...(message.parentId
+      ? { parentId: boundIdentifier(message.parentId, transcriptPath, state) }
+      : {}),
     blocks: blocks.map((block) => boundBlock(block, state))
   }
 }
@@ -127,6 +138,14 @@ function boundBlock(block: NativeChatBlock, state: TranscriptBoundState): Native
       name: clipMetadata(block.name, state),
       input: boundToolInput(block.input, budget, 0, state)
     }
+  }
+  if (block.type === 'subagent-group' || block.type === 'background-task') {
+    return boundWorkerTranscriptActivityBlock(block, {
+      clipMetadata: (value) => clipMetadata(value, state),
+      clipText: (value) => clipText(value, state),
+      boundEntryId: (value) => boundEntryId(value, state),
+      markClipped: (warning) => markClipped(state, warning)
+    })
   }
   if (block.path || (block.url && isLocalFileLocator(block.url))) {
     markClipped(state, 'Local image paths were omitted from transcript output.')
@@ -163,13 +182,25 @@ function isLocalFileLocator(value: string): boolean {
   )
 }
 
+/** A roster entry's id is the roster KEY, so it is redacted like other metadata
+ *  but bounded with a digest rather than clipped: two ids sharing a 512-char
+ *  head must not collapse onto one entry. */
+function boundEntryId(value: string, state: TranscriptBoundState): string {
+  const redacted = redactSensitiveText(value, state.warnings)
+  const bounded = boundSubagentEntryId(redacted)
+  if (bounded !== redacted) {
+    markClipped(state, 'Oversized transcript metadata was clipped.')
+  }
+  return bounded
+}
+
 function clipMetadata(value: string, state: TranscriptBoundState): string {
   const redacted = redactSensitiveText(value, state.warnings)
-  if (redacted.length <= 512) {
+  if (redacted.length <= MAX_WORKER_TRANSCRIPT_METADATA_CHARS) {
     return redacted
   }
   markClipped(state, 'Oversized transcript metadata was clipped.')
-  return redacted.slice(0, 512)
+  return redacted.slice(0, MAX_WORKER_TRANSCRIPT_METADATA_CHARS)
 }
 
 function clipText(value: string, state: TranscriptBoundState): string {

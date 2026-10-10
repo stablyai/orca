@@ -7,6 +7,7 @@ import {
   isWorktreeHostIdentity
 } from '../../shared/worktree/host-qualified-identity'
 
+/** Includes worktrees referenced only by sessions or UI preferences so profile transfer cannot strand their state. */
 export function collectTransferWorktreeIds(
   state: TransferProfileState,
   repoId: string
@@ -36,6 +37,7 @@ export function collectTransferWorktreeIds(
   for (const session of Object.values(state.workspaceSessionsByHostId ?? {})) {
     collectSessionWorktreeIds(session, repoId, ids)
   }
+  Object.keys(state.ui?.explorerDisplayRootByWorktree ?? {}).forEach(add)
   Object.keys(state.ui?.showDotfilesByWorktree ?? {}).forEach(add)
   return ids
 }

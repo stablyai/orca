@@ -74,6 +74,25 @@ vi.mock('@/i18n/i18n', () => ({
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
+vi.mock('./TabSessionSurfaceSwitchMenuItems', () => ({
+  TabSessionSurfaceSwitchMenuItems: ({
+    tab,
+    structuredSessionId,
+    leadingSeparator
+  }: {
+    tab: { id: string }
+    structuredSessionId?: string
+    leadingSeparator: boolean
+  }) => (
+    <div
+      data-testid="session-surface-switch"
+      data-tab-id={tab.id}
+      data-structured-session-id={structuredSessionId ?? ''}
+      data-leading-separator={String(leadingSeparator)}
+    />
+  )
+}))
+
 vi.mock('../../store', () => ({
   useAppStore: Object.assign(
     (selector: (state: Record<string, unknown>) => unknown) => selector(storeMock.state),
@@ -143,6 +162,14 @@ function getButton(container: HTMLElement, label: string): HTMLButtonElement {
   return button
 }
 
+function getSurfaceSwitchMarker(container: HTMLElement): Element {
+  const marker = container.querySelector('[data-testid="session-surface-switch"]')
+  if (!marker) {
+    throw new Error('Missing session surface switch items')
+  }
+  return marker
+}
+
 function getLastSplitEvent(spy: ReturnType<typeof vi.spyOn>): CustomEvent {
   const event = spy.mock.calls.at(-1)?.[0]
   if (!(event instanceof CustomEvent)) {
@@ -210,11 +237,82 @@ describe('requestActiveTerminalPaneSplit', () => {
 })
 
 describe('SortableTabContextMenu', () => {
+  it.each([false, true])(
+    'copies the workspace ID of an inactive tab (pinned: %s)',
+    async (isPinned) => {
+      const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+      const onClose = vi.fn()
+      const onRenameOpen = vi.fn()
+      const apiDescriptor = Object.getOwnPropertyDescriptor(window, 'api')
+      Object.defineProperty(window, 'api', {
+        configurable: true,
+        value: { ui: { writeClipboardText } }
+      })
+      try {
+        const { container, onActivate } = renderMenu({
+          isActive: false,
+          isPinned,
+          onClose,
+          onRenameOpen
+        })
+        await act(async () => getButton(container, 'Copy Tab ID').click())
+        expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith('orcaTabId: tab-1')
+        expect(onActivate).not.toHaveBeenCalled()
+        expect(onClose).not.toHaveBeenCalled()
+        expect(onRenameOpen).not.toHaveBeenCalled()
+      } finally {
+        if (apiDescriptor) {
+          Object.defineProperty(window, 'api', apiDescriptor)
+        } else {
+          Reflect.deleteProperty(window, 'api')
+        }
+      }
+    }
+  )
+
   it('does not expose a native/terminal view switch', () => {
     const { container } = renderMenu()
 
     expect(container.textContent).not.toContain('Switch to terminal view')
     expect(container.textContent).not.toContain('Switch to chat view')
+  })
+
+  it('hides switching a terminal-view tab into chat view', () => {
+    const { container } = renderMenu({ canToggleViewMode: true, onToggleViewMode: vi.fn() })
+
+    expect(container.textContent).not.toContain('Switch to chat view')
+  })
+
+  it('keeps the way back for a tab already in chat view, in the chat/CLI move section', () => {
+    const onToggleViewMode = vi.fn()
+    const { container } = renderMenu({
+      canToggleViewMode: true,
+      isChatView: true,
+      onToggleViewMode
+    })
+    const marker = getSurfaceSwitchMarker(container)
+
+    expect(getButton(container, 'Switch to terminal view').compareDocumentPosition(marker)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    )
+    expect(marker.getAttribute('data-leading-separator')).toBe('false')
+    act(() => getButton(container, 'Switch to terminal view').click())
+    expect(onToggleViewMode).toHaveBeenCalled()
+  })
+
+  it('offers the session-history chat/CLI move right above Pin Tab', () => {
+    const { container } = renderMenu({ structuredSessionId: 'orca-chat-1' })
+    const marker = getSurfaceSwitchMarker(container)
+
+    expect(marker.getAttribute('data-tab-id')).toBe('term-1')
+    expect(marker.getAttribute('data-structured-session-id')).toBe('orca-chat-1')
+    expect(marker.getAttribute('data-leading-separator')).toBe('true')
+    expect(getButton(container, 'Split terminal').compareDocumentPosition(marker)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    )
+    expect(marker.compareDocumentPosition(getButton(container, 'Pin Tab'))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    )
   })
 
   it('dispatches split requests and activates inactive terminal tabs first', () => {
@@ -261,7 +359,11 @@ describe('SortableTabContextMenu', () => {
     const onCloseOthers = vi.fn()
     const onCloseToRight = vi.fn()
     const onCloseToLeft = vi.fn()
-    const { container } = renderMenu({ onCloseOthers, onCloseToRight, onCloseToLeft })
+    const { container } = renderMenu({
+      onCloseOthers,
+      onCloseToRight,
+      onCloseToLeft
+    })
 
     act(() => getButton(container, 'Close Others').click())
     expect(onCloseOthers).toHaveBeenCalledWith('term-1')
@@ -274,7 +376,10 @@ describe('SortableTabContextMenu', () => {
   })
 
   it('disables directional closes when no tabs exist on that side', () => {
-    const { container } = renderMenu({ hasTabsToLeft: false, hasTabsToRight: false })
+    const { container } = renderMenu({
+      hasTabsToLeft: false,
+      hasTabsToRight: false
+    })
 
     expect(getButton(container, 'Close Tabs To The Left').disabled).toBe(true)
     expect(getButton(container, 'Close Tabs To The Right').disabled).toBe(true)

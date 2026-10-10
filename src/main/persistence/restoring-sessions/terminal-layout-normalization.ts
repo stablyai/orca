@@ -4,6 +4,16 @@ import type {
   TerminalPaneLayoutNode
 } from '../../../shared/terminal-tab-types'
 import { isTerminalLeafId } from '../../../shared/stable-pane-id'
+import {
+  collectLayoutLeafIdsInOrder,
+  firstLayoutLeafId
+} from '../../../shared/workspace-layout/terminal-pane-tree'
+
+export {
+  collectLayoutLeafIdsInOrder,
+  firstLayoutLeafId,
+  layoutContainsLeafId
+} from '../../../shared/workspace-layout/terminal-pane-tree'
 
 export type LayoutLeafNormalization = {
   snapshot: TerminalLayoutSnapshot
@@ -22,35 +32,6 @@ export function collectLayoutLeafCounts(
   collectLayoutLeafCounts(node.first, counts)
   collectLayoutLeafCounts(node.second, counts)
   return counts
-}
-
-export function collectLayoutLeafIdsInOrder(
-  node: TerminalPaneLayoutNode | null | undefined
-): string[] {
-  if (!node) {
-    return []
-  }
-  if (node.type === 'leaf') {
-    return [node.leafId]
-  }
-  return [...collectLayoutLeafIdsInOrder(node.first), ...collectLayoutLeafIdsInOrder(node.second)]
-}
-
-export function firstLayoutLeafId(node: TerminalPaneLayoutNode | null): string | null {
-  if (!node) {
-    return null
-  }
-  return node.type === 'leaf' ? node.leafId : firstLayoutLeafId(node.first)
-}
-
-export function layoutContainsLeafId(node: TerminalPaneLayoutNode | null, leafId: string): boolean {
-  if (!node) {
-    return false
-  }
-  if (node.type === 'leaf') {
-    return node.leafId === leafId
-  }
-  return layoutContainsLeafId(node.first, leafId) || layoutContainsLeafId(node.second, leafId)
 }
 
 export function cloneLayoutNode(node: TerminalPaneLayoutNode): TerminalPaneLayoutNode {
@@ -218,6 +199,10 @@ export function normalizeTerminalLayoutSnapshotForPersistence(
     inputSnapshot.expandedLeafId && !duplicatedInputLeafIds.has(inputSnapshot.expandedLeafId)
       ? (leafIdByInputLeafId.get(inputSnapshot.expandedLeafId) ?? null)
       : null
+  const chatLeafId =
+    inputSnapshot.chatLeafId && !duplicatedInputLeafIds.has(inputSnapshot.chatLeafId)
+      ? (leafIdByInputLeafId.get(inputSnapshot.chatLeafId) ?? null)
+      : null
   const ptyIdsByLeafId = remapLeafRecordForPersistence(
     inputSnapshot.ptyIdsByLeafId,
     leafIdByInputLeafId,
@@ -244,7 +229,9 @@ export function normalizeTerminalLayoutSnapshotForPersistence(
     !leafRecordEquivalent(inputSnapshot.scrollbackRefsByLeafId, scrollbackRefsByLeafId) ||
     !leafRecordEquivalent(inputSnapshot.titlesByLeafId, titlesByLeafId)
   const metadataChanged =
-    activeLeafId !== inputSnapshot.activeLeafId || expandedLeafId !== inputSnapshot.expandedLeafId
+    activeLeafId !== inputSnapshot.activeLeafId ||
+    expandedLeafId !== inputSnapshot.expandedLeafId ||
+    chatLeafId !== (inputSnapshot.chatLeafId ?? null)
   if (!changed && !recordsChanged && !metadataChanged) {
     return { snapshot, changed: false, leafIdByInputLeafId }
   }
@@ -253,6 +240,7 @@ export function normalizeTerminalLayoutSnapshotForPersistence(
     buffersByLeafId: _oldBuffersByLeafId,
     scrollbackRefsByLeafId: _oldScrollbackRefsByLeafId,
     titlesByLeafId: _oldTitlesByLeafId,
+    chatLeafId: _oldChatLeafId,
     ...snapshotWithoutLeafRecords
   } = inputSnapshot
   return {
@@ -261,6 +249,7 @@ export function normalizeTerminalLayoutSnapshotForPersistence(
       root,
       activeLeafId,
       expandedLeafId,
+      ...(chatLeafId ? { chatLeafId } : {}),
       ...(ptyIdsByLeafId ? { ptyIdsByLeafId } : {}),
       ...(buffersByLeafId ? { buffersByLeafId } : {}),
       ...(scrollbackRefsByLeafId ? { scrollbackRefsByLeafId } : {}),

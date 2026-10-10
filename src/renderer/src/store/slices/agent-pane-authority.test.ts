@@ -70,11 +70,11 @@ describe('agent pane authority', () => {
     expect(state.agentLaunchConfigByPaneKey[TARGET]).toBeUndefined()
     expect(state.sleepingAgentSessionsByPaneKey[TARGET]).toBeUndefined()
     expect(state.agentStatusByPaneKey[SIBLING]).toBeDefined()
-    expect(state.recentlyRetiredAgentStatusPaneKeys[TARGET]).toBe(true)
-    expect(retirePaneAuthority).toHaveBeenCalledWith(TARGET)
+    expect(state.recentlyRetiredAgentStatusPaneKeys[TARGET]).toEqual(expect.any(String))
+    expect(retirePaneAuthority).toHaveBeenCalledWith(TARGET, expect.any(String))
   })
 
-  it('re-retiring an already-retired pane keeps the retired-key map identity and epochs', () => {
+  it('re-retiring an already-retired pane renews recovery identity without changing epochs', () => {
     const store = createTestStore()
     store.getState().setAgentStatus(TARGET, { state: 'working', prompt: 'target' })
     store.getState().retireAgentPaneAuthority(TARGET)
@@ -83,7 +83,9 @@ describe('agent pane authority', () => {
     store.getState().retireAgentPaneAuthority(TARGET)
 
     const after = store.getState()
-    expect(after.recentlyRetiredAgentStatusPaneKeys).toBe(before.recentlyRetiredAgentStatusPaneKeys)
+    expect(after.recentlyRetiredAgentStatusPaneKeys[TARGET]).not.toBe(
+      before.recentlyRetiredAgentStatusPaneKeys[TARGET]
+    )
     expect(after.agentStatusEpoch).toBe(before.agentStatusEpoch)
     expect(after.sortEpoch).toBe(before.sortEpoch)
   })
@@ -147,16 +149,17 @@ describe('agent pane authority', () => {
     const store = createTestStore()
     store.getState().retireAgentPaneAuthority(TARGET)
     store.getState().retireAgentPaneAuthority(SIBLING)
+    const siblingRetirement = store.getState().recentlyRetiredAgentStatusPaneKeys[SIBLING]
 
     store.getState().restoreAgentPaneAuthority(TARGET)
 
     expect(store.getState().recentlyRetiredAgentStatusPaneKeys[TARGET]).toBeUndefined()
-    expect(store.getState().recentlyRetiredAgentStatusPaneKeys[SIBLING]).toBe(true)
+    expect(store.getState().recentlyRetiredAgentStatusPaneKeys[SIBLING]).toBe(siblingRetirement)
     store.getState().setAgentStatus(SIBLING, { state: 'working', prompt: 'still fenced' })
     expect(store.getState().agentStatusByPaneKey[SIBLING]).toBeUndefined()
   })
 
-  it('can retire live pane authority while retaining a migration recovery fence', () => {
+  it('can retire live pane authority while retaining its sleeping session', () => {
     const store = createTestStore()
     store.getState().setAgentStatus(TARGET, { state: 'working', prompt: 'target' })
     store.getState().registerAgentLaunchConfig(TARGET, { agentArgs: '', agentEnv: {} })
@@ -171,8 +174,7 @@ describe('agent pane authority', () => {
           prompt: 'continue',
           state: 'working',
           capturedAt: 1,
-          updatedAt: 1,
-          automaticResumeBlockedBy: 'legacy-orchestration-worker'
+          updatedAt: 1
         }
       }
     })
@@ -183,10 +185,10 @@ describe('agent pane authority', () => {
     expect(state.agentStatusByPaneKey[TARGET]).toBeUndefined()
     expect(state.agentLaunchConfigByPaneKey[TARGET]).toBeUndefined()
     expect(state.sleepingAgentSessionsByPaneKey[TARGET]).toMatchObject({
-      automaticResumeBlockedBy: 'legacy-orchestration-worker'
+      providerSession: { key: 'session_id', id: 'session-1' }
     })
-    expect(state.recentlyRetiredAgentStatusPaneKeys[TARGET]).toBe(true)
-    expect(retirePaneAuthority).toHaveBeenCalledWith(TARGET)
+    expect(state.recentlyRetiredAgentStatusPaneKeys[TARGET]).toEqual(expect.any(String))
+    expect(retirePaneAuthority).toHaveBeenCalledWith(TARGET, expect.any(String))
   })
 
   it('keeps a physical pane routed through chained detaches until its current owner closes', () => {

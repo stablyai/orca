@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 const readWorkflow = (name) => parse(readFileSync(`.github/workflows/${name}.yml`, 'utf8'))
 const windowsVet = readWorkflow('dev-channel-win-build').jobs['build-win'].steps.find(
@@ -95,7 +95,7 @@ describe('release ref trust with case-twin names', () => {
     expect(result.stdout).toContain('Refusing to build PR ref')
   })
 
-  it('preserves both case variants in the subsequent full-history checkout', async () => {
+  it('checks out the vetted SHA shallowly without mirroring case-twin refs again', async () => {
     const checkout = join(directory, 'checkout')
     const env = { ...identity, ...macCheckout.env }
     await git(['init', checkout], env)
@@ -105,21 +105,15 @@ describe('release ref trust with case-twin names', () => {
         checkout,
         'fetch',
         '--no-tags',
+        `--depth=${macCheckout.with['fetch-depth']}`,
         repository,
-        '+refs/heads/*:refs/remotes/origin/*',
-        '+refs/tags/*:refs/tags/*'
+        upper
       ],
       env
     )
     await git(['-C', checkout, 'checkout', '--detach', upper], env)
-    for (const [ref, sha] of [
-      ['refs/remotes/origin/Fix', upper],
-      ['refs/remotes/origin/fix', lower],
-      ['refs/tags/Release', upper],
-      ['refs/tags/release', lower]
-    ]) {
-      expect(await git(['-C', checkout, 'rev-parse', `${ref}^{commit}`], env)).toBe(sha)
-    }
     expect(await git(['-C', checkout, 'rev-parse', 'HEAD'], env)).toBe(upper)
+    expect(await git(['-C', checkout, 'rev-list', '--count', 'HEAD'], env)).toBe('1')
+    expect(await git(['-C', checkout, 'for-each-ref', '--format=%(refname)'], env)).toBe('')
   })
 })

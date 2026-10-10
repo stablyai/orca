@@ -6,8 +6,21 @@ import {
   electronMocks
 } from '../orca-runtime-test-mocks.spec'
 import { deferred, store } from '../orca-runtime-test-fixtures.spec'
+import { RuntimeClientSettingsController } from '../runtime-client-settings'
 
 describe('OrcaRuntimeService', () => {
+  it.each([true, false])('projects the single Chat UI switch to older clients (%s)', (enabled) => {
+    const controller = new RuntimeClientSettingsController({
+      getSettings: () => ({ ...store.getSettings(), experimentalNativeChat: enabled }),
+      updateSettings: () => undefined
+    })
+    expect(controller.get()).toMatchObject({
+      experimentalNativeChat: enabled,
+      experimentalStructuredNativeChat: enabled,
+      openAgentTabsInChatByDefault: false
+    })
+  })
+
   it('projects runtime-backed settings to paired clients', () => {
     const terminalQuickCommands = [
       {
@@ -30,6 +43,7 @@ describe('OrcaRuntimeService', () => {
         compactWorktreeCards: true,
         minimaxGroupId: 'group-42',
         minimaxUsageModels: 'general,abab6.5',
+        minimaxEndpoint: 'cn',
         terminalQuickCommands
       })
     } as never)
@@ -39,7 +53,9 @@ describe('OrcaRuntimeService', () => {
       experimentalNewWorktreeCardStyle: true,
       compactWorktreeCards: true,
       minimaxGroupId: 'group-42',
-      minimaxUsageModels: 'general,abab6.5'
+      minimaxUsageModels: 'general,abab6.5',
+      // Why: without this the paired client silently falls back to 'overseas' and shows the wrong region.
+      minimaxEndpoint: 'cn'
     })
     expect(runtime.getClientSettings()).not.toHaveProperty('terminalQuickCommands')
     expect(runtime.getClientSettings().hostSettingOverrides).toEqual({
@@ -194,7 +210,8 @@ describe('OrcaRuntimeService', () => {
       experimentalNewWorktreeCardStyle: false,
       compactWorktreeCards: false,
       minimaxGroupId: '',
-      minimaxUsageModels: 'general'
+      minimaxUsageModels: 'general',
+      minimaxEndpoint: 'overseas'
     }
     const updateSettings = vi.fn((updates: Partial<typeof settings>) => {
       settings = { ...settings, ...updates }
@@ -211,20 +228,23 @@ describe('OrcaRuntimeService', () => {
         experimentalNewWorktreeCardStyle: true,
         compactWorktreeCards: true,
         minimaxGroupId: 'group-42',
-        minimaxUsageModels: 'general,abab6.5'
+        minimaxUsageModels: 'general,abab6.5',
+        minimaxEndpoint: 'cn'
       })
     ).toMatchObject({
       experimentalNewWorktreeCardStyle: true,
       compactWorktreeCards: true,
       minimaxGroupId: 'group-42',
-      minimaxUsageModels: 'general,abab6.5'
+      minimaxUsageModels: 'general,abab6.5',
+      minimaxEndpoint: 'cn'
     })
     expect(updateSettings).toHaveBeenCalledWith(
       {
         experimentalNewWorktreeCardStyle: true,
         compactWorktreeCards: true,
         minimaxGroupId: 'group-42',
-        minimaxUsageModels: 'general,abab6.5'
+        minimaxUsageModels: 'general,abab6.5',
+        minimaxEndpoint: 'cn'
       },
       { notifyListeners: true }
     )
@@ -232,7 +252,8 @@ describe('OrcaRuntimeService', () => {
       experimentalNewWorktreeCardStyle: true,
       compactWorktreeCards: true,
       minimaxGroupId: 'group-42',
-      minimaxUsageModels: 'general,abab6.5'
+      minimaxUsageModels: 'general,abab6.5',
+      minimaxEndpoint: 'cn'
     })
   })
 

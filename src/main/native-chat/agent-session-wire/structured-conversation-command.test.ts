@@ -1,12 +1,18 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { listStructuredProviderSessionOwnership } from './structured-provider-session-ownership'
+import { findConflictingStructuredAdoption } from '../structured-agent-session-history-adoption'
+import { cp, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionConversationCommand } from '../../../shared/agent-session-conversation-command'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import { STRUCTURED_AGENT_SESSION_IDLE_MS } from './structured-agent-session-idle-sweep'
 import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION,
@@ -15,40 +21,85 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const caller = { callerKey: 'desktop' }
 let directory: string
+let generation: number
+let clock: number
 let store: AgentSessionRecordStore
 let host: StructuredAgentSessionHost
+let hosts: StructuredAgentSessionHost[]
 let adapter: StructuredAgentSessionAdapter
 const compact = vi.fn<NonNullable<StructuredAgentSessionAdapter['compact']>>()
 let acquisitions = 0
 
-function commandParams(command: AgentSessionConversationCommand) {
+function envelope(method: string, fields: Record<string, unknown>) {
   return {
-    command,
-    envelope: {
+    sessionId: HOST_TEST_SESSION,
+    clientOperationId: hostTestOperationId(),
+    expectedRuntimeFence: store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
+    payloadFingerprint: computeAgentSessionPayloadFingerprint({
+      method,
       sessionId: HOST_TEST_SESSION,
-      clientOperationId: hostTestOperationId(),
-      expectedRuntimeFence: store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
-      payloadFingerprint: computeAgentSessionPayloadFingerprint({
-        method: 'agentSession.conversationCommand',
-        sessionId: HOST_TEST_SESSION,
-        fields: { command }
-      })
-    }
+      fields
+    })
   }
+}
+
+function commandParams(command: AgentSessionConversationCommand) {
+  return { command, envelope: envelope('agentSession.conversationCommand', { command }) }
+}
+
+function sendParams(text: string) {
+  const body = hostTestMessage(text)
+  return { body, envelope: envelope('agentSession.send', { body }) }
+}
+
+const generationRoot = () => join(directory, `generation-${generation}`)
+
+let ownerProbe: AgentSessionOwnerProbe = { outcome: 'pid-absent' }
+
+async function openHost(): Promise<void> {
+  store = await openTestAgentSessionRecordStore(generationRoot())
+  host = new StructuredAgentSessionHost({
+    agents: claudeAndCodexDeclared(),
+    logger: createStructuredAgentSessionLogger(),
+    store,
+    adapter,
+    journalDatabase: openTestJournalHostDatabase(generationRoot()),
+    claimKeyId: 'key',
+    now: () => clock,
+    mintSpawnToken: () => `spawn-${acquisitions}`,
+    // The owners a restarted host finds died with the process that started them, unless a test says otherwise.
+    probeOwner: async () => ownerProbe
+  })
+  hosts.push(host)
+}
+
+/** A crash and relaunch: the next host opens what the dying one had written, and nothing after. */
+async function restartHost(): Promise<void> {
+  await store.renewLeases([])
+  const dying = generationRoot()
+  generation++
+  await cp(dying, generationRoot(), {
+    recursive: true,
+    filter: (source) => !source.endsWith('.tmp') && !source.includes('.lock')
+  })
+  await openHost()
 }
 
 beforeEach(async () => {
   resetHostTestOperationIds()
+  ownerProbe = { outcome: 'pid-absent' }
   acquisitions = 0
-  compact.mockReset().mockResolvedValue({})
+  generation = 0
+  clock = HOST_TEST_NOW
+  hosts = []
+  compact.mockReset().mockResolvedValue({ state: 'accepted', providerIdentity: null })
   directory = await mkdtemp(join(tmpdir(), 'orca-conversation-command-'))
-  store = await AgentSessionRecordStore.open({
-    directory: join(directory, 'store'),
-    hostId: 'local'
-  })
   adapter = {
     supportsLocation: (location) =>
       location.executionHostId === 'local' && location.wslDistro === null,
@@ -65,14 +116,15 @@ beforeEach(async () => {
           linkId: `link-${acquisitions}`,
           mintedAtFence: input.fence,
           observedAt: HOST_TEST_NOW,
-          origin: input.fence > 1 ? ('resumed' as const) : ('created' as const),
-          handle: {
-            provider: 'codex' as const,
-            threadId:
-              input.identity.providerHandle.kind === 'codex'
-                ? input.identity.providerHandle.threadId
-                : `00000000-0000-4000-8000-${String(acquisitions).padStart(12, '0')}`
-          }
+          // A start with no thread to resume creates one, whatever its fence.
+          origin:
+            input.fence > 1 && input.identity.providerHandle
+              ? ('resumed' as const)
+              : ('created' as const),
+          handle: codexProviderHandle(
+            input.identity.providerHandle?.nativeId ??
+              `00000000-0000-4000-8000-${String(acquisitions).padStart(12, '0')}`
+          )
         }
       }
     }),
@@ -81,18 +133,11 @@ beforeEach(async () => {
     answerPrompt: async () => {},
     setOption: async () => {},
     compact,
-    releaseAcquisition: async () => true,
-    closeSession: async () => true,
+    releaseAcquisition: vi.fn(async () => true),
+    closeSession: vi.fn(async () => true),
     readOptions: async () => ({ models: [], current: { model: 'test-model', effort: 'high' } })
   }
-  host = new StructuredAgentSessionHost({
-    store,
-    adapter,
-    journalRoot: directory,
-    claimKeyId: 'key',
-    now: () => HOST_TEST_NOW,
-    mintSpawnToken: () => `spawn-${acquisitions}`
-  })
+  await openHost()
   expect(
     await host.attach(caller, hostTestAttachParams(null, { options: { effort: 'low' } }))
   ).toMatchObject({ ok: true })
@@ -100,215 +145,206 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await host.flushAllStreamedEvents()
+  for (const each of hosts) {
+    await each.flushAllStreamedEvents()
+  }
   await rm(directory, { recursive: true, force: true })
 })
 
-describe('host conversation commands', () => {
-  it('compacts once without an ordinary message submission and replays its receipt', async () => {
-    const params = commandParams('compact')
-    expect(await host.conversationCommand(caller, params)).toMatchObject({
-      ok: true,
-      value: { state: 'completed' }
+const journal = () => host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+const clearRows = async () =>
+  (await host.journalSnapshot(HOST_TEST_SESSION)).items.filter(
+    (item) => item.body.kind === 'status' && item.body.contextClear
+  )
+
+async function clearCommits(params = commandParams('clear'), who = caller) {
+  const result = await host.conversationCommand(who, params)
+  expect(result).toMatchObject({ ok: true, value: { command: 'clear', state: 'completed' } })
+  if (!result.ok) {
+    throw new Error('clear refused')
+  }
+  expect(result.value.replacementSessionId).toBeUndefined()
+  expect(result.fence).toBe(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)
+  return result
+}
+
+describe('same-conversation clear', () => {
+  it('keeps the record, journal, tab, options and earlier messages while starting nothing', async () => {
+    const source = store.getRecord(HOST_TEST_SESSION)!
+    const tab = store.getSessionTabId(HOST_TEST_SESSION)
+    await journal().appendItem(
+      { provider: 'orca', clientMessageId: 'earlier' },
+      hostTestMessage('earlier'),
+      {
+        fence: source.lease.runtimeFence,
+        turnScope: { kind: 'thread' }
+      }
+    )
+    const before = await host.journalSnapshot(HOST_TEST_SESSION)
+    const done = await clearCommits()
+    const after = await host.journalSnapshot(HOST_TEST_SESSION)
+    const cleared = store.getRecord(HOST_TEST_SESSION)!
+    expect(store.listRecords()).toHaveLength(1)
+    expect(store.listVisibleSessionIds()).toEqual([HOST_TEST_SESSION])
+    expect(store.getSessionTabId(HOST_TEST_SESSION)).toBe(tab)
+    expect(cleared.providerHandleChain).toEqual([])
+    const ownership = listStructuredProviderSessionOwnership(store.listRecords())
+    expect(ownership).toEqual([])
+    expect(
+      findConflictingStructuredAdoption({
+        agent: 'codex',
+        providerSessionId: source.providerHandleChain.at(-1)!.handle.nativeId,
+        selfSessionId: 'another-conversation',
+        ownership
+      })
+    ).toBeNull()
+    expect(cleared.options).toEqual(source.options)
+    expect(cleared.providerContextBoundary).toMatchObject({
+      afterFence: done.fence,
+      clearedAt: clock
     })
+    expect(cleared.lease.claimStatus).toBe('released')
+    expect(after.cursor.epoch).toBe(before.cursor.epoch)
+    expect(after.items.slice(0, before.items.length)).toEqual(before.items)
+    expect(await clearRows()).toHaveLength(1)
+    expect(adapter.acquire).toHaveBeenCalledTimes(1)
+    expect(
+      host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)?.lastEndedChild?.cause
+    ).toBe('context-clear')
+  })
+
+  it('starts a fresh provider context on the first send using the clear answer fence', async () => {
+    const previous = store.getRecord(HOST_TEST_SESSION)!.providerHandleChain.at(-1)!.handle.nativeId
+    const done = await clearCommits()
+    const params = sendParams('after clear')
+    params.envelope.expectedRuntimeFence = done.fence
+    expect(await host.send(caller, params)).toMatchObject({ ok: true })
+    await vi.waitFor(() => expect(adapter.dispatch).toHaveBeenCalledTimes(1))
+    const last = vi.mocked(adapter.acquire).mock.calls.at(-1)![0]
+    expect(last.identity.providerHandle).toBeNull()
+    const head = store.getRecord(HOST_TEST_SESSION)!.providerHandleChain.at(-1)!
+    expect(head.handle.nativeId).not.toBe(previous)
+    expect(head).toMatchObject({ origin: 'created' })
+    expect(head.replaces).toBeUndefined()
+    expect(store.getRecord(HOST_TEST_SESSION)!.providerHandleChain).toHaveLength(1)
+  })
+
+  it('replays the same operation and makes a new boundary for a new operation', async () => {
+    const params = commandParams('clear')
+    await clearCommits(params)
+    const first = store.getRecord(HOST_TEST_SESSION)!.providerContextBoundary
     expect(await host.conversationCommand(caller, params)).toMatchObject({
       ok: true,
       replayed: true
     })
-    expect(compact).toHaveBeenCalledTimes(1)
-    expect(adapter.dispatch).not.toHaveBeenCalled()
-    const history = host.history({ sessionId: HOST_TEST_SESSION, direction: 'tail' })
-    expect(history.page.submissions).toEqual([])
-    expect(
-      history.page.items.some(
-        (item) => item.body.kind === 'status' && item.body.turnLifecycle?.state === 'running'
-      )
-    ).toBe(false)
+    expect(await clearRows()).toHaveLength(1)
+    await clearCommits()
+    expect(store.getRecord(HOST_TEST_SESSION)!.providerContextBoundary).not.toEqual(first)
+    expect(await clearRows()).toHaveLength(2)
+    expect(store.listRecords()).toHaveLength(1)
+    expect(adapter.acquire).toHaveBeenCalledTimes(1)
   })
 
-  it('reports provider compaction failure without a stuck lifecycle', async () => {
-    compact.mockResolvedValue({ error: 'Not enough messages to compact.' })
-    expect(await host.conversationCommand(caller, commandParams('compact'))).toMatchObject({
-      ok: true,
-      value: { state: 'completed', error: 'Not enough messages to compact.' }
-    })
-    expect(store.getRecord(HOST_TEST_SESSION)?.conversationCommand?.state).toBe('completed')
-  })
-
-  it('keeps an unknown compaction from being executed again', async () => {
-    compact.mockRejectedValue(new Error('connection lost'))
-    const params = commandParams('compact')
-    await expect(host.conversationCommand(caller, params)).rejects.toThrow('connection lost')
-    expect(await host.conversationCommand(caller, params)).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_unknown' }
-    })
-    expect(compact).toHaveBeenCalledTimes(1)
-  })
-
-  it('clears with a fresh record and effective options, retaining old history and idempotent mapping', async () => {
-    const before = store.getRecord(HOST_TEST_SESSION)!
+  it('gives different callers distinct boundaries even when their operation IDs match', async () => {
     const params = commandParams('clear')
-    const result = await host.conversationCommand(caller, params)
-    expect(result.ok).toBe(true)
-    if (!result.ok) {
-      return
-    }
-    const nextId = result.value.replacementSessionId!
-    expect(nextId).not.toBe(HOST_TEST_SESSION)
-    expect(store.getRecord(nextId)).toMatchObject({
-      location: before.location,
-      accountHome: before.accountHome,
-      options: { model: 'test-model', effort: 'high' }
-    })
-    expect(store.getRecord(HOST_TEST_SESSION)).not.toBeNull()
-    expect(store.listVisibleSessionIds()).toEqual([nextId])
-    expect(host.history({ sessionId: nextId, direction: 'tail' }).page.items).toEqual([])
-    expect(await host.conversationCommand(caller, params)).toMatchObject({
-      ok: true,
-      replayed: true,
-      value: { replacementSessionId: nextId }
-    })
-    expect(acquisitions).toBe(2)
-    const body = hostTestMessage('late send')
-    expect(
-      await host.send(caller, {
-        body,
-        envelope: {
-          ...params.envelope,
-          clientOperationId: hostTestOperationId(),
-          payloadFingerprint: computeAgentSessionPayloadFingerprint({
-            method: 'agentSession.send',
-            sessionId: HOST_TEST_SESSION,
-            fields: { body }
-          })
-        }
-      })
-    ).toMatchObject({ ok: false })
-    expect(adapter.dispatch).not.toHaveBeenCalled()
+    await clearCommits(params)
+    const first = store.getRecord(HOST_TEST_SESSION)!.providerContextBoundary
+    await clearCommits(params, { callerKey: 'mobile' })
+    expect(store.getRecord(HOST_TEST_SESSION)!.providerContextBoundary).not.toEqual(first)
+    expect(await clearRows()).toHaveLength(2)
   })
 
-  it('leaves the source usable when replacement creation is definitely refused', async () => {
-    vi.spyOn(host, 'attach').mockResolvedValueOnce({
-      ok: false,
-      refusal: { code: 'structured_agent_session_unsupported', message: 'Unavailable' }
-    })
-    expect(await host.conversationCommand(caller, commandParams('clear'))).toMatchObject({
-      ok: true,
-      value: { state: 'completed', replacementSessionId: undefined, error: expect.any(String) }
-    })
-    expect(store.listVisibleSessionIds()).toEqual([HOST_TEST_SESSION])
-    expect(acquisitions).toBe(1)
-    expect(await host.conversationCommand(caller, commandParams('compact'))).toMatchObject({
-      ok: true
-    })
-  })
-
-  it('rejects stale fences before provider execution', async () => {
-    const params = commandParams('compact')
-    params.envelope.expectedRuntimeFence++
-    expect(await host.conversationCommand(caller, params)).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_checkpoint_stale' }
-    })
-    expect(compact).not.toHaveBeenCalled()
-  })
-  it('allows cancellation while compaction is awaiting completion and refuses a second client', async () => {
-    let finish!: (value: {}) => void
-    compact.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          finish = resolve
-        })
+  it('rolls back the divider, boundary and ledger success together when storage fails', async () => {
+    const db = openTestJournalHostDatabase(generationRoot()).db
+    db.exec(
+      "CREATE TEMP TRIGGER fail_clear BEFORE UPDATE ON agent_session_records WHEN instr(NEW.record_json, 'providerContextBoundary') > 0 BEGIN SELECT RAISE(ABORT, 'disk full'); END"
     )
-    const params = commandParams('compact')
-    const running = host.conversationCommand(caller, params)
-    await vi.waitFor(() => expect(compact).toHaveBeenCalled())
+    const params = commandParams('clear')
+    const before = await host.journalSnapshot(HOST_TEST_SESSION)
+    await expect(host.conversationCommand(caller, params)).rejects.toThrow('disk full')
+    expect(await clearRows()).toHaveLength(0)
+    expect((await host.journalSnapshot(HOST_TEST_SESSION)).cursor.epoch).toBe(before.cursor.epoch)
+    expect(store.getRecord(HOST_TEST_SESSION)!.providerContextBoundary).toBeUndefined()
     expect(
-      await host.conversationCommand({ callerKey: 'mobile' }, commandParams('clear'))
-    ).toMatchObject({ ok: false })
-    const turnId = `compact:${params.envelope.clientOperationId}`
-    const cancel = await host.cancel(caller, {
-      turnId,
-      envelope: {
-        ...params.envelope,
-        clientOperationId: hostTestOperationId(),
-        payloadFingerprint: computeAgentSessionPayloadFingerprint({
-          method: 'agentSession.cancel',
-          sessionId: HOST_TEST_SESSION,
-          fields: { turnId }
-        })
-      }
-    })
-    expect(cancel).toMatchObject({ ok: true, value: { cancelled: true } })
-    expect(adapter.cancelTurn).toHaveBeenCalled()
-    finish({})
-    await running
+      store.getOperationRow(caller.callerKey, params.envelope.clientOperationId)?.outcome.status
+    ).toBe('pending')
+    db.exec('DROP TRIGGER fail_clear')
+    await clearCommits(params)
+    expect(await clearRows()).toHaveLength(1)
+    expect(
+      store.getOperationRow(caller.callerKey, params.envelope.clientOperationId)?.outcome.status
+    ).toBe('succeeded')
   })
 
-  it('reconstructs a committed replacement after the ledger settlement is lost', async () => {
-    const persist = store.recordOperationOutcome.bind(store)
-    vi.spyOn(store, 'recordOperationOutcome').mockImplementation(async (input) => {
-      if (input.outcome.status === 'succeeded' && input.outcome.conversationCommand) {
-        throw new Error('crash')
-      }
-      return persist(input)
+  it('replays a lost acknowledgment after the atomic commit without another divider', async () => {
+    const target = journal()
+    const append = target.context.clear.bind(target.context)
+    vi.spyOn(target.context, 'clear').mockImplementationOnce(async (...args) => {
+      await append(...args)
+      throw new Error('connection lost')
     })
     const params = commandParams('clear')
-    await expect(host.conversationCommand(caller, params)).rejects.toThrow('crash')
+    await expect(host.conversationCommand(caller, params)).rejects.toThrow('connection lost')
+    expect(
+      store.getOperationRow(caller.callerKey, params.envelope.clientOperationId)?.outcome.status
+    ).toBe('succeeded')
     expect(await host.conversationCommand(caller, params)).toMatchObject({
       ok: true,
-      replayed: true,
-      value: { state: 'completed' }
+      replayed: true
     })
-    expect(acquisitions).toBe(2)
+    expect(await clearRows()).toHaveLength(1)
   })
 
-  it('repairs an unknown receipt when the provider completes late', async () => {
-    compact.mockRejectedValue(new Error('connection lost'))
-    const params = commandParams('compact')
-    await expect(host.conversationCommand(caller, params)).rejects.toThrow()
-    await compact.mock.calls[0]![0].onLateResult?.({})
-    expect(await host.conversationCommand(caller, params)).toMatchObject({
-      ok: true,
-      replayed: true,
-      value: { state: 'completed' }
-    })
-    expect(compact).toHaveBeenCalledTimes(1)
+  it('does not complete when the previous process exit is unverifiable', async () => {
+    vi.mocked(adapter.closeSession!).mockResolvedValueOnce(false)
+    await expect(host.conversationCommand(caller, commandParams('clear'))).rejects.toThrow()
+    expect(store.getRecord(HOST_TEST_SESSION)!.providerContextBoundary).toBeUndefined()
+    expect(await clearRows()).toHaveLength(0)
+    expect(adapter.acquire).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps explicitly revealed history and closed replacement tabs out of automatic restoration', async () => {
-    const result = await host.conversationCommand(caller, commandParams('clear'))
-    if (!result.ok) {
-      throw new Error('clear failed')
-    }
-    expect(host.conversationReplacements()).toHaveLength(1)
-    await host.setSessionTabVisibility(HOST_TEST_SESSION, true)
-    expect(host.conversationReplacements()).toEqual([])
-    await host.setSessionTabVisibility(HOST_TEST_SESSION, false)
-    await host.setSessionTabVisibility(result.value.replacementSessionId!, false)
-    expect(host.conversationReplacements()).toEqual([])
+  it('starts fresh after a restart between clear and first send', async () => {
+    await clearCommits()
+    await restartHost()
+    await host.restoreReadableSessions(store.listVisibleSessionIds())
+    expect(await host.send(caller, sendParams('after restart'))).toMatchObject({ ok: true })
+    await vi.waitFor(() => expect(adapter.dispatch).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(adapter.acquire).mock.calls.at(-1)![0].identity.providerHandle).toBeNull()
+    expect(store.getRecord(HOST_TEST_SESSION)!.providerHandleChain).toHaveLength(1)
   })
-  it('keeps the old compact outcome unknown but restores usability after verified reacquisition', async () => {
-    compact.mockRejectedValue(new Error('lost response'))
-    const params = commandParams('compact')
-    await expect(host.conversationCommand(caller, params)).rejects.toThrow()
-    await host.close(HOST_TEST_SESSION)
-    const fence = store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence
-    expect(await host.attach(caller, hostTestAttachParams(fence))).toMatchObject({ ok: true })
-    expect(store.getRecord(HOST_TEST_SESSION)?.conversationCommand).toMatchObject({
+
+  it('does not start an idle-released provider to clear it', async () => {
+    clock += STRUCTURED_AGENT_SESSION_IDLE_MS + 1
+    await host.collaboratorsForTests().lifetime.idleSweep.tick()
+    await clearCommits()
+    expect(adapter.acquire).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses another clear while the first is in flight', async () => {
+    const [first, second] = await Promise.all([
+      host.conversationCommand(caller, commandParams('clear')),
+      host.conversationCommand(caller, commandParams('clear'))
+    ])
+    expect(first).toMatchObject({ ok: true })
+    expect(second).toMatchObject({
+      ok: false,
+      refusal: { details: { reason: 'conversationCommandInFlight' } }
+    })
+    expect(await clearRows()).toHaveLength(1)
+  })
+
+  it('allows independently sending a record with an old-build replacement pointer', async () => {
+    const source = store.getRecord(HOST_TEST_SESSION)!
+    await store.setConversationCommand(HOST_TEST_SESSION, source.lease.runtimeFence, {
+      command: 'clear',
       phase: 'committed',
-      state: 'unknown'
+      state: 'completed',
+      operationId: hostTestOperationId(),
+      callerKey: caller.callerKey,
+      replacementSessionId: 'old-clear-destination'
     })
-    expect(await host.conversationCommand(caller, params)).toMatchObject({
-      ok: true,
-      replayed: true,
-      value: { state: 'unknown' }
-    })
-    compact.mockResolvedValue({})
-    expect(await host.conversationCommand(caller, commandParams('compact'))).toMatchObject({
-      ok: true,
-      value: { state: 'completed' }
+    expect(await host.send(caller, sendParams('still this conversation'))).toMatchObject({
+      ok: true
     })
   })
 })

@@ -24,5 +24,53 @@ export const MAX_COMMAND_LINE_CHARS = 30_000
  * quote-heavy ~26KB script on argv and over the real limit.
  */
 export function commandLineLength(args: readonly string[]): number {
-  return args.reduce((total, arg) => total + arg.length + 3 + (arg.match(/["\\]/g)?.length ?? 0), 0)
+  let total = 0
+  for (const arg of args) {
+    total += arg.length + 3 + countEscapes(arg)
+  }
+  return total
+}
+
+/** One escape per this many characters is where seeking stops paying off. */
+const DENSE_ESCAPE_RATIO = 4
+/** Leading escapes alone must not condemn a long plain tail to a full scan. */
+const DENSE_ESCAPE_GRACE = 256
+
+/**
+ * Count `"` and `\\` in an argument.
+ *
+ * `indexOf` skips plain runs with a native search, so the cost tracks the number
+ * of escapes rather than the length of the argument — which is what the WSL
+ * runner hands us: one multi-KB script with almost no escapes in it. Past the
+ * density where seeking each escape costs more than reading every character,
+ * a plain scan finishes the rest; that is the quote-dense script's shape.
+ */
+function countEscapes(arg: string): number {
+  let count = 0
+  let scanFrom = 0
+  let quote = arg.indexOf('"')
+  let slash = arg.indexOf('\\')
+  while (quote !== -1 || slash !== -1) {
+    const at = slash === -1 || (quote !== -1 && quote < slash) ? quote : slash
+    if (at === quote) {
+      quote = arg.indexOf('"', at + 1)
+    } else {
+      slash = arg.indexOf('\\', at + 1)
+    }
+    count += 1
+    scanFrom = at + 1
+    if (count * DENSE_ESCAPE_RATIO > at + DENSE_ESCAPE_GRACE) {
+      break
+    }
+  }
+  if (quote === -1 && slash === -1) {
+    return count
+  }
+  for (let index = scanFrom; index < arg.length; index += 1) {
+    const code = arg.charCodeAt(index)
+    if (code === 34 || code === 92) {
+      count += 1
+    }
+  }
+  return count
 }

@@ -5,15 +5,17 @@ import type {
 } from '../../shared/github/pull-request-refresh-types'
 import { getPRForBranchOutcome } from './client'
 import {
+  aliasFromCandidate,
   freshRetryAt,
   hostedReviewOptionArgs,
   isBackground,
   isMergeabilityPendingOutcome,
+  sameAliasRequestIdentity,
   validateCandidate,
   visibleCandidateAfterOutcome
 } from './pr-refresh-candidate-policy'
 import type { PRRefreshEventPublisher } from './pr-refresh-event-publisher'
-import type { PRRefreshPacing } from './pr-refresh-pacing'
+import { type PRRefreshPacing, usesActiveRefreshPacing } from './pr-refresh-pacing'
 import type { PRRefreshQueue, PRRefreshQueueEntry } from './pr-refresh-queue'
 import { prRefreshRateLimitPausedUntil } from './pr-refresh-rate-limit-gate'
 import type { PRRefreshRetryState } from './pr-refresh-retry-state'
@@ -50,12 +52,16 @@ export class PRRefreshQueueDrainer {
     windowId?: number,
     options?: { pendingMergeabilityDelayMs?: number; plannedRetryAt?: number }
   ): void {
-    if (!this.visibility.has(key)) {
-      this.retry.reset(key)
-      return
-    }
     if (outcome.kind === 'upstream-error') {
-      const retryAt = options?.plannedRetryAt ?? this.retry.nextVisibleErrorRetryAt(key)
+      const retryAt = Math.max(
+        options?.plannedRetryAt ??
+          this.retry.nextVisibleErrorRetryAt(key, this.visibility.candidate(key, candidate)),
+        this.retry.manualGateUntil(key)
+      )
+      this.queue.protectBackgroundUntil(key, retryAt)
+      if (!this.visibility.has(key)) {
+        return
+      }
       this.queue.setVisibleFollowUp({
         key,
         candidate,
@@ -70,13 +76,31 @@ export class PRRefreshQueueDrainer {
       return
     }
     this.retry.reset(key)
-    const followUpCandidate = visibleCandidateAfterOutcome(candidate, outcome)
+    const refreshed = visibleCandidateAfterOutcome(candidate, outcome)
+    this.visibility.update(refreshed)
+    if (!this.visibility.has(key)) {
+      return
+    }
+    const followUpCandidate = this.visibility.candidate(key, refreshed)
     const regularDueAt = freshRetryAt(followUpCandidate) ?? Date.now()
     const pendingDueAt =
       options?.pendingMergeabilityDelayMs !== undefined && isMergeabilityPendingOutcome(outcome)
         ? outcome.fetchedAt + options.pendingMergeabilityDelayMs
         : null
     const dueAt = pendingDueAt === null ? regularDueAt : Math.min(regularDueAt, pendingDueAt)
+    if (!Number.isFinite(dueAt)) {
+      const pending = this.queue.get(key)
+      if (
+        pending?.reason === 'visible' &&
+        sameAliasRequestIdentity(
+          aliasFromCandidate(pending.candidate),
+          aliasFromCandidate(followUpCandidate)
+        )
+      ) {
+        this.queue.delete(key)
+      }
+      return
+    }
     this.queue.setVisibleFollowUp({
       key,
       candidate: followUpCandidate,
@@ -86,6 +110,7 @@ export class PRRefreshQueueDrainer {
       dueAt,
       queuedAt: this.queue.nextOrder(),
       bypassBackgroundBudget: pendingDueAt !== null,
+      followUp: true,
       windowId
     })
     this.schedule(Math.max(0, dueAt - Date.now()))
@@ -146,7 +171,6 @@ export class PRRefreshQueueDrainer {
           continue
         }
         if (next.reason === 'visible' && !this.visibility.has(next.key)) {
-          this.retry.reset(next.key)
           this.events.broadcast({
             aliases,
             reason: next.reason,
@@ -157,6 +181,7 @@ export class PRRefreshQueueDrainer {
         }
         const requestSequence = this.events.nextSequence()
         const requestStartedAt = Date.now()
+        this.queue.noteRequestStarted(next.key, requestSequence)
         this.events.broadcast(
           { aliases, reason: next.reason, status: 'in-flight', requestStartedAt },
           requestSequence
@@ -164,7 +189,11 @@ export class PRRefreshQueueDrainer {
 
         if (isBackground(next.reason)) {
           const pausedUntil = await prRefreshRateLimitPausedUntil(next.candidate, true)
+          if (!this.queue.ownsRequest(next.key, requestSequence)) {
+            continue
+          }
           if (pausedUntil !== null) {
+            this.queue.protectBackgroundUntil(next.key, pausedUntil)
             this.queue.set(next.key, { ...next, dueAt: pausedUntil })
             this.events.broadcast({
               aliases,
@@ -182,7 +211,7 @@ export class PRRefreshQueueDrainer {
           ) {
             this.pacing.noteBackgroundStart()
           }
-          if (next.reason === 'active') {
+          if (usesActiveRefreshPacing(next)) {
             this.pacing.noteActiveStart(next)
           }
         }
@@ -195,10 +224,20 @@ export class PRRefreshQueueDrainer {
           next.candidate.linkedPRNumber == null ? (next.candidate.fallbackPRNumber ?? null) : null,
           ...hostedReviewOptionArgs(next.candidate, next.reason)
         )
+        if (!this.queue.ownsRequest(next.key, requestSequence)) {
+          this.events.broadcast(
+            { aliases, reason: next.reason, outcome, requestStartedAt },
+            requestSequence
+          )
+          continue
+        }
         let plannedRetryAt: number | undefined
         let broadcastOutcome = outcome
         if (outcome.kind === 'upstream-error' && this.visibility.has(next.key)) {
-          plannedRetryAt = this.retry.nextVisibleErrorRetryAt(next.key)
+          plannedRetryAt = this.retry.nextVisibleErrorRetryAt(
+            next.key,
+            this.visibility.candidate(next.key, next.candidate)
+          )
           broadcastOutcome = this.retry.withErrorSchedule(outcome, plannedRetryAt)
         }
         this.events.observe(next.candidate, outcome)

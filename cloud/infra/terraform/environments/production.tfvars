@@ -32,7 +32,16 @@ relay_gce_subnetwork_cidr = "10.42.0.0/24"
 relay_gce_additional_region_subnetwork_cidrs = {
   "asia-east2" = "10.42.1.0/24"
 }
-relay_gce_fenced_cells = ["production-gce-c1", "production-gce-c2", "production-gce-c3", "production-gce-c6", "production-gce-c11", "production-gce-c12"]
+# Fenced cells are retired existing-only capacity: the selector can never place on them again,
+# so their MIGs run at zero rather than holding a VM and 10 Postgres connections each.
+relay_gce_fenced_cells = [
+  "production-gce-c1",
+  "production-gce-c2",
+  "production-gce-c3",
+  "production-gce-c6",
+  "production-gce-c11",
+  "production-gce-c12"
+]
 # Initial cells stay admission-disabled until production preflight and go-live approval.
 relay_gce_cells = {
   "production-gce-c1" = {
@@ -350,7 +359,7 @@ relay_gce_cells = {
     boot_disk_gb                = 30
     boot_image                  = "https://www.googleapis.com/compute/v1/projects/cos-cloud/global/images/cos-stable-121-18867-528-21"
     capacity_requests           = 6000
-    database_pool_max           = 10
+    database_pool_max           = 16 # 176 ms from us-central1 Postgres saturates 10 (94-156 waiters).
     image                       = "us-central1-docker.pkg.dev/onorca-cloud/orca-cloud/relay@sha256:5aedbca5c86de24c8b4d4bf7e3b444b76c712f281ede916cb9d90f70cad1e563"
     initially_enabled           = false
     connection_hard_cap         = 3000
@@ -364,7 +373,7 @@ relay_gce_cells = {
     boot_disk_gb                = 30
     boot_image                  = "https://www.googleapis.com/compute/v1/projects/cos-cloud/global/images/cos-stable-121-18867-528-21"
     capacity_requests           = 6000
-    database_pool_max           = 10
+    database_pool_max           = 16 # 176 ms from us-central1 Postgres saturates 10 (94-156 waiters).
     image                       = "us-central1-docker.pkg.dev/onorca-cloud/orca-cloud/relay@sha256:5aedbca5c86de24c8b4d4bf7e3b444b76c712f281ede916cb9d90f70cad1e563"
     initially_enabled           = false
     connection_hard_cap         = 3000
@@ -378,8 +387,80 @@ relay_gce_cells = {
     boot_disk_gb                = 30
     boot_image                  = "https://www.googleapis.com/compute/v1/projects/cos-cloud/global/images/cos-stable-121-18867-528-21"
     capacity_requests           = 6000
-    database_pool_max           = 10
+    database_pool_max           = 16 # 176 ms from us-central1 Postgres saturates 10 (94-156 waiters).
     image                       = "us-central1-docker.pkg.dev/onorca-cloud/orca-cloud/relay@sha256:5aedbca5c86de24c8b4d4bf7e3b444b76c712f281ede916cb9d90f70cad1e563"
+    initially_enabled           = false
+    connection_hard_cap         = 3000
+    connection_unobserved_bound = 60
+  }
+  "production-gce-c30" = {
+    hostname                    = "c30"
+    region                      = "asia-east2"
+    zone                        = "asia-east2-a"
+    machine_type                = "e2-standard-4"
+    boot_disk_gb                = 30
+    boot_image                  = "https://www.googleapis.com/compute/v1/projects/cos-cloud/global/images/cos-stable-121-18867-528-21"
+    capacity_requests           = 6000
+    database_pool_max           = 16 # 176 ms from us-central1 Postgres saturates 10 (94-156 waiters).
+    image                       = "us-central1-docker.pkg.dev/onorca-cloud/orca-cloud/relay@sha256:4158d8a2e18e9caec439d257f0c1e45d92ffea8c0262f057b2f08c76a134bcf0"
+    initially_enabled           = false
+    connection_hard_cap         = 3000
+    connection_unobserved_bound = 60
+  }
+  "production-gce-c31" = {
+    hostname                    = "c31"
+    region                      = "asia-east2"
+    zone                        = "asia-east2-b"
+    machine_type                = "e2-standard-4"
+    boot_disk_gb                = 30
+    boot_image                  = "https://www.googleapis.com/compute/v1/projects/cos-cloud/global/images/cos-stable-121-18867-528-21"
+    capacity_requests           = 6000
+    database_pool_max           = 16 # 176 ms from us-central1 Postgres saturates 10 (94-156 waiters).
+    image                       = "us-central1-docker.pkg.dev/onorca-cloud/orca-cloud/relay@sha256:f30b5cb1ec52b6b6145efecfa1b8be9e3d309403beffd8abcc64197a2087e269"
+    initially_enabled           = false
+    connection_hard_cap         = 3000
+    connection_unobserved_bound = 60
+  }
+  # US cells at the Asia 3,000-host shape, one topology wave: a was lightest, b ties c.
+  "production-gce-c32" = {
+    hostname                    = "c32"
+    region                      = "us-central1"
+    zone                        = "us-central1-a"
+    machine_type                = "e2-standard-4"
+    boot_disk_gb                = 30
+    boot_image                  = "https://www.googleapis.com/compute/v1/projects/cos-cloud/global/images/cos-stable-121-18867-528-21"
+    capacity_requests           = 6000
+    database_pool_max           = 10 # The US default; 16 exists only for the asia-east2 round trip.
+    image                       = "us-central1-docker.pkg.dev/onorca-cloud/orca-cloud/relay@sha256:f30b5cb1ec52b6b6145efecfa1b8be9e3d309403beffd8abcc64197a2087e269"
+    initially_enabled           = false
+    connection_hard_cap         = 3000
+    connection_unobserved_bound = 60
+  }
+  "production-gce-c33" = {
+    hostname                    = "c33"
+    region                      = "us-central1"
+    zone                        = "us-central1-b"
+    machine_type                = "e2-standard-4"
+    boot_disk_gb                = 30
+    boot_image                  = "https://www.googleapis.com/compute/v1/projects/cos-cloud/global/images/cos-stable-121-18867-528-21"
+    capacity_requests           = 6000
+    database_pool_max           = 10 # The US default; 16 exists only for the asia-east2 round trip.
+    image                       = "us-central1-docker.pkg.dev/onorca-cloud/orca-cloud/relay@sha256:f30b5cb1ec52b6b6145efecfa1b8be9e3d309403beffd8abcc64197a2087e269"
+    initially_enabled           = false
+    connection_hard_cap         = 3000
+    connection_unobserved_bound = 60
+  }
+  # Sixth Asia cell: launched as a migration-only spare, now general; c completes the 2/2/2 zone spread.
+  "production-gce-c34" = {
+    hostname                    = "c34"
+    region                      = "asia-east2"
+    zone                        = "asia-east2-c"
+    machine_type                = "e2-standard-4"
+    boot_disk_gb                = 30
+    boot_image                  = "https://www.googleapis.com/compute/v1/projects/cos-cloud/global/images/cos-stable-121-18867-528-21"
+    capacity_requests           = 6000
+    database_pool_max           = 16 # 176 ms from us-central1 Postgres saturates 10 (94-156 waiters).
+    image                       = "us-central1-docker.pkg.dev/onorca-cloud/orca-cloud/relay@sha256:f30b5cb1ec52b6b6145efecfa1b8be9e3d309403beffd8abcc64197a2087e269"
     initially_enabled           = false
     connection_hard_cap         = 3000
     connection_unobserved_bound = 60
@@ -402,9 +483,32 @@ relay_region_rehome_source_cell_ids = [
   "production-gce-c23",
   "production-gce-c24",
   "production-gce-c25",
-  "production-gce-c26"
+  "production-gce-c26",
+  # Asia cells carry the same trust so mis-homed hosts can be drained back off them.
+  "production-gce-c27",
+  "production-gce-c28",
+  "production-gce-c29",
+  "production-gce-c30",
+  "production-gce-c31",
+  "production-gce-c32",
+  "production-gce-c33",
+  "production-gce-c34"
 ]
 
 # Slack #orca-relay-alerts, created out of band on 2026-08-05. Declared here because an apply
 # was otherwise going to strip it from every policy, leaving the alerts firing at nobody.
 relay_alert_notification_channels = ["projects/onorca-cloud/notificationChannels/4879431412695417284"]
+
+# Cells below this RELAY_FIX_LEVEL page after 6 hours. Raise it with a targeted apply of the
+# outdated-image alert once a wave has rolled every serving cell, never mid-wave.
+relay_cell_min_fix_level = 1
+
+# Mobile push gateway. Production is the only environment that runs one; the runtime account,
+# the three Apple secrets, and their accessor bindings already exist and are imported once
+# (see docs/push-gateway.md).
+push_gateway_enabled = true
+push_base_url        = "https://push.onorca.dev"
+# Dedicated push pools allow three revision resources during validation and recovery.
+push_max_instances         = 2
+push_database_pool_max     = 6
+manage_push_domain_mapping = true

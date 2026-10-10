@@ -1,11 +1,13 @@
 /**
- * The two things Orca installs into `~/.orca-remote/`, and the rules that keep them from
+ * The things Orca installs into `~/.orca-remote/`, and the rules that keep them from
  * touching each other.
  *
- * `docs/design/shipping-orcad.html` §06 settles that on-disk coexistence is permanent: the
- * relay is the dumb execution host for SSH-target users, orcad is the peer for paired
- * environments, and no plan item retires either. So `relay-<version>/` and `orcad-<version>/`
- * sit side by side forever, and the namespace has to be a parameter rather than a literal.
+ * Design D10 (to be tracked in docs/reference/remote-server-install-model.md): the relay and
+ * orcad converge into one server package; on the host that is `server-<version>/` plus the
+ * shared `runtimes/node-<sha256>/` store. Legacy `relay-*` / `orcad-*` directories belong to a
+ * migration sweep that deletes only on an `exited` verdict, handed over in two releases: this
+ * one lists them as diagnostics only. Until then each is its own namespace, so the prefix has
+ * to be a parameter rather than a literal.
  *
  * GC ownership is the trap that parameterization creates. Each model garbage-collects ONLY
  * its own directories — see `remoteInstallDirOwner`. Relay's regex happened to be narrow
@@ -21,8 +23,10 @@ import {
 import {
   orcadArtifactFilenames,
   ORCAD_INSTALL_COMPLETE_FILENAME,
+  ORCAD_RUNTIMES_DIRNAME,
   ORCAD_VERSION_FILENAME
 } from '../../shared/orcad-artifacts'
+import { isWindowsRemoteHost, type RemoteHostPlatform } from './ssh-remote-platform'
 
 export type RemoteInstallModelId = 'relay' | 'orcad'
 
@@ -35,7 +39,7 @@ export type RemoteInstallModel = {
   readonly versionFilename: string
   readonly installCompleteFilename: string
   /** Files whose absence means a torn install, so the probe forces a re-deploy. */
-  requiredArtifacts(isWindows: boolean): string[]
+  requiredArtifacts(host: RemoteHostPlatform): string[]
 }
 
 export const RELAY_INSTALL_MODEL: RemoteInstallModel = {
@@ -44,7 +48,7 @@ export const RELAY_INSTALL_MODEL: RemoteInstallModel = {
   nativeDepsPackageName: 'orca-relay',
   versionFilename: RELAY_VERSION_FILENAME,
   installCompleteFilename: RELAY_INSTALL_COMPLETE_FILENAME,
-  requiredArtifacts: (isWindows) => relayArtifactFilenames(isWindows)
+  requiredArtifacts: (host) => relayArtifactFilenames(isWindowsRemoteHost(host))
 }
 
 export const ORCAD_INSTALL_MODEL: RemoteInstallModel = {
@@ -53,9 +57,8 @@ export const ORCAD_INSTALL_MODEL: RemoteInstallModel = {
   nativeDepsPackageName: 'orca-orcad',
   versionFilename: ORCAD_VERSION_FILENAME,
   installCompleteFilename: ORCAD_INSTALL_COMPLETE_FILENAME,
-  // Why the parameter is ignored: orcad's forked children are the same three .js files on
-  // every host. The Windows-only console-list agent patch is a relay/node-pty concern.
-  requiredArtifacts: () => orcadArtifactFilenames()
+  // libc changes no file name, so `<os>-<arch>` names every slot file.
+  requiredArtifacts: (host) => orcadArtifactFilenames(`${host.os}-${host.arch}`)
 }
 
 export const REMOTE_INSTALL_MODELS: readonly RemoteInstallModel[] = [
@@ -104,15 +107,18 @@ export function remoteInstallListingRegexSource(model: RemoteInstallModel): stri
 }
 
 /**
- * Which model owns a directory found in `~/.orca-remote/`, or null for anything neither
- * model created.
+ * Which owner a directory found in `~/.orca-remote/` belongs to, or null for anything no
+ * owner created.
  *
- * This is the answer to §06 falsifier 1's first half: **the model that created a directory
- * owns it, and nothing else may delete it.** A relay GC pass that saw `orcad-0.1.0+abc`
- * would be looking at the live install of a peer whose lifecycle it has no view into — the
- * SSH-execution-boundary collapse in directory form.
+ * Design D10: **the model that created a directory owns it, and nothing else may delete it**
+ * (amended only in the release after the two-step hand-over). A relay GC pass that saw
+ * `orcad-0.1.0+abc` would be looking at the live install of a peer whose lifecycle it has no
+ * view into — the SSH-execution-boundary collapse in directory form.
  */
-export function remoteInstallDirOwner(dirName: string): RemoteInstallModelId | null {
+export function remoteInstallDirOwner(dirName: string): RemoteInstallDirOwner | null {
+  if (dirName === ORCAD_RUNTIMES_DIRNAME) {
+    return 'runtimes'
+  }
   for (const model of REMOTE_INSTALL_MODELS) {
     if (new RegExp(remoteInstallListingRegexSource(model)).test(dirName)) {
       return model.id
@@ -126,11 +132,17 @@ export function remoteInstallGcPermits(model: RemoteInstallModel, dirName: strin
   return remoteInstallDirOwner(dirName) === model.id
 }
 
-export type RemoteInstallInventory = Record<RemoteInstallModelId | 'unknown', string[]>
+/**
+ * `runtimes` is the shared Node store (design D5). No version-dir model owns it, so neither
+ * model's GC can list or delete it; only `remote-node-runtime-store-gc.ts` collects inside it.
+ */
+export type RemoteInstallDirOwner = RemoteInstallModelId | 'runtimes'
+
+export type RemoteInstallInventory = Record<RemoteInstallDirOwner | 'unknown', string[]>
 
 /** Group a raw `~/.orca-remote/` listing by owning model, for diagnostics and the client's choice. */
 export function inventoryRemoteInstallDirs(dirNames: readonly string[]): RemoteInstallInventory {
-  const inventory: RemoteInstallInventory = { relay: [], orcad: [], unknown: [] }
+  const inventory: RemoteInstallInventory = { relay: [], orcad: [], runtimes: [], unknown: [] }
   for (const name of dirNames) {
     const owner = remoteInstallDirOwner(name)
     if (owner) {

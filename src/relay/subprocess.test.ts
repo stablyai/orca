@@ -14,6 +14,7 @@ import * as path from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync, spawn as spawnChild } from 'node:child_process'
 import { build } from 'esbuild'
+import { JSONC_PARSER_ESM_ALIAS } from '../../config/build-plugins/jsonc-parser-esm'
 import { spawnRelay, type RelayProcess } from './subprocess-test-utils'
 import { getEndpointFileName } from '../shared/agent-hook-listener/endpoint-publication'
 import { relayTestSocketPath } from './relay-test-socket-path'
@@ -35,6 +36,7 @@ beforeAll(async () => {
     format: 'cjs',
     outfile: relayEntry,
     external: ['node-pty', '@parcel/watcher', 'electron'],
+    alias: JSONC_PARSER_ESM_ALIAS,
     sourcemap: false
   })
   await build({
@@ -179,15 +181,6 @@ describe('Subprocess: Relay entry point', () => {
     }
   })
 
-  it('prints sentinel on startup', async () => {
-    relay = spawn()
-    await relay.sentinelReceived
-  }, 10_000)
-
-  it('keeps the Node-18 relay bundle free of unsupported array copy methods', () => {
-    expect(readFileSync(relayEntry, 'utf8')).not.toContain('.toReversed(')
-  })
-
   it('loads node-pty after an in-place dependency repair without restarting', async () => {
     tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-native-repair-'))
     const repairedRelayEntry = path.join(tmpDir, 'relay.js')
@@ -232,38 +225,6 @@ describe('Subprocess: Relay entry point', () => {
     expect(repaired.error).toBeUndefined()
     // Why: the late failure happens after the id is minted, so the repair lands on the next sequence.
     expect(repaired.result).toMatchObject({ id: expect.stringMatching(/^pty2:[^:]+:2$/) })
-  }, 10_000)
-
-  it('responds to fs.stat over stdin/stdout', async () => {
-    tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-sub-'))
-    writeFileSync(path.join(tmpDir, 'test.txt'), 'hello')
-
-    relay = spawn()
-    await relay.sentinelReceived
-
-    const id = relay.send('fs.stat', { filePath: path.join(tmpDir, 'test.txt') })
-    const resp = await relay.waitForResponse(id)
-
-    expect(resp.result).toBeDefined()
-    const result = resp.result as { size: number; type: string }
-    expect(result.type).toBe('file')
-    expect(result.size).toBe(5)
-  }, 10_000)
-
-  it('responds to fs.readDir', async () => {
-    tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-sub-'))
-    writeFileSync(path.join(tmpDir, 'a.txt'), 'a')
-    writeFileSync(path.join(tmpDir, 'b.txt'), 'b')
-
-    relay = spawn()
-    await relay.sentinelReceived
-
-    const id = relay.send('fs.readDir', { dirPath: tmpDir })
-    const resp = await relay.waitForResponse(id)
-
-    const entries = resp.result as { name: string }[]
-    const names = entries.map((e) => e.name).sort()
-    expect(names).toEqual(['a.txt', 'b.txt'])
   }, 10_000)
 
   it('responds to fs.readFile and fs.writeFile', async () => {

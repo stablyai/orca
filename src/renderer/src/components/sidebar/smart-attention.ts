@@ -1,8 +1,10 @@
 import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
+import { agentTurnEndedOnPurpose } from '../../../../shared/agent-main-agent-verdict'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { resolveDecayedAgentRowState } from '@/lib/agent-row-decay-state'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { isSyntheticAgentPermissionTitle } from '../../../../shared/synthetic-agent-title'
 import { resolveRuntimePaneTitleLeafId } from '@/lib/runtime-pane-title-leaf-id'
 import type { AgentStatus } from '../../../../shared/agent-detection'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -84,18 +86,15 @@ export function hasFreshAttributedAgentStatus(
 
 /**
  * Return the timestamp of the most recent `done`/`blocked`/`waiting` history row, ignoring
- * interrupted `done` rows (Ctrl+C). Returns `null` when no qualifying row exists.
+ * `done` rows the user stopped (Ctrl+C). Returns `null` when no qualifying row exists.
  */
 export function mostRecentAttentionInHistory(history: AgentStateHistoryEntry[]): number | null {
   let max = 0
   for (const h of history) {
-    // Why: setAgentStatus preserves `interrupted` on history rows, so filter them like the current entry.
-    if (h.state === 'done' && h.interrupted) {
-      continue
-    }
+    // Why: history rows keep the verdict, so filter a stopped turn like the current entry.
     if (h.state === 'done' || h.state === 'blocked' || h.state === 'waiting') {
       // Why: Infinity from a corrupted row would pin the worktree atop Class 3 forever; treat non-finite as missing.
-      if (!Number.isFinite(h.startedAt)) {
+      if (agentTurnEndedOnPurpose(h) || !Number.isFinite(h.startedAt)) {
         continue
       }
       if (h.startedAt > max) {
@@ -162,8 +161,8 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
         ts = entry.stateStartedAt
         cause = entry.state
       } else if (entry.state === 'done') {
-        // Why: null covers interrupted `done` (Ctrl+C — user is finished with it) and idle session
-        // boundaries; neither is attention.
+        // Why: null covers a stopped `done` (not a completion) and idle session boundaries;
+        // neither is attention. A failed `done` ranks here: it is news the user has not seen.
         const completedAt = agentEntryCompletionAt(entry)
         if (completedAt === null) {
           continue
@@ -300,8 +299,14 @@ export function collectTabPaneInputs(
   const hasLivePty = tabHasLivePty(sources.ptyIdsByTabId, tab.id)
   // Why: leaves covered by a hook entry skip the title fallback so we don't double-count them.
   const hookLeafIds = new Set<string>()
+  // Stale hooks still suppress one-shot permission titles, matching worktree and tab status dots.
+  const permissionHookLeafIds = new Set<string>()
   for (const entry of sources.entriesByTabId.get(tab.id) ?? []) {
     panes.push({ kind: 'hook', entry, hasLivePty })
+    const leafId = leafIdFromPaneKey(entry.paneKey)
+    if (leafId !== null) {
+      permissionHookLeafIds.add(leafId)
+    }
     // Why: restored rows own their co-restored title without asserting live state.
     if (
       !entry.restoredUnconfirmed &&
@@ -309,7 +314,6 @@ export function collectTabPaneInputs(
     ) {
       continue
     }
-    const leafId = leafIdFromPaneKey(entry.paneKey)
     if (leafId !== null) {
       hookLeafIds.add(leafId)
     }
@@ -322,7 +326,10 @@ export function collectTabPaneInputs(
 
   const paneTitles = sources.runtimePaneTitlesByTabId[tab.id]
   if (!paneTitles || Object.keys(paneTitles).length === 0) {
-    if (hookLeafIds.size === 0) {
+    const coveredLeafIds = isSyntheticAgentPermissionTitle(tab.title)
+      ? permissionHookLeafIds
+      : hookLeafIds
+    if (coveredLeafIds.size === 0) {
       // Why: unmounted tabs (restored-but-unvisited) expose only the legacy tab title.
       panes.push({
         kind: 'title',
@@ -337,10 +344,13 @@ export function collectTabPaneInputs(
   const tabLayout = sources.terminalLayoutsByTabId?.[tab.id]
   const paneTitleEntries = Object.entries(paneTitles)
   for (const [runtimePaneId, title] of paneTitleEntries) {
+    const coveredLeafIds = isSyntheticAgentPermissionTitle(title)
+      ? permissionHookLeafIds
+      : hookLeafIds
     const leafId = resolveRuntimePaneTitleLeafId(tabLayout, runtimePaneId)
     const hasSingleUnmappedHook =
-      leafId === null && hookLeafIds.size === 1 && paneTitleEntries.length === 1
-    if ((leafId !== null && hookLeafIds.has(leafId)) || hasSingleUnmappedHook) {
+      leafId === null && coveredLeafIds.size === 1 && paneTitleEntries.length === 1
+    if ((leafId !== null && coveredLeafIds.has(leafId)) || hasSingleUnmappedHook) {
       continue
     }
     panes.push({ kind: 'title', status: classifyTitleActivity(title), worktreeLastActivityAt })

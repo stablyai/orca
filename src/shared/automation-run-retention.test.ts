@@ -171,3 +171,25 @@ describe('nextAutomationRunNumber', () => {
     expect(runs.some((r) => r.runNumber === next)).toBe(false)
   })
 })
+
+it('does not inspect ordering timestamps when an automation is within its retention cap', () => {
+  let reads = 0
+  const runs = Array.from({ length: 100 }, (_, index) =>
+    run({
+      id: `run-${index}`,
+      automationId: 'a'
+    })
+  )
+  for (const [index, entry] of runs.entries()) {
+    Object.defineProperty(entry, 'createdAt', {
+      get() {
+        reads += 1
+        return (index * 37) % 100
+      }
+    })
+  }
+  const kept = pruneAutomationRuns(runs)
+  expect(kept).toHaveLength(100)
+  expect(kept.every((entry, index) => entry === runs[index])).toBe(true)
+  expect(reads).toBe(0)
+})

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
-import { getAgentSessionOptionCatalog } from '../../../src/shared/agent-session-option-catalog'
+import { structuredAgentSessionSeedCatalog } from '../../../src/shared/structured-agent-session-seed-catalog'
 import type {
   AgentSessionOptionResult,
   AgentSessionOptionsResult
@@ -17,7 +17,8 @@ import {
   commitStructuredAgentSessionOptionValues,
   createStructuredAgentSessionOptionState,
   structuredAgentSessionOptionPicks,
-  structuredAgentSessionOptionSnapshot
+  structuredAgentSessionOptionSnapshot,
+  type StructuredAgentSessionOptionState
 } from '../../../src/shared/structured-agent-session-options'
 import type { RpcClient } from '../transport/rpc-client'
 import {
@@ -25,6 +26,12 @@ import {
   type StructuredAgentSessionMutate
 } from './mobile-structured-agent-session-rpc'
 import { persistMobileStructuredOptionPicks } from './mobile-native-chat-session-option-persistence'
+import { useMobileHostModelCatalogUpgrade } from './use-mobile-host-model-catalog-upgrade'
+import {
+  forgetMobileCreatedStructuredSession,
+  mobileCreatedStructuredSession
+} from './mobile-created-structured-sessions'
+import { encodeStructuredAgentSessionOptionValue } from '../../../src/shared/structured-agent-session-option-codec'
 
 type StructuredOptionsController = {
   optionPickerRequest: { id: string; sequence: number } | null
@@ -45,10 +52,26 @@ export function useMobileStructuredAgentOptions(args: {
   mutate: StructuredAgentSessionMutate
 }): StructuredOptionsController {
   const { agent, client, enabled, fence, mutate, sessionId } = args
-  const [optionState, setOptionState] = useState(() =>
-    createStructuredAgentSessionOptionState(agent ?? 'codex')
+  // Every agent's seed, as on the desktop: a built-in list or the provider-default pill.
+  const optionCatalog = useMemo(
+    () => (agent ? structuredAgentSessionSeedCatalog(agent) : null),
+    [agent]
   )
+  const [optionState, setOptionState] = useState(() =>
+    createStructuredAgentSessionOptionState(agent ?? 'codex', optionCatalog)
+  )
+  const optionStateRef = useRef(optionState)
   const activeOptionRecordRef = useRef(optionState.record)
+  const pendingOptionRef = useRef<string | null>(null)
+  const optionMutationGeneration = useRef(0)
+  const updateOptionState = useCallback(
+    (update: (current: StructuredAgentSessionOptionState) => StructuredAgentSessionOptionState) => {
+      const next = update(optionStateRef.current)
+      optionStateRef.current = next
+      setOptionState(next)
+    },
+    []
+  )
   const [optionPickerRequest, setOptionPickerRequest] = useState<{
     id: string
     sequence: number
@@ -57,27 +80,57 @@ export function useMobileStructuredAgentOptions(args: {
     sessionId: string
     commands: readonly AgentSessionConversationCommand[]
   } | null>(null)
-  const optionCatalog = useMemo(
-    () => (agent === 'claude' || agent === 'codex' ? getAgentSessionOptionCatalog(agent) : null),
-    [agent]
-  )
 
+  const optionIdentityRef = useRef(`${agent}:${sessionId}`)
   useEffect(() => {
-    const next = createStructuredAgentSessionOptionState(agent ?? 'codex')
+    const identity = `${agent}:${sessionId}`
+    const sameSession = optionIdentityRef.current === identity
+    optionIdentityRef.current = identity
+    const previous = optionStateRef.current
+    const seeded = createStructuredAgentSessionOptionState(agent ?? 'codex', optionCatalog)
+    // A host answer is the account's, not the fence's: keep it rather than fall back to the placeholder.
+    const next =
+      sameSession && (previous.catalogSource === 'host' || previous.catalogSource === 'builtin')
+        ? { ...seeded, catalog: previous.catalog, catalogSource: previous.catalogSource }
+        : seeded
+    optionMutationGeneration.current += 1
+    pendingOptionRef.current = null
+    optionStateRef.current = next
     activeOptionRecordRef.current = next.record
     setOptionState(next)
-  }, [agent, enabled, fence, sessionId])
+  }, [agent, enabled, fence, optionCatalog, sessionId])
+
+  // A chat this phone created runs the listed default, as a desktop chat its own view launched does.
+  const createdHere = useMemo(
+    () => (sessionId ? mobileCreatedStructuredSession(sessionId) : undefined),
+    [sessionId]
+  )
+  useMobileHostModelCatalogUpgrade({
+    agent,
+    client,
+    sessionId,
+    enabled,
+    fence,
+    newLaunch: createdHere !== undefined,
+    ...(createdHere ? { worktree: createdHere.worktree } : {}),
+    optionCatalog,
+    activeOptionRecordRef,
+    updateOptionState
+  })
 
   useEffect(() => {
     if (!client || !sessionId || !enabled || !optionCatalog) {
       return
     }
     let stale = false
+    const readGeneration = optionMutationGeneration.current
     void callAgentSession<AgentSessionOptionsResult>(client, 'agentSession.options', { sessionId })
       .then((result) => {
-        if (!stale) {
+        // This view keeps its latch; a later one may run a model picked here.
+        forgetMobileCreatedStructuredSession(sessionId)
+        if (!stale && optionMutationGeneration.current === readGeneration) {
           setConversationSupport({ sessionId, commands: result.conversationCommands ?? [] })
-          setOptionState((current) =>
+          updateOptionState((current) =>
             current.record === activeOptionRecordRef.current
               ? applyStructuredAgentSessionOptions(current, optionCatalog, result)
               : current
@@ -88,7 +141,7 @@ export function useMobileStructuredAgentOptions(args: {
     return () => {
       stale = true
     }
-  }, [client, enabled, optionCatalog, sessionId, fence])
+  }, [client, enabled, optionCatalog, sessionId, fence, updateOptionState])
 
   const optionSnapshot = useMemo(
     () => structuredAgentSessionOptionSnapshot(optionState),
@@ -97,26 +150,37 @@ export function useMobileStructuredAgentOptions(args: {
 
   const setStructuredOption = useCallback(
     async (id: string, value: SessionOptionValue): Promise<boolean> => {
+      const currentState = optionStateRef.current
+      const encoded = encodeStructuredAgentSessionOptionValue(id, value)
       if (
-        !canSetStructuredAgentSessionOption(optionState, id, value) ||
-        typeof value !== 'string'
+        pendingOptionRef.current !== null ||
+        !client ||
+        !sessionId ||
+        !optionCatalog ||
+        encoded === null ||
+        !canSetStructuredAgentSessionOption(currentState, id, value)
       ) {
         return false
       }
-      const targetRecord = optionState.record
-      setOptionState((current) => ({ ...current, pendingId: id }))
+      const targetRecord = currentState.record
+      const mutationGeneration = ++optionMutationGeneration.current
+      pendingOptionRef.current = id
+      updateOptionState((current) => ({ ...current, pendingId: id }))
       try {
         const result = await mutate<AgentSessionOptionResult>(
           'agentSession.setOption',
           'agentSession.setOption',
-          { key: id, value }
+          { key: id, value: encoded }
         )
-        if (activeOptionRecordRef.current !== targetRecord) {
+        if (
+          activeOptionRecordRef.current !== targetRecord ||
+          optionMutationGeneration.current !== mutationGeneration
+        ) {
           return result.status !== 'rejected'
         }
         if (result.status === 'accepted') {
-          const committed = result.value.options ?? { [id]: value }
-          setOptionState((current) =>
+          const committed = result.value.options ?? { [id]: encoded }
+          updateOptionState((current) =>
             current.record === targetRecord && result.sameFence
               ? commitStructuredAgentSessionOptionValues(current, committed)
               : current
@@ -124,33 +188,57 @@ export function useMobileStructuredAgentOptions(args: {
           // Only an accepted pick: an `unknown` outcome commits optimistically to the
           // visible record, and remembering one the provider refused would seed a
           // launch the user never chose.
-          if (agent === 'claude' || agent === 'codex') {
+          if (agent) {
             void persistMobileStructuredOptionPicks({
               client,
               agent,
-              picks: structuredAgentSessionOptionPicks(optionState, committed)
+              picks: structuredAgentSessionOptionPicks(currentState, committed)
             })
+          }
+          if (result.sameFence) {
+            void callAgentSession<AgentSessionOptionsResult>(client, 'agentSession.options', {
+              sessionId
+            })
+              .then((refreshed) => {
+                if (
+                  activeOptionRecordRef.current === targetRecord &&
+                  optionMutationGeneration.current === mutationGeneration
+                ) {
+                  updateOptionState((latest) =>
+                    latest.record === targetRecord
+                      ? applyStructuredAgentSessionOptions(latest, optionCatalog, refreshed)
+                      : latest
+                  )
+                }
+              })
+              .catch(() => undefined)
           }
           return true
         }
         if (result.status === 'unknown') {
-          setOptionState((current) =>
+          updateOptionState((current) =>
             current.record === targetRecord
-              ? commitStructuredAgentSessionOption(current, id, value)
+              ? commitStructuredAgentSessionOption(current, id, encoded)
               : current
           )
           return true
         }
         return false
       } finally {
-        setOptionState((current) =>
-          current.record === targetRecord && current.pendingId === id
-            ? { ...current, pendingId: null }
-            : current
-        )
+        if (
+          activeOptionRecordRef.current === targetRecord &&
+          optionMutationGeneration.current === mutationGeneration
+        ) {
+          pendingOptionRef.current = null
+          updateOptionState((current) =>
+            current.record === targetRecord && current.pendingId === id
+              ? { ...current, pendingId: null }
+              : current
+          )
+        }
       }
     },
-    [agent, client, mutate, optionState]
+    [agent, client, mutate, optionCatalog, sessionId, updateOptionState]
   )
 
   const invokeStructuredOption = useCallback(
@@ -167,9 +255,9 @@ export function useMobileStructuredAgentOptions(args: {
   const setOption = useCallback(
     async (id: string, value: SessionOptionValue) => {
       await setStructuredOption(id, value)
-      return { snapshot: optionSnapshot }
+      return { snapshot: structuredAgentSessionOptionSnapshot(optionStateRef.current) }
     },
-    [optionSnapshot, setStructuredOption]
+    [setStructuredOption]
   )
 
   const optionSurface = useMemo<SessionOptionsSurface>(

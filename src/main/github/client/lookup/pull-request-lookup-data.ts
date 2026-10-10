@@ -6,10 +6,6 @@ import type {
 } from '../../../../shared/github/pull-request-types'
 import { gitExecFileAsync } from '../../gh-utils'
 import type { GitAdmissionTier } from '../../../git/command-runner/git-exec-options'
-import {
-  getSshGitProvider,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
-} from '../../../providers/ssh-git-dispatch'
 import type { HostedReviewExecutionOptions } from '../../../source-control/hosted-review-git-options'
 import { mapPRState } from '../../mappers'
 import {
@@ -17,6 +13,8 @@ import {
   normalizeReviewDecision,
   isAutoMergeEnabled
 } from './../map/work-item-field-coercion'
+import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 export type PullRequestLookupData = {
   number: number
   title: string
@@ -161,12 +159,9 @@ export async function getCurrentHeadOid(
   connectionId?: string | null,
   localGitOptions: { wslDistro?: string; admissionTier?: GitAdmissionTier } = {}
 ): Promise<string | null> {
-  const provider = connectionId ? getSshGitProvider(connectionId) : null
-  if (connectionId && !provider) {
-    throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-  }
-  if (provider) {
-    const result = await provider.exec(['rev-parse', 'HEAD'], repoPath)
+  const route = requireReachableGitRoute(getConnectionExecutionHostId(connectionId))
+  if (route.kind === 'ssh') {
+    const result = await route.provider.exec(['rev-parse', 'HEAD'], repoPath)
     return result.stdout.trim() || null
   }
   try {
