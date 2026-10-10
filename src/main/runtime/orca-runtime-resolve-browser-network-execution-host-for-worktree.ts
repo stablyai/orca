@@ -29,7 +29,7 @@ import { ensureJcodeRuntimeDir } from '../../shared/jcode-runtime-dir'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { homedir } from 'node:os'
 import { getExplicitWorktreeIdSelector } from './runtime-worktree-selection'
-import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree/id'
+import { WORKTREE_ID_SEPARATOR, worktreeIdsEqual } from '../../shared/worktree/id'
 import { WorktreeIdRequiresFullPathError } from './runtime-worktree-lineage-resolution'
 import { triggerTerminalSpawnPushTargetMaterialization } from './runtime-terminal-spawn-push-target-materialization'
 import { resolveCreatedWorktreeTerminalTarget } from './runtime-created-worktree-terminal-target'
@@ -227,5 +227,35 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
       throw new WorktreeIdRequiresFullPathError()
     }
     return worktreeId
+  }
+
+  getExplicitSessionWorktreeIdSelector(selector: string | undefined): string | null {
+    const worktreeId = this.getValidatedExplicitWorktreeIdSelector(selector)
+    if (
+      !worktreeId?.includes(WORKTREE_ID_SEPARATOR) ||
+      this.mobileSessionTabsByWorktree.has(worktreeId)
+    ) {
+      return worktreeId
+    }
+    // Why: clients normalize Windows paths, but tab maps retain the host's original spelling.
+    const knownIds = new Set([
+      ...this.mobileSessionTabsByWorktree.keys(),
+      ...Object.keys(this.getOwnWorkspaceSessionForWorktree(worktreeId)?.tabsByWorktree ?? {})
+    ])
+    // Why: surviving renderer PTYs can be known before the first renderer graph arrives.
+    for (const ptyId of this.pairedRendererSessionOwnedPtyIds) {
+      const pty = this.ptysById.get(ptyId)
+      if (pty?.connected) {
+        knownIds.add(pty.worktreeId)
+      }
+    }
+    if (knownIds.has(worktreeId)) {
+      return worktreeId
+    }
+    const matches = [...knownIds].filter((knownId) => worktreeIdsEqual(knownId, worktreeId))
+    if (matches.length > 1) {
+      throw new Error('selector_ambiguous')
+    }
+    return matches[0] ?? worktreeId
   }
 }

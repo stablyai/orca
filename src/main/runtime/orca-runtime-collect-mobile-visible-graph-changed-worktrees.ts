@@ -50,7 +50,7 @@ export class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees extends Or
     worktreeSelector: string,
     clientNavigationId?: string
   ): Promise<RuntimeMobileSessionTabsResult> {
-    const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
+    const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     if (explicitWorktreeId) {
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(explicitWorktreeId, {
         allowAttachedWindow: true,
@@ -58,8 +58,11 @@ export class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees extends Or
       })
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(explicitWorktreeId)
       await this.refreshMobileSessionPtyRecords(explicitWorktreeId)
-      this.restoreLivePairedRendererSessionOwnedMobileTerminals(explicitWorktreeId)
-      return this.getMobileSessionTabsForWorktree(explicitWorktreeId, clientNavigationId)
+      // Why: the refresh may discover a surviving PTY under the host's original path spelling.
+      const resolvedId =
+        this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ?? explicitWorktreeId
+      this.restoreLivePairedRendererSessionOwnedMobileTerminals(resolvedId)
+      return this.getMobileSessionTabsForWorktree(resolvedId, clientNavigationId)
     }
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktree.id, {

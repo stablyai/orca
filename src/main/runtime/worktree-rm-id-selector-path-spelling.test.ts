@@ -222,25 +222,40 @@ describe('worktree id selectors vs. the path spelling git reports (#16243)', () 
 
   // The fail-closed guard on a delete-capable resolver: two rows spelling one directory must not
   // let a folded id pick one. `path:` collapses same-host duplicates; `id:` deliberately refuses.
-  it('refuses a folded id when two same-repo rows spell one directory', async () => {
-    listWorktreesStrictMock.mockResolvedValue([
-      { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true },
-      { path: WORKTREE_PATH, head: 'def', branch: 'feature', isBare: false, isMainWorktree: false },
-      {
-        path: '/srv/projects//workspaces/plugin-host',
-        head: 'ghi',
-        branch: 'feature-2',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
-    const runtime = new OrcaRuntimeService(makeStore() as never)
+  it.each([false, true])(
+    'refuses a folded id when two same-repo rows spell one directory (saved session: %s)',
+    async (hasSavedSession) => {
+      listWorktreesStrictMock.mockResolvedValue([
+        { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true },
+        {
+          path: WORKTREE_PATH,
+          head: 'def',
+          branch: 'feature',
+          isBare: false,
+          isMainWorktree: false
+        },
+        {
+          path: '/srv/projects//workspaces/plugin-host',
+          head: 'ghi',
+          branch: 'feature-2',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only the repository metadata and session keys supplied by this fixture.
+      const runtime = new OrcaRuntimeService({
+        ...makeStore(),
+        getWorkspaceSession: () => ({
+          tabsByWorktree: hasSavedSession ? { [CANONICAL_ID]: [] } : {}
+        })
+      } as never)
 
-    // Matches neither row exactly, folds to both.
-    await expect(runtime.showManagedWorktree(`id:${CANONICAL_ID}/`)).rejects.toThrow(
-      'selector_ambiguous'
-    )
-  })
+      // Matches neither row exactly, folds to both.
+      await expect(runtime.showManagedWorktree(`id:${CANONICAL_ID}/`)).rejects.toThrow(
+        'selector_ambiguous'
+      )
+    }
+  )
 
   // Live-proof limit, pinned so nobody "fixes" the trimming: a folder-workspace id only trims a
   // trailing slash at end of string, so one placed before the instance suffix stays exact-only.
