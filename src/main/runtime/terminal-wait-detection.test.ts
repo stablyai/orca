@@ -527,6 +527,15 @@ const MUSE_READY_SCREEN_META = [
   '  muse-spark-1.3 · max · ~/Downloads/interview-coach · YOLO'
 ]
 
+// Shape from #25005: Muse Code on Linux paints its idle composer without the voice-input footer.
+const MUSE_READY_SCREEN_NO_VOICE_FOOTER = [
+  '  Muse Code 1.4.2',
+  '──────────────────────────────────────────',
+  '❯',
+  '──────────────────────────────────────────',
+  '  muse-spark-1.4 · max · ~/work/app'
+]
+
 const MUSE_TRUST_DIALOG = [
   'Do you trust this workspace?',
   'Workspace: /private/tmp',
@@ -541,6 +550,48 @@ describe('isMuseReadyPromptPreview', () => {
   it('recognizes a Muse ready screen across providers', () => {
     expect(isMuseReadyPromptPreview(waitTextFor(MUSE_READY_SCREEN_ECHO))).toBe(true)
     expect(isMuseReadyPromptPreview(waitTextFor(MUSE_READY_SCREEN_META))).toBe(true)
+  })
+
+  it('recognizes the idle composer without the voice-input footer', () => {
+    const waitText = waitTextFor(MUSE_READY_SCREEN_NO_VOICE_FOOTER)
+    expect(isMuseReadyPromptPreview(waitText)).toBe(true)
+    expect(detectTerminalWaitBlockedReason(waitText)).toBeNull()
+  })
+
+  it('refuses a shell prompt left below the banner of an exited Muse', () => {
+    expect(
+      isMuseReadyPromptPreview(
+        waitTextFor(['  Muse Code 1.4.2', 'error: provider not configured', '~/work/app ❯'])
+      )
+    ).toBe(false)
+    expect(
+      isMuseReadyPromptPreview(
+        waitTextFor([
+          '  Muse Code 1.4.2',
+          'error: provider not configured',
+          '$ git log --graph --oneline',
+          '──────────────────────────',
+          '~/work/app on main',
+          '❯'
+        ])
+      )
+    ).toBe(false)
+    expect(
+      isMuseReadyPromptPreview(
+        waitTextFor(['  Muse Code 1.4.2', 'error: provider not configured', '───────', '❯ ls'])
+      )
+    ).toBe(false)
+  })
+
+  it('refuses a shell prompt below the stale footer-free composer of an exited Muse', () => {
+    const waitText = waitTextFor([...MUSE_READY_SCREEN_NO_VOICE_FOOTER, '~/work/app ❯'])
+    expect(isMuseReadyPromptPreview(waitText)).toBe(false)
+  })
+
+  it('refuses a footer-free composer once a blocked dialog opens below it', () => {
+    const waitText = waitTextFor([...MUSE_READY_SCREEN_NO_VOICE_FOOTER, ...MUSE_TRUST_DIALOG])
+    expect(detectTerminalWaitBlockedReason(waitText)).toBe('agent-trust-workspace')
+    expect(isMuseReadyPromptPreview(waitText)).toBe(false)
   })
 
   it('tolerates ANSI styling around the ready markers', () => {

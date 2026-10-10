@@ -41,4 +41,30 @@ describe('Muse readiness from captured terminal bytes', () => {
       satisfied: true
     })
   }, 15_000)
+
+  // #25005: Linux Muse paints a plain rule where the macOS capture has the voice-input footer.
+  it('recognizes the captured composer with the voice-input footer replaced by a plain rule', async () => {
+    const captured = readFileSync(
+      join(__dirname, '__fixtures__', 'muse-empty-folder-ready.txt'),
+      'utf8'
+    )
+    const esc = String.fromCharCode(27)
+    const rowStart = `${esc}[4;1H${esc}[2m`
+    const footerEnd = `start)${esc}[2m `
+    expect(captured).toContain(rowStart)
+    expect(captured).toContain(footerEnd)
+    const data =
+      captured.slice(0, captured.indexOf(rowStart) + rowStart.length) +
+      captured.slice(captured.indexOf(footerEnd) + footerEnd.length)
+    expect(data.toLowerCase()).not.toContain('voice')
+    const { runtime, handle } = await createTranscriptPane({
+      paneTitle: 'muse-first-class-workspace',
+      foregroundProcess: 'muse-bin-1.3.0-R3401.1',
+      launchAgent: 'muse',
+      data
+    })
+    await expect(
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 10_000 })
+    ).resolves.toMatchObject({ satisfied: true })
+  }, 15_000)
 })

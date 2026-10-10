@@ -151,6 +151,27 @@ function findDismissedStartupModalIndex(normalized: string): number | null {
   return live === null || muse === null ? (live ?? muse) : Math.max(live, muse)
 }
 
+// Muse frames its composer between two box-drawing rules. The voice-input footer is the upper
+// one on macOS, but Linux builds paint a plain rule instead (#25005).
+const MUSE_COMPOSER_RULE = '───'
+const RULE_BEFORE_PROMPT_RE = new RegExp(`${MUSE_COMPOSER_RULE}\\s*$`)
+const RULE_AFTER_PROMPT_RE = new RegExp(`^\\s*${MUSE_COMPOSER_RULE}`)
+// Wide enough for the whitespace Muse leaves between a rule and `❯` once cursor moves are dropped.
+const COMPOSER_NEIGHBORHOOD = 96
+
+// Why both rules: a shell prompt such as starship's or pure's also draws `❯`, and shell output can
+// draw a rule, so one rule next to `❯` would let a crashed Muse read as ready below its old banner.
+// Why only the newest `❯`: a shell prompt below an exited Muse's stale composer is the live one.
+function hasRuleFramedMusePrompt(segment: string): boolean {
+  const index = segment.lastIndexOf('❯')
+  if (index === -1) {
+    return false
+  }
+  const before = segment.slice(Math.max(0, index - COMPOSER_NEIGHBORHOOD), index)
+  const after = segment.slice(index + 1, index + 1 + COMPOSER_NEIGHBORHOOD)
+  return RULE_BEFORE_PROMPT_RE.test(before) && RULE_AFTER_PROMPT_RE.test(after)
+}
+
 // Why: Muse titles its OSC with the bare cwd and never updates it, so only the body can
 // prove the TUI is up. The voice-input composer is present even without loaded skills.
 function findMuseReadyPromptIndex(normalized: string): number | null {
@@ -159,7 +180,9 @@ function findMuseReadyPromptIndex(normalized: string): number | null {
     return null
   }
   const segment = normalized.slice(headerIndex)
-  return segment.includes('voice') && segment.includes('input') && segment.includes('❯')
-    ? headerIndex
-    : null
+  if (!segment.includes('❯')) {
+    return null
+  }
+  const hasVoiceFooter = segment.includes('voice') && segment.includes('input')
+  return hasVoiceFooter || hasRuleFramedMusePrompt(segment) ? headerIndex : null
 }
