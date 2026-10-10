@@ -1,6 +1,7 @@
 import type { ITerminalOptions } from '@xterm/xterm'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../shared/terminal-scrollback-policy'
 import { LIGHT_BG_MIN_CONTRAST } from '@/lib/terminal-contrast-correction'
+import { buildFontFamily } from '@/lib/monospace-font-family'
 
 type TerminalCursorStyle = NonNullable<ITerminalOptions['cursorStyle']>
 type TerminalCursorInactiveStyle = NonNullable<ITerminalOptions['cursorInactiveStyle']>
@@ -37,9 +38,10 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
     cursorStyle,
     cursorInactiveStyle: resolveTerminalCursorInactiveStyle(cursorStyle),
     fontSize: 14,
-    // Cross-platform fallback chain; keep in sync with FALLBACK_FONTS in layout-serialization.ts.
-    fontFamily:
-      '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", monospace',
+    fontFamily: buildFontFamily(''),
+    // Why: one-cell glyphs drawn from a CJK/symbol fallback face (①, ※, Ⅻ) otherwise spill
+    // into the next cell under WebGL; wide, ASCII, emoji and Nerd glyphs are never rescaled.
+    rescaleOverlappingGlyphs: true,
     fontWeight: '300',
     fontWeightBold: '500',
     scrollback: DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT,
