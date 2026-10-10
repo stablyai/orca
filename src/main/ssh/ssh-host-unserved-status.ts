@@ -24,7 +24,7 @@ export function unservedHostServerMessage(decision: UnservedDecision): string {
       return 'This SSH host isn’t supported by this version of Orca. To keep using it, install an older version of Orca.'
     case 'relay_terminals_live':
     case 'relay_terminals_unverifiable':
-      return 'Terminals started by an older version of Orca are still running on this host. Reconnect to continue once they have exited.'
+      return 'Terminals started by an older version of Orca are still running on this host, and they don’t stop on their own. Close them in that version of Orca or end them on the host, then reconnect.'
     case 'refused':
       return decision.detail ?? 'Orca couldn’t set up its server on this host.'
     case 'source_changed':

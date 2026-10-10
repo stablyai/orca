@@ -129,7 +129,7 @@ describe('SSH host server status line', () => {
         managedServer: { kind: 'relay', reason: 'relay_terminals_live', terminals }
       })?.text
     expect(live(1)).toBe(
-      '1 terminal started by an older version of Orca is still running on this host. Reconnect to continue once it has exited.'
+      '1 terminal started by an older version of Orca is still running on this host, and it doesn’t stop on its own. Close it in that version of Orca or end it on the host, then reconnect.'
     )
     expect(live(2)).toContain('2 terminals started by an older version of Orca')
     // Why: an absent count is unreported, never zero open terminals.

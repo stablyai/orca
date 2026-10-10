@@ -58,7 +58,6 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/ipc/repos/folder-workspace-attachment-handlers.test.ts',
   'src/main/ipc/ssh-host-partition-session-export.test.ts',
   'src/main/ipc/ssh-host-server-on-connect-wiring.test.ts',
-  'src/main/ipc/ssh-managed-server-move-conversion.test.ts',
   'src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.test.ts',
   'src/main/native-chat/agent-session-attachments/agent-session-attachment-sweep.test.ts',
   'src/main/native-chat/agent-session-wire/agent-session-history-byte-accounting.test.ts',

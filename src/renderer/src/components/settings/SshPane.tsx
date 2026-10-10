@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { Plus, Upload } from 'lucide-react'
 import type { SshTarget } from '../../../../shared/ssh-types'
 import { useAppStore } from '@/store'
-import { sshConnectFailureText } from './ssh-host-server-status-copy'
+import { sshTargetConnectFailureText } from '@/ssh/ssh-connect-failure-text'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../ui/button'
 import { SshTargetCard } from './SshTargetCard'
@@ -197,12 +197,10 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
       recordFeatureInteraction('ssh')
     } catch (err) {
       toast.error(
-        sshConnectFailureText(
-          targets.find((target) => target.id === targetId),
-          useAppStore.getState().sshConnectionStates.get(targetId),
-          err instanceof Error
-            ? err.message
-            : translate('auto.components.settings.SshPane.e95d5ae10e', 'Connection failed')
+        sshTargetConnectFailureText(
+          targetId,
+          err,
+          translate('auto.components.settings.SshPane.e95d5ae10e', 'Connection failed')
         )
       )
     }

@@ -1813,8 +1813,8 @@
           }
         },
         "sshHostServer": {
-          "olderTerminals_one": "{{count}} terminal started by an older version of Orca is still running on this host. Reconnect to continue once it has exited.",
-          "olderTerminals_other": "{{count}} terminals started by an older version of Orca are still running on this host. Reconnect to continue once they have exited."
+          "olderTerminals_one": "{{count}} terminal started by an older version of Orca is still running on this host, and it doesn’t stop on its own. Close it in that version of Orca or end it on the host, then reconnect.",
+          "olderTerminals_other": "{{count}} terminals started by an older version of Orca are still running on this host, and they don’t stop on their own. Close them in that version of Orca or end them on the host, then reconnect."
         },
         "terminal": {
           "windows": {

@@ -12387,11 +12387,11 @@
           "unsupportedUnknown": "이 버전의 Orca는 이 호스트를 지원하지 않습니다. 계속 사용하려면 이전 버전의 Orca를 설치하세요.",
           "tunnelUnsupported": "이 버전의 Orca는 이 호스트를 지원하지 않습니다. 호스트의 SSH 서버가 포트 포워딩을 허용하지 않으며, SSH 세션을 통해서도 Orca 서버에 연결할 수 없었습니다. 계속 사용하려면 이전 버전의 Orca를 설치하세요.",
           "setupRetry": "Orca가 이 호스트에서 서버를 시작하지 못했습니다. 다시 연결해 보세요.",
-          "olderTerminalsUncounted": "이전 버전의 Orca에서 시작한 터미널이 이 호스트에서 아직 실행 중입니다. 종료된 후 다시 연결하여 계속하세요.",
+          "olderTerminalsUncounted": "이전 버전의 Orca에서 시작한 터미널이 이 호스트에서 아직 실행 중이며 저절로 종료되지 않습니다. 해당 버전의 Orca에서 닫거나 호스트에서 종료한 후 다시 연결하세요.",
           "olderTerminalsUnverifiable": "이전 버전의 Orca에서 시작한 터미널이 종료되었는지 확인할 수 없습니다. 다시 연결하여 다시 시도하세요.",
-          "olderTerminals_one": "이전 버전의 Orca에서 시작한 터미널 {{count}}개가 이 호스트에서 아직 실행 중입니다. 종료된 후 다시 연결하여 계속하세요.",
-          "olderTerminals_other": "이전 버전의 Orca에서 시작한 터미널 {{count}}개가 이 호스트에서 아직 실행 중입니다. 종료된 후 다시 연결하여 계속하세요.",
-          "olderTerminals": "이전 버전의 Orca에서 시작한 터미널 {{count}}개가 이 호스트에서 아직 실행 중입니다. 종료된 후 다시 연결하여 계속하세요."
+          "olderTerminals_one": "이전 버전의 Orca에서 시작한 터미널 {{count}}개가 이 호스트에서 아직 실행 중이며 저절로 종료되지 않습니다. 해당 버전의 Orca에서 닫거나 호스트에서 종료한 후 다시 연결하세요.",
+          "olderTerminals_other": "이전 버전의 Orca에서 시작한 터미널 {{count}}개가 이 호스트에서 아직 실행 중이며 저절로 종료되지 않습니다. 해당 버전의 Orca에서 닫거나 호스트에서 종료한 후 다시 연결하세요.",
+          "olderTerminals": "이전 버전의 Orca에서 시작한 터미널 {{count}}개가 이 호스트에서 아직 실행 중이며 저절로 종료되지 않습니다. 해당 버전의 Orca에서 닫거나 호스트에서 종료한 후 다시 연결하세요."
         },
         "deltaMove": {
           "action": "새 프로젝트 이동…",

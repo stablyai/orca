@@ -231,12 +231,12 @@ function unservedLine(
         text: status.terminals
           ? translate(
               'auto.components.settings.sshHostServer.olderTerminals',
-              '{{count}} terminals started by an older version of Orca are still running on this host. Reconnect to continue once they have exited.',
+              '{{count}} terminals started by an older version of Orca are still running on this host, and they don’t stop on their own. Close them in that version of Orca or end them on the host, then reconnect.',
               { count: status.terminals }
             )
           : translate(
               'auto.components.settings.sshHostServer.olderTerminalsUncounted',
-              'Terminals started by an older version of Orca are still running on this host. Reconnect to continue once they have exited.'
+              'Terminals started by an older version of Orca are still running on this host, and they don’t stop on their own. Close them in that version of Orca or end them on the host, then reconnect.'
             )
       }
     case 'relay_terminals_unverifiable':

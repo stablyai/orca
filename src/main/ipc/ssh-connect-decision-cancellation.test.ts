@@ -77,6 +77,39 @@ describe('a connect cancelled during its server decision', () => {
     expect(mockConnectionManager.disconnectConnection).toHaveBeenCalledWith('ssh-1', opened)
   })
 
+  it('leaves a transport a completed replacement connect adopted from the stale decision', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    const opened = { id: 'shared-transport' }
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.getConnection.mockReturnValue(undefined)
+    mockConnectionManager.disconnect.mockResolvedValue(undefined)
+    let resumeStale = (): void => {}
+    let staleDecided = false
+    vi.mocked(decideHostServer).mockImplementationOnce(async () => {
+      await Promise.resolve()
+      staleDecided = true
+      recordSshConnectionOpened(asTransport(opened))
+      mockConnectionManager.getConnection.mockReturnValue(opened)
+      await new Promise<void>((resolve) => (resumeStale = resolve))
+      return { route: 'relay', reason: 'orcad_unavailable', detail: 'unsupported_host' }
+    })
+    const stale = Promise.resolve(handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' }))
+    await vi.waitFor(() => expect(staleDecided).toBe(true))
+    await handlers.get('ssh:disconnect')!(null, { targetId: 'ssh-1' })
+    // The managed replacement adopts the pooled transport and completes.
+    await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
+    mockConnectionManager.disconnectConnection.mockClear()
+    resumeStale()
+    await expect(stale).rejects.toThrow('SSH connection attempt was cancelled')
+    expect(mockConnectionManager.disconnectConnection).not.toHaveBeenCalledWith('ssh-1', opened)
+  })
+
   it('closes the transport a still-current decision dialed when that decision fails', async () => {
     const target: SshTarget = {
       id: 'ssh-1',

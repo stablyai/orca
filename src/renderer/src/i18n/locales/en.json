@@ -12590,11 +12590,11 @@
           "unsupportedUnknown": "This host isn’t supported by this version of Orca. To keep using it, install an older version of Orca.",
           "tunnelUnsupported": "This host isn’t supported by this version of Orca: its SSH server doesn’t allow port forwarding, and Orca couldn’t reach its server through the SSH session either. To keep using it, install an older version of Orca.",
           "setupRetry": "Orca couldn’t start its server on this host. Try connecting again.",
-          "olderTerminalsUncounted": "Terminals started by an older version of Orca are still running on this host. Reconnect to continue once they have exited.",
+          "olderTerminalsUncounted": "Terminals started by an older version of Orca are still running on this host, and they don’t stop on their own. Close them in that version of Orca or end them on the host, then reconnect.",
           "olderTerminalsUnverifiable": "Orca couldn’t confirm that terminals started by an older version of Orca have exited. Reconnect to try again.",
-          "olderTerminals_one": "{{count}} terminal started by an older version of Orca is still running on this host. Reconnect to continue once it has exited.",
-          "olderTerminals_other": "{{count}} terminals started by an older version of Orca are still running on this host. Reconnect to continue once they have exited.",
-          "olderTerminals": "{{count}} terminals started by an older version of Orca are still running on this host. Reconnect to continue once they have exited."
+          "olderTerminals_one": "{{count}} terminal started by an older version of Orca is still running on this host, and it doesn’t stop on its own. Close it in that version of Orca or end it on the host, then reconnect.",
+          "olderTerminals_other": "{{count}} terminals started by an older version of Orca are still running on this host, and they don’t stop on their own. Close them in that version of Orca or end them on the host, then reconnect.",
+          "olderTerminals": "{{count}} terminals started by an older version of Orca are still running on this host, and they don’t stop on their own. Close them in that version of Orca or end them on the host, then reconnect."
         },
         "ZcodePlanAccountsSection": {
           "site": {
