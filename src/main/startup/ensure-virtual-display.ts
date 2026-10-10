@@ -65,11 +65,26 @@ function probeDisplayLock(displayNumber: number): DisplayLockProbe {
 }
 
 /**
+ * Checks whether an X display lock file exists for a dead or corrupt process.
+ * If the process holding the lock is dead (ESRCH) or the lock file is malformed,
+ * the lock is stale and should be cleared before Xvfb spawn.
+ *
+ * @param displayNumber - The X11 display number (e.g. 99 for :99).
+ * @returns True if the lock file exists for a dead or corrupt process; otherwise false.
+ */
+export function isStaleDisplayLock(displayNumber: number): boolean {
+  return probeDisplayLock(displayNumber) === 'dead'
+}
+
+/**
  * Liveness for a display Orca did not create. An X server writes its lock beside the socket and
  * both survive a crash (verified against Xvfb under SIGKILL), so a socket with no lock was never
  * left by a crashed server — it is an endpoint published from elsewhere: a container bind-mounting
  * only /tmp/.X11-unix, WSLg, or a foreign PID namespace. We cannot judge those, and refusing them
  * blocks startup on displays that work.
+ *
+ * @param displayNumber - The X11 display number (e.g. 99 for :99).
+ * @returns True if the foreign display server is not dead; otherwise false.
  */
 function isForeignDisplayServerAlive(displayNumber: number): boolean {
   return probeDisplayLock(displayNumber) !== 'dead'
@@ -80,12 +95,25 @@ function isForeignDisplayServerAlive(displayNumber: number): boolean {
  * unlinks the lock before the socket, so a lockless socket here is Orca's own half-finished
  * teardown, not a foreign endpoint. Adopting it would resurrect the orphan-socket bug and stop the
  * cleanup below from self-healing.
+ *
+ * @param displayNumber - The X11 display number (e.g. 99 for :99).
+ * @returns True if Orca's managed display server process is actively alive; otherwise false.
  */
 function isManagedDisplayServerAlive(displayNumber: number): boolean {
   return probeDisplayLock(displayNumber) === 'alive'
 }
 
-function removeStaleDisplayArtifacts(displayNumber: number): void {
+/**
+ * Removes stale X11 lock and socket artifacts for a given display number.
+ * Re-verifies that the display server remains dead before removing files
+ * to avoid clobbering an active server spawned by a concurrent launch.
+ *
+ * @param displayNumber - The X11 display number (e.g. 99 for :99).
+ */
+export function removeStaleDisplayArtifacts(displayNumber: number): void {
+  if (probeDisplayLock(displayNumber) === 'alive') {
+    return
+  }
   for (const path of [xDisplayLockPath(displayNumber), xvfbSocketPath(displayNumber)]) {
     try {
       rmSync(path, { force: true })
@@ -117,7 +145,12 @@ function waitForDisplayReady(displayNumber: number, deadline: number): boolean {
   return isReady()
 }
 
-// Validate display syntax and local sockets before Chromium reaches Ozone initialization.
+/**
+ * Validate display syntax and local sockets before Chromium reaches Ozone initialization.
+ *
+ * @param env - The process environment to check (defaults to process.env).
+ * @returns True if a usable Linux display is available or if on non-Linux; otherwise false.
+ */
 export function hasUsableLinuxDisplay(env: NodeJS.ProcessEnv = process.env): boolean {
   if (process.platform !== 'linux') {
     return true
@@ -221,6 +254,9 @@ function hasUsableWaylandDisplay(env: NodeJS.ProcessEnv): boolean {
  * Ensure a usable X display for headless Linux serve. Returns true when a
  * display is available (pre-existing or freshly started), false when browser
  * panes cannot be supported on this host. Safe to call on any platform.
+ *
+ * @param options - Configuration options specifying whether serve mode is active.
+ * @returns True when a display is available; false when browser panes cannot be supported.
  */
 export function ensureVirtualDisplayForHeadlessServe(options: { isServeMode: boolean }): boolean {
   if (!options.isServeMode || process.platform !== 'linux') {
@@ -254,6 +290,14 @@ export function ensureVirtualDisplayForHeadlessServe(options: { isServeMode: boo
     }
     // Why: stale socket/lock — clean them up so Xvfb can rebind the display
     // below instead of refusing to start on an "in use" number.
+    removeStaleDisplayArtifacts(VIRTUAL_DISPLAY_NUMBER)
+  } else if (isStaleDisplayLock(VIRTUAL_DISPLAY_NUMBER)) {
+    // Orphan lock file with no socket, left by unclean exit or dead PID.
+    // Unconditionally remove stale lock artifacts before Xvfb attempts to bind :99.
+    console.warn(
+      `[serve] Detected stale display lock at ${xDisplayLockPath(VIRTUAL_DISPLAY_NUMBER)} ` +
+        'without an active server. Cleaning up prior to starting Xvfb.'
+    )
     removeStaleDisplayArtifacts(VIRTUAL_DISPLAY_NUMBER)
   }
 
@@ -302,6 +346,9 @@ export function ensureVirtualDisplayForHeadlessServe(options: { isServeMode: boo
   return true
 }
 
+/**
+ * Stops any virtual X display process (Xvfb) spawned by ensureVirtualDisplayForHeadlessServe.
+ */
 export function stopVirtualDisplay(): void {
   if (xvfbProcess && !xvfbProcess.killed) {
     try {
