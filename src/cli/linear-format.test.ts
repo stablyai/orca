@@ -145,6 +145,36 @@ describe('linear-format', () => {
     expect(formatLinearIssue(result)).toContain('Due: 2026-06-30')
   })
 
+  it('shows the cycle number, its name when present, or none', () => {
+    const issue = {
+      id: 'issue-1',
+      identifier: 'ENG-124',
+      title: 'Show the cycle',
+      url: 'https://linear.app/acme/issue/ENG-124',
+      state: { name: 'Todo' },
+      assignee: null,
+      project: null,
+      labels: [],
+      priority: 0
+    }
+    const result = (cycle: unknown) =>
+      ({
+        issue: { ...issue, cycle },
+        meta: { sections: {} }
+      }) as unknown as LinearIssueContextResult
+
+    expect(formatLinearIssue(result({ id: 'cycle-20', name: null, number: 20 }))).toContain(
+      'Cycle: 20'
+    )
+    expect(
+      formatLinearIssue(result({ id: 'cycle-20', name: 'Launch week', number: 20 }))
+    ).toContain('Cycle: 20 (Launch week)')
+    expect(formatLinearIssue(result({ id: 'cycle-21', name: 'Named only' }))).toContain(
+      'Cycle: Named only'
+    )
+    expect(formatLinearIssue(result(null))).toContain('Cycle: none')
+  })
+
   it('formats project rows with names, ids, teams, and workspace', () => {
     const result = {
       projects: [
