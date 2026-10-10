@@ -29,7 +29,7 @@ export function RichMarkdownEmojiMenu({
         lazyLoadEmojis
         onEmojiClick={insertEmoji}
         previewConfig={{ showPreview: false }}
-        searchPlaceHolder="Search emoji"
+        searchPlaceholder="Search emoji"
         skinTonesDisabled
         theme={Theme.AUTO}
         width={320}

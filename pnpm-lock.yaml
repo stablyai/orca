@@ -457,8 +457,8 @@ importers:
         specifier: ^5.0.0
         version: 5.0.0(@swc/core@1.15.46)(rolldown-vite@7.3.1(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@25.9.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))(supports-color@7.2.0)
       emoji-picker-react:
-        specifier: ^4.22.3
-        version: 4.22.3(react@19.2.8)
+        specifier: ^5.0.0
+        version: 5.0.0(react@19.2.8)
       emojibase-data:
         specifier: 17.0.0
         version: 17.0.0(emojibase@17.0.0)
@@ -628,9 +628,6 @@ importers:
         specifier: ^5.0.15
         version: 5.0.15(@types/react@19.2.18)(react@19.2.8)(use-sync-external-store@1.6.0(react@19.2.8))
     optionalDependencies:
-      '@orca/windows-registry':
-        specifier: workspace:*
-        version: link:native/windows-registry
       '@vscode/windows-process-tree':
         specifier: 0.8.0
         version: 0.8.0(patch_hash=9da74aa3d17243aa53dcdc95c9f06e97437e7fbccf098aeb017579e2d24cbac2)
@@ -649,12 +646,6 @@ importers:
       sherpa-onnx-win-x64:
         specifier: 1.12.37
         version: 1.12.37
-
-  native/windows-registry:
-    dependencies:
-      node-addon-api:
-        specifier: ^8.5.0
-        version: 8.9.2
 
   src/packages/process-host:
     devDependencies:
@@ -5025,9 +5016,9 @@ packages:
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
-  emoji-picker-react@4.22.3:
-    resolution: {integrity: sha512-jrAkkoN69l5lA2Xp6P5axqoK1YdHNS1+MKMlLxwltnnnaXrojUjZaolgI/U8vdx8vFWqG42yYqpLSR83f6pwiw==}
-    engines: {node: '>=10'}
+  emoji-picker-react@5.0.0:
+    resolution: {integrity: sha512-TiWM6Fbhi42SyfdVx20jJuqOOszY/sO/XyiBcTlIgMEkgN7LOxIk2pXJybfvC0qDD/ld9iT0feM3qg9tH1C/Pg==}
+    engines: {node: '>=18'}
     peerDependencies:
       react: '>=16.8'
 
@@ -6467,10 +6458,6 @@ packages:
 
   node-addon-api@7.1.1:
     resolution: {integrity: sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ==}
-
-  node-addon-api@8.9.2:
-    resolution: {integrity: sha512-VijLXbi3UACN69I0JVXJsX4tjACjNoQDgv2gTF6sx2wWEi8tkSg2eX8p5gSIFi8z2+DL3oHmY6OyKce38SDolg==}
-    engines: {node: ^18 || ^20 || >= 21}
 
   node-api-version@0.2.1:
     resolution: {integrity: sha512-2xP/IGGMmmSQpI1+O/k72jF/ykvZ89JeuKX3TLJAYPDVLUalrshrLHkeVcCCZqG/eEa635cr8IBYzgnDvM2O8Q==}
@@ -12121,7 +12108,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  emoji-picker-react@4.22.3(react@19.2.8):
+  emoji-picker-react@5.0.0(react@19.2.8):
     dependencies:
       react: 19.2.8
       shipstyles: 1.0.0
@@ -13977,8 +13964,6 @@ snapshots:
     optional: true
 
   node-addon-api@7.1.1: {}
-
-  node-addon-api@8.9.2: {}
 
   node-api-version@0.2.1:
     dependencies:
