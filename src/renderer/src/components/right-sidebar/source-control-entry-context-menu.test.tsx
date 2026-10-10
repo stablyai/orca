@@ -13,7 +13,7 @@ const storeState = vi.hoisted(
       openInApplications: OpenInApplication[]
       activeRuntimeEnvironmentId: string | null
     }
-    worktreesByRepo: Record<string, { id: string; repoId: string; hostId: 'local' }[]>
+    worktreesByRepo: Record<string, { id: string; repoId: string; hostId: string }[]>
   } => ({
     settings: { openInApplications: [], activeRuntimeEnvironmentId: null },
     worktreesByRepo: { 'repo-1': [{ id: 'worktree-1', repoId: 'repo-1', hostId: 'local' }] }
@@ -128,6 +128,9 @@ describe('SourceControlEntryContextMenu', () => {
     items.list = []
     storeState.settings.activeRuntimeEnvironmentId = null
     storeState.settings.openInApplications = []
+    storeState.worktreesByRepo = {
+      'repo-1': [{ id: 'worktree-1', repoId: 'repo-1', hostId: 'local' }]
+    }
     ownerRuntime.environmentId = null
     revealInFileManager.mockReset()
     openWorktreePath.mockReset()
@@ -190,10 +193,26 @@ describe('SourceControlEntryContextMenu', () => {
     expect(openWorktreePath).toHaveBeenCalledWith({
       target: 'external-editor',
       worktreePath: '/repo/src/example.ts',
-      connectionId: undefined,
+      connectionId: null,
       runtimeEnvironmentId: 'env-2',
+      ownerUnresolved: false,
       command: 'zed'
     })
+  })
+
+  it('routes a repo the catalog places on an SSH host there, even with no connection prop', () => {
+    storeState.worktreesByRepo = {
+      'repo-1': [{ id: 'worktree-1', repoId: 'repo-1', hostId: 'ssh:ssh-9' }]
+    }
+    storeState.settings.activeRuntimeEnvironmentId = 'env-1'
+    storeState.settings.openInApplications = [{ id: 'code', label: 'Code', command: 'code' }]
+
+    const revealItem = renderRevealItem()
+    expect(revealItem?.disabled).toBe(true)
+    items.list.find((item) => childrenText(item.children) === 'Code')?.onSelect?.()
+    expect(openWorktreePath).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionId: 'ssh-9', runtimeEnvironmentId: null })
+    )
   })
 
   it('disables reveal, with no reason, for a deleted file', () => {

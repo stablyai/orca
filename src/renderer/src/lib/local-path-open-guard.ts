@@ -38,6 +38,20 @@ export function getLocalPathOpenOwnerForRoute(route: {
   return connectionId ? toSshExecutionHostId(connectionId) : 'local'
 }
 
+/** The inverse of {@link getLocalPathOpenOwnerForRoute}, for callers that still take a route. */
+export function getRouteForLocalPathOpenOwner(owner: ExecutionHostId | 'unresolved'): {
+  connectionId: string | null
+  runtimeEnvironmentId: string | null
+  ownerUnresolved: boolean
+} {
+  const host = owner === 'unresolved' ? null : parseRoutableExecutionHostId(owner)
+  return {
+    connectionId: host?.kind === 'ssh' ? host.targetId : null,
+    runtimeEnvironmentId: host?.kind === 'runtime' ? host.environmentId : null,
+    ownerUnresolved: !host
+  }
+}
+
 export function showLocalPathOpenBlockedToast(): void {
   // Why: local OS reveal/open actions receive client filesystem paths. Remote
   // runtime and SSH paths belong to another machine, not this client.

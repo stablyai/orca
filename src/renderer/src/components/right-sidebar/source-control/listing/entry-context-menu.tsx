@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import { Copy, ExternalLink, Eye, FolderOpen } from 'lucide-react'
 import {
   ContextMenu,
@@ -19,7 +19,7 @@ import {
   getWorkspaceFileRevealOwner,
   revealInFileManager
 } from '@/lib/reveal-in-file-manager'
-import { isLocalPathOpenBlocked } from '@/lib/local-path-open-guard'
+import { getRouteForLocalPathOpenOwner, isLocalPathOpenBlocked } from '@/lib/local-path-open-guard'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
 import {
@@ -64,6 +64,7 @@ export function SourceControlEntryContextMenu({
     getWorkspaceFileRevealOwner(s, currentWorktreeId, { connectionId, runtimeEnvironmentId })
   )
   const revealBlocked = isLocalPathOpenBlocked(revealOwner)
+  const openInRoute = useMemo(() => getRouteForLocalPathOpenOwner(revealOwner), [revealOwner])
 
   const handleCopyPath = useCallback(() => {
     if (!absolutePath) {
@@ -100,12 +101,11 @@ export function SourceControlEntryContextMenu({
       void openWorktreePath({
         target: 'external-editor',
         worktreePath: absolutePath,
-        connectionId,
-        runtimeEnvironmentId,
+        ...openInRoute,
         command
       })
     },
-    [absolutePath, connectionId, runtimeEnvironmentId]
+    [absolutePath, openInRoute]
   )
 
   return (
@@ -141,8 +141,9 @@ export function SourceControlEntryContextMenu({
             {openInApplications.map((application) => {
               const availability = getOpenInEntryAvailability(
                 { ...application, target: 'external-editor' },
-                connectionId,
-                runtimeEnvironmentId
+                openInRoute.connectionId,
+                openInRoute.runtimeEnvironmentId,
+                openInRoute.ownerUnresolved
               )
               return (
                 <ContextMenuItem
