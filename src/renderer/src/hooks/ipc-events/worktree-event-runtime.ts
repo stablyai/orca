@@ -7,6 +7,10 @@ import {
   createWorktreeChangeRefreshQueue,
   type WorktreeChangeRefreshQueue
 } from '../worktree-change-refresh-queue'
+import {
+  createWorktreeEventLineageRefresh,
+  type WorktreeEventLineageTarget
+} from './worktree-event-lineage-refresh'
 
 const WORKTREE_RENAME_PURGE_GRACE_MS = 20_000
 const recentlyRenamedWorktreeIdExpiry = new Map<string, number>()
@@ -39,6 +43,9 @@ export function createWorktreeEventRuntime(
   unsubs: (() => void)[],
   isRuntimeEnvironmentActive: () => boolean
 ): WorktreeEventRuntime {
+  const refreshLineageAfterListing = createWorktreeEventLineageRefresh((target) =>
+    useAppStore.getState().fetchWorktreeLineage(target)
+  )
   const handleWorktreesChanged = async (
     repoId: string,
     renamed?: { oldWorktreeId: string; newWorktreeId: string },
@@ -61,26 +68,24 @@ export function createWorktreeEventRuntime(
     const before =
       getAuthoritativeDetectedWorktreeIds(state, repoId) ??
       getVisibleWorktreeIdsForRepo(state, repoId)
-    await state.fetchWorktrees(
-      repoId,
-      options?.forceLocalOwner
-        ? { forceLocalOwner: true }
-        : options?.executionHostId
-          ? {
-              executionHostId: options.executionHostId,
-              suppressRemoteLineageRefresh: true
-            }
-          : undefined
-    )
-    await useAppStore
-      .getState()
-      .fetchWorktreeLineage(
+    const lineageTarget: WorktreeEventLineageTarget = options?.forceLocalOwner
+      ? { forceLocalOwner: true }
+      : options?.executionHostId
+        ? { executionHostId: options.executionHostId }
+        : undefined
+    await refreshLineageAfterListing(lineageTarget, () =>
+      state.fetchWorktrees(
+        repoId,
         options?.forceLocalOwner
           ? { forceLocalOwner: true }
           : options?.executionHostId
-            ? { executionHostId: options.executionHostId }
+            ? {
+                executionHostId: options.executionHostId,
+                suppressRemoteLineageRefresh: true
+              }
             : undefined
       )
+    )
     // Why: an id change unmounts the active pane; re-activate so the tab reconciles, else it vanishes until re-select.
     if (renamedWasActive && renamed) {
       useAppStore.getState().setActiveWorktree(renamed.newWorktreeId)

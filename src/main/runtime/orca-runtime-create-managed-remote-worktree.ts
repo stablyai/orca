@@ -179,7 +179,7 @@ export class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRuntimeWithC
       orderedIds,
       store: this.store,
       invalidateResolved: () => this.invalidateResolvedWorktreeCache(),
-      notifyChanged: (repoId) => this.notifyWorktreesChanged(repoId)
+      notifyChanged: (repoId) => this.notifyWorktreeSortOrderChanged(repoId)
     })
   }
 

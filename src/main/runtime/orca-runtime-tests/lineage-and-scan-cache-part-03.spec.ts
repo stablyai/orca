@@ -319,6 +319,45 @@ describe('OrcaRuntimeService', () => {
     expect(events).toEqual([{ type: 'worktreesChanged', repoId: TEST_REPO_ID }])
   })
 
+  it('worktree scan cache: an order-only save keeps the git scan and lists the new order', async () => {
+    const firstPath = '/tmp/first'
+    const secondPath = '/tmp/second'
+    const firstId = `${TEST_REPO_ID}::${firstPath}`
+    const secondId = `${TEST_REPO_ID}::${secondPath}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [firstId]: makeWorktreeMeta({ sortOrder: 200 }),
+      [secondId]: makeWorktreeMeta({ sortOrder: 100 })
+    }
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (id: string) => metaById[id],
+      setWorktreeMeta: (id: string, meta: Partial<WorktreeMeta>) => {
+        metaById[id] = { ...metaById[id], ...meta }
+        return metaById[id]
+      }
+    })
+    vi.mocked(listWorktrees).mockClear()
+    vi.mocked(listWorktrees).mockResolvedValueOnce([
+      makeWorktreeInfo(firstPath),
+      makeWorktreeInfo(secondPath)
+    ])
+    await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+    const events: { type: string; repoId?: string }[] = []
+    const unsubscribe = runtime.onClientEvent((event) => events.push(event))
+
+    expect(runtime.persistManagedWorktreeSortOrder([secondId, firstId])).toEqual({ updated: 2 })
+    unsubscribe()
+    const listed = await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+
+    // Why: mobile re-ranks on this event, so an order-only save must still publish it.
+    expect(events).toEqual([{ type: 'worktreesChanged', repoId: TEST_REPO_ID }])
+    expect(listWorktrees).toHaveBeenCalledTimes(1)
+    const sortOrderOf = (id: string) =>
+      listed.worktrees.find((worktree) => worktree.id === id)?.sortOrder ?? Number.NaN
+    expect(sortOrderOf(secondId)).toBeGreaterThan(sortOrderOf(firstId))
+  })
+
   it('worktree scan cache: folder metadata invalidation preserves raw scans', async () => {
     vi.mocked(listWorktrees).mockClear()
     const runtime = createRuntime()

@@ -275,6 +275,13 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
     this.emitClientEvent({ type: 'worktreesChanged', repoId })
   }
 
+  /** An order-only save changes worktree metadata, never Git, so the `git worktree list` scan
+   *  caches stay valid; the caller invalidates the resolved rows. Mobile still re-ranks on the event. */
+  protected notifyWorktreeSortOrderChanged(repoId: string): void {
+    this.notifier?.worktreesChanged(repoId)
+    this.emitClientEvent({ type: 'worktreesChanged', repoId })
+  }
+
   /** Detail-level worktree lifecycle tap (plugin event bus). The coarse
    *  worktreesChanged client event carries only repoId, which is not enough
    *  for subscribers that need the affected worktree's identity.
