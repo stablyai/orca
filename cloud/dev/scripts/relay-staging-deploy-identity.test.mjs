@@ -224,38 +224,13 @@ test('the identity is exposed through its own outputs', () => {
   assert.match(outputs, /output "github_staging_relay_deploy_service_account"/)
 })
 
-// Why: the deploy script refuses partial argument groups (rehome identity, durable rehome check),
-// so a staging workflow edit that passes one flag of a group fails every staging deploy at start.
-test('the staging director deploy passes argument groups the deploy script accepts', async () => {
-  const { parseArguments } = await import('./deploy-relay-blue-green.mjs')
+// Why: relay-deploy-workflow-argv.test.mjs proves the argv parses; this pins the identity it names.
+test('the staging director deploy runs as relay-dir with its rehome identity', () => {
   const source = workflow('deploy-relay-staging.yml')
   const start = source.indexOf('node dev/scripts/deploy-relay-blue-green.mjs')
   const block = source.slice(start, source.indexOf('\n\n', start))
-  const flags = [...block.matchAll(/^\s+(--[a-z-]+) /gm)].map((match) => match[1])
-  const account = (name) => `orca-cloud-staging-${name}@onorca-cloud-staging.iam.gserviceaccount.com`
-  const sample = {
-    '--project': 'onorca-cloud-staging',
-    '--region': 'us-central1',
-    '--service': 'orca-cloud-relay-staging',
-    '--image': `us-central1-docker.pkg.dev/onorca-cloud-staging/orca-cloud/relay@sha256:${'a'.repeat(64)}`,
-    '--role': 'director',
-    '--max-instances': '2',
-    '--capacity-service-account': account('gha-cap'),
-    '--deploy-service-account': account('gha-relay'),
-    '--asia-proof-service-account': account('gha-aproof'),
-    '--regional-placement-secret-version': '1',
-    '--runtime-service-account': account('relay-dir'),
-    '--rehome-director-service-account': account('relay-dir'),
-    '--rehome-audience': 'https://relay-staging.onorca.dev/v1/admin/host-drain',
-    '--rehome-control-origin': 'https://relay-staging.onorca.dev',
-    '--expected-rehome-generation': '0',
-    '--admin-audience': 'https://relay-staging.onorca.dev/v1/admin/drain',
-    '--reserve-placement': 'preserve',
-    '--release-id': '1'
-  }
-  for (const flag of flags) assert.ok(flag in sample, `${flag} has no sample value`)
-  assert.doesNotThrow(() => parseArguments(flags.flatMap((flag) => [flag, sample[flag]])))
-  assert.match(block, /--deploy-service-account "\$\{DEPLOY_SERVICE_ACCOUNT\}"/)
   assert.match(block, /--runtime-service-account "\$\{DIRECTOR_RUNTIME_SERVICE_ACCOUNT\}"/)
   assert.match(block, /--rehome-director-service-account "\$\{DIRECTOR_RUNTIME_SERVICE_ACCOUNT\}"/)
+  assert.match(source, /DIRECTOR_RUNTIME_SERVICE_ACCOUNT: orca-cloud-staging-relay-dir@/)
+  assert.match(block, /--deploy-service-account "\$\{DEPLOY_SERVICE_ACCOUNT\}"/)
 })
