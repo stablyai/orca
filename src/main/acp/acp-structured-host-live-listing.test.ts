@@ -22,7 +22,7 @@ describe('a live Grok listing', () => {
     }
     const { host } = await openAttachedHostRig({}, undefined, modelCatalog)
 
-    await host.readOptions(SESSION, { readsWithoutModel: true })
+    await host.readOptions(SESSION)
 
     expect(modelCatalog.recordLiveListing).toHaveBeenCalledTimes(1)
     const [sessionId, listing] = vi.mocked(modelCatalog.recordLiveListing).mock.calls[0]!

@@ -28,6 +28,11 @@ type RestingOptions = Pick<AgentSessionOptionsResult, 'models' | 'fastModeSuppor
 /** What the asking client takes: whether it reads an answer that names no model. */
 export type StructuredAgentSessionOptionsReader = { readsWithoutModel: boolean }
 
+/** A same-build caller in this process reads as the RPC gate treats one: it takes no model. */
+export const IN_PROCESS_OPTIONS_READER: StructuredAgentSessionOptionsReader = {
+  readsWithoutModel: true
+}
+
 /** Initial explicit picks follow the same rules as a pick made while the chat is at rest. */
 export function structuredAgentSessionOptionOverridesRefusal(
   agents: Pick<StructuredAgentRegistry, 'definition'>,

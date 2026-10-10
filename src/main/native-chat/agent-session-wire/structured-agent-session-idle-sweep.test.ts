@@ -86,9 +86,7 @@ describe('the idle sweep', () => {
     expect(reader.events.some((event) => event.type === 'end')).toBe(false)
 
     // Everything a chat at rest answers still answers, and the next send starts a new agent.
-    await expect(rig.host.readOptions(SESSION, { readsWithoutModel: true })).resolves.toMatchObject(
-      { current: {} }
-    )
+    await expect(rig.host.readOptions(SESSION)).resolves.toMatchObject({ current: {} })
     const sent = await rig.host.send(CALLER, restTestSend('carry on', fence()))
     expect(sent.ok).toBe(true)
     await vi.waitFor(() => expect(rig.adapter.acquire).toHaveBeenCalledTimes(2))

@@ -82,7 +82,7 @@ it('keeps the offer through every way of looking at the chat (R-02)', async () =
   const { host, root, acquire } = await offered()
   const unsubscribe = await host.subscribe({ id: 'pane', sessionId: SESSION, emit: vi.fn() })
   await host.history({ sessionId: SESSION, direction: 'tail' })
-  await host.readOptions(SESSION, { readsWithoutModel: true })
+  await host.readOptions(SESSION)
   host.readCommands(SESSION)
   await host.handoffStatus(SESSION)
   await host.revealSession(SESSION)

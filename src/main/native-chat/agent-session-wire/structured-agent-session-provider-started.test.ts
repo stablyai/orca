@@ -217,7 +217,7 @@ describe('a publish-first Claude create whose init is slow', () => {
     await claudeStartupSettled(adapter, SESSION)
     await Promise.all(lifecycle)
     expect(store.getRecord(SESSION)?.options?.model).toBe('claude-opus-9')
-    await host.readOptions(SESSION, { readsWithoutModel: true })
+    await host.readOptions(SESSION)
     expect(savedListings.at(-1)).toEqual({
       sessionId: SESSION,
       listing: expect.objectContaining({
