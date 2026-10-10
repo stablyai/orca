@@ -39,12 +39,12 @@ describe('agentSession.agents', () => {
         ])
       )
     ).toEqual({
-      pi: [false, false],
+      pi: [false, true],
       codex: [true, true],
       claude: [true, true],
-      grok: [false, false],
-      opencode: [false, false],
-      omp: [false, false]
+      grok: [false, true],
+      opencode: [false, true],
+      omp: [false, true]
     })
   })
 

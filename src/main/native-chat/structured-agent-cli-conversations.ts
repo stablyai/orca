@@ -4,6 +4,7 @@
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import { sessionIdFromFileName } from '../ai-vault/session-scanner-accumulator'
 
 /** What the runtime hands an importer: the settings that name extra account homes. */
 export type StructuredAgentTranscriptImportSettings = {
@@ -35,6 +36,9 @@ export type StructuredAgentSessionHistory = {
   rowSessionId: (link: AgentSessionProviderHandleLink) => string
   /** The resume the arguments after the binary ask for; null when they resume nothing. */
   parseResumeArgs: (args: readonly string[]) => StructuredAgentResumeInvocation | null
+  /** Whether a resume target names the conversation listed under `rowSessionId`; absent, only
+   *  that exact id does. */
+  resumeTargetMatches?: (target: string, rowSessionId: string) => boolean
 }
 
 /** Required on every registration, as `modelCatalog` is: an agent without one says `null`. An
@@ -76,4 +80,49 @@ export function resumeInvocationAfterMarker(
   }
   const candidate = args[markerIndex + 1]
   return { target: candidate && !candidate.startsWith('-') ? candidate : null }
+}
+
+const SHELL_COMMAND_SEPARATORS = new Set(['&&', '||', ';', '|', '&'])
+
+/** The arguments that are this command's own: they stop at a shell operator, so `cd ~/pi && bash
+ *  -c x` is no `pi -c`. */
+export function ownCommandArgs(args: readonly string[]): readonly string[] {
+  const end = args.findIndex((token) => SHELL_COMMAND_SEPARATORS.has(token))
+  return end === -1 ? args : args.slice(0, end)
+}
+
+/** Whether the command's own options include one of `flags`; after `--` a flag is prompt text. */
+export function ownOptionsInclude(args: readonly string[], flags: readonly string[]): boolean {
+  const own = ownCommandArgs(args)
+  const terminator = own.indexOf('--')
+  return (terminator === -1 ? own : own.slice(0, terminator)).some((token) =>
+    flags.includes(token.toLowerCase())
+  )
+}
+
+/** The resume a command's own options ask for: a target-less flag may pick any conversation, a
+ *  marker resumes its value (`--marker=value` too). */
+export function resumeInvocationFromOptions(
+  args: readonly string[],
+  options: { targetless: readonly string[]; markers: readonly string[] }
+): StructuredAgentResumeInvocation | null {
+  const own = ownCommandArgs(args)
+  if (own.some((token) => options.targetless.includes(token.toLowerCase()))) {
+    return { target: null }
+  }
+  const inline = own.find((token) =>
+    options.markers.some((marker) => token.toLowerCase().startsWith(`${marker}=`))
+  )
+  if (inline !== undefined) {
+    const target = inline.slice(inline.indexOf('=') + 1)
+    return { target: target.length > 0 ? target : null }
+  }
+  return resumeInvocationAfterMarker(own, options.markers)
+}
+
+/** For a CLI that resumes a session file by its id, any prefix of it, or the file's path: the
+ *  same file-name id Session History lists the file under. */
+export function sessionFileResumeTargetMatches(target: string, rowSessionId: string): boolean {
+  const id = rowSessionId.toLowerCase()
+  return id.startsWith(target.toLowerCase()) || sessionIdFromFileName(target).toLowerCase() === id
 }

@@ -11,7 +11,8 @@ import { listStructuredSessionHistoryOwnership } from '../runtime/structured-age
 import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
 import {
   isSessionHistoryBinary,
-  type StructuredAgentResumeInvocation
+  type StructuredAgentResumeInvocation,
+  type StructuredAgentSessionHistory
 } from '../native-chat/structured-agent-cli-conversations'
 import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from '../runtime/structured-agent-runtime-registrations'
 
@@ -123,7 +124,8 @@ export async function assertLegacyAiVaultResumeCommandAllowed(
   command: string,
   ensureHost: () => Promise<void>
 ): Promise<void> {
-  if (!isPotentialStructuredResumeCommand(command)) {
+  const invocations = parseResumeInvocations(command)
+  if (invocations.length === 0) {
     return
   }
   // A terminal command is not a chat: with chats refused here there is no ownership to check.
@@ -133,14 +135,10 @@ export async function assertLegacyAiVaultResumeCommandAllowed(
     return
   }
   for (const ownership of listOwnership()) {
-    if (isResumeCommandFor(command, ownership)) {
+    if (invocations.some((invocation) => resumesOwnedSession(invocation, ownership))) {
       refuseLegacyWriter(ownership)
     }
   }
-}
-
-function isPotentialStructuredResumeCommand(command: string): boolean {
-  return parseResumeInvocation(command) !== null
 }
 
 function findResumeOwnership(
@@ -183,39 +181,51 @@ function listOwnership(): StructuredProviderSessionOwnership[] {
   return host ? listStructuredSessionHistoryOwnership(host.deps.store.listRecords()) : []
 }
 
-function isResumeCommandFor(
-  command: string,
+function resumesOwnedSession(
+  invocation: ResumeInvocation,
   ownership: StructuredProviderSessionOwnership
 ): boolean {
-  const invocation = parseResumeInvocation(command)
-  if (!invocation || invocation.provider !== ownership.provider) {
+  if (invocation.provider !== ownership.provider) {
     return false
   }
   // A target-less resume (--last, --continue, or a bare --resume/-r) may pick
   // any provider session, so it cannot be admitted while one is structured.
-  // Only an explicit target that differs from this owned session is safe.
-  return invocation.target === null || invocation.target === ownership.providerSessionId
+  // Only an explicit target that names a different session is safe.
+  if (invocation.target === null) {
+    return true
+  }
+  const matches = invocation.history.resumeTargetMatches
+  return matches
+    ? matches(invocation.target, ownership.providerSessionId)
+    : invocation.target === ownership.providerSessionId
 }
 
-type ResumeInvocation = StructuredAgentResumeInvocation & { provider: StructuredAgentId }
+type ResumeInvocation = StructuredAgentResumeInvocation & {
+  provider: StructuredAgentId
+  history: StructuredAgentSessionHistory
+}
 
-function parseResumeInvocation(command: string): ResumeInvocation | null {
+function parseResumeInvocations(command: string): ResumeInvocation[] {
   // Keep this deliberately conservative: shell quoting is normalized only
   // enough to identify executable/flag tokens; an unrecognized shape is not
   // treated as proof that a different session is being resumed.
   const tokens = command.match(/"[^"\\]*(?:\\.[^"\\]*)*"|'[^']*'|[^\s]+/g) ?? []
   const normalized = tokens.map((token) => token.replace(/^['"]|['"]$/g, ''))
-  // The first token naming any owning agent's binary decides which agent the command runs.
-  for (const [index, token] of normalized.entries()) {
-    const registration = STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.find(
-      ({ sessionHistory }) => sessionHistory && isSessionHistoryBinary(sessionHistory, token)
-    )
-    if (registration?.sessionHistory) {
-      const invocation = registration.sessionHistory.parseResumeArgs(normalized.slice(index + 1))
-      return invocation && { ...invocation, provider: registration.definition.agent }
-    }
-  }
-  return null
+  // Each agent reads every token naming its own binary, so another agent's name earlier in the
+  // command (`cd ~/pi && claude -r x`, `claude --model pi`) never hides its resume.
+  return STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.flatMap(({ definition, sessionHistory }) =>
+    sessionHistory
+      ? normalized.flatMap((token, index) => {
+          if (!isSessionHistoryBinary(sessionHistory, token)) {
+            return []
+          }
+          const invocation = sessionHistory.parseResumeArgs(normalized.slice(index + 1))
+          return invocation
+            ? [{ ...invocation, provider: definition.agent, history: sessionHistory }]
+            : []
+        })
+      : []
+  )
 }
 
 function refuseLegacyWriter(ownership: StructuredProviderSessionOwnership): never {

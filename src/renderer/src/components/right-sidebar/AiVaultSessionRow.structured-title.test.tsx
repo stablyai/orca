@@ -191,6 +191,16 @@ describe('native chat names in Vault rows', () => {
     }
   )
 
+  it('names an OpenCode 2.x chat row (listed as opencode2) by its renamed tab', async () => {
+    useAppStore.setState({
+      unifiedTabsByWorktree: {
+        'folder-workspace': [{ ...tab('Manual name'), agentSessionAgent: 'opencode' }]
+      }
+    })
+    await renderRow({ ...row(), agent: 'opencode2' })
+    expect(screen.getByText('Manual name')).toBeTruthy()
+  })
+
   it('shows a search hit the name its host published', async () => {
     await renderRow(searchRow())
     publish('local', 'Explain the parser')

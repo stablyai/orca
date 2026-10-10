@@ -1,10 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  agentSessionLeaseFixture,
-  agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
-import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
-import type { StructuredProviderSessionOwnership } from '../native-chat/agent-session-wire/structured-provider-session-ownership'
+import { agentSessionLeaseFixture } from '../../shared/agent-session-record.test-fixture'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   assertLegacyAiVaultResumeAllowed,
@@ -14,11 +9,12 @@ import {
 } from './structured-session-ownership'
 import type { AiVaultSearchHit } from '../../shared/ai-vault-search-types'
 import {
-  claudeProviderHandle,
-  codexProviderHandle
-} from '../../shared/agent-session-provider-handle-encoding'
+  installOwnership,
+  listResult,
+  PROVIDER_SESSION
+} from './structured-session-ownership.test-support'
 
-const PROVIDER_SESSION = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
+const OTHER_SESSION = '019fd532-7c11-7a90-b6de-4e1a2c3d5f61'
 
 describe('structured AI Vault ownership', () => {
   afterEach(() => setStructuredAgentSessionHost(null))
@@ -214,15 +210,15 @@ describe('structured AI Vault ownership', () => {
 describe('Session History ownership read from the agent registration', () => {
   afterEach(() => setStructuredAgentSessionHost(null))
 
-  it('leaves the rows and resumes of an agent registered with no history ownership alone', async () => {
-    installOwnership({ provider: 'opencode' })
+  it('leaves a row and resume of an agent no chat lists under alone', async () => {
+    installOwnership({ provider: 'claude' })
     const result = listResult()
-    result.sessions = result.sessions.map((session) => ({ ...session, agent: 'opencode' }))
+    result.sessions = result.sessions.map((session) => ({ ...session, agent: 'gemini' }))
 
     expect(projectStructuredAiVaultSessions(result, false)).toBe(result)
     expect(() =>
       assertLegacyAiVaultResumeAllowed({
-        agent: 'opencode',
+        agent: 'gemini',
         sessionId: PROVIDER_SESSION,
         filePath: `/sessions/${PROVIDER_SESSION}.json`,
         codexHome: null,
@@ -231,9 +227,50 @@ describe('Session History ownership read from the agent registration', () => {
     ).not.toThrow()
     await expect(
       assertLegacyAiVaultResumeCommandAllowed(
-        `opencode --session ${PROVIDER_SESSION}`,
+        `gemini --resume ${PROVIDER_SESSION}`,
         async () => undefined
       )
+    ).resolves.toBeUndefined()
+  })
+
+  // Each agent reads its own binary's tokens: a folder or argument named after another agent no
+  // longer hides a Claude or Codex resume (on main the first claude/codex token decided).
+  it.each([
+    {
+      provider: 'claude' as const,
+      command: `cd /Users/me/src/codex && claude --resume ${PROVIDER_SESSION}`
+    },
+    {
+      provider: 'claude' as const,
+      command: `codex resume ${OTHER_SESSION} && claude -r ${PROVIDER_SESSION}`
+    },
+    {
+      provider: 'codex' as const,
+      command: `cd /Users/me/claude && codex resume ${PROVIDER_SESSION}`
+    },
+    { provider: 'claude' as const, command: `claude --model pi --resume ${PROVIDER_SESSION}` },
+    { provider: 'claude' as const, command: `echo pi && claude --resume ${PROVIDER_SESSION}` },
+    { provider: 'claude' as const, command: `cd /Users/me/grok && claude -c` },
+    { provider: 'codex' as const, command: `cd /Users/me/omp && codex resume --last` }
+  ])(
+    'refuses an owned resume after another agent is named: $command',
+    async ({ provider, command }) => {
+      installOwnership({ provider })
+
+      await expect(
+        assertLegacyAiVaultResumeCommandAllowed(command, async () => undefined)
+      ).rejects.toThrow('agent_session_conflict')
+    }
+  )
+
+  it.each([
+    `claude --model pi --resume ${OTHER_SESSION}`,
+    `cd /Users/me/opencode && claude --resume ${OTHER_SESSION}`
+  ])('allows a different Claude target with another agent named: %s', async (command) => {
+    installOwnership({ provider: 'claude' })
+
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(command, async () => undefined)
     ).resolves.toBeUndefined()
   })
 
@@ -248,67 +285,3 @@ describe('Session History ownership read from the agent registration', () => {
     ).rejects.toThrow('agent_session_conflict')
   })
 })
-
-function installOwnership(overrides: Partial<StructuredProviderSessionOwnership> = {}): void {
-  const ownership: StructuredProviderSessionOwnership = {
-    sessionId: 'session-alpha',
-    workspaceId: 'workspace-1',
-    provider: 'codex',
-    providerSessionId: PROVIDER_SESSION,
-    lease: agentSessionLeaseFixture(),
-    ...overrides
-  }
-  const record = agentSessionRecordFixture(ownership.lease)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the ownership read touches only `deps.store.listRecords`; the rest of the host is never reached.
-  setStructuredAgentSessionHost({
-    deps: {
-      store: {
-        listRecords: () => [
-          {
-            ...record,
-            sessionId: ownership.sessionId,
-            location: { ...record.location, workspaceId: ownership.workspaceId },
-            provider: ownership.provider,
-            providerHandleChain: [
-              {
-                ...record.providerHandleChain[0]!,
-                handle:
-                  ownership.provider === 'claude'
-                    ? claudeProviderHandle(ownership.providerSessionId, null)
-                    : codexProviderHandle(ownership.providerSessionId)
-              }
-            ],
-            lease: { ...ownership.lease, sessionId: ownership.sessionId },
-            ...(ownership.conversationName ? { conversationName: ownership.conversationName } : {})
-          }
-        ]
-      }
-    }
-  } as never)
-}
-
-function listResult(): AiVaultListResult {
-  const session: AiVaultSession = {
-    id: `local:codex:${PROVIDER_SESSION}`,
-    executionHostId: 'local',
-    agent: 'codex',
-    sessionId: PROVIDER_SESSION,
-    title: 'Owned',
-    cwd: '/repo',
-    branch: null,
-    model: null,
-    filePath: `/sessions/rollout-${PROVIDER_SESSION}.jsonl`,
-    codexHome: null,
-    createdAt: null,
-    updatedAt: null,
-    modifiedAt: '2026-08-11T00:00:00.000Z',
-    messageCount: 1,
-    totalTokens: 0,
-    previewMessages: [],
-    queuedMessageCount: 0,
-    subagentTranscriptCount: 0,
-    resumeCommand: `codex resume '${PROVIDER_SESSION}'`,
-    subagent: null
-  }
-  return { sessions: [session], issues: [], scannedAt: '2026-08-11T00:00:00.000Z' }
-}
