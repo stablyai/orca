@@ -10,6 +10,18 @@ index d02e003a439e410ddab597b2c036256c80db0395..3caff21b0d00bfbc6dea3f8470e812b8
        .selectionRange = [self _selectionRange],
        .eventCount = static_cast<int>(_mostRecentEventCount),
        .contentOffset = RCTPointFromCGPoint(_backedTextInputView.contentOffset),
+@@ -862,8 +863,11 @@ static NSSet<NSNumber *> *returnKeyTypesSet;
+                      }
+                    }];
+ 
++  // Orca: iOS 16+ keeps primaryLanguage off "dictation"; port Paper's recognizing flag so the final
++  // result's placeholder attachment isn't overwritten, which made iOS insert the transcript twice.
+   BOOL shouldFallbackToBareTextComparison =
+       [_backedTextInputView.textInputMode.primaryLanguage isEqualToString:@"dictation"] ||
++      _backedTextInputView.dictationRecognizing ||
+       [_backedTextInputView.textInputMode.primaryLanguage isEqualToString:@"ko-KR"] ||
+       _backedTextInputView.markedTextRange || _backedTextInputView.isSecureTextEntry || fontHasBeenUpdatedBySystem;
+ 
 diff --git a/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.cpp b/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.cpp
 index a9bc219f8bf729111e907423ca61b991fd712b46..60e9c6f54edb295295d6e48d1d554499106b7e57 100644
 --- a/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.cpp
