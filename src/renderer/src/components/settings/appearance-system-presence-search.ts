@@ -89,8 +89,9 @@ export function getSystemTrayEntries(
 ): SettingsSearchEntry[] {
   const show =
     options.showSystemTray ??
-    // Why: a Windows web client can report win32, but it has no local tray.
-    (getRendererAppPlatform() === 'win32' && !isWebClientLocation())
+    // Why: a browser can report a tray-capable host platform, but it has no
+    // local Electron tray to affect.
+    (getRendererAppPlatform() !== 'darwin' && !isWebClientLocation())
   return show ? getSystemTrayEntryCatalog() : []
 }
 

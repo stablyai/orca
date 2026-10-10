@@ -32,6 +32,22 @@ function ids(
   }).map((section) => section.id)
 }
 
+function appearanceSearchTitles(
+  args: { isMac?: boolean; isWindows?: boolean; isWebClient?: boolean; isDev?: boolean } = {}
+): string[] {
+  return (
+    buildSettingsNavigationMetadata({
+      isMac: args.isMac ?? false,
+      isWindows: args.isWindows ?? false,
+      isWebClient: args.isWebClient ?? false,
+      isDev: args.isDev ?? false,
+      repos: [repo]
+    })
+      .find((section) => section.id === 'appearance')
+      ?.searchEntries.map((entry) => entry.title) ?? []
+  )
+}
+
 describe('settings navigation metadata', () => {
   it.each([false, undefined])(
     'omits Chat navigation and search when the opt-in is %s',
@@ -253,6 +269,13 @@ describe('settings navigation metadata', () => {
 
     expect(shortcutTitles).toContain('New browser tab')
     expect(shortcutTitles).not.toContain('New mobile emulator tab')
+  })
+
+  it('includes system tray search on Linux and Windows desktop only', () => {
+    expect(appearanceSearchTitles()).toContain('Minimize to Tray on Close')
+    expect(appearanceSearchTitles({ isWindows: true })).toContain('Minimize to Tray on Close')
+    expect(appearanceSearchTitles({ isMac: true })).not.toContain('Minimize to Tray on Close')
+    expect(appearanceSearchTitles({ isWebClient: true })).not.toContain('Minimize to Tray on Close')
   })
 
   it('does not mark installable AI capabilities as beta in the sidebar metadata', () => {

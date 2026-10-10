@@ -59,11 +59,14 @@ export function installMainWindowCloseLifecycle(args: {
     }
   }
 
-  // Windows minimize-to-tray: hide instead of close when enabled; returns true when it hid so callers skip their close path.
+  // Why: tray minimize hides the window instead of closing when the setting is
+  // on, this isn't a real quit (Ctrl+Q / tray "Quit" set getIsQuitting), and
+  // the renderer is alive. Shared by BOTH the renderer-drawn X
+  // (window:request-close) and the native close event (Alt+F4).
   const hideToTrayIfEnabled = (): boolean => {
     const isRendererCrashed = mainWindow.webContents.isCrashed?.() ?? false
     if (
-      process.platform !== 'win32' ||
+      (process.platform !== 'win32' && process.platform !== 'linux') ||
       focus.isRendererProcessGone() ||
       isRendererCrashed ||
       opts?.getIsQuitting?.() === true ||

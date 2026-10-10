@@ -152,7 +152,8 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     // Why: brief delay lets the renderer paint "Restarting…" before the window tears down.
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
     setTimeout(() => {
-      // Why: app.exit(0) skips before-quit, so destroy the Windows tray manually to avoid a stale icon.
+      // Why: app.exit(0) skips before-quit/will-quit, so clean the tray
+      // explicitly before relaunching to avoid a stale notification-area icon.
       destroySystemTray()
       relaunchApp('renderer-request')
       app.exit(0)

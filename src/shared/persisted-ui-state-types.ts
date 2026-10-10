@@ -161,7 +161,7 @@ export type PersistedUIState = {
   setupGuideBrowserMilestoneLegacyComplete?: boolean
   /** User-dismissed browser import toolbar hint; import stays available from Settings > Browser and the overflow menu. */
   browserImportHintHidden?: boolean
-  /** Why: Windows-only. Set once on first hide to tray so the "Orca is still running" notice shows only once. */
+  /** Why: tray-supported desktop (Windows/Linux). Set once on first hide to tray so the "Orca is still running" notice shows only once. */
   trayMinimizeNoticeShown?: boolean
   /** Set by the OSC 52 default-on migration when it overrode a persisted `false`; the renderer shows one notice and clears it. */
   osc52ClipboardDefaultOnNoticePending?: boolean
