@@ -1185,7 +1185,8 @@ export class HostSessionRegistry {
           })) === 'valid')
     }
     if (reserveMode && !admittedFromMemory && this.reserveAdmission!.databaseShedding()) {
-      // Let in as a seated host, but at another epoch: the wedged pool would only time it out.
+      // Memory cannot admit it (e.g. seated here, but at another epoch), and the wedged pool
+      // would only time out its database check: shed it now, as the upgrade shed does.
       this.observer.recordAuth(false)
       socket.close(RELAY_CLOSE_CODE.LIMIT_EXCEEDED, 'relay temporarily unavailable')
       return

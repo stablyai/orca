@@ -635,13 +635,13 @@ export function createRelayServer(
         rejectUpgrade(socket, 503, 'Service Unavailable', HOST_HELLO_SHED_RETRY_AFTER_SECONDS)
         return
       }
-      // A booked host's unit was counted under the placement ceiling: the upgrade takes it
-      // over (so it counts once) and may rise to the hard cap.
-      if (reserveAdmission === 'booked') {
-        reserveBook?.handOff(identity.sub, identity.relayHostId)
-      }
+      // A booked host may rise to the hard cap. Once its upgrade holds a unit, the booking's
+      // goes back, so the host counts once; a refused upgrade leaves the booking whole.
       const controlUpgrade =
         connectionLedger?.tryReserveControl(isRebind || reserveAdmission === 'booked') ?? null
+      if (controlUpgrade && reserveAdmission === 'booked') {
+        reserveBook?.handOff(identity.sub, identity.relayHostId)
+      }
       if (
         (connectionLedger && !controlUpgrade) ||
         (!connectionLedger && totalConnections >= RELAY_ADMISSION_BUDGETS.cloudRunConcurrency)
