@@ -90,7 +90,8 @@ function setup(
     random: () => 0.25,
     log: () => undefined
   })
-  for (const cell of assignment.placementCells()) placer.observePoll(cell)
+  // Starts each cell's refill clock, as a director's first look does.
+  for (const cell of assignment.placementCells()) placer.hasBudget(cell)
   now.value += 1_000
   for (const response of options.feeds ?? cells.map((cell) => feed(cell.cellId))) {
     directory.apply(response.cellId, { ...response, full: response.full ?? [] }, now.value - 1, now.value - 1)
@@ -170,7 +171,7 @@ describe('reserve assignment on a director', () => {
   })
 
   it('after the reconcile demotes a seat behind its row, mints above the row and never answers that seat', async () => {
-    const { assignment, directory, reserved, now, placer } = setup({ feeds: [feed('c1', { full: [seated(7)] }), feed('c2')] })
+    const { assignment, directory, reserved, now } = setup({ feeds: [feed('c1', { full: [seated(7)] }), feed('c2')] })
     // The row names another cell at epoch 8; the mirror would refuse a re-assign at 8.
     assignment.raiseEpochFloor(HOST, 8)
     const plan = await assignment.plan(HOST, { reconnect: true, region: US })
@@ -181,7 +182,6 @@ describe('reserve assignment on a director', () => {
     for (const response of [feed('c1', { seq: 2, full: [seated(7)] }), feed('c2', { seq: 2 })]) {
       directory.apply(response.cellId, response, now.value, now.value)
     }
-    for (const cell of assignment.placementCells()) placer.observePoll(cell)
     expect(await assignment.plan(HOST, { reconnect: true, region: US })).toMatchObject({ lane: 'sticky' })
   })
 
