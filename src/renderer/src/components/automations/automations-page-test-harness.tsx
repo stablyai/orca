@@ -31,6 +31,7 @@ import type { AutomationCreateDestinationControl } from './use-automation-create
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
 import type { AutomationListRow } from './automation-list-row-identity'
 import type { AutomationListViewItem } from './automation-list-view'
+import * as storeEvents from './automations-page-store-test-events'
 import { resetAutomationCapabilityProbes } from './automation-scoped-list-client'
 import {
   addRuntimeProject as addRuntimeProjectFixture,
@@ -131,6 +132,10 @@ type AutomationsPageMocks = {
   setPendingRunNavigation: Mock
 }
 
+export function publishStoreChanges(): void {
+  storeEvents.publish({ ...mocks.state })
+}
+
 // Not `vi.hoisted`: the mock factories below only close over this, and a hoisted
 // binding cannot be exported.
 export const mocks: AutomationsPageMocks = {
@@ -154,6 +159,8 @@ vi.mock('@/store', () => {
   const useAppStore = (selector: (state: Partial<AppState>) => unknown): unknown =>
     selector(mocks.state as Partial<AppState>)
   useAppStore.getState = (): Partial<AppState> => mocks.state as Partial<AppState>
+  useAppStore.subscribe = (listener: Parameters<typeof storeEvents.subscribe>[0]) =>
+    storeEvents.subscribe(listener)
   return { useAppStore }
 })
 
@@ -384,6 +391,7 @@ export async function renderPage(options?: { strict?: boolean }): Promise<{
   roots.push(root)
   const rerender = async (): Promise<void> => {
     await act(async () => {
+      publishStoreChanges()
       // Strict mounts double-invoke effects the way the dev app does, which is
       // where a dispose-without-revive lifecycle bug becomes visible.
       const page = options?.strict
@@ -458,6 +466,7 @@ export function installAutomationsPageHarness(): void {
     await act(async () => {
       roots.splice(0).forEach((root) => root.unmount())
     })
+    storeEvents.reset()
     document.body.innerHTML = ''
   })
 }
