@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -256,6 +257,30 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
       readFileSync(join(accountTwo.managedHomePath, 'sessions', siblingRollout), 'utf-8')
     ).toBe('{"session":"account-one"}\n')
     expect(existsSync(join(systemHome(), 'sessions', siblingRollout))).toBe(false)
+  })
+
+  it('stops a real account launch when global rules cannot safely coexist with account files', async () => {
+    const importName = `orca-global-0000000000-${createHash('sha256').update('default.rules').digest('hex').slice(0, 32)}.rules`
+    const account = createManagedAccount(
+      'account-1',
+      'acct-1',
+      createAuth('one@example.com', 'acct-1', 'fresh', 10_000)
+    )
+    mkdirSync(join(systemHome(), 'rules'))
+    writeFileSync(join(systemHome(), 'rules', 'default.rules'), 'global forbidden policy')
+    mkdirSync(join(account.managedHomePath, 'rules'))
+    writeFileSync(join(account.managedHomePath, 'rules', importName), 'user-owned collision')
+    const { store } = createStore([account], account.id)
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture provides the only store methods account launch uses.
+    const service = new CodexRuntimeHomeService(store as never)
+    expect(() => service.prepareForCodexLaunch()).toThrow('launch stopped')
+    expect(readFileSync(join(account.managedHomePath, 'rules', importName), 'utf8')).toBe(
+      'user-owned collision'
+    )
+    expect(readFileSync(join(systemHome(), 'rules', 'default.rules'), 'utf8')).toBe(
+      'global forbidden policy'
+    )
   })
 
   it('does not expose an untrusted persisted home through rollout discovery', async () => {

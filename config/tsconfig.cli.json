@@ -151,6 +151,7 @@
     "../src/main/codex/codex-hook-command-form.ts",
     "../src/main/codex/codex-hook-definition.ts",
     "../src/main/codex/codex-managed-home-resource-copy-marker.ts",
+    "../src/main/codex/codex-managed-home-rules.ts",
     "../src/main/codex/codex-managed-trust-grant-plan.ts",
     "../src/main/codex/codex-path-observation.ts",
     "../src/main/codex/codex-hook-identity.ts",
