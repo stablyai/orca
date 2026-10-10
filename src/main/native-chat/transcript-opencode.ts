@@ -144,7 +144,8 @@ export async function readOpenCodeNativeChatTranscriptFull(
   try {
     const dbPath = await (deps.resolveDbPath ?? openCodeTranscriptDefaultDeps.resolveDbPath)(
       sessionId,
-      signal
+      signal,
+      agent
     )
     if (!dbPath) {
       return { error: 'Transcript unavailable', notFound: true }

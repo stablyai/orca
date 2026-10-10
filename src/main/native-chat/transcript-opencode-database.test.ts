@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { OpenCodeTranscriptSignal } from './transcript-opencode-sqlite-query'
 import { WslTranscriptFsError } from './wsl-transcript-fs-error'
@@ -39,6 +40,7 @@ vi.mock('../ai-vault/session-scanner-opencode-sqlite-worker-spawn', () => ({
   readOpenCodeTranscriptSignalViaWorker: mocks.readSignal,
   readOpenCodeTranscriptPageViaWorker: vi.fn()
 }))
+import { discoverOpenCodeTranscriptDatabase } from './transcript-opencode-database'
 import {
   resolveOpenCodeTranscriptDbPath,
   openCodeTranscriptDefaultDeps
@@ -211,5 +213,39 @@ describe('OpenCode transcript owning-host database discovery', () => {
       openCodeTranscriptDefaultDeps.resolveDbPath('session', controller.signal)
     ).rejects.toThrow('cancelled')
     expect(mocks.readSignal).not.toHaveBeenCalled()
+  })
+
+  it('probes the native zcode database without waiting for WSL homes', async () => {
+    vi.useFakeTimers()
+    mocks.homes.mockImplementation(() => new Promise(() => {}))
+    mocks.readSignal.mockResolvedValue({
+      messageCount: 1,
+      partCount: 1,
+      maxMessageRowId: 1,
+      maxPartTimeUpdated: 1
+    })
+    const settled = vi.fn()
+    void discoverOpenCodeTranscriptDatabase('session', undefined, 'zcode').then(settled, settled)
+    await vi.advanceTimersByTimeAsync(50)
+    expect(settled).toHaveBeenCalledWith(join(homedir(), '.zcode', 'cli', 'db', 'db.sqlite'))
+    expect(mocks.prepare).not.toHaveBeenCalled()
+  })
+
+  it('falls zcode discovery through to WSL homes after the native probe misses', async () => {
+    const home = 'wsl-home'
+    mocks.homes.mockResolvedValue([home])
+    mocks.readSignal
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({
+        messageCount: 1,
+        partCount: 1,
+        maxMessageRowId: 1,
+        maxPartTimeUpdated: 1
+      })
+    await expect(discoverOpenCodeTranscriptDatabase('session', undefined, 'zcode')).resolves.toBe(
+      join(home, '.zcode', 'cli', 'db', 'db.sqlite')
+    )
+    expect(mocks.prepare).toHaveBeenCalledWith([home])
+    expect(mocks.configure).toHaveBeenCalledOnce()
   })
 })

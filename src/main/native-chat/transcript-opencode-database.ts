@@ -76,11 +76,12 @@ export async function discoverOpenCodeTranscriptDatabase(
     // A zcode transcript only ever lives in a ZCode database: probe those first
     // and never fall through to OpenCode installs that cannot hold the session.
     if (agent === 'zcode') {
-      const homes = await waitForPromiseWithSignal(getAiVaultWslHomeDirs(), boundedSignal)
+      // Unrelated WSL setup must not hold up a matching native database.
       const native = await findSession(zcodeTranscriptDatabasePaths([]))
       if (native) {
         return native
       }
+      const homes = await waitForPromiseWithSignal(getAiVaultWslHomeDirs(), boundedSignal)
       const readerRoots = homes
       if (readerRoots.length > 0) {
         const readers = await waitForPromiseWithSignal(

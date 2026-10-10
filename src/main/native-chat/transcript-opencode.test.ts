@@ -75,6 +75,18 @@ describe('readOpenCodeNativeChatTranscriptFull', () => {
     })
     expect(result).toEqual({ error: 'EACCES' })
   })
+
+  it('passes the zcode agent to full-read DB discovery', async () => {
+    const resolveDbPath = vi.fn(async () => '/fake/zcode.db')
+    const result = await readOpenCodeNativeChatTranscriptFull(
+      'ses-1',
+      { resolveDbPath, readPage: async () => null },
+      undefined,
+      'zcode'
+    )
+    expect(result).toEqual({ error: 'Transcript unavailable', notFound: true })
+    expect(resolveDbPath).toHaveBeenCalledWith('ses-1', undefined, 'zcode')
+  })
 })
 
 describe('readOpenCodeNativeChatTranscriptTail', () => {
