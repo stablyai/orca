@@ -137,13 +137,14 @@ describe('isAllowedPushTargetRemoteConflict', () => {
     ).toBe(false)
   })
 
-  it('requires a push target', () => {
+  it('allows a selected review branch with no push target', () => {
+    // A fork PR whose push target could not be resolved still names its review.
     expect(
       isAllowedPushTargetRemoteConflict('remote', 'feat', {
         linkedGitLabMR: 12,
         branchNameOverride: 'feat'
       })
-    ).toBe(false)
+    ).toBe(true)
   })
 })
 
