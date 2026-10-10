@@ -15,4 +15,11 @@ describe('terminalPreviewUnavailableMessage', () => {
     expect(fromPtyId).not.toMatch(/pane has closed/)
     expect(terminalPreviewUnavailableMessage({ hostKind: 'ssh' })).toBe(fromPtyId)
   })
+
+  it('reports a paired-server card as remote instead of claiming its pane closed (#25688)', () => {
+    const remote = terminalPreviewUnavailableMessage({ hostKind: 'ssh' })
+    expect(terminalPreviewUnavailableMessage({ hostKind: 'remote' })).toBe(remote)
+    expect(terminalPreviewUnavailableMessage({ ptyId: 'remote:env-1@@term_1' })).toBe(remote)
+    expect(terminalPreviewUnavailableMessage({ ptyId: 'remote:term_1' })).toBe(remote)
+  })
 })

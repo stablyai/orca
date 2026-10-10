@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { activateTerminalTabOnOwner } from '@/lib/terminal-tab-owner-activation'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { useNow } from '@/hooks/use-now'
 import { deriveRunningAgentSendTargets } from '@/lib/running-agent-targets'
@@ -173,6 +174,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       activateAndRevealWorktree(worktreeId)
       const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
       if (tabs.some((t) => t.id === tabId)) {
+        activateTerminalTabOnOwner(worktreeId, tabId)
         activateTabAndFocusPane(tabId, parsed.leafId, {
           ackPaneKeyOnSuccess: paneKey,
           flashFocusedPane: true,
@@ -182,6 +184,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
         const liveEntry = useAppStore.getState().agentStatusByPaneKey[paneKey]
         if (liveEntry?.worktreeId === worktreeId) {
           // Why: orchestration worker status can be worktree-attributed before the renderer knows its tab; keep the live row instead of dismissing as stale.
+          activateTerminalTabOnOwner(worktreeId, tabId)
           return
         }
         dismissStaleAgentRowByKey(paneKey)
