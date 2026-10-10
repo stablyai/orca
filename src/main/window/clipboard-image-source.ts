@@ -4,7 +4,7 @@ import {
   type WindowsClipboardFileFormats
 } from './clipboard-windows-image-file'
 
-type ClipboardImageReader = {
+export type ClipboardImageReader = {
   availableFormats: () => string[]
   readBuffer: (format: string) => Buffer
 }

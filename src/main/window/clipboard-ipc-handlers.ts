@@ -41,6 +41,7 @@ import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upl
 import { uploadPastedImageToAgentSessionAttachments } from '../ipc/agent-session-attachment-upload'
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
 import { readClipboardImageSource } from './clipboard-image-source'
+import { readClipboardRawImageAsPng } from './clipboard-raw-image-fallback'
 import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
 import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
 import { writeClipboardTextAndVerify } from './clipboard-text-write-verify'
@@ -161,14 +162,24 @@ export function registerClipboardHandlers(store: Store): void {
       }
       const image = clipboard.readImage()
       if (image.isEmpty()) {
-        if (!source.windowsFileFormats) {
-          return null
+        if (source.windowsFileFormats) {
+          const copiedFilePng = await readWindowsClipboardImageFileAsPng(
+            source.windowsFileFormats,
+            {
+              createImageFromBuffer: (buffer) => nativeImage.createFromBuffer(buffer),
+              openFile: (filePath) => open(filePath, 'r')
+            }
+          )
+          return copiedFilePng ? saveClipboardImageBufferForTarget(copiedFilePng, args) : null
         }
-        const copiedFilePng = await readWindowsClipboardImageFileAsPng(source.windowsFileFormats, {
-          createImageFromBuffer: (buffer) => nativeImage.createFromBuffer(buffer),
-          openFile: (filePath) => open(filePath, 'r')
-        })
-        return copiedFilePng ? saveClipboardImageBufferForTarget(copiedFilePng, args) : null
+        // Why (#26739): CleanShot X puts JPEG bytes under public.png, which
+        // readImage reports as empty; try raw flavors, and fail loudly when
+        // nothing decodes so the paste is never silent.
+        const rawImagePng = readClipboardRawImageAsPng(clipboard)
+        if (rawImagePng) {
+          return saveClipboardImageBufferForTarget(rawImagePng, args)
+        }
+        throw new Error('Clipboard image could not be read')
       }
       assertClipboardImageDimensionsWithinLimit(image.getSize())
       return saveClipboardImageBufferForTarget(image.toPNG(), args)

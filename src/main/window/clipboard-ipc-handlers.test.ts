@@ -558,13 +558,16 @@ describe('registerClipboardHandlers', () => {
   it('does not inspect FileNameW when an empty image clipboard is read outside Windows', async () => {
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
     clipboardReadImageMock.mockReturnValue({ isEmpty: () => true })
+    clipboardReadBufferMock.mockReturnValue(Buffer.alloc(0))
 
     try {
       registerClipboardHandlers({} as never)
 
       const handler = getRegisteredHandlers().get('clipboard:saveImageAsTempFile')
-      await expect(handler?.(makeClipboardEvent(), undefined)).resolves.toBeNull()
-      expect(clipboardReadBufferMock).not.toHaveBeenCalled()
+      await expect(handler?.(makeClipboardEvent(), undefined)).rejects.toThrow(
+        'Clipboard image could not be read'
+      )
+      expect(clipboardReadBufferMock).not.toHaveBeenCalledWith('FileNameW')
       expect(fsOpenMock).not.toHaveBeenCalled()
       expect(nativeImageCreateFromBufferMock).not.toHaveBeenCalled()
     } finally {
