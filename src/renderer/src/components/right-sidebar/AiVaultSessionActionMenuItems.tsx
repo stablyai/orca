@@ -13,6 +13,7 @@ import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-m
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { AiVaultSessionSurfaceSwitchMenuItems } from './AiVaultSessionSurfaceSwitchMenuItems'
+import { isAiVaultFolderWorkspaceId } from './ai-vault-session-worktree-affordances'
 
 export function SessionActionMenuItems({
   menuKind = 'dropdown',
@@ -25,6 +26,7 @@ export function SessionActionMenuItems({
   onResumeInNewCli,
   onJumpToOriginalPane,
   showJumpToWorktree,
+  jumpWorkspaceId,
   onJumpToWorktree,
   onCopyResume,
   onCopyId,
@@ -46,6 +48,7 @@ export function SessionActionMenuItems({
   onResumeInNewCli?: () => void
   onJumpToOriginalPane?: () => void
   showJumpToWorktree: boolean
+  jumpWorkspaceId?: string | null
   onJumpToWorktree?: () => void
   // Absent for zero-turn sessions: copying a resume command that lands in an
   // empty conversation would contradict the "not saved" state.
@@ -100,10 +103,15 @@ export function SessionActionMenuItems({
       {showJumpToWorktree ? (
         <Item disabled={!onJumpToWorktree} onSelect={onJumpToWorktree}>
           <PanelTopOpen className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.AiVaultSessionRow.jumpToWorktree',
-            'Jump to Worktree'
-          )}
+          {isAiVaultFolderWorkspaceId(jumpWorkspaceId)
+            ? translate(
+                'auto.components.right.sidebar.AiVaultSessionWorktree.jumpToFolder',
+                'Jump to Folder'
+              )
+            : translate(
+                'auto.components.right.sidebar.AiVaultSessionRow.jumpToWorktree',
+                'Jump to Worktree'
+              )}
         </Item>
       ) : null}
       {!resumeHidden ? (

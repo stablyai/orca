@@ -3,6 +3,7 @@ import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
 import type React from 'react'
 import {
   FileJson,
+  Folder,
   FolderGit2,
   MessageSquare,
   MessageSquarePlus,
@@ -27,6 +28,7 @@ import { SessionUnsavedConversationNotice } from './AiVaultSessionUnsavedNotice'
 import {
   aiVaultResumeInSessionWorkspaceLabel,
   aiVaultSessionWorkspaceHeading,
+  isAiVaultFolderWorkspaceId,
   aiVaultWorktreeCompactPath,
   aiVaultWorktreeStatusLabel,
   shouldShowAiVaultWorktreeStatusBadge,
@@ -262,7 +264,13 @@ export function SessionInlineDetails({
           vaultScope
         }) ? (
           <SessionReceiptSection
-            icon={<FolderGit2 className="size-3" />}
+            icon={
+              isAiVaultFolderWorkspaceId(worktreeDisplay.worktreeId) ? (
+                <Folder className="size-3" />
+              ) : (
+                <FolderGit2 className="size-3" />
+              )
+            }
             label={aiVaultSessionWorkspaceHeading(worktreeDisplay.worktreeId)}
           >
             <WorktreeMetadataLines worktreeInfo={worktreeDisplay} vaultScope={vaultScope} />

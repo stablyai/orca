@@ -13862,10 +13862,10 @@
             "noActiveWorktreeMatch": "このセッションに一致するアクティブなワークツリーはありません。",
             "noActiveWorktreeTarget": "利用可能なアクティブなワークツリーはありません。",
             "activeFolder": "フォルダー",
-            "archivedFolder": "アーカイブ済みのフォルダー",
-            "archivedFolderJumpUnavailable": "このセッションはアーカイブ済みのフォルダーにあります。",
+            "archivedFolder": "アーカイブされたフォルダー",
+            "archivedFolderJumpUnavailable": "このセッションはアーカイブされたフォルダーにあります。",
             "currentFolder": "現在のフォルダー",
-            "jumpToFolder": "フォルダーに移動"
+            "jumpToFolder": "フォルダーにジャンプ"
           },
           "AiVaultSessionSubagents": {
             "subagentsCount": "サブ Agent ({{value0}})",

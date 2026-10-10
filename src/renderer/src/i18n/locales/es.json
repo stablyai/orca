@@ -13865,7 +13865,7 @@
             "archivedFolder": "Carpeta archivada",
             "archivedFolderJumpUnavailable": "Esta sesión está en una carpeta archivada.",
             "currentFolder": "Carpeta actual",
-            "jumpToFolder": "Ir a la carpeta"
+            "jumpToFolder": "Saltar a la carpeta"
           },
           "AiVaultSessionSubagents": {
             "subagentsCount": "Subagentes ({{value0}})",
