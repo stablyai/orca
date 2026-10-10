@@ -11,7 +11,8 @@ export const NATIVE_CHAT_SUPPORTED_AGENT_LIST: readonly TuiAgent[] = [
   'grok',
   'omp',
   'opencode',
-  'opencode2'
+  'opencode2',
+  'zcode'
 ]
 
 export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set(
@@ -45,7 +46,7 @@ export function resolveNativeChatTranscriptAgent(
   if (agent === 'claude' || agent === 'openclaude') {
     return 'claude'
   }
-  if (agent === 'opencode' || agent === 'opencode2') {
+  if (agent === 'opencode' || agent === 'opencode2' || agent === 'zcode') {
     return 'opencode'
   }
   if (agent === 'codex' || agent === 'grok' || agent === 'omp') {
