@@ -17,6 +17,19 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     recommended: true
   },
   {
+    id: 'parakeet-tdt-0.6b-v3-pt-br-int8',
+    label: 'Parakeet TDT v3 PT-BR',
+    description:
+      'Portuguese (Brazil) only. Fine-tuned for Brazilian Portuguese accuracy. Punctuation and capitalization.',
+    type: 'transducer',
+    provider: 'local',
+    language: 'pt',
+    ...getSpeechModelDownloadMetadata('parakeet-tdt-0.6b-v3-pt-br-int8'),
+    sampleRate: 16000,
+    streaming: false,
+    modelingUnit: 'bpe'
+  },
+  {
     id: 'parakeet-tdt-0.6b-v2-int8',
     label: 'Parakeet TDT v2',
     description:
