@@ -8,7 +8,7 @@ import type {
 import { getProjectedWorktreeLineage } from './worktree-lineage-projection'
 import { getWorkspaceStatus } from './workspace-status'
 import { translate } from '@/i18n/i18n'
-import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 
 export const WORKTREE_CONTEXT_MENU_SCOPE_ATTR = 'data-worktree-context-menu-scope'
 export const WORKTREE_NATIVE_CONTEXT_MENU_ATTR = 'data-worktree-native-context-menu'
@@ -60,6 +60,39 @@ export function hasWorktreeParentLink(
     getProjectedWorktreeLineage(worktree, lineageById) ||
     workspaceLineageByChildKey[worktreeWorkspaceKey(worktree.id)]
   )
+}
+
+// Why: bulk "Remove from Parent" must only cut links that leave the selection. A row with
+// no parent link, or a row whose parent is also selected, keeps its lineage, so a selected
+// subtree moves out as one unit instead of being flattened. Folder workspaces are never
+// worktree-lineage children, so they are never sent a worktree detach.
+export function getBulkDetachTargets(
+  worktrees: readonly Worktree[],
+  lineageById: AppState['worktreeLineageById'],
+  workspaceLineageByChildKey: AppState['workspaceLineageByChildKey']
+): Worktree[] {
+  const selected = new Set<string>()
+  for (const item of worktrees) {
+    selected.add(item.id)
+    selected.add(worktreeWorkspaceKey(item.id))
+  }
+  return worktrees.filter((item) => {
+    if (parseWorkspaceKey(item.id)?.type === 'folder') {
+      return false
+    }
+    const ownKey = worktreeWorkspaceKey(item.id)
+    const lineage = getProjectedWorktreeLineage(item, lineageById)
+    const workspaceLineage = workspaceLineageByChildKey[ownKey]
+    if (!lineage && !workspaceLineage) {
+      return false
+    }
+    const parentSelected = (parent: string): boolean =>
+      parent !== item.id && parent !== ownKey && selected.has(parent)
+    return !(
+      (lineage && parentSelected(lineage.parentWorktreeId)) ||
+      (workspaceLineage && parentSelected(workspaceLineage.parentWorkspaceKey))
+    )
+  })
 }
 
 export function shouldUseNativeContextMenu(target: EventTarget | null): boolean {
