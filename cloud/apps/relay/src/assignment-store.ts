@@ -680,9 +680,12 @@ export class RelayAssignmentStore {
     ) {
       return answer()
     }
-    this.reserveModeInFlight ??= this.readReserveModes(database).finally(() => {
-      this.reserveModeInFlight = null
-    })
+    if (!this.reserveModeInFlight) {
+      const read: Promise<void> = this.readReserveModes(database).finally(() => {
+        if (this.reserveModeInFlight === read) this.reserveModeInFlight = null
+      })
+      this.reserveModeInFlight = read
+    }
     await this.reserveModeInFlight
     return answer()
   }
@@ -712,7 +715,8 @@ export class RelayAssignmentStore {
         readAt: at
       }
     } catch (error) {
-      this.reserveModeFailedAt = performance.now()
+      // A read begun before an admit-mode write says nothing about the table after it.
+      if (generation === this.reserveModeGeneration) this.reserveModeFailedAt = performance.now()
       // Keep the last read until it is stale. Logged at most once a minute: while it fails,
       // sweeps soon stop and admin operations are refused, so the cause must be on the record.
       if (at - this.reserveModeFailureLoggedAt >= RESERVE_MODE_FAILURE_LOG_MS) {
@@ -775,11 +779,13 @@ export class RelayAssignmentStore {
     return !this.requireLiveCells || (await this.heartbeatFresh(database, cellId, now))
   }
 
+  // A stale set beats none: an unreadable table for a minute must not pin every host. Only a
+  // store that has never read the set treats every cell as possibly reserve.
   private async mayBeReserveCell(
     cellId: string,
     database: Pick<RelayDatabase, 'query'> = this.database
   ): Promise<boolean> {
-    const cells = await this.reserveModeCells(database)
+    const cells = (await this.reserveModeCells(database)) ?? this.reserveModeRead?.cells ?? null
     return cells === null || cells.has(cellId)
   }
 
@@ -849,6 +855,8 @@ export class RelayAssignmentStore {
     this.reserveModeRead = null
     this.reserveModeFailedAt = Number.NEGATIVE_INFINITY
     this.reserveModeGeneration += 1
+    // The next caller reads afresh rather than joining a read from before this write.
+    this.reserveModeInFlight = null
   }
 
   async reconcileCells(cells: RelayCellConfig[], disableMissing = true): Promise<void> {

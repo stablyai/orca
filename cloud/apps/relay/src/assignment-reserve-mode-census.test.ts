@@ -228,6 +228,88 @@ describe('reserve-mode census', () => {
     await restore()
   })
 
+  // Only the first reserve-set read is held; it is released (or failed) by the test.
+  function holdFirstRead(options: { fail?: boolean } = {}) {
+    const query = database!.query.bind(database!)
+    let release!: () => void
+    const released = new Promise<void>((resolve) => (release = resolve))
+    const counter = { reads: 0 }
+    database!.query = async (sql, params) => {
+      if (sql.includes('FROM relay_cell_admit_modes m')) {
+        counter.reads += 1
+        if (counter.reads === 1) {
+          await released
+          if (options.fail) throw new Error('canceling statement due to statement timeout')
+        }
+      }
+      return await query(sql, params)
+    }
+    return { counter, release, restore: () => (database!.query = query) }
+  }
+
+  it('reads afresh after an admit-mode write instead of joining a read begun before it', async () => {
+    const store = await setup(() => 1_000)
+    const held = holdFirstRead()
+    try {
+      const before = store.reserveModeCells()
+      await store.setCellAdmitMode('cell-a', 'reserve')
+      const after = await Promise.race([
+        store.reserveModeCells(),
+        new Promise<'joined'>((resolve) => setTimeout(() => resolve('joined'), 500))
+      ])
+      expect(after === 'joined' ? after : [...(after ?? [])]).toEqual(['cell-a'])
+      held.release()
+      // The pre-write read lands after, and is not kept.
+      await before
+      expect([...((await store.reserveModeCells()) ?? [])]).toEqual(['cell-a'])
+    } finally {
+      held.release()
+      held.restore()
+    }
+  })
+
+  it('does not back off for a pre-write read that fails after the write', async () => {
+    const store = await setup(() => 1_000)
+    const held = holdFirstRead({ fail: true })
+    try {
+      const before = store.reserveModeCells()
+      await store.setCellAdmitMode('cell-a', 'reserve')
+      const reads = held.counter.reads
+      held.release()
+      await before
+      // A write cleared the cache: the next caller reads now, not after a 5 s backoff.
+      expect([...((await store.reserveModeCells()) ?? [])]).toEqual(['cell-a'])
+      expect(held.counter.reads).toBeGreaterThan(reads)
+    } finally {
+      held.release()
+      held.restore()
+    }
+  })
+
+  // A table unreadable for over a minute leaves a stale set, not none: a host on a cell last
+  // known to be in database mode is placed as today, not pinned as if its cell might be reserve.
+  it('checks pins and dormancy against the last-known set once the read goes stale', async () => {
+    let now = 1_000
+    const clock = vi.spyOn(performance, 'now')
+    let at = 5_000_000
+    clock.mockImplementation(() => at)
+    const store = await setup(() => now)
+    try {
+      const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
+      const first = await store.assign(identity)
+      await store.changeActivity(identity, 'control', -1)
+      now += ASSIGNMENT_LIMITS.activityLeaseMs + ASSIGNMENT_LIMITS.dormantTtlMs + 1
+      expect([...((await store.reserveModeCells()) ?? [])]).toEqual([])
+      await database!.query('ALTER TABLE relay_cell_admit_modes RENAME TO relay_cell_admit_modes_gone')
+      at += 61_000
+      expect(await store.reserveModeCells()).toBeNull()
+      expect((await store.assign(identity)).assignmentEpoch).toBeGreaterThan(first.assignmentEpoch)
+    } finally {
+      await database!.query('ALTER TABLE relay_cell_admit_modes_gone RENAME TO relay_cell_admit_modes').catch(() => undefined)
+      clock.mockRestore()
+    }
+  })
+
   it('never places a fresh host on a reserve-mode cell through the database', async () => {
     const store = await setup(() => 1_000, ['cell-a'])
     for (let index = 0; index < 4; index += 1) {
