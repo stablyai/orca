@@ -79,7 +79,8 @@ export function buildRuntimeMobileAgentStatus(
       // Scoped to panes with no PTY status at all, so it cannot revive a spinner:
       // this branch publishes `done`. It only keeps the transcript addressable.
       (!pty?.lastAgentStatus && (hookRow.agentType != null || hookRow.providerSession != null))
-    if (!hasLiveHookSignal) {
+    // An idle title can retire activity without retiring the transcript address.
+    if (!hasLiveHookSignal && !providerSession.providerSession) {
       return {}
     }
   }
@@ -134,11 +135,12 @@ export function buildRuntimeMobileAgentStatus(
   // its evidence. Stamping it with the byte stream made the frame advance on
   // every output byte, so a paired client's live status could never outrank it.
   const evidenceAt = pty?.lastOscTitleEpochMs ?? hookRow.providerSessionReceivedAt ?? Date.now()
-  const agentType = ownerAgent ?? undefined
+  const agentType = ownerAgent ?? hookRow.providerSessionAgentType ?? undefined
   return {
     agentStatus: {
-      state:
-        pty?.lastAgentStatus === 'working'
+      state: nonAgentTitle
+        ? 'done'
+        : pty?.lastAgentStatus === 'working'
           ? 'working'
           : pty?.lastAgentStatus === 'permission'
             ? 'blocked'
