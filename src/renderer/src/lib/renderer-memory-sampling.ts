@@ -1,7 +1,8 @@
 /**
  * Renderer memory sampling for crash reports: the periodic `renderer_memory`
- * crumb, and the one-shot `renderer_memory_highwater` crumbs that carry the
- * subsystem census naming whatever grew.
+ * crumb, and the periodically re-armed
+ * `renderer_memory_highwater` crumbs that carry the subsystem census naming
+ * whatever grew.
  */
 import type { CrashReportDetailValue } from '../../../shared/crash-reporting'
 import type { RendererProcessMemory } from '../../../shared/renderer-process-memory'
@@ -25,6 +26,15 @@ const RENDERER_MEMORY_HIGHWATER_RATIOS = [0.6, 0.8] as const
  * outside every heap counter, so footprint is the only mark that sees them.
  */
 const RENDERER_PRIVATE_HIGHWATER_MB = [600, 1000] as const
+// Why re-arm on a timer, not on a dip below the mark: fb476b1c crossed 600MB
+// once, plateaued 21h and died at 577MB, so a dip-armed rearm ships that same
+// stale census. 15min = 1 census per 15 samples, and the store keys retained
+// highwater crumbs by mark, so a refresh replaces the stale one.
+const RENDERER_HIGHWATER_RECENSUS_MS = 15 * 60_000
+// Why 0.9 and not 0: the retained crumb is one slot per mark, so a refresh overwrites the census
+// taken at the peak. Refreshing only while the renderer is still near the mark keeps the peak
+// evidence for a renderer that released its memory, and still re-censuses one that stays large.
+const RENDERER_HIGHWATER_RECENSUS_BAND = 0.9
 
 export type RendererSurface = 'main' | 'dashboard-popout'
 
@@ -41,8 +51,15 @@ type HeapMetrics = BrowserPerformanceMemory & {
   exact: boolean
 }
 
-const emittedHighwaterRatios = new Set<number>()
-const emittedPrivateHighwaterMarks = new Set<number>()
+/** Per-mark census bookkeeping. Monotonic times throughout; see `isHighwaterCensusDue`. */
+type HighwaterMarkState = {
+  /** Accumulated, not derived from a start time: only samples actually seen in band count. */
+  nearMarkMs: number
+  lastSampleAtMs: number
+  lastEmittedAtMs: number
+}
+const emittedHighwaterRatios = new Map<number, HighwaterMarkState>()
+const emittedPrivateHighwaterMarks = new Map<number, HighwaterMarkState>()
 let lastProcessFootprint: RendererProcessMemory | null = null
 let processFootprintReadGeneration = 0
 let processFootprintReadInFlight = false
@@ -154,15 +171,26 @@ function recordRendererMemoryHighwater(
   const used = memory.usedJSHeapSize
   const limit = memory.jsHeapSizeLimit
   // Why: NaN would satisfy `ratio < threshold` for nothing, emitting both
-  // levels spuriously and disarming the one-shot for the session.
+  // levels spuriously and disarming both marks.
   const ratio =
     isFiniteHeapBytes(used) && isFiniteHeapBytes(limit) && limit > 0 ? used / limit : null
   const privateMB =
     footprint === null ? null : (toMegabytes(footprint.privateKB * BYTES_PER_KILOBYTE) ?? null)
+  const nowMs = performance.now()
+  if (ratio !== null) {
+    for (const threshold of RENDERER_MEMORY_HIGHWATER_RATIOS) {
+      noteHighwaterBandResidency(emittedHighwaterRatios, threshold, nowMs, ratio)
+    }
+  }
+  if (privateMB !== null) {
+    for (const mark of RENDERER_PRIVATE_HIGHWATER_MB) {
+      noteHighwaterBandResidency(emittedPrivateHighwaterMarks, mark, nowMs, privateMB)
+    }
+  }
   let crossedThreshold = false
   if (ratio !== null) {
     for (const threshold of RENDERER_MEMORY_HIGHWATER_RATIOS) {
-      if (ratio >= threshold && !emittedHighwaterRatios.has(threshold)) {
+      if (isHighwaterCensusDue(emittedHighwaterRatios, threshold, nowMs, ratio)) {
         crossedThreshold = true
         break
       }
@@ -170,7 +198,7 @@ function recordRendererMemoryHighwater(
   }
   if (privateMB !== null) {
     for (const mark of RENDERER_PRIVATE_HIGHWATER_MB) {
-      if (privateMB >= mark && !emittedPrivateHighwaterMarks.has(mark)) {
+      if (isHighwaterCensusDue(emittedPrivateHighwaterMarks, mark, nowMs, privateMB)) {
         crossedThreshold = true
         break
       }
@@ -197,28 +225,95 @@ function recordRendererMemoryHighwater(
   })
   if (ratio !== null) {
     for (const threshold of RENDERER_MEMORY_HIGHWATER_RATIOS) {
-      if (ratio < threshold || emittedHighwaterRatios.has(threshold)) {
+      if (!isHighwaterCensusDue(emittedHighwaterRatios, threshold, nowMs, ratio)) {
         continue
       }
-      emittedHighwaterRatios.add(threshold)
+      const nearMarkMinutes = stampHighwaterMark(emittedHighwaterRatios, threshold, nowMs)
       recordRendererCrashBreadcrumb('renderer_memory_highwater', {
         ...profile,
-        thresholdPct: Math.round(threshold * 100)
+        thresholdPct: Math.round(threshold * 100),
+        nearMarkMinutes
       })
     }
   }
   if (privateMB !== null) {
     for (const mark of RENDERER_PRIVATE_HIGHWATER_MB) {
-      if (privateMB < mark || emittedPrivateHighwaterMarks.has(mark)) {
+      if (!isHighwaterCensusDue(emittedPrivateHighwaterMarks, mark, nowMs, privateMB)) {
         continue
       }
-      emittedPrivateHighwaterMarks.add(mark)
+      const nearMarkMinutes = stampHighwaterMark(emittedPrivateHighwaterMarks, mark, nowMs)
       recordRendererCrashBreadcrumb('renderer_memory_highwater', {
         ...profile,
-        thresholdPrivateMB: mark
+        thresholdPrivateMB: mark,
+        nearMarkMinutes
       })
     }
   }
+}
+
+/** Accrues in-band residency for one mark. Emits nothing; see the body for why it accumulates. */
+function noteHighwaterBandResidency(
+  emitted: Map<number, HighwaterMarkState>,
+  mark: number,
+  nowMs: number,
+  value: number
+): void {
+  const state = emitted.get(mark)
+  if (state === undefined) {
+    return
+  }
+  // Credit each in-band sample with the time since the previous sample. Why accumulate rather than
+  // measure from the first crossing: sawtooth (build, GC, build) is the ordinary shape of renderer
+  // memory, and elapsed time would report a renderer that spent 94% of 10h at 100MB as sustained
+  // pressure. A gap in sampling is still credited, because a wedged renderer has not left the band.
+  const elapsedMs = Math.max(0, nowMs - state.lastSampleAtMs)
+  const inBand = value >= mark * RENDERER_HIGHWATER_RECENSUS_BAND
+  emitted.set(mark, {
+    nearMarkMs: inBand ? state.nearMarkMs + elapsedMs : state.nearMarkMs,
+    lastSampleAtMs: nowMs,
+    lastEmittedAtMs: state.lastEmittedAtMs
+  })
+}
+
+/**
+ * Records this emission and returns minutes the renderer has been *within the refresh band* of the
+ * mark (>=90% of it), not strictly above it — a renderer sitting at 577MB under a 600MB mark is
+ * the sustained-pressure signal worth reporting. Why carry it in the payload: a refresh replaces
+ * the retained crumb's `createdAt`, so without this the duration axis becomes unrecoverable.
+ */
+function stampHighwaterMark(
+  emitted: Map<number, HighwaterMarkState>,
+  mark: number,
+  nowMs: number
+): number {
+  const nearMarkMs = emitted.get(mark)?.nearMarkMs ?? 0
+  emitted.set(mark, { nearMarkMs, lastSampleAtMs: nowMs, lastEmittedAtMs: nowMs })
+  return Math.round(nearMarkMs / 60_000)
+}
+
+/**
+ * A mark is due on its first crossing, and thereafter every `RENDERER_HIGHWATER_RECENSUS_MS`
+ * while the renderer stays within `RENDERER_HIGHWATER_RECENSUS_BAND` of it. Why not a strict
+ * `value >= mark`: report fb476b1c crossed 600MB then died 21h later at 577MB, and a re-census
+ * gated on the mark never fires again — that is the stale-census bug. Why not value-independent
+ * either: the refresh overwrites the one retained slot, so a renderer that released its memory
+ * would lose the census taken at its peak. Why monotonic: a wall-clock correction must not
+ * stretch or collapse the window.
+ */
+function isHighwaterCensusDue(
+  emitted: Map<number, HighwaterMarkState>,
+  mark: number,
+  nowMs: number,
+  value: number
+): boolean {
+  const lastEmittedAtMs = emitted.get(mark)?.lastEmittedAtMs
+  if (lastEmittedAtMs === undefined) {
+    return value >= mark
+  }
+  return (
+    nowMs - lastEmittedAtMs >= RENDERER_HIGHWATER_RECENSUS_MS &&
+    value >= mark * RENDERER_HIGHWATER_RECENSUS_BAND
+  )
 }
 
 function isFiniteHeapBytes(value: number | undefined): value is number {
