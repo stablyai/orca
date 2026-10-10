@@ -1122,6 +1122,97 @@
       "demotionRule": "Keep experimental until soak; investigate owner and refresh regressions without weakening assertions or adding retries."
     },
     {
+      "id": "settings.terminal-section-lifetime",
+      "title": "Terminal settings search preserves matching section state",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "renderer-unit",
+      "surfaces": [
+        "Terminal settings search",
+        "session diagnostic inventory",
+        "scrollback settings draft"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "wsl",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [],
+      "coverageNotes": "Actual TerminalPane, ManageSessionsSection, health listener and scrollback form with mocked store/provider and display/action boundaries. Unix/Windows and Mac-client/Windows-host flags simulated; no physical provider, process-stop or native input coverage.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/renderer/src/components/settings/TerminalPane.tsx"
+      ],
+      "invariant": "A matching settings section retains its state when preceding sections are filtered away; a section removed from search releases its owner and refreshes when shown again. A retained section still refreshes when another surface invalidates the session inventory. Diagnostic inventory never becomes authority for process death.",
+      "oracle": "Across 15 matched search edits the matched section keeps the same DOM node and the inventory/health read counts do not grow, instead of six reads each. A foreign inventory invalidation still reads once on the retained section and not after unmount. A draft and pending target survive matched search; actual hide/reopen reloads, explicit Refresh still reads, and hidden/unmounted health listeners do not fire.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/TerminalPane.section-lifetime.test.tsx src/renderer/src/components/settings/TerminalTccAttributionNotice.test.tsx"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/settings/TerminalPane.section-lifetime.test.tsx",
+        "src/renderer/src/components/settings/TerminalTccAttributionNotice.test.tsx"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/settings/TerminalPane.section-lifetime.test.tsx",
+          "assertions": [
+            "refreshes a retained section when another surface invalidates the inventory",
+            "refreshes explicitly, reloads genuinely hidden sections, and removes focus listeners",
+            "preserves an uncommitted scrollback draft while its section remains visible",
+            "retains a pending action target only while its section remains visible"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/TerminalPane.section-lifetime.test.tsx src/renderer/src/components/settings/TerminalTccAttributionNotice.test.tsx",
+          "result": "passed",
+          "durationSeconds": 1.48,
+          "summary": "12 tests/2 suites pass after the shared SettingsSectionStack adoption and the inventory-invalidation subscription. Read-count oracles restated as node identity plus non-growing read counts; original main fails all three simulated platform cases, the draft, the pending target and the foreign-invalidation refresh."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "Focused renderer-unit suites, p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Author and independent local evidence only; no CI soak."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Original new suite fails all three simulated platform read-count cases, draft and pending target; one cleanup/refresh control passes. Candidate6pass. Independent scratch5pass/original4fail1control."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Actual child inventory and health reads 6 to 1 across 15 matched search edits. Fixed small section filter/map now lives in the shared SettingsSectionStack; no new polling, cache or subprocess. One added in-renderer invalidation listener replaces the incidental search-driven refresh, so a retained section stays as fresh as the signal every other inventory reader already uses. No packaged CPU/frame/heap claim."
+      },
+      "knownGaps": [
+        "CI soak pending.",
+        "No physical local/daemon/SSH/WSL/remote-runtime provider, native Linux/Windows or process-stop behavior exercised; routing, PTY ownership, commands and wire formats unchanged.",
+        "Matched searches keep the loaded snapshot until existing Refresh, completed mutation, a foreign inventory invalidation or genuine hide/reopen; health also refreshes on focus/revision.",
+        "Pending action target and drafts remain while their parent section matches, including individual controls hidden inside a retained section.",
+        "No packaged app latency, heap, real focus or pending destructive-mutation completion evidence. Hidden Electron component visual proof is separate from the gate."
+      ],
+      "promotionCriteria": [
+        "Retain count, real draft, pending target and cleanup oracles; obtain stable CI history and relevant full-app/provider evidence before promotion."
+      ],
+      "demotionRule": "Keep experimental until soak; investigate stale state or cleanup failures without weakening read-count, draft or fresh-owner assertions."
+    },
+    {
       "id": "agent-session.journal-streaming-replay",
       "title": "Journal replay bounds obsolete revision memory without changing recovery",
       "maturity": "experimental",
