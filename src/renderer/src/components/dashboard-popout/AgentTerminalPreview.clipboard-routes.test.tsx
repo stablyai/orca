@@ -71,7 +71,7 @@ vi.mock('@xterm/xterm', () => ({
     dispose = vi.fn()
     resize = vi.fn()
     reset = vi.fn()
-    modes = { bracketedPasteMode: false }
+    modes = { bracketedPasteMode: false, mouseTrackingMode: 'none' }
     paste = vi.fn((data: string) => {
       terminalHarness.userInputListener?.()
       this.onDataListener?.(data)

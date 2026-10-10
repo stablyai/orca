@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { TerminalPasteSource } from './terminal-paste-coordinator'
 import { copyTerminalSelection } from './terminal-selection-copy'
+import { terminalForcesSelectionForClick } from './terminal-click-forces-selection'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 
 type UseTerminalContextMenuTriggerDeps = {
@@ -68,6 +69,19 @@ export function useTerminalContextMenuTrigger({
     if (rightClickToPaste && !event.ctrlKey) {
       event.stopPropagation()
       if (!clickedPane) {
+        return
+      }
+      // Why: a mouse-tracking TUI already got this press as a mouse report and
+      // may paste on its own (Codex, pi on Windows), so Orca pasting too doubles
+      // the text. Same tradeoff as the middle-click fix in #21834. xterm only
+      // reports presses on its own element, so the pane title still pastes.
+      if (
+        !clickedPane.terminal.getSelection() &&
+        clickedPane.terminal.modes.mouseTrackingMode !== 'none' &&
+        !terminalForcesSelectionForClick(event) &&
+        event.target instanceof Node &&
+        clickedPane.terminal.element?.contains(event.target)
+      ) {
         return
       }
       if (clickedPane.terminal.getSelection()) {

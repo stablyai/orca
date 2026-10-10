@@ -1,8 +1,11 @@
 import type { Terminal } from '@xterm/xterm'
 import { copyTerminalSelection } from '@/components/terminal-pane/terminal-selection-copy'
+import { terminalForcesSelectionForClick } from '@/components/terminal-pane/terminal-click-forces-selection'
 import type { PreviewTerminalPasteSource } from './preview-terminal-paste'
 
-type PreviewRightClickTerminal = Pick<Terminal, 'getSelection' | 'clearSelection'>
+type PreviewRightClickTerminal = Pick<Terminal, 'getSelection' | 'clearSelection'> & {
+  modes: Pick<Terminal['modes'], 'mouseTrackingMode'>
+}
 
 /**
  * Terminal-style right-click for the preview terminal, mirroring the pane's
@@ -36,6 +39,10 @@ export function installPreviewTerminalRightClickPaste({
         writeClipboardText: window.api.ui.writeTerminalClipboardText,
         clearSelectionOnSuccess: true
       }).catch(() => undefined)
+      return
+    }
+    // Why: a mouse-tracking TUI already got this press as a mouse report and may paste itself.
+    if (terminal.modes.mouseTrackingMode !== 'none' && !terminalForcesSelectionForClick(event)) {
       return
     }
     pasteClipboardText(document.activeElement, 'right-click')

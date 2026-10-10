@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installPreviewTerminalRightClickPaste } from './preview-terminal-right-click-paste'
 
 describe('installPreviewTerminalRightClickPaste', () => {
@@ -10,11 +10,16 @@ describe('installPreviewTerminalRightClickPaste', () => {
   let selection: string
   let clearSelection: ReturnType<typeof vi.fn<() => void>>
   let rightClickToPaste: boolean
+  let mouseTrackingMode: 'none' | 'any'
 
   const install = (): (() => void) =>
     installPreviewTerminalRightClickPaste({
       container,
-      getTerminal: () => ({ getSelection: () => selection, clearSelection }),
+      getTerminal: () => ({
+        getSelection: () => selection,
+        clearSelection,
+        modes: { mouseTrackingMode }
+      }),
       isRightClickToPasteEnabled: () => rightClickToPaste,
       pasteClipboardText
     })
@@ -33,6 +38,9 @@ describe('installPreviewTerminalRightClickPaste', () => {
     selection = ''
     clearSelection = vi.fn<() => void>()
     rightClickToPaste = true
+    mouseTrackingMode = 'none'
+    // Why: pin a non-Mac platform so Shift is the selection-forcing modifier.
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0 (Windows NT 10.0)')
     Object.assign(window, { api: { ui: { writeTerminalClipboardText } } })
   })
 
@@ -42,6 +50,26 @@ describe('installPreviewTerminalRightClickPaste', () => {
     expect(event.defaultPrevented).toBe(true)
     expect(pasteClipboardText).toHaveBeenCalledWith(document.activeElement, 'right-click')
     expect(writeTerminalClipboardText).not.toHaveBeenCalled()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  // Issue #25192: Codex and pi paste on the forwarded right-button report themselves.
+  it('leaves the paste to a mouse-tracking TUI', () => {
+    mouseTrackingMode = 'any'
+    install()
+    const event = rightClick()
+    expect(event.defaultPrevented).toBe(true)
+    expect(pasteClipboardText).not.toHaveBeenCalled()
+  })
+
+  it('still pastes on Shift+right-click, which xterm never reports to a tracking TUI', () => {
+    mouseTrackingMode = 'any'
+    install()
+    rightClick({ shiftKey: true })
+    expect(pasteClipboardText).toHaveBeenCalledWith(document.activeElement, 'right-click')
   })
 
   it('copies and clears the selection instead of pasting', async () => {

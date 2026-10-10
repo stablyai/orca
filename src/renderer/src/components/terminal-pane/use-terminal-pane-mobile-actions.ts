@@ -18,14 +18,8 @@ import { pasteTextIntoTerminalPane } from './terminal-pane-paste-dispatch'
 import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
+import { terminalForcesSelectionForClick } from './terminal-click-forces-selection'
 import type { TerminalPaneContextController } from './use-terminal-pane-context-actions'
-
-// Why: mirrors xterm's SelectionService.shouldForceSelection — a shifted click
-// (Option-click on Mac, via macOptionClickForcesSelection) is never forwarded
-// as a mouse report, so the TUI cannot paste and Orca must own it instead.
-function terminalForcesSelectionForClick(event: React.MouseEvent): boolean {
-  return navigator.userAgent.includes('Mac') ? event.altKey : event.shiftKey
-}
 
 export function useTerminalPaneMobileActions(controller: TerminalPaneContextController) {
   const {
