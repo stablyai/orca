@@ -1,4 +1,6 @@
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { captureTerminalWorktreeMetadataOwner } from './terminal-worktree-metadata-owner'
+import type { WorktreePassiveMetadataOwner } from '../slices/worktree-helpers'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
@@ -19,6 +21,7 @@ export function createTerminalPtyReleaseActions(
         return
       }
       let worktreeId: string | null = null
+      let owner: WorktreePassiveMetadataOwner | undefined
       let wasActivationSpawn = false
       let preservesDirectSshContinuationGap = false
       let isRemoteRuntimeMirror = isRemoteRuntimePtyId(ptyId)
@@ -33,6 +36,7 @@ export function createTerminalPtyReleaseActions(
             continue
           }
           worktreeId = wId
+          owner = captureTerminalWorktreeMetadataOwner(s, wId, ptyId ? [ptyId] : existingPtyIds)
           const tab = tabs[index]
           if (getPendingActivationSpawnCount(tab.pendingActivationSpawn) > 0) {
             wasActivationSpawn = true
@@ -154,7 +158,9 @@ export function createTerminalPtyReleaseActions(
         !hasWorktreeSleepIntent(worktreeId) &&
         !(ptyId && get().suppressedPtyExitIds[ptyId])
       ) {
-        get().bumpWorktreeActivity(worktreeId)
+        if (owner) {
+          get().bumpWorktreeActivity(worktreeId, owner)
+        }
       }
     }
   }

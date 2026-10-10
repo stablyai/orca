@@ -1,9 +1,11 @@
 import type { TestStore } from './worktrees-test-ipc-surface'
+import { configureWorktreeMetadataMutationStoreMocks } from './worktrees-test-metadata-mutation-store'
 
 export function configureMetadataPruningStoreMocks(
   store: TestStore,
   expectedSettings: unknown
 ): void {
+  configureWorktreeMetadataMutationStoreMocks(store)
   store.captureNativeLocalWorktreeMetadataScanExpectation.mockImplementation(
     (...args: unknown[]) => {
       const repo = args[0] as {

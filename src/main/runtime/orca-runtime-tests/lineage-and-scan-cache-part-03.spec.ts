@@ -299,6 +299,7 @@ describe('OrcaRuntimeService', () => {
     }
     const setWorktreeMeta = vi.fn((id: string, updates: Partial<WorktreeMeta>) => {
       metaById[id] = { ...metaById[id], ...updates }
+      return metaById[id]
     })
     const runtime = new OrcaRuntimeService({
       ...store,

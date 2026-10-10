@@ -1,5 +1,6 @@
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { Store } from './store'
+import { WorktreeMetadataAdmissionOperations } from './worktree-metadata-admission'
 import { LoadedStateAdaptationOperations } from './loaded-state-adaptation'
 import { LoadedCohortMigrationOperations } from './loaded-cohort-migrations'
 import { LoadedStateParsingOperations } from './loaded-state-parsing'
@@ -32,6 +33,7 @@ export type StoreDomainOperations = WriteSchedulingOperations &
   SparsePresetPersistence &
   AutomationPersistence &
   MetadataLineageOperations &
+  WorktreeMetadataAdmissionOperations &
   ProfilePreferences &
   SessionHostPartitionOperations &
   SessionSnapshotOperations &
@@ -57,6 +59,7 @@ export type StoreDomains = {
   sessions: SessionHostPartitionOperations
   sessionSnapshots: SessionSnapshotOperations
   metadata: MetadataLineageOperations
+  metadataAdmission: WorktreeMetadataAdmissionOperations
   projects: ProjectCollectionOperations
   automations: AutomationPersistence
   mobileTabSelections: MobileTabSelectionPersistence
@@ -78,6 +81,7 @@ export const STORE_DOMAIN_OPERATION_CLASSES = [
   SparsePresetPersistence,
   AutomationPersistence,
   MetadataLineageOperations,
+  WorktreeMetadataAdmissionOperations,
   ProfilePreferences,
   SessionHostPartitionOperations,
   SessionSnapshotOperations,
@@ -147,6 +151,7 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     sessions,
     sessionSnapshots,
     metadata,
+    metadataAdmission: new WorktreeMetadataAdmissionOperations(runtime, scheduling),
     projects,
     automations,
     mobileTabSelections,

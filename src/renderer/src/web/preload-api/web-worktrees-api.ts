@@ -15,6 +15,7 @@ import { readRetiredNameRegistryForRepo } from '../../../../shared/worktree/reti
 import { EMPTY_RETIRED_NAME_REGISTRY } from '../../../../shared/worktree/retired-name-registry'
 import { worktreeRemovalReplyTimeoutMs } from '../../../../shared/worktree/archive-hook-removal-gate'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 import {
   getRemoteRuntimeStatus,
   callRuntimeResult,
@@ -172,7 +173,17 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         expectedHead,
         ...(hostId ? { hostId } : {})
       }),
-    updateMeta: async ({ worktreeId, updates }) => {
+    updateMeta: async ({ worktreeId, updates, executionHostId, expectedInstanceId }) => {
+      const host = parseExecutionHostId(executionHostId)
+      if ((executionHostId || expectedInstanceId) && (!host || !expectedInstanceId?.trim())) {
+        throw new Error('selector_not_found')
+      }
+      const selector = toRuntimeWorktreeSelector(
+        worktreeId,
+        host && expectedInstanceId
+          ? { executionHostId: host.id, instanceId: expectedInstanceId }
+          : undefined
+      )
       if (updates.linkedItems !== undefined) {
         await assertAttachmentWriteSupported(updates)
       }
@@ -190,7 +201,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
           ? { ...updates, pushTarget: null }
           : updates
       const owned = await callRuntimeResultWithOwner<{ worktree: Worktree }>('worktree.set', {
-        worktree: toRuntimeWorktreeSelector(worktreeId),
+        worktree: selector,
         ...rpcUpdates
       })
       return withRuntimeWorktreeOwner(owned.result.worktree, owned.hostId)

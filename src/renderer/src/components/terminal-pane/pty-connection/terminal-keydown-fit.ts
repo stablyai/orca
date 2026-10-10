@@ -19,6 +19,7 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 /** Keydown intent, PTY fit binding, side-effect fact consumption, and the agent completion coordinator. */
 export function installTerminalKeydownFit(session: ConnectPanePtySession): void {
+  session.worktreeMetadataOwner = null
   session.onTerminalKeyDown = (event: KeyboardEvent): void => {
     if (isPlainEscapeKeyEvent(event)) {
       session.setPendingTerminalInputIntent('plain-escape')
@@ -27,7 +28,7 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
       // the early return for interrupt-intent inference.
       session.deps.clearTerminalTabUnread(session.deps.tabId)
       session.deps.clearTerminalPaneUnread(session.cacheKey)
-      session.deps.clearWorktreeUnread(session.deps.worktreeId)
+      session.deps.clearWorktreeUnread(session.deps.worktreeId, session.worktreeMetadataOwner)
       return
     }
     if (isCtrlCKeyEvent(event)) {
@@ -67,7 +68,7 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     }
     session.deps.clearTerminalTabUnread(session.deps.tabId)
     session.deps.clearTerminalPaneUnread(session.cacheKey)
-    session.deps.clearWorktreeUnread(session.deps.worktreeId)
+    session.deps.clearWorktreeUnread(session.deps.worktreeId, session.worktreeMetadataOwner)
   }
   // Why: infer only from focused xterm key events. Raw PTY bytes cannot
   // distinguish plain Escape from Alt/meta sequences, and programmatic writes

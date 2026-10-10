@@ -1,4 +1,5 @@
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
+import type { WorktreePassiveMetadataOwner } from '@/store/slices/worktree-helpers'
 import type { PtyConnectionDeps } from '../pty-connection-types'
 import type { PtyTransport } from '../pty-transport-types'
 
@@ -10,6 +11,7 @@ export type ConnectPanePtySession = {
   deps: PtyConnectionDeps
   // Why typed: every PTY write must name its input kind, and the bag's `any` would hide a missing one.
   transport: PtyTransport
+  worktreeMetadataOwner: WorktreePassiveMetadataOwner | null
   // oxlint-disable-next-line typescript/no-explicit-any -- session bag for mechanical extract
   [key: string]: any
 }

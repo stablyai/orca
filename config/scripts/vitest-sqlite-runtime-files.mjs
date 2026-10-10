@@ -230,6 +230,8 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/runtime/rpc/methods/structured-agent-session-unsubscribe.test.ts',
   'src/main/runtime/rpc/methods/structured-chat-tab-table.test.ts',
   'src/main/runtime/runtime-managed-worktree-metadata-sweep.test.ts',
+  'src/main/runtime/runtime-managed-worktree-metadata.test.ts',
+  'src/main/runtime/runtime-worktree-metadata-admission.integration.test.ts',
   'src/main/runtime/runtime-orchestration-sender-names.test.ts',
   'src/main/runtime/runtime-worktree-agent-rows-verdict.test.ts',
   'src/main/runtime/runtime-worktree-structured-agent-rows-liveness.test.ts',
@@ -257,6 +259,7 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/ssh/orcad-unreachable-setup-release.test.ts',
   'src/main/ssh/ssh-target-orcad-preflight.test.ts',
   'src/main/worktree-identity-persistence.test.ts',
+  'src/main/worktree-metadata-admission.test.ts',
   'src/main/worktree-removal-close-records.test.ts',
   'src/main/worktree-removal-session-partition-fencing.test.ts',
   'tests/e2e/codex-child-approval-activity-row.unit.test.ts',
@@ -265,6 +268,7 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'tests/e2e/cross-version-wire/cross-version-agent-session-wire.unit.test.ts',
   'tests/e2e/cross-version-wire/submission-positions-downgrade.unit.test.ts',
   'tests/e2e/folder-upgrade-identity-persistence.unit.test.ts',
+  'tests/e2e/worktree-metadata-admission.unit.test.ts',
   'tests/e2e/structured-agent-session-read-owner.unit.test.ts',
   'tests/e2e/structured-chat-owner-status-activation.unit.test.ts'
 ]
