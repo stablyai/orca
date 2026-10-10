@@ -21,26 +21,29 @@ vi.mock('sonner', () => ({
 
 vi.mock('./repo-registration-context', async (importOriginal) => {
   const original = await importOriginal<typeof RegistrationContext>()
-  const proxies = new WeakMap<readonly Repo[], readonly Repo[]>()
+  const countedInputs = new WeakMap<readonly Repo[], readonly Repo[]>()
   function countedInput(repos: readonly Repo[]): readonly Repo[] {
-    const cached = proxies.get(repos)
+    const cached = countedInputs.get(repos)
     if (cached) {
       return cached
     }
-    const proxy = new Proxy(repos, {
-      get(target, key, receiver) {
-        if (typeof key === 'string' && /^(0|[1-9]\d*)$/.test(key)) {
+    const counted = repos.map((repo) => repo)
+    for (const [index, repo] of repos.entries()) {
+      Object.defineProperty(counted, index, {
+        enumerable: true,
+        configurable: true,
+        get() {
           if (visits.scope === 'capture') {
             visits.capture += 1
           } else {
             visits.current += 1
           }
+          return repo
         }
-        return Reflect.get(target, key, receiver)
-      }
-    })
-    proxies.set(repos, proxy)
-    return proxy
+      })
+    }
+    countedInputs.set(repos, counted)
+    return counted
   }
   return {
     ...original,
