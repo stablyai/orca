@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { getActiveRuntimeTarget } from '@/runtime/runtime-client-target'
+
+// Why: these cases model a switch made on the focused host, as the status bar does.
+const focusedOwner = () => getActiveRuntimeTarget(useAppStore.getState().settings)
 import { markLiveCodexSessionsForRestart } from './codex-session-restart'
 
 const ACCOUNT_A = 'account-a@example.com'
@@ -65,6 +69,7 @@ describe('Codex account switch recheck against main', () => {
     useAppStore.getState().queueCodexPaneRestarts(['pty-1'])
 
     await markLiveCodexSessionsForRestart({
+      owner: focusedOwner(),
       previousAccountLabel: ACCOUNT_B,
       nextAccountLabel: ACCOUNT_C,
       previousAccountId: 'account-b',
@@ -80,6 +85,7 @@ describe('Codex account switch recheck against main', () => {
     listStalePanes.mockRejectedValue(new Error('ipc failed'))
 
     await markLiveCodexSessionsForRestart({
+      owner: focusedOwner(),
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B,
       previousAccountId: 'account-a',

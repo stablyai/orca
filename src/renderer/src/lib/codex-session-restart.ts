@@ -23,6 +23,7 @@ import {
   resolveCodexPaneSelectionLane
 } from './codex-pane-selection-lane'
 import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
 // Why: prompt integrations such as Starship can outlast the daemon's 300ms
@@ -202,6 +203,8 @@ export async function markLiveCodexSessionsForRestart(args: {
   previousAccountId?: string | null
   nextAccountId?: string | null
   target?: CodexAccountSelectionTarget | null
+  /** Host whose roster the change wrote; never inferred from focus. */
+  owner: RuntimeClientTarget
   /** Set when the change cleared the selection rather than pointing it somewhere. */
   clearsEveryWslDistro?: boolean
 }): Promise<void> {
@@ -209,7 +212,7 @@ export async function markLiveCodexSessionsForRestart(args: {
   const scans = await scanCodexPanes(state, {
     ptyIdFilter: null,
     isLaneInScope: getCodexAccountSwitchLaneMatcher({
-      settings: state.settings,
+      owner: args.owner,
       target: args.target,
       clearsEveryWslDistro: args.clearsEveryWslDistro
     })

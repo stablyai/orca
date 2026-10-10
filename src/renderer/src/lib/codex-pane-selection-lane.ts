@@ -1,5 +1,5 @@
 import type { AppState } from '@/store'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-client-target'
+import { getActiveRuntimeTarget, type RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import {
   getCodexSelectionLaneKey,
@@ -14,7 +14,6 @@ import {
 } from '../../../shared/local-windows-terminal-runtime'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { resolveTerminalStartupCwd } from '../../../shared/terminal-startup-cwd'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
@@ -24,8 +23,6 @@ import {
   getCachedWindowsTerminalCapabilities,
   hasCachedWindowsTerminalCapabilities
 } from './windows-terminal-capabilities'
-
-type RuntimeEnvironmentSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'>
 
 /** Everything the pane lane needs: the workspace path plus the project runtime inputs. */
 type CodexPaneLaneState = Pick<
@@ -72,7 +69,8 @@ export function isForeignMachineCodexPtyId(ptyId: string): boolean {
 
 /** Matches the panes a Codex account mutation could have re-pointed. */
 export function getCodexAccountSwitchLaneMatcher(args: {
-  settings: RuntimeEnvironmentSettings | null | undefined
+  /** Host whose roster the mutation wrote. */
+  owner: RuntimeClientTarget
   target?: CodexAccountSelectionTarget | null
   /**
    * True only when the mutation cleared every WSL distro slot at once, which
@@ -82,8 +80,8 @@ export function getCodexAccountSwitchLaneMatcher(args: {
    */
   clearsEveryWslDistro?: boolean
 }): (laneKey: string) => boolean {
-  const runtimeTarget = getActiveRuntimeTarget(args.settings)
-  // Why: with an environment active the mutation is RPC'd to that machine's
+  const runtimeTarget = args.owner
+  // Why: a server-owned mutation is RPC'd to that machine's
   // roster and local GlobalSettings are never touched, so the local host/WSL
   // panes are exactly the ones the switch cannot have affected.
   if (runtimeTarget.kind === 'environment') {

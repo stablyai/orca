@@ -60,7 +60,7 @@
 1 src/renderer/src/lib/active-agent-note-send.ts
 1 src/renderer/src/lib/active-agent-note-target.ts
 1 src/renderer/src/lib/automation-session-observer.ts
-2 src/renderer/src/lib/codex-pane-selection-lane.ts
+1 src/renderer/src/lib/codex-pane-selection-lane.ts
 1 src/renderer/src/lib/github-pr-start-point.ts
 1 src/renderer/src/lib/github-source-runtime-context.ts
 1 src/renderer/src/lib/hosted-review-repo-read.ts

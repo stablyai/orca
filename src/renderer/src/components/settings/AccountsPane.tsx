@@ -312,6 +312,7 @@ export function AccountsPane({
 
   const runCodexAccountAction = createCodexAccountActionRunner({
     settings,
+    accountOwner,
     isCurrentAccountOwner,
     accountRuntime,
     isRemoteAccountScope,

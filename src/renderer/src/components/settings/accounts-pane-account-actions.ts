@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import type { FeatureInteractionId } from '../../../../shared/feature-interaction-catalog'
 import type {
   ClaudeRateLimitAccountsState,
@@ -32,6 +33,8 @@ import { getClaudeAccountLabel } from './accounts-pane-runtime'
 
 type CodexActionContext = {
   settings: GlobalSettings
+  /** Host whose roster the action writes. */
+  accountOwner: RuntimeClientTarget
   accountRuntime: LocalAccountRuntime
   isRemoteAccountScope: boolean
   codexAccounts: CodexRateLimitAccountsState
@@ -48,6 +51,7 @@ export function createCodexAccountActionRunner(
   context: CodexActionContext
 ): CodexAccountActionRunner {
   const {
+    accountOwner,
     accountRuntime,
     codexAccounts,
     fetchSettings,
@@ -118,6 +122,7 @@ export function createCodexAccountActionRunner(
           nextAccountId: nextActiveAccountId ?? null,
           // Why: the mutation wrote this row's slot only, so panes on any other
           // lane still launch under the account they already had.
+          owner: accountOwner,
           target: addedAccount ? getProviderAccountRuntime(addedAccount) : actionRuntime,
           // Why: clearing a distro-less WSL row nulls every distro slot at once.
           clearsEveryWslDistro: action === 'select:system'

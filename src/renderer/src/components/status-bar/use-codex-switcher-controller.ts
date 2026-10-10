@@ -161,6 +161,7 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
           nextAccountId: nextActiveAccountId ?? null,
           // Why: the mutation wrote this row's slot only, so panes on any other
           // lane still launch under the account they already had.
+          owner: runtimeTarget,
           target,
           // Why: clearing a distro-less WSL row nulls every distro slot at once.
           clearsEveryWslDistro: accountId === null

@@ -1,5 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { getActiveRuntimeTarget } from '@/runtime/runtime-client-target'
+
+// Why: these cases model a switch made on the focused host, as the status bar does.
+const markForFocusedHost = (
+  args: Omit<Parameters<typeof markLiveCodexSessionsForRestart>[0], 'owner'>
+): Promise<void> =>
+  markLiveCodexSessionsForRestart({
+    owner: getActiveRuntimeTarget(useAppStore.getState().settings),
+    ...args
+  })
 import { shouldUseShellReadyStartupDelivery } from '../../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
@@ -120,7 +130,7 @@ describe('markLiveCodexSessionsForRestart', () => {
       hasChildProcesses: false
     })
 
-    await markLiveCodexSessionsForRestart({
+    await markForFocusedHost({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
@@ -170,7 +180,7 @@ describe('markLiveCodexSessionsForRestart', () => {
       return { foregroundProcess, hasChildProcesses: false }
     })
 
-    await markLiveCodexSessionsForRestart({
+    await markForFocusedHost({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
@@ -193,7 +203,7 @@ describe('markLiveCodexSessionsForRestart', () => {
       hasChildProcesses: false
     })
 
-    await markLiveCodexSessionsForRestart({
+    await markForFocusedHost({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
@@ -209,7 +219,7 @@ describe('markLiveCodexSessionsForRestart', () => {
       hasChildProcesses: true
     })
 
-    await markLiveCodexSessionsForRestart({
+    await markForFocusedHost({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
@@ -227,7 +237,7 @@ describe('markLiveCodexSessionsForRestart', () => {
       hasChildProcesses: false
     })
 
-    await markLiveCodexSessionsForRestart({
+    await markForFocusedHost({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
@@ -245,7 +255,7 @@ describe('markLiveCodexSessionsForRestart', () => {
       hasChildProcesses: true
     })
 
-    await markLiveCodexSessionsForRestart({
+    await markForFocusedHost({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
@@ -262,7 +272,7 @@ describe('markLiveCodexSessionsForRestart', () => {
       return { foregroundProcess: 'codex', hasChildProcesses: true }
     })
 
-    await markLiveCodexSessionsForRestart({
+    await markForFocusedHost({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
@@ -281,7 +291,7 @@ describe('markLiveCodexSessionsForRestart', () => {
       hasChildProcesses: false
     })
 
-    await markLiveCodexSessionsForRestart({
+    await markForFocusedHost({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
@@ -298,7 +308,7 @@ describe('markLiveCodexSessionsForRestart', () => {
       hasChildProcesses: false
     })
 
-    await markLiveCodexSessionsForRestart({
+    await markForFocusedHost({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
@@ -315,13 +325,13 @@ describe('markLiveCodexSessionsForRestart', () => {
       hasChildProcesses: false
     })
 
-    await markLiveCodexSessionsForRestart({
+    await markForFocusedHost({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
     useAppStore.getState().queueCodexPaneRestarts(['pty-1'])
 
-    await markLiveCodexSessionsForRestart({
+    await markForFocusedHost({
       previousAccountLabel: ACCOUNT_B,
       nextAccountLabel: ACCOUNT_A
     })
@@ -336,12 +346,12 @@ describe('markLiveCodexSessionsForRestart', () => {
       hasChildProcesses: false
     })
 
-    await markLiveCodexSessionsForRestart({
+    await markForFocusedHost({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
     useAppStore.getState().queueCodexPaneRestarts(['pty-1'])
-    await markLiveCodexSessionsForRestart({
+    await markForFocusedHost({
       previousAccountLabel: ACCOUNT_B,
       nextAccountLabel: 'account-c@example.com'
     })
@@ -362,12 +372,12 @@ describe('markLiveCodexSessionsForRestart', () => {
       hasChildProcesses: false
     })
 
-    await markLiveCodexSessionsForRestart({
+    await markForFocusedHost({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
 
-    await markLiveCodexSessionsForRestart({
+    await markForFocusedHost({
       previousAccountLabel: ACCOUNT_B,
       nextAccountLabel: ACCOUNT_C
     })
@@ -412,7 +422,7 @@ describe('markLiveCodexSessionsForRestart', () => {
       _meta: { runtimeId: 'remote-runtime' }
     })
 
-    await markLiveCodexSessionsForRestart({
+    await markForFocusedHost({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
@@ -532,7 +542,7 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
   it('leaves a live remote Codex pane alone on a host switch, and never inspects it', async () => {
     seedPanes([{ ptyId: 'remote:env-1@@term-1' }])
 
-    await markLiveCodexSessionsForRestart({
+    await markForFocusedHost({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B,
       target: { runtime: 'host' }
@@ -545,7 +555,7 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
   it('leaves a live SSH-connection Codex pane alone on a host switch', async () => {
     seedPanes([{ ptyId: 'ssh:my-box@@pty-7' }])
 
-    await markLiveCodexSessionsForRestart({
+    await markForFocusedHost({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B,
       target: { runtime: 'host' }
@@ -558,7 +568,7 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
   it('still marks the local host pane while sparing the remote one beside it', async () => {
     seedPanes([{ ptyId: 'pty-1' }, { ptyId: 'remote:env-1@@term-1' }])
 
-    await markLiveCodexSessionsForRestart({
+    await markForFocusedHost({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B,
       target: { runtime: 'host' }
@@ -571,10 +581,27 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
+  it('marks the local pane for a switch made on this computer while a server is focused', async () => {
+    seedPanes([{ ptyId: 'pty-1' }, { ptyId: 'remote:env-1@@term-1' }])
+    useAppStore.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
+
+    await markLiveCodexSessionsForRestart({
+      owner: { kind: 'local' },
+      previousAccountLabel: ACCOUNT_A,
+      nextAccountLabel: ACCOUNT_B,
+      target: { runtime: 'host' }
+    })
+
+    // Why: the notice follows the host that was written, never the focused one.
+    expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({
+      'pty-1': { previousAccountLabel: ACCOUNT_A, nextAccountLabel: ACCOUNT_B }
+    })
+  })
+
   it('still marks a local host pane when the switch names no target at all', async () => {
     seedPanes([{ ptyId: 'pty-1' }])
 
-    await markLiveCodexSessionsForRestart({
+    await markForFocusedHost({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
@@ -590,7 +617,7 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
   it('leaves a WSL Codex pane alone on a host switch even when its foreground is codex', async () => {
     seedPanes([{ ptyId: 'pty-wsl' }], { wt1: '\\\\wsl.localhost\\Ubuntu\\home\\dev\\orca' })
 
-    await markLiveCodexSessionsForRestart({
+    await markForFocusedHost({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B,
       target: { runtime: 'host' }
@@ -603,7 +630,7 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
   it('marks that same WSL pane when its own distro is the lane that changed', async () => {
     seedPanes([{ ptyId: 'pty-wsl' }], { wt1: '\\\\wsl.localhost\\Ubuntu\\home\\dev\\orca' })
 
-    await markLiveCodexSessionsForRestart({
+    await markForFocusedHost({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B,
       target: { runtime: 'wsl', wslDistro: 'Ubuntu' }
@@ -617,7 +644,7 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
   it('keeps one distro switch off another distro pane', async () => {
     seedPanes([{ ptyId: 'pty-wsl' }], { wt1: '\\\\wsl.localhost\\Ubuntu\\home\\dev\\orca' })
 
-    await markLiveCodexSessionsForRestart({
+    await markForFocusedHost({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B,
       target: { runtime: 'wsl', wslDistro: 'Debian' }
@@ -630,7 +657,7 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
     seedPanes([{ ptyId: 'pty-1' }, { ptyId: 'remote:env-1@@term-1' }])
     useAppStore.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
 
-    await markLiveCodexSessionsForRestart({
+    await markForFocusedHost({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B,
       target: { runtime: 'host' }
@@ -662,7 +689,7 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
         'pty-1': 'wsl:Ubuntu'
       })
 
-      await markLiveCodexSessionsForRestart({
+      await markForFocusedHost({
         previousAccountLabel: ACCOUNT_A,
         nextAccountLabel: ACCOUNT_B,
         target: { runtime: 'host' }
@@ -687,7 +714,7 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
         }
       ])
 
-      await markLiveCodexSessionsForRestart({
+      await markForFocusedHost({
         previousAccountLabel: ACCOUNT_A,
         nextAccountLabel: ACCOUNT_B,
         previousAccountId: 'account-a',
@@ -709,7 +736,7 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
         'pty-1': 'host'
       })
 
-      await markLiveCodexSessionsForRestart({
+      await markForFocusedHost({
         previousAccountLabel: 'System default',
         nextAccountLabel: ACCOUNT_A,
         previousAccountId: null,
@@ -737,7 +764,7 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
         }
       ])
 
-      await markLiveCodexSessionsForRestart({
+      await markForFocusedHost({
         previousAccountLabel: ACCOUNT_A,
         nextAccountLabel: ACCOUNT_B,
         previousAccountId: 'account-a',
@@ -784,7 +811,7 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
         vi.mocked(window.api.codexAccounts.listRecordedPaneLanes).mockResolvedValue(recorded())
       }
 
-      await markLiveCodexSessionsForRestart({
+      await markForFocusedHost({
         previousAccountLabel: ACCOUNT_A,
         nextAccountLabel: ACCOUNT_B,
         target: { runtime: 'host' }
@@ -803,7 +830,7 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
         { ptyId: 'ssh:my-box@@pty-7' }
       ])
 
-      await markLiveCodexSessionsForRestart({
+      await markForFocusedHost({
         previousAccountLabel: ACCOUNT_A,
         nextAccountLabel: ACCOUNT_B,
         target: { runtime: 'host' }
