@@ -14,6 +14,7 @@ import {
   createWorktreeCopyBudgetTracker,
   formatWorktreeIncludeCopyWarning
 } from './worktree-include-copy-budget'
+import { RefsCloneUnavailableError } from './worktree-refs-clone'
 import { createWorktreeCopiedPaths, createWorktreeLinkedPaths } from './worktree-symlinks'
 
 const posixIt = process.platform === 'win32' ? it.skip : it
@@ -357,6 +358,21 @@ describe('createWorktreeCopiedPaths copy budget', () => {
     expect(cloneWorktreePath).toHaveBeenCalledTimes(1)
   })
 
+  it('still block-clones on Windows ReFS when only the byte budget would be exceeded', async () => {
+    mkdirSync(join(primary, 'node_modules'))
+    writeFileSync(join(primary, 'node_modules', 'pkg.js'), 'x'.repeat(200))
+    const cloneWorktreePath = vi.fn(async () => undefined)
+
+    const skipped = await createWorktreeCopiedPaths(primary, worktree, ['node_modules'], {
+      platform: 'win32',
+      cloneWorktreePath,
+      copyBudget: TINY_BYTE_BUDGET
+    })
+
+    expect(skipped).toEqual([])
+    expect(cloneWorktreePath).toHaveBeenCalledTimes(1)
+  })
+
   it('does not run the macOS APFS clone for an entry over the file-count limit', async () => {
     mkdirSync(join(primary, '.cache'))
     for (const name of ['a', 'b', 'c', 'd', 'e']) {
@@ -392,6 +408,24 @@ describe('createWorktreeCopiedPaths copy budget', () => {
     expect(cloneWorktreePath).toHaveBeenCalledTimes(1)
     expect(skipped).toEqual([{ path: 'models', reason: 'bytes', mayBePartial: true }])
     // The whole point: no unbudgeted byte-for-byte copy ran behind the failure.
+    expect(existsSync(join(worktree, 'models'))).toBe(false)
+  })
+
+  it('does not let a typed ReFS clone fallback escape the byte budget', async () => {
+    mkdirSync(join(primary, 'models'))
+    writeFileSync(join(primary, 'models', 'checkpoint'), 'x'.repeat(500))
+    const cloneWorktreePath = vi.fn(async () => {
+      throw new RefsCloneUnavailableError('block cloning became unavailable')
+    })
+
+    const skipped = await createWorktreeCopiedPaths(primary, worktree, ['models'], {
+      platform: 'win32',
+      cloneWorktreePath,
+      copyBudget: TINY_BYTE_BUDGET
+    })
+
+    expect(cloneWorktreePath).toHaveBeenCalledTimes(1)
+    expect(skipped).toEqual([{ path: 'models', reason: 'bytes', mayBePartial: true }])
     expect(existsSync(join(worktree, 'models'))).toBe(false)
   })
 
