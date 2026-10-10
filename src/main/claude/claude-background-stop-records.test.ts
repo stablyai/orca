@@ -33,7 +33,14 @@ async function droppedFromRoster() {
       {
         sessionId: 'session-1',
         fence: 7,
-        journal: { snapshot: () => ({ items: [] }), submissions: () => [] },
+        journal: {
+          snapshot: () => ({ items: [] }),
+          submissions: () => [],
+          runningTurn: () => null,
+          itemFence: () => undefined,
+          visitItems: () => undefined,
+          wroteBeforeOpen: () => false
+        },
         adapter: run.adapter
       },
       RECORD,

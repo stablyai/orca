@@ -9,6 +9,7 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import type { JournalHostDatabase } from './journal-host-database'
 import { JournalEpochController } from './journal-epoch-controller'
+import { JournalEpochFounding } from './journal-epoch-founding'
 import { JournalItemAppender } from './journal-item-appender'
 import { JournalLifecycleBatchAppender } from './journal-lifecycle-batch-appender'
 import type { JournalLoad } from './journal-open'
@@ -60,7 +61,9 @@ export type JournalStoreCollaborators = {
 }
 
 export function createJournalStoreCollaborators(host: JournalStoreHost): JournalStoreCollaborators {
+  const founding = new JournalEpochFounding(host.identity)
   const epochController = new JournalEpochController({
+    founding,
     identity: host.identity,
     now: host.now,
     mintEpoch: host.mintEpoch,
@@ -109,23 +112,21 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     // Every rejection is a dispatch row through this one writer; the draft
     // returned-transition rides it so no path can bypass the hook.
     inTransaction: (db, row) => queuedMessages.onRowInTransaction(db, row),
-    rolledBack: () => queuedMessages.invalidate()
+    rolledBack: () => queuedMessages.invalidate(),
+    founding
   })
   const lifecycleBatchAppender = new JournalLifecycleBatchAppender({
     state: host.state,
     cursor: host.cursor,
-    enqueueRows: (plan) => rowWriter.enqueueRows(plan)
+    enqueueRows: (plan, options) => rowWriter.enqueueRows(plan, undefined, options)
   })
   return {
     epochController,
     queuedMessages,
     stopMarks: new JournalStopMarks({ state: host.state }),
-    // Behind the stored fact: settles drafts whose consumed submission the loaded journal shows
-    // refused (a downgrade wrote no hook), then prunes. Bookkeeping, never failing the open.
-    restore: () =>
-      restoreJournalStore(host, { epochController }).then(() =>
-        queuedMessages.repairAndPruneAtOpen()
-      ),
+    // Reads only: the drafts' repair and prune are startup's (`repairAndPrune`), and a chat with
+    // no journal yet is founded by its first write.
+    restore: () => restoreJournalStore(host, founding),
     rowWriter,
     submissionWriter: new JournalSubmissionWriter({
       state: host.state,

@@ -17,6 +17,7 @@ import {
 } from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { openTestAttachConversation } from './structured-agent-session-attach-test-conversation'
+import { settleStaleStructuredAgentSessionState } from './structured-agent-session-stale-state-settlement'
 import {
   attachJournal,
   journalIdentityFor,
@@ -66,17 +67,27 @@ function adapterWith(providerHistoryWindow?: () => Promise<ProviderHistoryWindow
   return { adapter, dispatch }
 }
 
-/** A previous process wrote the submission row and died before its outcome. */
+/** A previous process wrote the submission row and died before its outcome; the acquisition's
+ *  leftover settlement then left the send it may have handed over in doubt, before the attach. */
 async function crashedJournal(clientMessageId = 'cm_1', text = 'deploy the thing') {
   const journal = await journals.open({
     identity: IDENTITY,
     stateDirectory: root
   })
+  const fence = RECORD.lease.runtimeFence
   await journal.appendSubmission({
     clientMessageId,
     payloadFingerprint: digestPayload(text),
     body: userMessage(text),
-    fence: RECORD.lease.runtimeFence
+    fence
+  })
+  await settleStaleStructuredAgentSessionState({
+    journal,
+    sessionId: RECORD.sessionId,
+    fence,
+    acquisitionGeneration: null,
+    deathEvidence: null,
+    below: fence + 1
   })
   await journal.close()
 }

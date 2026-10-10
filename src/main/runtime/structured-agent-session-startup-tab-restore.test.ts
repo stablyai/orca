@@ -339,6 +339,8 @@ describe('restoring the chat tabs open at quit', () => {
       const tabWrites = spyOnTabWrites()
       const { runtime, published } = startupRuntime({ profileChats: [CHAT_A, CHAT_B] })
       await runtime.prepareStructuredAgentSessionStartupRestoration()
+      // Startup's settlement of what the legacy chats' last process left lands first.
+      await getStructuredAgentSessionHost()?.startupSettled()
       // One more write, then failing: a seed written chat by chat would stop part way.
       writes.grants = 1
 

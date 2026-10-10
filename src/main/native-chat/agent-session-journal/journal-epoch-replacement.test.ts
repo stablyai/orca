@@ -96,7 +96,7 @@ describe('journal epoch replacement', () => {
     const published: JournalLoad[] = []
 
     replace({
-      items: [{ identity: item(1), body: { kind: 'status', text: 'republished' } }],
+      items: [{ identity: item(1), body: { kind: 'status', text: 'republished' }, ownerFence: 1 }],
       onPublished: (loaded) => published.push(loaded)
     })
 
@@ -112,7 +112,7 @@ describe('journal epoch replacement', () => {
       'a replace',
       (journal: AgentSessionJournal) =>
         journal.replaceEpochItems('legacy_import', 1, [
-          { identity: item(9), body: { kind: 'status', text: 'republished' } }
+          { identity: item(9), body: { kind: 'status', text: 'republished' }, ownerFence: 1 }
         ])
     ],
     ['a rollover', (journal: AgentSessionJournal) => journal.rollEpoch('handle_forked', 1)]

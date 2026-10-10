@@ -27,6 +27,7 @@ import {
   REST_TEST_THREAD as THREAD,
   type RestTestRig
 } from './structured-agent-session-rest-test-rig'
+import { retryIdle } from './structured-agent-session-retry.test-fixture'
 
 const LAST_CHUNK_AT = HOST_TEST_NOW + 5_500
 const RESTARTED_AT = HOST_TEST_NOW + 3_600_000
@@ -108,6 +109,11 @@ async function restartAfterCrash(): Promise<void> {
   })
 }
 
+/** The host's retry has settled what the restart left. */
+function settled(): Promise<void> {
+  return retryIdle(rig.host.collaboratorsForTests().reconciliation, SESSION)
+}
+
 async function expectSettledStream(): Promise<void> {
   const snapshot = await rig.host.journalSnapshot(SESSION)
   expect(
@@ -173,13 +179,14 @@ describe('a provider stream cut short before its next lease renewal', () => {
   it('retains the output bound when a client opens the journal before owner reconciliation', async () => {
     await streamBeforeCrash()
     await restartAfterCrash()
-    const beforeProof = await rig.host.journalSnapshot(SESSION)
-    expect(
-      beforeProof.items.some((item) => readAgentJournalTurn(item.body)?.state === 'unverifiable')
-    ).toBe(true)
+    // The open writes nothing; with its owner not yet reconciled the turn reads unverifiable.
+    const beforeProof = await rig.host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(beforeProof.page.latestTurn?.turn.state).toBe('unverifiable')
+    expect(beforeProof.page.working).toBe(false)
 
     await rig.host.reconcileRestartLeases()
     await rig.host.collaboratorsForTests().serialize(SESSION, async () => {})
+    await settled()
 
     await expectSettledStream()
   })
@@ -204,6 +211,7 @@ describe('a provider stream cut short before its next lease renewal', () => {
       reason: 'probe unavailable'
     })
     await rig.host.restoreReadableSessions()
+    await settled()
 
     const snapshot = await rig.host.journalSnapshot(SESSION)
     const turn = snapshot.items.map((item) => readAgentJournalTurn(item.body)).find(Boolean)

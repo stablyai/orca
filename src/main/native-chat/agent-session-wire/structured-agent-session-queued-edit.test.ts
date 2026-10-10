@@ -75,8 +75,12 @@ function hold(
       : { ...common, action }
   )
 }
+function gate() {
+  const host = { store: rig.store, sessions: rig.host.collaboratorsForTests().sessions }
+  return structuredQueueSendGate(host, HOST_TEST_SESSION)
+}
 function publication() {
-  return readQueuePublication(journal(), structuredQueueSendGate(rig.store, HOST_TEST_SESSION))
+  return readQueuePublication(journal(), gate())
 }
 function published(id: string) {
   return publication().queuedMessages.find((message) => message.messageId === id)
@@ -198,7 +202,7 @@ describe('edit leases and automatic delivery', () => {
     expect(
       shouldQueueStructuredAgentSessionSend({
         journal: journal(),
-        ...structuredQueueSendGate(rig.store, HOST_TEST_SESSION)()
+        ...gate()(journal())
       })
     ).toBe(true)
     // An explicit Send still overrides, and spends the lease with the card.

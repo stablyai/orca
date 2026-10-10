@@ -138,7 +138,9 @@ export async function prepareLegacyTranscriptImport(input: {
     replacement.push({
       identity,
       body: legacyItemBody(message, limits),
-      observedAt: message.timestamp ?? undefined
+      observedAt: message.timestamp ?? undefined,
+      // Imported history is no generation's work: never current, whatever it says still runs.
+      ownerFence: 0
     })
   }
   return { ok: true, items: replacement }

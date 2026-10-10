@@ -26,6 +26,8 @@ export type JournalLifecycleMutationInput = JournalItemAddress &
         linkage?: AgentJournalProducerLinkage
         /** Which turn the row belongs to. Kept from the write that creates the row. */
         turnScope: AgentJournalTurnScope
+        /** The writer's provenance claim (`journalItemOwnerFence`); absent for host bookkeeping. */
+        ownerFence?: number
       }
     | { kind: 'tombstone' }
   )
@@ -61,7 +63,9 @@ export function journalLifecycleItemMutation(
 export function journalLifecycleMutationRow(
   mutation: JournalLifecycleMutationInput,
   itemId: string,
-  revision: number
+  revision: number,
+  /** What an item mutation states (`journalItemOwnerFence`). */
+  ownerFence: number
 ): JournalLifecycleMutation {
   return mutation.kind === 'item'
     ? {
@@ -70,6 +74,7 @@ export function journalLifecycleMutationRow(
         revision,
         body: mutation.body,
         turnScope: mutation.turnScope,
+        ownerFence,
         ...agentJournalLinkageFields(mutation.linkage)
       }
     : { kind: 'tombstone', itemId, revision }

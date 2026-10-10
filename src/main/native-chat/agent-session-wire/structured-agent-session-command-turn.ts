@@ -44,6 +44,10 @@ import type { StructuredAgentRegistry } from './structured-agent-registry'
 import { conversationCommandBlocked } from './structured-conversation-command-admission'
 import { structuredAgentSessionCommandTurn } from '../../../shared/structured-agent-session-command-turn-identity'
 import { refuseQueuedCommand } from './structured-agent-session-queued-command-refusal'
+import {
+  contextStructuredAgentSessionCurrentWork,
+  type StructuredAgentSessionCurrentWork
+} from './structured-agent-session-current-work'
 
 export { structuredAgentSessionCommandTurn } from '../../../shared/structured-agent-session-command-turn-identity'
 
@@ -90,11 +94,12 @@ export function structuredAgentSessionAwaitedCommand(
     : undefined
 }
 
-/** Whether the journal's running turn is a command's, which takes no input while it runs. */
+/** Whether the live generation's running turn is a command's, which takes no input while it runs
+ *  (`structuredAgentSessionCurrentWork`). */
 export function structuredAgentSessionCommandRunning(
-  journal: Pick<AgentSessionJournal, 'activeTurnId'>
+  work: Pick<StructuredAgentSessionCurrentWork, 'activeTurnId'>
 ): boolean {
-  const turnId = journal.activeTurnId()
+  const turnId = work.activeTurnId()
   return turnId !== null && isStructuredAgentSessionCommandTurnId(turnId)
 }
 
@@ -220,7 +225,8 @@ async function openCommandTurn(
     clientMessageId,
     state: 'pending',
     fence: ctx.fence,
-    turnScope: ctx.journal.liveTurnScope()
+    // The child it goes to is live at `fence`: an ended generation's turn is not joined.
+    turnScope: contextStructuredAgentSessionCurrentWork(ctx).turnScope()
   })
   const startedAt = ctx.now()
   const running = agentJournalTurnBody({

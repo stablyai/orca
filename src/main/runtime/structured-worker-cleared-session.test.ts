@@ -207,6 +207,8 @@ function installHost(): void {
       open.add(id)
       return { items: [message(`${id}-1`, 'idle')], submissions: [] }
     },
+    // No projection held: the gate reads the timeline as it stands.
+    currentWork: () => null,
     setSessionTabVisibility: async (id: string, visible: boolean) => {
       if (id === failHideOf) {
         throw new Error('the durable tab index is wedged')

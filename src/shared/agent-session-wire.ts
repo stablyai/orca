@@ -148,6 +148,16 @@ export type AgentSessionHistoryPage = {
   subagentRoster?: AgentSessionSubagentRosterEntry[]
   /** As of the page's read; a client applies it only from a page that replaces its state. */
   latestTurn?: AgentSessionLatestTurn | null
+  /** Rides with `latestTurn`: the approvals and questions still waiting on the person that the
+   *  agent running now raised, over the whole journal. One an agent that has ended raised is not
+   *  listed, since nothing can take its answer. Absent from an older host, whose clients read every
+   *  pending prompt they hold as waiting. */
+  actionablePromptIds?: string[]
+  /** Rides with `latestTurn`: whether the agent running now is working, by the host's projection of
+   *  current work — its running turn, or a send it owes, eligible or handed over and unanswered.
+   *  What an agent that has ended left counts for nothing. Absent from an older host, whose
+   *  clients derive it from the rows they hold. */
+  working?: boolean
 }
 
 export type AgentSessionHistoryResult =
@@ -207,6 +217,10 @@ export type AgentSessionSubscribeEvent =
       /** Rides every batch that carries rows, removals or submissions, so absent there means an
        *  older host; absent on one that carries none, which changes no turn. */
       latestTurn?: AgentSessionLatestTurn | null
+      /** Rides with `latestTurn` (`AgentSessionHistoryPage.actionablePromptIds`). */
+      actionablePromptIds?: string[]
+      /** Rides with `latestTurn` (`AgentSessionHistoryPage.working`). */
+      working?: boolean
     } & AgentSessionFrameFields)
   | ({
       type: 'reset'
@@ -473,9 +487,7 @@ export type AgentSessionThreadGoalChange =
   | { kind: 'status'; status: 'active' | 'paused' }
   | { kind: 'clear' }
 
-export type AgentSessionThreadGoalResult = {
-  change: AgentSessionThreadGoalChange['kind']
-}
+export type AgentSessionThreadGoalResult = { change: AgentSessionThreadGoalChange['kind'] }
 
 /** Provider-reported choices and effective next-turn values. Additive read-only
  *  surface so older hosts can reject it without changing structured v1 writes. */

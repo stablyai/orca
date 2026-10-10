@@ -9,19 +9,28 @@ import {
 } from '../../../shared/agent-session-failure'
 import { PROVIDER_EXIT_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
-import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionEndedEvent } from './structured-agent-session-adapter'
 import type {
   StructuredAgentSessionHostSession,
   StructuredAgentSessionProviderChild
 } from './structured-agent-session-host-types'
-import { endProviderChild } from './structured-agent-session-provider-child'
+import { recordProviderChildEnd } from './structured-agent-session-provider-child'
+import { isSqliteContentionFailure } from '../../sqlite/sqlite-read-failure'
+import {
+  backgroundLeaseWrites,
+  backgroundSettlementWrites
+} from './structured-agent-session-background-writes'
 import {
   releaseStoredStructuredAgentSessionOwnerAfterExit,
   type StructuredAgentSessionLeaseStore
 } from './structured-agent-session-lease-release'
 import type { StructuredAgentSessionSinkBarrier } from './structured-agent-session-event-sink'
-import { settleStructuredAgentSessionDeadGeneration } from './structured-agent-session-dead-generation-settlement'
+import {
+  settleStructuredAgentSessionLeftovers,
+  type StructuredAgentSessionExitSettlement,
+  type StructuredAgentSessionLeftoverStore
+} from './structured-agent-session-leftover-settlement'
+import type { StaleStructuredAgentSessionStateJournal } from './structured-agent-session-stale-state-settlement'
 import {
   captureUnfinishedStructuredAgentSessionWork,
   type DeadGenerationJournal,
@@ -47,16 +56,26 @@ export type StructuredAgentSessionChildExit = {
 export type StructuredAgentSessionChildExitSession = Pick<
   StructuredAgentSessionHostSession,
   'child' | 'lastEndedChild'
-> & { journal: DeadGenerationJournal & Pick<AgentSessionJournal, 'cursor' | 'itemBody'> }
+> & { journal: DeadGenerationJournal & StaleStructuredAgentSessionStateJournal }
+
+/** The host retry's signal (`StructuredAgentSessionRetry.signal`): the one edge every way a
+ *  generation ends goes through. `exit`: the exit's own settlement, owed when
+ *  it did not land. */
+export type StructuredAgentSessionGenerationEnded = (
+  sessionId: string,
+  options?: { restate?: boolean; exit?: StructuredAgentSessionExitSettlement }
+) => void
 
 export type StructuredAgentSessionChildExitContext<
   TSession extends StructuredAgentSessionChildExitSession = StructuredAgentSessionHostSession
 > = {
-  store: StructuredAgentSessionLeaseStore
+  store: StructuredAgentSessionLeaseStore & StructuredAgentSessionLeftoverStore
   sessions: Map<string, TSession>
   flushLifecycle: (sessionId: string) => Promise<StructuredAgentSessionSinkBarrier>
-  publishFence: (sessionId: string, session: TSession) => void
   publishStatus?: (sessionId: string) => void
+  /** A generation ended: every reader re-derives current work, the queued-card drain is
+   *  scheduled with no journal write needed, and the host's retry settles what is owed. `restate`: each chat re-baselines at the moved fence. */
+  generationEnded: StructuredAgentSessionGenerationEnded
   /** The delivery loop hands over whatever is queued once the child is off the record. */
   wakeDelivery?: (sessionId: string) => void
   /** An ended child's start, if still open, has nothing left to time. */
@@ -145,20 +164,27 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
         ? ('hostRestarted' as const)
         : ('chatClosed' as const)
       : undefined
+  // Death first: before the tail, the settlement or the release writes anything, every reader
+  // projects this generation as ended, so no frame they publish reads it Working and no prompt it
+  // raised is answerable. The child stays on record (its sink drains the tail) until `endChild`.
+  recordProviderChildEnd(session, {
+    generation: child.generation,
+    fence: child.fence,
+    // A close keeps the cause of the stop that asked for it, and ends where it was asked.
+    cause: expected ? (close?.cause ?? 'evict') : 'exit',
+    reason: expected ? (close?.reason ?? null) : exit.reason,
+    ...(!expected && exit.failure ? { failure: exit.failure } : {}),
+    duringStartup: exitedDuringStartup,
+    // The adapter publishes an exit only once it saw the root go, first-hand or proven.
+    rootGone: true,
+    ...(expected && close ? { endedAt: close.requestedAt } : {})
+  })
+  context.generationEnded(sessionId)
   const endChild = (): void => {
     context.startupAttempts?.childEnded(sessionId, child)
-    endProviderChild(session, {
-      generation: child.generation,
-      fence: child.fence,
-      // A close keeps the cause of the stop that asked for it, and ends where it was asked.
-      cause: expected ? (close?.cause ?? 'evict') : 'exit',
-      reason: expected ? (close?.reason ?? null) : exit.reason,
-      ...(!expected && exit.failure ? { failure: exit.failure } : {}),
-      duringStartup: exitedDuringStartup,
-      // The adapter publishes an exit only once it saw the root go, first-hand or proven.
-      rootGone: true,
-      ...(expected && close ? { endedAt: close.requestedAt } : {})
-    })
+    if (session.child === child) {
+      session.child = null
+    }
     context.publishStatus?.(sessionId)
   }
   const record = context.store.getRecord(sessionId)
@@ -168,6 +194,7 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     context.wakeDelivery?.(sessionId)
     return
   }
+  let settlement: StructuredAgentSessionExitSettlement | null = null
   try {
     // The exited child's own writes land first: its dead generation is settled from all of them.
     try {
@@ -191,13 +218,11 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     // Folded before the fallback's end is built, so the end reads it (`turnEndAfterStop`).
     await close?.recorded
     const generation = child.generation ?? 'unknown'
-    // The exit proves this child gone, as the record's death evidence later says: what it left
-    // `unverifiable` is revised now, not at the next open.
+    // The exit proves this child gone, as the record's death evidence says once released: what it
+    // left `unverifiable` is revised now.
     const watched = { ownerFence: child.fence, observedAt }
-    const settled = await settleStructuredAgentSessionDeadGeneration({
-      journal: session.journal,
-      sessionId,
-      fence: child.fence,
+    settlement = {
+      ownerFence: child.fence,
       settlementId: `${expected ? 'expected-close:' : PROVIDER_EXIT_ROW_PREFIX}${sessionId}:${child.fence}:${generation}`,
       pendingSubmissionReason: expected
         ? 'provider_closed_before_acknowledgement'
@@ -222,18 +247,36 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
         : {}),
       exit: watched,
       ...(unrunRejection ? { unrunRejection } : {})
-    })
-    if (!settled.ok) {
-      logExitFailure(context, sessionId, 'exit-settlement', settled.error)
     }
   } finally {
-    // The root's exit was observed, so the owner is released even when terminal settlement could
-    // not be durably accepted. Bare cause: whatever this settlement could not write is settled from
-    // it later (the settle recording it queues, or the next open or acquire).
+    // What the exited child left is settled first, at its own fence, as its own closing tail lands:
+    // a row its closed sink still delivers lands too, and wakes the retry to settle it once the
+    // release below moves the fence. Both are bookkeeping (`structured-agent-session-background-
+    // writes.ts`): another connection's lock fails them at once, and what did not commit stays owed
+    // to the retry, the settlement as the exit's debt and the release as its repair.
     let released = false
+    let owed: StructuredAgentSessionExitSettlement | null = null
+    let contended = false
+    if (settlement) {
+      const settled = await settleStructuredAgentSessionLeftovers({
+        store: context.store,
+        sessionId,
+        journal: session.journal,
+        writes: backgroundSettlementWrites(session.journal),
+        exit: settlement,
+        // Ended whether or not the release lands: the host saw the root go.
+        ended: { fence: child.fence, rootGone: true }
+      })
+      if (!settled.ok) {
+        owed = settlement
+        contended = isSqliteContentionFailure(settled.error)
+        logExitFailure(context, sessionId, 'exit-settlement', settled.error)
+      }
+    }
     try {
       await releaseStoredStructuredAgentSessionOwnerAfterExit({
         store: context.store,
+        writes: backgroundLeaseWrites(context.store),
         sessionId,
         expectedFence: child.fence,
         now: context.now(),
@@ -242,6 +285,7 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
       })
       released = true
     } catch (error) {
+      contended ||= isSqliteContentionFailure(error)
       logExitFailure(context, sessionId, 'exit-owner-release', error)
     }
     if (context.route) {
@@ -256,10 +300,14 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     }
     endChild()
     // A reader re-baselines on a death of the child's own; a close Orca asked for moves no fence a
-    // reader holds, as a client resends a message when its fence moves.
-    if (released && !expected) {
-      context.publishFence(sessionId, session)
-    }
+    // reader holds, as a client resends a message when its fence moves, and discards a reply (the
+    // Stop's own) issued at the fence before. Either way every reader learns the generation ended
+    // and the queued-card drain runs, whether or not the release or the settlement was written.
+    context.generationEnded(sessionId, {
+      restate: released && !expected,
+      ...(owed ? { exit: owed } : {}),
+      ...(contended ? { contended } : {})
+    })
     context.wakeDelivery?.(sessionId)
   }
 }

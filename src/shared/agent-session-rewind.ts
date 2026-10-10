@@ -55,6 +55,9 @@ export const AgentSessionRewindRecordSchema = z.object({
         observedAt: z.number().finite(),
         // Absent on records written before rows stated them: the rebuild then places the row by position.
         turnScope: AgentJournalTurnScopeSchema.optional(),
+        // The row's execution provenance, carried into the rebuilt epoch. Absent on records written
+        // before rows carried it.
+        ownerFence: z.number().int().nonnegative().optional(),
         ...AgentJournalProducerLinkageFields
       })
     )

@@ -110,6 +110,9 @@ export type StructuredAgentSessionHostSession = {
    *  observed exit. */
   child: StructuredAgentSessionProviderChild | null
   lastEndedChild?: StructuredAgentSessionEndedChild
+  /** Bumped by every signal that a generation ended, which can change what is current with no
+   *  journal row or lease write: readers key what they cache of current work on it. */
+  operationalRevision?: number
   /** Owned by one live restart action, so another caller cannot replace its progress. */
   restartResume?: NonNullable<AgentSessionStatusSummary['restartResume']> & { operationId: string }
 }

@@ -50,6 +50,7 @@ import { codexProviderHandle } from '../../../shared/agent-session-provider-hand
 import { StructuredAgentArgumentsError } from '../structured-agent-arguments-error'
 import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session-message-source'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { startUpHost } from './structured-agent-session-leftover-settlement.test-fixture'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -252,6 +253,9 @@ async function writeAsEarlierProcess(
   })
   await write(journal, record.lease.runtimeFence)
   await journal.close()
+  // The next host is a new process, which has not opened the chat yet.
+  await host.flushAllStreamedEvents()
+  await startHost()
 }
 
 function earlierSubmission(id: string, text: string, handoverRecorded?: true) {
@@ -557,8 +561,7 @@ describe('what an earlier host process left behind', () => {
     await writeAsEarlierProcess(async (journal, fence) => {
       await journal.appendSubmission({ ...earlierSubmission('queued', 'q', true), fence })
     })
-
-    await host.revealSession(SESSION)
+    await startUpHost(host)
 
     expect(await submission('queued')).toMatchObject({
       dispatchState: 'rejected',
@@ -582,10 +585,7 @@ describe('what an earlier host process left behind', () => {
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       })
     })
-    await host.flushAllStreamedEvents()
-    await startHost()
-
-    await host.revealSession(SESSION)
+    await startUpHost(host)
 
     expect(await submission('legacy')).toMatchObject({ dispatchState: 'unknown', recovered: true })
     expect(await submission('handed')).toMatchObject({ dispatchState: 'unknown', recovered: true })
@@ -676,7 +676,7 @@ describe('a start that fails while messages wait on it', () => {
 })
 
 describe('Stop withdraws what is queued', () => {
-  it('never meets a crash leftover: the open it runs settles it first (W17a)', async () => {
+  it('never meets a crash leftover: startup settles it first (W17a)', async () => {
     await writeAsEarlierProcess(async (journal, fence) => {
       await journal.appendSubmission({
         ...earlierSubmission('person', 'p', true),
@@ -686,6 +686,7 @@ describe('Stop withdraws what is queued', () => {
       })
       await journal.appendSubmission({ ...earlierSubmission('leftover', 'l', true), fence })
     })
+    await startUpHost(host)
 
     expect(await stop()).toMatchObject({ ok: true })
 

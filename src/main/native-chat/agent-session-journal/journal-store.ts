@@ -1,6 +1,7 @@
 // Append-only journal store for one agent session. It owns the chat's fold and write queue, and no
 // connection: every statement goes through the host's one journal database.
 
+import { QueuedMessageReopenFloor } from './queued-message-reopen-floor'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import { randomUUID } from 'node:crypto'
 import type {
@@ -13,7 +14,6 @@ import type {
   AgentJournalSubmission,
   AgentJournalThreadGoal,
   AgentJournalTurnLifecycle,
-  AgentJournalTurnScope,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
@@ -21,13 +21,12 @@ import { currentAgentSessionThreadGoalBySequence } from '../../../shared/agent-s
 import type { AgentSessionContextUsage } from '../../../shared/agent-session-context-usage'
 import { latestStructuredAgentContextFacts } from '../../../shared/structured-agent-session-context-usage'
 import {
-  activeStructuredAgentSessionTurnIdBySequence,
-  liveStructuredAgentSessionTurnScope,
-  newestStructuredAgentSessionTurnBySequence
+  newestStructuredAgentSessionTurnBySequence,
+  runningStructuredAgentSessionTurnItemBySequence
 } from '../../../shared/structured-agent-session-live-turn'
 import type { JournalReplacementItem } from './journal-epoch-replacement'
 import { readJournalSince } from './journal-cursor'
-import type { JournalHostDatabase } from './journal-host-database'
+import type { JournalHostDatabase, JournalWriteOptions } from './journal-host-database'
 import { journalRowsAfterReader, type JournalLoad } from './journal-open'
 import {
   markJournalPendingSubmissionsUnknown,
@@ -48,6 +47,7 @@ import type {
   JournalItemAppendOptions,
   JournalItemLinkageVisitor,
   JournalLifecycleBatchInput,
+  JournalPlannedLifecycleBatchInput,
   JournalReadSince,
   JournalSubmissionConsume,
   JournalSubmissionInput,
@@ -60,7 +60,7 @@ import {
   journalQueueReopenRowBuilder,
   journalStopEventRowBuilder
 } from './journal-stop-and-resume-rows'
-import type { AgentJournalEpochReason, JournalStopEvent } from './journal-row-schema'
+import type { AgentJournalEpochReason, JournalRow, JournalStopEvent } from './journal-row-schema'
 import type {
   JournalOperationReceipt,
   JournalRowTransactionHook,
@@ -86,8 +86,8 @@ export class AgentSessionJournal {
 
   private state: JournalReducerState
   private openedThrough: AgentJournalCursor = { epoch: '', sequence: 0 }
-  private reopenUnmarked: AgentJournalCursor | null = null
-  private onCommitted: (() => void) | null = null
+  private readonly reopen: QueuedMessageReopenFloor
+  private onCommitted: ((rows?: readonly JournalRow[]) => void) | null = null
   private readonly queue: JournalWriteQueue
   private readonly rowWriter: JournalRowWriter
   private readonly epochController: JournalEpochController
@@ -127,7 +127,7 @@ export class AgentSessionJournal {
         for (const row of rows) {
           applyJournalRow(this.state, row, savedAt)
         }
-        this.onCommitted?.()
+        this.onCommitted?.(rows)
       },
       notifyCommitted: () => this.onCommitted?.(),
       journal: () => this,
@@ -140,6 +140,7 @@ export class AgentSessionJournal {
     this.submissionWriter = collaborators.submissionWriter
     this.stepWriter = collaborators.stepWriter
     this.queuedMessages = collaborators.queuedMessages
+    this.reopen = new QueuedMessageReopenFloor(this.queuedMessages)
     this.stopMarks = collaborators.stopMarks
     this.restore = collaborators.restore
     this.context = new JournalContextController({
@@ -167,15 +168,23 @@ export class AgentSessionJournal {
     )
   }
 
-  /** Where the reopen's pause begins when this handle could not write its mark: where the mark
-   *  would have gone. Null once a mark is written. Per handle, so the next open marks again. */
-  reopenFloor(): AgentJournalCursor | null {
-    return this.reopenUnmarked
-  }
+  /** Where this handle opened the journal (`wroteBeforeOpen`). */
+  openedAt = (): AgentJournalCursor => this.openedThrough
+
+  /** Where the reopen's pause begins while no mark holds it: where this handle's mark would go.
+   *  Null once a mark is written. Per handle, so the next open derives it again. */
+  reopenFloor = (): AgentJournalCursor | null => this.reopen.get()
 
   async open(): Promise<void> {
     await this.restore()
     this.openedThrough = this.cursor()
+  }
+
+  /** A conversation's open, which always follows the chat stopping (a quit, a crash or a close):
+   *  a card it finds waits for a turn from where this handle opened, derived with nothing written,
+   *  unless an earlier mark already holds it. The mark that follows records the same start. */
+  holdReopenFromOpen(): void {
+    this.reopen.holdFromOpen(this.openedThrough)
   }
 
   /** Refuses every later write and resolves once the admitted ones have landed. Holds no
@@ -188,7 +197,7 @@ export class AgentSessionJournal {
 
   /** Told of every durable change, epoch replacements included, so a reader learns of a write
    *  without its writer saying so. One listener: a later call replaces it. It must not throw. */
-  observeCommits(listener: () => void): void {
+  observeCommits(listener: (rows?: readonly JournalRow[]) => void): void {
     this.onCommitted = listener
   }
 
@@ -223,14 +232,11 @@ export class AgentSessionJournal {
     }
   }
 
-  /** The turn this journal has published as running — the same read a client's snapshot gives,
-   *  without materialising one. */
-  activeTurnId = (): string | null =>
-    activeStructuredAgentSessionTurnIdBySequence(this.state.items.values())
-
-  /** Where a row written now belongs: the running turn, or the conversation. */
-  liveTurnScope = (): AgentJournalTurnScope =>
-    liveStructuredAgentSessionTurnScope(this.state.items.values())
+  /** The turn this journal records as running, with its record's item, whichever generation
+   *  opened it — the same read a client's snapshot gives, without materialising one. Whether it is
+   *  current work is the host projection's to say (`structuredAgentSessionCurrentWork`). */
+  runningTurn = (): { item: AgentJournalRenderItem; turnId: string } | null =>
+    runningStructuredAgentSessionTurnItemBySequence(this.state.items.values())
 
   /** The newest turn record whatever state it settled in, for readers that need the outcome. */
   newestTurn = (): AgentJournalTurnLifecycle | null =>
@@ -247,12 +253,11 @@ export class AgentSessionJournal {
   /** Includes revisions and completion tombstones, whose timestamps disappear from render items. */
   lastActivityAt = (): number => this.state.lastActivityAt
 
-  /** Fence of the writer that created the item, while it is in the timeline. */
+  /** The item's execution provenance (`JournalItemRow.ownerFence`), while it is in the timeline. */
   itemFence = (itemId: string): number | undefined => this.state.itemFences.get(itemId)
 
   /** Latest saved output at this fence, excluding client actions and recovery bookkeeping. */
-  lastProviderActivityAt = (fence: number): number | undefined =>
-    this.state.providerActivityAt.get(fence)
+  lastProviderActivityAt = (fence: number) => this.state.providerActivityAt.get(fence)
 
   submissions = (): AgentJournalSubmission[] => [...this.state.submissions.values()]
 
@@ -315,25 +320,28 @@ export class AgentSessionJournal {
   }
 
   /** This open found waiting cards an earlier handle wrote (`queued-message-pause.ts`). */
-  appendQueueReopen(fence: number, since?: number): Promise<AgentJournalCursor> {
-    return this.rowWriter.append(journalQueueReopenRowBuilder(() => this.state, fence, since))
+  appendQueueReopen(fence: number, since?: number, options?: JournalWriteOptions) {
+    const build = journalQueueReopenRowBuilder(() => this.state, fence, since)
+    return this.rowWriter.append(build, undefined, undefined, options)
   }
 
-  /** Marks the reopen when a card waits or is mid-hand-off (it may come back to waiting), from
-   *  `since` when the chat stopped before now; a failed write leaves where the mark would have gone
-   *  as the pause's start (`reopenFloor`), and throws. */
-  async markQueueReopen(fence: number, since?: number): Promise<void> {
-    if (this.queuedMessages.awaitReopenMark()) {
-      const sequence = since ?? this.state.lastSequence + 1
-      this.reopenUnmarked = { epoch: this.state.epoch, sequence }
-      await this.appendQueueReopen(fence, since)
-      this.reopenUnmarked = null
-    }
+  /** Marks the reopen (`QueuedMessageReopenFloor.mark`), from `since` when the chat stopped before
+   *  now; a failed write leaves the pause's start where the mark would have gone, and throws. */
+  markQueueReopen(fence: number, since?: number, options?: JournalWriteOptions): Promise<void> {
+    const at = { epoch: this.state.epoch, sequence: since ?? this.state.lastSequence + 1 }
+    return this.reopen.mark(at, () => this.appendQueueReopen(fence, since, options))
   }
 
   appendLifecycleBatch(input: JournalLifecycleBatchInput): Promise<AgentJournalCursor> {
     return this.lifecycleBatchAppender.append(input)
   }
+
+  /** A lifecycle batch planned at its own turn in the queue (`JournalPlannedLifecycleBatchInput`). */
+  appendPlannedLifecycleBatch = (input: JournalPlannedLifecycleBatchInput) =>
+    this.lifecycleBatchAppender.appendPlanned(input)
+
+  /** An acquisition's write of a chat's first epoch (`JournalRowWriter.found`). */
+  foundEpoch = (): Promise<void> => this.rowWriter.found()
 
   /** Several writes as one turn in the queue; see `JournalStepWriter`. */
   appendSteps: JournalStepWriter['append'] = (steps) => this.stepWriter.append(steps)
@@ -386,9 +394,10 @@ export class AgentSessionJournal {
   replaceEpochItems(
     reason: AgentJournalEpochReason,
     fence: number,
-    items: readonly JournalReplacementItem[]
+    items: readonly JournalReplacementItem[],
+    options?: JournalWriteOptions
   ): Promise<AgentJournalCursor> {
-    return this.epochController.replace(reason, fence, items)
+    return this.epochController.replace(reason, fence, items, options)
   }
 
   private adoptLoadedJournal(loaded: JournalLoad): void {

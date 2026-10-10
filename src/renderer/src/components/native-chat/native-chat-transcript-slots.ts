@@ -322,13 +322,15 @@ export function splitNativeChatSlotsWaitingBehindLiveTurn(
   slots: readonly NativeChatTranscriptSlot[],
   journalItems: readonly AgentJournalRenderItem[] | undefined,
   stopping = false,
-  journalSubmissions?: readonly AgentJournalSubmission[]
+  journalSubmissions?: readonly AgentJournalSubmission[],
+  host: Parameters<typeof nativeChatMessagesWaitingBehindLiveTurn>[4] = {}
 ): { slots: NativeChatTranscriptSlot[]; waitingSlots: NativeChatTranscriptSlot[] } {
   const waiting = nativeChatMessagesWaitingBehindLiveTurn(
     slots.flatMap((slot) => (slot.kind === 'message' ? [slot.message] : [])),
     journalItems,
     stopping,
-    journalSubmissions
+    journalSubmissions,
+    host
   )
   const isWaiting = (slot: NativeChatTranscriptSlot): boolean =>
     slot.kind === 'message' &&

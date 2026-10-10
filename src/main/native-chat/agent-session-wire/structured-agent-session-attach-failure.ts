@@ -84,4 +84,6 @@ export function endStructuredAgentSessionReleasedChild(
   context.runtimeState.currentEventSink(sessionId)?.close()
   context.runtimeState.discardEventSink(sessionId)
   context.publishStatus?.(sessionId)
+  // The released acquisition was the live generation: readers and the queued-card drain re-derive.
+  context.generationEnded?.(sessionId)
 }

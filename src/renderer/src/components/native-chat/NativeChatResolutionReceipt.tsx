@@ -9,11 +9,15 @@ import {
 
 export function NativeChatResolutionReceipt({
   body,
-  disclosureId
+  disclosureId,
+  awaiting = true
 }: {
   body: NativeChatResolvedPrompt
   /** Message this receipt stands in for; keys the question row's disclosure. */
   disclosureId?: string
+  /** False when the host says nobody waits on this pending prompt: the agent that raised it ended,
+   *  so its row reports what was asked instead of breathing. */
+  awaiting?: boolean
 }): React.JSX.Element | null {
   const askDisclosureKey = disclosureId === undefined ? undefined : `ask:${disclosureId}`
   const subject: NativeChatAskRowSubject | null =
@@ -35,7 +39,11 @@ export function NativeChatResolutionReceipt({
           }
   if (body.resolution.state === 'pending') {
     return body.kind === 'question' ? (
-      <NativeChatAwaitingInputRow subject={subject} pending disclosureKey={askDisclosureKey} />
+      <NativeChatAwaitingInputRow
+        subject={subject}
+        pending={awaiting}
+        disclosureKey={askDisclosureKey}
+      />
     ) : null
   }
   const { resolution } = body

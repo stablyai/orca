@@ -83,7 +83,8 @@ function installHost(options: {
       present: true,
       sessionIds: options.tabListed ? [SESSION_ID] : []
     }),
-    journalSnapshot: async () => ({ items: options.items ?? [idleTurn()] })
+    journalSnapshot: async () => ({ items: options.items ?? [idleTurn()] }),
+    currentWork: () => null
   }
 }
 

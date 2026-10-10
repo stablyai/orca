@@ -18,6 +18,12 @@ import { createClaudeJournalTranslator } from './claude-structured-journal-trans
 import { claudeSubagentGroupBody, claudeSubagentGroupIdentity } from './claude-subagent-group-row'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../shared/agent-session-record.test-fixture'
+import { settleStructuredAgentSessionLeftovers } from '../native-chat/agent-session-wire/structured-agent-session-leftover-settlement'
+import { backgroundSettlementWrites } from '../native-chat/agent-session-wire/structured-agent-session-background-writes'
 
 // Frame orders are real sessions', scrubbed. A resumed agent's frames still name its ORIGINAL
 // spawn call while the announcement names the message call that resumed it, and a new provider
@@ -138,10 +144,10 @@ async function openJournal(): Promise<AgentSessionJournal> {
 }
 
 /** One provider process: a fresh sink and translator over the session's journal. */
-function acquire(journal: AgentSessionJournal) {
+function acquire(journal: AgentSessionJournal, fence = 1) {
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   const translator = createClaudeJournalTranslator({ sink: deferred.sink, coalesceMs: 0 })
-  deferred.bind({ journal, fence: 1, publish: () => {} })
+  deferred.bind({ journal, fence, publish: () => {} })
   const settle = async (): Promise<void> => {
     await expect(deferred.drained()).resolves.toEqual({ ok: true })
   }
@@ -451,16 +457,37 @@ describe('a Claude subagent resumed after its provider restarted', () => {
     )
     first.translator.handle(taskStarted('agent-a', 'toolu_spawn_a', 'Grok PR'))
     await first.settle()
-    // The host dies: nothing sweeps the child, and reopening the journal can say only that
-    // contact was lost, not when.
+    // The host dies: nothing sweeps the child. The next startup's reconciliation finds its
+    // generation's lease released with no proof, so it can say only that contact was lost, not when.
     await crashed.close()
     const journal = await openJournal()
+    expect(rowsListing(journal, 'agent-a')[0]?.agents).toEqual([
+      expect.objectContaining({ id: 'agent-a', state: 'working', ownerFence: 1 })
+    ])
+    const released = agentSessionRecordFixture(
+      agentSessionLeaseFixture({
+        sessionId: 'orca-session',
+        runtimeFence: 2,
+        claimStatus: 'released',
+        ownerProcess: null,
+        reservedSpawnToken: null
+      })
+    )
+    expect(
+      await settleStructuredAgentSessionLeftovers({
+        store: { getRecord: (sessionId) => (sessionId === 'orca-session' ? released : null) },
+        sessionId: 'orca-session',
+        journal,
+        writes: backgroundSettlementWrites(journal)
+      })
+    ).toMatchObject({ ok: true })
     const [lost] = rowsListing(journal, 'agent-a')[0]?.agents ?? []
     expect(lost).toMatchObject({ id: 'agent-a', state: 'unverifiable' })
     expect(lost?.settledAt).toBeUndefined()
 
     vi.setSystemTime(5_000_000)
-    const second = acquire(journal)
+    // The next start reserves past the released lease.
+    const second = acquire(journal, 3)
     second.translator.handle(userTurn('turn-b'))
     second.translator.handle(
       frame({

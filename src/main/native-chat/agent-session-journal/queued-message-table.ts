@@ -129,6 +129,14 @@ export function listQueuedMessages(db: Database.Database, sessionId: string): Qu
     .flatMap((row) => readStoredQueuedMessageRow(row) ?? [])
 }
 
+/** Every chat holding a card, of any state: the chats startup re-derives cards for. */
+export function listSessionsWithQueuedMessages(db: Database.Database): string[] {
+  return db
+    .prepare('SELECT DISTINCT session_id FROM queued_messages')
+    .all()
+    .flatMap((row) => (typeof row.session_id === 'string' ? [row.session_id] : []))
+}
+
 export function getQueuedMessage(
   db: Database.Database,
   sessionId: string,

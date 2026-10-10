@@ -67,7 +67,7 @@ describe('a conversation delivers what its journal commits', () => {
 
     // Already delivered when the writer's await returns, as an explicit publish would have been.
     expect(deliver).toHaveBeenCalledOnce()
-    expect(deliver).toHaveBeenCalledWith('session-1', journal)
+    expect(deliver).toHaveBeenCalledWith('session-1', journal, { lowestFence: 0 })
   })
 
   it('binds a handle set through a plain map reference', async () => {
@@ -84,7 +84,7 @@ describe('a conversation delivers what its journal commits', () => {
 
     await appendStatus(journal, 'through the plain map')
 
-    expect(deliver).toHaveBeenCalledExactlyOnceWith('session-1', journal)
+    expect(deliver).toHaveBeenCalledExactlyOnceWith('session-1', journal, expect.anything())
   })
 
   it('delivers an epoch replacement, which readers must reload from', async () => {
@@ -99,7 +99,7 @@ describe('a conversation delivers what its journal commits', () => {
 
     await journal.replaceEpochItems('handle_forked', 0, [])
 
-    expect(deliver).toHaveBeenCalledExactlyOnceWith('session-1', journal)
+    expect(deliver).toHaveBeenCalledExactlyOnceWith('session-1', journal, expect.anything())
   })
 
   it('delivers nothing for a handle the conversation has replaced', async () => {
@@ -118,7 +118,7 @@ describe('a conversation delivers what its journal commits', () => {
     expect(deliver).not.toHaveBeenCalled()
 
     await appendStatus(current, 'live')
-    expect(deliver).toHaveBeenCalledExactlyOnceWith('session-1', current)
+    expect(deliver).toHaveBeenCalledExactlyOnceWith('session-1', current, expect.anything())
   })
 
   it('delivers nothing once the conversation is dropped', async () => {

@@ -1,6 +1,7 @@
 // The context every client mutation of a session runs with, and the one path each takes: admit the
 // envelope against the lease, then run its plan inside the session's serialize.
 
+import type { StructuredAgentSessionRetry } from './structured-agent-session-reconciliation-retry'
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult
@@ -15,6 +16,7 @@ import type { MutationPlan } from './structured-agent-session-mutation-plans'
 import type { StructuredAgentSessionStopEnding } from './structured-agent-session-host-lifetime'
 import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
 import type { StructuredAgentSessionOptionRevisions } from './structured-agent-session-option-revisions'
+import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import type {
   StructuredAgentSessionCaller,
   StructuredAgentSessionHostDeps,
@@ -39,6 +41,8 @@ export type StructuredAgentSessionMutationContext = {
   joinChildClose: (sessionId: string) => Promise<AgentSessionMutationSessionPreparation>
   /** A message was accepted: the session's delivery loop hands it over. */
   wakeDelivery: (sessionId: string) => void
+  /** The host's retry of background bookkeeping (`StructuredAgentSessionRetry`). */
+  retry: Pick<StructuredAgentSessionRetry, 'signal' | 'sendWaits'>
   /** Stops the session's provider child, keeping its conversation; inside the caller's serialize.
    *  Each caller names why (`ending`). */
   stopAgent: (sessionId: string, ending: StructuredAgentSessionStopEnding) => Promise<void>
@@ -72,6 +76,11 @@ export function mutateStructuredAgentSession<TValue>(
       envelope,
       plan,
       journal: () => context.sessions.get(envelope.sessionId)?.journal,
+      currentWork: () =>
+        hostStructuredAgentSessionCurrentWork(
+          { store: context.deps.store, sessions: context.sessions },
+          envelope.sessionId
+        ),
       prepareSession,
       publish: (journal) => context.publish(envelope.sessionId, journal),
       wakeDelivery: (sessionId) => context.wakeDelivery(sessionId),

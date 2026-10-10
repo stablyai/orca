@@ -155,11 +155,14 @@ export function journal(
   items: AgentJournalRenderItem[],
   submissions: AgentJournalSubmission[] = []
 ) {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the code under test calls only snapshot(), submissions() and appendItem(); a real AgentSessionJournal needs an on-disk SQLite store.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the code under test calls only snapshot(), submissions(), appendItem() and the provenance reads; a real AgentSessionJournal needs an on-disk SQLite store.
   return {
     snapshot: () => ({ items, submissions, cursor: { epoch: EPOCH, sequence: items.length } }),
     submissions: () => submissions,
-    appendItem: async () => undefined
+    appendItem: async () => undefined,
+    // Created by the generation the record names: current while its lease is held.
+    itemFence: () => undefined,
+    wroteBeforeOpen: () => false
   } as never
 }
 

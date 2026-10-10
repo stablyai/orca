@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { DerivedQueuePause } from '../agent-session-journal/queued-message-pause'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { isSqliteContentionFailure } from '../../sqlite/sqlite-read-failure'
 
 /** A per-process id, minted once per host process like the runtime's own
  *  `runtimeId` (`orca-runtime-runtime-id.ts`), stamped on the cards this process writes or hands
@@ -30,14 +31,16 @@ export function structuredQueuePauses(journal: PauseJournal): DerivedQueuePause[
 }
 
 /** The mark of a chat that stopped running with cards waiting — Orca quit or crashed, or the chat
- *  was closed — so they wait for its next turn (`queued-message-pause.ts`). Every open marks, and
- *  so does a person's close: the idle sweep never closes a chat with cards waiting, so its
+ *  was closed — so they wait for its next turn (`queued-message-pause.ts`). Startup marks each
+ *  chat with cards the earlier process left, and so does a person's close: the idle sweep never closes a chat with cards waiting, so its
  *  eviction never reopens one. `since`: where the chat stopped, for a mark written after a send
  *  that came later, which must still lift it. Bookkeeping, so a failure is reported and never
- *  thrown; the pause then starts where the mark would have gone, holding no less. */
+ *  thrown; the pause then starts where the mark would have gone, holding no less. One written
+ *  through the retry's background handle that met another connection's lock throws, ending the
+ *  retry's round. */
 export async function markStructuredQueueReopen(
   sessionId: string,
-  journal: Pick<AgentSessionJournal, 'markQueueReopen'>,
+  journal: Pick<AgentSessionJournal, 'markQueueReopen'> & { background?: true },
   fence: number,
   logger: StructuredAgentSessionLogger,
   since?: number
@@ -45,6 +48,9 @@ export async function markStructuredQueueReopen(
   try {
     await journal.markQueueReopen(fence, since)
   } catch (error) {
+    if (journal.background && isSqliteContentionFailure(error)) {
+      throw error
+    }
     logger.warn('marking a reopened queue failed', {
       scope: 'queue-reopen-mark',
       sessionId,

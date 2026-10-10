@@ -2,14 +2,12 @@
 // messages to a provider child. Bundled because they share one invariant — a conversation open
 // with a message queued has a delivery loop — and the open is where a loop for leftovers wakes.
 
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import { holdClosedStructuredAgentSessionSends } from './structured-agent-session-host-lifetime'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   openStructuredAgentSessionConversation,
-  resettleOpenStructuredAgentSessionConversation,
-  type OpenedStructuredAgentSessionConversation,
-  type StructuredAgentSessionConversationOpenOptions
+  type OpenedStructuredAgentSessionConversation
 } from './structured-agent-session-conversation-open'
 import type { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
 import { StructuredAgentSessionDeliveryLoop } from './structured-agent-session-delivery-loop'
@@ -21,16 +19,12 @@ import type {
 } from './structured-agent-session-host-types'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
-import { recoverStructuredRewind } from './structured-rewind-recovery'
 import { retireSignedOutStructuredAgentSessionChild } from './structured-agent-session-signed-out-child'
 
 export type StructuredAgentSessionConversationDelivery = {
   loop: StructuredAgentSessionDeliveryLoop
   /** For a caller inside the session's serialize. */
-  open: (
-    sessionId: string,
-    options?: StructuredAgentSessionConversationOpenOptions
-  ) => Promise<StructuredAgentSessionHostSession | null>
+  open: (sessionId: string) => Promise<StructuredAgentSessionHostSession | null>
   /** Every commit a conversation's journal makes: one may have ended the command that held its
    *  queue. Enqueued through the session's serialize, never read here, so a commit that lands while
    *  a step is deciding to stop wakes the loop after that step rather than being lost to it. */
@@ -38,7 +32,7 @@ export type StructuredAgentSessionConversationDelivery = {
   /** A person's Stop settle opened or closed. It writes no row, so only what reads the settle
    *  moves: the session's status row and the steer hold's handover. Never activity. */
   afterSettleEdge: (sessionId: string, journal: AgentSessionJournal) => void
-  /** Stops the loop and the resettle on a proof of death; quit's first step. */
+  /** Stops the loop; quit's first step. */
   dispose: () => void
   /** Indexes a conversation some other open produced, as `open` would have. */
   adoptOpened: (
@@ -78,6 +72,8 @@ export function createStructuredAgentSessionConversationDelivery(input: {
         : sessions.get(sessionId)
       await retireSignedOutStructuredAgentSessionChild(sessionId, session, {
         work: {
+          currentWork: () =>
+            hostStructuredAgentSessionCurrentWork({ store: deps.store, sessions }, sessionId),
           childWork: () => input.clientDelivery.readChildWork(sessionId),
           hasOpenDispatch: () => {
             const record = deps.store.getRecord(sessionId)
@@ -109,6 +105,8 @@ export function createStructuredAgentSessionConversationDelivery(input: {
       ),
     logger: deps.logger,
     record: (sessionId) => deps.store.getRecord(sessionId),
+    currentWork: (sessionId) =>
+      hostStructuredAgentSessionCurrentWork({ store: deps.store, sessions }, sessionId),
     readChildWork: input.clientDelivery.readChildWork,
     stopping: input.clientDelivery.readStopping,
     now: () => deps.now?.() ?? Date.now()
@@ -117,20 +115,19 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     sessionId: string,
     opened: OpenedStructuredAgentSessionConversation
   ): Promise<void> => {
-    const { session } = opened
-    sessions.set(sessionId, session)
+    // Indexing a chat writes nothing: the loop never hands over a send an earlier process left
+    // (`StructuredAgentSessionCurrentWork.handsOver`), and keeping one as a card is startup's.
+    sessions.set(sessionId, opened.session)
     input.clientDelivery.publishRestored(sessionId)
-    await settleInterruptedCommands(deps, sessionId, session)
-    if (session.journal.submissions().some(isQueuedAgentJournalSubmission)) {
-      loop.wake(sessionId)
-    }
   }
   const wakesQueued = new Set<string>()
   const afterCommit = (sessionId: string, journal: AgentSessionJournal): void => {
+    const work = hostStructuredAgentSessionCurrentWork({ store: deps.store, sessions }, sessionId)
     if (
       wakesQueued.has(sessionId) ||
-      structuredAgentSessionCommandRunning(journal) ||
-      !journal.submissions().some(isQueuedAgentJournalSubmission)
+      !work ||
+      structuredAgentSessionCommandRunning(work) ||
+      !journal.submissions().some((submission) => work.handsOver(submission))
     ) {
       return
     }
@@ -149,25 +146,6 @@ export function createStructuredAgentSessionConversationDelivery(input: {
         })
       })
   }
-  // A chat open before its owner's death was proven revises what its open settled. Queued, never
-  // awaited: the writer can hold this session's serialize (an attach recovering its lease).
-  const stopResettling = deps.store.onDeathEvidence((sessionId) => {
-    if (sessions.has(sessionId)) {
-      void input
-        .trackStart(
-          input.serialize(sessionId, () =>
-            resettleOpenStructuredAgentSessionConversation(deps, sessionId, sessions.get(sessionId))
-          )
-        )
-        .catch((error: unknown) =>
-          deps.logger.warn('resettling an open chat after its owner died failed', {
-            scope: 'death-evidence-resettle',
-            sessionId,
-            error
-          })
-        )
-    }
-  })
   return {
     loop,
     afterCommit,
@@ -176,34 +154,8 @@ export function createStructuredAgentSessionConversationDelivery(input: {
       afterCommit(sessionId, journal)
     },
     adoptOpened,
-    dispose: () => {
-      loop.dispose()
-      stopResettling()
-    },
-    open: (sessionId, options) =>
-      openStructuredAgentSessionConversation({ deps, sessions, adoptOpened }, sessionId, options)
-  }
-}
-
-/**
- * A rewind found prepared when the conversation opens was started under a child this process no
- * longer has — the open runs only when none is indexed — so nothing will finish it, and left alone
- * it refuses every send until a view attaches. Settled here instead of by a start inside
- * acceptance. A Codex rewind only its provider can prove stays for the attach.
- */
-async function settleInterruptedCommands(
-  deps: StructuredAgentSessionHostDeps,
-  sessionId: string,
-  session: StructuredAgentSessionHostSession
-): Promise<void> {
-  const fence = structuredAgentSessionConversationFence(deps.store, sessionId)
-  try {
-    await recoverStructuredRewind(deps, sessionId, session.journal, fence)
-  } catch (error) {
-    deps.logger.warn('settling an interrupted rewind on open failed', {
-      scope: 'rewind-recovery',
-      sessionId,
-      error
-    })
+    dispose: () => loop.dispose(),
+    open: (sessionId) =>
+      openStructuredAgentSessionConversation({ deps, sessions, adoptOpened }, sessionId)
   }
 }

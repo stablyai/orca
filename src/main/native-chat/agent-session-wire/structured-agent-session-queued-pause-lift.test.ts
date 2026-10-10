@@ -105,7 +105,7 @@ describe("a Stop's queue pause", () => {
     const inFlight = await handedOverUserSend('sent before the restart')
     // Derived from the journal, not remembered: a restart forgets nothing it needs. The process
     // dies with no close, as a quit writes no Stop event to end the pause either.
-    rig.crashRestartHostProcess()
+    await rig.crashRestartHostProcess()
     // Still derived, though after a restart no pause is shown.
     expect(await rig.queuePause()).toBeNull()
     expect(derivedPauses()).toEqual(['stopped', 'restarted'])
@@ -447,7 +447,7 @@ describe('Resume', () => {
 
   it("of a Stop from before a restart, which no client offers there, also lifts the restart's pause", async () => {
     const draftId = await stoppedDraft()
-    rig.crashRestartHostProcess()
+    await rig.crashRestartHostProcess()
     expect(await rig.queuePause()).toBeNull()
     expect(derivedPauses()).toEqual(['stopped', 'restarted'])
     expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })

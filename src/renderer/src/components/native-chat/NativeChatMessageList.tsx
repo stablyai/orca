@@ -27,6 +27,7 @@ import {
   NativeChatWaitingTranscriptItems
 } from './NativeChatTranscriptItems'
 import type { NativeChatTranscriptRowContext } from './NativeChatTranscriptRow'
+import type { StructuredAgentSessionHostWork } from './use-structured-agent-session-transport-state'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import {
   splitNativeChatSlotsWaitingBehindLiveTurn,
@@ -77,6 +78,7 @@ export function NativeChatMessageList({
   journalItems,
   journalSubmissions,
   journalLatestTurn: latestTurn,
+  journalHostWork: hostWork,
   subagentRoster,
   railOutline = null,
   isVisible = true,
@@ -99,6 +101,8 @@ export function NativeChatMessageList({
   journalSubmissions?: readonly AgentJournalSubmission[]
   /** The host's newest turn record, which places a live turn whose record is not loaded. */
   journalLatestTurn?: AgentSessionLatestTurn | null
+  /** The host's prompts still waiting on the person and its working answer (an older host: none). */
+  journalHostWork?: StructuredAgentSessionHostWork
   /** Every subagent the session's rosters named, whether or not its roster row is loaded. */
   subagentRoster?: Parameters<typeof useNativeChatSubagentSections>[2]
   /** User messages older than the loaded window, from the host's outline. */
@@ -218,9 +222,10 @@ export function NativeChatMessageList({
         allSlots,
         journalItems,
         stopping,
-        journalSubmissions
+        journalSubmissions,
+        { latestTurn, ...hostWork }
       ),
-    [allSlots, journalItems, stopping, journalSubmissions]
+    [allSlots, journalItems, stopping, journalSubmissions, latestTurn, hostWork]
   )
   const transcriptWindow = useNativeChatTranscriptWindow({
     scrollRef,
@@ -328,6 +333,7 @@ export function NativeChatMessageList({
   const rowContext = useMemo<NativeChatTranscriptRowContext>(
     () => ({
       agentName: structuredAgentLabel(session.agent),
+      actionablePromptIds: hostWork?.actionablePromptIds,
       expandSignal,
       revealedDiff,
       taskListPredecessors,
@@ -343,6 +349,7 @@ export function NativeChatMessageList({
     }),
     [
       session.agent,
+      hostWork,
       allowFileUriLinks,
       expandSignal,
       expandedTurnIds,

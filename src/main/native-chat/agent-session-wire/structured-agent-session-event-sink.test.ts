@@ -577,7 +577,7 @@ describe('producer linkage reaches the journal through every append path', () =>
       await deferred.drained()
 
       expect(journalAppendOptions).toEqual([
-        { fence: 5, turnScope: AGENT_JOURNAL_THREAD_SCOPE, ...LINKAGE }
+        { fence: 5, ownerFence: 5, turnScope: AGENT_JOURNAL_THREAD_SCOPE, ...LINKAGE }
       ])
       deferred.close()
     }
@@ -601,7 +601,7 @@ describe('producer linkage reaches the journal through every append path', () =>
       await deferred.drained()
 
       expect(journalAppendOptions).toEqual([
-        { fence: 5, turnScope: AGENT_JOURNAL_THREAD_SCOPE, ...LINKAGE }
+        { fence: 5, ownerFence: 5, turnScope: AGENT_JOURNAL_THREAD_SCOPE, ...LINKAGE }
       ])
       deferred.close()
     }
@@ -637,7 +637,10 @@ describe('producer linkage reaches the journal through every append path', () =>
     // A control, not a pin. Absence is the claim, so the keys must be missing
     // rather than present-and-undefined: a reader holding this options object
     // would read `agentId: undefined` as a key that exists.
-    expect(journalAppendOptions).toEqual([{ fence: 5, turnScope: AGENT_JOURNAL_THREAD_SCOPE }])
+    // A provider observation names the generation that produced it: the bound fence.
+    expect(journalAppendOptions).toEqual([
+      { fence: 5, ownerFence: 5, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    ])
     deferred.close()
   })
 })

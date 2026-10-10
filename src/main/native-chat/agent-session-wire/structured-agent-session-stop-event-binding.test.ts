@@ -122,7 +122,7 @@ async function stopOfStart(options: { held?: true } = {}): Promise<string | unde
 /** Orchestration mail after the Stop starts a new child and its turn runs. */
 async function mailTurn(): Promise<void> {
   const handedOver = rig.dispatch.mock.calls.length
-  const mail = rig.send('mail for the worker')
+  const mail = rig.send('mail for the retry')
   await mail.result
   await rig.proveStart()
   await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(handedOver + 1))
@@ -167,7 +167,7 @@ describe('a Stop of a start that never landed binds no later turn', () => {
 
   it('reads a mail turn the child end cut, with no verdict of its own, as news', async () => {
     await stopOfStart()
-    const mail = rig.send('mail for the worker')
+    const mail = rig.send('mail for the retry')
     await mail.result
     await turnOpenedBy(mail.id)
 
@@ -180,7 +180,7 @@ describe('a Stop of a start that never landed binds no later turn', () => {
     await stopOfStart()
     await mailTurn()
     const owner = fence()
-    rig.crashRestartHostProcess()
+    await rig.crashRestartHostProcess()
     await rig.host.journalSnapshot(HOST_TEST_SESSION)
 
     await settleStaleStructuredAgentSessionState({
@@ -248,7 +248,7 @@ describe('a Stop pressed before its send opened a turn binds only the turn it st
     expect(laterTurnEndRows()).toEqual([
       expect.objectContaining({ state: 'interrupted', outcome: 'cancellation' })
     ])
-    expect(journal().activeTurnId()).toBeNull()
+    expect(journal().runningTurn()?.turnId ?? null).toBeNull()
   })
 
   it('binds no turn that opens after a Stop that stopped nothing', async () => {
@@ -346,7 +346,7 @@ describe("a Stop's settle that ends the turn its interrupt took", () => {
     expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
 
     expect(await laterTurn()).toMatchObject({ state: 'interrupted', outcome: 'cancellation' })
-    expect(journal().activeTurnId()).toBeNull()
+    expect(journal().runningTurn()?.turnId ?? null).toBeNull()
   })
 })
 
@@ -443,7 +443,8 @@ describe('a rewind that restates a turnless Stop', () => {
     await journal().replaceEpochItems('handle_forked', 1, [
       {
         identity: stoppedTurn,
-        body: { ...ended, completedAt: Date.now() + 1, outcome: 'cancellation' }
+        body: { ...ended, completedAt: Date.now() + 1, outcome: 'cancellation' },
+        ownerFence: 1
       }
     ])
     const mail = rig.send('mail after the rewind')

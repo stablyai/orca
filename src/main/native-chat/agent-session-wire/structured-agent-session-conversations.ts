@@ -21,12 +21,17 @@ export class StructuredAgentSessionConversations extends Map<
 
   constructor(
     private readonly delivery: {
-      deliver: (sessionId: string, journal: AgentSessionJournal) => void
+      /** `lowestFence`: the lowest fence a row committed since the last delivery was written at. */
+      deliver: (
+        sessionId: string,
+        journal: AgentSessionJournal,
+        committed: { lowestFence: number | null }
+      ) => void
       /** A person's Stop settle opened or closed: no row, so neither a publish nor activity. */
       deliverSettleEdge?: (sessionId: string, journal: AgentSessionJournal) => void
       logger: StructuredAgentSessionLogger
       /** A conversation became held: state that waited on it (queued drafts) re-derives. */
-      onOpened?: (sessionId: string) => void
+      onOpened?: (sessionId: string, journal: AgentSessionJournal) => void
       now: () => number
     }
   ) {
@@ -36,18 +41,24 @@ export class StructuredAgentSessionConversations extends Map<
   override set(sessionId: string, session: StructuredAgentSessionHostSession): this {
     const { journal } = session
     let queued = false
-    journal.observeCommits(() => {
+    let lowestFence: number | null = null
+    journal.observeCommits((rows) => {
+      for (const row of rows ?? []) {
+        lowestFence = Math.min(lowestFence ?? row.fence, row.fence)
+      }
       if (queued) {
         return
       }
       queued = true
       queueMicrotask(() => {
         queued = false
+        const committed = { lowestFence }
+        lowestFence = null
         if (this.get(sessionId)?.journal !== journal) {
           return
         }
         try {
-          this.delivery.deliver(sessionId, journal)
+          this.delivery.deliver(sessionId, journal, committed)
         } catch (error) {
           this.delivery.logger.warn('delivering a journal commit failed', {
             scope: 'journal-delivery',
@@ -75,7 +86,7 @@ export class StructuredAgentSessionConversations extends Map<
     })
     this.activity.set(sessionId, this.delivery.now())
     const adopted = super.set(sessionId, session)
-    this.delivery.onOpened?.(sessionId)
+    this.delivery.onOpened?.(sessionId, session.journal)
     return adopted
   }
 

@@ -82,14 +82,14 @@ describe('death evidence on disk', () => {
   })
 })
 
-describe('who is told a proof of death landed', () => {
-  it('tells a listener once the proof is committed, and never for a write that proves nothing', async () => {
+describe('who is told a generation ended', () => {
+  it('tells a listener once the end is committed, with its proof, and never for a write that ends nothing', async () => {
     await seed(null)
     const store = await open()
     const told: unknown[] = []
-    store.onDeathEvidence((sessionId) => told.push(store.getRecord(sessionId)?.lease.deathEvidence))
+    store.onGenerationEnded((ended) => told.push(ended))
     const unsubscribed = vi.fn()
-    store.onDeathEvidence(unsubscribed)()
+    store.onGenerationEnded(unsubscribed)()
 
     await expect(
       store.evictProvenDeadOwner({
@@ -103,7 +103,13 @@ describe('who is told a proof of death landed', () => {
     // The proof already on the record is not news to a later write.
     await store.setSessionTabVisibility(SESSION, true)
 
-    expect(told).toEqual([expect.objectContaining({ kind: 'pid-absent', ownerFence: 7 })])
+    expect(told).toEqual([
+      {
+        sessionId: SESSION,
+        endedFence: 7,
+        evidence: expect.objectContaining({ kind: 'pid-absent', ownerFence: 7 })
+      }
+    ])
     expect(unsubscribed).not.toHaveBeenCalled()
   })
 })

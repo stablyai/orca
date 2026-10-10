@@ -17816,6 +17816,7 @@
         "chooseClaudeAccountThenSend": "Elija o agregue una en la configuración de Cuentas de Claude y vuelva a enviar su mensaje.",
         "providerExitedRow": "{{agent}} se detuvo mientras esta respuesta estaba en curso. Puede continuar en esta conversación.",
         "providerExitedRejection": "{{agent}} se detuvo antes de que se enviara este mensaje.",
+        "providerExitedAnswer": "{{agent}} se detuvo, así que su respuesta no se envió. Envíe un mensaje para continuar.",
         "providerRejected": "El proveedor no aceptó este mensaje.",
         "providerRejectedQuoted": "El proveedor no aceptó este mensaje: {{detail}}.",
         "attachmentEmpty": "Una imagen de este mensaje está vacía, así que el mensaje no se envió.",

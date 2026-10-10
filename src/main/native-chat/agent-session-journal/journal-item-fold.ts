@@ -27,8 +27,8 @@ export function upsertJournalItem(
   itemId: string,
   revision: number,
   next: AgentJournalRenderItem,
-  /** The creating write's fence: the generation a running turn belongs to. */
-  fence: number
+  /** The write's fence, and the provenance it states (`JournalItemRow.ownerFence`). */
+  fences: { fence: number; ownerFence?: number }
 ): void {
   const tombstoned = state.tombstones.get(itemId)
   if (tombstoned !== undefined && revision <= tombstoned) {
@@ -41,9 +41,13 @@ export function upsertJournalItem(
   state.derivedTurnScope.observe(itemId, isRootAgentJournalItem(next), existing?.body, next.body)
   if (!existing) {
     state.items.set(itemId, next)
-    state.itemFences.set(itemId, fence)
+    state.itemFences.set(itemId, fences.ownerFence ?? fences.fence)
     state.tombstones.delete(itemId)
     return
+  }
+  // A revision keeps the provenance it found unless it states one: an owner's observation does.
+  if (fences.ownerFence !== undefined) {
+    state.itemFences.set(itemId, fences.ownerFence)
   }
   // Creation sequence is the ordering key; a revision refreshes content only.
   // `observedAt` is pinned with it: clients sort the timeline by that timestamp,

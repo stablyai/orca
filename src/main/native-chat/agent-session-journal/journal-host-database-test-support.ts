@@ -6,7 +6,10 @@ import { resolve } from 'node:path'
 import { JournalHostDatabase } from './journal-host-database'
 import { replayJournal, type JournalLoad } from './journal-open'
 import { serializeJournalRow, type JournalRow } from './journal-row-schema'
+import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
+import { agentSessionJournalProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import {
+  insertJournalRow,
   iterateJournalEpochRows,
   publishJournalSessionEpoch,
   readJournalSessionEpoch,
@@ -137,7 +140,9 @@ export function insertTestJournalRow(
   insertTestJournalRowJson(db, sessionId, row.seq, serializeJournalRow(row), row.ts)
 }
 
-/** A raw `row_json` at `seq`, the way a newer build or a bad write would leave it. */
+/** A raw `row_json` at `seq`, the way a newer build or a bad write would leave it. A chat whose
+ *  journal was opened and never written holds its epoch in memory only; the row's own epoch is
+ *  founded first, as that journal's first write would have. */
 export function insertTestJournalRowJson(
   db: Database.Database,
   sessionId: string,
@@ -145,9 +150,29 @@ export function insertTestJournalRowJson(
   rowJson: string,
   ts = 1
 ): void {
+  if (readJournalSessionEpoch(db, sessionId) === null) {
+    const parsed: unknown = JSON.parse(rowJson)
+    const epoch =
+      typeof parsed === 'object' && parsed !== null && 'epoch' in parsed ? parsed.epoch : ''
+    foundTestJournalEpoch(db, sessionId, String(epoch))
+  }
   db.prepare(
     'INSERT INTO journal_rows (session_id, epoch, seq, ts, row_json) VALUES (?, ?, ?, ?, ?)'
   ).run(sessionId, liveEpoch(db, sessionId), seq, ts, rowJson)
+}
+
+function foundTestJournalEpoch(db: Database.Database, sessionId: string, epoch: string): void {
+  insertJournalRow(db, sessionId, {
+    kind: 'epoch',
+    reason: 'session_created',
+    providerHandle: agentSessionJournalProviderHandle({ agent: 'claude', providerHandle: null }),
+    v: journalRowSchemaVersion([]),
+    epoch,
+    seq: 1,
+    fence: 0,
+    ts: 1
+  })
+  publishTestJournalEpoch(db, sessionId, epoch)
 }
 
 export function updateTestJournalRowJson(

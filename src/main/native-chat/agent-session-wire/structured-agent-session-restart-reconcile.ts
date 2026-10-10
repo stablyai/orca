@@ -9,6 +9,7 @@ import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { classifyStoreFailure } from './structured-agent-session-attach'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import type { JournalWriteOptions } from '../agent-session-journal/journal-database'
 
 const MAX_RECONCILIATION_PASSES = 8
 
@@ -21,10 +22,23 @@ export function createRestartReconciler(deps: {
     records: readonly AgentSessionRecord[]
   ) => Promise<Map<string, AgentSessionOwnerProbe>>
   now: () => number
-}): (sessionId: string) => Promise<AgentSessionWireRefusal | null> {
+}): (
+  sessionId: string | null,
+  options?: JournalWriteOptions
+) => Promise<AgentSessionWireRefusal | null> {
   let pending: Promise<void> | null = null
-  return async (sessionId) => {
+  let background: Promise<void> | null = null
+  return async (sessionId, options) => {
     if (!deps.store.listRecords().some((record) => record.lease.unreconciled)) {
+      return null
+    }
+    // Background bookkeeping joins a person's run, or another background one, never the reverse:
+    // no person's run inherits its refusal to wait for another connection's lock.
+    if (options?.background && !pending) {
+      background ??= reconcileCurrentLeases(deps, options).finally(() => {
+        background = null
+      })
+      await background
       return null
     }
     if (!pending) {
@@ -37,11 +51,8 @@ export function createRestartReconciler(deps: {
       await pending
       return null
     } catch (error) {
-      return classifyStoreFailure(
-        error,
-        deps.store.getRecord(sessionId)?.lease.runtimeFence ?? null,
-        deps.store.getRecord(sessionId)
-      )
+      const record = sessionId === null ? null : deps.store.getRecord(sessionId)
+      return classifyStoreFailure(error, record?.lease.runtimeFence ?? null, record)
     }
   }
 }
@@ -54,8 +65,7 @@ export type ReaderBookkeepingFailures = {
   clear: () => void
 }
 
-/** Startup and the read carry on past a failure: the next attach or send reconciles and resolves
- *  recovery again before it acts. */
+/** Startup and the read carry on past a failure: the host's retry tries it again with a backoff, and the next attach or send reconciles and resolves recovery again before it acts. */
 export function reportEachFailureOnce(
   logger: StructuredAgentSessionLogger
 ): ReaderBookkeepingFailures {
@@ -113,20 +123,26 @@ function failureKey(failure: unknown): string {
   return String(failure)
 }
 
-async function reconcileCurrentLeases(deps: {
-  store: AgentSessionRecordStore
-  probe: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>
-  probeMany?: (
-    records: readonly AgentSessionRecord[]
-  ) => Promise<Map<string, AgentSessionOwnerProbe>>
-  now: () => number
-}): Promise<void> {
+async function reconcileCurrentLeases(
+  deps: {
+    store: AgentSessionRecordStore
+    probe: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>
+    probeMany?: (
+      records: readonly AgentSessionRecord[]
+    ) => Promise<Map<string, AgentSessionOwnerProbe>>
+    now: () => number
+  },
+  options?: JournalWriteOptions
+): Promise<void> {
   for (let pass = 0; pass < MAX_RECONCILIATION_PASSES; pass += 1) {
-    await deps.store.reconcileOnRestart({
-      probe: deps.probe,
-      ...(deps.probeMany ? { probeMany: deps.probeMany } : {}),
-      now: deps.now()
-    })
+    await deps.store.reconcileOnRestart(
+      {
+        probe: deps.probe,
+        ...(deps.probeMany ? { probeMany: deps.probeMany } : {}),
+        now: deps.now()
+      },
+      options
+    )
     if (!deps.store.listRecords().some((record) => record.lease.unreconciled)) {
       return
     }

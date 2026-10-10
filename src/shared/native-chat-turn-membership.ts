@@ -46,6 +46,8 @@ export type NativeChatTurnJournal = {
    *  record is not loaded, so the turn's loaded rows still draw under its bar. Absent from older
    *  hosts. */
   latestTurn?: AgentSessionLatestTurn | null
+  /** The host's answer to whether the session's own agent is working; absent from older hosts. */
+  working?: boolean
 }
 
 /**

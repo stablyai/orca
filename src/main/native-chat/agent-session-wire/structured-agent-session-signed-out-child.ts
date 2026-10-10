@@ -16,10 +16,7 @@ import type { StructuredAgentSessionLogger } from './structured-agent-session-lo
 
 /** What the check reads of a conversation; every read skips building a snapshot. */
 type SignedOutReading = Pick<StructuredAgentSessionHostSession, 'child'> & {
-  journal: Pick<
-    AgentSessionJournal,
-    'visitItems' | 'visitItemsWithLinkage' | 'itemFence' | 'activeTurnId' | 'newestTurn'
-  > & {
+  journal: Pick<AgentSessionJournal, 'visitItemsWithLinkage' | 'itemFence' | 'newestTurn'> & {
     submissions(): readonly Pick<AgentJournalSubmission, 'dispatchState' | 'fence' | 'rejection'>[]
   }
 }
@@ -94,7 +91,7 @@ export async function retireSignedOutStructuredAgentSessionChild(
   if (
     !session ||
     !structuredAgentSessionChildReportedSignedOut(session, deps.startUnavailable?.()) ||
-    structuredAgentSessionChildHasOpenWork(session.journal, deps.work) ||
+    structuredAgentSessionChildHasOpenWork(deps.work) ||
     owesWakeUp(session.journal, deps.work.childWork())
   ) {
     return

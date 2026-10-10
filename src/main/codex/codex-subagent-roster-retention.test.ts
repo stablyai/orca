@@ -12,6 +12,9 @@ import {
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { CodexSubagentRoster } from './codex-subagent-roster'
 import { MAX_CODEX_SUBAGENT_GROUPS } from './codex-structured-journal-limits'
+import { structuredAgentSessionCurrentWork } from '../native-chat/agent-session-wire/structured-agent-session-current-work'
+import { planStaleStructuredAgentSessionState } from '../native-chat/agent-session-wire/structured-agent-session-stale-state-settlement'
+import { scanRecord } from '../native-chat/agent-session-wire/structured-agent-session-startup-scan.test-fixture'
 
 const THREAD = 'parent'
 const ORIGINAL = 'original'
@@ -104,6 +107,7 @@ async function session(refuse?: 'append' | 'publish') {
       )
   }
   return {
+    journal,
     roster,
     turn,
     announce,
@@ -319,4 +323,40 @@ describe('Codex roster retention through the real sink and journal', () => {
       expect(s.roster.retentionSizes().groups).toBe(MAX_CODEX_SUBAGENT_GROUPS)
     }
   )
+})
+
+// The roster retains a group while any child in it runs; the generation that wrote it can still end.
+describe('a retained running child of a generation that ended', () => {
+  it('reads as not running and not working once a later generation holds the chat', async () => {
+    const s = await session()
+    s.spawn('old-a')
+    await laterGroups(s, true)
+    const original = await s.original()
+    expect(states(original)).toEqual([{ id: 'old-a', state: 'working' }])
+    const itemId = original?.row.itemId ?? ''
+
+    // Generation 1 wrote it; the lease now names generation 13, which is live.
+    const record = scanRecord('session-codex-roster-retention', false)
+    const work = structuredAgentSessionCurrentWork(s.journal, { record })
+    expect(work.isCurrentItem(itemId)).toBe(false)
+    expect(work.working()).toBe(false)
+
+    const plan = planStaleStructuredAgentSessionState({
+      journal: s.journal,
+      sessionId: record.sessionId,
+      fence: 13,
+      acquisitionGeneration: null,
+      deathEvidence: null,
+      below: 13,
+      entriesBelow: 13
+    })
+    const revised = plan.mutations.find(
+      (mutation) => mutation.kind === 'item' && mutation.itemId === itemId
+    )
+    const body = revised?.kind === 'item' ? revised.body : undefined
+    const groups = body?.kind === 'message' ? body.blocks.filter(isSubagentGroupBlock) : []
+    expect(groups.flatMap((group) => group.agents.map(({ id, state }) => ({ id, state })))).toEqual(
+      [{ id: 'old-a', state: 'unverifiable' }]
+    )
+  })
 })

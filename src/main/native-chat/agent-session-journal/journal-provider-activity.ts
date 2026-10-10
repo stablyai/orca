@@ -4,13 +4,15 @@ import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 
-/** Saved output extends a turn; client actions and recovery writes do not. */
+/** Saved output extends a turn; client actions and recovery writes do not. Keyed by the fence of
+ *  the generation that produced the item (`AgentSessionJournal.itemFence`), as a verdict reads it. */
 export function observeJournalProviderActivity(
   state: Pick<JournalReducerState, 'providerActivityAt'>,
   row: JournalRow,
   itemId: string,
   body: AgentJournalItemBody,
-  savedAt: number
+  savedAt: number,
+  fence: number
 ): void {
   if (row.recovered || !isProviderActivity(body)) {
     return
@@ -25,10 +27,7 @@ export function observeJournalProviderActivity(
   ) {
     return
   }
-  state.providerActivityAt.set(
-    row.fence,
-    Math.max(state.providerActivityAt.get(row.fence) ?? 0, savedAt)
-  )
+  state.providerActivityAt.set(fence, Math.max(state.providerActivityAt.get(fence) ?? 0, savedAt))
 }
 
 function isProviderActivity(body: AgentJournalItemBody): boolean {

@@ -151,6 +151,9 @@ export type NativeChatSubagentEntry = {
   startedAt?: number
   /** Epoch ms the entry latched terminal. */
   settledAt?: number
+  /** The agent generation (lease fence) whose execution this entry last observed: stamped by the
+   *  journal on a fresh observation, kept when carried unchanged. Absent: the row's own. */
+  ownerFence?: number
 }
 
 /** One spawn group's roster, revised in place as its children report activity.
@@ -195,6 +198,8 @@ export type NativeChatBackgroundTaskBlock = {
   startedAt?: number
   /** Epoch ms the row latched terminal. */
   settledAt?: number
+  /** As `NativeChatSubagentEntry.ownerFence`. */
+  ownerFence?: number
 }
 
 export type NativeChatBlock =

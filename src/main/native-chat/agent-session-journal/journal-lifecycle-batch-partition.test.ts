@@ -57,6 +57,7 @@ function previousProbe(settlementId: string, mutations: readonly JournalLifecycl
           ? { ...mutation, body: { ...mutation.body, outcome: 'cancellation' } }
           : mutation,
         journalLifecycleMutationItemId(mutation),
+        Number.MAX_SAFE_INTEGER,
         Number.MAX_SAFE_INTEGER
       )
     )

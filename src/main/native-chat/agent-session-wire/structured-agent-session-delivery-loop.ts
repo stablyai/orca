@@ -9,8 +9,10 @@
 // that arrives while a start holds the queue withdraw the queued messages before the handover that
 // would have written them. Stop and the conversation's close are the only other writers of a
 // queued message: a child's exit only ends the child, and this loop reads why. A message an
-// earlier host process left queued is never handed over: the open, or this loop's first step,
-// settles it first (`journal-unsent-send-hold.ts`).
+// earlier host process left queued is never handed over: the loop hands over only what this
+// process accepted (`structuredAgentSessionHandsOver`), read off the journal, so nothing has to be
+// written first. Keeping that message as a card (`journal-unsent-send-hold.ts`) is the startup
+// share's bookkeeping, and its failure holds up no one.
 
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
@@ -37,7 +39,7 @@ import { handOverSubmission } from './structured-agent-session-turns'
 import { structuredAgentSessionNextHandover } from './structured-agent-session-opening-send'
 import { structuredAgentSessionCommandRunning } from './structured-agent-session-command-turn'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
-import { holdRestartedStructuredAgentSessionSends } from './structured-agent-session-host-lifetime'
+import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import { structuredAgentSessionEndedChildFailure } from './structured-agent-session-ended-child-failure'
 
 export type StructuredAgentSessionDeliveryLoopDeps = {
@@ -64,6 +66,8 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   failureTextContext: (sessionId: string) => AgentSessionFailureWordsContext
   logger: StructuredAgentSessionLogger
   record: (sessionId: string) => AgentSessionRecord | null
+  /** The host's projection of the chat's current work (`hostStructuredAgentSessionCurrentWork`). */
+  currentWork: (sessionId: string) => StructuredAgentSessionCurrentWork | null
   readChildWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
   /** A person's Stop is still ending the session's work: the status feed's own reading. */
   stopping: (sessionId: string) => boolean
@@ -167,21 +171,12 @@ export class StructuredAgentSessionDeliveryLoop {
     }
   }
 
-  /** Settles what an earlier host process left queued, then makes the session ready. */
+  /** Makes the session ready for the oldest send this process may hand over. */
   private async prepare(sessionId: string): Promise<Prepared> {
     const session = this.deps.sessions.get(sessionId)
     if (!session || this.disposed) {
       return this.stop(sessionId)
     }
-    // The open already did, unless its write failed: a row an earlier handle wrote is never handed
-    // over, whether it outlived a quit or a crash. A failure here throws, so none is: this run then
-    // fails, which rejects every queued send, this process's own too.
-    await holdRestartedStructuredAgentSessionSends(
-      this.deps.logger,
-      sessionId,
-      session.journal,
-      this.deps.conversationFence(sessionId)
-    )
     if (!(await this.closeWhatTheUserClosed(sessionId, session))) {
       // Never start an agent for a message the user closed; the next wake re-derives and retries.
       return this.stop(sessionId)
@@ -189,7 +184,8 @@ export class StructuredAgentSessionDeliveryLoop {
     const oldest = oldestQueuedSubmission(session)
     // A running command takes no input while its child carries it; its end is a commit, which
     // wakes the loop again. With no child it is a gone generation's, which the start below settles.
-    if (!oldest || (session.child && structuredAgentSessionCommandRunning(session.journal))) {
+    const work = this.deps.currentWork(sessionId)
+    if (!oldest || (session.child && work && structuredAgentSessionCommandRunning(work))) {
       return this.stop(sessionId)
     }
     const failedStart = startThatFailedWhileQueued(session, oldest)

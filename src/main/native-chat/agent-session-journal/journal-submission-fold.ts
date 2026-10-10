@@ -46,7 +46,8 @@ export function applyJournalSubmission(
     itemId,
     0,
     journalRenderItem(itemId, 0, row.body, row, turnScope),
-    row.fence
+    // A person's message is no generation's work: its provenance is the fence that accepted it.
+    { fence: row.fence }
   )
 }
 

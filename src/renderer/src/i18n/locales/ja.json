@@ -17851,6 +17851,7 @@
         "chooseClaudeAccountThenSend": "Claude アカウントの設定で選択または追加してから、メッセージをもう一度送信してください。",
         "providerExitedRow": "この応答の途中で {{agent}} が停止しました。この会話で続けることができます。",
         "providerExitedRejection": "このメッセージが送信される前に {{agent}} が停止しました。",
+        "providerExitedAnswer": "{{agent}} が停止したため、回答は送信されませんでした。続けるにはメッセージを送信してください。",
         "providerRejected": "プロバイダーはこのメッセージを受け付けませんでした。",
         "providerRejectedQuoted": "プロバイダーはこのメッセージを受け付けませんでした: {{detail}}。",
         "attachmentEmpty": "このメッセージの画像が空のため、メッセージは送信されませんでした。",

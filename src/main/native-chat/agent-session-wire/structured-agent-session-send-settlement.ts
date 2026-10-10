@@ -7,8 +7,12 @@ import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-qu
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { isStructuredAgentSessionCommandTurnId } from './structured-agent-session-command-turn'
 
-/** What a settlement read needs of a journal. */
-type SendSettlementJournal = Pick<AgentSessionJournal, 'submissions' | 'cursor' | 'activeTurnId'>
+/** What a settlement read needs: the journal's sends and position, and the live generation's
+ *  running turn as the host's projection reads it (`structuredAgentSessionCurrentWork`), so a send
+ *  never reads as waiting behind a command an ended generation left. */
+export type SendSettlementJournal = Pick<AgentSessionJournal, 'submissions' | 'cursor'> & {
+  activeTurnId: () => string | null
+}
 
 type SettledSend = {
   cursor: AgentJournalCursor

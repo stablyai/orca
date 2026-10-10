@@ -8,6 +8,7 @@
 // the async boundary every awaiting caller was written against.
 
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
+import type { JournalWriteOptions } from '../native-chat/agent-session-journal/journal-database'
 import type { JournalOperationReceipt } from '../native-chat/agent-session-journal/journal-row-writer'
 import { journalOpenRefusalError } from '../native-chat/agent-session-journal/journal-open-failure'
 import { AgentSessionJournalError } from '../native-chat/agent-session-journal/journal-write-guards'
@@ -135,9 +136,11 @@ export class AgentSessionStoreTransactions {
    */
   transact<T>(
     apply: (draft: AgentSessionStoreState) => T,
-    options: { inMemoryWhenReadOnly?: boolean } = {}
+    options: { inMemoryWhenReadOnly?: boolean } & JournalWriteOptions = {}
   ): Promise<T> {
-    const run = this.queue.then(() => this.commit(apply, options.inMemoryWhenReadOnly === true))
+    const run = this.queue.then(() =>
+      this.commit(apply, options.inMemoryWhenReadOnly === true, options.background)
+    )
     this.queue = run.catch(() => {})
     return run
   }
@@ -175,7 +178,11 @@ export class AgentSessionStoreTransactions {
     }
   }
 
-  private commit<T>(apply: (draft: AgentSessionStoreState) => T, inMemoryWhenReadOnly: boolean): T {
+  private commit<T>(
+    apply: (draft: AgentSessionStoreState) => T,
+    inMemoryWhenReadOnly: boolean,
+    background?: true
+  ): T {
     const readOnly = this.journalDatabase.readOnly
     if (readOnly && !inMemoryWhenReadOnly) {
       throw readOnlyStoreRefusal()
@@ -183,7 +190,10 @@ export class AgentSessionStoreTransactions {
     const staged = this.stage(apply)
     const writes = staged.writes
     if (writes && !readOnly) {
-      this.journalDatabase.transaction((db) => writeAgentSessionStoreRows(db, writes))
+      this.journalDatabase.transaction(
+        (db) => writeAgentSessionStoreRows(db, writes),
+        background ? { background } : undefined
+      )
     }
     staged.adopt()
     return staged.result

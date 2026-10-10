@@ -156,6 +156,8 @@ export function mutateWithChatStop<TValue>(
                 windDown = { owed, ctx }
               },
               withdrewQueued: withdrew,
+              noteFence: () =>
+                context.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? ctx.fence,
               ...(ownsLatestStop ? { opensSettle: true as const } : {})
             }
           )

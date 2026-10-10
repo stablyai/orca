@@ -7,7 +7,8 @@ import type { SubscriberFieldHooks } from './agent-session-subscriber-frame-fiel
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import {
   structuredQueueSendGate,
-  tryReadQueuePublication
+  tryReadQueuePublication,
+  type QueuedDrainHolds
 } from './structured-agent-session-queued-publication'
 import type {
   StructuredAgentSessionHostDeps,
@@ -15,6 +16,8 @@ import type {
 } from './structured-agent-session-host-types'
 import { AGENT_SESSION_NOT_ATTACHED } from './structured-agent-session-mutation-admission'
 import { StructuredAgentSessionSendSettlement } from './structured-agent-session-send-settlement'
+import { heldStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
+import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import type { StructuredAgentSessionStatusSubscriber } from './structured-agent-session-status-feed'
 import { createStructuredAgentSessionHostStatusFeed } from './structured-agent-session-host-status-feed'
 import {
@@ -35,7 +38,12 @@ export class StructuredAgentSessionClientDelivery {
     private readonly sessions: Map<string, StructuredAgentSessionHostSession>,
     now: () => number,
     private readonly deps: () => StructuredAgentSessionHostDeps,
-    private readonly onJournalActivity: (sessionId: string) => void,
+    /** The queued-card drain: every publish wakes it (`activity`: a journal write, which renews the
+     *  idle clock; a generation's end is not one), and a card it holds back is never named next. */
+    private readonly queue: {
+      onJournalActivity: (sessionId: string, activity?: boolean) => void
+      drain: QueuedDrainHolds
+    },
     onAgentStarted: (sessionId: string) => void,
     /** A session's child records changed; the chat strip republishes from them. */
     onChildWorkChanged: (sessionId: string) => void,
@@ -56,7 +64,7 @@ export class StructuredAgentSessionClientDelivery {
         this.statusFeed.journalProjection(sessionId, journal)?.state ?? null
     })
     this.sendSettlement = new StructuredAgentSessionSendSettlement((sessionId) =>
-      this.requireJournal(sessionId)
+      this.settlementReading(sessionId, this.requireJournal(sessionId))
     )
     this.waitForSendSettlement = this.sendSettlement.wait
     this.subscribers = new AgentSessionSubscribers({
@@ -64,10 +72,15 @@ export class StructuredAgentSessionClientDelivery {
       readQueuePublication: (sessionId) =>
         tryReadQueuePublication(
           sessions.get(sessionId)?.journal,
-          structuredQueueSendGate(this.deps().store, sessionId)
+          structuredQueueSendGate(
+            { store: this.deps().store, sessions },
+            sessionId,
+            this.queue.drain
+          )
         ),
       readBackgroundTasks,
-      onJournalPublished: (sessionId, journal) => this.publishJournal(sessionId, journal)
+      onJournalPublished: (sessionId, journal) => this.publishJournal(sessionId, journal),
+      readCurrentWork: (sessionId, journal) => this.currentWork(sessionId, journal)
     })
   }
 
@@ -110,8 +123,33 @@ export class StructuredAgentSessionClientDelivery {
     this.statusFeed.publish(sessionId)
     const journal = this.sessions.get(sessionId)?.journal
     if (journal) {
-      this.sendSettlement.publish(sessionId, journal)
+      this.sendSettlement.publish(sessionId, this.settlementReading(sessionId, journal))
     }
+  }
+
+  /** A generation ended — an exit, a release — which can change what is current with no journal
+   *  row. The one edge for every way a generation ends: every reader re-derives current work (the
+   *  status feed, settlement waits, each chat's frames) and the queued-card drain is scheduled,
+   *  whatever became of the cleanup's own write. An end is no activity: it renews no idle clock.
+   *  `restate`: each chat re-baselines at the fence, as a death of the child's own does. */
+  publishGenerationEnded = (sessionId: string, options: { restate?: boolean } = {}): void => {
+    const journal = this.sessions.get(sessionId)?.journal
+    if (!journal) {
+      return
+    }
+    if (options.restate) {
+      const fence = structuredAgentSessionConversationFence(this.deps().store, sessionId)
+      this.subscribers.snapshot(sessionId, journal, fence)
+      return
+    }
+    this.subscribers.deliverFrames(sessionId, journal)
+    this.publishJournal(sessionId, journal, false)
+  }
+
+  /** A held chat's current work (`structuredAgentSessionCurrentWork`); null when none is held. */
+  readCurrentWork = (sessionId: string) => {
+    const journal = this.sessions.get(sessionId)?.journal
+    return journal ? this.currentWork(sessionId, journal) : null
   }
 
   publishRestored = (sessionId: string): void => {
@@ -148,14 +186,28 @@ export class StructuredAgentSessionClientDelivery {
     this.sendSettlement.closeAll()
   }
 
-  private publishJournal(sessionId: string, journal: AgentSessionJournal): void {
+  private publishJournal(sessionId: string, journal: AgentSessionJournal, activity = true): void {
     this.statusFeed.publish(sessionId, journal)
-    this.sendSettlement.publish(sessionId, journal)
+    this.sendSettlement.publish(sessionId, this.settlementReading(sessionId, journal))
     // Derived here rather than per-subscriber: this edge runs whether or not anyone is
     // subscribed, which is the whole reason a backgrounded chat can complete at all. After the
     // status publish, so it reads the projection that publish cached.
     this.turnCompletionFeed.observe(sessionId, journal)
-    this.onJournalActivity(sessionId)
+    this.queue.onJournalActivity(sessionId, activity)
+  }
+
+  /** The current-work projection over this journal (`structuredAgentSessionCurrentWork`). */
+  private currentWork(sessionId: string, journal: AgentSessionJournal) {
+    const session = this.sessions.get(sessionId)
+    return heldStructuredAgentSessionCurrentWork(this.deps().store, sessionId, journal, session)
+  }
+
+  private settlementReading(sessionId: string, journal: AgentSessionJournal) {
+    return {
+      submissions: () => journal.submissions(),
+      cursor: () => journal.cursor(),
+      activeTurnId: () => this.currentWork(sessionId, journal).activeTurnId()
+    }
   }
 
   private requireJournal(sessionId: string): AgentSessionJournal {

@@ -31,12 +31,13 @@ afterEach(() => vi.restoreAllMocks())
 function newerOrcaRow(root: string, sessionId: string = SESSION): void {
   const { db } = openTestJournalHostDatabase(root)
   const last = liveTestJournalRows(db, sessionId).at(-1)
-  const parsed: unknown = last ? JSON.parse(last.rowJson) : null
-  if (!last || typeof parsed !== 'object' || parsed === null || !('epoch' in parsed)) {
+  const parsed: unknown = last ? JSON.parse(last.rowJson) : { epoch: 'newer-orca-epoch' }
+  if (typeof parsed !== 'object' || parsed === null || !('epoch' in parsed)) {
     throw new Error('the chat has no journal row to follow')
   }
+  // A chat nothing was written to has no journal yet: the row founds one, after its epoch row.
   const { epoch } = parsed
-  const seq = last.seq + 1
+  const seq = (last?.seq ?? 1) + 1
   insertTestJournalRowJson(
     db,
     sessionId,

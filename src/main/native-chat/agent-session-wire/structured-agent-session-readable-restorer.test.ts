@@ -35,11 +35,7 @@ describe('StructuredAgentSessionReadableRestorer', () => {
     )
     const restorer = new StructuredAgentSessionReadableRestorer({
       openDeps: {
-        store: {
-          getRecord: () => null,
-          listRecords: () => records,
-          replacedRuntime: () => undefined
-        },
+        store: { getRecord: () => null, listRecords: () => records },
         journalDatabase: openTestJournalHostDatabase(stateDirectory),
         logger: recordingStructuredAgentSessionLogger().logger
       },

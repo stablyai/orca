@@ -101,12 +101,14 @@ function statusFeed(): StructuredAgentSessionStatusFeed {
       [
         STATUS_SESSION,
         {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed reads only cursor(), lastActivityAt(), stopMarks and snapshot() of a journal.
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed reads only cursor(), lastActivityAt(), stopMarks, snapshot(), itemFence() and runningTurn() of a journal with no sends.
           journal: {
             cursor: () => ({ epoch: 'epoch-status', sequence: 2 }),
             lastActivityAt: () => 2,
             stopMarks: { latest: () => null, revision: () => 0 },
-            snapshot: () => ({ items: STATUS_ITEMS, submissions: [] })
+            snapshot: () => ({ items: STATUS_ITEMS, submissions: [] }),
+            itemFence: () => undefined,
+            runningTurn: () => null
           } as unknown as AgentSessionJournal,
           params: {
             location: {
@@ -143,11 +145,7 @@ export function hostStub(): StructuredAgentSessionHost {
           items: [],
           removedItemIds: [],
           submissions: [],
-          window: {
-            oldest: null,
-            newest: null,
-            nextCursor: { epoch: 'epoch-a', sequence: 0 }
-          },
+          window: { oldest: null, newest: null, nextCursor: { epoch: 'epoch-a', sequence: 0 } },
           liveCursor: { epoch: 'epoch-a', sequence: 0 },
           hasOlder: false,
           hasNewer: false

@@ -14,6 +14,7 @@ import {
 } from '../agent-session-journal/queued-message-table'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 import { isMainAgentWorking } from './structured-agent-session-turns-cancel'
+import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import {
   structuredAgentSessionStopNamesTurnNotLive,
   structuredAgentSessionStoppedTurnId
@@ -45,7 +46,11 @@ export async function runRecordedStop<TValue>(
   const skipped = (error: unknown): void => report(ctx, 'event row', error)
   return stop(() => {
     try {
-      const turnId = structuredAgentSessionStoppedTurnId(ctx.journal, event.turnId) ?? undefined
+      const turnId =
+        structuredAgentSessionStoppedTurnId(
+          contextStructuredAgentSessionCurrentWork(ctx),
+          event.turnId
+        ) ?? undefined
       return ctx.journal
         .appendStopEvent({ ...event, ...(turnId ? { turnId } : {}) }, ctx.fence)
         .then(() => undefined, skipped)
@@ -65,10 +70,10 @@ export async function runRecordedStop<TValue>(
  * already over, as a late Stop from a phone can.
  */
 export function stopReachesUnrecordedWork(
-  ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence'>,
+  ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'currentWork'>,
   namedTurnId: string | undefined
 ): 'unrecorded' | 'repeat' | 'late' {
-  const live = ctx.journal.activeTurnId()
+  const live = contextStructuredAgentSessionCurrentWork(ctx).activeTurnId()
   // No turn published yet while the agent works: the named one may still be opening.
   if (
     structuredAgentSessionStopNamesTurnNotLive(namedTurnId, live) &&

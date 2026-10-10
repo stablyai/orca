@@ -14,11 +14,14 @@ import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 import type { NativeChatDiffReveal, NativeChatDiffTarget } from './native-chat-turn-diffs'
 import { NativeChatRewindContext } from './native-chat-rewind-context'
 import { nativeChatRowOffersRewind } from './native-chat-rewind-eligibility'
+import { isActionableStructuredAgentSessionPrompt } from '../../../../shared/structured-agent-session-live-turn'
 
 /** Everything a row needs that is the same for every row. Held as one memoized
  *  object so a row's props change only when that row's own slot does. */
 export type NativeChatTranscriptRowContext = {
   agentName?: string
+  /** The prompts the host says still wait on the person; absent from an older host. */
+  actionablePromptIds?: readonly string[] | undefined
   expandSignal: boolean
   revealedDiff: NativeChatDiffReveal | null
   taskListPredecessors: ReadonlyMap<string, NativeChatTaskListPredecessors>
@@ -98,7 +101,14 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       {/* A turn with no user bubble carries its bar above its first row. */}
       {slot.statusAbove ? statusRow : null}
       {!slot.drawsMessage ? null : receipt ? (
-        <NativeChatResolutionReceipt body={receipt} disclosureId={message.id} />
+        <NativeChatResolutionReceipt
+          body={receipt}
+          disclosureId={message.id}
+          awaiting={isActionableStructuredAgentSessionPrompt(
+            message.id,
+            context.actionablePromptIds
+          )}
+        />
       ) : (
         <MessageRow
           message={message}

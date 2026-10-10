@@ -225,6 +225,7 @@ describe('the warning row of a replacement whose attach failed', () => {
     expect(await host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
     await host.close(SESSION, 'user-close')
     // The journal's open fails after the fresh session's link is durable, before its row is written.
+    // A start settles nothing, so the attach's own open is the only one.
     vi.spyOn(AgentSessionJournal.prototype, 'open').mockRejectedValueOnce(
       new Error('journal path unavailable')
     )

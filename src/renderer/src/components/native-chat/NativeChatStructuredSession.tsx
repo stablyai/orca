@@ -297,6 +297,7 @@ export function NativeChatStructuredSession(
                   journalItems={controller.journalItems}
                   journalSubmissions={controller.submissions}
                   journalLatestTurn={controller.latestTurn}
+                  journalHostWork={controller.hostWork}
                   subagentRoster={controller.subagentRoster}
                   railOutline={controller.railOutline}
                   isVisible={props.isVisible}

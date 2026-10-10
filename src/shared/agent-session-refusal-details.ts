@@ -47,6 +47,8 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'rewindUnconfirmed',
     // A prompt card or an option
     'promptGone',
+    /** The agent that raised the prompt has ended, so nothing can take its answer. */
+    'promptOwnerEnded',
     'optionRejected',
     // The provider
     'providerStarting',

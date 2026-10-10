@@ -126,7 +126,6 @@ const conversation = (
     child?: StructuredAgentSessionProviderChild | null
     items?: Row[]
     submissions?: ReturnType<typeof rejected>[]
-    activeTurnId?: string
     newestTurnEndedAt?: number
   } = {}
 ) => {
@@ -142,7 +141,6 @@ const conversation = (
           visit(item.itemId, index, item.body, item.agentId ? { agentId: item.agentId } : {})
         ),
       itemFence: (itemId: string) => items.find((item) => item.itemId === itemId)?.fence,
-      activeTurnId: () => input.activeTurnId ?? null,
       newestTurn: (): AgentJournalTurnLifecycle | null =>
         input.newestTurnEndedAt === undefined
           ? null
@@ -197,6 +195,7 @@ describe('retireSignedOutStructuredAgentSessionChild', () => {
     invocation: { invocationId: 'spawn-subagent-1', generation: 1 }
   }
   const idle: StructuredAgentSessionChildWorkReads = {
+    currentWork: () => ({ activeTurnId: () => null, hasActionablePrompt: () => false }),
     childWork: () => [],
     hasOpenDispatch: () => false,
     providerHoldsDispatch: () => false
@@ -223,7 +222,9 @@ describe('retireSignedOutStructuredAgentSessionChild', () => {
   it('keeps it while it owes work the idle sweep also protects', async () => {
     // A pending prompt is the shared check's too; the idle sweep's tests cover that case.
     for (const kept of [
-      await retire({ ...signedOut, activeTurnId: 'turn-1' }),
+      await retire(signedOut, {
+        currentWork: () => ({ activeTurnId: () => 'turn-1', hasActionablePrompt: () => false })
+      }),
       await retire(signedOut, { childWork: () => [liveChildWork] }),
       await retire(signedOut, { hasOpenDispatch: () => true }),
       await retire(signedOut, { providerHoldsDispatch: () => true })

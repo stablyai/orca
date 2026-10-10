@@ -5,7 +5,6 @@ import {
   type AgentJournalRenderItem
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import {
   completedStructuredAgentTurnSeconds,
@@ -18,10 +17,6 @@ import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
-import {
-  openStructuredAgentSessionConversationJournal,
-  type StructuredAgentSessionConversationOpenDeps
-} from './structured-agent-session-conversation-open'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { HOST_TEST_NOW, hostTestAttachParams } from './structured-agent-session-host-test-data'
 import {
@@ -32,6 +27,7 @@ import {
   REST_TEST_THREAD as THREAD,
   type RestTestRig
 } from './structured-agent-session-rest-test-rig'
+import { retryIdle } from './structured-agent-session-retry.test-fixture'
 
 const LAST_CHUNK_AT = HOST_TEST_NOW + 5_500
 const RESTARTED_AT = HOST_TEST_NOW + 3_600_000
@@ -118,6 +114,19 @@ async function startServer(options: { newProcess: boolean }): Promise<void> {
   })
 }
 
+/** Startup as the runtime runs it: the lease reconcile, the retry's settlement, the visible tabs. */
+async function startUp(): Promise<void> {
+  await rig.host.reconcileRestartLeases()
+  await rig.host.startupSettled()
+  await settled()
+  await rig.host.restoreReadableSessions()
+  await settled()
+}
+
+function settled(): Promise<void> {
+  return retryIdle(rig.host.collaboratorsForTests().reconciliation, SESSION)
+}
+
 function turnsOf(items: readonly AgentJournalRenderItem[]) {
   return items.flatMap((item) => readAgentJournalTurn(item.body) ?? [])
 }
@@ -150,7 +159,8 @@ describe('a server replaced mid-turn on the same execution host', () => {
   it('interrupts the cut turn at its last saved output with no provider identity left', async () => {
     await streamThenServerKilled()
     await startServer({ newProcess: true })
-    await rig.host.restoreReadableSessions()
+    // Settled at startup, not on open.
+    await startUp()
     await expectCutTurnSettledOnce()
 
     await rig.host.reconcileRestartLeases()
@@ -211,31 +221,107 @@ describe('a server replaced mid-turn on the same execution host', () => {
     await streamThenServerKilled()
     // The same process reopening its store replaced no runtime: nothing proves the turn over.
     await startServer({ newProcess: false })
-    await rig.host.restoreReadableSessions()
-    await rig.host.reconcileRestartLeases()
-    await rig.host.collaboratorsForTests().serialize(SESSION, async () => {})
+    await startUp()
     const left = turnsOf((await rig.host.journalSnapshot(SESSION)).items)
     expect(left).toEqual([expect.objectContaining({ state: 'unverifiable' })])
 
+    // Healed at startup, not on open.
     await startServer({ newProcess: true })
-    await rig.host.restoreReadableSessions()
+    await startUp()
     await expectCutTurnSettledOnce()
 
-    const settled = await rig.host.journalSnapshot(SESSION)
+    const healed = await rig.host.journalSnapshot(SESSION)
     await startServer({ newProcess: true })
-    await rig.host.restoreReadableSessions()
-    expect((await rig.host.journalSnapshot(SESSION)).items).toEqual(settled.items)
+    await startUp()
+    expect((await rig.host.journalSnapshot(SESSION)).items).toEqual(healed.items)
+  })
+})
+
+// No write on open: before the startup lease check, the projection derives the end from the
+// runtime this one replaced; the startup pass then settles it, even under a recovery latch.
+describe('a chat whose turn a replaced server held, before anything settles it', () => {
+  it('reads its cut turn interrupted when opened before the startup lease check', async () => {
+    await streamThenServerKilled()
+    await startServer({ newProcess: true })
+
+    const { page } = await rig.host.history({ sessionId: SESSION, direction: 'tail' })
+
+    expect(page.latestTurn?.turn).toMatchObject({ turnId: TURN.turnId, state: 'interrupted' })
+    expect(page.working).toBe(false)
+    // Derived, not written: the journal holds the turn as the crash left it.
+    const { items } = await rig.host.journalSnapshot(SESSION)
+    expect(turnsOf(items)).toEqual([expect.objectContaining({ state: 'running' })])
   })
 
-  it('only lets an acquisition open a journal without the store', () => {
-    const open = (
-      deps: Omit<StructuredAgentSessionConversationOpenDeps, 'store'>,
-      record: AgentSessionRecord
-    ) => {
-      void openStructuredAgentSessionConversationJournal(deps, record, { acquisition: true })
-      // @ts-expect-error a reader open settles, so without the store its turns would stay unverifiable
-      void openStructuredAgentSessionConversationJournal(deps, record)
+  /** Its agent outlived the server; startup runs with no tab showing the chat. */
+  async function survivingOwnerStartup(newProcess: boolean) {
+    await streamThenServerKilled()
+    await startServer({ newProcess })
+    let alive = true
+    rig.host.deps.probeOwner = async () =>
+      alive
+        ? { outcome: 'identity-matched', matchedOn: ['spawn-token'] }
+        : { outcome: 'pid-absent' }
+    const stopOwnerProcess = vi.fn(() => {
+      alive = false
+    })
+    rig.host.deps.stopOwnerProcess = stopOwnerProcess
+    await rig.host.reconcileRestartLeases()
+    await rig.host.startupSettled()
+    await settled()
+    const lease = rig.store.getRecord(SESSION)?.lease
+    expect(lease?.handoffStage).toBe('recovering')
+    return { stopOwnerProcess, lease }
+  }
+
+  it('reads settled from history after startup, with no send or attach, and its next send starts a new agent', async () => {
+    const { stopOwnerProcess, lease } = await survivingOwnerStartup(true)
+
+    await rig.host.history({ sessionId: SESSION, direction: 'tail' })
+    await expectCutTurnSettledOnce()
+    // The settle stopped no process and left the recovery's lease as it was.
+    expect(stopOwnerProcess).not.toHaveBeenCalled()
+    expect(rig.store.getRecord(SESSION)?.lease).toEqual(lease)
+
+    // The attach resolves the recovery first, which moves the fence it expected.
+    const stale = await rig.host.attach(
+      REST_TEST_CALLER,
+      hostTestAttachParams(lease?.runtimeFence ?? null)
+    )
+    const attached = stale.ok
+      ? stale
+      : await rig.host.attach(
+          REST_TEST_CALLER,
+          hostTestAttachParams(stale.refusal.currentFence ?? null)
+        )
+    if (!attached.ok) {
+      throw new Error(`attach refused: ${attached.refusal.code}`)
     }
-    expect(open).toBeTypeOf('function')
+    const sent = await rig.host.send(
+      REST_TEST_CALLER,
+      restTestSend('after restart', attached.fence)
+    )
+    expect(sent.ok).toBe(true)
+    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(2))
+    expect(rig.adapter.acquire).toHaveBeenCalledTimes(2)
+  })
+
+  it('reads unverifiable and not working while its owner recovers with no child here', async () => {
+    await survivingOwnerStartup(false)
+
+    const { page } = await rig.host.history({ sessionId: SESSION, direction: 'tail' })
+
+    expect(page.working).toBe(false)
+    expect(page.latestTurn?.turn).toMatchObject({ turnId: TURN.turnId, state: 'unverifiable' })
+    expect(rig.host.currentWork(SESSION)?.working()).toBe(false)
+  })
+
+  it('settles nothing and stops nothing with no runtime replaced, while its recovery waits', async () => {
+    const { stopOwnerProcess, lease } = await survivingOwnerStartup(false)
+
+    const { items } = await rig.host.journalSnapshot(SESSION)
+    expect(turnsOf(items)).toEqual([expect.objectContaining({ state: 'running' })])
+    expect(stopOwnerProcess).not.toHaveBeenCalled()
+    expect(rig.store.getRecord(SESSION)?.lease).toEqual(lease)
   })
 })

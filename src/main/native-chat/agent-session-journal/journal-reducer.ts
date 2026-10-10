@@ -51,7 +51,8 @@ export type JournalReducerState = {
   oldestSequence: number
   highestFence: number
   items: Map<string, AgentJournalRenderItem>
-  /** Fence of the writer that created each item: the generation a running turn belongs to. */
+  /** Each item's execution provenance (`JournalItemRow.ownerFence`): the generation whose work it
+   *  is, which decides whether it is current. */
   itemFences: Map<string, number>
   /** Latest saved output per owner, rebuilt during the existing row fold. */
   providerActivityAt: Map<number, number>
@@ -109,15 +110,16 @@ export function applyJournalRow(
       return
     }
     const itemId = resolveJournalItemId(state, row.itemId, row.body)
-    observeJournalProviderActivity(state, row, row.itemId, row.body, savedAt)
     acceptSubmissionFromProviderItem(state, row.itemId, itemId, row)
     upsertJournalItem(
       state,
       itemId,
       row.revision,
       journalRenderItem(itemId, row.revision, row.body, row, statedOrDerivedTurnScope(state, row)),
-      row.fence
+      { fence: row.fence, ownerFence: row.ownerFence }
     )
+    const fence = state.itemFences.get(itemId) ?? row.fence
+    observeJournalProviderActivity(state, row, row.itemId, row.body, savedAt, fence)
     return
   }
   if (isJournalStopOrResumeRow(row)) {
@@ -141,13 +143,17 @@ export function applyJournalRow(
           continue
         }
         const { revision, body } = mutation
-        observeJournalProviderActivity(state, row, mutation.itemId, body, savedAt)
         const itemId = resolveJournalItemId(state, mutation.itemId, body)
         acceptSubmissionFromProviderItem(state, mutation.itemId, itemId, row)
         const producer = journalBatchMutationProducer(row, mutation)
         const scope = statedOrDerivedTurnScope(state, mutation)
         const item = journalRenderItem(itemId, revision, body, row, scope, producer, sequenceIndex)
-        upsertJournalItem(state, itemId, revision, item, row.fence)
+        upsertJournalItem(state, itemId, revision, item, {
+          fence: row.fence,
+          ownerFence: mutation.ownerFence
+        })
+        const fence = state.itemFences.get(itemId) ?? row.fence
+        observeJournalProviderActivity(state, row, mutation.itemId, body, savedAt, fence)
       } else {
         removeJournalItem(state, resolveItemId(state, mutation.itemId), mutation.revision)
       }

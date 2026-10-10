@@ -17918,6 +17918,7 @@
         "chooseClaudeAccountThenSend": "Choisissez-en un ou ajoutez-en un dans les paramètres Comptes Claude, puis renvoyez votre message.",
         "providerExitedRow": "{{agent}} s'est arrêté pendant que cette réponse était en cours. Vous pouvez continuer dans cette conversation.",
         "providerExitedRejection": "{{agent}} s'est arrêté avant l'envoi de ce message.",
+        "providerExitedAnswer": "{{agent}} s'est arrêté, donc votre réponse n'a pas été envoyée. Envoyez un message pour continuer.",
         "providerRejected": "Le fournisseur n'a pas accepté ce message.",
         "providerRejectedQuoted": "Le fournisseur n'a pas accepté ce message : {{detail}}.",
         "attachmentEmpty": "Une image de ce message est vide, le message n'a donc pas été envoyé.",

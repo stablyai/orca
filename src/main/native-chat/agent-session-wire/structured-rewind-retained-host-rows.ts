@@ -5,7 +5,10 @@
 // each keeps the ones its retained row held.
 
 import { parseCodexGoalJournalItemId } from '../../codex/codex-goal-journal-identity'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  parseAgentJournalItemKey
+} from '../../../shared/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_ITEM_BODY_KINDS,
   isAdmissibleAgentJournalMessageBody
@@ -64,12 +67,28 @@ export function mergeRetainedHostLifecycleRows(
   )
 }
 
+/** The live agent's rewound history as retained rows: its own observation, at the fence it
+ *  answered at. A row the old epoch held keeps that row's provenance when merged. */
+export function rewindProviderRows(
+  items: readonly { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[],
+  observedAt: number,
+  ownerFence: number
+): RetainedRow[] {
+  return items.map(({ identity, body }) => ({
+    itemId: agentJournalItemKey(identity),
+    body,
+    observedAt,
+    ownerFence
+  }))
+}
+
 /** The rebuilt epoch's item for one retained row, with the scope and producer it was written with. */
 export function retainedRowReplacement(row: RetainedRow): AgentJournalProducerLinkage & {
   identity: AgentJournalItemIdentity
   body: AgentJournalItemBody
   observedAt: number
   turnScope?: AgentJournalTurnScope
+  ownerFence: number
 } {
   const identity = parseAgentJournalItemKey(row.itemId)
   if (!identity) {
@@ -87,6 +106,9 @@ export function retainedRowReplacement(row: RetainedRow): AgentJournalProducerLi
     body: restoreRewindJournalBody(row.body),
     observedAt: row.observedAt,
     ...(scope ? { turnScope: scope } : {}),
+    // The old fold's provenance, so a rewind never makes a dead generation's work current. A record
+    // from before rows carried it states none: 0, which is never current.
+    ownerFence: row.ownerFence ?? 0,
     ...(agentId === undefined ? {} : { agentId }),
     ...(parentAgentId === undefined ? {} : { parentAgentId }),
     ...(providerParentRef === undefined ? {} : { providerParentRef }),

@@ -88,6 +88,16 @@ export function isJournalWrittenByNewerOrca(error: unknown): boolean {
   return error instanceof AgentSessionJournalError && error.code === 'journal_read_only'
 }
 
+/** A failed open no retry gets past in this process: damage, or a newer Orca's journal. */
+export function isJournalOpenFailurePermanent(error: unknown): boolean {
+  const refusal = journalOpenRefusal(error)
+  if (refusal.code !== 'agent_session_journal_unreadable') {
+    return false
+  }
+  const reason = refusal.details?.reason
+  return reason === 'journalCorrupt' || reason === 'journalWrittenByNewerOrca'
+}
+
 /** Why a journal open failed. A newer Orca's journal clears when this Orca is updated, so it is
  *  not damage. */
 function journalRefusalReason(error: unknown): JournalRefusalReason {
