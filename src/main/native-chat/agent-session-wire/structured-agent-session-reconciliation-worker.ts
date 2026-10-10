@@ -71,8 +71,8 @@ export type StructuredAgentSessionReconciliationContext =
 
 /** `done`: a pass found nothing owed, unless a signal came meanwhile; `retire`: nothing this
  *  worker can do, whatever came meanwhile (a later signal starts a new one); `again`: a pass wrote
- *  rows, so the next one verifies at once; `stale`: no pass ran (its read went stale), which backs
- *  off like a failure, since nothing moved. */
+ *  rows, so the next one verifies at once; `stale`: no pass ran (its read went stale, or the
+ *  store-wide reconcile has not settled), which backs off quietly like a failure. */
 type Outcome = 'done' | 'retire' | 'again' | 'stale' | 'failed'
 
 type ChatWorker = StructuredAgentSessionReconciliationSlotWaiter & {
@@ -106,11 +106,13 @@ export class StructuredAgentSessionReconciliation {
     if (session) {
       session.operationalRevision = (session.operationalRevision ?? 0) + 1
     }
+    // Published once the worker owes: the queue's next card waits on an owed release, so no client
+    // is told that card sends next meanwhile.
+    const worker = this.disposed ? null : this.workerFor(sessionId)
     this.context.publishGenerationEnded(sessionId, signal.restate ? { restate: true } : {})
-    if (this.disposed) {
+    if (!worker) {
       return
     }
-    const worker = this.workerFor(sessionId)
     if (signal.evidence) {
       worker.debts.evidence = [...(worker.debts.evidence ?? []), signal.evidence]
     }
@@ -133,12 +135,10 @@ export class StructuredAgentSessionReconciliation {
     }
   }
 
-  /** A handle this host opened on the chat's journal; only its first one marks the boundary. */
-  noteOpened = (sessionId: string, journal: Pick<AgentSessionJournal, 'openedAt'>): void =>
+  /** A reader opened the chat: its handle marks the process boundary if it is the first, and what
+   *  its worker still waits a slot for goes ahead of the scan. */
+  opened = (sessionId: string, journal: Pick<AgentSessionJournal, 'openedAt'>): void => {
     this.memory.noteOpened(sessionId, journal)
-
-  /** A reader opened the chat: whatever its worker still waits a slot for goes ahead of the scan. */
-  prioritize = (sessionId: string): void => {
     const worker = this.workers.get(sessionId)
     if (worker) {
       this.slots.prioritize(worker)
@@ -217,13 +217,14 @@ export class StructuredAgentSessionReconciliation {
       if (this.disposed || store.readOnly) {
         return 'retire'
       }
-      // Startup's reconcile failed (storage was busy): retried here, the same deduped step, so a
-      // gone owner's lease does not read live until a person sends. It never stops a process.
+      // Startup's reconcile failed (storage was busy): retried as one store-wide step, so a gone
+      // owner's lease does not read live until a person sends. It never stops a process.
+      const reconcile = () => this.context.reconcile(sessionId)
       if (
         store.getRecord(sessionId)?.lease.unreconciled &&
-        !(await this.context.reconcile(sessionId))
+        !(await this.memory.reconcileOnce(reconcile))
       ) {
-        return 'failed'
+        return 'stale'
       }
       if (!this.context.sessions.has(sessionId) && !worker.loaded) {
         const stop = await this.load(sessionId, worker)
@@ -372,6 +373,8 @@ export class StructuredAgentSessionReconciliation {
     this.workers.delete(sessionId)
     if (!this.disposed && this.context.deps.store.getRecord(sessionId)) {
       this.memory.park(sessionId, worker.debts)
+      // The queue's automatic send waits on a release a worker owes: it re-derives now.
+      this.context.publishGenerationEnded(sessionId)
     }
     if (!worker.running) {
       this.dropLoaded(worker)

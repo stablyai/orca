@@ -163,6 +163,11 @@ export class AgentSessionSubscribers {
     }
   }
 
+  /** The queue as frames publish it, for a history page to read the same. */
+  readQueuePublication(sessionId: string): QueuePublication | undefined {
+    return this.hooks.readQueuePublication?.(sessionId)
+  }
+
   /** Each subscriber's frame for what changed, with none of a journal write's other edges. */
   deliverFrames(
     sessionId: string,

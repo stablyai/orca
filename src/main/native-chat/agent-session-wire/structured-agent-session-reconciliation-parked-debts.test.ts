@@ -13,6 +13,7 @@ import {
   seedTestAgentSessionRecordStore
 } from '../../runtime/agent-session-record-store-test-harness'
 import { closeTestJournalHostDatabases } from '../agent-session-journal/journal-host-database-test-support'
+import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
 import { attachParamsForRecord } from './structured-agent-session-conversation-open'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type { StructuredAgentSessionExitSettlement } from './structured-agent-session-leftover-settlement'
@@ -122,6 +123,29 @@ describe("a worker that retires while the chat's lease recovers", () => {
     expect(await turnState(current, CHAT)).toBe('interrupted')
     expect(reconciliation['memory']['parked'].has(CHAT)).toBe(false)
     // Generation 14's send ran on a child that proved its start: in doubt, never "did not start".
+    const { submissions } = await current.journalSnapshot(CHAT)
+    expect(submissions.find((entry) => entry.clientMessageId === `${CHAT}-handed`)).toMatchObject({
+      dispatchState: 'unknown'
+    })
+  })
+})
+
+describe('a live worker waiting out a backoff with an exit account', () => {
+  it("drops it once a later generation acquired, so generation 14's send stays in doubt", async () => {
+    const current = await recoveringAt14()
+    const { reconciliation } = current.collaboratorsForTests()
+    // The pass fails once (storage busy): the worker backs off still holding generation 13's.
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    vi.spyOn(JournalQueuedMessages.prototype, 'repairAndPrune').mockRejectedValueOnce(
+      Object.assign(new Error('database is locked'), { errcode: 5 })
+    )
+    reconciliation.signal(CHAT, { evidence: proof13, exit: exit13 })
+    await reconciliation.attempted(CHAT)
+
+    // Generation 14's recovery is decided meanwhile, with no exit account of its own.
+    await attach(current)
+    await idle(current, [CHAT])
+
     const { submissions } = await current.journalSnapshot(CHAT)
     expect(submissions.find((entry) => entry.clientMessageId === `${CHAT}-handed`)).toMatchObject({
       dispatchState: 'unknown'

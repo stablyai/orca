@@ -67,9 +67,7 @@ export class StructuredAgentSessionHost {
     logger: sessionLogger.deferredStructuredAgentSessionLogger(() => this.deps.logger),
     onOpened: (sessionId, journal) => {
       this.queued.drain.schedule(sessionId)
-      this.restore.reconciliation.noteOpened(sessionId, journal)
-      // A reader holds it now: its settlement goes ahead of the rest of the startup scan.
-      this.restore.reconciliation.prioritize(sessionId)
+      this.restore.reconciliation.opened(sessionId, journal)
     },
     now: () => this.now()
   })
@@ -79,7 +77,7 @@ export class StructuredAgentSessionHost {
     this.sessions,
     () => this.now(),
     () => this.deps,
-    (sessionId, activity) => this.queued.onJournalActivity(sessionId, activity),
+    this.queued,
     (sessionId) => this.restartResume.onAgentStarted(sessionId),
     (sessionId) => this.backgroundTasks.publish(sessionId),
     (sessionId) => this.backgroundTasks.read(sessionId)
@@ -294,6 +292,7 @@ export class StructuredAgentSessionHost {
       wakeDelivery: (sessionId) => this.conversationDelivery.loop.wake(sessionId),
       stopAgent: (sessionId, ending) => this.lifetime.stopAgent(sessionId, ending),
       wakeQueuedDrain: (sessionId) => this.queued.drain.schedule(sessionId),
+      reconciliationOwes: (sessionId) => this.restore.reconciliation.owes(sessionId),
       acquireAborts: this.runtimeState.acquireAborts,
       optionRevisions: this.runtimeState.optionRevisions,
       now: () => this.now()

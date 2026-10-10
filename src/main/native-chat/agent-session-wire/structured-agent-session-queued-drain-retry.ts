@@ -24,6 +24,8 @@ export function isTransientStorageFailure(error: unknown): boolean {
 
 type PendingRetry = {
   messageId: string
+  /** The conversation the failures were met on: a reopened chat's card starts fresh. */
+  journal: object
   failures: number
   timer: ReturnType<typeof setTimeout> | null
 }
@@ -35,33 +37,33 @@ export class StructuredAgentSessionQueuedDrainRetry {
   constructor(private readonly wake: (sessionId: string) => void) {}
 
   /** Whether this card's send waits out a backoff: a step woken meanwhile leaves it to the timer. */
-  waiting(sessionId: string, messageId: string): boolean {
+  waiting(sessionId: string, messageId: string, journal: object): boolean {
     const entry = this.pending.get(sessionId)
-    return entry?.messageId === messageId && entry.timer !== null
+    return entry?.messageId === messageId && entry.journal === journal && entry.timer !== null
   }
 
   /** A transient failure of this card's send: true while it is retried later, false once the
    *  run is given up (the caller then holds the card). */
-  retryLater(sessionId: string, messageId: string): boolean {
+  retryLater(sessionId: string, messageId: string, journal: object): boolean {
     const previous = this.pending.get(sessionId)
-    const failures = previous?.messageId === messageId ? previous.failures + 1 : 1
+    const failures =
+      previous?.messageId === messageId && previous.journal === journal ? previous.failures + 1 : 1
+    this.settled(sessionId)
     if (failures >= RECONCILIATION_MAX_FAILED_ATTEMPTS) {
-      this.settled(sessionId)
       return false
     }
-    const delay = reconciliationBackoffDelay(failures)
-    const entry: PendingRetry = { messageId, failures, timer: null }
+    const entry: PendingRetry = { messageId, journal, failures, timer: null }
     entry.timer = setTimeout(() => {
       entry.timer = null
       this.wake(sessionId)
-    }, delay)
+    }, reconciliationBackoffDelay(failures))
     // A backoff alone never keeps the process alive.
     entry.timer.unref?.()
     this.pending.set(sessionId, entry)
     return true
   }
 
-  /** The send landed, or the card is no longer the queue's next: its run ends. */
+  /** The send landed, or the card moved on (sent, a person's Send now or Delete): its run ends. */
   settled(sessionId: string): void {
     const entry = this.pending.get(sessionId)
     if (entry?.timer) {
@@ -71,11 +73,8 @@ export class StructuredAgentSessionQueuedDrainRetry {
   }
 
   dispose(): void {
-    for (const entry of this.pending.values()) {
-      if (entry.timer) {
-        clearTimeout(entry.timer)
-      }
+    for (const sessionId of this.pending.keys()) {
+      this.settled(sessionId)
     }
-    this.pending.clear()
   }
 }

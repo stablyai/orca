@@ -33,16 +33,25 @@ export type QueuePublication = {
 /** What the drain's gate reads beyond the journal; resolved per read. */
 export type QueueSendGate = (journal: AgentSessionJournal) => StructuredQueueGateInput
 
+/** `StructuredAgentSessionQueuedMessageDrain.waits`. */
+export type QueuedDrainWaits = (sessionId: string, messageId: string, journal: object) => boolean
+
+/** `drainWaits`: the drain's own waits, which a publication reads so a client is never told a card
+ *  sends next while the drain holds it back (the chat would read Working with nothing running). */
 export function structuredQueueSendGate(
   host: StructuredAgentSessionCurrentWorkHost,
-  sessionId: string
+  sessionId: string,
+  drainWaits?: QueuedDrainWaits
 ): QueueSendGate {
   return (journal) => {
     const record = host.store.getRecord(sessionId)
     const ended = host.sessions.get(sessionId)?.lastEndedChild
     return {
       record,
-      work: structuredAgentSessionCurrentWork(journal, { record, ...(ended ? { ended } : {}) })
+      work: structuredAgentSessionCurrentWork(journal, { record, ...(ended ? { ended } : {}) }),
+      ...(drainWaits
+        ? { drainWaits: (messageId: string) => drainWaits(sessionId, messageId, journal) }
+        : {})
     }
   }
 }

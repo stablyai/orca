@@ -85,6 +85,9 @@ export type StructuredQueueHold = 'blocked' | 'working' | 'prompt'
 export type StructuredQueueGateInput = {
   record: AgentSessionRecord | null
   work: StructuredAgentSessionCurrentWork
+  /** The drain's own waits past the gate (`StructuredAgentSessionQueuedMessageDrain.waits`): a
+   *  card it holds back is not one a client is told it sends next. */
+  drainWaits?: (messageId: string) => boolean
 }
 
 export function structuredQueueHold(input: StructuredQueueGateInput): StructuredQueueHold | null {
@@ -113,7 +116,7 @@ export function nextStructuredQueuedMessage(
   if (next === null || input.work.working()) {
     return null
   }
-  return structuredQueueHold(input) === null ? next : null
+  return structuredQueueHold(input) === null && !input.drainWaits?.(next.messageId) ? next : null
 }
 
 /**
@@ -237,9 +240,12 @@ export type QueuedMessageDrainDeps = {
   currentWork: (sessionId: string) => StructuredAgentSessionCurrentWork | null
   /** The consumed submission is ordinary #22821 work from here on. */
   wakeDelivery: (sessionId: string) => void
-  /** An exited child's lease still awaits its release (`structuredAgentSessionEndedChildHoldsLease`):
-   *  the release's repair wakes the drain once it lands. */
-  endedChildHoldsLease: (sessionId: string) => boolean
+  /** An ended child still holds the lease and the chat's worker still owes its release: its retire
+   *  wakes the drain, whether the release landed or was given up. A settlement still owed with the
+   *  lease released holds nothing: bookkeeping never gates the queue. */
+  releaseOwed: (sessionId: string) => boolean
+  /** Re-sends what clients read (`AgentSessionSubscribers.publish`): a send put off writes nothing. */
+  publish: (sessionId: string, journal: AgentSessionJournal) => void
   logger: StructuredAgentSessionLogger
 }
 
@@ -266,9 +272,21 @@ export class StructuredAgentSessionQueuedMessageDrain {
     this.retry.dispose()
   }
 
+  /** Whether the send of this card waits: an ended generation's release is still owed
+   *  (`releaseOwed`), or a transient failure's backoff runs. A person's Send now waits on neither. */
+  waits = (sessionId: string, messageId: string, journal: object): boolean =>
+    this.deps.releaseOwed(sessionId) || this.retry.waiting(sessionId, messageId, journal)
+
+  /** A person moved the card on (Send now, Delete): a send being retried starts fresh. */
+  cardMoved(sessionId: string): void {
+    this.retry.settled(sessionId)
+  }
+
   schedule(sessionId: string): void {
     const journal = this.disposed ? undefined : this.deps.sessions.get(sessionId)?.journal
     if (!journal) {
+      // Closed: a backoff's wake finds no chat, and its entry goes (a reopen starts fresh).
+      this.retry.settled(sessionId)
       return
     }
     // Cheap pre-check so token streams do not pay a serialized step per delta.
@@ -330,12 +348,7 @@ export class StructuredAgentSessionQueuedMessageDrain {
       this.retry.settled(sessionId)
       return
     }
-    // An exited child's lease not yet released: its storage is failing now, and the release's
-    // repair wakes this step once it lands. A person's Send now never waits on it.
-    if (
-      this.deps.endedChildHoldsLease(sessionId) ||
-      this.retry.waiting(sessionId, next.messageId)
-    ) {
+    if (this.waits(sessionId, next.messageId, journal)) {
       return
     }
     // Always a fresh id: the submission names its draft by `queuedMessageId`, never by id equality.
@@ -366,7 +379,12 @@ export class StructuredAgentSessionQueuedMessageDrain {
         return
       }
       // Storage another connection holds: retried after a backoff, with nothing shown.
-      if (isTransientStorageFailure(error) && this.retry.retryLater(sessionId, next.messageId)) {
+      if (
+        isTransientStorageFailure(error) &&
+        this.retry.retryLater(sessionId, next.messageId, journal)
+      ) {
+        // Clients were told this card sends next; it now waits, so the chat reads idle meanwhile.
+        this.deps.publish(sessionId, journal)
         return
       }
       // A refusal, or contention past its retries: the draft stays waiting, held with the marker

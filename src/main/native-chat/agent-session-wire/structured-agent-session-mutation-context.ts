@@ -39,6 +39,8 @@ export type StructuredAgentSessionMutationContext = {
   joinChildClose: (sessionId: string) => Promise<AgentSessionMutationSessionPreparation>
   /** A message was accepted: the session's delivery loop hands it over. */
   wakeDelivery: (sessionId: string) => void
+  /** The chat's reconciliation worker still owes something (`StructuredAgentSessionReconciliation`). */
+  reconciliationOwes: (sessionId: string) => boolean
   /** Stops the session's provider child, keeping its conversation; inside the caller's serialize.
    *  Each caller names why (`ending`). */
   stopAgent: (sessionId: string, ending: StructuredAgentSessionStopEnding) => Promise<void>

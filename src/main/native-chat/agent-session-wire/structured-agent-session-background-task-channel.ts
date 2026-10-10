@@ -8,10 +8,6 @@ import { structuredChildWorkLegacyTasks } from '../../../shared/structured-agent
 import { structuredRunningChildWork } from '../../../shared/agent-child-work-listing'
 import { readStructuredAgentSessionHistoryResult } from './structured-agent-session-history-result'
 import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
-import {
-  structuredQueueSendGate,
-  tryReadQueuePublication
-} from './structured-agent-session-queued-publication'
 import type { AgentSessionHistoryScope } from './agent-session-history-page'
 import type {
   AgentSessionSubscribers,
@@ -58,13 +54,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
       ...(work ? { work } : {})
     })
     const backgroundTasks = this.read(request.sessionId)
-    const queue = tryReadQueuePublication(
-      journal,
-      structuredQueueSendGate(
-        { store: this.deps.store, sessions: this.sessions },
-        request.sessionId
-      )
-    )
+    const queue = this.subscribers.readQueuePublication(request.sessionId)
     const hostNow = this.deps.now?.() ?? Date.now()
     return {
       ...result,

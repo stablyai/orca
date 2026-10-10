@@ -69,7 +69,12 @@ export async function runStructuredAgentSessionReconciliationPass(
   processOpened: AgentJournalCursor
 ): Promise<StructuredAgentSessionReconciliationPass> {
   const pass: StructuredAgentSessionReconciliationPass = { failed: [], wrote: false }
-  const recovering = context.deps.store.getRecord(sessionId)?.lease.handoffStage === 'recovering'
+  const lease = context.deps.store.getRecord(sessionId)?.lease
+  const recovering = lease?.handoffStage === 'recovering'
+  // An exit's account judges only its own generation: once a later one acquired, it is spent.
+  if (debts.exit && (!lease || lease.runtimeFence > debts.exit.ownerFence + 1)) {
+    delete debts.exit
+  }
   if (
     !recovering &&
     structuredAgentSessionEndedChildHoldsLease(context, sessionId) &&

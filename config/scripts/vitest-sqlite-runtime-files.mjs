@@ -117,6 +117,7 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/native-chat/agent-session-wire/structured-agent-session-startup-recovery-scope.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-reconciliation-parked-debts.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-queued-drain-retry.test.ts',
+  'src/main/native-chat/agent-session-wire/structured-agent-session-restart-reconcile-retry.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-ended-prompt-cancel.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-roster-provenance.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-legacy-handoff-record.test.ts',

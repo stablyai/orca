@@ -7,7 +7,8 @@ import type { SubscriberFieldHooks } from './agent-session-subscriber-frame-fiel
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import {
   structuredQueueSendGate,
-  tryReadQueuePublication
+  tryReadQueuePublication,
+  type QueuedDrainWaits
 } from './structured-agent-session-queued-publication'
 import type {
   StructuredAgentSessionHostDeps,
@@ -37,8 +38,12 @@ export class StructuredAgentSessionClientDelivery {
     private readonly sessions: Map<string, StructuredAgentSessionHostSession>,
     now: () => number,
     private readonly deps: () => StructuredAgentSessionHostDeps,
-    /** `activity`: a journal write, which renews the idle clock; a generation's end is not one. */
-    private readonly onJournalActivity: (sessionId: string, activity?: boolean) => void,
+    /** The queued-card drain: every publish wakes it (`activity`: a journal write, which renews the
+     *  idle clock; a generation's end is not one), and a card it holds back is never named next. */
+    private readonly queue: {
+      onJournalActivity: (sessionId: string, activity?: boolean) => void
+      drain: { waits: QueuedDrainWaits }
+    },
     onAgentStarted: (sessionId: string) => void,
     /** A session's child records changed; the chat strip republishes from them. */
     onChildWorkChanged: (sessionId: string) => void,
@@ -67,7 +72,11 @@ export class StructuredAgentSessionClientDelivery {
       readQueuePublication: (sessionId) =>
         tryReadQueuePublication(
           sessions.get(sessionId)?.journal,
-          structuredQueueSendGate({ store: this.deps().store, sessions }, sessionId)
+          structuredQueueSendGate(
+            { store: this.deps().store, sessions },
+            sessionId,
+            this.queue.drain.waits
+          )
         ),
       readBackgroundTasks,
       onJournalPublished: (sessionId, journal) => this.publishJournal(sessionId, journal),
@@ -184,7 +193,7 @@ export class StructuredAgentSessionClientDelivery {
     // subscribed, which is the whole reason a backgrounded chat can complete at all. After the
     // status publish, so it reads the projection that publish cached.
     this.turnCompletionFeed.observe(sessionId, journal)
-    this.onJournalActivity(sessionId, activity)
+    this.queue.onJournalActivity(sessionId, activity)
   }
 
   /** The current-work projection over this journal (`structuredAgentSessionCurrentWork`). */
