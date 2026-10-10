@@ -14,6 +14,10 @@ const mocks = vi.hoisted(() => ({
     repos: [] as Repo[],
     sshTargetLabels: new Map<string, string>(),
     removedSshTargetLabels: new Map<string, string>(),
+    worktreesByRepo: {} as Record<string, { id: string; hostId?: string }[]>,
+    detectedWorktreesByRepo: {},
+    tabsByWorktree: {} as Record<string, { id: string }[]>,
+    ptyIdsByTabId: {} as Record<string, string[]>,
     closeModal: vi.fn(),
     removeProject: vi.fn()
   }
@@ -70,6 +74,9 @@ describe('RemoveFolderDialog', () => {
     }
     mocks.state.sshTargetLabels = new Map([['target-1', 'Persistent host']])
     mocks.state.removedSshTargetLabels = new Map()
+    mocks.state.worktreesByRepo = {}
+    mocks.state.tabsByWorktree = {}
+    mocks.state.ptyIdsByTabId = {}
   })
 
   it('warns that VM recipe cleanup controls file deletion', () => {
@@ -90,5 +97,18 @@ describe('RemoveFolderDialog', () => {
 
     expect(html).toContain('Its files stay on Persistent host')
     expect(html).not.toContain('VM recipe')
+  })
+
+  it('says how many open terminals removal will close', () => {
+    mocks.state.repos = [repo('target-1', 'ssh:target-1')]
+    mocks.state.worktreesByRepo = {
+      'repo-1': [{ id: 'repo-1::/workspace/example', hostId: 'ssh:target-1' }]
+    }
+    mocks.state.tabsByWorktree = { 'repo-1::/workspace/example': [{ id: 'a' }, { id: 'b' }] }
+    mocks.state.ptyIdsByTabId = { a: ['pty-a'], b: ['pty-b'] }
+
+    expect(renderToStaticMarkup(<RemoveFolderDialog />)).toContain(
+      '2 open terminals in this project will be closed.'
+    )
   })
 })
