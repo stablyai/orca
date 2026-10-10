@@ -15,7 +15,7 @@ const UNAUTHENTICATED_HOSTS_MAX_ENTRIES = 128
 export const KNOWN_HOSTS_CACHE_MAX_ENTRIES = 128
 const knownHostsCacheByExecutionContext = new Map<
   string,
-  { key: string; hosts: readonly string[] }
+  { key: string; hosts: readonly string[]; retryAt?: number }
 >()
 const knownHostsInFlightByExecutionContext: CoalescedProbes<readonly string[]> = new Map()
 const unauthenticatedHostExpiries = new Map<string, number>()
@@ -150,7 +150,7 @@ export function rememberGlabKnownHosts(
       unauthenticatedHostKey(normalizedHost, connectionId, localGitOptions)
     )
   }
-  if (additions.length === 0) {
+  if (additions.length === 0 && !knownHostsCacheByExecutionContext.get(cacheKey)?.retryAt) {
     return
   }
   knownHostsCacheByExecutionContext.set(cacheKey, { key, hosts: [...cached, ...additions] })
@@ -162,6 +162,10 @@ export async function getGlabKnownHosts(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<readonly string[]> {
   const { key, cacheKey } = knownHostsCacheContext(connectionId, localGitOptions)
+  const previous = knownHostsCacheByExecutionContext.get(cacheKey)
+  if (previous?.retryAt !== undefined && previous.retryAt <= Date.now()) {
+    knownHostsCacheByExecutionContext.delete(cacheKey)
+  }
   const cached = knownHostsCacheByExecutionContext.get(cacheKey)?.hosts
   if (cached) {
     const entry = knownHostsCacheByExecutionContext.get(cacheKey)
@@ -209,9 +213,21 @@ async function probeGlabKnownHosts(
     }
     return merged
   } catch {
-    // Keep failures uncached so auth or tunnel recovery is discovered later.
     const cached = knownHostsCacheByExecutionContext.get(cacheKey)
-    return cached?.key === key ? cached.hosts : [...DEFAULT_GITLAB_HOSTS]
+    if (cached?.key === key) {
+      return cached.hosts
+    }
+    const hosts = [...DEFAULT_GITLAB_HOSTS]
+    // Failed keyring/auth probes must not be repeated by every background poll.
+    if (ownsKey() && knownHostsExecutionKey(connectionId, localGitOptions) === key) {
+      knownHostsCacheByExecutionContext.set(cacheKey, {
+        key,
+        hosts,
+        retryAt: Date.now() + NEGATIVE_ENTRY_TTL_MS
+      })
+      trimKnownHostsCache()
+    }
+    return hosts
   }
 }
 
