@@ -1,9 +1,14 @@
 import { useAppStore } from '@/store'
-import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
+import {
+  getRepoMapFromState,
+  getWorktreeMapFromState,
+  getWorktreeOnHostFromState
+} from '@/store/selectors'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
 import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 
@@ -93,7 +98,7 @@ function focusNextWorktreeAfterActiveDelete(
 
 /**
  * Capture, before a delete runs, whether the target is the workspace the user is
- * currently viewing. Returns a committer to call after a successful delete: it
+ * currently viewing. Returns a committer to call once the delete removed the workspace: it
  * focuses the next-best workspace only when the deleted one was active, so
  * deleting a background workspace never steals the user's current focus.
  *
@@ -108,4 +113,28 @@ export function prepareActiveWorktreeFocusAfterDelete(worktreeId: string): () =>
     state.activeWorktreeId === worktreeId
   const repoId = getWorktreeMapFromState(state).get(worktreeId)?.repoId ?? null
   return () => focusNextWorktreeAfterActiveDelete(worktreeId, repoId, wasViewing)
+}
+
+/**
+ * A delete can fail after git already dropped the worktree (its folder could not be removed), so
+ * the row only leaves on the next list refresh. Refresh now and, when the row is gone, run the
+ * committer a successful delete runs.
+ */
+export async function commitFocusIfFailedDeleteRemovedWorktree(
+  target: WorktreeRemovalTarget,
+  commitFocus: () => void
+): Promise<void> {
+  const hostId = target.executionHostId ?? undefined
+  const row = getWorktreeOnHostFromState(useAppStore.getState(), target.id, hostId)
+  if (row) {
+    // Why no catch: a failed refresh resolves false and leaves the row listed, so nothing moves.
+    await useAppStore.getState().fetchWorktrees(row.repoId, {
+      requireAuthoritative: true,
+      ...(hostId ? { executionHostId: hostId } : {})
+    })
+    if (getWorktreeOnHostFromState(useAppStore.getState(), target.id, hostId)) {
+      return
+    }
+  }
+  commitFocus()
 }

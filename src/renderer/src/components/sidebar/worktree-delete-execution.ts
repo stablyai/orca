@@ -14,7 +14,10 @@ import {
   toWorktreeRemovalTarget,
   type WorktreeRemovalTarget
 } from '../../../../shared/worktree/removal'
-import { prepareActiveWorktreeFocusAfterDelete } from './active-worktree-focus-after-delete'
+import {
+  commitFocusIfFailedDeleteRemovedWorktree,
+  prepareActiveWorktreeFocusAfterDelete
+} from './active-worktree-focus-after-delete'
 import { showWorkspaceListChangedToast } from './stale-workspace-list-toast'
 import { showPreservedBranchBatchToast } from './preserved-branch-batch-toast'
 import type { PreservedBranchCleanup } from '@/lib/preserved-branch-cleanup'
@@ -198,6 +201,18 @@ export async function runWorktreeDeletesInParallel(
     )
     if (!activeRow) {
       commitBatchFocus?.()
+    } else if (commitBatchFocus) {
+      const failedActiveTarget = uniqueTargets.find(
+        (target) =>
+          target.id === activeWorktreeIdBefore &&
+          !deletedIdentities.has(getWorktreeHostIdentity(target))
+      )
+      if (failedActiveTarget) {
+        void commitFocusIfFailedDeleteRemovedWorktree(
+          toWorktreeRemovalTarget(failedActiveTarget),
+          commitBatchFocus
+        )
+      }
     }
   }
   if (aggregatePreservedBranches && preservedBranches.length > 0) {

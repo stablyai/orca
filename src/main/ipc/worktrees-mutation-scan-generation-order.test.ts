@@ -4,8 +4,11 @@
 // the older one: it purges a new workspace, or restores a removed one.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { isWorktreeCatalogVersion } from '../../shared/worktree/catalog-version'
+import * as localWorktreeFilesystem from '../local-worktree-filesystem'
 import { getLocalWorktreeScanGeneration } from '../local-worktree-scan-generation'
 import {
+  ORIGINAL_PLATFORM,
+  setPlatform,
   addWorktreeMock,
   getActiveMultiplexerMock,
   getSshGitProviderMock,
@@ -254,4 +257,105 @@ describe('worktree mutation scan-generation ordering', () => {
     expect(witness.after).toBeGreaterThan(witness.during ?? Infinity)
     expect(replySequence(result)).toBeGreaterThanOrEqual(witness.after ?? Infinity)
   })
+
+  // Why: git can drop the worktree and then fail on its folder; an SSH listing that began before
+  // must still be overtaken, since the generation is its only guard against a stale read.
+  it('bumps the generation before the first step after an SSH git worktree remove fails', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1'
+    }
+    const witness: GenerationWitness = {}
+    const provider = {
+      listWorktrees: vi.fn(async () => [
+        { ...createdRow('/remote/repo', 'main'), isMainWorktree: true },
+        createdRow('/remote/feature-wt', 'feature')
+      ]),
+      removeWorktree: vi.fn(async () => {
+        witness.during = getLocalWorktreeScanGeneration(repo.id)
+        throw new Error("error: failed to delete '/remote/feature-wt': Permission denied")
+      }),
+      worktreeIsClean: vi.fn(async () => ({ clean: true }))
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    runtimeStub.acquireFileWatcherRemoval.mockResolvedValue({
+      finish: vi.fn(async () => witnessAfter(witness, repo.id))
+    })
+
+    await expect(
+      handlers['worktrees:remove'](null, {
+        worktreeId: 'repo-ssh::/remote/feature-wt',
+        force: true
+      })
+    ).rejects.toThrow('Permission denied')
+
+    expect(witness.after).toBeGreaterThan(witness.during ?? Infinity)
+  })
+})
+
+describe('listing after a local removal that partly fails', () => {
+  beforeEach(() => {
+    setupWorktreeHandlers()
+  })
+
+  // Why Windows too: there the failure first goes through a recovery that retries the folder
+  // deletion, and that retry failing is its own exit.
+  it.each([
+    { platform: ORIGINAL_PLATFORM, folderRetry: 'Permission denied' },
+    { platform: 'win32' as const, folderRetry: 'EBUSY: resource busy or locked' }
+  ])(
+    'does not answer from a listing cached before git dropped the worktree ($platform)',
+    async ({ platform, folderRetry }) => {
+      mockKnownFeatureWorktree()
+      const listDetected = () => handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
+      expect(await listDetected()).toMatchObject({
+        worktrees: expect.arrayContaining([
+          expect.objectContaining({ path: '/workspace/feature-wt' })
+        ])
+      })
+      const removePath = vi
+        .spyOn(localWorktreeFilesystem, 'removeLocalWorktreePath')
+        .mockRejectedValue(new Error(folderRetry))
+      removeWorktreeMock.mockImplementation(async () => {
+        // Git dropped the registration, then failed deleting the folder.
+        listWorktreesMock.mockResolvedValue([
+          {
+            path: '/workspace/repo',
+            head: 'main',
+            branch: 'main',
+            isBare: false,
+            isMainWorktree: true
+          }
+        ])
+        // Why only now: the removal's path checks before git ran stay on the host's rules.
+        setPlatform(platform)
+        throw Object.assign(new Error('git worktree remove failed'), {
+          stderr: "error: failed to delete '/workspace/feature-wt': Permission denied"
+        })
+      })
+
+      try {
+        await expect(
+          handlers['worktrees:remove'](null, {
+            worktreeId: 'repo-1::/workspace/feature-wt',
+            force: true
+          })
+        ).rejects.toThrow(folderRetry)
+      } finally {
+        setPlatform(ORIGINAL_PLATFORM)
+        removePath.mockRestore()
+      }
+
+      // Only the main worktree is left.
+      expect(await listDetected()).toMatchObject({
+        worktrees: [expect.objectContaining({ path: '/workspace/repo' })]
+      })
+    }
+  )
 })
