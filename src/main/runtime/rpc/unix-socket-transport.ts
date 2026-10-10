@@ -21,6 +21,8 @@ export type UnixSocketTransportOptions = {
   // the client honours them, the client-side idle timer. Tests override this
   // to avoid waiting 10 s for a frame.
   keepaliveIntervalMs?: number
+  // Why: tests override the 30 s idle reap to exercise it on a real socket.
+  idleTimeoutMs?: number
 }
 
 type MessageHandler = (
@@ -33,14 +35,16 @@ export class UnixSocketTransport implements RpcTransport {
   private readonly endpoint: string
   private readonly kind: 'unix' | 'named-pipe'
   private readonly keepaliveIntervalMs: number
+  private readonly idleTimeoutMs: number
   private server: Server | null = null
   private messageHandler: MessageHandler | null = null
   private readonly activeSockets = new Set<Socket>()
 
-  constructor({ endpoint, kind, keepaliveIntervalMs }: UnixSocketTransportOptions) {
+  constructor({ endpoint, kind, keepaliveIntervalMs, idleTimeoutMs }: UnixSocketTransportOptions) {
     this.endpoint = endpoint
     this.kind = kind
     this.keepaliveIntervalMs = keepaliveIntervalMs ?? DEFAULT_KEEPALIVE_INTERVAL_MS
+    this.idleTimeoutMs = idleTimeoutMs ?? RUNTIME_RPC_SOCKET_IDLE_TIMEOUT_MS
   }
 
   onMessage(handler: MessageHandler): void {
@@ -117,7 +121,10 @@ export class UnixSocketTransport implements RpcTransport {
 
     socket.setEncoding('utf8')
     socket.setNoDelay(true)
-    socket.setTimeout(RUNTIME_RPC_SOCKET_IDLE_TIMEOUT_MS, () => {
+    // Why: the idle reap only runs while no request is in flight; dispatchMessage
+    // pauses it so a slow handler's reply is not dropped on a destroyed socket.
+    socket.setTimeout(this.idleTimeoutMs)
+    socket.on('timeout', () => {
       socket.destroy()
     })
     socket.on('error', () => {
@@ -188,9 +195,13 @@ export class UnixSocketTransport implements RpcTransport {
         abortController.abort()
       }
       inflight.delete(abortDispatch)
+      if (inflight.size === 0 && !socket.destroyed) {
+        socket.setTimeout(this.idleTimeoutMs)
+      }
     }
     const abortDispatch = (): void => cleanupDispatch(true)
     inflight.add(abortDispatch)
+    socket.setTimeout(0)
 
     const reply = (response: string): void => {
       if (replied) {
