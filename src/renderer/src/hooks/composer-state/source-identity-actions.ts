@@ -111,7 +111,8 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
         nextName &&
         shouldApplyWorkspaceSourceAutoName({
           currentName: name,
-          lastAutoName: lastAutoNameRef.current
+          lastAutoName: lastAutoNameRef.current,
+          lookupTextIsQuery: !linkedWorkItem
         })
       ) {
         setName(nextName)
@@ -123,6 +124,7 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
     },
     [
       name,
+      linkedWorkItem,
       branchAutoNameRef,
       lastAutoNameRef,
       setBranchNameOverride,
