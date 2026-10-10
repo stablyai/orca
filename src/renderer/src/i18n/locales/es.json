@@ -7731,7 +7731,7 @@
         "OpenAiTranscriptionKeyDialog": {
           "fa83512e48": "Guardar clave",
           "07b26f2742": "Borrar clave",
-          "d246b2bdb3": "Las claves del runtime local se almacenan en ~/.orca mediante el almacenamiento cifrado de Electron cuando está disponible.",
+          "d246b2bdb3": "Las claves del runtime local se almacenan en {{value0}} mediante el almacenamiento cifrado de Electron cuando está disponible.",
           "c3380e4ca5": "sk-...",
           "2f797018f0": "Clave API configurada",
           "16015322f9": "Clave API",
@@ -8415,7 +8415,6 @@
           "25b0004fbf": "Terminal activa",
           "781cb74d22": "Se ejecuta desde paneles de terminal.",
           "cb02e00202": "Terminal",
-          "d8c988dab4": "~/.orca/keybindings.json",
           "shortcutUnavailable": "El atajo ya no está disponible."
         },
         "SourceControlAiActionRecipeDefaults": {

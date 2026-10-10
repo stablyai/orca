@@ -13,6 +13,7 @@ import { readManagedHookEventsFromJson } from '../agent-hooks/managed-hooks-json
 import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import { parseMuseSettingsText } from './hook-config-json'
+import { remoteOrcaHomePath } from '../../shared/orca-home'
 
 const MUSE_SCRIPT_BASE = 'muse-hook'
 
@@ -63,7 +64,7 @@ export function getMuseRemoteConfigPath(remoteHome: string): string {
 }
 
 export function getMuseRemoteManagedHooksPath(remoteHome: string): string {
-  return `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${MUSE_MANAGED_HOOKS_FILE_NAME}`
+  return remoteOrcaHomePath(remoteHome, 'agent-hooks', MUSE_MANAGED_HOOKS_FILE_NAME)
 }
 
 export function getMuseManagedCommand(scriptPath: string): string {

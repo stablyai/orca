@@ -20,6 +20,7 @@ import {
 } from '../agent-hooks/installer-utils-remote'
 import { CURSOR_EVENTS } from './hook-events'
 import { getManagedCommand, getManagedScript, getPosixManagedCommand } from './hook-script'
+import { remoteOrcaHomePath } from '../../shared/orca-home'
 
 function getConfigPath(): string {
   return join(homedir(), '.cursor', 'hooks.json')
@@ -203,7 +204,7 @@ export class CursorHookService {
   // Installs managed Cursor hooks on an SSH remote (POSIX-only); the managed script/JSON shape must match local install() or remote panes report a different status.
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remoteConfigPath = `${remoteHome.replace(/\/$/, '')}/.cursor/hooks.json`
-    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/cursor-hook.sh`
+    const remoteScriptPath = remoteOrcaHomePath(remoteHome, 'agent-hooks', 'cursor-hook.sh')
     try {
       const config = await readHooksJsonRemote(sftp, remoteConfigPath)
       if (!config) {

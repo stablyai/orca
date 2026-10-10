@@ -40,6 +40,7 @@ import { buildShortcutDefinitionCatalog } from './shortcut-definition-catalog'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import { buildShortcutRowVisibility } from './shortcut-row-visibility'
 import { useMacCapturedDigitChords } from './use-mac-captured-digit-chords'
+import { orcaHomeDisplayPath } from '../../../../shared/orca-home'
 
 const isMac = navigator.userAgent.includes('Mac')
 const platform: NodeJS.Platform = isMac
@@ -316,11 +317,7 @@ export function ShortcutsPane(): React.JSX.Element {
                 'Customize shortcuts visually or edit'
               )}{' '}
               <span className="font-mono text-[11px]">
-                {keybindingSnapshot?.path ??
-                  translate(
-                    'auto.components.settings.ShortcutsPane.d8c988dab4',
-                    '~/.orca/keybindings.json'
-                  )}
+                {keybindingSnapshot?.path ?? orcaHomeDisplayPath('keybindings.json')}
               </span>{' '}
               {translate('auto.components.settings.ShortcutsPane.4b7ae34062', 'directly.')}
             </>

@@ -17,6 +17,11 @@ import { quotePowerShellLiteral } from '../../shared/powershell-native-argument'
 import { wrapRuntimeHomeHookCommand } from '../agent-hooks/runtime-home-hook-command'
 import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 import type { ClaudeManagedHookPlan } from './claude-managed-hook-events'
+import {
+  ORCA_HOME_DIR_NAME,
+  ORCA_REMOTE_HOME_DIR_NAME,
+  remoteOrcaHomePath
+} from '../../shared/orca-home'
 
 export type ClaudeCompatibleHookSettings = {
   configDirName: '.claude' | '.openclaude' | '.qoder' | '.qoder-cn' | '.qwen' | '.codebuddy'
@@ -83,9 +88,16 @@ export function getRemoteConfigPath(remoteHome: string, settings = CLAUDE_HOOK_S
   return `${remoteHome.replace(/\/$/, '')}/${settings.configDirName}/settings.json`
 }
 
+export function getRemoteManagedScriptPath(
+  remoteHome: string,
+  settings = CLAUDE_HOOK_SETTINGS
+): string {
+  return remoteOrcaHomePath(remoteHome, 'agent-hooks', getPosixManagedScriptFileName(settings))
+}
+
 export function getManagedCommand(
   scriptPath: string,
-  options: { neutralJsonWhenMissing?: boolean } = {}
+  options: { neutralJsonWhenMissing?: boolean; homeDirName?: string } = {}
 ): string {
   const scriptFileName = basename(scriptPath)
   const extension = extname(scriptFileName)
@@ -130,7 +142,9 @@ export function getWindowsManagedLifecycleHook(scriptPath: string): HookCommandC
 
 function getWindowsPowerShellLifecycleCommand(scriptPath: string): string {
   const scriptFileName = win32.basename(scriptPath)
-  const quotedRelativePath = quotePowerShellLiteral(`.orca\\agent-hooks\\${scriptFileName}`)
+  const quotedRelativePath = quotePowerShellLiteral(
+    `${ORCA_HOME_DIR_NAME}\\agent-hooks\\${scriptFileName}`
+  )
   return (
     `$scriptPath = Join-Path $env:USERPROFILE ${quotedRelativePath}; ` +
     'if (Test-Path -LiteralPath $scriptPath -PathType Leaf) { & $scriptPath; exit $LASTEXITCODE }; ' +
@@ -150,7 +164,10 @@ export function hasSameManagedHookInvocation(
 }
 
 export function getRemoteManagedCommand(scriptPath: string): string {
-  return getManagedCommand(scriptPath, { neutralJsonWhenMissing: true })
+  return getManagedCommand(scriptPath, {
+    neutralJsonWhenMissing: true,
+    homeDirName: ORCA_REMOTE_HOME_DIR_NAME
+  })
 }
 
 export function applyManagedHooks(

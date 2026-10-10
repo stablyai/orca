@@ -7869,7 +7869,7 @@
         "OpenAiTranscriptionKeyDialog": {
           "fa83512e48": "Enregistrer la clé",
           "07b26f2742": "Effacer la clé",
-          "d246b2bdb3": "Les clés locales d'exécution sont stockées dans ~/.orca via le stockage chiffré d'Electron quand celui-ci est disponible.",
+          "d246b2bdb3": "Les clés locales d'exécution sont stockées dans {{value0}} via le stockage chiffré d'Electron quand celui-ci est disponible.",
           "c3380e4ca5": "sk-...",
           "2f797018f0": "Clé API configurée",
           "16015322f9": "Clé API",
@@ -8559,7 +8559,6 @@
           "25b0004fbf": "Terminal actif",
           "781cb74d22": "S'exécute depuis les volets de terminal.",
           "cb02e00202": "Terminal",
-          "d8c988dab4": "~/.orca/keybindings.json",
           "shortcutUnavailable": "Le raccourci n'est plus disponible."
         },
         "SourceControlAiActionRecipeDefaults": {

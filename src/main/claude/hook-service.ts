@@ -37,6 +37,7 @@ import {
   getPosixManagedScriptFileName,
   getRemoteConfigPath,
   getRemoteManagedCommand,
+  getRemoteManagedScriptPath,
   getStatusLineInstallMarkerPath,
   getStatusLineScriptFileName,
   getStatusLineScriptPath,
@@ -259,8 +260,7 @@ export class ClaudeHookService {
   ): Promise<AgentHookInstallStatus> {
     // Why: remote Windows is unsupported; local process.platform cannot identify the remote OS.
     const remoteConfigPath = getRemoteConfigPath(remoteHome, this.options.settings)
-    const remoteScriptFileName = getPosixManagedScriptFileName(this.options.settings)
-    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteScriptFileName}`
+    const remoteScriptPath = getRemoteManagedScriptPath(remoteHome, this.options.settings)
     // Why: surface fallible SFTP installs as structured errors.
     try {
       const config = await readHooksJsonRemote(sftp, remoteConfigPath)
@@ -279,7 +279,7 @@ export class ClaudeHookService {
       const nextConfig = applyManagedHooks(
         config,
         hook,
-        remoteScriptFileName,
+        getPosixManagedScriptFileName(this.options.settings),
         this.managedHookPlan(options)
       )
 

@@ -9,6 +9,7 @@ import {
   type HookDefinition
 } from '../agent-hooks/installer-utils'
 import { readManagedHookEventsFromJson } from '../agent-hooks/managed-hooks-json-events'
+import { ORCA_REMOTE_HOME_DIR_NAME } from '../../shared/orca-home'
 
 const DSH_SCRIPT_BASE = 'dsh-hook'
 
@@ -66,7 +67,7 @@ export function getDshManagedHooksPath(): string {
 export function getDshRemoteManagedHooksPath(remoteHome: string): string {
   return pathPosix.join(
     remoteHome.replace(/\/$/, ''),
-    '.orca',
+    ORCA_REMOTE_HOME_DIR_NAME,
     'agent-hooks',
     DSH_MANAGED_HOOKS_FILE_NAME
   )

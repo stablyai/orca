@@ -20,6 +20,7 @@
     "../src/main/agent-hooks/hooks-json-read.ts",
     "../src/main/agent-hooks/installer-utils.ts",
     "../src/main/agent-hooks/installer-utils-remote.ts",
+    "../src/main/orca-home-dir.ts",
     "../src/main/agent-hooks/local-agent-cli-presence.ts",
     "../src/main/agent-hooks/managed-toml-ownership.ts",
     "../src/main/agent-hooks/managed-agent-hook-controls.ts",

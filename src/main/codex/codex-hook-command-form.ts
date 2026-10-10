@@ -1,3 +1,4 @@
+import { ORCA_HOME_DIR_NAME } from '../../shared/orca-home'
 /**
  * The Codex hook command every Orca build writes, frozen per form.
  *
@@ -21,7 +22,7 @@ const WINDOWS_BARE_PATH = /^[A-Za-z0-9_.:/~-]+$/
 
 function buildPosixCommand(): string {
   const rootScript = '"${ORCA_AGENT_HOOK_ROOT-}/agent-hooks/codex-hook.sh"'
-  const sharedScript = '"${HOME-}/.orca/agent-hooks/codex-hook.sh"'
+  const sharedScript = `"\${HOME-}/${ORCA_HOME_DIR_NAME}/agent-hooks/codex-hook.sh"`
   // Why the root branch: dormant until Orca sets ORCA_AGENT_HOOK_ROOT, so the
   // bytes need not change when it does. The shared branch needs a hook port,
   // so a pane with hooks off and every shell outside Orca only drain stdin.

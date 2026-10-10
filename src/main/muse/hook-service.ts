@@ -42,6 +42,7 @@ import {
   readMuseSettingsSource,
   serializeMuseSettings
 } from './hook-config-json'
+import { remoteOrcaHomePath } from '../../shared/orca-home'
 
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   if (target === 'local' && process.platform === 'win32') {
@@ -228,7 +229,7 @@ export class MuseHookService {
   // Install the Muse hook on an SSH execution host, where the shell contract is POSIX.
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remoteConfigPath = getMuseRemoteConfigPath(remoteHome)
-    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/muse-hook.sh`
+    const remoteScriptPath = remoteOrcaHomePath(remoteHome, 'agent-hooks', 'muse-hook.sh')
     const remoteManagedHooksPath = getMuseRemoteManagedHooksPath(remoteHome)
     try {
       const body = await readTextFileRemote(sftp, remoteConfigPath)

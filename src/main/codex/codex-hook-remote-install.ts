@@ -25,6 +25,7 @@ import {
   wrapReadablePosixHookCommand
 } from './codex-hook-definition'
 import { getManagedScript } from './codex-hook-script'
+import { ORCA_REMOTE_HOME_DIR_NAME, remoteOrcaHomePath } from '../../shared/orca-home'
 
 export async function installCodexHooksRemote(
   sftp: SFTPWrapper,
@@ -40,8 +41,8 @@ export async function installCodexHooksRemote(
   // into stale trust keys. Plain SSH keeps its guest-home script contract.
   const redirectedCodexHome = options?.codexHomeDir?.replace(/\/$/, '')
   const remoteScriptPath = redirectedCodexHome
-    ? `${redirectedCodexHome}/.orca/agent-hooks/codex-hook.sh`
-    : `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/codex-hook.sh`
+    ? `${redirectedCodexHome}/${ORCA_REMOTE_HOME_DIR_NAME}/agent-hooks/codex-hook.sh`
+    : remoteOrcaHomePath(remoteHome, 'agent-hooks', 'codex-hook.sh')
   try {
     const config = await readHooksJsonRemote(sftp, remoteConfigPath)
     if (!config) {

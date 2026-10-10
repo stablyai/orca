@@ -7716,7 +7716,7 @@
         "OpenAiTranscriptionKeyDialog": {
           "fa83512e48": "保存密钥",
           "07b26f2742": "清除键",
-          "d246b2bdb3": "本地运行时密钥使用 Electron 加密存储（如果可用）存储在 ~/.orca 中。",
+          "d246b2bdb3": "本地运行时密钥使用 Electron 加密存储（如果可用）存储在 {{value0}} 中。",
           "c3380e4ca5": "sk-...",
           "2f797018f0": "API 密钥已配置",
           "16015322f9": "API密钥",
@@ -8400,7 +8400,6 @@
           "25b0004fbf": "终端活跃",
           "781cb74d22": "从终端窗格运行。",
           "cb02e00202": "终端",
-          "d8c988dab4": "~/.orca/keybindings.json",
           "shortcutUnavailable": "此快捷键已不再可用。"
         },
         "SourceControlAiActionRecipeDefaults": {

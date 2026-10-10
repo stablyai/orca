@@ -1,6 +1,5 @@
 import { safeStorage } from 'electron'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
   hardenExistingSecureFile,
@@ -9,6 +8,7 @@ import {
 } from '../../shared/secure-file'
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 import { ApiKeyFileUnreadableError } from './api-key-file-unreadable-error'
+import { orcaHomeDir } from '../orca-home-dir'
 
 type EncryptedApiKeyFileStore = {
   protection: () => SecretAtRestProtection | null
@@ -38,7 +38,7 @@ export function createEncryptedApiKeyFileStore({
   }
 
   function getOrcaDir(): string {
-    return join(homedir(), '.orca')
+    return orcaHomeDir()
   }
 
   function getApiKeyPath(): string {

@@ -28,6 +28,7 @@ import {
   buildWindowsHookEnvironmentGuardLines,
   buildWindowsHookStdinDrainEpilogue
 } from '../agent-hooks/hook-stdin-contract'
+import { remoteOrcaHomePath } from '../../shared/orca-home'
 
 // Why: SessionStart is installed (not just listened for) so that resuming a
 // droid session via `droid --resume` resets the per-pane prompt/tool caches
@@ -258,7 +259,7 @@ export class DroidHookService {
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const home = remoteHome.replace(/\/$/, '')
     const remoteConfigPath = `${home}/.factory/settings.json`
-    const remoteScriptPath = `${home}/.orca/agent-hooks/droid-hook.sh`
+    const remoteScriptPath = remoteOrcaHomePath(home, 'agent-hooks', 'droid-hook.sh')
     try {
       const config = await readHooksJsonRemote(sftp, remoteConfigPath)
       if (!config) {

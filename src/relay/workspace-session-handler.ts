@@ -3,6 +3,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { RelayDispatcher } from '../wsl-guest/dispatcher'
 import { publishWorkspaceSnapshotChange } from './workspace-snapshot-publication'
+import { relayOrcaHomeDir } from './relay-orca-home-dir'
 
 type RemoteWorkspaceSnapshot = {
   namespace: string
@@ -58,7 +59,7 @@ export class WorkspaceSessionHandler {
 
   constructor(
     private dispatcher: RelayDispatcher,
-    private baseDir = join(homedir(), '.orca', 'sessions')
+    private baseDir = relayOrcaHomeDir(homedir(), 'sessions')
   ) {
     this.dispatcher.onRequest('workspace.get', (params) => this.get(params))
     this.dispatcher.onRequest('workspace.patch', (params) => this.patch(params))

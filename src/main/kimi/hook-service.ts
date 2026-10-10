@@ -37,6 +37,7 @@ import {
   readManagedKimiHookEvents,
   removeManagedKimiHooks
 } from './kimi-hook-config-toml'
+import { ORCA_REMOTE_HOME_DIR_NAME } from '../../shared/orca-home'
 
 // Why: match the CLI's `KIMI_CODE_HOME ?? ~/.kimi-code` resolution (also used by
 // kimi-fetcher.ts and the AI Vault session scanner) so hooks land in the same
@@ -242,7 +243,7 @@ export class KimiHookService {
     const remoteConfigPath = pathPosix.join(remoteHome, '.kimi-code', 'config.toml')
     const remoteScriptPath = pathPosix.join(
       remoteHome,
-      '.orca',
+      ORCA_REMOTE_HOME_DIR_NAME,
       'agent-hooks',
       MANAGED_SCRIPT_FILE_NAME
     )

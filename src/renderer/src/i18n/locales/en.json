@@ -8006,7 +8006,7 @@
         "OpenAiTranscriptionKeyDialog": {
           "fa83512e48": "Save Key",
           "07b26f2742": "Clear Key",
-          "d246b2bdb3": "Local runtime keys are stored in ~/.orca using Electron encrypted storage when available.",
+          "d246b2bdb3": "Local runtime keys are stored in {{value0}} using Electron encrypted storage when available.",
           "c3380e4ca5": "sk-...",
           "2f797018f0": "API key configured",
           "16015322f9": "API Key",
@@ -8696,7 +8696,6 @@
           "25b0004fbf": "Terminal active",
           "781cb74d22": "Runs from terminal panes.",
           "cb02e00202": "Terminal",
-          "d8c988dab4": "~/.orca/keybindings.json",
           "shortcutUnavailable": "Shortcut is no longer available."
         },
         "SourceControlAiActionRecipeDefaults": {

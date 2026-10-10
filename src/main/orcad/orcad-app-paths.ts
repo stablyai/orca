@@ -11,6 +11,8 @@ import { homedir, tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import type { AppPathName } from '../../shared/app-environment'
+// Why the constant, not orcaHomeDir(): the compatibility launcher bundles this file and must stay tiny.
+import { ORCA_HOME_DIR_NAME } from '../../shared/orca-home'
 
 /** Empty is unset: a supervisor that exports `APPDATA=` has configured nothing. */
 function env(name: string): string | null {
@@ -25,7 +27,7 @@ export function resolveUserDataPath(): string {
     return explicit
   }
   const xdg = env('XDG_DATA_HOME')
-  return xdg ? join(xdg, 'Orca') : join(homedir(), '.orca')
+  return xdg ? join(xdg, 'Orca') : join(homedir(), ORCA_HOME_DIR_NAME)
 }
 
 /** Electron's `'appData'` definition, computed without Electron. */

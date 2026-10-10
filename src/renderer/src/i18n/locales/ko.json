@@ -7716,7 +7716,7 @@
         "OpenAiTranscriptionKeyDialog": {
           "fa83512e48": "키 저장",
           "07b26f2742": "키 지우기",
-          "d246b2bdb3": "로컬 런타임 키는 가능한 경우 Electron 암호화 저장소를 사용하여 ~/.orca에 저장됩니다.",
+          "d246b2bdb3": "로컬 런타임 키는 가능한 경우 Electron 암호화 저장소를 사용하여 {{value0}}에 저장됩니다.",
           "c3380e4ca5": "sk-...",
           "2f797018f0": "API 키가 구성됨",
           "16015322f9": "API 키",
@@ -8400,7 +8400,6 @@
           "25b0004fbf": "Terminal 활성",
           "781cb74d22": "terminal 패널에서 실행됩니다.",
           "cb02e00202": "터미널",
-          "d8c988dab4": "~/.orca/keybindings.json",
           "shortcutUnavailable": "단축키를 더 이상 사용할 수 없습니다."
         },
         "SourceControlAiActionRecipeDefaults": {

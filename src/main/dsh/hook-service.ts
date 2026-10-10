@@ -41,6 +41,7 @@ import {
   getDshRemoteManagedHooksPath,
   readManagedDshHookEvents
 } from './hook-settings'
+import { remoteOrcaHomePath } from '../../shared/orca-home'
 
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   if (target === 'local' && process.platform === 'win32') {
@@ -213,7 +214,7 @@ export class DshHookService {
   /** Install on an SSH execution host, where DSH's shell contract is always POSIX. */
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remoteConfigPath = getDshRemoteConfigPath(remoteHome)
-    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/dsh-hook.sh`
+    const remoteScriptPath = remoteOrcaHomePath(remoteHome, 'agent-hooks', 'dsh-hook.sh')
     const remoteManagedHooksPath = getDshRemoteManagedHooksPath(remoteHome)
     try {
       const body = (await readTextFileRemote(sftp, remoteConfigPath)) ?? ''

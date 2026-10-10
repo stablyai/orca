@@ -39,6 +39,7 @@ import {
   removeManagedKiroHooks,
   serializeKiroAgentConfig
 } from './hook-settings'
+import { remoteOrcaHomePath } from '../../shared/orca-home'
 
 // Why: hook stdout from agentSpawn/userPromptSubmit is injected into Kiro's model context,
 // so every path below must stay silent.
@@ -215,7 +216,7 @@ export class KiroHookService {
     kiroHomeDir?: string
   ): Promise<AgentHookInstallStatus> {
     const agentsDir = getKiroRemoteAgentsDir(remoteHome, kiroHomeDir)
-    const scriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/kiro-hook.sh`
+    const scriptPath = remoteOrcaHomePath(remoteHome, 'agent-hooks', 'kiro-hook.sh')
     try {
       const fileNames = ((await listRemoteDirectory(sftp, agentsDir)) ?? [])
         .filter(isKiroAgentConfigFileName)

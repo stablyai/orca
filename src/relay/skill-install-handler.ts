@@ -61,6 +61,7 @@ import {
 } from '../main/skills/skill-install-operation-error'
 import { recoverPendingSkillTransactions } from '../main/skills/skill-transaction-startup-recovery'
 import { resolveEnvironmentSkillProviderRoots } from '../main/skills/skill-provider-runtime-roots'
+import { relayOrcaHomeDir } from './relay-orca-home-dir'
 
 const SSH_SKILL_ENVIRONMENT_ID = 'ssh-host'
 
@@ -92,7 +93,7 @@ export class SkillInstallHandler {
     } = {}
   ) {
     this.homeDirectory = options.homeDirectory ?? homedir()
-    this.stateDirectory = options.stateDirectory ?? join(this.homeDirectory, '.orca')
+    this.stateDirectory = options.stateDirectory ?? relayOrcaHomeDir(this.homeDirectory)
     this.uploads = new SkillUploadSessionService(
       join(this.stateDirectory, 'skill-installs', SKILL_UPLOAD_STAGING_ROOT_NAME)
     )

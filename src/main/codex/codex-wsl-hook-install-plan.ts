@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import { posix as pathPosix, win32 as pathWin32 } from 'node:path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import { ORCA_REMOTE_HOME_DIR_NAME } from '../../shared/orca-home'
 
 export type CodexWslRuntimeHookTarget = {
   runtime?: 'host' | 'wsl'
@@ -204,8 +205,18 @@ export function createCodexWslRuntimeHookInstallPlan(
   return {
     configPath: pathWin32.join(runtimeHomePath, 'hooks.json'),
     tomlPath: pathWin32.join(runtimeHomePath, 'config.toml'),
-    scriptPath: pathWin32.join(runtimeHomePath, '.orca', 'agent-hooks', 'codex-hook.sh'),
-    commandScriptPath: pathPosix.join(linuxRuntimeHome, '.orca', 'agent-hooks', 'codex-hook.sh'),
+    scriptPath: pathWin32.join(
+      runtimeHomePath,
+      ORCA_REMOTE_HOME_DIR_NAME,
+      'agent-hooks',
+      'codex-hook.sh'
+    ),
+    commandScriptPath: pathPosix.join(
+      linuxRuntimeHome,
+      ORCA_REMOTE_HOME_DIR_NAME,
+      'agent-hooks',
+      'codex-hook.sh'
+    ),
     trustConfigPath: pathPosix.join(linuxRuntimeHome, 'hooks.json'),
     wslDistro: distro,
     linuxRuntimeHome

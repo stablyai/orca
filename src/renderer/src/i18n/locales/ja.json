@@ -7753,7 +7753,7 @@
         "OpenAiTranscriptionKeyDialog": {
           "fa83512e48": "キーの保存",
           "07b26f2742": "クリアキー",
-          "d246b2bdb3": "ローカルランタイムキーは、利用可能な場合は Electron 暗号化ストレージを使用して ~/.orca に保存されます。",
+          "d246b2bdb3": "ローカルランタイムキーは、利用可能な場合は Electron 暗号化ストレージを使用して {{value0}} に保存されます。",
           "c3380e4ca5": "sk-...",
           "2f797018f0": "APIキーが設定されました",
           "16015322f9": "APIキー",
@@ -8437,7 +8437,6 @@
           "25b0004fbf": "ターミナルがアクティブです",
           "781cb74d22": "ターミナルペインから実行します。",
           "cb02e00202": "ターミナル",
-          "d8c988dab4": "~/.orca/keybindings.json",
           "shortcutUnavailable": "ショートカットは利用できなくなりました。"
         },
         "SourceControlAiActionRecipeDefaults": {

@@ -11,6 +11,7 @@ import {
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { translate } from '@/i18n/i18n'
+import { orcaHomeDisplayPath } from '../../../../shared/orca-home'
 
 type OpenAiTranscriptionKeyDialogProps = {
   open: boolean
@@ -85,7 +86,8 @@ export function OpenAiTranscriptionKeyDialog({
           <Lock className="size-3 shrink-0" />
           {translate(
             'auto.components.settings.OpenAiTranscriptionKeyDialog.d246b2bdb3',
-            'Local runtime keys are stored in ~/.orca using Electron encrypted storage when available.'
+            'Local runtime keys are stored in {{value0}} using Electron encrypted storage when available.',
+            { value0: orcaHomeDisplayPath() }
           )}
         </p>
         <DialogFooter>

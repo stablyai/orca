@@ -18,6 +18,7 @@ import {
 import { detectRemoteHostPlatform } from './ssh-remote-platform-detection'
 import { OrcadHostUnsupportedError } from './orcad-host-unavailable'
 import { rememberSshHostPlatform } from './ssh-host-platform-memo'
+import { ORCA_REMOTE_HOME_DIR_NAME } from '../../shared/orca-home'
 
 export type OrcadRemoteContext = {
   activationRecord: OrcadActivationRecord
@@ -62,6 +63,6 @@ export async function resolveOrcadRemoteContext(
     host,
     remoteHome,
     target,
-    userDataDir: joinRemotePath(host, remoteHome, '.orca')
+    userDataDir: joinRemotePath(host, remoteHome, ORCA_REMOTE_HOME_DIR_NAME)
   }
 }

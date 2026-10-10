@@ -1,6 +1,5 @@
 import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { accessSync, constants, existsSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { delimiter, dirname, isAbsolute, join } from 'node:path'
 import {
   addClaudeTeammateModeAuto,
@@ -10,6 +9,7 @@ import {
 } from '../../shared/claude-agent-teams-tmux-compat'
 import { getOrcaCliCommandNameForPlatform } from '../../shared/orca-cli-command-name'
 import { resolvePathEnvKey } from '../pty/windows-path-segment-merge'
+import { orcaHomeDir } from '../orca-home-dir'
 
 export type ClaudeAgentTeamsLaunchPlan = {
   command: string
@@ -84,7 +84,7 @@ export function resolveClaudeAgentTeamsShimBin(
 }
 
 function defaultShimRoot(): string {
-  return join(homedir(), '.orca', 'claude-agent-teams-bin')
+  return orcaHomeDir('claude-agent-teams-bin')
 }
 
 function bundledLauncherPath(): string | null {

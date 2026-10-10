@@ -13,6 +13,7 @@ import {
 } from '../agent-hooks/installer-utils-remote'
 import { COPILOT_EVENTS } from './copilot-managed-hook-definitions'
 import { getManagedScript } from './copilot-managed-script'
+import { remoteOrcaHomePath } from '../../shared/orca-home'
 
 function getRemoteManagedHookDefinition(command: string): HookDefinition {
   return { type: 'command', bash: command, timeoutSec: 5 }
@@ -24,7 +25,7 @@ export async function installCopilotHooksRemote(
 ): Promise<AgentHookInstallStatus> {
   const home = remoteHome.replace(/\/$/, '')
   const remoteConfigPath = `${home}/.copilot/hooks/orca.json`
-  const remoteScriptPath = `${home}/.orca/agent-hooks/copilot-hook.sh`
+  const remoteScriptPath = remoteOrcaHomePath(home, 'agent-hooks', 'copilot-hook.sh')
 
   try {
     const config = await readHooksJsonRemote(sftp, remoteConfigPath)
