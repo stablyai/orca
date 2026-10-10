@@ -17,24 +17,32 @@ export function normalizeGroupBy(groupBy: unknown): PersistedState['ui']['groupB
   return getDefaultUIState().groupBy
 }
 
-export function normalizeShowDotfilesByWorktree(value: unknown): Record<string, boolean> {
+function normalizeBooleanByWorktree(value: unknown): Record<string, boolean> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return {}
   }
   const out: Record<string, boolean> = {}
-  for (const [worktreeId, showDotfiles] of Object.entries(value as Record<string, unknown>)) {
+  for (const [worktreeId, flag] of Object.entries(value as Record<string, unknown>)) {
     if (
       !worktreeId ||
       worktreeId === '__proto__' ||
       worktreeId === 'constructor' ||
       worktreeId === 'prototype' ||
-      typeof showDotfiles !== 'boolean'
+      typeof flag !== 'boolean'
     ) {
       continue
     }
-    out[worktreeId] = showDotfiles
+    out[worktreeId] = flag
   }
   return out
+}
+
+export function normalizeShowDotfilesByWorktree(value: unknown): Record<string, boolean> {
+  return normalizeBooleanByWorktree(value)
+}
+
+export function normalizeNotificationsMutedByWorktree(value: unknown): Record<string, boolean> {
+  return normalizeBooleanByWorktree(value)
 }
 
 export function normalizeSortBy(sortBy: unknown): PersistedState['ui']['sortBy'] {

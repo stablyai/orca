@@ -5060,6 +5060,9 @@
         }
       },
       "sidebar": {
+        "WorktreeCardMetaRow": {
+          "notificationsMuted": "Notificaciones silenciadas"
+        },
         "local": {
           "base": {
             "ref": {
@@ -5708,7 +5711,9 @@
           "deleteWorktree": "Eliminar worktree",
           "sleepWithDescendants": "Dormir con Descendientes ({{value0}})",
           "sleepWithDescendantsDescription": "Cierre los paneles activos en este espacio de trabajo y en todos los descendientes anidados para liberar memoria y CPU.",
-          "deleteWithDescendants": "Eliminar con Descendientes…"
+          "deleteWithDescendants": "Eliminar con Descendientes…",
+          "muteNotifications": "Silenciar notificaciones",
+          "unmuteNotifications": "Reactivar notificaciones"
         },
         "WorktreeList": {
           "d880ea0744": "Crea un grupo y mueve este proyecto a él.",
@@ -17871,8 +17876,7 @@
         "agentNotSignedIn": "Inicia sesión en {{agent}}.",
         "thenSendAgain": "Después, envía tu mensaje de nuevo.",
         "runCommandWhenDone": "Ejecute /{{command}} cuando termine.",
-        "commandAfterAnswer": "Responda a la pregunta o aprobación del agente y luego ejecute /{{command}}.",
-        "sessionNotRestored": "{{agent}} no pudo reabrir su sesión anterior, así que este chat continúa en una nueva. {{agent}} no recuerda los mensajes anteriores."
+        "commandAfterAnswer": "Responda a la pregunta o aprobación del agente y luego ejecute /{{command}}."
       },
       "writeNotice": {
         "notDoneReadHistory": "No se pudo cargar el historial de este chat.",

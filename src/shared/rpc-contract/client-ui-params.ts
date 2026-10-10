@@ -169,6 +169,7 @@ export const UiUpdateFields = z
     // payload (sidebar widths, filters, agent acks) for every paired client.
     explorerDisplayRootByWorktree: z.record(z.string(), z.string()).optional(),
     showDotfilesByWorktree: z.record(z.string(), z.boolean()).optional(),
+    notificationsMutedByWorktree: z.record(z.string(), z.boolean()).optional(),
     collapsedGroups: StringArray.optional(),
     uiZoomLevel: z.number().finite().optional(),
     editorFontZoomLevel: z.number().finite().optional(),

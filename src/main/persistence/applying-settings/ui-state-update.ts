@@ -32,6 +32,7 @@ import {
 import {
   normalizeGroupBy,
   normalizeProjectOrderBy,
+  normalizeNotificationsMutedByWorktree,
   normalizeRightSidebarExplorerView,
   normalizeRightSidebarTab,
   normalizeShowDotfilesByWorktree,
@@ -182,6 +183,10 @@ export function updatePersistedUI(
       sanitizedUpdates.showDotfilesByWorktree !== undefined
         ? normalizeShowDotfilesByWorktree(sanitizedUpdates.showDotfilesByWorktree)
         : normalizeShowDotfilesByWorktree(operations.state.ui?.showDotfilesByWorktree),
+    notificationsMutedByWorktree:
+      sanitizedUpdates.notificationsMutedByWorktree !== undefined
+        ? normalizeNotificationsMutedByWorktree(sanitizedUpdates.notificationsMutedByWorktree)
+        : normalizeNotificationsMutedByWorktree(operations.state.ui?.notificationsMutedByWorktree),
     // Why: a stale renderer or paired client must not erase a dismissal, or a one-time tip replays.
     featureTipsSeenIds:
       sanitizedUpdates.featureTipsSeenIds !== undefined

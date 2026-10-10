@@ -94,6 +94,11 @@ export function sanitizeShowDotfilesByWorktree(value: unknown): Record<string, b
   return out
 }
 
+/** Same persisted shape as the dotfile map: a per-worktree boolean preference record. */
+export function sanitizeNotificationsMutedByWorktree(value: unknown): Record<string, boolean> {
+  return sanitizeShowDotfilesByWorktree(value)
+}
+
 export function sanitizePersistedSidebarWidth(
   width: unknown,
   fallback: number,

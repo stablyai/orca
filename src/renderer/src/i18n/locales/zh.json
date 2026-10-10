@@ -5591,6 +5591,9 @@
         "WorktreeCardAgents": {
           "1b0a156717": "智能体"
         },
+        "WorktreeCardMetaRow": {
+          "notificationsMuted": "通知已静音"
+        },
         "WorktreeCardReviewDetailSection": {
           "reviewHeader": "{{value0}} #{{value1}}",
           "copyLink": "复制链接"
@@ -5689,7 +5692,9 @@
           "deleteWorktree": "删除工作树",
           "sleepWithDescendants": "与后代同眠 ({{value0}})",
           "sleepWithDescendantsDescription": "关闭此工作区中的活动面板以及每个嵌套的后代面板以释放内存和 CPU。",
-          "deleteWithDescendants": "与后代一起删除..."
+          "deleteWithDescendants": "与后代一起删除...",
+          "muteNotifications": "静音通知",
+          "unmuteNotifications": "取消静音通知"
         },
         "WorktreeList": {
           "d880ea0744": "创建一个组并将该项目移入其中。",
@@ -17871,8 +17876,7 @@
         "agentNotSignedIn": "请登录 {{agent}}。",
         "thenSendAgain": "然后再次发送消息。",
         "runCommandWhenDone": "完成后再运行 /{{command}}。",
-        "commandAfterAnswer": "请先回答智能体的问题或审批，然后再运行 /{{command}}。",
-        "sessionNotRestored": "{{agent}} 无法重新打开之前的会话，因此此聊天将在新会话中继续。{{agent}} 不记得之前的消息。"
+        "commandAfterAnswer": "请先回答智能体的问题或审批，然后再运行 /{{command}}。"
       },
       "writeNotice": {
         "notDoneReadHistory": "无法加载此聊天的历史记录。",

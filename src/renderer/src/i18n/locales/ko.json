@@ -5591,6 +5591,9 @@
         "WorktreeCardAgents": {
           "1b0a156717": "에이전트"
         },
+        "WorktreeCardMetaRow": {
+          "notificationsMuted": "알림 음소거됨"
+        },
         "WorktreeCardReviewDetailSection": {
           "reviewHeader": "{{value0}} #{{value1}}",
           "copyLink": "링크 복사"
@@ -5689,7 +5692,9 @@
           "deleteWorktree": "작업 트리 삭제",
           "sleepWithDescendants": "자손과 동침({{value0}})",
           "sleepWithDescendantsDescription": "메모리와 CPU를 확보하려면 이 워크스페이스과 모든 중첩 하위 항목의 활성 패널을 닫으세요.",
-          "deleteWithDescendants": "하위 항목과 함께 삭제…"
+          "deleteWithDescendants": "하위 항목과 함께 삭제…",
+          "muteNotifications": "알림 음소거",
+          "unmuteNotifications": "알림 음소거 해제"
         },
         "WorktreeList": {
           "d880ea0744": "그룹을 만들고 이 프로젝트를 그룹으로 이동하세요.",
@@ -17906,8 +17911,7 @@
         "agentNotSignedIn": "{{agent}}에 로그인하세요.",
         "thenSendAgain": "그런 다음 메시지를 다시 보내세요.",
         "runCommandWhenDone": "작업이 끝나면 /{{command}}을(를) 실행하세요.",
-        "commandAfterAnswer": "에이전트의 질문 또는 승인에 응답한 다음 /{{command}}을(를) 실행하세요.",
-        "sessionNotRestored": "{{agent}}이(가) 이전 세션을 다시 열 수 없어 이 채팅은 새 세션에서 계속됩니다. {{agent}}은(는) 이전 메시지를 기억하지 않습니다."
+        "commandAfterAnswer": "에이전트의 질문 또는 승인에 응답한 다음 /{{command}}을(를) 실행하세요."
       },
       "writeNotice": {
         "notDoneReadHistory": "이 채팅의 기록을 불러오지 못했습니다.",

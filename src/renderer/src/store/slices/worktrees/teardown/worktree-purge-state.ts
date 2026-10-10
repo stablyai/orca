@@ -246,6 +246,7 @@ export function buildWorktreePurgeState(
     gitStatusHugeByWorktree: omitByWorktree(s.gitStatusHugeByWorktree),
     explorerDisplayRootByWorktree: omitByWorktree(s.explorerDisplayRootByWorktree),
     showDotfilesByWorktree: omitByWorktree(s.showDotfilesByWorktree),
+    notificationsMutedByWorktree: omitByWorktree(s.notificationsMutedByWorktree),
     expandedDirs: omitByWorktree(s.expandedDirs),
     // Per-file editor state for removed files
     editorDrafts: omitByFileId(s.editorDrafts),

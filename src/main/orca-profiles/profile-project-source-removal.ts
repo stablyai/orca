@@ -40,7 +40,11 @@ export function removeSourceRepo(
         state.ui.explorerDisplayRootByWorktree,
         repoId
       ),
-      showDotfilesByWorktree: removeRepoWorktreeRecord(state.ui.showDotfilesByWorktree, repoId)
+      showDotfilesByWorktree: removeRepoWorktreeRecord(state.ui.showDotfilesByWorktree, repoId),
+      notificationsMutedByWorktree: removeRepoWorktreeRecord(
+        state.ui.notificationsMutedByWorktree,
+        repoId
+      )
     }
   }
   delete next.sparsePresetsByRepo[repoId]

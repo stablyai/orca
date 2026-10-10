@@ -186,6 +186,9 @@ export function dispatchTerminalNotification(
     )
   }
 
+  // Why: per-worktree mute stops at the interruptions (OS banner, sound, mobile
+  // push, tray dot); the unread writes above the delivery still run.
+  const notificationsMuted = state.notificationsMutedByWorktree?.[worktreeId] === true
   applyAgentAttention(attentionDecision, {
     unread: {
       markWorkspaceUnread: state.markWorktreeUnread,
@@ -193,7 +196,7 @@ export function dispatchTerminalNotification(
       markGroupUnread: state.markTerminalTabUnread,
       markSurfaceUnread: state.markTerminalPaneUnread
     },
-    requestDelivery
+    requestDelivery: notificationsMuted ? () => {} : requestDelivery
   })
 }
 

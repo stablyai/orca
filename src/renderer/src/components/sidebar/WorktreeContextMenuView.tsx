@@ -35,6 +35,7 @@ import { translate } from '@/i18n/i18n'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 import { WorktreeStatusMenuItems } from './WorktreeStatusMenuItems'
+import { WorktreeNotificationMuteMenuItem } from './WorktreeNotificationMuteMenuItem'
 import { WorktreeContextMenuOverlays } from './WorktreeContextMenuOverlays'
 import {
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR,
@@ -209,6 +210,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                       'Mark Unread'
                     )}
               </DropdownMenuItem>
+              <WorktreeNotificationMuteMenuItem worktreeId={worktree.id} disabled={isDeleting} />
               {repo ? (
                 <>
                   <DropdownMenuSeparator />

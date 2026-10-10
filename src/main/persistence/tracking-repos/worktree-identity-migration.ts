@@ -337,6 +337,10 @@ export function migrateWorktreeIdentity(
   if (showDotfiles) {
     changed = moveKey(showDotfiles) || changed
   }
+  const notificationsMuted = state.ui?.notificationsMutedByWorktree
+  if (notificationsMuted) {
+    changed = moveKey(notificationsMuted) || changed
+  }
 
   return changed
 }

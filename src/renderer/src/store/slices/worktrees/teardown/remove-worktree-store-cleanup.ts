@@ -114,6 +114,7 @@ export function applyRemoveWorktreeSuccessState(
       editorCursorLine: omitByFileId(s.editorCursorLine),
       explorerDisplayRootByWorktree: omitByWorktree(s.explorerDisplayRootByWorktree),
       showDotfilesByWorktree: omitByWorktree(s.showDotfilesByWorktree),
+      notificationsMutedByWorktree: omitByWorktree(s.notificationsMutedByWorktree),
       expandedDirs: omitByWorktree(s.expandedDirs),
       // Why: clear the huge-status marker so it doesn't linger after the worktree is gone.
       gitStatusHugeByWorktree: omitByWorktree(s.gitStatusHugeByWorktree),

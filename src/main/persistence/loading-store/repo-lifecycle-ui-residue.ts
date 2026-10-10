@@ -15,7 +15,11 @@ export function pruneDeregisteredRepoUiResidue(
     ui.lastActiveWorktreeId = null
   }
   ui.filterRepoIds = ui.filterRepoIds?.filter((repoId) => !orphanRepoIds.has(repoId)) ?? []
-  for (const record of [ui.explorerDisplayRootByWorktree, ui.showDotfilesByWorktree]) {
+  for (const record of [
+    ui.explorerDisplayRootByWorktree,
+    ui.showDotfilesByWorktree,
+    ui.notificationsMutedByWorktree
+  ]) {
     for (const worktreeId of Object.keys(record ?? {})) {
       if (isOrphanWorktree(worktreeId)) {
         delete record?.[worktreeId]

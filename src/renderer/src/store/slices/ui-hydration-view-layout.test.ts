@@ -637,6 +637,32 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().showDotfilesByWorktree).toEqual({ 'repo-1::/repo': false })
   })
 
+  it('hydrates persisted per-worktree notification mutes and drops invalid entries', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        notificationsMutedByWorktree: {
+          'repo-1::/repo': true,
+          'repo-2::/repo': 'nope',
+          constructor: true
+        } as never
+      })
+    )
+
+    expect(store.getState().notificationsMutedByWorktree).toEqual({ 'repo-1::/repo': true })
+  })
+
+  it('stores only per-worktree notification mute opt-ins when toggling', () => {
+    const store = createUIStore()
+
+    store.getState().toggleWorktreeNotificationsMuted('repo-1::/repo')
+    store.getState().toggleWorktreeNotificationsMuted('repo-2::/repo')
+    store.getState().toggleWorktreeNotificationsMuted('repo-2::/repo')
+
+    expect(store.getState().notificationsMutedByWorktree).toEqual({ 'repo-1::/repo': true })
+  })
+
   it('falls back to explorer for invalid persisted right sidebar tabs', () => {
     const store = createUIStore()
 

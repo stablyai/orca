@@ -155,6 +155,23 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
         return { showDotfilesByWorktree: next }
       }),
 
+    notificationsMutedByWorktree: {},
+    toggleWorktreeNotificationsMuted: (worktreeId) =>
+      set((s) => {
+        if (!worktreeId) {
+          return s
+        }
+        const nextMuted = s.notificationsMutedByWorktree[worktreeId] !== true
+        const next = { ...s.notificationsMutedByWorktree }
+        // Why: not muted is the default; only persist worktree-level opt-ins.
+        if (nextMuted) {
+          next[worktreeId] = true
+        } else {
+          delete next[worktreeId]
+        }
+        return { notificationsMutedByWorktree: next }
+      }),
+
     filterRepoIds: [],
     setFilterRepoIds: (ids) => set({ filterRepoIds: ids }),
 
