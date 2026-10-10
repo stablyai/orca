@@ -79,6 +79,13 @@ export type WorktreeHeadIdentity = {
   branch: string | null
 }
 
+/** `worktreePaths` names the only checkouts whose status the burst can have
+ *  changed; absent means unattributed, so every listener must refresh. */
+export type GitStatusMetadataChangedEvent = {
+  repoId: string
+  worktreePaths?: string[]
+}
+
 // ─── Worktree (app-level, enriched) ──────────────────────────────────
 export type WorkspaceStatus = string
 

@@ -7,7 +7,10 @@ import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
 } from '../../shared/worktree/base-ref-drift-types'
-import type { WorktreeHeadIdentity } from '../../shared/worktree/types'
+import type {
+  GitStatusMetadataChangedEvent,
+  WorktreeHeadIdentity
+} from '../../shared/worktree/types'
 import type { PreloadApi } from '../api-types'
 
 export const worktreesApi = {
@@ -84,8 +87,11 @@ export const worktreesApi = {
     return () => ipcRenderer.removeListener('worktrees:changed', listener)
   },
 
-  onGitStatusMetadataChanged: (callback: (data: { repoId: string }) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, data: { repoId: string }) => callback(data)
+  onGitStatusMetadataChanged: (
+    callback: (data: GitStatusMetadataChangedEvent) => void
+  ): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: GitStatusMetadataChangedEvent) =>
+      callback(data)
     ipcRenderer.on('worktrees:gitStatusMetadataChanged', listener)
     return () => ipcRenderer.removeListener('worktrees:gitStatusMetadataChanged', listener)
   },
