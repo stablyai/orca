@@ -51,6 +51,11 @@ on:
 jobs:
   terminal-perf:
     name: terminal scale perf
+    # Why: the daily run is this repo's regression tripwire and forks inherit it
+    # with the cron, burning ~12 runner-minutes a day to mirror a result upstream
+    # already records. Manual dispatch stays open everywhere — the inputs exist
+    # so forks can measure their own branches.
+    if: github.event_name != 'schedule' || github.repository == 'stablyai/orca'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
