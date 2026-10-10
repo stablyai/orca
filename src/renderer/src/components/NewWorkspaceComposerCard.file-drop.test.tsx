@@ -133,6 +133,7 @@ describe('new workspace card file drop ownership', () => {
         ({ source }: { source: string }) => {
           const target = resolveComposerAttachmentTarget({
             selectedProjectGroup: group,
+            selectedRepo: { id: 'source-repo' },
             selectedRepoPath: source,
             selectedRepoExecutionHostId: 'ssh:ssh-a',
             selectedRepoSettings: {},
@@ -146,6 +147,7 @@ describe('new workspace card file drop ownership', () => {
             connectionId: target.connectionId,
             selectedRepoPath: target.path ?? undefined,
             selectedRepoSettings: target.settings,
+            selectedWorktreeId: target.worktreeId,
             setAgentPrompt: () => {},
             setAttachmentPaths: attach
           })
