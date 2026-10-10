@@ -12,11 +12,15 @@ import {
   githubApiRepositoryProbeCacheKey,
   resolveGitHubApiRepositoryProbe
 } from './github-api-repository-probe'
+import { readLocalGitConfigSignature } from './local-git-config-signature'
 
 // Why: cache the uncached Enterprise remote probe used by hot paths.
 const ORIGIN_REPO_CACHE_TTL_MS = 30_000
 const ORIGIN_REPO_CACHE_MAX_ENTRIES = 512
-const originRepoCache = new Map<string, { value: GitHubApiRepository | null; expiresAt: number }>()
+const originRepoCache = new Map<
+  string,
+  { value: GitHubApiRepository | null; expiresAt: number; configSignature?: string }
+>()
 const originRepoInFlight = new Map<string, Promise<GitHubApiRepository | null>>()
 
 /** @internal - exposed for tests only */
@@ -73,11 +77,24 @@ export async function getGitHubApiRepositoryForRemote(
     localGitOptions,
     requireVerifiedSshProbe
   )
+  const signatureContext = {
+    repoPath,
+    connectionId: connectionId ?? null,
+    ...localGitOptions
+  }
   const now = Date.now()
   pruneOriginRepoCache(now)
   const cached = originRepoCache.get(cacheKey)
   if (cached && cached.expiresAt > now) {
-    return cached.value
+    // Revalidate signed hits so a changed remote is visible before the TTL.
+    if (cached.configSignature === undefined) {
+      return cached.value
+    }
+    const currentSignature = await readLocalGitConfigSignature(signatureContext)
+    if (currentSignature === cached.configSignature) {
+      return cached.value
+    }
+    originRepoCache.delete(cacheKey)
   }
   const inFlight = originRepoInFlight.get(cacheKey)
   if (inFlight) {
@@ -105,9 +122,11 @@ export async function getGitHubApiRepositoryForRemote(
     // Why: undefined means the gh auth inventory could not be read. Caching it
     // as a negative would turn a transient spawn failure into a 30-second miss.
     if (slug !== undefined) {
+      const configSignature = await readLocalGitConfigSignature(signatureContext)
       originRepoCache.set(cacheKey, {
         value: slug,
-        expiresAt: Date.now() + ORIGIN_REPO_CACHE_TTL_MS
+        expiresAt: Date.now() + ORIGIN_REPO_CACHE_TTL_MS,
+        ...(configSignature ? { configSignature } : {})
       })
       pruneOriginRepoCache(Date.now())
     }
