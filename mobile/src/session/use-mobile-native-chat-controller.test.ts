@@ -92,6 +92,7 @@ vi.mock('./use-mobile-structured-agent-session', () => ({
     ...structuredActivity,
     queued: { cards: [], send: vi.fn(), delete: vi.fn(), edit: vi.fn() },
     sendWithOutcome: structuredSendWithOutcome,
+    acceptsImages: false,
     cancel: structuredCancel,
     cancelPrompt: structuredCancelPrompt,
     permission: structuredPermission,
@@ -172,6 +173,19 @@ const ORIGIN = {
   baselineOccurrences: 0,
   baselineTailMessageId: null,
   baselineResolved: true
+}
+
+/** Harness props for a structured chat tab running `agent`. */
+function structuredTab(agent: string) {
+  const tab = {
+    type: 'agent-session',
+    id: 'agent-tab-1',
+    title: 'Chat',
+    sessionId: 'session-structured',
+    agent,
+    isActive: true
+  }
+  return { tab, activeHandle: null, inputLeaseReady: false }
 }
 
 describe('useMobileNativeChatController handleNativeChatSend', () => {
@@ -316,6 +330,8 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     })
     expect(accepted).toBe(true)
     expect(acceptSend).toHaveBeenCalledWith(ORIGIN, 'look', ['file:///a.jpg'])
+    // A terminal-backed chat pastes images into the agent's own input.
+    expect(controller!.nativeChatAcceptsImages).toBe(true)
     // Optimistic clear happens at send time, never a restore on success.
     expect(clearDraftForSend).toHaveBeenCalledWith(ORIGIN, 'look')
     expect(restoreRejectedDraft).not.toHaveBeenCalled()
@@ -323,20 +339,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
 
   it('routes structured agent-session sends away from terminal/nativeChat transports', async () => {
     await act(async () => {
-      renderer?.update(
-        createElement(Harness, {
-          tab: {
-            type: 'agent-session',
-            id: 'agent-tab-1',
-            title: 'Codex Chat',
-            sessionId: 'session-structured',
-            agent: 'codex',
-            isActive: true
-          },
-          activeHandle: null,
-          inputLeaseReady: false
-        })
-      )
+      renderer?.update(createElement(Harness, structuredTab('codex')))
     })
 
     let accepted = false
@@ -350,19 +353,21 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     expect(clientStub.sendRequest).not.toHaveBeenCalled()
   })
 
+  it("echoes a command the chat's own agent runs, though Codex's host claims it", async () => {
+    await act(async () => {
+      renderer?.update(createElement(Harness, structuredTab('opencode')))
+    })
+    await act(async () => {
+      await controller!.handleNativeChatSend('/review')
+    })
+    expect(structuredSendWithOutcome).toHaveBeenCalledWith('/review')
+    expect(acceptSend).toHaveBeenCalledWith(ORIGIN, '/review', undefined)
+    // Its host record decides attach, not the built-in answer.
+    expect(controller!.nativeChatAcceptsImages).toBe(false)
+  })
+
   it('separates structured working status from provider cancellation availability', async () => {
-    const props = {
-      tab: {
-        type: 'agent-session',
-        id: 'agent-tab-1',
-        title: 'Chat',
-        sessionId: 'session-structured',
-        agent: 'codex',
-        isActive: true
-      },
-      activeHandle: null,
-      inputLeaseReady: false
-    }
+    const props = structuredTab('codex')
     structuredActivity.isWorking = true
     try {
       await act(async () => {
@@ -383,20 +388,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
 
   it('exposes structured prompt cards and session options on structured tabs', async () => {
     await act(async () => {
-      renderer?.update(
-        createElement(Harness, {
-          tab: {
-            type: 'agent-session',
-            id: 'agent-tab-1',
-            title: 'Codex Chat',
-            sessionId: 'session-structured',
-            agent: 'codex',
-            isActive: true
-          },
-          activeHandle: null,
-          inputLeaseReady: false
-        })
-      )
+      renderer?.update(createElement(Harness, structuredTab('codex')))
     })
 
     expect(controller!.nativeChatPermission).toEqual(structuredPermission)

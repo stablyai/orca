@@ -31,6 +31,7 @@ type Tick = {
   identity?: string
   /** The host says a person's Stop is ending the turn. */
   stopping?: boolean
+  acceptsImages?: boolean
 }
 
 function overlayElement(tick: Tick): ReturnType<typeof createElement> {
@@ -39,6 +40,7 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
     showNativeChat: tick.show ?? true,
     nativeChatSession: { messages: tick.messages ?? [], status: 'ready' },
     nativeChatAgent: 'claude',
+    nativeChatAcceptsImages: tick.acceptsImages ?? true,
     nativeChatAgentWorking: tick.streamLive ?? false,
     nativeChatTurnIndicator: {
       thinking: false,
@@ -220,5 +222,22 @@ describe("MobileNativeChatOverlay while a person's Stop ends the turn", () => {
 
   it('leaves Steer to the cards otherwise', async () => {
     expect(await steerHeld({ streamLive: true, stopping: false })).toBe(false)
+  })
+})
+
+describe('MobileNativeChatOverlay attach button', () => {
+  let renderer: ReactTestRenderer | null = null
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  it.each([true, false])('offers attach only when the agent takes images (%s)', async (accepts) => {
+    await act(async () => {
+      renderer = create(overlayElement({ acceptsImages: accepts }))
+    })
+    const view = renderer!.root.find((node) => node.type === 'ChatView')
+    expect(typeof view.props.onAttachImage === 'function').toBe(accepts)
   })
 })
