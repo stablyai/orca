@@ -35,7 +35,7 @@ export async function resolveAiVaultSessionTitlesByHost(
       return { titles: [] }
     }
   }
-  if (parsed?.kind === 'runtime' && resolveRuntime) {
+  if (parsed?.kind === 'runtime' && parsed.environmentId !== 'unresolved-owner' && resolveRuntime) {
     return resolveRuntime(parsed.environmentId, args).catch(() => ({ titles: [] }))
   }
   return { titles: [] }
