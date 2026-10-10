@@ -154,6 +154,9 @@
       "description": "Per-profile user-agent settings were removed. Choose Cleaned or Native in Browser settings; changes take effect after a restart.",
       "title": "Browser identity is now app-wide",
       "openSettings": "Open Settings"
+    },
+    "request": {
+      "pairedServerWorkspace": "This workspace runs on a paired server. Use that server's browser tabs."
     }
   },
   "editor": {
@@ -1205,8 +1208,6 @@
         "0e3cf53060": "Browser tab {{value0}} not found",
         "2f6637fe6c": "Browser tab {{value0}} is pinned",
         "a8d2bf8e9e": "No active browser tab to close",
-        "291c8ed902": "Browser tabs are unavailable while a remote runtime is active",
-        "f45fa2b03c": "Browser profiles are unavailable while a remote runtime is active",
         "f000b2ff76": "No active worktree",
         "56d3ec4203": "Failed to create untitled markdown file.",
         "f6300deb8b": "New Browser Tab",
@@ -19079,6 +19080,9 @@
       "important": "Important",
       "warning": "Warning",
       "caution": "Caution"
+    },
+    "automations": {
+      "runTerminalUnavailable": "Run terminal is unavailable."
     }
   },
   "dashboardPopout": {

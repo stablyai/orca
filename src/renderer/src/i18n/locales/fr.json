@@ -1138,8 +1138,6 @@
         "0e3cf53060": "Onglet de navigateur {{value0}} introuvable",
         "2f6637fe6c": "L'onglet de navigateur {{value0}} est épinglé",
         "a8d2bf8e9e": "Aucun onglet de navigateur actif à fermer",
-        "291c8ed902": "Les onglets de navigateur sont indisponibles tant qu'un runtime distant est actif",
-        "f45fa2b03c": "Les profils de navigateur sont indisponibles tant qu'un runtime distant est actif",
         "f000b2ff76": "Aucun worktree actif",
         "56d3ec4203": "Échec de la création du fichier markdown sans titre.",
         "f6300deb8b": "Nouvel onglet de navigateur",
