@@ -43,6 +43,8 @@ async function wiredSession() {
     // One generation produced everything here, and every send was accepted by this process.
     itemFence: () => undefined,
     wroteBeforeOpen: () => false,
+    // The live generation's own turns are never a died turn, so this is never consulted for one.
+    runningTurn: () => null,
     snapshot: () => ({
       items: [...run.journalItems.values()]
         .sort((a, b) => a.sequence - b.sequence)
