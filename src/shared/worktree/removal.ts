@@ -12,6 +12,7 @@ export const WORKTREE_TEARDOWN_FORCE_HINT = 'Retry with force delete (--force) t
 
 export type WorktreeForceDeleteReason =
   | 'dirty'
+  | 'submodules'
   | 'orphan-directory'
   | 'missing-registration'
   | 'unstopped-pty'
@@ -132,6 +133,10 @@ export function classifyWorktreeForceDeleteReason(
   }
   if (force) {
     return null
+  }
+  // Why: parent status cannot prove submodule commits are published; only an explicit force retry may waive Git's refusal.
+  if (/working trees? containing submodules cannot be moved or removed/i.test(error)) {
+    return 'submodules'
   }
   if (error.includes('Worktree is no longer registered with Git but its directory remains')) {
     return 'orphan-directory'

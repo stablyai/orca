@@ -6018,6 +6018,7 @@
               "905fc8efac": "Git a déjà supprimé cet espace de travail. Utilisez Forcer la suppression pour le nettoyer d'Orca.",
               "0899ebdb28": "Git a déjà oublié cet espace de travail, mais son dossier est toujours sur le disque. Utilisez Forcer la suppression pour retirer le dossier orphelin.",
               "locked": "Cet espace de travail est verrouillé par Git. Exécutez git worktree unlock <worktree-path> depuis son dépôt, puis relancez la suppression.",
+              "submodules": "Forcer la suppression peut supprimer définitivement les fichiers et commits non publiés des sous-modules.",
               "lockedReason": "Cet espace de travail est verrouillé par Git. Git a signalé : {{value0}}. Exécutez git worktree unlock <worktree-path> depuis son dépôt, puis relancez la suppression.",
               "unstoppedPty": "Orca n'a pas pu confirmer que tous les terminaux de cet espace de travail sont fermés, il s'est donc arrêté avant de supprimer des fichiers. Utilisez Forcer la suppression pour le retirer quand même.",
               "unstoppedPtyLive": "Cet espace de travail a encore des terminaux actifs, Orca s'est donc arrêté avant de supprimer des fichiers. Forcer la suppression les arrêtera et abandonnera tout travail non commité qu'ils contiennent.",

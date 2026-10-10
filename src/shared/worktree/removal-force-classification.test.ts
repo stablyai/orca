@@ -10,6 +10,32 @@ import {
 const liveError = `${UNSTOPPED_PTY_REMOVAL_PREFIX} repo-1::/w — still live: term_a. ${WORKTREE_TEARDOWN_FORCE_HINT}`
 const unverifiableError = `${UNSTOPPED_PTY_REMOVAL_PREFIX} repo-1::/w — could not verify these exited: term_a (daemon socket closed). ${WORKTREE_TEARDOWN_FORCE_HINT}`
 
+describe('classifyWorktreeForceDeleteReason for submodules', () => {
+  const refusal = 'fatal: working trees containing submodules cannot be moved or removed'
+
+  it.each([
+    refusal,
+    `Failed to delete worktree at /repo-feature.\n${refusal}`,
+    `Error invoking remote method 'worktrees:remove': Error: ${refusal}`
+  ])('offers an explicit submodule retry for %s', (error) => {
+    expect(classifyWorktreeForceDeleteReason(error)).toBe('submodules')
+  })
+
+  it('does not re-offer force after a forced attempt', () => {
+    expect(classifyWorktreeForceDeleteReason(refusal, true)).toBeNull()
+  })
+
+  it('keeps Git locks authoritative even alongside a submodule refusal', () => {
+    expect(classifyWorktreeForceDeleteReason(`Worktree is locked by Git. ${refusal}`)).toBeNull()
+  })
+
+  it('does not classify unrelated submodule errors as forceable', () => {
+    expect(
+      classifyWorktreeForceDeleteReason('fatal: failed to push all needed submodules')
+    ).toBeNull()
+  })
+})
+
 // Why (#11960): the desktop Force Delete button renders only when this classifier
 // returns a reason. The PTY-teardown error tells the user to force-delete, so an
 // unclassified message leaves them reading advice they cannot act on.

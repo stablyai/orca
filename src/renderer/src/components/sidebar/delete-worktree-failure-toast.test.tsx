@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { showDeleteWorktreeFailureToast } from './delete-worktree-failure-toast'
+import { classifyWorktreeForceDeleteReason } from '../../../../shared/worktree/removal'
 
 vi.mock('sonner', () => ({
   toast: {
@@ -48,6 +49,28 @@ afterEach(() => {
 })
 
 describe('showDeleteWorktreeFailureToast', () => {
+  it('warns about submodule loss and waits for an explicit Force Delete click', () => {
+    const error = 'fatal: working trees containing submodules cannot be moved or removed'
+    const reason = classifyWorktreeForceDeleteReason(error)
+    const onForceDelete = vi.fn()
+    showDeleteWorktreeFailureToast({
+      error,
+      canForceDelete: reason !== null,
+      forceDeleteReason: reason,
+      onViewChanges: vi.fn(),
+      onForceDelete,
+      onDeleteAnyway: vi.fn(),
+      worktreeId: 'wt-submodules',
+      worktreeName: 'feature/submodules'
+    })
+    const body = renderToastBody('info')
+    expect(body.textContent).toContain('unpublished commits')
+    expect(body.textContent).toContain('permanently discard')
+    expect(onForceDelete).not.toHaveBeenCalled()
+    clickButton(body, 'Force Delete')
+    expect(onForceDelete).toHaveBeenCalledOnce()
+  })
+
   it('uses a persistent in-body action footer when force delete is available', () => {
     const onViewChanges = vi.fn()
     const onForceDelete = vi.fn()

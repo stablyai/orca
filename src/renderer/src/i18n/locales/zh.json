@@ -5896,6 +5896,7 @@
               "905fc8efac": "Git 已经删除了这个工作区。使用强制删除将其从 Orca 中清除。",
               "0899ebdb28": "Git 已经忘记了这个工作区，但它的目录仍然在磁盘上。使用强制删除来删除孤立目录。",
               "locked": "此工作区被 Git 锁定。请在其仓库中运行 git worktree unlock <worktree-path>，然后重试删除。",
+              "submodules": "强制删除可能会永久丢失子模块文件和未发布的提交。",
               "lockedReason": "此工作区被 Git 锁定。Git 报告：{{value0}}。请在其仓库中运行 git worktree unlock <worktree-path>，然后重试删除。",
               "unstoppedPty": "Orca 无法确认此工作区中的每个终端都已退出，因此它在删除任何文件之前停止。无论如何，请使用强制删除将其删除。",
               "unstoppedPtyLive": "该工作区仍然有正在运行的终端，因此 Orca 在删除任何文件之前停止了。强制删除将杀死它们并丢弃它们持有的任何未提交的工作。",

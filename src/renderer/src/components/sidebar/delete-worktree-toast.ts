@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { getSubmoduleRemovalWarning } from './submodule-removal-warning'
 import {
   isLockedWorktreeRemovalError,
   isProvenLivePtyRemovalError,
@@ -39,6 +40,17 @@ export function getDeleteWorktreeToastCopy(
   }
 
   if (forceDeleteReason) {
+    if (forceDeleteReason === 'submodules') {
+      return {
+        title: translate(
+          'auto.components.sidebar.delete.worktree.toast.1d0fa5c0a5',
+          'Failed to delete workspace {{value0}}',
+          { value0: worktreeName }
+        ),
+        description: getSubmoduleRemovalWarning(),
+        isDestructive: false
+      }
+    }
     if (forceDeleteReason === 'orphan-directory') {
       return {
         title: translate(

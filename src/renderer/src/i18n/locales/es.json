@@ -5915,6 +5915,7 @@
               "905fc8efac": "Git ya eliminó este espacio de trabajo. Usa Forzar eliminación para borrarlo de Orca.",
               "0899ebdb28": "Git ya olvidó este espacio de trabajo, pero su directorio todavía está en disco. Usa Forzar eliminación para eliminar el directorio huérfano.",
               "locked": "Este espacio de trabajo está bloqueado por Git. Ejecute git worktree unlock <worktree-path> desde su repositorio, luego intente la eliminación de nuevo.",
+              "submodules": "Forzar eliminación puede descartar permanentemente los archivos y commits no publicados de los submódulos.",
               "lockedReason": "Este espacio de trabajo está bloqueado por Git. Git reportó: {{value0}}. Ejecute git worktree unlock <worktree-path> desde su repositorio, luego intente la eliminación de nuevo.",
               "unstoppedPty": "Orca no pudo confirmar que todos los terminales de este espacio de trabajo hayan salido, por lo que se detuvo antes de eliminar cualquier archivo. Utilice Forzar eliminación para eliminarlo de todos modos.",
               "unstoppedPtyLive": "Este espacio de trabajo todavía tiene terminales en ejecución, por lo que Orca se detuvo antes de eliminar cualquier archivo. Forzar eliminación los matará y descartará cualquier trabajo no comprometido que tengan.",
