@@ -1,4 +1,4 @@
-import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useId, useMemo, useState } from 'react'
 import { Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -40,10 +40,10 @@ export function useNativeChatInterruptedContinuation(input: {
   journalItems: readonly AgentJournalRenderItem[]
   submissions: readonly Pick<AgentJournalSubmission, 'dispatchState'>[]
   isWorking: boolean
-  /** The composer's own error; a Continue click is the user's newer action, so it clears it. */
-  composer: { clearError: () => void }
+  /** Stable; a Continue click is the user's newer action, so it clears the composer's error. */
+  reportComposerError: (text: null) => void
 }): NativeChatInterruptedContinuation {
-  const { target, sessionId } = input
+  const { target, sessionId, reportComposerError } = input
   const hostLabel = useStructuredAgentSessionHostLabel(target)
   const capability = useStructuredAgentSessionHostCapabilityState(
     target,
@@ -64,7 +64,7 @@ export function useNativeChatInterruptedContinuation(input: {
     capability === 'supported' && cut && !input.isWorking && !resuming && asked !== cut.turnItemId
       ? cut.turnItemId
       : null
-  const continueNow = (): void => {
+  const continueNow = useCallback((): void => {
     if (offered === null) {
       return
     }
@@ -76,21 +76,15 @@ export function useNativeChatInterruptedContinuation(input: {
     }
     setAsked(turnItemId)
     setFailedOn(null)
-    input.composer.clearError()
+    reportComposerError(null)
     void callStructuredAgentSession<ContinueAnswer>(target, 'agentSession.continueInterrupted', {
       sessionId,
       turnItemId
     }).then((answer) => (answer.outcome === 'refused' ? failed() : undefined), failed)
-  }
+  }, [offered, target, sessionId, reportComposerError])
   // Unknown counts as able: a host that writes cause rows has Continue, and the words stay put.
   const continueAvailable = capability !== 'unsupported'
-  // One object per change, so the chat's rows re-render only when what they show changes; the rows
-  // get a stable handler that runs the latest continueNow.
-  const latestContinueNow = useRef(continueNow)
-  useLayoutEffect(() => {
-    latestContinueNow.current = continueNow
-  })
-  const stableContinueNow = useCallback(() => latestContinueNow.current(), [])
+  // One object per change, so the chat's rows re-render only when what they show changes.
   const remoteHost = target.kind === 'environment'
   const view = useMemo(
     () => ({
@@ -98,9 +92,9 @@ export function useNativeChatInterruptedContinuation(input: {
       remoteHost,
       continueAvailable,
       offeredTurnItemId: offered,
-      continueNow: stableContinueNow
+      continueNow
     }),
-    [hostLabel, remoteHost, continueAvailable, offered, stableContinueNow]
+    [hostLabel, remoteHost, continueAvailable, offered, continueNow]
   )
   const failedHere =
     failedOn !== null && cut?.turnItemId === failedOn
@@ -130,13 +124,7 @@ export function NativeChatInterruptedContinueButton({
     <>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button
-            type="button"
-            size="sm"
-            className="-my-1 shrink-0"
-            aria-describedby={explanationId}
-            onClick={onContinue}
-          >
+          <Button type="button" size="xs" aria-describedby={explanationId} onClick={onContinue}>
             <Play />
             {translate('components.native-chat.interruptedContinue.continue', 'Continue')}
           </Button>

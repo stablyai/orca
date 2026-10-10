@@ -78,7 +78,7 @@ function Harness(props: Props): React.JSX.Element {
   // The chat's own composer error, as NativeChatStructuredSession holds it.
   const [composerError, setComposerError] = useState<string | null>(null)
   const continuation = useNativeChatInterruptedContinuation({
-    composer: { clearError: () => setComposerError(null) },
+    reportComposerError: setComposerError,
     target: props.target ?? PAIRED,
     sessionId: 'session-1',
     journalItems: props.journalItems ?? cutChat,

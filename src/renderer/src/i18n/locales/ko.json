@@ -18289,7 +18289,8 @@
         "orcaStopQuit": "이 응답이 진행되는 동안 {{machine}}의 Orca가 종료되었습니다.",
         "orcaStopCrash": "이 응답이 진행되는 동안 {{machine}}의 Orca가 예기치 않게 중지되었습니다.",
         "orcaStopRemote": "이 응답이 진행되는 동안 {{machine}}의 Orca가 중지되었습니다.",
-        "orcaStopCanContinue": "이 대화에서 계속할 수 있습니다."
+        "orcaStopCanContinue": "이 대화에서 계속할 수 있습니다.",
+        "orcaStopUnnamedServer": "원격 서버"
       },
       "providerFrame": {
         "byteLength": "{{value0}}바이트"

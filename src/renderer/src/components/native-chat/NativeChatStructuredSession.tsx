@@ -139,7 +139,7 @@ export function NativeChatStructuredSession(
     journalItems: controller.journalItems,
     submissions: controller.submissions,
     isWorking: controller.isWorking,
-    composer: { clearError: () => reportComposerError(null) }
+    reportComposerError
   })
   const needsFailureFacts =
     submits.queuedMessages.cards.some((card) => card.state === 'returned') ||

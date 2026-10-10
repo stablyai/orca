@@ -110,10 +110,16 @@ export function NativeChatNoticeRow({
     )
   }
   // The host's row about an Orca stop names the cause and the machine, muted: Orca stopped, not the
-  // agent. With no machine to name it keeps the host's own words.
+  // agent. Outside a chat that knows its machine it keeps the host's own words.
   const { orcaStop } = block
   const { hostLabel, remoteHost, continueAvailable } = orcaStopView
-  const named = orcaStop !== undefined && hostLabel !== null
+  // A paired server with no name to show is still a remote server; its id is not a name.
+  const machine =
+    hostLabel ??
+    (remoteHost
+      ? translate('components.native-chat.notices.orcaStopUnnamedServer', 'the remote server')
+      : null)
+  const named = orcaStop !== undefined && machine !== null
   const continueOffered =
     orcaStop?.turnItemId !== undefined && orcaStop.turnItemId === orcaStopView.offeredTurnItemId
   const failure = readWholeAgentSessionFailureFact(block.failure)
@@ -125,7 +131,7 @@ export function NativeChatNoticeRow({
         )
       : undefined
   const text = named
-    ? nativeChatOrcaStopRowText(orcaStop.cause, hostLabel, { continueAvailable, remoteHost })
+    ? nativeChatOrcaStopRowText(orcaStop.cause, machine, { continueAvailable, remoteHost })
     : failure && authSurface
       ? agentSessionFailureSentence(
           failure,

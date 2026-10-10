@@ -191,6 +191,16 @@ describe('the row an Orca stop leaves', () => {
     )
   })
 
+  it('calls a paired server with no name the remote server, so its words match the button', () => {
+    renderStatus(orcaStopRow('update'), null, true, true)
+    expect(
+      screen.getByText(
+        'Orca on the remote server restarted for an update while this response was in progress.'
+      )
+    ).toBeInTheDocument()
+    expect(screen.queryByText(LEGACY_TEXT)).toBeNull()
+  })
+
   it('keeps the host words for a stop Orca did not cause', () => {
     const { orcaStop: _orcaStop, presentation: _presentation, ...agentExit } = orcaStopRow('update')
     renderStatus(agentExit, 'studio-mac')
