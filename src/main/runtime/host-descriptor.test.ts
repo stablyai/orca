@@ -1,8 +1,7 @@
-import type * as Fs from 'node:fs'
-import { linkSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { RuntimeHostDescriptorSchema } from '../../shared/runtime-host-descriptor'
 import {
   HOST_INSTALLATION_FILENAME,
@@ -11,75 +10,59 @@ import {
   loadOrCreateHostInstallationId
 } from './host-descriptor'
 
-vi.mock('node:fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof Fs>()
-  return { ...actual, linkSync: vi.fn(actual.linkSync) }
-})
-
 function profile(): string {
   return mkdtempSync(join(tmpdir(), 'orca-host-descriptor-'))
 }
 
-afterEach(() => {
-  vi.mocked(linkSync).mockClear()
-})
+function storedId(userDataPath: string): unknown {
+  return JSON.parse(readFileSync(join(userDataPath, HOST_INSTALLATION_FILENAME), 'utf8'))
+    .installationId
+}
 
 describe('loadOrCreateHostInstallationId', () => {
-  it('creates the id once and returns the same id on every later load', () => {
+  it('creates the id once and returns the same id on every later load', async () => {
     const userDataPath = profile()
-    const first = loadOrCreateHostInstallationId(userDataPath)
-    expect(loadOrCreateHostInstallationId(userDataPath)).toBe(first)
-    expect(
-      JSON.parse(readFileSync(join(userDataPath, HOST_INSTALLATION_FILENAME), 'utf8'))
-    ).toEqual({ installationId: first })
+    const first = await loadOrCreateHostInstallationId(userDataPath)
+    expect(await loadOrCreateHostInstallationId(userDataPath)).toBe(first)
+    expect(storedId(userDataPath)).toBe(first)
   })
 
-  it('keeps the id a racing creator published first', () => {
+  it('concurrent creators all return the one id that was stored', async () => {
     const userDataPath = profile()
-    const racer = '0b4c3d5e-1f2a-4b6c-8d7e-9f0a1b2c3d4e'
-    vi.mocked(linkSync).mockImplementationOnce(() => {
-      writeFileSync(
-        join(userDataPath, HOST_INSTALLATION_FILENAME),
-        JSON.stringify({ installationId: racer })
-      )
-      throw Object.assign(new Error('exists'), { code: 'EEXIST' })
-    })
-    expect(loadOrCreateHostInstallationId(userDataPath)).toBe(racer)
+    const ids = await Promise.all(
+      Array.from({ length: 4 }, () => loadOrCreateHostInstallationId(userDataPath))
+    )
+    expect(new Set(ids).size).toBe(1)
+    expect(storedId(userDataPath)).toBe(ids[0])
   })
 
-  it('falls back to exclusive create where hard links are unsupported', () => {
-    const userDataPath = profile()
-    vi.mocked(linkSync).mockImplementationOnce(() => {
-      throw Object.assign(new Error('no links'), { code: 'ENOTSUP' })
-    })
-    const id = loadOrCreateHostInstallationId(userDataPath)
-    expect(loadOrCreateHostInstallationId(userDataPath)).toBe(id)
-  })
-
-  it('replaces a malformed file', () => {
+  it('concurrent repairs of a malformed file never fork the id', async () => {
     const userDataPath = profile()
     writeFileSync(join(userDataPath, HOST_INSTALLATION_FILENAME), '{not json')
-    const id = loadOrCreateHostInstallationId(userDataPath)
-    expect(RuntimeHostDescriptorSchema.shape.installationId.safeParse(id).success).toBe(true)
-    expect(loadOrCreateHostInstallationId(userDataPath)).toBe(id)
+    const ids = await Promise.all(
+      Array.from({ length: 4 }, () => loadOrCreateHostInstallationId(userDataPath))
+    )
+    expect(new Set(ids).size).toBe(1)
+    expect(RuntimeHostDescriptorSchema.shape.installationId.safeParse(ids[0]).success).toBe(true)
+    expect(storedId(userDataPath)).toBe(ids[0])
   })
 })
 
 describe('loadHostDescriptor', () => {
-  it('publishes an id and a binding keyed by that id', () => {
+  it('publishes an id and a binding keyed by that id', async () => {
     const userDataPath = profile()
-    const descriptor = loadHostDescriptor(userDataPath, () => 'machine-a')
+    const descriptor = await loadHostDescriptor(userDataPath, () => 'machine-a')
     expect(RuntimeHostDescriptorSchema.safeParse(descriptor).success).toBe(true)
     expect(descriptor?.machineBinding).toBe(
       computeHostMachineBinding(descriptor!.installationId, 'machine-a', userDataPath)
     )
-    expect(loadHostDescriptor(userDataPath, () => 'machine-a')).toEqual(descriptor)
+    expect(await loadHostDescriptor(userDataPath, () => 'machine-a')).toEqual(descriptor)
   })
 
-  it('changes only the binding when the profile moves to another machine', () => {
+  it('changes only the binding when the profile moves to another machine', async () => {
     const userDataPath = profile()
-    const here = loadHostDescriptor(userDataPath, () => 'machine-a')
-    const moved = loadHostDescriptor(userDataPath, () => 'machine-b')
+    const here = await loadHostDescriptor(userDataPath, () => 'machine-a')
+    const moved = await loadHostDescriptor(userDataPath, () => 'machine-b')
     expect(moved?.installationId).toBe(here?.installationId)
     expect(moved?.machineBinding).not.toBe(here?.machineBinding)
   })
@@ -97,18 +80,18 @@ describe('loadHostDescriptor', () => {
     ).not.toBe(computeHostMachineBinding('1b4c3d5e-1f2a-4b6c-8d7e-9f0a1b2c3d4e', 'machine-a', '/p'))
   })
 
-  it('omits the binding when no machine id is readable', () => {
-    const descriptor = loadHostDescriptor(profile(), () => null)
+  it('omits the binding when no machine id is readable', async () => {
+    const descriptor = await loadHostDescriptor(profile(), () => null)
     expect(descriptor).toEqual({ installationId: descriptor?.installationId })
   })
 
-  it('publishes nothing, and writes nothing, when the stored id cannot be read', () => {
+  it('publishes nothing, and writes nothing, when the stored id cannot be read', async () => {
     const userDataPath = profile()
     const blocker = join(userDataPath, 'blocker')
     writeFileSync(blocker, '')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     // A read that fails with anything but ENOENT (here ENOTDIR) must not mint a replacement id.
-    expect(loadHostDescriptor(join(blocker, 'profile'), () => 'machine-a')).toBeNull()
+    expect(await loadHostDescriptor(join(blocker, 'profile'), () => 'machine-a')).toBeNull()
     expect(warn).toHaveBeenCalledOnce()
     warn.mockRestore()
   })

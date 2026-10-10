@@ -91,7 +91,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         this.deviceRegistry = pairingIdentity.deviceRegistry
         this.e2eeKeypair = pairingIdentity.e2eeKeypair
         this.pairingInitializationFailure = null
-        this.hostDescriptor = loadHostDescriptor(this.userDataPath)
+        this.hostDescriptor = await loadHostDescriptor(this.userDataPath)
         publishHostDescriptor(this.runtime.getRuntimeId(), this.hostDescriptor)
         try {
           const host = this.resolveInitialWebSocketBindHost()
