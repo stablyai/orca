@@ -64,10 +64,10 @@ describe('shouldModelAnswerHiddenPtyQueries', () => {
     expect(answer('pty-other')).toBe(false)
   })
 
-  it('yields to registered renderer delivery interest (chunk is delivered to a sidecar)', () => {
+  it('keeps answering under renderer delivery interest (the chunk reaches sidecars, not the view)', () => {
     markHiddenRendererPty('pty-1')
     setRendererPtyDeliveryInterest('pty-1', true)
-    expect(answer('pty-1')).toBe(false)
+    expect(answer('pty-1')).toBe(true)
     setRendererPtyDeliveryInterest('pty-1', false)
     expect(answer('pty-1')).toBe(true)
   })

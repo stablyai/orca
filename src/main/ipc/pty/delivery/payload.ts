@@ -2,6 +2,10 @@ import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagn
 import type { PtyModelRestoreReason } from '../../../../shared/pty-model-restore-marker'
 import { mainDeliveryBreadcrumbs } from './debug'
 import { recordPtyRendererDeliveryPressure } from './accounting'
+import {
+  recordHiddenRendererPtyDataDrop,
+  shouldDeliverHiddenRendererPtyDataToSidecarsOnly
+} from '../../pty-hidden-delivery-gate'
 import type { PtyDataPayload, PtyIpcSession } from '../session'
 
 export function makePtyDataPayload(
@@ -68,6 +72,19 @@ export function sendPtyDataToRenderer(
     return { sent: false, projectionsTransferred: projectionAdmissionIds !== undefined }
   }
   const charCount = getPtyPayloadCharCount(payload)
+  // Why at send time: bytes queued while visible but sent after hiding are skipped by the
+  // view exactly like the gate's pending drop, and the reveal restore covers them.
+  const sidecarOnly = shouldDeliverHiddenRendererPtyDataToSidecarsOnly(id, session.getSettings?.())
+  if (sidecarOnly) {
+    if (recordHiddenRendererPtyDataDrop(id, charCount).shouldEmitRestoreMarker) {
+      sendModelRestoreNeededMarker(
+        session,
+        id,
+        'hidden-drop',
+        session.runtime?.getPtyOutputSequence(id)
+      )
+    }
+  }
   const accounting = session.rendererDeliveryAccountingByPty.get(id)
   const hadAccounting = accounting !== undefined
   if (accounting) {
@@ -84,7 +101,10 @@ export function sendPtyDataToRenderer(
   session.rendererInFlightTotalChars += charCount
   recordPtyRendererDeliveryPressure(session, id)
   try {
-    session.mainWindow.webContents.send('pty:data', payload)
+    session.mainWindow.webContents.send(
+      'pty:data',
+      sidecarOnly ? { ...payload, sidecarOnly } : payload
+    )
   } catch (error) {
     const current = session.rendererDeliveryAccountingByPty.get(id)
     if (current) {

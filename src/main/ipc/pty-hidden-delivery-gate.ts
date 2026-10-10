@@ -6,8 +6,8 @@
  * main then drops renderer-bound delivery AFTER model ingestion — the runtime
  * already parsed the chunk, and reveal restores from the model snapshot via
  * the existing seq-guarded machinery. Any renderer party that still needs raw
- * bytes (dispatcher sidecars) registers delivery
- * interest, which suppresses the gate for that PTY.
+ * bytes (dispatcher sidecars) registers delivery interest; main then sends that
+ * PTY's hidden bytes for sidecars only, and the view stays gated.
  */
 import type { GlobalSettings } from '../../shared/global-settings-types'
 
@@ -19,7 +19,7 @@ export type HiddenPtyDeliveryGateSettings = Pick<
 const hiddenRendererPtys = new Set<string>()
 // Why: sidecar consumers (paste-draft pacing, background agent launches,
 // automation observers) need live bytes even while no visible view exists. Any
-// registered interest suppresses the gate for that PTY.
+// registered interest turns drops for that PTY into sidecar-only delivery.
 const deliveryInterestRendererPtys = new Set<string>()
 // Why: reveal must restore from the model only when bytes were actually
 // dropped. Doubles as the one-shot marker latch: the first gated drop emits a
@@ -92,15 +92,29 @@ export function setRendererPtyDeliveryInterest(id: string, interested: boolean):
   }
 }
 
+/** Hidden for the view whether or not a sidecar holds interest: the view restores
+ *  from the model on reveal, so main owns the PTY's query replies meanwhile. */
+export function isHiddenRendererPtyViewGated(
+  id: string,
+  settings: HiddenPtyDeliveryGateSettings | null | undefined
+): boolean {
+  return isHiddenPtyDeliveryGateEnabled(settings) && hiddenRendererPtys.has(id)
+}
+
 export function shouldDropHiddenRendererPtyData(
   id: string,
   settings: HiddenPtyDeliveryGateSettings | null | undefined
 ): boolean {
-  return (
-    isHiddenPtyDeliveryGateEnabled(settings) &&
-    hiddenRendererPtys.has(id) &&
-    !deliveryInterestRendererPtys.has(id)
-  )
+  return isHiddenRendererPtyViewGated(id, settings) && !deliveryInterestRendererPtys.has(id)
+}
+
+/** Hidden bytes still sent because a sidecar needs them, which the view must skip:
+ *  the renderer credits them on receipt, so a throttled hidden view never paces the PTY. */
+export function shouldDeliverHiddenRendererPtyDataToSidecarsOnly(
+  id: string,
+  settings: HiddenPtyDeliveryGateSettings | null | undefined
+): boolean {
+  return isHiddenRendererPtyViewGated(id, settings) && deliveryInterestRendererPtys.has(id)
 }
 
 /** Record one gated drop. Returns whether the caller should emit the one-shot

@@ -3,16 +3,17 @@
  * authority.
  *
  * The delivery decision is the reply decision: main answers a query iff the
- * hidden-delivery gate dropped the chunk that carried it. This module owns
- * the responder kill-switch predicate and the main-side mirror of the
- * renderer's native-Windows-ConPTY determination, recorded per PTY at spawn
- * so the runtime emulator can register the DA1 override before byte zero.
+ * hidden-delivery gate kept the chunk from the view (dropped it, or sent it to
+ * raw-byte sidecars only). This module owns the responder kill-switch
+ * predicate and the main-side mirror of the renderer's native-Windows-ConPTY
+ * determination, recorded per PTY at spawn so the runtime emulator can
+ * register the DA1 override before byte zero.
  */
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import {
   isHiddenPtyDeliveryGateEnabled,
-  shouldDropHiddenRendererPtyData
+  isHiddenRendererPtyViewGated
 } from '../ipc/pty-hidden-delivery-gate'
 
 export type TerminalModelQueryAuthoritySettings = Pick<
@@ -30,10 +31,10 @@ export function isTerminalModelQueryAuthorityEnabled(
 
 /** Per-chunk reply-ownership predicate, evaluated once at ingestion in
  *  OrcaRuntimeService.onPtyData — the same module state and tick as the
- *  hidden-gate drop sites, so "chunk dropped" and "main answers" cannot
- *  diverge for live chunks. Remote view subscribers (mobile/web/remote
- *  desktop xterms on the multiplexed stream) keep view authority, so main
- *  yields while one is attached. */
+ *  hidden-gate drop and sidecar-only sites, so "view skips the chunk" and
+ *  "main answers" cannot diverge for live chunks. Remote view subscribers
+ *  (mobile/web/remote desktop xterms on the multiplexed stream) keep view
+ *  authority, so main yields while one is attached. */
 export function shouldModelAnswerHiddenPtyQueries(opts: {
   ptyId: string
   settings: TerminalModelQueryAuthoritySettings | null | undefined
@@ -42,7 +43,7 @@ export function shouldModelAnswerHiddenPtyQueries(opts: {
   return (
     isTerminalModelQueryAuthorityEnabled(opts.settings) &&
     !opts.hasRemoteViewSubscriber &&
-    shouldDropHiddenRendererPtyData(opts.ptyId, opts.settings)
+    isHiddenRendererPtyViewGated(opts.ptyId, opts.settings)
   )
 }
 
