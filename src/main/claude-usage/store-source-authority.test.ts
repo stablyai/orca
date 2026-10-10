@@ -172,7 +172,7 @@ it('updates the completed report while retaining an unchanged verified sidecar',
   state.scanState.lastScanCompletedAt = 1
   await writeFile(fixture.reportPath, serializeClaudeUsageReport(state))
   const sourceText = await readFile(fixture.sourceRef.path, 'utf8')
-  const write = vi.spyOn(sourceCacheWriter, 'writeUsageSourceCacheText')
+  const write = vi.spyOn(sourceCacheWriter, 'writeUsageSourceCacheData')
   const store = fixture.createStore()
   await store.whenLoaded()
 
