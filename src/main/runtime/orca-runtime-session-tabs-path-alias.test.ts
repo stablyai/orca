@@ -155,12 +155,19 @@ describe('session tab workspace path aliases', () => {
     runtime.cleanupSubscriptionsForConnection('alias-connection')
   })
 
-  it.each([ALIAS, 'repo::g:/GIT/Example'])('lists the existing tabs for %s', async (alias) => {
-    const runtime = liveRuntime()
-    const original = await runtime.listMobileSessionTabs(`id:${WORKTREE}`)
+  it.each([
+    [WORKTREE, ALIAS],
+    [WORKTREE, 'repo::g:/GIT/Example'],
+    ['repo::/srv/project', 'repo::/srv/project/'],
+    ['repo::/srv/project', 'repo::/srv//project'],
+    ['repo::/Users/dev/프로젝트', 'repo::/Users/dev/프로젝트'.normalize('NFD')],
+    ['repo::\\\\wsl$\\Ubuntu\\home\\dev\\project', 'repo:://wsl.localhost/ubuntu/home/dev/project']
+  ])('lists the existing tabs for %s via %s', async (worktree, alias) => {
+    const runtime = liveRuntime(worktree)
+    const original = await runtime.listMobileSessionTabs(`id:${worktree}`)
     const listed = await runtime.listMobileSessionTabs(`id:${alias}`)
 
-    expect(listed.worktree).toBe(WORKTREE)
+    expect(listed.worktree).toBe(worktree)
     expect(listed.tabs).toEqual(original.tabs)
     expect(listed.tabs).toContainEqual(expect.objectContaining({ id: TAB }))
   })
