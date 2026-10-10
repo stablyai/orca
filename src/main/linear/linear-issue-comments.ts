@@ -189,7 +189,13 @@ export async function getIssueComments(
       LinearRawVariables
     >(ISSUE_COMMENTS_QUERY, { id: issueId })
     const nodes = result.data?.issue?.comments?.nodes ?? []
-    return nodes.map((node) => ({
+    // Why reversed: ISSUE_COMMENTS_QUERY asks for the first 50, and Linear
+    // returns comments newest-first (with or without an explicit orderBy), while
+    // every consumer — the drawer, mergeLinearIssueComments, the comment box —
+    // assumes oldest-first with the newest next to the input. Reversing the
+    // fetched page keeps the newest 50 on long threads and lands them at the
+    // bottom where the UI expects them (#25573).
+    return nodes.toReversed().map((node) => ({
       id: node.id,
       body: node.body ?? '',
       // Why: rawRequest returns createdAt as an ISO string already; do not
