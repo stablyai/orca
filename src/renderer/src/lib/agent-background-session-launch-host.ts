@@ -1,13 +1,14 @@
 import type { useAppStore } from '@/store'
-import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import {
+  requireExecutionHostPlatform,
+  resolveRepoExecutionHostPlatform,
+  resolveWorktreeExecutionHostPlatform
+} from '@/lib/execution-host-facts'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { getRepoSshConnectionId } from '../../../shared/execution-host'
-import { isWslUncPath } from '../../../shared/wsl-paths'
 
 type LaunchStore = ReturnType<typeof useAppStore.getState>
 type LaunchRepo = LaunchStore['repos'][number]
@@ -48,9 +49,10 @@ export function resolveAgentBackgroundLaunchHost(args: {
     const sshConnectionId = getRepoSshConnectionId(repo)
     return {
       connectionId: sshConnectionId,
-      platform: getAgentLaunchPlatformForRepo(
-        repo,
-        sshConnectionId ? undefined : getLocalProjectExecutionRuntimeContext(store, worktreeId)
+      platform: requireExecutionHostPlatform(
+        resolveRepoExecutionHostPlatform(store, repo, () =>
+          getLocalProjectExecutionRuntimeContext(store, worktreeId)
+        )
       ),
       isRemote: repoIsRemote(repo),
       expectedConnectionId: sshConnectionId
@@ -63,13 +65,9 @@ export function resolveAgentBackgroundLaunchHost(args: {
   }
   return {
     connectionId: folderWorkspaceConnectionId ?? null,
-    platform: folderWorkspaceConnectionId
-      ? isWindowsAbsolutePathLike(worktreePath ?? '')
-        ? 'win32'
-        : 'linux'
-      : isWslUncPath(worktreePath ?? '')
-        ? 'linux'
-        : CLIENT_PLATFORM,
+    platform: requireExecutionHostPlatform(
+      resolveWorktreeExecutionHostPlatform(store, worktreeId, worktreePath)
+    ),
     isRemote: Boolean(folderWorkspaceConnectionId),
     expectedConnectionId: isFolderWorkspace ? (folderWorkspaceConnectionId ?? null) : undefined
   }

@@ -26,7 +26,7 @@ vi.mock('@/lib/new-workspace', async (importOriginal) => {
 
 import { useAppStore } from '@/store'
 import {
-  getFolderWorkspaceAgentLaunchPlatform,
+  getFolderWorkspaceAgentLaunchFact,
   submitFolderWorkspaceCreate
 } from './folder-workspace-composer-submit'
 
@@ -333,6 +333,20 @@ describe('submitFolderWorkspaceCreate', () => {
       connectionId: 'ssh-1',
       parentPath: '/home/alice/platform'
     }
+    useAppStore.setState({
+      sshConnectionStates: new Map([
+        [
+          'ssh-1',
+          {
+            targetId: 'ssh-1',
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            remotePlatform: 'linux'
+          }
+        ]
+      ])
+    })
 
     await submitFolderWorkspaceCreate({
       projectGroup,
@@ -550,7 +564,9 @@ describe('submitFolderWorkspaceCreate', () => {
       parentPath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\platform'
     }
 
-    expect(getFolderWorkspaceAgentLaunchPlatform(projectGroup)).toBe('linux')
+    expect(getFolderWorkspaceAgentLaunchFact(useAppStore.getState(), projectGroup)).toMatchObject({
+      platform: 'linux'
+    })
 
     await submitFolderWorkspaceCreate({
       projectGroup,
@@ -575,15 +591,31 @@ describe('submitFolderWorkspaceCreate', () => {
     )
   })
 
-  it('quotes quick-agent startup for Windows when the remote folder group uses a Windows path', async () => {
+  it('quotes quick-agent startup for the Windows OS the SSH relay reported', async () => {
     const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
     const projectGroup = {
       ...makeProjectGroup(),
       connectionId: 'ssh-windows',
       parentPath: 'C:\\Users\\alice\\platform'
     }
+    useAppStore.setState({
+      sshConnectionStates: new Map([
+        [
+          'ssh-windows',
+          {
+            targetId: 'ssh-windows',
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            remotePlatform: 'win32'
+          }
+        ]
+      ])
+    })
 
-    expect(getFolderWorkspaceAgentLaunchPlatform(projectGroup)).toBe('win32')
+    expect(getFolderWorkspaceAgentLaunchFact(useAppStore.getState(), projectGroup)).toMatchObject({
+      platform: 'win32'
+    })
 
     await submitFolderWorkspaceCreate({
       projectGroup,

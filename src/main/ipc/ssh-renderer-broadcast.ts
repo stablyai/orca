@@ -50,7 +50,9 @@ export function broadcastSshState(
 }
 
 function withSshRemotePlatform(targetId: string, state: SshConnectionState): SshConnectionState {
-  const remotePlatform = activeSessions.get(targetId)?.getHostPlatform()?.os
+  const session = activeSessions.get(targetId)
+  const remotePlatform =
+    session?.getHostPlatform()?.os ?? session?.getPlainSshSession()?.remotePlatform
   const authority = getSshProviderAuthority(targetId)
   const plainSsh = state.status === 'connected' ? getSshPlainSshMode(targetId) : undefined
   const managedServer = state.managedServer ?? getSshHostServerStatus(targetId)

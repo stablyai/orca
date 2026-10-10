@@ -11,9 +11,13 @@ import { resolveWorkspaceCreationTarget } from '@/lib/project-host-workspace-tar
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
+import {
+  resolveExecutionHostAgentStartupShell,
+  resolveRepoExecutionHostPlatform,
+  type ExecutionHostPlatformFact
+} from '@/lib/execution-host-facts'
+import { useAppStore } from '@/store'
 import { repoIsRemote } from '../../../../shared/agent-launch-remote'
-import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows-terminal-shell'
 import { buildProjectHostSetupOptions } from '@/lib/project-host-setup-options'
 import { buildNewWorkspaceCreateTargetOptions } from '@/lib/new-workspace-project-options'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
@@ -127,13 +131,18 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     ? JSON.stringify([selectedRepoExecutionHostId ?? 'local', repoId])
     : null
 
-  const selectedRepoAgentLaunchPlatform = useMemo(() => {
+  const sshStateByEnvironment = useAppStore((s) => s.sshStateByEnvironment)
+  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  // Why: the agent runs on the repo's execution host, so its OS decides quoting, not this client's (#22204).
+  const selectedRepoAgentLaunchFact = useMemo((): ExecutionHostPlatformFact => {
     if (!selectedRepo) {
-      return CLIENT_PLATFORM
+      return { kind: 'withheld', reason: 'Select a project first.' }
     }
-    const projectRuntime = selectedRepo.connectionId
-      ? undefined
-      : getLocalRepoProjectExecutionRuntimeContext(
+    return resolveRepoExecutionHostPlatform(
+      { sshConnectionStates, sshStateByEnvironment, runtimeStatusByEnvironmentId },
+      selectedRepo,
+      () =>
+        getLocalRepoProjectExecutionRuntimeContext(
           {
             activeRepoId,
             activeWorktreeId: null,
@@ -145,17 +154,26 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
           selectedRepo.id,
           CLIENT_PLATFORM
         )
-    return getAgentLaunchPlatformForRepo(selectedRepo, projectRuntime)
-  }, [activeRepoId, projects, repos, selectedRepo, settings, worktreesByRepo])
+    )
+  }, [
+    activeRepoId,
+    projects,
+    repos,
+    runtimeStatusByEnvironmentId,
+    selectedRepo,
+    settings,
+    sshConnectionStates,
+    sshStateByEnvironment,
+    worktreesByRepo
+  ])
 
   // Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only `orca-ide` rename must not apply to remote launch commands.
   const selectedRepoIsRemote = selectedRepo ? repoIsRemote(selectedRepo) : false
 
-  const selectedRepoStartupShell = resolveLocalWindowsAgentStartupShell({
-    platform: selectedRepoAgentLaunchPlatform,
-    isRemote: selectedRepoIsRemote,
-    terminalWindowsShell: settings?.terminalWindowsShell
-  })
+  const selectedRepoStartupShell = resolveExecutionHostAgentStartupShell(
+    selectedRepoAgentLaunchFact,
+    settings?.terminalWindowsShell
+  )
 
   const selectedRepoProjectId =
     selectedWorkspaceTarget.status === 'ready' ? selectedWorkspaceTarget.target.projectId : null
@@ -265,7 +283,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     selectedRepoIsGit,
     selectedRepoExecutionHostId,
     selectedRepoHookContextKey,
-    selectedRepoAgentLaunchPlatform,
+    selectedRepoAgentLaunchFact,
     selectedRepoIsRemote,
     selectedRepoStartupShell,
     selectedRepoProjectId,
