@@ -8,7 +8,8 @@ type WslAvailabilityCache =
   | { available: true }
   /** Not Windows — never re-probed. */
   | { available: false; unsupported: true }
-  | { available: false; cachedAt: number; retryable: boolean; failures: number }
+  /** `available` is the last answer wsl.exe gave; null while every probe failed without one. */
+  | { available: false | null; cachedAt: number; retryable: boolean; failures: number }
 
 let wslAvailableCache: WslAvailabilityCache | null = null
 let wslAvailabilityProbeInFlight: Promise<boolean> | null = null
@@ -27,7 +28,7 @@ const WSL_AVAILABILITY_MAX_RETRY_DELAY_MS = 30 * 60_000
 
 function isPermanentWslAvailabilityCache(cache: WslAvailabilityCache): boolean {
   // Why: re-check the platform so a cache seeded off-Windows can't suppress a real probe.
-  return cache.available || ('unsupported' in cache && process.platform !== 'win32')
+  return cache.available === true || ('unsupported' in cache && process.platform !== 'win32')
 }
 
 // Why: the probe spawns wsl.exe, so a host with a wedged wsl.exe must not pay it every
@@ -67,12 +68,20 @@ function isWslAvailabilityCacheFresh(cache: WslAvailabilityCache): boolean {
 
 function reusableWslAvailability(): boolean | null {
   return wslAvailableCache && isWslAvailabilityCacheFresh(wslAvailableCache)
-    ? wslAvailableCache.available
+    ? wslAvailableCache.available === true
     : null
 }
 
 function previousWslAvailabilityFailures(): number {
   return wslAvailableCache && 'failures' in wslAvailableCache ? wslAvailableCache.failures : 0
+}
+
+// Why: a timeout means "could not ask", not "no" — it keeps the previous answer instead of minting one.
+function availabilityAfterProbeFailure(error: unknown): false | null {
+  if (!isRetryableWslProbeFailure(error)) {
+    return false
+  }
+  return wslAvailableCache && 'cachedAt' in wslAvailableCache ? wslAvailableCache.available : null
 }
 
 function writeWslAvailabilityCache(cache: WslAvailabilityCache | null): void {
@@ -82,12 +91,12 @@ function writeWslAvailabilityCache(cache: WslAvailabilityCache | null): void {
 
 function cacheWslAvailabilityProbeResult(error: unknown, startedAtGeneration: number): boolean {
   if (error && startedAtGeneration !== wslAvailabilityCacheGeneration) {
-    return wslAvailableCache?.available ?? false
+    return wslAvailableCache?.available === true
   }
   writeWslAvailabilityCache(
     error
       ? {
-          available: false,
+          available: availabilityAfterProbeFailure(error),
           cachedAt: Date.now(),
           retryable: isRetryableWslProbeFailure(error),
           failures: previousWslAvailabilityFailures() + 1
@@ -247,10 +256,9 @@ export function hasCachedWslAvailability(): boolean {
   return wslAvailableCache !== null
 }
 
-// Why: same contract as the distro getter — report the last observed answer. Going
-// null on staleness would drop the `wsl-unavailable` repair prompt and let git and
-// PTY silently resolve to a WSL that last failed to respond. `isWslAvailable` is what
-// clears it, by re-probing once the retry window lapses.
+// Why: same contract as the distro getter — report the last answer wsl.exe gave, even once
+// stale, so a definitive failure keeps the `wsl-unavailable` repair prompt. A timeout is no
+// answer: it stays null, because a slow wsl.exe must not refuse project git (#26085).
 export function getCachedWslAvailability(): boolean | null {
   return wslAvailableCache?.available ?? null
 }

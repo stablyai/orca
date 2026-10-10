@@ -538,12 +538,59 @@ describe('WSL availability cache', () => {
     }
   })
 
-  // Why: the resolver reads the cached getter, not the probe. Reporting the last
-  // observed answer keeps the `wsl-unavailable` repair prompt reachable; going null
-  // on staleness would let git and PTY silently resolve to a WSL that just failed.
-  it('keeps reporting the last observed answer after it goes stale', () => {
+  // Why (#26085): the project runtime resolver reads the cached getter, and a `false` there is a
+  // `wsl-unavailable` repair verdict that refuses project git. A slow wsl.exe gave no answer.
+  it('reports no answer, not unavailable, after a probe timeout', async () => {
+    execFileMock.mockImplementation((_command, _args, _options, callback) => {
+      // Real execFile timeout shape: killed by the timeout, no exit code.
+      callback(
+        Object.assign(new Error('Command failed: wsl.exe --status'), {
+          killed: true,
+          code: null,
+          signal: 'SIGTERM'
+        }),
+        '',
+        ''
+      )
+    })
+
+    await withPlatformAsync('win32', async () => {
+      await expect(isWslAvailableAsync()).resolves.toBe(false)
+      expect(hasCachedWslAvailability()).toBe(true)
+      expect(getCachedWslAvailability()).toBeNull()
+      // Still bounded: the retry window holds, so callers do not re-spawn the probe.
+      await expect(isWslAvailableAsync()).resolves.toBe(false)
+      expect(execFileMock).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  // Why: the resolver reads the cached getter, not the probe. Reporting the last answer
+  // keeps the `wsl-unavailable` repair prompt reachable after the window lapses.
+  it('keeps reporting a definitive answer after it goes stale', () => {
     vi.useFakeTimers()
     execFileSyncMock.mockImplementation(() => {
+      throw Object.assign(new Error('Command failed: wsl.exe --status'), { status: 1 })
+    })
+
+    try {
+      withPlatform('win32', () => {
+        expect(isWslAvailable()).toBe(false)
+        vi.advanceTimersByTime(10 * 60_000)
+        expect(getCachedWslAvailability()).toBe(false)
+        expect(hasCachedWslAvailability()).toBe(true)
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // Why: not being able to ask again is not evidence the earlier "no" changed.
+  it('keeps a definitive answer when a later re-probe times out', () => {
+    vi.useFakeTimers()
+    execFileSyncMock.mockImplementationOnce(() => {
+      throw Object.assign(new Error('Command failed: wsl.exe --status'), { status: 1 })
+    })
+    execFileSyncMock.mockImplementationOnce(() => {
       // Real execFileSync timeout shape on Windows: status null, signal SIGTERM.
       throw Object.assign(new Error('spawnSync ETIMEDOUT'), {
         code: 'ETIMEDOUT',
@@ -555,9 +602,10 @@ describe('WSL availability cache', () => {
     try {
       withPlatform('win32', () => {
         expect(isWslAvailable()).toBe(false)
-        vi.advanceTimersByTime(45_000)
+        vi.advanceTimersByTime(10 * 60_000)
+        expect(isWslAvailable()).toBe(false)
+        expect(execFileSyncMock).toHaveBeenCalledTimes(2)
         expect(getCachedWslAvailability()).toBe(false)
-        expect(hasCachedWslAvailability()).toBe(true)
       })
     } finally {
       vi.useRealTimers()

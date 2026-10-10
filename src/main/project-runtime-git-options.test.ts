@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type * as childProcess from 'node:child_process'
 import type { Store } from './persistence'
 import type { Project } from '../shared/project-types'
 import type { Repo } from '../shared/repo-types'
@@ -8,7 +9,14 @@ import {
   getWorktreeMirrorDistro,
   resolveLocalProjectRuntimeForRepo
 } from './project-runtime-git-options'
-import { _resetWslCachesForTests, _setWslCachesForTests } from './wsl'
+import { _resetWslCachesForTests, _setWslCachesForTests, isWslAvailableAsync } from './wsl'
+
+const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn() }))
+
+vi.mock('child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof childProcess>()
+  return { ...actual, execFile: execFileMock }
+})
 
 function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
   const originalPlatform = process.platform
@@ -107,6 +115,24 @@ describe('project runtime git options', () => {
     expect(() =>
       withPlatform('win32', () => getLocalProjectGitExecOptions(makeStore(project), makeRepo()))
     ).toThrow('Project runtime requires repair before git execution: wsl-unavailable')
+  })
+
+  // Why (#26085): a slow wsl.exe is "could not reach WSL", not a verdict; git must not be refused.
+  it('does not refuse git after an availability probe times out', async () => {
+    execFileMock.mockImplementation((_command, _args, _options, callback) => {
+      // Real execFile timeout shape: killed by the timeout, no exit code.
+      callback(Object.assign(new Error('Command failed'), { killed: true, code: null }), '', '')
+    })
+    const project = makeProject({
+      localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+    })
+
+    await withPlatform('win32', () => expect(isWslAvailableAsync()).resolves.toBe(false))
+    const options = withPlatform('win32', () =>
+      getLocalProjectGitExecOptions(makeStore(project), makeRepo())
+    )
+
+    expect(options).toEqual({ cwd: String.raw`C:\repo`, wslDistro: 'Ubuntu' })
   })
 
   it('keeps project host override on host even when cached WSL is unavailable', () => {
