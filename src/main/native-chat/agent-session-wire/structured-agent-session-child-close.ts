@@ -15,6 +15,8 @@ import type {
   StructuredAgentSessionProviderChild
 } from './structured-agent-session-host-types'
 import { stopAgentSessionProviderRoot } from './structured-agent-session-provider-exit-proof'
+import type { JournalWriteOptions } from '../agent-session-journal/journal-database'
+import { isSqliteContentionFailure } from '../../sqlite/sqlite-read-failure'
 import { releaseStoredStructuredAgentSessionOwnerAfterExit } from './structured-agent-session-lease-release'
 import { isSurfaceReleasableAgentSessionRecord } from '../../runtime/agent-session-surface-release-transition'
 
@@ -126,7 +128,8 @@ export function structuredAgentSessionEndedChildHoldsLease(
  *  whether the lease still names that child. */
 export async function releaseLeaseOfEndedStructuredAgentSessionChild(
   context: Pick<StructuredAgentSessionLifetimeContext, 'deps' | 'sessions' | 'now'>,
-  sessionId: string
+  sessionId: string,
+  options?: JournalWriteOptions
 ): Promise<boolean> {
   const ended = context.sessions.get(sessionId)?.lastEndedChild
   if (!ended || !structuredAgentSessionEndedChildHoldsLease(context, sessionId)) {
@@ -137,13 +140,18 @@ export async function releaseLeaseOfEndedStructuredAgentSessionChild(
     sessionId,
     expectedFence: ended.fence,
     now: context.now(),
-    ...(ended.reason ? { exitReason: ended.reason } : {})
-  }).catch((error: unknown) =>
+    ...(ended.reason ? { exitReason: ended.reason } : {}),
+    ...options
+  }).catch((error: unknown) => {
+    // Background work stops on contention, for its retry; anything else is only reported.
+    if (options?.background && isSqliteContentionFailure(error)) {
+      throw error
+    }
     context.deps.logger.warn("releasing an exited agent's lease failed", {
       scope: 'ended-child-lease-release',
       sessionId,
       error
     })
-  )
+  })
   return structuredAgentSessionEndedChildHoldsLease(context, sessionId)
 }

@@ -1,4 +1,4 @@
-// The chat's reconciliation worker, driven by every way a generation ends: what it settles, that
+// The retry of background bookkeeping, driven by every way a generation ends: what it settles, that
 // it settles in one commit, and that nothing a person does ever waits on it.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -201,7 +201,7 @@ describe('a settlement that cannot commit never gates the user', () => {
   })
 })
 
-describe('the worker’s retry', () => {
+describe('the retry', () => {
   /** Lets every attempt a fired timer began run to its end, with no fake time passing. */
   async function settleTurns(): Promise<void> {
     for (let turn = 0; turn < 50; turn++) {
@@ -209,7 +209,7 @@ describe('the worker’s retry', () => {
     }
   }
 
-  it('backs off from 1 s, coalesces the signals meanwhile, and settles once the fault clears', async () => {
+  it('backs off from 1 s, doubling; a new signal starts a fresh episode at once; settles once the fault clears', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     try {
       rig = await createQueuedMessageTestRig({ restartable: true })
@@ -221,24 +221,29 @@ describe('the worker’s retry', () => {
       const attempts = vi.spyOn(currentJournal(current), 'appendPlannedLifecycleBatch')
       expect(reconciliation.owes(SESSION)).toBe(true)
 
-      // Signals during the backoff join the one worker; none runs an attempt of its own.
-      reconciliation.signal(SESSION)
-      reconciliation.signal(SESSION, { restate: true })
-      await settleTurns()
       await vi.advanceTimersByTimeAsync(990)
       await settleTurns()
       expect(attempts).not.toHaveBeenCalled()
       await vi.advanceTimersByTimeAsync(10)
       await settleTurns()
       expect(attempts).toHaveBeenCalledTimes(1)
-      expect(reconciliation.owes(SESSION)).toBe(true)
-      expect(turnState(current)).toBe('running')
-
-      database.db.exec('DROP TRIGGER reject_recovered')
       // The second failure doubled the wait.
       await vi.advanceTimersByTimeAsync(1_990)
       await settleTurns()
       expect(attempts).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(10)
+      await settleTurns()
+      expect(attempts).toHaveBeenCalledTimes(2)
+
+      // A new signal is a fresh episode: a round at once, and the budget back at its first step.
+      reconciliation.signal(SESSION)
+      await settleTurns()
+      expect(attempts).toHaveBeenCalledTimes(3)
+      expect(turnState(current)).toBe('running')
+      database.db.exec('DROP TRIGGER reject_recovered')
+      await vi.advanceTimersByTimeAsync(990)
+      await settleTurns()
+      expect(attempts).toHaveBeenCalledTimes(3)
       await vi.advanceTimersByTimeAsync(10)
       await settleTurns()
       expect(reconciliation.owes(SESSION)).toBe(false)

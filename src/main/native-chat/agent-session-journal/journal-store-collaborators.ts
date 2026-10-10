@@ -118,7 +118,7 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
   const lifecycleBatchAppender = new JournalLifecycleBatchAppender({
     state: host.state,
     cursor: host.cursor,
-    enqueueRows: (plan) => rowWriter.enqueueRows(plan)
+    enqueueRows: (plan, options) => rowWriter.enqueueRows(plan, undefined, options)
   })
   return {
     epochController,

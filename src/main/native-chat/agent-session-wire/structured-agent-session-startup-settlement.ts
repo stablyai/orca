@@ -10,12 +10,12 @@
 // start or read of a chat late in the scan never waits behind it, and an opened chat goes first.
 
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import type { StructuredAgentSessionReconciliation } from './structured-agent-session-reconciliation-worker'
+import type { StructuredAgentSessionRetry } from './structured-agent-session-reconciliation-retry'
 
 /** Resolves once every chat's first attempt finished, whatever it found. */
 export function scanStructuredAgentSessionsAtStartup(
   store: Pick<AgentSessionRecordStore, 'listRecords'>,
-  reconciliation: Pick<StructuredAgentSessionReconciliation, 'signal' | 'attempted'>
+  reconciliation: Pick<StructuredAgentSessionRetry, 'signal' | 'attempted'>
 ): Promise<void> {
   const sessionIds = store.listRecords().map((record) => record.sessionId)
   for (const sessionId of sessionIds) {

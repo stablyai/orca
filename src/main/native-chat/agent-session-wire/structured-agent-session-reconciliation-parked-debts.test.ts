@@ -1,4 +1,4 @@
-// What a retired worker keeps for the chat's next one: the proofs it still held, never an exit's
+// What the retry keeps for a chat whose lease recovers: the proofs it still holds, never an exit's
 // account (it judges only its own generation, which a later one may have replaced), and nothing at
 // all once the chat's record is gone.
 
@@ -105,7 +105,7 @@ function attach(current: StructuredAgentSessionHost) {
   return current.attach({ callerKey: 'client-1' }, params).catch(() => undefined)
 }
 
-describe("a worker that retires while the chat's lease recovers", () => {
+describe('a chat whose lease recovers', () => {
   it("parks generation 13's proof, never its exit account, which would judge generation 14's sends", async () => {
     const current = await recoveringAt14()
     const { reconciliation } = current.collaboratorsForTests()
@@ -113,7 +113,11 @@ describe("a worker that retires while the chat's lease recovers", () => {
     // Generation 13's exit could not be settled; the lease recovers, so the worker retires.
     reconciliation.signal(CHAT, { evidence: proof13, exit: exit13 })
     await idle(current, [CHAT])
-    expect(reconciliation['memory']['parked'].get(CHAT)).toEqual({ evidence: [proof13] })
+    expect(reconciliation['owed'].get(CHAT)).toMatchObject({
+      due: false,
+      debts: { evidence: [proof13] }
+    })
+    expect(reconciliation['owed'].get(CHAT)?.debts.exit).toBeUndefined()
 
     // Generation 14 ends with no exit account of its own: an attach decides its recovery.
     await attach(current)
@@ -121,7 +125,7 @@ describe("a worker that retires while the chat's lease recovers", () => {
 
     // The proof judged what generation 13 left, and was taken.
     expect(await turnState(current, CHAT)).toBe('interrupted')
-    expect(reconciliation['memory']['parked'].has(CHAT)).toBe(false)
+    expect(reconciliation['owed'].has(CHAT)).toBe(false)
     // Generation 14's send ran on a child that proved its start: in doubt, never "did not start".
     const { submissions } = await current.journalSnapshot(CHAT)
     expect(submissions.find((entry) => entry.clientMessageId === `${CHAT}-handed`)).toMatchObject({
@@ -130,7 +134,7 @@ describe("a worker that retires while the chat's lease recovers", () => {
   })
 })
 
-describe('a live worker waiting out a backoff with an exit account', () => {
+describe('a chat waiting out a backoff with an exit account', () => {
   it("drops it once a later generation acquired, so generation 14's send stays in doubt", async () => {
     const current = await recoveringAt14()
     const { reconciliation } = current.collaboratorsForTests()
@@ -160,15 +164,15 @@ describe('a chat whose record is gone', () => {
     reconciliation.signal(CHAT, { evidence: proof13 })
     await idle(current, [CHAT])
     expect(await turnState(current, CHAT)).toBe('running')
-    expect(reconciliation['memory']['parked'].has(CHAT)).toBe(true)
-    expect(reconciliation['memory']['firstOpened'].has(CHAT)).toBe(true)
+    expect(reconciliation['owed'].get(CHAT)?.debts.evidence).toEqual([proof13])
+    expect(reconciliation['firstOpened'].has(CHAT)).toBe(true)
 
     const getRecord = store.getRecord.bind(store)
     vi.spyOn(store, 'getRecord').mockImplementation((id) => (id === CHAT ? null : getRecord(id)))
     reconciliation.signal(CHAT)
     await idle(current, [CHAT])
 
-    expect(reconciliation['memory']['parked'].has(CHAT)).toBe(false)
-    expect(reconciliation['memory']['firstOpened'].has(CHAT)).toBe(false)
+    expect(reconciliation['owed'].has(CHAT)).toBe(false)
+    expect(reconciliation['firstOpened'].has(CHAT)).toBe(false)
   })
 })

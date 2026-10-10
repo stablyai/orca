@@ -15,6 +15,7 @@
 // An empty item plan says nothing of (a) or (b).
 
 import { holdUnsentSends } from '../agent-session-journal/journal-unsent-send-hold'
+import { isSqliteContentionFailure } from '../../sqlite/sqlite-read-failure'
 import { queuedMessageReopenMarkStart } from '../agent-session-journal/queued-message-reopen-floor'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
@@ -51,11 +52,16 @@ export type StructuredAgentSessionReconciliationDebts = {
 }
 
 export type StructuredAgentSessionReconciliationPass = {
-  /** A step could not finish: the worker retries after its backoff. */
+  /** A step could not finish: the retry visits again after its backoff. */
   failed: unknown[]
   /** Rows were written, so the next pass verifies nothing is left. */
   wrote: boolean
+  /** The lease is latched in recovery: what ended waits for its decision's signal. */
+  recovering: boolean
 }
+
+/** Every write a pass makes is bookkeeping no person waits on (`JournalWriteOptions`). */
+const BACKGROUND = { background: true } as const
 
 /** `session`: the chat's open conversation, or the worker's own read of a closed one.
  *  `processOpened`: where this host first opened the chat's journal; a send at or before it was an
@@ -68,9 +74,9 @@ export async function runStructuredAgentSessionReconciliationPass(
   debts: StructuredAgentSessionReconciliationDebts,
   processOpened: AgentJournalCursor
 ): Promise<StructuredAgentSessionReconciliationPass> {
-  const pass: StructuredAgentSessionReconciliationPass = { failed: [], wrote: false }
   const lease = context.deps.store.getRecord(sessionId)?.lease
   const recovering = lease?.handoffStage === 'recovering'
+  const pass: StructuredAgentSessionReconciliationPass = { failed: [], wrote: false, recovering }
   // An exit's account judges only its own generation: once a later one acquired, it is spent.
   if (debts.exit && (!lease || lease.runtimeFence > debts.exit.ownerFence + 1)) {
     delete debts.exit
@@ -78,12 +84,12 @@ export async function runStructuredAgentSessionReconciliationPass(
   if (
     !recovering &&
     structuredAgentSessionEndedChildHoldsLease(context, sessionId) &&
-    (await releaseLeaseOfEndedStructuredAgentSessionChild(context, sessionId))
+    (await releaseLeaseOfEndedStructuredAgentSessionChild(context, sessionId, BACKGROUND))
   ) {
     pass.failed.push(new Error('agent_session_exit_release_owed'))
   }
   await settleEarlierProcess(context, sessionId, session.journal, processOpened, pass)
-  if (recovering) {
+  if (recovering || pass.failed.some(isSqliteContentionFailure)) {
     // What ended is not known until its recovery is decided; the debts wait for that signal.
     return pass
   }
@@ -94,7 +100,8 @@ export async function runStructuredAgentSessionReconciliationPass(
       journal: session.journal,
       ...(debts.exit ? { exit: debts.exit } : {}),
       ...(session.lastEndedChild ? { ended: session.lastEndedChild } : {}),
-      ...(proof ? { proof } : {})
+      ...(proof ? { proof } : {}),
+      background: true
     })
   // Each proof the lease no longer holds judges what its own generation left, oldest first.
   const leaseEvidence = context.deps.store.getRecord(sessionId)?.lease.deathEvidence ?? null
@@ -161,17 +168,24 @@ async function settleEarlierProcess(
         return false
       }
     )
-  await attempt(() => journal.queuedMessages.repairAndPrune())
+  // Another connection's lock ends the pass: the round ends, and every step is tried again.
+  if (!(await attempt(() => journal.queuedMessages.repairAndPrune(BACKGROUND)))) {
+    return
+  }
   // Before a Stop can withdraw one: a Stop never withdraws a card.
   let converted = false
-  await attempt(async () => {
+  const held = await attempt(async () => {
     converted =
       (await holdUnsentSends(journal, {
         fence,
         hostInstance: structuredAgentSessionHostInstance(),
-        hold: { cause: 'hostRestarted', which: (entry) => earlier(entry.acceptedSequence) }
+        hold: { cause: 'hostRestarted', which: (entry) => earlier(entry.acceptedSequence) },
+        background: true
       })) !== null
   })
+  if (!held && pass.failed.some(isSqliteContentionFailure)) {
+    return
+  }
   // After every card the earlier process left, so a card this one queued is never held by it.
   // Reported, never owed: the pause starts there anyway, and a failed mark leaves the floor set,
   // so the next pass marks again.

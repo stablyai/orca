@@ -137,7 +137,12 @@ export class StructuredAgentSessionHost {
       // `hasSession` inside the same serialized step as this `set`.
       onReadable: this.conversationDelivery.adoptOpened,
       onUnopened: (sessionId) => this.tabs.markUnopened(sessionId),
-      startup: { sessions: this.sessions, tasks: this.tasks, clientDelivery: this.clientDelivery }
+      startup: {
+        sessions: this.sessions,
+        tasks: this.tasks,
+        clientDelivery: this.clientDelivery,
+        queue: this.queued.drain
+      }
     })
     this.eventRecovery = new StructuredAgentSessionEventRecovery({
       deps,
@@ -287,7 +292,7 @@ export class StructuredAgentSessionHost {
       wakeDelivery: (sessionId) => this.conversationDelivery.loop.wake(sessionId),
       stopAgent: (sessionId, ending) => this.lifetime.stopAgent(sessionId, ending),
       wakeQueuedDrain: (sessionId) => this.queued.drain.schedule(sessionId),
-      reconciliationOwes: (sessionId) => this.restore.reconciliation.owes(sessionId),
+      retry: this.restore.reconciliation,
       acquireAborts: this.runtimeState.acquireAborts,
       optionRevisions: this.runtimeState.optionRevisions,
       now: () => this.now()

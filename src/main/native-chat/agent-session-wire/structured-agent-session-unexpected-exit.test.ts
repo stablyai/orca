@@ -431,9 +431,11 @@ describe('provider-exit settlement', () => {
     await settleStructuredAgentSessionChildExit(context, event)
 
     expect(session.child).toBeNull()
-    expect(generationEnded).toHaveBeenCalledTimes(1)
-    // The worker is handed the exit's own account, to write once the journal takes it.
-    expect(generationEnded).toHaveBeenCalledWith(SESSION, {
+    // The death first, before anything is written; then the exit's own account, for the retry to
+    // write once the journal takes it.
+    expect(generationEnded).toHaveBeenCalledTimes(2)
+    expect(generationEnded).toHaveBeenNthCalledWith(1, SESSION)
+    expect(generationEnded).toHaveBeenLastCalledWith(SESSION, {
       restate: true,
       exit: expect.objectContaining({ ownerFence: 7, showUnexpectedExitOutcome: true })
     })

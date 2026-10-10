@@ -14,7 +14,7 @@ import type {
   StructuredAgentSessionHostSession,
   StructuredAgentSessionProviderChild
 } from './structured-agent-session-host-types'
-import { endProviderChild } from './structured-agent-session-provider-child'
+import { recordProviderChildEnd } from './structured-agent-session-provider-child'
 import {
   releaseStoredStructuredAgentSessionOwnerAfterExit,
   type StructuredAgentSessionLeaseStore
@@ -160,27 +160,33 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
         ? ('hostRestarted' as const)
         : ('chatClosed' as const)
       : undefined
+  // Death first: before the tail, the settlement or the release writes anything, every reader
+  // projects this generation as ended, so no frame they publish reads it Working and no prompt it
+  // raised is answerable. The child stays on record (its sink drains the tail) until `endChild`.
+  recordProviderChildEnd(session, {
+    generation: child.generation,
+    fence: child.fence,
+    // A close keeps the cause of the stop that asked for it, and ends where it was asked.
+    cause: expected ? (close?.cause ?? 'evict') : 'exit',
+    reason: expected ? (close?.reason ?? null) : exit.reason,
+    ...(!expected && exit.failure ? { failure: exit.failure } : {}),
+    duringStartup: exitedDuringStartup,
+    // The adapter publishes an exit only once it saw the root go, first-hand or proven.
+    rootGone: true,
+    ...(expected && close ? { endedAt: close.requestedAt } : {})
+  })
+  context.generationEnded(sessionId)
   const endChild = (): void => {
     context.startupAttempts?.childEnded(sessionId, child)
-    endProviderChild(session, {
-      generation: child.generation,
-      fence: child.fence,
-      // A close keeps the cause of the stop that asked for it, and ends where it was asked.
-      cause: expected ? (close?.cause ?? 'evict') : 'exit',
-      reason: expected ? (close?.reason ?? null) : exit.reason,
-      ...(!expected && exit.failure ? { failure: exit.failure } : {}),
-      duringStartup: exitedDuringStartup,
-      // The adapter publishes an exit only once it saw the root go, first-hand or proven.
-      rootGone: true,
-      ...(expected && close ? { endedAt: close.requestedAt } : {})
-    })
+    if (session.child === child) {
+      session.child = null
+    }
     context.publishStatus?.(sessionId)
   }
   const record = context.store.getRecord(sessionId)
   if (!record || record.lease.handoffStage !== null) {
     // An acquisition or recovery already owns this lease's transition.
     endChild()
-    context.generationEnded(sessionId)
     context.wakeDelivery?.(sessionId)
     return
   }

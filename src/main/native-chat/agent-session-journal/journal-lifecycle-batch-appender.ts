@@ -20,6 +20,7 @@ import type {
   JournalResolvedLifecycleBatchInput
 } from './journal-store-contracts'
 import type { JournalRow } from './journal-row-schema'
+import type { JournalWriteOptions } from './journal-database'
 import { journalQueuedRejectionRowBuilders } from './journal-pending-submission-recovery'
 
 export class JournalLifecycleBatchAppender {
@@ -28,7 +29,8 @@ export class JournalLifecycleBatchAppender {
       state: () => JournalReducerState
       cursor: () => AgentJournalCursor
       enqueueRows: (
-        plan: () => readonly ((seq: number, ts: number) => JournalRow)[]
+        plan: () => readonly ((seq: number, ts: number) => JournalRow)[],
+        options?: JournalWriteOptions
       ) => Promise<JournalRow[]>
     }
   ) {}
@@ -66,16 +68,19 @@ export class JournalLifecycleBatchAppender {
   /** `append`, with every row chosen at the batch's own turn in the queue. */
   appendPlanned(input: JournalPlannedLifecycleBatchInput): Promise<AgentJournalCursor> {
     return this.deps
-      .enqueueRows(() => {
-        if (this.wasApplied(input.settlementId)) {
-          return []
-        }
-        const { mutations, dispatches } = input.plan()
-        return [
-          ...dispatches.map((dispatch) => journalDispatchRowBuilder(this.deps.state, dispatch)),
-          ...this.planMutations(input, mutations)
-        ]
-      })
+      .enqueueRows(
+        () => {
+          if (this.wasApplied(input.settlementId)) {
+            return []
+          }
+          const { mutations, dispatches } = input.plan()
+          return [
+            ...dispatches.map((dispatch) => journalDispatchRowBuilder(this.deps.state, dispatch)),
+            ...this.planMutations(input, mutations)
+          ]
+        },
+        input.background ? { background: true } : undefined
+      )
       .then((rows) => this.cursorAfter(rows))
   }
 

@@ -146,7 +146,8 @@ async function startStructuredAgentSessionAgent(
   }
   const params = structuredAgentSessionResumeParams(
     record,
-    structuredAgentSessionResumeOperationId(context.now())
+    structuredAgentSessionResumeOperationId(context.now()),
+    context.sessions.get(sessionId)?.lastEndedChild
   )
   if (!params) {
     return record.lease.unreconciled

@@ -8,7 +8,7 @@ import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import {
   structuredQueueSendGate,
   tryReadQueuePublication,
-  type QueuedDrainWaits
+  type QueuedDrainHolds
 } from './structured-agent-session-queued-publication'
 import type {
   StructuredAgentSessionHostDeps,
@@ -42,7 +42,7 @@ export class StructuredAgentSessionClientDelivery {
      *  idle clock; a generation's end is not one), and a card it holds back is never named next. */
     private readonly queue: {
       onJournalActivity: (sessionId: string, activity?: boolean) => void
-      drain: { waits: QueuedDrainWaits }
+      drain: QueuedDrainHolds
     },
     onAgentStarted: (sessionId: string) => void,
     /** A session's child records changed; the chat strip republishes from them. */
@@ -75,7 +75,7 @@ export class StructuredAgentSessionClientDelivery {
           structuredQueueSendGate(
             { store: this.deps().store, sessions },
             sessionId,
-            this.queue.drain.waits
+            this.queue.drain
           )
         ),
       readBackgroundTasks,

@@ -26,6 +26,8 @@ export async function releaseStoredStructuredAgentSessionOwnerAfterExit(input: {
   now: number
   exitObservedAt?: number
   exitReason?: string
+  /** Bookkeeping no person waits on (`JournalWriteOptions`). */
+  background?: true
 }): Promise<AgentSessionRecord> {
   const record = input.store.getRecord(input.sessionId)
   if (
@@ -35,11 +37,15 @@ export async function releaseStoredStructuredAgentSessionOwnerAfterExit(input: {
   ) {
     throw new Error('agent_session_checkpoint_stale')
   }
-  return releaseStoredAgentSessionOwnerAfterSurfaceClose(input.store, {
-    sessionId: input.sessionId,
-    expectedFence: input.expectedFence,
-    now: input.now,
-    ...(input.exitObservedAt === undefined ? {} : { exitObservedAt: input.exitObservedAt }),
-    ...(input.exitReason ? { exitReason: input.exitReason } : {})
-  })
+  return releaseStoredAgentSessionOwnerAfterSurfaceClose(
+    input.store,
+    {
+      sessionId: input.sessionId,
+      expectedFence: input.expectedFence,
+      now: input.now,
+      ...(input.exitObservedAt === undefined ? {} : { exitObservedAt: input.exitObservedAt }),
+      ...(input.exitReason ? { exitReason: input.exitReason } : {})
+    },
+    input.background ? { background: true } : undefined
+  )
 }

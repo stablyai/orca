@@ -25,9 +25,9 @@ import type {
 } from './structured-agent-session-host-types'
 import { scanStructuredAgentSessionsAtStartup } from './structured-agent-session-startup-settlement'
 import {
-  StructuredAgentSessionReconciliation,
-  type StructuredAgentSessionReconciliationContext
-} from './structured-agent-session-reconciliation-worker'
+  StructuredAgentSessionRetry,
+  type StructuredAgentSessionRetryContext
+} from './structured-agent-session-reconciliation-retry'
 import type { StructuredAgentSessionTaskQueue } from './structured-agent-session-task-queue'
 
 /** Throws its refusal as the code itself. */
@@ -70,9 +70,13 @@ export function createStructuredAgentSessionHostRestore(
   > & {
     reconcileLeases: (sessionId: string) => Promise<AgentSessionWireRefusal | null>
     resolveRecovery: (sessionId: string) => Promise<unknown>
-    startup: Pick<StructuredAgentSessionReconciliationContext, 'sessions'> & {
+    startup: Pick<StructuredAgentSessionRetryContext, 'sessions'> & {
       tasks: Pick<StructuredAgentSessionTaskQueue, 'trackAttach'>
-      clientDelivery: Pick<StructuredAgentSessionReconciliationContext, 'publishGenerationEnded'>
+      clientDelivery: Pick<StructuredAgentSessionRetryContext, 'publishGenerationEnded'>
+      queue: {
+        sendForRetry: (sessionId: string) => Promise<'contended' | 'done'>
+        abandon: (sessionId: string) => void
+      }
     }
   }
 ): {
@@ -80,12 +84,12 @@ export function createStructuredAgentSessionHostRestore(
   /** The startup scan the last reconcile began; resolved once every chat's first attempt ran. */
   startupSettled: () => Promise<void>
   restoreReadableSessions: (sessionIds?: readonly string[]) => Promise<void>
-  reconciliation: StructuredAgentSessionReconciliation
+  reconciliation: StructuredAgentSessionRetry
 } {
   const { reconcileLeases, resolveRecovery, startup, ...rest } = wiring
   const failures = reportEachFailureOnce(deps.logger)
   const reconcile = createReaderReconcile(reconcileLeases, failures)
-  const reconciliation = new StructuredAgentSessionReconciliation({
+  const reconciliation = new StructuredAgentSessionRetry({
     deps,
     sessions: startup.sessions,
     now: () => deps.now?.() ?? Date.now(),
@@ -94,7 +98,9 @@ export function createStructuredAgentSessionHostRestore(
     track: (operation) => startup.tasks.trackAttach(operation),
     publishGenerationEnded: (sessionId, options) =>
       startup.clientDelivery.publishGenerationEnded(sessionId, options),
-    reconcile
+    reconcile,
+    sendQueued: (sessionId) => startup.queue.sendForRetry(sessionId),
+    abandonSend: (sessionId) => startup.queue.abandon(sessionId)
   })
   let startupSettled: Promise<void> = Promise.resolve()
   const restorer = new StructuredAgentSessionReadableRestorer({

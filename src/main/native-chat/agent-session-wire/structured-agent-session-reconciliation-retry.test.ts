@@ -1,5 +1,5 @@
-// The chat's reconciliation worker: what retires it, what keeps it, and what readers see before it
-// has written anything.
+// The retry of a chat's background bookkeeping: what settles it, what keeps it owed, and what
+// readers see before it has written anything.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'

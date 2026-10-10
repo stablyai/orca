@@ -9,6 +9,7 @@ import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { classifyStoreFailure } from './structured-agent-session-attach'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import type { JournalWriteOptions } from '../agent-session-journal/journal-database'
 
 const MAX_RECONCILIATION_PASSES = 8
 
@@ -21,10 +22,16 @@ export function createRestartReconciler(deps: {
     records: readonly AgentSessionRecord[]
   ) => Promise<Map<string, AgentSessionOwnerProbe>>
   now: () => number
-}): (sessionId: string) => Promise<AgentSessionWireRefusal | null> {
+}): (sessionId: string, options?: JournalWriteOptions) => Promise<AgentSessionWireRefusal | null> {
   let pending: Promise<void> | null = null
-  return async (sessionId) => {
+  return async (sessionId, options) => {
     if (!deps.store.listRecords().some((record) => record.lease.unreconciled)) {
+      return null
+    }
+    // Background bookkeeping joins a reader's run, never the reverse: no reader inherits its
+    // refusal to wait for another connection's lock.
+    if (options?.background && !pending) {
+      await reconcileCurrentLeases(deps, options)
       return null
     }
     if (!pending) {
@@ -82,13 +89,16 @@ export function reportEachFailureOnce(
  *  reconciles again before it acts.
  *  Answers whether every lease is settled. */
 export function createReaderReconcile(
-  reconcile: (sessionId: string) => Promise<AgentSessionWireRefusal | null>,
+  reconcile: (
+    sessionId: string,
+    options?: JournalWriteOptions
+  ) => Promise<AgentSessionWireRefusal | null>,
   failures: ReaderBookkeepingFailures
-): (sessionId: string) => Promise<boolean> {
-  return async (sessionId) => {
+): (sessionId: string, options?: JournalWriteOptions) => Promise<boolean> {
+  return async (sessionId, options) => {
     let failure: unknown
     try {
-      const refusal = await reconcile(sessionId)
+      const refusal = await reconcile(sessionId, options)
       if (!refusal) {
         failures.clear()
         return true
@@ -114,20 +124,26 @@ function failureKey(failure: unknown): string {
   return String(failure)
 }
 
-async function reconcileCurrentLeases(deps: {
-  store: AgentSessionRecordStore
-  probe: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>
-  probeMany?: (
-    records: readonly AgentSessionRecord[]
-  ) => Promise<Map<string, AgentSessionOwnerProbe>>
-  now: () => number
-}): Promise<void> {
+async function reconcileCurrentLeases(
+  deps: {
+    store: AgentSessionRecordStore
+    probe: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>
+    probeMany?: (
+      records: readonly AgentSessionRecord[]
+    ) => Promise<Map<string, AgentSessionOwnerProbe>>
+    now: () => number
+  },
+  options?: JournalWriteOptions
+): Promise<void> {
   for (let pass = 0; pass < MAX_RECONCILIATION_PASSES; pass += 1) {
-    await deps.store.reconcileOnRestart({
-      probe: deps.probe,
-      ...(deps.probeMany ? { probeMany: deps.probeMany } : {}),
-      now: deps.now()
-    })
+    await deps.store.reconcileOnRestart(
+      {
+        probe: deps.probe,
+        ...(deps.probeMany ? { probeMany: deps.probeMany } : {}),
+        now: deps.now()
+      },
+      options
+    )
     if (!deps.store.listRecords().some((record) => record.lease.unreconciled)) {
       return
     }

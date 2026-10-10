@@ -1,6 +1,7 @@
 /** Durable single-writer session records and their operation ledger, as rows in the host's chat
  *  journal database. */
 
+import type { JournalWriteOptions } from '../native-chat/agent-session-journal/journal-database'
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import { createAgentSessionConversationReceipts } from './agent-session-conversation-receipts'
 import { commitConversationCommandRecord } from './agent-session-conversation-command-record'
@@ -261,12 +262,11 @@ export class AgentSessionRecordStore {
     return this.mutate(args.sessionId, (record) => evictAgentSessionOwner({ ...args, record }))
   }
 
-  async transitionHandoff(
+  transitionHandoff = (
     sessionId: string,
-    transition: (record: AgentSessionRecord) => AgentSessionRecord
-  ): Promise<AgentSessionRecord> {
-    return this.mutate(sessionId, transition)
-  }
+    transition: (record: AgentSessionRecord) => AgentSessionRecord,
+    options?: JournalWriteOptions
+  ): Promise<AgentSessionRecord> => this.mutate(sessionId, transition, options)
 
   /**
    * Adjudicate every lease this host loaded. No lease grants a writer until it appears here. On a
@@ -274,13 +274,13 @@ export class AgentSessionRecordStore {
    * start, and none grants a writer there, since every grant is a write.
    */
   async reconcileOnRestart(
-    args: AgentSessionRestartProbeArgs
+    args: AgentSessionRestartProbeArgs,
+    options?: JournalWriteOptions
   ): Promise<Map<string, AgentSessionRecord>> {
     const pending = this.listRecords().filter((record) => record.lease.unreconciled)
     const probes = await collectAgentSessionRestartProbes(pending, args)
-    return this.transact((draft) => applyAgentSessionRestartProbes(draft, probes, args.now), {
-      inMemoryWhenReadOnly: true
-    })
+    const write = { inMemoryWhenReadOnly: true, ...options }
+    return this.transact((draft) => applyAgentSessionRestartProbes(draft, probes, args.now), write)
   }
 
   /** Admits one non-reservation mutation through the durable ledger. */
@@ -332,7 +332,8 @@ export class AgentSessionRecordStore {
 
   private async mutate(
     sessionId: string,
-    apply: (record: AgentSessionRecord) => AgentSessionRecord
+    apply: (record: AgentSessionRecord) => AgentSessionRecord,
+    options?: JournalWriteOptions
   ): Promise<AgentSessionRecord> {
     return this.transact((draft) => {
       const record = draft.records.get(sessionId)
@@ -344,7 +345,7 @@ export class AgentSessionRecordStore {
       const next = apply(record)
       draft.records.set(sessionId, next)
       return next
-    })
+    }, options)
   }
 
   /** Told once, after commit, of each generation a transaction revoked or superseded, whichever
@@ -365,7 +366,8 @@ export class AgentSessionRecordStore {
    *  once its rows have committed. */
   private transact = async <T>(
     apply: (draft: AgentSessionStoreState) => T,
-    options?: { inMemoryWhenReadOnly?: boolean } & AgentSessionGenerationEndOptions
+    options?: { inMemoryWhenReadOnly?: boolean } & AgentSessionGenerationEndOptions &
+      JournalWriteOptions
   ): Promise<T> => {
     let ended: AgentSessionGenerationEnd[] = []
     let heldBefore = true

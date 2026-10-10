@@ -49,6 +49,8 @@ export type StructuredAgentSessionLeftoverSettlementInput = {
    *  proven-dead owner clears it, and a later release writes its own): only what that generation
    *  and earlier ones left is settled, judged by it. Absent: the lease's own evidence judges. */
   proof?: AgentSessionDeathEvidence & { ownerFence: number }
+  /** Bookkeeping no person waits on (`JournalWriteOptions`). */
+  background?: true
 }
 
 export type StructuredAgentSessionLeftoverSettlement =
@@ -87,6 +89,7 @@ export async function settleStructuredAgentSessionLeftovers(
         : `${STALE_SESSION_ROW_PREFIX}${sessionId}:${fence}:${proof ? `proof-${proof.ownerFence}:` : ''}seq-${journal.cursor().sequence}`,
       fence,
       recovered: true,
+      ...(input.background ? { background: true } : {}),
       plan: () => {
         const exited = exit
           ? planStructuredAgentSessionDeadGeneration(

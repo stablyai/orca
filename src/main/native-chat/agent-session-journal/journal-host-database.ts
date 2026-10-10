@@ -10,8 +10,10 @@ import type Database from '../../sqlite/sync-database'
 import {
   openJournalDatabase,
   runJournalTransaction,
+  type JournalWriteOptions,
   type OpenJournalDatabase
 } from './journal-database'
+export type { JournalWriteOptions } from './journal-database'
 import { journalOpenRefusalError } from './journal-open-failure'
 import { AgentSessionJournalError } from './journal-write-guards'
 
@@ -61,10 +63,15 @@ export class JournalHostDatabase {
   }
 
   /** One IMMEDIATE transaction; see `runJournalTransaction`. */
-  transaction<T>(run: (db: Database.Database) => T): T {
-    return runJournalTransaction(this.db, run, () => {
-      this.stranded = true
-    })
+  transaction<T>(run: (db: Database.Database) => T, options?: JournalWriteOptions): T {
+    return runJournalTransaction(
+      this.db,
+      run,
+      () => {
+        this.stranded = true
+      },
+      options
+    )
   }
 
   /** Last, after every store has drained. A close that fails keeps the handle, so the retried

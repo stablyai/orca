@@ -30,41 +30,53 @@ export type QueuePublication = {
   nextQueuedMessageId: string | null
 }
 
-/** What the drain's gate reads beyond the journal; resolved per read. */
-export type QueueSendGate = (journal: AgentSessionJournal) => StructuredQueueGateInput
+/** What the drain's gate reads beyond the journal; resolved per read. `abandoned`: the card whose
+ *  automatic send was given up on, shown as not sent. */
+export type QueueSendGate = (
+  journal: AgentSessionJournal
+) => StructuredQueueGateInput & { abandoned?: string }
 
-/** `StructuredAgentSessionQueuedMessageDrain.waits`. */
-export type QueuedDrainWaits = (sessionId: string, messageId: string, journal: object) => boolean
+/** What the drain itself holds back (`StructuredAgentSessionQueuedMessageDrain`). */
+export type QueuedDrainHolds = {
+  waits: (sessionId: string, messageId: string) => boolean
+  abandonedCard: (sessionId: string) => string | undefined
+}
 
-/** `drainWaits`: the drain's own waits, which a publication reads so a client is never told a card
+/** `drain`: the drain's own holds, which a publication reads so a client is never told a card
  *  sends next while the drain holds it back (the chat would read Working with nothing running). */
 export function structuredQueueSendGate(
   host: StructuredAgentSessionCurrentWorkHost,
   sessionId: string,
-  drainWaits?: QueuedDrainWaits
+  drain?: QueuedDrainHolds
 ): QueueSendGate {
   return (journal) => {
     const record = host.store.getRecord(sessionId)
     const ended = host.sessions.get(sessionId)?.lastEndedChild
+    const abandoned = drain?.abandonedCard(sessionId)
     return {
       record,
       work: structuredAgentSessionCurrentWork(journal, { record, ...(ended ? { ended } : {}) }),
-      ...(drainWaits
-        ? { drainWaits: (messageId: string) => drainWaits(sessionId, messageId, journal) }
-        : {})
+      ...(drain ? { drainWaits: (messageId: string) => drain.waits(sessionId, messageId) } : {}),
+      ...(abandoned ? { abandoned } : {})
     }
   }
 }
 
 /** Waiting and returned rows only. `paused` is a per-card hold (a failed conversion); a person's
  *  Stop pauses the queue, published once beside it. */
-function computePublishedQueuedMessages(journal: AgentSessionJournal): AgentSessionQueuedMessage[] {
+function computePublishedQueuedMessages(
+  journal: AgentSessionJournal,
+  abandoned: string | undefined
+): AgentSessionQueuedMessage[] {
   const published: AgentSessionQueuedMessage[] = []
   for (const row of journal.queuedMessages.list()) {
     if (row.state !== 'waiting' && row.state !== 'returned') {
       continue
     }
-    const held = row.state === 'waiting' && row.holdReason !== null
+    // A send given up on reads as main's failed send even when its stored hold did not land.
+    const holdReason =
+      row.messageId === abandoned ? QUEUED_MESSAGE_PAUSED_SEND_FAILED : row.holdReason
+    const held = row.state === 'waiting' && holdReason !== null
     published.push({
       messageId: row.messageId,
       position: row.position,
@@ -72,7 +84,7 @@ function computePublishedQueuedMessages(journal: AgentSessionJournal): AgentSess
       state: row.state,
       ...(held ? { paused: true as const } : {}),
       // The stored reason is a typed marker; an unknown one reads as a plain hold.
-      ...(held && isPublishedPausedReason(row.holdReason) ? { pausedReason: row.holdReason } : {}),
+      ...(held && isPublishedPausedReason(holdReason) ? { pausedReason: holdReason } : {}),
       ...(row.state === 'returned' ? { returnedReason: row.returnedReason } : {}),
       ...(row.state === 'returned' && row.returnedRejection
         ? { returnedRejection: row.returnedRejection }
@@ -96,13 +108,16 @@ type ListMemo = { key: string; serialized: string; list: AgentSessionQueuedMessa
 const listMemos = new WeakMap<AgentSessionJournal, ListMemo>()
 const publications = new WeakMap<AgentSessionJournal, QueuePublication>()
 
-function readPublishedQueuedMessages(journal: AgentSessionJournal): AgentSessionQueuedMessage[] {
-  const key = String(journal.queuedMessages.revision())
+function readPublishedQueuedMessages(
+  journal: AgentSessionJournal,
+  abandoned: string | undefined
+): AgentSessionQueuedMessage[] {
+  const key = `${journal.queuedMessages.revision()}:${abandoned ?? ''}`
   const memo = listMemos.get(journal)
   if (memo && memo.key === key) {
     return memo.list
   }
-  const list = computePublishedQueuedMessages(journal)
+  const list = computePublishedQueuedMessages(journal, abandoned)
   // Belt for the identity dedup: equal recomputed content keeps the previous reference.
   const serialized = JSON.stringify(list)
   if (memo && memo.serialized === serialized) {
@@ -126,7 +141,8 @@ export function readQueuePublication(
   journal: AgentSessionJournal,
   gate: QueueSendGate
 ): QueuePublication {
-  const queuedMessages = readPublishedQueuedMessages(journal)
+  const input = gate(journal)
+  const queuedMessages = readPublishedQueuedMessages(journal, input.abandoned)
   // Read per emit: the pause also turns on submissions (a turn starting). Only a person's Stop is
   // shown, and only over a card Resume would send, so its header never offers to send nothing;
   // deleting a blocking returned card shows it again. After a /clear, a restart or a close nothing
@@ -150,8 +166,7 @@ export function readQueuePublication(
     resumable && !queuePauseLiftOnItsWay(resumable, journal.submissions()) ? resumable : null
   // The test narrows the type.
   const queuePause = pause?.reason === 'stopped' ? { reason: pause.reason } : null
-  const nextQueuedMessageId =
-    nextStructuredQueuedMessage({ journal, ...gate(journal) })?.messageId ?? null
+  const nextQueuedMessageId = nextStructuredQueuedMessage({ journal, ...input })?.messageId ?? null
   const previous = publications.get(journal)
   if (
     previous &&

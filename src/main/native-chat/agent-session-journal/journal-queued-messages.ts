@@ -13,12 +13,12 @@ import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
 } from '../../../shared/agent-session-host-authority'
-import type { JournalHostDatabase } from './journal-host-database'
+import type { JournalHostDatabase, JournalWriteOptions } from './journal-host-database'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 import type { JournalOperationReceipt } from './journal-row-writer'
 import type { JournalSubmissionConsume } from './journal-store-contracts'
-import { holdQueuedMessages } from './queued-message-holds'
+import { holdQueuedMessages, type QueuedMessageHold } from './queued-message-holds'
 import {
   deriveQueuePauses,
   journalUserStopInForce,
@@ -149,17 +149,18 @@ export class JournalQueuedMessages {
         return row
       },
       () => inserted,
-      receipt?.committed
+      { adopted: receipt?.committed }
     )
   }
 
   /** Hold one waiting draft whose conversion failed. Stored on the row, so it
    *  survives handle eviction and restart; withdraw and consume clear it in their
    *  own UPDATE. */
-  hold(input: { messageIds: readonly string[]; reason: QueuedMessageHoldReason }): Promise<void> {
+  hold(input: QueuedMessageHold & JournalWriteOptions): Promise<void> {
     return this.transact(
       (db) => holdQueuedMessages(db, { ...input, sessionId: this.deps.sessionId }),
-      (held) => held > 0
+      (held) => held > 0,
+      input
     ).then(() => undefined)
   }
 
@@ -259,13 +260,13 @@ export class JournalQueuedMessages {
   private transact<T>(
     run: (db: Database.Database) => JournalWriteResult<T>,
     changed: (result: T) => boolean,
-    adopted?: () => void
+    options: { adopted?: (() => void) | undefined } & JournalWriteOptions = {}
   ): Promise<T> {
     return this.deps.serialize(() => {
       assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
-      const result = this.deps.database().transaction(run)
+      const result = this.deps.database().transaction(run, options)
       if (changed(result)) {
-        adopted?.()
+        options.adopted?.()
         this.changeRevision++
         this.deps.committed()
       }
@@ -358,7 +359,7 @@ export class JournalQueuedMessages {
    * crash → downgrade → upgrade, where the old build rejected the leftover with
    * no hook), then retention runs.
    */
-  repairAndPrune(): Promise<void> {
+  repairAndPrune(options?: JournalWriteOptions): Promise<void> {
     // No draft, no work, and no write.
     if (this.deps.readOnly() || this.list().length === 0) {
       return Promise.resolve()
@@ -377,7 +378,8 @@ export class JournalQueuedMessages {
           })
         )
       },
-      (changed) => changed > 0
+      (changed) => changed > 0,
+      options
     ).then(() => undefined)
   }
 }

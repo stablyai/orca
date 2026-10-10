@@ -18,6 +18,7 @@ import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import type { AgentSessionJournal } from './journal-store'
+import { isSqliteContentionFailure } from '../../sqlite/sqlite-read-failure'
 import type { JournalRowTransactionHook } from './journal-row-writer'
 import type { QueuedMessagePositionMove } from './queued-message-positions'
 
@@ -88,8 +89,11 @@ export async function holdUnsentSends(
     /** In place of the queued sends: those a child that ended before it answered its start was
      *  handed and never echoed. It ran none, so each is unsent as surely as a queued one. */
     unrun?: true
+    /** Bookkeeping no person waits on (`JournalWriteOptions`): contention stops it, untouched. */
+    background?: true
   }
 ): Promise<number | null> {
+  const background = input.background ? { background: input.background } : {}
   const { hold } = input
   const unsent = journal
     .submissions()
@@ -165,10 +169,17 @@ export async function holdUnsentSends(
     try {
       // The send names its card in the same row, so no surface draws it once the card is gone.
       await journal.resolveDispatch(
-        card ? { ...reject, keptAsQueuedMessageId: clientMessageId } : reject,
+        {
+          ...(card ? { ...reject, keptAsQueuedMessageId: clientMessageId } : reject),
+          ...background
+        },
         keep
       )
     } catch (error) {
+      // Another connection holds the database: nothing was written, so nothing is lost by waiting.
+      if (input.background && isSqliteContentionFailure(error)) {
+        throw error
+      }
       if (!keep) {
         failures.push(error)
         continue
@@ -181,7 +192,9 @@ export async function holdUnsentSends(
         cause: hold.cause,
         error: error instanceof Error ? error.message : String(error)
       })
-      await journal.resolveDispatch(reject).catch((fallback: unknown) => failures.push(fallback))
+      await journal
+        .resolveDispatch({ ...reject, ...background })
+        .catch((fallback: unknown) => failures.push(fallback))
     }
   }
   if (failures.length > 0) {
