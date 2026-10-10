@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { readOrchestrationCompatibilityEvidence } from '../../shared/orchestration-compatibility-evidence'
+import {
+  readOrchestrationCompatibilityEvidence,
+  type OrchestrationCompatibilityEvidence
+} from '../../shared/orchestration-compatibility-evidence'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RpcResponse } from '../runtime/rpc/core'
@@ -12,18 +15,24 @@ import type {
 import { RemoteCliArgumentError, type ParsedRemoteCli } from './ssh-remote-cli-argument-error'
 import { optionalRemoteCliString, resolveRemoteCliHandle } from './ssh-remote-cli-args'
 
+/** The caller's inherited evidence, with the host stamp replaced by the relay's runtime authority. */
+export function remoteCliOrchestrationEvidence(
+  env: Record<string, string>,
+  runtimeAuthority: RemoteOrcaCliRequest['runtimeAuthority'] | undefined
+): OrchestrationCompatibilityEvidence | undefined {
+  const inherited = readOrchestrationCompatibilityEvidence(env)
+  return runtimeAuthority ? { ...inherited, host: runtimeAuthority } : inherited
+}
+
 export async function acknowledgeRemoteOrcaCliPostOutput(
   runtime: OrcaRuntimeService,
   args: {
     postOutput: RemoteOrcaCliPostOutput
     env: Record<string, string>
     runtimeAuthority?: RemoteOrcaCliRequest['runtimeAuthority']
+    callerScope: RemoteOrcaCliRequest['callerScope']
   }
 ): Promise<void> {
-  const inheritedEvidence = readOrchestrationCompatibilityEvidence(args.env)
-  const orchestrationCompatibilityEvidence = args.runtimeAuthority
-    ? { ...inheritedEvidence, host: args.runtimeAuthority }
-    : inheritedEvidence
   const params =
     args.postOutput.kind === 'legacy_check_ack'
       ? {
@@ -40,14 +49,21 @@ export async function acknowledgeRemoteOrcaCliPostOutput(
             answerMessageId: args.postOutput.answerMessageId
           })
         }
-  const response = await new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatch({
+  const response = await new RpcDispatcher({
+    runtime,
+    methods: ALL_RPC_METHODS,
+    callerScope: args.callerScope
+  }).dispatch({
     id: `remote-cli-post-output-${randomUUID()}`,
     authToken: 'remote-cli',
     method: 'orchestration.check',
     params,
     orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
     compatibilityInvocationId: randomUUID(),
-    orchestrationCompatibilityEvidence
+    orchestrationCompatibilityEvidence: remoteCliOrchestrationEvidence(
+      args.env,
+      args.runtimeAuthority
+    )
   })
   if (!response.ok) {
     throw new Error(response.error.message)

@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
+import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
@@ -85,19 +85,7 @@ export function launchAiVaultSessionInNewTab(args: {
   })
   store.setActiveTabType('terminal', args.worktreeId)
 
-  const fresh = useAppStore.getState()
-  const termIds = (fresh.tabsByWorktree[args.worktreeId] ?? []).map((t) => t.id)
-  const editorIds = fresh.openFiles.filter((f) => f.worktreeId === args.worktreeId).map((f) => f.id)
-  const browserIds = (fresh.browserTabsByWorktree?.[args.worktreeId] ?? []).map((t) => t.id)
-  const base = reconcileTabOrder(
-    fresh.tabBarOrderByWorktree[args.worktreeId],
-    termIds,
-    editorIds,
-    browserIds
-  )
-  const order = base.filter((id) => id !== tab.id)
-  order.push(tab.id)
-  fresh.setTabBarOrder(args.worktreeId, order)
+  persistAgentLaunchTabOrder(args.worktreeId, tab.id)
 
   return { tabId: tab.id, groupId: targetGroupId }
 }

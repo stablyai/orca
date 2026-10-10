@@ -28,10 +28,8 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 import type {
   AgentSessionDispatchOutcome,
-  StructuredAgentSessionAdapter,
-  StructuredAgentSessionProviderChildPhase
+  StructuredAgentSessionAdapter
 } from './structured-agent-session-adapter'
-import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import {
   handOverStructuredAgentSessionCommand,
@@ -45,6 +43,7 @@ import {
 } from '../agent-session-journal/journal-open-failure'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { isAgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
+import { CommandReceiptExistsError } from '../agent-session-journal/command-receipt-transaction'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
 export { performSetOption } from './structured-agent-session-turns-options'
 export { performPrompt } from './structured-agent-session-turns-prompt'
@@ -67,11 +66,9 @@ export type AgentSessionTurnContext = {
   /** Republishes state kept outside the journal, such as the record's options or rewind phase.
    *  Journal appends reach readers on their own. */
   publish: () => void
-  /** What the host holds about the child this dispatch is for, read at the moment it is needed. */
-  providerChildPhase?: () => StructuredAgentSessionProviderChildPhase | undefined
   /** Who a Stop's refusal row names. */
   failureTextContext?: AgentSessionFailureWordsContext
-  /** The operation's success, committed with the row that accepts it (`MutationPlan.settlesWithWrite`). */
+  /** The operation's success, committed with the row that accepts it (`settlesWithWrite` or `acceptsWithCommandReceipt`). */
   operationReceipt?: JournalOperationReceipt
   now: () => number
 }
@@ -98,10 +95,10 @@ export function agentSessionAttachmentExpiredRefusal(): {
   )
 }
 
-/** A thrown adapter error is indistinguishable from a lost reply, so it settles as `unknown`
- *  rather than as a rejection — unless the child had not proven its start. A dispatch to such a
- *  child throws only when the start failed before the write (a write's own failure is an outcome,
- *  not a throw), so it is provably unwritten and is rejected with the cause the adapter gave. */
+/** A thrown adapter error is indistinguishable from a lost reply, so it settles as `unknown`, never
+ *  replayed. Only a child that proved its start is handed anything, so a start that fails leaves its
+ *  messages unsent instead (the delivery loop's barrier); an adapter that knows a write never
+ *  happened answers `rejected`. */
 async function dispatchSafely(
   ctx: AgentSessionHandoverContext,
   clientMessageId: string,
@@ -117,12 +114,6 @@ async function dispatchSafely(
       requestedAt
     })
   } catch (error) {
-    if (ctx.providerChildPhase?.() === 'starting') {
-      return {
-        state: 'rejected',
-        ...structuredAgentSessionStartFailure({ error }, ctx.failureTextContext)
-      }
-    }
     return { state: 'unknown', reason: error instanceof Error ? error.message : String(error) }
   }
 }
@@ -171,6 +162,14 @@ export async function performSend(
       ctx.operationReceipt
     )
   } catch (error) {
+    if (error instanceof CommandReceiptExistsError) {
+      throw error
+    }
+    ctx.logger.warn('recording a message failed', {
+      scope: 'send-journal-write',
+      sessionId: ctx.sessionId,
+      error
+    })
     if (isAgentSessionAttachmentExpiredError(error)) {
       return agentSessionAttachmentExpiredRefusal()
     }

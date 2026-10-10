@@ -53,7 +53,9 @@ export type MobileNativeChatPendingItem = {
   baselineTailMessageId?: string | null
 }
 
-export function foldMobileNativeChatMessages(messages: NativeChatMessage[]): NativeChatMessage[] {
+export function foldMobileNativeChatMessages(
+  messages: readonly NativeChatMessage[]
+): NativeChatMessage[] {
   // The conversation only: a subagent's rows are that subagent's, and mobile shows
   // each spawn as its roster row (one line per child) rather than the child's own rows.
   // Normalize first (desktop assembler parity): image marker turns fold into

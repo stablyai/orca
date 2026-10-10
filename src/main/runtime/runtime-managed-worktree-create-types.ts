@@ -5,6 +5,7 @@ import type {
   CliWorkspaceProvenance,
   GitPushTarget,
   WorkspaceLinkedItem,
+  WorkspaceAttachment,
   Worktree
 } from '../../shared/worktree/types'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -33,6 +34,7 @@ export type RuntimeManagedWorktreeCreateArgs = {
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
   linkedWorkItem?: WorkspaceLinkedItem | null
+  linkedItems?: WorkspaceAttachment[]
   linkedTaskSourceContext?: TaskSourceContext | null
   comment?: string
   displayName?: string
@@ -56,6 +58,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
   onStartupPromptCarry?: (carried: boolean) => void
   /** Per-launch inputs used when `startupAgent` is the created terminal surface. */
   startupAgentArgs?: string | null
+  /** Main-internal: an automation's saved extras, merged over the startup agent's arguments. */
+  startupExtraAgentArgs?: string
   startupCwd?: string
   /** The surface behind a host-built startup agent (`startupAgent` or `startupDraft`). */
   startupLaunchSource?: string
@@ -72,6 +76,9 @@ export type RuntimeManagedWorktreeCreateArgs = {
   creatorProvenance?: Worktree['creatorProvenance']
   startup?: WorktreeStartupLaunch
   startupDraft?: string
+  /** Main-internal: the agent a launch already chose for `startupDraft`, so the create does not
+   *  choose again. Steers only the draft; `createdWithAgent` stays what the caller asked for. */
+  startupDraftAgent?: TuiAgent
   startupDraftPaste?: WorktreeStartupDraftPaste
   lineage?: {
     parentWorkspace?: string

@@ -17,8 +17,8 @@ const require = createRequire(import.meta.url)
 export const MANIFEST_SCHEMA_VERSION = 2
 
 /**
- * Node 18, the rung C host floor, supports N-API 8 (9 only from 18.17). Pinned here rather
- * than left to the headers' default so a header bump cannot silently raise it.
+ * Keep N-API 8 stable across bundled and host runtimes rather than using the headers'
+ * default, so a header bump cannot silently change the shipped addon ABI.
  */
 export const SLOT_NAPI_VERSION = 8
 

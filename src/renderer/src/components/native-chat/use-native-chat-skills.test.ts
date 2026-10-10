@@ -11,6 +11,7 @@ import {
   resolveNativeChatSkillDiscoveryContext,
   resolveNativeChatSkillDiscoveryCwd
 } from './use-native-chat-skills'
+import { worktreeFixture } from './native-chat-workspace-test-fixtures'
 
 function skill(overrides: Partial<DiscoveredSkill>): DiscoveredSkill {
   return {
@@ -114,22 +115,23 @@ describe('isNativeChatSkillForAgent', () => {
 })
 
 describe('resolveNativeChatSkillDiscoveryCwd', () => {
+  const catalog = {
+    floatingWorkspacePath: null,
+    folderWorkspaces: [],
+    worktreesByRepo: {
+      'repo-1': [worktreeFixture('repo-1::/repo/worktree', '/repo/worktree', { repoId: 'repo-1' })]
+    }
+  }
+
   it('returns the owning worktree path for a terminal tab', () => {
     expect(
       resolveNativeChatSkillDiscoveryCwd(
         {
+          ...catalog,
           tabsByWorktree: {
             'repo-1::/repo/worktree': [
               {
                 id: 'tab-1'
-              }
-            ]
-          },
-          worktreesByRepo: {
-            'repo-1': [
-              {
-                id: 'repo-1::/repo/worktree',
-                path: '/repo/worktree'
               }
             ]
           }
@@ -143,12 +145,10 @@ describe('resolveNativeChatSkillDiscoveryCwd', () => {
     expect(
       resolveNativeChatSkillDiscoveryCwd(
         {
+          ...catalog,
           tabsByWorktree: {},
           unifiedTabsByWorktree: {
             'repo-1::/repo/worktree': [{ id: 'structured-tab-1' }]
-          },
-          worktreesByRepo: {
-            'repo-1': [{ id: 'repo-1::/repo/worktree', path: '/repo/worktree' }]
           }
         },
         'structured-tab-1'
@@ -158,7 +158,10 @@ describe('resolveNativeChatSkillDiscoveryCwd', () => {
 
   it('returns null when the tab has no known worktree owner', () => {
     expect(
-      resolveNativeChatSkillDiscoveryCwd({ tabsByWorktree: {}, worktreesByRepo: {} }, 'tab-1')
+      resolveNativeChatSkillDiscoveryCwd(
+        { ...catalog, tabsByWorktree: {}, worktreesByRepo: {} },
+        'tab-1'
+      )
     ).toBeNull()
   })
 
@@ -166,14 +169,12 @@ describe('resolveNativeChatSkillDiscoveryCwd', () => {
     expect(
       resolveNativeChatSkillDiscoveryCwd(
         {
+          ...catalog,
           tabsByWorktree: {
             'repo-1::/repo/worktree': [
               { id: 'tab-1', startupCwd: '/repo/worktree/packages/app' },
               { id: 'tab-2' }
             ]
-          },
-          worktreesByRepo: {
-            'repo-1': [{ id: 'repo-1::/repo/worktree', path: '/repo/worktree' }]
           }
         },
         'tab-1'

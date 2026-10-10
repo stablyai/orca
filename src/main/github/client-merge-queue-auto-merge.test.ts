@@ -26,15 +26,13 @@ vi.mock('./github-api-repository', async (importOriginal) =>
   )
 )
 
-import {
-  getPRForBranch,
-  getWorkItemByOwnerRepo,
-  mergePR,
-  resolveReviewThread,
-  setPRAutoMerge,
-  updatePRTitle,
-  _getMergeQueueCacheSizeForTests
-} from './client'
+import { getPRForBranch } from './client/lookup/get-pr-for-branch'
+import { getWorkItemByOwnerRepo } from './client/fetch/get-work-item'
+import { mergePR } from './client/merge/merge-pr'
+import { resolveReviewThread } from './client/update/resolve-review-thread'
+import { setPRAutoMerge } from './client/merge/pr-auto-merge'
+import { updatePRTitle } from './client/update/pr-details'
+import { _getMergeQueueCacheSizeForTests } from './client/detect/repository-merge-metadata-cache'
 import { resetGraphQLRateLimitGuardMocks } from './client-test-harness'
 
 const {

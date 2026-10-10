@@ -46,7 +46,9 @@ enum MobileWebShellCsp {
     "frame-src 'none'",
     "child-src 'none'",
     "worker-src 'none'",
-    "base-uri 'none'",
+    // `about:` only, so a chat visual's srcdoc frame (which inherits this) keeps its own
+    // `about:srcdoc` base and in-page links stay in it; no network base can apply.
+    "base-uri about:",
     "form-action 'none'",
     "frame-ancestors 'none'"
   ].joined(separator: "; ")

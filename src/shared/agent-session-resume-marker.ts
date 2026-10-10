@@ -74,6 +74,7 @@ export type AgentSessionResumeMarker = {
    * record it.
    */
   journalCursor?: AgentJournalCursor
+  contextClearOperationId?: string
   /**
    * What the session was doing, captured at the same stop-time snapshot that decided the offer.
    * The dialog row, the status bar and the wire candidate read ONLY this; nothing re-reads the
@@ -128,6 +129,7 @@ const agentSessionResumeMarkerSchema = z.object({
   trigger: z.enum(AGENT_SESSION_RESUME_TRIGGERS),
   providerHandleRoot: markerField,
   teardownId: markerField,
+  contextClearOperationId: markerField.optional().catch(undefined),
   journalCursor: z
     .object({ epoch: markerField, sequence: z.number().int().nonnegative() })
     .optional()

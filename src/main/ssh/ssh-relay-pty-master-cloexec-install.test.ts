@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RelayInstallMarkerModule from './ssh-relay-install-marker'
 
 vi.mock('./ssh-relay-opencode-runtime', () => ({
@@ -109,8 +109,11 @@ describe('relay pty fd-leak patch on the install path', () => {
     execCallCountAtWrite: {}
   }
 
+  afterEach(() => vi.unstubAllEnvs())
   beforeEach(() => {
     vi.clearAllMocks()
+    // The host-npm path is opt-in; these cases cover it.
+    vi.stubEnv('ORCA_SSH_REMOTE_RUNTIME', 'legacy')
     vi.mocked(execCommand).mockReset().mockResolvedValue('')
     sftpCapture.paths.length = 0
     vi.mocked(parseUnameToRelayPlatform).mockReturnValue('linux-x64')

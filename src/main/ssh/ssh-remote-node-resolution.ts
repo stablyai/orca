@@ -8,7 +8,7 @@ import {
   type RemoteNodeResolutionOptions
 } from './ssh-remote-node-install-guidance'
 import { execCommand } from './ssh-relay-deploy-helpers'
-import { isSshExecTimeout } from './ssh-relay-exec-command'
+import { isSshCommandExitError } from './ssh-relay-exec-command'
 import {
   buildPosixNodeToolchainProbe,
   buildWindowsNodeToolchainProbe,
@@ -23,10 +23,19 @@ import { REMOTE_NODE_PATH_PROBE_SCRIPT } from './ssh-remote-node-probe-script'
 // hang a login shell, so keep this short.
 const LOGIN_SHELL_PROBE_TIMEOUT_MS = 8_000
 
+/** The probes answered and no usable Node.js + npm exists; only `strict` resolution proves it. */
+export class RemoteNodeNotFoundError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'RemoteNodeNotFoundError'
+  }
+}
+
+/** `strict` rethrows probes the host never answered, so a not-found is proof, not a lost channel. */
 export async function resolveRemoteNodePath(
   conn: SshConnection,
   host?: RemoteHostPlatform,
-  options?: RemoteNodeResolutionOptions
+  options?: ProbeOptions
 ): Promise<string> {
   if (host && isWindowsRemoteHost(host)) {
     return resolveRemoteWindowsNodePath(conn, options)
@@ -37,8 +46,10 @@ export async function resolveRemoteNodePath(
   // This doesn't depend on shell startup-file semantics — bash -lc skips
   // .bashrc and zsh -lc skips .zshrc, but those are exactly the files where
   // nvm/mise/asdf hooks live. Probing directories directly is deterministic.
-  const npmCheck: CandidateCheck<true> = async (candidate) =>
-    (await nodeToolchainMeetsRequirements(conn, candidate, options)) || null
+  // Why memoized: the login shell often names the Node the path probe already rejected.
+  const npmCheck = memoizeCandidateCheck<true>(
+    async (candidate) => (await nodeToolchainMeetsRequirements(conn, candidate, options)) || null
+  )
   const probed = await tryResolveViaKnownPaths(conn, npmCheck, options)
   if (probed) {
     return probed.nodePath
@@ -55,12 +66,35 @@ export async function resolveRemoteNodePath(
 }
 
 export type CandidateCheck<T> = (candidate: string) => Promise<T | null>
+
+/** Probes each candidate path once per resolution, however many strategies name it. */
+export function memoizeCandidateCheck<T>(check: CandidateCheck<T>): CandidateCheck<T> {
+  const results = new Map<string, Promise<T | null>>()
+  return (candidate) => {
+    let result = results.get(candidate)
+    if (!result) {
+      result = check(candidate)
+      results.set(candidate, result)
+    }
+    return result
+  }
+}
 type ResolvedCandidate<T> = { nodePath: string; result: T }
 /** `strict` rethrows unanswered probes rather than reading them as "no Node here". */
 export type ProbeOptions = RemoteNodeResolutionOptions & { strict?: boolean }
 
-function isUnansweredExec(err: unknown): boolean {
-  return isSshExecTimeout(err) || (err instanceof Error && 'sshChannelCloseConfirmed' in err)
+/**
+ * Rethrows what is not a host-answered miss: an opted-in session limit, an abort, or (under
+ * `strict`) an exec that never exited. Only a command that ran and exited answered.
+ */
+function rethrowUnlessAnsweredMiss(err: unknown, options?: ProbeOptions): void {
+  if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
+    throw err
+  }
+  throwIfAborted(options)
+  if (options?.strict && !isSshCommandExitError(err)) {
+    throw err
+  }
 }
 
 // Probe the on-disk install directories of every common Node version manager
@@ -75,7 +109,7 @@ export async function tryResolveViaKnownPaths<T>(
   const script = REMOTE_NODE_PATH_PROBE_SCRIPT
 
   try {
-    const result = await execCommandWithOptionalOptions(conn, script, signalOnlyOptions(options))
+    const result = await execCommand(conn, script, { signal: options?.signal })
     const seen = new Set<string>()
     for (const line of result.split('\n')) {
       const candidate = line.trim()
@@ -116,22 +150,22 @@ export async function tryResolveViaLoginShell<T>(
     // Using it — rather than hardcoding bash — means zsh/fish users whose
     // custom PATH hooks live in profile files get coverage too. We fall back
     // to sh if $SHELL is unset (rare, e.g. restricted accounts).
-    const shellResult = await execCommand(
-      conn,
-      'echo "${SHELL:-/bin/sh}"',
-      commandOptions({ timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS }, options)
-    )
+    const shellResult = await execCommand(conn, 'echo "${SHELL:-/bin/sh}"', {
+      timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS,
+      signal: options?.signal
+    })
     const shell = shellResult.trim().split('\n')[0]
     if (!shell) {
       return null
     }
 
-    const nodePath = await execCommand(
-      conn,
-      buildSshLoginShellCommand(shell, 'command -v node'),
-      commandOptions({ wrapCommand: false, timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS }, options)
-    )
-    const candidate = nodePath.trim().split('\n')[0]
+    const probe = buildSshLoginShellCommand(shell, 'command -v node')
+    const nodePath = await execCommand(conn, probe.command, {
+      wrapCommand: false,
+      timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS,
+      signal: options?.signal
+    })
+    const candidate = probe.readStdout(nodePath)?.trim().split('\n')[0]
     if (!candidate) {
       return null
     }
@@ -142,14 +176,8 @@ export async function tryResolveViaLoginShell<T>(
       return { nodePath: candidate, result }
     }
   } catch (err) {
-    if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
-      throw err
-    }
-    throwIfAborted(options)
-    // Why only these: `command -v node` exits non-zero when the shell answered "none".
-    if (options?.strict && isUnansweredExec(err)) {
-      throw err
-    }
+    // Why: `command -v node` exits non-zero when the shell answered "none".
+    rethrowUnlessAnsweredMiss(err, options)
     // Fall through.
   }
   return null
@@ -157,12 +185,10 @@ export async function tryResolveViaLoginShell<T>(
 
 // Validates the same PATH-prepend + bare npm contract used during deployment.
 // This rejects missing npm (#8450) without requiring colocation (#9165).
-// Caches nothing — this runs at most a few times per resolution (one per
-// candidate), and the exec round-trip dominates.
 async function nodeToolchainMeetsRequirements(
   conn: SshConnection,
   nodePath: string,
-  options?: RemoteNodeResolutionOptions
+  options?: ProbeOptions
 ): Promise<boolean> {
   try {
     const versionOutput = await execCommand(
@@ -170,14 +196,11 @@ async function nodeToolchainMeetsRequirements(
       buildPosixNodeToolchainProbe(nodePath),
       // Why: the paired probe uses POSIX PATH assignment syntax, which fish
       // and csh cannot parse when sshd delegates directly to the login shell.
-      commandOptions({ wrapCommand: true }, options)
+      { wrapCommand: true, signal: options?.signal }
     )
     return nodeToolchainVersionsMeetRequirements(versionOutput)
   } catch (err) {
-    if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
-      throw err
-    }
-    throwIfAborted(options)
+    rethrowUnlessAnsweredMiss(err, options)
     // Binary missing or fails to run — not usable.
     return false
   }
@@ -185,7 +208,7 @@ async function nodeToolchainMeetsRequirements(
 
 async function resolveRemoteWindowsNodePath(
   conn: SshConnection,
-  options?: RemoteNodeResolutionOptions
+  options?: ProbeOptions
 ): Promise<string> {
   const script = [
     '$paths = @()',
@@ -207,11 +230,10 @@ async function resolveRemoteWindowsNodePath(
   ].join('\n')
 
   try {
-    const result = await execCommand(
-      conn,
-      powerShellCommand(script),
-      commandOptions({ wrapCommand: false }, options)
-    )
+    const result = await execCommand(conn, powerShellCommand(script), {
+      wrapCommand: false,
+      signal: options?.signal
+    })
     for (const line of result.split('\n')) {
       const nodePath = line.trim()
       if (!nodePath) {
@@ -224,10 +246,8 @@ async function resolveRemoteWindowsNodePath(
       }
     }
   } catch (err) {
-    if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
-      throw err
-    }
-    throwIfAborted(options)
+    // Why: the script exits 1 when it finds nothing, so only an unanswered probe is unknown.
+    rethrowUnlessAnsweredMiss(err, options)
     // Fall through to the shared error below.
   }
 
@@ -237,20 +257,17 @@ async function resolveRemoteWindowsNodePath(
 async function windowsNodeToolchainMeetsRequirements(
   conn: SshConnection,
   nodePath: string,
-  options?: RemoteNodeResolutionOptions
+  options?: ProbeOptions
 ): Promise<boolean> {
   try {
     const versionOutput = await execCommand(
       conn,
       powerShellCommand(buildWindowsNodeToolchainProbe(nodePath)),
-      commandOptions({ wrapCommand: false }, options)
+      { wrapCommand: false, signal: options?.signal }
     )
     return nodeToolchainVersionsMeetRequirements(versionOutput)
   } catch (err) {
-    if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
-      throw err
-    }
-    throwIfAborted(options)
+    rethrowUnlessAnsweredMiss(err, options)
     return false
   }
 }
@@ -262,12 +279,12 @@ async function throwNodeNotFound(
   throwIfAborted(options)
   const guidance = await buildPosixNodeInstallGuidance(conn, options)
   throwIfAborted(options)
-  throw new Error(guidance)
+  throw new RemoteNodeNotFoundError(guidance)
 }
 
 function throwWindowsNodeNotFound(options?: RemoteNodeResolutionOptions): never {
   throwIfAborted(options)
-  throw new Error(
+  throw new RemoteNodeNotFoundError(
     [
       'Node.js not found on remote host. Orca relay requires Node.js 18+ and npm.',
       '',
@@ -290,31 +307,4 @@ export function throwIfAborted(options?: RemoteNodeResolutionOptions): void {
   if (options?.signal?.aborted) {
     throw createSshOperationAbortError()
   }
-}
-
-function signalOnlyOptions(
-  options?: RemoteNodeResolutionOptions
-): { signal: AbortSignal } | undefined {
-  return options?.signal ? { signal: options.signal } : undefined
-}
-
-type RemoteExecOptions = {
-  wrapCommand?: boolean
-  timeoutMs?: number
-  signal?: AbortSignal
-}
-
-export function commandOptions(
-  base: RemoteExecOptions,
-  options?: RemoteNodeResolutionOptions
-): RemoteExecOptions {
-  return options?.signal ? { ...base, signal: options.signal } : base
-}
-
-async function execCommandWithOptionalOptions(
-  conn: SshConnection,
-  command: string,
-  options?: { signal: AbortSignal }
-): Promise<string> {
-  return options ? execCommand(conn, command, options) : execCommand(conn, command)
 }

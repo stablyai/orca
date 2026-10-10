@@ -1,15 +1,11 @@
-// A composer's chips still on their way (a save, an upload, a server's answer), per pane scope,
-// owned here rather than by the composer. A prompt card unmounts the composer, so anything owed to
-// the message must outlive it: the composer that comes back shows the same chips, Send waits for
-// them, and each settles into the scope's draft whichever composer, if any, is showing. They are
-// never saved with the draft, so a restored draft cannot bring back an upload as if it were
-// attached. Every chip dies with its operation: settled or dropped when the save or upload settles
-// (each bounded by its call timeout), removed by the user, or dropped with the drafts of a tab or
-// workspace the user closed or removed, so none settles into a draft nothing could find or delete.
+// Pending operations belong to draft scopes and outlive their composers. They are not persisted.
+// Completion, failure, explicit removal, draft/workspace deletion or renderer exit ends ownership.
 
 import { useCallback, useSyncExternalStore } from 'react'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import type { NativeChatComposerDraftOwner } from './native-chat-composer-draft-storage'
+import { appendNativeChatDraftCache } from './native-chat-draft-cache'
+import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
 import {
   appendToNativeChatComposerDraft,
   nativeChatDraftScopeTabId,
@@ -115,17 +111,23 @@ export function settleNativeChatPendingAttachment(
   return true
 }
 
-/** Shows a pending chip that was held out of sight, such as while a server was asked first. */
-export function revealNativeChatPendingAttachment(scopeKey: string, id: string): void {
-  const current = nativeChatPendingAttachmentSnapshot(scopeKey)
-  if (current.some((attachment) => attachment.id === id && attachment.hidden)) {
-    writePending(
-      scopeKey,
-      current.map((attachment) => {
-        const { hidden: _hidden, ...shown } = attachment
-        return attachment.id === id ? shown : attachment
-      })
-    )
+/** File results settle only while their operation still belongs to this draft. */
+export function settleNativeChatPendingAttachmentReferences(
+  scopeKey: string,
+  references: { id: string; path: string }[],
+  insertAtCaret?: (paths: string[]) => void
+): void {
+  const owner = pendingOwners.get(scopeKey)
+  const paths = references.flatMap(({ id, path }) =>
+    takeNativeChatPendingAttachment(scopeKey, id) ? [path] : []
+  )
+  if (paths.length === 0) {
+    return
+  }
+  if (insertAtCaret) {
+    insertAtCaret(paths)
+  } else {
+    appendNativeChatDraftCache(scopeKey, paths.map(formatNativeChatFileReference).join(' '), owner)
   }
 }
 

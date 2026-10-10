@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { getConnectionId } from '@/lib/connection-context'
-import { clearIpynbOutputs, updateIpynbCellRun, withIpynbCellIds } from './ipynb-cell-mutations'
+import { clearIpynbOutputs, updateIpynbCellRuns, withIpynbCellIds } from './ipynb-cell-mutations'
 import { toStoredOutputs } from './ipynb-kernel-outputs'
 import {
   forgetFinishedRuns,
@@ -48,18 +48,23 @@ export function useIpynbCellExecution({
     let nextContent = latestContent
     try {
       const cells = parseIpynb(latestContent).cells
+      const updates: {
+        index: number
+        outputs: Record<string, unknown>[]
+        executionCount: number | null
+      }[] = []
       for (const key of uncommittedRunKeys) {
         const run = getCellRun(filePath, key)
         const index = cells.findIndex((cell, cellIndex) => getIpynbCellKey(cell, cellIndex) === key)
         if (run && index !== -1) {
-          nextContent = updateIpynbCellRun(
-            nextContent,
+          updates.push({
             index,
-            toStoredOutputs(run.outputs),
-            run.executionCount
-          )
+            outputs: toStoredOutputs(run.outputs),
+            executionCount: run.executionCount
+          })
         }
       }
+      nextContent = updateIpynbCellRuns(latestContent, updates)
     } catch {
       // An unparseable document has no cells to take outputs; drop them.
     }

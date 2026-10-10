@@ -247,8 +247,7 @@ describe('AppearancePane', () => {
   it('keeps chat appearance controls out of the Appearance pane', async () => {
     mocks.state.settingsSearchQuery = ''
     const container = await renderAppearancePane({
-      ...getDefaultSettings('/tmp'),
-      experimentalStructuredNativeChat: true
+      ...getDefaultSettings('/tmp')
     })
     expect(appearanceSectionToggle(container, 'chat')).toBeUndefined()
     expect(container.textContent).not.toContain('Reset chat appearance')

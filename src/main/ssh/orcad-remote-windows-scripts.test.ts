@@ -5,11 +5,12 @@
  * every platform. The process-tree addon is faked by a preload that loads `*.node` as a table of
  * creation times, so the identity rules run for real without Windows.
  */
+import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { runProcess, spawnProcess } from '../../shared/child-process/run-process'
+import { runProcess, spawnProcess } from '@orca/process-host'
 import { ORCAD_WINDOWS_PROCESS_TREE_FILENAME } from '../../shared/orcad-artifacts'
 import { ORCAD_STOP_REQUEST_FILENAME } from '../../shared/orcad-stop-request'
 import { ORCAD_WINDOWS_PROCESS_FILENAME } from './orcad-remote-host-support'
@@ -22,6 +23,7 @@ import {
   ORCAD_WINDOWS_HOST_SCRIPT,
   ORCAD_WINDOWS_READINESS_MARKER,
   ORCAD_WINDOWS_RUNTIME_MARKER,
+  ORCAD_WINDOWS_ENTRY_MARKER,
   type OrcadWindowsHostOp
 } from './orcad-windows-host-script'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
@@ -317,6 +319,14 @@ describe('Windows slot runtime and file removal', () => {
     expect(readOrcadWindowsEncodedAnswer(plain.stdout, ORCAD_WINDOWS_RUNTIME_MARKER)).toBe(
       join(dir, 'runtimes', `node-${sha}`, 'node.exe')
     )
+    expect(readOrcadWindowsEncodedAnswer(plain.stdout, ORCAD_WINDOWS_ENTRY_MARKER)).toBe(
+      join(slot(), 'orcad.js')
+    )
+    writeFileSync(join(slot(), 'orcad-server.js'), '')
+    const split = await runOp('slot-runtime', [slot()], false)
+    expect(readOrcadWindowsEncodedAnswer(split.stdout, ORCAD_WINDOWS_ENTRY_MARKER)).toBe(
+      join(slot(), 'orcad-server.js')
+    )
     expect(existsSync(join(slot(), ORCAD_STOP_REQUEST_FILENAME))).toBe(true)
     await runOp('slot-runtime', [slot(), 'clear-stop-request'], false)
     expect(existsSync(join(slot(), ORCAD_STOP_REQUEST_FILENAME))).toBe(false)
@@ -344,4 +354,18 @@ describe('Windows slot runtime and file removal', () => {
 
 it('decodes nothing from output that lacks the marker', () => {
   expect(readOrcadWindowsEncodedAnswer('noise\r\n', ORCAD_WINDOWS_READINESS_MARKER)).toBeNull()
+})
+
+describe('Windows installed build identity', () => {
+  it.each([false, true])('matches the server hash for split entry %s', async (splitEntry) => {
+    const launcher = join(dir, 'orcad.js')
+    writeFileSync(launcher, 'launcher\n')
+    if (splitEntry) {
+      writeFileSync(join(dir, 'orcad-server.js'), 'server\n')
+    }
+    const result = await runOp('build-hash', [launcher], false)
+    expect(result.code).toBe(0)
+    const legacyHash = createHash('sha256').update('launcher\n').digest('hex').slice(0, 16)
+    expect(result.stdout.trim()).toBe(`__ORCAD_BUILD_HASH__ ${legacyHash}`)
+  })
 })

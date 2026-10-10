@@ -99,7 +99,7 @@ export function decidedEvent(
 }
 
 /** A classified code for a thrown setup failure; null when it carries none. */
-export function hostServerFailureCode(error: unknown): string | null {
+function hostServerFailureCode(error: unknown): string | null {
   const unavailable = classifyOrcadHostUnavailable(error)
   if (unavailable) {
     return unavailable

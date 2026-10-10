@@ -1,3 +1,4 @@
+import { isAgentSessionProviderContextBoundary } from '../../../src/shared/agent-session-provider-context'
 import { MobileSelectableText as Text } from '../components/MobileSelectableText'
 import { memo, useCallback, useContext, useState } from 'react'
 import { Image, Text as NativeText, View } from 'react-native'
@@ -57,6 +58,18 @@ function Prose({
   onLongPress?: () => void
 }): React.JSX.Element | null {
   if (isTextBlock(block)) {
+    if (isAgentSessionProviderContextBoundary(block.contextClear)) {
+      return (
+        <View style={styles.contextBoundary}>
+          <Text
+            selectable={INLINE_TEXT_SELECTION}
+            style={[styles.hostNotice, { fontSize: TEXT_SIZE * fontScale }]}
+          >
+            {block.text}
+          </Text>
+        </View>
+      )
+    }
     if (isAgentSessionHostStatusPresentation(block.presentation)) {
       return (
         <Text

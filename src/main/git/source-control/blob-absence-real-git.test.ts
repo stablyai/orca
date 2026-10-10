@@ -1,7 +1,7 @@
 import { readFile, unlink, utimes, writeFile } from 'node:fs/promises'
 import * as path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { runProcess } from '../../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { gitCommit, gitInit, type MockDispatcher } from '../../../relay/git-handler-test-setup'
 import {
   createGitHandlerRelay,

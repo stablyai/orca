@@ -3,6 +3,9 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
+import { summarizeWorkspaceReviewChecks } from '../../../../shared/workspace-review-checks'
+import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachment-normalization'
+import { referenceAttachment, referenceReview } from './workspace-reference-fixtures.test-support'
 
 const mocks = vi.hoisted(() => ({
   status: 'active',
@@ -45,6 +48,79 @@ describe('WorktreeCardStatusSlot', () => {
     state: 'open',
     status: 'pending'
   }
+
+  it('uses checks from every attached review rather than the legacy passing review', () => {
+    const items = [referenceAttachment(1), referenceAttachment(2)]
+    const details = Object.fromEntries(
+      items.map((item) => [
+        getWorkspaceAttachmentKey(item),
+        {
+          review: referenceReview(item.number, {
+            status: item.number === 1 ? 'success' : 'failure'
+          })
+        }
+      ])
+    )
+    const markup = renderToStaticMarkup(
+      <WorktreeCardStatusSlot
+        worktreeId="wt-1"
+        showStatus
+        showUnreadAction={false}
+        isUnread={false}
+        unreadTooltip=""
+        onPointerDown={vi.fn()}
+        onToggleUnread={vi.fn()}
+        newCardStyle
+        prDisplay={{ ...review, status: 'success' }}
+        reviewChecks={summarizeWorkspaceReviewChecks(items, details)}
+      />
+    )
+    expect(markup).toContain('Reviews: 2 · Checks: Failed')
+    expect(markup).toContain('text-rose-500/85')
+    expect(markup).not.toContain('checks: Passing')
+  })
+  it('keeps incomplete collection checks neutral instead of claiming passing', () => {
+    const items = [referenceAttachment(1), referenceAttachment(2)]
+    const markup = renderToStaticMarkup(
+      <WorktreeCardStatusSlot
+        worktreeId="wt-1"
+        showStatus
+        showUnreadAction={false}
+        isUnread={false}
+        unreadTooltip=""
+        onPointerDown={vi.fn()}
+        onToggleUnread={vi.fn()}
+        newCardStyle
+        prDisplay={{ ...review, status: 'success' }}
+        reviewChecks={summarizeWorkspaceReviewChecks(items, {})}
+      />
+    )
+    expect(markup).toContain('Reviews: 2 · Checks: Unknown')
+    expect(markup).toContain('text-muted-foreground')
+    expect(markup).not.toContain('text-emerald-500')
+  })
+  it.each([{ items: [] }, { items: [referenceAttachment(1)] }])(
+    'preserves discovered and singleton review lifecycle glyphs',
+    ({ items }) => {
+      const markup = renderToStaticMarkup(
+        <WorktreeCardStatusSlot
+          worktreeId="wt-1"
+          showStatus
+          showUnreadAction={false}
+          isUnread={false}
+          unreadTooltip=""
+          onPointerDown={vi.fn()}
+          onToggleUnread={vi.fn()}
+          newCardStyle
+          prDisplay={{ ...review, state: 'draft' }}
+          reviewChecks={summarizeWorkspaceReviewChecks(items, {})}
+        />
+      )
+      expect(markup).toContain('PR: Draft')
+      expect(markup).toContain('lucide-git-pull-request-draft')
+      expect(markup).not.toContain('Reviews:')
+    }
+  )
 
   it('lets the unread bell replace the visual status dot by default', () => {
     const markup = renderToStaticMarkup(

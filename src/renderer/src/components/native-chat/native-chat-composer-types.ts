@@ -4,7 +4,10 @@ import type { AgentSessionConversationCommand } from '../../../../shared/agent-s
 import type { StructuredAgentContextUsage } from '../../../../shared/structured-agent-session-context-usage'
 import type { AgentSessionSlashCommand } from '../../../../shared/agent-session-wire'
 import type { AgentType } from '../../../../shared/agent-status-types'
-import type { StructuredAgentSessionCommandOutcome } from '../../../../shared/structured-agent-session-composer'
+import type {
+  StructuredAgentSessionCommandOutcome,
+  StructuredAgentSessionCommandRefusalCause
+} from '../../../../shared/structured-agent-session-composer'
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
@@ -14,6 +17,13 @@ import type { NativeChatComposerImageAttachment } from './NativeChatComposerFiel
 import type { NativeChatAfterStopSend } from './native-chat-composer-target'
 import type { NativeChatLocalCommandAnswer } from './use-native-chat-local-command-answer'
 import type { NativeChatRecallSource } from './native-chat-sent-prompt-history'
+
+export type NativeChatComposerErrorDetail = {
+  /** Error text Orca did not write, shown apart and copyable. */
+  errorText?: string
+  /** A refused command's cause: its line is said only while that still holds. */
+  refusedWhile?: StructuredAgentSessionCommandRefusalCause
+}
 
 export type NativeChatOptionPickerRequest = {
   id: string
@@ -50,8 +60,7 @@ export type NativeChatStructuredComposerTransport = {
   worktreeId?: string
   /** Present only where the host can set this session's goal. */
   threadGoal?: { setObjective: (objective: string) => Promise<boolean> }
-  /** `errorText` is error text Orca did not write, shown apart and copyable. */
-  onError: (message: string | null, errorText?: string) => void
+  onError: (message: string | null, detail?: NativeChatComposerErrorDetail) => void
   /** A local send: brings the latest into view at the press, not when the host answers. */
   onSubmitted?: () => void
   runtime: 'local' | 'remote'
@@ -140,6 +149,11 @@ export type NativeChatLaunchSeed = {
 export type NativeChatComposerHandle = {
   focus: () => boolean
   insertTypedText: (text: string) => boolean
+  /** Whether the input is there and enabled, so text given to it lands. */
+  acceptsText: () => boolean
+  /** Adds text after the draft, a blank line apart, and leaves the caret at its end. Text the
+   *  draft already ends with is not added again. */
+  appendText: (text: string) => void
   /** Routes pane-level paste events back to the composer field. */
   handlePasteEvent: (event: {
     clipboardData: DataTransfer | null

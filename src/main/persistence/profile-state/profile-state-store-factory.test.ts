@@ -303,6 +303,49 @@ describe('profile state Store authority factory', () => {
     })
   })
 
+  it.each([
+    [
+      { experimentalNativeChat: true, openAgentTabsInChatByDefault: true },
+      false,
+      'standard',
+      'chat-ui-on'
+    ],
+    [
+      { experimentalNativeChat: true, openAgentTabsInChatByDefault: false },
+      true,
+      'keep-terminal',
+      'chat-ui-on-terminal-default'
+    ],
+    [
+      { experimentalNativeChat: false, openAgentTabsInChatByDefault: false },
+      true,
+      'none',
+      'chat-ui-off'
+    ]
+  ])(
+    'decides the native chat upgrade tip audience once from the startup snapshot (%o)',
+    (settings, laterChatUi, variant, basis) => {
+      const options = createOptions()
+      writeFileSync(options.dataFile, JSON.stringify({ settings }))
+      const first = createProfileStateStore({ ...options })
+      expect(first.store.getNativeChatUpgradeTipVariant()).toBe(variant)
+
+      // Why: a later Chat UI change must never move a profile into or out of the audience.
+      first.store.updateSettings({ experimentalNativeChat: laterChatUi })
+      first.store.flushOrThrow()
+      rmSync(options.dataFile)
+      const restarted = createProfileStateStore({ ...options })
+
+      expect(restarted.store.getNativeChatUpgradeTipVariant()).toBe(variant)
+      expect(JSON.parse(restarted.store.prepareProfileStateExport().json)).toMatchObject({
+        nativeChatUpgradeTipAudience: {
+          membership: variant === 'none' ? 'excluded' : 'eligible',
+          basis
+        }
+      })
+    }
+  )
+
   it('initializes a valid empty SQLite profile instead of falling back to legacy JSON', () => {
     const options = createOptions()
     const opened = openProfileStateDatabase(options.databaseFile, options.profileId)

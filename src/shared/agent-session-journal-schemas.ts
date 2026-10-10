@@ -251,6 +251,13 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     kind: z.literal('status'),
     text: z.string(),
     presentation: z.string().optional(),
+    contextClear: z
+      .object({
+        operationId: z.string().min(1).max(512),
+        afterFence: z.number().int().nonnegative(),
+        clearedAt: z.number().int().nonnegative()
+      })
+      .optional(),
     tone: z.string().optional(),
     turnLifecycle: z.object(TurnLifecycleFields).optional(),
     providerFrame: ProviderFrame.optional(),

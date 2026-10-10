@@ -164,7 +164,7 @@ export function AgentSessionContinuationDialog({
             <MessageSquarePlus className="size-4" />
             {translate(
               'components.agentSessionContinuation.dialogTitle',
-              'Continue in New Session'
+              'Hand Off to Another Agent'
             )}
           </DialogTitle>
           <DialogDescription className="text-xs">
@@ -200,12 +200,7 @@ export function AgentSessionContinuationDialog({
               agents={agents}
               value={selectedAgent}
               onValueChange={setSelectedAgent}
-              allowBlankTerminal={false}
               allowNarrowTrigger
-              emptyLabel={translate(
-                'components.agentSessionContinuation.selectAgent',
-                'Select an Agent'
-              )}
               triggerClassName="min-w-0 w-full"
             />
             {detecting ? (

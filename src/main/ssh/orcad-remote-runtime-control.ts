@@ -9,6 +9,7 @@ import {
 import {
   readWindowsOrcadLaunchReport,
   readWindowsOrcadSlotRuntime,
+  readWindowsOrcadSlotEntry,
   windowsOrcadLaunchCommand,
   windowsOrcadLaunchRuntimeCommand
 } from './orcad-remote-launch-windows'
@@ -26,7 +27,7 @@ import {
   OrcadFenceLostError,
   posixOrcadFenceGuard
 } from './orcad-activation-fence-scope'
-import { orcadRemoteBaseDir, orcadWindowsHostOpCommand } from './orcad-remote-windows-node'
+import { orcadWindowsHomeOpCommand } from './orcad-remote-windows-node'
 import { ORCAD_WINDOWS_FENCE_ARG } from './orcad-windows-host-fence-ops'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from './ssh-remote-platform'
 
@@ -62,8 +63,7 @@ export async function execOrcadRemote(
     }
     // A host op checks inside the host script; anything else is checked by one op just before it.
     if (!command.includes(ORCAD_WINDOWS_FENCE_ARG) && target.remoteHome) {
-      const baseDir = orcadRemoteBaseDir(target.host, target.remoteHome)
-      await run(orcadWindowsHostOpCommand(target.host, baseDir, 'fence-check', []))
+      await run(orcadWindowsHomeOpCommand(target.host, target.remoteHome, 'fence-check', []))
     }
     return await run(command)
   } catch (error) {
@@ -104,14 +104,17 @@ export async function launchOrcadAndAwaitReadiness(
   spec: OrcadLaunchSpec
 ): Promise<OrcadReadinessParse> {
   if (isWindowsRemoteHost(target.host)) {
-    const slotRuntime = readWindowsOrcadSlotRuntime(
+    const slotAnswer = await execOrcadRemote(
+      target,
+      windowsOrcadLaunchRuntimeCommand(target.host, spec.remoteInstallDir)
+    )
+    const slotRuntime = readWindowsOrcadSlotRuntime(slotAnswer)
+    const slotEntry = readWindowsOrcadSlotEntry(slotAnswer, target.host, spec.remoteInstallDir)
+    readWindowsOrcadLaunchReport(
       await execOrcadRemote(
         target,
-        windowsOrcadLaunchRuntimeCommand(target.host, spec.remoteInstallDir)
+        windowsOrcadLaunchCommand(target.host, spec, slotRuntime, slotEntry)
       )
-    )
-    readWindowsOrcadLaunchReport(
-      await execOrcadRemote(target, windowsOrcadLaunchCommand(target.host, spec, slotRuntime))
     )
   } else {
     await execOrcadRemote(target, orcadLaunchCommand(target.host, spec))
@@ -134,7 +137,11 @@ export async function launchOrcadAndAwaitReadiness(
         orcadReadinessWaitCommand(target.host, spec.remoteInstallDir, waitSeconds)
       )
     } catch (error) {
-      if (isUnconfirmedSshCommandTermination(error) || error instanceof OrcadFenceLostError) {
+      if (
+        (error instanceof Error && error.name === 'AbortError') ||
+        isUnconfirmedSshCommandTermination(error) ||
+        error instanceof OrcadFenceLostError
+      ) {
         throw error
       }
       // Why retry: a failed read (a refused channel, a timed-out wait) says nothing about the
@@ -144,6 +151,7 @@ export async function launchOrcadAndAwaitReadiness(
       await sleep(READINESS_RETRY_PAUSE_MS)
       continue
     }
+    target.signal?.throwIfAborted()
     lastWaitError = undefined
     last = parseOrcadReadinessWaitOutput(target.host, output)
     if (last.state !== 'pending') {

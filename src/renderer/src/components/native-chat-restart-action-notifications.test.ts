@@ -19,17 +19,18 @@ function titles(): unknown[] {
   return vi.mocked(toast).mock.calls.map(([text]) => text)
 }
 
-it('says how many chats were resumed', () => {
+it.each([true, false])('offers Show for successful chats with a failure list: %s', (listed) => {
   announceRestartResults(
     ['a', 'b'],
     [
       { sessionId: 'a', outcome: 'continued' },
       { sessionId: 'b', outcome: 'continued' }
     ],
-    [],
+    listed ? [] : undefined,
     show
   )
-  expect(vi.mocked(toast).mock.calls).toEqual([['Resumed 2 chats']])
+  expect(titles()).toEqual(['Resumed 2 chats'])
+  expect(lastToastShow()).toBeDefined()
 })
 
 it('offers Show for chats a resume could not carry on', () => {

@@ -18,10 +18,10 @@ import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import type { Tab } from '../../../shared/tab-types'
 import {
   applyFreshWebSessionTabsSnapshot,
-  applyWebSessionTabsSnapshot,
-  resetWebSessionTabsSnapshotFreshnessForTests,
-  type WebSessionTabsSyncState
-} from './web-session-tabs-sync'
+  applyWebSessionTabsSnapshot
+} from './web-session-tabs-sync/snapshot-api'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import {
   recordWebSessionFocusIntent,
   resetWebSessionFocusIntentForTests

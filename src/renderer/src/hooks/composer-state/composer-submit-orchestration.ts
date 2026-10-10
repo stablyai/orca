@@ -21,7 +21,6 @@ export function useComposerSubmitOrchestration(
     disabledTuiAgents: target.workspaceIdentityState.disabledTuiAgents,
     folderCreateDisabled: source.composerNavigationActions.folderCreateDisabled,
     folderSourceRepos: target.runtimeTargetSelection.folderSourceRepos,
-    folderTargetConnectionId: target.runtimeTargetSelection.folderTargetConnectionId,
     folderTargetIsRemote: target.runtimeTargetSelection.folderTargetIsRemote,
     folderTargetRuntimeEnvironmentId:
       target.runtimeTargetSelection.folderTargetRuntimeEnvironmentId,

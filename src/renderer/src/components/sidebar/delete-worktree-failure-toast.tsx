@@ -3,6 +3,7 @@ import { Button } from '../ui/button'
 import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
 import { translate } from '@/i18n/i18n'
 import { DeleteNestedWorktreesDialog } from './DeleteNestedWorktreesDialog'
+import { WorktreeForceDeleteButton } from './WorktreeForceDeleteButton'
 import { isNestedWorktreeRemovalError } from '../../../../shared/worktree/nested-removal'
 import {
   isLockedWorktreeRemovalError,
@@ -20,6 +21,7 @@ type DeleteWorktreeFailureToastOptions = {
   canWaiveArchiveHook?: boolean
   onViewChanges: () => void
   onForceDelete: () => void
+  onAlwaysForceDelete?: () => Promise<void>
   onDeleteAnyway: () => void
   worktreeId: string
   worktreeName: string
@@ -38,6 +40,7 @@ function DeleteWorktreeFailureToastBody({
   showViewChanges,
   onViewChanges,
   onForceDelete,
+  onAlwaysForceDelete,
   onDeleteAnyway,
   toastId,
   nestedRemovalTarget,
@@ -50,6 +53,7 @@ function DeleteWorktreeFailureToastBody({
   showViewChanges: boolean
   onViewChanges: () => void
   onForceDelete: () => void
+  onAlwaysForceDelete?: () => Promise<void>
   onDeleteAnyway: () => void
   toastId: string
   nestedRemovalTarget?: WorktreeRemovalTarget
@@ -59,10 +63,6 @@ function DeleteWorktreeFailureToastBody({
   const viewChanges = (): void => {
     toast.dismiss(toastId)
     onViewChanges()
-  }
-  const forceDelete = (): void => {
-    toast.dismiss(toastId)
-    onForceDelete()
   }
   const deleteAnyway = (): void => {
     toast.dismiss(toastId)
@@ -89,9 +89,11 @@ function DeleteWorktreeFailureToastBody({
           />
         ) : null}
         {canForceDelete ? (
-          <Button type="button" variant="destructive" size="sm" onClick={forceDelete}>
-            {translate('auto.components.sidebar.delete.worktree.flow.2b20ce87b3', 'Force Delete')}
-          </Button>
+          <WorktreeForceDeleteButton
+            toastId={toastId}
+            onForceDelete={onForceDelete}
+            onAlwaysForceDelete={onAlwaysForceDelete}
+          />
         ) : null}
         {canWaiveArchiveHook ? (
           <Button type="button" variant="destructive" size="sm" onClick={deleteAnyway}>
@@ -115,6 +117,7 @@ export function showDeleteWorktreeFailureToast({
   canWaiveArchiveHook,
   onViewChanges,
   onForceDelete,
+  onAlwaysForceDelete,
   onDeleteAnyway,
   worktreeId,
   worktreeName,
@@ -146,6 +149,7 @@ export function showDeleteWorktreeFailureToast({
         showViewChanges={!isLockedWorktreeRemovalError(error) || hasKnownChanges === true}
         onViewChanges={onViewChanges}
         onForceDelete={onForceDelete}
+        onAlwaysForceDelete={onAlwaysForceDelete}
         onDeleteAnyway={onDeleteAnyway}
         toastId={id}
         nestedRemovalTarget={nestedTarget}

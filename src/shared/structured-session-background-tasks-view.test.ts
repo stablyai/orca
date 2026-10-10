@@ -17,6 +17,49 @@ function view(membership: 'live' | 'settled', kind: AgentChildWorkView['kind'] =
 }
 
 describe('structuredSessionBackgroundTasksView', () => {
+  it('does not mount the strip for a foreground command from an older host', () => {
+    const id = 'codex-command:primary:pwd'
+    const foreground = new Set([id])
+    expect(
+      structuredSessionBackgroundTasksView(
+        { state: 'monitoring', tasks: [{ id, kind: 'command' }] },
+        'turn-1',
+        foreground
+      )
+    ).toMatchObject({ show: false, isMonitoring: false, tasks: [] })
+  })
+
+  it('removes the foreground command from child views and legacy tasks together', () => {
+    const id = 'codex-command:primary:pwd'
+    const shell = { ...view('live', 'command'), providerId: id }
+    const agent = view('live')
+    const tasks = [
+      { id, kind: 'command' as const },
+      { id: 'child-agent', kind: 'agent' as const }
+    ]
+    const shown = structuredSessionBackgroundTasksView(
+      { state: 'monitoring', tasks, children: [shell, agent] },
+      'turn-1',
+      new Set([id])
+    )
+    expect(shown).toMatchObject({ show: true, tasks: [tasks[1]], children: [agent] })
+  })
+
+  it('keeps unrelated rosters and commands from earlier turns during the current turn', () => {
+    const tasks = [
+      { id: 'codex-command:primary:server', kind: 'command' as const },
+      { id: 'claude-shell', kind: 'command' as const },
+      { id: 'codex-command:thread:child:pwd', kind: 'command' as const }
+    ]
+    const shown = structuredSessionBackgroundTasksView(
+      { state: 'monitoring', tasks },
+      'turn-2',
+      new Set(['codex-command:primary:pwd'])
+    )
+    expect(shown.show).toBe(true)
+    expect(shown.tasks).toBe(tasks)
+  })
+
   it('shows finished children until the next turn, but they hold nothing open', () => {
     const finished = structuredSessionBackgroundTasksView(
       { state: 'monitoring', children: [view('settled')] },

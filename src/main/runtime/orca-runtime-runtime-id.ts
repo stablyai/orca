@@ -1,8 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { randomUUID } from 'node:crypto'
 import { preserveTerminalRetirementProofs } from './mobile-session-terminal-retirement-proof'
-import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
-import { replaceConversationInSnapshot } from './structured-conversation-tab-replacement'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -107,9 +105,6 @@ export class OrcaRuntimeWithRuntimeId {
     worktreeId: string,
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsSnapshot {
-    for (const replacement of getStructuredAgentSessionHost()?.conversationReplacements?.() ?? []) {
-      snapshot = replaceConversationInSnapshot(snapshot, replacement)
-    }
     const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
     snapshot = preserveTerminalRetirementProofs(snapshot, existing)
     const snapshotVersion = existing

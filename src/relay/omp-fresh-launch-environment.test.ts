@@ -1,4 +1,4 @@
-import { runProcess } from '../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { getPosixOmpShellWrapper } from '../main/pty/omp-shell-wrapper'
 import { mkdtempSync, readFileSync, rmSync, existsSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

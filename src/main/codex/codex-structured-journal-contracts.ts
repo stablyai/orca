@@ -1,4 +1,5 @@
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import type { CodexDispatchRequestOrigin } from './codex-structured-dispatch-echo'
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
@@ -20,6 +21,7 @@ export type CodexActiveJournalItem = {
 }
 
 export type CodexJournalTranslatorDeps = {
+  account?: () => AgentSessionAccountKind | undefined
   sink: StructuredAgentSessionEventSink
   /** Names this connection in frame-row identities, so a later connection never revises its rows. */
   acquisitionId?: string

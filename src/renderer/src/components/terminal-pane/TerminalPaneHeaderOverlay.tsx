@@ -235,8 +235,8 @@ export default function TerminalPaneHeaderOverlay({
                           size="icon-xs"
                           className="pane-title-split-trigger"
                           aria-label={translate(
-                            'components.agentSessionContinuation.continueInNewSession',
-                            'Continue in New Session…'
+                            'components.agentSessionContinuation.handOffToAnotherAgent',
+                            'Hand Off to Another Agent'
                           )}
                           onClick={(event) => {
                             event.stopPropagation()
@@ -248,8 +248,8 @@ export default function TerminalPaneHeaderOverlay({
                       </TooltipTrigger>
                       <TooltipContent side="bottom" sideOffset={4}>
                         {translate(
-                          'components.agentSessionContinuation.continueInNewSession',
-                          'Continue in New Session…'
+                          'components.agentSessionContinuation.handOffToAnotherAgent',
+                          'Hand Off to Another Agent'
                         )}
                       </TooltipContent>
                     </Tooltip>

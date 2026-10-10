@@ -86,12 +86,6 @@ export function registerRepoCatalogHandlers(mainWindow: BrowserWindow, store: St
     }
   )
 
-  ipcMain.handle('repos:remove', async (_event, args: { repoId: string }) => {
-    store.removeProject(args.repoId)
-    invalidateAuthorizedRootsCache()
-    notifyReposChanged(mainWindow)
-  })
-
   // Why: forget a project on one execution host without disturbing the same repo id on other hosts (SSH-workspace forget flow).
   ipcMain.handle(
     'repos:removeForHost',

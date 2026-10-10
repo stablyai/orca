@@ -7,6 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import { AgentLaunch, AgentLaunchFields } from './agent-launch-params'
 
 const BASE = { agent: 'claude', target: { kind: 'existing', worktree: 'wt-1' } }
@@ -74,6 +75,19 @@ describe('agent.launch params', () => {
       success: true,
       data: { presentation: undefined }
     })
+  })
+
+  it('has a host from before folder creates refuse that target rather than misread it', () => {
+    const [existing, createWorktree] = AgentLaunchFields.shape.target.options
+    const olderHost = AgentLaunchFields.extend({
+      target: z.discriminatedUnion('kind', [existing, createWorktree])
+    })
+    expect(
+      olderHost.safeParse({
+        ...BASE,
+        target: { kind: 'create-folder-workspace', create: { projectGroupId: 'group-1' } }
+      }).success
+    ).toBe(false)
   })
 
   it('lets a host from before placement drop it rather than refuse the launch', () => {

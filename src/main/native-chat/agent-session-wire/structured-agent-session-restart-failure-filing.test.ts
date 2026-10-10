@@ -11,7 +11,7 @@ import {
   QUIT_CUT_NOTICE,
   readerNotes,
   statusNotes,
-  throwAfterContinuationAccepted
+  continuationCannotFold
 } from './structured-agent-session-restart-interruption-test-harness'
 import { CALLER, envelope } from './structured-agent-session-host-test-harness'
 import {
@@ -88,13 +88,13 @@ it("keeps the quit's notice through a continuation that carries the chat on", as
   ])
 })
 
-// A send that throws after Orca may have taken it cannot be proven undelivered: filed unconfirmed,
+// A message Orca took but cannot read back cannot be proven undelivered: filed unconfirmed,
 // and it stays on record while the agent that may be carrying on keeps running.
 it('keeps an unconfirmed failure while the agent the continuation started keeps running', async () => {
   const { host } = await interruptedRestart()
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   await host.restartResume.list()
-  throwAfterContinuationAccepted()
+  continuationCannotFold()
 
   const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
 

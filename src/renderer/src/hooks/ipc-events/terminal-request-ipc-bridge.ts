@@ -1,7 +1,4 @@
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
-import { getConnectionIdFromState } from '@/lib/connection-context'
-import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { insertUnifiedTabAfterAnchor } from '@/lib/unified-tab-anchor-insertion'
 import { translate } from '@/i18n/i18n'
@@ -56,14 +53,7 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
           ? {
               ...(shouldActivate ? {} : { activate: false, recordInteraction: false }),
               launchAgent: data.launchAgent,
-              ...(data.viewMode
-                ? { viewMode: data.viewMode }
-                : initialAgentTabViewModeProps(store.settings, {
-                    agent: data.launchAgent,
-                    nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-                      getConnectionIdFromState(store, worktreeId)
-                    )
-                  })),
+              ...(data.viewMode ? { viewMode: data.viewMode } : {}),
               ...(data.cwd ? { startupCwd: data.cwd } : {})
             }
           : shouldActivate

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChildProcess } from 'node:child_process'
 import type * as ChildProcessModule from 'node:child_process'
-import { createFakeSpawnedChild } from '../shared/child-process/__fixtures__/fake-spawned-child'
+import { createFakeSpawnedChild } from '../shared/__fixtures__/fake-spawned-child'
 import { GitAdmissionScheduler } from '../shared/git-admission-scheduler'
 import { createGitHandlerRelay } from './git-handler-test-harness'
 import { _resetRelayGitAdmissionForTests } from './git-handler-command-termination'
@@ -15,7 +15,7 @@ vi.mock('node:child_process', async (importOriginal) => ({
   ...(await importOriginal<typeof ChildProcessModule>()),
   spawn
 }))
-vi.mock('../shared/child-process/process-tree-termination', () => ({
+vi.mock('@orca/process-host/process-tree-termination', () => ({
   signalProcessTree: signalTree,
   forceTerminateProcessTree: forceTree
 }))

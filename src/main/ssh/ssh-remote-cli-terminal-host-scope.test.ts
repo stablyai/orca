@@ -13,6 +13,7 @@ vi.mock('../persistence', () => ({
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { HostCliPassthroughOptions } from './ssh-remote-cli-host-passthrough'
 import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
+import { CONTROL_GRANTED_SSH_BRIDGE_SCOPE } from './ssh-bridge-caller-scope.test-fixture'
 
 // Why: a missing CLI entry forces the legacy in-process bridge, the transport
 // an SSH-hosted agent actually reaches `terminal list` through.
@@ -51,7 +52,12 @@ describe('remote CLI bridge terminal list', () => {
 
     const result = await runRemoteOrcaCli(
       runtime,
-      { argv: ['terminal', 'list', '--json'], cwd: '/home/alice/repo', env: {} },
+      {
+        callerScope: CONTROL_GRANTED_SSH_BRIDGE_SCOPE,
+        argv: ['terminal', 'list', '--json'],
+        cwd: '/home/alice/repo',
+        env: {}
+      },
       LEGACY_FALLBACK_OPTIONS
     )
 

@@ -178,6 +178,10 @@
       "reason": "The catch-all's native body mounts the shell, and the page is what that shell displays; nesting one here would open a second document inside the first, and the shell module calls requireNativeViewManager at import, which throws in a browser."
     },
     {
+      "file": "src/mobile-web-shell/page-owns-host-area.web.ts",
+      "reason": "Natively there is no `init` and the shell layout decides who draws the host sidebar. Inside the page the only answer is the `ownsHostArea` init fact, never the page's own width, because a detail-route page on a wide iPad sits beside the shell's sidebar."
+    },
+    {
       "file": "src/session/use-notification-pane-navigation.web.ts",
       "reason": "The native hook reads `paneKey` off the app's route with `useLocalSearchParams` and clears it with `setParams`. Inside the page neither exists: the document is served at `/` with one history entry, so `setParams` would rewrite the page's own URL while the app's route kept the spent tap, and the pane request never reaches the page as a param at all. It arrives as a re-sent `init` for the session this page already holds (ruling 33.1), which this sibling reads off the client's standing route-update listener; the shell clears the native param once the page has been handed one."
     },

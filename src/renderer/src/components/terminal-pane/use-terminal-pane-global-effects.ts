@@ -1,3 +1,4 @@
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { useEffect, useRef } from 'react'
 import {
   FOCUS_TERMINAL_PANE_EVENT,
@@ -52,7 +53,7 @@ function reportRendererPtyVisibility(
 ): void {
   for (const transport of paneTransports.values()) {
     const ptyId = transport.getPtyId()
-    if (!ptyId || ptyId.startsWith('remote:')) {
+    if (!ptyId || isRemoteRuntimePtyId(ptyId)) {
       // Why: remote-runtime PTYs use a relay path outside main's local
       // renderer-visibility registry, so reporting them here is misleading.
       continue
@@ -190,7 +191,7 @@ export function useTerminalPaneGlobalEffects({
 
   useEffect(() => {
     const ptyId = isActive && isVisible && isWorktreeActive ? activeLeafPtyId : null
-    if (!ptyId || ptyId.startsWith('remote:')) {
+    if (!ptyId || isRemoteRuntimePtyId(ptyId)) {
       return
     }
     // Why: main uses this as a scheduler hint only, so the foreground pane's

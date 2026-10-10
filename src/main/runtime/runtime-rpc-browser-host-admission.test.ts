@@ -32,6 +32,7 @@ describe('runtime RPC browser-host admission', () => {
     const blockingMethod = (name: 'browser.clientHost.attach' | 'terminal.wait') =>
       defineStreamingMethod({
         name,
+        permission: 'workspace',
         params: null,
         handler: async (_params, { signal }) => {
           await new Promise<void>((resolve) => {
@@ -102,6 +103,7 @@ describe('runtime RPC browser-host admission', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-browser-host-fairness-'))
     const blockingHost = defineStreamingMethod({
       name: 'browser.clientHost.attach',
+      permission: 'workspace',
       params: null,
       handler: async (_params, { signal }) =>
         await new Promise<void>((resolve) => signal?.addEventListener('abort', () => resolve()))
@@ -195,6 +197,7 @@ describe('runtime RPC browser-host admission', () => {
     ) =>
       defineStreamingMethod({
         name,
+        permission: 'workspace',
         params: null,
         handler: async (_params, { signal }) =>
           await new Promise<void>((resolve) => signal?.addEventListener('abort', () => resolve()))

@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parse } from 'yaml'
 import { peImage } from './windows-pe-image-fixture.mjs'
 import { canReusePreparedRelayAddon } from './relay-windows-process-tree-prepared-addon.mjs'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 
 const directories = []
 afterEach(() => {

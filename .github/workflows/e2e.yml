@@ -342,13 +342,28 @@ jobs:
               . != "tests/e2e/terminal-retention-budget.spec.ts" and
               . != "tests/e2e/ssh-startup-exec-readiness.spec.ts" and
               . != "tests/e2e/paired-startup-exec-readiness.spec.ts" and
+              . != "tests/e2e/workspace-layout-oracle-ssh.spec.ts" and
               . != "tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts" and
               . != "tests/e2e/ssh-localhost.spec.ts" and
               . != "tests/e2e/terminal-ibus-hangul-native.spec.ts" and
               . != "tests/e2e/orcad-serve-mode-switch.spec.ts" and
+              . != "tests/e2e/workspace-layout-oracle-headless.spec.ts" and
               . != "tests/e2e/ssh-orcad-auto-convert.spec.ts" and
               . != "tests/e2e/windows-missing-appdata-startup.spec.ts" and
-              . != "tests/e2e/ssh-orcad-idle-exit.spec.ts"
+              . != "tests/e2e/ssh-orcad-idle-exit.spec.ts" and
+              . != "tests/e2e/ssh-orcad-browser-capabilities.spec.ts" and
+              . != "tests/e2e/ssh-orcad-browser-service-status.spec.ts" and
+              . != "tests/e2e/ssh-orcad-browser-routing.spec.ts" and
+              . != "tests/e2e/ssh-orcad-editor-ownership.spec.ts" and
+              . != "tests/e2e/ssh-orcad-markdown-conversion.spec.ts" and
+              . != "tests/e2e/ssh-orcad-markdown-link-refresh.spec.ts" and
+              . != "tests/e2e/ssh-orcad-markdown-live-documents.spec.ts" and
+              . != "tests/e2e/ssh-orcad-open-in-owner.spec.ts" and
+              . != "tests/e2e/ssh-orcad-editor-watch-recovery.spec.ts" and
+              . != "tests/e2e/ssh-orcad-explorer-watch-recovery.spec.ts" and
+              . != "tests/e2e/ssh-orcad-explorer-selected-host.spec.ts" and
+              . != "tests/e2e/ssh-orcad-browser-drop-owner.spec.ts" and
+              . != "tests/e2e/ssh-orcad-terminal-root-owner.spec.ts"
             )' <<<"$TEST_FILES_JSON" > "$RUNNER_TEMP/general-e2e-specs"
           fi
           mapfile -t TEST_FILES < "$RUNNER_TEMP/general-e2e-specs"
@@ -417,7 +432,8 @@ jobs:
       contains(inputs.test_files, 'tests/e2e/ssh-terminal-parking.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/terminal-retention-budget.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/ssh-startup-exec-readiness.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/paired-startup-exec-readiness.spec.ts')
+      contains(inputs.test_files, 'tests/e2e/paired-startup-exec-readiness.spec.ts') ||
+      contains(inputs.test_files, 'tests/e2e/workspace-layout-oracle-ssh.spec.ts')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -520,9 +536,12 @@ jobs:
   orcad-serve-mode-switch:
     name: orca serve Electron/orcad mode switch (D7)
     needs: [build, prepare-native-cache]
-    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts')
+    if: >-
+      inputs.test_files == '' ||
+      contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts') ||
+      contains(inputs.test_files, 'tests/e2e/workspace-layout-oracle-headless.spec.ts')
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
     steps:
@@ -549,11 +568,21 @@ jobs:
           pnpm build:orcad
           node config/scripts/build-orcad-template.mjs --targets "$slot"
       - name: Switch serve hosts on one profile
+        if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts')
         env:
           SKIP_BUILD: '1'
           ORCA_E2E_ORCAD_SERVE: '1'
           ORCA_E2E_FORWARD_APP_LOGS: '1'
         run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/orcad-serve-mode-switch.spec.ts --project=electron-headless --workers=1
+      # The layout oracle's headless scenarios run on both serve hosts, so they need this job's orcad.
+      - name: Layout oracle on headless serve (orcad and Electron)
+        if: >-
+          !cancelled() &&
+          (inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/workspace-layout-oracle-headless.spec.ts'))
+        env:
+          SKIP_BUILD: '1'
+          ORCA_E2E_FORWARD_APP_LOGS: '1'
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/workspace-layout-oracle-headless.spec.ts --project=electron-headless --workers=1
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
@@ -568,7 +597,7 @@ jobs:
   orcad-auto-convert-docker:
     name: ssh host auto-converts to managed orcad (Docker)
     needs: [build, prepare-native-cache]
-    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/ssh-orcad-auto-convert.spec.ts') || contains(inputs.test_files, 'tests/e2e/ssh-orcad-idle-exit.spec.ts')
+    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/ssh-orcad-auto-convert.spec.ts') || contains(inputs.test_files, 'tests/e2e/ssh-orcad-idle-exit.spec.ts') || contains(inputs.test_files, 'tests/e2e/ssh-orcad-browser-capabilities.spec.ts') || contains(inputs.test_files, 'tests/e2e/ssh-orcad-browser-service-status.spec.ts') || contains(inputs.test_files, 'tests/e2e/ssh-orcad-browser-routing.spec.ts') || contains(inputs.test_files, 'tests/e2e/ssh-orcad-editor-ownership.spec.ts') || contains(inputs.test_files, 'tests/e2e/ssh-orcad-markdown-conversion.spec.ts') || contains(inputs.test_files, 'tests/e2e/ssh-orcad-markdown-link-refresh.spec.ts') || contains(inputs.test_files, 'tests/e2e/ssh-orcad-markdown-live-documents.spec.ts') || contains(inputs.test_files, 'tests/e2e/ssh-orcad-open-in-owner.spec.ts') || contains(inputs.test_files, 'tests/e2e/ssh-orcad-editor-watch-recovery.spec.ts') || contains(inputs.test_files, 'tests/e2e/ssh-orcad-explorer-watch-recovery.spec.ts') || contains(inputs.test_files, 'tests/e2e/ssh-orcad-explorer-selected-host.spec.ts') || contains(inputs.test_files, 'tests/e2e/ssh-orcad-browser-drop-owner.spec.ts') || contains(inputs.test_files, 'tests/e2e/ssh-orcad-terminal-root-owner.spec.ts')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -604,7 +633,7 @@ jobs:
           ORCA_RELAY_PATH: ${{ github.workspace }}/out/relay
         run: |
           export ORCA_E2E_ORCAD_CONVERT_TEMPLATE="$RUNNER_TEMP/orcad-convert-template"
-          xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/ssh-orcad-auto-convert.spec.ts tests/e2e/ssh-orcad-idle-exit.spec.ts --project=electron-headless --workers=1
+          xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/ssh-orcad-auto-convert.spec.ts tests/e2e/ssh-orcad-idle-exit.spec.ts tests/e2e/ssh-orcad-browser-capabilities.spec.ts tests/e2e/ssh-orcad-browser-service-status.spec.ts tests/e2e/ssh-orcad-browser-routing.spec.ts tests/e2e/ssh-orcad-editor-ownership.spec.ts tests/e2e/ssh-orcad-markdown-conversion.spec.ts tests/e2e/ssh-orcad-markdown-link-refresh.spec.ts tests/e2e/ssh-orcad-markdown-live-documents.spec.ts tests/e2e/ssh-orcad-open-in-owner.spec.ts tests/e2e/ssh-orcad-editor-watch-recovery.spec.ts tests/e2e/ssh-orcad-explorer-watch-recovery.spec.ts tests/e2e/ssh-orcad-explorer-selected-host.spec.ts tests/e2e/ssh-orcad-browser-drop-owner.spec.ts tests/e2e/ssh-orcad-terminal-root-owner.spec.ts --project=electron-headless --workers=1
       - uses: actions/upload-artifact@v7
         if: failure()
         with:

@@ -239,11 +239,12 @@ Fix dispatch fallback preview for normalized status prompts`
   })
 
   it('accepts custom non-empty agentType values', () => {
-    const result = parseAgentStatusPayload('{"state":"working","agentType":"cursor"}')
+    const agentType: AgentType = 'some-in-house-agent'
+    const result = parseAgentStatusPayload(JSON.stringify({ state: 'working', agentType }))
     expect(result).toEqual({
       state: 'working',
       prompt: '',
-      agentType: 'cursor'
+      agentType
     })
   })
 
@@ -730,11 +731,6 @@ describe('WellKnownAgentType', () => {
       'unknown',
       'rovo'
     ])
-  })
-
-  it('keeps AgentType open to custom agent names', () => {
-    const custom: AgentType = 'some-in-house-agent'
-    expect(custom).toBe('some-in-house-agent')
   })
 })
 

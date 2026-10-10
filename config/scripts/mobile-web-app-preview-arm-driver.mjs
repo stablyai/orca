@@ -186,7 +186,10 @@ export async function openPreviewArm(
     if (act) {
       // Recorded, never swallowed: a click that never landed and a click that produced no
       // navigation are the same empty counter, and only one of them is the product's doing.
-      await act({ page, frame: previewFrame(page) }).catch((error) => {
+      if (!artifactFrame || artifactFrame.isDetached()) {
+        throw new Error('The loaded preview frame is missing before its action')
+      }
+      await act({ page, frame: artifactFrame }).catch((error) => {
         actError = String(error).split('\n')[0]
       })
     }

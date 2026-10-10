@@ -9,7 +9,7 @@
  */
 import { closeSync, openSync, readSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { quoteWindowsArgument } from './child-process/windows-command-line'
+import { quoteWindowsArgument } from '@orca/process-host/windows-command-line'
 import {
   formatWindowsBreakawayLaunchReport,
   WINDOWS_BREAKAWAY_ENV_FLAG,

@@ -3,10 +3,6 @@ import {
   MAX_PROVIDER_DIAGNOSTIC_CHARS,
   type SubmissionRejectionFact
 } from '../../../shared/agent-session-failure'
-import {
-  agentJournalItemKey,
-  parseAgentJournalItemKey
-} from '../../../shared/agent-session-journal-item-key'
 import { STALE_SESSION_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import {
@@ -14,8 +10,11 @@ import {
   type AgentJournalItemBody,
   type AgentJournalRenderItem
 } from '../../../shared/agent-session-journal-types'
-import { partitionJournalLifecycleMutations } from '../agent-session-journal/journal-lifecycle-batch-partition'
-import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
+import { journalPendingSubmissionResolutions } from '../agent-session-journal/journal-pending-submission-recovery'
+import {
+  journalLifecycleMutationItemId,
+  type JournalLifecycleMutationInput
+} from '../agent-session-journal/journal-row-builders'
 import {
   endedUnseenMessageBody,
   runningCallEnd,
@@ -37,8 +36,9 @@ import {
   provenUnverifiableTurnRevisions,
   provenUnverifiedToolCallRevisions,
   runningTurnLifecycleRevisions,
-  stopFoundTurnLiveAt,
+  lastProvenTurnLiveAt,
   turnVerdictFromDeathEvidence,
+  turnVerdictFromReplacedRuntime,
   watchedExitRevisions,
   type StructuredAgentSessionTurnVerdict,
   type StructuredAgentSessionWatchedExit
@@ -47,13 +47,18 @@ import {
   exitedRootTurnScope,
   settledRootTurnScope
 } from './structured-agent-session-exit-turn-scope'
-import { orcaStopRowBody } from './structured-agent-session-orca-stop-row'
 import {
   hasUnfinishedStructuredAgentSessionWork,
   isInProgressStructuredAgentSessionItem,
   type DeadGenerationJournal
 } from './structured-agent-session-unfinished-work'
-import { withdrawCodexSendsNoTurnOpenedFor } from './structured-agent-session-unopened-send-withdrawal'
+import { codexUnopenedSendResolutions } from './structured-agent-session-unopened-send-withdrawal'
+import type { AgentSessionReplacedRuntime } from '../../runtime/agent-session-replaced-runtime'
+import {
+  isUnverifiableTurn,
+  staleStopRow,
+  type StaleCut
+} from './structured-agent-session-stale-stop-row'
 
 /** Bounds the exit reason the lease keeps as log evidence; a provider diagnostic is held to the
  *  same cap. */
@@ -101,12 +106,18 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
     const closed = input.unrunRejection
     const unrun =
       startupFailure ?? (closed && agentSessionFailureWords(closed, { surface: 'rejection' }))
-    if (!unrun) {
-      await withdrawCodexSendsNoTurnOpenedFor(input.journal, input.fence)
-    }
-    await (unrun
-      ? input.journal.rejectPendingSubmissions(input.fence, unrun)
-      : input.journal.markPendingSubmissionsUnknown(input.fence, input.pendingSubmissionReason))
+    const withdrawn = unrun ? [] : codexUnopenedSendResolutions(input.journal, input.fence)
+    const withdrawnIds = new Set(withdrawn.map((entry) => entry.clientMessageId))
+    const dispatches = [
+      ...withdrawn,
+      ...journalPendingSubmissionResolutions(
+        (input.journal.submissions?.() ?? input.journal.pendingSubmissions?.() ?? []).filter(
+          (entry) => !withdrawnIds.has(entry.clientMessageId)
+        ),
+        input.fence,
+        unrun ? { rejection: unrun } : { reason: input.pendingSubmissionReason }
+      )
+    ]
     const items = input.journal.snapshot().items
     const proven = watchedExitRevisions(items, input.exit, input.journal)
     const mutations: JournalLifecycleMutationInput[] = []
@@ -142,30 +153,27 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
     }
     const bodies = new Map(items.map((item) => [item.itemId, item.body]))
     for (const item of items) {
-      const identity = parseAgentJournalItemKey(item.itemId)
       // Ended as its turn is: a proven death cuts a running call short. An open reasoning row is
       // ended too, but is not unfinished work: its running turn already says so.
       const end = runningCallEnd(item.turnScope, (id) => bodies.get(id), input.verdict.state)
       const body = endedUnseenMessageBody(item.body) ?? terminalAgentJournalBody(item.body, end)
-      if (identity && body) {
+      if (body) {
         mutations.push({
           kind: 'item',
-          identity,
+          itemId: item.itemId,
           body,
           turnScope: item.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
         })
       }
     }
     mutations.push(...runningTurnLifecycleRevisions(items, input.verdict), ...proven)
-    const batchId = `dead-generation:${input.settlementId}`
-    for (const chunk of partitionJournalLifecycleMutations(batchId, mutations)) {
-      await input.journal.appendLifecycleBatch({
-        settlementId: chunk.settlementId,
-        fence: input.fence,
-        recovered: true,
-        mutations: chunk.mutations
-      })
-    }
+    await input.journal.appendLifecycleBatch({
+      settlementId: `dead-generation:${input.settlementId}`,
+      fence: input.fence,
+      recovered: true,
+      mutations,
+      dispatches
+    })
     return { ok: true }
   } catch (error) {
     // Returned rather than logged: each caller logs it under its own scope.
@@ -175,11 +183,11 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
 
 /**
  * Settles whatever a generation with no child in this process left running: found when a new child
- * is acquired, or when a chat is reopened for reading. Derived from the journal and the lease's
- * death evidence each time, so nothing is owed in between. Proven death ends the turn interrupted,
- * and a proof written after an earlier settle revises what that settle left `unverifiable`, the
- * turn and the calls it closed alike. Must run before a new child's buffered events land, or a
- * live turn would be judged.
+ * is acquired, or when a chat is reopened for reading. Derived from the journal, the lease's death
+ * evidence and the runtimes this one replaced each time, so nothing is owed in between. Either proof
+ * ends the turn interrupted, and a proof written after an earlier settle revises what that settle
+ * left `unverifiable`, the turn and the calls it closed alike. Must run before a new child's
+ * buffered events land, or a live turn would be judged.
  */
 export async function settleStaleStructuredAgentSessionState(input: {
   journal: AgentSessionJournal
@@ -187,73 +195,82 @@ export async function settleStaleStructuredAgentSessionState(input: {
   fence: number
   acquisitionGeneration: string | null
   deathEvidence: AgentSessionDeathEvidence | null
+  /** The runtimes this one replaced for this chat: every owner they held lost its pipes with them. */
+  replaced?: AgentSessionReplacedRuntime
   /** Who the exit row names. */
   failureTextContext?: AgentSessionFailureWordsContext
 }): Promise<number> {
-  const { journal } = input
+  const { journal, replaced } = input
   const items = journal.snapshot().items
   // Each turn is judged by the evidence only if it names that turn's owner.
-  const verdictFor = (item: AgentJournalRenderItem) =>
+  const deathVerdictFor = (item: AgentJournalRenderItem) =>
     turnVerdictFromDeathEvidence(
       input.deathEvidence,
       journal.itemFence(item.itemId),
-      stopFoundTurnLiveAt(journal, item)
+      lastProvenTurnLiveAt(journal, item)
     )
-  // Per attempt: a retry re-partitions only what is left, and a reused chunk id would skip it.
+  const replacedVerdictFor = (item: AgentJournalRenderItem) =>
+    turnVerdictFromReplacedRuntime(
+      replaced,
+      journal.itemFence(item.itemId),
+      lastProvenTurnLiveAt(journal, item)
+    )
+  const verdictFor = (item: AgentJournalRenderItem) => {
+    const byDeath = deathVerdictFor(item)
+    return byDeath.state === 'interrupted' ? byDeath : replacedVerdictFor(item)
+  }
+  // A successful settlement leaves terminal items; a failed transaction leaves the same prefix.
   const generation = input.acquisitionGeneration ?? `seq-${journal.cursor().sequence}`
   const settlementId = `${STALE_SESSION_ROW_PREFIX}${input.sessionId}:${input.fence}:${generation}`
   // Calls an earlier settle closed with no proof, revised once a proof names their owner.
-  const mutations = provenUnverifiedToolCallRevisions(items, input.deathEvidence, journal)
+  const mutations = provenUnverifiedToolCallRevisions(items, input.deathEvidence, journal, replaced)
   for (const item of items) {
-    const identity = parseAgentJournalItemKey(item.itemId)
     // A turn already settled (a person's Stop) ends its calls as it ended; only a turn still running
     // leaves them to the evidence.
     const end = runningCallEnd(item.turnScope, (id) => journal.itemBody(id), verdictFor(item).state)
     const body = endedUnseenMessageBody(item.body) ?? terminalAgentJournalBody(item.body, end)
-    if (identity && body) {
+    if (body) {
       mutations.push({
         kind: 'item',
-        identity,
+        itemId: item.itemId,
         body,
         turnScope: item.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
       })
     }
   }
-  const proven = provenUnverifiableTurnRevisions(items, input.deathEvidence, journal)
+  const proven = provenUnverifiableTurnRevisions(items, input.deathEvidence, journal, replaced)
   const turnEnds = [
     ...items.flatMap((item) => runningTurnLifecycleRevisions([item], verdictFor(item))),
     ...proven
   ]
   mutations.push(...turnEnds)
-  const evidence = input.deathEvidence
-  if (
-    evidence &&
-    (proven.length > 0 ||
-      items.some(
-        (item) =>
-          isInProgressStructuredAgentSessionItem(item) && verdictFor(item).state === 'interrupted'
-      )) &&
-    !endedByPersonsStop(journal, turnEnds)
-  ) {
-    mutations.unshift({
-      kind: 'item',
-      // Named by the death it explains, so a retry after a partly written settle adds no second row.
-      identity: {
-        provider: 'orca',
-        clientMessageId: `${STALE_SESSION_ROW_PREFIX}${input.sessionId}:death-${evidence.ownerFence ?? 'unowned'}-${evidence.observedAt}`
-      },
-      // The death evidence is Orca's log text, never a sentence for a person: the row says only
-      // that the provider stopped, and how Orca ended when the provider died with it.
-      body: orcaStopRowBody(input.failureTextContext, evidence.runtimeEnd),
-      turnScope: settledRootTurnScope(items, turnEnds)
-    })
+  const stopRow = staleStopRow(input, items, (item): StaleCut => {
+    const unverifiable = isUnverifiableTurn(item)
+    if (!unverifiable && !isInProgressStructuredAgentSessionItem(item)) {
+      return null
+    }
+    const fence = journal.itemFence(item.itemId)
+    // An earlier settle's `unverifiable` turn is revised by a death naming its owner or by its replaced runtime.
+    if (
+      unverifiable
+        ? fence !== undefined && fence === input.deathEvidence?.ownerFence
+        : deathVerdictFor(item).state === 'interrupted'
+    ) {
+      return { by: 'death' }
+    }
+    return fence !== undefined && replacedVerdictFor(item).state === 'interrupted'
+      ? { by: 'replaced', fence }
+      : null
+  })
+  if (stopRow && !endedByPersonsStop(journal, turnEnds)) {
+    mutations.unshift({ ...stopRow, turnScope: settledRootTurnScope(items, turnEnds) })
   }
-  for (const chunk of partitionJournalLifecycleMutations(settlementId, mutations)) {
+  if (mutations.length > 0) {
     await journal.appendLifecycleBatch({
-      settlementId: chunk.settlementId,
+      settlementId,
       fence: input.fence,
       recovered: true,
-      mutations: chunk.mutations
+      mutations
     })
   }
   return mutations.length
@@ -265,7 +282,7 @@ function withRevisions(
 ): AgentJournalRenderItem[] {
   const bodies = new Map(
     revisions.flatMap((revision): [string, AgentJournalItemBody][] =>
-      revision.kind === 'item' ? [[agentJournalItemKey(revision.identity), revision.body]] : []
+      revision.kind === 'item' ? [[journalLifecycleMutationItemId(revision), revision.body]] : []
     )
   )
   return items.map((item) => ({ ...item, body: bodies.get(item.itemId) ?? item.body }))

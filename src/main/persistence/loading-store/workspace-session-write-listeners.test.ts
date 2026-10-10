@@ -1,12 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { TerminalTopologySlice } from '../../../shared/terminal-topology-slice'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { TEST_LEAF_1, TEST_LEAF_2 } from '../../persistence-session-fixtures'
-import {
-  TerminalTopologyPublisher,
-  type WorkspaceSessionOwner
-} from '../../runtime/terminal-topology-publisher'
+import type { WorkspaceLayoutEvent } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
+import { WorkspaceLayoutStream } from '../../runtime/workspace-layout-stream'
 import { ProfileStateWriterError } from '../profile-state/profile-state-writer-errors'
 import { fixture } from './profile-state-delayed-authority-fixture'
 import type { Store } from './store'
@@ -32,17 +29,14 @@ const binding = {
 
 type Mode = 'none' | 'publisher' | 'throwing'
 
-function ownersOf(store: Store): Map<string, WorkspaceSessionOwner> {
-  const owners = new Map<string, WorkspaceSessionOwner>()
-  for (const hostId of store.getWorkspaceSessionHostIds()) {
-    const session = store.getWorkspaceSession(hostId)
-    for (const worktreeId of Object.keys(session.tabsByWorktree)) {
-      if (!owners.has(worktreeId)) {
-        owners.set(worktreeId, { hostId, session })
-      }
-    }
-  }
-  return owners
+/** The first partition holding the workspace's rows owns it. */
+function homeOf(store: Store, key: string): ExecutionHostId | null {
+  return (
+    store
+      .getWorkspaceSessionHostIds()
+      .find((hostId) => Object.hasOwn(store.getWorkspaceSession(hostId).tabsByWorktree, key)) ??
+    null
+  )
 }
 
 function hostSession(store: Store): WorkspaceSessionState {
@@ -79,17 +73,19 @@ async function runScenario(mode: Mode) {
   vi.spyOn(console, 'error').mockImplementation(() => {})
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
   const { store, authority, readState } = await fixture()
-  const pushes: TerminalTopologySlice[] = []
+  const pushes: WorkspaceLayoutEvent[] = []
   if (mode !== 'none') {
-    const publisher = new TerminalTopologyPublisher(
-      () => ownersOf(store),
+    const stream = new WorkspaceLayoutStream({
+      store: () => store,
+      homeHostId: (key) => homeOf(store, key)
+    })
+    stream.subscribe(
       mode === 'publisher'
-        ? (slice) => pushes.push(slice)
+        ? (event) => pushes.push(event)
         : () => {
-            throw new Error('sink failed')
+            throw new Error('listener failed')
           }
     )
-    store.onWorkspaceSessionWritten(() => publisher.markDirty())
   }
   const snapshots: unknown[] = []
   const step = async (run: () => unknown) => {
@@ -117,7 +113,7 @@ async function runScenario(mode: Mode) {
       persisted: readState()
     }),
     pushes,
-    warnings: warn.mock.calls.filter(([message]) => String(message).includes('terminal-topology'))
+    warnings: warn.mock.calls.filter(([message]) => String(message).includes('workspace-layout'))
       .length
   }
 }
@@ -153,22 +149,41 @@ describe('workspace session write observers are inert', () => {
     expect(throwing.warnings).toBe(1)
   })
 
-  it('pushes each committed topology change, including durable binds and the removal', async () => {
+  it('publishes each committed layout change, including durable binds and the removal', async () => {
     const { pushes } = await runScenario('publisher')
 
-    const local = pushes.filter((slice) => slice.worktreeId === WT)
-    expect(local.map((slice) => slice.layouts[binding.tabId]?.ptyIdsByLeafId)).toEqual([
-      { [TEST_LEAF_1]: 'observed-pty' },
-      { [TEST_LEAF_1]: 'observed-pty', [TEST_LEAF_2]: 'split-pty' },
+    const local = pushes.filter((event) => event.key === WT)
+    const bindings = local.map((event) =>
+      event.type === 'workspace'
+        ? event.layout.tabs
+            .find((tab) => tab.entityId === binding.tabId)
+            ?.terminal?.panes.map((pane) => [pane.leafId, pane.ptyId])
+        : 'removed'
+    )
+    expect(bindings).toEqual([
+      [[TEST_LEAF_1, 'observed-pty']],
+      [
+        [TEST_LEAF_1, 'observed-pty'],
+        [TEST_LEAF_2, 'split-pty']
+      ],
       // Memory is published before the disk write; the failed write's rollback republishes.
-      { [TEST_LEAF_1]: 'failed-pty', [TEST_LEAF_2]: 'split-pty' },
-      { [TEST_LEAF_1]: 'observed-pty', [TEST_LEAF_2]: 'split-pty' },
-      { [TEST_LEAF_2]: 'split-pty' },
-      undefined
+      [
+        [TEST_LEAF_1, 'failed-pty'],
+        [TEST_LEAF_2, 'split-pty']
+      ],
+      [
+        [TEST_LEAF_1, 'observed-pty'],
+        [TEST_LEAF_2, 'split-pty']
+      ],
+      [
+        [TEST_LEAF_1, undefined],
+        [TEST_LEAF_2, 'split-pty']
+      ],
+      'removed'
     ])
-    expect(local.at(-1)?.tabs).toEqual([])
-    expect(pushes.filter((slice) => slice.hostId === SSH_HOST)).toHaveLength(1)
-    const seqs = pushes.map((slice) => slice.publishSeq)
-    expect(seqs).toEqual([...seqs].sort((a, b) => a - b))
+    const ssh = pushes.filter((event) => event.key === 'repo-ssh::/remote/wt')
+    expect(ssh).toEqual([expect.objectContaining({ type: 'workspace' })])
+    // Published from the SSH partition that owns it: its tabs run on that host.
+    expect(ssh[0]?.type === 'workspace' && ssh[0].layout.tabs[0]?.executionHostId).toBe(SSH_HOST)
   })
 })
