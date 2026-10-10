@@ -93,12 +93,17 @@ export function getRenderRowWorktreeItem(
 }
 
 // Prefer the worktree's natural group row over its pinned duplicate when both are rendered.
+// When `isVisibleRow` is given, an already-visible copy wins: a reveal must not yank the
+// viewport away from the duplicate the user is looking at (issue #24852).
 export function findPreferredRenderRowIndexForWorktree(
   renderRows: readonly RenderRow[],
   worktreeId: string,
-  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
+  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy,
+  isVisibleRow?: (row: RenderRow) => boolean
 ): number {
   let fallbackIndex = -1
+  let visibleIndex = -1
+  let naturalGroupIndex = -1
   for (let index = 0; index < renderRows.length; index++) {
     const row = renderRows[index]
     if (!renderRowContainsWorktree(row, worktreeId)) {
@@ -107,21 +112,36 @@ export function findPreferredRenderRowIndexForWorktree(
     if (fallbackIndex === -1) {
       fallbackIndex = index
     }
+    if (visibleIndex === -1 && isVisibleRow?.(row)) {
+      visibleIndex = index
+    }
     const itemRow = getRenderRowWorktreeItem(row, worktreeId)
-    if (pinnedDisplayPolicy === 'duplicate-in-groups' && itemRow && !isPinnedWorktreeRow(itemRow)) {
-      return index
+    if (
+      naturalGroupIndex === -1 &&
+      pinnedDisplayPolicy === 'duplicate-in-groups' &&
+      itemRow &&
+      !isPinnedWorktreeRow(itemRow)
+    ) {
+      naturalGroupIndex = index
     }
   }
-  return fallbackIndex
+  return visibleIndex !== -1
+    ? visibleIndex
+    : naturalGroupIndex !== -1
+      ? naturalGroupIndex
+      : fallbackIndex
 }
 
 export function findPreferredRenderRowIndexForWorktreeIdentity(
   renderRows: readonly RenderRow[],
   worktree: Pick<Worktree, 'id' | 'hostId'>,
-  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
+  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy,
+  isVisibleRow?: (row: RenderRow) => boolean
 ): number {
   const identity = getWorktreeHostIdentity(worktree)
   let fallbackIndex = -1
+  let visibleIndex = -1
+  let naturalGroupIndex = -1
   for (let index = 0; index < renderRows.length; index++) {
     const row = renderRows[index]
     // Why: host-qualified reveals are emitted for folder workspaces too, and a
@@ -132,7 +152,14 @@ export function findPreferredRenderRowIndexForWorktreeIdentity(
         (!worktree.hostId ||
           getWorktreeHostIdentity(folderWorkspaceToWorktree(row.folderWorkspace)) === identity)
       ) {
-        return index
+        // Why: duplicate folder rows follow the same visible-copy preference as item
+        // rows — a reveal must not yank the viewport off the copy the user sees (#24852).
+        if (fallbackIndex === -1) {
+          fallbackIndex = index
+        }
+        if (visibleIndex === -1 && isVisibleRow?.(row)) {
+          visibleIndex = index
+        }
       }
       continue
     }
@@ -146,9 +173,20 @@ export function findPreferredRenderRowIndexForWorktreeIdentity(
     if (fallbackIndex === -1) {
       fallbackIndex = index
     }
-    if (pinnedDisplayPolicy === 'duplicate-in-groups' && !isPinnedWorktreeRow(itemRow)) {
-      return index
+    if (visibleIndex === -1 && isVisibleRow?.(row)) {
+      visibleIndex = index
+    }
+    if (
+      naturalGroupIndex === -1 &&
+      pinnedDisplayPolicy === 'duplicate-in-groups' &&
+      !isPinnedWorktreeRow(itemRow)
+    ) {
+      naturalGroupIndex = index
     }
   }
-  return fallbackIndex
+  return visibleIndex !== -1
+    ? visibleIndex
+    : naturalGroupIndex !== -1
+      ? naturalGroupIndex
+      : fallbackIndex
 }

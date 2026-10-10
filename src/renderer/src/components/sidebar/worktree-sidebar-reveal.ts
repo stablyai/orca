@@ -67,3 +67,21 @@ export function revealElementInScrollContainer(
   container.scrollTo({ top: targetTop, behavior: resolvedBehavior })
   return true
 }
+
+// Why: callers choosing between duplicate rows for one reveal need the exact
+// visibility judgment revealElementInScrollContainer uses to skip its scroll.
+export function isElementVisibleInScrollContainer(
+  container: HTMLElement,
+  element: Element
+): boolean {
+  if (!container.contains(element)) {
+    return false
+  }
+  return (
+    getScrollTopToRevealBounds(
+      container,
+      getElementScrollBounds(container, element),
+      WORKTREE_SIDEBAR_REVEAL_TOP_INSET
+    ) === null
+  )
+}
