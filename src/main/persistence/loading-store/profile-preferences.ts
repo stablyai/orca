@@ -108,33 +108,22 @@ export class ProfilePreferences {
         return {
           value: undefined,
           rollback: () => {
-            const currentEntries = new Map(Object.entries(runtime.state.settings))
-            const nextEntries = new Map(Object.entries(next))
             // Same-value writes still own their choice; failed predecessors cannot restore over them.
             const stillOwned = (key: string): boolean =>
               settingsWriteOwners.get(key) === writeOwners.get(key)
             const restoredUpdates = Object.fromEntries(
-              Object.entries(previous).filter(
-                ([key]) =>
-                  updateKeys.has(key) &&
-                  stillOwned(key) &&
-                  Object.is(currentEntries.get(key), nextEntries.get(key))
-              )
+              Object.entries(previous).filter(([key]) => updateKeys.has(key) && stillOwned(key))
             )
             const restoredSettings = { ...runtime.state.settings, ...restoredUpdates }
             for (const key of updateKeys) {
-              if (
-                !previousEntries.has(key) &&
-                stillOwned(key) &&
-                Object.is(currentEntries.get(key), nextEntries.get(key))
-              ) {
+              if (!previousEntries.has(key) && stillOwned(key)) {
                 Reflect.deleteProperty(restoredSettings, key)
               }
             }
-            runtime.state.settings = restoredSettings
-            if (options.notifyListeners && [...updateKeys].some((key) => !stillOwned(key))) {
+            if (options.notifyListeners && runtime.state.settings !== next) {
               rollbackKeys = [...updateKeys]
             }
+            runtime.state.settings = restoredSettings
           }
         }
       })
@@ -155,9 +144,13 @@ export class ProfilePreferences {
     if (options.notifyListeners) {
       const currentEntries = new Map(Object.entries(runtime.state.settings))
       const currentUpdates = Object.fromEntries(
-        Object.entries(changedUpdates).filter(([key, value]) =>
-          Object.is(currentEntries.get(key), value)
-        )
+        Object.entries(changedUpdates)
+          .filter(
+            ([key, value]) =>
+              settingsWriteOwners.get(key) === writeOwners.get(key) ||
+              Object.is(currentEntries.get(key), value)
+          )
+          .map(([key]) => [key, currentEntries.get(key)])
       )
       if (Object.keys(currentUpdates).length > 0) {
         notifySettingsChanged(this, currentUpdates, options.originWebContentsId)
