@@ -13,6 +13,7 @@ import {
 } from '../../../../shared/agent-session-host-status-rows'
 import type { NativeChatTextBlock } from '../../../../shared/native-chat-types'
 import { useNativeChatOrcaStopView } from './native-chat-orca-stop-context'
+import { NativeChatInterruptedContinueButton } from './NativeChatInterruptedContinue'
 import { nativeChatOrcaStopRowText } from './native-chat-orca-stop-words'
 import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../../../shared/agent-session-orca-stop'
 import { ProviderFrameRow } from './NativeChatTranscriptChrome'
@@ -109,10 +110,18 @@ export function NativeChatNoticeRow({
     )
   }
   // The host's row about an Orca stop names the cause and the machine, muted: Orca stopped, not the
-  // agent. With no machine to name it keeps the host's own words.
+  // agent. Outside a chat that knows its machine it keeps the host's own words.
   const { orcaStop } = block
   const { hostLabel, remoteHost, continueAvailable } = orcaStopView
-  const named = orcaStop !== undefined && hostLabel !== null
+  // A paired server with no name to show is still a remote server; its id is not a name.
+  const machine =
+    hostLabel ??
+    (remoteHost
+      ? translate('components.native-chat.notices.orcaStopUnnamedServer', 'the remote server')
+      : null)
+  const named = orcaStop !== undefined && machine !== null
+  const continueOffered =
+    orcaStop?.turnItemId !== undefined && orcaStop.turnItemId === orcaStopView.offeredTurnItemId
   const failure = readWholeAgentSessionFailureFact(block.failure)
   // Only reword auth text fully described by its fact; host text may also carry command advice.
   const authSurface =
@@ -122,7 +131,7 @@ export function NativeChatNoticeRow({
         )
       : undefined
   const text = named
-    ? nativeChatOrcaStopRowText(orcaStop.cause, hostLabel, { continueAvailable, remoteHost })
+    ? nativeChatOrcaStopRowText(orcaStop.cause, machine, { continueAvailable, remoteHost })
     : failure && authSurface
       ? agentSessionFailureSentence(
           failure,
@@ -153,7 +162,10 @@ export function NativeChatNoticeRow({
     >
       <div className="flex items-start gap-2">
         {Icon ? <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> : null}
-        <p className="min-w-0 whitespace-pre-wrap break-words">{text}</p>
+        <p className="min-w-0 flex-1 whitespace-pre-wrap break-words">{text}</p>
+        {continueOffered ? (
+          <NativeChatInterruptedContinueButton onContinue={orcaStopView.continueNow} />
+        ) : null}
       </div>
       {claudeSignIn && isClaudeSignInFailureKind(block.failure?.kind) ? (
         <Button

@@ -18288,7 +18288,8 @@
         "orcaStopQuit": "この応答の途中で、{{machine}} の Orca が終了しました。",
         "orcaStopCrash": "この応答の途中で、{{machine}} の Orca が予期せず停止しました。",
         "orcaStopRemote": "この応答の途中で、{{machine}} の Orca が停止しました。",
-        "orcaStopCanContinue": "この会話で続行できます。"
+        "orcaStopCanContinue": "この会話で続行できます。",
+        "orcaStopUnnamedServer": "リモートサーバー"
       },
       "providerFrame": {
         "byteLength": "{{value0}}バイト"

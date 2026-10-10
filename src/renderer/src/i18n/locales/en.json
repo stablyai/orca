@@ -18232,7 +18232,8 @@
         "orcaStopQuit": "Orca on {{machine}} was closed while this response was in progress.",
         "orcaStopCrash": "Orca on {{machine}} stopped unexpectedly while this response was in progress.",
         "orcaStopRemote": "Orca on {{machine}} stopped while this response was in progress.",
-        "orcaStopCanContinue": "You can continue in this conversation."
+        "orcaStopCanContinue": "You can continue in this conversation.",
+        "orcaStopUnnamedServer": "the remote server"
       },
       "composer": {
         "imageUnsupported": "Image paste is not supported for this agent.",
