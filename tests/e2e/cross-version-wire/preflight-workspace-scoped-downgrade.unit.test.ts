@@ -5,16 +5,18 @@
 // the workspace's own runtime (a WSL distro on a Windows host). Each skew must keep today's answer:
 //
 //  - an old client sends nothing, and a new host answers with its own default as it always did;
-//  - a new client asks an old host only for its default, because the capability is absent — and an
-//    old host that is sent the field anyway (mobile does not gate) discards it rather than refusing.
+//  - a new client asks a known non-Windows old host only for its default — and an old host that is
+//    sent the field anyway (mobile does not gate) discards it rather than refusing.
 //
 // The old side's capability list is read from its checkout and the capability removed from it, so
 // this stays exercised after a release ships the capability.
 
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY,
-  RUNTIME_CAPABILITIES
+  RUNTIME_CAPABILITIES,
+  RUNTIME_PROTOCOL_VERSION
 } from '../../../src/shared/protocol-version'
 import { RPC_PARAMS_BY_METHOD } from '../../../src/shared/rpc-contract/rpc-params-catalog.generated'
 import { parseRpcRequestParams } from '../../../src/main/runtime/rpc/dispatcher-request-parsing'
@@ -29,6 +31,7 @@ import {
 // Why: a cold CI run extracts the baseline checkout before the first pairing.
 const SUITE_TIMEOUT_MS = 180_000
 const WORKTREE = 'repo-1::\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
+const UNIX_WORKTREE = 'repo-1::/home/me/repo'
 
 type ParseParams = (
   request: RpcRequest,
@@ -55,11 +58,6 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
     ...actual,
     runtimeEnvironmentSupportsCapability: async (_environmentId: string, capability: string) =>
       wire.host?.capabilities.includes(capability) ?? false,
-    // Why linux: an old Windows host is asked to update instead of answering its default list.
-    getRuntimeEnvironmentStatus: async () => ({
-      capabilities: wire.host?.capabilities ?? [],
-      hostPlatform: 'linux'
-    }),
     callRuntimeRpc: async (_target: unknown, method: string, params?: unknown) => {
       const hostSaw = wire.host?.parse(method, params)
       wire.sent.push({ method, params, hostSaw })
@@ -70,8 +68,30 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
   }
 })
 
-// @ts-expect-error -- minimal window.api stub for the store under test
-globalThis.window = { api: {} }
+const hostStatusCall = vi.fn(async ({ method }: { method: string }) => {
+  if (method !== 'status.get' || !wire.host) {
+    throw new Error(`unexpected host status request: ${method}`)
+  }
+  return {
+    id: 'status',
+    ok: true,
+    result: {
+      runtimeId: 'paired-host',
+      rendererGraphEpoch: 1,
+      graphStatus: 'ready',
+      authoritativeWindowId: null,
+      liveTabCount: 0,
+      liveLeafCount: 0,
+      runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+      minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+      capabilities: [...wire.host.capabilities],
+      hostPlatform: 'linux'
+    },
+    _meta: { runtimeId: 'paired-host' }
+  }
+})
+
+vi.stubGlobal('window', { api: { runtimeEnvironments: { call: hostStatusCall } } })
 
 const { createTestStore } =
   await import('../../../src/renderer/src/store/slices/store-test-helpers')
@@ -134,16 +154,21 @@ beforeAll(async () => {
 
 beforeEach(() => {
   wire.sent.length = 0
+  hostStatusCall.mockClear()
 })
 
 describe('workspace-scoped agent detection across versions', () => {
-  it('a new client asks an old host only for its default list', async () => {
+  it('a new client asks a known non-Windows old host only for its default list', async () => {
     wire.host = oldHost
     const store = createTestStore()
 
-    const detected = await store.getState().ensureRuntimeDetectedAgents('env-1', WORKTREE)
-    const refreshed = await store.getState().refreshRuntimeDetectedAgents('env-1', WORKTREE)
+    const detected = await store.getState().ensureRuntimeDetectedAgents('env-1', UNIX_WORKTREE)
+    const refreshed = await store.getState().refreshRuntimeDetectedAgents('env-1', UNIX_WORKTREE)
 
+    expect(hostStatusCall.mock.calls).toEqual([
+      [{ selector: 'env-1', method: 'status.get', timeoutMs: undefined }],
+      [{ selector: 'env-1', method: 'status.get', timeoutMs: undefined }]
+    ])
     expect(wire.sent.map(({ method, params }) => ({ method, params }))).toEqual([
       { method: 'preflight.detectAgents', params: undefined },
       { method: 'preflight.refreshAgents', params: undefined }
@@ -151,8 +176,13 @@ describe('workspace-scoped agent detection across versions', () => {
     expect(detected).toEqual(['claude'])
     expect(refreshed).toEqual(['claude'])
     expect(
-      store.getState().runtimeDetectedAgentIds[getRuntimeAgentInventoryKey('env-1', WORKTREE)]
+      store.getState().runtimeDetectedAgentIds[getRuntimeAgentInventoryKey('env-1', UNIX_WORKTREE)]
     ).toEqual(['claude'])
+    expect(
+      store.getState().runtimeAgentDetectionNeedsServerUpdate[
+        getRuntimeAgentInventoryKey('env-1', UNIX_WORKTREE)
+      ]
+    ).toBeUndefined()
   })
 
   it('an old host discards the field from an ungated client instead of refusing it', () => {

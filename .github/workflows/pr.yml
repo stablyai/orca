@@ -815,6 +815,7 @@ jobs:
       node_versions: '["24"]'
       runner: ubuntu-24.04-arm
       shards: ${{ needs.preflight.outputs.shards }}
+      pr_failed_unit_exit: ${{ github.event_name == 'pull_request' }}
 
   # Why a sibling and not part of the test workflow: it is advisory, so it must not delay the
   # gate. Inside unit-tests.yml a caller's `needs: test` waited for it, holding verify ~36s
