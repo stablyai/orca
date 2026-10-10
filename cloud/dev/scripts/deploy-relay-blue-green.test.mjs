@@ -18,6 +18,7 @@ import {
   deployDirector,
   DIRECTOR_RESERVE_PLACEMENT_ENV,
   directorDeploymentEnvironment,
+  DIRECTOR_SHADOW_SEAT_FEED_CELLS_ENV,
   directorCellSetAddition,
   directorStartupProbeArguments,
   directorTopologyChange,
@@ -423,6 +424,9 @@ test('requires exactly one active revision and reads queried tag metadata', () =
   assert.deepEqual(trafficTags(service), ['candidate-123'])
 })
 
+const adminToken = (email) =>
+  `e30.${Buffer.from(JSON.stringify(email ? { email } : {})).toString('base64url')}.sig`
+
 function directorHarness({
   deployFailure,
   deleteFailure,
@@ -436,7 +440,8 @@ function directorHarness({
   servingImageDigest = `sha256:${'f'.repeat(64)}`,
   reserveCells = {},
   servingEnvironment = {},
-  placements = {}
+  placements = {},
+  callerEmail
 } = {}) {
   const state = {
     activeRevision: 'relay-00001-old',
@@ -511,7 +516,8 @@ function directorHarness({
     deployCandidate: (config, tag, env, image, minimum, maximum, regionalVersion) => {
       const revision = `relay-${String(state.nextRevision++).padStart(5, '0')}-new`
       state.revisions.set(revision, {
-        env: { ORCA_RELAY_ROLE: 'director', ...env },
+        // gcloud --update-env-vars keeps every variable the deploy does not name.
+        env: { ORCA_RELAY_ROLE: 'director', ...servingEnvironment, ...env },
         secrets: {
           [DIRECTOR_REGIONAL_PLACEMENT_ENV]: {
             secret: DIRECTOR_REGIONAL_PLACEMENT_SECRET,
@@ -556,7 +562,8 @@ function directorHarness({
       healthProtocols.push(connectionCapacityProtocol)
     },
     readReserveCells: async (_config, origin) => reserveCells[origin],
-    readDirectorPlacement: async (_config, origin) => placements[origin] ?? 'unreported'
+    readDirectorPlacement: async (_config, origin) => placements[origin] ?? 'unreported',
+    adminIdentityToken: () => adminToken(callerEmail)
   }
   return { state, removed, healthProtocols, operations }
 }
@@ -1014,4 +1021,58 @@ test('reads a director placement from runtime-status, and reports an image witho
     if (environment === undefined) delete process.env.ORCA_RELAY_ADMIN_ID_TOKEN
     else process.env.ORCA_RELAY_ADMIN_ID_TOKEN = environment
   }
+})
+
+// Staging's director trusted gha-deploy while the workflow authenticated as gha-relay: a bare 401.
+test('the guard names the deploy identity a drifted director trusts instead of reading into a 401', async () => {
+  const servingImageDigest = `sha256:${'f'.repeat(64)}`
+  const harness = directorHarness({
+    servingEnvironment: { ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT: 'gha-deploy@p.iam.gserviceaccount.com' },
+    callerEmail: 'gha-relay@p.iam.gserviceaccount.com'
+  })
+  await assert.rejects(
+    deployDirector({ image: `relay@${servingImageDigest}`, 'reserve-placement': 'off' }, 'candidate-new', harness.operations),
+    /serving director trusts gha-deploy@p\.iam\.gserviceaccount\.com for deploy admin reads, but this deploy authenticates as gha-relay@p\.iam\.gserviceaccount\.com/
+  )
+  const trusted = directorHarness({
+    servingEnvironment: { ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT: 'gha-relay@p.iam.gserviceaccount.com' },
+    callerEmail: 'gha-relay@p.iam.gserviceaccount.com'
+  })
+  await deployDirector({ image: `relay@${servingImageDigest}`, 'reserve-placement': 'off' }, 'candidate-new', trusted.operations)
+})
+
+test('a director deploy takes --admin-audience alone for the reserve guard', () => {
+  const base = ['--project', 'p', '--region', 'r', '--service', 's', '--image', `relay@sha256:${'e'.repeat(64)}`, '--role', 'director', '--release-id', 'x']
+  const audience = ['--admin-audience', 'https://relay.example.test']
+  assert.equal(parseArguments([...base, ...audience])['admin-audience'], 'https://relay.example.test')
+  assert.throws(
+    () => parseArguments([...base, '--expected-rehome-generation', '1', '--rehome-control-origin', 'https://relay.example.test']),
+    /durable rehome verification arguments must be configured together/
+  )
+  assert.throws(
+    () => parseArguments([...base, ...audience, '--expected-rehome-generation', '1']),
+    /durable rehome verification arguments must be configured together/
+  )
+})
+
+test('--shadow-seat-feed-cells sets the director setting, and preserve keeps the serving one', async () => {
+  assert.equal(
+    directorDeploymentEnvironment({ 'shadow-seat-feed-cells': 'c1, c2' })[DIRECTOR_SHADOW_SEAT_FEED_CELLS_ENV],
+    'c1,c2'
+  )
+  assert.equal(directorDeploymentEnvironment({ 'shadow-seat-feed-cells': 'all' })[DIRECTOR_SHADOW_SEAT_FEED_CELLS_ENV], 'all')
+  assert.equal(directorDeploymentEnvironment({ 'shadow-seat-feed-cells': 'preserve' })[DIRECTOR_SHADOW_SEAT_FEED_CELLS_ENV], undefined)
+  assert.throws(() => directorDeploymentEnvironment({ 'shadow-seat-feed-cells': 'C1;x' }), /must be preserve, all, or a comma list/)
+  const servingImageDigest = `sha256:${'f'.repeat(64)}`
+  const harness = directorHarness({ servingEnvironment: { [DIRECTOR_SHADOW_SEAT_FEED_CELLS_ENV]: 'c1,c3' } })
+  await deployDirector({ image: `relay@${servingImageDigest}`, 'shadow-seat-feed-cells': 'preserve' }, 'candidate-new', harness.operations)
+  assert.equal(harness.state.revisions.get(harness.state.activeRevision).env[DIRECTOR_SHADOW_SEAT_FEED_CELLS_ENV], 'c1,c3')
+  const shrink = directorHarness({
+    servingEnvironment: { [DIRECTOR_SHADOW_SEAT_FEED_CELLS_ENV]: 'c1,c3' },
+    reserveCells: { 'https://relay-hash-uc.a.run.app': ['c3'], 'https://candidate-new---relay-hash-uc.a.run.app': ['c3'] }
+  })
+  await assert.rejects(
+    deployDirector({ image: `relay@${servingImageDigest}`, 'shadow-seat-feed-cells': 'c1' }, 'candidate-new', shrink.operations),
+    /would drop reserve cells \(c3\)/
+  )
 })
