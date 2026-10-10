@@ -28,11 +28,13 @@ import { getWorktreeOperationOwnerHostIds } from '@/lib/worktree-operation-route
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceCleanupFailure } from './workspace-cleanup'
 import {
+  getWorkspaceCleanupAgentStartedFailure,
   getWorkspaceCleanupGitUnavailableFailure,
   getWorkspaceCleanupMissingFailure,
   getWorkspaceCleanupRepoScanFailure,
   hasValidWorkspaceCleanupUnverifiedConsent,
-  hasWorkspaceCleanupRiskEscalated
+  hasWorkspaceCleanupRiskEscalated,
+  hasWorkspaceCleanupUnapprovedLiveAgent
 } from './workspace-cleanup-preflight-failures'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 
@@ -321,6 +323,9 @@ export function evaluateWorkspaceCleanupPreflight(
           'Workspace changed after confirmation. Refresh to review it before removing.'
         )
       )
+    }
+    if (hasWorkspaceCleanupUnapprovedLiveAgent(candidate, approvedCandidate)) {
+      return { ok: false, failure: getWorkspaceCleanupAgentStartedFailure(target, candidate) }
     }
   }
   const sameIdSurvivingHostId = [...(identitiesByWorktreeId.get(target.worktreeId) ?? [])]

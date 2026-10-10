@@ -152,7 +152,7 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
         // parent/child root) is being deleted. That is expected teardown, not a
         // user-facing failure — the pane unmounts once removal completes, so never
         // surface the raw fence error. Covers the parent-removal-fences-child case
-        // that startFreshSpawn's own-worktree isDeleting skip cannot see.
+        // that startFreshSpawn's own-worktree teardown skip cannot see.
         return
       }
       session.deps.onPtyErrorRef?.current?.(session.pane.id, message)
