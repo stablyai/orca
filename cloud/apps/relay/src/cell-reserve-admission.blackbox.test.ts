@@ -298,4 +298,43 @@ describe('a reserve-mode cell admits from memory with its database wedged', () =
     // A demoted seat no longer holds its epoch against a new booking.
     expect(cell.book(identity, 9)).toEqual([{ outcome: 'ok' }])
   })
+
+  it('takes no demotion on a database-mode cell', async () => {
+    const cell = await startCell({ admitMode: 'reserve' })
+    const identity = await cell.host()
+    cell.book(identity, 9)
+    await cell.connect(identity, 9)
+    const page = cell.relay.sessions.seatFeed(null)
+    const joinedAt = 'full' in page ? page.full[0]!.joinedAt : -1
+    cell.setFlags({ admitMode: 'db' })
+    const seat = { v: 1 as const, userId: 'user-1', relayHostId: identity.hostId, epoch: 9, joinedAt }
+    expect(cell.relay.sessions.demote(seat)).toBe('off')
+    const changes = cell.relay.sessions.seatFeed(0)
+    expect('changes' in changes && changes.changes.at(-1)?.kind).toBe('join')
+  })
+
+  it('ends a demotion with its socket, so the host booked back later is an ordinary seat', async () => {
+    const cell = await startCell({ admitMode: 'reserve' })
+    const identity = await cell.host()
+    cell.book(identity, 9)
+    const loser = await cell.connect(identity, 9)
+    const page = cell.relay.sessions.seatFeed(null)
+    const joinedAt = 'full' in page ? page.full[0]!.joinedAt : -1
+    const seat = { v: 1 as const, userId: 'user-1', relayHostId: identity.hostId, epoch: 9, joinedAt }
+    expect(cell.relay.sessions.demote(seat)).toBe('demoted')
+    // The loser goes on its own, well before the 60 s demotion close.
+    loser.socket!.close()
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    const left = cell.relay.sessions.seatFeed(0)
+    // Recorded as moved, so neither rule 2 nor a director's sticky sends it back at 9.
+    expect('changes' in left && left.changes.at(-1)).toMatchObject({ kind: 'leave', closeCode: 4409 })
+    expect((await cell.connect(identity, 9)).ack).toBeUndefined()
+    // Booked back onto this cell at a newer epoch: admitted, and then remembered as seated.
+    expect(cell.book(identity, 11)).toEqual([{ outcome: 'ok' }])
+    const back = await cell.connect(identity, 11)
+    expect(back.ack).toMatchObject({ type: 'host-hello-ack' })
+    back.socket!.close()
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect((await cell.connect(identity, 11)).ack).toMatchObject({ type: 'host-hello-ack' })
+  })
 })

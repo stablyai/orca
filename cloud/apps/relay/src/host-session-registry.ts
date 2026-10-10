@@ -244,7 +244,9 @@ export class HostSessionRegistry {
   // draining" is not the same question as "this host has been told to leave".
   private readonly drainSentHosts = new Set<string>()
   private readonly seatLog: CellSeatLog
-  private readonly demotedSeats = new Set<string>()
+  // Seat key -> the demoted control socket. Its own set, not drainSentHosts: it ends with
+  // that socket (close, rebind or a new join), so a later booking here is a fresh seat.
+  private readonly demotedSeats = new Map<string, WebSocket>()
 
   private readonly idleWork = new Map<string, number>()
   private readonly idleAttempts = new Map<
@@ -444,7 +446,9 @@ export class HostSessionRegistry {
 
   // A director names this seat the loser of a duplicate: stop taking phones for it now, and
   // close it once its splices have had time to finish. Repeats are one demotion.
-  demote(request: DemoteRequest): 'demoted' | 'already-demoted' | 'not-seated' {
+  demote(request: DemoteRequest): 'demoted' | 'already-demoted' | 'not-seated' | 'off' {
+    // Only a reserve-mode cell takes demotions, so flipping admitMode back reverts the route.
+    if (!this.reserveMode()) return 'off'
     const session = this.get(request)
     const key = this.key(request.userId, request.relayHostId)
     // The seat the director saw: the same host rejoining here later is a different seat.
@@ -458,15 +462,12 @@ export class HostSessionRegistry {
     ) {
       return 'not-seated'
     }
-    if (this.demotedSeats.has(key)) return 'already-demoted'
-    this.demotedSeats.add(key)
-    this.drainSentHosts.add(session.relayHostId)
-    this.markSeatDrainOnly(session)
     const socket = session.socket
+    if (this.demotedSeats.get(key) === socket) return 'already-demoted'
+    this.demotedSeats.set(key, socket)
+    this.markSeatDrainOnly(session)
     const timer = setTimeout(() => {
-      this.demotedSeats.delete(key)
-      if (this.get(request) === session && session.socket === socket) {
-        if (!this.draining) this.drainSentHosts.delete(session.relayHostId)
+      if (this.demotedSeats.get(key) === socket) {
         socket.close(RELAY_CLOSE_CODE.WRONG_CELL, 'seated on a newer cell')
       }
     }, DEMOTION_CLOSE_MS)
@@ -590,6 +591,12 @@ export class HostSessionRegistry {
     markStage('credential')
     const sessionKey = this.key(reservation.userId, hostId)
     const session = this.sessions.get(sessionKey)
+    if (session?.socket && this.demotedSeats.get(sessionKey) === session.socket) {
+      capacityReservation?.release()
+      await this.store.failReservation(reservation)
+      this.rejectClient(socket, RELAY_CLOSE_CODE.DRAINING)
+      return
+    }
     if (
       !session ||
       session.state !== 'active' ||
@@ -1543,8 +1550,12 @@ export class HostSessionRegistry {
       // Guarded on identity: a predecessor retired by a rebind must not stamp a
       // cause onto the live session that replaced it.
       if (session.socket === socket) {
-        this.hostCloseReasons.record(this.key(session.identity.sub, session.relayHostId), reason)
-        this.appendSeatChange(session, 'leave', code)
+        const seatKey = this.key(session.identity.sub, session.relayHostId)
+        this.hostCloseReasons.record(seatKey, reason)
+        // However it closed, a demoted seat was moved: it may not rejoin here from memory.
+        const demoted = this.demotedSeats.get(seatKey) === socket
+        if (demoted) this.demotedSeats.delete(seatKey)
+        this.appendSeatChange(session, 'leave', demoted ? RELAY_CLOSE_CODE.WRONG_CELL : code)
       }
       // One line per control close makes reconnect churners attributable by
       // host digest without exposing the raw relay host id.
