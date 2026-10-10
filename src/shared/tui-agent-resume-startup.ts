@@ -8,7 +8,13 @@ import type { SessionOptionValue } from './native-chat-session-options'
 import { buildSleepingAgentLaunchConfig } from './sleeping-agent-launch-config'
 import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
 import type { AgentStartupPlan } from './tui-agent-startup'
-import { resolveStartupShell, type AgentStartupShell } from './tui-agent-startup-shell'
+import {
+  isPosixStartupShell,
+  quoteStartupArg,
+  resolveStartupShell,
+  type AgentStartupShell
+} from './tui-agent-startup-shell'
+import { claudeConfigDirFromTranscriptPath } from './claude-transcript-config-dir'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import type { TuiAgent } from './tui-agent'
 import { buildAgentResumeLaunchCommand } from './agent-resume-launch-command'
@@ -69,7 +75,17 @@ export function buildAgentResumeStartupPlan(args: {
     ...args,
     agentCommand: baseCommand.commandWithoutSessionOptions
   })
-  const launchCommand = buildAgentResumeLaunchCommand(args.agent, baseCommand.command, argv, shell)
+  const resumeCommand = buildAgentResumeLaunchCommand(args.agent, baseCommand.command, argv, shell)
+  // Why: `--resume <id>` only searches the config dir Claude runs with, so a session written under
+  // another dir answers "No conversation found" (#26499, #24752). Prefixed on this line only, not
+  // the pane env, so later `claude` runs in the pane keep their own account.
+  const claudeConfigDir =
+    args.agent === 'claude' && isPosixStartupShell(shell)
+      ? claudeConfigDirFromTranscriptPath(args.providerSession.transcriptPath)
+      : null
+  const launchCommand = claudeConfigDir
+    ? `CLAUDE_CONFIG_DIR=${quoteStartupArg(claudeConfigDir, shell)} ${resumeCommand}`
+    : resumeCommand
   const applied = baseCommand.appliedSessionOptions
   return {
     agent: args.agent,
