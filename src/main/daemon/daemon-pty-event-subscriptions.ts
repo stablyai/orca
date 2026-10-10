@@ -53,6 +53,7 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     this.respawnAdoptionClosed = true
     this.sessionsAwaitingDaemonRecovery.clear()
     this.writeRecoveryAttempted = false
+    this.clearPendingWriteRecoveryRetryTimer()
     this.releasePendingRespawnAdoptionLease()
     this.stopCheckpointTimer()
     this.dirtySessionVersions.clear()
@@ -177,6 +178,7 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
       this.respawnAdoptionClosed = true
       this.sessionsAwaitingDaemonRecovery.clear()
       this.writeRecoveryAttempted = false
+      this.clearPendingWriteRecoveryRetryTimer()
       this.releasePendingRespawnAdoptionLease()
       this.disconnectOnlyPromise = this.finishDisconnectOnly([...this.keepHistoryShutdowns])
     }

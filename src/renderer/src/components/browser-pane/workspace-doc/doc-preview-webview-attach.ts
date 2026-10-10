@@ -6,6 +6,7 @@ import {
   unregisterPersistentWebview,
   webviewRegistry
 } from '@/components/browser-pane/host-guest/webview-registry'
+import { removeBrowserClientPageWebview } from '@/components/browser-pane/browser-client-page-guest-metadata'
 
 export function attachDocPreviewWebview({
   previewId,
@@ -66,7 +67,7 @@ export function attachDocPreviewWebview({
       webview.removeEventListener('did-navigate-in-page', onNavigated)
       webview.removeEventListener('page-title-updated', onTitleUpdated)
       moveFocusToRendererBeforeWebviewDetach(webview)
-      webview.remove()
+      removeBrowserClientPageWebview(webview)
       if (webviewRegistry.get(previewId) === webview) {
         unregisterPersistentWebview(previewId)
       }
