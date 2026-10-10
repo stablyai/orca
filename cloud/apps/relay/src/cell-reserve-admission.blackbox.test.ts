@@ -217,6 +217,23 @@ describe('a reserve-mode cell admits from memory with its database wedged', () =
       return { status: 101, ack: await nextMessage(socket), socket }
     }
 
+    // An upgrade that never sends its hello, so it keeps its connection unit.
+    const upgradeOnly = async (identity: Awaited<ReturnType<typeof host>>): Promise<number> => {
+      const socket = new WebSocket(`ws://127.0.0.1:${port}/v1/host/control`, {
+        headers: { authorization: `Bearer ${identity.token}` },
+        perMessageDeflate: false
+      })
+      cleanup.push(() => socket.terminate())
+      return await new Promise<number>((resolve, reject) => {
+        socket.once('unexpected-response', (request, response) => {
+          resolve(response.statusCode ?? 0)
+          request.destroy()
+        })
+        socket.once('open', () => resolve(101))
+        socket.once('error', reject)
+      })
+    }
+
     const book = (identity: Awaited<ReturnType<typeof host>>, epoch: number) =>
       relay.sessions.reserve({
         v: 1,
@@ -228,6 +245,7 @@ describe('a reserve-mode cell admits from memory with its database wedged', () =
       relay,
       host,
       connect,
+      upgradeOnly,
       book,
       setFlags: (next: Partial<CellFlags>) => {
         applied = { generation: applied.generation + 1, flags: { ...CELL_FLAG_DEFAULTS, ...next } }
@@ -360,6 +378,28 @@ describe('a reserve-mode cell admits from memory with its database wedged', () =
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect((await cell.connect(identity, 11)).ack).toMatchObject({ type: 'host-hello-ack' })
   })
+
+  it('refuses a booked upgrade at the hard cap and leaves the feed units and bookings as they were', async () => {
+    const hardCap = 4
+    const cell = await startCell({ admitMode: 'reserve' }, { hardCap, controlReserve: 1 })
+    const [waiting, seated] = [await cell.host(), await cell.host()]
+    expect(cell.book(waiting, 5)[0]?.outcome).toBe('ok')
+    expect(cell.book(seated, 5)[0]?.outcome).toBe('ok')
+    expect((await cell.connect(seated, 5)).ack?.type).toBe('host-hello-ack')
+    // Rebinds over the live control may rise to the hard cap; unproven, they hold their units.
+    expect(await cell.upgradeOnly(seated)).toBe(101)
+    expect(await cell.upgradeOnly(seated)).toBe(101)
+    const before = {
+      units: cell.relay.connectionSnapshot()!.enforcedConnectionUnits,
+      bookings: cell.relay.sessions.reserveCounts()!.bookings
+    }
+    expect(before).toEqual({ units: hardCap, bookings: 1 })
+    expect((await cell.connect(waiting, 5)).status).toBe(503)
+    expect({
+      units: cell.relay.connectionSnapshot()!.enforcedConnectionUnits,
+      bookings: cell.relay.sessions.reserveCounts()!.bookings
+    }).toEqual(before)
+  }, 30_000)
 
   it('never crosses the hard cap under seeded bookings, hellos, rebooks and closes', async () => {
     const hardCap = 6

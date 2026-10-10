@@ -9,6 +9,7 @@ import { startCellHeartbeat } from './cell-heartbeat-client.js'
 import {
   CELL_FLAG_DEFAULTS,
   CELL_FLAGS_APPLIED_EVENT,
+  type CellFlags,
   cellFlagObjectName,
   cellFlagParser
 } from './cell-flags.js'
@@ -36,15 +37,20 @@ import {
   readRegisteredMigrationInventory
 } from './registered-migration-inventory.js'
 
+// Both read the cell's switch file once it exists; until then, the boot values.
+let cellFlagsApplied: (() => CellFlags) | null = null
 // Before anything can start a database promise.
-process.on('unhandledRejection', handleRelayUnhandledRejection)
+process.on('unhandledRejection', (reason) =>
+  handleRelayUnhandledRejection(reason, cellFlagsApplied?.().rejectionFence ?? true)
+)
 const config = loadRelayConfig()
 const database = await openRelayDatabaseAtBoot({
   databaseUrl: config.databaseUrl,
   dataDir: config.dataDir,
   poolMax: config.databasePoolMax,
   applicationName: `orca-relay/${config.role}/${config.cellId}`,
-  appliesPostgresSchema: config.role !== 'cell'
+  appliesPostgresSchema: config.role !== 'cell',
+  readTimeoutMarginOverrideMs: () => cellFlagsApplied?.().readTimeoutMarginMs
 })
 await reconcileCellAdmissionAtStartup(config, new RelayAssignmentStore(database))
 // Never awaited: the cell listens on defaults (all off) until the first read lands.
@@ -57,6 +63,7 @@ const cellFlagChannel =
         appliedEvent: CELL_FLAGS_APPLIED_EVENT
       })
     : null
+cellFlagsApplied = cellFlagChannel ? () => cellFlagChannel.applied().flags : null
 const {
   server,
   sessions,

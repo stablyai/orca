@@ -63,7 +63,7 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
   function installController(): {
     controller: {
       kill: (ptyId: string) => boolean
-      listProcesses: (connectionId?: string | null) => Promise<{ id: string }[]>
+      listProcesses: (hostId?: string) => Promise<{ id: string }[]>
       retireRejectedPty: (ptyId: string, stopConfirmed: boolean) => void
       stopAndWait: (ptyId: string, opts?: { deadlineMs?: number }) => Promise<boolean>
     }
