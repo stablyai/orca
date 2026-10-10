@@ -47,6 +47,10 @@ import { createRelayTokenVerifier, readBearer } from './relay-token-verifier.js'
 import { closeRelayWebSocket } from './relay-websocket-close.js'
 import { ShadowDirectoryCompare } from './shadow-directory-compare.js'
 import { startShadowSeatPoller } from './shadow-seat-directory.js'
+import { CellReserveClient } from './cell-reserve-client.js'
+import { googleMetadataIdentityToken, reusedIdentityToken } from './google-metadata-identity-token.js'
+import { ReserveAssignment } from './reserve-assignment.js'
+import { ReservePlacer } from './reserve-placement.js'
 import { ProcessQueuedByteBudget } from './splice-forwarder.js'
 
 // A malformed percent-escape in the request target must be a client error, never a URIError
@@ -168,12 +172,62 @@ export function createRelayServer(
     observeGrace: (event) => observability.recordReadinessGrace(event)
   })
   const ready = readiness.check
+  // Set once placement is built: a director configured `on` that could not build it (no map or
+  // no rehome credential) books nothing, so it must not keep a reserve cell's dead-man fed.
+  const placing = { on: false }
   const shadowSeatPoller = startShadowSeatPoller(config, {
-    listCells: () => assignments.seatFeedCells()
+    listCells: () => assignments.seatFeedCells(),
+    reserver: () => placing.on
   })
   const shadowCompare = shadowSeatPoller
     ? new ShadowDirectoryCompare(shadowSeatPoller.directory, options.now)
     : undefined
+  // Step 5 on directors: needs the map and the rehome credential the cells verify.
+  const directorId = randomUUID()
+  const rehomeAudience = config.rehomeAudience
+  const reservePlacement =
+    config.role === 'director' &&
+    shadowSeatPoller &&
+    rehomeAudience &&
+    (config.reservePlacement ?? 'off') !== 'off'
+      ? new ReserveAssignment({
+          mode: config.reservePlacement ?? 'off',
+          directory: shadowSeatPoller.directory,
+          cells: shadowSeatPoller.cells,
+          startedAt: shadowSeatPoller.startedAt,
+          placer: new ReservePlacer(options.now, options.random),
+          client: new CellReserveClient({
+            directorId,
+            identityToken: reusedIdentityToken(
+              () => googleMetadataIdentityToken(rehomeAudience),
+              options.now
+            )
+          }),
+          readRow: async (identity) => await assignments.hostWhereabouts(identity),
+          now: options.now,
+          random: options.random
+        })
+      : undefined
+  placing.on = reservePlacement?.placementMode === 'on'
+  // A director that is not placing while a cell is in reserve mode strands that cell's hosts on
+  // its memory: its dead-man flips it back, and this says so loudly until then.
+  const offWithReserveTimer =
+    config.role === 'director' && shadowSeatPoller && !placing.on
+      ? setInterval(() => {
+          const { directory } = shadowSeatPoller
+          const cells = directory.cellIds().filter((cellId) => directory.admitModeOf(cellId) === 'reserve')
+          if (cells.length === 0) return
+          console.error(
+            JSON.stringify({
+              event: 'orca_relay_reserve_placement_off_with_reserve_cells',
+              cells,
+              placement: reservePlacement?.placementMode ?? 'off',
+              configured: config.reservePlacement ?? 'off'
+            })
+          )
+        }, 60_000)
+      : null
+  offWithReserveTimer?.unref()
   const configuredConnectionLimits =
     config.connectionHardCap === undefined
       ? null
@@ -328,6 +382,7 @@ export function createRelayServer(
     recordAssignmentUnavailable: (cause) => observability.recordAssignmentUnavailable?.(cause),
     recordRegionRequest: (region) => observability.recordRegionRequest?.(region),
     shadowSeats: shadowSeatPoller?.directory,
+    reservePlacement,
     compareShadowSeats: shadowCompare
       ? (route, identity, answer) => {
           shadowCompare.compare(route, identity, answer)
@@ -754,6 +809,8 @@ export function createRelayServer(
     connectionSnapshot,
     ready,
     cellIncarnation,
-    shadowSeatPoller
+    shadowSeatPoller,
+    directorId,
+    reservePlacement
   }
 }
