@@ -94,6 +94,30 @@ describe('recordAgentSessionProviderHandle', () => {
   })
 })
 
+describe('recordAgentSessionProviderHandle on a live owner', () => {
+  it('moves a resumed head in place at the same fence and names it as the proof', () => {
+    const live = recordAgentSessionProviderHandle({
+      record: agentSessionRecordFixture(),
+      fence: 7,
+      link: resumedLink(7),
+      now: 4_000
+    })
+    const next = recordAgentSessionProviderHandle({
+      record: live,
+      fence: 7,
+      link: {
+        ...resumedLink(7),
+        linkId: 'link-3',
+        handle: claudeProviderHandle('provider-session-alpha-1', 'leaf-3')
+      },
+      now: 5_000
+    })
+    expect(next.providerHandleChain.map((link) => link.linkId)).toEqual(['link-1', 'link-3'])
+    expect(next.lease.provenHandleLinkId).toBe('link-3')
+    expect(isPersistedAgentSessionRecord(encodeAgentSessionRecord(next))).toBe(true)
+  })
+})
+
 describe('reviseAgentSessionProviderResumePoint', () => {
   const revise = (record = agentSessionRecordFixture(), leafUuid = 'leaf-2') =>
     reviseAgentSessionProviderResumePoint({

@@ -9,7 +9,6 @@ import {
   isAgentSessionProviderHandle,
   isAgentSessionHandleProvider,
   isAgentSessionProviderHandleChain,
-  MAX_AGENT_SESSION_PROVIDER_HANDLE_LINKS,
   type AgentSessionProviderHandle,
   type AgentSessionProviderHandleLink
 } from './agent-session-provider-handle'
@@ -180,36 +179,6 @@ describe('chain append', () => {
     ).toThrow('agent_session_provider_handle_invalid')
   })
 
-  it('refuses to grow past the cap rather than dropping fork provenance', () => {
-    const chain: AgentSessionProviderHandleLink[] = [link()]
-    for (let index = 1; index < MAX_AGENT_SESSION_PROVIDER_HANDLE_LINKS; index += 1) {
-      chain.push(
-        link({
-          linkId: `link-${index + 1}`,
-          origin: 'resumed',
-          handle: claudeProviderHandle('sess-1', `leaf-${index + 1}`),
-          mintedAtFence: index + 1
-        })
-      )
-    }
-    expect(chain).toHaveLength(MAX_AGENT_SESSION_PROVIDER_HANDLE_LINKS)
-    expect(() =>
-      appendAgentSessionProviderHandleLink(
-        chain,
-        link({
-          linkId: 'link-overflow',
-          origin: 'resumed',
-          handle: claudeProviderHandle('sess-1', 'leaf-overflow'),
-          mintedAtFence: 999
-        })
-      )
-    ).toThrow('agent_session_provider_handle_chain_overflow')
-    expect(isAgentSessionProviderHandleChain(chain)).toBe(true)
-    expect(agentSessionProviderHandleChainHead(chain)?.linkId).toBe(
-      `link-${MAX_AGENT_SESSION_PROVIDER_HANDLE_LINKS}`
-    )
-  })
-
   it('never mutates the chain it was given', () => {
     const chain = [link()]
     appendAgentSessionProviderHandleLink(
@@ -242,19 +211,12 @@ describe('chain lookup and validation', () => {
     expect(agentSessionProviderHandleChainHead([])).toBeNull()
   })
 
-  it('rejects a persisted chain that is over the cap or holds a malformed link', () => {
+  it('rejects a persisted chain that holds a malformed link', () => {
     expect(isAgentSessionProviderHandleChain([{ ...link(), mintedAtFence: -1 }])).toBe(false)
     expect(isAgentSessionProviderHandleChain([{ ...link(), linkId: 'not a link id!' }])).toBe(false)
     expect(isAgentSessionProviderHandleChain([{ ...link(), forkedFromKey: 'claude:seed' }])).toBe(
       false
     )
-    expect(
-      isAgentSessionProviderHandleChain(
-        Array.from({ length: MAX_AGENT_SESSION_PROVIDER_HANDLE_LINKS + 1 }, (_value, index) =>
-          link({ linkId: `link-${index}` })
-        )
-      )
-    ).toBe(false)
   })
 
   it('rejects persisted chains that bypass append invariants', () => {
