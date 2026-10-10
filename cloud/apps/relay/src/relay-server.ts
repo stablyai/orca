@@ -389,7 +389,7 @@ export function createRelayServer(
           write: async (mode) =>
             await assignments.recordCellAdmitEffective({ cellId: config.cellId, cellIncarnation, mode }),
           databaseBusy: () => readRelayDatabasePoolPressure(database).databasePoolWaiting > 0,
-          now: performance.now.bind(performance)
+          now: options.now ?? Date.now
         })
       : undefined
   const reserveSweepTimer = reserveBook
@@ -401,9 +401,8 @@ export function createRelayServer(
           sessions.reregisterMemoryControls()
         }
         appliedAdmitMode = admitMode
-        // Booted cells run a default until the first flag read: a db written then could let
-        // today's path onto a reserve cell for its first seconds.
-        if ((options.cellFlags?.().generation ?? 0) > 0) admitEffective?.tick(admitMode)
+        // A booted cell runs db defaults until its first flag read, so it writes nothing until then.
+        admitEffective?.tick(admitMode, options.cellFlags?.().flags.admitMode === 'reserve')
       }, RESERVE_MODE_WATCH_MS)
     : null
   reserveSweepTimer?.unref()

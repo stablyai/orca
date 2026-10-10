@@ -208,7 +208,7 @@ export async function startReserveModeCell(input: {
   const admitEffectiveRow = async () =>
     (
       await input.database.query(
-        `SELECT cell_incarnation, mode FROM relay_cell_admit_effective WHERE cell_id = ?`,
+        `SELECT cell_incarnation, mode, updated_at FROM relay_cell_admit_effective WHERE cell_id = ?`,
         [config.cellId]
       )
     )[0]

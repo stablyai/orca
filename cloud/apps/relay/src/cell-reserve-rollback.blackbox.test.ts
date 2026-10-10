@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
+import { CELL_ADMIT_EFFECTIVE_REFRESH_MS } from './cell-admit-effective-writer.js'
 import { RESERVE_DEAD_MAN_MS, reserveDeadManWindowMs } from './cell-reserve-dead-man.js'
 import { openRelayDatabase } from './database.js'
 import {
@@ -228,13 +229,25 @@ describe('flipping a reserve-mode cell back to the database', () => {
     expect(reply.socket.readyState).toBe(WebSocket.OPEN)
   }, 30_000)
 
-  // Its boot default is not a mode: a db row then could let today's path onto a reserve cell.
-  it('writes no admit-effective row until it has read its flag object', async () => {
-    const booting = await cell(undefined, { flagsUnread: true })
+  // Step 5 off stays write-free: a db switch (read, generation > 0) writes no row, nor does a
+  // booted cell before its first flag read. Leaving reserve writes db once, then nothing.
+  it('writes an admit-effective row only while its switch says reserve, plus one db write on the way out', async () => {
+    let now = Date.now()
+    const booting = await cell(() => now, { flagsUnread: true })
     await new Promise((resolve) => setTimeout(resolve, 2_500))
     expect(await booting.admitEffectiveRow()).toBeUndefined()
     booting.setAdmitMode('db')
+    now += 3 * CELL_ADMIT_EFFECTIVE_REFRESH_MS
+    await new Promise((resolve) => setTimeout(resolve, 2_500))
+    expect(await booting.admitEffectiveRow()).toBeUndefined()
+    booting.setAdmitMode('reserve')
+    await until(async () => (await booting.admitEffectiveRow())?.mode === 'reserve')
+    booting.setAdmitMode('db')
     await until(async () => (await booting.admitEffectiveRow())?.mode === 'db')
+    const last = (await booting.admitEffectiveRow())!.updated_at
+    now += 3 * CELL_ADMIT_EFFECTIVE_REFRESH_MS
+    await new Promise((resolve) => setTimeout(resolve, 2_500))
+    expect((await booting.admitEffectiveRow())!.updated_at).toEqual(last)
   }, 30_000)
 
   it('flips itself back to db when no placing director has been in touch for the dead-man window', async () => {
