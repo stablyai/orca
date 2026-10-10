@@ -82,9 +82,13 @@ export class GoogleStorageMutationLease {
       }
     )
     if (response.status === 412) {
+      await response.body?.cancel().catch(() => undefined)
       throw new MutationLeaseConflict('relay mutation lease changed concurrently')
     }
-    if (!response.ok) throw new Error(`mutation lease acquisition failed: ${response.status}`)
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined)
+      throw new Error(`mutation lease acquisition failed: ${response.status}`)
+    }
     const metadata = (await response.json()) as Partial<ObjectMetadata>
     if (!/^[1-9][0-9]{0,30}$/.test(metadata.generation ?? '')) {
       throw new Error('mutation lease has no valid generation')
@@ -101,6 +105,7 @@ export class GoogleStorageMutationLease {
         headers: { Authorization: `Bearer ${token}` }
       }
     )
+    await response.body?.cancel().catch(() => undefined)
     if (!response.ok && response.status !== 404) {
       throw new Error(`mutation lease release failed: ${response.status}`)
     }
@@ -112,8 +117,12 @@ export class GoogleStorageMutationLease {
     const metadataResponse = await this.fetcher(this.metadataUrl(), {
       headers: { Authorization: `Bearer ${token}` }
     })
-    if (metadataResponse.status === 404) return null
+    if (metadataResponse.status === 404) {
+      await metadataResponse.body?.cancel().catch(() => undefined)
+      return null
+    }
     if (!metadataResponse.ok) {
+      await metadataResponse.body?.cancel().catch(() => undefined)
       throw new Error(`mutation lease inspection failed: ${metadataResponse.status}`)
     }
     const metadata = (await metadataResponse.json()) as Partial<ObjectMetadata>
@@ -124,6 +133,7 @@ export class GoogleStorageMutationLease {
       headers: { Authorization: `Bearer ${token}` }
     })
     if (!bodyResponse.ok) {
+      await bodyResponse.body?.cancel().catch(() => undefined)
       throw new Error(`mutation lease body read failed: ${bodyResponse.status}`)
     }
     const record = (await bodyResponse.json()) as Partial<LeaseRecord>
