@@ -16,6 +16,7 @@ type ExternalAutomationJobsFileOptions = {
   structureLimits?: JsonTextStructureLimits
 }
 
+/** Reads a jobs file under byte, JSON-shape and entry caps so untrusted input can't exhaust memory. */
 export async function readExternalAutomationJobsFile(
   filePath: string,
   options: ExternalAutomationJobsFileOptions
@@ -46,8 +47,9 @@ export async function readExternalAutomationJobsFile(
         ? parsed.jobs
         : []
   if (jobs.length > EXTERNAL_AUTOMATION_JOBS_MAX_ENTRIES) {
+    // Why 'en-US': the sentence is English; a de-DE or pt-BR host would print "10.000" (read as ten).
     throw new Error(
-      `External automation jobs file contains more than ${EXTERNAL_AUTOMATION_JOBS_MAX_ENTRIES.toLocaleString()} jobs and cannot be loaded safely: ${filePath}`
+      `External automation jobs file contains more than ${EXTERNAL_AUTOMATION_JOBS_MAX_ENTRIES.toLocaleString('en-US')} jobs and cannot be loaded safely: ${filePath}`
     )
   }
   return jobs

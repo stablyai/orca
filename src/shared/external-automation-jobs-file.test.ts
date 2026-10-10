@@ -1,7 +1,7 @@
 import { mkdtemp, rm, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   EXTERNAL_AUTOMATION_JOBS_FILE_MAX_BYTES,
   EXTERNAL_AUTOMATION_JOBS_MAX_ENTRIES,
@@ -11,6 +11,7 @@ import {
 const tempDirs: string[] = []
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
 })
 
@@ -47,6 +48,27 @@ describe('readExternalAutomationJobsFile', () => {
 
   it('rejects excessive job counts explicitly', async () => {
     const path = await tempFile('too-many.json')
+    await writeFile(
+      path,
+      JSON.stringify(Array.from({ length: EXTERNAL_AUTOMATION_JOBS_MAX_ENTRIES + 1 }, () => null))
+    )
+
+    await expect(readExternalAutomationJobsFile(path, { allowRootArray: true })).rejects.toThrow(
+      'more than 10,000 jobs'
+    )
+  })
+
+  it('keeps the job cap in English digits on a non-English host locale', async () => {
+    const formatNumber = Number.prototype.toLocaleString
+    // Simulates a de-DE host, where the default locale renders 10000 as "10.000".
+    vi.spyOn(Number.prototype, 'toLocaleString').mockImplementation(function (
+      this: number,
+      locales,
+      options
+    ) {
+      return formatNumber.call(this, locales ?? 'de-DE', options)
+    })
+    const path = await tempFile('too-many-de.json')
     await writeFile(
       path,
       JSON.stringify(Array.from({ length: EXTERNAL_AUTOMATION_JOBS_MAX_ENTRIES + 1 }, () => null))
