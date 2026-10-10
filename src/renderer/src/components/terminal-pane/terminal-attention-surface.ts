@@ -6,14 +6,13 @@
  */
 import type { useAppStore } from '@/store'
 import type {
-  AgentAttentionRemainder,
   AgentAttentionSubject,
   AgentAttentionSurface,
   AgentAttentionSurfaceAdmission,
   AgentAttentionSurfaceSubject,
   AgentAttentionLiveness
 } from '@/attention/agent-attention-contract'
-import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import {
   getPaneKeyTabId,
   hasLivePtyForNotification,
@@ -22,6 +21,7 @@ import {
 } from './terminal-notification-state'
 import { isOrcaWindowForegroundFocused } from './terminal-notification-pane-visibility'
 import { isTabOnVisibleSurface } from '@/hooks/agent-auto-ack-targets'
+import { collectTerminalAttentionRemainder } from '@/lib/workspace-attention-remainder'
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>
 
@@ -42,25 +42,6 @@ function admitTerminalPane(
   return isCurrentPane
     ? { admitted: true, groupId: tabId }
     : { admitted: false, cause: 'superseded-surface' }
-}
-
-function collectTerminalAttentionRemainder(
-  state: StoreSnapshot,
-  workspaceId: string
-): AgentAttentionRemainder {
-  const tabIds = new Set((state.tabsByWorktree[workspaceId] ?? []).map((tab) => tab.id))
-  if (tabIds.size === 0) {
-    return { hasSurfaces: false, unreadSubjectKeys: [], unreadGroupIds: [] }
-  }
-  const unreadSubjectKeys: string[] = []
-  for (const paneKey of Object.keys(state.unreadAgentCompletionPanes)) {
-    const parsed = parsePaneKey(paneKey)
-    if (parsed && tabIds.has(parsed.tabId)) {
-      unreadSubjectKeys.push(paneKey)
-    }
-  }
-  const unreadGroupIds = Object.keys(state.unreadTerminalTabs).filter((tabId) => tabIds.has(tabId))
-  return { hasSurfaces: true, unreadSubjectKeys, unreadGroupIds }
 }
 
 function resolveViewedPaneKey(state: StoreSnapshot, tabId: string): string | null {

@@ -3,14 +3,10 @@
  * the workspace still holds across every surface kind, and the write that acknowledges one target.
  */
 import type { useAppStore } from '@/store'
-import type {
-  AgentAttentionRemainder,
-  AgentAttentionSurface
-} from '@/attention/agent-attention-contract'
+import type { AgentAttentionSurface } from '@/attention/agent-attention-contract'
 import {
   applyAgentAttentionAcknowledgement,
   computeAgentAcknowledgementTargets,
-  mergeAgentAttentionRemainders,
   readAgentAttentionTurnStartedAt,
   resolveViewedUnreadSubjectKey,
   shouldClearWorkspaceAttention,
@@ -18,6 +14,7 @@ import {
 } from '@/attention/agent-attention-acknowledgement'
 import { createTerminalAttentionSurface } from '@/components/terminal-pane/terminal-attention-surface'
 import { createStructuredAttentionSurface } from '@/components/native-chat/structured-attention-surface'
+import { collectWorkspaceAttentionRemainder } from '@/lib/workspace-attention-remainder'
 import type { AutoAckTabTarget } from './agent-auto-ack-targets'
 import {
   emitAgentSubjectReads,
@@ -34,22 +31,6 @@ export function surfaceForAutoAckTarget(
   return target.surfaceKind === 'structured'
     ? createStructuredAttentionSurface(state)
     : createTerminalAttentionSurface(state)
-}
-
-/**
- * Attention the workspace still holds, as every surface kind sees it.
- *
- * Why both: workspace unread belongs to the workspace, not to one surface kind, so asking only
- * the acknowledged kind would report a hidden sibling of the other kind as absent.
- */
-function collectWorkspaceAttentionRemainder(
-  state: StoreSnapshot,
-  workspaceId: string
-): AgentAttentionRemainder {
-  return mergeAgentAttentionRemainders([
-    createTerminalAttentionSurface(state).collectWorkspaceAttentionRemainder(workspaceId),
-    createStructuredAttentionSurface(state).collectWorkspaceAttentionRemainder(workspaceId)
-  ])
 }
 
 /** Subject-keyed view of the store's turn bookkeeping for the neutral acknowledgement policy. */

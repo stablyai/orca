@@ -14,6 +14,7 @@ import {
 } from '../listing/worktree-owner-settings'
 import { persistWorktreeMeta } from '../metadata/worktree-meta-persist'
 import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-errors'
+import { canClearWorkspaceUnread } from '@/lib/workspace-attention-remainder'
 
 export function createMarkWorktreeUnread(
   set: WorktreeSliceSet,
@@ -105,7 +106,7 @@ export function createClearWorktreeUnread(
       const folderWorkspace = get().folderWorkspaces.find(
         (workspace) => workspace.id === folderWorkspaceId
       )
-      if (!folderWorkspace?.isUnread) {
+      if (!folderWorkspace?.isUnread || !canClearWorkspaceUnread(get(), worktreeId)) {
         return
       }
       // Why: flip locally first — this runs per keystroke, so the guard above must dedupe before the IPC round-trip lands.
@@ -120,7 +121,7 @@ export function createClearWorktreeUnread(
     let shouldPersist = false
     set((s) => {
       const worktree = findKnownWorktreeById(s, worktreeId)
-      if (!worktree || !worktree.isUnread) {
+      if (!worktree || !worktree.isUnread || !canClearWorkspaceUnread(s, worktreeId)) {
         // Why: return `s` (not {}) to keep the object reference on this hot-path no-op (every keystroke), avoiding selector churn.
         return s
       }

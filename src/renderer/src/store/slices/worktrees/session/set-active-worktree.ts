@@ -25,6 +25,7 @@ import {
 import { persistPassiveWorktreeMetaForOwner } from '../listing/worktree-owner-settings'
 import { resolveActivatedWorktreeSurface } from './active-worktree-surface'
 import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { canClearWorkspaceUnread } from '@/lib/workspace-attention-remainder'
 import {
   pendingActivationTerminalPrepCancels,
   shouldDeferActivationTerminalPrep
@@ -83,7 +84,7 @@ export function createSetActiveWorktree(
       }
 
       const worktree = findKnownWorktreeById(s, worktreeId, executionHostId)
-      shouldClearUnread = Boolean(worktree?.isUnread)
+      shouldClearUnread = Boolean(worktree?.isUnread && canClearWorkspaceUnread(s, worktreeId))
       const {
         restoredRightSidebarExplorerView,
         activeFileId,
