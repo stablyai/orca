@@ -33,11 +33,11 @@ on:
         type: choice
         options: [none, staging-gce-c1, staging-gce-c2, staging-gce-c3, staging-gce-c4]
       min-instances:
-        description: Director floor; keep 2 while any cell is reserve, so reserve polls never stop
+        description: Director floor; preserve keeps the serving revision's, so a reserve run's 2 survives
         required: true
-        default: '0'
+        default: preserve
         type: choice
-        options: ['0', '2']
+        options: [preserve, '0', '2']
       confirmation:
         description: BOOTSTRAP_RELAY_DIRECTOR_REHOME_IDENTITY for a bootstrap
         required: false
@@ -93,7 +93,7 @@ jobs:
           [[ "${EXPECTED_IMAGE_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]
           [[ "${EXPECTED_REHOME_GENERATION}" =~ ^(0|[1-9][0-9]*)$ ]]
           [[ "${BOOTSTRAP_RUNTIME_IDENTITY}" =~ ^(true|false)$ ]]
-          [[ "${MIN_INSTANCES}" =~ ^[02]$ ]]
+          [[ "${MIN_INSTANCES}" =~ ^(preserve|0|2)$ ]]
           if test "${BOOTSTRAP_RUNTIME_IDENTITY}" = true; then
             [[ "${PREDECESSOR_IMAGE_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]
             test "${CAPACITY_CELL_ID}" = none
@@ -175,6 +175,11 @@ jobs:
               --predecessor-image-digest "${PREDECESSOR_IMAGE_DIGEST}"
             )
           fi
+          # Omitted, the deploy script inherits the serving revision's floor.
+          floor_args=()
+          if test "${MIN_INSTANCES}" != preserve; then
+            floor_args=(--min-instances "${MIN_INSTANCES}")
+          fi
           topology_args=()
           if test "${CAPACITY_CELL_ID}" != none; then
             topology_args=(
@@ -193,7 +198,7 @@ jobs:
             --deploy-service-account "${DEPLOY_SERVICE_ACCOUNT}" \
             --asia-proof-service-account "${ASIA_PROOF_SERVICE_ACCOUNT}" \
             --regional-placement-secret-version "${regional_version}" \
-            --min-instances "${MIN_INSTANCES}" \
+            "${floor_args[@]}" \
             --runtime-service-account "${DIRECTOR_RUNTIME_SERVICE_ACCOUNT}" \
             "${identity_args[@]}" \
             --rehome-director-service-account "${DIRECTOR_RUNTIME_SERVICE_ACCOUNT}" \
