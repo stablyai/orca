@@ -116,11 +116,3 @@ export function createSystemSshProcess(): MockSystemSshProcess {
   })
   return proc
 }
-
-export function createFailingSystemSshProcess(code: number): MockSystemSshProcess {
-  const proc = createPendingSystemSshProcess()
-  proc.onExit = vi.fn((handler: (exitCode: number | null) => void) => {
-    queueMicrotask(() => handler(code))
-  })
-  return proc
-}

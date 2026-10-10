@@ -30,6 +30,7 @@ import type {
 } from '../../shared/worktree/lineage-types'
 import { recordCreatedWorktreeLineage as recordCreatedWorktreeLineageState } from './runtime-worktree-lineage-recording'
 import {
+  deliverWorktreeStartupFollowup,
   pasteWorktreeStartupDraftWhenReady,
   sendWorktreeStartupFollowupWhenReady,
   waitForWorktreeStartupDraft
@@ -304,6 +305,11 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
 
   protected sendStartupFollowupWhenReady(handle: string, followup: WorktreeStartupFollowup): void {
     sendWorktreeStartupFollowupWhenReady(this.getWorktreeStartupReadinessHost(), handle, followup)
+  }
+
+  /** The same follow-up write, awaited: true once the prompt was typed into the agent. */
+  deliverStartupFollowup(handle: string, followup: WorktreeStartupFollowup): Promise<boolean> {
+    return deliverWorktreeStartupFollowup(this.getWorktreeStartupReadinessHost(), handle, followup)
   }
 
   protected async provisionManagedWorktreeTerminals(

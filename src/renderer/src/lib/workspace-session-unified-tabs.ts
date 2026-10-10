@@ -77,7 +77,8 @@ export function buildPersistedUnifiedTabSessionData(
   ])
 
   for (const worktreeId of worktreeIds) {
-    const tabs = sourceTabs[worktreeId] ?? []
+    // Why: chat-visual tabs are in memory only; the saved-session schema has no such kind.
+    const tabs = (sourceTabs[worktreeId] ?? []).filter((tab) => tab.contentType !== 'chat-visual')
     if (tabs.length === 0) {
       continue
     }

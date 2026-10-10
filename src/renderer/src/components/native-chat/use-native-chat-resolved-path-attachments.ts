@@ -65,12 +65,17 @@ export function useNativeChatResolvedPathAttachments({
 
   const insertFileReferences = useCallback(
     (paths: string[]) => {
-      const references = paths.map(formatNativeChatFileReference).join(' ')
-      if (references.length === 0) {
+      if (paths.length === 0) {
         return
       }
-      const insertion = `${references} `
-      const caretAtInsert = textareaRef.current?.selectionStart ?? caret
+      const input = textareaRef.current
+      // The editor shows each file as a pill and reports the new draft and caret itself.
+      if (input?.insertFileReferences) {
+        input.insertFileReferences(paths)
+        return
+      }
+      const insertion = `${paths.map(formatNativeChatFileReference).join(' ')} `
+      const caretAtInsert = input?.selectionStart ?? caret
       setDraft((prev) => {
         const before = prev.slice(0, caretAtInsert)
         const after = prev.slice(caretAtInsert)

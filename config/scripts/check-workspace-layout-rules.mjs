@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Checks a profile's saved workspace layout against the structural layout rules
-// (src/main/persistence/terminal-topology/workspace-layout-rules.ts). Works on a running dev app's
+// (src/shared/workspace-layout/workspace-layout-rules.ts). Works on a running dev app's
 // profile too. Usage: node config/scripts/check-workspace-layout-rules.mjs <userDataDir>
 // Exits 1 when any rule is broken, printing one line per breach.
 
@@ -25,7 +25,7 @@ try {
       contents: `
         export { readPersistedProfileState } from './tests/e2e/helpers/persisted-profile-state'
         export { partitionsFromProfileRoot } from './tests/e2e/helpers/workspace-layout-oracle-views'
-        export { checkWorkspaceLayoutRules } from './src/main/persistence/terminal-topology/workspace-layout-rules'
+        export { checkWorkspaceLayoutRules } from './src/shared/workspace-layout/workspace-layout-rules'
       `,
       resolveDir: root,
       loader: 'ts'

@@ -24,15 +24,12 @@ import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
 
 export type RuntimeTerminalProcessInspection = TerminalProcessInspection
 
-const REMOTE_PTY_ID_PREFIX = 'remote:'
 const DESKTOP_RUNTIME_CLIENT = { id: 'orca-desktop', type: 'desktop' } as const
 function isRuntimePtyInputTooLarge(data: string): boolean | Promise<boolean> {
   return isTerminalInputTooLargeWithDeferredMeasurement(data)
 }
 
-export function isRemoteRuntimePtyId(ptyId: string): boolean {
-  return ptyId.startsWith(REMOTE_PTY_ID_PREFIX)
-}
+export { isRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 
 function isRemoteInspectionPtyId(ptyId: string): boolean {
   return getRemoteRuntimePtyEnvironmentId(ptyId) !== null || parseAppSshPtyId(ptyId) !== null

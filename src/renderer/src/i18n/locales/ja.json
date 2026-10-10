@@ -3263,6 +3263,7 @@
                 "ce8248b835": "ワークツリーのパスが使用できません。",
                 "internalTooManyPaths": "安全にターミナルへ貼り付けるにはドロップされたパスが多すぎます。",
                 "internalPathsTooLarge": "安全にターミナルへ貼り付けるにはパス一覧が大きすぎます。",
+                "internalHostMismatch": "このターミナルと同じホストのファイルをドロップしてください。",
                 "b4cf68e889": "{{value0}} {{value1}} をスキップしました。",
                 "writeTimeout": "ファイルドロップをキャンセルしました: 安全タイムアウト前にターミナルがパスを受け付けませんでした。",
                 "writeRejected": "ファイルドロップをキャンセルしました: ターミナルがパスを受け付けられませんでした。"
@@ -3425,7 +3426,8 @@
             "ec2adf093e": "新規ターミナルで {{value0}} を起動",
             "465e432ef1": "{{value0}} の起動コマンドを作成できませんでした。",
             "e518f544b1": "Agent が検出されませんでした",
-            "8dea9b5cdf": "有効な Agent がありません"
+            "8dea9b5cdf": "有効な Agent がありません",
+            "needsServerUpdate": "このワークスペースの Agent を表示するには、このサーバーの Orca を更新してください"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "タブの切り替え",
@@ -3742,7 +3744,6 @@
             "54e8d6bb2d": "Fable",
             "d79c3362c4": "5時間",
             "a79c64f87e": "Fable",
-            "8295903d17": "切り替え後に古い会話を続ける前に、ライブ Claude ターミナルを再起動します。",
             "c98ea88392": "他のアカウントはありません",
             "9332ba8684": "切り替え先",
             "d450654fa2": "Claude アカウント",
@@ -3981,6 +3982,10 @@
           "StatusBarUsageChangeNotices": {
             "compactTitle": "使用量がコンパクト表示になりました",
             "compactBody": "プロバイダーごとに主要な指標を1つ表示します。より多くの上限を表示するには、使用量メニューで「<detailed>詳細</detailed>」を選択してください。"
+          },
+          "usageUnitLabel": {
+            "used": "使用済み",
+            "remaining": "残り"
           },
           "UsagePercentageDisplayChangeNotice": {
             "title": "使用状況に、使用済みの割合を表示するようになりました",
@@ -6497,7 +6502,6 @@
         "AccountsPane": {
           "c2d2751587": "アカウントの削除",
           "dbb9626ed1": "キャンセル",
-          "854ebbcc45": "Orca は、この保存されたアカウントの管理対象 Claude 認証を削除します。現在アクティブな場合、Orca はシステムのデフォルトの Claude ログインに戻ります。",
           "63843e37e2": "Claude アカウントを削除しますか?",
           "380a7736cc": "このアカウントを削除すると、管理対象の Codex ホームと、その中に保存されているすべての Codex セッション履歴および MCP ログインが完全に削除されます。この操作は元に戻せません。アカウントが現在アクティブな場合、Orca はシステムのデフォルトの Codex ログインに戻ります。",
           "0d47394635": "Codex アカウントを削除しますか?",
@@ -6545,12 +6549,10 @@
           "3fe7862418": "{{value0}} の管理対象 Claude アカウントはありません。ここで追加するまで、Orca はその環境のシステムデフォルトの Claude ログインを使用します。",
           "3455cf43fa": "Claude のログイン。",
           "fcc4093fc1": "現在の {{value0}} Codex ログインを使用します。",
-          "79e484c3b2": "共有 Claude 認証ファイル用のオプションのアカウントスイッチャー。",
           "8bbfd74556": "Claude アカウント",
           "72b36ea174": "任意。Orca は通常の Claude ログインを使用できます。チャットセッションを移さずにすばやく切り替えたい場合にのみ、アカウントを追加してください。",
           "26ef4b55be": "Claude",
           "2743cdc0af": "Claude アカウントの更新に失敗しました。",
-          "b15ce90870": "{{value0}} -> {{value1}}。古いセッションを続行する前に、ライブ Claude ターミナルを再起動します。",
           "f921d32606": "Claude アカウントが更新されました。",
           "5bf8764953": "Codex アカウントの更新に失敗しました。",
           "9baf45d071": "このデバイス",
@@ -11457,7 +11459,6 @@
           "pathGroup": "スマートフォンがこのコンピュータに到達する方法",
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "スマートフォンはモバイル回線または任意の Wi‑Fi から接続できます。サインインが必要なのは Relay のみです。",
-          "signInRequired": "Relay のみ — LAN にはアカウントは不要です。",
           "relayUnavailable": "このビルドでは Orca Relay を利用できません。LAN をご利用ください。",
           "signInAgain": "Relay に再サインイン",
           "localTitle": "LAN",
@@ -14901,7 +14902,6 @@
                 "d90d2e1f6d": "セッションと毎週の使用状況を追跡します。",
                 "8919321417": "Codex のサインインに失敗しました。",
                 "c7b90c140b": "Codex アカウントが追加されました。",
-                "4e71d72912": "Claude のサインインに失敗しました。",
                 "9ddeb558f9": "Claude アカウントが追加されました。",
                 "29d0653961": "サインイン",
                 "945865332e": "サインインする",
@@ -17846,6 +17846,8 @@
         "managedAccountUnsupported": "WSL に Claude アカウントが追加されている間、Claude チャットには Windows の Claude アカウントが必要です。",
         "launchFolderMissing": "このチャットが実行されていたフォルダーは存在しなくなりました。このチャットを続けるには、フォルダーを復元してください。",
         "historyInOtherAccount": "このチャットの履歴は別の Claude アカウントにあります。続けるには、そのアカウントに切り替えてください。",
+        "claudeAccountFolderMissing": "選択した Claude アカウントのフォルダーが見つかりません。もう一度サインインするか、別のアカウントを選択してください。",
+        "claudeAccountSetupFailed": "選択した Claude アカウントを設定できませんでした。もう一度試すか、別のアカウントを選択してください。",
         "agentCommandNotRunnable": "[設定] → [Agent] にある {{agent}} の [コマンド] には、Orca が見つけられるプログラムのパスまたは名前を、引数や変数なしで指定する必要があります。変更するか、[リセット] してください。",
         "chooseClaudeAccount": "Claude アカウントの設定で選択または追加してください。",
         "chooseClaudeAccountThenRunCommand": "Claude アカウントの設定で選択または追加してから、/{{command}} をもう一度実行してください。",
@@ -18011,6 +18013,7 @@
         "model": "モデル",
         "effort": "推論レベル",
         "fastMode": "高速モード",
+        "speed": "速度",
         "thinking": "思考",
         "options": "オプション",
         "sessionOptions": "セッションオプション",
@@ -18031,7 +18034,8 @@
           "high": "高",
           "xhigh": "最高",
           "max": "最大",
-          "ultra": "ウルトラ"
+          "ultra": "ウルトラ",
+          "standard": "標準"
         },
         "noCommandsOrSkills": "一致するコマンドやスキルがありません",
         "commands": "コマンド",
@@ -18284,6 +18288,7 @@
         "orcaStopUpdate": "この応答の途中で、{{machine}} の Orca がアップデートのため再起動しました。",
         "orcaStopQuit": "この応答の途中で、{{machine}} の Orca が終了しました。",
         "orcaStopCrash": "この応答の途中で、{{machine}} の Orca が予期せず停止しました。",
+        "orcaStopRemote": "この応答の途中で、{{machine}} の Orca が停止しました。",
         "orcaStopCanContinue": "この会話で続行できます。"
       },
       "providerFrame": {
@@ -18420,10 +18425,8 @@
       },
       "queuedMessages": {
         "alreadySent": "このメッセージはすでに送信されています。",
-        "editAlreadySent": "すでに送信されています — テキストは入力欄に残っています。",
         "listLabel": "キュー内のメッセージ",
         "behindReturnedHold": "待機中 — 前のメッセージの対応が必要です",
-        "awaitingAnswerHold": "回答を待っています",
         "steer": "今すぐ送信",
         "send": "送信",
         "steerHint": "モデルを中断せずに送信します",
@@ -18447,7 +18450,15 @@
         "sendConfirmClear": "キューを消去",
         "sendConfirmSend": "メッセージを送信",
         "fromSender": "送信元:",
-        "pausedSendFailedWaiting": "送信できませんでした。Agent の処理が終わったら「送信」を押して再試行してください。"
+        "pausedSendFailedWaiting": "送信できませんでした。Agent の処理が終わったら「送信」を押して再試行してください。",
+        "save": "保存",
+        "editingMessage": "メッセージを編集中",
+        "cancelEditing": "編集をキャンセル",
+        "editChanged": "編集中にこのメッセージが変更されました。編集したテキストはチャット入力欄にあります。",
+        "editChangedPrompt": "編集中にこのメッセージが変更されました。Agent に回答すると、編集したテキストがチャット入力欄に表示されます。",
+        "editFailed": "このメッセージは編集できません。",
+        "editGone": "このメッセージはすでに送信または削除されています。編集したテキストはチャット入力欄にあります。",
+        "editGonePrompt": "このメッセージはすでに送信または削除されています。Agent に回答すると、編集したテキストがチャット入力欄に表示されます。"
       },
       "thought": "考えました",
       "thoughtForDuration": "{{duration}} 考えました",
@@ -18488,8 +18499,7 @@
       },
       "visualUnavailable": "ビジュアライゼーションを利用できません",
       "visualLoading": "ビジュアライゼーションを読み込み中",
-      "visualOpenInSidebar": "サイドバーで開く",
-      "visualClose": "ビジュアライゼーションを閉じる"
+      "visualOpenInNewTab": "新しいタブで開く"
     },
     "tab": {
       "bar": {
@@ -19117,6 +19127,9 @@
     "nativeChatUpgrade": {
       "eyebrow": "新機能",
       "title": "ネイティブチャットを刷新",
+      "chatModeNote": "新しい Agent タブは、これまでどおりターミナルで開きます。",
+      "chatModeLabel": "チャットモードをオンにする",
+      "chatModeHint": "新しい Agent タブをチャットで開きます。",
       "intro": "対応 Agent の新しいチャットはアップグレード版のチャットビューで開きます。チャットと CLI の切り替えは右サイドバーの{{panel}}から:",
       "resumeInNativeChat": "{{action}}: 対応する CLI の会話をネイティブチャットで開きます。",
       "resumeInCli": "{{action}}: Claude/Codex のチャットを新しい CLI セッションに複製します。元のチャットは残ります。",
@@ -19236,6 +19249,7 @@
       "sortResultsAriaLabel": "ソート結果: {{value0}}",
       "consent": "全文検索を有効にしますか? Orca は、完全な会話とツール出力ごとに最大 3,072 文字を含む、ローカル Agent のトランスクリプトからこのコンピュータ上にインデックスを作成します。内容は編集されていません。認証されたペアリングされたクライアントは検索できます。",
       "remoteDisabled": "このコンピュータでは検索が無効になっています。そのコンピュータ上でトランスクリプトのインデックス作成を有効にして、セッションを検索します。",
+      "titleOnly": "このコンピュータでは全文検索がオフのため、セッションのタイトルのみが照合されます。",
       "notReady": "検索インデックスはまだ準備ができていません。しばらくしてからもう一度お試しください。",
       "noService": "このコンピュータでは検索を利用できません。 Orca アップデートまたは検索サポートを備えたランタイムが必要な場合があります。",
       "failed": "このコンピュータを検索できませんでした。接続を確認して、再試行してください。",
@@ -19443,9 +19457,6 @@
       "oldTerminalDialogRisk": "サーバーを共有する Codex セッションが同時に終了する可能性があり、Agent のステータスが間違っている可能性があります。",
       "oldTerminalDialogCause": "古いターミナルは依然として Codex サーバーを共有しています。新規ターミナルを開いて、別のサーバーで Codex を実行します。",
       "fix": "修理",
-      "openNewTerminal": "新規ターミナルを開く",
-      "dontShowAgain": "二度と表示しないでください",
-      "dismiss": "閉じる",
       "dialogTitle": "各 Codex タブに独自のサーバーを与える",
       "dialogDescription": "ターミナルで直接開始された Codex セッションは、1 つのバックグラウンドサーバーを共有します。 Orca は、開始する Codex セッションを個別に保持します。セッションがサーバーを共有している場合、1 つを閉じると他のセッションも終了し、Agent のステータスが不正になる可能性があります。",
       "copy": "コピー",
@@ -19456,7 +19467,6 @@
       "step2Title": "稼働中の共有サーバーを停止します",
       "undo": "元に戻すには、codex features enable daemon_auto_start を実行します。",
       "step2Warning": "サーバーを共有している開いている Codex セッションをすべて閉じます。",
-      "learnMore": "詳しく見る",
       "turnOff": "消す",
       "turningOff": "オフにしています…",
       "turnedOff": "オフになっています",
@@ -19472,6 +19482,12 @@
     },
     "paneMove": {
       "failed": "ペインを新規タブに移動できませんでした。"
+    },
+    "paneTopBanner": {
+      "openNewTerminal": "新規ターミナルを開く",
+      "learnMore": "詳しく見る",
+      "dontShowAgain": "二度と表示しないでください",
+      "dismiss": "閉じる"
     }
   },
   "fileSearch": {

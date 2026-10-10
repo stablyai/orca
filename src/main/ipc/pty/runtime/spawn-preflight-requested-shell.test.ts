@@ -1,3 +1,7 @@
+import type * as ChildProcessModule from 'node:child_process'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -8,6 +12,31 @@ import { createRuntimePtySpawnState, type RuntimePtySpawnArgs } from './spawn-st
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import { ClaudeProfileRouter } from '../../../claude-accounts/claude-profile-router'
 import { installClaudeProfileRouter } from '../../../claude-accounts/claude-profile-installed-router'
+
+const { regQueryStdout } = vi.hoisted(() => ({ regQueryStdout: { value: '' } }))
+
+// Answers only the OpenSSH DefaultShell registry query; every other spawn is real.
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof ChildProcessModule>()
+  return {
+    ...actual,
+    spawnSync: (
+      file: string,
+      args: readonly string[],
+      options: ChildProcessModule.SpawnSyncOptions
+    ) =>
+      /reg\.exe$/i.test(file) && args.includes('DefaultShell')
+        ? {
+            pid: 0,
+            output: [],
+            stdout: Buffer.from(regQueryStdout.value),
+            stderr: Buffer.alloc(0),
+            status: regQueryStdout.value ? 0 : 1,
+            signal: null
+          }
+        : actual.spawnSync(file, [...args], options)
+  }
+})
 
 const HOST_DEFAULT_SHELL = 'powershell.exe'
 const hostPlatform = process.platform
@@ -83,6 +112,53 @@ describe('runtime pty spawn preflight: requested shell on a local Windows host',
   })
 })
 
+describe('runtime pty spawn preflight: OpenSSH login shell on a managed SSH host (#9327)', () => {
+  let loginShellDir = ''
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    rmSync(loginShellDir, { recursive: true, force: true })
+    Object.defineProperty(process, 'platform', { configurable: true, value: hostPlatform })
+  })
+
+  async function resolveWithLoginShell(managed: boolean, shellOverride?: string) {
+    vi.resetModules()
+    loginShellDir = mkdtempSync(join(tmpdir(), 'orca-openssh-login-shell-'))
+    const loginShell = join(loginShellDir, 'pwsh.exe')
+    writeFileSync(loginShell, '')
+    regQueryStdout.value = `HKEY_LOCAL_MACHINE\\SOFTWARE\\OpenSSH\r\n    DefaultShell    REG_SZ    ${loginShell}\r\n`
+    if (managed) {
+      vi.stubEnv('ORCA_ORCAD_MANAGED_ACTIVATION_ROOT', loginShellDir)
+    }
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const { prepareRuntimePtySpawn: prepare } = await import('./spawn-preflight')
+    const { buildRuntimePtySpawnOptions: build } = await import('./spawn-options')
+    const { createRuntimePtySpawnState: create } = await import('./spawn-state')
+    const ctx = create(makeDeps(), { cols: 120, rows: 40, shellOverride })
+    await prepare(ctx)
+    await build(ctx)
+    ctx.finishTerminalInstall()
+    return { loginShell, shell: ctx.spawnOptions.shellOverride }
+  }
+
+  it('opens the configured login shell instead of the shipped PowerShell default', async () => {
+    const { loginShell, shell } = await resolveWithLoginShell(true)
+
+    expect(shell).toBe(loginShell)
+  })
+
+  it('still honors a shell the client asked for explicitly', async () => {
+    await expect(resolveWithLoginShell(true, 'cmd.exe')).resolves.toMatchObject({
+      shell: 'cmd.exe'
+    })
+  })
+
+  it('leaves a desktop or user-started server on its own default', async () => {
+    await expect(resolveWithLoginShell(false)).resolves.toMatchObject({
+      shell: HOST_DEFAULT_SHELL
+    })
+  })
+})
+
 describe('runtime pty spawn preflight: Claude account routing in a WSL pane', () => {
   afterEach(() => {
     installClaudeProfileRouter(undefined)
@@ -96,6 +172,7 @@ describe('runtime pty spawn preflight: Claude account routing in a WSL pane', ()
       new ClaudeProfileRouter({
         getSettings: () => getDefaultSettings('/tmp'),
         dataRoot: '/data/orca',
+        env: {},
         runSetup
       })
     )

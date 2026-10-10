@@ -198,6 +198,8 @@ async function runAttachUnderAbort(
       now: () => context.now(),
       recordPhase,
       acquireSignal,
+      onStartCatalogListing: (listing) =>
+        context.deps.modelCatalog?.recordLiveListing(sessionId, listing),
       onStartupAttempt: (startup) => {
         attempt.startup = startup
         return startupAttempts.track(sessionId, startup)
@@ -232,6 +234,7 @@ async function runAttachUnderAbort(
             fence,
             acquisitionGeneration,
             deathEvidence: priorDeathEvidence,
+            replaced: context.deps.store.replacedRuntime(sessionId),
             failureTextContext: structuredAgentSessionFailureWordsContext(priorRecord)
           })
         }

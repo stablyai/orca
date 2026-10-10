@@ -18,6 +18,8 @@ type Command = {
   turnId: string | null
   backgrounded: boolean
   task: AgentSessionBackgroundTask
+  /** Codex's id for the command's process, which a background-terminal stop names. */
+  processId?: string
   bytes: number
 }
 
@@ -29,6 +31,7 @@ export type CodexBackgroundCommandChange =
       turnId: string | null
       backgrounded: boolean
       task: AgentSessionBackgroundTask
+      processId?: string
     }
   | { type: 'ended'; threadId: string; taskId: string }
 
@@ -97,8 +100,15 @@ export class CodexBackgroundCommandTracker {
   }
 
   private liveChange(command: Command): Extract<CodexBackgroundCommandChange, { type: 'started' }> {
-    const { threadId, turnId, backgrounded, task } = command
-    return { type: 'started', threadId, turnId, backgrounded, task }
+    const { threadId, turnId, backgrounded, task, processId } = command
+    return {
+      type: 'started',
+      threadId,
+      turnId,
+      backgrounded,
+      task,
+      ...(processId !== undefined ? { processId } : {})
+    }
   }
 
   /** The thread closed: Codex stops its processes first, so none of them can report an exit. */
@@ -128,6 +138,24 @@ export class CodexBackgroundCommandTracker {
           ? { ...task, description: codexChildCommandDescription(label, task.description) }
           : task
       })
+  }
+
+  /** Whether a running command carries a process id a background-terminal stop could name. */
+  get holdsProcess(): boolean {
+    return [...this.commands.values()].some((command) => command.processId !== undefined)
+  }
+
+  /** Every live process, on every thread. */
+  liveCommands(): CodexBackgroundCommandChange[] {
+    return [...this.commands.values()].map((command) => this.liveChange(command))
+  }
+
+  /** The processes the named tasks run: only backgrounded commands, the ones the strip offers. */
+  backgroundProcesses(taskIds: readonly string[]): { threadId: string; processId: string }[] {
+    const named = new Set(taskIds)
+    return [...this.commands.values()].flatMap(({ threadId, backgrounded, task, processId }) =>
+      backgrounded && processId !== undefined && named.has(task.id) ? [{ threadId, processId }] : []
+    )
   }
 
   /** Live processes, including foreground tools that are absent from the strip. */
@@ -213,6 +241,7 @@ export class CodexBackgroundCommandTracker {
       .replace(/\s+/g, ' ')
       .trim()
     const turnId = readCodexTurnId(event.params)
+    const processId = readString(item, 'processId') ?? undefined
     const value = {
       threadId: event.threadId,
       turnId,
@@ -224,7 +253,8 @@ export class CodexBackgroundCommandTracker {
             : `codex-command:thread:${encodeURIComponent(event.threadId)}:${encodeURIComponent(item.id)}`,
         kind: 'command' as const,
         ...(description ? { description } : {})
-      }
+      },
+      ...(processId !== undefined ? { processId } : {})
     }
     return {
       key,

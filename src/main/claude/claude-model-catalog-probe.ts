@@ -23,7 +23,6 @@ export type ClaudeModelCatalogProbeDeps = Pick<
   ClaudeStructuredLaunchResolverDeps,
   'resolveCommand' | 'resolveEnv' | 'resolveInheritedEnv' | 'resolveAuthPolicy'
 > & {
-  authSwitchSettleTimeoutMs?: number
   /** Test seam; production runs the shared supervised listing. */
   runListing?: typeof runAgentModelCatalogListing
 }
@@ -75,7 +74,6 @@ export function createClaudeModelCatalogProbe(
           ? { supportsFastMode: model.supportsFastMode }
           : {})
       })),
-      fastModeTierByModel: new Map(),
       origin: 'probe'
     }
   }

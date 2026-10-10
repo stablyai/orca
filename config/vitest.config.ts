@@ -5,19 +5,21 @@ import TimingSequencer from './scripts/ci-unit-sequencer.mjs'
 import RuntimeSequencer from './scripts/vitest-runtime-sequencer.mjs'
 import { NODE_RUNTIME_INCLUDE } from './scripts/vitest-node-runtime-files.mjs'
 import { nodeRuntimePool } from './scripts/vitest-node-runtime-pool'
+import { createWorkspaceSourceResolver } from './scripts/workspace-source-exports.mjs'
 
 const balancedShards = process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
 const measurementFile = 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-event-loop.test.ts'
 const transforms = {
   define: { ORCA_FEATURE_WALL_ENABLED: 'true' },
   resolve: {
-    alias: {
-      '@renderer': resolve('src/renderer/src'),
-      '@': resolve('src/renderer/src'),
-      'fs/promises': 'node:fs/promises',
-      fs: 'node:fs',
-      os: 'node:os'
-    }
+    alias: [
+      ...createWorkspaceSourceResolver().aliases,
+      { find: '@renderer', replacement: resolve('src/renderer/src') },
+      { find: '@', replacement: resolve('src/renderer/src') },
+      { find: 'fs/promises', replacement: 'node:fs/promises' },
+      { find: 'fs', replacement: 'node:fs' },
+      { find: 'os', replacement: 'node:os' }
+    ]
   }
 }
 const testOptions = {

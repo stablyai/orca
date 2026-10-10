@@ -32,6 +32,12 @@ export function launchAiVaultSessionInNewTab(args: {
 }): LaunchAiVaultSessionInNewTabResult {
   const store = useAppStore.getState()
   let targetGroupId = args.targetGroupId
+  // Why before both paths: the runtime path used to return first and drop the split (#22791).
+  const splitGroupId =
+    args.splitDirection && targetGroupId
+      ? store.createEmptySplitGroup(args.worktreeId, targetGroupId, args.splitDirection)
+      : null
+  targetGroupId = splitGroupId ?? targetGroupId
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, args.worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     const runtimeLaunch = createWebRuntimeSessionTerminal({
@@ -52,6 +58,9 @@ export function launchAiVaultSessionInNewTab(args: {
     const observedRuntimeLaunch = runtimeLaunch.then((outcome) => {
       if (outcome.status === 'created') {
         useAppStore.getState().setActiveTabType('terminal', args.worktreeId)
+      } else if (splitGroupId) {
+        // A refused or failed drop must not leave a blank pane behind.
+        useAppStore.getState().closeEmptyGroup(args.worktreeId, splitGroupId)
       }
       return outcome
     })
@@ -60,12 +69,6 @@ export function launchAiVaultSessionInNewTab(args: {
       ...(targetGroupId ? { groupId: targetGroupId } : {}),
       runtimeLaunch: observedRuntimeLaunch
     }
-  }
-
-  if (args.splitDirection && targetGroupId) {
-    targetGroupId =
-      store.createEmptySplitGroup(args.worktreeId, targetGroupId, args.splitDirection) ??
-      targetGroupId
   }
 
   const tab = args.cwd

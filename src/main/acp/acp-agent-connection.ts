@@ -1,4 +1,5 @@
-import { spawnProcess } from '../../shared/child-process/run-process'
+import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import { spawnProcess } from '@orca/process-host'
 import {
   spawnManagedProviderProcess,
   type ManagedProviderProcess,
@@ -21,7 +22,7 @@ export type AcpAgentConnectionOptions = Omit<AcpSessionRuntimeOptions, 'peer'> &
 export function createAcpAgentConnection(
   launch: ProviderProcessLaunch,
   options: AcpAgentConnectionOptions = {},
-  spawnImpl: typeof spawnProcess = spawnProcess
+  spawnImpl: PipedProcessSpawner = spawnProcess
 ): AcpAgentConnection {
   return new AcpAgentConnection(launch, options, spawnImpl)
 }
@@ -35,7 +36,7 @@ export class AcpAgentConnection extends AcpSessionRuntime {
   constructor(
     launch: ProviderProcessLaunch,
     options: AcpAgentConnectionOptions = {},
-    spawnImpl: typeof spawnProcess = spawnProcess
+    spawnImpl: PipedProcessSpawner = spawnProcess
   ) {
     // Validate before spawning so invalid limits cannot leave an unowned child.
     const peer = resolveAcpPeerOptions({ ...options.peer, closeOnInputEnd: false })

@@ -1,8 +1,15 @@
 import { toast } from 'sonner'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 import { getLocalFileManager } from './local-file-manager-label'
-import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from './local-path-open-guard'
+import {
+  getLocalPathOpenOwnerForRoute,
+  isLocalPathOpenBlocked,
+  showLocalPathOpenBlockedToast,
+  type LocalPathOpenOwner
+} from './local-path-open-guard'
+import { getResolvedExecutionHostIdForWorktree } from './resolved-worktree-execution-host'
+import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 
 /** Menu label for showing a path in the OS file manager, as each platform names it. */
 export function getRevealInFileManagerLabel(): string {
@@ -26,19 +33,28 @@ export function getRevealInFileManagerLabel(): string {
 }
 
 /**
- * Whether the OS file manager cannot show a file: another host owns it, or a remote runtime is
- * focused, which makes the main process refuse every reveal.
+ * The host that owns a workspace file. A route that reads as local is confirmed against the
+ * catalog row, because a server workspace whose tab carries no owner stamp also reads as local.
  */
-export function isRevealInFileManagerBlocked(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
-  owner: { connectionId?: string | null; runtimeEnvironmentId?: string | null }
-): boolean {
-  return isLocalPathOpenBlocked(settings, owner)
+export function getWorkspaceFileRevealOwner(
+  state: WorktreeRuntimeOwnerState,
+  worktreeId: string | null | undefined,
+  route: { connectionId?: string | null; runtimeEnvironmentId?: string | null }
+): ExecutionHostId | 'unresolved' {
+  const routeOwner = getLocalPathOpenOwnerForRoute(route)
+  if (routeOwner !== LOCAL_EXECUTION_HOST_ID || !worktreeId) {
+    return routeOwner
+  }
+  return getResolvedExecutionHostIdForWorktree(state, worktreeId) ?? 'unresolved'
 }
 
-/** Shows a client-local path selected in the OS file manager, and says why when it cannot. */
-export async function revealInFileManager(path: string): Promise<void> {
-  const result = await window.api.shell.openInFileManager(path)
+/** Shows a path in the OS file manager when this computer owns it, and says why when it cannot. */
+export async function revealInFileManager(path: string, owner: LocalPathOpenOwner): Promise<void> {
+  if (isLocalPathOpenBlocked(owner)) {
+    showLocalPathOpenBlockedToast()
+    return
+  }
+  const result = await window.api.shell.openInFileManager(path, LOCAL_EXECUTION_HOST_ID)
   if (result.ok) {
     return
   }

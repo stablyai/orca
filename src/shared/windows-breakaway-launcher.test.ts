@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { quoteWindowsArgument } from './child-process/windows-command-line'
+import { quoteWindowsArgument } from '@orca/process-host/windows-command-line'
 import {
   ORCAD_WINDOWS_BREAKAWAY_CONTRACT,
   parseWindowsBreakawayLaunchReport,

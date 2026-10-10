@@ -209,6 +209,11 @@ runs:
           git -C "$GITHUB_WORKSPACE" diff --exit-code -- package.json pnpm-lock.yaml pnpm-workspace.yaml
         fi
 
+    # Why --if-present: release cuts run main's workflows against older release tags that predate this script.
+    - name: Build internal packages
+      shell: bash
+      run: pnpm run --if-present build:packages
+
     # pnpm checks the cached record's policy and validity; never bypass verification.
     - name: Save pnpm verification record on main
       if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && steps.verification-cache.outputs.key != '' && steps.verification-cache.outputs.cache-hit != 'true'

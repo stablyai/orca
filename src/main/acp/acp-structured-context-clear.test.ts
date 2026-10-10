@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import { ACP_LAUNCH_SPECS } from './acp-launch-specs'
 import { createAcpStructuredLaunchResolver } from './acp-structured-launch-resolution'
@@ -33,7 +33,7 @@ it.each(ACP_LAUNCH_SPECS)(
     const resolve = createAcpStructuredLaunchResolver(
       { ...spec, account },
       {
-        store: { getRecord: () => record },
+        store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
         readJournal: () => {
           throw new Error('pre-clear history must not be sampled')
         },

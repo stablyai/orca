@@ -18,7 +18,7 @@ import {
 
 type ListingCall = Parameters<typeof runAgentModelCatalogListing>
 
-const AUTH_POLICY = { stripAuthEnv: false } as const
+const AUTH_POLICY = { account: 'system' } as const
 
 const HOME = (path: string): { variable: string; path: string } => ({
   variable: 'CLAUDE_CONFIG_DIR',
@@ -198,7 +198,7 @@ describe('Claude catalog availability', () => {
     const runListing = vi.fn(async () => LISTED)
     const probe = createClaudeModelCatalogProbe({
       ...probeDeps(),
-      resolveAuthPolicy: () => ({ stripAuthEnv: managed }),
+      resolveAuthPolicy: () => ({ account: managed ? ('managed' as const) : ('system' as const) }),
       runListing
     })
     const result = await probe(HOME('/homes/a'))

@@ -1,4 +1,5 @@
 import type { Editor, UseEditorOptions } from '@tiptap/react'
+import type { EditorView } from '@tiptap/pm/view'
 import { handleRichMarkdownCut } from './rich-markdown-cut-handler'
 import { handleRichMarkdownPaste } from './rich-markdown-paste-handler'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
@@ -129,6 +130,27 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
     setDocLinkMenu
   } = params
 
+  const handleClick = (view: EditorView, pos: number, event: MouseEvent): boolean => {
+    return handleRichMarkdownEditorClick({
+      activateMarkdownLink,
+      editorRef,
+      event,
+      filePath,
+      htmlSuperscriptLinkContext,
+      isMac,
+      markdownCommentsRef,
+      markdownSourceLineOffsetRef,
+      onOpenDocLinkRef,
+      pos,
+      rootRef,
+      runtimeEnvironmentId,
+      scrollRichMarkdownReviewNoteCardIntoView,
+      view,
+      worktreeId,
+      worktreeRoot
+    })
+  }
+
   return {
     immediatelyRender: false,
     content: encodeRawMarkdownHtmlForRichEditor(content, codec, { htmlSuperscriptLinks: true }),
@@ -139,7 +161,24 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
         spellcheck: getRichMarkdownSpellcheckAttribute(richMarkdownSpellcheckEnabled)
       },
       handleDOMEvents: {
-        cut: handleRichMarkdownCut
+        cut: handleRichMarkdownCut,
+        // ProseMirror skips handleClick for Shift gestures to extend the selection.
+        click: (view, event) => {
+          if (
+            event.defaultPrevented ||
+            event.button !== 0 ||
+            !event.shiftKey ||
+            !(isMac ? event.metaKey : event.ctrlKey)
+          ) {
+            return false
+          }
+          const position = view.posAtCoords({ left: event.clientX, top: event.clientY })
+          if (!position || !handleClick(view, position.pos, event)) {
+            return false
+          }
+          event.preventDefault()
+          return true
+        }
       },
       handlePaste: (view, event, slice) =>
         handleRichMarkdownPaste({
@@ -176,27 +215,8 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
             runtimeEnvironmentId
           })
       }),
-      handleClick: (view, pos, event) => {
-        return handleRichMarkdownEditorClick({
-          activateMarkdownLink,
-          editorRef,
-          event,
-          filePath,
-          htmlSuperscriptLinkContext,
-          isMac,
-          markdownCommentsRef,
-          markdownSourceLineOffsetRef,
-          onOpenDocLinkRef,
-          pos,
-          rootRef,
-          runtimeEnvironmentId,
-          scrollRichMarkdownReviewNoteCardIntoView,
-          settings,
-          view,
-          worktreeId,
-          worktreeRoot
-        })
-      }
+      // Shift clicks route only through the DOM handler, including modifier changes during a click.
+      handleClick: (view, pos, event) => !event.shiftKey && handleClick(view, pos, event)
     },
     onFocus: () => {
       window.api.ui.setMarkdownEditorFocused(true)

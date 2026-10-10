@@ -2,13 +2,12 @@ import type { PasteTerminalTextDetail } from '@/constants/terminal'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { getConnectionId } from '@/lib/connection-context'
-import { pasteTerminalText } from './terminal-bracketed-paste'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
-import { executeTerminalPastePlan, planTerminalPasteWithYield } from './terminal-paste-coordinator'
+import { pasteTextIntoTerminalPane } from './terminal-pane-paste-dispatch'
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
 import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
 import { isTerminalPanePasteTargetCurrent } from './terminal-paste-target-state'
-import { writeTerminalPastePtyInput } from './terminal-pty-paste-writer'
 
 type HandleTerminalProgrammaticTextPasteArgs = {
   detail: PasteTerminalTextDetail | undefined
@@ -43,62 +42,37 @@ export function handleTerminalProgrammaticTextPaste({
   const paneTransports = getPaneTransports()
   const transport = paneTransports.get(pane.id)
   const ptyId = transport?.getPtyId() ?? null
-  const platform = getShortcutPlatform()
   const connectionId = getConnectionId(worktreeId) ?? null
-  void planTerminalPasteWithYield({
-    text: detail.text,
-    source: 'programmatic',
-    target: {
-      kind: 'terminal',
+  const isTargetCurrent = (): boolean =>
+    isTerminalPanePasteTargetCurrent({
+      manager: getManager(),
+      paneTransports: getPaneTransports(),
       paneId: pane.id,
       leafId: pane.leafId,
-      ptyId,
-      runtime: resolveTerminalPasteRuntime({
-        platform,
-        ptyId,
-        connectionId,
-        remotePlatform: getTerminalPasteSshRemotePlatform(connectionId),
-        transport
-      })
-    },
-    terminalBracketedPasteMode: pane.terminal.modes?.bracketedPasteMode === true
-  })
-    .then((plan) =>
-      executeTerminalPastePlan(plan, {
-        pasteText: (text, options) => pasteTerminalText(pane.terminal, text, options),
-        writePty: (data, signal) => writeTerminalPastePtyInput(transport, data, 'driving', signal),
-        isTargetCurrent: () =>
-          isTerminalPanePasteTargetCurrent({
-            manager: getManager(),
-            paneTransports: getPaneTransports(),
-            paneId: pane.id,
-            leafId: pane.leafId,
-            transport,
-            ptyId
-          }),
-        canContinue: () =>
-          isTerminalPanePasteTargetCurrent({
-            manager: getManager(),
-            paneTransports: getPaneTransports(),
-            paneId: pane.id,
-            leafId: pane.leafId,
-            transport,
-            ptyId
-          })
-      })
-    )
-    .then((result) => {
-      if (result.status !== 'pasted') {
-        return
-      }
-      recordTerminalUserInputForLeaf(tabId, pane.leafId)
-      pane.terminal.focus()
+      transport,
+      ptyId
     })
-}
-
-function getShortcutPlatform(userAgent = globalThis.navigator?.userAgent ?? ''): NodeJS.Platform {
-  if (userAgent.includes('Mac')) {
-    return 'darwin'
-  }
-  return userAgent.includes('Windows') ? 'win32' : 'linux'
+  void pasteTextIntoTerminalPane({
+    pane,
+    text: detail.text,
+    source: 'programmatic',
+    ptyId,
+    runtime: resolveTerminalPasteRuntime({
+      platform: getShortcutPlatform(),
+      ptyId,
+      connectionId,
+      remotePlatform: getTerminalPasteSshRemotePlatform(connectionId),
+      transport
+    }),
+    transport,
+    inputKind: 'driving',
+    isTargetCurrent,
+    canContinue: isTargetCurrent
+  }).then((result) => {
+    if (result.status !== 'pasted') {
+      return
+    }
+    recordTerminalUserInputForLeaf(tabId, pane.leafId)
+    pane.terminal.focus()
+  })
 }

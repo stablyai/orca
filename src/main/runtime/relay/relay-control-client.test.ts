@@ -666,6 +666,29 @@ describe('RelayControlClient scripted-socket lifecycle', () => {
     warn.mockRestore()
   })
 
+  it('names a control-error during the proof instead of failing it as a bad credential', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { client, socket } = scriptedControl()
+    const closeCodes: number[] = []
+    socket.script = (message, ws) => {
+      if (message.type === 'host-hello') {
+        // An extra key from a newer relay must not turn the frame into an unknown one.
+        ws.deliver({ type: 'control-error', code: 'limit_exceeded', retryAfterMs: 1_000 })
+        expect(ws.readyState).toBe(1)
+        ws.close(MOBILE_RELAY_CLOSE_CODE.LIMIT_EXCEEDED)
+      }
+    }
+    const close = socket.close.bind(socket)
+    socket.close = (code?: number) => {
+      closeCodes.push(code ?? 1000)
+      close(code)
+    }
+
+    await expect(client.connect()).rejects.toThrow('relay_control_error_limit_exceeded')
+    expect(closeCodes).toEqual([MOBILE_RELAY_CLOSE_CODE.LIMIT_EXCEEDED])
+    warn.mockRestore()
+  })
+
   it('still opens a connection the relay handed over before it asked us to drain', async () => {
     const { client, socket, onConnectionOpen } = scriptedControl()
     await client.connect()

@@ -132,6 +132,23 @@ describe('a desktop launch through the host', () => {
     })
   })
 
+  // Why: a floating launch must leave the main window's selection alone, as main's own tab does.
+  it('keeps a launch that must not take the selection in the background', () => {
+    callRuntimeRpc.mockReturnValue(new Promise(() => {}))
+    const before = store.getState().activeTabId
+
+    const { tabId } = launchAgentThroughHost({
+      agent: 'claude',
+      worktreeId: WT,
+      prompt: '',
+      activate: false
+    })
+
+    expect(launchTab(tabId)).toBeDefined()
+    expect(store.getState().activeTabId).toBe(before)
+    expect(lastParams().presentation).toBe('background')
+  })
+
   it('names every click as its own operation', () => {
     callRuntimeRpc.mockReturnValue(new Promise(() => {}))
     launch()

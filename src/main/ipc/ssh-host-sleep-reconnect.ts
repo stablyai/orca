@@ -3,6 +3,7 @@ import { recoverOrcadManagedTunnelsAfterHostResume } from '../ssh/orcad-managed-
 import type { SshRelaySession } from '../ssh/ssh-relay-session'
 import { activeSessions } from './ssh-active-relay-sessions'
 import { connectionManager } from './ssh-ipc-context'
+import { errorMessage } from '../../shared/error-message'
 
 let powerMonitorUnsubscribe: (() => void) | null = null
 
@@ -60,9 +61,7 @@ export function registerPowerMonitorReconnect(getUserDataPath?: () => string): v
           await manager?.reconnect(targetId)
         } catch (err) {
           console.warn(
-            `[ssh] Failed to reconnect ${targetId} after system resume: ${
-              err instanceof Error ? err.message : String(err)
-            }`
+            `[ssh] Failed to reconnect ${targetId} after system resume: ${errorMessage(err)}`
           )
         }
       })()
@@ -74,9 +73,7 @@ export function registerPowerMonitorReconnect(getUserDataPath?: () => string): v
         timeoutMs: RESUME_PROBE_TIMEOUT_MS
       }).catch((err) => {
         console.warn(
-          `[ssh] Failed to recover a managed Orca tunnel after system resume: ${
-            err instanceof Error ? err.message : String(err)
-          }`
+          `[ssh] Failed to recover a managed Orca tunnel after system resume: ${errorMessage(err)}`
         )
       })
     }

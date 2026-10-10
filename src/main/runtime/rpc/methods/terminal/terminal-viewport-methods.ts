@@ -1,11 +1,11 @@
 import { defineMethod } from '../../core'
-import { TerminalHandle } from './unary-schemas'
+import { TerminalHandle } from '../../../../../shared/rpc-contract/terminal-unary-params'
 import {
   TerminalSetAutoRestoreFit,
   TerminalSetDisplayMode,
   TerminalUnsubscribe,
   TerminalUpdateViewport
-} from './viewport-schemas'
+} from '../../../../../shared/rpc-contract/terminal-viewport-schemas-params'
 import { updateViewportForClient } from './terminal-viewport-update'
 import { TerminalGetAutoRestoreFitParams } from '../../../../../shared/rpc-contract/terminal-viewport-methods-params'
 

@@ -63,6 +63,10 @@ export type AssignmentUnavailableCause =
   | 'relay_connection_headroom_exhausted'
   | 'relay_home_cell_unavailable'
   | 'relay_assignment_row_busy'
+  // Step 5: a starting director's map, a never-seen host with the database down, or intake.
+  | 'reserve-map-incomplete'
+  | 'reserve-database'
+  | 'reserve-paced'
 
 // Row-lock waiters seen in one pg_stat_activity sample, by who waits, on which
 // table, behind whom. Roles come from each pool's application_name.

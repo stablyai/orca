@@ -32,12 +32,14 @@ describe('buildAiVaultServiceEnv', () => {
   it('keeps the agent-home variables the scanner discovers sessions through', () => {
     const env = buildAiVaultServiceEnv(
       {
+        CLAUDE_CONFIG_DIR: '/home/dev/claude-home',
         CODEX_HOME: '/home/dev/.codex',
         CLINE_SESSION_DATA_DIR: '/home/dev/cline-sessions',
         COPILOT_HOME: '/home/dev/.copilot',
         DEVIN_HOME: '/home/dev/.devin',
         GROK_HOME: '/home/dev/.grok',
         KIMI_CODE_HOME: '/home/dev/.kimi-code',
+        KIRO_HOME: '/home/dev/kiro-data',
         OMP_CODING_AGENT_DIR: '/home/dev/.omp/agent/sessions',
         OPENCLAW_STATE_DIR: '/home/dev/.openclaw',
         PI_CODING_AGENT_DIR: '/home/dev/.pi/agent/sessions',
@@ -49,12 +51,14 @@ describe('buildAiVaultServiceEnv', () => {
     )
 
     expect(env).toEqual({
+      CLAUDE_CONFIG_DIR: '/home/dev/claude-home',
       CODEX_HOME: '/home/dev/.codex',
       CLINE_SESSION_DATA_DIR: '/home/dev/cline-sessions',
       COPILOT_HOME: '/home/dev/.copilot',
       DEVIN_HOME: '/home/dev/.devin',
       GROK_HOME: '/home/dev/.grok',
       KIMI_CODE_HOME: '/home/dev/.kimi-code',
+      KIRO_HOME: '/home/dev/kiro-data',
       OMP_CODING_AGENT_DIR: '/home/dev/.omp/agent/sessions',
       OPENCLAW_STATE_DIR: '/home/dev/.openclaw',
       PI_CODING_AGENT_DIR: '/home/dev/.pi/agent/sessions',
@@ -113,6 +117,14 @@ describe('buildAiVaultServiceEnv', () => {
 })
 
 describe('buildRelayAiVaultServiceEnv', () => {
+  it('preserves the execution host Kiro home with Windows case folding', () => {
+    expect(buildRelayAiVaultServiceEnv({ KIRO_HOME: '/srv/kiro' }, 'linux')).toEqual({
+      KIRO_HOME: '/srv/kiro'
+    })
+    expect(buildRelayAiVaultServiceEnv({ kiro_home: 'D:\\kiro' }, 'win32')).toEqual({
+      KIRO_HOME: 'D:\\kiro'
+    })
+  })
   it('drops Node flag injection variables', () => {
     const env = buildRelayAiVaultServiceEnv(
       { NODE_OPTIONS: '--max-old-space-size=8192', NODE_PATH: '/tmp/evil', HOME: '/home/ada' },

@@ -7,7 +7,7 @@ import type { Store } from '../../../persistence'
 import { retireTerminalSurfaceFromPersistence } from '../../../runtime/mobile-session-terminal-persistence-retirement'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../../../providers/types'
-import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
+import { getPtySshConnectionId } from '../provider/registry'
 import {
   isDaemonEndpointGoneError,
   TerminalHostGoneError,
@@ -98,9 +98,7 @@ export function resolveStablePaneOwner(
   if (!ptyId) {
     return null
   }
-  const registeredConnectionId = ptyOwnership.get(ptyId)
-  const parsedSshId = registeredConnectionId === undefined ? parseAppSshPtyId(ptyId) : null
-  if ((registeredConnectionId ?? parsedSshId?.connectionId ?? null) !== (connectionId ?? null)) {
+  if (getPtySshConnectionId(ptyId) !== (connectionId ?? null)) {
     throw new Error('terminal_pane_owner_host_mismatch')
   }
   const runtimeIncarnationId = ptyIncarnationById.get(ptyId)

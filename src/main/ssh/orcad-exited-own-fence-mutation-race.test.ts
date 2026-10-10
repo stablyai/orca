@@ -10,12 +10,12 @@ import {
 import { hostname, tmpdir, uptime } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { runProcess, spawnProcess } from '../../shared/child-process/run-process'
+import { runProcess, spawnProcess } from '@orca/process-host'
 import type * as DeployHelpers from './ssh-relay-deploy-helpers'
 
 // The proof's remote commands run in a real local shell.
 vi.mock('./ssh-relay-deploy-helpers', async (importOriginal) => {
-  const { runProcess: run } = await import('../../shared/child-process/run-process')
+  const { runProcess: run } = await import('@orca/process-host')
   return {
     ...(await importOriginal<typeof DeployHelpers>()),
     execCommand: async (_conn: unknown, command: string) =>
