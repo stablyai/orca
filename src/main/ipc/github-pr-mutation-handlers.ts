@@ -3,6 +3,7 @@ import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import type { GitHubPullRequestStateUpdate } from '../../shared/issue-mutation-types'
 import {
   markPRReadyForReview,
+  updatePRBranch,
   mergePR,
   removePRReviewers,
   requestPRReviewers,
@@ -154,6 +155,37 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
       const result = await markPRReadyForReview(
         repo.path,
         args.prNumber,
+        getGitHubRepoConnectionId(repo),
+        args.prRepo ?? null,
+        ...getGitHubLocalGitOptionArgs(store, repo)
+      )
+      broadcastSuccessfulPRMutation(result.ok, repo.path, repo.id, args.prNumber, event.sender.id)
+      return result
+    }
+  )
+
+  ipcMain.handle(
+    'gh:updatePRBranch',
+    async (
+      event,
+      args: GitHubRepoScopedArgs & {
+        prNumber: number
+        expectedHeadSha: string
+        prRepo?: GitHubOwnerRepo | null
+      }
+    ) => {
+      const repo = assertRegisteredGitHubRepo(args, store)
+      if (
+        typeof args.prNumber !== 'number' ||
+        !Number.isInteger(args.prNumber) ||
+        args.prNumber < 1
+      ) {
+        return { ok: false, error: 'Invalid pull request number' }
+      }
+      const result = await updatePRBranch(
+        repo.path,
+        args.prNumber,
+        args.expectedHeadSha,
         getGitHubRepoConnectionId(repo),
         args.prRepo ?? null,
         ...getGitHubLocalGitOptionArgs(store, repo)
