@@ -164,7 +164,9 @@ const MOBILE_WEB_APP_PREFIXES = [
   'mobile/packages/',
   'mobile/package.json',
   'mobile/pnpm-lock.yaml',
-  'mobile/modules/orca-mobile-web-shell/'
+  'mobile/modules/orca-mobile-web-shell/',
+  // Chat visuals on both mobile surfaces are built from it; their in-page links check runs here.
+  'src/shared/native-chat-visual-shell'
 ]
 
 function changesMobileWebApp(changedFiles) {
@@ -214,7 +216,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/orchestration-rpc-contract.ts',
   'src/main/runtime/rpc/methods/agent-launch',
   'src/main/runtime/rpc/methods/ai-vault.ts',
-  'src/main/runtime/rpc/methods/browser-tab-create-schema',
+  'src/shared/rpc-contract/browser-tab-create-params',
   'src/main/runtime/rpc/methods/session-tabs.ts',
   'src/main/runtime/rpc/methods/structured-agent-session',
   'src/main/runtime/rpc/methods/terminal',

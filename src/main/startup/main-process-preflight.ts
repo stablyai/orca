@@ -64,8 +64,7 @@ import { selectLinuxKeyringBackend } from './select-linux-keyring-backend'
 import { setPtyHostBindings } from '../ipc/pty-host-bindings'
 import { electronRuntimeDesktopSurface } from '../host/electron-runtime-desktop-surface'
 import { setRuntimeDesktopSurface } from '../runtime/runtime-desktop-surface'
-import { electronRuntimeBrowserCommandsFactory } from '../host/electron-browser-commands'
-import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
+import { installElectronBrowserCommands } from '../host/electron-browser-commands'
 import { electronHttpClient } from '../host/electron-http-client'
 import { setMainHttpClient } from '../network/http-client'
 import { electronSpeechServiceFactories } from '../host/electron-speech-services'
@@ -310,7 +309,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Why here: constructing RuntimeBrowserCommands is what pulls the Chromium browser
   // cluster into the graph. The desktop installs it; a Node host installs none and every
   // browser RPC rejects, which capability filtering already tells clients about.
-  setRuntimeBrowserCommandsFactory(electronRuntimeBrowserCommandsFactory)
+  installElectronBrowserCommands()
   // Why here: proxy-settings only needed electron for `session.defaultSession`. The
   // desktop supplies it; a Node host has no Chromium proxy config to consult, so the
   // environment variables are the whole answer there.

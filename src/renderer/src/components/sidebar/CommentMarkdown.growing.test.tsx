@@ -75,4 +75,18 @@ describe('growing comment markdown', () => {
     }
     expect(renderCodeBlock.mock.calls.length).toBe(afterFence)
   })
+
+  it('links a path in an earlier block once the host confirms it', () => {
+    const content = 'Edited src/a.ts.\n\nThen more text'
+    const view = render(
+      <CommentMarkdown content={content} variant="document" fileLinkExists={() => false} growing />
+    )
+    expect(view.container.querySelector('a')).toBeNull()
+
+    view.rerender(
+      <CommentMarkdown content={content} variant="document" fileLinkExists={() => true} />
+    )
+
+    expect(view.container.querySelector('a')?.textContent).toBe('src/a.ts')
+  })
 })

@@ -17,9 +17,21 @@ function acpStopReasonFailed(stopReason: string): boolean {
   return FAILED_STOP_REASONS.includes(stopReason)
 }
 
-/** The provider's words in its error answer to `session/prompt`. */
+/** The provider's words in its error answer to `session/prompt`. Agents often answer a generic
+ *  message ("Internal error") and keep their own words in `data`. */
 export function acpPromptErrorDetail(dialect: AcpDialect, error: AcpAgentError): string {
-  return dialect.promptErrorDetail?.(error) ?? error.message
+  return dialect.promptErrorDetail?.(error) ?? acpErrorDataWords(error.data) ?? error.message
+}
+
+// Other structured data is metadata (service, error class names), not words for a person.
+function acpErrorDataWords(data: unknown): string | undefined {
+  const words =
+    typeof data === 'string'
+      ? data
+      : typeof data === 'object' && data !== null && 'details' in data
+        ? data.details
+        : undefined
+  return typeof words === 'string' && words.trim() ? words : undefined
 }
 
 export function acpAuthenticationRequired(dialect: AcpDialect, error: unknown): boolean {

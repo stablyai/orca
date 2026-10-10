@@ -47,9 +47,16 @@ export type ClaudeAccountsApi = {
   add: (args?: {
     runtime?: 'host' | 'wsl'
     wslDistro?: string | null
+    /** Copy the sign-in link instead of opening the default browser. */
+    copyLink?: boolean
   }) => Promise<ClaudeRateLimitAccountsState>
   cancelPendingLogin: () => Promise<boolean>
-  reauthenticate: (args: { accountId: string }) => Promise<ClaudeRateLimitAccountsState>
+  reauthenticate: (args: {
+    accountId: string
+    copyLink?: boolean
+  }) => Promise<ClaudeRateLimitAccountsState>
+  /** The pending sign-in's link once Claude hands it over; null if it ends without one. */
+  waitForSignInLink: () => Promise<string | null>
   remove: (args: { accountId: string }) => Promise<ClaudeRateLimitAccountsState>
   select: (args: {
     accountId: string | null

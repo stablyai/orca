@@ -6,9 +6,19 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../../shared/protocol-version'
+import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../shared/agent-session-optional-model-capability'
 import { isNativeChatEnabled } from '../../../../shared/structured-native-chat-launch-route'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext } from '../core'
+
+export function clientReadsOptionsWithoutModel(
+  context: Pick<RpcContext, 'clientCapabilities' | 'clientKind'>
+): boolean {
+  return (
+    context.clientKind === undefined ||
+    context.clientCapabilities?.includes(AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY) === true
+  )
+}
 
 /**
  * One rule for every caller: can this client read structured sessions? The host's own

@@ -47,7 +47,7 @@ describe('agent model catalog store', () => {
   it('serves an entry at any age and flags staleness at the refresh threshold', () => {
     let at = 1_000
     const store = new AgentModelCatalogStore({ now: () => at })
-    store.recordSuccess('fp-1', 'codex', success('gpt-a'))
+    store.recordSuccess('fp-1', 'codex', success('gpt-a'), 'discovery')
     const entry = store.get('fp-1')!
     expect(entry.models.map((model) => model.id)).toEqual(['gpt-a'])
     expect(store.isStale(entry)).toBe(false)
@@ -60,11 +60,16 @@ describe('agent model catalog store', () => {
   it('never memoizes an empty list as a catalog', () => {
     const store = new AgentModelCatalogStore()
     expect(
-      store.recordSuccess('fp-1', 'codex', {
-        models: [],
-        fastModeTierByModel: new Map(),
-        origin: 'live-session'
-      })
+      store.recordSuccess(
+        'fp-1',
+        'codex',
+        {
+          models: [],
+          fastModeTierByModel: new Map(),
+          origin: 'live-session'
+        },
+        'discovery'
+      )
     ).toBeNull()
     expect(store.get('fp-1')).toBeNull()
   })
@@ -72,7 +77,7 @@ describe('agent model catalog store', () => {
   it('holds a failure under its TTL without touching the last good entry', () => {
     let at = 1_000
     const store = new AgentModelCatalogStore({ now: () => at })
-    store.recordSuccess('fp-1', 'codex', success('gpt-a'))
+    store.recordSuccess('fp-1', 'codex', success('gpt-a'), 'discovery')
     store.recordFailure('fp-1', 'timed out')
     expect(store.get('fp-1')!.models.map((model) => model.id)).toEqual(['gpt-a'])
     expect(store.hasActiveFailure('fp-1')).toBe(true)
@@ -103,7 +108,9 @@ describe('agent model catalog store', () => {
     let failProbe!: (error: Error) => void
     const hungProbe: AgentModelCatalogProbe = () =>
       new Promise<AgentModelCatalogSuccess>((_resolve, reject) => (failProbe = reject))
-    const probe = store.refresh('fp-1', 'codex', hungProbe, () => hungProbe('/homes/a'))
+    const probe = store.refresh('fp-1', 'codex', hungProbe, () =>
+      hungProbe({ variable: 'CODEX_HOME', path: '/homes/a' })
+    )
     expect(store.shouldRefresh('fp-1')).toBe(false)
 
     const live = await store.refresh('fp-1', 'codex', liveLister(store), async () =>
@@ -216,11 +223,33 @@ describe('agent model catalog store', () => {
     let settleProbe!: (success: AgentModelCatalogSuccess) => void
     const probe: AgentModelCatalogProbe = () =>
       new Promise<AgentModelCatalogSuccess>((resolve) => (settleProbe = resolve))
-    const pending = store.refresh('fp-1', 'codex', probe, () => probe('/homes/a'))
-    store.recordSuccess('fp-1', 'codex', success('gpt-live'))
+    const pending = store.refresh('fp-1', 'codex', probe, () =>
+      probe({ variable: 'CODEX_HOME', path: '/homes/a' })
+    )
+    store.recordSuccess('fp-1', 'codex', success('gpt-live'), 'discovery')
     settleProbe({ ...success('gpt-probe'), origin: 'probe' })
     expect((await pending)!.models[0]!.id).toBe('gpt-probe')
     expect(store.get('fp-1')!.models[0]!.id).toBe('gpt-live')
+  })
+
+  it('still writes a pending probe that resolves after a live save, keeping both', async () => {
+    const store = new AgentModelCatalogStore()
+    let settleProbe!: (success: AgentModelCatalogSuccess) => void
+    const probe: AgentModelCatalogProbe = () =>
+      new Promise<AgentModelCatalogSuccess>((resolve) => (settleProbe = resolve))
+    const pending = store.refresh('fp-1', 'codex', probe, () =>
+      probe({ variable: 'CODEX_HOME', path: '/homes/a' })
+    )
+    store.recordSuccess('fp-1', 'codex', success('gpt-live'), 'live')
+    settleProbe({ ...success('gpt-probe'), origin: 'probe' })
+    await pending
+    const entry = store.get('fp-1')!
+    expect(entry.discovered!.models[0]!.id).toBe('gpt-probe')
+    expect(entry.live!.models[0]!.id).toBe('gpt-live')
+    // A live save neither postpones the next discovery nor clears its failure back-off.
+    store.recordFailure('fp-1', 'timed out')
+    store.recordSuccess('fp-1', 'codex', success('gpt-live'), 'live')
+    expect(store.hasActiveFailure('fp-1')).toBe(true)
   })
 
   it('keeps an older successful listing when the newer entry was evicted', async () => {
@@ -234,7 +263,7 @@ describe('agent model catalog store', () => {
     )
     await store.refresh('fp-1', 'codex', liveLister(store), async () => success('gpt-new'))
     for (let index = 0; index < AGENT_MODEL_CATALOG_MAX_ENTRIES; index++) {
-      store.recordSuccess(`other-${index}`, 'codex', success('other'))
+      store.recordSuccess(`other-${index}`, 'codex', success('other'), 'discovery')
     }
     expect(store.get('fp-1')).toBeNull()
     const save = vi.fn()
@@ -274,7 +303,7 @@ describe('agent model catalog store', () => {
     })
     expect(fingerprintA).not.toBe(fingerprintB)
     const store = new AgentModelCatalogStore()
-    store.recordSuccess(fingerprintA, 'codex', success('gpt-a'))
+    store.recordSuccess(fingerprintA, 'codex', success('gpt-a'), 'discovery')
     expect(store.get(fingerprintB)).toBeNull()
   })
 
@@ -304,12 +333,12 @@ describe('agent model catalog store', () => {
     const store = new AgentModelCatalogStore({ now: () => at })
     const save = vi.fn()
     void store.attachPersistence({ load: async () => [], save, flush: async () => {} })
-    store.recordSuccess('fp', 'claude', success('opus'))
+    store.recordSuccess('fp', 'claude', success('opus'), 'discovery')
     at += AGENT_MODEL_CATALOG_FRESH_MS
-    store.recordSuccess('fp', 'claude', success('opus'))
+    store.recordSuccess('fp', 'claude', success('opus'), 'discovery')
     expect(save).toHaveBeenCalledTimes(1)
     expect(store.shouldRefresh('fp')).toBe(false)
-    store.recordSuccess('fp', 'claude', success('opus', 'sonnet'))
+    store.recordSuccess('fp', 'claude', success('opus', 'sonnet'), 'discovery')
     expect(save).toHaveBeenCalledTimes(2)
   })
 
@@ -334,9 +363,9 @@ describe('agent model catalog store', () => {
       fastModeTierByModel: new Map(),
       origin: 'live-session'
     })
-    store.recordSuccess('fp', 'claude', listing('medium'))
+    store.recordSuccess('fp', 'claude', listing('medium'), 'live')
     // A session-less probe never names Claude's default.
-    store.recordSuccess('fp', 'claude', { ...listing(), origin: 'probe' })
+    store.recordSuccess('fp', 'claude', { ...listing(), origin: 'probe' }, 'discovery')
     expect(store.get('fp')!.models[0]!.defaultEffort).toBe('medium')
     await store.flushPersistence()
     const restarted = new AgentModelCatalogStore()
@@ -344,20 +373,63 @@ describe('agent model catalog store', () => {
     expect(restarted.get('fp')!.models[0]!.defaultEffort).toBe('medium')
 
     // A newer report replaces it; a model that stops offering it drops it.
-    store.recordSuccess('fp', 'claude', listing('high'))
+    store.recordSuccess('fp', 'claude', listing('high'), 'live')
     expect(store.get('fp')!.models[0]!.defaultEffort).toBe('high')
-    store.recordSuccess('fp', 'claude', {
-      ...listing(),
-      models: [{ id: 'opus', label: 'Opus', isDefault: true, efforts: [efforts[0]!] }]
-    })
+    store.recordSuccess(
+      'fp',
+      'claude',
+      {
+        ...listing(),
+        models: [{ id: 'opus', label: 'Opus', isDefault: true, efforts: [efforts[0]!] }]
+      },
+      'live'
+    )
     expect(store.get('fp')!.models[0]).not.toHaveProperty('defaultEffort')
+  })
+
+  it('keeps a CLI-resolved configured default through later listings and a restart', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'agent-model-catalog-'))
+    const store = new AgentModelCatalogStore()
+    await store.attachPersistence(createAgentModelCatalogFilePersistence(directory))
+    // Never on its own: there is no catalog to name a default in yet.
+    store.recordConfiguredDefault('fp', { modelId: 'sonnet' })
+    expect(store.get('fp')).toBeNull()
+
+    store.recordSuccess('fp', 'claude', success('opus', 'sonnet'), 'live')
+    store.recordConfiguredDefault('fp', { modelId: 'sonnet', effort: 'high' })
+    store.recordSuccess(
+      'fp',
+      'claude',
+      { ...success('opus', 'sonnet'), origin: 'probe' },
+      'discovery'
+    )
+    const named = (entry: ReturnType<typeof store.get>) =>
+      entry?.models.filter((model) => model.isDefault).map((model) => model.id)
+    expect(named(store.get('fp'))).toEqual(['sonnet'])
+
+    await store.flushPersistence()
+    const restarted = new AgentModelCatalogStore()
+    await restarted.attachPersistence(createAgentModelCatalogFilePersistence(directory))
+    expect(restarted.get('fp')?.configured).toMatchObject({
+      modelId: 'sonnet',
+      effort: 'high'
+    })
+    expect(named(restarted.get('fp'))).toEqual(['sonnet'])
+    const sonnet = restarted.get('fp')?.models.find((model) => model.id === 'sonnet')
+    expect(sonnet?.defaultEffort).toBe('high')
+
+    restarted.recordConfiguredDefault('fp', null)
+    expect(restarted.get('fp')?.configured).toBeNull()
+    expect(restarted.get('fp')?.models.find((model) => model.id === 'sonnet')).not.toHaveProperty(
+      'defaultEffort'
+    )
   })
 
   it('persists successes only and hydrates them across a restart', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'agent-model-catalog-'))
     const store = new AgentModelCatalogStore()
     await store.attachPersistence(createAgentModelCatalogFilePersistence(directory))
-    store.recordSuccess('fp-1', 'codex', success('gpt-a'))
+    store.recordSuccess('fp-1', 'codex', success('gpt-a'), 'discovery')
     store.recordFailure('fp-2', 'timed out')
     await vi.waitFor(
       async () => {
@@ -380,7 +452,7 @@ describe('agent model catalog store', () => {
     const directory = mkdtempSync(join(tmpdir(), 'agent-model-catalog-'))
     const store = new AgentModelCatalogStore()
     await store.attachPersistence(createAgentModelCatalogFilePersistence(directory))
-    store.recordSuccess('fp-1', 'codex', success('gpt-a'))
+    store.recordSuccess('fp-1', 'codex', success('gpt-a'), 'discovery')
     await store.flushPersistence()
     const persisted = await createAgentModelCatalogFilePersistence(directory).load()
     expect(persisted.map((entry) => entry.fingerprint)).toEqual(['fp-1'])

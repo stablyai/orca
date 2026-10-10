@@ -6,19 +6,16 @@ import {
   requireRuntimeFileProvider,
   runtimeFileRouteForTarget
 } from './runtime-file-command-target'
+import { randomUUID } from 'node:crypto'
 import { QUICK_OPEN_LISTING_MAX_RESULTS } from '../../shared/quick-open-listing-limits'
 import { limitQuickOpenFilesBySerializedBytes } from '../../shared/quick-open-transport-budget'
 import { listQuickOpenFiles } from '../ipc/filesystem-list-files'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
-import { listMarkdownDocuments } from '../ipc/markdown-documents'
-import { getLocalGitOptionsForRegisteredWorktree } from '../ipc/local-worktree-runtime-options'
 import {
   validatePathExistenceBatch,
   type PathExistenceResult
 } from '../../shared/path-existence-batch'
 import { readRuntimeFilePathExistence } from './runtime-file-path-existence'
-import { stat } from 'node:fs/promises'
-import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 
 export class RuntimeFileCommandsWithSearchRuntimeFiles extends RuntimeFileCommandsWithCreateFileExplorerDirNoClobber {
@@ -33,13 +30,20 @@ export class RuntimeFileCommandsWithSearchRuntimeFiles extends RuntimeFileComman
       requestOptions.signal
     )
     throwIfSignalAborted(requestOptions.signal)
-    const provider = requireRuntimeFileProvider(target)
-    const rootPath = target.worktree.path
-    const searchOptions = { ...options, rootPath }
-    if (provider) {
-      return provider.search(searchOptions, requestOptions)
-    }
-    return this.searchLocalRuntimeFiles(rootPath, searchOptions, requestOptions.signal)
+    const provider = requireRuntimeFileProvider(target, {
+      requireStore: () => this.host.requireStore(),
+      // Why: local ripgrep children stay registered with this command set for cancellation.
+      onTextSearchSpawn: (child) => {
+        const searchKey = randomUUID()
+        this.activeRuntimeTextSearches.set(searchKey, child)
+        return () => {
+          if (this.activeRuntimeTextSearches.get(searchKey) === child) {
+            this.activeRuntimeTextSearches.delete(searchKey)
+          }
+        }
+      }
+    })
+    return provider.search({ ...options, rootPath: target.worktree.path }, requestOptions)
   }
 
   async listRuntimeFiles(
@@ -106,17 +110,9 @@ export class RuntimeFileCommandsWithSearchRuntimeFiles extends RuntimeFileComman
 
   async listRuntimeMarkdownDocuments(worktreeSelector: string): Promise<MarkdownDocument[]> {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
-    const provider = requireRuntimeFileProvider(target)
-    if (provider) {
-      return listFilesystemMarkdownDocuments(provider, target.worktree.path)
-    }
-    return listMarkdownDocuments(
-      target.worktree.path,
-      getLocalGitOptionsForRegisteredWorktree(
-        this.host.requireStore(),
-        target.worktree.path,
-        target.worktree.path
-      )
+    return listFilesystemMarkdownDocuments(
+      requireRuntimeFileProvider(target, this.host),
+      target.worktree.path
     )
   }
 
@@ -126,7 +122,7 @@ export class RuntimeFileCommandsWithSearchRuntimeFiles extends RuntimeFileComman
   ): Promise<PathExistenceResult[]> {
     validatePathExistenceBatch(relativePaths)
     const targets = await this.resolveFileExplorerPaths(worktreeSelector, relativePaths)
-    return readRuntimeFilePathExistence(targets, () => this.host.requireStore())
+    return readRuntimeFilePathExistence(targets, this.host)
   }
 
   async statRuntimeFile(
@@ -134,22 +130,12 @@ export class RuntimeFileCommandsWithSearchRuntimeFiles extends RuntimeFileComman
     relativePath: string
   ): Promise<{ size: number; isDirectory: boolean; mtime: number; ctime?: number }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
-    const provider = requireRuntimeFileProvider(target)
-    if (provider) {
-      const fileStat = await provider.stat(target.path)
-      return {
-        size: fileStat.size,
-        isDirectory: fileStat.type === 'directory',
-        mtime: fileStat.mtime
-      }
-    }
-    const filePath = await resolveAuthorizedPath(target.path, this.host.requireStore())
-    const stats = await stat(filePath)
+    const fileStat = await requireRuntimeFileProvider(target, this.host).stat(target.path)
     return {
-      size: stats.size,
-      isDirectory: stats.isDirectory(),
-      mtime: stats.mtimeMs,
-      ctime: stats.ctimeMs
+      size: fileStat.size,
+      isDirectory: fileStat.type === 'directory',
+      mtime: fileStat.mtime,
+      ...(fileStat.ctimeMs === undefined ? {} : { ctime: fileStat.ctimeMs })
     }
   }
 }

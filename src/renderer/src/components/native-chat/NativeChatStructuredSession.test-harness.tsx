@@ -335,7 +335,10 @@ export function createStructuredSessionMocks() {
     nativeChatMessageList: () => ({
       NativeChatMessageList: (props: typeof mocks.messageListProps) => {
         mocks.messageListProps = props
-        useImperativeHandle(props?.ref, () => ({ revealLatest: mocks.revealLatest }))
+        useImperativeHandle(props?.ref, () => ({
+          revealLatest: mocks.revealLatest,
+          revealFindMatch: () => {}
+        }))
         return <DeliveryNoticesMock notices={props?.deliveryNotices} />
       }
     }),

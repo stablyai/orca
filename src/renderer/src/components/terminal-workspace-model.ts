@@ -1,16 +1,10 @@
-import type { Tab, TabContentType } from '../../../shared/tab-types'
+import type { Tab } from '../../../shared/tab-types'
 import type { KeybindingContext } from '../../../shared/keybindings'
 import { useAppStore } from '../store'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 
 export const CLOSE_DIALOG_DEBOUNCE_MS = 200
-
-const EDITOR_TAB_CONTENT_TYPES = new Set<TabContentType>([
-  'editor',
-  'diff',
-  'conflict-review',
-  'check-details'
-])
 
 type TerminalStoreSnapshot = ReturnType<typeof useAppStore.getState>
 
@@ -74,7 +68,7 @@ export function isPinnedActiveEditorTab(
   if (activeTab) {
     return (
       activeTab.entityId === fileId &&
-      EDITOR_TAB_CONTENT_TYPES.has(activeTab.contentType) &&
+      isEditorTabContentType(activeTab.contentType) &&
       activeTab.isPinned === true
     )
   }
@@ -82,7 +76,7 @@ export function isPinnedActiveEditorTab(
     (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
       (tab) =>
         tab.entityId === fileId &&
-        EDITOR_TAB_CONTENT_TYPES.has(tab.contentType) &&
+        isEditorTabContentType(tab.contentType) &&
         tab.isPinned === true
     ) ?? false
   )
@@ -95,7 +89,7 @@ export function isPinnedEditorFileTab(
 ): boolean {
   return (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
     (tab) =>
-      tab.entityId === fileId && EDITOR_TAB_CONTENT_TYPES.has(tab.contentType) && tab.isPinned
+      tab.entityId === fileId && isEditorTabContentType(tab.contentType) && tab.isPinned
   )
 }
 

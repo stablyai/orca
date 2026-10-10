@@ -85,6 +85,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
           },
           providerHoldsDispatch: () => deps.adapter.holdsDispatch?.(sessionId) === true
         },
+        startUnavailable: () => deps.adapter.startUnavailable?.(sessionId),
         stopAgent: input.stopSignedOutAgent,
         logger: deps.logger
       })

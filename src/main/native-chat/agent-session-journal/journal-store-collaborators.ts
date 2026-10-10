@@ -40,7 +40,7 @@ export type JournalStoreHost = {
   readOnly: () => boolean
   cursor: () => AgentJournalCursor
   adopt: (loaded: JournalLoad) => void
-  commit: (row: JournalRow) => void
+  commit: (rows: readonly JournalRow[]) => void
   journal: () => AgentSessionJournal
   enqueue: (
     build: (seq: number, ts: number) => JournalRow,
@@ -117,7 +117,6 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
   const lifecycleBatchAppender = new JournalLifecycleBatchAppender({
     state: host.state,
     cursor: host.cursor,
-    enqueue: host.enqueue,
     enqueueRows: (plan) => rowWriter.enqueueRows(plan)
   })
   return {

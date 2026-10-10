@@ -14,12 +14,15 @@ import type { AgentSessionFailureFact } from '../../../../shared/agent-session-f
  */
 export function NativeChatQueuedMessageList({
   controller,
+  chatWorktreeId,
   agentName,
   statedFailures,
   steerHeld = false,
   focusComposer
 }: {
   controller: StructuredAgentSessionQueuedMessagesController
+  /** Where a card's sender is opened from; null shows it unlinked. */
+  chatWorktreeId: string | null
   agentName?: string
   statedFailures?: readonly AgentSessionFailureFact[]
   /** The chat reads Stopping: no card steers into the turn a Stop is ending. */
@@ -85,6 +88,7 @@ export function NativeChatQueuedMessageList({
                 <NativeChatQueuedMessageCard
                   key={card.messageId}
                   card={card}
+                  chatWorktreeId={chatWorktreeId}
                   agentName={agentName}
                   statedFailures={statedFailures}
                   showsSteerShortcut={controller.queueCapable && card === newest}

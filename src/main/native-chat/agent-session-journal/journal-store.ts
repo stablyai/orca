@@ -123,8 +123,10 @@ export class AgentSessionJournal {
         this.adoptLoadedJournal(loaded)
         this.onCommitted?.()
       },
-      commit: (row) => {
-        applyJournalRow(this.state, row)
+      commit: (rows) => {
+        for (const row of rows) {
+          applyJournalRow(this.state, row)
+        }
         this.onCommitted?.()
       },
       notifyCommitted: () => this.onCommitted?.(),
@@ -305,11 +307,8 @@ export class AgentSessionJournal {
 
   /** A person's Resume of the queue. */
   appendQueueResume(fence: number, receipt?: JournalOperationReceipt): Promise<AgentJournalCursor> {
-    return this.rowWriter.append(
-      journalQueueResumeRowBuilder(() => this.state, fence),
-      undefined,
-      receipt
-    )
+    const build = journalQueueResumeRowBuilder(() => this.state, fence)
+    return this.rowWriter.append(build, undefined, receipt)
   }
 
   /** This open found waiting cards an earlier handle wrote (`queued-message-pause.ts`). */

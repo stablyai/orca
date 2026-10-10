@@ -174,7 +174,7 @@ const PRECONNECT_CONOUT_REPLACEMENTS = [
 ]
 
 /** Each entry is one published file, its patched form, and the edits between them. */
-const PATCH_TARGETS = [
+const PREVIOUS_PATCH_TARGETS = [
   {
     relativePath: ['lib', 'windowsConoutConnection.js'],
     originalSha256: '1440f70908fb1f55911ac8e936a1230f68a9c00c03096fcef6788eac6aad9d62',
@@ -249,6 +249,32 @@ const PATCH_TARGETS = [
     ]
   }
 ]
+
+// Retire the entrypoint before removing the APIs it required.
+const PATCH_TARGETS = [
+  'windowsTerminal.js',
+  'windowsPtyAgent.js',
+  'windowsConoutConnection.js'
+].map((file) => {
+  const previous = PREVIOUS_PATCH_TARGETS.find((target) => target.relativePath.at(-1) === file)
+  const inverse = (replacements) => replacements.toReversed().map(([from, to]) => [to, from])
+  const isConout = file === 'windowsConoutConnection.js'
+  const retiredReplacements = isConout ? previous.replacements : previous.previousReplacements
+  return {
+    relativePath: previous.relativePath,
+    originalSha256: previous.originalSha256,
+    patchedSha256: isConout ? previous.originalSha256 : previous.previousPatchedSha256,
+    replacements: isConout
+      ? []
+      : previous.replacements.slice(0, previous.replacements.length - retiredReplacements.length),
+    previousPatchedSha256: previous.patchedSha256,
+    previousReplacements: inverse(retiredReplacements),
+    additionalPreviousVariants: previous.additionalPreviousVariants?.map((variant) => ({
+      sha256: variant.sha256,
+      replacements: [...variant.replacements, ...inverse(retiredReplacements)]
+    }))
+  }
+})
 
 function inspectTarget(relayDir, target) {
   const nodePtyDir = resolve(relayDir, 'node_modules', 'node-pty')

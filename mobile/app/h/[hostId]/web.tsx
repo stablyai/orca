@@ -1,32 +1,25 @@
 import { Redirect, useLocalSearchParams } from 'expo-router'
 import { MobileWebShellScreen } from '../../../src/mobile-web-shell/MobileWebShellScreen'
-import { ShellSwitchPendingScreen } from '../../../src/mobile-web-shell/ShellSwitchPendingScreen'
-import { useShellSwitchDecision } from '../../../src/mobile-web-shell/shell-switch-decision'
+import { shellSwitchDecision } from '../../../src/mobile-web-shell/shell-switch-decision'
 
 /**
- * The hybrid shell route, dark behind a flag only some builds can turn on.
+ * The hybrid shell route, dark in every build but an OTA one.
  *
- * With the flag off — which is every native store build, one built without
- * `EXPO_PUBLIC_MOBILE_SHELL=ota` — this redirects and the screen is never constructed, so nothing
- * is fetched, written or swept. It sits under `app/h/[hostId]` so `HostProtocolGate` in that
- * group's layout still owns the `desktop-too-old` wall above it.
+ * In a build without `EXPO_PUBLIC_MOBILE_SHELL=ota` this redirects and the screen is never
+ * constructed, so nothing is fetched, written or swept. It sits under `app/h/[hostId]` so
+ * `HostProtocolGate` in that group's layout still owns the `desktop-too-old` wall above it.
  *
- * Reachable by deep link and from the Troubleshoot row only; no screen links here.
+ * Reachable by deep link only; no screen links here.
  */
 export default function MobileWebShellRoute() {
   const { hostId } = useLocalSearchParams<{ hostId: string }>()
   // Encoded here rather than in the JSX below so the decision holds the route the shell is handed:
   // `hostId` arrives decoded from the URL, so one carrying `?`, `#` or whitespace would build a
   // pathname the page refuses and never mount anything.
-  const decision = useShellSwitchDecision(
+  const decision = shellSwitchDecision(
     hostId ? { pathname: `/h/${encodeURIComponent(hostId)}` } : null
   )
 
-  if (decision.kind === 'pending') {
-    // A redirect fired before the read settles would bounce a flag that is on, and a screen mounted
-    // before it settles would fetch on a flag that is off. Neither, until it is known.
-    return <ShellSwitchPendingScreen />
-  }
   if (decision.kind === 'native') {
     return <Redirect href={`/h/${hostId ?? ''}`} />
   }

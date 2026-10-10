@@ -3,6 +3,7 @@ import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { downloadRuntimeFile, type RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import type { TreeNode } from './file-explorer-types'
+import { shouldShowCopyFileAction } from './file-explorer-row-action-visibility'
 
 function getLocalDownloadName(destinationPath: string, platform: NodeJS.Platform): string {
   const lastSeparatorIndex =
@@ -87,6 +88,10 @@ export async function copyFileToOsClipboard(
     'auto.components.right.sidebar.FileExplorerRow.b234ab25b4',
     'Could not copy the file to the clipboard'
   )
+  if (!shouldShowCopyFileAction(node, connectionId)) {
+    toast.error(failureMessage)
+    return
+  }
   const stagingFailureMessage = translate(
     'auto.components.right.sidebar.FileExplorerRow.clipboardStagingUnavailable',
     "Could not copy the file because Orca's temporary storage is unavailable"

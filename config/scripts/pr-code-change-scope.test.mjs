@@ -336,6 +336,7 @@ describe('per-job path classification', () => {
       'mobile/app/h/[hostId]/index.tsx',
       'mobile/src/transport/client-context.web.tsx',
       'mobile/modules/orca-mobile-web-shell/ios/MobileWebShellCsp.swift',
+      'src/shared/native-chat-visual-shell.ts',
       // The vendored Expo module the page resolves a .web.ts out of.
       'mobile/packages/expo-two-way-audio/src/ExpoTwoWayAudioModule.web.ts'
     ]) {
@@ -345,8 +346,7 @@ describe('per-job path classification', () => {
 
   it('runs it on a mobile-only diff, which should_run alone would skip', () => {
     const classified = classifyPrJobs(['mobile/app/h/[hostId]/tasks.tsx'])
-    expect(classified.should_run).toBe(false)
-    expect(classified.mobile_web_app).toBe(true)
+    expect([classified.should_run, classified.mobile_web_app]).toEqual([false, true])
   })
 
   it('needs no package.json prefix, because package.json already forces every job', () => {
@@ -378,7 +378,7 @@ describe('per-job path classification', () => {
       'src/main/runtime/agent-session-record-store.ts',
       'src/main/runtime/rpc/dispatcher.ts',
       'src/main/runtime/rpc/methods/ai-vault.ts',
-      'src/main/runtime/rpc/methods/browser-tab-create-schema.ts',
+      'src/shared/rpc-contract/browser-tab-create-params.ts',
       'src/main/runtime/rpc/methods/session-tabs.ts',
       'src/main/runtime/rpc/methods/structured-agent-session.ts',
       'src/main/runtime/rpc/methods/structured-agent-session-gate.ts',

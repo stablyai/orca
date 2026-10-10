@@ -310,12 +310,12 @@ export function NativeChatMessageList({
     beginNavigation()
     scrollToBottom()
   }, [beginNavigation, scrollToBottom])
-  useNativeChatMessageListHandle(ref, jumpToLatest)
   const readerScrollInput = useNativeChatReaderScrollInput(scrollRef, {
     onReaderScroll: beginNavigation,
     onTakeScroll: transcriptWindow.cancelAlign,
     onLeaveEnd: readerLeavesEnd
   })
+  useNativeChatMessageListHandle(ref, jumpToLatest, readerScrollInput.revealFindMatch)
   useNativeChatRailJumpLanding({
     railJump,
     slots,

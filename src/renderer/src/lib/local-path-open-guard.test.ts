@@ -10,6 +10,15 @@ describe('isLocalPathOpenBlocked', () => {
     expect(isLocalPathOpenBlocked({ activeRuntimeEnvironmentId: 'env-1' })).toBe(true)
   })
 
+  it('blocks a host-owned target while the focused runtime is local', () => {
+    expect(
+      isLocalPathOpenBlocked(
+        { activeRuntimeEnvironmentId: null },
+        { runtimeEnvironmentId: 'env-2' }
+      )
+    ).toBe(true)
+  })
+
   it('blocks SSH-backed paths', () => {
     expect(
       isLocalPathOpenBlocked({ activeRuntimeEnvironmentId: null }, { connectionId: 'ssh-1' })

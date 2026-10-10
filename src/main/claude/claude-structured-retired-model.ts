@@ -2,7 +2,6 @@
 // retired fails the turn. The CLI says so itself: a synthetic reply whose `error` is
 // `model_not_found` (Claude Code 2.1.280). That reply is the evidence the saved model cannot run.
 
-import type { AgentModelCatalogSessionAccess } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type {
   ClaudeSession,
   ClaudeStructuredSessionAdapterDeps
@@ -70,21 +69,4 @@ export function claudeRetiredOptions(
   return session.restoreSkippedOptions.has('model') && session.launchedModel !== null
     ? { retiredOptions: { model: session.launchedModel } }
     : {}
-}
-
-/** The rows of a listing the account's catalog keeps. A child launched with `--model X` lists X
- *  itself (Claude Code 2.1.280 adds a row named by the raw id, "Custom model"), whether or not X
- *  exists: that row is the launch talking, not the account, unless the account already listed X.
- *  Native rows carry a display name of their own, so a row named by its id is the tell. */
-export function claudeCatalogRowsOfAccount<T extends { id: string; label: string }>(
-  access: AgentModelCatalogSessionAccess,
-  rows: readonly T[],
-  launchedModel: string | null
-): T[] {
-  const listedBefore = access.store
-    .get(access.fingerprint)
-    ?.models.some((model) => model.id === launchedModel)
-  return rows.filter(
-    (row) => listedBefore === true || row.id !== launchedModel || row.label !== row.id
-  )
 }

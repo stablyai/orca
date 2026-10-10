@@ -1,9 +1,17 @@
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { isDeepStrictEqual } from 'node:util'
+import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { JournalReducerState } from './journal-reducer'
-import { partitionJournalLifecycleMutations } from './journal-lifecycle-batch-partition'
 import {
+  journalLifecycleMutationFitsOneBatch,
+  partitionJournalLifecycleMutations
+} from './journal-lifecycle-batch-partition'
+import {
+  journalDispatchRowBuilder,
+  journalItemRowBuilder,
   journalLifecycleBatchRowBuilder,
+  journalTombstoneRowBuilder,
+  journalLifecycleMutationItemId,
   type JournalLifecycleMutationInput
 } from './journal-row-builders'
 import type {
@@ -13,14 +21,11 @@ import type {
 import type { JournalRow } from './journal-row-schema'
 import { journalQueuedRejectionRowBuilders } from './journal-pending-submission-recovery'
 
-const SETTLEMENT_ALREADY_APPLIED = new Error('journal_settlement_already_applied')
-
 export class JournalLifecycleBatchAppender {
   constructor(
     private readonly deps: {
       state: () => JournalReducerState
       cursor: () => AgentJournalCursor
-      enqueue: (build: (seq: number, ts: number) => JournalRow) => Promise<JournalRow>
       enqueueRows: (
         plan: () => readonly ((seq: number, ts: number) => JournalRow)[]
       ) => Promise<JournalRow[]>
@@ -28,53 +33,34 @@ export class JournalLifecycleBatchAppender {
   ) {}
 
   append(input: JournalLifecycleBatchInput): Promise<AgentJournalCursor> {
-    const { rejectsQueued } = input
-    if (rejectsQueued) {
-      // Planned on the lane: the sends queued then, and this batch unless it already landed. With
-      // none left (a Stop withdrew them first) it failed no one, so nothing is written.
-      return this.deps
-        .enqueueRows(() => {
+    return this.deps
+      .enqueueRows(() => {
+        if (input.rejectsQueued) {
           const rejections = journalQueuedRejectionRowBuilders(
             this.deps.state,
             input.fence,
-            rejectsQueued
+            input.rejectsQueued
           )
-          return rejections.length === 0 || this.wasApplied(input.settlementId)
-            ? rejections
-            : [
-                ...rejections,
-                journalLifecycleBatchRowBuilder(
-                  this.deps.state,
-                  input.settlementId,
-                  input.mutations,
-                  input
-                )
-              ]
-        })
-        .then(() => this.deps.cursor())
-    }
-    if (this.wasApplied(input.settlementId)) {
-      return Promise.resolve(this.deps.cursor())
-    }
-    const build = journalLifecycleBatchRowBuilder(
-      this.deps.state,
-      input.settlementId,
-      input.mutations,
-      input
-    )
-    return this.deps
-      .enqueue((seq, ts) => {
+          if (rejections.length > 0 && input.mutations.length === 0) {
+            throw new Error('journal_lifecycle_batch_mutation_bound_exceeded')
+          }
+          return rejections.length === 0
+            ? []
+            : [...rejections, ...this.planMutations(input, input.mutations)]
+        }
         if (this.wasApplied(input.settlementId)) {
-          throw SETTLEMENT_ALREADY_APPLIED
+          return []
         }
-        return build(seq, ts)
+        return [
+          ...(input.dispatches ?? []).map((dispatch) =>
+            journalDispatchRowBuilder(this.deps.state, dispatch)
+          ),
+          ...this.planMutations(input, input.mutations)
+        ]
       })
-      .then((row) => ({ epoch: row.epoch, sequence: row.seq }))
-      .catch((error: unknown) => {
-        if (error === SETTLEMENT_ALREADY_APPLIED) {
-          return this.deps.cursor()
-        }
-        throw error
+      .then((rows) => {
+        const last = rows.at(-1)
+        return last ? { epoch: last.epoch, sequence: last.seq } : this.deps.cursor()
       })
   }
 
@@ -84,21 +70,106 @@ export class JournalLifecycleBatchAppender {
     input: JournalResolvedLifecycleBatchInput
   ): ((seq: number, ts: number) => JournalRow)[] {
     const mutations = input.resolve()
-    // Every chunk is built before any commits, so a second chunk naming the same item would
-    // reuse the first chunk's revision.
     this.assertDistinctItems(mutations)
-    return partitionJournalLifecycleMutations(input.settlementId, mutations)
-      .filter((chunk) => !this.wasApplied(chunk.settlementId))
-      .map((chunk) =>
-        journalLifecycleBatchRowBuilder(this.deps.state, chunk.settlementId, chunk.mutations, input)
-      )
+    return this.planMutations(input, mutations)
+  }
+
+  private planMutations(
+    input: Pick<JournalLifecycleBatchInput, 'settlementId' | 'fence' | 'recovered'>,
+    mutations: readonly JournalLifecycleMutationInput[]
+  ): ((seq: number, ts: number) => JournalRow)[] {
+    if (this.wasApplied(input.settlementId)) {
+      return []
+    }
+    const current = this.deps.state()
+    const options = { ...input, epoch: current.epoch }
+    // Every row in this transaction must advance past the rows planned before it.
+    const revisions = new Map<string, number>()
+    const plannedItems = new Set<string>()
+    let namedSettlement = false
+    return partitionJournalLifecycleMutations(input.settlementId, mutations, options).flatMap(
+      (chunk): ((seq: number, ts: number) => JournalRow)[] => {
+        const previouslyPlanned = chunk.mutations.some((mutation) => {
+          const itemId = journalLifecycleMutationItemId(mutation)
+          return plannedItems.has(current.aliases.get(itemId) ?? itemId)
+        })
+        for (const mutation of chunk.mutations) {
+          const itemId = journalLifecycleMutationItemId(mutation)
+          plannedItems.add(current.aliases.get(itemId) ?? itemId)
+        }
+        const [only] = chunk.mutations
+        if (
+          chunk.mutations.length === 1 &&
+          only &&
+          !journalLifecycleMutationFitsOneBatch(chunk.settlementId, only, options)
+        ) {
+          const itemId = journalLifecycleMutationItemId(only)
+          const resolved = current.aliases.get(itemId) ?? itemId
+          if (only.kind === 'tombstone') {
+            const build = journalTombstoneRowBuilder(
+              this.deps.state,
+              itemId,
+              input.fence,
+              revisions
+            )
+            return !previouslyPlanned && current.tombstones.has(resolved)
+              ? []
+              : [
+                  (seq, ts) => ({
+                    ...build(seq, ts),
+                    ...(input.recovered ? { recovered: true as const } : {})
+                  })
+                ]
+          }
+          const existing = current.items.get(resolved)
+          // An all-oversized settlement has no batch receipt; its terminal bodies are its receipt.
+          return !previouslyPlanned &&
+            existing &&
+            isDeepStrictEqual(existing.body, only.body) &&
+            (only.linkage === undefined ||
+              isDeepStrictEqual(
+                agentJournalLinkageFields(existing),
+                agentJournalLinkageFields(only.linkage)
+              ))
+            ? []
+            : [
+                journalItemRowBuilder(
+                  this.deps.state,
+                  itemId,
+                  only.body,
+                  {
+                    ...only.linkage,
+                    turnScope: only.turnScope,
+                    fence: input.fence,
+                    recovered: input.recovered
+                  },
+                  revisions
+                )
+              ]
+        }
+        // One bounded row remembers the generation even when the re-derived plan has fewer items.
+        const id = namedSettlement ? chunk.settlementId : input.settlementId
+        namedSettlement = true
+        return this.wasApplied(id)
+          ? []
+          : [
+              journalLifecycleBatchRowBuilder(
+                this.deps.state,
+                id,
+                chunk.mutations,
+                input,
+                revisions
+              )
+            ]
+      }
+    )
   }
 
   private assertDistinctItems(mutations: readonly JournalLifecycleMutationInput[]): void {
     const { aliases } = this.deps.state()
     const seen = new Set<string>()
     for (const mutation of mutations) {
-      const itemId = agentJournalItemKey(mutation.identity)
+      const itemId = journalLifecycleMutationItemId(mutation)
       const resolved = aliases.get(itemId) ?? itemId
       if (seen.has(resolved)) {
         throw new Error('journal_resolved_lifecycle_batch_names_item_twice')

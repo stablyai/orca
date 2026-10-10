@@ -5,6 +5,7 @@ import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../shared/pty-liveness-verd
 import type { RuntimeTerminalClose } from '../../shared/runtime-types'
 import type { RuntimePtyTabCloseAuthority } from './runtime-terminal-state-records'
 import { parsePaneKey } from '../../shared/stable-pane-id'
+import { errorMessage } from '../../shared/error-message'
 
 /** How an explicit close's stop of its addressed PTY ended. */
 type ExplicitCloseStop = { stopped: boolean; pendingKillRecorded: boolean }
@@ -27,10 +28,7 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
         try {
           stopped = await this.ptyController.stopAndWait(ptyId, { deadlineMs })
         } catch (error) {
-          this.markPtyLivenessUnverifiable(
-            ptyId,
-            error instanceof Error ? error.message : String(error)
-          )
+          this.markPtyLivenessUnverifiable(ptyId, errorMessage(error))
         }
         // Preserve an observed exit when a broader inventory check could not finish.
         if (

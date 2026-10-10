@@ -15,8 +15,7 @@ import {
   clearResyncTimer,
   clearSnapshot,
   concatBytes,
-  decodeSnapshotInfo,
-  pushedSnapshotKeepsLocalScrollback
+  decodeSnapshotInfo
 } from './remote-runtime-terminal-snapshot-state'
 import type {
   RemoteRuntimeMultiplexedTerminalCallbacks,
@@ -75,7 +74,6 @@ export abstract class RemoteRuntimeTerminalBinarySnapshots extends RemoteRuntime
         (typeof info?.requestId === 'number'
           ? info.requestId === pendingRequest.requestId
           : stream.initialSnapshotReceived)
-      const keepsLocalScrollback = pushedSnapshotKeepsLocalScrollback(info)
       if (snapshotApplied) {
         const pushedMeta: NonNullable<
           Parameters<RemoteRuntimeMultiplexedTerminalCallbacks['onSnapshot']>[1]
@@ -90,7 +88,8 @@ export abstract class RemoteRuntimeTerminalBinarySnapshots extends RemoteRuntime
           // always carried these; the pushes silently dropped them.
           cols: info?.cols,
           rows: info?.rows,
-          keepsLocalScrollback
+          // Absent counts as none: older hosts push desktop images screen-only.
+          carriesHistory: (info?.scrollbackRows ?? 0) > 0
         }
         if (matchesPendingRequest) {
           pendingRequest.resolve({
@@ -113,15 +112,15 @@ export abstract class RemoteRuntimeTerminalBinarySnapshots extends RemoteRuntime
         } else if (target === 'initial') {
           stream.callbacks.onSnapshot(data ?? '', pushedMeta)
         } else if (target === 'recovery') {
-          // Why: a server-pushed recovery snapshot replaces terminal state
-          // mid-session; clear the screen, and the scrollback only when the
-          // image carries its own, before applying it.
+          // Why: a server-pushed recovery snapshot follows dropped output, so the
+          // pane's history ends before this image; clear screen and scrollback
+          // rather than splice them with a silent gap (P2-5).
           // An empty snapshot is still applied so stale dropped output does
           // not linger on a terminal the model says is blank.
           // RELEASE_SYNCHRONIZED_OUTPUT: \x1b[2J does not clear mode 2026, so a pane
           // holding an open latch would not paint this recovery snapshot at all.
           stream.callbacks.onSnapshot(
-            `${RELEASE_SYNCHRONIZED_OUTPUT}\x1b[2J${keepsLocalScrollback ? '' : '\x1b[3J'}\x1b[H${data ?? ''}`,
+            `${RELEASE_SYNCHRONIZED_OUTPUT}\x1b[2J\x1b[3J\x1b[H${data ?? ''}`,
             pushedMeta
           )
         }

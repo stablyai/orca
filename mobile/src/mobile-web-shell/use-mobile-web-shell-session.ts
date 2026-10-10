@@ -30,6 +30,7 @@ export type MobileWebShellSessionView = {
   readonly pageRoutes: readonly string[]
   readonly pageRouteGrants: readonly { pathname: string; grants: readonly string[] }[]
   readonly routeGrants: readonly string[]
+  readonly ownsHostArea: boolean
   /** Non-null when this generation is a fallback from an update the shell refused, for the caller
    *  to say so beside the page rather than instead of it. */
   readonly updateNotice: MobileWebShellUpdateNotice | null
@@ -72,9 +73,12 @@ export function useMobileWebShellSession(args: {
   hostId: string
   /** The route this mount stands for, matched against the page routes the bundle declares. */
   routePathname: string
+  /** A wide layout; a change restarts the session only where it changes the answer. */
+  wide?: boolean
   runtime?: MobileWebShellRuntime
 }): MobileWebShellSessionView {
   const { hostId, routePathname } = args
+  const wide = args.wide === true
   const gates = useHostProtocolGates()
   const { client, state: connState } = useHostClient(hostId)
 
@@ -84,7 +88,7 @@ export function useMobileWebShellSession(args: {
   const storeRef = useRef<GenerationStore | null>(null)
   storeRef.current ??= runtime.createStore()
 
-  const sessionRef = useRef(createMobileWebShellSession(routePathname))
+  const sessionRef = useRef(createMobileWebShellSession(routePathname, wide))
   const [state, setState] = useState(sessionRef.current.state)
   const [pageReady, setPageReady] = useState(sessionRef.current.pageReady)
   const [pageFrame, setPageFrame] = useState(() => shellPageFrame(sessionRef.current))
@@ -214,13 +218,17 @@ export function useMobileWebShellSession(args: {
   useEffect(() => {
     // A new host is a new session: the old one's latches, cache handle and in-flight work all go.
     invalidate()
-    sessionRef.current = createMobileWebShellSession(routePathname)
+    sessionRef.current = createMobileWebShellSession(routePathname, wide)
     startedAtRef.current = runtime.now()
     setState(sessionRef.current.state)
     setPageReady(sessionRef.current.pageReady)
     setPageFrame(shellPageFrame(sessionRef.current))
     return invalidate
   }, [hostId, invalidate, routePathname, runtime])
+
+  useEffect(() => {
+    dispatch(epochRef.current, { type: 'layout-changed', wide })
+  }, [dispatch, wide])
 
   const { statusPending, statusReadable, hostCapabilities, hostProtocolWindow } = gates
   const reachability = readMobileWebShellReachability(connState, client)
@@ -293,6 +301,7 @@ export function useMobileWebShellSession(args: {
     pageRoutes: sessionRef.current.pageRoutes,
     pageRouteGrants: sessionRef.current.pageRouteGrants,
     routeGrants: sessionRef.current.routeGrants,
+    ownsHostArea: sessionRef.current.ownsHostArea,
     updateNotice: sessionRef.current.updateNotice,
     retry,
     reportShellFailure,

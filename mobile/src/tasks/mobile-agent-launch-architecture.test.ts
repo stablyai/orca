@@ -8,7 +8,7 @@ import { OrcaRuntimeRpcServer } from '../../../src/main/runtime/runtime-rpc'
 import { DeviceRegistry } from '../../../src/main/runtime/device-registry'
 import type { AuthenticatedMobileSocket } from '../../../src/main/runtime/rpc/mobile-socket-wiring'
 import { RpcDispatcher } from '../../../src/main/runtime/rpc/dispatcher'
-import { AgentLaunchFields } from '../../../src/main/runtime/rpc/methods/agent-launch-schemas'
+import { AgentLaunchFields } from '../../../src/shared/rpc-contract/agent-launch-params'
 import {
   runtimeStub,
   setAgentLaunchRecordStore
