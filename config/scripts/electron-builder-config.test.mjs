@@ -316,6 +316,17 @@ describe('electron-builder config', () => {
     )
   })
 
+  it('ships the mac process-info addon where the main process and daemon look for it', () => {
+    expect(electronBuilderConfig.mac.extraResources).toEqual(
+      expect.arrayContaining([
+        {
+          from: 'native/proc-info-darwin/.build/release/orca-proc-info.node',
+          to: 'native/orca-proc-info.node'
+        }
+      ])
+    )
+  })
+
   it('ships the mac keyboard-layout helper in Contents/MacOS, not Resources', () => {
     expect(electronBuilderConfig.mac.extraFiles).toEqual(
       expect.arrayContaining([
@@ -583,12 +594,19 @@ describe('arch-aware packaging guard', () => {
 
   const packHost = (arch) =>
     electronBuilderConfig.beforePack({ electronPlatformName: process.platform, arch }, bundleDir)
+  // Why: on macOS beforePack also demands the compiled process-info addon (its own suite covers
+  // the guard), which only `pnpm run build:native` produces.
+  const procInfoReady =
+    process.platform !== 'darwin' ||
+    existsSync(
+      join(REPO_ROOT, 'native', 'proc-info-darwin', '.build', 'release', 'orca-proc-info.node')
+    )
 
-  it('allows packaging the host platform and architecture', () => {
+  it.runIf(procInfoReady)('allows packaging the host platform and architecture', () => {
     expect(() => packHost(HOST_ARCH)).not.toThrow()
   })
 
-  it('requires the other architecture natives to be installed', () => {
+  it.runIf(procInfoReady)('requires the other architecture natives to be installed', () => {
     const otherSherpaInstalled = existsSync(
       join(REPO_ROOT, 'node_modules', otherSherpa, 'package.json')
     )

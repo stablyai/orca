@@ -192,6 +192,16 @@ jobs:
             (github.event_name == 'pull_request' ||
             (github.ref == 'refs/heads/main' && contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name))) }}
           restore-windows-cache: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+      - name: Verify macOS native repaint lookup
+        if: runner.os == 'macOS'
+        run: |
+          node config/scripts/build-proc-info-macos.mjs
+          lipo native/proc-info-darwin/.build/release/orca-proc-info.node -verify_arch arm64 x86_64
+          pnpm exec vitest run --config config/vitest.config.ts \
+            src/shared/native-process-info.test.ts \
+            src/main/pty/posix-pty-foreground-group.test.ts \
+            config/scripts/proc-info-macos-resources.test.mjs \
+            config/scripts/electron-builder-config.test.mjs
       - run: pnpm build:orcad
       - wait: bun-orcad
       - run: pnpm test:node-server --artifact ${{ runner.os == 'Linux' && '--cross-runtime' || '' }}

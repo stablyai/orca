@@ -88,6 +88,7 @@ it.each([
     false
   ],
   ['src/main/daemon/darwin-process.ts', ['ubuntu-22.04', 'macos-15', 'macos-15-intel'], false],
+  ['src/shared/native-process-info.ts', ['ubuntu-22.04', 'macos-15', 'macos-15-intel'], false],
   ['src/shared/linux-glibc.ts', ['ubuntu-22.04', 'ubuntu-24.04-arm'], true],
   [
     'src/main/daemon/posix-process.ts',

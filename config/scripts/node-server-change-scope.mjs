@@ -8,6 +8,7 @@ const ROOT = resolve(import.meta.dirname, '../..')
 const BUILD_SCRIPTS = [
   'config/scripts/build-orcad-node.mjs',
   'config/scripts/server-build-target.mjs',
+  'config/scripts/build-proc-info-macos.mjs',
   'config/scripts/pinned-node-downloads.mjs',
   'config/scripts/build-orcad.mjs',
   'config/scripts/build-orcad-prebuilds.mjs',
@@ -36,6 +37,7 @@ const ALWAYS_FILES = new Set([
   'config/scripts/headless-detector-compiler-cache.mjs',
   'config/scripts/node-server-qualification.mjs',
   'config/scripts/node-server-qualification.test.mjs',
+  'config/proc-info-macos-resources.cjs',
   // The source graph sees process-host source, not the build that emits the dist servers load.
   'src/packages/process-host/.gitignore',
   'src/packages/process-host/scripts/build-dist.mjs',

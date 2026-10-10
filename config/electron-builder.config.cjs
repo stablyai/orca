@@ -37,6 +37,10 @@ const {
   orcadTemplateMacSignIgnore
 } = require('./scripts/packaged-orcad-template.cjs')
 const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
+const {
+  assertProcInfoAddonBuilt,
+  procInfoMacExtraResource
+} = require('./proc-info-macos-resources.cjs')
 const { verifyStaticAppImagePackage } = require('./scripts/static-appimage-package-contract.cjs')
 const { signWindowsUninstallerViaSignPath } = require('./scripts/windows-uninstaller-signing.cjs')
 
@@ -343,6 +347,7 @@ module.exports = {
   // so a test can point the guard at a scratch bundle instead of needing the repo's out/ built.
   beforePack: (context, mobileWebBundleDir = MOBILE_WEB_BUNDLE_DIR) => {
     assertPackagedNativeVariantsInstalled(context.electronPlatformName, context.arch)
+    assertProcInfoAddonBuilt(context.electronPlatformName, context.arch)
     assertBundledRipgrepInstalled()
     assertProcessHostOutputBuilt()
     assertOrcadTemplateBuilt()
@@ -584,6 +589,7 @@ module.exports = {
       ...commonExtraResources,
       ...createPackagedRuntimeNodeModuleResources('darwin'),
       macSpeechNativeResource,
+      procInfoMacExtraResource,
       {
         from: 'resources/darwin/bin/orca',
         to: 'bin/orca'

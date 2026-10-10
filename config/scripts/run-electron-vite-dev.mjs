@@ -17,6 +17,7 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 
 import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mjs'
+import { prepareDevProcInfoAddon } from './dev-proc-info-addon.mjs'
 import {
   DEV_BUNDLE_MARKER_FILENAME,
   getDevBundleProcessTable,
@@ -470,6 +471,7 @@ if (process.env.ORCA_SKIP_DEV_CLI_PREPARE !== '1') {
 seedDevInstanceIdentityEnv()
 if (!useStableElectronName && process.env.ORCA_SKIP_DEV_ELECTRON_APP_PREPARE !== '1') {
   prepareMacDevElectronApp()
+  prepareDevProcInfoAddon(repoRoot)
 }
 
 // Why: tests inject a tiny fake CLI here so they can verify Ctrl+C tears down

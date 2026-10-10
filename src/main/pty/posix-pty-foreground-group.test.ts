@@ -1,5 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'node:child_process'
+import {
+  setNativeProcessInfoForTests,
+  type NativeProcessForegroundRow
+} from '../../shared/native-process-info'
 import {
   getPosixPtyForegroundGroup,
   resetPosixPtyForegroundGroupOwnRowCache,
@@ -221,6 +225,78 @@ describe('process table lookup', () => {
     } finally {
       execFileSyncMock.mockReset()
       execFileSyncMock.mockReturnValue('' as never)
+      kill.mockRestore()
+    }
+  })
+})
+
+describe('signalPosixPtyForegroundGroup with the native process-info addon', () => {
+  const rows: NativeProcessForegroundRow[] = [
+    { pid: 84644, tpgid: 84985, tty: 'ttys318' },
+    { pid: 4242, tpgid: 4242, tty: 'ttys002' }
+  ]
+
+  beforeEach(() => {
+    vi.mocked(execFileSync).mockClear()
+    resetPosixPtyForegroundGroupOwnRowCache()
+    setNativeProcessInfoForTests({
+      readProcessForegroundGroup: (pid) => rows.find((row) => row.pid === pid) ?? null
+    })
+  })
+
+  afterEach(() => {
+    setNativeProcessInfoForTests(undefined)
+  })
+
+  it('resolves the group from sysctl rows instead of blocking on ps', () => {
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    const fallback = vi.fn()
+    try {
+      signalPosixPtyForegroundGroup(84644, '/dev/ttys318', 'SIGWINCH', fallback, {
+        platform: 'darwin',
+        currentPid: 4242
+      })
+      expect(kill).toHaveBeenCalledWith(-84985, 'SIGWINCH')
+      expect(fallback).not.toHaveBeenCalled()
+      expect(execFileSync).not.toHaveBeenCalled()
+    } finally {
+      kill.mockRestore()
+    }
+  })
+
+  it('falls back to the root signal when the pid is gone, still without ps', () => {
+    const fallback = vi.fn()
+    signalPosixPtyForegroundGroup(99999, '/dev/ttys318', 'SIGWINCH', fallback, {
+      platform: 'darwin',
+      currentPid: 4242
+    })
+    expect(fallback).toHaveBeenCalledTimes(1)
+    expect(execFileSync).not.toHaveBeenCalled()
+  })
+
+  it('rechecks its own terminal membership when the supplied PTY changes', () => {
+    setNativeProcessInfoForTests({
+      readProcessForegroundGroup: (pid, expectedTty) => {
+        const row = rows.find((candidate) => candidate.pid === pid)
+        return row ? { ...row, tty: expectedTty === `/dev/${row.tty}` ? row.tty : '??' } : null
+      }
+    })
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    const fallback = vi.fn()
+    try {
+      signalPosixPtyForegroundGroup(84644, '/dev/ttys318', 'SIGWINCH', fallback, {
+        platform: 'darwin',
+        currentPid: 4242
+      })
+      signalPosixPtyForegroundGroup(4242, '/dev/ttys002', 'SIGWINCH', fallback, {
+        platform: 'darwin',
+        currentPid: 4242
+      })
+      expect(kill).toHaveBeenCalledTimes(1)
+      expect(kill).toHaveBeenCalledWith(-84985, 'SIGWINCH')
+      expect(fallback).toHaveBeenCalledTimes(1)
+      expect(execFileSync).not.toHaveBeenCalled()
+    } finally {
       kill.mockRestore()
     }
   })

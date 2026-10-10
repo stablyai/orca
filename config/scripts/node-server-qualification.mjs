@@ -29,7 +29,10 @@ const PLATFORM_PREFIXES = [
 
 const PLATFORM_FAMILIES = [
   { pattern: /(?:^|[/.-])(?:windows|win32|wsl)(?:[/.-]|$)/i, prefix: 'windows-' },
-  { pattern: /(?:^|[/.-])(?:macos|darwin|posix)(?:[/.-]|$)/i, prefix: 'macos-' },
+  {
+    pattern: /(?:^|[/.-])(?:macos|darwin|posix|native-process-info)(?:[/.-]|$)/i,
+    prefix: 'macos-'
+  },
   { pattern: /(?:^|[/.-])(?:linux|posix)(?:[/.-]|$)/i, prefix: 'ubuntu-' }
 ]
 
