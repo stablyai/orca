@@ -258,6 +258,9 @@ export function directorDeploymentEnvironment(config) {
   if (config['reserve-placement'] !== undefined && config['reserve-placement'] !== 'preserve') {
     environment[DIRECTOR_RESERVE_PLACEMENT_ENV] = config['reserve-placement']
   }
+  if (config['shadow-seat-feed-cells'] !== undefined && config['shadow-seat-feed-cells'] !== 'preserve') {
+    environment[DIRECTOR_SHADOW_SEAT_FEED_CELLS_ENV] = shadowSeatFeedCellsSetting(config['shadow-seat-feed-cells'])
+  }
   const serviceAccount = projectServiceAccount(config, 'capacity-service-account')
   const asiaProofServiceAccount = projectServiceAccount(config, 'asia-proof-service-account')
   const rehomeDirectorServiceAccount = projectServiceAccount(
@@ -277,6 +280,16 @@ export function directorDeploymentEnvironment(config) {
   }
   if (cellsJson !== undefined) environment.ORCA_RELAY_CELLS_JSON = cellsJson
   return environment
+}
+
+// `all` or a comma list of cell ids, as the director's config reads it.
+function shadowSeatFeedCellsSetting(value) {
+  if (value === 'all') return value
+  const cells = value.split(',').map((cell) => cell.trim())
+  if (cells.length > 100 || cells.some((cell) => !/^[a-z][a-z0-9-]{0,39}$/.test(cell))) {
+    throw new Error('--shadow-seat-feed-cells must be preserve, all, or a comma list of cell ids')
+  }
+  return cells.join(',')
 }
 
 export function environmentUpdateValue(environment) {
@@ -324,7 +337,8 @@ export function parseArguments(argv) {
       values['expected-rehome-generation'] !== undefined ||
       values['rehome-control-origin'] !== undefined ||
       values['region-correction-cohort-percent'] !== undefined ||
-      values['reserve-placement'] !== undefined
+      values['reserve-placement'] !== undefined ||
+      values['shadow-seat-feed-cells'] !== undefined
     ) {
       throw new Error('director configuration arguments require --role director')
     }
@@ -393,12 +407,14 @@ export function parseArguments(argv) {
         throw new Error('--rehome-audience must be an exact host-drain HTTPS URL')
       }
     }
-    const controlArguments = [
-      'expected-rehome-generation',
-      'rehome-control-origin',
-      'admin-audience'
-    ].map((key) => values[key] !== undefined)
-    if (controlArguments.some(Boolean) && !controlArguments.every(Boolean)) {
+    // --admin-audience alone serves the reserve guard's reads; durable verification needs all three.
+    const controlArguments = ['expected-rehome-generation', 'rehome-control-origin'].map(
+      (key) => values[key] !== undefined
+    )
+    if (
+      controlArguments.some(Boolean) &&
+      (!controlArguments.every(Boolean) || values['admin-audience'] === undefined)
+    ) {
       throw new Error('durable rehome verification arguments must be configured together')
     }
     if (
@@ -444,9 +460,35 @@ export function suppliedAdminIdentityToken(environment = process.env) {
   return token
 }
 
+// The unverified `email` claim, only to name the caller in an error; the director verifies it.
+export function adminTokenEmail(token) {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'))
+    return typeof payload?.email === 'string' ? payload.email : undefined
+  } catch {
+    return undefined
+  }
+}
+
+// cell-admit-mode answers only the revision's deploy identity, so a drifted one (a revision that
+// trusts another account than the workflow's) fails here by name instead of as a bare 401.
+export function assertDirectorTrustsAdminCaller(token, environment, label) {
+  const trusted = environment.ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT
+  const caller = adminTokenEmail(token)
+  if (trusted === undefined || caller === undefined || caller === trusted) return
+  throw new Error(
+    `the ${label} director trusts ${trusted} for deploy admin reads, but this deploy authenticates as ${caller}; ` +
+      'run as that identity or correct the revision\'s ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT'
+  )
+}
+
 function adminIdentityToken(config) {
+  const supplied = suppliedAdminIdentityToken()
+  if (supplied === null && !config['admin-audience']) {
+    throw new Error('admin reads need --admin-audience or a supplied ORCA_RELAY_ADMIN_ID_TOKEN')
+  }
   return (
-    suppliedAdminIdentityToken() ??
+    supplied ??
     commandText(['auth', 'print-identity-token', `--audiences=${config['admin-audience']}`], {
       sensitive: true
     })
@@ -860,6 +902,7 @@ export async function deployDirector(config, tag, overrides = {}) {
     assertRegionalRehomeDisabled,
     readReserveCells,
     readDirectorPlacement,
+    adminIdentityToken,
     ...overrides
   }
   // Why: gcloud does not carry minScale onto a new revision, and the candidate below takes
@@ -922,6 +965,9 @@ export async function deployDirector(config, tag, overrides = {}) {
   )
   if (currentEnvironment[DIRECTOR_RESERVE_PLACEMENT_ENV] !== undefined) {
     deploymentEnvironment[DIRECTOR_RESERVE_PLACEMENT_ENV] ??= currentEnvironment[DIRECTOR_RESERVE_PLACEMENT_ENV]
+  }
+  if (currentEnvironment[DIRECTOR_SHADOW_SEAT_FEED_CELLS_ENV] !== undefined) {
+    deploymentEnvironment[DIRECTOR_SHADOW_SEAT_FEED_CELLS_ENV] ??= currentEnvironment[DIRECTOR_SHADOW_SEAT_FEED_CELLS_ENV]
   }
   if (config['region-correction-cohort-percent'] !== undefined &&
       config['region-correction-cohort-percent'] !== 'preserve' &&
@@ -1043,6 +1089,9 @@ export async function deployDirector(config, tag, overrides = {}) {
     } else {
       const servingOrigin = initialService.status?.url
       if (!servingOrigin) throw new Error('relay service reports no URL for the serving revision')
+      const token = operations.adminIdentityToken(config)
+      assertDirectorTrustsAdminCaller(token, currentEnvironment, 'serving')
+      assertDirectorTrustsAdminCaller(token, environment, 'candidate')
       const cellIds = directorCellIds(currentEnvironment, environment)
       const servingReserve = await operations.readReserveCells(config, servingOrigin, cellIds)
       const candidateReserve = await operations.readReserveCells(config, candidate.origin, cellIds)

@@ -212,6 +212,7 @@ export function directorDeployInputs({ imageDigest, predecessorDigest, rehomeGen
     'regional-placement-mode': 'preserve',
     'region-correction-cohort-percent': 'preserve',
     'reserve-placement': 'preserve',
+    'shadow-seat-feed-cells': 'preserve',
     'prune-incompatible-revisions': 'false',
     'expected-rehome-generation': String(rehomeGeneration),
     'bootstrap-runtime-identity': 'false',

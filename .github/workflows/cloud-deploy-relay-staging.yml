@@ -42,6 +42,11 @@ on:
         description: BOOTSTRAP_RELAY_DIRECTOR_REHOME_IDENTITY for a bootstrap
         required: false
         type: string
+      shadow-seat-feed-cells:
+        description: Preserve the step-3 shadow seat-feed cells, or set all or a comma list of cell ids; dropping a reserve cell is refused
+        required: true
+        default: preserve
+        type: string
 
 permissions:
   contents: read
@@ -159,6 +164,7 @@ jobs:
           # An image change reads every cell's admit mode before the traffic move.
           ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
           RESERVE_PLACEMENT: ${{ inputs.reserve-placement }}
+          SHADOW_SEAT_FEED_CELLS: ${{ inputs.shadow-seat-feed-cells }}
         run: |
           regional_version="$(gcloud secrets versions describe latest \
             --project "${GCP_PROJECT_ID}" --secret "${REGIONAL_PLACEMENT_SECRET}" \
@@ -205,6 +211,7 @@ jobs:
             "${topology_args[@]}" \
             --admin-audience https://relay-staging.onorca.dev/v1/admin/drain \
             --reserve-placement "${RESERVE_PLACEMENT}" \
+            --shadow-seat-feed-cells "${SHADOW_SEAT_FEED_CELLS}" \
             --release-id "${RELEASE_ID}"
 
       - name: Smoke director health
