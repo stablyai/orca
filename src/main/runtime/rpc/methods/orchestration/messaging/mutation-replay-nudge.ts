@@ -21,7 +21,7 @@ export function recordReceiptForPostCommitNudge<T>(
   recordMutationReceipt: ((receipt: unknown) => void) | undefined,
   receipt: T,
   nudge: () => void,
-  replayNudge: MutationReplayNudge | undefined = messageReplayNudge(receipt)
+  replayNudge: MutationReplayNudge | null | undefined = messageReplayNudge(receipt)
 ): { receipt: T; nudge: () => void } {
   recordMutationReceipt?.(replayNudge ? attachMutationReplayNudge(receipt, replayNudge) : receipt)
   return { receipt, nudge }
