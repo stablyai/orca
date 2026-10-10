@@ -1,7 +1,52 @@
 {
   "id": "dsh",
   "engineVersion": 1,
-  "profile": { "hooks": "turn-end" },
+  "profile": { "hooks": "turn-end", "screenSource": "trusted" },
   "anchors": [],
-  "rules": []
+  "rules": [
+    {
+      "id": "chat_composer_ready",
+      "why": "dsh-tui 0.10-0.13's empty chat composer over its model footer as the bottom row, under an optional context gauge. Not quiet: the whale intro repaints behind it at rest. A turn paints `esc to interrupt` (zh `esc 中断`) under the footer, and the `· total 0s` spinner row while that is not yet painted; an approval replaces the composer.",
+      "priority": 500,
+      "when": {
+        "region": "screen",
+        "rows": [
+          { "regex": "^╭─{8,}╮$" },
+          { "regex": "^(?:⌸ )?❯\\s*⛶$" },
+          { "regex": "^╰─{8,}╯$" },
+          { "optional": { "regex": "^\\S+/\\S+ \\d+(?:\\.\\d+)?%$" } },
+          { "regex": "^\\S+ · \\S+ · \\S" }
+        ],
+        "noneAbove": { "regex": "· (?:total |总)\\d" }
+      },
+      "answer": { "state": "idle", "strength": "strong", "requiresQuiet": false }
+    },
+    {
+      "id": "launchpad_composer_ready",
+      "why": "dsh-tui 0.13's launchpad: its placeholder composer (en or zh) over the model row, which sits above at most the nav, tip, cwd and version rows. Not quiet: the whale repaints behind it at rest. A typed draft replaces the placeholder, and a submitted prompt leaves for the chat screen.",
+      "priority": 500,
+      "when": {
+        "region": "screen",
+        "rows": [
+          { "regex": "^╭─{8,}╮$" },
+          {
+            "regex": "^│ ❯ (?:say something, or type / for commands…|说点什么，或输入 / 看命令…)\\s*│$",
+            "ignoreCase": true
+          },
+          { "regex": "^╰─{8,}╯$" },
+          { "regex": "^\\S+\\s+·\\s+\\S+\\s+·\\s+\\S+$" }
+        ],
+        "endsWithinBottom": 6,
+        "noneAbove": { "regex": "· (?:total |总)\\d" }
+      },
+      "answer": { "state": "idle", "strength": "strong", "requiresQuiet": false }
+    },
+    {
+      "id": "composer_not_shown",
+      "why": "A readable screen that is not an idle composer may be the first-run guide, a menu, an approval or a busy turn, which the quiet-process lane cannot see.",
+      "priority": 100,
+      "when": { "region": "screen" },
+      "answer": { "state": "hold" }
+    }
+  ]
 }

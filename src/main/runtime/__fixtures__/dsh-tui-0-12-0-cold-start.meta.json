@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-10-08T22:44:59.865Z",
+  "platform": "darwin",
+  "command": ["<scratch>/dsh-or", ".", "--yolo"],
+  "cols": 120,
+  "rows": 40,
+  "note": "dsh-tui 0.12.0 launcher and profile on @deepseek-ai/dsh 0.2.0-rc.2, macOS arm64, OpenRouter nvidia/nemotron-3-super-120b-a12b:free via an isolated DSH_HOME, DSH_TUI_LANG=en, scratch workspace; cold start to the idle chat composer; the whale intro keeps repainting at rest",
+  "exitCode": 0
+}
