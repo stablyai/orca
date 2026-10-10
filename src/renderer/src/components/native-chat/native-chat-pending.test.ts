@@ -490,7 +490,7 @@ describe('pendingSendsAsMessages', () => {
         ...pendingOf('first-send', 'run tests'),
         sentAt: 1_000_000,
         afterMessageId: null,
-        afterEmptyTranscript: true as const
+        afterEmptyTranscriptSessionId: 'session-1'
       }
     ]
     const hostBehind = [

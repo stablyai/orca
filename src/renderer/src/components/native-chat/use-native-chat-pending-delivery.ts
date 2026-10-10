@@ -7,6 +7,7 @@ import {
   pendingSendsAsMessages,
   prunePendingSends,
   readPendingSendCache,
+  releaseEmptyTranscriptClaims,
   writePendingSendCache,
   type NativeChatPendingSend
 } from './native-chat-pending'
@@ -22,14 +23,25 @@ const NO_NOTICES: ReadonlyMap<string, NativeChatDeliveryNotice> = new Map()
 export function useNativeChatPendingDelivery(args: {
   paneKey: string
   agent: AgentType
-  /** `readPhase` 'ready' means an empty `messages` is real history, not a read still loading. */
-  session: { messages: NativeChatMessage[]; readPhase?: ReadState['phase'] }
+  /** `readPhase` 'ready' with a `sessionId` means an empty `messages` was a real read. */
+  session: {
+    messages: NativeChatMessage[]
+    readPhase?: ReadState['phase']
+    sessionId?: string | null
+  }
 }) {
   const { paneKey, agent } = args
   const { messages } = args.session
-  const transcriptSettled = args.session.readPhase === 'ready'
+  const sessionId = args.session.sessionId ?? null
+  // Why sessionId too: with none, 'ready' is a placeholder that read nothing.
+  const readEmptySessionId =
+    args.session.readPhase === 'ready' && messages.length === 0 ? sessionId : null
   const scope = useMemo(() => ({ paneKey, agent }), [paneKey, agent])
-  const [pending, setPending] = useState(() => readPendingSendCache(scope))
+  const [cachedPending, setPending] = useState(() => readPendingSendCache(scope))
+  const pending = useMemo(
+    () => releaseEmptyTranscriptClaims(cachedPending, sessionId),
+    [cachedPending, sessionId]
+  )
   useEffect(() => setPending(readPendingSendCache(scope)), [scope])
   const save = useCallback(
     (update: (entries: NativeChatPendingSend[]) => NativeChatPendingSend[]) => {
@@ -43,8 +55,8 @@ export function useNativeChatPendingDelivery(args: {
     [scope]
   )
   useEffect(() => {
-    save((entries) => prunePendingSends(entries, messages))
-  }, [messages, save])
+    save((entries) => prunePendingSends(releaseEmptyTranscriptClaims(entries, sessionId), messages))
+  }, [messages, save, sessionId])
   const record = useCallback(
     (text: string, imagePaths?: string[]) => {
       const sentAt = Date.now()
@@ -55,13 +67,13 @@ export function useNativeChatPendingDelivery(args: {
         sentAt,
         afterMessageId: boundary?.id ?? null,
         afterMessageTimestamp: boundary?.timestamp ?? null,
-        ...(!boundary && transcriptSettled ? { afterEmptyTranscript: true as const } : {}),
+        ...(readEmptySessionId ? { afterEmptyTranscriptSessionId: readEmptySessionId } : {}),
         ...(imagePaths ? { imagePaths } : {})
       }
       setPending(appendPendingSendCache(scope, entry))
       return entry.id
     },
-    [messages, scope, transcriptSettled]
+    [messages, readEmptySessionId, scope]
   )
   const cancel = useCallback(
     (id: string) => save((entries) => entries.filter((entry) => entry.id !== id)),
@@ -119,7 +131,9 @@ export function useNativeChatPendingDelivery(args: {
             return entries
           }
           const unmatched = new Set(
-            pendingSendsAsMessages(due, messages).map((message) => message.id)
+            pendingSendsAsMessages(releaseEmptyTranscriptClaims(due, sessionId), messages).map(
+              (message) => message.id
+            )
           )
           if (unmatched.size === 0) {
             return entries
@@ -134,7 +148,7 @@ export function useNativeChatPendingDelivery(args: {
       Math.max(0, nextHoldDeadline - Date.now())
     )
     return () => clearTimeout(timer)
-  }, [nextHoldDeadline, messages, save])
+  }, [nextHoldDeadline, messages, save, sessionId])
 
   const notices = useMemo(() => {
     if (!pending.some((entry) => entry.delivery)) {

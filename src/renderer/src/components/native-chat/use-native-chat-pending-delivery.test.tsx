@@ -42,22 +42,50 @@ afterEach(() => {
 })
 
 describe('terminal Chat pending delivery', () => {
-  it('records a send into a settled empty transcript as after every row', () => {
+  it('records a send into a read empty transcript as after every row of that session', () => {
     const { result } = renderHook(() =>
-      useNativeChatPendingDelivery({ ...args, session: { messages: [], readPhase: 'ready' } })
+      useNativeChatPendingDelivery({
+        ...args,
+        session: { messages: [], readPhase: 'ready', sessionId: 'session-1' }
+      })
     )
     act(() => result.current.record('first'))
     expect(result.current.pending[0]).toMatchObject({
       afterMessageId: null,
-      afterEmptyTranscript: true
+      afterEmptyTranscriptSessionId: 'session-1'
     })
   })
-  it('does not claim an empty boundary while the transcript is still loading', () => {
+  it.each([
+    ['still loading', { readPhase: 'loading' as const, sessionId: 'session-1' }],
+    ['no session yet', { readPhase: 'ready' as const, sessionId: null }]
+  ])('does not claim an empty transcript while %s', (_label, session) => {
     const { result } = renderHook(() =>
-      useNativeChatPendingDelivery({ ...args, session: { messages: [], readPhase: 'loading' } })
+      useNativeChatPendingDelivery({ ...args, session: { messages: [], ...session } })
     )
     act(() => result.current.record('first'))
-    expect(result.current.pending[0]?.afterEmptyTranscript).toBeUndefined()
+    expect(result.current.pending[0]?.afterEmptyTranscriptSessionId).toBeUndefined()
+  })
+  // A resumed transcript can hold an older identical turn; the claim was about another one.
+  it('keeps a send, and its failure notice, when a different session with old history loads', () => {
+    const old: NativeChatMessage[] = [
+      { ...userRow('run tests'), id: 'old-user', timestamp: 10 },
+      { ...boundary, id: 'old-answer', timestamp: 20 }
+    ]
+    const initialSession: Parameters<typeof useNativeChatPendingDelivery>[0]['session'] = {
+      messages: [],
+      readPhase: 'ready',
+      sessionId: 'new-session'
+    }
+    const { result, rerender } = renderHook(
+      ({ session }) => useNativeChatPendingDelivery({ ...args, session }),
+      { initialProps: { session: initialSession } }
+    )
+    act(() => {
+      result.current.reject(result.current.record('run tests'))
+    })
+    rerender({ session: { messages: old, readPhase: 'ready', sessionId: 'resumed-session' } })
+    expect(result.current.pending.map((entry) => entry.text)).toEqual(['run tests'])
+    expect(result.current.notices.size).toBe(1)
   })
   it('never flags an ordinary send, such as one Claude queues mid-turn', async () => {
     const { result } = render()
