@@ -14,6 +14,7 @@ import { ChevronLeft, Check, RefreshCw, User } from 'lucide-react-native'
 import { loadHosts } from '../../../src/transport/host-store'
 import { useHostClient } from '../../../src/transport/client-context'
 import { colors, spacing } from '../../../src/theme/mobile-theme'
+import { GrokAccountUsageSection } from '../../../src/accounts/GrokAccountUsageSection'
 import { styles } from '../../../src/accounts/mobile-accounts-screen-styles'
 import { useNow } from '../../../src/hooks/use-now'
 import { ClaudeIcon, OpenAIIcon } from '../../../src/components/AgentIcons'
@@ -381,6 +382,7 @@ export default function AccountsScreen() {
           <>
             {renderProviderSection('claude', 'Claude')}
             {renderProviderSection('codex', 'Codex')}
+            <GrokAccountUsageSection snapshot={snapshot} now={now} />
             <View style={styles.footerHint}>
               <User size={14} color={colors.textMuted} />
               <Text style={styles.footerHintText}>
