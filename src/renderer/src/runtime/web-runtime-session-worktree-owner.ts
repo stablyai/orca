@@ -1,7 +1,7 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { WorktreeSelectionOwner } from '../../../shared/worktree-selection-owner'
 import { canonicalWorktreeIdentity } from '../../../shared/worktree/identity'
-import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import { executionHostIdForSessionTabsOwner } from './local-structured-session-owner'
 import {
   findWorktreeForSelectionOwner,
   worktreeSelectionOwnerForRow,
@@ -28,7 +28,7 @@ export function isCurrentWebRuntimeSessionWorktreeOwner(
   owner: WorktreeSelectionOwner
 ): boolean {
   return (
-    owner.publisherHostId === toRuntimeExecutionHostId(environmentId) &&
+    owner.publisherHostId === executionHostIdForSessionTabsOwner(environmentId) &&
     findWorktreeForSelectionOwner(state, owner) !== null &&
     !(
       state.activeWorktreeId === owner.worktreeId &&
@@ -51,14 +51,14 @@ export function admitsWebRuntimeSessionWorktreeSnapshot(
   if (
     state.activeWorktreeId === snapshot.worktree &&
     state.activeWorkspaceOwner &&
-    state.activeWorkspaceOwner.publisherHostId !== toRuntimeExecutionHostId(environmentId)
+    state.activeWorkspaceOwner.publisherHostId !== executionHostIdForSessionTabsOwner(environmentId)
   ) {
     return false
   }
   const owner = identity
     ? {
         worktreeId: snapshot.worktree,
-        publisherHostId: toRuntimeExecutionHostId(environmentId),
+        publisherHostId: executionHostIdForSessionTabsOwner(environmentId),
         executionHostId: identity.executionHostId,
         instanceId: identity.instanceId
       }
@@ -78,17 +78,27 @@ export function admitsWebRuntimeSessionWorktreeSnapshot(
       isCurrentWebRuntimeSessionWorktreeOwner(state, environmentId, owner)
     )
   }
-  const owners = [
+  const rows = [
     ...findIndexedWorktreesById(state.worktreesByRepo, snapshot.worktree),
     ...findIndexedDetectedWorktrees(state.detectedWorktreesByRepo, snapshot.worktree)
-  ].flatMap((row) => {
+  ]
+  if (rows.length === 0) {
+    return expected === undefined
+  }
+  const owners: WorktreeSelectionOwner[] = []
+  for (const row of rows) {
     const captured = worktreeSelectionOwnerForRow(row, state.repos)
-    return captured?.publisherHostId === toRuntimeExecutionHostId(environmentId) ? [captured] : []
-  })
+    if (!captured) {
+      return false
+    }
+    if (captured.publisherHostId === executionHostIdForSessionTabsOwner(environmentId)) {
+      owners.push(captured)
+    }
+  }
   const publishers = new Set(owners.map(worktreeSelectionOwnerKey))
-  return publishers.size === 0
-    ? expected === undefined
-    : publishers.size === 1 &&
-        owners[0] !== undefined &&
-        findWorktreeForSelectionOwner(state, owners[0]) !== null
+  return (
+    publishers.size === 1 &&
+    owners[0] !== undefined &&
+    findWorktreeForSelectionOwner(state, owners[0]) !== null
+  )
 }

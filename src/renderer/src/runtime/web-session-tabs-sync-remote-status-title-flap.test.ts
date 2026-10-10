@@ -53,6 +53,7 @@ import { deriveGeneratedTabTitle } from '../../../shared/agent-tab-title'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { AppState } from '../store/types'
 import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'
+import { withRepoHostOwnership } from '../store/slices/worktrees/listing/worktree-host-ownership'
 import {
   markRendererOwnedAgentStatusWrite,
   registerRendererOwnedAgentStatusPane,
@@ -224,12 +225,15 @@ function seedPairedClientStore(): TestStore {
     },
     worktreesByRepo: {
       repo1: [
-        makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' }),
+        withRepoHostOwnership(
+          makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' }),
+          `runtime:${ENV}`
+        ),
         makeWorktree({ id: LOCAL_WT, repoId: 'repo1', path: '/path/local-wt' })
       ]
     },
     activeWorktreeId: WT
-  } as Partial<AppState>)
+  })
   return store
 }
 

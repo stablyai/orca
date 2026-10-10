@@ -11,6 +11,7 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { getDefaultSettings } from '../../../shared/constants'
 import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'
+import { withRepoHostOwnership } from '../store/slices/worktrees/listing/worktree-host-ownership'
 import { resetRendererOwnedAgentStatusPanesForTests } from '../components/terminal-pane/renderer-owned-agent-status-registry'
 import { applyFreshWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
@@ -86,7 +87,14 @@ describe('a mirrored main agent that fails while its subagents keep the row work
     const store = createTestStore()
     seedStore(store, {
       settings: getDefaultSettings('/tmp'),
-      worktreesByRepo: { repo1: [makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' })] },
+      worktreesByRepo: {
+        repo1: [
+          withRepoHostOwnership(
+            makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' }),
+            `runtime:${ENV}`
+          )
+        ]
+      },
       activeWorktreeId: WT
     })
     const apply = (snapshot: RuntimeMobileSessionTabsResult): void => {
