@@ -39,11 +39,13 @@ function resolveLaunchHostFact(
   store: LaunchStore,
   worktreeId: string,
   worktreePath: string | undefined
-): Pick<AgentBackgroundLaunchHost, 'platform' | 'isLocalHost'> {
+): Pick<AgentBackgroundLaunchHost, 'platform' | 'isLocalHost'> & { isSshHost: boolean } {
   const fact = resolveWorktreeExecutionHostPlatform(store, worktreeId, worktreePath)
   return {
     platform: requireExecutionHostPlatform(fact),
-    isLocalHost: fact.kind === 'known' && fact.hostKind === 'local'
+    isLocalHost: fact.kind === 'known' && fact.hostKind === 'local',
+    // Why: an SSH target (nested ones too) runs the relay shim as plain `orca`.
+    isSshHost: fact.kind === 'known' && fact.hostKind === 'ssh'
   }
 }
 
@@ -60,10 +62,11 @@ export function resolveAgentBackgroundLaunchHost(args: {
     // repo on the client with a remote path. One resolution feeds the route, the trust write and the
     // launch shape, which must not disagree about the host.
     const sshConnectionId = getRepoSshConnectionId(repo)
+    const { isSshHost, ...hostFact } = resolveLaunchHostFact(store, worktreeId, worktreePath)
     return {
       connectionId: sshConnectionId,
-      ...resolveLaunchHostFact(store, worktreeId, worktreePath),
-      isRemote: repoIsRemote(repo),
+      ...hostFact,
+      isRemote: repoIsRemote(repo) || isSshHost,
       expectedConnectionId: sshConnectionId
     }
   }
@@ -72,10 +75,11 @@ export function resolveAgentBackgroundLaunchHost(args: {
   if (isFolderWorkspace && folderWorkspaceConnectionId === undefined) {
     throw new Error('The target folder workspace host is unavailable or ambiguous.')
   }
+  const { isSshHost, ...hostFact } = resolveLaunchHostFact(store, worktreeId, worktreePath)
   return {
     connectionId: folderWorkspaceConnectionId ?? null,
-    ...resolveLaunchHostFact(store, worktreeId, worktreePath),
-    isRemote: Boolean(folderWorkspaceConnectionId),
+    ...hostFact,
+    isRemote: Boolean(folderWorkspaceConnectionId) || isSshHost,
     expectedConnectionId: isFolderWorkspace ? (folderWorkspaceConnectionId ?? null) : undefined
   }
 }

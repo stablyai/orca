@@ -228,7 +228,8 @@ describe('resolveAgentBackgroundLaunchHost', () => {
       worktreePath: '/srv/repo'
     })
 
-    expect(host).toMatchObject({ platform: 'linux', isLocalHost: false })
+    // Why isRemote: the SSH target runs the relay shim as `orca`, not the Linux desktop `orca-ide`.
+    expect(host).toMatchObject({ platform: 'linux', isLocalHost: false, isRemote: true })
   })
 
   it('quotes for the Orca server that owns a folder workspace', () => {
