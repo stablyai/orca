@@ -214,6 +214,8 @@ export type CellReserveAdmission = {
   mode: () => CellAdmitMode
   ticketEnforce: () => boolean
   dryRunEnabled: () => boolean
+  // A real booking: a placing director is there (the dead-man's evidence).
+  directorContact?: () => void
   // The pool-pressure shed's condition: a hello memory cannot admit is shed, not queued.
   databaseShedding: () => boolean
   book: CellReserveBook
@@ -232,11 +234,12 @@ const NO_REJOIN_CLOSE_CODES: ReadonlySet<number> = new Set([
 ])
 // A demoted duplicate keeps its splices this long, then closes so the desktop re-assigns.
 export const DEMOTION_CLOSE_MS = 60_000
-// A flip back registers memory-admitted controls at this pace: 3k in about a minute.
-export const REREGISTER_PER_SECOND = 50
+// A flip back registers memory-admitted controls with at most this share of the pool in
+// flight (US 10 -> 3, Asia 16 -> 5), so DB-path hellos and renewals keep the rest.
+export const REREGISTER_POOL_SHARE = 1 / 3
 const REREGISTER_TICK_MS = 100
-// A row the ledger has not written yet gets this long before the control is left as is.
-const REREGISTER_MAX_ATTEMPTS = 20
+// A row the ledger has not written yet gets this long; then the control is closed (4409).
+export const REREGISTER_MAX_ATTEMPTS = 20
 
 export class HostSessionRegistry {
   private readonly sessions = new Map<string, HostSession>()
@@ -257,7 +260,12 @@ export class HostSessionRegistry {
   private readonly demotedSeats = new Map<string, WebSocket>()
   private reregistration: {
     queue: Array<{ key: string; generation: number; attempts: number; dueAt: number }>
+    // Sessions already queued, given up on, or done in this pass: the rescan skips them.
+    seen: Set<string>
     inFlight: number
+    // relay_cells delta not yet written: one write per tick folds every activation's.
+    cellDelta: number
+    cellWriteInFlight: boolean
     timer: ReturnType<typeof setInterval>
   } | null = null
 
@@ -401,67 +409,93 @@ export class HostSessionRegistry {
     return this.reserveMode()
   }
 
-  // Leaving reserve mode: every control admitted from memory gets the database lease it
-  // never took, paced, while it stays connected. Nobody is disconnected; a control whose row
-  // never names it (a duplicate the ledger did not follow) is logged and left as it is.
+  // Leaving reserve mode: every control admitted from memory gets the database lease it never
+  // took, while it stays connected. Rescans until none lacks one, so a hello whose proof lands
+  // after the flip is caught too. A control whose row never names this cell is closed (4409).
   reregisterMemoryControls(): number {
     if (this.config.role !== 'cell') return 0
-    const now = this.now()
-    const queue = [...this.sessions.entries()]
-      .filter(([, session]) => session.controlActivityId === null && session.state !== 'closed')
-      .map(([key, session]) => ({ key, generation: session.generation, attempts: 0, dueAt: now }))
     if (this.reregistration) clearInterval(this.reregistration.timer)
     this.reregistration = null
-    if (queue.length === 0) return 0
-    const perTick = Math.max(1, Math.round((REREGISTER_PER_SECOND * REREGISTER_TICK_MS) / 1_000))
-    const state = {
-      queue,
+    const state: NonNullable<HostSessionRegistry['reregistration']> = {
+      queue: [],
+      seen: new Set(),
       inFlight: 0,
-      timer: setInterval(() => this.reregisterTick(state, perTick), REREGISTER_TICK_MS)
+      cellDelta: 0,
+      cellWriteInFlight: false,
+      timer: setInterval(() => this.reregisterTick(state), REREGISTER_TICK_MS)
     }
     state.timer.unref?.()
+    const queued = this.rescanUnleasedControls(state)
     this.reregistration = state
     console.warn(
       JSON.stringify({
         event: 'orca_relay_cell_reregistration_started',
         ...this.logIdentity(),
-        controls: queue.length
+        controls: queued
       })
     )
-    return queue.length
+    return queued
   }
 
   reregistrationPending(): number {
-    return this.reregistration ? this.reregistration.queue.length + this.reregistration.inFlight : 0
+    const state = this.reregistration
+    return state ? state.queue.length + state.inFlight + (state.cellDelta === 0 ? 0 : 1) : 0
   }
 
-  private reregisterTick(
-    state: NonNullable<HostSessionRegistry['reregistration']>,
-    perTick: number
-  ): void {
+  private rescanUnleasedControls(state: NonNullable<HostSessionRegistry['reregistration']>): number {
+    const now = this.now()
+    let queued = 0
+    for (const [key, session] of this.sessions) {
+      if (session.controlActivityId !== null || session.state === 'closed' || !session.socket) continue
+      const seenKey = `${key}\u0000${session.generation}`
+      if (state.seen.has(seenKey)) continue
+      state.seen.add(seenKey)
+      state.queue.push({ key, generation: session.generation, attempts: 0, dueAt: now })
+      queued += 1
+    }
+    return queued
+  }
+
+  private reregisterTick(state: NonNullable<HostSessionRegistry['reregistration']>): void {
     // Back in reserve mode, the remaining controls need no lease again.
     if (this.reserveMode() || this.reregistration !== state) {
       clearInterval(state.timer)
       if (this.reregistration === state) this.reregistration = null
       return
     }
+    this.flushReregistrationCellDelta(state)
     const now = this.now()
-    let started = 0
-    // A slow database holds a few ticks' worth in flight, never more.
-    while (started < perTick && state.inFlight < perTick * 4) {
+    const maxInFlight = Math.max(1, Math.floor(this.config.databasePoolMax * REREGISTER_POOL_SHARE))
+    while (state.inFlight < maxInFlight) {
       const index = state.queue.findIndex((entry) => entry.dueAt <= now)
       if (index < 0) break
       const [entry] = state.queue.splice(index, 1)
-      started += 1
       this.reregisterOne(state, entry!)
     }
-    if (state.queue.length === 0 && state.inFlight === 0) {
-      clearInterval(state.timer)
-      this.reregistration = null
-      console.warn(
-        JSON.stringify({ event: 'orca_relay_cell_reregistration_finished', ...this.logIdentity() })
-      )
-    }
+    if (state.queue.length > 0 || state.inFlight > 0) return
+    if (this.rescanUnleasedControls(state) > 0) return
+    if (state.cellDelta !== 0 || state.cellWriteInFlight) return
+    clearInterval(state.timer)
+    this.reregistration = null
+    console.warn(
+      JSON.stringify({ event: 'orca_relay_cell_reregistration_finished', ...this.logIdentity() })
+    )
+  }
+
+  private flushReregistrationCellDelta(state: NonNullable<HostSessionRegistry['reregistration']>): void {
+    if (state.cellDelta === 0 || state.cellWriteInFlight) return
+    const delta = state.cellDelta
+    state.cellDelta = 0
+    state.cellWriteInFlight = true
+    void this.assignments
+      .commitCellReservationDelta(this.config.cellId, delta)
+      .catch(() => {
+        // Retried next tick: the leases exist, only the cell's count is behind.
+        state.cellDelta += delta
+      })
+      .finally(() => {
+        state.cellWriteInFlight = false
+      })
   }
 
   private reregisterOne(
@@ -481,7 +515,7 @@ export class HostSessionRegistry {
     const epoch = session.assignmentEpoch
     state.inFlight += 1
     void this.assignments
-      .activateControl(identity, {
+      .activateControlDeferringCell(identity, {
         cellId: this.config.cellId,
         assignmentEpoch: epoch,
         generation: session.generation,
@@ -491,7 +525,8 @@ export class HostSessionRegistry {
           false,
         cellIncarnation: this.cellIncarnation
       })
-      .then(async (activityId) => {
+      .then(async ({ activityId, reservationDelta }) => {
+        state.cellDelta += reservationDelta
         // As a database-path join does: an open migration onto this cell sees its host arrive.
         try {
           await this.assignments.markMigrationTargetRegistered(identity, {
@@ -557,6 +592,7 @@ export class HostSessionRegistry {
     if (this.config.role !== 'cell' || !admission || (request.dryRun && !admission.dryRunEnabled())) {
       return request.items.map(() => ({ outcome: 'off' }))
     }
+    if (!request.dryRun) admission.directorContact?.()
     const context = {
       mode: admission.mode(),
       draining: this.draining,
@@ -1523,7 +1559,8 @@ export class HostSessionRegistry {
     reserved?: { reservedBy?: string }
   ): Promise<void> {
     let controlActivityId: string | null = null
-    if (this.config.role === 'cell' && !reserved) {
+    // Admitted from memory, but the cell left reserve mode before the proof landed: lease now.
+    if (this.config.role === 'cell' && !(reserved && this.reserveMode())) {
       try {
         controlActivityId = await this.assignments.activateControl(
           { userId: identity.sub, relayHostId: identity.relayHostId },

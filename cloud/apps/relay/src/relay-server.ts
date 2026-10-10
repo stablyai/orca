@@ -19,6 +19,7 @@ import { createRemoteJWKSet } from 'jose'
 import { WebSocketServer } from 'ws'
 import type WebSocket from 'ws'
 import type { RawData } from 'ws'
+import { ReserveDeadMan } from './cell-reserve-dead-man.js'
 import { createRelayApp } from './app.js'
 import { classifyAssignmentLease } from './assignment-lease.js'
 import { defaultIntakePerSec, type CellFlags } from './cell-flags.js'
@@ -208,6 +209,13 @@ export function createRelayServer(
   const databaseShedding = (): boolean =>
     readRelayDatabasePoolPressure(database).databasePoolWaiting >= config.databasePoolMax &&
     readRelayDatabasePoolOldestWaitMs(database) >= HOST_HELLO_SHED_OLDEST_WAIT_MS
+  const reserveDeadMan = reserveBook ? new ReserveDeadMan(options.now) : null
+  // The switch file's admitMode, unless the dead-man has flipped this cell back.
+  const effectiveAdmitMode = (): 'db' | 'reserve' => {
+    const applied = options.cellFlags?.()
+    if (!applied) return 'db'
+    return reserveDeadMan ? reserveDeadMan.mode(applied) : applied.flags.admitMode
+  }
   const queuedBytes = new ProcessQueuedByteBudget()
   const sessions = new HostSessionRegistry(
     config,
@@ -226,7 +234,8 @@ export function createRelayServer(
     }),
     reserveBook
       ? {
-          mode: () => options.cellFlags?.().flags.admitMode ?? 'db',
+          mode: effectiveAdmitMode,
+          directorContact: () => reserveDeadMan?.contact(),
           ticketEnforce: () => options.cellFlags?.().flags.ticketCheck === 'enforce',
           dryRunEnabled: () => options.cellFlags?.().flags.reserveDryRun === true,
           databaseShedding: () => databaseShedding(),
@@ -242,11 +251,11 @@ export function createRelayServer(
   )
   // Expired bookings give their units back even while no director is reserving. A flip out of
   // reserve mode voids the bookings and registers every control admitted from memory.
-  let appliedAdmitMode = options.cellFlags?.().flags.admitMode ?? 'db'
+  let appliedAdmitMode = effectiveAdmitMode()
   const reserveSweepTimer = reserveBook
     ? setInterval(() => {
         reserveBook.sweep()
-        const admitMode = options.cellFlags?.().flags.admitMode ?? 'db'
+        const admitMode = effectiveAdmitMode()
         if (appliedAdmitMode === 'reserve' && admitMode !== 'reserve') {
           reserveBook.clear()
           sessions.reregisterMemoryControls()
@@ -280,6 +289,13 @@ export function createRelayServer(
     ...(reserveBook && placementCeiling !== null
       ? {
           cellReserve: (request: ReserveRequest) => sessions.reserve(request),
+          cellReserverPoll: () => reserveDeadMan?.contact(),
+          // Reserve until every control it admitted from memory holds a lease again: the flag
+          // workflow records db in Postgres (and sweeps resume) only after this says db.
+          cellAdmitModeEffective: (): 'db' | 'reserve' =>
+            effectiveAdmitMode() === 'reserve' || sessions.reregistrationPending() > 0
+              ? 'reserve'
+              : 'db',
           cellDemote: (request: DemoteRequest) => sessions.demote(request),
           cellReserveCounts: () => sessions.reserveCounts(),
           cellPlacementCeiling: placementCeiling
