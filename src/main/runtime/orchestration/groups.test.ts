@@ -19,6 +19,7 @@ function makeSummary(
     writable: opts.writable ?? true,
     lastOutputAt: opts.lastOutputAt ?? null,
     preview: opts.preview ?? '',
+    surface: opts.surface ?? 'visible',
     // Why spread and not a default: `agentIdentity` absent is meaningful (unknown), so the
     // helper must be able to produce a summary that genuinely lacks the field.
     ...(opts.agentIdentity ? { agentIdentity: opts.agentIdentity } : {})

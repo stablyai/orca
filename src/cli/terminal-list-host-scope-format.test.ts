@@ -16,6 +16,7 @@ function terminal(overrides: Partial<RuntimeTerminalSummary> = {}): RuntimeTermi
     writable: true,
     lastOutputAt: null,
     preview: '',
+    surface: 'visible',
     ...overrides
   }
 }
@@ -25,6 +26,13 @@ function listResult(overrides: Partial<RuntimeTerminalListResult> = {}): Runtime
 }
 
 describe('formatTerminalList host identity', () => {
+  it('prints an unverifiable surface when the host predates surface reporting', () => {
+    const row = terminal()
+    delete row.surface
+
+    expect(formatTerminalList(listResult({ terminals: [row] }))).toContain('[unverifiable]')
+  })
+
   it('prints the execution host each terminal runs on', () => {
     const output = formatTerminalList(
       listResult({ terminals: [terminal({ executionHostId: 'ssh:box-1' })] })
