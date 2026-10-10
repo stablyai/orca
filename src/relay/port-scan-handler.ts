@@ -1,6 +1,6 @@
 import { readFile, readdir, readlink } from 'node:fs/promises'
 import { getProcessOutputFields } from '../shared/process-output-field-scanner'
-import type { RelayDispatcher, RequestContext } from './dispatcher'
+import type { RelayDispatcher, RequestContext } from '../wsl-guest/dispatcher'
 import { scanWindowsListeningPorts } from './windows-port-scan'
 
 // Keep in sync with src/shared/ssh-types.ts — DetectedPort

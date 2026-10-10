@@ -6,7 +6,7 @@ import {
 } from '@orca/process-host/windows-system-binary'
 import { getProcessOutputFields } from '../shared/process-output-field-scanner'
 import type { DetectedPort } from './port-scan-handler'
-import { buildRelayCommandEnv } from './relay-command-env'
+import { buildRelayCommandEnv } from '../wsl-guest/relay-command-env'
 import { relayLogLine } from './relay-diagnostic-log'
 
 const SYSTEM_PORTS_TO_EXCLUDE = new Set([22])

@@ -13,13 +13,13 @@
 // `git.responseAck` can credit the ack window a pump parks on — the other's
 // streams would stall at STREAM_ACK_WINDOW_CHUNKS forever. See
 // `relay-runtime-services.ts` for the wiring.
-import type { RelayDispatcher, RequestContext } from './dispatcher'
+import type { RelayDispatcher, RequestContext } from '../wsl-guest/dispatcher'
 import {
   GIT_RESPONSE_CHUNK_SIZE,
   GIT_RESPONSE_STREAM_THRESHOLD,
   STREAM_ACK_WINDOW_CHUNKS,
   type GitResponseStreamMarker
-} from './protocol'
+} from '../wsl-guest/protocol'
 import { settlesWithin } from './settles-within'
 import { RelayStreamAckWindow } from './relay-stream-ack-window'
 import { errorMessage } from '../shared/error-message'

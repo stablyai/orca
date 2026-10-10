@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MethodHandler, RequestContext } from './dispatcher'
+import type { MethodHandler, RequestContext } from '../wsl-guest/dispatcher'
 
 const { readFileMock, readdirMock, readlinkMock } = vi.hoisted(() => ({
   readFileMock: vi.fn(),

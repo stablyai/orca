@@ -5,8 +5,8 @@ import {
   PTY_CONSUMER_OWNER_HELD_GRACE_FLOOR_MS,
   PTY_CONSUMER_OWNER_RECOVERY_PENDING_ERROR
 } from '../shared/pty-consumer-session'
-import { RelayDispatcher, type RelayClientSessionIdentity } from './dispatcher'
-import { encodeJsonRpcFrame, MessageType } from './protocol'
+import { RelayDispatcher, type RelayClientSessionIdentity } from '../wsl-guest/dispatcher'
+import { encodeJsonRpcFrame, MessageType } from '../wsl-guest/protocol'
 import { SshPtyConsumerSessionAdapter } from './ssh-pty-consumer-session-adapter'
 
 const endpointIdentity: RelayClientSessionIdentity = {

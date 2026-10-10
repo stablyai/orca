@@ -1,6 +1,6 @@
 import { isWatcherProcessFailure } from '../main/ipc/parcel-watcher-process-failure'
 import type { PromiseSettlementWaiters } from '../shared/promise-settlement-waiters'
-import type { RequestContext } from './dispatcher'
+import type { RequestContext } from '../wsl-guest/dispatcher'
 import type { RelayWatcherTeardownState } from './relay-watcher-teardown-tracker'
 import { errorMessage } from '../shared/error-message'
 

@@ -6,8 +6,8 @@ import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { RelayReconnectListener } from './relay-reconnect-listener'
 import { RelaySocketOwnership } from './relay-socket-ownership'
-import { encodeHandshakeFrame, FrameDecoder, RELAY_VERSION } from './protocol'
-import { RelayDispatcher } from './dispatcher'
+import { encodeHandshakeFrame, FrameDecoder, RELAY_VERSION } from '../wsl-guest/protocol'
+import { RelayDispatcher } from '../wsl-guest/dispatcher'
 import type { PtyConsumerCloseCause } from '../shared/pty-consumer-session-contract'
 
 describe.skipIf(process.platform === 'win32')('reconnect listener peer end', () => {

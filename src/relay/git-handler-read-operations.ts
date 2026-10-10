@@ -1,5 +1,5 @@
 import * as path from 'node:path'
-import type { RequestContext } from './dispatcher'
+import type { RequestContext } from '../wsl-guest/dispatcher'
 import { GitHandlerOperationContext } from './git-handler-operation-context'
 import { getStatusOp } from './git-handler-status-ops'
 import { streamRelayGitStdout } from './git-stdout-stream'

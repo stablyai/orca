@@ -1,6 +1,6 @@
 import type { FileHandle } from 'node:fs/promises'
 import { settlesWithin } from './settles-within'
-import { MAX_CONCURRENT_STREAMS, RelayErrorCode } from './protocol'
+import { MAX_CONCURRENT_STREAMS, RelayErrorCode } from '../wsl-guest/protocol'
 import { RelayStreamAckWindow } from './relay-stream-ack-window'
 
 type StreamEntry = { handle: FileHandle; ack: RelayStreamAckWindow }

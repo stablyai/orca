@@ -5,7 +5,7 @@ vi.mock('@orca/process-host', () => ({
   runProcess: (spec: unknown) => runProcessMock(spec)
 }))
 
-vi.mock('./relay-command-env', () => ({
+vi.mock('../wsl-guest/relay-command-env', () => ({
   buildRelayCommandEnv: () => ({ PATH: 'C:\\Windows\\System32' })
 }))
 

@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher } from '../wsl-guest/dispatcher'
 import type { PtyHandler } from './pty-handler'
 import { RelayGraceLifecycle } from './relay-grace-lifecycle'
 

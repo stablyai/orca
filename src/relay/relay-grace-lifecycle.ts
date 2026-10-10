@@ -6,7 +6,7 @@ import {
 } from './relay-grace-branch'
 import { relayLogLine } from './relay-diagnostic-log'
 import { SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD } from '../shared/ssh-types'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher } from '../wsl-guest/dispatcher'
 import { errorMessage } from '../shared/error-message'
 
 type RelayGraceLifecycleOptions = {
