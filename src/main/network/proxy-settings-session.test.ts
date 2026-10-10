@@ -41,32 +41,35 @@ describe('applyProxySettingsToSession', () => {
     vi.clearAllMocks()
   })
 
-  it('pins the configured proxy onto a non-default session', async () => {
-    const proxySession = createProxySession()
-    resetSessionProxyApplicationForTests(proxySession)
+  it.each(['socks5', 'socks5h'])(
+    'pins %s onto a session using Chromium remote DNS',
+    async (scheme) => {
+      const proxySession = createProxySession()
+      resetSessionProxyApplicationForTests(proxySession)
 
-    await expect(
-      applyProxySettingsToSession(
-        proxySession,
-        {
-          httpProxyUrl: ' socks5://127.0.0.1:1080/ ',
-          httpProxyBypassRules: 'localhost, *.internal'
-        },
-        { env: {} }
-      )
-    ).resolves.toEqual({
-      source: 'settings',
-      proxyRules: 'socks5://127.0.0.1:1080',
-      proxyBypassRules: 'localhost;*.internal'
-    })
+      await expect(
+        applyProxySettingsToSession(
+          proxySession,
+          {
+            httpProxyUrl: ` ${scheme}://127.0.0.1:1080/ `,
+            httpProxyBypassRules: 'localhost, *.internal'
+          },
+          { env: {} }
+        )
+      ).resolves.toEqual({
+        source: 'settings',
+        proxyRules: 'socks5://127.0.0.1:1080',
+        proxyBypassRules: 'localhost;*.internal'
+      })
 
-    expect(proxySession.setProxy).toHaveBeenCalledWith({
-      mode: 'fixed_servers',
-      proxyRules: 'socks5://127.0.0.1:1080',
-      proxyBypassRules: 'localhost;*.internal'
-    })
-    expect(proxySession.closeAllConnections).toHaveBeenCalledTimes(1)
-  })
+      expect(proxySession.setProxy).toHaveBeenCalledWith({
+        mode: 'fixed_servers',
+        proxyRules: 'socks5://127.0.0.1:1080',
+        proxyBypassRules: 'localhost;*.internal'
+      })
+      expect(proxySession.closeAllConnections).toHaveBeenCalledTimes(1)
+    }
+  )
 
   it('does not touch defaultSession when applying to another session', async () => {
     const proxySession = createProxySession()

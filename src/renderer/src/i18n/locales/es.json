@@ -7295,7 +7295,7 @@
           "33ee3ca3af": "Opcional. Separa hosts con comas, punto y coma o líneas nuevas.",
           "f6d76cc8f4": "Reglas de omisión de proxy",
           "fb7130dcb9": "Hosts que deben omitir el proxy HTTP configurado.",
-          "0adfce9fa7": "Admite URLs http, https, socks, socks4 y socks5.",
+          "0adfce9fa7": "Admite URLs http, https, socks, socks4, socks5 y socks5h para conexiones de la aplicación y Relay.",
           "476f302aca": "http://proxy.example.com:8080",
           "1e214e265a": "Déjalo vacío para usar la configuración de proxy del sistema y las variables de entorno de proxy heredadas.",
           "f00daf6324": "Proxy HTTP",

@@ -7401,7 +7401,7 @@
           "33ee3ca3af": "Facultatif. Séparez les hôtes par des virgules, des points-virgules ou des sauts de ligne.",
           "f6d76cc8f4": "Règles de contournement du proxy",
           "fb7130dcb9": "Hôtes qui doivent contourner le proxy HTTP configuré.",
-          "0adfce9fa7": "Prend en charge les URL http, https, socks, socks4 et socks5.",
+          "0adfce9fa7": "Prend en charge les URL http, https, socks, socks4, socks5 et socks5h pour les connexions de l’application et de Relay.",
           "476f302aca": "http://proxy.example.com:8080",
           "1e214e265a": "Laissez vide pour utiliser les réglages de proxy du système et les variables d'environnement de proxy héritées.",
           "f00daf6324": "Proxy HTTP",

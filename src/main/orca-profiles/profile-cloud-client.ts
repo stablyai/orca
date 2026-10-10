@@ -7,6 +7,7 @@ import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 import type { OrcaCloudSession } from './profile-cloud-session-store'
 import type { OrcaCloudSessionExchangeResponse } from './profile-cloud-session-exchange'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
+import { getMainHttpClient } from '../network/http-client'
 
 type ExchangeCodeArgs = {
   code: string
@@ -178,7 +179,7 @@ export function isAmbiguousCloudRequestFailure(error: unknown): boolean {
 }
 
 async function postJson<T>(url: string, body: unknown, options?: PostJsonOptions): Promise<T> {
-  const response = await fetch(url, {
+  const response = await getMainHttpClient().fetch(url, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',

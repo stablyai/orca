@@ -37,6 +37,10 @@ function normalizeProxyHost(host: string): string {
 
 export function separateElectronProxyCredentials(proxyUrl: string): ElectronProxyConfig {
   const url = new URL(proxyUrl)
+  // Chromium SOCKS5 already resolves destination names through the proxy.
+  if (url.protocol === 'socks5h:') {
+    url.protocol = 'socks5:'
+  }
   const hasCredentials = Boolean(url.username || url.password)
   const credentials = hasCredentials
     ? {
@@ -77,6 +81,12 @@ export function setElectronProxyCredentialsForSession(
 
 export function clearElectronProxyCredentialsForSession(proxySession: ProxySession): void {
   proxyCredentialsBySession.delete(proxySession)
+}
+
+export function getElectronProxyCredentialsForSession(
+  proxySession: ProxySession
+): Readonly<ElectronProxyCredentials> | undefined {
+  return proxyCredentialsBySession.get(proxySession)
 }
 
 export function resetElectronProxyCredentialsForTests(proxySession?: ProxySession): void {

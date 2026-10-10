@@ -1,4 +1,5 @@
 import { measureRelayRegionDecision } from './relay-region-decision'
+import { getMainHttpClient, type MainHttpClient } from '../../network/http-client'
 import { existsSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
@@ -86,7 +87,7 @@ export class RelayRegionPreferenceResolver {
     return measureRelayRegionDecision(window, {
       diagnosticOverride: Boolean(this.overrideRegion()),
       now: this.options.now ?? Date.now,
-      measure: () => this.probeCatalog(this.options.fetch ?? globalThis.fetch)
+      measure: () => this.probeCatalog(this.options.fetch ?? getMainHttpClient().fetch)
     })
   }
 
@@ -147,7 +148,7 @@ export class RelayRegionPreferenceResolver {
       reason: 'catalog-unavailable'
     }
     try {
-      const fetch = this.options.fetch ?? globalThis.fetch
+      const fetch = this.options.fetch ?? getMainHttpClient().fetch
       const probe = this.createProbe(fetch)
       // A director that cannot list its regions is the one self-heal outcome a
       // support log would otherwise never see, so it is reported before the throw.
@@ -184,7 +185,7 @@ export class RelayRegionPreferenceResolver {
     previous: RelayRegionCache | null,
     now: number
   ): Promise<RelayRegion | undefined> {
-    const fetch = this.options.fetch ?? globalThis.fetch
+    const fetch = this.options.fetch ?? getMainHttpClient().fetch
     // Only a refresh withholds a hint, so only a refresh reports the catalog
     // failure as a probe event; self-heal reports it as its own outcome.
     const reports = await this.probeCatalog(fetch, () =>
@@ -220,7 +221,7 @@ export class RelayRegionPreferenceResolver {
   }
 
   private async probeCatalog(
-    fetch: typeof globalThis.fetch,
+    fetch: MainHttpClient['fetch'],
     onCatalogFailure?: () => void
   ): Promise<RelayRegionProbeReport[]> {
     let catalog: RelayRegionCatalog
@@ -270,7 +271,7 @@ export class RelayRegionPreferenceResolver {
     return join(this.options.userDataPath, RELAY_REGION_CACHE_FILENAME)
   }
 
-  private createProbe(fetch: typeof globalThis.fetch): RelayProbe {
+  private createProbe(fetch: MainHttpClient['fetch']): RelayProbe {
     return (
       this.options.probe ??
       ((origin: string) =>

@@ -269,6 +269,9 @@ describe('packaged runtime resources', () => {
       )
     ).toBe(true)
     expect(packagedTargets).toContain(join('node_modules', 'proper-lockfile'))
+    for (const dependency of ['proxy-agent', 'socks-proxy-agent', 'socks', 'https-proxy-agent']) {
+      expect(packagedTargets).toContain(join('node_modules', dependency))
+    }
   })
 
   it('includes the Claude agent SDK in every desktop package plan', () => {

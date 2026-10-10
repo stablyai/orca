@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { getMainHttpClient } from '../../network/http-client'
 import { z } from 'zod'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
@@ -111,7 +112,7 @@ export async function exchangeRelayAuthorization(input: {
   requestDeadlineMs?: number
 }): Promise<RelayAuthorization> {
   const relayHostId = deriveRelayHostId(input.keypair.publicKey)
-  const response = await (input.fetch ?? globalThis.fetch)(input.endpoint, {
+  const response = await (input.fetch ?? getMainHttpClient().fetch)(input.endpoint, {
     method: 'POST',
     headers: {
       authorization: `Bearer ${input.accessToken}`,
@@ -182,23 +183,26 @@ async function sendRelayAssignment(
   if (input.isCurrent && !input.isCurrent()) {
     throw new RelayAssignAbortedError()
   }
-  const response = await (input.fetch ?? globalThis.fetch)(`${input.directorUrl}/v1/assign`, {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${input.relayToken}`,
-      'content-type': 'application/json'
-    },
-    signal: AbortSignal.timeout(input.requestDeadlineMs ?? RELAY_HTTP_REQUEST_DEADLINE_MS),
-    body: JSON.stringify({
-      v: 1,
-      relayHostId: input.relayHostId,
-      ...(input.regionCorrection ? { regionCorrection: input.regionCorrection } : {}),
-      ...(input.preferredRegion ? { preferredRegion: input.preferredRegion } : {}),
-      // Declares likely reconnection so the director can verify and admit
-      // through its bounded fast lane instead of the placement queue.
-      ...(input.reconnect ? { reconnect: true } : {})
-    })
-  })
+  const response = await (input.fetch ?? getMainHttpClient().fetch)(
+    `${input.directorUrl}/v1/assign`,
+    {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${input.relayToken}`,
+        'content-type': 'application/json'
+      },
+      signal: AbortSignal.timeout(input.requestDeadlineMs ?? RELAY_HTTP_REQUEST_DEADLINE_MS),
+      body: JSON.stringify({
+        v: 1,
+        relayHostId: input.relayHostId,
+        ...(input.regionCorrection ? { regionCorrection: input.regionCorrection } : {}),
+        ...(input.preferredRegion ? { preferredRegion: input.preferredRegion } : {}),
+        // Declares likely reconnection so the director can verify and admit
+        // through its bounded fast lane instead of the placement queue.
+        ...(input.reconnect ? { reconnect: true } : {})
+      })
+    }
+  )
   if (!response.ok) {
     const retryAfterMs = relayRetryAfterMs(response.headers.get('retry-after'))
     if (retryAfterMs !== null) {

@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setMainHttpClient } from '../network/http-client'
 import { cancelTrackingResponse } from '../lib/unread-response-body.test-fixtures'
 import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 import type { OrcaCloudSession } from './profile-cloud-session-store'
@@ -42,6 +43,7 @@ function mockFetchJson(value: unknown): void {
 }
 
 describe('Orca cloud client', () => {
+  afterEach(() => setMainHttpClient(null))
   beforeEach(() => {
     fetchMock.mockReset()
     vi.stubGlobal('fetch', fetchMock)
@@ -164,33 +166,42 @@ describe('Orca cloud client', () => {
     )
   })
 
-  it('refreshes session material without exposing refresh tokens in URLs', async () => {
-    mockFetchJson({
-      accessToken: 'rotated-access-token',
-      refreshToken: 'rotated-refresh-token',
-      expiresAt: 2000,
-      cloud: {
-        cloudProfileId: 'cloud-profile-1',
-        userId: 'user-1',
-        email: 'nina@example.com'
-      },
-      capabilities: {
-        flags: { share: true },
-        refreshedAt: 999
+  it.each(['node', 'app'])(
+    'refreshes through the %s HTTP client without tokens in URLs',
+    async (host) => {
+      if (host === 'app') {
+        setMainHttpClient({ fetch: fetchMock, proxySession: () => null })
+        vi.stubGlobal('fetch', async () => {
+          throw new Error('Unexpected direct connection')
+        })
       }
-    })
-
-    await expect(refreshOrcaCloudSession(config, session)).resolves.toMatchObject({
-      accessToken: 'rotated-access-token',
-      refreshToken: 'rotated-refresh-token'
-    })
-    expect(fetchMock).toHaveBeenCalledWith(
-      config.refreshEndpoint,
-      expect.objectContaining({
-        body: JSON.stringify({ refreshToken: 'refresh-token' })
+      mockFetchJson({
+        accessToken: 'rotated-access-token',
+        refreshToken: 'rotated-refresh-token',
+        expiresAt: 2000,
+        cloud: {
+          cloudProfileId: 'cloud-profile-1',
+          userId: 'user-1',
+          email: 'nina@example.com'
+        },
+        capabilities: {
+          flags: { share: true },
+          refreshedAt: 999
+        }
       })
-    )
-  })
+
+      await expect(refreshOrcaCloudSession(config, session)).resolves.toMatchObject({
+        accessToken: 'rotated-access-token',
+        refreshToken: 'rotated-refresh-token'
+      })
+      expect(fetchMock).toHaveBeenCalledWith(
+        config.refreshEndpoint,
+        expect.objectContaining({
+          body: JSON.stringify({ refreshToken: 'refresh-token' })
+        })
+      )
+    }
+  )
 
   it('refreshes capability flags and optional org metadata with the current access token', async () => {
     mockFetchJson({

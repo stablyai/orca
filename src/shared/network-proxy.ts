@@ -9,7 +9,7 @@ export type ProxyUrlValidationResult =
 
 const PROXY_URL_MAX_LENGTH = 2048
 const PROXY_BYPASS_RULES_MAX_LENGTH = 4096
-const PROXY_PROTOCOLS = new Set(['http:', 'https:', 'socks:', 'socks4:', 'socks5:'])
+const PROXY_PROTOCOLS = new Set(['http:', 'https:', 'socks:', 'socks4:', 'socks5:', 'socks5h:'])
 const PROXY_ENV_KEYS = [
   'HTTPS_PROXY',
   'https_proxy',
@@ -48,7 +48,7 @@ export function normalizeProxyUrl(value: unknown): ProxyUrlValidationResult {
     return {
       ok: false,
       value: '',
-      message: 'Use an http, https, socks, socks4, or socks5 proxy URL.'
+      message: 'Use an http, https, socks, socks4, socks5, or socks5h proxy URL.'
     }
   }
   if (!parsed.hostname) {

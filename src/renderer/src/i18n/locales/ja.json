@@ -7280,7 +7280,7 @@
           "33ee3ca3af": "オプション。ホストはカンマ、セミコロン、または改行で区切ります。",
           "f6d76cc8f4": "プロキシバイパスルール",
           "fb7130dcb9": "構成された HTTP プロキシをバイパスする必要があるホスト。",
-          "0adfce9fa7": "http、https、socks、socks4、socks5 の URL をサポートします。",
+          "0adfce9fa7": "アプリと Relay の接続で http、https、socks、socks4、socks5、socks5h の URL をサポートします。",
           "476f302aca": "http://proxy.example.com:8080",
           "1e214e265a": "システムのプロキシ設定と継承されたプロキシ環境変数を使用するには、空のままにします。",
           "f00daf6324": "HTTPプロキシ",

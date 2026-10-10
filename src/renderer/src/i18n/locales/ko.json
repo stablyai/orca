@@ -7280,7 +7280,7 @@
           "33ee3ca3af": "선택 사항. 쉼표, 세미콜론 또는 새 줄로 호스트를 구분합니다.",
           "f6d76cc8f4": "프록시 우회 규칙",
           "fb7130dcb9": "구성된 HTTP 프록시를 우회해야 하는 호스트입니다.",
-          "0adfce9fa7": "http, https, SOCKS, SOCKS4, SOCKS5 URL을 지원합니다.",
+          "0adfce9fa7": "앱 및 Relay 연결에 http, https, socks, socks4, socks5, socks5h URL을 지원합니다.",
           "476f302aca": "http://proxy.example.com:8080",
           "1e214e265a": "시스템 프록시 설정 및 상속된 프록시 환경 변수를 사용하려면 비워 두세요.",
           "f00daf6324": "HTTP 프록시",

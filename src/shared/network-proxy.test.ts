@@ -9,6 +9,17 @@ import {
 } from './network-proxy'
 
 describe('network proxy settings', () => {
+  it('preserves SOCKS5H for proxy-side DNS in settings and child environments', () => {
+    const proxy = 'socks5h://user:pass@proxy.example:1080'
+    expect(normalizeProxyUrl(` ${proxy}/ `)).toEqual({ ok: true, value: proxy })
+    expect(buildConfiguredProxyEnv({ httpProxyUrl: proxy })).toMatchObject({
+      HTTP_PROXY: proxy,
+      HTTPS_PROXY: proxy,
+      ALL_PROXY: proxy
+    })
+    expect(redactProxyUrl(proxy)).toBe('socks5h://***:***@proxy.example:1080')
+  })
+
   it('normalizes supported proxy URLs without path, query, or fragment', () => {
     expect(normalizeProxyUrl(' https://user:pass@proxy.example.com:8443/path?q=1#secret ')).toEqual(
       {

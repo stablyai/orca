@@ -292,7 +292,7 @@ export function AdvancedNetworkSettingsSection({
                 <p className="text-xs text-muted-foreground">
                   {translate(
                     'auto.components.settings.AdvancedNetworkSettingsSection.0adfce9fa7',
-                    'Supports http, https, socks, socks4, and socks5 URLs.'
+                    'Supports http, https, socks, socks4, socks5, and socks5h URLs for app and Relay connections.'
                   )}
                 </p>
               )}

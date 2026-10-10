@@ -1,4 +1,5 @@
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
+import type { MainHttpClient } from '../../network/http-client'
 import { readFetchResponseJsonWithinLimit } from '../../../shared/fetch-response-body'
 import { RelayRegionCatalogSchema, type RelayRegionCatalog } from './relay-region-probe'
 
@@ -6,7 +7,7 @@ const CATALOG_MAX_BYTES = 16 * 1024
 
 export async function fetchRelayRegionCatalog(
   directorUrl: string,
-  fetch: typeof globalThis.fetch,
+  fetch: MainHttpClient['fetch'],
   timeoutMs: number
 ): Promise<RelayRegionCatalog> {
   if (!isCanonicalDirectorOrigin(directorUrl)) {

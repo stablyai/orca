@@ -14,6 +14,7 @@ import {
   type ElectronProxyCredentials
 } from './electron-proxy-credentials'
 import { runBoundedProxyApplication } from './bounded-proxy-application'
+import { closeProxySessionWebSockets } from './proxy-session-websockets'
 import { defaultProxySession, type ProxySession } from './electron-default-proxy-session'
 import { resolveProxyPolicyWithoutSession, type ProxyApplyResult } from './proxy-policy-resolution'
 
@@ -245,6 +246,7 @@ async function releaseSessionProxyPin(
   if (state.appliedKey === null) {
     return
   }
+  closeProxySessionWebSockets(proxySession)
   await proxySession.setProxy({ mode: 'system' })
   // Why: keep the pin marker until stale pooled connections are closed so a retry cannot skip them.
   state.settledKey = null
@@ -268,6 +270,7 @@ async function applySessionProxyResult(
   ) {
     return result
   }
+  closeProxySessionWebSockets(proxySession)
   await proxySession.setProxy({
     mode: 'fixed_servers',
     proxyRules: result.proxyRules,

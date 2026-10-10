@@ -22,6 +22,7 @@ import { answerRelayHostChallenge } from './relay-host-proof'
 import { RelayControlLiveness } from './relay-control-liveness'
 import { closeRelayControlSocket } from './relay-control-socket-close'
 import { controlWebSocketUrl } from './relay-control-url'
+import { createProxyWebSocket } from '../../network/proxy-websocket'
 
 type RelayControlState = 'idle' | 'opening' | 'proving' | 'active' | 'draining' | 'closed'
 
@@ -60,7 +61,7 @@ export class RelayControlClient {
     this.createSocket =
       options.createSocket ??
       ((url, token) =>
-        new WebSocket(url, {
+        createProxyWebSocket(url, {
           headers: { authorization: `Bearer ${token}`, ...RELAY_HOST_CAPABILITY_HEADERS },
           perMessageDeflate: false,
           maxPayload: 64 * 1024

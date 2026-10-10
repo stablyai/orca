@@ -1,4 +1,5 @@
 import { performance } from 'node:perf_hooks'
+import type { MainHttpClient } from '../../network/http-client'
 import { z } from 'zod'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
 
@@ -60,7 +61,7 @@ export type RelayProbe = (origin: string) => Promise<number | null>
 
 export async function probeRelayOrigin(
   origin: string,
-  fetch: typeof globalThis.fetch,
+  fetch: MainHttpClient['fetch'],
   now = () => performance.now(),
   timeoutMs = PROBE_TIMEOUT_MS
 ): Promise<number | null> {

@@ -2,6 +2,7 @@ import WebSocket, { type RawData } from 'ws'
 import { forEachWithConcurrency } from '../../../shared/map-with-concurrency'
 import type { RpcTransport } from './transport'
 import type { MobileSocketTransport, MobileSocketTransportMetadata } from './mobile-socket-wiring'
+import { createProxyWebSocket } from '../../network/proxy-websocket'
 
 const MAX_RELAY_MESSAGE_BYTES = 1024 * 1024
 // Why: terminate() normally emits 'close' within one tick; 5s covers slow
@@ -65,7 +66,10 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
     this.createSocket =
       options.createSocket ??
       ((url) =>
-        new WebSocket(url, { perMessageDeflate: false, maxPayload: MAX_RELAY_MESSAGE_BYTES }))
+        createProxyWebSocket(url, {
+          perMessageDeflate: false,
+          maxPayload: MAX_RELAY_MESSAGE_BYTES
+        }))
   }
 
   onMessage(handler: Parameters<MobileSocketTransport['onMessage']>[0]): void {

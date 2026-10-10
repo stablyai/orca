@@ -7280,7 +7280,7 @@
           "33ee3ca3af": "可选。用逗号、分号或换行符分隔主机。",
           "f6d76cc8f4": "代理绕过规则",
           "fb7130dcb9": "应绕过配置的 HTTP 代理的主机。",
-          "0adfce9fa7": "支持http、https、socks、socks4 和socks5 URL。",
+          "0adfce9fa7": "应用和 Relay 连接支持 http、https、socks、socks4、socks5 和 socks5h URL。",
           "476f302aca": "http://proxy.example.com:8080",
           "1e214e265a": "留空以使用系统代理设置和继承的代理环境变量。",
           "f00daf6324": "HTTP 代理",

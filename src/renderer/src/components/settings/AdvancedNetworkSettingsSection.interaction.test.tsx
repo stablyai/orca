@@ -8,6 +8,21 @@ import { AdvancedNetworkSettingsSection } from './AdvancedNetworkSettingsSection
 afterEach(() => cleanup())
 
 describe('AdvancedNetworkSettingsSection bypass rules control', () => {
+  it('explains and saves SOCKS5H in the existing proxy field', () => {
+    const updateSettings = vi.fn()
+    const { getByLabelText, getByText } = render(
+      <AdvancedNetworkSettingsSection
+        settings={{ ...getDefaultSettings('/tmp'), httpProxyUrl: 'socks5://127.0.0.1:1080' }}
+        updateSettings={updateSettings}
+      />
+    )
+    expect(getByText(/Supports .*socks5h/)).toBeTruthy()
+    const input = getByLabelText('HTTP Proxy')
+    fireEvent.change(input, { target: { value: 'socks5h://127.0.0.1:1080' } })
+    fireEvent.blur(input)
+    expect(updateSettings).toHaveBeenCalledWith({ httpProxyUrl: 'socks5h://127.0.0.1:1080' })
+  })
+
   it('keeps newline input and canonicalizes it when focus leaves the textarea', async () => {
     const updateSettings = vi.fn()
 

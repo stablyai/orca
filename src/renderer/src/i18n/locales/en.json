@@ -7533,7 +7533,7 @@
           "33ee3ca3af": "Optional. Separate hosts with commas, semicolons, or new lines.",
           "f6d76cc8f4": "Proxy Bypass Rules",
           "fb7130dcb9": "Hosts that should bypass the configured HTTP proxy.",
-          "0adfce9fa7": "Supports http, https, socks, socks4, and socks5 URLs.",
+          "0adfce9fa7": "Supports http, https, socks, socks4, socks5, and socks5h URLs for app and Relay connections.",
           "476f302aca": "http://proxy.example.com:8080",
           "1e214e265a": "Leave empty to use system proxy settings and inherited proxy environment variables.",
           "f00daf6324": "HTTP Proxy",

@@ -201,6 +201,7 @@
     "node-pty": "^1.1.0",
     "posthog-node": "^5.52.5",
     "proper-lockfile": "4.1.2",
+    "proxy-agent": "^6.5.0",
     "qrcode": "^1.5.4",
     "react-i18next": "17.0.15",
     "serve-sim": "0.1.47",
