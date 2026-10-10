@@ -143,7 +143,7 @@ describe('a chat the startup scan settles', () => {
     expect(snapshots.at(-1)).toEqual([visible])
     // Settled all the same.
     expect(current.collaboratorsForTests().sessions.has('chat-hidden01')).toBe(false)
-    expect(await turnState(current, 'chat-hidden01')).toBe('unverifiable')
+    expect(await turnState(current, 'chat-hidden01')).toBe('interrupted')
   })
 
   it('stays open when the restorer opened it while the scan was settling it', async () => {
@@ -166,7 +166,7 @@ describe('a chat the startup scan settles', () => {
     await new Promise((resolve) => setTimeout(resolve, 20))
 
     expect(sessions.has(CHAT)).toBe(true)
-    expect(await turnState(current, CHAT)).toBe('unverifiable')
+    expect(await turnState(current, CHAT)).toBe('interrupted')
   })
 })
 
@@ -214,7 +214,7 @@ describe('a startup retry whose step cannot succeed', () => {
     expect(current.collaboratorsForTests().sessions.has(CHAT)).toBe(false)
     // Not tried here at all: without its provider it cannot succeed.
     expect(warnings).toEqual([])
-    expect(await turnState(current, CHAT)).toBe('unverifiable')
+    expect(await turnState(current, CHAT)).toBe('interrupted')
   })
 
   it('retires at once on a journal whose named epoch holds no row, reading it once', async () => {

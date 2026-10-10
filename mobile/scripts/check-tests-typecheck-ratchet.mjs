@@ -36,7 +36,7 @@ export const TESTS_OUTSIDE_PROGRAM = new Map([
   ],
   [
     'src/transport/mobile-relay-browser-cancel-budget.test.ts',
-    'Node-side: imports src/shared/child-process, checked against @types/node rather than RN libs'
+    'Node-side: imports @orca/process-host, checked against @types/node rather than RN libs'
   ]
 ])
 

@@ -197,7 +197,7 @@ describe('terminal file link actions', () => {
       // Marked external so the popover draws the same icon as every other Reveal item.
       expect(row).toMatchObject({ external: true })
       await row.run()
-      expect(shellApi.openInFileManager).toHaveBeenCalledWith('/repo/src/main.ts')
+      expect(shellApi.openInFileManager).toHaveBeenCalledWith('/repo/src/main.ts', 'local')
       expect(mocks.openDetectedFilePath).not.toHaveBeenCalled()
     })
 
@@ -214,7 +214,7 @@ describe('terminal file link actions', () => {
       )
 
       await revealRow(request).run()
-      expect(shellApi.openInFileManager).toHaveBeenCalledWith('/repo/build/Orca.app')
+      expect(shellApi.openInFileManager).toHaveBeenCalledWith('/repo/build/Orca.app', 'local')
       expect(shellApi.openFilePath).not.toHaveBeenCalled()
       expect(fsApi.stat).not.toHaveBeenCalled()
       expect(mocks.openDetectedFilePath).not.toHaveBeenCalled()
@@ -268,11 +268,11 @@ describe('terminal file link actions', () => {
       expect(request.mock.calls[0][0]).not.toHaveProperty('secondaryActions')
     })
 
-    it('omits the row while a remote runtime is focused, or for a runtime-owned link', () => {
+    it('keeps the row for a local link while a server is focused, and omits it for a runtime-owned link', () => {
       mocks.settings = { activeRuntimeEnvironmentId: 'env-1' }
       const focused = vi.fn()
       handleTerminalFileLink('/repo/src/main.ts', null, null, plainEvent(), deps, context(focused))
-      expect(focused.mock.calls[0][0]).not.toHaveProperty('secondaryActions')
+      expect(focused.mock.calls[0][0]).toHaveProperty('secondaryActions')
 
       mocks.settings = { activeRuntimeEnvironmentId: null }
       const owned = vi.fn()

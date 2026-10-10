@@ -29,7 +29,7 @@ import { handleAiVaultGetFirstUserPrompt } from '../ai-vault/session-first-user-
 import { registerAiVaultResumeHandler, type AiVaultResumeHandlerOptions } from './ai-vault-resume'
 import {
   LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId,
+  parseRoutableExecutionHostId,
   requestedExecutionHostScope,
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
@@ -177,7 +177,7 @@ async function scanAiVaultSessionsByHostScope(
     )
   }
 
-  const parsed = parseExecutionHostId(executionHostScope)
+  const parsed = parseRoutableExecutionHostId(executionHostScope)
   if (parsed?.kind === 'ssh') {
     return scanSshAiVaultSessions(parsed.targetId, args, { signal })
   }

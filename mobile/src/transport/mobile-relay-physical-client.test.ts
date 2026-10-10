@@ -130,7 +130,7 @@ describe('mobile relay physical pairing client', () => {
     const status = client.sendRequest('status.get')
     socket.receive(JSON.stringify({ type: 'relay-hello', ok: false, code: 4404 }))
 
-    await expect(status).rejects.toEqual(new RelayOuterError(4404))
+    await expect(status).rejects.toEqual(new RelayOuterError(4404, true))
     expect(fakes.start).not.toHaveBeenCalled()
   })
 
@@ -231,7 +231,7 @@ describe('mobile relay physical pairing client', () => {
     const status = client.sendRequest('status.get')
     socket.receive(JSON.stringify({ type: 'relay-hello', ok: false, code: 4404 }))
 
-    await expect(status).rejects.toEqual(new RelayOuterError(4404))
+    await expect(status).rejects.toEqual(new RelayOuterError(4404, true))
     expect(entries.at(-1)).toMatchObject({
       level: 'warn',
       message: 'Relay: pairing socket closed',

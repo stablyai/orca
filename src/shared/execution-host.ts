@@ -118,6 +118,24 @@ export function parseExecutionHostId(value: string | null | undefined): ParsedEx
   return null
 }
 
+/**
+ * Bookkeeping for a worktree whose owner publications conflict. It is spelled as a runtime host so
+ * nothing treats the worktree as local, but no environment has this id and it must never be dialed.
+ */
+export const UNRESOLVED_OWNER_HOST_ID = 'runtime:unresolved-owner' satisfies ExecutionHostId
+
+export function isUnresolvedOwnerHostId(value: string | null | undefined): boolean {
+  return parseExecutionHostId(value)?.id === UNRESOLVED_OWNER_HOST_ID
+}
+
+/** {@link parseExecutionHostId} for transports: the unresolved-owner sentinel is not a host. */
+export function parseRoutableExecutionHostId(
+  value: string | null | undefined
+): ParsedExecutionHost | null {
+  const parsed = parseExecutionHostId(value)
+  return parsed?.id === UNRESOLVED_OWNER_HOST_ID ? null : parsed
+}
+
 export function normalizeExecutionHostId(value: string | null | undefined): ExecutionHostId | null {
   return parseExecutionHostId(value)?.id ?? null
 }
@@ -194,7 +212,7 @@ export function getSshTargetIdForExecutionHost(
 //     `contradictory`. Answering with it hands out an SSH connection for a row that declares
 //     itself local.
 //   - `runtime:<env>` is a different machine with its own SSH targets, and a nested one appears
-//     only in this field (`repoWithFetchedOwner` spreads it through). It is not dialable on its
+//     only in this field (`adoptFromEndpoint` spreads it through). It is not dialable on its
 //     own, but it is addressable as the pair (environmentId, targetId) — which is how the
 //     renderer reads it, recovering the environment from the worktree and looking the target up
 //     inside it (`selectRuntimeAwareSshStatus`). Dropping it makes a nested-SSH workspace read

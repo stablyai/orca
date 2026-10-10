@@ -10,13 +10,16 @@ import {
   getSettingsFocusedExecutionHostId,
   getSshTargetIdForExecutionHost,
   getWorktreeExecutionHostId,
+  isUnresolvedOwnerHostId,
   normalizeExecutionHostOrder,
   normalizeExecutionHostScope,
   normalizeVisibleExecutionHostIds,
   parseExecutionHostId,
+  parseRoutableExecutionHostId,
   requestedExecutionHostScope,
   toRuntimeExecutionHostId,
-  toSshExecutionHostId
+  toSshExecutionHostId,
+  UNRESOLVED_OWNER_HOST_ID
 } from './execution-host'
 
 describe('execution host identity', () => {
@@ -188,5 +191,15 @@ describe('execution host id delimiter invariant', () => {
     expect(getExecutionHostLabel(ALL_EXECUTION_HOSTS_SCOPE)).toBe('All hosts')
     expect(getExecutionHostLabel('ssh:box')).toBe('box')
     expect(getExecutionHostLabel('runtime:env-1')).toBe('env-1')
+  })
+})
+
+describe('unresolved-owner sentinel', () => {
+  it('parses as a runtime host so nothing treats it as local, but is never routable', () => {
+    expect(parseExecutionHostId(UNRESOLVED_OWNER_HOST_ID)?.kind).toBe('runtime')
+    expect(isUnresolvedOwnerHostId(UNRESOLVED_OWNER_HOST_ID)).toBe(true)
+    expect(parseRoutableExecutionHostId(UNRESOLVED_OWNER_HOST_ID)).toBeNull()
+    expect(parseRoutableExecutionHostId('runtime:env-1')?.id).toBe('runtime:env-1')
+    expect(isUnresolvedOwnerHostId('runtime:env-1')).toBe(false)
   })
 })

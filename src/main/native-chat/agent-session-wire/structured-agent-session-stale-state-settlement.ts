@@ -1,10 +1,11 @@
-// What a generation that can no longer write left unfinished, settled from the journal and the
-// lease's death evidence each time it is asked. Proven death ends a turn interrupted; anything else
-// is `unverifiable`, until a proof naming its owner revises it. Working subagents and background
+// What a generation that can no longer write left unfinished, settled from the journal, the
+// lease's death evidence and the runtimes this one replaced each time it is asked. Either proof ends
+// a turn interrupted; anything else is `unverifiable`, until a proof naming its owner revises it. Working subagents and background
 // tasks become `unverifiable`. Planned at the batch's own turn in the write queue, so an answer or
 // a Stop queued ahead of it is what it settles from.
 
 import { STALE_SESSION_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
+import type { AgentSessionReplacedRuntime } from '../../runtime/agent-session-replaced-runtime'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem
@@ -27,12 +28,13 @@ import {
   endedByPersonsStop,
   provenUnverifiableTurnRevisions,
   provenUnverifiedToolCallRevisions,
+  lastProvenTurnLiveAt,
   runningTurnLifecycleRevisions,
-  stopFoundTurnLiveAt,
-  turnVerdictFromDeathEvidence
+  turnVerdictFromDeathEvidence,
+  turnVerdictFromReplacedRuntime
 } from './structured-agent-session-stale-turn-verdict'
 import { settledRootTurnScope } from './structured-agent-session-exit-turn-scope'
-import { orcaStopRowBody } from './structured-agent-session-orca-stop-row'
+import { isUnverifiableTurn, staleStopRow } from './structured-agent-session-stale-stop-row'
 import { isInProgressStructuredAgentSessionItem } from './structured-agent-session-unfinished-work'
 
 /** What the settlement reads and writes of a chat's journal. */
@@ -43,6 +45,7 @@ export type StaleStructuredAgentSessionStateJournal = Pick<
   | 'itemBody'
   | 'submissions'
   | 'stopMarks'
+  | 'lastProviderActivityAt'
   | 'cursor'
   | 'appendPlannedLifecycleBatch'
 >
@@ -54,6 +57,8 @@ export type StaleStructuredAgentSessionStateInput = {
   fence: number
   acquisitionGeneration: string | null
   deathEvidence: AgentSessionDeathEvidence | null
+  /** The runtimes this one replaced for this chat: every owner they held lost its pipes with them. */
+  replaced?: AgentSessionReplacedRuntime
   /** Who the exit row names. */
   failureTextContext?: AgentSessionFailureWordsContext
   /** Only what generations below this fence wrote, which can no longer write, is settled; their
@@ -144,16 +149,26 @@ function staleMutations(
   input: StaleStructuredAgentSessionStateInput,
   items: readonly AgentJournalRenderItem[]
 ): JournalLifecycleMutationInput[] {
-  const { journal } = input
+  const { journal, replaced } = input
   // Each turn is judged by the evidence only if it names that turn's owner.
-  const verdictFor = (item: AgentJournalRenderItem) =>
+  const deathVerdictFor = (item: AgentJournalRenderItem) =>
     turnVerdictFromDeathEvidence(
       input.deathEvidence,
       journal.itemFence(item.itemId),
-      stopFoundTurnLiveAt(journal, item)
+      lastProvenTurnLiveAt(journal, item)
     )
+  const replacedVerdictFor = (item: AgentJournalRenderItem) =>
+    turnVerdictFromReplacedRuntime(
+      replaced,
+      journal.itemFence(item.itemId),
+      lastProvenTurnLiveAt(journal, item)
+    )
+  const verdictFor = (item: AgentJournalRenderItem) => {
+    const byDeath = deathVerdictFor(item)
+    return byDeath.state === 'interrupted' ? byDeath : replacedVerdictFor(item)
+  }
   // Calls an earlier settle closed with no proof, revised once a proof names their owner.
-  const mutations = provenUnverifiedToolCallRevisions(items, input.deathEvidence, journal)
+  const mutations = provenUnverifiedToolCallRevisions(items, input.deathEvidence, journal, replaced)
   for (const item of items) {
     // A turn already settled (a person's Stop) ends its calls as it ended; only a turn still running
     // leaves them to the evidence.
@@ -176,34 +191,33 @@ function staleMutations(
       })
     }
   }
-  const proven = provenUnverifiableTurnRevisions(items, input.deathEvidence, journal)
+  const proven = provenUnverifiableTurnRevisions(items, input.deathEvidence, journal, replaced)
   const turnEnds = [
     ...items.flatMap((item) => runningTurnLifecycleRevisions([item], verdictFor(item))),
     ...proven
   ]
   mutations.push(...turnEnds)
-  const evidence = input.deathEvidence
-  if (
-    evidence &&
-    (proven.length > 0 ||
-      items.some(
-        (item) =>
-          isInProgressStructuredAgentSessionItem(item) && verdictFor(item).state === 'interrupted'
-      )) &&
-    !endedByPersonsStop(journal, turnEnds)
-  ) {
-    mutations.unshift({
-      kind: 'item',
-      // Named by the death it explains, so a retry after a partly written settle adds no second row.
-      identity: {
-        provider: 'orca',
-        clientMessageId: `${STALE_SESSION_ROW_PREFIX}${input.sessionId}:death-${evidence.ownerFence ?? 'unowned'}-${evidence.observedAt}`
-      },
-      // The death evidence is Orca's log text, never a sentence for a person: the row says only
-      // that the provider stopped, and how Orca ended when the provider died with it.
-      body: orcaStopRowBody(input.failureTextContext, evidence.runtimeEnd),
-      turnScope: settledRootTurnScope(items, turnEnds)
-    })
+  const stopRow = staleStopRow(input, items, (item) => {
+    const unverifiable = isUnverifiableTurn(item)
+    if (!unverifiable && !isInProgressStructuredAgentSessionItem(item)) {
+      return null
+    }
+    const fence = journal.itemFence(item.itemId)
+    // An earlier settle's `unverifiable` turn is revised by a death naming its owner or by its
+    // replaced runtime.
+    if (
+      unverifiable
+        ? fence !== undefined && fence === input.deathEvidence?.ownerFence
+        : deathVerdictFor(item).state === 'interrupted'
+    ) {
+      return { by: 'death' }
+    }
+    return fence !== undefined && replacedVerdictFor(item).state === 'interrupted'
+      ? { by: 'replaced', fence }
+      : null
+  })
+  if (stopRow && !endedByPersonsStop(journal, turnEnds)) {
+    mutations.unshift({ ...stopRow, turnScope: settledRootTurnScope(items, turnEnds) })
   }
   return mutations
 }

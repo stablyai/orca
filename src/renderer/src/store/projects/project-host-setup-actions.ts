@@ -15,12 +15,11 @@ import { translate } from '@/i18n/i18n'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import type { RepoSlice } from '../repos/repo-state'
 import { ERROR_TOAST_DURATION } from '../repos/repo-state'
-import { repoWithFetchedOwner } from '../repos/owner-routing'
+import { adoptFromEndpoint } from '../adopt-from-endpoint'
 import { normalizeProjectRow } from '../../../../shared/project-catalog-row-normalization'
 import {
   assertProjectHostSetupMutationRuntimeCapabilities,
-  getProjectSetupRuntimeTarget,
-  setupWithFetchedOwner
+  getProjectSetupRuntimeTarget
 } from './project-host-routing'
 
 export function createProjectHostSetupActions(
@@ -55,9 +54,9 @@ export function createProjectHostSetupActions(
                   { timeoutMs: 15_000 }
                 )
               ).result
-        const repo = repoWithFetchedOwner(result.repo, target)
+        const repo = adoptFromEndpoint(target, { kind: 'repo', row: result.repo })
         const repoHostId = getRepoExecutionHostId(repo)
-        const setup = setupWithFetchedOwner(result.setup, target)
+        const setup = adoptFromEndpoint(target, { kind: 'projectHostSetup', row: result.setup })
         const project = normalizeProjectRow(result.project)
         set((s) => {
           const nextRepos = s.repos.some((entry) =>
@@ -109,7 +108,7 @@ export function createProjectHostSetupActions(
                   { timeoutMs: 15_000 }
                 )
               ).result
-        const setup = setupWithFetchedOwner(result.setup, target)
+        const setup = adoptFromEndpoint(target, { kind: 'projectHostSetup', row: result.setup })
         const project = normalizeProjectRow(result.project)
         set((s) => ({
           projects: s.projects.some((entry) => entry.id === project.id)
@@ -149,9 +148,11 @@ export function createProjectHostSetupActions(
                   { timeoutMs: 15_000 }
                 )
               ).result
-        const setup = setupWithFetchedOwner(result.setup, target)
+        const setup = adoptFromEndpoint(target, { kind: 'projectHostSetup', row: result.setup })
         const project = normalizeProjectRow(result.project)
-        const repo = result.repo ? repoWithFetchedOwner(result.repo, target) : undefined
+        const repo = result.repo
+          ? adoptFromEndpoint(target, { kind: 'repo', row: result.repo })
+          : undefined
         const repoHostId = repo ? getRepoExecutionHostId(repo) : null
         set((s) => ({
           repos: repo
@@ -198,7 +199,9 @@ export function createProjectHostSetupActions(
                   { timeoutMs: 15_000 }
                 )
               ).result
-        const repo = result.repo ? repoWithFetchedOwner(result.repo, target) : undefined
+        const repo = result.repo
+          ? adoptFromEndpoint(target, { kind: 'repo', row: result.repo })
+          : undefined
         const repoHostId = repo ? getRepoExecutionHostId(repo) : null
         set((s) => {
           const projectHostSetups = s.projectHostSetups.filter(

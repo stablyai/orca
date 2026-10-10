@@ -68,6 +68,7 @@ export async function stopEndsWork(
   // The child is live: the work its stop ends is its generation's.
   const work = structuredAgentSessionCurrentWork(journal, {
     record: context.deps.store.getRecord(sessionId),
+    replaced: context.deps.store.replacedRuntime(sessionId),
     ...(session.lastEndedChild ? { ended: session.lastEndedChild } : {})
   })
   const working =
@@ -110,6 +111,7 @@ export function recordStopEvent(
   const fence = structuredAgentSessionConversationFence(context.deps.store, sessionId)
   const turnId = structuredAgentSessionCurrentWork(session.journal, {
     record: context.deps.store.getRecord(sessionId),
+    replaced: context.deps.store.replacedRuntime(sessionId),
     ...(session.lastEndedChild ? { ended: session.lastEndedChild } : {})
   }).activeTurnId()
   return session.journal

@@ -22,7 +22,7 @@ import {
   sealAndPublishTrackedPtySourceExit,
   type PtyExitParams
 } from './relay-pty-source-exit-publication'
-import type { RelayDispatcher, RequestContext } from './dispatcher'
+import type { RelayDispatcher, RequestContext } from '../wsl-guest/dispatcher'
 import {
   appendPtySourceOutput,
   projectPtySourceOutputToLegacy,

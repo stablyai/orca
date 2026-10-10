@@ -500,7 +500,7 @@ describe('a Stop whose provider ends its session', () => {
     })
   })
 
-  it('keeps the note unconfirmed while the old exit stays unverifiable, through a later restart', async () => {
+  it('keeps the note unconfirmed while the old exit stays unverifiable, until a later restart replaces its runtime', async () => {
     // The restart cannot prove the old owner gone: it releases it unproven, and startup settles.
     await crashAfterUnconfirmedStop({ outcome: 'indeterminate', reason: 'no answer' })
     await rig.queuePause()
@@ -509,11 +509,12 @@ describe('a Stop whose provider ends its session', () => {
       notes: ['cancelUnconfirmed']
     })
 
-    // A later restart that proves nothing more leaves them as they are.
+    // A later restart replaced the runtime that held the old owner, which ends its turn: the Stop took.
     await rig.crashRestartHostProcess()
+    await rig.queuePause()
     expect({ turn: turnOneState(), notes: stopAnswers() }).toEqual({
-      turn: 'unverifiable',
-      notes: ['cancelUnconfirmed']
+      turn: 'interrupted',
+      notes: ['took']
     })
   })
 

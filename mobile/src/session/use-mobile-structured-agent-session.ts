@@ -235,7 +235,6 @@ export function useMobileStructuredAgentSession(args: {
     queuedMessages,
     queuePause,
     submissions: state.submissions,
-    pendingPrompt: approvalPrompt !== null || questionPrompt !== null,
     agentWorking: isWorking,
     mutate,
     appendComposerText,

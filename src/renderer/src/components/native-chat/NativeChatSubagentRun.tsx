@@ -129,7 +129,7 @@ export function NativeChatSubagentEntries({
                 <ChevronRight
                   aria-hidden
                   className={cn(
-                    'size-3.5 shrink-0 text-chat-foreground-faint transition-all',
+                    'size-3.5 shrink-0 text-chat-foreground-faint transition-all motion-reduce:transition-none',
                     sectionOpen
                       ? 'rotate-90 opacity-100'
                       : 'opacity-0 group-hover/subagent-entry:opacity-100'
@@ -218,7 +218,7 @@ export function NativeChatSubagentRun({
         </span>
         <ChevronRight
           className={cn(
-            'size-3.5 shrink-0 text-chat-foreground-faint transition-all',
+            'size-3.5 shrink-0 text-chat-foreground-faint transition-all motion-reduce:transition-none',
             open ? 'rotate-90 opacity-100' : 'opacity-0 group-hover/subagent-run:opacity-100'
           )}
         />

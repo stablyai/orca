@@ -16,7 +16,8 @@ import {
   normalizeWorktreeVisibilitySourcePreferences
 } from '../../../../shared/worktree/visibility-sources'
 import type { RepoSlice, RepoUpdate } from './repo-state'
-import { repoWithFetchedOwner, settingsForRepoOwner } from './owner-routing'
+import { settingsForRepoOwner } from './owner-routing'
+import { adoptFromEndpoint } from '../adopt-from-endpoint'
 import { getRuntimeTargetHostId } from '../runtime-target-host'
 import { getProjectSetupRuntimeTarget } from '../projects/project-host-routing'
 import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-identity'
@@ -148,7 +149,7 @@ export function createRepoUpdateActions(
                 return r
               }
               if (updatedRepo) {
-                return repoWithFetchedOwner(updatedRepo, target)
+                return adoptFromEndpoint(target, { kind: 'repo', row: updatedRepo })
               }
               let mergedRepo: Repo = r
               const {

@@ -131,6 +131,34 @@ Omitting a flag leaves its link unchanged. On `set`, literal `null` clears only 
 
 Folder-based repositories can store numeric links through these commands, but a number does not supply a provider host or project. Without existing source context or a stored remote, pasted GitLab URLs are refused and provider details or clickable links may be unavailable. These flags use fields already supported by the runtime; an older runtime that predates a field may ignore it, so check `worktree show --json` after writing to an older host.
 
+## References
+
+A workspace can link multiple reviews and issues, including sources outside its repository.
+
+```bash
+orca reference list --worktree name:api --json
+orca reference add https://github.com/acme/api/pull/5123 https://linear.app/acme/issue/STA-1234 --worktree name:api --json
+orca reference remove https://github.com/acme/api/pull/5123 --worktree name:api --json
+orca reference remove --key '<key-from-list>' --worktree name:api --json
+orca worktree create --name fix --reference https://github.com/acme/api/pull/5123 --reference https://linear.app/acme/issue/STA-1234 --json
+orca reference find STA-1234 --json
+```
+
+- **Writes:** full URLs only; no custom shorthand. `remove --key` supports older entries without URLs. Source-unknown legacy links cannot match an exact URL; native issue keys remain searchable when stored. Duplicate adds and absent removals are no-ops. Unrelated links and current selection are preserved. Older hosts without safe delta merging refuse writes.
+- **Create:** repeat `--reference`; incompatible with `--pr`, `--issue`, `--linear-issue`, `--gitlab-issue`, and `--gitlab-mr`. References persist before setup or agent startup.
+- **Find:** a full URL or native issue key; bare numbers are rejected. Keys search all matching sources. Reads stored metadata, without provider requests or conversation searches. Use `orca search` for conversation text.
+- **Scope:** `--worktree` selects a worktree or folder workspace. Find also accepts `--repo` instead, plus `--include-archived` and `--limit` (default 50 workspaces). `truncated: true` means more matched. Remote selectors refer to the execution host; `current` is local only.
+- **Output:** list returns `references` with opaque `key` and `selected`; writes also return `changes`. Worktree show/list/ps retain `linkedItems`. Find returns workspace matches and agents with `linked`, `liveness`, and available `terminal`/`mailbox` addresses. `linked: false` means ownership is unknown; sharing a workspace is insufficient evidence.
+
+Choose an agent from `find`, then use its exact address:
+
+```bash
+orca terminal send --terminal '<terminal-from-find>' --text 'Status?' --enter
+orca orchestration send --to '<mailbox-from-find>' --subject 'Status?' --type question
+```
+
+Mailboxes are `dispatch:<id>` or `orca_session_id:<id>`; a `run:<id>` addresses a coordinator. Find never sends messages or assigns ownership. Adding references from a shell does not associate that shell with an agent.
+
 ## Terminals
 
 ```bash

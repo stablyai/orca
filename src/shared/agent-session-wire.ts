@@ -411,6 +411,10 @@ export type AgentSessionModelOption = {
   efforts: AgentSessionOptionChoice[]
   /** Provider catalog fact. Absent means the host could not determine support. */
   supportsFastMode?: boolean
+  /** Service tiers the provider lists for this model besides its standard one, each valued by the
+   *  provider's own tier id. Absent means unknown; a client that reads it offers one speed choice
+   *  (`default` for standard) in place of the Fast toggle. */
+  serviceTiers?: AgentSessionOptionChoice[]
 }
 
 export type AgentSessionFastModeState = 'off' | 'cooldown' | 'on'
@@ -483,9 +487,7 @@ export type AgentSessionThreadGoalChange =
   | { kind: 'status'; status: 'active' | 'paused' }
   | { kind: 'clear' }
 
-export type AgentSessionThreadGoalResult = {
-  change: AgentSessionThreadGoalChange['kind']
-}
+export type AgentSessionThreadGoalResult = { change: AgentSessionThreadGoalChange['kind'] }
 
 /** Provider-reported choices and effective next-turn values. Additive read-only
  *  surface so older hosts can reject it without changing structured v1 writes. */
@@ -509,6 +511,8 @@ export type AgentSessionOptionsResult = {
     effort?: string
     /** Canonical preference for the next turn. Explicit false is meaningful. */
     fastMode?: boolean
+    /** Next-turn service tier id where the model lists `serviceTiers`; `default` is standard. */
+    serviceTier?: string
     /** Provider-reported effective routing, distinct from the next-turn preference. */
     fastModeState?: AgentSessionFastModeState
     /**

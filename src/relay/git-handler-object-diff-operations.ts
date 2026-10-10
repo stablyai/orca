@@ -1,4 +1,4 @@
-import type { RequestContext } from './dispatcher'
+import type { RequestContext } from '../wsl-guest/dispatcher'
 import { GitHandlerOperationContext } from './git-handler-operation-context'
 import { branchDiffEntries } from './git-handler-ops'
 import {

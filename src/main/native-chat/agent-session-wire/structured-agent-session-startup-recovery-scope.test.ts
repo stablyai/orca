@@ -116,8 +116,9 @@ describe("a hidden chat's send the earlier process never handed over, while its 
       runtimeFence: 13,
       ownerProcess: { pid: OWNER_PID }
     })
-    // What the owner left running waits for the decision: no verdict yet.
-    expect(await turnState(current, CHAT)).toBe('running')
+    // The runtime that held its owner was replaced: that turn is over whatever the recovery
+    // decides, so startup settles it, stopping nothing and leaving the lease as it is.
+    expect(await turnState(current, CHAT)).toBe('interrupted')
   })
 })
 

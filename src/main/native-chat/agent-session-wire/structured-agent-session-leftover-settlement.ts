@@ -7,7 +7,8 @@
 // call, prompt, reasoning row, subagent roster entry and background task whose execution belongs
 // to a generation that is not live (`structuredAgentSessionLiveFence`), and every send handed to
 // one and never answered. Its turns end `interrupted` only when death evidence names that
-// generation, else `unverifiable`, and a later proof revises an earlier `unverifiable`. Rows land at
+// generation or a runtime this one replaced held it, else `unverifiable`, and a later proof revises
+// an earlier `unverifiable`. Rows land at
 // the lease's current fence in ONE transaction; a run with nothing left plans no row and writes
 // nothing. A failure is the caller's to retry: its rows hold nothing, since the projection counts
 // only the live generation's work.
@@ -31,7 +32,9 @@ import {
   type StructuredAgentSessionWorkEvidence
 } from './structured-agent-session-current-work'
 
-export type StructuredAgentSessionLeftoverStore = Pick<AgentSessionRecordStore, 'getRecord'>
+/** Without `replacedRuntime`, a store whose runtime replaced none. */
+export type StructuredAgentSessionLeftoverStore = Pick<AgentSessionRecordStore, 'getRecord'> &
+  Partial<Pick<AgentSessionRecordStore, 'replacedRuntime'>>
 
 /** An observed exit's settlement: what that child's generation left, settled as the exit says. */
 export type StructuredAgentSessionExitSettlement = Omit<
@@ -69,9 +72,11 @@ export async function settleStructuredAgentSessionLeftovers(
     }
     const fence = record.lease.runtimeFence
     const { journal, sessionId } = input
+    const replaced = input.store.replacedRuntime?.(sessionId)
     // Everything below the live generation is ended; with none live, all of it is.
     const liveFence = structuredAgentSessionLiveFence({
       record,
+      replaced,
       ...(input.ended ? { ended: input.ended } : {})
     })
     // An exit's own account holds only until a later generation is live: its rows and sends at
@@ -107,6 +112,7 @@ export async function settleStructuredAgentSessionLeftovers(
           // Read with the rows: the proof the lease holds now. On an observed exit this settlement
           // runs before the release, so the exit's own account (`exit`) judges instead.
           deathEvidence: proof ?? input.store.getRecord(sessionId)?.lease.deathEvidence ?? null,
+          replaced,
           failureTextContext,
           below,
           // With an exit's account, nothing is live: every entry of what is settled is ended.

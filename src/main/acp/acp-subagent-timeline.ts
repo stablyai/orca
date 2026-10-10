@@ -1,4 +1,3 @@
-import { BoundedMap } from '../../shared/bounded-map'
 import {
   canReplaceSubagentState,
   isTerminalSubagentState
@@ -15,6 +14,7 @@ import {
 import type { ProviderTimelineJoin } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { acpSubagentIdentity, type AcpTimelineEvent } from './acp-timeline-event'
 import type { AcpSubagentUpdate } from './acp-dialects/acp-dialect'
+import { SubagentRosterRetention } from '../native-chat/subagent-roster-retention'
 
 /** Settled history budget; live ownership outlives it until an outcome or session close. */
 const MAX_GROUPS = 32
@@ -36,16 +36,22 @@ type RosterGroup = {
 export class AcpSubagentTimeline {
   private readonly groups = new Map<string, RosterGroup>()
   private readonly groupOf = new Map<string, string>()
-  /** An eviction index, re-derived from the changed groups' entries after each batch. */
-  private readonly settledGroups = new Set<string>()
-  private readonly settledIds = new BoundedMap<string, true>({
-    maxEntries: MAX_GROUPS * MAX_SUBAGENTS_PER_GROUP
+  private readonly retention = new SubagentRosterRetention(this.groups, {
+    maxGroups: MAX_GROUPS,
+    maxSettledIdentities: MAX_GROUPS * MAX_SUBAGENTS_PER_GROUP,
+    entries: (group) => group.entries.values(),
+    identities: (group) => group.entries.keys(),
+    onEvict: (group) => {
+      for (const id of group.entries.keys()) {
+        this.groupOf.delete(id)
+      }
+    }
   })
   private disposed = false
 
   /** Known children include recently evicted outcomes, so they cannot become background tasks. */
   has(id: string): boolean {
-    return this.groupOf.has(id) || this.settledIds.has(id)
+    return this.groupOf.has(id) || this.retention.hasSettled(id)
   }
 
   /** The journal owns session-end settlement; no later frame may reacquire working ownership. */
@@ -53,8 +59,7 @@ export class AcpSubagentTimeline {
     this.disposed = true
     this.groups.clear()
     this.groupOf.clear()
-    this.settledGroups.clear()
-    this.settledIds.clear()
+    this.retention.clear()
   }
 
   translate(
@@ -93,7 +98,8 @@ export class AcpSubagentTimeline {
         join: groupJoin(group, join)
       })
     }
-    this.trimSettledGroups(changed)
+    // Emit the final roster and reply before releasing their cached ownership together.
+    this.retention.trim(changed)
     return events
   }
 
@@ -102,7 +108,7 @@ export class AcpSubagentTimeline {
     join: ProviderTimelineJoin,
     at: number
   ): RosterGroup | undefined {
-    if (this.settledIds.has(update.id)) {
+    if (this.retention.hasSettled(update.id)) {
       return undefined
     }
     const known = this.groups.get(this.groupOf.get(update.id) ?? '')
@@ -167,31 +173,6 @@ export class AcpSubagentTimeline {
     const seen = group.labelCounts.get(bounded) ?? 0
     group.labelCounts.set(bounded, seen + 1)
     return boundSubagentField(seen === 0 ? bounded : `${bounded} ${seen + 1}`, index)
-  }
-
-  private trimSettledGroups(changed: Set<RosterGroup>): void {
-    for (const group of changed) {
-      if ([...group.entries.values()].every((entry) => isTerminalSubagentState(entry.state))) {
-        this.settledGroups.add(group.groupId)
-      } else {
-        this.settledGroups.delete(group.groupId)
-      }
-    }
-    // Emit the final roster and reply before releasing their cached ownership together.
-    for (const groupId of this.settledGroups) {
-      if (this.groups.size <= MAX_GROUPS) {
-        break
-      }
-      const group = this.groups.get(groupId)
-      if (group) {
-        for (const id of group.entries.keys()) {
-          this.groupOf.delete(id)
-          this.settledIds.set(id, true)
-        }
-      }
-      this.groups.delete(groupId)
-      this.settledGroups.delete(groupId)
-    }
   }
 
   private groupEvent(group: RosterGroup, join: ProviderTimelineJoin): AcpTimelineEvent[] {

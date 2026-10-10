@@ -45,6 +45,7 @@ export type StructuredAgentSessionTransitionStep =
       kind: 'settlement'
       /** Unique per settlement: the journal applies one id once. */
       settlementId: string
+      recovered?: true
       /** Paces the queue only; the mutations are the journal's to choose. */
       reservedBytes: number
       /** Read at execution; none writes nothing. */
@@ -119,6 +120,7 @@ function transitionAppend(
                     settlementId: step.settlementId,
                     fence,
                     ownerFence: fence,
+                    recovered: step.recovered,
                     resolve: () => step.resolve(journal)
                   }
                 }

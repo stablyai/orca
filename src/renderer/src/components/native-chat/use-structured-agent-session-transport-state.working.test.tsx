@@ -138,7 +138,13 @@ describe('the chat’s Working', () => {
           hasPendingPrompt: false,
           isWorking: transport.isWorking,
           composerScopeKey: undefined,
-          mutate
+          mutate,
+          editTransport: {
+            target: { kind: 'local' },
+            sessionId: 'session-a',
+            capable: false,
+            write: async () => ({ kind: 'dropped' })
+          }
         })
       }).result.current.queueResume
     expect(resume(loaded({ ...held, working: false }))).toBeDefined()

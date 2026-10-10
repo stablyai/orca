@@ -3,7 +3,7 @@ import {
   AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
   type AgentHookInstallManagedHooksParams
 } from '../shared/agent-hook-relay'
-import type { RelayDispatcher, RequestContext } from './dispatcher'
+import type { RelayDispatcher, RequestContext } from '../wsl-guest/dispatcher'
 import type { AgentHookTarget } from '../shared/agent-hook-types'
 import { isManagedAgentHookTarget } from '../shared/managed-agent-hook-targets'
 import { parseClaudeCliVersion } from '../main/claude/claude-hook-event-versions'

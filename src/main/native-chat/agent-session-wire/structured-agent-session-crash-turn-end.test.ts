@@ -357,8 +357,8 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
       published
         .filter((summary) => summary.sessionId === SESSION && summary.turnOutcome)
         .map((summary) => summary.turnOutcome)
-    // Nothing settled yet: the turn has no outcome to report.
-    expect(outcomes()).toEqual([])
+    // Nothing written yet, but the runtime that held the turn was replaced: it reads interrupted.
+    expect(outcomes()).toEqual(['interruption'])
 
     await startUp()
 

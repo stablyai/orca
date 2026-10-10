@@ -379,7 +379,7 @@ export function RepositoryPane({
       <SparsePresetSettingsSection key={`sparse-presets:${repo.id}`} repoId={repo.id} />
     ) : null,
     !isFolder && (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, mcpEntries)) ? (
-      <McpConfigSection key="mcp-configs" repo={repo} />
+      <McpConfigSection key={`mcp-configs:${selectedHostId}:${repo.id}`} repo={repo} />
     ) : null
   ].filter(Boolean)
 

@@ -55,7 +55,11 @@ export function structuredQueueSendGate(
     const abandoned = drain?.abandonedCard(sessionId)
     return {
       record,
-      work: structuredAgentSessionCurrentWork(journal, { record, ...(ended ? { ended } : {}) }),
+      work: structuredAgentSessionCurrentWork(journal, {
+        record,
+        replaced: host.store.replacedRuntime(sessionId),
+        ...(ended ? { ended } : {})
+      }),
       ...(drain ? { drainWaits: (messageId: string) => drain.waits(sessionId, messageId) } : {}),
       ...(abandoned ? { abandoned } : {})
     }

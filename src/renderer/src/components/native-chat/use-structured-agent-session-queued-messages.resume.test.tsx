@@ -30,6 +30,14 @@ import { useStructuredAgentSessionQueuedMessages } from './use-structured-agent-
 import { useStructuredNativeChatSubmitReveal } from './use-structured-native-chat-submit-reveal'
 import { useNativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 import { useNativeChatTranscriptScroll } from './use-native-chat-transcript-scroll'
+import type { QueuedEditTransport } from './use-structured-agent-session-queued-edit'
+
+const NO_EDIT: QueuedEditTransport = {
+  target: { kind: 'local' },
+  sessionId: 'session',
+  capable: false,
+  write: async () => ({ kind: 'dropped' })
+}
 
 const RESUMED = {
   ok: true,
@@ -72,7 +80,8 @@ function renderController(initialProps: ControllerInput = {}) {
         hasPendingPrompt: input.hasPendingPrompt ?? false,
         isWorking: input.isWorking ?? false,
         composerScopeKey: undefined,
-        mutate
+        mutate,
+        editTransport: NO_EDIT
       })
     },
     { initialProps }
@@ -286,7 +295,8 @@ function useQueue(sessionId = 'session-1', fence: number | null = 1) {
     hasPendingPrompt: false,
     isWorking: false,
     composerScopeKey: undefined,
-    mutate
+    mutate,
+    editTransport: NO_EDIT
   })
 }
 

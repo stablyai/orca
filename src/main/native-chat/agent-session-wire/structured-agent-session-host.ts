@@ -30,7 +30,7 @@ import {
   type StructuredAgentSessionMutationContext
 } from './structured-agent-session-host-mutations'
 import { settleStructuredAgentSessionLateDispatch } from './structured-agent-session-late-dispatch'
-import { releaseStructuredAgentSessionUnansweredDispatches } from './structured-agent-session-unanswered-dispatch-release'
+import { releaseStructuredAgentSessionUnansweredDispatches as releaseUnanswered } from './structured-agent-session-unanswered-dispatch-release'
 import { flushStructuredAgentSessionHost } from './structured-agent-session-host-teardown'
 import type {
   StructuredAgentSessionCaller,
@@ -65,7 +65,7 @@ export class StructuredAgentSessionHost {
     deliverSettleEdge: (id, journal) => this.conversationDelivery.afterSettleEdge(id, journal),
     logger: sessionLogger.deferredStructuredAgentSessionLogger(() => this.deps.logger),
     onOpened: (sessionId, journal) => {
-      this.queued.drain.schedule(sessionId)
+      this.queued.onOpened(sessionId)
       this.restore.reconciliation.opened(sessionId, journal)
     },
     now: () => this.now()
@@ -304,6 +304,8 @@ export class StructuredAgentSessionHost {
   queuedMessageSend = this.queued.queuedMessageSend
   queuedMessageDelete = this.queued.queuedMessageDelete
   queuedMessagesResume = this.queued.queuedMessagesResume
+  queuedMessageUpdate = this.queued.queuedMessageUpdate
+  queuedMessageEditHold = this.queued.queuedMessageEditHold
 
   waitForSendSettlement = this.clientDelivery.waitForSendSettlement
 
@@ -317,8 +319,7 @@ export class StructuredAgentSessionHost {
   rewind = (caller: StructuredAgentSessionCaller, params: AgentSessionRewindParams) =>
     rewindStructuredAgentSession(this.mutationContext(), this.attachContext(), caller, params)
 
-  conversationCommand = (...args: Parameters<StructuredConversationCommandController['run']>) =>
-    this.conversationCommands.run(...args)
+  conversationCommand = this.conversationCommands.run
   /** Undefined means unavailable; an empty array is an authoritative catalog. */
   readCommands = (sessionId: string) => ({ commands: this.clientDelivery.readCommands(sessionId) })
 
@@ -342,9 +343,8 @@ export class StructuredAgentSessionHost {
   settleLateDispatch = (input: Parameters<typeof settleStructuredAgentSessionLateDispatch>[1]) =>
     settleStructuredAgentSessionLateDispatch(this.mutationContext(), input)
 
-  releaseUnansweredDispatches = (
-    input: Parameters<typeof releaseStructuredAgentSessionUnansweredDispatches>[1]
-  ) => releaseStructuredAgentSessionUnansweredDispatches(this.mutationContext(), input)
+  releaseUnansweredDispatches = (input: Parameters<typeof releaseUnanswered>[1]) =>
+    releaseUnanswered(this.mutationContext(), input)
 
   publishChildWorkEvidence = this.clientDelivery.publishChildWork
   unsubscribe = (sessionId: string, id: string): void => this.subscribers.close(sessionId, id)

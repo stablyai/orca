@@ -32,8 +32,11 @@ import { resolveWslSessionContext } from '../../../daemon/wsl-session-context'
 import { isAgentStatusHooksEnabled } from '../../../agent-hooks/managed-agent-hook-controls'
 import { resolveLocalWindowsTerminalRuntimeOptions } from '../../../../shared/local-windows-terminal-runtime'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../../../local-project-runtime-resolution'
+import { resolveManagedSshHostLoginShell } from '../../../pty/managed-ssh-host-login-shell'
 import { resolvePathEnvKey } from '../../../pty/windows-environment-path'
 import { stampWslOrchestrationCompatibilityHost } from '../../../pty/wsl-orca-env'
+import { stampRuntimeSourceEnv } from '../../../../shared/runtime-source-env'
+import { getRuntimeSourceStamp } from '../../../runtime/host-descriptor'
 import { ensureCodexStateDbBackfillRecoveryStarted } from '../../../codex/codex-state-db-backfill-recovery'
 import { clearProviderPtyState } from '../provider/state-cleanup'
 import { awaitExplicitPiOmpGuestReadiness } from '../../../agent-hooks/wsl-pi-omp-guest-readiness'
@@ -77,7 +80,8 @@ export async function prepareRuntimePtySpawn(
           requestedShellOverride: args.shellOverride,
           settings: ctx.deps.getSettings?.(),
           projectRuntime: resolveLocalProjectRuntimeForWorktreeId(ctx.deps.store, args.worktreeId),
-          fallbackHostShell: process.env.COMSPEC || 'powershell.exe'
+          fallbackHostShell: process.env.COMSPEC || 'powershell.exe',
+          sshLoginShell: resolveManagedSshHostLoginShell()
         })
       : {
           shellOverride:
@@ -281,6 +285,10 @@ export async function prepareRuntimePtySpawn(
         ctx.env,
         ctx.deps.runtime?.getOrchestrationCompatibilityHostId?.(),
         ctx.codexSelectionTarget.runtime === 'wsl' ? ctx.expectedWslDistro : null
+      )
+      stampRuntimeSourceEnv(
+        ctx.env,
+        getRuntimeSourceStamp(ctx.deps.runtime, getAppEnvironment().getPath('userData'))
       )
       promoteAgentTeamsShimPath(ctx.env, ctx.requestedAgentTeamsPath)
     } catch (error) {

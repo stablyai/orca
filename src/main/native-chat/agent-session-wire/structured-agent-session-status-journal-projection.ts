@@ -45,6 +45,13 @@ export class StructuredAgentSessionJournalProjections {
     StructuredAgentSessionJournalProjection
   >()
 
+  /** `AgentSessionRecordStore.replacedRuntime`, which ends what a replaced runtime held. */
+  constructor(
+    private readonly replacedRuntime?: (
+      sessionId: string
+    ) => StructuredAgentSessionWorkEvidence['replaced']
+  ) {}
+
   read(
     journal: AgentSessionJournal,
     record: AgentSessionRecord | null,
@@ -60,6 +67,7 @@ export class StructuredAgentSessionJournalProjections {
     const ended = seen?.lastEndedChild
     const work = structuredAgentSessionCurrentWork(journal, {
       record,
+      replaced: record ? this.replacedRuntime?.(record.sessionId) : undefined,
       ...(ended ? { ended } : {}),
       revision: seen?.operationalRevision ?? 0
     })

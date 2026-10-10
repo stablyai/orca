@@ -164,19 +164,25 @@ function addRuntimeHost(
   const metadata = status ?? snapshot?.status
   const compatibility = runtimeCompatibility(metadata)
   const remoteControl = runtimeStatus?.remoteControl ?? status?.remoteControl
+  // Why: the status owner withdraws `verified` whenever a ready socket drops, so a verified
+  // answer proves the host reachable while shared control is still connecting (#10704).
+  const reachable =
+    snapshot?.transport === 'ready'
+      ? snapshot.verification !== 'checking'
+      : snapshot?.verification === 'verified' && snapshot.transport !== 'disconnected'
   const controlHealth = snapshot?.retired
     ? 'disconnected'
     : snapshot?.verification === 'blocked'
       ? 'blocked'
-      : !runtimeStatus ||
-          snapshot?.verification === 'checking' ||
-          snapshot?.transport === 'disconnected' ||
-          snapshot?.transport === 'connecting'
-        ? 'connecting'
-        : snapshot?.transport === 'ready'
-          ? compatibility?.kind === 'blocked'
-            ? 'blocked'
-            : 'available'
+      : reachable
+        ? compatibility?.kind === 'blocked'
+          ? 'blocked'
+          : 'available'
+        : !runtimeStatus ||
+            snapshot?.verification === 'checking' ||
+            snapshot?.transport === 'disconnected' ||
+            snapshot?.transport === 'connecting'
+          ? 'connecting'
           : runtimeControlHealth(remoteControl)
   setHost(hosts, {
     id: hostId,

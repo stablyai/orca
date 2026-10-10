@@ -22,6 +22,7 @@ export function mutationTurnContext<TValue>(
       const ended = request.endedChild?.()
       return structuredAgentSessionCurrentWork(journal, {
         record: request.store.getRecord(sessionId),
+        replaced: request.store.replacedRuntime(sessionId),
         ...(ended ? { ended } : {})
       })
     },

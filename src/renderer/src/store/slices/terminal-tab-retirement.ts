@@ -63,7 +63,7 @@ export function getTerminalPtyOwnershipIdentity(
   return JSON.stringify(['runtime', environmentId, remote.handle])
 }
 
-function collectPtyIdsForTab(
+export function collectPtyIdsForTab(
   state: TerminalTabRetirementState,
   tabId: string,
   rowPtyId: string | null | undefined

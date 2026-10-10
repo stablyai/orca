@@ -21,7 +21,7 @@ import type { NativeChatComposerNoticeContent } from './native-chat-composer-not
 type ContinueAnswer = { outcome?: string }
 
 export type NativeChatInterruptedContinuation = {
-  /** What the chat's rows are told: the machine's name and whether its host can continue a cut. */
+  /** Told to the chat's rows: the machine's name, whether it is remote, and if it can continue. */
   view: NativeChatOrcaStopView
   /** The cut turn Continue is offered on right now, if any. */
   offeredTurnItemId: string | null
@@ -87,7 +87,11 @@ export function useNativeChatInterruptedContinuation(input: {
   // Unknown counts as able: a host that writes cause rows has Continue, and the words stay put.
   const continueAvailable = capability !== 'unsupported'
   // One object per change, so the chat's rows re-render only when what they show changes.
-  const view = useMemo(() => ({ hostLabel, continueAvailable }), [hostLabel, continueAvailable])
+  const remoteHost = target.kind === 'environment'
+  const view = useMemo(
+    () => ({ hostLabel, remoteHost, continueAvailable }),
+    [hostLabel, remoteHost, continueAvailable]
+  )
   const failedHere =
     failedOn !== null && cut?.turnItemId === failedOn
       ? translate(

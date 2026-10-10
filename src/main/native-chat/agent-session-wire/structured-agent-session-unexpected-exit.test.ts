@@ -104,6 +104,7 @@ describe('provider-exit settlement', () => {
           items: [lifecycleItem('turn-1', 1, { state: 'running', startedAt: 1_000 })]
         }),
         itemFence: () => 7,
+        lastProviderActivityAt: () => undefined,
         stopMarks: { latest: () => null, personStopDecides: () => false },
         submissions: () => [],
         appendPlannedLifecycleBatch: plannedBatchThrough(appendLifecycleBatch)

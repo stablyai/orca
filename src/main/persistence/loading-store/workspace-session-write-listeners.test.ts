@@ -2,10 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { TEST_LEAF_1, TEST_LEAF_2 } from '../../persistence-session-fixtures'
-import {
-  WorkspaceLayoutStream,
-  type WorkspaceLayoutEvent
-} from '../../runtime/workspace-layout-stream'
+import type { WorkspaceLayoutEvent } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
+import { WorkspaceLayoutStream } from '../../runtime/workspace-layout-stream'
 import { ProfileStateWriterError } from '../profile-state/profile-state-writer-errors'
 import { fixture } from './profile-state-delayed-authority-fixture'
 import type { Store } from './store'

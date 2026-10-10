@@ -2,7 +2,7 @@
 // holds, read from its sessions and lease store. Apart from the projection itself, which stays free
 // of host types so shared and client code can import it.
 
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import {
   structuredAgentSessionCurrentWork,
   type StructuredAgentSessionCurrentWork
@@ -11,7 +11,7 @@ import type { StructuredAgentSessionHostSession } from './structured-agent-sessi
 
 /** The host's sessions and lease store, as the projection reads them. */
 export type StructuredAgentSessionCurrentWorkHost = {
-  store: { getRecord: (sessionId: string) => AgentSessionRecord | null }
+  store: Pick<AgentSessionRecordStore, 'getRecord' | 'replacedRuntime'>
   sessions: {
     get(
       sessionId: string
@@ -33,6 +33,7 @@ export function hostStructuredAgentSessionCurrentWork(
   return session
     ? structuredAgentSessionCurrentWork(session.journal, {
         record: host.store.getRecord(sessionId),
+        replaced: host.store.replacedRuntime(sessionId),
         ...(session.lastEndedChild ? { ended: session.lastEndedChild } : {}),
         revision: session.operationalRevision ?? 0
       })

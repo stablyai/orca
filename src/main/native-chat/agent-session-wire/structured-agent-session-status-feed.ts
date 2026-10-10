@@ -58,6 +58,8 @@ type StatusFeedSession = {
 export type StructuredAgentSessionStatusFeedDeps = {
   sessions: ReadonlyMap<string, StatusFeedSession>
   getRecord: (sessionId: string) => AgentSessionRecord | null
+  /** `AgentSessionRecordStore.replacedRuntime`; absent where no runtime was replaced. */
+  replacedRuntime?: (sessionId: string) => { fence: number } | undefined
   now: () => number
   /** Where a failing sink or observer is reported; neither may cost subscribers their event. */
   logger: StructuredAgentSessionLogger
@@ -92,7 +94,10 @@ export class StructuredAgentSessionStatusFeed {
   /** The user's newest accepted send each session was last projected with; a new one retires
    *  settled children. */
   private readonly acceptedSends = new Map<string, string>()
-  private readonly projections = new StructuredAgentSessionJournalProjections()
+  // Read per call: field initializers run before the constructor assigns `deps`.
+  private readonly projections = new StructuredAgentSessionJournalProjections((sessionId) =>
+    this.deps.replacedRuntime?.(sessionId)
+  )
 
   constructor(private readonly deps: StructuredAgentSessionStatusFeedDeps) {}
 

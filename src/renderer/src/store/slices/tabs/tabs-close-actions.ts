@@ -34,12 +34,12 @@ export function createTabsCloseActions(
       }
       const { tab, worktreeId } = found
       const group = findGroupForTab(state.groupsByWorktree, worktreeId, tab.groupId)
-      if (!group) {
-        return null
-      }
+      // Why: a tab whose group record vanished must still close; its order is the worktree's tabs.
+      const groupOrder =
+        group?.tabOrder ?? (state.unifiedTabsByWorktree[worktreeId] ?? []).map((item) => item.id)
 
       if (tab.contentType === 'terminal' && !opts?.terminalRetirementHandled) {
-        const dedupedGroupOrder = dedupeTabOrder(group.tabOrder)
+        const dedupedGroupOrder = dedupeTabOrder(groupOrder)
         const wasLastTab =
           dedupeTabOrder(dedupedGroupOrder.filter((id) => id !== tabId)).length === 0
         // Why: unified-only hydrated tabs still own provider sessions without a legacy row, so retire every terminal close by entity id.
@@ -47,7 +47,7 @@ export function createTabsCloseActions(
         return { closedTabId: tabId, wasLastTab, worktreeId }
       }
 
-      const dedupedGroupOrder = dedupeTabOrder(group.tabOrder)
+      const dedupedGroupOrder = dedupeTabOrder(groupOrder)
       const remainingOrder = dedupeTabOrder(dedupedGroupOrder.filter((id) => id !== tabId))
       const wasLastTab = remainingOrder.length === 0
       if (tab.contentType === 'agent-session') {
@@ -78,13 +78,13 @@ export function createTabsCloseActions(
       }
       // Why: on closing the active tab, walk the MRU stack to the previously-active tab; pickNextActiveTab falls back to the neighbor.
       const nextActiveTabId =
-        group.activeTabId === tabId
+        group?.activeTabId === tabId
           ? wasLastTab
             ? null
             : pickNextActiveTab(dedupedGroupOrder, group.recentTabIds, tabId)
-          : group.activeTabId
+          : (group?.activeTabId ?? null)
       const nextRecentTabIds = sanitizeRecentTabIds(
-        (group.recentTabIds ?? []).filter((id) => id !== tabId),
+        (group?.recentTabIds ?? []).filter((id) => id !== tabId),
         remainingOrder
       )
       const terminalEntityId = tab.contentType === 'terminal' ? tab.entityId : null
@@ -100,7 +100,7 @@ export function createTabsCloseActions(
           delete nextUnreadTerminalTabs[terminalEntityId]
         }
         let nextGroups = (current.groupsByWorktree[worktreeId] ?? []).map((candidate) =>
-          candidate.id === group.id
+          candidate.id === group?.id
             ? {
                 ...candidate,
                 activeTabId: nextActiveTabId,
@@ -111,7 +111,7 @@ export function createTabsCloseActions(
         )
         let nextLayoutByWorktree = current.layoutByWorktree
         let nextActiveGroupIdByWorktree = current.activeGroupIdByWorktree
-        if (wasLastTab && current.layoutByWorktree[worktreeId] && nextGroups.length > 1) {
+        if (group && wasLastTab && current.layoutByWorktree[worktreeId] && nextGroups.length > 1) {
           nextGroups = nextGroups.filter((candidate) => candidate.id !== group.id)
           const collapsedState = collapseGroupLayout(
             current.layoutByWorktree,

@@ -2,7 +2,7 @@ import type {
   RelayWatcherTeardownState,
   RelayWatcherTeardownTracker
 } from './relay-watcher-teardown-tracker'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher } from '../wsl-guest/dispatcher'
 import { emitRelayWatcherTerminalFailure } from './relay-watcher-terminal-notifier'
 import { isPathInsideOrEqual } from '../shared/cross-platform-path'
 import type { RelayWatcherPendingSetup } from './relay-watcher-setup-tracking'

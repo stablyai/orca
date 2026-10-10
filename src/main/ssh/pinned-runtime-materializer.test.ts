@@ -11,13 +11,13 @@ import {
   type ServerTarget
 } from '../../shared/node-runtime-pin'
 import { setMainHttpClient } from '../network/http-client'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { materializeCachedNodeRuntime } from './pinned-runtime-materializer'
 import { RUNTIME_ARCHIVE_RETRY_DELAYS_MS } from './runtime-archive-download'
 
 const extraction = vi.hoisted(() => ({ executable: new Uint8Array(), member: '' }))
 
-vi.mock('../../shared/child-process/run-process', () => ({
+vi.mock('@orca/process-host', () => ({
   runProcess: vi.fn(async (spec: { args: string[] }) => {
     const flag = spec.args.includes('-C') ? '-C' : '-d'
     const extracted = join(spec.args[spec.args.indexOf(flag) + 1]!, ...extraction.member.split('/'))
@@ -165,7 +165,7 @@ describe('materializeCachedNodeRuntime', () => {
     await writeFile(join(cacheRoot, 'plain-file'), 'not a directory')
     const { runProcess: spawnForReal } = await vi.importActual<{
       runProcess: typeof runProcess
-    }>('../../shared/child-process/run-process')
+    }>('@orca/process-host')
     vi.mocked(runProcess).mockImplementationOnce(spawnForReal)
     vi.stubEnv('ORCA_UNZIP_BIN', path())
 

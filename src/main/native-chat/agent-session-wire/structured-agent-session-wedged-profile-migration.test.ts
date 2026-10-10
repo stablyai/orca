@@ -425,7 +425,7 @@ describe('already-wedged profiles become usable on load', () => {
     })
   })
 
-  it('an attach that beats the boot sweep clears the latch; the sweep then settles the turn unverifiable', async () => {
+  it('an attach that beats the boot sweep clears the latch; the sweep then settles the turn interrupted', async () => {
     const record = wedgedRecord({ claimStatus: 'released', handoffStage: 'recovering' })
     // The settlement latch an older build wrote; this build derives the settlement instead.
     const olderBuildLatch = {
@@ -452,10 +452,11 @@ describe('already-wedged profiles become usable on load', () => {
 
     expect(acquire).toHaveBeenCalledOnce()
     expect(activeStructuredAgentSessionTurnId(restoredJournal().snapshot().items)).toBe(null)
-    // The reservation cleared the release's proof before the sweep ran: less specific, never wrong.
+    // The reservation cleared the release's proof before the sweep ran; the runtime this one
+    // replaced held the turn's owner, which still ends it.
     expect(turnLifecycle('turn-1')).toMatchObject({
       turnId: 'turn-1',
-      state: 'unverifiable',
+      state: 'interrupted',
       startedAt: NOW - 5_000,
       recovered: true
     })
@@ -583,9 +584,10 @@ describe('already-wedged profiles become usable on load', () => {
     }
   )
 
-  it('marks a running turn left behind by a released lease unverifiable at startup, and a cold acquire starts', async () => {
+  it('interrupts a running turn left behind by a released lease at startup, and a cold acquire starts', async () => {
     // No settlement latch: the record was released cleanly, but the journal still says a turn is
-    // running. The child that wrote it is gone and nothing observed its exit.
+    // running. Nothing observed the child's exit, but the runtime that held it was replaced, and
+    // nothing after its start proves it alive.
     await seedStore(wedgedRecord({ claimStatus: 'released', handoffStage: null }))
     await seedRunningTurn()
     openHost()
@@ -596,8 +598,9 @@ describe('already-wedged profiles become usable on load', () => {
     expect(acquire).toHaveBeenCalledOnce()
     expect(turnLifecycle('turn-1')).toEqual({
       turnId: 'turn-1',
-      state: 'unverifiable',
+      state: 'interrupted',
       startedAt: NOW - 5_000,
+      completedAt: NOW - 5_000,
       recovered: true
     })
     expect(

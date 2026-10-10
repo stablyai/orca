@@ -86,7 +86,7 @@ describe('RuntimeFileCommands', () => {
     }
   })
 
-  it('opens source control diffs through the renderer host (inheriting active runtime env)', async () => {
+  it('opens source control diffs through the renderer host as owned by this desktop, not the focused server', async () => {
     const openDiff = vi.fn()
     const { commands } = createRuntimeFileCommands({ openDiff })
 
@@ -97,7 +97,7 @@ describe('RuntimeFileCommands', () => {
       '/repo/docs/readme.md',
       'docs/readme.md',
       true,
-      undefined,
+      null,
       undefined
     )
     expect(result).toEqual({
@@ -108,7 +108,7 @@ describe('RuntimeFileCommands', () => {
     })
   })
 
-  it('opens text files through the renderer host (inheriting active runtime env)', async () => {
+  it('opens text files through the renderer host as owned by this desktop, not the focused server', async () => {
     const openFile = vi.fn()
     const { commands } = createRuntimeFileCommands({ openFile })
     resolveAuthorizedPathMock.mockResolvedValue('/repo/docs/readme.md')
@@ -120,7 +120,7 @@ describe('RuntimeFileCommands', () => {
       'wt-1',
       '/repo/docs/readme.md',
       'docs/readme.md',
-      undefined,
+      null,
       undefined
     )
     expect(result).toEqual({
@@ -143,7 +143,7 @@ describe('RuntimeFileCommands', () => {
       'wt-1',
       '/repo/assets/logo.png',
       'assets/logo.png',
-      undefined,
+      null,
       undefined
     )
     expect(result).toEqual({
@@ -168,7 +168,7 @@ describe('RuntimeFileCommands', () => {
       'wt-1',
       '/repo/docs/readme.md',
       'docs/readme.md',
-      undefined,
+      null,
       'all'
     )
     expect(openDiff).toHaveBeenCalledWith(
@@ -176,8 +176,70 @@ describe('RuntimeFileCommands', () => {
       '/repo/docs/readme.md',
       'docs/readme.md',
       false,
-      undefined,
+      null,
       'host'
+    )
+  })
+
+  it('names this desktop as the owner of SSH file and diff opens', async () => {
+    const openFile = vi.fn()
+    const openDiff = vi.fn()
+    const resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/remote/repo' },
+      executionHostId: 'ssh:ssh-1'
+    }))
+    const { commands } = createRuntimeFileCommands({
+      openFile,
+      openDiff,
+      path: '/remote/repo',
+      resolveRuntimeFileTarget
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the open path only calls `stat`.
+    vi.mocked(getSshFilesystemProvider).mockReturnValue({
+      stat: vi.fn().mockResolvedValue({ type: 'file', size: 1, mtime: 0 })
+    } as never)
+
+    await commands.openMobileFile('id:wt-1', 'docs/readme.md')
+    await commands.openMobileDiff('id:wt-1', 'docs/readme.md', false)
+
+    expect(openFile).toHaveBeenCalledWith(
+      'wt-1',
+      '/remote/repo/docs/readme.md',
+      'docs/readme.md',
+      null,
+      undefined
+    )
+    expect(openDiff).toHaveBeenCalledWith(
+      'wt-1',
+      '/remote/repo/docs/readme.md',
+      'docs/readme.md',
+      false,
+      null,
+      undefined
+    )
+  })
+
+  it('names a paired server as the owner of a diff its catalog row is stamped with', async () => {
+    const openDiff = vi.fn()
+    const resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/remote/repo' },
+      executionHostId: 'runtime:env-a'
+    }))
+    const { commands } = createRuntimeFileCommands({
+      openDiff,
+      path: '/remote/repo',
+      resolveRuntimeFileTarget
+    })
+
+    await commands.openMobileDiff('id:wt-1', 'docs/readme.md', true)
+
+    expect(openDiff).toHaveBeenCalledWith(
+      'wt-1',
+      '/remote/repo/docs/readme.md',
+      'docs/readme.md',
+      true,
+      'env-a',
+      undefined
     )
   })
 
@@ -195,7 +257,7 @@ describe('RuntimeFileCommands', () => {
         'wt-1',
         `/repo/${relativePath}`,
         relativePath,
-        undefined,
+        null,
         undefined
       )
       expect(result).toEqual({ worktree: 'wt-1', relativePath, kind: 'binary', opened: true })

@@ -87,6 +87,44 @@ export class CodexBackgroundTaskTracker {
     return this.stopsTerminals ? this.commands.backgroundProcesses(taskIds) : []
   }
 
+  /** What a Stop of the named sub-agents reaches: the run each one and each of its descendants is
+   *  working on, and, when this app-server can terminate them, the processes their threads hold.
+   *  A sub-agent row's providerId is its thread id. */
+  subagentStopTargets(taskIds: readonly string[]): {
+    turns: { threadId: string; turnId: string }[]
+    terminals: { threadId: string; processId: string }[]
+  } {
+    const named = new Set(taskIds)
+    const lineage = this.executions
+      .workingChildren()
+      .filter((child) => named.has(child.agentThreadId))
+      .flatMap((child) => this.executions.lineage(child.agentThreadId))
+    const threads = [...new Set(lineage.map((child) => child.agentThreadId))]
+    return {
+      turns: threads.flatMap((threadId) => {
+        const execution = this.executions.find(threadId)?.execution
+        return execution?.state === 'working' ? [{ threadId, turnId: execution.turnId }] : []
+      }),
+      terminals: this.stopsTerminals
+        ? threads.flatMap((threadId) =>
+            this.commands
+              .threadCommands(threadId)
+              .flatMap((command) =>
+                command.type === 'started' && command.processId !== undefined
+                  ? [{ threadId, processId: command.processId }]
+                  : []
+              )
+          )
+        : []
+    }
+  }
+
+  /** Whether the sub-agent is still working on this run. */
+  runsSubagentTurn(threadId: string, turnId: string): boolean {
+    const execution = this.executions.find(threadId)?.execution
+    return execution?.state === 'working' && execution.turnId === turnId
+  }
+
   get state(): AgentSessionBackgroundTaskState | null {
     // Journal admission precedes observe; readers must not see its pending facts.
     return this.publishedState

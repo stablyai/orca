@@ -80,7 +80,7 @@ describe('a terminal spawn that lands after its pane changed', () => {
         options: { allowMissing: true, force: true, closedByLayoutOwner: true, reason: 'user' },
         requestedSession: store.getWorkspaceSession(),
         ownerMatches: () => true,
-        hostId: () => LOCAL_EXECUTION_HOST_ID,
+        hostIds: () => [LOCAL_EXECUTION_HOST_ID],
         getSession: (hostId) => store.getWorkspaceSession(hostId),
         setSession: (session, hostId) => store.setWorkspaceSession(session, hostId),
         onClosed: () => {}

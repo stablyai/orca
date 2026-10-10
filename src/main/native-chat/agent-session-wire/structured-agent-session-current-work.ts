@@ -6,10 +6,13 @@
 //  - the lease: the live or reserved generation's fence; none once it is released;
 //  - this host's own sight of that generation's root exit, which ends it even when the release
 //    write failed (`lastEndedChild`);
+//  - the Orca runtimes this one replaced (`AgentSessionRecordStore.replacedRuntime`): a generation
+//    one of them held lost its pipes with it, so it is over before any startup write says so;
 //  - the journal's fold, where every item carries the generation that produced it (`ownerFence`).
 // So work an ended generation left holds nothing and is not Working whether or not its cleanup
 // landed: cleanup is bookkeeping and never gates what the person does next. Loss of contact is
-// never an end: an unreconciled or conflicted lease keeps its fence, and its work stays current.
+// never an end: an unreconciled or conflicted lease keeps its fence, and its work stays current, unless
+// a runtime this one replaced held it, which is this host's own proof.
 
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -36,7 +39,12 @@ export type StructuredAgentSessionWorkEvidence = {
   ended?: StructuredAgentSessionSeenEnd
   /** `StructuredAgentSessionHostSession.operationalRevision`. */
   revision?: number
+  /** The runtimes this one replaced for the chat (`AgentSessionRecordStore.replacedRuntime`). */
+  replaced?: StructuredAgentSessionReplacedEnd | undefined
 }
+
+/** Every fence at or below `fence` was granted by a runtime this one replaced. */
+type StructuredAgentSessionReplacedEnd = { fence: number }
 
 type StructuredAgentSessionSeenEnd = { fence: number; rootGone?: boolean; cause?: string }
 
@@ -52,8 +60,24 @@ export function structuredAgentSessionLiveFence(
   if (lease.claimStatus === 'released') {
     return null
   }
+  if (structuredAgentSessionReplacedRuntimeEnded(lease, evidence.replaced)) {
+    return null
+  }
   const { ended } = evidence
   return ended?.rootGone === true && ended.fence === lease.runtimeFence ? null : lease.runtimeFence
+}
+
+/** Whether a runtime this one replaced granted the lease's generation, which is then over. A
+ *  conflicted claim's agent is a terminal's, which no runtime's pipes held. */
+export function structuredAgentSessionReplacedRuntimeEnded(
+  lease: Pick<AgentSessionRecord['lease'], 'runtimeFence' | 'claimStatus'>,
+  replaced: StructuredAgentSessionReplacedEnd | undefined
+): boolean {
+  return (
+    replaced !== undefined &&
+    lease.runtimeFence <= replaced.fence &&
+    lease.claimStatus !== 'conflicted'
+  )
 }
 
 /** `StructuredAgentSessionCurrentWork.handsOver`, for a reader that needs no other answer. */
@@ -85,7 +109,8 @@ export class StructuredAgentSessionCurrentWork {
     /** Moves with every generation end this host saw, lease write or not: a reader that caches
      *  what it derived from this answer keys it here and on the journal's cursor. */
     readonly revision = 0,
-    private readonly ended?: StructuredAgentSessionSeenEnd
+    private readonly ended?: StructuredAgentSessionSeenEnd,
+    private readonly replaced?: StructuredAgentSessionReplacedEnd
   ) {}
 
   /** What a reader that published this answer compares to learn it changed with no row: the live
@@ -168,16 +193,18 @@ export class StructuredAgentSessionCurrentWork {
     return this.activeTurnId() !== null || this.owesAnySend()
   }
 
-  /** The running turn of the generation this host saw die on its own (its root gone, nobody asked):
-   *  that death's settlement writes it interrupted, so it reads so before that lands. */
+  /** The running turn of a generation this host saw die on its own (its root gone, nobody asked),
+   *  or that a runtime this one replaced held: its settlement writes it interrupted, so it reads so
+   *  before that lands. */
   diedTurn(): { item: AgentJournalRenderItem; turnId: string } | null {
     const running = this.journal.runningTurn()
-    const { ended } = this
-    return running &&
-      ended?.rootGone === true &&
-      ended.cause === 'exit' &&
-      this.journal.itemFence(running.item.itemId) === ended.fence &&
-      !this.isCurrentItem(running.item.itemId)
+    if (!running || this.isCurrentItem(running.item.itemId)) {
+      return null
+    }
+    const fence = this.journal.itemFence(running.item.itemId)
+    const { ended, replaced } = this
+    const died = ended?.rootGone === true && ended.cause === 'exit' && fence === ended.fence
+    return died || (replaced !== undefined && fence !== undefined && fence <= replaced.fence)
       ? running
       : null
   }
@@ -203,7 +230,8 @@ export function structuredAgentSessionCurrentWork(
     journal,
     structuredAgentSessionLiveFence(evidence),
     evidence.revision,
-    evidence.ended
+    evidence.ended,
+    evidence.replaced
   )
 }
 

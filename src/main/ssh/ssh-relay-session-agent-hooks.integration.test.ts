@@ -5,7 +5,7 @@ import type { SshPortForwardManager } from './ssh-port-forward'
 import type { SshConnection } from './ssh-connection'
 import type { MultiplexerTransport } from './ssh-channel-multiplexer'
 import type { AgentHookRelayEnvelope } from '../../shared/agent-hook-relay'
-import { RelayDispatcher } from '../../relay/dispatcher'
+import { RelayDispatcher } from '../../wsl-guest/dispatcher'
 import {
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD,

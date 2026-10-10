@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { execFile, execFileSync } from 'node:child_process'
-import { runProcess, runProcessSync, type ProcessResult } from '../shared/child-process/run-process'
+import { runProcess, runProcessSync } from '@orca/process-host'
+import type { ProcessResult } from '@orca/process-host/process-spec'
 import {
   _resetWslAvailabilityCacheForTests,
   isWslAvailable,
@@ -8,7 +9,7 @@ import {
 } from './wsl-availability'
 
 vi.mock('node:child_process', () => ({ execFile: vi.fn(), execFileSync: vi.fn() }))
-vi.mock('../shared/child-process/run-process', () => ({
+vi.mock('@orca/process-host', () => ({
   runProcess: vi.fn(),
   runProcessSync: vi.fn()
 }))

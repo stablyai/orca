@@ -153,7 +153,7 @@ describe('the startup scan', () => {
     await current.startupSettled()
     await idle(current, all)
     expect(passes.indexOf(LATE)).toBeLessThan(passes.indexOf(CHATS[4]!))
-    expect(await turnState(current, LATE)).toBe('unverifiable')
+    expect(await turnState(current, LATE)).toBe('interrupted')
   })
 
   it('finds what an earlier process left with no fence move and no stored mark, and keeps its send as a card', async () => {
@@ -171,8 +171,8 @@ describe('the startup scan', () => {
     // Already released: the restart moved nothing and ended no generation.
     expect(ended).not.toHaveBeenCalled()
     expect(store.getRecord(RELEASED)?.lease.runtimeFence).toBe(14)
-    // Nothing proved its owner gone: less specific, never wrong.
-    expect(await turnState(current, RELEASED)).toBe('unverifiable')
+    // Nothing proved its owner gone, but the runtime that held it was replaced, which ends it.
+    expect(await turnState(current, RELEASED)).toBe('interrupted')
     const { journal } = current.collaboratorsForTests().sessions.get(RELEASED)!
     expect(journal.submission(`${RELEASED}-queued`)).toMatchObject({ dispatchState: 'rejected' })
     expect(journal.queuedMessages.list()).toEqual([
@@ -202,7 +202,7 @@ describe('the startup scan', () => {
     database.db.exec('DROP TRIGGER reject_conversion')
     await idle(current, [RELEASED])
 
-    expect(await turnState(current, RELEASED)).toBe('unverifiable')
+    expect(await turnState(current, RELEASED)).toBe('interrupted')
     const { journal } = current.collaboratorsForTests().sessions.get(RELEASED)!
     expect(journal.submission(`${RELEASED}-queued`)).toMatchObject({ dispatchState: 'rejected' })
     expect(journal.queuedMessages.list()).toHaveLength(1)

@@ -42,8 +42,8 @@ import {
   getTuiAgentDetectionProbeCommands,
   resolveDetectedTuiAgentIds
 } from '../shared/tui-agent-detection-commands'
-import type { RelayDispatcher } from './dispatcher'
-import { isCommandOnPathForRelay } from './preflight-handler'
+import type { RelayDispatcher } from '../wsl-guest/dispatcher'
+import { isCommandOnPathForRelay } from '../wsl-guest/preflight-handler'
 import type { SkillInstallDestinationAuthority } from '../main/skills/skill-install-destinations'
 import {
   previewSharedSkillBundleInstall,

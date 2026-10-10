@@ -16,7 +16,7 @@ import type {
   AgentSessionSendResult
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { QueuedMessageNotConsumableError } from '../agent-session-journal/journal-queued-messages'
+import { QueuedMessageNotConsumableError } from '../agent-session-journal/queued-message-consume-error'
 import {
   isJournalWrittenByNewerOrca,
   journalOpenRefusal
@@ -73,7 +73,7 @@ export async function withdrawQueuedMessagesForOperation(
 
 /** Draft actions run like any mutation: admitted on the session's lane, the
  *  conversation opened for the write. */
-function mutateQueued<TValue>(
+export function mutateQueued<TValue>(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
   envelope: AgentSessionMutationEnvelope,

@@ -4,7 +4,9 @@
 // sight of an exit and the journal, so a pass that finds nothing owed writes nothing; only what
 // cannot be derived rides in from the signals (an exit's own account, a proof the lease no longer
 // holds). A lease latched in recovery still gets (b), which touches no process and no lease, as
-// every open did on main; (a) and (c) wait for its decision, whose release signals again.
+// every open did on main, and (c) for a generation a runtime this one replaced held, which is over
+// whatever the recovery decides; (a), and (c) otherwise, wait for its decision, whose release
+// signals again.
 //
 // The steps stay apart, so one never retires another's debt:
 //  (a) lease-release repair: an exit this host observed whose release write failed;
@@ -36,6 +38,7 @@ import {
   settleStructuredAgentSessionLeftovers,
   type StructuredAgentSessionExitSettlement
 } from './structured-agent-session-leftover-settlement'
+import { structuredAgentSessionReplacedRuntimeEnded } from './structured-agent-session-current-work'
 import {
   markStructuredQueueReopen,
   structuredAgentSessionHostInstance
@@ -98,8 +101,7 @@ export async function runStructuredAgentSessionReconciliationPass(
     pass.failed.push(new Error('agent_session_exit_release_owed'))
   }
   await settleEarlierProcess(context, sessionId, session.journal, writes, processOpened, pass)
-  if (recovering || pass.failed.some(isSqliteContentionFailure)) {
-    // What ended is not known until its recovery is decided; the debts wait for that signal.
+  if (pass.failed.some(isSqliteContentionFailure)) {
     return pass
   }
   const settle = (proof?: AgentSessionDeathEvidence & { ownerFence: number }) =>
@@ -108,10 +110,20 @@ export async function runStructuredAgentSessionReconciliationPass(
       sessionId,
       journal: session.journal,
       writes: writes.journal,
-      ...(debts.exit ? { exit: debts.exit } : {}),
+      ...(debts.exit && !recovering ? { exit: debts.exit } : {}),
       ...(session.lastEndedChild ? { ended: session.lastEndedChild } : {}),
       ...(proof ? { proof } : {})
     })
+  if (recovering) {
+    // What else ended is not known until its recovery is decided; the debts wait for that signal.
+    const replaced = context.deps.store.replacedRuntime(sessionId)
+    if (lease && structuredAgentSessionReplacedRuntimeEnded(lease, replaced)) {
+      const settled = await settle()
+      pass.failed.push(...(settled.ok ? [] : [settled.error]))
+      pass.wrote ||= settled.ok && settled.planned > 0
+    }
+    return pass
+  }
   // Each proof the lease no longer holds judges what its own generation left, oldest first.
   const leaseEvidence = context.deps.store.getRecord(sessionId)?.lease.deathEvidence ?? null
   for (const proof of heldProofs(debts, leaseEvidence)) {

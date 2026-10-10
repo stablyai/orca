@@ -1,6 +1,6 @@
 import { closeSync, openSync } from 'node:fs'
-import { RelayDispatcher } from './dispatcher'
-import { RELAY_SENTINEL } from './protocol'
+import { RelayDispatcher } from '../wsl-guest/dispatcher'
+import { RELAY_SENTINEL } from '../wsl-guest/protocol'
 
 /**
  * Why the `\\.\` device prefix and not bare `NUL`: node's fs resolves a relative path

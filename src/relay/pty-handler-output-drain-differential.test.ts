@@ -19,7 +19,7 @@ const { mockPtySpawn, mockPtyInstance } = vi.hoisted(() => ({
 vi.mock('node-pty', () => ({ spawn: mockPtySpawn }))
 
 import { PtyHandler } from './pty-handler'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher } from '../wsl-guest/dispatcher'
 
 // Mirrors the relay drain constants; kept local so a constant change fails this oracle loudly.
 const CHUNK_CHARS = 16 * 1024

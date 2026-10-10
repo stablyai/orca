@@ -163,7 +163,8 @@ describe('a chat whose record is gone', () => {
     const { reconciliation } = current.collaboratorsForTests()
     reconciliation.signal(CHAT, { evidence: proof13 })
     await idle(current, [CHAT])
-    expect(await turnState(current, CHAT)).toBe('running')
+    // A replaced runtime's turn is settled under the latch; the proof still waits for its decision.
+    expect(await turnState(current, CHAT)).toBe('interrupted')
     expect(reconciliation['owed'].get(CHAT)?.debts.evidence).toEqual([proof13])
     expect(reconciliation['firstOpened'].has(CHAT)).toBe(true)
 

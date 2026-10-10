@@ -202,6 +202,7 @@ export class StructuredAgentSessionClientDelivery {
     const ended = session?.lastEndedChild
     return structuredAgentSessionCurrentWork(journal, {
       record: this.deps().store.getRecord(sessionId),
+      replaced: this.deps().store.replacedRuntime(sessionId),
       ...(ended ? { ended } : {}),
       revision: session?.operationalRevision ?? 0
     })

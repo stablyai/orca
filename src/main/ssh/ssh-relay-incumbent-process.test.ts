@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: vi.fn(),
   isUnconfirmedSshCommandTermination: () => false

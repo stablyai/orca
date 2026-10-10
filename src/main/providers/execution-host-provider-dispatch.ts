@@ -38,7 +38,7 @@ import {
 } from '../../shared/execution-host'
 import { createLocalFilesystemProvider } from './local-filesystem-provider'
 import { createLocalGitProvider } from './local-git-provider'
-import { getSshGitProvider, SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE } from './ssh-git-dispatch'
+import { getSshGitProvider, sshGitProviderMissingError } from './ssh-git-dispatch'
 import type { SshGitProvider } from './ssh-git-provider'
 import {
   getSshFilesystemProvider,
@@ -133,14 +133,52 @@ export function resolveFilesystemRouteForHost(
   }
 }
 
+type ReachableSshRoute<TProvider> = SshRoute<TProvider> & { provider: TProvider }
+export type ReachableGitRoute = LocalGitRoute | ReachableSshRoute<SshGitProvider>
+export type ReachableFilesystemRoute = LocalFilesystemRoute | ReachableSshRoute<IFilesystemProvider>
+
+/** For work this process runs itself: `runtime:` and an unreachable SSH host throw, never run here. */
+export function requireReachableGitRoute(hostId: string | null | undefined): ReachableGitRoute {
+  const route = resolveGitRouteForHost(hostId)
+  switch (route.kind) {
+    case 'local':
+      return route
+    case 'ssh': {
+      const { provider } = route
+      if (!provider) {
+        throw sshGitProviderMissingError(route.connectionId)
+      }
+      return { ...route, provider }
+    }
+    case 'runtime':
+      throw new ExecutionHostNotDispatchableError(route.hostId)
+  }
+}
+
+export function requireReachableFilesystemRoute(
+  hostId: string | null | undefined
+): ReachableFilesystemRoute {
+  const route = resolveFilesystemRouteForHost(hostId)
+  switch (route.kind) {
+    case 'local':
+      return route
+    case 'ssh': {
+      const { provider } = route
+      if (!provider) {
+        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
+      }
+      return { ...route, provider }
+    }
+    case 'runtime':
+      throw new ExecutionHostNotDispatchableError(route.hostId)
+  }
+}
+
 /** For call sites that are structurally remote-only: local and runtime are both routing errors. */
 export function requireGitProviderForHost(hostId: string | null | undefined): IGitProvider {
-  const route = resolveGitRouteForHost(hostId)
+  const route = requireReachableGitRoute(hostId)
   if (route.kind !== 'ssh') {
     throw new ExecutionHostNotDispatchableError(route.hostId)
-  }
-  if (!route.provider) {
-    throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
   }
   return route.provider
 }
@@ -148,12 +186,9 @@ export function requireGitProviderForHost(hostId: string | null | undefined): IG
 export function requireFilesystemProviderForHost(
   hostId: string | null | undefined
 ): IFilesystemProvider {
-  const route = resolveFilesystemRouteForHost(hostId)
+  const route = requireReachableFilesystemRoute(hostId)
   if (route.kind !== 'ssh') {
     throw new ExecutionHostNotDispatchableError(route.hostId)
-  }
-  if (!route.provider) {
-    throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
   }
   return route.provider
 }

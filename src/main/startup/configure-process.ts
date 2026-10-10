@@ -8,6 +8,7 @@ import { getMainE2EConfig } from '../e2e-config'
 import { DISABLED_CHROMIUM_FEATURES } from './disabled-chromium-features'
 import { readHttp1CompatibilityMarker } from './http1-compatibility-marker'
 import { checkServeUserDataPath } from './serve-user-data-path-guard'
+import { stampRuntimeSourceEnv } from '../../shared/runtime-source-env'
 import {
   hasMissingProfileStateDatabaseWithRetainedAuthority,
   readActiveProfileId,
@@ -243,6 +244,8 @@ export function configureOrcaUserDataPathEnv(): void {
   }
   // Why: relaunches can inherit a stale ORCA_USER_DATA_PATH; canonicalize before CLI-shared modules build runtime-home paths.
   process.env.ORCA_USER_DATA_PATH = userDataPath
+  // Why: an Orca started from another Orca's terminal must not fence its own CLI children to the parent.
+  stampRuntimeSourceEnv(process.env, null)
 }
 
 export function shouldInstallManagedHooks(isDev: boolean): boolean {

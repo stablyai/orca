@@ -7,8 +7,8 @@ import { execFileSync } from 'node:child_process'
 import { GitHandler } from './git-handler'
 import { RelayContext } from './context'
 import { DEFAULT_GIT_STATUS_LIMIT } from '../shared/git-status-limit'
-import { RelayDispatcher } from './dispatcher'
-import type { MethodHandler } from './dispatcher-contract'
+import { RelayDispatcher } from '../wsl-guest/dispatcher'
+import type { MethodHandler } from '../wsl-guest/dispatcher-contract'
 import { gitCommit, gitInit } from './git-handler-test-setup'
 
 const OVER_CAP = DEFAULT_GIT_STATUS_LIMIT + 50

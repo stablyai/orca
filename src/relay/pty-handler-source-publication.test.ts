@@ -5,8 +5,8 @@ import {
   RelayDispatcher,
   type RelayClientSessionIdentity,
   type SinkWriteSettlement
-} from './dispatcher'
-import { encodeJsonRpcFrame, MessageType } from './protocol'
+} from '../wsl-guest/dispatcher'
+import { encodeJsonRpcFrame, MessageType } from '../wsl-guest/protocol'
 import { PtyHandler } from './pty-handler'
 import { TEST_PTY_ID_MINT_EPOCH, testPtyId } from './pty-handler-test-harness'
 import { RelayPtySourcePublication } from './relay-pty-source-publication'

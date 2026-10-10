@@ -32,7 +32,7 @@ import {
   RipgrepUnavailableError
 } from '../shared/ripgrep-process-availability'
 import { QuickOpenPathRanker } from '../shared/quick-open-path-search'
-import { buildRelayCommandEnv } from './relay-command-env'
+import { buildRelayCommandEnv } from '../wsl-guest/relay-command-env'
 import {
   pathRipgrepCommand,
   resolveRelayRipgrepCommand,
