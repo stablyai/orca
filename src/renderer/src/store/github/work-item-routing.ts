@@ -14,6 +14,11 @@ import {
 import { classifyGitHubUnavailable } from '../../../../shared/github/api-availability'
 import { callRuntimeRpc, RuntimeRpcCallError } from '../../runtime/runtime-rpc-client'
 import { getHostlessSourceRepoOwnerEnvironmentId } from '@/lib/repo-runtime-owner'
+import {
+  runtimeTargetForOwnerEnvironment,
+  runtimeTargetForOwnerHostId,
+  type RuntimeClientTarget
+} from '@/runtime/runtime-client-target'
 import { workItemsCacheKey } from './cache-identity'
 import {
   findRepoForGitHubOwner,
@@ -79,15 +84,6 @@ function settingsForGitHubTaskSource(
   )
 }
 
-export function settingsForGitHubFocusedRepoOwner(
-  settings: AppState['settings'],
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined
-): AppState['settings'] {
-  if (!repo?.executionHostId && !repo?.connectionId) {
-    return settings
-  }
-  return settingsForGitHubRepoOwner(settings, repo)
-}
 export function getWorkItemsCacheKeyForOwner(
   state: Partial<Pick<AppState, 'repos' | 'settings'>>,
   repoId: string,
@@ -128,17 +124,6 @@ export function getGitHubWorkItemSourceCacheScope(
   return getGitHubWorkItemSourceHostId(state, repo, sourceContext)
 }
 
-export function getGitHubWorkItemSourceSettings(
-  state: GitHubSourceRoutingState,
-  repo: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> | undefined,
-  sourceContext?: TaskSourceContext | null
-): AppState['settings'] {
-  if (sourceContext?.provider === 'github') {
-    return settingsForGitHubTaskSource(state, repo, sourceContext)
-  }
-  return settingsForGitHubFocusedRepoOwner(state.settings, repo)
-}
-
 export function getGitHubRepoSourceSettings(
   state: GitHubSourceRoutingState,
   repo: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> | undefined,
@@ -150,9 +135,32 @@ export function getGitHubRepoSourceSettings(
   return settingsForGitHubRepoOwner(state.settings, repo)
 }
 
+/**
+ * Transport for a repo's GitHub request: a row-less task source's host, else the repo's owner.
+ * Local and SSH repos use this app's credentials; an unknown repo stays here too (main refuses
+ * repos it does not own) instead of following the focused server.
+ */
+export function getGitHubSourceTarget(
+  state: Pick<AppState, 'repos'>,
+  repo: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> | undefined,
+  sourceContext?: TaskSourceContext | null
+): RuntimeClientTarget {
+  if (sourceContext?.provider === 'github') {
+    const sourceHost = parseExecutionHostId(sourceContext.hostId)
+    return runtimeTargetForOwnerEnvironment(
+      sourceHost?.kind === 'runtime'
+        ? sourceHost.environmentId
+        : getHostlessSourceRepoOwnerEnvironmentId(state.repos, repo?.id)
+    )
+  }
+  return (
+    (repo ? runtimeTargetForOwnerHostId(getRepoExecutionHostId(repo)) : null) ?? { kind: 'local' }
+  )
+}
+
 export function getGitHubWorkItemRequestContext(
   state: AppState,
-  settings: AppState['settings'],
+  requestTarget: RuntimeClientTarget,
   repoId: string,
   repoPath: string,
   sourceContext?: TaskSourceContext | null
@@ -171,7 +179,7 @@ export function getGitHubWorkItemRequestContext(
       }
     }
   }
-  const runtimeRepo = getRuntimeRepoTarget(state, repoPath, settings)
+  const runtimeRepo = getRuntimeRepoTarget(state, repoPath, requestTarget)
   return {
     repoId,
     repoPath,

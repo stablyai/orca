@@ -8,7 +8,11 @@ import { isFresh, withBoundedCacheEntry } from './cache-policy'
 import { debouncedSaveCache } from './cache-persistence'
 import { inflightIssueRequests } from './request-coordination'
 import { findRepoForGitHubOwner } from './repository-routing'
-import { getGitHubRepoSourceSettings, getGitHubWorkItemRequestContext } from './work-item-routing'
+import {
+  getGitHubRepoSourceSettings,
+  getGitHubSourceTarget,
+  getGitHubWorkItemRequestContext
+} from './work-item-routing'
 
 export const createIssueActions = (
   set: Parameters<StateCreator<AppState>>[0],
@@ -42,7 +46,7 @@ export const createIssueActions = (
       try {
         const requestContext = getGitHubWorkItemRequestContext(
           get(),
-          requestSettings,
+          getGitHubSourceTarget(get(), repo, options?.sourceContext),
           repoId ?? repoPath,
           repoPath,
           options?.sourceContext

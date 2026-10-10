@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { Repo } from '../../../../shared/repo-types'
-import { getGitHubRepoSourceSettings, getGitHubWorkItemSourceSettings } from './work-item-routing'
+import { getGitHubRepoSourceSettings, getGitHubSourceTarget } from './work-item-routing'
 
 const settings = {
   ...getDefaultSettings('/home/user'),
@@ -33,9 +33,16 @@ function stateWith(repos: Repo[]): Parameters<typeof getGitHubRepoSourceSettings
   return { settings, repos }
 }
 
+function targetEnvironmentId(...args: Parameters<typeof getGitHubSourceTarget>): {
+  activeRuntimeEnvironmentId: string | null
+} {
+  const target = getGitHubSourceTarget(...args)
+  return { activeRuntimeEnvironmentId: target.kind === 'environment' ? target.environmentId : null }
+}
+
 describe.each([
   ['getGitHubRepoSourceSettings', getGitHubRepoSourceSettings],
-  ['getGitHubWorkItemSourceSettings', getGitHubWorkItemSourceSettings]
+  ['getGitHubSourceTarget', targetEnvironmentId]
 ])('%s with a GitHub task source', (_name, resolve) => {
   it('keeps a runtime-owned repo on its owner when the source has no runtime (#7623)', () => {
     expect(
@@ -63,5 +70,20 @@ describe.each([
     const state = stateWith([runtimeRepo, localRepo])
     expect(resolve(state, runtimeRepo, localSource)?.activeRuntimeEnvironmentId).toBeNull()
     expect(resolve(state, localRepo, localSource)?.activeRuntimeEnvironmentId).toBeNull()
+  })
+})
+
+describe('getGitHubSourceTarget without a task source', () => {
+  it("sends a repo's request to its owner, not the focused server", () => {
+    expect(getGitHubSourceTarget(stateWith([runtimeRepo]), runtimeRepo)).toEqual({
+      kind: 'environment',
+      environmentId: 'owner-runtime'
+    })
+    expect(getGitHubSourceTarget(stateWith([localRepo]), localRepo)).toEqual({ kind: 'local' })
+  })
+
+  it('keeps an unknown repo on this computer while a server is focused', () => {
+    // Before: the focused server answered for a repo no row owns.
+    expect(getGitHubSourceTarget(stateWith([]), undefined)).toEqual({ kind: 'local' })
   })
 })

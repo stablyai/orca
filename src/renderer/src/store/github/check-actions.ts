@@ -17,7 +17,11 @@ import {
   nextProviderRequestId,
   ownsInflightRequest
 } from './request-coordination'
-import { getGitHubRepoSourceSettings, getGitHubWorkItemRequestContext } from './work-item-routing'
+import {
+  getGitHubRepoSourceSettings,
+  getGitHubSourceTarget,
+  getGitHubWorkItemRequestContext
+} from './work-item-routing'
 
 export const createCheckActions = (
   set: Parameters<StateCreator<AppState>>[0],
@@ -121,7 +125,7 @@ export const createCheckActions = (
     const request = (async () => {
       const requestContext = getGitHubWorkItemRequestContext(
         get(),
-        requestSettings,
+        getGitHubSourceTarget(get(), repo, options?.sourceContext),
         repoId ?? repoPath,
         repoPath,
         options?.sourceContext
@@ -205,10 +209,9 @@ export const createCheckActions = (
       options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
     )
     const repoId = options?.repoId ?? repo?.id
-    const requestSettings = getGitHubRepoSourceSettings(get(), repo, options?.sourceContext)
     const requestContext = getGitHubWorkItemRequestContext(
       get(),
-      requestSettings,
+      getGitHubSourceTarget(get(), repo, options?.sourceContext),
       repoId ?? repoPath,
       repoPath,
       options?.sourceContext

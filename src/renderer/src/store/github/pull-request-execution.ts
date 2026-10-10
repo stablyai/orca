@@ -1,4 +1,5 @@
 import type { StateCreator } from 'zustand'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -35,6 +36,7 @@ export function startPullRequestLookup(args: {
   repo: Repo | undefined
   repoId: string | undefined
   requestSettings: AppState['settings']
+  requestTarget: RuntimeClientTarget
   cacheKey: string
   cached: CacheEntry<PRInfo> | undefined
   linkedPRNumber: number | null
@@ -54,6 +56,7 @@ export function startPullRequestLookup(args: {
     repo,
     repoId,
     requestSettings,
+    requestTarget,
     cacheKey,
     cached,
     linkedPRNumber,
@@ -66,7 +69,7 @@ export function startPullRequestLookup(args: {
   } = args
   const request = (async () => {
     try {
-      const runtimeRepo = getRuntimeRepoTarget(get(), repoPath, requestSettings)
+      const runtimeRepo = getRuntimeRepoTarget(get(), repoPath, requestTarget)
       const candidateWorktree = options?.worktreeId
         ? findWorktreeById(get(), options.worktreeId)
         : null

@@ -6,7 +6,7 @@ import type {
   HostedReviewCreationEligibilityArgs,
   HostedReviewInfo
 } from '../../../../shared/hosted-review'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { AppState } from '../types'
 import { nextLookupGeneration } from '../lookup-generation-sequence'
 import {
@@ -23,7 +23,6 @@ import {
   isFreshHostedReview,
   isStaleMergedGitHubReviewForHead,
   hostedReviewRepoOwnerTarget,
-  settingsForHostedReviewRepoOwner,
   shouldRefetchForLinkedHint,
   shouldRefetchGitHubScopedResultForNoHint,
   withCreationEligibilityTimeout,
@@ -153,14 +152,14 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     if (repo === null) {
       return null
     }
-    const ownerSettings = settingsForHostedReviewRepoOwner(get().settings, repo)
-    const target = getActiveRuntimeTarget(ownerSettings)
+    const target = hostedReviewRepoOwnerTarget(repo)
     const cacheKey =
       options?.exactReviewKey ??
       getHostedReviewCacheKey(
         repoPath,
         branch,
-        ownerSettings,
+        // Why settings: a known repo keys by its own host; only an unknown repo's key keeps today's scope.
+        get().settings,
         options?.repoId ?? repo?.id,
         repo?.connectionId,
         repo?.executionHostId,
@@ -237,7 +236,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
                     repoPath,
                     repoId: options?.repoId ?? repo?.id,
                     branch,
-                    settings: ownerSettings,
+                    settings: get().settings,
                     repo
                   })
               return {
