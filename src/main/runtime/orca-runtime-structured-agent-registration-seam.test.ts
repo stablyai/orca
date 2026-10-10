@@ -48,14 +48,14 @@ describe('the structured agent registration list', () => {
 
   it('refuses an agent it does not hold without installing the host', async () => {
     const { runtime, installHost } = runtimeAt()
-    // No structured registration exists for Cursor.
+    // Gemini stays a terminal agent; the registration list does not drive it.
     expect(
-      await runtime.getStructuredAgentSessionCreateSupport('id:workspace-1', 'cursor')
+      await runtime.getStructuredAgentSessionCreateSupport('id:workspace-1', 'gemini')
     ).toEqual({
       supported: false,
       reason: 'agent'
     })
-    await expect(runtime.resolveStructuredAgentAccountHome('cursor')).rejects.toMatchObject({
+    await expect(runtime.resolveStructuredAgentAccountHome('gemini')).rejects.toMatchObject({
       message: 'structured_agent_session_unsupported'
     })
     expect(installHost).not.toHaveBeenCalled()

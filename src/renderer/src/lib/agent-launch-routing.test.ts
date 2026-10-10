@@ -48,6 +48,20 @@ describe('new agent launch routing', () => {
     expect(route({ settings: null })).toBe('terminal-tui')
   })
 
+  it('routes Cursor to structured chat when the host lists it', () => {
+    expect(route({ agent: 'cursor' })).toBe('terminal-tui')
+    expect(
+      route({
+        agent: 'cursor',
+        hostCapabilities: [
+          STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+          STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+        ],
+        hostStructuredAgents: ['cursor']
+      })
+    ).toBe('structured-native-chat')
+  })
+
   it('keeps unsupported and unverified launches in terminal UI', () => {
     expect(route({ hostCapabilities: [] })).toBe('terminal-tui')
     expect(route({ hostCapabilities: null })).toBe('terminal-tui')

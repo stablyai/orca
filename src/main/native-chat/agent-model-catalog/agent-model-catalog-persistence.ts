@@ -61,6 +61,10 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
     : undefined
   const description = text(row.description)
   const defaultEffort = text(row.defaultEffort)
+  const contextWindows = parseChoices(row.contextWindows)
+  const thinkingLevels = parseChoices(row.thinkingLevels)
+  const defaultContextWindow = text(row.defaultContextWindow)
+  const defaultThinking = text(row.defaultThinking)
   return {
     id,
     label,
@@ -68,11 +72,26 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
     isDefault: row.isDefault === true,
     ...(defaultEffort ? { defaultEffort } : {}),
     efforts: efforts.filter((effort): effort is AgentSessionOptionChoice => effort !== null),
+    ...(contextWindows ? { contextWindows } : {}),
+    ...(defaultContextWindow ? { defaultContextWindow } : {}),
+    ...(thinkingLevels ? { thinkingLevels } : {}),
+    ...(defaultThinking ? { defaultThinking } : {}),
     ...(typeof row.supportsFastMode === 'boolean'
       ? { supportsFastMode: row.supportsFastMode }
       : {}),
     ...(serviceTiers ? { serviceTiers } : {})
   }
+}
+
+function parseChoices(value: unknown): AgentSessionOptionChoice[] | null {
+  if (!Array.isArray(value) || value.length === 0) {
+    return null
+  }
+  const choices = value.map(parseChoice)
+  if (choices.some((choice) => choice === null)) {
+    return null
+  }
+  return choices.filter((choice): choice is AgentSessionOptionChoice => choice !== null)
 }
 
 function parseListing(value: unknown): AgentModelCatalogListing | null {

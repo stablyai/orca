@@ -6,7 +6,8 @@ import type {
 import { isLegacyAgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 import {
   agentModelCatalogFingerprint,
-  agentModelCatalogFingerprintForRecord
+  agentModelCatalogIdentityForRecord,
+  type AgentModelCatalogIdentity
 } from './agent-model-catalog-fingerprint'
 import type { AgentModelCatalogConfiguredChoice } from './agent-model-catalog-entry'
 import type {
@@ -30,6 +31,8 @@ export type AgentModelCatalogServiceDeps = {
   resolveAccountHome: (agent: string) => Promise<AgentSessionAccountHome>
   /** Session-less listers, one per agent that has one on this host. */
   probes?: Readonly<Partial<Record<string, AgentModelCatalogProbe>>>
+  /** Cursor only. A new value is a new catalog even when the account home is unchanged. */
+  cursorCredentialScope?: () => string
   /** Agents whose listing marks the model the account is configured to run as its default. */
   listingNamesConfiguredModel?: ReadonlySet<string>
   /** Where a session's provider runs, for deciding whether its own config scope is the account's. */
@@ -71,6 +74,14 @@ export type AgentModelCatalogService = {
   providerStarted: (
     record: Pick<AgentSessionRecord, 'provider' | 'accountHome' | 'location'>
   ) => void
+}
+
+function catalogFingerprint(
+  deps: AgentModelCatalogServiceDeps,
+  identity: AgentModelCatalogIdentity
+): string {
+  const credentialScope = identity.agent === 'cursor' ? deps.cursorCredentialScope?.() : undefined
+  return agentModelCatalogFingerprint(credentialScope ? { ...identity, credentialScope } : identity)
 }
 
 // At most this many agents list at once: each listing spawns that agent's CLI.
@@ -127,7 +138,7 @@ async function newChatCatalogKey(
     return null
   }
   return {
-    fingerprint: agentModelCatalogFingerprint({ agent, accountHome, wslDistro: null }),
+    fingerprint: catalogFingerprint(deps, { agent, accountHome, wslDistro: null }),
     accountHome
   }
 }
@@ -208,7 +219,7 @@ export function createAgentModelCatalogService(
       })
   return {
     providerStarted(record) {
-      deps.store.expireFailure(agentModelCatalogFingerprintForRecord(record))
+      deps.store.expireFailure(catalogFingerprint(deps, agentModelCatalogIdentityForRecord(record)))
     },
     async read(params) {
       const record = params.sessionId ? deps.getRecord(params.sessionId) : undefined
@@ -218,7 +229,7 @@ export function createAgentModelCatalogService(
       // The account a probe lists under; null where this host cannot spawn one natively.
       let probeHome: AgentSessionAccountHome | null
       if (scoped) {
-        fingerprint = agentModelCatalogFingerprintForRecord(scoped)
+        fingerprint = catalogFingerprint(deps, agentModelCatalogIdentityForRecord(scoped))
         // Probes spawn natively; a WSL-pinned record has no host-side lister.
         probeHome = scoped.location.wslDistro === null ? scoped.accountHome : null
       } else {
@@ -304,7 +315,7 @@ export function createAgentModelCatalogService(
         return
       }
       // The record's pinned account and host: the account this child listed under.
-      const fingerprint = agentModelCatalogFingerprintForRecord(record)
+      const fingerprint = catalogFingerprint(deps, agentModelCatalogIdentityForRecord(record))
       const { configuredDefault, ...listed } = listing
       const saved = deps.store.recordSuccess(
         fingerprint,

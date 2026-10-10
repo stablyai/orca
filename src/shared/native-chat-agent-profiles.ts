@@ -44,6 +44,10 @@ const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfi
   grok: {
     skillPrefix: '/',
     skillSourceOwner: 'grok'
+  },
+  cursor: {
+    skillPrefix: '/',
+    skillSourceOwner: 'cursor'
   }
 }
 

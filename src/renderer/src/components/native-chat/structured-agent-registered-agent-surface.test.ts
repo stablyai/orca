@@ -51,6 +51,10 @@ describe('a host-registered agent on the structured chat surface', () => {
     expect(structuredAgentSessionSeedCatalog('grok').models).toEqual([])
     expect(structuredAgentSessionSeedCatalog('claude')).toBe(getAgentSessionOptionCatalog('claude'))
     expect(structuredAgentSessionSeedCatalog('codex')).toBe(getAgentSessionOptionCatalog('codex'))
+    expect(structuredAgentSessionSeedCatalog('cursor')).toMatchObject({
+      models: [],
+      hostListingNamesConfiguredModel: true
+    })
   })
 
   it("attaches images only when the host's record for the agent takes them", () => {

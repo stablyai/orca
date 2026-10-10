@@ -2,7 +2,8 @@ import type { AgentType } from '../../../../shared/agent-status-types'
 import {
   createClaudeCatalogOptions,
   getAgentSessionOptionCatalog,
-  type CatalogModel
+  type CatalogModel,
+  type CatalogOption
 } from '../../../../shared/agent-session-option-catalog'
 import {
   getCommitMessageModelDiscoveryHostKeyForLocalRuntime,
@@ -27,6 +28,7 @@ import type {
   AgentSessionModelOption
 } from '../../../../shared/agent-session-wire'
 import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 
 export type NativeChatModelDiscoveryContext = {
@@ -77,8 +79,55 @@ export function resolveNativeChatModelDiscoveryContext(
   }
 }
 
+function cursorDiscoveredOptions(model: AgentSessionModelOption): CatalogOption[] {
+  const options: CatalogOption[] = []
+  if (model.efforts.length > 1) {
+    options.push({
+      id: 'effort',
+      label: translate('components.native-chat.composer.reasoningEffort', 'Reasoning effort'),
+      category: 'thought_level',
+      kind: {
+        type: 'select',
+        choices: model.efforts,
+        defaultValue: model.defaultEffort ?? model.efforts[0]!.value
+      },
+      apply: {}
+    })
+  }
+  if (model.supportsFastMode) {
+    options.push({
+      id: 'fastMode',
+      label: translate('components.native-chat.composer.fastMode', 'Fast mode'),
+      category: 'mode',
+      kind: { type: 'boolean', defaultValue: false },
+      apply: {}
+    })
+  }
+  options.push({
+    id: 'conversationMode',
+    label: translate('components.native-chat.composer.conversationMode', 'Mode'),
+    category: 'mode',
+    kind: {
+      type: 'select',
+      choices: [
+        {
+          value: 'agent',
+          label: translate('components.native-chat.composer.conversationModeAgent', 'Agent')
+        },
+        {
+          value: 'plan',
+          label: translate('components.native-chat.composer.conversationModePlan', 'Plan')
+        }
+      ],
+      defaultValue: 'agent'
+    },
+    apply: {}
+  })
+  return options
+}
+
 function catalogModelsFromHostCatalog(
-  agent: 'claude' | 'codex',
+  agent: 'claude' | 'codex' | 'cursor',
   models: AgentSessionModelOption[]
 ): CatalogModel[] {
   return models.map((model) => ({
@@ -94,14 +143,16 @@ function catalogModelsFromHostCatalog(
               ? { supportsFastMode: model.supportsFastMode }
               : {})
           })
-        : []
+        : agent === 'cursor'
+          ? cursorDiscoveredOptions(model)
+          : []
   }))
 }
 
 /** Null when the host has no listing yet or predates the surface (`forbidden`
  *  or `method_not_found`) — the caller then falls back to the CLI listing. */
 async function readLocalHostCatalogModels(
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'cursor'
 ): Promise<CatalogModel[] | null> {
   try {
     const result = await callStructuredAgentSession<AgentSessionModelCatalogResult>(
@@ -123,10 +174,16 @@ export async function discoverNativeChatCatalogModels(
   context: RuntimeGitContext,
   hostKey?: string
 ): Promise<CatalogModel[] | null> {
-  // Claude/Codex on this machine read its host model catalog; the CLI listing
-  // below remains for every other host and while this one has never listed.
+  // Claude, Codex, and Cursor on this machine read the host model catalog; the
+  // CLI listing below remains for every other host and while this one has never listed.
   const hostCatalogAgent =
-    agent === 'claude' ? ('claude' as const) : agent === 'codex' ? ('codex' as const) : null
+    agent === 'claude'
+      ? ('claude' as const)
+      : agent === 'codex'
+        ? ('codex' as const)
+        : agent === 'cursor'
+          ? ('cursor' as const)
+          : null
   // Only `local` proves a native pane: a paired runtime's key also covers its SSH/WSL worktrees.
   // Terminal-backed chat runs the full custom command line, which only the CLI listing models.
   if (

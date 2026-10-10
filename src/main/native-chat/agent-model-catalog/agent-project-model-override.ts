@@ -207,9 +207,9 @@ function ancestry(cwd: string): string[] {
 }
 
 /** Whether the agent's CLI may read its model from a project's own config. Grok reads its default
- *  model from user, managed and env config only. */
+ *  model from user, managed and env config only; Cursor's structured launch runs the listed default. */
 export function agentReadsProjectModelConfig(agent: string): boolean {
-  return agent !== 'grok'
+  return agent !== 'grok' && agent !== 'cursor'
 }
 
 /** True when a new chat in `workspacePath` could run a model other than the listed default. */

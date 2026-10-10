@@ -218,6 +218,8 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   terminalUrlMiddleClickBehavior?: 'open' | 'actions' | 'none'
   /** New supported agent launches use structured Chat UI; off defaults to terminal UI. */
   experimentalNativeChat?: boolean
+  /** Optional Cursor SDK key for structured chat. Empty uses the browser login on this host. */
+  cursorSdkApiKey?: string
   /** Opt-in: resume working structured chats automatically on the next launch. Off still offers
    *  the list, so the user sees exactly what would run before anything spends tokens. */
   nativeChatResumeWorkOnRestart?: boolean

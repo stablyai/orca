@@ -19,6 +19,9 @@ export type StructuredAgentDefinition = AgentSessionStoredAgent & {
     fallbackModels: () => AgentSessionModelOption[] | null
     /** An unpicked effort reads as the model's default effort, as a running child reports it. */
     effortDefaultsToModel: boolean
+    /** The provider starts on the first send, so a new chat's picker reads at rest: wait for a
+     *  running first listing rather than answer an empty list the client would keep. */
+    awaitsFirstListing?: boolean
   }
 }
 

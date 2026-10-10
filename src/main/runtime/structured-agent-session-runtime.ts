@@ -129,6 +129,8 @@ export type StructuredAgentSessionRuntimeDeps = {
   resolveCodexPermissionPolicy?: () => CodexStructuredPermissionPolicy
   /** The same setting for a protocol-driven (ACP) agent: whether it runs with full access. */
   resolveAgentFullAccess?: (agent: string) => boolean
+  /** Optional Cursor SDK key. Empty means the sidecar uses a stored browser login. */
+  resolveCursorApiKey?: () => string | undefined
   /** The user's per-agent environment overlay, for agents with no lane-specific resolver. */
   resolveAgentLaunchEnv?: (agent: string) => Record<string, string>
   /** The settings a per-agent Command override is read from, for the same agents. */

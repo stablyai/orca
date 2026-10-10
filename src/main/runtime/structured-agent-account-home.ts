@@ -4,6 +4,7 @@ import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-p
 import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
 import { normalizeCodexRuntimeSelection } from '../codex-accounts/runtime-selection'
 import { resolveOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
+import { cursorSdkHomePath } from '../cursor/cursor-structured-location-support'
 import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -19,6 +20,10 @@ export type StructuredClaudeAccountHomeDeps = {
   getClaudeConfigDirectory: (
     target: { runtime: 'host' } | { runtime: 'wsl'; wslDistro: string }
   ) => string | null | undefined
+}
+
+export function resolveStructuredCursorAccountHomePath(): string {
+  return cursorSdkHomePath()
 }
 
 export function resolveStructuredClaudeAccountHomePath(

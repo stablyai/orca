@@ -56,7 +56,7 @@ describe('a structured default this dispatch cannot honour', () => {
   it.each([
     ['a remote --on', { on: 'server-1' }, 'remote_execution_host'],
     ['an existing --terminal', { terminal: 'term_1' }, 'reused_terminal'],
-    ['a non-structured agent', { agent: 'cursor' }, 'agent_without_structured_session'],
+    ['a non-structured agent', { agent: 'gemini' }, 'agent_without_structured_session'],
     ['no agent at all', { agent: undefined }, 'agent_without_structured_session']
   ])('falls back to a terminal worker for %s', (_name, params, reason) => {
     const receipt = decide({ params: { agent: 'claude', ...params } })

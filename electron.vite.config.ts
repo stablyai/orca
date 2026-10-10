@@ -238,6 +238,9 @@ export const electronViteConfig: UserConfig = {
           'daemon-entry': resolve('src/main/daemon/daemon-entry.ts'),
           'plugin-host-entry': resolve('src/main/plugins/plugin-host-entry.ts'),
           'computer-sidecar': resolve('src/main/computer/sidecar-entry.ts'),
+          // Why: ELECTRON_RUN_AS_NODE cannot see inside app.asar, and bundling
+          // @cursor/sdk into one file fails on Agent.create().
+          'cursor-sdk-sidecar': resolve('src/main/cursor/cursor-sdk-sidecar-entry.ts'),
           'stt-worker': resolve('src/main/speech/stt-worker.ts'),
           'warp-theme-parser-worker': resolve('src/main/warp-themes/warp-theme-parser-worker.ts'),
           'foreign-sqlite-reader-entry': resolve(

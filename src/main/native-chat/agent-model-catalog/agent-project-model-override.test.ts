@@ -266,4 +266,8 @@ describe('workspaceMayOverrideDefaultModel', () => {
       }
     }
   )
+
+  it('vouches for a Cursor default, which is the model a new chat runs', async () => {
+    expect(await mayOverride('cursor', join(root, 'anywhere'))).toBe(false)
+  })
 })

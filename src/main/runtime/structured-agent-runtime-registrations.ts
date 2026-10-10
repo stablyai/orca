@@ -41,6 +41,7 @@ import {
   type StructuredCodexAccountHomeDeps
 } from './structured-agent-account-home'
 import { ACP_LAUNCH_SPECS, type AcpLaunchSpec } from '../acp/acp-launch-specs'
+import { CURSOR_RUNTIME_REGISTRATION } from '../cursor/cursor-runtime-registration'
 import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'
 import { createAcpAgentConnection } from '../acp/acp-agent-connection'
 import {
@@ -310,6 +311,7 @@ export const STRUCTURED_AGENT_RUNTIME_REGISTRATIONS: readonly StructuredAgentRun
           })
         )
     },
+    CURSOR_RUNTIME_REGISTRATION,
     ...ACP_LAUNCH_SPECS.map(acpRegistration)
   ]
 

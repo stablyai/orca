@@ -18,6 +18,8 @@ export function nativeChatSessionOptionLabel(descriptor: SessionOptionDescriptor
       return translate('components.native-chat.composer.speed', 'Speed')
     case 'thinking':
       return translate('components.native-chat.composer.thinking', 'Thinking')
+    case 'context':
+      return translate('components.native-chat.composer.context', 'Context')
     default:
       return descriptor.label
   }
@@ -46,6 +48,10 @@ export function nativeChatSessionChoiceLabel(
       return translate('components.native-chat.composer.optionValue.max', 'Max')
     case 'ultra':
       return translate('components.native-chat.composer.optionValue.ultra', 'Ultra')
+    case 'true':
+      return translate('components.native-chat.composer.optionValue.on', 'On')
+    case 'false':
+      return translate('components.native-chat.composer.optionValue.off', 'Off')
     default:
       return choice.label
   }

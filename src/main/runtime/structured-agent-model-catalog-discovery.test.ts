@@ -76,9 +76,10 @@ describe('the model catalog contract on every registration', () => {
       STRUCTURED_AGENT_RUNTIME_REGISTRATIONS,
       context()
     )
-    // Codex's `model/list` names it. Grok's session-free `currentModelId` can differ from what a
-    // session runs, so Grok, like the rest, learns it from a chat with no pick.
-    expect([...listingNamesConfiguredModel].sort()).toEqual(['codex'])
+    // Codex's `model/list` names it, and a structured Cursor chat runs the SDK's listed default.
+    // Grok's session-free `currentModelId` can differ from what a session runs, so Grok, like the
+    // rest, learns it from a chat with no pick.
+    expect([...listingNamesConfiguredModel].sort()).toEqual(['codex', 'cursor'])
   })
 
   it('maps an ACP agent with no session-free listing to an unavailable registration', () => {

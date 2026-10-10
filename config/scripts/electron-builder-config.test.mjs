@@ -382,6 +382,18 @@ describe('electron-builder config', () => {
     expect(viteConfig).toMatch(new RegExp(`'${entryFilename.replace(/\.js$/, '')}':\\s*resolve\\(`))
   })
 
+  it('unpacks the Cursor SDK sidecar and the packages it requires at runtime', () => {
+    expect(electronBuilderConfig.asarUnpack).toEqual(
+      expect.arrayContaining([
+        'out/main/cursor-sdk-sidecar.js',
+        'node_modules/@cursor/**',
+        'node_modules/@bufbuild/**',
+        'node_modules/@connectrpc/**',
+        'node_modules/@statsig/**'
+      ])
+    )
+  })
+
   it('keeps the worker-thread hang watchdog inside app.asar', () => {
     expect(electronBuilderConfig.asarUnpack).not.toContain(
       'out/main/main-thread-hang-watchdog-entry.js'

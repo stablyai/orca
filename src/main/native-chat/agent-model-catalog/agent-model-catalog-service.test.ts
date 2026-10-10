@@ -126,6 +126,30 @@ describe('agent model catalog service', () => {
     expect(store.get(oldFingerprint)!.models[0]!.id).toBe('gpt-old')
   })
 
+  it('a new Cursor API key does not reuse the previous listing', async () => {
+    const store = new AgentModelCatalogStore()
+    let scope = 'browser-login'
+    const probe = vi.fn(async () => listing('composer-2.5'))
+    const service = createAgentModelCatalogService({
+      store,
+      getRecord: () => undefined,
+      drivesRecord: () => true,
+      resolveAccountHome: async () => ({ variable: 'CURSOR_SDK_HOME', path: '/homes/cursor' }),
+      cursorCredentialScope: () => scope,
+      probes: { cursor: probe }
+    })
+    const first = await service.read({ agent: 'cursor', waitForListing: true })
+    expect(first.origin === 'unknown' ? null : first.models[0]!.id).toBe('composer-2.5')
+    expect(probe).toHaveBeenCalledTimes(1)
+    scope = 'key-hash'
+    probe.mockResolvedValue(listing('other-model'))
+    expect(await service.read({ agent: 'cursor' })).toEqual({
+      origin: 'unknown',
+      listingInProgress: true
+    })
+    expect(probe).toHaveBeenCalledTimes(2)
+  })
+
   it('a record-less read serves the selected account entry when it exists', async () => {
     const store = new AgentModelCatalogStore()
     store.recordSuccess(

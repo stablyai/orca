@@ -3,22 +3,44 @@ import type { AgentSessionOptionChoice, AgentSessionOptionsResult } from './agen
 
 // The picker options one listed model offers, built from what its host reported.
 
-function effortOption(model: AgentSessionOptionsResult['models'][number]): CatalogOption | null {
-  if (model.efforts.length <= 1) {
+function listedSelect(
+  id: string,
+  label: string,
+  category: CatalogOption['category'],
+  choices: AgentSessionOptionChoice[] | undefined,
+  defaultValue: string | undefined,
+  apply: CatalogOption['apply']
+): CatalogOption | null {
+  if (!choices || choices.length <= 1) {
     return null
   }
+  const selected =
+    defaultValue && choices.some((choice) => choice.value === defaultValue)
+      ? defaultValue
+      : choices[0]!.value
   return {
-    id: 'effort',
-    label: 'Reasoning effort',
-    category: 'thought_level',
+    id,
+    label,
+    category,
     kind: {
       type: 'select',
-      choices: model.efforts,
-      defaultValue: model.defaultEffort ?? model.efforts[0]!.value,
-      ...(model.defaultEffort ? { defaultIsCliDefault: true as const } : {})
+      choices,
+      defaultValue: selected,
+      ...(defaultValue ? { defaultIsCliDefault: true as const } : {})
     },
-    apply: { midSession: { kind: 'command', build: (value) => `/effort ${String(value)}` } }
+    apply
   }
+}
+
+function effortOption(model: AgentSessionOptionsResult['models'][number]): CatalogOption | null {
+  return listedSelect(
+    'effort',
+    'Reasoning effort',
+    'thought_level',
+    model.efforts,
+    model.defaultEffort,
+    { midSession: { kind: 'command', build: (value) => `/effort ${String(value)}` } }
+  )
 }
 
 function fastModeOption(): CatalogOption {
@@ -51,6 +73,22 @@ export function discoveredModel(
   sessionSupportsFastMode: boolean
 ): CatalogModel {
   const effort = effortOption(model)
+  const context = listedSelect(
+    'context',
+    'Context',
+    'model_config',
+    model.contextWindows,
+    model.defaultContextWindow,
+    {}
+  )
+  const thinking = listedSelect(
+    'thinking',
+    'Thinking',
+    'model_config',
+    model.thinkingLevels,
+    model.defaultThinking,
+    {}
+  )
   const serviceTier = model.serviceTiers?.length ? serviceTierOption(model.serviceTiers) : null
   return {
     id: model.id,
@@ -59,6 +97,8 @@ export function discoveredModel(
     ...(model.isDefault ? { isDefault: true } : {}),
     options: [
       ...(effort ? [effort] : []),
+      ...(context ? [context] : []),
+      ...(thinking ? [thinking] : []),
       ...(serviceTier
         ? [serviceTier]
         : sessionSupportsFastMode && model.supportsFastMode === true
@@ -66,4 +106,11 @@ export function discoveredModel(
           : [])
     ]
   }
+}
+
+export function withStructuredConversationMode(
+  model: CatalogModel,
+  mode: CatalogOption | undefined
+): CatalogModel {
+  return mode ? { ...model, options: [...model.options, mode] } : model
 }

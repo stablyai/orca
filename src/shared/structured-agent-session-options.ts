@@ -1,5 +1,8 @@
 import type { AgentSessionOptionCatalog, CatalogModel } from './agent-session-option-catalog'
-import { discoveredModel } from './structured-agent-session-discovered-model'
+import {
+  discoveredModel,
+  withStructuredConversationMode
+} from './structured-agent-session-discovered-model'
 import {
   buildNativeChatSessionOptionSnapshot,
   resolveEffectiveNativeChatModelId,
@@ -27,14 +30,18 @@ export function structuredAgentSessionOptionCatalog(
   seed: AgentSessionOptionCatalog,
   result: AgentSessionOptionsResult
 ): AgentSessionOptionCatalog {
+  const mode = seed.structuredConversationMode
   const models: CatalogModel[] = result.models.map((model) =>
-    discoveredModel(model, result.fastModeSupport?.supported === true)
+    withStructuredConversationMode(
+      discoveredModel(model, result.fastModeSupport?.supported === true),
+      mode
+    )
   )
   if (result.current.model && !models.some((model) => model.id === result.current.model)) {
     models.push({
       id: result.current.model,
       label: result.current.model,
-      options: seed.unknownModelOptions ?? []
+      options: [...(seed.unknownModelOptions ?? []), ...(mode ? [mode] : [])]
     })
   }
   return { ...seed, models, defaultModelIsCliDefault: true }
@@ -87,11 +94,15 @@ export function applyStructuredAgentSessionModelCatalog(
   if (state.catalogSource === 'live') {
     return state
   }
+  const mode = seed.structuredConversationMode
   const models =
     catalog.origin === 'unknown'
       ? []
       : catalog.models.map((model) =>
-          discoveredModel(model, catalog.fastModeSupport?.supported === true)
+          withStructuredConversationMode(
+            discoveredModel(model, catalog.fastModeSupport?.supported === true),
+            mode
+          )
         )
   if (catalog.origin === 'unknown' || models.length === 0) {
     return settleStructuredAgentSessionBuiltinCatalog(state)
@@ -131,7 +142,12 @@ export function applyStructuredAgentSessionOptions(
       ...(result.current.model ? { model: result.current.model } : {}),
       ...(result.current.effort ? { effort: result.current.effort } : {}),
       ...(result.current.fastMode !== undefined ? { fastMode: result.current.fastMode } : {}),
-      ...(result.current.serviceTier ? { serviceTier: result.current.serviceTier } : {})
+      ...(result.current.serviceTier ? { serviceTier: result.current.serviceTier } : {}),
+      ...(result.current.context ? { context: result.current.context } : {}),
+      ...(result.current.thinking ? { thinking: result.current.thinking } : {}),
+      ...(result.current.conversationMode
+        ? { conversationMode: result.current.conversationMode }
+        : {})
     },
     result.current.confirmed ?? []
   )

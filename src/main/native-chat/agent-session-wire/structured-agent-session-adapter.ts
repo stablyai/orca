@@ -170,8 +170,8 @@ export type AgentSessionCommandAdmission =
   | { state: 'accepted'; providerIdentity: null }
 
 export type AgentSessionDispatchOutcome =
-  /** The provider owns the turn now, under this identity. */
-  | { state: 'accepted'; providerIdentity: AgentJournalItemIdentity }
+  /** The provider owns the turn now. Null: it echoed no item of its own. */
+  | { state: 'accepted'; providerIdentity: AgentJournalItemIdentity | null }
   /**
    * The provider transport took the message; identity settles later, out of band.
    * The submission stays `pending`: a message queued behind a running turn is

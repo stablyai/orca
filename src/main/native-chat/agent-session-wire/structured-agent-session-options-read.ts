@@ -59,7 +59,11 @@ async function readStructuredAgentSessionOptionsAtRest(
   }
   const rules = restingOptionRules(deps.agents, record)
   const catalog = (await deps.modelCatalog
-    ?.read({ agent: record.provider, sessionId })
+    ?.read({
+      agent: record.provider,
+      sessionId,
+      ...(rules?.awaitsFirstListing ? { waitForListing: true } : {})
+    })
     .catch(() => null)) ?? { origin: 'unknown' as const }
   // With no catalog for the account, the list a running child of this agent falls back to.
   const listed = catalog.origin === 'unknown' ? (rules?.fallbackModels() ?? null) : catalog.models

@@ -5,6 +5,7 @@ import {
   type AgentModelCatalogService,
   type AgentModelCatalogServiceDeps
 } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
+import { cursorCatalogCredentialScope } from '../cursor/cursor-model-catalog'
 import {
   agentReadsProjectModelConfig,
   workspaceMayOverrideDefaultModel
@@ -91,6 +92,7 @@ export async function modelCatalogHostDeps(input: {
       (await deps.resolveWorkspacePath(record.location.workspaceId).catch(() => null)),
     agentReadsProjectModelConfig,
     workspaceMayOverrideDefaultModel,
+    cursorCredentialScope: () => cursorCatalogCredentialScope(deps.resolveCursorApiKey?.()),
     hasChatRecords: (agent) =>
       input.store.listRecords().some((record) => record.provider === agent),
     ...registeredModelCatalogDiscovery(input.registrations, {

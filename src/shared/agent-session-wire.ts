@@ -1,5 +1,10 @@
 import type { AgentSessionUnavailable } from './agent-session-availability'
 import type {
+  AgentSessionCurrentModelParameters,
+  AgentSessionModelParameterOptions,
+  AgentSessionOptionChoice
+} from './agent-session-model-parameters'
+import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
 } from './agent-session-background-task-wire'
@@ -382,13 +387,9 @@ export type AgentSessionOptionResult = {
   options?: Record<string, string>
 }
 
-export type AgentSessionOptionChoice = {
-  value: string
-  label: string
-  description?: string
-}
+export type { AgentSessionOptionChoice }
 
-export type AgentSessionModelOption = {
+export type AgentSessionModelOption = AgentSessionModelParameterOptions & {
   id: string
   label: string
   description?: string
@@ -494,7 +495,7 @@ export type AgentSessionOptionsResult = {
   models: AgentSessionModelOption[]
   /** Session/account/transport support. Absent means unknown, never unsupported. */
   fastModeSupport?: AgentSessionFastModeSupport
-  current: {
+  current: AgentSessionCurrentModelParameters & {
     model?: string
     effort?: string
     /** Canonical preference for the next turn. Explicit false is meaningful. */

@@ -233,6 +233,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
         claudeStructuredPermissionModeForSettings(this.requireStore().getSettings()),
       resolveCodexPermissionPolicy: () =>
         codexStructuredPermissionPolicyForSettings(this.requireStore().getSettings()),
+      resolveCursorApiKey: () => this.requireStore().getSettings().cursorSdkApiKey,
       resolveAgentFullAccess: (agent) =>
         isTuiAgent(agent) &&
         resolvedTuiAgentArgsBypassPermissions(

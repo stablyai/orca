@@ -83,6 +83,8 @@ export type AgentSessionOptionCatalog = {
     command: string
     parse: (stdout: string) => CatalogModel[]
   }
+  /** Appended only when a structured chat builds its live catalog. Terminal launches ignore it. */
+  structuredConversationMode?: CatalogOption
 }
 
 export type AgentSessionOptionCatalogMap = Partial<Record<AgentType, AgentSessionOptionCatalog>>

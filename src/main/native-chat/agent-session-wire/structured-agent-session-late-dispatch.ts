@@ -14,7 +14,7 @@ export async function settleStructuredAgentSessionLateDispatch(
     sessionId: string
     clientMessageId: string
   } & (
-    | { providerIdentity: AgentJournalItemIdentity }
+    | { providerIdentity: AgentJournalItemIdentity | null }
     | ({
         state: 'rejected'
         answeredInTurn?: AgentJournalAnsweredTurnIdentity
