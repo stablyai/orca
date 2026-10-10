@@ -56,6 +56,8 @@ export function resolveWorkerLaunchPreferences(args: {
   createsWorktree?: boolean
   model?: string
   effort?: string
+  /** What the executing host's agent CLI lists for `model`; null or absent uses the static catalog. */
+  discoveredEfforts?: readonly string[] | null
 }): {
   preferences: AgentLaunchPreferences | undefined
   receipt: OrchestrationWorkerLaunchReceipt
@@ -92,7 +94,14 @@ export function resolveWorkerLaunchPreferences(args: {
     )
   }
 
-  if (args.effort) {
+  if (args.effort && args.discoveredEfforts?.length) {
+    if (!args.discoveredEfforts.includes(args.effort)) {
+      throw new OrchestrationError(
+        'invalid_argument',
+        `Agent ${args.agent} model ${args.model} does not support effort ${args.effort}. The installed ${args.agent} lists: ${args.discoveredEfforts.join(', ')}.`
+      )
+    }
+  } else if (args.effort) {
     const model = findCatalogModel(catalog, args.model)
     const option =
       findCatalogOption(model, 'effort') ??

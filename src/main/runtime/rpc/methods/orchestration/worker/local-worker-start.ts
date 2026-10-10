@@ -1,4 +1,5 @@
 import { probeWorkerOpenCodeModelLaunchSupport } from './worker-opencode-model-preflight'
+import { readWorkerCodexDiscoveredEfforts } from './worker-codex-effort-preflight'
 import { resolveWorkerConfiguredAgentParams } from './worker-configured-agent-preflight'
 import { waitForWorkerAgentReady } from '../../../../launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -63,7 +64,7 @@ export async function startLocalWorker(args: {
   const coordinatorPane = coordinator?.paneKey ?? null
   const requestedWorktree = params.worktree ?? 'current'
   const createsWorktree = requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
-  const launchParams = await resolveWorkerConfiguredAgentParams(runtime, params, async () => {
+  const resolveLaunchTarget = async (): Promise<{ repo?: string; worktree?: string }> => {
     const callerWorkspaceId = await resolveDispatchCallerWorktreeId(
       runtime,
       params.from,
@@ -77,7 +78,12 @@ export async function startLocalWorker(args: {
       : {
           worktree: requestedWorktree === 'current' ? `id:${callerWorkspaceId}` : requestedWorktree
         }
-  })
+  }
+  const launchParams = await resolveWorkerConfiguredAgentParams(
+    runtime,
+    params,
+    resolveLaunchTarget
+  )
   let openCodeModelLaunchSupported = false
   if (!createsWorktree && launchParams.agent === 'opencode' && launchParams.model) {
     const callerWorkspaceId = await resolveDispatchCallerWorktreeId(
@@ -92,11 +98,18 @@ export async function startLocalWorker(args: {
     )
   }
 
+  const discoveredEfforts = await readWorkerCodexDiscoveredEfforts(
+    runtime,
+    launchParams,
+    resolveLaunchTarget
+  )
+
   const { agent, launch } = prepareLocalWorkerStart({
     params: launchParams,
     createsWorktree,
     runtime,
-    openCodeModelLaunchSupported
+    openCodeModelLaunchSupported,
+    discoveredEfforts
   })
 
   const coordinatorWorktreeId = await resolveDispatchCallerWorktreeId(

@@ -1,3 +1,4 @@
+import { readWorkerCodexDiscoveredEfforts } from './worker-codex-effort-preflight'
 import {
   prepareFederationConfiguredWorkerStart,
   resolveWorkerConfiguredAgentParams
@@ -21,16 +22,26 @@ export async function probeWorkerOpenCodeModelLaunchSupport(
 export async function prepareFederationWorkerLaunchOnHost(
   args: Omit<
     Parameters<typeof prepareFederationAttachmentWorkerStart>[0],
-    'openCodeModelLaunchSupported'
+    'openCodeModelLaunchSupported' | 'discoveredEfforts'
   >
 ) {
-  const params = await resolveWorkerConfiguredAgentParams(args.runtime, args.params, async () =>
+  const resolveTarget = async () =>
     args.createsWorktree ? { repo: args.params.repo } : { worktree: args.params.worktree }
-  )
+  const params = await resolveWorkerConfiguredAgentParams(args.runtime, args.params, resolveTarget)
   const openCodeModelLaunchSupported =
     !args.createsWorktree &&
     (await probeWorkerOpenCodeModelLaunchSupport(args.runtime, params, {
       worktree: params.worktree
     }))
-  return prepareFederationConfiguredWorkerStart({ ...args, params, openCodeModelLaunchSupported })
+  const discoveredEfforts = await readWorkerCodexDiscoveredEfforts(
+    args.runtime,
+    params,
+    resolveTarget
+  )
+  return prepareFederationConfiguredWorkerStart({
+    ...args,
+    params,
+    openCodeModelLaunchSupported,
+    discoveredEfforts
+  })
 }

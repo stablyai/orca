@@ -53,6 +53,7 @@ export function prepareLocalWorkerStart(args: {
   createsWorktree: boolean
   runtime: OrcaRuntimeService
   openCodeModelLaunchSupported?: boolean
+  discoveredEfforts?: readonly string[] | null
 }): { agent: TuiAgent | undefined; launch: WorkerStartLaunch } {
   const { params, createsWorktree, runtime } = args
   assertWorkerLaunchPreferencesCreateTerminal(params)
@@ -80,6 +81,7 @@ export function prepareLocalWorkerStart(args: {
   return resolveWorkerStartAgent({
     runtime,
     openCodeModelLaunchSupported: args.openCodeModelLaunchSupported,
+    discoveredEfforts: args.discoveredEfforts,
     createsWorktree,
     terminal: params.terminal,
     agent: params.agent,
@@ -94,6 +96,7 @@ export function prepareFederationAttachmentWorkerStart(args: {
   createsWorktree: boolean
   runtime: OrcaRuntimeService
   openCodeModelLaunchSupported?: boolean
+  discoveredEfforts?: readonly string[] | null
 }): { agent: TuiAgent | undefined; launch: WorkerStartLaunch } {
   const { params, createsWorktree, runtime } = args
   assertWorkerLaunchPreferencesCreateTerminal(params)
@@ -127,6 +130,7 @@ export function prepareFederationAttachmentWorkerStart(args: {
   return resolveWorkerStartAgent({
     runtime,
     openCodeModelLaunchSupported: args.openCodeModelLaunchSupported,
+    discoveredEfforts: args.discoveredEfforts,
     createsWorktree,
     terminal: params.terminal,
     agent: params.agent,
@@ -140,6 +144,7 @@ export function prepareFederationAttachmentWorkerStart(args: {
 function resolveWorkerStartAgent(args: {
   runtime: OrcaRuntimeService
   openCodeModelLaunchSupported?: boolean
+  discoveredEfforts?: readonly string[] | null
   createsWorktree: boolean
   terminal?: string
   agent?: string
@@ -162,6 +167,7 @@ function resolveWorkerStartAgent(args: {
       launch: resolveWorkerLaunchPreferences({
         agent,
         openCodeModelLaunchSupported: args.openCodeModelLaunchSupported,
+        discoveredEfforts: args.discoveredEfforts,
         createsWorktree: args.createsWorktree,
         model: args.model,
         effort: args.effort

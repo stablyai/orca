@@ -243,6 +243,60 @@ describe('orchestration worker launch preferences', () => {
     }
   })
 
+  describe('with efforts discovered from the host Codex', () => {
+    const solEfforts = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']
+
+    it.each(['max', 'ultra'])('accepts %s for gpt-6.1-sol when Codex lists it', (effort) => {
+      expect(
+        resolveWorkerLaunchPreferences({
+          agent: 'codex',
+          model: 'gpt-6.1-sol',
+          effort,
+          discoveredEfforts: solEfforts
+        }).preferences
+      ).toEqual({ model: 'gpt-6.1-sol', effort })
+    })
+
+    it.each([
+      ['an effort Codex does not list for the model', 'gpt-6-luna', 'ultra'],
+      ['minimal, which the static fallback alone would allow', 'gpt-6.1-sol', 'minimal'],
+      ['an unknown effort name', 'gpt-6.1-sol', 'turbo']
+    ])('refuses %s', (_case, model, effort) => {
+      const discoveredEfforts =
+        model === 'gpt-6-luna' ? ['low', 'medium', 'high', 'xhigh', 'max'] : solEfforts
+      expect(() =>
+        resolveWorkerLaunchPreferences({ agent: 'codex', model, effort, discoveredEfforts })
+      ).toThrow(
+        `does not support effort ${effort}. The installed codex lists: ${discoveredEfforts.join(', ')}.`
+      )
+    })
+
+    it('lets the host listing raise a stale static ceiling for a known model', () => {
+      expect(() =>
+        resolveWorkerLaunchPreferences({ agent: 'codex', model: 'gpt-5.5', effort: 'max' })
+      ).toThrow('does not support effort max')
+      expect(
+        resolveWorkerLaunchPreferences({
+          agent: 'codex',
+          model: 'gpt-5.5',
+          effort: 'max',
+          discoveredEfforts: ['low', 'medium', 'high', 'xhigh', 'max']
+        }).preferences
+      ).toEqual({ model: 'gpt-5.5', effort: 'max' })
+    })
+
+    it.each([null, []])('uses the static catalog when discovery has no answer (%j)', (none) => {
+      expect(() =>
+        resolveWorkerLaunchPreferences({
+          agent: 'codex',
+          model: 'gpt-5.5',
+          effort: 'max',
+          discoveredEfforts: none
+        })
+      ).toThrow('does not support effort max')
+    })
+  })
+
   it.each(['codex', 'omp'] as const)('rejects %s effort without a model', (agent) => {
     expect(() => resolveWorkerLaunchPreferences({ agent, effort: 'high' })).toThrow(
       '--effort requires --model'

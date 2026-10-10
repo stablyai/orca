@@ -19,11 +19,14 @@ import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-termi
 import { resolveStartupShell, type AgentStartupShell } from '../../shared/tui-agent-startup-shell'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { resolveConfiguredWorkerAgent } from './orchestration/configured-worker-agent-selector'
-import { parseWslUncPath } from '../../shared/wsl-paths'
-import { resolveLocalProjectRuntimeForRepo } from '../project-runtime-git-options'
 
 import { prepareOpenCodeModelStartupInputs } from '../opencode/opencode-model-startup-plan'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
+import {
+  createCodexWorkerModelCatalog,
+  readCodexWorkerModelEfforts
+} from './orchestration/codex-worker-model-efforts'
+import { resolveWorkerLocalPlacement } from './orchestration/worker-local-placement'
 
 export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAdoptTerminalOrphansFromInventory {
   async getTerminalInteractiveWait(
@@ -235,37 +238,19 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
     if (!target.model || !target.worktree) {
       return false
     }
-    const workspace = await this.resolveTerminalWorkspaceLaunchScope(target.worktree)
-    const executionRepo = workspace?.repo
-    if (
-      workspace?.connectionId ||
-      (executionRepo?.executionHostId && executionRepo.executionHostId !== 'local')
-    ) {
+    const placement = resolveWorkerLocalPlacement(
+      this.requireStore(),
+      await this.resolveTerminalWorkspaceLaunchScope(target.worktree)
+    )
+    if (!placement) {
       return false
     }
-    const store = this.requireStore()
-    const settings = store.getSettings()
-    const path = workspace?.path
-    const unc = path ? parseWslUncPath(path) : null
-    const projectRuntime = executionRepo
-      ? resolveLocalProjectRuntimeForRepo(store, executionRepo)
-      : null
-    if (projectRuntime?.status === 'repair-required') {
-      return false
-    }
-    const wsl = unc
-      ? { distro: unc.distro }
-      : projectRuntime?.runtime.kind === 'wsl'
-        ? { distro: projectRuntime.runtime.distro }
-        : undefined
-    if (!path) {
-      return false
-    }
+    const { path, wsl } = placement
     try {
       await prepareOpenCodeModelStartupInputs({
         inputs: resolveAgentStartupPlanInputs({
           agent: 'opencode',
-          settings,
+          settings: this.requireStore().getSettings(),
           platform: wsl ? 'linux' : process.platform,
           isRemote: false,
           sessionOptions: { model: target.model }
@@ -278,6 +263,31 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
     } catch {
       return false
     }
+  }
+
+  /** The efforts this host's Codex lists for `model`; null falls back to Orca's static catalog. */
+  async readOrchestrationCodexModelEfforts(
+    target: { repo?: string; worktree?: string },
+    model: string
+  ): Promise<string[] | null> {
+    const repo = target.repo ? await this.resolveRepoSelector(target.repo) : null
+    const placement = resolveWorkerLocalPlacement(
+      this.requireStore(),
+      repo
+        ? { repo, path: repo.path, connectionId: repo.connectionId }
+        : target.worktree
+          ? await this.resolveTerminalWorkspaceLaunchScope(target.worktree)
+          : null
+    )
+    // The listing probe spawns the native Codex; a WSL worker runs a different install.
+    if (!placement || placement.wsl) {
+      return null
+    }
+    this.codexWorkerModelCatalog ??= createCodexWorkerModelCatalog({
+      getSettings: () => this.requireStore().getSettings(),
+      resolveAccountHome: (agent) => this.resolveStructuredAgentAccountHome(agent)
+    })
+    return readCodexWorkerModelEfforts(this.codexWorkerModelCatalog, model)
   }
 
   validateOrchestrationAgentLauncher(agent: TuiAgent): void {
