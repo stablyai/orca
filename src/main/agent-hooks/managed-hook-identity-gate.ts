@@ -1,4 +1,4 @@
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import type { AgentHookTarget } from '../../shared/agent-hook-types'
 import type { ManagedAgentHookTarget } from '../../shared/managed-agent-hook-targets'
 import {
