@@ -32,6 +32,8 @@ import {
 } from './pty-launch-parity-host-cases'
 import { CALLER_LAUNCH_CASES, OPENCODE_MODEL } from './pty-launch-parity-caller-cases'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
+import { DESKTOP_RPC_CALLER } from '../runtime/rpc/rpc-caller-identity'
+import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './desktop-renderer-runtime-capabilities'
 import { TERMINAL_LIFECYCLE_METHODS } from '../runtime/rpc/methods/terminal/terminal-lifecycle-methods'
 import { AGENT_SESSION_METHODS } from '../runtime/rpc/methods/agent-session'
 import { applyManagedDataAccountEnvironment } from '../managed-data-accounts/launch-environment'
@@ -218,8 +220,16 @@ async function runHostCall(lanes: ParityLanes, c: HostLaunchCase): Promise<unkno
           ? { clientOperationId: `${Date.now()}-0123456789abcdef0123456789abcdef`, ...params }
           : params
     },
-    // Row 4 is the desktop's own in-process call; rows 5r and 7 come from a paired desktop.
-    c.row === '4' ? {} : { clientId: 'device-1', pairedDeviceId: 'device-1', clientKind: 'runtime' }
+    // Row 4 is the desktop's own runtime:call (ipc/runtime.ts); rows 5r and 7 come from a paired desktop.
+    c.row === '4'
+      ? {
+          clientId: 'desktop-renderer',
+          caller: DESKTOP_RPC_CALLER,
+          clientKind: 'runtime',
+          connectionId: 'desktop-window-1',
+          clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
+        }
+      : { clientId: 'device-1', pairedDeviceId: 'device-1', clientKind: 'runtime' }
   )
   if (!response.ok) {
     throw Object.assign(new Error(response.error.message), { code: response.error.code })
@@ -354,20 +364,24 @@ describe('launch facts outside the tables', () => {
     expect(trackMock.mock.calls.filter(([event]) => event === 'agent_error')).toEqual(c.calls)
   })
 
-  // main today: the host lane hands the provider a gone subfolder; the window pane's root fallback
-  // is pinned in pty-spawn-cwd-fallback.test.ts. An automation sends no cwdFallback, but it always
-  // starts at the root the fallback would pick, so that is not a provider-visible fact.
-  it('a missing host-lane cwd reaches the provider unchanged', async () => {
+  // main today: neither refuses a gone folder before the spawn; the window pane's root fallback is
+  // pinned in pty-spawn-cwd-fallback.test.ts (an automation sends no cwdFallback, at the request).
+  it.each([
+    { lane: 'row 3: a gone host-lane subfolder', cwd: `${POSIX_PATH}/gone` },
+    { lane: 'row 5: a gone automation root', cwd: POSIX_PATH }
+  ])('$lane reaches the provider unchanged', async ({ lane, cwd }) => {
     setMainPlatform('darwin')
     statSyncMock.mockImplementation(() => {
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
     const lanes = startParityLanes(suite, { workspace: POSIX_REPO })
-    await runHostCall(lanes, {
-      ...AI_BUTTON,
-      call: { kind: 'create', options: { ...AI_BUTTON_OPTIONS, cwd: 'gone' } }
-    })
-    expect((await providerFacts(lanes.provider)).cwd).toBe(`${POSIX_PATH}/gone`)
+    await (lane.startsWith('row 3')
+      ? runHostCall(lanes, {
+          ...AI_BUTTON,
+          call: { kind: 'create', options: { ...AI_BUTTON_OPTIONS, cwd: 'gone' } }
+        })
+      : lanes.spawnWindow(automationSpawnRequest(AUTOMATION_LAUNCH_CASES[0])))
+    expect((await providerFacts(lanes.provider)).cwd).toBe(cwd)
   })
 
   it.each([

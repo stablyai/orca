@@ -773,11 +773,11 @@ describe('row 7: prompted paired launch wire shape on main', () => {
   it.each(
     PAIRED_TAB_CASES.filter(
       (c): c is Extract<PairedTabCase, { creator: 'launch-draft' }> => c.creator === 'launch-draft'
-    )
+    ).flatMap((c) => [true, false].map((modern) => ({ ...c, modern })))
   )(
-    '$name: the chat-composer copy is seeded only after the host answers with its tab',
+    '$name, host authority $modern: the chat copy is seeded only after the host answers',
     async (c) => {
-      stubRuntime(HOST_AUTHORITY)
+      stubRuntime(c.modern ? HOST_AUTHORITY : [])
       await createWebRuntimeAgentSessionTerminalWithLaunchDraft(c.launch)
       expect(mocks.seedNativeChatLaunchDraftForAgentTab.mock.calls).toEqual([
         [{ tabId: 'web-terminal-host-tab-2', agent: 'claude', text: c.launch.launchDraft }]

@@ -111,7 +111,7 @@ export const CALLER_LAUNCH_CASES: HostLaunchCase[] = [
     })
   ),
   ...Object.entries(PAIRED_TAB_HOST_PARAMS).map(([name, params]): HostLaunchCase => ({
-    name: `paired new tab, current host: ${name}`,
+    name: `paired new tab, host without the keyboard capability: ${name}`,
     row: '7',
     os: 'linux',
     workspace: repo(PAIRED_TAB_PATH),
@@ -180,7 +180,8 @@ export const CALLER_LAUNCH_CASES: HostLaunchCase[] = [
       startupCwd: workspace.path,
       placement: { tabId: HOST_TAB_ID, leafId: HOST_LEAF_ID },
       presentation: 'background',
-      terminalKittyKeyboardProtocol: true
+      // A local Windows ConPTY pane withholds kitty (ipc-pty-opencode-model.test.ts).
+      ...(workspace.path === WIN_PATH ? {} : { terminalKittyKeyboardProtocol: true })
     }),
     provider: { command, ...shell },
     // main today: the pane's own launch_source never reaches the host.

@@ -51,6 +51,7 @@ vi.mock('@/lib/windows-terminal-capabilities', async (importOriginal) => ({
 
 const load = perClientLoader(async () => ({
   launch: await import('@/lib/launch-agent-in-new-tab'),
+  quick: await import('@/lib/run-quick-command-in-new-tab'),
   vault: await import('@/lib/launch-ai-vault-session'),
   resume: await import('@/lib/ai-vault-resume-command'),
   pane: await import('./pty-connection'),
@@ -69,15 +70,21 @@ async function openTab(c: WindowLaunchCase) {
   store.setState(launchWorkspaceState(c.workspace, c.settings))
   const worktreeId = launchWorkspaceId(c.workspace)
   const producer = c.producer
-  if (producer.kind === 'new-tab') {
+  if (producer.kind === 'quick-command') {
+    modules.quick.runQuickCommandInNewTab({
+      command: { id: 'qc-1', label: 'Fix', action: 'agent-prompt', ...producer },
+      worktreeId
+    })
+  } else if (producer.kind === 'continuation') {
+    // What launchAgentSessionContinuation passes once the agent is detected.
     modules.launch.launchAgentInNewTab({
       requestId: `parity-${c.name}`,
       agent: producer.agent,
       worktreeId,
       prompt: producer.prompt,
-      promptDelivery: producer.delivery,
-      launchSource: producer.launchSource,
-      ...(producer.initialCwd ? { initialCwd: producer.initialCwd } : {})
+      promptDelivery: 'draft',
+      launchSource: 'terminal_context_menu',
+      initialCwd: producer.initialCwd
     })
   } else {
     // The sidebar's "continue from transcript" builds the startup, then opens the tab.
@@ -124,7 +131,7 @@ async function paneSpawnRequest(c: WindowLaunchCase): Promise<unknown> {
     tab.startupCwd ?? c.workspace.path
   ).startupCwd
   const startup = store.getState().pendingStartupByTabId[tab.id]
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the real store state is a superset of every StoreState member the pane reads.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the real store state includes every StoreState member the pane reads.
   const deps = buildPaneConnectionDeps(() => store.getState() as never, {
     tabId: tab.id,
     worktreeId,

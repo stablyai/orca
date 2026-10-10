@@ -30,14 +30,10 @@ export function launchWorkspaceId(workspace: LaunchWorkspace): string {
 }
 
 export type WindowLaunchProducer =
-  | {
-      kind: 'new-tab'
-      agent: 'claude' | 'codex' | 'aider'
-      prompt: string
-      delivery: 'draft' | 'auto-submit'
-      launchSource: 'quick_command'
-      initialCwd?: string
-    }
+  /** An agent-prompt quick command (run-quick-command-in-new-tab.ts): Claude and Codex auto-submit. */
+  | { kind: 'quick-command'; agent: 'claude' | 'codex'; prompt: string }
+  /** A terminal's "continue in new session": Claude gets a draft in the pane's cwd. */
+  | { kind: 'continuation'; agent: 'claude'; prompt: string; initialCwd: string }
   | { kind: 'transcript-continue'; transcript: string; cwd: string | null }
 
 type ProjectRuntimeSent =
@@ -107,7 +103,7 @@ export function windowSpawnRequest(c: WindowLaunchCase): Record<string, unknown>
   const { workspace, producer, request } = c
   const worktreeId = launchWorkspaceId(workspace)
   const ssh = workspace.connectionId !== undefined
-  const agent = producer.kind === 'new-tab' ? producer.agent : 'antigravity'
+  const agent = producer.kind === 'transcript-continue' ? 'antigravity' : producer.agent
   const cwd = request.cwd ?? workspace.path
   // A local Windows ConPTY pane withholds the kitty keyboard flag (terminal-keyboard-protocol.ts).
   const localConpty =
@@ -151,13 +147,14 @@ export function windowSpawnRequest(c: WindowLaunchCase): Record<string, unknown>
     ...(request.projectRuntime ? { projectRuntime: sentRuntime(request.projectRuntime) } : {}),
     ...(localConpty ? {} : { terminalKittyKeyboardProtocol: true }),
     telemetry:
-      producer.kind === 'new-tab'
-        ? {
+      producer.kind === 'transcript-continue'
+        ? { agent_kind: 'antigravity', launch_source: 'sidebar', request_kind: 'resume' }
+        : {
             agent_kind: agent === 'claude' ? 'claude-code' : agent,
-            launch_source: producer.launchSource,
+            launch_source:
+              producer.kind === 'quick-command' ? 'quick_command' : 'terminal_context_menu',
             request_kind: 'new'
           }
-        : { agent_kind: 'antigravity', launch_source: 'sidebar', request_kind: 'resume' }
   }
 }
 

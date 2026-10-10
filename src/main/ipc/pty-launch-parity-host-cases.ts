@@ -56,7 +56,8 @@ const agentLaunch = (extra: Record<string, unknown> = {}): HostLaunchCall => ({
     tabId: HOST_TAB_ID,
     leafId: HOST_LEAF_ID,
     requireFreshPane: true,
-    launchSource: 'cli',
+    // Fix checks, an AI button, sends its caller's source.
+    launchSource: 'task_page',
     viewMode: 'terminal',
     surfaceOwner: false,
     ...extra
@@ -83,12 +84,23 @@ export const folder = (path: string, extra: Partial<LaunchWorkspace> = {}): Laun
   path,
   ...extra
 })
-// The same factory for a CLI `agent.launch` with a prompt: no reserved pane, the window not moved.
-const cliLaunch = (extra: Record<string, unknown>): HostLaunchCall => ({
+// The same factory for a mobile quick command (agent.launchReplay with a reserved pane and a
+// prompt): a paired phone never moves the host window.
+const mobileQuickCommand = (startupPrompt: string): HostLaunchCall => ({
   kind: 'create',
-  options: { startupAgent: 'codex', launchSource: 'cli', surfaceOwner: false, ...extra }
+  options: {
+    startupAgent: 'codex',
+    startupPrompt,
+    launchSource: 'quick_command',
+    tabId: HOST_TAB_ID,
+    leafId: HOST_LEAF_ID,
+    requireFreshPane: true,
+    viewMode: 'terminal',
+    surfaceOwner: false
+  }
 })
-const CLI = { agent_kind: 'claude-code', launch_source: 'cli', request_kind: 'new' }
+const TASK_PAGE = { agent_kind: 'claude-code', launch_source: 'task_page', request_kind: 'new' }
+const QUICK_COMMAND = { agent_kind: 'codex', launch_source: 'quick_command', request_kind: 'new' }
 export const AGENT_PHONE = { title: 'Terminal', launchAgent: 'claude', isActive: true }
 const POSIX_CLAUDE = "claude '--dangerously-skip-permissions'"
 const CMD_CLAUDE = 'claude "--dangerously-skip-permissions"'
@@ -128,7 +140,7 @@ function aiButton(
     ...(settings ? { settings } : {}),
     call: agentLaunch(),
     provider,
-    telemetry: CLI,
+    telemetry: TASK_PAGE,
     phone: AGENT_PHONE
   }
 }
@@ -227,32 +239,32 @@ export const HOST_LAUNCH_CASES: HostLaunchCase[] = [
     // main today: with no prompt on the command, the host does not wait for the shell.
     ...aiButton('macOS repo, codex', 'darwin', repo(POSIX_PATH), { command: CODEX, ...ZSH }),
     call: agentLaunch({ startupAgent: 'codex' }),
-    telemetry: { ...CLI, agent_kind: 'codex' },
+    telemetry: { ...TASK_PAGE, agent_kind: 'codex' },
     phone: { ...AGENT_PHONE, launchAgent: 'codex' }
   },
   {
     // A remote Windows path quotes PowerShell-style (the doubled apostrophe), whatever the host.
-    name: 'CLI agent.launch, Linux host, SSH Windows-path repo, codex prompt',
+    name: 'mobile quick command, Linux host, SSH Windows-path repo, codex prompt',
     row: '10',
     os: 'linux',
     workspace: repo(WIN_PATH, ssh),
-    call: cliLaunch({ startupPrompt: "fix Bob's branch" }),
+    call: mobileQuickCommand("fix Bob's branch"),
     provider: { command: `${CODEX} 'fix Bob''s branch'`, startupCommandDelivery: 'shell-ready' },
-    telemetry: { ...CLI, agent_kind: 'codex' },
+    telemetry: QUICK_COMMAND,
     phone: { ...AGENT_PHONE, launchAgent: 'codex' }
   },
   {
-    name: 'CLI agent.launch, macOS repo, codex prompt waits for the shell',
+    name: 'mobile quick command, macOS repo, codex prompt waits for the shell',
     row: '10',
     os: 'darwin',
     workspace: repo(POSIX_PATH),
-    call: cliLaunch({ startupPrompt: "fix Bob's branch" }),
+    call: mobileQuickCommand("fix Bob's branch"),
     provider: {
       command: `${CODEX} 'fix Bob'"'"'s branch'`,
       startupCommandDelivery: 'shell-ready',
       ...ZSH
     },
-    telemetry: { ...CLI, agent_kind: 'codex' },
+    telemetry: QUICK_COMMAND,
     phone: { ...AGENT_PHONE, launchAgent: 'codex' }
   },
   ...[repo(POSIX_PATH), folder(POSIX_PATH), repo(POSIX_PATH, { connectionId: 'ssh-1' })].map(
@@ -263,7 +275,7 @@ export const HOST_LAUNCH_CASES: HostLaunchCase[] = [
       workspace,
       call: worker,
       provider: { command: POSIX_CLAUDE, ...(workspace.connectionId ? NO_SHELL : ZSH) },
-      telemetry: { ...CLI, launch_source: 'orchestration' },
+      telemetry: { ...TASK_PAGE, launch_source: 'orchestration' },
       phone: { title: 'worker-task-1', launchAgent: 'claude', isActive: true }
     })
   )

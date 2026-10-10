@@ -17,13 +17,10 @@ export const WSL_PATH = String.raw`\\wsl$\Ubuntu\home\alice\repo`
 const SKIP = '--dangerously-skip-permissions'
 const POSIX_CLAUDE = `claude '${SKIP}'`
 const CMD_CLAUDE = `claude "${SKIP}"`
-// The draft rides --prefill.
-const posix = {
-  command: `${POSIX_CLAUDE} --prefill 'fix Bob'"'"'s bug'`,
-  agentCommand: POSIX_CLAUDE
-}
-const ps = { command: `${POSIX_CLAUDE} --prefill 'fix Bob''s bug'`, agentCommand: POSIX_CLAUDE }
-const cmd = { command: `${CMD_CLAUDE} --prefill "fix Bob's bug"`, agentCommand: CMD_CLAUDE }
+// The auto-submitted prompt rides on argv.
+const posix = { command: `${POSIX_CLAUDE} 'fix Bob'"'"'s bug'`, agentCommand: POSIX_CLAUDE }
+const ps = { command: `${POSIX_CLAUDE} 'fix Bob''s bug'`, agentCommand: POSIX_CLAUDE }
+const cmd = { command: `${CMD_CLAUDE} "fix Bob's bug"`, agentCommand: CMD_CLAUDE }
 
 const BRAIN = '.gemini/antigravity-ide/brain/ide-id/transcript_full.jsonl'
 const MAC_T = `/Users/alice/${BRAIN}`
@@ -75,15 +72,9 @@ function launch(
 ): WindowLaunchCase {
   return { name, row, client, workspace, producer, request, provider, settings }
 }
-// Quick command's typed prompt; the apostrophe shows which shell the command was quoted for.
-const draft = {
-  kind: 'new-tab',
-  agent: 'claude',
-  prompt: "fix Bob's bug",
-  delivery: 'draft',
-  launchSource: 'quick_command'
-} as const
-const typed = launch.bind(null, 2, draft)
+// A quick command's prompt; the apostrophe shows which shell the command was quoted for.
+const quick = { kind: 'quick-command', agent: 'claude', prompt: "fix Bob's bug" } as const
+const typed = launch.bind(null, 2, quick)
 const resume = (transcript: string, cwd: string | null) =>
   launch.bind(null, 6, { kind: 'transcript-continue', transcript, cwd })
 
@@ -101,37 +92,34 @@ export const WINDOW_LAUNCH_CASES: WindowLaunchCase[] = [
       agentDefaultEnv: { claude: { A: '1' } }
     }
   ),
+  // The draft rides --prefill.
   launch(
     2,
-    { ...draft, initialCwd: `${POSIX_PATH}/pkg` },
-    'macOS repo, initial cwd',
+    {
+      kind: 'continuation',
+      agent: 'claude',
+      prompt: "fix Bob's bug",
+      initialCwd: `${POSIX_PATH}/pkg`
+    },
+    'macOS repo, terminal continuation in the pane cwd',
     'darwin',
     repo(POSIX_PATH),
-    { ...posix, cwd: `${POSIX_PATH}/pkg` },
+    {
+      command: `${POSIX_CLAUDE} --prefill 'fix Bob'"'"'s bug'`,
+      agentCommand: POSIX_CLAUDE,
+      cwd: `${POSIX_PATH}/pkg`
+    },
     ZSH
   ),
   launch(
     2,
-    { ...draft, agent: 'codex', delivery: 'auto-submit' },
+    { ...quick, agent: 'codex' },
     'macOS repo, codex auto-submit waits for the shell',
     'darwin',
     repo(POSIX_PATH),
     {
       command: `codex '--dangerously-bypass-approvals-and-sandbox' 'fix Bob'"'"'s bug'`,
       agentCommand: `codex '--dangerously-bypass-approvals-and-sandbox'`
-    },
-    ZSH
-  ),
-  // stdin-after-start: the prompt is pasted once the agent is ready (launch-agent-in-new-tab tests).
-  launch(
-    2,
-    { ...draft, agent: 'aider', delivery: 'auto-submit' },
-    'Linux repo, aider',
-    'linux',
-    repo(POSIX_PATH),
-    {
-      command: "aider '--yes-always'",
-      agentCommand: "aider '--yes-always'"
     },
     ZSH
   ),
