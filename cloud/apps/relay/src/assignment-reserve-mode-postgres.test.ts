@@ -35,13 +35,13 @@ describePostgres('reserve-mode census on PostgreSQL', () => {
     await database.close()
   })
 
-  const heartbeat = async (store: RelayAssignmentStore, cell: RelayCellConfig) =>
+  const heartbeat = async (store: RelayAssignmentStore, cell: RelayCellConfig, ready = true) =>
     await store.recordCellHeartbeat({
       cellId: cell.id,
       cellUrl: cell.url,
       cellIncarnation: '11111111-1111-4111-8111-111111111111',
       startedAt: 50,
-      ready: true,
+      ready,
       observedRequests: 0,
       totalConnections: 0,
       inFlightConnections: 0,
@@ -107,4 +107,78 @@ describePostgres('reserve-mode census on PostgreSQL', () => {
     expect((await store.assign(identity)).cellId).toBe(cellB.id)
     await store.setCellAdmitMode(cellA.id, 'db')
   })
+
+  // A database brownout drops ready, not the socket: a host on a reserve cell that still
+  // heartbeats is not re-placed (that would seat it twice); its home just reads unavailable.
+  it('does not re-place a host off a reserve cell that heartbeats while not ready', async () => {
+    let now = 400_000
+    const store = new RelayAssignmentStore(database, () => now, { requireLiveCells: true, heartbeatTtlMs: 45_000 })
+    await store.reconcileCells([cellA, cellB], false)
+    const identity = { userId: USER, relayHostId: 'host000000000005' }
+    await database.query(
+      `INSERT INTO relay_assignments
+       (user_id, relay_host_id, cell_id, assignment_epoch, lease_expires_at, last_activity_at,
+        reserved_controls, reserved_splices, reserved_invites, pending_installs,
+        pending_confirmations, migration_leases)
+       VALUES (?, ?, ?, 7, ?, ?, 0, 0, 0, 0, 0, 0)`,
+      [USER, identity.relayHostId, cellA.id, now, now]
+    )
+    await store.setCellAdmitMode(cellA.id, 'reserve')
+    now += ASSIGNMENT_LIMITS.activityLeaseMs + ASSIGNMENT_LIMITS.dormantTtlMs + 1
+    await heartbeat(store, cellA, false)
+    await heartbeat(store, cellB)
+    await expect(store.assign(identity)).rejects.toThrow('relay_home_cell_unavailable')
+    expect(
+      await database.query(`SELECT cell_id FROM relay_assignments WHERE user_id = ? AND relay_host_id = ?`, [
+        USER,
+        identity.relayHostId
+      ])
+    ).toEqual([{ cell_id: cellA.id }])
+    await store.setCellAdmitMode(cellA.id, 'db')
+  })
+
+  // A fleet-wide dead-man trip leaves every cell reserve in PG. The director only reads, never
+  // writes db back, so the database path must take the cells whose own feed says db.
+  it('places a fresh host on a reserve cell whose current feed says it admits through the database', async () => {
+    const store = new RelayAssignmentStore(database, () => 200_000)
+    await store.reconcileCells([cellA, cellB], false)
+    await store.setCellAdmitMode(cellA.id, 'reserve')
+    await store.setCellAdmitMode(cellB.id, 'reserve')
+    await expect(store.assign({ userId: USER, relayHostId: 'host000000000002' })).rejects.toThrow('relay_capacity_exhausted')
+    store.setReserveCellAdmitsDatabase((cellId) => cellId === cellA.id)
+    expect((await store.assign({ userId: USER, relayHostId: 'host000000000003' })).cellId).toBe(cellA.id)
+    // Census sweeps still treat it as reserve.
+    expect([...((await store.reserveModeCells()) ?? [])]).toEqual(expect.arrayContaining([cellA.id, cellB.id]))
+    await store.setCellAdmitMode(cellA.id, 'db')
+    await store.setCellAdmitMode(cellB.id, 'db')
+  })
+
+  // A timed-out read inside BEGIN aborts the transaction (25P02 on the next statement), so the
+  // reserve set is read before BEGIN and the transaction answers from that read.
+  it('assigns while the admit-mode read times out (57014), without aborting the transaction', async () => {
+    const timed = await openRelayDatabase({ databaseUrl, dataDir: '/tmp', statementTimeoutMs: 300 })
+    const holder = await openRelayDatabase({ databaseUrl, dataDir: '/tmp' })
+    let release!: () => void
+    const released = new Promise<void>((resolve) => (release = resolve))
+    let held!: () => void
+    const holding = new Promise<void>((resolve) => (held = resolve))
+    const lock = holder.transaction(async (transaction) => {
+      await transaction.query(`LOCK TABLE relay_cell_admit_modes IN ACCESS EXCLUSIVE MODE`)
+      held()
+      await released
+    })
+    try {
+      await holding
+      const store = new RelayAssignmentStore(timed, () => 300_000)
+      await store.reconcileCells([cellA, cellB], false)
+      expect(await store.reserveModeCells()).toBeNull()
+      const placed = await store.assign({ userId: USER, relayHostId: 'host000000000004' })
+      expect([cellA.id, cellB.id]).toContain(placed.cellId)
+    } finally {
+      release()
+      await lock
+      await timed.close()
+      await holder.close()
+    }
+  }, 20_000)
 })

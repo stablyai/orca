@@ -169,6 +169,9 @@ function hostKey(userId: string, relayHostId: string): string {
   return `${userId}\u0000${relayHostId}`
 }
 
+// Five missed polls: an older db answer may predate a re-arm to reserve.
+export const SEAT_FEED_DB_ADMIT_FRESH_MS = 5_000
+
 export class ShadowSeatDirectory {
   private readonly cells = new Map<string, CellCursor>()
   private readonly hosts = new Map<string, Map<string, ShadowSeat>>()
@@ -282,6 +285,18 @@ export class ShadowSeatDirectory {
 
   cellIds(): string[] {
     return [...this.cells.keys()]
+  }
+
+  // A fresh answer from the cell's current process saying it admits through the database: a
+  // tripped dead-man reports db with no re-registration pending. A stale or missing answer is no.
+  admitsDatabaseNow(cellId: string, now: number): boolean {
+    const cursor = this.cells.get(cellId)
+    return (
+      cursor?.status === 'live' &&
+      cursor.lastAnsweredAt !== undefined &&
+      now - cursor.lastAnsweredAt <= SEAT_FEED_DB_ADMIT_FRESH_MS &&
+      cursor.admitModeEffective === 'db'
+    )
   }
 
   // One cell's seats as the map holds them.
