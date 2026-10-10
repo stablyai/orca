@@ -436,6 +436,10 @@ test('the wait counts the lanes the cell actually uses', () => {
   assert.equal(reregisterLanes({ region: 'asia-east2' }), 5)
   assert.equal(reregisterLanes({ region: 'us-central1', flagsApplied: { flags: { reregisterInFlight: 16 } } }), 8)
   assert.equal(reregisterLanes({ region: 'asia-east2', flagsApplied: { flags: { reregisterInFlight: 16 } } }), 14)
+  // The pool the cell reports wins over the deployed-size table.
+  assert.equal(reregisterLanes({ region: 'us-central1', databasePoolMax: 22 }), 7)
+  assert.equal(reregisterLanes({ region: 'asia-east2', databasePoolMax: 12, flagsApplied: { flags: { reregisterInFlight: 16 } } }), 10)
+  assert.equal(reregisterLanes({ region: 'asia-east2', databasePoolMax: 'x' }), 5)
 })
 
 test('a tripped cell takes no write that keeps reserve, only one that also says db', async () => {

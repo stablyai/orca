@@ -55,13 +55,18 @@ export const RESERVE_MODE_CACHE_WAIT_MS = 10_000
 export const REREGISTER_WAIT_MIN_MS = 8 * 60_000
 export const REREGISTER_WAIT_MAX_MS = 50 * 60_000
 const REREGISTER_CONTROLS_PER_LANE_PER_SEC = 0.3
-// Cell database pool sizes (US 10, Asia 16): the cell takes a third, and caps the switch at the
-// pool less two (host-session-registry.ts reregisterInFlightLimit).
+// The cell takes a third of its database pool, and caps the switch at the pool less two
+// (host-session-registry.ts reregisterInFlightLimit). An image from before runtime-status
+// reported the pool falls back to the deployed sizes (US 10, Asia 16).
 const CELL_DATABASE_POOL_MAX = { 'asia-east2': 16 }
 const CELL_DATABASE_POOL_MAX_DEFAULT = 10
 
 export function reregisterLanes(runtime) {
-  const pool = CELL_DATABASE_POOL_MAX[runtime?.region] ?? CELL_DATABASE_POOL_MAX_DEFAULT
+  const reported = runtime?.databasePoolMax
+  const pool =
+    Number.isInteger(reported) && reported > 0
+      ? reported
+      : (CELL_DATABASE_POOL_MAX[runtime?.region] ?? CELL_DATABASE_POOL_MAX_DEFAULT)
   const flag = runtime?.flagsApplied?.flags?.reregisterInFlight
   if (flag === undefined) return Math.max(1, Math.floor(pool / 3))
   return Math.max(1, Math.min(Number(flag), pool - 2))
