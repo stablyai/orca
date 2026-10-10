@@ -168,9 +168,11 @@ export function AccountsPane({
   const visibleClaudeAccounts = claudeAccounts.accounts.filter((account) =>
     providerAccountMatchesView(account, accountRuntime, accountVisibilityOptions)
   )
-  const visibleCodexAccounts = codexAccounts.accounts.filter((account) =>
-    providerAccountMatchesView(account, accountRuntime, accountVisibilityOptions)
-  )
+  const visibleCodexAccounts = [...codexAccounts.accounts, ...(codexAccounts.pendingRemovals ?? [])]
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .filter((account) =>
+      providerAccountMatchesView(account, accountRuntime, accountVisibilityOptions)
+    )
   const activeCodexAccountId = getProviderAccountActiveIdForView(codexAccounts, accountRuntime)
   // Why: System default lights only when no account row is active; while a remote
   // owner's platform is unknown WSL rows hide fail-closed, so check the full roster.

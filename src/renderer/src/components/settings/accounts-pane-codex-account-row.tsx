@@ -13,9 +13,25 @@ import {
 import { formatAccountTimestamp, getCodexAccountRuntimeLabel } from './accounts-pane-runtime'
 import type { AccountsPaneSectionModel } from './accounts-pane-types'
 
+type CodexAccountRowModel = Pick<
+  AccountsPaneSectionModel,
+  | 'accountRuntime'
+  | 'accountRuntimeUnavailable'
+  | 'accountVisibilityOptions'
+  | 'activeCodexAccountId'
+  | 'codexAccounts'
+  | 'codexAction'
+  | 'codexRateLimits'
+  | 'codexRateLimitTarget'
+  | 'isRemoteAccountScope'
+  | 'runCodexAccountAction'
+  | 'setRemoveCodexTarget'
+  | 'settings'
+>
+
 export function renderCodexAccountRow(
   account: CodexRateLimitAccountsState['accounts'][number],
-  model: AccountsPaneSectionModel
+  model: CodexAccountRowModel
 ): React.JSX.Element {
   const {
     accountRuntime,
@@ -31,25 +47,27 @@ export function renderCodexAccountRow(
     setRemoveCodexTarget,
     settings
   } = model
-  const isActive = providerAccountIsActiveInView(
-    account,
-    codexAccounts,
-    accountRuntime,
-    accountVisibilityOptions
-  )
+  const removalPending = account.removalPending === true
+  const isActive =
+    !removalPending &&
+    providerAccountIsActiveInView(account, codexAccounts, accountRuntime, accountVisibilityOptions)
   // Why: same remote gate as the section-level warning — the
   // desktop's rate-limit poll says nothing about server accounts.
-  const accountAuthWarning = isRemoteAccountScope
-    ? null
-    : getCodexAccountAuthWarning({
-        limits: codexRateLimits,
-        target: codexRateLimitTarget,
-        runtime: accountRuntime,
-        activeAccountId: activeCodexAccountId,
-        accountId: account.id
-      })
+  const accountAuthWarning =
+    isRemoteAccountScope || removalPending
+      ? null
+      : getCodexAccountAuthWarning({
+          limits: codexRateLimits,
+          target: codexRateLimitTarget,
+          runtime: accountRuntime,
+          activeAccountId: activeCodexAccountId,
+          accountId: account.id
+        })
   const needsReauthentication = Boolean(accountAuthWarning)
-  const accountDetail = getCodexAccountDisplayDetail(account, codexAccounts.accounts)
+  const accountDetail = getCodexAccountDisplayDetail(account, [
+    ...codexAccounts.accounts,
+    ...(codexAccounts.pendingRemovals ?? [])
+  ])
   const isReauthing = codexAction === `reauth:${account.id}`
   const isRemoving = codexAction === `remove:${account.id}`
   const isBusy = codexAction !== 'idle' || accountRuntimeUnavailable
@@ -80,7 +98,7 @@ export function renderCodexAccountRow(
               accountRuntimeView
             )
           }}
-          disabled={isBusy}
+          disabled={isBusy || removalPending}
           className="flex min-w-0 flex-1 flex-col gap-0.5 text-left disabled:cursor-default"
         >
           <div className="flex min-w-0 items-center gap-2">
@@ -91,6 +109,14 @@ export function renderCodexAccountRow(
             >
               {getCodexAccountRuntimeLabel(account, accountRuntime.label)}
             </Badge>
+            {removalPending ? (
+              <Badge variant="outline">
+                {translate(
+                  'auto.components.settings.AccountsPane.codexRemovalPending',
+                  'Removal pending'
+                )}
+              </Badge>
+            ) : null}
             {isActive ? (
               <Badge
                 variant="outline"
@@ -118,6 +144,14 @@ export function renderCodexAccountRow(
                 <span className="min-w-0 break-words">{accountDetail}</span>
                 <span className="shrink-0 opacity-50">•</span>
               </>
+            ) : null}
+            {removalPending ? (
+              <span>
+                {translate(
+                  'auto.components.settings.AccountsPane.codexRemovalRetry',
+                  'Choose Remove to retry cleanup.'
+                )}
+              </span>
             ) : null}
             {needsReauthentication ? (
               <span className="truncate">
@@ -150,7 +184,7 @@ export function renderCodexAccountRow(
                 getProviderAccountRuntime(account)
               )
             }}
-            disabled={isRemoteAccountScope || isBusy}
+            disabled={isRemoteAccountScope || isBusy || removalPending}
             className="h-6 px-2 text-muted-foreground hover:text-foreground"
           >
             {isReauthing ? (

@@ -1,4 +1,4 @@
-import { lstatSync, readFileSync, realpathSync, statSync } from 'node:fs'
+import { lstatSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 
@@ -7,6 +7,7 @@ type HostCodexManagedHomeOwnershipOptions = {
   managedAccountsRoot: string
   systemCodexHomePath: string
   expectedAccountId?: string
+  allowEmptyHome?: boolean
 }
 
 export const MISSING_MANAGED_HOME_MESSAGE = 'Managed Codex home directory does not exist on disk.'
@@ -79,7 +80,8 @@ function evaluate({
   candidatePath,
   managedAccountsRoot,
   systemCodexHomePath,
-  expectedAccountId
+  expectedAccountId,
+  allowEmptyHome
 }: HostCodexManagedHomeOwnershipOptions): HostCodexManagedHomeVerdict {
   const resolvedCandidate = resolve(candidatePath)
   const resolvedRoot = resolve(managedAccountsRoot)
@@ -156,6 +158,15 @@ function evaluate({
     // Why: the marker is required, so its definitive absence is structural — but
     // an unreadable marker is not evidence of anything.
     if (isDefinitiveAbsence(error)) {
+      if (allowEmptyHome && expectedAccountId !== undefined) {
+        try {
+          if (readdirSync(canonicalCandidate).length === 0) {
+            return { kind: 'owned', homePath: canonicalCandidate }
+          }
+        } catch (readError) {
+          return { kind: 'indeterminate', error: readError }
+        }
+      }
       return { kind: 'untrusted', reason: 'Managed Codex home is missing Orca ownership marker.' }
     }
     return { kind: 'indeterminate', error }

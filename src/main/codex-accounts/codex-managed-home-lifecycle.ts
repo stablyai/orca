@@ -1,5 +1,13 @@
-import { mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, join, resolve, sep } from 'node:path'
+import {
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmdirSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
+import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import {
   WINDOWS_RM_MAX_RETRIES,
@@ -11,7 +19,11 @@ import { toWindowsWslPath } from '../wsl'
 import { runWslProcess } from '../wsl/wsl-runner'
 import type { CodexAccountAddTarget, ManagedCodexHomeLocation } from './codex-account-service-types'
 import { writeFileAtomically } from './fs-utils'
-import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
+import {
+  ManagedCodexHomeTemporarilyUnavailableError,
+  UntrustedManagedCodexHomeError,
+  MISSING_MANAGED_HOME_MESSAGE
+} from './host-codex-managed-home-ownership'
 import type { CodexManagedHomePath } from './codex-managed-home-path'
 
 const WSL_MANAGED_HOME_TIMEOUT_MS = 5_000
@@ -91,22 +103,50 @@ export class CodexManagedHomeLifecycle {
     this.safeRemove(managedHomePath, accountId)
   }
 
-  safeRemove(candidatePath: string, expectedAccountId: string): void {
+  safeRemove(candidatePath: string, expectedAccountId: string): boolean {
     let managedHomePath: string
     try {
-      managedHomePath = this.paths.assert(candidatePath, expectedAccountId)
+      managedHomePath = this.paths.assert(candidatePath, expectedAccountId, {
+        allowEmptyHome: true
+      })
     } catch (error) {
+      if (
+        error instanceof UntrustedManagedCodexHomeError &&
+        error.message === MISSING_MANAGED_HOME_MESSAGE
+      ) {
+        return true
+      }
+      if (parseWslUncPath(candidatePath) && confirmHomeAbsent(candidatePath)) {
+        return true
+      }
       console.warn('[codex-accounts] Refusing to remove untrusted managed home:', error)
-      return
+      return false
     }
 
     try {
-      removeManagedHomeTreeSync(managedHomePath)
+      const entries = readdirSync(managedHomePath)
+      const marker = entries.find((entry) =>
+        process.platform === 'win32'
+          ? entry.toLowerCase() === '.orca-managed-home'
+          : entry === '.orca-managed-home'
+      )
+      if (marker === undefined) {
+        // An interrupted final unlink may leave an empty home; refuse concurrent new files.
+        rmdirSync(managedHomePath)
+      } else {
+        // Keep proof of ownership until all credential-bearing entries have gone.
+        for (const entry of entries) {
+          if (entry !== marker) {
+            removeManagedHomeTreeSync(join(managedHomePath, entry))
+          }
+        }
+        removeManagedHomeTreeSync(managedHomePath)
+      }
     } catch (error) {
       // Why: this runs from error-cleanup paths; a still-held Windows handle
       // must not mask the original failure with an ENOTEMPTY from rmSync.
       console.warn('[codex-accounts] Failed to remove managed home:', error)
-      return
+      return false
     }
 
     if (parseWslUncPath(managedHomePath)) {
@@ -115,7 +155,7 @@ export class CodexManagedHomeLifecycle {
       } catch {
         // Best-effort cleanup
       }
-      return
+      return true
     }
 
     // Why: homes live at <accounts-root>/<uuid>/home; removing the home/ leaf leaves an empty <uuid>/ behind.
@@ -129,6 +169,7 @@ export class CodexManagedHomeLifecycle {
     } catch {
       // Best-effort cleanup
     }
+    return true
   }
 
   private async tryCreateWslHome(
@@ -222,4 +263,27 @@ export class CodexManagedHomeLifecycle {
       console.warn('[codex-accounts] Failed to clean up WSL managed home candidate:', error)
     }
   }
+}
+
+function confirmHomeAbsent(candidatePath: string): boolean {
+  if (!isAbsolute(candidatePath)) {
+    return false
+  }
+  let child = resolve(candidatePath)
+  while (dirname(child) !== child) {
+    const parent = dirname(child)
+    try {
+      const entries = readdirSync(parent)
+      const name = basename(child)
+      return !entries.some((entry) =>
+        process.platform === 'win32' ? entry.toLowerCase() === name.toLowerCase() : entry === name
+      )
+    } catch (error) {
+      if (!isDefinitiveAbsence(error)) {
+        return false
+      }
+      child = parent
+    }
+  }
+  return false
 }

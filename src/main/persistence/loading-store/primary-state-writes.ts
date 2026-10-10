@@ -1,3 +1,4 @@
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import {
   parseCodexResetCreditAttemptLedger,
@@ -14,6 +15,16 @@ import { writeProfileStateInWorker } from './primary-state-write-worker'
 import type { DurableProfileStateMutation } from './store-runtime-state'
 import { profileStateWriterFailureOutcome } from '../profile-state/profile-state-writer-errors'
 import { notifyWorkspaceSessionWritten } from './workspace-session-write-listeners'
+
+export type CodexAccountSettingsUpdate = Partial<
+  Pick<
+    GlobalSettings,
+    | 'codexManagedAccounts'
+    | 'activeCodexManagedAccountId'
+    | 'activeCodexManagedAccountIdsByRuntime'
+    | 'codexAccountRemovalRecovery'
+  >
+>
 
 const primaryStateWriteOperationsContext = Symbol('PrimaryStateWriteOperations')
 export class PrimaryStateWriteOperations {
@@ -125,21 +136,59 @@ export class PrimaryStateWriteOperations {
   replaceCodexResetCreditAttemptLedgerAndFlush(
     ledger: CodexResetCreditAttemptLedger
   ): Promise<void> {
+    return this.updateCodexAccountStateAndFlush({}, ledger)
+  }
+
+  async updateCodexAccountStateAndFlush(
+    updates: CodexAccountSettingsUpdate,
+    ledger?: CodexResetCreditAttemptLedger
+  ): Promise<void> {
     const { runtime } = this[primaryStateWriteOperationsContext]
-    const next = parseCodexResetCreditAttemptLedger(ledger)
-    return this.runDurableMutation(() => {
-      const previous = runtime.state.codexResetCreditAttemptLedger
-      runtime.state.codexResetCreditAttemptLedger = next
-      runtime.dirtyProfileStateDomains?.add('codexResetCreditAttemptLedger')
+    const nextLedger = ledger === undefined ? undefined : parseCodexResetCreditAttemptLedger(ledger)
+    await this.runDurableMutation(() => {
+      const previousSettings = runtime.state.settings
+      const previousLedger = runtime.state.codexResetCreditAttemptLedger
+      const nextSettings = { ...previousSettings, ...updates }
+      if (Object.keys(updates).length > 0) {
+        runtime.state.settings = nextSettings
+        runtime.dirtyProfileStateDomains?.add('settings')
+      }
+      if (nextLedger !== undefined) {
+        runtime.state.codexResetCreditAttemptLedger = nextLedger
+        runtime.dirtyProfileStateDomains?.add('codexResetCreditAttemptLedger')
+      }
       return {
         value: undefined,
         rollback: () => {
-          if (runtime.state.codexResetCreditAttemptLedger === next) {
-            runtime.state.codexResetCreditAttemptLedger = previous
+          // Preserve unrelated settings edits made while the writer was awaiting acknowledgement.
+          for (const key of [
+            'codexManagedAccounts',
+            'activeCodexManagedAccountId',
+            'activeCodexManagedAccountIdsByRuntime',
+            'codexAccountRemovalRecovery'
+          ] as const) {
+            if (runtime.state.settings[key] === nextSettings[key]) {
+              runtime.state.settings = { ...runtime.state.settings, [key]: previousSettings[key] }
+            }
+          }
+          if (runtime.state.codexResetCreditAttemptLedger === nextLedger) {
+            runtime.state.codexResetCreditAttemptLedger = previousLedger
           }
         }
       }
     })
+    if (Object.keys(updates).length > 0) {
+      for (const listener of runtime.settingsChangeListeners) {
+        try {
+          listener(updates, runtime.state.settings)
+        } catch (error) {
+          console.error(
+            '[codex-accounts] Settings notification after durable commit failed:',
+            error
+          )
+        }
+      }
+    }
   }
 }
 

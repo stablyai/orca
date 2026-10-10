@@ -6915,7 +6915,9 @@
               "placeholder": "Leave blank to use the key saved by /connect or OPENCODE_API_KEY",
               "help": "Used for OpenCode Go usage in the status bar. The session cookie below is only needed for legacy console (OpenCode Black) accounts."
             }
-          }
+          },
+          "codexRemovalPending": "Removal pending",
+          "codexRemovalRetry": "Choose Remove to retry cleanup."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",

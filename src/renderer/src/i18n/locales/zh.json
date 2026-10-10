@@ -6531,6 +6531,8 @@
           "973741a871": "保留现有的 Gemini CLI 会话可用。Gemini 凭据不会让您登录 Antigravity。",
           "0c64dc2a64": "Gemini CLI（旧版）",
           "db209ee572": "移除",
+          "codexRemovalPending": "等待移除",
+          "codexRemovalRetry": "选择移除以重试清理。",
           "8a0f870153": "重新验证",
           "3d245ef7d9": "Codex 报告此登录已过时",
           "589eba1eee": "需要重新授权",

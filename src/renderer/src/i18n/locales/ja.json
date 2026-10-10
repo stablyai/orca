@@ -6531,6 +6531,8 @@
           "973741a871": "既存の Gemini CLI セッションを利用可能な状態に保ちます。Gemini の認証情報では Antigravity にサインインできません。",
           "0c64dc2a64": "Gemini CLI (レガシー)",
           "db209ee572": "削除",
+          "codexRemovalPending": "削除待ち",
+          "codexRemovalRetry": "「削除」を選ぶと、削除処理を再試行できます。",
           "8a0f870153": "再認証",
           "3d245ef7d9": "Codex はこのサインインが古いと報告しました",
           "589eba1eee": "再認証が必要です",

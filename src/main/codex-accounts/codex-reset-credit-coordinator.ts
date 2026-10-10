@@ -13,6 +13,7 @@ import type {
   RateLimitState,
   RateLimitRuntimeTarget
 } from '../../shared/rate-limit-types'
+import type { CodexAccountSettingsUpdate } from '../persistence/loading-store/primary-state-writes'
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
 import type { CodexRuntimeHomeService } from './runtime-home-service'
@@ -171,8 +172,8 @@ export class CodexResetCreditCoordinator {
     })
   }
 
-  discardForRemovedAccount(accountId: string): Promise<void> {
-    return this.ledger.discardForRemovedAccount(accountId)
+  persistAccountRemoval(accountId: string, updates: CodexAccountSettingsUpdate): Promise<void> {
+    return this.ledger.persistAccountRemoval(accountId, updates)
   }
 
   private startAttempt(

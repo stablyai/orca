@@ -266,13 +266,7 @@ describe('CodexAccountService config sync', () => {
       expect(existsSync(managedHomePath)).toBe(false)
       expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalled()
       expect(rateLimits.evictInactiveCodexCache).toHaveBeenCalledWith('account-1')
-      if (ledger === 'unreadable') {
-        expect(warn).toHaveBeenCalledWith(
-          '[codex-accounts] Removed account, but credit ledger cleanup failed:',
-          expect.any(Error)
-        )
-        expect(store.replaceCodexResetCreditAttemptLedgerAndFlush).not.toHaveBeenCalled()
-      }
+      expect(store.updateCodexAccountStateAndFlush).toHaveBeenCalled()
       warn.mockRestore()
     }
   )

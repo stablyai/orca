@@ -8,6 +8,7 @@ import type {
   CodexRateLimitResetOutcome,
   RateLimitRuntimeTarget
 } from '../../shared/rate-limit-types'
+import type { CodexAccountSettingsUpdate } from '../persistence/loading-store/primary-state-writes'
 import type { Store } from '../persistence'
 import { profileStateWriterFailureOutcome } from '../persistence/profile-state/profile-state-writer-errors'
 
@@ -52,7 +53,9 @@ export class CodexResetCreditLedger {
   constructor(
     private readonly store: Pick<
       Store,
-      'getCodexResetCreditAttemptLedger' | 'replaceCodexResetCreditAttemptLedgerAndFlush'
+      | 'getCodexResetCreditAttemptLedger'
+      | 'replaceCodexResetCreditAttemptLedgerAndFlush'
+      | 'updateCodexAccountStateAndFlush'
     >
   ) {
     this.hydrate()
@@ -163,32 +166,29 @@ export class CodexResetCreditLedger {
     }
   }
 
-  // Why: a removed account's managed home is gone, so its unresolved providerPending
-  // attempt can never validate or be replayed; drop it so a target-scoped default reset
-  // is not wedged forever by hasPendingResetForTarget matching the orphan.
-  discardForRemovedAccount(accountId: string): Promise<void> {
-    return this.serializeMutation(() => this.discardAccountAttempts(accountId))
+  persistAccountRemoval(accountId: string, updates: CodexAccountSettingsUpdate): Promise<void> {
+    return this.serializeMutation(() => this.discardAccountAttempts(accountId, updates), true)
   }
 
-  private async discardAccountAttempts(accountId: string): Promise<void> {
+  private async discardAccountAttempts(
+    accountId: string,
+    updates: CodexAccountSettingsUpdate
+  ): Promise<void> {
     const staleAttempts = [...this.attemptsByKey].filter(
       ([, attempt]) => attempt.expectedScope.accountId === accountId
     )
-    if (staleAttempts.length === 0) {
-      return
-    }
-    const staleKeySet = new Set(staleAttempts.map(([idempotencyKey]) => idempotencyKey))
-    if (this.durableLedger) {
-      const attempts = this.durableLedger.attempts.filter(
-        (attempt) => !staleKeySet.has(attempt.idempotencyKey)
-      )
-      if (attempts.length !== this.durableLedger.attempts.length) {
-        const nextLedger: CodexResetCreditAttemptLedger = { version: 1, attempts }
-        // Persist first so a failed durability barrier leaves the in-memory
-        // fail-closed guards aligned with the ledger that will reload.
-        await this.store.replaceCodexResetCreditAttemptLedgerAndFlush(nextLedger)
-        this.durableLedger = structuredClone(nextLedger)
-      }
+    const nextLedger =
+      this.durableLedger === null
+        ? undefined
+        : {
+            version: 1 as const,
+            attempts: this.durableLedger.attempts.filter(
+              (attempt) => attempt.expectedScope.accountId !== accountId
+            )
+          }
+    await this.store.updateCodexAccountStateAndFlush(updates, nextLedger)
+    if (nextLedger) {
+      this.durableLedger = nextLedger
     }
     for (const [idempotencyKey, attempt] of staleAttempts) {
       this.attemptsByKey.delete(idempotencyKey)
@@ -226,9 +226,12 @@ export class CodexResetCreditLedger {
     }
   }
 
-  private serializeMutation(operation: () => Promise<void>): Promise<void> {
+  private serializeMutation(
+    operation: () => Promise<void>,
+    allowCorruptLedger = false
+  ): Promise<void> {
     const next = this.mutationQueue.then(async () => {
-      if (this.stateError) {
+      if (this.stateError && !(allowCorruptLedger && this.durableLedger === null)) {
         throw this.stateError
       }
       try {

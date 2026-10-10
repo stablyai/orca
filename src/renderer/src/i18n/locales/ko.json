@@ -6531,6 +6531,8 @@
           "973741a871": "기존 Gemini CLI 세션은 계속 사용할 수 있습니다. Gemini 자격 증명으로는 Antigravity에 로그인되지 않습니다.",
           "0c64dc2a64": "Gemini CLI (레거시)",
           "db209ee572": "제거",
+          "codexRemovalPending": "제거 대기 중",
+          "codexRemovalRetry": "제거를 선택하여 정리를 다시 시도하세요.",
           "8a0f870153": "재인증",
           "3d245ef7d9": "Codex에서 이 로그인이 오래되었다고 보고했습니다.",
           "589eba1eee": "재인증 필요",

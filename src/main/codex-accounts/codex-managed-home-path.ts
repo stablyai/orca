@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { app } from 'electron'
 import { quotePosixShell } from '../../shared/wsl-login-shell-command'
@@ -46,14 +46,19 @@ export class CodexManagedHomePath {
     }
   }
 
-  assert(candidatePath: string, expectedAccountId?: string): string {
+  assert(
+    candidatePath: string,
+    expectedAccountId?: string,
+    options: { allowEmptyHome?: boolean } = {}
+  ): string {
     const wslInfo = parseWslUncPath(candidatePath)
     if (!wslInfo) {
       return assertOwnedHostCodexManagedHomePath({
         candidatePath,
         managedAccountsRoot: this.getRoot(),
         systemCodexHomePath: getSystemCodexHomePath(),
-        expectedAccountId
+        expectedAccountId,
+        allowEmptyHome: options.allowEmptyHome
       })
     }
     if (
@@ -69,9 +74,14 @@ export class CodexManagedHomePath {
       throw new Error('Managed WSL Codex home does not match its persisted account ID.')
     }
     if (process.platform === 'win32') {
-      return this.assertWindowsWslPath(wslInfo, expectedAccountId)
+      return this.assertWindowsWslPath(wslInfo, expectedAccountId, options.allowEmptyHome)
     }
-    return this.assertMountedWslPath(candidatePath, wslInfo.linuxPath, expectedAccountId)
+    return this.assertMountedWslPath(
+      candidatePath,
+      wslInfo.linuxPath,
+      expectedAccountId,
+      options.allowEmptyHome
+    )
   }
 
   private recreateExpectedHostHome(account: CodexManagedAccount, originalError: unknown): string {
@@ -124,7 +134,8 @@ export class CodexManagedHomePath {
 
   private assertWindowsWslPath(
     wslInfo: { distro: string; linuxPath: string },
-    expectedAccountId?: string
+    expectedAccountId?: string,
+    allowEmptyHome = false
   ): string {
     try {
       const canonicalLinuxPath = this.validateWslPath(
@@ -135,17 +146,31 @@ export class CodexManagedHomePath {
           'managed_root="${HOME%/}/.local/share/orca/codex-accounts"',
           'candidate_real=$(readlink -f -- "$candidate")',
           'managed_root_real=$(readlink -f -- "$managed_root")',
-          'test -f "$candidate_real/.orca-managed-home"',
+          'test -d "$candidate_real"',
           ...(expectedAccountId === undefined
-            ? [
-                'case "$candidate_real" in "$managed_root_real"/*/home) printf "%s\\n" "$candidate_real" ;; *) exit 35 ;; esac'
-              ]
+            ? ['case "$candidate_real" in "$managed_root_real"/*/home) ;; *) exit 35 ;; esac']
             : [
                 `expected_marker=${quotePosixShell(expectedAccountId)}`,
-                'test "$candidate_real" = "$managed_root_real/$expected_marker/home"',
-                'test "$(cat "$candidate_real/.orca-managed-home")" = "$expected_marker"',
-                'printf "%s\\n" "$candidate_real"'
-              ])
+                'test "$candidate_real" = "$managed_root_real/$expected_marker/home"'
+              ]),
+          ...(allowEmptyHome && expectedAccountId !== undefined
+            ? [
+                'if [ -e "$candidate_real/.orca-managed-home" ] || [ -L "$candidate_real/.orca-managed-home" ]; then'
+              ]
+            : []),
+          'test -f "$candidate_real/.orca-managed-home"',
+          ...(expectedAccountId === undefined
+            ? []
+            : ['test "$(cat "$candidate_real/.orca-managed-home")" = "$expected_marker"']),
+          ...(allowEmptyHome && expectedAccountId !== undefined
+            ? [
+                'else',
+                'entries=$(find "$candidate_real" -mindepth 1 -maxdepth 1 -print -quit)',
+                'test -z "$entries"',
+                'fi'
+              ]
+            : []),
+          'printf "%s\\n" "$candidate_real"'
         ].join('\n')
       ).trim()
       if (!canonicalLinuxPath) {
@@ -162,7 +187,8 @@ export class CodexManagedHomePath {
   private assertMountedWslPath(
     candidatePath: string,
     linuxPath: string,
-    expectedAccountId?: string
+    expectedAccountId?: string,
+    allowEmptyHome = false
   ): string {
     if (linuxPath.split('/').includes('..')) {
       throw new Error('Managed WSL Codex home is outside Orca account storage.')
@@ -172,6 +198,13 @@ export class CodexManagedHomePath {
     }
     const markerPath = join(candidatePath, '.orca-managed-home')
     if (!existsSync(markerPath)) {
+      if (
+        allowEmptyHome &&
+        expectedAccountId !== undefined &&
+        readdirSync(candidatePath).length === 0
+      ) {
+        return candidatePath
+      }
       throw new Error('Managed Codex home is missing Orca ownership marker.')
     }
     if (

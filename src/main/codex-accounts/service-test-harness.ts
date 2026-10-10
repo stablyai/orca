@@ -42,7 +42,7 @@ export function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalS
 
 export function createStore(settings: GlobalSettings) {
   let resetLedger: CodexResetCreditAttemptLedger = { version: 1, attempts: [] }
-  return {
+  const store = {
     getSettings: vi.fn(() => settings),
     updateSettings: vi.fn((updates: Partial<GlobalSettings>) => {
       settings = {
@@ -55,6 +55,14 @@ export function createStore(settings: GlobalSettings) {
       }
       return settings
     }),
+    updateCodexAccountStateAndFlush: vi.fn(
+      async (updates: Partial<GlobalSettings>, next?: CodexResetCreditAttemptLedger) => {
+        store.updateSettings(updates)
+        if (next) {
+          resetLedger = structuredClone(next)
+        }
+      }
+    ),
     getCodexResetCreditAttemptLedger: vi.fn(() => structuredClone(resetLedger)),
     replaceCodexResetCreditAttemptLedgerAndFlush: vi.fn(
       async (next: CodexResetCreditAttemptLedger) => {
@@ -62,6 +70,7 @@ export function createStore(settings: GlobalSettings) {
       }
     )
   }
+  return store
 }
 
 /** Rate-limit collaborator surface the accounts service calls into. */

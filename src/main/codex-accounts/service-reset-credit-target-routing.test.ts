@@ -415,7 +415,7 @@ describe('CodexAccountService config sync', () => {
     expect(store.getCodexResetCreditAttemptLedger().attempts).toEqual([])
   })
 
-  it('reports account removal while keeping reset attempts guarded after a failed purge', async () => {
+  it('preserves account and reset guards when the removal commit fails', async () => {
     const managedHomePath = createManagedHome(testState.userDataDir, 'account-1')
     const account = {
       id: 'account-1',
@@ -462,15 +462,12 @@ describe('CodexAccountService config sync', () => {
     )
     const failure = new Error('disk full')
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    vi.spyOn(store, 'replaceCodexResetCreditAttemptLedgerAndFlush').mockRejectedValueOnce(failure)
+    vi.spyOn(store, 'updateCodexAccountStateAndFlush').mockRejectedValueOnce(failure)
 
-    await expect(service.removeAccount('account-1')).resolves.toMatchObject({ accounts: [] })
-    expect(store.getSettings().codexManagedAccounts).toEqual([])
-    expect(existsSync(managedHomePath)).toBe(false)
-    expect(warning).toHaveBeenCalledWith(
-      '[codex-accounts] Removed account, but credit ledger cleanup failed:',
-      failure
-    )
+    await expect(service.removeAccount('account-1')).rejects.toThrow('disk full')
+    expect(store.getSettings().codexManagedAccounts).toHaveLength(1)
+    expect(existsSync(managedHomePath)).toBe(true)
+    expect(warning).not.toHaveBeenCalled()
     await expect(service.consumeCurrentRateLimitResetCredit()).rejects.toThrow('unknown outcome')
     expect(consume).not.toHaveBeenCalled()
   })

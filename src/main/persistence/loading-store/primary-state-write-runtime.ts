@@ -19,6 +19,7 @@ export type PrimaryStateWriteOperationsRuntime = Pick<
   | 'profileStateAuthority'
   | 'protectedSecrets'
   | 'quitFlushStarted'
+  | 'settingsChangeListeners'
   | 'state'
   | 'writeGeneration'
   | 'writeTimer'

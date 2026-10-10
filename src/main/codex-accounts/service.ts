@@ -128,7 +128,8 @@ export class CodexAccountService {
       lifecycle,
       resolveSystemDefault: () => this.resolveSystemDefaultIdentity(),
       removeManagedHome: (path, accountId) => this.safeRemoveManagedHome(path, accountId),
-      discardResetAttempts: (accountId) => this.resetCredits.discardForRemovedAccount(accountId)
+      persistAccountRemoval: (accountId, updates) =>
+        this.resetCredits.persistAccountRemoval(accountId, updates)
     })
     this.registration = new CodexAccountRegistration({
       store,
@@ -142,6 +143,11 @@ export class CodexAccountService {
       login: (managedHomePath) => this.runCodexLogin(managedHomePath)
     })
     this.configMirror.safeSyncToManagedHomes()
+    for (const account of store.getSettings().codexAccountRemovalRecovery ?? []) {
+      void this.serializeMutation(() => this.selection.remove(account.id)).catch((error) => {
+        console.warn('[codex-accounts] Startup account cleanup needs retry:', error)
+      })
+    }
   }
 
   /**
@@ -273,8 +279,8 @@ export class CodexAccountService {
     return toCodexManagedAccountSummary(account)
   }
 
-  private safeRemoveManagedHome(candidatePath: string, expectedAccountId: string): void {
-    this.managedHomes.safeRemove(candidatePath, expectedAccountId)
+  private safeRemoveManagedHome(candidatePath: string, expectedAccountId: string): boolean {
+    return this.managedHomes.safeRemove(candidatePath, expectedAccountId)
   }
 
   private async runCodexLogin(managedHomePath: string): Promise<void> {
