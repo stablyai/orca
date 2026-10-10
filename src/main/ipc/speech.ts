@@ -196,8 +196,8 @@ export function registerSpeechHandlers(store: Store): void {
 
   ipcMain.handle(
     'speech:feedAudio',
-    async (_event, buffer: Buffer, sampleRate: number, sessionId = 'desktop') => {
-      // Why: the preload sends audio as a Buffer to avoid Float32Array data
+    async (_event, buffer: Uint8Array, sampleRate: number, sessionId = 'desktop') => {
+      // Why: the preload sends audio as bytes to avoid Float32Array data
       // being zeroed out during contextBridge + IPC serialization.
       const samples = new Float32Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 4)
       getSpeechSttService(store).feedAudio(
