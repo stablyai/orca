@@ -87,7 +87,8 @@ describe('workspace composer Codex installation admission', () => {
             : "Codex isn't installed."
         )
       ).toBeInTheDocument()
-      expect(query.queryByRole('button', { name: 'Install Codex' }) !== null).toBe(!installed)
+      // Install Codex lives only in Settings → Agents.
+      expect(query.queryByRole('button', { name: 'Install Codex' })).toBeNull()
       expect(mocks.route).toHaveBeenCalledWith(mocks.state, {
         agent: 'codex',
         workspace: { kind: 'git-worktree', repoId: 'repo-a', executionHostId: 'local' }

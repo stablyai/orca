@@ -13,7 +13,7 @@ export type NativeChatComposerNoticeContent = {
 
 export type NativeChatComposerNotice = NativeChatComposerNoticeContent & {
   key: string
-  action?: { label: string; onClick: () => void; disabled?: boolean; busy?: boolean }
+  action?: { label: string; onClick: () => void; disabled?: boolean }
   onDismiss?: () => void
 } & ({ kind: 'error' | 'attachment' } | { kind: 'host'; tone: 'warning' | 'muted' })
 

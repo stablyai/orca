@@ -1,5 +1,5 @@
 import { useContext } from 'react'
-import { AlertCircle, AlertTriangle, Info, Loader2 } from 'lucide-react'
+import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { NativeChatCodexMaintenanceContext } from '@/hooks/useCodexMaintenance'
 import { Button } from '@/components/ui/button'
 import { useTranslation } from 'react-i18next'
@@ -167,7 +167,6 @@ export function NativeChatNoticeRow({
           disabled={repairAction.disabled}
           onClick={repairAction.onClick}
         >
-          {repairAction.busy ? <Loader2 className="size-3 animate-spin" /> : null}
           {repairAction.label}
         </Button>
       ) : null}

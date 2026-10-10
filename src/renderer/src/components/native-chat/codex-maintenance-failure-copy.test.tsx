@@ -4,11 +4,11 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { codexCliInstallation } from '../../../../shared/codex-cli-installation'
 import type { CodexMaintenanceState } from '../../../../shared/codex-cli-maintenance'
-import { useCodexMaintenance } from '@/hooks/useCodexMaintenance'
 import {
   refreshCodexMaintenance,
   resetCodexMaintenanceStoreForTests
 } from '@/lib/codex-maintenance-store'
+import { CodexMaintenanceRow } from '../settings/CodexMaintenanceRow'
 import { NativeChatComposerNotices } from './NativeChatComposerNotices'
 import { CodexMaintenanceLogDialog } from './CodexMaintenanceLogDialog'
 
@@ -36,12 +36,10 @@ function state(installed: boolean, version: string | null): CodexMaintenanceStat
     job: null
   }
 }
-function Composer() {
-  const maintenance = useCodexMaintenance(TARGET)
+function SettingsRow() {
   return (
     <>
-      <NativeChatComposerNotices notices={maintenance.notice ? [maintenance.notice] : []} />
-      <button disabled={maintenance.blocked}>Send</button>
+      <CodexMaintenanceRow target={TARGET} />
       <CodexMaintenanceLogDialog />
     </>
   )
@@ -83,7 +81,7 @@ describe('Codex install failure copy', () => {
       )
       const write = vi.fn().mockResolvedValue(undefined)
       Object.assign(window, { api: { ui: { writeClipboardText: write } } })
-      render(<Composer />)
+      render(<SettingsRow />)
       await flush()
       fireEvent.click(screen.getByRole('button', { name: 'Install Codex' }))
       expect(
@@ -105,7 +103,7 @@ describe('Codex install failure copy', () => {
       }
       return state(false, null)
     })
-    render(<Composer />)
+    render(<SettingsRow />)
     await flush()
     fireEvent.click(screen.getByRole('button', { name: 'Install Codex' }))
     expect(await screen.findByText('Codex could not be installed. Try again.')).toBeInTheDocument()

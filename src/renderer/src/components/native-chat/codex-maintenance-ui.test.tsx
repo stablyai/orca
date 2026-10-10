@@ -77,10 +77,10 @@ describe('Codex composer and Settings maintenance', () => {
   })
 
   it.each([
-    { installed: false, version: null, text: "Codex isn't installed.", install: true },
-    { installed: true, version: '0.135.0', text: TOO_OLD, install: false },
-    { installed: true, version: null, text: null, install: false },
-    { installed: true, version: '0.136.0', text: null, install: false }
+    { installed: false, version: null, text: "Codex isn't installed." },
+    { installed: true, version: '0.135.0', text: TOO_OLD },
+    { installed: true, version: null, text: null },
+    { installed: true, version: '0.136.0', text: null }
   ])('renders known installation facts, allows unknown: $version / $installed', async (f) => {
     call.mockResolvedValue(state(f.installed, f.version))
     render(<Composer />)
@@ -91,9 +91,8 @@ describe('Codex composer and Settings maintenance', () => {
     } else {
       expect(screen.queryByRole('listitem')).toBeNull()
     }
-    // A too-old Codex gets only the message: the user updates it themselves.
-    expect(screen.queryByRole('button', { name: 'Install Codex' }) !== null).toBe(f.install)
-    expect(screen.queryByRole('button', { name: /update/i })).toBeNull()
+    // Install Codex lives only in Settings; the composer states the fact.
+    expect(screen.queryAllByRole('button').map((button) => button.textContent)).toEqual(['Send'])
   })
   it('allows a response without current evidence', async () => {
     const legacy = state(true, '0.135.0')
@@ -155,9 +154,9 @@ describe('Codex composer and Settings maintenance', () => {
       </>
     )
     await flush()
-    fireEvent.click(screen.getAllByRole('button', { name: 'Install Codex' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Install Codex' }))
     await waitFor(() =>
-      expect(screen.getAllByText('Installing…', { selector: 'button' })).toHaveLength(2)
+      expect(screen.getAllByText('Installing…', { selector: 'button' })).toHaveLength(1)
     )
     expect(screen.getByText(/started/)).toBeInTheDocument()
     await waitFor(
@@ -194,7 +193,7 @@ describe('Codex composer and Settings maintenance', () => {
       </>
     )
     await flush()
-    fireEvent.click(screen.getAllByRole('button', { name: 'Install Codex' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Install Codex' }))
     await waitFor(
       () => expect(screen.getByText('Command exited with code 0')).toBeInTheDocument(),
       { timeout: 3000 }

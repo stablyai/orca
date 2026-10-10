@@ -10,7 +10,6 @@ import {
   EMPTY,
   type CodexMaintenanceEntry
 } from './codex-maintenance-snapshot'
-export type { CodexMaintenanceEntry } from './codex-maintenance-snapshot'
 import { CodexMaintenanceActivity } from './codex-maintenance-activity'
 
 let entries: ReadonlyMap<string, CodexMaintenanceEntry> = new Map()
@@ -21,14 +20,12 @@ const polls = new Map<string, ReturnType<typeof setTimeout>>()
 const revisions = new Map<string, number>()
 const starts = new Map<string, object>()
 const hosts = new Map<string, string>()
-const contexts = new Map<string, CodexMaintenanceTarget>()
 const activities = new CodexMaintenanceActivity()
 let revisionId = 0
 
 function rememberTarget(target: CodexMaintenanceTarget): string {
   const key = codexMaintenanceTargetKey(target)
   hosts.set(key, codexMaintenanceTargetKey({ ...target, cwd: undefined }))
-  contexts.set(key, target)
   return key
 }
 
@@ -54,7 +51,6 @@ function publish(key: string, patch: Partial<CodexMaintenanceEntry>): void {
       revisions.delete(id)
       const oldHost = hosts.get(id)
       hosts.delete(id)
-      contexts.delete(id)
       if (oldHost && ![...hosts.values()].includes(oldHost)) {
         activities.delete(oldHost)
       }
@@ -155,12 +151,6 @@ function scheduleRead(target: CodexMaintenanceTarget, jobId: string, failures = 
             refreshDetectedAgents(target)
             if (state.currentJob === undefined) {
               void refreshCodexMaintenance(target)
-            }
-            for (const [peerKey, peer] of contexts) {
-              if (peerKey !== key && hosts.get(peerKey) === hosts.get(key)) {
-                invalidateCodexMaintenanceContact(peer)
-                void refreshCodexMaintenance(peer)
-              }
             }
           }
         })
@@ -283,7 +273,6 @@ export function resetCodexMaintenanceStoreForTests(): void {
   reads.clear()
   starts.clear()
   hosts.clear()
-  contexts.clear()
   activities.clear()
   revisions.clear()
   entries = new Map()

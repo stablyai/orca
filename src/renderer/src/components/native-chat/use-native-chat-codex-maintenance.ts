@@ -39,8 +39,7 @@ export function useNativeChatCodexMaintenance(input: {
     ? JSON.stringify([
         sessionId,
         maintenance.state?.evidence?.configurationId,
-        maintenance.installation?.version,
-        maintenance.state?.job?.id
+        maintenance.installation?.version
       ])
     : null
   const attempted = useRef<string | null>(null)
