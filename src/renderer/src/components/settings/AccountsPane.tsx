@@ -12,6 +12,7 @@ import { isWebClientLocation } from '@/lib/web-client-location'
 import {
   emptyClaudeAccountsState,
   emptyCodexAccountsState,
+  getProviderAccountsOwnerKey,
   hasRemoteProviderAccountOwner,
   watchProviderAccounts
 } from '@/runtime/runtime-provider-accounts-client'
@@ -71,7 +72,13 @@ import { renderAccountsRemovalDialogs } from './accounts-pane-removal-dialogs'
 
 export { getAccountsPaneSearchEntries }
 
-export function AccountsPane({
+export function AccountsPane(props: AccountsPaneProps): React.JSX.Element {
+  // Why: rosters, account ids and in-flight results belong to one owner; a late
+  // result from the previous server must not land in the next owner's pane.
+  return <AccountsPaneForOwner key={getProviderAccountsOwnerKey(props.settings)} {...props} />
+}
+
+function AccountsPaneForOwner({
   settings,
   updateSettings,
   wslSupportedPlatform = false,

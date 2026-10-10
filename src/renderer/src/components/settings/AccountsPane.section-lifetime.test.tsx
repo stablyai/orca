@@ -68,6 +68,8 @@ vi.mock('@/runtime/runtime-provider-accounts-client', () => ({
     activeAccountId: null,
     activeAccountIdsByRuntime: { host: null, wsl: {} }
   }),
+  getProviderAccountsOwnerKey: (settings: { activeRuntimeEnvironmentId?: string | null }) =>
+    settings.activeRuntimeEnvironmentId ?? 'local',
   hasRemoteProviderAccountOwner: (settings: { activeRuntimeEnvironmentId?: string }) =>
     Boolean(settings.activeRuntimeEnvironmentId),
   watchProviderAccounts: fake.watcher,

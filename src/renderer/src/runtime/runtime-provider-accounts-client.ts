@@ -35,7 +35,7 @@ const REMOTE_ACCOUNTS_FIRST_SNAPSHOT_TIMEOUT_MS = 15_000
 const REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS = 30_000
 const pendingProviderAccountsSnapshots = new Map<string, Promise<ProviderAccountsSnapshot>>()
 
-function getProviderAccountsOwnerKey(
+export function getProviderAccountsOwnerKey(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 ): string {
   const target = getActiveRuntimeTarget(settings)
