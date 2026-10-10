@@ -14,6 +14,7 @@ import { antigravitySessionOrigin } from '../../../shared/antigravity-session-or
 import type { AppState } from '@/store/types'
 import { getIndexedWorktreeMap } from '@/store/worktree-repo-index'
 import { getFolderWorkspaceCandidateRepos } from './folder-workspace-connection'
+import { CLIENT_PLATFORM } from './new-workspace'
 
 export type AiVaultResumeTargetStatus = 'local' | 'ssh' | 'runtime' | 'unknown'
 
@@ -36,6 +37,37 @@ export function isSupportedAiVaultResumeTargetStatus(status: AiVaultResumeTarget
 
 export function isWslStoredAiVaultSessionFile(sessionFilePath: string | null | undefined): boolean {
   return Boolean(sessionFilePath && isWslUncPath(sessionFilePath))
+}
+
+const WINDOWS_DRIVE_PATH = /^[A-Za-z]:[\\/]/
+
+/**
+ * Why: a transcript only resumes under the runtime that wrote it — a WSL-stored one inside its own distro, a
+ * Windows-drive one on the Windows host (inside WSL the agent reads another home and finds nothing).
+ * `targetWslDistro` follows getAiVaultResumeWorkspaceWslDistro: a distro, null for the Windows host, undefined
+ * when unknown. An unknown runtime (a project that needs runtime repair, a folder with several possible repos)
+ * cannot prove either, so it blocks both, like the Antigravity reference rule.
+ */
+export function isAiVaultSessionRuntimeCompatible(
+  sessionFilePath: string | null | undefined,
+  targetWslDistro: string | null | undefined
+): boolean {
+  if (!sessionFilePath) {
+    return true
+  }
+  const sessionWsl = parseWslUncPath(sessionFilePath)
+  if (!sessionWsl && !WINDOWS_DRIVE_PATH.test(sessionFilePath)) {
+    return true
+  }
+  if (targetWslDistro === undefined) {
+    return false
+  }
+  if (sessionWsl) {
+    return (
+      Boolean(targetWslDistro) && targetWslDistro?.toLowerCase() === sessionWsl.distro.toLowerCase()
+    )
+  }
+  return !(targetWslDistro && WINDOWS_DRIVE_PATH.test(sessionFilePath))
 }
 
 export function canResumeAiVaultSessionOnTarget(args: {
@@ -72,6 +104,14 @@ export function canResumeAiVaultSessionOnTarget(args: {
     }
     // File references require the original filesystem, unlike legacy ID resumes.
     return args.targetStatus !== 'local' || !args.targetWslDistro
+  }
+  // Why: only a Windows client runs local workspaces in two runtimes; elsewhere a null distro is not the Windows host.
+  if (
+    args.targetStatus === 'local' &&
+    CLIENT_PLATFORM === 'win32' &&
+    !isAiVaultSessionRuntimeCompatible(args.sessionFilePath, args.targetWslDistro)
+  ) {
+    return false
   }
   if (args.targetStatus === 'runtime') {
     // Runtime session stores live on one paired server; only queue resumes back
