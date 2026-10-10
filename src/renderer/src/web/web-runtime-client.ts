@@ -128,6 +128,15 @@ export class WebRuntimeClient {
     try {
       const wrappedCallbacks: WebRuntimeSubscriptionCallbacks = {
         ...callbacks,
+        onResponse: (response) => {
+          try {
+            callbacks.onResponse(response)
+          } finally {
+            if (!response.ok) {
+              closeChild()
+            }
+          }
+        },
         onError: (error) => {
           callbacks.onError?.(error)
           closeChild()
