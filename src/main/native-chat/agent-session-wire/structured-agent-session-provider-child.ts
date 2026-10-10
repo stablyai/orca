@@ -113,6 +113,13 @@ export function recordProviderChildEnd(
   return true
 }
 
+/** The child's exit is still settling: it ended, and its exit has not let it go (`endChild`). */
+export function providerChildExitSettling(
+  session: Pick<ChildBearer, 'child' | 'lastEndedChild'> | undefined
+): boolean {
+  return session?.child != null && session.lastEndedChild?.fence === session.child.fence
+}
+
 /** The conversation's last start died before it proved itself, and nothing started since. Only a
  *  send retries it: a view or an exit recovery would respawn into the same failure, adding a row. */
 export function failedProviderChildStart(

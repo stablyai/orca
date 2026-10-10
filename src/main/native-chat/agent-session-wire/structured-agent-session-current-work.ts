@@ -33,10 +33,12 @@ export type StructuredAgentSessionCurrentWorkJournal = Pick<
 export type StructuredAgentSessionWorkEvidence = {
   record: Pick<AgentSessionRecord, 'lease'> | null
   /** The last child this host saw end (`StructuredAgentSessionHostSession.lastEndedChild`). */
-  ended?: { fence: number; rootGone?: boolean }
+  ended?: StructuredAgentSessionSeenEnd
   /** `StructuredAgentSessionHostSession.operationalRevision`. */
   revision?: number
 }
+
+type StructuredAgentSessionSeenEnd = { fence: number; rootGone?: boolean; cause?: string }
 
 /** The live or reserved generation's fence, or null when no generation is live. With no record
  *  nothing has ended: fence 0, under which every item is current, as before records scoped work. */
@@ -82,7 +84,8 @@ export class StructuredAgentSessionCurrentWork {
     readonly liveFence: number | null,
     /** Moves with every generation end this host saw, lease write or not: a reader that caches
      *  what it derived from this answer keys it here and on the journal's cursor. */
-    readonly revision = 0
+    readonly revision = 0,
+    private readonly ended?: StructuredAgentSessionSeenEnd
   ) {}
 
   /** What a reader that published this answer compares to learn it changed with no row: the live
@@ -165,10 +168,30 @@ export class StructuredAgentSessionCurrentWork {
     return this.activeTurnId() !== null || this.owesAnySend()
   }
 
+  /** The running turn of the generation this host saw die on its own (its root gone, nobody asked):
+   *  that death's settlement writes it interrupted, so it reads so before that lands. */
+  diedTurn(): { item: AgentJournalRenderItem; turnId: string } | null {
+    const running = this.journal.runningTurn()
+    const { ended } = this
+    return running &&
+      ended?.rootGone === true &&
+      ended.cause === 'exit' &&
+      this.journal.itemFence(running.item.itemId) === ended.fence &&
+      !this.isCurrentItem(running.item.itemId)
+      ? running
+      : null
+  }
+
   /** The newest turn record as a client is told it: a running one an ended generation opened is
-   *  none, so no client reads it as working or steers into it. */
+   *  none, or interrupted when it died on its own (`diedTurn`), so no client reads it as working,
+   *  steers into it or reads it finished. */
   publishedLatestTurn(latest: AgentSessionLatestTurn | null): AgentSessionLatestTurn | null {
-    return latest?.turn.state === 'running' && !this.isCurrentItem(latest.itemId) ? null : latest
+    if (latest?.turn.state !== 'running' || this.isCurrentItem(latest.itemId)) {
+      return latest
+    }
+    return this.diedTurn()?.item.itemId === latest.itemId
+      ? { ...latest, turn: { ...latest.turn, state: 'interrupted' } }
+      : null
   }
 }
 
@@ -179,7 +202,8 @@ export function structuredAgentSessionCurrentWork(
   return new StructuredAgentSessionCurrentWork(
     journal,
     structuredAgentSessionLiveFence(evidence),
-    evidence.revision
+    evidence.revision,
+    evidence.ended
   )
 }
 

@@ -39,6 +39,8 @@ export type QueuedMessageCard = {
   command?: true
   /** A command card while the agent works: it offers no send until the agent is idle. */
   waitsForAgent?: true
+  /** No turn runs, by the host's own answer, so there is nothing to steer into. */
+  agentIdle?: true
   pausedReason?: string
   returnedReason?: string | null
   /** The typed fact the returned card's submission settled with; read like its `rejection`. */
@@ -61,7 +63,13 @@ function queuedMessageCardText(body: AgentSessionQueuedMessage['body']): string 
 export function projectQueuedMessageCards(
   queuedMessages: readonly AgentSessionQueuedMessage[] | null | undefined,
   submissions: readonly AgentJournalSubmission[],
-  session: { hasPendingPrompt: boolean; queuePaused?: boolean; agentWorking?: boolean }
+  session: {
+    hasPendingPrompt: boolean
+    queuePaused?: boolean
+    agentWorking?: boolean
+    /** The host said nothing runs; an older host never says, and its cards read as before. */
+    hostIdle?: boolean
+  }
 ): QueuedMessageCard[] {
   const handedOff = handedOffQueuedMessageIds(
     submissions.filter((submission) => submission.dispatchState !== 'rejected')
@@ -97,6 +105,7 @@ export function projectQueuedMessageCards(
             ...(session.agentWorking ? { waitsForAgent: true as const } : {})
           }
         : {}),
+      ...(session.hostIdle ? { agentIdle: true as const } : {}),
       ...(message.pausedReason !== undefined ? { pausedReason: message.pausedReason } : {}),
       ...(message.returnedReason !== undefined ? { returnedReason: message.returnedReason } : {}),
       ...(message.returnedRejection !== undefined
@@ -128,9 +137,10 @@ export function queuedMessagesQueuePause(
 }
 
 /** Steer names the mid-turn jump, also while the whole queue is paused; a card held on its own or
- *  returned is not waiting on the turn, so its action is plainly Send. A command never steers. */
+ *  returned is not waiting on the turn, nor is any card while no turn runs, so its action is
+ *  plainly Send. A command never steers. */
 export function queuedMessageCardSteers(card: QueuedMessageCard): boolean {
-  return card.hold !== 'paused' && card.hold !== 'returned' && !card.command
+  return card.hold !== 'paused' && card.hold !== 'returned' && !card.command && !card.agentIdle
 }
 
 /** The card Cmd/Ctrl+Enter steers: the newest one, unless it is a command, which never steers. */

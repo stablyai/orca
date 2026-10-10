@@ -27,14 +27,18 @@ export function createRestartReconciler(deps: {
   options?: JournalWriteOptions
 ) => Promise<AgentSessionWireRefusal | null> {
   let pending: Promise<void> | null = null
+  let background: Promise<void> | null = null
   return async (sessionId, options) => {
     if (!deps.store.listRecords().some((record) => record.lease.unreconciled)) {
       return null
     }
-    // Background bookkeeping joins a reader's run, never the reverse: no reader inherits its
-    // refusal to wait for another connection's lock.
+    // Background bookkeeping joins a person's run, or another background one, never the reverse:
+    // no person's run inherits its refusal to wait for another connection's lock.
     if (options?.background && !pending) {
-      await reconcileCurrentLeases(deps, options)
+      background ??= reconcileCurrentLeases(deps, options).finally(() => {
+        background = null
+      })
+      await background
       return null
     }
     if (!pending) {
@@ -83,9 +87,8 @@ export function reportEachFailureOnce(
   }
 }
 
-/** The reconcile a reader runs, at startup, before each restored read and in the reconciliation
- *  worker: it never throws, since an unreconciled lease grants no writer and the next send
- *  reconciles again before it acts.
+/** The reconcile a reader runs, at startup and before each restored read: it never throws, since
+ *  an unreconciled lease grants no writer and the next send reconciles again before it acts.
  *  Answers whether every lease is settled. */
 export function createReaderReconcile(
   reconcile: (sessionId: string) => Promise<AgentSessionWireRefusal | null>,

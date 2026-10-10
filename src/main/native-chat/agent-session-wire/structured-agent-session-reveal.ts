@@ -14,6 +14,11 @@ import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire
 import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import { journalOpenRefusal } from '../agent-session-journal/journal-open-failure'
 import type { JournalWriteOptions } from '../agent-session-journal/journal-host-database'
+import {
+  BACKGROUND_WRITE,
+  backgroundLeaseWrites,
+  type BackgroundLeaseWrites
+} from './structured-agent-session-background-writes'
 import { isSqliteContentionFailure } from '../../sqlite/sqlite-read-failure'
 import { StructuredAgentSessionReadableRestorer } from './structured-agent-session-readable-restorer'
 import { StructuredAgentSessionRestartRestoreGate } from './structured-agent-session-restart-restore-gate'
@@ -74,7 +79,7 @@ export function createStructuredAgentSessionHostRestore(
       sessionId: string | null,
       options?: JournalWriteOptions
     ) => Promise<AgentSessionWireRefusal | null>
-    resolveRecovery: (sessionId: string) => Promise<unknown>
+    resolveRecovery: (sessionId: string, writes: BackgroundLeaseWrites) => Promise<unknown>
     startup: Pick<StructuredAgentSessionRetryContext, 'sessions'> & {
       tasks: Pick<StructuredAgentSessionTaskQueue, 'trackAttach' | 'busy'>
       clientDelivery: Pick<StructuredAgentSessionRetryContext, 'publishGenerationEnded'>
@@ -93,7 +98,13 @@ export function createStructuredAgentSessionHostRestore(
 } {
   const { reconcileLeases, resolveRecovery, startup, ...rest } = wiring
   const failures = reportEachFailureOnce(deps.logger)
-  const reconcile = createReaderReconcile(reconcileLeases, failures)
+  // Startup's and a restored read's bookkeeping, which neither waits on: another connection's lock
+  // fails it at once, and the retry's round tries it again.
+  const reconcile = createReaderReconcile(
+    (sessionId) => reconcileLeases(sessionId, BACKGROUND_WRITE),
+    failures
+  )
+  const recoveryWrites = backgroundLeaseWrites(deps.store)
   const reconciliation = new StructuredAgentSessionRetry({
     deps,
     sessions: startup.sessions,
@@ -104,21 +115,26 @@ export function createStructuredAgentSessionHostRestore(
     track: (operation) => startup.tasks.trackAttach(operation),
     publishGenerationEnded: (sessionId, options) =>
       startup.clientDelivery.publishGenerationEnded(sessionId, options),
-    reconcile: () =>
-      reconcileLeases(null, { background: true }).then(
-        (refusal) => {
-          if (!refusal) {
-            failures.clear()
-            return 'settled'
-          }
+    reconcile: async () => {
+      try {
+        const refusal = await reconcileLeases(null, BACKGROUND_WRITE)
+        if (refusal) {
           failures.report(refusal)
           return 'failed'
-        },
-        (error: unknown) => {
-          failures.report(error)
-          return isSqliteContentionFailure(error) ? 'contended' : 'failed'
         }
-      ),
+        // What a restore whose own reconcile failed left latched: its open chats' recovery.
+        for (const { sessionId, lease } of deps.store.listRecords()) {
+          if (lease.handoffStage === 'recovering' && startup.sessions.has(sessionId)) {
+            await resolveRecovery(sessionId, recoveryWrites)
+          }
+        }
+        failures.clear()
+        return 'settled'
+      } catch (error) {
+        failures.report(error)
+        return isSqliteContentionFailure(error) ? 'contended' : 'failed'
+      }
+    },
     sendQueued: (sessionId) => startup.queue.sendForRetry(sessionId),
     abandonSend: (sessionId) => startup.queue.abandon(sessionId)
   })
@@ -128,7 +144,7 @@ export function createStructuredAgentSessionHostRestore(
     reconcile,
     // The next attach or send resolves recovery again, strictly, before it acts.
     resolveRecovery: (sessionId) =>
-      resolveRecovery(sessionId).then(
+      resolveRecovery(sessionId, recoveryWrites).then(
         () => true,
         (error: unknown) => {
           failures.report(error)

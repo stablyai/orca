@@ -171,6 +171,21 @@ describe('queued message cards', () => {
     expect(cards.map((card) => queuedMessageCardSteers(card))).toEqual([true, true])
   })
 
+  it('a card offers Send, not Steer, while the host says no turn runs; an older host keeps Steer', () => {
+    // An agent that died while its settlement waits: the host names no turn running.
+    const idle = projectQueuedMessageCards([draft('waiting', 1)], [], {
+      hasPendingPrompt: false,
+      agentWorking: false,
+      hostIdle: true
+    })
+    expect(idle.map((card) => [card.hold, queuedMessageCardSteers(card)])).toEqual([
+      ['turn', false]
+    ])
+    // An older host gives no answer of its own: its cards steer as they always did.
+    const older = projectQueuedMessageCards([draft('waiting', 1)], [], IDLE)
+    expect(older.map((card) => queuedMessageCardSteers(card))).toEqual([true])
+  })
+
   it("the header names the queue's pause while it holds a card, and none over cards Resume would not send", () => {
     const stopped = { reason: 'stopped' } as const
     const project = (messages: AgentSessionQueuedMessage[], queuePaused = true) =>

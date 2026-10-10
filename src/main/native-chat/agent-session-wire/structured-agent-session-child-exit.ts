@@ -15,6 +15,7 @@ import type {
   StructuredAgentSessionProviderChild
 } from './structured-agent-session-host-types'
 import { recordProviderChildEnd } from './structured-agent-session-provider-child'
+import { isSqliteContentionFailure } from '../../sqlite/sqlite-read-failure'
 import {
   backgroundLeaseWrites,
   backgroundSettlementWrites
@@ -255,6 +256,7 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     // to the retry, the settlement as the exit's debt and the release as its repair.
     let released = false
     let owed: StructuredAgentSessionExitSettlement | null = null
+    let contended = false
     if (settlement) {
       const settled = await settleStructuredAgentSessionLeftovers({
         store: context.store,
@@ -267,6 +269,7 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
       })
       if (!settled.ok) {
         owed = settlement
+        contended = isSqliteContentionFailure(settled.error)
         logExitFailure(context, sessionId, 'exit-settlement', settled.error)
       }
     }
@@ -282,6 +285,7 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
       })
       released = true
     } catch (error) {
+      contended ||= isSqliteContentionFailure(error)
       logExitFailure(context, sessionId, 'exit-owner-release', error)
     }
     if (context.route) {
@@ -301,7 +305,8 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     // and the queued-card drain runs, whether or not the release or the settlement was written.
     context.generationEnded(sessionId, {
       restate: released && !expected,
-      ...(owed ? { exit: owed } : {})
+      ...(owed ? { exit: owed } : {}),
+      ...(contended ? { contended } : {})
     })
     context.wakeDelivery?.(sessionId)
   }

@@ -9,7 +9,9 @@ import type { JournalContextController } from '../agent-session-journal/journal-
 import type { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
-const BACKGROUND = { background: true } as const
+/** Bookkeeping's write options, for a call that takes them directly. */
+export const BACKGROUND_WRITE = { background: true } as const
+const BACKGROUND = BACKGROUND_WRITE
 
 type Background = { readonly background: true }
 

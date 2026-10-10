@@ -159,7 +159,7 @@ describe('an observed exit whose release write failed', () => {
         type: 'batch',
         batch: { items: [], cursor },
         working: false,
-        latestTurn: null
+        latestTurn: { turn: { state: 'interrupted' } }
       })
     )
 

@@ -129,7 +129,8 @@ describe("a dead generation's leftovers, its settlement refused and its lease re
     expect(current.host.readStatusSummary(SESSION)?.status).not.toBe('working')
     // A client hydrating now, and the one already watching, read the same.
     const page = await hydration(current)
-    expect(page.latestTurn).toBeNull()
+    // Read interrupted, as its settlement will write it: never running, never finished.
+    expect(page.latestTurn?.turn.state).toBe('interrupted')
     expect(page.actionablePromptIds).toEqual([])
     await vi.waitFor(() => expect(view.chat().actionablePromptIds).toEqual([]))
     expect(runningStructuredAgentSessionTurnId(view.chat())).toBeNull()

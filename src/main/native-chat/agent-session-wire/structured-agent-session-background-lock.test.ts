@@ -13,6 +13,8 @@ import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-te
 import {
   exitChild,
   leaveUnfinishedWork,
+  REASONING,
+  TURN_KEY,
   turnState
 } from './structured-agent-session-leftover-settlement.test-fixture'
 import {
@@ -23,7 +25,8 @@ import { retryOwes } from './structured-agent-session-retry.test-fixture'
 import {
   holdWriteLock,
   longestStall,
-  releaseWriteLocks
+  releaseWriteLocks,
+  stallsOver
 } from './structured-agent-session-write-lock.test-fixture'
 
 let rig: QueuedMessageTestRig | undefined
@@ -55,6 +58,70 @@ describe('under another connection’s write lock', () => {
       () => expect(current.store.getRecord(SESSION)?.lease.claimStatus).toBe('released'),
       { timeout: 8_000 }
     )
+  }, 20_000)
+
+  it("an agent dying mid-row costs one wait, its last row's, and the exit's bookkeeping none", async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    let sinkFailedAt = Infinity
+    vi.spyOn(console, 'error').mockImplementation((message: unknown) => {
+      if (String(message).includes('writing provider events to the chat journal failed')) {
+        sinkFailedAt = performance.now()
+      }
+    })
+    rig = await createQueuedMessageTestRig({ restartable: true })
+    const current = rig
+    await current.workingSend()
+    await leaveUnfinishedWork(current, { prompt: true })
+    // Longer than a person's write waits (`JOURNAL_BUSY_TIMEOUT_MS`), so the row's write gives up.
+    await holdWriteLock(current.root, 6_500)
+
+    const stalls = await stallsOver(60, async () => {
+      // The agent's last words are a person's content: written as on main, waiting its 5 s.
+      current
+        .providerEvents()
+        .appendItem(
+          REASONING,
+          { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'last words' }] },
+          { turnScope: { kind: 'turn', turnItemId: TURN_KEY } }
+        )
+      await exitChild(current)
+    })
+
+    // One wait, the row's own busy timeout (5 s, plus SQLite's sleep granularity on a loaded
+    // machine), and it is the row's: the sink reports its failure as that wait ends.
+    expect(stalls).toHaveLength(1)
+    const [wait] = stalls
+    expect(wait!.ms).toBeLessThanOrEqual(5_500)
+    expect(sinkFailedAt).toBeGreaterThanOrEqual(wait!.endedAt - wait!.ms)
+    expect(sinkFailedAt).toBeLessThanOrEqual(wait!.endedAt)
+    await vi.waitFor(() => expect(turnState(current)).toBe('interrupted'), { timeout: 10_000 })
+    await vi.waitFor(
+      () => expect(current.store.getRecord(SESSION)?.lease.claimStatus).toBe('released'),
+      { timeout: 8_000 }
+    )
+  }, 30_000)
+
+  it('a relaunch under the lock never holds the main thread, and its startup lands after', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    rig = await createQueuedMessageTestRig({ restartable: true })
+    const current = rig
+    await current.workingSend()
+    await leaveUnfinishedWork(current, { prompt: true })
+
+    // Another process holds the lock from before this one starts: the restart reconcile, the
+    // restore's reconcile and recovery, and the startup scan all meet it.
+    expect(
+      await longestStall(() =>
+        current.crashRestartHostProcess(() => holdWriteLock(current.root, LOCK_MS))
+      )
+    ).toBeLessThan(60)
+    // Once it lifts, the retry reconciles, resolves the recovery the restore could not, and settles
+    // the turn as an unlocked startup does: the rig's probe proves nothing, so unverifiable.
+    await vi.waitFor(() => expect(turnState(current)).toBe('unverifiable'), { timeout: 8_000 })
+    expect(current.store.getRecord(SESSION)?.lease).toMatchObject({
+      unreconciled: false,
+      handoffStage: null
+    })
   }, 20_000)
 
   it('a pending rewind the retry recovers ends its round at once, never holding the lane', async () => {

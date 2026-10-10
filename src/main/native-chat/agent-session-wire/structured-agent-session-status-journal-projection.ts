@@ -108,11 +108,14 @@ export class StructuredAgentSessionJournalProjections {
         workRevision: work.revision,
         stopRevision,
         // The host's projection of current work: an ended generation's is not Working.
-        state: projectStructuredAgentSessionStatusState(
-          snapshot.items,
-          snapshot.submissions,
-          fence,
-          work.scope
+        state: withDiedTurnVerdict(
+          projectStructuredAgentSessionStatusState(
+            snapshot.items,
+            snapshot.submissions,
+            fence,
+            work.scope
+          ),
+          work.diedTurn()
         ),
         acceptedSendKey: newestAcceptedSendKey(cursor.epoch, snapshot.submissions),
         stopping: structuredAgentSessionStopping(
@@ -126,4 +129,20 @@ export class StructuredAgentSessionJournalProjections {
     }
     return projection
   }
+}
+
+/** A turn whose generation died on its own reads as its settlement writes it, interrupted, before
+ *  that lands: never a finish with no verdict (`StructuredAgentSessionCurrentWork.diedTurn`). */
+function withDiedTurnVerdict(
+  state: StructuredAgentSessionStatusState,
+  died: { turnId: string } | null
+): StructuredAgentSessionStatusState {
+  const request = state.latestRequest
+  return died &&
+    state.summary.status === 'idle' &&
+    request?.kind === 'turn' &&
+    request.id === died.turnId &&
+    request.turnState === 'running'
+    ? { ...state, summary: { ...state.summary, turnOutcome: 'interruption' } }
+    : state
 }

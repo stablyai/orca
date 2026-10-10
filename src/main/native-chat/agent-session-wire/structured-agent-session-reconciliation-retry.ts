@@ -30,6 +30,7 @@ import {
   reconciliationBackoffDelay
 } from './structured-agent-session-reconciliation-backoff'
 import { StructuredAgentSessionReconciliationSlots } from './structured-agent-session-reconciliation-slots'
+import { providerChildExitSettling } from './structured-agent-session-provider-child'
 import {
   dropStructuredAgentSessionLoaded,
   noteStructuredAgentSessionOpened,
@@ -49,6 +50,8 @@ export type StructuredAgentSessionReconciliationSignal = {
   exit?: StructuredAgentSessionExitSettlement
   /** Readers re-baseline at the moved fence (`publishGenerationEnded`). */
   restate?: boolean
+  /** The exit's own settlement met another connection's lock. */
+  contended?: boolean
 }
 
 export class StructuredAgentSessionRetry {
@@ -104,6 +107,10 @@ export class StructuredAgentSessionRetry {
     if (chat && signal.exit) {
       chat.debts.exit = signal.exit
     }
+    if (chat && signal.contended) {
+      // The chat's queued send would meet the same lock: it waits for the round, which sends it.
+      chat.send = true
+    }
     this.context.publishGenerationEnded(sessionId, signal.restate ? { restate: true } : {})
     this.freshEpisode()
   }
@@ -120,13 +127,17 @@ export class StructuredAgentSessionRetry {
   }
 
   /** A reader opened the chat: its handle marks the process boundary if it is the first, and what
-   *  it owes goes ahead of the scan, in a fresh episode. */
+   *  it owes goes ahead of the scan, in a fresh episode unless a backoff runs. */
   opened = (sessionId: string, journal: Pick<AgentSessionJournal, 'openedAt'>): void => {
     noteStructuredAgentSessionOpened(this.firstOpened, sessionId, journal)
     const chat = this.owed.get(sessionId)
     if (chat) {
       this.slots.prioritize(chat)
-      this.freshEpisode()
+      // Backing off after a failed round, it goes first in the next, which an open does not
+      // hurry: a store that keeps refusing costs a write per round, never one per chat opened.
+      if (this.failures === 0 || this.failures >= RECONCILIATION_MAX_FAILED_ATTEMPTS) {
+        this.freshEpisode()
+      }
     }
   }
 
@@ -141,8 +152,11 @@ export class StructuredAgentSessionRetry {
     }
   }
 
-  /** Whether the chat's queued send waits for a round (or for a fresh episode, given up). */
-  sendWaits = (sessionId: string): boolean => this.owed.get(sessionId)?.send === true
+  /** Whether the chat's queued send waits for a round (or for a fresh episode, given up): it met a
+   *  lock, or the exit it follows is still settling. */
+  sendWaits = (sessionId: string): boolean =>
+    this.owed.get(sessionId)?.send === true ||
+    providerChildExitSettling(this.context.sessions.get(sessionId))
 
   /** Resolves once the chat's next visit finished, or at once when it owes nothing. */
   attempted = (sessionId: string): Promise<void> => {

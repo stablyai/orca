@@ -81,6 +81,8 @@ export function useStructuredAgentSessionQueuedMessages(args: {
   hasPendingPrompt: boolean
   /** A turn is running, whoever started it, or the queue is about to send its next card. */
   isWorking: boolean
+  /** The host's own answer (`working`); absent from an older host. */
+  hostWork?: { working?: boolean }
   /** This pane's sends without a host record yet show as sending cards. */
   sending?: readonly StructuredAgentSessionPendingSend[]
   composerScopeKey: string | undefined
@@ -88,6 +90,8 @@ export function useStructuredAgentSessionQueuedMessages(args: {
 }): StructuredAgentSessionQueuedMessagesController {
   const { composerScopeKey, enabled, hasPendingPrompt, mutate, queuedMessages, submissions } = args
   const { isWorking, queuePause } = args
+  // Only the host's own answer: an older host's cards steer as they always did.
+  const hostIdle = args.hostWork?.working === false && !isWorking
   const sending = args.sending ?? NO_SENDS
 
   const cards = useMemo(
@@ -96,7 +100,8 @@ export function useStructuredAgentSessionQueuedMessages(args: {
         hasPendingPrompt,
         // A command card offers no send while the agent works.
         agentWorking: isWorking,
-        queuePaused: queuePause !== null
+        queuePaused: queuePause !== null,
+        hostIdle
       }),
       ...sendingQueuedMessageCards(
         pendingQueueSendsOnTheirWay(
@@ -107,7 +112,7 @@ export function useStructuredAgentSessionQueuedMessages(args: {
         )
       )
     ],
-    [hasPendingPrompt, isWorking, sending, queuePause, queuedMessages, submissions]
+    [hasPendingPrompt, hostIdle, isWorking, sending, queuePause, queuedMessages, submissions]
   )
   const cardsRef = useRef(cards)
   useEffect(() => {

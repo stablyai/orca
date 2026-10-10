@@ -35,19 +35,34 @@ export async function releaseWriteLocks(): Promise<void> {
   lockers.clear()
 }
 
-/** The longest the main thread went without running a timer, while `run` ran. */
-export async function longestStall(run: () => Promise<unknown>): Promise<number> {
+/** Each gap between the main thread's timer turns while `run` ran: how long, and when it ended. */
+async function timerGaps(run: () => Promise<unknown>): Promise<{ ms: number; endedAt: number }[]> {
   let last = performance.now()
-  let longest = 0
-  const probe = setInterval(() => {
+  const gaps: { ms: number; endedAt: number }[] = []
+  const gap = (): void => {
     const now = performance.now()
-    longest = Math.max(longest, now - last)
+    gaps.push({ ms: now - last, endedAt: now })
     last = now
-  }, 2)
+  }
+  const probe = setInterval(gap, 2)
   try {
     await run()
-    return Math.max(longest, performance.now() - last)
+    gap()
+    return gaps
   } finally {
     clearInterval(probe)
   }
+}
+
+/** The longest the main thread went without running a timer, while `run` ran. */
+export async function longestStall(run: () => Promise<unknown>): Promise<number> {
+  return Math.max(0, ...(await timerGaps(run)).map((gap) => gap.ms))
+}
+
+/** Every time the main thread went longer than `ms` without running a timer, while `run` ran. */
+export async function stallsOver(
+  ms: number,
+  run: () => Promise<unknown>
+): Promise<{ ms: number; endedAt: number }[]> {
+  return (await timerGaps(run)).filter((gap) => gap.ms > ms)
 }

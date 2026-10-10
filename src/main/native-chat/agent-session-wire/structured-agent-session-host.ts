@@ -130,7 +130,7 @@ export class StructuredAgentSessionHost {
     })
     this.restore = reveal.createStructuredAgentSessionHostRestore(deps, {
       reconcileLeases: this.reconcileLeases,
-      resolveRecovery: (sessionId) => this.runtimeState.resolveRecovery(sessionId),
+      resolveRecovery: (sessionId, writes) => this.runtimeState.resolveRecovery(sessionId, writes),
       serialize: (sessionId, task) => this.serialize(sessionId, task),
       hasSession: this.hasSession,
       // Site 10: cannot overwrite a live entry — the restorer returns early on

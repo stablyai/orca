@@ -14,6 +14,7 @@ import {
 } from './structured-agent-session-provider-child'
 import { StructuredAgentSessionOptionRevisions } from './structured-agent-session-option-revisions'
 import { resolveStructuredSessionRecovery } from './structured-agent-session-recovery-resolution'
+import type { StructuredAgentSessionLeaseWrites } from './structured-agent-session-lease-release'
 import { recordAgentSessionStartup } from '../../observability/agent-session-instrumentation'
 import {
   StructuredAgentSessionStartupAttempts,
@@ -154,10 +155,14 @@ export class StructuredAgentSessionHostRuntimeState {
   }
 
   /** Exit from a latched recovery stage when present-time evidence permits one. */
-  resolveRecovery(sessionId: string): Promise<'resolved' | 'unresolved' | 'not-applicable'> {
+  resolveRecovery(
+    sessionId: string,
+    writes?: StructuredAgentSessionLeaseWrites
+  ): Promise<'resolved' | 'unresolved' | 'not-applicable'> {
     return resolveStructuredSessionRecovery(
       {
         store: this.deps.store,
+        ...(writes ? { writes } : {}),
         probeRecord: (record) => this.probeRecord(record),
         now: () => this.deps.now?.() ?? Date.now(),
         ...(this.deps.stopOwnerProcess ? { stopOwnerProcess: this.deps.stopOwnerProcess } : {})
