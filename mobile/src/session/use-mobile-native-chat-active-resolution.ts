@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import { resolveMobileNativeChat, type MobileNativeChatTab } from './mobile-native-chat-eligibility'
 import { useMobileSessionViewMode } from './use-mobile-session-view-mode'
+import type { MobileSessionTabViewModeBridge } from './use-mobile-session-view-mode'
 
 export function useMobileNativeChatActiveResolution(args: {
   hostId: string
@@ -10,6 +11,8 @@ export function useMobileNativeChatActiveResolution(args: {
   activeSessionTabId: string | null
   activeHandleRef: MutableRefObject<string | null>
   nativeChatTranscriptIsLocalReadable: boolean
+  /** Shared terminal/chat view when the host carries it; absent leaves the view device-local. */
+  sessionTabViewMode?: MobileSessionTabViewModeBridge
 }): {
   isTabChatView: (tabId: string) => boolean
   toggleTabChatView: (tabId: string) => void
@@ -32,9 +35,14 @@ export function useMobileNativeChatActiveResolution(args: {
     activeSessionTabId,
     hostId,
     nativeChatTranscriptIsLocalReadable,
+    sessionTabViewMode,
     worktreeId
   } = args
-  const { isTabChatView, toggleTabChatView } = useMobileSessionViewMode({ hostId, worktreeId })
+  const { isTabChatView, toggleTabChatView } = useMobileSessionViewMode({
+    hostId,
+    worktreeId,
+    sessionTabViewMode
+  })
   const tabWantsChat =
     activeSessionTab?.type === 'agent-session' ||
     (activeSessionTabId ? isTabChatView(activeSessionTabId) : false)

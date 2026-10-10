@@ -228,21 +228,55 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
       isPinned?: boolean
       viewMode?: 'terminal' | 'chat'
     }
-  ): Promise<{ updated: true }> {
+  ): Promise<{ updated: true; publicationEpoch?: string; snapshotVersion?: number }> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
     // Why: a renderer-authoritative host owns + republishes tab props, so a
     // headless write would be overwritten. Persist only when headless.
     if (this.getAvailableAuthoritativeWindow()) {
-      return { updated: true }
+      if (!this.notifier?.setSessionTabProps) {
+        throw new Error('renderer_unavailable')
+      }
+      const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+      const hostTabId = snapshot
+        ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
+        : args.tabId
+      await this.notifier.setSessionTabProps(worktreeId, hostTabId, {
+        ...(args.color !== undefined ? { color: args.color } : {}),
+        ...(args.isPinned !== undefined ? { isPinned: args.isPinned } : {}),
+        ...(args.viewMode !== undefined ? { viewMode: args.viewMode } : {})
+      })
+      const published = this.mobileSessionTabsByWorktree.get(worktreeId)
+      return {
+        updated: true,
+        ...(published
+          ? {
+              publicationEpoch: published.publicationEpoch,
+              snapshotVersion: published.snapshotVersion
+            }
+          : {})
+      }
     }
-    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    let snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    if (!snapshot) {
+      this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
+      snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    }
     const hostTabId = snapshot
       ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
       : args.tabId
     this.persistHeadlessSessionTabProps(worktreeId, hostTabId, args)
     this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, hostTabId, args)
-    return { updated: true }
+    const published = this.mobileSessionTabsByWorktree.get(worktreeId)
+    return {
+      updated: true,
+      ...(published
+        ? {
+            publicationEpoch: published.publicationEpoch,
+            snapshotVersion: published.snapshotVersion
+          }
+        : {})
+    }
   }
 }

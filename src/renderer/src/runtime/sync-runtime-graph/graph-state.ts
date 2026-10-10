@@ -3,7 +3,8 @@ import type { AppState } from '@/store/types'
 import type {
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTabsSnapshot,
-  RuntimeMobileTerminalTheme
+  RuntimeMobileTerminalTheme,
+  RuntimeSyncWindowGraphResult
 } from '../../../../shared/runtime-types'
 import type {
   AgentStatusProjectionCache,
@@ -35,6 +36,11 @@ export const EMPTY_WORKTREE_OPEN_FILE_IDS: readonly string[] = []
 
 export const mobilePublicationEpoch = `renderer:${createBrowserUuid()}`
 
+type RuntimeGraphSyncFlight = Promise<RuntimeSyncWindowGraphResult | undefined> | null
+function initialRuntimeGraphSyncFlight(): RuntimeGraphSyncFlight {
+  return null
+}
+
 export type RegisteredTerminalTabKey = string
 
 export const graphState = {
@@ -42,6 +48,7 @@ export const graphState = {
   tabRegisteredAt: new Map<RegisteredTerminalTabKey, number>(),
   syncScheduled: false,
   syncInFlight: false,
+  syncFlight: initialRuntimeGraphSyncFlight(),
   syncPendingAfterFlight: false,
   syncEnabled: false,
   syncTimer: null as ReturnType<typeof setTimeout> | null,

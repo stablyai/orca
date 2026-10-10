@@ -16,6 +16,7 @@ import type { MobileNativeChatCommandRefusalCauses } from './use-mobile-native-c
 import type { MobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
 import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
 import type { MobileNativeChatPendingMessage } from './use-mobile-native-chat-drafts'
+import type { MobileProviderSessions } from './mobile-structured-provider-session'
 import type { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
@@ -110,4 +111,7 @@ export type MobileNativeChatController = {
   /** Model/session-option pickers for the composer, or null when the active
    *  agent has no session-option catalog. */
   nativeChatSessionOptions: MobileNativeChatSessionOptionPickersProps | null
+  /** The provider session each chat's history read named, by chat id. The tab
+   *  carries no provider identity, so this is what a terminal resume reads. */
+  chatProviderSessions: MobileProviderSessions
 }

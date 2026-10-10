@@ -16,8 +16,8 @@ import {
   projectStructuredPermission,
   projectStructuredQuestion
 } from './mobile-structured-agent-prompts'
-import type { StructuredMobileSession } from './mobile-structured-agent-session-contract'
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
+import type { MobileNativeChatSession } from './use-mobile-native-chat-session'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'
 import { useMobileStructuredStopPress } from './use-mobile-structured-stop-press'
@@ -36,10 +36,9 @@ import {
   mobileStructuredSendQueues,
   useMobileStructuredSendWithOutcome
 } from './use-mobile-structured-send-with-outcome'
-import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
 import { useMobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
 import { useMobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
-
+import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
 export function useMobileStructuredAgentSession(args: {
   client: RpcClient | null
   sessionId: string | null
@@ -56,7 +55,7 @@ export function useMobileStructuredAgentSession(args: {
   onSendError: MobileNativeChatSendErrorReporter
   /** Called on any accepted queued-card action; retires the route's failure banner. */
   onActionResolved?: () => void
-}): StructuredMobileSession {
+}) {
   const {
     agent,
     appendComposerText,
@@ -80,9 +79,15 @@ export function useMobileStructuredAgentSession(args: {
   // Against a host that predates the quiet repeated Stop, a Stop of a turn still being stopped joins it.
   const inFlightStopsRef = useRef(new Map<string, Promise<boolean>>())
   const stateArgs = { client, sessionId, sessionKey, enabled, connected }
-  const { state, stateRef, queuedMessages, queuePause, loadingOlder, loadEarlier } =
-    useMobileStructuredAgentState(stateArgs)
-
+  const {
+    state,
+    stateRef,
+    queuedMessages,
+    queuePause,
+    providerSessions,
+    loadingOlder,
+    loadEarlier
+  } = useMobileStructuredAgentState(stateArgs)
   const mutate = useMobileStructuredAgentMutate({
     client,
     sessionId,
@@ -90,7 +95,6 @@ export function useMobileStructuredAgentSession(args: {
     stateRef,
     onSendError
   })
-
   const options = useMobileStructuredAgentOptions({
     agent,
     client,
@@ -111,7 +115,6 @@ export function useMobileStructuredAgentSession(args: {
     }),
     [conversationCommands, invokeStructuredOption, optionSnapshot, setStructuredOption]
   )
-
   const sendWithOutcome = useMobileStructuredSendWithOutcome({
     agent,
     client,
@@ -131,7 +134,6 @@ export function useMobileStructuredAgentSession(args: {
     questionAnswersSupported: hostSupport?.questionAnswers ?? null,
     onSendError
   })
-
   // What the transcript reads, as desktop does: the journal plus the one notice a cut turn with no
   // row gets.
   const transcriptItems = useMemo(
@@ -250,12 +252,10 @@ export function useMobileStructuredAgentSession(args: {
       stateRef
     ]
   )
-
   const visualSource = useMemo<MobileNativeChatVisualSource | null>(
     () => (client && sessionId ? { client, sessionId } : null),
     [client, sessionId]
   )
-
   return {
     ...options,
     visualSource,
@@ -268,7 +268,7 @@ export function useMobileStructuredAgentSession(args: {
       hasMore: state.hasOlder,
       loadingEarlier: loadingOlder,
       loadEarlier
-    },
+    } satisfies MobileNativeChatSession,
     isWorking,
     turnId,
     turnIndicator,
@@ -284,6 +284,7 @@ export function useMobileStructuredAgentSession(args: {
     respondPermission,
     respondQuestion,
     queued,
+    providerSessions,
     commandRefusalCauses,
     backgroundTasks
   }

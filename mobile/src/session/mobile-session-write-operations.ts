@@ -4,9 +4,11 @@ import { markdownTabDocumentSchema } from './session-read-reply-schema'
 import { terminalSendAcceptedSchema } from '../terminal/terminal-reply-schema'
 import {
   sessionCreatedTerminalTabSchema,
+  sessionTabPropsWriteReplySchema,
   sessionWriteUnreadReplySchema
 } from './session-write-reply-schema'
 import { quickCommandsReader } from './mobile-session-read-operations'
+import type { RpcResponse } from '../transport/types'
 
 // The session screen's writes: terminal input from native chat and the image surfaces, the tab
 // strip's rename/close/activate, the New Tab terminal create, the terminal menu's display-mode
@@ -147,6 +149,32 @@ export const sessionTabActivate = bindDeferredRpcOperation(
     read: rpcResultVariant('session-tab-activated', sessionWriteUnreadReplySchema)
   })
 )
+
+/**
+ * Sharing a tab's terminal/chat view with the host and its paired clients. The caller reads the
+ * acceptance and publication marker so refused writes reject and accepted writes settle on a
+ * matching host snapshot. Sent only to a host advertising the shared-view capability.
+ */
+export const sessionTabSetProps = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'session.tabs-set-props',
+    method: 'session.tabs.setTabProps',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('session-tab-props-set', sessionTabPropsWriteReplySchema)
+  })
+)
+
+export function requireAcceptedSessionTabProps(response: RpcResponse): {
+  publicationEpoch?: string
+  snapshotVersion?: number
+} {
+  const verdict = sessionTabSetProps.interpret(response)
+  if (!verdict.accepted) {
+    throw new Error('session.tabs.setTabProps was not accepted')
+  }
+  return verdict.value
+}
 
 /**
  * Writing the review notes and the per-file review state onto the worktree record. Both call sites

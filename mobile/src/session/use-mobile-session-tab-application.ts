@@ -60,9 +60,13 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
     (result: SessionTabsResult): SessionTabsApplyOutcome<MobileSessionTab> => {
       const diagnostics = terminalDiagnosticsRef.current
       // Reject stale snapshots; suppress just-closed tabs until the publisher confirms absence — see session-tab-snapshot-gate.
+      const previousMarker = { ...appliedSnapshotMarkerRef.current }
       if (!acceptSessionSnapshot(result, appliedSnapshotMarkerRef.current)) {
         return { accepted: false }
       }
+      const publicationChanged =
+        previousMarker.epoch !== appliedSnapshotMarkerRef.current.epoch ||
+        previousMarker.version !== appliedSnapshotMarkerRef.current.version
       const applicationRevision = ++appliedSessionTabsRevisionRef.current
       let nextTabs = applyClosedTabTombstones(
         result.tabs,
@@ -95,7 +99,9 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       sessionTabsRef.current = nextTabs
       initialSessionAutoCreateRef.current.sawSessionTabs ||= nextTabs.length > 0
       // Why: subscribe snapshots often repeat identical payloads; skip re-set to avoid a subscription teardown/replay loop.
-      setSessionTabs((prev) => (mobileSessionTabsEqual(prev, nextTabs) ? prev : nextTabs))
+      setSessionTabs((prev) =>
+        !publicationChanged && mobileSessionTabsEqual(prev, nextTabs) ? prev : [...nextTabs]
+      )
       const terminalTabs = getTerminalRecordsFromSessionTabs(nextTabs)
       const terminalTabHandles = terminalTabs.map((terminal) => terminal.handle)
       defaultTerminalHandlesToLiveInput(terminalTabHandles)

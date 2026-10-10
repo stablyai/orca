@@ -409,10 +409,22 @@ describe('OrcaRuntimeService', () => {
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
-    await runtime.setMobileSessionTabProps(`id:${TEST_WORKTREE_ID}`, {
+    const reply = await runtime.setMobileSessionTabProps(`id:${TEST_WORKTREE_ID}`, {
       tabId: 'host-tab',
       viewMode: 'chat'
     })
+
+    expect(reply).toMatchObject({
+      updated: true,
+      publicationEpoch: expect.any(String),
+      snapshotVersion: expect.any(Number)
+    })
+    const published = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    expect(reply.publicationEpoch).toBe(published.publicationEpoch)
+    expect(reply.snapshotVersion).toBe(published.snapshotVersion)
+    expect(published.tabs).toEqual(
+      expect.arrayContaining([expect.objectContaining({ viewMode: 'chat' })])
+    )
 
     const persisted = getSession().tabsByWorktree[TEST_WORKTREE_ID]!.find(
       (tab) => tab.id === 'host-tab'
@@ -432,6 +444,100 @@ describe('OrcaRuntimeService', () => {
       (tab) => tab.type === 'terminal' && tab.parentTabId === 'host-tab'
     )
     expect(surface?.type === 'terminal' && surface.viewMode).toBe('chat')
+  })
+
+  it('forwards renderer-authoritative viewMode changes to the window owner', async () => {
+    const session = makeWorkspaceSessionWithHeadlessTerminal()
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const setSessionTabProps = vi.fn(async () => {
+      runtime.syncWindowGraph(0, {
+        tabs: [],
+        leaves: [],
+        mobileSessionTabs: [
+          {
+            worktree: TEST_WORKTREE_ID,
+            publicationEpoch: 'renderer:updated',
+            snapshotVersion: 2,
+            activeGroupId: null,
+            activeTabId: 'host-tab::leaf:1',
+            activeTabType: 'terminal',
+            tabs: [
+              {
+                type: 'terminal',
+                id: 'host-tab::leaf:1',
+                parentTabId: 'host-tab',
+                leafId: 'leaf:1',
+                title: 'Terminal',
+                isActive: true,
+                viewMode: 'chat'
+              }
+            ]
+          }
+        ]
+      })
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn(),
+      setSessionTabProps
+    })
+    runtime.syncWindowGraph(0, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'renderer:test',
+          snapshotVersion: 1,
+          activeGroupId: null,
+          activeTabId: 'host-tab::leaf:1',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'host-tab::leaf:1',
+              parentTabId: 'host-tab',
+              leafId: 'leaf:1',
+              title: 'Terminal',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+    Object.defineProperty(runtime, 'getAvailableAuthoritativeWindow', { value: () => ({}) })
+
+    const reply = await runtime.setMobileSessionTabProps(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'host-tab::leaf:1',
+      color: 'blue',
+      isPinned: true,
+      viewMode: 'chat'
+    })
+
+    expect(reply).toEqual({
+      updated: true,
+      publicationEpoch: 'renderer:updated',
+      snapshotVersion: 2
+    })
+
+    expect(setSessionTabProps).toHaveBeenCalledWith(TEST_WORKTREE_ID, 'host-tab', {
+      color: 'blue',
+      isPinned: true,
+      viewMode: 'chat'
+    })
+    expect(
+      getSession().tabsByWorktree[TEST_WORKTREE_ID]!.find((tab) => tab.id === 'host-tab')
+    ).not.toHaveProperty('viewMode')
   })
 
   it('still persists tab props in serve mode after syncWindowGraph(0) (gate does not fire)', async () => {

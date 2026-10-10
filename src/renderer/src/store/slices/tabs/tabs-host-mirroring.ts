@@ -3,6 +3,10 @@ import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
 import { findTabAndWorktree } from '../tab-group-state'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { locateTerminalTab } from '../../terminals/terminal-tab-location'
+import {
+  recordLocalViewModeWrite,
+  settleLocalViewModeWrite
+} from '@/runtime/web-session-tabs-sync/last-local-view-mode-write'
 
 /**
  * Mirror a host-tracked unified-tab field onto its terminal row, in whichever
@@ -14,7 +18,7 @@ import { locateTerminalTab } from '../../terminals/terminal-tab-location'
 export function patchTerminalTabRow(
   tabsByWorktree: Record<string, TerminalTab[]>,
   tabId: string,
-  patch: Partial<Pick<TerminalTab, 'isPinned' | 'viewMode'>>
+  patch: Partial<Pick<TerminalTab, 'color' | 'isPinned' | 'viewMode'>>
 ): Partial<Pick<AppState, 'tabsByWorktree'>> {
   const location = locateTerminalTab(tabsByWorktree, tabId)
   if (!location) {
@@ -60,7 +64,11 @@ export function mirrorTabViewModeToHost(
     return
   }
   const worktreeId = found.worktreeId
-  void import('@/runtime/web-runtime-session').then(({ setWebRuntimeTabProps }) =>
-    setWebRuntimeTabProps({ worktreeId, tabId, viewMode })
-  )
+  // Why: the echoed snapshot arrives before this write lands, so the record it opens has to stay
+  // open until the RPC settles — a value comparison alone would read that echo as a peer's change.
+  const token = recordLocalViewModeWrite(tabId)
+  void import('@/runtime/web-runtime-session')
+    .then(({ setWebRuntimeTabProps }) => setWebRuntimeTabProps({ worktreeId, tabId, viewMode }))
+    .catch(() => undefined)
+    .finally(() => settleLocalViewModeWrite(tabId, token))
 }

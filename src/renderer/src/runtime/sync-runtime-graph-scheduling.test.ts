@@ -4,6 +4,7 @@ import {
   hasRegisteredRuntimeTerminalTab,
   registerRuntimeTerminalTab,
   runtimeMobileSessionSyncKeysEqual,
+  flushRuntimeGraphSync,
   scheduleRuntimeGraphSync,
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled
@@ -173,6 +174,67 @@ describe('scheduleRuntimeGraphSync', () => {
 
     expect(syncWindowGraph).toHaveBeenCalledTimes(1)
     unregister()
+  })
+
+  it('flushes a fresh graph immediately and waits for main acceptance', async () => {
+    vi.useFakeTimers()
+    const publication = deferred<void>()
+    const syncWindowGraph = vi.fn(() => publication.promise)
+    vi.stubGlobal('window', { api: { runtime: { syncWindowGraph } } })
+    vi.stubGlobal('HTMLElement', class HTMLElement {})
+    const unregister = registerRuntimeTerminalTab({
+      tabId: 'term-1',
+      worktreeId: 'wt-1',
+      getManager: () => null,
+      getContainer: () => null,
+      getPtyIdForPane: () => null,
+      getTabWideAgentHintLeafId: () => null
+    })
+    setRuntimeGraphStoreStateGetter(() => makeState())
+    setRuntimeGraphSyncEnabled(true)
+
+    let settled = false
+    const flush = flushRuntimeGraphSync('wt-1').then(() => {
+      settled = true
+    })
+    await flushMicrotasks()
+    expect(syncWindowGraph).toHaveBeenCalledTimes(1)
+    expect(settled).toBe(false)
+    publication.resolve()
+    await flush
+    expect(settled).toBe(true)
+    unregister()
+  })
+
+  it('retries one requested mobile resync before acknowledging', async () => {
+    vi.useFakeTimers()
+    const syncWindowGraph = vi
+      .fn()
+      .mockResolvedValueOnce({ mobileSessionResyncWorktrees: ['wt-1'] })
+      .mockResolvedValueOnce(undefined)
+    vi.stubGlobal('window', { api: { runtime: { syncWindowGraph } } })
+    vi.stubGlobal('HTMLElement', class HTMLElement {})
+    setRuntimeGraphStoreStateGetter(() => makeState())
+    setRuntimeGraphSyncEnabled(true)
+
+    await flushRuntimeGraphSync('wt-1')
+
+    expect(syncWindowGraph).toHaveBeenCalledTimes(2)
+  })
+
+  it('rejects a publication failure while background scheduling keeps its catch behavior', async () => {
+    vi.useFakeTimers()
+    const failure = new Error('publication_failed')
+    const syncWindowGraph = vi.fn().mockRejectedValue(failure)
+    vi.stubGlobal('window', { api: { runtime: { syncWindowGraph } } })
+    vi.stubGlobal('HTMLElement', class HTMLElement {})
+    setRuntimeGraphStoreStateGetter(() => makeState())
+    setRuntimeGraphSyncEnabled(true)
+
+    await expect(flushRuntimeGraphSync('wt-1')).rejects.toThrow('publication_failed')
+    scheduleRuntimeGraphSync()
+    await flushRuntimeGraphSyncTimer()
+    expect(syncWindowGraph).toHaveBeenCalledTimes(2)
   })
 })
 

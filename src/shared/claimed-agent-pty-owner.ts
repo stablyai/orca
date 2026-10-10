@@ -286,6 +286,12 @@ export class ClaimedAgentPtyOwnerRegistry {
     return owner && scopedAgentSessionClaimsEqual(owner.claim, claim) ? cloneOwner(owner) : null
   }
 
+  /** A conversation stays owned even when another workspace asks to attach it. */
+  hasIdentityOwner(claim: AgentSessionExecutionClaim): boolean {
+    const key = agentSessionClaimKey(claim)
+    return this.live.has(key) || this.reserved.has(key) || this.conflicts.has(key)
+  }
+
   private rebuildPtyIndex(): void {
     this.keysByPtyId = buildClaimedAgentPtyOwnerIndex(this.live, this.conflicts)
   }

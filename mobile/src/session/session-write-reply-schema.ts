@@ -17,6 +17,11 @@ import { salvagedOptional } from '../../../src/shared/zod-salvage'
  * them would be a requirement with no reader behind it.
  */
 export const sessionWriteUnreadReplySchema = z.unknown()
+export const sessionTabPropsWriteReplySchema = z.object({
+  updated: z.literal(true),
+  publicationEpoch: z.string().optional(),
+  snapshotVersion: z.number().optional()
+})
 
 /**
  * The terminal tab a New Tab create answers with.

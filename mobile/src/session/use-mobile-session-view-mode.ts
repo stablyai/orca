@@ -4,54 +4,31 @@ import {
   loadDefaultSessionView,
   readSessionViewOverridesPreference,
   updateSessionViewOverride,
-  type MobileSessionView,
-  type SessionViewOverridesPreference
+  type MobileSessionView
 } from '../storage/session-view-preferences'
-
-type ViewOverridesState = {
-  hostId: string
-  worktreeId: string
-  overrides: Map<string, MobileSessionView>
-  loaded: boolean
-}
-
-type ViewOverridesRuntime = {
-  hostId: string
-  worktreeId: string
-  loadPromise: Promise<SessionViewOverridesPreference>
-  currentOverrides: Map<string, MobileSessionView>
-  mutationRevisions: Map<string, number>
-}
-
-function isOverrideScope(state: ViewOverridesState, hostId: string, worktreeId: string): boolean {
-  return state.hostId === hostId && state.worktreeId === worktreeId
-}
-
-function mergeOverrides(
-  persisted: ReadonlyMap<string, MobileSessionView>,
-  current: ReadonlyMap<string, MobileSessionView>
-): Map<string, MobileSessionView> {
-  const merged = new Map(persisted)
-  for (const [tabId, view] of current) {
-    merged.set(tabId, view)
-  }
-  return merged
-}
-
-export type MobileSessionViewModeController = {
-  /** Whether a tab's effective view is chat (per-tab override, else the default). */
-  isTabChatView: (tabId: string) => boolean
-  toggleTabChatView: (tabId: string) => void
-}
-
-/** Resolves each tab's terminal/chat view: a per-device default (reloaded on focus
- *  so a Settings change applies without remounting the route) overlaid by persisted
- *  per-tab overrides that pin a session regardless of what the default later becomes. */
+import {
+  isOverrideScope,
+  mergeOverrides,
+  isPendingHostViewWriteSettled,
+  createViewOverridesRuntime,
+  type MobileSessionTabViewModeBridge,
+  type PendingHostViewWrite,
+  type ViewOverridesRuntime,
+  type ViewOverridesState
+} from './mobile-session-view-mode-state'
+export type {
+  MobileSessionTabViewModeBridge,
+  MobileSessionViewModeController
+} from './mobile-session-view-mode-state'
+/** Resolves host-published or persisted per-tab terminal/chat views over the reloaded device default. */
 export function useMobileSessionViewMode(args: {
   hostId: string
   worktreeId: string
-}): MobileSessionViewModeController {
-  const { hostId, worktreeId } = args
+  sessionTabViewMode?: MobileSessionTabViewModeBridge
+}) {
+  const { hostId, sessionTabViewMode, worktreeId } = args
+  const sessionTabViewModeRef = useRef(sessionTabViewMode)
+  sessionTabViewModeRef.current = sessionTabViewMode
   const [viewOverridesState, setViewOverridesState] = useState<ViewOverridesState>(() => ({
     hostId,
     worktreeId,
@@ -61,6 +38,11 @@ export function useMobileSessionViewMode(args: {
   const viewOverridesStateRef = useRef(viewOverridesState)
   viewOverridesStateRef.current = viewOverridesState
   const viewOverridesRuntimeRef = useRef<ViewOverridesRuntime | null>(null)
+  // Why: a host write settles only after acceptance and an authoritative echo; the optimistic
+  // view must survive stale snapshots and the RPC's asynchronous settlement window.
+  const pendingHostViewWritesRef = useRef(new Map<string, PendingHostViewWrite>())
+  const nextHostViewWriteTokenRef = useRef(0)
+  const [, setPendingVersion] = useState(0)
   const mountedRef = useRef(true)
   useEffect(() => {
     mountedRef.current = true
@@ -73,22 +55,53 @@ export function useMobileSessionViewMode(args: {
     if (current?.hostId === scopeHostId && current.worktreeId === scopeWorktreeId) {
       return current
     }
-    const next: ViewOverridesRuntime = {
-      hostId: scopeHostId,
-      worktreeId: scopeWorktreeId,
-      loadPromise: readSessionViewOverridesPreference(scopeHostId, scopeWorktreeId),
-      currentOverrides: new Map(),
-      mutationRevisions: new Map()
-    }
+    const next = createViewOverridesRuntime(
+      scopeHostId,
+      scopeWorktreeId,
+      readSessionViewOverridesPreference
+    )
     viewOverridesRuntimeRef.current = next
     return next
   }, [])
   const [defaultView, setDefaultView] = useState<MobileSessionView>('terminal')
-  // Why: the toggle callback reads the live default without depending on it, so
-  // its identity stays stable and it never captures a stale default.
   const defaultViewRef = useRef(defaultView)
   defaultViewRef.current = defaultView
-
+  useEffect(() => {
+    const pending = pendingHostViewWritesRef.current
+    const bridge = sessionTabViewModeRef.current
+    let cleared = false
+    for (const [tabId, write] of pending) {
+      if (
+        write.hostId !== hostId ||
+        write.worktreeId !== worktreeId ||
+        write.source !== bridge?.hostViewSource
+      ) {
+        pending.delete(tabId)
+        cleared = true
+      }
+    }
+    if (!bridge?.writeHostViewMode) {
+      return
+    }
+    for (const [tabId, write] of pending) {
+      if (
+        write.hostId === hostId &&
+        write.worktreeId === worktreeId &&
+        write.source === bridge.hostViewSource &&
+        isPendingHostViewWriteSettled(
+          write,
+          bridge.readHostViewPublication?.(),
+          bridge.readHostViewMode(tabId)
+        )
+      ) {
+        pending.delete(tabId)
+        cleared = true
+      }
+    }
+    if (cleared) {
+      setPendingVersion((version) => version + 1)
+    }
+  })
   useEffect(() => {
     let active = true
     const runtime = ensureViewOverridesRuntime(hostId, worktreeId)
@@ -96,12 +109,8 @@ export function useMobileSessionViewMode(args: {
       if (!active) {
         return
       }
-      // Why: toggles made during the read are authoritative, but must not
-      // discard unrelated persisted overrides from the same worktree.
       const merged = mergeOverrides(preference.overrides, runtime.currentOverrides)
       runtime.currentOverrides = merged
-      // Why: an unreadable override store cannot safely be treated as empty when
-      // the default is chat; fail closed to terminal until a user toggles.
       const next = { hostId, worktreeId, overrides: merged, loaded: preference.loaded }
       viewOverridesStateRef.current = next
       setViewOverridesState(next)
@@ -110,8 +119,6 @@ export function useMobileSessionViewMode(args: {
       active = false
     }
   }, [ensureViewOverridesRuntime, hostId, worktreeId])
-
-  // Why: reload on focus so returning from Settings picks up a changed default.
   useFocusEffect(
     useCallback(() => {
       let active = true
@@ -125,20 +132,32 @@ export function useMobileSessionViewMode(args: {
       }
     }, [])
   )
-
   const isTabChatView = useCallback(
     (tabId: string): boolean => {
       if (!isOverrideScope(viewOverridesState, hostId, worktreeId)) {
         return false
       }
+      const bridge = sessionTabViewModeRef.current
+      if (bridge?.writeHostViewMode) {
+        const pending = pendingHostViewWritesRef.current.get(tabId)
+        if (
+          pending &&
+          pending.hostId === hostId &&
+          pending.worktreeId === worktreeId &&
+          pending.source === bridge.hostViewSource
+        ) {
+          return pending.viewMode === 'chat'
+        }
+        const hostViewMode = bridge.readHostViewMode(tabId)
+        if (hostViewMode !== undefined) {
+          return hostViewMode === 'chat'
+        }
+      }
       const override = viewOverridesState.overrides.get(tabId)
-      // Until this scope loads, only an immediate user toggle is authoritative;
-      // defaulting other tabs to terminal avoids activating stale cross-host chat.
       return (override ?? (viewOverridesState.loaded ? defaultView : 'terminal')) === 'chat'
     },
     [defaultView, hostId, viewOverridesState, worktreeId]
   )
-
   const toggleTabChatView = useCallback(
     (tabId: string) => {
       const current = viewOverridesStateRef.current
@@ -151,28 +170,109 @@ export function useMobileSessionViewMode(args: {
             loaded: false
           }
       const overrides = new Map(currentScope.overrides)
-      // Flip from the tab's effective view (its override, else the default), so
-      // a tab following a chat default can still be pinned back to terminal.
+      const bridge = sessionTabViewModeRef.current
+      const pendingWrite = pendingHostViewWritesRef.current.get(tabId)
+      const pendingView =
+        pendingWrite?.hostId === hostId &&
+        pendingWrite.worktreeId === worktreeId &&
+        pendingWrite.source === bridge?.hostViewSource
+          ? pendingWrite.viewMode
+          : undefined
+      const hostViewMode = bridge?.writeHostViewMode ? bridge.readHostViewMode(tabId) : undefined
       const fallbackView = currentScope.loaded ? defaultViewRef.current : 'terminal'
-      const currentlyChat = (overrides.get(tabId) ?? fallbackView) === 'chat'
+      const effectiveView = pendingView ?? hostViewMode
+      const currentlyChat =
+        effectiveView !== undefined
+          ? effectiveView === 'chat'
+          : (overrides.get(tabId) ?? fallbackView) === 'chat'
       const nextView = currentlyChat ? 'terminal' : 'chat'
       overrides.set(tabId, nextView)
       const next = { ...currentScope, overrides }
       viewOverridesStateRef.current = next
       setViewOverridesState(next)
-
       const runtime = ensureViewOverridesRuntime(hostId, worktreeId)
       runtime.currentOverrides = overrides
       const revision = (runtime.mutationRevisions.get(tabId) ?? 0) + 1
       runtime.mutationRevisions.set(tabId, revision)
-      // Why: enqueue the individual mutation immediately so a remounted route
-      // cannot reorder it or replace unrelated overrides with a stale snapshot.
+      const writeHostViewMode = bridge?.writeHostViewMode
+      if (writeHostViewMode) {
+        const priorOverride = currentScope.overrides.get(tabId)
+        const pendingWrites = pendingHostViewWritesRef.current
+        const token = nextHostViewWriteTokenRef.current + 1
+        nextHostViewWriteTokenRef.current = token
+        pendingWrites.set(tabId, {
+          hostId,
+          worktreeId,
+          source: bridge.hostViewSource,
+          viewMode: nextView,
+          token,
+          accepted: false
+        })
+        void Promise.resolve()
+          .then(() => writeHostViewMode(tabId, nextView))
+          .then(
+            (ack) => {
+              const pending = pendingWrites.get(tabId)
+              if (
+                pending?.token === token &&
+                pending.hostId === hostId &&
+                pending.worktreeId === worktreeId &&
+                pending.source === bridge.hostViewSource
+              ) {
+                pending.accepted = true
+                // Why: newer hosts identify the exact publication; older hosts retain matching
+                // echo reconciliation below, including snapshots received before this ACK.
+                if (ack?.publicationEpoch && typeof ack.snapshotVersion === 'number') {
+                  pending.acknowledgedPublication = {
+                    epoch: ack.publicationEpoch,
+                    version: ack.snapshotVersion
+                  }
+                }
+                if (mountedRef.current) {
+                  setPendingVersion((version) => version + 1)
+                }
+              }
+            },
+            (error) => {
+              const pending = pendingWrites.get(tabId)
+              const isCurrentWrite =
+                pending?.token === token &&
+                pending.hostId === hostId &&
+                pending.worktreeId === worktreeId &&
+                pending.source === bridge?.hostViewSource &&
+                sessionTabViewModeRef.current?.hostViewSource === bridge?.hostViewSource
+              if (isCurrentWrite) {
+                pendingWrites.delete(tabId)
+              }
+              if (
+                isCurrentWrite &&
+                mountedRef.current &&
+                viewOverridesRuntimeRef.current === runtime &&
+                runtime.mutationRevisions.get(tabId) === revision
+              ) {
+                const reverted = new Map(runtime.currentOverrides)
+                if (priorOverride) {
+                  reverted.set(tabId, priorOverride)
+                } else {
+                  reverted.delete(tabId)
+                }
+                runtime.currentOverrides = reverted
+                const latest = viewOverridesStateRef.current
+                if (isOverrideScope(latest, hostId, worktreeId)) {
+                  const revertedState = { ...latest, overrides: reverted }
+                  viewOverridesStateRef.current = revertedState
+                  setViewOverridesState(revertedState)
+                }
+                sessionTabViewModeRef.current?.onHostViewModeWriteError?.(error)
+              }
+            }
+          )
+      }
       void updateSessionViewOverride(hostId, worktreeId, tabId, nextView).catch(async () => {
         if (!mountedRef.current || viewOverridesRuntimeRef.current !== runtime) {
           return
         }
         const preference = await readSessionViewOverridesPreference(hostId, worktreeId)
-        // Why: a failed older write must not roll back a newer choice for this tab.
         if (
           !mountedRef.current ||
           viewOverridesRuntimeRef.current !== runtime ||
@@ -180,8 +280,6 @@ export function useMobileSessionViewMode(args: {
         ) {
           return
         }
-        // Why: if recovery is also unreadable, fail closed instead of treating an
-        // unknown store as empty or restoring an earlier optimistic mutation.
         const reconciled = preference.loaded
           ? mergeOverrides(preference.overrides, runtime.currentOverrides)
           : new Map(runtime.currentOverrides)
@@ -203,6 +301,5 @@ export function useMobileSessionViewMode(args: {
     },
     [ensureViewOverridesRuntime, hostId, worktreeId]
   )
-
   return { isTabChatView, toggleTabChatView }
 }

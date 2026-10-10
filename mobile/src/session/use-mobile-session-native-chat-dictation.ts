@@ -11,6 +11,11 @@ import {
   isDictationSetupRequiredError
 } from '../dictation/mobile-dictation-setup'
 import { useMobileNativeChatController } from './use-mobile-native-chat-controller'
+import {
+  requireAcceptedSessionTabProps,
+  sessionTabSetProps
+} from './mobile-session-write-operations'
+import type { MobileSessionTabViewModeBridge } from './use-mobile-session-view-mode'
 import { useMobileNativeChatReadability } from './use-mobile-native-chat-readability'
 import { useMobileNativeChatInputLease } from './use-mobile-native-chat-input-lease'
 import {
@@ -30,6 +35,9 @@ export function useMobileSessionNativeChatDictation(
     worktreeId,
     client,
     connState,
+    sessionTabs,
+    appliedSnapshotMarkerRef,
+    sessionTabsViewModeSupported,
     agentSessionHostSupport,
     setInput,
     liveInputTerminalHandles,
@@ -65,10 +73,46 @@ export function useMobileSessionNativeChatDictation(
     activeHandle,
     connected: connState === 'connected'
   })
+  // Why: the view is host-shared only when the host advertised the capability, so the write
+  // callback is null otherwise and the hook keeps resolving the view device-locally.
+  const sessionTabViewMode = useMemo<MobileSessionTabViewModeBridge>(
+    () => ({
+      hostViewSource: client ?? undefined,
+      readHostViewPublication: () => ({
+        epoch: appliedSnapshotMarkerRef.current.epoch,
+        version: appliedSnapshotMarkerRef.current.version
+      }),
+      readHostViewMode: (tabId) => {
+        const tab = sessionTabs.find((candidate) => candidate.id === tabId)
+        return tab?.type === 'terminal' ? tab.viewMode : undefined
+      },
+      writeHostViewMode:
+        sessionTabsViewModeSupported && client
+          ? (tabId, view) =>
+              sessionTabSetProps
+                .request(client, { worktree: `id:${worktreeId}`, tabId, viewMode: view })
+                .then(requireAcceptedSessionTabProps)
+          : null,
+      // Why: a rejected shared-view write left the user on a view the host never took, silently.
+      onHostViewModeWriteError: () => {
+        triggerError()
+        showToast('Could not switch view mode')
+      }
+    }),
+    [
+      appliedSnapshotMarkerRef,
+      client,
+      sessionTabs,
+      sessionTabsViewModeSupported,
+      showToast,
+      worktreeId
+    ]
+  )
   const nativeChatController = useMobileNativeChatController({
     client,
     hostId,
     worktreeId,
+    sessionTabViewMode,
     activeSessionTab,
     activeSessionTabId,
     activeHandleRef,
