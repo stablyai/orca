@@ -3,26 +3,36 @@ import {
   aiVaultSessionCliForkWorktreeId,
   describeAiVaultCliForkFailure
 } from './ai-vault-session-cli-fork'
+import type { AiVaultAgent } from '../../../../shared/ai-vault-types'
 
 const OWNED = { sessionId: 'chat-1', workspaceId: 'repo-1::worktree-1' }
 const RESUMABLE = { worktreeId: 'repo-1::worktree-2', disabled: false }
 
+function row(agent: AiVaultAgent) {
+  return { agent, sessionId: 'provider-1', structuredSession: OWNED }
+}
+
 describe('Resume in New CLI eligibility', () => {
   it('offers the fork for Claude and Codex rows native chat owns', () => {
-    expect(
-      aiVaultSessionCliForkWorktreeId({ agent: 'claude', structuredSession: OWNED }, RESUMABLE)
-    ).toBe('repo-1::worktree-2')
-    expect(
-      aiVaultSessionCliForkWorktreeId({ agent: 'codex', structuredSession: OWNED }, RESUMABLE)
-    ).toBe('repo-1::worktree-2')
+    expect(aiVaultSessionCliForkWorktreeId(row('claude'), RESUMABLE)).toBe('repo-1::worktree-2')
+    expect(aiVaultSessionCliForkWorktreeId(row('codex'), RESUMABLE)).toBe('repo-1::worktree-2')
   })
 
+  it.each(['opencode', 'grok', 'pi'] as const)(
+    'offers no fork for %s, whose CLI cannot fork a conversation',
+    (agent) => {
+      expect(aiVaultSessionCliForkWorktreeId(row(agent), RESUMABLE)).toBeNull()
+    }
+  )
+
   it('leaves rows no chat owns to plain Resume', () => {
-    expect(aiVaultSessionCliForkWorktreeId({ agent: 'claude' }, RESUMABLE)).toBeNull()
+    expect(
+      aiVaultSessionCliForkWorktreeId({ agent: 'claude', sessionId: 'provider-1' }, RESUMABLE)
+    ).toBeNull()
   })
 
   it('withholds the fork when resume is blocked or has no target', () => {
-    const session = { agent: 'claude' as const, structuredSession: OWNED }
+    const session = row('claude')
     expect(aiVaultSessionCliForkWorktreeId(session, { worktreeId: 'w', disabled: true })).toBeNull()
     expect(
       aiVaultSessionCliForkWorktreeId(session, { worktreeId: null, disabled: false })

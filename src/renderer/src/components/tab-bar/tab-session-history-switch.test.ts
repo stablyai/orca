@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { makeRepo, makeTerminalTab, makeWorktree } from '../worktree-jump-palette-test-fixtures'
@@ -19,13 +19,20 @@ import {
   resolveTabSessionSwitch,
   type TabSessionHistorySubject
 } from './tab-session-history-switch'
+import {
+  loadHostStructuredAgents,
+  resetHostStructuredAgentsForTests
+} from '@/runtime/host-structured-agents'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 
 const mocks = vi.hoisted(() => {
   const state: {
     resumeState: { blocked: boolean; worktreeId: string | null }
   } = { resumeState: { blocked: false, worktreeId: 'repo-1::/repo/wt' } }
-  return { ...state, resumeInChat: vi.fn() }
+  return { ...state, resumeInChat: vi.fn(), callRuntimeRpc: vi.fn() }
 })
+
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 
 // Parity with the panel's real composition is pinned in tab-session-history-switch.parity.test.ts.
 vi.mock('../right-sidebar/ai-vault-session-resume-in-chat-workspace', () => ({
@@ -142,6 +149,35 @@ describe('resolveTabSessionHistorySubject', () => {
         structuredSessionId: 'orca-chat-1'
       })
     ).toBeNull()
+  })
+
+  describe("once the chat's host has listed its agents", () => {
+    afterEach(() => resetHostStructuredAgentsForTests())
+
+    it('follows its history flag rather than the agent name', async () => {
+      mocks.callRuntimeRpc.mockResolvedValue({
+        agents: [
+          { agent: 'grok', capabilities: { sessionHistory: true } },
+          { agent: 'codex', capabilities: { sessionHistory: false } },
+          // A host that predates the flag still owns its built-ins' rows.
+          { agent: 'claude', capabilities: {} }
+        ]
+      })
+      await loadHostStructuredAgents(
+        'local',
+        [STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY],
+        null
+      )
+      const subject = (launchAgent: 'grok' | 'codex' | 'claude') =>
+        resolveTabSessionHistorySubject(makeState(), {
+          tab: { id: 'unified-1', worktreeId: WORKTREE_ID, launchAgent },
+          structuredSessionId: 'orca-chat-1'
+        })
+
+      expect(subject('grok')).toEqual(chatSubject)
+      expect(subject('codex')).toBeNull()
+      expect(subject('claude')).toEqual(chatSubject)
+    })
   })
 
   it('finds a terminal tab by the conversation its agent reported', () => {

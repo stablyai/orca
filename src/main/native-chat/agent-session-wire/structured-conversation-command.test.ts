@@ -1,4 +1,4 @@
-import { listStructuredProviderSessionOwnership } from './structured-provider-session-ownership'
+import { listStructuredSessionHistoryOwnership } from '../../runtime/structured-agent-session-history-ownership'
 import { findConflictingStructuredAdoption } from '../structured-agent-session-history-adoption'
 import { cp, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -188,7 +188,7 @@ describe('same-conversation clear', () => {
     expect(store.listVisibleSessionIds()).toEqual([HOST_TEST_SESSION])
     expect(store.getSessionTabId(HOST_TEST_SESSION)).toBe(tab)
     expect(cleared.providerHandleChain).toEqual([])
-    const ownership = listStructuredProviderSessionOwnership(store.listRecords())
+    const ownership = listStructuredSessionHistoryOwnership(store.listRecords())
     expect(ownership).toEqual([])
     expect(
       findConflictingStructuredAdoption({

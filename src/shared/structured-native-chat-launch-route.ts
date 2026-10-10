@@ -87,6 +87,7 @@ export function resolveStructuredNativeChatSupport(
   if (input.reusesTerminal === true) {
     return { supported: false, blocker: 'reused-terminal' }
   }
+  // The old-host floor: a host that lists no agents still runs the two every build ships.
   const builtInAgent = isAgentSessionHandleProvider(input.agent)
   if (!builtInAgent && !input.hostStructuredAgents?.includes(input.agent)) {
     return { supported: false, blocker: 'agent-without-structured-session' }

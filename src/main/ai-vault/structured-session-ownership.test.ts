@@ -211,6 +211,44 @@ describe('structured AI Vault ownership', () => {
   })
 })
 
+describe('Session History ownership read from the agent registration', () => {
+  afterEach(() => setStructuredAgentSessionHost(null))
+
+  it('leaves the rows and resumes of an agent registered with no history ownership alone', async () => {
+    installOwnership({ provider: 'opencode' })
+    const result = listResult()
+    result.sessions = result.sessions.map((session) => ({ ...session, agent: 'opencode' }))
+
+    expect(projectStructuredAiVaultSessions(result, false)).toBe(result)
+    expect(() =>
+      assertLegacyAiVaultResumeAllowed({
+        agent: 'opencode',
+        sessionId: PROVIDER_SESSION,
+        filePath: `/sessions/${PROVIDER_SESSION}.json`,
+        codexHome: null,
+        executionHostId: 'local'
+      })
+    ).not.toThrow()
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(
+        `opencode --session ${PROVIDER_SESSION}`,
+        async () => undefined
+      )
+    ).resolves.toBeUndefined()
+  })
+
+  it.each([
+    `/usr/local/bin/claude --resume ${PROVIDER_SESSION}`,
+    `C:\\bin\\CLAUDE.EXE -r ${PROVIDER_SESSION}`
+  ])("recognises the registered binary by its path's last name: %s", async (command) => {
+    installOwnership({ provider: 'claude' })
+
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(command, async () => undefined)
+    ).rejects.toThrow('agent_session_conflict')
+  })
+})
+
 function installOwnership(overrides: Partial<StructuredProviderSessionOwnership> = {}): void {
   const ownership: StructuredProviderSessionOwnership = {
     sessionId: 'session-alpha',

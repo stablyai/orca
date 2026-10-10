@@ -6,10 +6,14 @@ import type { AiVaultSearchResponse } from '../../shared/ai-vault-search-types'
 import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault-resume-preparation'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/structured-agent-session-host-refusal'
+import type { StructuredProviderSessionOwnership } from '../native-chat/agent-session-wire/structured-provider-session-ownership'
+import { listStructuredSessionHistoryOwnership } from '../runtime/structured-agent-session-history-ownership'
+import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
 import {
-  listStructuredProviderSessionOwnership,
-  type StructuredProviderSessionOwnership
-} from '../native-chat/agent-session-wire/structured-provider-session-ownership'
+  isSessionHistoryBinary,
+  type StructuredAgentResumeInvocation
+} from '../native-chat/structured-agent-cli-conversations'
+import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from '../runtime/structured-agent-runtime-registrations'
 
 export function projectStructuredAiVaultSessions(
   result: AiVaultListResult,
@@ -92,10 +96,19 @@ function ownershipLookup():
       byProviderSession.set(key, ownership)
     }
   }
-  return (row) =>
-    row.agent === 'codex' || row.agent === 'claude'
-      ? (byProviderSession.get(`${row.agent}\0${row.sessionId}`) ?? null)
-      : null
+  return (row) => {
+    const owner = historyRowOwner(row.agent)
+    return owner ? (byProviderSession.get(`${owner}\0${row.sessionId}`) ?? null) : null
+  }
+}
+
+/** The agent whose chats own history rows listed under `rowAgent`; null when none does. */
+function historyRowOwner(rowAgent: string): StructuredAgentId | null {
+  return (
+    STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.find(({ sessionHistory }) =>
+      sessionHistory?.rowAgents.some((agent) => agent === rowAgent)
+    )?.definition.agent ?? null
+  )
 }
 
 export function assertLegacyAiVaultResumeAllowed(args: AiVaultPrepareSessionResumeArgs): void {
@@ -133,28 +146,28 @@ function isPotentialStructuredResumeCommand(command: string): boolean {
 function findResumeOwnership(
   args: AiVaultPrepareSessionResumeArgs
 ): StructuredProviderSessionOwnership | null {
-  if (args.agent !== 'codex' && args.agent !== 'claude') {
+  const owner = historyRowOwner(args.agent)
+  if (!owner) {
     return null
   }
   const host = getStructuredAgentSessionHost()
   if (!host) {
     return null
   }
-  const exact = args.sessionId ? findOwnership(args.agent, args.sessionId) : null
+  const exact = args.sessionId ? findOwnership(owner, args.sessionId) : null
   if (exact) {
     return exact
   }
   const fileName = args.filePath.split(/[\\/]/).at(-1) ?? ''
   return (
     listOwnership().find(
-      (ownership) =>
-        ownership.provider === args.agent && fileName.includes(ownership.providerSessionId)
+      (ownership) => ownership.provider === owner && fileName.includes(ownership.providerSessionId)
     ) ?? null
   )
 }
 
 function findOwnership(
-  provider: 'claude' | 'codex',
+  provider: StructuredAgentId,
   providerSessionId: string
 ): StructuredProviderSessionOwnership | null {
   return (
@@ -167,7 +180,7 @@ function findOwnership(
 
 function listOwnership(): StructuredProviderSessionOwnership[] {
   const host = getStructuredAgentSessionHost()
-  return host ? listStructuredProviderSessionOwnership(host.deps.store.listRecords()) : []
+  return host ? listStructuredSessionHistoryOwnership(host.deps.store.listRecords()) : []
 }
 
 function isResumeCommandFor(
@@ -184,10 +197,7 @@ function isResumeCommandFor(
   return invocation.target === null || invocation.target === ownership.providerSessionId
 }
 
-type ResumeInvocation = {
-  provider: 'codex' | 'claude'
-  target: string | null
-}
+type ResumeInvocation = StructuredAgentResumeInvocation & { provider: StructuredAgentId }
 
 function parseResumeInvocation(command: string): ResumeInvocation | null {
   // Keep this deliberately conservative: shell quoting is normalized only
@@ -195,57 +205,17 @@ function parseResumeInvocation(command: string): ResumeInvocation | null {
   // treated as proof that a different session is being resumed.
   const tokens = command.match(/"[^"\\]*(?:\\.[^"\\]*)*"|'[^']*'|[^\s]+/g) ?? []
   const normalized = tokens.map((token) => token.replace(/^['"]|['"]$/g, ''))
-  const executableIndex = normalized.findIndex((token) =>
-    /(?:^|[\\/])(?:codex|claude)(?:\.exe)?$/i.test(token)
-  )
-  if (executableIndex === -1) {
-    return null
+  // The first token naming any owning agent's binary decides which agent the command runs.
+  for (const [index, token] of normalized.entries()) {
+    const registration = STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.find(
+      ({ sessionHistory }) => sessionHistory && isSessionHistoryBinary(sessionHistory, token)
+    )
+    if (registration?.sessionHistory) {
+      const invocation = registration.sessionHistory.parseResumeArgs(normalized.slice(index + 1))
+      return invocation && { ...invocation, provider: registration.definition.agent }
+    }
   }
-  const provider = /codex(?:\.exe)?$/i.test(normalized[executableIndex]!) ? 'codex' : 'claude'
-  const args = normalized.slice(executableIndex + 1)
-  // `codex fork` already falls through below: it carries no `resume` marker.
-  if (provider === 'claude' && isClaudeForkInvocation(args)) {
-    return null
-  }
-  // `--continue`/`-c` resume the most recent session and never take an id, so a
-  // following token is a prompt, not a target — they are always target-less.
-  const targetlessFlags = provider === 'codex' ? [] : ['--continue', '-c']
-  const targetlessIndex = args.findIndex((token) => targetlessFlags.includes(token.toLowerCase()))
-  if (targetlessIndex !== -1) {
-    return { provider, target: null }
-  }
-  const resumeFlags = provider === 'codex' ? ['resume'] : ['--resume', '-r']
-  const inlineIndex = args.findIndex(
-    (token) =>
-      provider === 'claude' &&
-      (token.toLowerCase().startsWith('--resume=') || token.toLowerCase().startsWith('-r='))
-  )
-  if (inlineIndex !== -1) {
-    const target = args[inlineIndex]!.slice(args[inlineIndex]!.indexOf('=') + 1)
-    return { provider, target: target.length > 0 ? target : null }
-  }
-  const markerIndex = args.findIndex((token) => resumeFlags.includes(token.toLowerCase()))
-  if (markerIndex === -1) {
-    return null
-  }
-  const candidate = args[markerIndex + 1]
-  return {
-    provider,
-    target: candidate && !candidate.startsWith('-') ? candidate : null
-  }
-}
-
-/** A fork reads the conversation and writes a new one, so it is no second writer. Not when
- *  `--session-id` names the id it writes under, and nothing after `--` is an option. */
-function isClaudeForkInvocation(args: readonly string[]): boolean {
-  const terminatorIndex = args.indexOf('--')
-  const options = (terminatorIndex === -1 ? args : args.slice(0, terminatorIndex)).map((token) =>
-    token.toLowerCase()
-  )
-  return (
-    options.includes('--fork-session') &&
-    !options.some((token) => token === '--session-id' || token.startsWith('--session-id='))
-  )
+  return null
 }
 
 function refuseLegacyWriter(ownership: StructuredProviderSessionOwnership): never {

@@ -291,3 +291,32 @@ describe('structured agent-session create intent', () => {
     })
   })
 })
+
+describe('adopting a conversation recorded outside Orca', () => {
+  it('refuses an agent registered with no transcript importer before any adoption work', async () => {
+    const runtime = new OrcaRuntimeService(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: create intent only reads getSettings from the store.
+      { getSettings: () => ({ agentDefaultEnv: {} }) } as never
+    )
+    vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({
+      supported: true
+    })
+    const resolveStructuredAgentSessionLocation = vi.fn()
+    Object.assign(runtime, { resolveStructuredAgentSessionLocation })
+
+    await expect(
+      runtime.resolveStructuredAgentSessionCreateIntent({
+        envelope: { sessionId: 'session-1', clientOperationId: 'operation-1' },
+        worktree: 'id:workspace-1',
+        agent: 'opencode',
+        resumeFrom: { providerSessionId: 'provider-1' }
+      })
+    ).rejects.toMatchObject({
+      refusal: {
+        code: 'structured_agent_session_unsupported',
+        details: { reason: 'hostUnsupported' }
+      }
+    })
+    expect(resolveStructuredAgentSessionLocation).not.toHaveBeenCalled()
+  })
+})

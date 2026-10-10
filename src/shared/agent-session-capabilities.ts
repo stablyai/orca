@@ -26,4 +26,15 @@ export type AgentSessionCapabilities = {
    * WHEN it asks, so only what it asks about is covered, never a sandbox.
    */
   approvalEnforcement: 'provider' | 'orca'
+  /** A conversation the agent's own CLI recorded can be resumed into a new chat. */
+  transcriptAdoption: boolean
+  /** The agent's chats own their conversations' Agent Session History rows. */
+  sessionHistory: boolean
 }
+
+/** What an agent's definition declares; the rest follows from what its runtime registration holds,
+ *  so the two can never disagree. */
+export type AgentSessionDeclaredCapabilities = Omit<
+  AgentSessionCapabilities,
+  'transcriptAdoption' | 'sessionHistory'
+>

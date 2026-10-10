@@ -5,18 +5,45 @@ import { LOCAL_EXECUTION_HOST_ID, toRuntimeExecutionHostId } from '../../../shar
 import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
 import { useAppStore } from '@/store'
 import {
+  readHostStructuredAgents,
   readHostStructuredAgentsForRuntime,
-  subscribeHostStructuredAgents
+  subscribeHostStructuredAgents,
+  type HostStructuredAgentsStatuses
 } from './host-structured-agents'
 import type { RuntimeClientTarget } from './runtime-client-target'
 
-/** Whether a chat may carry images: what its host registered for the agent, else what every build
- *  has always sent the agents it ships. An unlisted agent claims nothing. */
+type HostStructuredAgentFlag = 'imagePrompts' | 'transcriptAdoption' | 'sessionHistory'
+
+/** What the host registered for the agent. With no record (no list yet, or an older host), the
+ *  answer every build has always given: yes for Claude and Codex, no for any other agent. */
+export function structuredAgentClaims(
+  record: AgentSessionRegisteredAgent | undefined,
+  agent: string,
+  flag: HostStructuredAgentFlag
+): boolean {
+  return record ? record.capabilities[flag] : isAgentSessionHandleProvider(agent)
+}
+
+/** Whether a chat may carry images. */
 export function structuredAgentAcceptsImages(
   record: AgentSessionRegisteredAgent | undefined,
   agent: string
 ): boolean {
-  return record ? record.capabilities.imagePrompts : isAgentSessionHandleProvider(agent)
+  return structuredAgentClaims(record, agent, 'imagePrompts')
+}
+
+/** The same answer from a host's last learned list, for a caller outside React. */
+export function hostStructuredAgentClaims(
+  store: { runtimeStatusByEnvironmentId?: HostStructuredAgentsStatuses },
+  executionHostId: string,
+  agent: string,
+  flag: HostStructuredAgentFlag
+): boolean {
+  const record = readHostStructuredAgents(
+    executionHostId,
+    store.runtimeStatusByEnvironmentId
+  )?.find((row) => row.agent === agent)
+  return structuredAgentClaims(record, agent, flag)
 }
 
 /** The agent's record as the chat's host listed it; undefined until (or unless) it has. */
