@@ -152,8 +152,8 @@ export class OrcaRuntimeWithMoveHeadlessMobileSessionTab extends OrcaRuntimeWith
     return { moved: true }
   }
 
-  // Persist the headless tab-GROUP layout so snapshot rebuilds keep the split. The tab bar and the
-  // rows follow the groups, so every saved copy of the tab order agrees.
+  // Persist the headless tab-GROUP layout so snapshot rebuilds keep the split; the tab bar and rows
+  // follow the groups. Deleted by the switch (PR 6), when moves are layout commands.
   protected persistHeadlessTabGroups(
     worktreeId: string,
     groups: readonly RuntimeMobileSessionTabGroup[],

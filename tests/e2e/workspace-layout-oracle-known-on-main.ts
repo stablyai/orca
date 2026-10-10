@@ -118,6 +118,15 @@ export const LAYOUT_ORACLE_KNOWN_ON_MAIN: readonly KnownOnMain[] = [
     step: 'rename after restart',
     cause: 'orcad title after restart'
   },
+  // A headless reorder saves rows through the session merge door, which keeps the stored row order,
+  // so rows and the group disagree; hidden until creates saved a tab bar. Fixed in PR 6 with
+  // client-reorder-tabs.
+  ...(['orcad', 'electron'] as const).map((kind) => ({
+    scenario: `headless-${kind}-move-tab-between-groups`,
+    check: 'rules' as const,
+    rule: 'tab_order_disagrees',
+    cause: 'one tab order'
+  })),
   // After a headless move into an existing group, paired clients still see that group's previous
   // tab selected, not the moved one. A split into a new group selects the moved tab.
   ...(['orcad', 'electron'] as const).map((kind) => ({
