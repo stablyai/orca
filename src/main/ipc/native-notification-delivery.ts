@@ -10,6 +10,7 @@ import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { buildNotificationOptions } from './notification-options'
 import { getEffectiveNotificationSoundId } from './notification-sound-selection'
+import { buildNativeNotificationIdentity } from './native-notification-identity'
 import {
   activeNotificationsById,
   logNativeNotificationFailure,
@@ -30,7 +31,10 @@ export function deliverNativeNotification(
     // Why: macOS treats an unset sound as silent, so request Electron's default when using the OS sound.
     notificationOptions.sound = 'default'
   }
-  const notification = new Notification(notificationOptions)
+  const notification = new Notification({
+    ...notificationOptions,
+    ...buildNativeNotificationIdentity(args)
+  })
   if (args.notificationId) {
     const previous = activeNotificationsById.get(args.notificationId)
     if (previous) {
