@@ -2,14 +2,15 @@ import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import { findStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { findOriginalAiVaultSessionPane } from './ai-vault-original-pane'
-import { activateAiVaultResumeWorkspace } from './ai-vault-session-resume-in-chat-launch'
 import {
   createLazyAiVaultOriginalPaneIndex,
   findAiVaultSessionLiveStateInIndex,
@@ -86,13 +87,7 @@ export function useAiVaultOriginalPaneActions(): {
         return
       }
 
-      if (!activateAiVaultResumeWorkspace(target.worktreeId)) {
-        toast.error(
-          translate(
-            'auto.components.right.sidebar.AiVaultPanel.worktreeUnavailable',
-            'Worktree is no longer available.'
-          )
-        )
+      if (!revealSessionWorkspace(target.worktreeId)) {
         return
       }
       const state = useAppStore.getState()
@@ -106,14 +101,7 @@ export function useAiVaultOriginalPaneActions(): {
   )
 
   const jumpToWorktree = useCallback((worktreeId: string): void => {
-    if (!activateAiVaultResumeWorkspace(worktreeId)) {
-      toast.error(
-        translate(
-          'auto.components.right.sidebar.AiVaultPanel.worktreeUnavailable',
-          'Worktree is no longer available.'
-        )
-      )
-    }
+    revealSessionWorkspace(worktreeId)
   }, [])
 
   return {
@@ -123,4 +111,23 @@ export function useAiVaultOriginalPaneActions(): {
     jumpToOriginalPane,
     jumpToWorktree
   }
+}
+
+function revealSessionWorkspace(workspaceId: string): boolean {
+  if (activateAndRevealWorkspace(workspaceId) !== false) {
+    return true
+  }
+  // A folder that still exists was refused for its path, and folder activation already said why.
+  const reported =
+    parseWorkspaceKey(workspaceId)?.type === 'folder' &&
+    Boolean(useAppStore.getState().getKnownWorktreeById(workspaceId))
+  if (!reported) {
+    toast.error(
+      translate(
+        'auto.components.right.sidebar.AiVaultPanel.worktreeUnavailable',
+        'Worktree is no longer available.'
+      )
+    )
+  }
+  return false
 }

@@ -273,6 +273,13 @@ describe('folder workspaces as session owners', () => {
     ).toBe('folder:folder-1')
   })
 
+  it('matches a WSL folder to a session recorded under its Linux path', () => {
+    const wslFolder = makeFolderWorkspace({
+      folderPath: '\\\\wsl.localhost\\Ubuntu\\home\\ada\\notes'
+    })
+    expect(resolveOwner('/home/ada/notes/src', [wslFolder])?.worktreeId).toBe('folder:folder-1')
+  })
+
   it('reports an archived folder as archived, which is not a jump target', () => {
     const info = resolveOwner('/work/notes', [makeFolderWorkspace({ isArchived: true })])
     expect(info?.status).toBe('archived')
