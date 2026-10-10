@@ -42,4 +42,36 @@ describe('ShortcutCommandBlock', () => {
     expect(helper.classList.contains('whitespace-normal')).toBe(true)
     expect(helper.classList.contains('truncate')).toBe(false)
   })
+
+  it('renders title with tooltip trigger for truncated names', () => {
+    const item = getKeybindingDefinition('worktree.history.back')
+    expect(item).not.toBeNull()
+
+    render(
+      <TooltipProvider>
+        <ShortcutCommandBlock
+          item={item!}
+          groupTitle="Navigation"
+          platform="darwin"
+          effective={['Ctrl+Alt+Left']}
+          modified={false}
+          warnings={[]}
+          previousBindings={[]}
+          recordingBindingIndex={null}
+          onStartRecordingAt={vi.fn()}
+          onAppendBinding={vi.fn()}
+          onCancelRecording={vi.fn()}
+          onCapture={vi.fn()}
+          onClearError={vi.fn()}
+          onRemoveBindingAt={vi.fn()}
+          onResetAction={vi.fn()}
+          onDisableAction={vi.fn()}
+          onEnableAction={vi.fn()}
+        />
+      </TooltipProvider>
+    )
+
+    const titleElement = screen.getByText(item!.title)
+    expect(titleElement.getAttribute('data-slot')).toBe('tooltip-trigger')
+  })
 })

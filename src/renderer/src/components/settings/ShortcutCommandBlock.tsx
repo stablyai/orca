@@ -122,14 +122,21 @@ export function ShortcutCommandBlock({
     >
       <div className="flex min-h-9 items-center gap-3 rounded-md px-2 py-1 transition-colors hover:bg-accent/40 focus-within:bg-accent/40">
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span
-            className={cn(
-              'truncate text-sm',
-              isDisabled ? 'text-muted-foreground' : 'text-foreground'
-            )}
-          >
-            {item.title}
-          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                className={cn(
+                  'truncate text-sm',
+                  isDisabled ? 'text-muted-foreground' : 'text-foreground'
+                )}
+              >
+                {item.title}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {item.title}
+            </TooltipContent>
+          </Tooltip>
           {modified ? (
             <Badge variant="outline" className="shrink-0 text-[11px]">
               {translate('auto.components.settings.ShortcutCommandBlock.287e07ddde', 'Modified')}
