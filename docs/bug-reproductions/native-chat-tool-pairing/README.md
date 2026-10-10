@@ -1,5 +1,7 @@
 # Native chat tool pairing
 
+Latest follow-up: [mobile row identity](./mobile-row-identity.md) keeps an opened detail with its command after earlier rows disappear or move.
+
 Long tool runs repeatedly scanned all unanswered calls to find each named result.
 Calls that emitted no output stayed at the front of that scan. Positional results
 also shifted the remaining pending-call array after every answer.

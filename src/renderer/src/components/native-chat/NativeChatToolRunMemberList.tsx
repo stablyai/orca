@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import type { NativeChatBlock, NativeChatToolCallBlock } from '../../../../shared/native-chat-types'
 import { pairNativeChatToolResults } from '../../../../shared/native-chat-tool-pairing'
+import { nativeChatToolLineIdentity } from '../../../../shared/native-chat-tool-line-identity'
 import { NativeChatDiffCard } from './NativeChatDiffCard'
 import { NativeChatTaskList } from './NativeChatTaskList'
 import { NativeChatToolLine } from './NativeChatToolLine'
@@ -9,30 +10,6 @@ import { buildEditCards } from './native-chat-edit-cards'
 import { buildNativeChatTaskListRows } from './native-chat-task-list-history'
 import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
 import type { NativeChatToolRunAsides } from './NativeChatToolRun'
-
-/** Repeated provider IDs share a FIFO stream, so each rendered occurrence needs its own identity. */
-function toolLineIdentity(block: NativeChatBlock, seen: Map<string, number>): string {
-  const providerCallId =
-    block.type === 'tool-call' && block.callId !== undefined && block.callId.trim().length > 0
-      ? block.callId
-      : undefined
-  const signature =
-    providerCallId !== undefined
-      ? `call:${providerCallId}`
-      : block.type === 'tool-call'
-        ? `${block.type}:${block.name}:${JSON.stringify(block.input)}`
-        : block.type === 'tool-result'
-          ? `${block.type}:${block.output}`
-          : `${block.type}`
-  const occurrence = seen.get(signature) ?? 0
-  seen.set(signature, occurrence + 1)
-  if (providerCallId === undefined) {
-    return `${signature}:${occurrence}`
-  }
-  return occurrence === 0
-    ? signature
-    : `call-occurrence:${JSON.stringify([providerCallId, occurrence])}`
-}
 
 /** An opened run's members in order, each one line until opened. Mounted only while the
  *  run is open, so a collapsed run pays for none of the diffing and pairing done here. */
@@ -111,7 +88,7 @@ export function NativeChatToolRunMemberList({
     if (consumedResults.has(block) || pairedResults.has(block)) {
       return null
     }
-    const lineIdentity = toolLineIdentity(block, seen)
+    const lineIdentity = nativeChatToolLineIdentity(block, seen)
     return (
       <NativeChatToolLine
         key={lineIdentity}

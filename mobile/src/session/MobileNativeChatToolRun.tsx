@@ -18,6 +18,7 @@ import {
 } from '../../../src/shared/native-chat-tool-activity'
 import { isShellActivityToolCall } from '../../../src/shared/native-chat-tool-icon'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
+import { nativeChatToolLineIdentity } from '../../../src/shared/native-chat-tool-line-identity'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-native-chat-message-styles'
 
@@ -189,6 +190,7 @@ export function ToolRun({
     [blocks, open, visibleCount]
   )
   const visiblePairs = pairs.slice(0, visibleCount)
+  const seen = new Map<string, number>()
   const diffLineLimit = Math.max(
     1,
     Math.floor(MAX_TOOL_RUN_DIFF_ROWS / (visiblePairs.length * 2 || 1))
@@ -242,9 +244,9 @@ export function ToolRun({
       </View>
       {open ? (
         <View style={styles.toolRunBody}>
-          {visiblePairs.map((pair, i) => (
+          {visiblePairs.map((pair) => (
             <ToolLine
-              key={i}
+              key={nativeChatToolLineIdentity(pair.call ?? pair.result!, seen, true)}
               pair={pair}
               defaultExpanded={expandChildren}
               diffLineLimit={diffLineLimit}
