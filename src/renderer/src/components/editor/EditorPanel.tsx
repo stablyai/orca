@@ -83,30 +83,6 @@ function EditorPanelInner({
   const settings = useAppStore((s) => s.settings)
   const markdownReviewNotesEnabled = isMarkdownReviewNotesEnabled(settings)
   const panelRef = useRef<HTMLDivElement>(null)
-  const [copiedPathToast, setCopiedPathToast] = useState<{ fileId: string; token: number } | null>(
-    null
-  )
-  const copiedPathToastResetTimerRef = useRef<number | null>(null)
-  // Why: clipboard IPC can resolve after the editor panel unmounts; skip path
-  // toast feedback instead of starting a reset timer on a stale panel.
-  const pathCopyMountedRef = useRef(false)
-  const clearCopiedPathToastResetTimer = useCallback((): void => {
-    if (copiedPathToastResetTimerRef.current === null) {
-      return
-    }
-    window.clearTimeout(copiedPathToastResetTimerRef.current)
-    copiedPathToastResetTimerRef.current = null
-  }, [])
-  const setPanelRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      panelRef.current = node
-      pathCopyMountedRef.current = node !== null
-      if (!node) {
-        clearCopiedPathToastResetTimer()
-      }
-    },
-    [clearCopiedPathToastResetTimer]
-  )
   const [sideBySide, setSideBySide] = useState(settings?.diffDefaultView === 'side-by-side')
   const [prevDiffView, setPrevDiffView] = useState(settings?.diffDefaultView)
 
@@ -175,35 +151,6 @@ function EditorPanelInner({
     handleSave,
     enabled: isCmdSaveOwner
   })
-
-  const handleCopyPath = useCallback(async (): Promise<void> => {
-    if (!activeFile) {
-      return
-    }
-    const copyState = getEditorHeaderCopyState(activeFile)
-    if (!copyState.copyText) {
-      return
-    }
-    try {
-      await window.api.ui.writeClipboardText(copyState.copyText)
-      if (!pathCopyMountedRef.current) {
-        return
-      }
-      clearCopiedPathToastResetTimer()
-      const nextToast = { fileId: activeFile.id, token: Date.now() }
-      setCopiedPathToast(nextToast)
-      copiedPathToastResetTimerRef.current = window.setTimeout(() => {
-        copiedPathToastResetTimerRef.current = null
-        setCopiedPathToast((current) => (current?.token === nextToast.token ? null : current))
-      }, 1500)
-    } catch {
-      if (!pathCopyMountedRef.current) {
-        return
-      }
-      clearCopiedPathToastResetTimer()
-      setCopiedPathToast(null)
-    }
-  }, [activeFile, clearCopiedPathToastResetTimer])
 
   if (!activeFile) {
     return null

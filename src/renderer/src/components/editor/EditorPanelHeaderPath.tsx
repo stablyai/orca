@@ -26,6 +26,8 @@ import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import { useEditorHeaderFileRename } from './editor-header-file-rename'
 import { getEditorHeaderCopyState } from './editor-header'
 import { splitPathForDisplay } from './editor-path-display'
+import { EditorHeaderPathBreadcrumbs } from './EditorHeaderPathBreadcrumbs'
+import { canNavigateEditorHeaderPath } from './editor-header-path-segments'
 
 type EditorPanelHeaderPathProps = {
   activeFile: OpenFile
@@ -48,6 +50,7 @@ export function EditorPanelHeaderPath({
   const headerCopyState = getEditorHeaderCopyState(activeFile)
   const displayPath = splitPathForDisplay(headerCopyState.pathLabel)
   const canCopyHeaderPath = headerCopyState.copyText !== null
+  const canNavigatePath = canNavigateEditorHeaderPath(activeFile)
   // Why: virtual editor tabs use synthetic ids instead of on-disk paths.
   const isVirtualEditorTab = isVirtualEditorFile(activeFile)
   const revealBlocked = useAppStore((s) =>
@@ -120,6 +123,12 @@ export function EditorPanelHeaderPath({
               }
             }}
             onBlur={commitRename}
+          />
+        ) : canNavigatePath ? (
+          <EditorHeaderPathBreadcrumbs
+            key={activeFile.id}
+            activeFile={activeFile}
+            pathTitle={headerCopyState.pathTitle}
           />
         ) : (
           <button
