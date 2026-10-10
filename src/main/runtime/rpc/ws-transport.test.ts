@@ -1,9 +1,9 @@
 import { EventEmitter } from 'node:events'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { connect } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, afterEach, vi } from 'vitest'
+import { describe, expect, it, afterEach, onTestFinished, vi } from 'vitest'
 import WebSocket from 'ws'
 import { WebSocketTransport } from './ws-transport'
 import { rejectNodeWebSocketOverCapacity } from './node-websocket-lifecycle'
@@ -14,6 +14,7 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
 function makeTls() {
   const userDataPath = mkdtempSync(join(tmpdir(), 'ws-transport-test-'))
+  onTestFinished(() => rmSync(userDataPath, { recursive: true, force: true }))
   return loadOrCreateTlsCertificate(userDataPath)
 }
 

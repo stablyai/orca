@@ -8,8 +8,12 @@ const workflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
 const gate = workflow.jobs.verify.steps.find((step) => step.name === 'Require successful checks')
 const variable = (job) => job.replaceAll('-', '_').toUpperCase()
 const requiredJobs = [
-  'preflight',
-  ...PR_CHECK_JOBS.filter((job) => job !== 'static_analysis' && job !== 'typecheck')
+  ...new Set([
+    'preflight',
+    ...PR_CHECK_JOBS.filter((job) => job !== 'static_analysis' && job !== 'typecheck').map((job) =>
+      job === 'orcad_browser' ? 'test' : job
+    )
+  ])
 ]
 
 function requiredResults(shouldRun) {

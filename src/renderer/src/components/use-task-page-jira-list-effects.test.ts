@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-import { act, renderHook, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TaskPageLinearCollectionEffectsModel } from './use-task-page-linear-collection-effects'
 import { useTaskPageJiraListEffects } from './use-task-page-jira-list-effects'
 
@@ -43,6 +43,8 @@ function createModel(): TaskPageLinearCollectionEffectsModel {
 }
 
 describe('useTaskPageJiraListEffects refresh wiring', () => {
+  afterEach(cleanup)
+
   beforeEach(() => {
     vi.clearAllMocks()
     listJiraIssues.mockResolvedValue([])

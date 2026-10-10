@@ -36,7 +36,17 @@ const CHILD = `acp-task:${TASK}`
 async function fixture() {
   const childWork = acpChildWorkStatusSink()
   const hosted = await openAttachedHostRig({}, childWork.sink)
-  cleanup.push(() => hosted.host.close(SESSION, 'user-close'))
+  cleanup.push(async () => {
+    const agent = hosted.rig.child().agent
+    // Only cleanup answers cancellation; task-stop assertions run before this.
+    agent.on('session/cancel', () => {
+      const prompt = agent.frames.findLast((frame) => frame.method === 'session/prompt')
+      if (prompt) {
+        agent.reply(prompt, { stopReason: 'cancelled' })
+      }
+    })
+    await hosted.host.close(SESSION, 'user-close')
+  })
   await send(hosted.host, 'Start the dev server')
   const prompt = await hosted.rig.frame('session/prompt')
   const agent = hosted.rig.child().agent

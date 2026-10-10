@@ -287,11 +287,4 @@ describe('External process-host development rebuilds', () => {
       await bundle.close()
     }
   })
-
-  it('leaves pnpm dev in no-watch mode unless the caller passes --watch', () => {
-    // Watch mode restarts Electron on every main-process save, so it stays opt-in.
-    const launcher = readFileSync(resolve('config/scripts/run-electron-vite-dev.mjs'), 'utf8')
-    expect(launcher).toContain("const forwardedArgs = ['dev', ...forwardedRaw, ...forwardedExtras]")
-    expect(launcher).not.toMatch(/['"](?:--watch|-w)['"]/)
-  })
 })

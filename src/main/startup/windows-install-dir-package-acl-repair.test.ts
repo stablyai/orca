@@ -1,7 +1,7 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 import type { CrashReportBreadcrumbData } from '../../shared/crash-reporting'
@@ -46,7 +46,9 @@ function fakeRunner(reply: (spec: ProcessSpec) => Partial<ProcessResult> = () =>
 }
 
 function userDataDir(): string {
-  return mkdtempSync(join(tmpdir(), 'orca-acl-repair-'))
+  const path = mkdtempSync(join(tmpdir(), 'orca-acl-repair-'))
+  onTestFinished(() => rmSync(path, { recursive: true, force: true }))
+  return path
 }
 
 function repair(

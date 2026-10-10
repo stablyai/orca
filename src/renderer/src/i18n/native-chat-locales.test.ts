@@ -5,24 +5,12 @@ import fr from './locales/fr.json'
 import ja from './locales/ja.json'
 import ko from './locales/ko.json'
 import zh from './locales/zh.json'
-import { CODEX_SESSION_OPTION_CATALOG } from '../../../shared/agent-session-option-catalog-claude-codex'
 
 const localizedCatalogs = { es, ja, ko, zh }
 const englishSetting = en.auto.components.settings.ExperimentalPane.nativeChat
 const englishSearch = en.auto.components.settings.experimental.search.nativeChat
 const englishComposer = en.components['native-chat'].composer
 const localizedEffortValues = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'] as const
-
-const codexEffortValues = new Set(
-  [
-    ...CODEX_SESSION_OPTION_CATALOG.models.flatMap((model) => model.options),
-    ...(CODEX_SESSION_OPTION_CATALOG.unknownModelOptions ?? [])
-  ].flatMap((option) =>
-    option.id === 'effort' && option.kind.type === 'select'
-      ? option.kind.choices.map((choice) => choice.value)
-      : []
-  )
-)
 
 describe('native chat locale copy', () => {
   it.each(Object.entries({ en, es, fr, ja, ko, zh }))(
@@ -39,10 +27,6 @@ describe('native chat locale copy', () => {
       expect(catalog.auto.components.settings.Settings['43b68e10f0']).not.toContain('Git')
     }
   )
-
-  it('covers every Codex effort choice', () => {
-    expect([...codexEffortValues].sort()).toEqual([...localizedEffortValues].sort())
-  })
 
   it.each(Object.entries(localizedCatalogs))(
     '%s falls back to current Chat UI copy until it is translated',

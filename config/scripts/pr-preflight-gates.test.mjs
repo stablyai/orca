@@ -54,7 +54,7 @@ it('requires physical preflight success before publishing shards and admitting c
   for (const result of ['success', 'failure', 'cancelled', 'skipped']) {
     const admitted = runInNewContext(workflow.jobs.test.if, {
       cancelled: () => false,
-      needs: { code_paths: { outputs: { test: 'true' } }, preflight: { result } }
+      needs: { code_paths: { result: 'success', outputs: { test: 'true' } }, preflight: { result } }
     })
     expect(admitted, result).toBe(result === 'success')
   }

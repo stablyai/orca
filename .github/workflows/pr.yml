@@ -812,6 +812,7 @@ jobs:
     # Cancellation and failed prerequisites stop the expensive matrix.
     if: >-
       !cancelled() &&
+      needs.code_paths.result == 'success' &&
       needs.code_paths.outputs.test == 'true' &&
       needs.preflight.result == 'success'
     uses: ./.github/workflows/unit-tests.yml
@@ -819,6 +820,7 @@ jobs:
       node_versions: '["24"]'
       runner: ubuntu-24.04-arm
       shards: ${{ needs.preflight.outputs.shards }}
+      browser_contract: ${{ needs.code_paths.outputs.orcad_browser == 'true' }}
 
   # Why a sibling and not part of the test workflow: it is advisory, so it must not delay the
   # gate. Inside unit-tests.yml a caller's `needs: test` waited for it, holding verify ~36s
@@ -827,48 +829,6 @@ jobs:
     needs: [test]
     if: ${{ !cancelled() && (needs.test.result == 'success' || needs.test.result == 'failure') }}
     uses: ./.github/workflows/unit-selection-evidence.yml
-
-  # Why a separate job: the test needs a real Chrome, and the sharded `test` matrix
-  # would pay for it on every shard to run one file in whichever shard it landed in.
-  orcad_browser:
-    name: orcad browser provider
-    needs: [code_paths, preflight]
-    if: >-
-      !cancelled() &&
-      needs.code_paths.result == 'success' &&
-      needs.code_paths.outputs.orcad_browser == 'true' &&
-      needs.preflight.result == 'success'
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      # Why no native-runtime: the provider drives the prebuilt agent-browser binary
-      # shipped in node_modules and never touches node-pty.
-      - uses: ./.github/actions/install-node-dependencies
-
-      # Why the runner's Google Chrome and not its chromium: Ubuntu 24.04 only ships an
-      # AppArmor userns profile for the Chrome .deb, so chromium dies with "No usable
-      # sandbox" and the provider passes no --no-sandbox. Why fail instead of skip: an
-      # unset ORCA_BROWSER_EXECUTABLE is exactly how this test went uncovered for so long.
-      - name: Resolve Chrome for the browser provider
-        run: |
-          set -euo pipefail
-          chrome="$(command -v google-chrome || command -v google-chrome-stable || true)"
-          if [ -z "$chrome" ]; then
-            echo "::error::No Google Chrome on the runner; the browser provider test would silently skip."
-            exit 1
-          fi
-          "$chrome" --version
-          echo "ORCA_BROWSER_EXECUTABLE=$chrome" >> "$GITHUB_ENV"
-
-      - name: Test external Chromium browser provider
-        run: |
-          pnpm exec vitest run --config config/vitest.config.ts \
-            src/main/orcad/external-chromium-browser-process.integration.test.ts
 
   # Why its own job: it needs mobile/node_modules and a real browser, and the sharded `test`
   # matrix would pay for both on every shard to run two files. It builds the same bundle the
@@ -1429,7 +1389,6 @@ jobs:
       - xterm_patch_sync
       - shell_contracts
       - test
-      - orcad_browser
       - mobile_web_app
       - cross-version-wire
       - managed_hook_node18
@@ -1464,8 +1423,6 @@ jobs:
           SHELL_CONTRACTS_SHOULD_RUN: ${{ needs.code_paths.outputs.shell_contracts }}
           TEST: ${{ needs.test.result }}
           TEST_SHOULD_RUN: ${{ needs.code_paths.outputs.test }}
-          ORCAD_BROWSER: ${{ needs.orcad_browser.result }}
-          ORCAD_BROWSER_SHOULD_RUN: ${{ needs.code_paths.outputs.orcad_browser }}
           MOBILE_WEB_APP: ${{ needs.mobile_web_app.result }}
           MOBILE_WEB_APP_SHOULD_RUN: ${{ needs.code_paths.outputs.mobile_web_app }}
           CROSS_VERSION_WIRE: ${{ needs.cross-version-wire.result }}
@@ -1505,7 +1462,6 @@ jobs:
           check_job xterm_patch_sync "$XTERM_PATCH_SYNC" "$XTERM_PATCH_SYNC_SHOULD_RUN"
           check_job shell_contracts "$SHELL_CONTRACTS" "$SHELL_CONTRACTS_SHOULD_RUN"
           check_job test "$TEST" "$TEST_SHOULD_RUN"
-          check_job orcad_browser "$ORCAD_BROWSER" "$ORCAD_BROWSER_SHOULD_RUN"
           check_job mobile_web_app "$MOBILE_WEB_APP" "$MOBILE_WEB_APP_SHOULD_RUN"
           check_job cross-version-wire "$CROSS_VERSION_WIRE" "$CROSS_VERSION_WIRE_SHOULD_RUN"
           check_job managed_hook_node18 "$MANAGED_HOOK_NODE18" "$MANAGED_HOOK_NODE18_SHOULD_RUN"
