@@ -21,12 +21,9 @@ import type {
   TerminalSurfaceCloseTarget
 } from '../../shared/terminal-surface-close-target'
 import { retireTerminalSurfacesFromSnapshot } from './mobile-session-terminal-retirement'
-import type { PtyControllerInventory } from './runtime-pty-controller-contract'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { captureAcknowledgedTerminalTabRetirement } from './workspace-session-terminal-tab-retirement-identity'
 import { closeLeafOrTab } from '../persistence/terminal-topology/terminal-topology-commit'
 import { markAgentLaunchesClosedByUser } from '../agent-launch/agent-launch-pane-attachment'
-import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 
 export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithPersistTerminalSurfaceRetirements {
   // Why: headless serve backs browser panes with offscreen WebContents that live
@@ -314,43 +311,5 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
   protected withSessionTabsHolds(result: RuntimeMobileSessionTabsResult, navigationId?: string) {
     const held = this.clientHostedPageReconciliation.holdFor(result, navigationId, Date.now())
     return holdAgentSessionInventory(held, this.structuredAgentSessionInventoryUnverifiable)
-  }
-
-  protected async refreshMobileSessionPtyRecords(
-    targetWorktreeId: string | null = null,
-    targetWorktree?: ResolvedWorktree
-  ): Promise<Set<string> | null> {
-    const inventory = await this.refreshMobileSessionPtyInventory(targetWorktreeId, targetWorktree)
-    return inventory ? new Set(inventory.livePtyIds) : null
-  }
-
-  protected async refreshMobileSessionPtyInventory(
-    targetWorktreeId: string | null = null,
-    targetWorktree?: ResolvedWorktree
-  ): Promise<PtyControllerInventory | null> {
-    // Targeted mobile polls must not queue behind an aggregate census that may
-    // be waiting on an unrelated SSH provider.
-    if (targetWorktreeId !== null && targetWorktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
-      return targetWorktree
-        ? this.performMobileSessionPtyRecordsRefresh(targetWorktreeId, targetWorktree)
-        : this.performMobileSessionPtyRecordsRefresh(targetWorktreeId)
-    }
-    if (targetWorktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
-      // Fleet-wide refreshes share one aggregate controller inventory.
-      const pending = this.pendingMobileSessionPtyAggregateInventoryRefresh
-      if (pending) {
-        return pending
-      }
-      // Why: reconnect exit bursts share one authoritative daemon inventory
-      // instead of multiplying a full cross-generation list RPC per stale tab.
-      const refresh = this.performMobileSessionPtyRecordsRefresh(targetWorktreeId).finally(() => {
-        if (this.pendingMobileSessionPtyAggregateInventoryRefresh === refresh) {
-          this.pendingMobileSessionPtyAggregateInventoryRefresh = null
-        }
-      })
-      this.pendingMobileSessionPtyAggregateInventoryRefresh = refresh
-      return refresh
-    }
-    return await this.performMobileSessionPtyRecordsRefresh(targetWorktreeId)
   }
 }

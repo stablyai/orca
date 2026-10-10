@@ -4,6 +4,7 @@ import { act, cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { StrictMode, type ComponentProps } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { NeedsSetupProjectHostOption } from '@/lib/project-host-setup-options'
 
 const storeMocks = vi.hoisted(() => ({
@@ -50,6 +51,26 @@ const option: NeedsSetupProjectHostOption = {
   canSetLocation: true
 }
 
+const existingFolderSetup: ProjectHostSetup = {
+  id: 'setup-openclaw',
+  projectId: 'project-orca',
+  hostId: 'ssh:openclaw',
+  repoId: 'setup-openclaw',
+  path: '/remote/orca',
+  displayName: 'orca',
+  kind: 'git',
+  setupState: 'ready',
+  setupMethod: 'imported-existing-folder',
+  createdAt: 1,
+  updatedAt: 1
+}
+const clonedSetup: ProjectHostSetup = {
+  ...existingFolderSetup,
+  id: 'setup-openclaw-clone',
+  repoId: 'setup-openclaw-clone',
+  setupMethod: 'cloned'
+}
+
 function renderDialog(
   overrides: Partial<ComponentProps<typeof SetProjectLocationDialog>> = {}
 ): ReturnType<typeof userEvent.setup> {
@@ -72,10 +93,10 @@ beforeEach(() => {
   storeMocks.setupProjectExistingFolder.mockReset()
   storeMocks.setupProjectClone.mockReset()
   storeMocks.setupProjectExistingFolder.mockResolvedValue({
-    setup: { id: 'setup-openclaw' }
+    setup: existingFolderSetup
   })
   storeMocks.setupProjectClone.mockResolvedValue({
-    setup: { id: 'setup-openclaw-clone' }
+    setup: clonedSetup
   })
 })
 
@@ -105,7 +126,7 @@ describe('SetProjectLocationDialog', () => {
       kind: 'git',
       displayName: 'orca'
     })
-    expect(onReady).toHaveBeenCalledWith('setup-openclaw')
+    expect(onReady).toHaveBeenCalledWith('["ssh:openclaw","ssh:openclaw",null,"setup-openclaw"]')
     expect(onClose).not.toHaveBeenCalled()
   })
 
@@ -125,7 +146,9 @@ describe('SetProjectLocationDialog', () => {
       destination: '/remote/orca',
       displayName: 'orca'
     })
-    expect(onReady).toHaveBeenCalledWith('setup-openclaw-clone')
+    expect(onReady).toHaveBeenCalledWith(
+      '["ssh:openclaw","ssh:openclaw",null,"setup-openclaw-clone"]'
+    )
   })
 
   it('hides clone for folder projects', () => {
@@ -230,7 +253,7 @@ describe('SetProjectLocationDialog', () => {
     await user.type(screen.getByPlaceholderText('/path/to/project/on/host'), '/remote/orca')
     await user.click(screen.getByRole('button', { name: 'Set location' }))
 
-    expect(onReady).toHaveBeenCalledWith('setup-openclaw')
+    expect(onReady).toHaveBeenCalledWith('["ssh:openclaw","ssh:openclaw",null,"setup-openclaw"]')
   })
 
   it('notifies the parent when dismissed', async () => {
