@@ -33,8 +33,7 @@ function context(): StructuredAgentModelCatalogContext {
     deps: { stateDirectory: '/state' } as StructuredAgentModelCatalogContext['deps'],
     environment: {
       resolveBaseEnvironment: unused,
-      resolveCodexEnvironment: unused,
-      resolveClaudeInheritedEnv: unused
+      resolveAgentEnvironment: unused
     }
   }
 }
@@ -118,8 +117,7 @@ describe('the model catalog contract on every registration', () => {
       } as StructuredAgentModelCatalogContext['deps'],
       environment: {
         resolveBaseEnvironment: env,
-        resolveCodexEnvironment: env,
-        resolveClaudeInheritedEnv: env
+        resolveAgentEnvironment: env
       }
     })
     const variables = { claude: 'CLAUDE_CONFIG_DIR', codex: 'CODEX_HOME', grok: 'GROK_HOME' }

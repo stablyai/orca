@@ -6,7 +6,7 @@ import { runCodexAppServerSession } from './codex-app-server-session'
 import { fetchCodexModelCatalogListing } from './codex-structured-model-catalog'
 import {
   resolveCodexStructuredInvocation,
-  type CodexStructuredLaunchResolverDeps
+  type CodexStructuredInvocationDeps
 } from './codex-structured-launch-resolution'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import { AGENT_MODEL_CATALOG_PROBE_TIMEOUT_MS } from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
@@ -15,10 +15,7 @@ import type {
   AgentModelCatalogSuccess
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 
-export type CodexModelCatalogProbeDeps = Pick<
-  CodexStructuredLaunchResolverDeps,
-  'resolveCommand' | 'resolveEnvironment'
-> & {
+export type CodexModelCatalogProbeDeps = CodexStructuredInvocationDeps & {
   resolveAccountKind?: (home: string) => AgentSessionAccountKind | undefined
   /** The sync a launch runs on this home first, so the probe reads the login a launch would. */
   prepareHome?: (home: string) => void

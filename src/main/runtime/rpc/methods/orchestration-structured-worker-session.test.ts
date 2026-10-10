@@ -22,8 +22,7 @@ const {
 } = await import('./orchestration-structured-worker-session')
 const { isUnknownWorkerStartOutcome } = await import('./orchestration/worker/worker-topology')
 const { structuredWorkerIdentities } = await import('../../structured-worker-identity')
-const { structuredSessionChildIdentityEnv } =
-  await import('../../structured-session-child-identity-env')
+const { structuredSessionChildIdentityEnv } = await import('../../structured-session-child-env')
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a host stub carrying only the members the worker start reaches.
 function installHost(location = { executionHostId: 'local', wslDistro: null as string | null }) {

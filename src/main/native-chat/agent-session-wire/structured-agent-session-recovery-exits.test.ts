@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
-import { CODEX_SPAWN_TOKEN_ENV } from '../../codex/codex-structured-owner-identity'
+import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../../shared/agent-session-caller-env'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { readProcessStartTimeMs } from '../../runtime/agent-session-process-identity-probe'
@@ -39,7 +39,7 @@ async function spawnOwner(spawnToken: string) {
   const child = spawnProcess({
     program: process.execPath,
     args: ['-e', 'setInterval(() => {}, 1_000)'],
-    env: { ...process.env, [CODEX_SPAWN_TOKEN_ENV]: spawnToken }
+    env: { ...process.env, [ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV]: spawnToken }
   })
   spawnedOwners.add(child)
   const pid = child.pid

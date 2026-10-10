@@ -24,9 +24,10 @@ import { supportsSupervisedProviderChildLocation } from '../provider-process/sup
 import { ClaudeDispatchContentError } from '../claude/claude-structured-dispatch-content'
 
 export type PiRpcSessionAdapterDeps = PiRpcSessionDeps & {
-  resolveLaunch: (
+  resolveLaunch: (input: {
     identity: StructuredAgentSessionAcquireInput['identity']
-  ) => Promise<PiRpcResolvedLaunch>
+    spawnToken: string
+  }) => Promise<PiRpcResolvedLaunch>
   readProcessStartTime?: (pid: number) => Promise<number | null>
 }
 
@@ -69,7 +70,7 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
       let launch: PiRpcResolvedLaunch
       try {
         launch = await waitForPromiseWithSignal(
-          this.deps.resolveLaunch(input.identity),
+          this.deps.resolveLaunch({ identity: input.identity, spawnToken: input.spawnToken }),
           attempt.signal
         )
       } catch (error) {
@@ -78,10 +79,7 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
       if (attempt.signal.aborted) {
         throw new AgentSessionPreSpawnError(new Error('Pi closed while starting'))
       }
-      const spec = buildPiRpcLaunch({
-        ...launch,
-        structuredSession: { id, spawnToken: input.spawnToken }
-      })
+      const spec = buildPiRpcLaunch(launch)
       const fresh = !launch.sessionFile && !launch.forkFile
       session = new PiRpcSession(input, randomUUID(), spec, this.deps, fresh)
       this.sessions.set(id, session)

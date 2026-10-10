@@ -9,7 +9,7 @@
  */
 
 import { readFile, readdir } from 'node:fs/promises'
-import { CODEX_SPAWN_TOKEN_ENV } from '../codex/codex-structured-owner-identity'
+import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
 import { spawnTokenFromEnvironBlock } from './agent-session-spawn-token-readback'
 
 export type AgentSessionSpawnTokenScan = ReadonlyMap<string, readonly number[]>
@@ -21,7 +21,7 @@ export type AgentSessionSpawnTokenScanEvidence =
 /** Tokens observed on this host, or null when the platform cannot answer at all. */
 export async function scanAgentSessionSpawnTokenProcesses(
   platform: NodeJS.Platform = process.platform,
-  variable: string = CODEX_SPAWN_TOKEN_ENV
+  variable: string = ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV
 ): Promise<AgentSessionSpawnTokenScan | null> {
   if (platform !== 'linux') {
     return null

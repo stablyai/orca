@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { runProcess } from '@orca/process-host'
-import { structuredSessionChildIdentityEnv } from './structured-session-child-identity-env'
+import { structuredSessionChildIdentityEnv } from './structured-session-child-env'
 
 const SESSION_ID = 'f7a1c0de-1111-4222-8333-444455556666'
 

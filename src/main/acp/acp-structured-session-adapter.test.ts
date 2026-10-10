@@ -10,7 +10,7 @@ import {
   AgentSessionAcquisitionRootExitObservedError
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { GENERIC_ACP_DIALECT } from './acp-dialects/acp-dialect'
-import { ACP_CHILD_ENV_TO_DELETE } from './acp-launch-specs'
+import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from '../ipc/pty/host-env/spawn-env-keys'
 import {
   GROK,
@@ -21,6 +21,8 @@ import {
   type AcpAdapterRig
 } from './acp-structured-adapter.test-support'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
+import { createAcpStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
+import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 
 afterEach(async () => {
   await closeProviderTimelineRigs()
@@ -65,10 +67,30 @@ describe('ACP structured session adapter: acquire', () => {
   })
 
   it('launches without any pane identity, so the agent own status hooks stay silent', async () => {
-    const rig = await openAcpAdapterRig()
+    const record = agentSessionRecordFixture({
+      sessionId: SESSION,
+      provider: 'grok',
+      accountHome: { variable: 'GROK_HOME', path: '/home/work/.grok' }
+    })
+    // The launch its registration composes: the shared seal names the child, not this adapter.
+    const rig = await openAcpAdapterRig({
+      deps: {
+        resolveLaunch: createAcpStructuredLaunchResolver(GROK, {
+          store: { getRecord: () => record, pinLaunchDirectory: async () => record },
+          resolveWorkspacePath: async () => '/workspace/project',
+          resolveEnvironment: async () => ({
+            PATH: '/usr/bin',
+            ORCA_PANE_KEY: 'tab-1:pane-1',
+            ORCA_AGENT_HOOK_PORT: '1234'
+          }),
+          resolveCommand: () => '/opt/bin/grok',
+          readJournal: () => null
+        })
+      }
+    })
     await rig.acquire()
     const launch = rig.child().launch
-    expect(launch.envToDelete).toEqual(expect.arrayContaining([...ACP_CHILD_ENV_TO_DELETE]))
+    expect(launch.envToDelete).toEqual(expect.arrayContaining([...STRUCTURED_CHILD_ENV_TO_DELETE]))
     expect(launch.envToDelete).toEqual(
       expect.arrayContaining(['ORCA_PANE_KEY', 'ORCA_AGENT_PANE', ...AGENT_HOOK_RUNTIME_ENV_KEYS])
     )

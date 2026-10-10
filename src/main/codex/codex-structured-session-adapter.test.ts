@@ -4,7 +4,7 @@ import {
   type openCodexAppServerConnection
 } from './codex-app-server-connection'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { CODEX_SPAWN_TOKEN_ENV } from './codex-structured-owner-identity'
+import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
 import {
   CodexStructuredSessionAdapter,
   type CodexStructuredLaunch,
@@ -20,6 +20,8 @@ import {
   identityFor
 } from './codex-structured-session-adapter-fixture'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { createCodexStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
+import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 
 describe('CodexStructuredSessionAdapter.acquire', () => {
@@ -124,7 +126,20 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
 
   it('starts a new thread and reports the process and link the lease will prove', async () => {
     const codex = fakeCodex()
-    const adapter = adapterFor(codex, { codexHome: '/codex/home' })
+    const record = agentSessionRecordFixture({
+      sessionId: 'session-1',
+      provider: 'codex',
+      accountHome: { variable: 'CODEX_HOME', path: '/codex/home' }
+    })
+    // The launch its registration composes: the shared seal names the child, not this adapter.
+    const adapter = adapterFor(codex, {}, [], {
+      resolveLaunch: createCodexStructuredLaunchResolver({
+        store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
+        resolveWorkspacePath: async () => '/work/repo',
+        resolveCommand: () => 'codex',
+        resolveLaunchArgs: () => []
+      })
+    })
 
     const acquisition = await adapter.acquire({
       identity: identityFor('session-1'),
@@ -133,7 +148,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     })
 
     expect(codex.connections[0].launch.env).toEqual({
-      [CODEX_SPAWN_TOKEN_ENV]: 'spawn-9',
+      [ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV]: 'spawn-9',
       CODEX_HOME: '/codex/home',
       ORCA_AGENT_SESSION_ID: 'session-1',
       ORCA_STRUCTURED_SESSION: '1',

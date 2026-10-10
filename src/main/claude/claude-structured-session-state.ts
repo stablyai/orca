@@ -100,6 +100,7 @@ export type ClaudeStructuredSessionAdapterDeps = {
   atRestCommands?: ClaudeAtRestCommandCatalog
   resolveLaunch: (input: {
     identity: AgentSessionJournalIdentity
+    spawnToken: string
   }) => Promise<ClaudeStructuredLaunch>
   onEvent?: (event: ClaudeStructuredSessionEvent) => void
   /** Direct settlement path for provider-proven late dispatch outcomes. */

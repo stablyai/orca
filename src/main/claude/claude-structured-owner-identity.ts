@@ -24,10 +24,6 @@ export function claudeProviderHandleLink(input: {
   }
 }
 
-/** The child echoes its spawn token here so the owner probe can tell a live
- *  child of this reservation from a same-pid stranger. */
-export const CLAUDE_SPAWN_TOKEN_ENV = 'ORCA_AGENT_SESSION_SPAWN_TOKEN'
-
 const START_TIME_READ_ATTEMPTS = 3
 
 export async function claudeProcessIdentity(

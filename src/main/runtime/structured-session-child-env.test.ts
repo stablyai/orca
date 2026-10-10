@@ -5,7 +5,7 @@ import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-p
 const shim = vi.hoisted(() => ({ ensureLinuxTerminalOrcaCliShimDir: vi.fn() }))
 vi.mock('../cli/linux-terminal-orca-cli-shim', () => shim)
 
-import { structuredSessionChildIdentityEnv } from './structured-session-child-identity-env'
+import { structuredSessionChildIdentityEnv } from './structured-session-child-env'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,

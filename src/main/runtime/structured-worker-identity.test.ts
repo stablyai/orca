@@ -5,7 +5,7 @@ import {
   structuredAgentSessionTabId
 } from '../../shared/structured-agent-session-projection'
 import { selectExactWorkerProviderSession } from './orchestration/worker-provider-session'
-import { structuredSessionChildIdentityEnv } from './structured-session-child-identity-env'
+import { structuredSessionChildIdentityEnv } from './structured-session-child-env'
 import {
   StructuredWorkerIdentityRegistry,
   isStructuredWorkerHandle,

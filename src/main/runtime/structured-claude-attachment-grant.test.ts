@@ -1,44 +1,27 @@
 // The chat attachment store reaches Claude's launch as an added directory: the runtime hands its
-// root to the Claude adapter, and the adapter to the launch resolver. Drop either hand-off and
-// Claude asks before reading every attached document.
+// root to Claude's part of the launch its registration composes. Drop that hand-off and Claude asks
+// before reading every attached document.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as LaunchResolution from '../claude/claude-structured-launch-resolution'
-import type * as ClaudeRuntimeAdapter from './structured-claude-runtime-adapter'
 
 type GrantDeps = { attachmentDirectory?: string }
 
 const captured = vi.hoisted(() => {
-  const adapter: GrantDeps[] = []
-  const resolver: GrantDeps[] = []
-  return { adapter, resolver }
-})
-
-vi.mock('./structured-claude-runtime-adapter', async (importOriginal) => {
-  const actual = await importOriginal<typeof ClaudeRuntimeAdapter>()
-  return {
-    ...actual,
-    createStructuredClaudeRuntimeAdapter: (
-      deps: Parameters<typeof actual.createStructuredClaudeRuntimeAdapter>[0]
-    ) => {
-      captured.adapter.push(deps)
-      return actual.createStructuredClaudeRuntimeAdapter(deps)
-    }
-  }
+  const part: GrantDeps[] = []
+  return { part }
 })
 
 vi.mock('../claude/claude-structured-launch-resolution', async (importOriginal) => {
   const actual = await importOriginal<typeof LaunchResolution>()
   return {
     ...actual,
-    createClaudeStructuredLaunchResolver: (
-      deps: Parameters<typeof actual.createClaudeStructuredLaunchResolver>[0]
-    ) => {
-      captured.resolver.push(deps)
-      return actual.createClaudeStructuredLaunchResolver(deps)
+    claudeStructuredLaunchPart: (deps: Parameters<typeof actual.claudeStructuredLaunchPart>[0]) => {
+      captured.part.push(deps)
+      return actual.claudeStructuredLaunchPart(deps)
     }
   }
 })
@@ -61,7 +44,7 @@ afterEach(async () => {
 })
 
 describe("structured Claude's read grant for chat attachments", () => {
-  it('hands the store root from the runtime through the adapter to the launch resolver', async () => {
+  it("hands the store root from the runtime to Claude's part of the launch", async () => {
     stateDirectory = await mkdtemp(join(tmpdir(), 'orca-attachment-grant-'))
     const directory = stateDirectory
     await ensureStructuredAgentSessionHost({
@@ -76,7 +59,6 @@ describe("structured Claude's read grant for chat attachments", () => {
     })
 
     const root = agentSessionAttachmentStoreRoot(directory)
-    expect(captured.adapter.at(-1)?.attachmentDirectory).toBe(root)
-    expect(captured.resolver.at(-1)?.attachmentDirectory).toBe(root)
+    expect(captured.part.at(-1)?.attachmentDirectory).toBe(root)
   })
 })

@@ -8,8 +8,9 @@ import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-ca
 import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
 import {
   resolveClaudeStructuredInvocation,
-  type ClaudeStructuredLaunchResolverDeps
+  type ClaudeStructuredLaunchPartDeps
 } from './claude-structured-launch-resolution'
+import type { ClaudeEnvDeps } from './claude-structured-child-env'
 import type {
   AgentModelCatalogProbe,
   AgentModelCatalogSuccess
@@ -19,13 +20,11 @@ import {
   runAgentModelCatalogListing
 } from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
 
-export type ClaudeModelCatalogProbeDeps = Pick<
-  ClaudeStructuredLaunchResolverDeps,
-  'resolveCommand' | 'resolveEnv' | 'resolveInheritedEnv' | 'resolveAuthPolicy'
-> & {
-  /** Test seam; production runs the shared supervised listing. */
-  runListing?: typeof runAgentModelCatalogListing
-}
+export type ClaudeModelCatalogProbeDeps = ClaudeEnvDeps &
+  Pick<ClaudeStructuredLaunchPartDeps, 'resolveAuthPolicy'> & {
+    /** Test seam; production runs the shared supervised listing. */
+    runListing?: typeof runAgentModelCatalogListing
+  }
 
 /**
  * Lists models without a live session: one `list_models` control request, under the SAME binary

@@ -5,7 +5,15 @@ import {
 } from '../native-chat/native-chat-visuals-delivery'
 import { CodexAppServerRequestError } from './codex-app-server-request-error'
 import { CodexAppServerTimeoutError } from './codex-app-server-session'
-import { acquired, fakeCodex, THREAD_ID } from './codex-structured-session-adapter-fixture'
+import {
+  adapterFor,
+  fakeCodex,
+  identityFor,
+  THREAD_ID
+} from './codex-structured-session-adapter-fixture'
+import { createCodexStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
+import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import {
   CODEX_VISUALS_SETUP_BUDGET_MS,
   prepareCodexThreadForVisuals
@@ -147,11 +155,51 @@ describe('setting up a Codex app-server for a chat with visuals', () => {
   })
 })
 
+/** A chat acquired through the launch its registration composes, over a shell env of `env`. */
+async function acquired(
+  codex: ReturnType<typeof fakeCodex>,
+  launch: {
+    visuals?: NativeChatVisualsLaunch
+    resumeThreadId?: string | null
+    env?: Record<string, string>
+  }
+): Promise<void> {
+  const record = agentSessionRecordFixture({
+    sessionId: 'session-1',
+    provider: 'codex',
+    accountHome: { variable: 'CODEX_HOME', path: '/home/work/.codex' },
+    providerHandleChain: launch.resumeThreadId
+      ? [
+          {
+            linkId: 'link-1',
+            handle: codexProviderHandle(launch.resumeThreadId),
+            origin: 'resumed',
+            mintedAtFence: 1,
+            observedAt: 1
+          }
+        ]
+      : []
+  })
+  const adapter = adapterFor(codex, {}, [], {
+    resolveLaunch: createCodexStructuredLaunchResolver({
+      store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
+      resolveWorkspacePath: async () => '/work/repo',
+      resolveEnvironment: async () => launch.env ?? {},
+      resolveCommand: () => 'codex',
+      resolveLaunchArgs: () => [],
+      resolveRollout: async () => null,
+      resolvePermissionPolicy: () => MANUAL,
+      prepareVisuals: async () => launch.visuals ?? null
+    })
+  })
+  await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-9' })
+}
+
 describe('a Codex chat acquisition with visuals', () => {
   it('sets up skills and the folder after initialize and before the thread opens, on start and resume', async () => {
     for (const resumeThreadId of [null, THREAD_ID]) {
       const codex = fakeCodex({ 'config/read': configWithRoots(['/home/me/scratch']) })
-      await acquired(codex, { visuals: VISUALS, permissionPolicy: MANUAL, resumeThreadId })
+      await acquired(codex, { visuals: VISUALS, resumeThreadId })
       const connection = codex.connections[0]!
       const methods = connection.calls.map((call) => call.method)
       const open = resumeThreadId ? 'thread/resume' : 'thread/start'
@@ -167,10 +215,7 @@ describe('a Codex chat acquisition with visuals', () => {
 
   it('opens the thread exactly as before for a chat without visuals', async () => {
     const codex = fakeCodex()
-    await acquired(codex, {
-      permissionPolicy: MANUAL,
-      env: { [NATIVE_CHAT_VISUALS_DIR_ENV]: '/other' }
-    })
+    await acquired(codex, { env: { [NATIVE_CHAT_VISUALS_DIR_ENV]: '/other' } })
     const connection = codex.connections[0]!
     const methods = connection.calls.map((call) => call.method)
     expect(methods[0]).toBe('thread/start')

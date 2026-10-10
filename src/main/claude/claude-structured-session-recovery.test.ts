@@ -413,7 +413,8 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
       identity: {
         ...identityFor(),
         providerHandle: claudeProviderHandle(PROVIDER_SESSION_ID, 'observed-retained-leaf')
-      }
+      },
+      spawnToken: expect.any(String)
     })
     expect(oldPrompt.settled()).toBe(true)
     expect(events.filter((event) => event.type === 'ended')).toEqual([

@@ -113,7 +113,11 @@ export async function readAcpRecoveryHistory(
     if (!load || inDoubt.length === 0) {
       return null
     }
-    const launch = await waitForPromiseWithSignal(input.resolveLaunch({ identity }), signal)
+    // A read: no child starts, so the agent's own env reaches the store reader unsealed.
+    const launch = await waitForPromiseWithSignal(
+      input.resolveLaunch({ identity, spawnToken: null }),
+      signal
+    )
     if (!launch.resume) {
       return null
     }

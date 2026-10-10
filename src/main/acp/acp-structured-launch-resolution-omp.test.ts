@@ -1,13 +1,11 @@
+import { createAcpStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import { NATIVE_CHAT_VISUALS_DIR_ENV } from '../native-chat/native-chat-visuals-delivery'
 import { createProviderSpawnSpec } from '../provider-process/provider-process-supervisor'
-import { ACP_CHILD_ENV_TO_DELETE, acpLaunchSpecFor } from './acp-launch-specs'
-import {
-  createAcpStructuredLaunchResolver,
-  type AcpStructuredLaunchResolverDeps
-} from './acp-structured-launch-resolution'
+import { acpLaunchSpecFor } from './acp-launch-specs'
+import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
 
 const OMP = acpLaunchSpecFor('omp')!
 const identity = {
@@ -32,7 +30,7 @@ function resolver(
   options: {
     launchEnv?: Record<string, string>
     fullAccess?: boolean
-    probeVersion?: AcpStructuredLaunchResolverDeps['probeVersion']
+    probeVersion?: Parameters<typeof createAcpStructuredLaunchResolver>[1]['probeVersion']
   } = {}
 ) {
   return createAcpStructuredLaunchResolver(OMP, {
@@ -65,14 +63,17 @@ describe('OMP ACP launch resolution', () => {
       ANTHROPIC_API_KEY: 'sk-test'
     }
     const launch = await resolver(ompRecord(), { launchEnv: userEnv })({ identity })
-    // Only an inherited visuals folder: this chat has none.
-    expect(launch.envToDelete).toEqual([NATIVE_CHAT_VISUALS_DIR_ENV])
+    // Only the shared pane and hook keys, and an inherited visuals folder: this chat has none.
+    expect(launch.envToDelete).toEqual([
+      ...STRUCTURED_CHILD_ENV_TO_DELETE,
+      NATIVE_CHAT_VISUALS_DIR_ENV
+    ])
     const child = createProviderSpawnSpec(
       {
         command: launch.command,
         args: launch.args,
         env: launch.env,
-        envToDelete: [...ACP_CHILD_ENV_TO_DELETE, ...launch.envToDelete]
+        envToDelete: [...STRUCTURED_CHILD_ENV_TO_DELETE, ...launch.envToDelete]
       },
       { ORCA_PANE_KEY: 'tab-1:pane-1' },
       'darwin'
@@ -125,7 +126,9 @@ describe('OMP ACP launch resolution', () => {
   })
 
   it('asks the version of exactly the binary, folder and environment it spawns', async () => {
-    const asked: Parameters<NonNullable<AcpStructuredLaunchResolverDeps['probeVersion']>>[0][] = []
+    const asked: Parameters<
+      NonNullable<Parameters<typeof createAcpStructuredLaunchResolver>[1]['probeVersion']>
+    >[0][] = []
     const launch = await resolver(ompRecord(), {
       probeVersion: async (input, supports) => (asked.push(input), supports('17.0.5'))
     })({ identity })

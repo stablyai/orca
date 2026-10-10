@@ -36,8 +36,7 @@ const { listAddressableStructuredWorkers } =
   await import('./orchestration/structured-worker-group-addressing')
 const { readStructuredLineageJournalPage, STRUCTURED_JOURNAL_PAGE_LIMIT } =
   await import('./orchestration/structured-worker-journal-page')
-const { structuredSessionChildIdentityEnv } =
-  await import('./structured-session-child-identity-env')
+const { structuredSessionChildIdentityEnv } = await import('./structured-session-child-env')
 const { foundAgentSessionRecord } = await import('./agent-session-record-founding')
 const { applyAgentSessionRestartAdjudication } =
   await import('./agent-session-restart-lease-transitions')
