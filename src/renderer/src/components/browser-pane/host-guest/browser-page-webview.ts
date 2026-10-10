@@ -1,5 +1,7 @@
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../../shared/browser-guest-web-preferences'
+import { BROWSER_GUEST_WINDOW_CLOSE_CHANNEL } from '../../../../../shared/browser-guest-window-close'
+import { closeBrowserPageFromGuest } from '@/lib/browser-page-guest-close'
 import {
   destroyPersistentWebview,
   registerPersistentWebview,
@@ -82,6 +84,12 @@ export function ensureBrowserPageWebview({
   })
   guest.addEventListener('render-process-gone', () => {
     guest.style.visibility = 'hidden'
+  })
+  // Why here: the mount-bound listeners are gone while the pane is hidden, and a background page can close too.
+  guest.addEventListener('ipc-message', (event) => {
+    if (event.channel === BROWSER_GUEST_WINDOW_CLOSE_CHANNEL) {
+      closeBrowserPageFromGuest(browserTabId)
+    }
   })
   registerPersistentWebview(browserTabId, webview)
   activeContainer.appendChild(webview)
