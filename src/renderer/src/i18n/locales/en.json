@@ -11849,7 +11849,8 @@
             "storage": "Store data in the plugin's own storage folder",
             "secrets": "Store and read secrets in the plugin's own encrypted vault",
             "eventsSubscribe": "Get notified when worktrees are created or removed and when agent status changes",
-            "settingsOwn": "Read and change the plugin's own settings"
+            "settingsOwn": "Read and change the plugin's own settings",
+            "settingsPage": "Show the plugin's own settings page inside Orca's Settings"
           },
           "decisionFailed": "Could not save the permission decision. Try again."
         },
@@ -12010,7 +12011,11 @@
           "logsFailed": "Could not load plugin logs.",
           "rollbackFailed": "Could not roll back this plugin. A previous immutable version may not be available."
         },
+        "PluginSettingsPageDialog": {
+          "description": "Provided by the {{value0}} plugin and shown in a sandbox."
+        },
         "PluginSettingsRow": {
+          "openSettingsPage": "Open {{value0}} for {{value1}}",
           "blocked": "Blocked",
           "needsReview": "Needs review",
           "restarting": "Restarting",

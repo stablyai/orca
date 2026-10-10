@@ -1,4 +1,8 @@
-import { getPluginHostMethodSpec, isPluginPanelAction } from './plugin-host-api'
+import {
+  getPluginHostMethodSpec,
+  isPluginPanelAction,
+  isPluginSettingsPageAction
+} from './plugin-host-api'
 import type { PluginCapabilityKind } from './plugin-capabilities'
 
 /**
@@ -29,6 +33,9 @@ export type PluginGateSubject = {
   /** True when the call arrives over the sandboxed panel bridge (narrower
    *  method surface than workers). */
   viaPanel: boolean
+  /** True when that bridge call comes from the plugin's settings page frame,
+   *  which may also use the settings methods. */
+  viaSettingsPage?: boolean
 }
 
 export function gatePluginHostCall(subject: PluginGateSubject, method: string): PluginGateDecision {
@@ -36,7 +43,10 @@ export function gatePluginHostCall(subject: PluginGateSubject, method: string): 
   if (!spec) {
     return { granted: false, code: 'unknown_method', error: `unknown host method: ${method}` }
   }
-  if (subject.viaPanel && !isPluginPanelAction(method)) {
+  const bridgeAllowed = subject.viaSettingsPage
+    ? isPluginSettingsPageAction(method)
+    : isPluginPanelAction(method)
+  if (subject.viaPanel && !bridgeAllowed) {
     return {
       granted: false,
       code: 'panel_forbidden',

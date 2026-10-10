@@ -1,6 +1,7 @@
 import type {
   PluginPanelActionOutcome,
-  PluginPanelEntry
+  PluginPanelEntry,
+  PluginPanelSurface
 } from '../../shared/plugins/plugin-panel-bridge'
 import type { PluginConsentRequest } from '../../shared/plugins/plugin-consent-request'
 import type { PluginLanguagePackRegistration } from '../../shared/plugins/plugin-language-pack-artifact'
@@ -46,6 +47,8 @@ export type PluginHostListEntry = {
   bundled: boolean
   capabilities: { kind: string; description: string }[]
   panels: PluginHostPanel[]
+  /** Optional on the wire: older hosts never send settings pages. */
+  settingsPages?: { id: string; title: string }[]
   commands: {
     id: string
     title: string
@@ -149,7 +152,11 @@ export type PluginsApi = {
   setEnabled: (args: { pluginKey: string; enabled: boolean }) => Promise<PluginHostListEntry[]>
   /** Returns the panel's CSP-wrapped HTML, or null when the plugin or
    *  panel is missing/disabled. Rendered only inside a sandboxed iframe. */
-  readPanelEntry: (args: { pluginKey: string; panelId: string }) => Promise<PluginPanelEntry | null>
+  readPanelEntry: (args: {
+    pluginKey: string
+    panelId: string
+    surface?: PluginPanelSurface
+  }) => Promise<PluginPanelEntry | null>
   invokeCommand: (args: {
     pluginKey: string
     commandId: string

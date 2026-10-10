@@ -11706,7 +11706,8 @@
             "storage": "Stocker des données dans le dossier de stockage propre au plugin",
             "secrets": "Stocker et lire des secrets dans le coffre chiffré propre au plugin",
             "eventsSubscribe": "Être notifié quand des worktrees sont créés ou supprimés et quand le statut d'un agent change",
-            "settingsOwn": "Lire et modifier les paramètres propres au plugin"
+            "settingsOwn": "Lire et modifier les paramètres propres au plugin",
+            "settingsPage": "Afficher la page de paramètres propre au plugin dans les paramètres d'Orca"
           },
           "decisionFailed": "Impossible d'enregistrer la décision d'autorisation. Réessayez."
         },
@@ -11867,7 +11868,11 @@
           "logsFailed": "Impossible de charger les logs du plugin.",
           "rollbackFailed": "Impossible de restaurer ce plugin. Une version immuable précédente n'est peut-être pas disponible."
         },
+        "PluginSettingsPageDialog": {
+          "description": "Fourni par le plugin {{value0}} et affiché dans un bac à sable."
+        },
         "PluginSettingsRow": {
+          "openSettingsPage": "Ouvrir {{value0}} pour {{value1}}",
           "blocked": "Bloquée",
           "needsReview": "En attente de relecture",
           "restarting": "Redémarrage",

@@ -1,0 +1,102 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      /* The host injects Orca design tokens as CSS custom properties. */
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+        font-size: 13px;
+        color: var(--foreground, #ddd);
+        background: var(--background, transparent);
+      }
+      label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 600;
+      }
+      input {
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 320px;
+        padding: 6px 8px;
+        border: 1px solid var(--input, #555);
+        border-radius: 6px;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+      }
+      button {
+        margin-top: 10px;
+        padding: 6px 12px;
+        border: 1px solid var(--border, #555);
+        border-radius: 6px;
+        background: var(--primary, #ddd);
+        color: var(--primary-foreground, #111);
+        cursor: pointer;
+        font: inherit;
+      }
+      p {
+        color: var(--muted-foreground, #999);
+      }
+    </style>
+  </head>
+  <body>
+    <label for="greeting">Greeting</label>
+    <input id="greeting" autocomplete="off" />
+    <div>
+      <button id="save" type="button">Save</button>
+    </div>
+    <p id="status" role="status"></p>
+    <script>
+      'use strict'
+      var seq = 0
+      var pending = {}
+      var input = document.getElementById('greeting')
+      var statusEl = document.getElementById('status')
+
+      // Same bridge as panels. Settings pages may also call settings.get and
+      // settings.set, gated by the plugin's settings:own capability.
+      function call(action, params) {
+        return new Promise(function (resolve) {
+          var requestId = 'req-' + ++seq
+          pending[requestId] = resolve
+          window.parent.postMessage(
+            { type: 'orca-panel-action', requestId: requestId, action: action, params: params },
+            '*'
+          )
+        })
+      }
+
+      window.addEventListener('message', function (event) {
+        var data = event.data
+        if (event.source !== window.parent || !data || data.type !== 'orca-panel-action-result')
+          return
+        var resolve = pending[data.requestId]
+        if (!resolve) return
+        delete pending[data.requestId]
+        resolve(data)
+      })
+
+      call('settings.get').then(function (result) {
+        if (!result.ok) {
+          statusEl.textContent = 'Could not load settings: ' + (result.error || result.errorCode)
+          return
+        }
+        var saved = result.value.settings.greeting
+        input.value = typeof saved === 'string' ? saved : 'Hello'
+        statusEl.textContent = 'Loaded'
+      })
+
+      document.getElementById('save').addEventListener('click', function () {
+        call('settings.set', { key: 'greeting', value: input.value }).then(function (result) {
+          statusEl.textContent = result.ok
+            ? 'Saved'
+            : 'Save failed: ' + (result.error || result.errorCode)
+        })
+      })
+    </script>
+  </body>
+</html>

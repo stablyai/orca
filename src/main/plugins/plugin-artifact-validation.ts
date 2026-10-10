@@ -45,6 +45,12 @@ function declaredArtifactPaths(manifest: PluginManifest): DeclaredArtifact[] {
       kind: 'file' as const,
       maxBytes: PLUGIN_PANEL_ENTRY_MAX_BYTES
     })),
+    ...manifest.contributes.settingsPages.map((page) => ({
+      label: `settings page "${page.id}" entry`,
+      path: page.entry,
+      kind: 'file' as const,
+      maxBytes: PLUGIN_PANEL_ENTRY_MAX_BYTES
+    })),
     ...manifest.contributes.languagePacks.map((languagePack) => ({
       label: `language pack "${languagePack.locale}"`,
       path: languagePack.path,

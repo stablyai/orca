@@ -57,6 +57,8 @@ export type PluginListEntry = {
   bundled: boolean
   capabilities: { kind: PluginCapabilityKind; description: string }[]
   panels: PluginListPanelEntry[]
+  /** Settings pages, opened from the plugin's card in Settings. */
+  settingsPages: { id: string; title: string }[]
   commands: {
     id: string
     title: string
@@ -112,6 +114,7 @@ export async function buildPluginList(
           bundled: false,
           capabilities: [],
           panels: [],
+          settingsPages: [],
           commands: [],
           hasWorker: false,
           vmRecipes: [],
@@ -176,6 +179,10 @@ export async function buildPluginList(
           title: panel.title,
           ...(panel.icon ? { icon: panel.icon } : {}),
           tabKey: pluginPanelTabKey(plugin.pluginKey, panel.id)
+        })),
+        settingsPages: plugin.manifest.contributes.settingsPages.map((page) => ({
+          id: page.id,
+          title: page.title
         })),
         commands: service.contentPacks.commands.preview(plugin.pluginKey).map((command) => ({
           id: command.id,

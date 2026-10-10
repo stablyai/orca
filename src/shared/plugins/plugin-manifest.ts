@@ -32,6 +32,7 @@ import { validatePluginManifestContributions } from './plugin-manifest-contribut
 const SEMVER_RE =
   /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
 export const PLUGIN_PANEL_LIMIT = 64
+export const PLUGIN_SETTINGS_PAGE_LIMIT = 4
 export const PLUGIN_COMMAND_LIMIT = 256
 
 // Why: v0 supports only the ">=x.y.z" form. A closed grammar keeps the gate
@@ -47,6 +48,14 @@ const panelContributionSchema = z.object({
   /** Lucide icon name rendered in the right-sidebar activity bar. */
   icon: z.string().min(1).max(64).optional(),
   /** HTML entry rendered inside a sandboxed panel frame. */
+  entry: pluginRelativePathSchema
+})
+
+/** A plugin-owned page rendered in the same sandboxed shell as panels, but
+ *  inside Settings, where it may also read and write the plugin's settings. */
+const settingsPageContributionSchema = z.object({
+  id: pluginIdSchema,
+  title: z.string().min(1).max(256),
   entry: pluginRelativePathSchema
 })
 
@@ -114,6 +123,10 @@ export const pluginManifestSchema = z
         agents: z
           .array(pluginAgentProfileContributionSchema)
           .max(PLUGIN_AGENT_PROFILE_LIMIT)
+          .default([]),
+        settingsPages: z
+          .array(settingsPageContributionSchema)
+          .max(PLUGIN_SETTINGS_PAGE_LIMIT)
           .default([])
       })
       .strict()
@@ -124,7 +137,8 @@ export const pluginManifestSchema = z
         languagePacks: [],
         keybindings: [],
         vmRecipes: [],
-        agents: []
+        agents: [],
+        settingsPages: []
       })),
     capabilities: z.array(pluginCapabilitySchema).max(32).default([])
   })
@@ -132,6 +146,7 @@ export const pluginManifestSchema = z
 
 export type PluginManifest = z.infer<typeof pluginManifestSchema>
 export type PluginPanelContribution = z.infer<typeof panelContributionSchema>
+export type PluginSettingsPageContribution = z.infer<typeof settingsPageContributionSchema>
 export type PluginCommandContribution = z.infer<typeof commandContributionSchema>
 export type PluginEventContribution = z.infer<typeof eventContributionSchema>
 

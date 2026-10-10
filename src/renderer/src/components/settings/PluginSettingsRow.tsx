@@ -5,6 +5,7 @@ import {
   Loader2,
   MoreHorizontal,
   RotateCcw,
+  Settings2,
   Trash2
 } from 'lucide-react'
 import type { PluginHostListEntry, PluginHostLogLine } from '../../../../preload/api-types'
@@ -21,6 +22,7 @@ import {
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
 import { SettingsSwitch } from './SettingsFormControls'
+import type { OpenPluginSettingsPage } from './PluginSettingsPageDialog'
 
 export type PluginLogsState = {
   loading: boolean
@@ -38,6 +40,7 @@ type PluginSettingsRowProps = {
   onToggleLogs: (pluginKey: string) => void
   onRollbackRequest: (pluginKey: string) => void
   onRemoveRequest: (pluginKey: string) => void
+  onOpenSettingsPage: (open: OpenPluginSettingsPage) => void
 }
 
 function statusPresentation(plugin: PluginHostListEntry): { label: string; className: string } {
@@ -136,7 +139,8 @@ export function PluginSettingsRow({
   onToggleEnabled,
   onToggleLogs,
   onRollbackRequest,
-  onRemoveRequest
+  onRemoveRequest,
+  onOpenSettingsPage
 }: PluginSettingsRowProps): React.JSX.Element {
   const status = statusPresentation(plugin)
   const needsReview = plugin.needsReconsent || plugin.status === 'pending'
@@ -161,7 +165,31 @@ export function PluginSettingsRow({
       {translate('auto.components.settings.PluginSettingsRow.reviewAndEnable', 'Review & enable')}
     </Button>
   ) : null
-  const footerAction = reviewAction
+  // Same visibility rule as panels: settings pages render only for an active plugin.
+  const settingsPagesActive =
+    !needsReview &&
+    (plugin.status === 'running' || plugin.status === 'restarting' || plugin.status === 'idle')
+  const settingsPageActions = settingsPagesActive
+    ? (plugin.settingsPages ?? []).map((page) => (
+        <Button
+          key={page.id}
+          variant="outline"
+          size="sm"
+          disabled={busy}
+          onClick={() => onOpenSettingsPage({ plugin, page })}
+          aria-label={translate(
+            'auto.components.settings.PluginSettingsRow.openSettingsPage',
+            'Open {{value0}} for {{value1}}',
+            { value0: page.title, value1: plugin.name }
+          )}
+        >
+          <Settings2 />
+          {page.title}
+        </Button>
+      ))
+    : []
+  const footerAction =
+    reviewAction ?? (settingsPageActions.length > 0 ? <>{settingsPageActions}</> : null)
 
   return (
     <article

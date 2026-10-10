@@ -5,7 +5,8 @@ import {
   parsePanelActionRequest,
   readPanelPongId,
   type PluginPanelActionOutcome,
-  type PluginPanelActionResultMessage
+  type PluginPanelActionResultMessage,
+  type PluginPanelSurface
 } from '../../../../shared/plugins/plugin-panel-bridge'
 import {
   createPanelControlMessageBudget,
@@ -33,6 +34,8 @@ export type PanelActionCall = {
 
 export type PanelBridgeHostOptions = {
   sessionToken: string
+  /** Settings pages accept the settings methods too; main re-gates by session. */
+  surface?: PluginPanelSurface
   /** The mounted panel iframe's contentWindow, or null when unmounted. */
   getPanelWindow: () => Window | null
   callPanelAction: (call: PanelActionCall) => Promise<PluginPanelActionOutcome>
@@ -141,7 +144,7 @@ export function createPanelBridgeMessageHandler(
     if (!looksLikePanelActionRequest(event.data)) {
       return
     }
-    const parsed = parsePanelActionRequest(event.data)
+    const parsed = parsePanelActionRequest(event.data, options.surface)
     if (!parsed.ok) {
       if (parsed.requestId) {
         respond({

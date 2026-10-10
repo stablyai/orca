@@ -11608,7 +11608,8 @@
             "storage": "在插件自己的存储文件夹中存储数据",
             "secrets": "在插件自己的加密保险库中存储和读取密钥",
             "eventsSubscribe": "在工作树创建或移除以及智能体状态更改时获得通知",
-            "settingsOwn": "读取和更改插件自己的设置"
+            "settingsOwn": "读取和更改插件自己的设置",
+            "settingsPage": "在 Orca 设置中显示插件自己的设置页面"
           },
           "decisionFailed": "无法保存权限决定。请重试。"
         },
@@ -11769,7 +11770,11 @@
           "logsFailed": "无法加载插件日志。",
           "rollbackFailed": "无法回滚此插件。之前的不可变版本可能不可用。"
         },
+        "PluginSettingsPageDialog": {
+          "description": "由 {{value0}} 插件提供，并在沙盒中显示。"
+        },
         "PluginSettingsRow": {
+          "openSettingsPage": "打开 {{value1}} 的 {{value0}}",
           "blocked": "已阻止",
           "needsReview": "需要审查",
           "restarting": "正在重启",

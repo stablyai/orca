@@ -5,6 +5,7 @@ import { PluginCatalogEmptyState } from '../plugin-catalog/PluginCatalogEmptySta
 import { PluginDevelopmentSection } from './PluginDevelopmentSection'
 import { PluginMarketplaceBrowser } from './PluginMarketplaceBrowser'
 import { PluginSettingsRow, type PluginLogsState } from './PluginSettingsRow'
+import type { OpenPluginSettingsPage } from './PluginSettingsPageDialog'
 import { SettingsRow, SettingsSwitch } from './SettingsFormControls'
 
 type PluginSettingsOverviewProps = {
@@ -27,6 +28,7 @@ type PluginSettingsOverviewProps = {
   onMarketplaceInstalled: (pluginKey: string) => Promise<void>
   onRollbackRequest: (pluginKey: string) => void
   onRemoveRequest: (pluginKey: string) => void
+  onOpenSettingsPage: (open: OpenPluginSettingsPage) => void
   onUpdateDevPaths: (paths: string[]) => Promise<void>
 }
 
@@ -60,6 +62,7 @@ export function PluginSettingsOverview({
   onMarketplaceInstalled,
   onRollbackRequest,
   onRemoveRequest,
+  onOpenSettingsPage,
   onUpdateDevPaths
 }: PluginSettingsOverviewProps): React.JSX.Element {
   return (
@@ -156,6 +159,7 @@ export function PluginSettingsOverview({
                       onToggleLogs={onToggleLogs}
                       onRollbackRequest={onRollbackRequest}
                       onRemoveRequest={onRemoveRequest}
+                      onOpenSettingsPage={onOpenSettingsPage}
                     />
                   ))}
                 </div>

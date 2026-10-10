@@ -22,6 +22,8 @@ export type ExecutePluginHostCallInput = {
   params: unknown
   /** True when the call arrives over the sandboxed panel bridge. */
   viaPanel: boolean
+  /** True when that bridge call comes from a settings page frame. */
+  viaSettingsPage?: boolean
   /** Consented capability kinds; null = unknown/disabled/consent-stale. */
   grantedCapabilities: readonly PluginCapabilityKind[] | null
   services: PluginHostServices | null
@@ -35,7 +37,11 @@ export async function executePluginHostCall(
     return { ok: false, code: 'invalid_request', error: 'invalid qualified plugin key' }
   }
   const gate = decidePluginHostCall(
-    { grantedCapabilities: input.grantedCapabilities, viaPanel: input.viaPanel },
+    {
+      grantedCapabilities: input.grantedCapabilities,
+      viaPanel: input.viaPanel,
+      viaSettingsPage: input.viaSettingsPage
+    },
     input.method
   )
   if (!gate.granted) {

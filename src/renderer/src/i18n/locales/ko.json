@@ -11608,7 +11608,8 @@
             "storage": "플러그인 자체 저장소 폴더에 데이터 저장",
             "secrets": "플러그인 자체 암호화 금고에 비밀 저장 및 읽기",
             "eventsSubscribe": "워크트리가 생성되거나 제거되고 에이전트 상태가 변경될 때 알림 받기",
-            "settingsOwn": "플러그인 자체 설정 읽기 및 변경"
+            "settingsOwn": "플러그인 자체 설정 읽기 및 변경",
+            "settingsPage": "Orca 설정 안에 플러그인 자체 설정 페이지 표시"
           },
           "decisionFailed": "권한 결정을 저장할 수 없습니다. 다시 시도하세요."
         },
@@ -11769,7 +11770,11 @@
           "logsFailed": "플러그인 로그를 로드할 수 없습니다.",
           "rollbackFailed": "이 플러그인을 롤백할 수 없습니다. 이전 불변 버전이 사용 가능하지 않을 수 있습니다."
         },
+        "PluginSettingsPageDialog": {
+          "description": "{{value0}} 플러그인이 제공하며 샌드박스에서 표시됩니다."
+        },
         "PluginSettingsRow": {
+          "openSettingsPage": "{{value1}}의 {{value0}} 열기",
           "blocked": "차단됨",
           "needsReview": "검토 필요",
           "restarting": "재시작 중",
