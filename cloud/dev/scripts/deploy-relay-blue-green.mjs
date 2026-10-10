@@ -263,6 +263,7 @@ export function directorDeploymentEnvironment(config) {
   }
   const serviceAccount = projectServiceAccount(config, 'capacity-service-account')
   const asiaProofServiceAccount = projectServiceAccount(config, 'asia-proof-service-account')
+  const deployServiceAccount = projectServiceAccount(config, 'deploy-service-account')
   const rehomeDirectorServiceAccount = projectServiceAccount(
     config,
     'rehome-director-service-account'
@@ -273,6 +274,10 @@ export function directorDeploymentEnvironment(config) {
   }
   if (asiaProofServiceAccount !== undefined) {
     environment.ORCA_RELAY_ASIA_PROOF_SERVICE_ACCOUNT = asiaProofServiceAccount
+  }
+  // The admin identity the director trusts; omitted, the serving revision's value carries over.
+  if (deployServiceAccount !== undefined) {
+    environment.ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT = deployServiceAccount
   }
   if (rehomeDirectorServiceAccount !== undefined) {
     environment[DIRECTOR_REHOME_IDENTITY_ENV] = rehomeDirectorServiceAccount
@@ -330,6 +335,7 @@ export function parseArguments(argv) {
     }
     if (
       values['capacity-service-account'] !== undefined ||
+      values['deploy-service-account'] !== undefined ||
       values['director-cells-json'] !== undefined ||
       values['runtime-service-account'] !== undefined ||
       values['rehome-director-service-account'] !== undefined ||

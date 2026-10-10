@@ -232,4 +232,5 @@ test('the staging director deploy runs as relay-dir with its rehome identity', (
   assert.match(block, /--runtime-service-account "\$\{DIRECTOR_RUNTIME_SERVICE_ACCOUNT\}"/)
   assert.match(block, /--rehome-director-service-account "\$\{DIRECTOR_RUNTIME_SERVICE_ACCOUNT\}"/)
   assert.match(source, /DIRECTOR_RUNTIME_SERVICE_ACCOUNT: orca-cloud-staging-relay-dir@/)
+  assert.match(block, /--deploy-service-account "\$\{DEPLOY_SERVICE_ACCOUNT\}"/)
 })

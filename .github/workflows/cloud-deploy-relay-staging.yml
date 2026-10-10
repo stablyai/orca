@@ -74,6 +74,8 @@ jobs:
       IMAGE_NAME: relay
       EXPECTED_IMAGE_DIGEST: ${{ inputs.expected-image-digest }}
       CAPACITY_SERVICE_ACCOUNT: ${{ vars.STAGING_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
+      # The director must trust the identity every staging Relay workflow authenticates as.
+      DEPLOY_SERVICE_ACCOUNT: ${{ vars.STAGING_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
       ASIA_PROOF_SERVICE_ACCOUNT: ${{ vars.STAGING_GCP_RELAY_ASIA_PROOF_SERVICE_ACCOUNT }}
       REGIONAL_PLACEMENT_SECRET: orca-cloud-relay-regional-placement-enabled
       DIRECTOR_RUNTIME_SERVICE_ACCOUNT: orca-cloud-staging-relay-dir@onorca-cloud-staging.iam.gserviceaccount.com
@@ -199,6 +201,7 @@ jobs:
             --role director \
             --max-instances 2 \
             --capacity-service-account "${CAPACITY_SERVICE_ACCOUNT}" \
+            --deploy-service-account "${DEPLOY_SERVICE_ACCOUNT}" \
             --asia-proof-service-account "${ASIA_PROOF_SERVICE_ACCOUNT}" \
             --regional-placement-secret-version "${regional_version}" \
             "${floor_args[@]}" \
