@@ -49,27 +49,13 @@ vi.mock('@/lib/runtime-workspace-file-route', () => ({
 
 // Fixture owners: `repo-runtime::` workspaces live on runtime-1, everything else here is local.
 vi.mock('@/lib/file-owner-runtime-target', () => {
-  const getRuntimeTargetForFileOwner = (
-    _state: unknown,
-    worktreeId: string | null | undefined,
-    runtimeEnvironmentId: string | null | undefined
-  ) => {
-    const owner =
-      runtimeEnvironmentId === undefined
-        ? worktreeId?.startsWith('repo-runtime::')
-          ? 'runtime-1'
-          : null
-        : runtimeEnvironmentId
-    return owner
-      ? { kind: 'environment' as const, environmentId: owner }
-      : { kind: 'local' as const }
+  const ownerTarget = (_s: unknown, worktreeId?: string, owner?: string | null) => {
+    const id = owner === undefined && worktreeId?.startsWith('repo-runtime::') ? 'runtime-1' : owner
+    return id ? { kind: 'environment', environmentId: id } : { kind: 'local' }
   }
   return {
-    FILE_OWNER_UNRESOLVED_MESSAGE: 'unresolved',
-    getRuntimeTargetForFileOwner,
-    requireRuntimeTargetForFileOwner: getRuntimeTargetForFileOwner,
-    getRuntimeTargetForWorktreeOwner: (state: unknown, worktreeId: string | null | undefined) =>
-      getRuntimeTargetForFileOwner(state, worktreeId, undefined)
+    getRuntimeTargetForFileOwner: ownerTarget,
+    requireRuntimeTargetForFileOwner: ownerTarget
   }
 })
 

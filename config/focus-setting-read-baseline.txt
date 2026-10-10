@@ -39,7 +39,6 @@
 1 src/renderer/src/components/editor/combined-diff/load-sections/use-combined-diff-section-loader.ts
 1 src/renderer/src/components/editor/csv/csv-link-routing.ts
 2 src/renderer/src/components/editor/editor-autosave-controller-test-fixture.ts
-1 src/renderer/src/components/editor/editor-dropped-file-open.ts
 1 src/renderer/src/components/editor/editor-model-lifetime-fixture.ts
 1 src/renderer/src/components/editor/markdown-preview-link-actions.ts
 1 src/renderer/src/components/editor/markdown-preview-system-link-action.ts

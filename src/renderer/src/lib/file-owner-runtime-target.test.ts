@@ -47,7 +47,7 @@ describe('getRuntimeTargetForWorktreeOwner', () => {
     // Before: a single saved, focused server claimed rows that predate owner stamping.
     const legacy: WorktreeOperationRouteState = {
       settings,
-      runtimeEnvironments: [{ id: 'focused-env' }] as never,
+      runtimeEnvironments: [{ id: 'focused-env' }],
       runtimeEnvironmentCatalogHydrated: true,
       repos: [{ id: 'legacy-repo' }],
       worktreesByRepo: { 'legacy-repo': [{ id: 'legacy-repo::wt', repoId: 'legacy-repo' }] }
