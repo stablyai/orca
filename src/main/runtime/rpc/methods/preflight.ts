@@ -27,7 +27,7 @@ export const PREFLIGHT_METHODS = [
     params: PreflightAgentDetection,
     // Why the host resolves: only it knows the workspace's project runtime, including WSL.
     handler: async (params, { runtime }) =>
-      detectAgentsOnHost(runtime.resolveAgentDetectionHost(params.worktreeId))
+      detectAgentsOnHost(await runtime.resolveAgentDetectionHost(params.worktreeId))
   }),
   defineMethod({
     name: 'preflight.detectRemoteAgents',
@@ -47,6 +47,6 @@ export const PREFLIGHT_METHODS = [
     permission: 'workspace',
     params: PreflightAgentDetection,
     handler: async (params, { runtime }) =>
-      refreshAgentsOnHost(runtime.resolveAgentDetectionHost(params.worktreeId))
+      refreshAgentsOnHost(await runtime.resolveAgentDetectionHost(params.worktreeId))
   })
 ]

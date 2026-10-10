@@ -1,4 +1,3 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import {
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost,
@@ -11,13 +10,12 @@ import {
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
-import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
-import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import {
   resolveLocalWorkspaceRuntime,
   type ProjectRuntimeResolutionStore
 } from '../local-project-runtime-resolution'
 import type { PreflightRuntimeContext } from '../ipc/preflight-runtime-target'
+import { resolveWorktreeHostRouting } from '../runtime/worktree-launch-host-repo'
 import {
   detectInstalledAgentsWithShellPathHydration,
   detectRemoteAgents,
@@ -36,7 +34,12 @@ export type WorkspaceAgentDetectionStore = ProjectRuntimeResolutionStore & {
   getProjectGroups?: () => ProjectGroup[]
 }
 
-const HOST_DEFAULT: AgentDetectionHost = { kind: 'local' }
+export const HOST_DEFAULT_AGENT_DETECTION: AgentDetectionHost = { kind: 'local' }
+
+/** A workspace as this host knows it: a folder workspace, or a worktree read from its own list. */
+export type AgentDetectionWorkspace =
+  | { kind: 'folder'; folderWorkspaceId: string }
+  | { kind: 'worktree'; repoId: string; path: string; hostId?: string | null }
 
 type ResolvedWorkspace =
   | { kind: 'ssh'; connectionId: string }
@@ -44,43 +47,49 @@ type ResolvedWorkspace =
 
 /**
  * The host a workspace's agents run on, resolved on this machine from its own project settings.
- * No workspace (or one this store does not know) keeps the host default older clients rely on.
+ * A workspace this store cannot place keeps the host default older clients rely on.
  */
 export function resolveWorkspaceAgentDetectionHost(
-  store: WorkspaceAgentDetectionStore | undefined,
-  worktreeId: string | null | undefined
+  store: WorkspaceAgentDetectionStore,
+  workspace: AgentDetectionWorkspace
 ): AgentDetectionHost {
-  if (!store || !worktreeId || worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
-    return HOST_DEFAULT
+  const resolved =
+    workspace.kind === 'folder'
+      ? resolveFolderWorkspace(store, workspace.folderWorkspaceId)
+      : resolveWorktree(store, workspace)
+  if (!resolved) {
+    return HOST_DEFAULT_AGENT_DETECTION
   }
-  const workspace = resolveWorkspace(store, worktreeId)
-  if (!workspace) {
-    return HOST_DEFAULT
+  if (resolved.kind === 'ssh') {
+    return resolved
   }
-  if (workspace.kind === 'ssh') {
-    return workspace
-  }
-  const projectRuntime = resolveLocalWorkspaceRuntime(store, workspace.repo, workspace.path)
-  return projectRuntime ? { kind: 'local', context: { projectRuntime } } : HOST_DEFAULT
+  const projectRuntime = resolveLocalWorkspaceRuntime(store, resolved.repo, resolved.path)
+  return projectRuntime
+    ? { kind: 'local', context: { projectRuntime } }
+    : HOST_DEFAULT_AGENT_DETECTION
 }
 
-function resolveWorkspace(
+function resolveWorktree(
   store: WorkspaceAgentDetectionStore,
-  worktreeId: string
+  worktree: Extract<AgentDetectionWorkspace, { kind: 'worktree' }>
 ): ResolvedWorkspace | null {
-  const scope = parseWorkspaceKey(worktreeId)
-  if (scope?.type === 'folder') {
-    return resolveFolderWorkspace(store, scope.folderWorkspaceId)
+  // Why the shared rule: one repo id can name rows on several hosts, and the first row is not
+  // necessarily this worktree's owner.
+  const routing = resolveWorktreeHostRouting(store.getRepos?.() ?? [], worktree)
+  if (routing.kind === 'ambiguous') {
+    throw new Error('worktree_execution_host_unresolved')
   }
-  const parsed = splitWorktreeIdForFilesystem(worktreeId)
-  const repo = parsed ? store.getRepo?.(parsed.repoId) : undefined
-  if (!parsed || !repo) {
+  if (routing.kind === 'unowned') {
     return null
   }
-  const sshTargetId = getSshTargetIdForExecutionHost(getRepoExecutionHostId(repo))
-  return sshTargetId
-    ? { kind: 'ssh', connectionId: sshTargetId }
-    : { kind: 'local', repo, path: parsed.worktreePath }
+  const sshTargetId = getSshTargetIdForExecutionHost(routing.hostId)
+  if (sshTargetId) {
+    return { kind: 'ssh', connectionId: sshTargetId }
+  }
+  // A worktree another runtime owns is not this host's to probe; keep the host default.
+  return routing.hostId === LOCAL_EXECUTION_HOST_ID && routing.repo
+    ? { kind: 'local', repo: routing.repo, path: worktree.path }
+    : null
 }
 
 function resolveFolderWorkspace(

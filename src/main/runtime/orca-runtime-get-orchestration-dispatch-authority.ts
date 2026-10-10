@@ -14,9 +14,13 @@ import { appendRecentPtyPathCandidates } from './terminal-output-path-candidates
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 import {
+  HOST_DEFAULT_AGENT_DETECTION,
   resolveWorkspaceAgentDetectionHost,
   type AgentDetectionHost
 } from '../preflight/workspace-agent-detection'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import {
   localOrchestrationCliCommand,
@@ -252,8 +256,35 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
       : undefined
   }
 
-  resolveAgentDetectionHost(worktreeId: string | null | undefined): AgentDetectionHost {
-    return resolveWorkspaceAgentDetectionHost(this.store ?? undefined, worktreeId)
+  // Why the host's own worktree record: it carries the owning host and the real path, where the
+  // client's id alone could pick the wrong row for a repo id shared across hosts.
+  async resolveAgentDetectionHost(
+    worktreeId: string | null | undefined
+  ): Promise<AgentDetectionHost> {
+    if (!this.store || !worktreeId || worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+      return HOST_DEFAULT_AGENT_DETECTION
+    }
+    const store = this.requireStore()
+    const scope = parseWorkspaceKey(worktreeId)
+    if (scope?.type === 'folder') {
+      return resolveWorkspaceAgentDetectionHost(store, {
+        kind: 'folder',
+        folderWorkspaceId: scope.folderWorkspaceId
+      })
+    }
+    let worktree: ResolvedWorktree
+    try {
+      worktree = await this.resolveWorktreeSelector(`id:${worktreeId}`)
+    } catch {
+      // An unknown workspace keeps the answer older clients always got.
+      return HOST_DEFAULT_AGENT_DETECTION
+    }
+    return resolveWorkspaceAgentDetectionHost(store, {
+      kind: 'worktree',
+      repoId: worktree.repoId,
+      path: worktree.path,
+      hostId: worktree.hostId
+    })
   }
 
   getOrchestrationFleetAgentStatusSnapshot(): readonly FleetAgentStatusEvidence[] {

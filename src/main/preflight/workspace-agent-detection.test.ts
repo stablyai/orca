@@ -8,8 +8,8 @@ import type { GlobalWindowsRuntimeDefault } from '../../shared/project-execution
 import type { Project } from '../../shared/project-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
-import { folderWorkspaceKey } from '../../shared/workspace-scope'
+import { folderWorkspaceKey, parseWorkspaceKey } from '../../shared/workspace-scope'
+import { splitWorktreeId } from '../../shared/worktree/id'
 import {
   resolveWorkspaceAgentDetectionHost,
   type WorkspaceAgentDetectionStore
@@ -108,6 +108,27 @@ function wslContext(distro: string, projectId: string, reason: string) {
   }
 }
 
+// Stands in for the runtime, which reads the worktree's host and path from its own list.
+function resolveFor(s: WorkspaceAgentDetectionStore, workspaceId: string, hostId?: string) {
+  const scope = parseWorkspaceKey(workspaceId)
+  if (scope?.type === 'folder') {
+    return resolveWorkspaceAgentDetectionHost(s, {
+      kind: 'folder',
+      folderWorkspaceId: scope.folderWorkspaceId
+    })
+  }
+  const parsed = splitWorktreeId(workspaceId)
+  if (!parsed) {
+    throw new Error(`not a worktree id: ${workspaceId}`)
+  }
+  return resolveWorkspaceAgentDetectionHost(s, {
+    kind: 'worktree',
+    repoId: parsed.repoId,
+    path: parsed.worktreePath,
+    hostId
+  })
+}
+
 describe('resolveWorkspaceAgentDetectionHost on a Windows host', () => {
   beforeEach(() => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
@@ -116,18 +137,40 @@ describe('resolveWorkspaceAgentDetectionHost on a Windows host', () => {
     Object.defineProperty(process, 'platform', { value: originalPlatform })
   })
 
-  it('keeps the host default when no workspace is named, unknown, or floating', () => {
+  it('keeps the host default for a workspace no repo row owns', () => {
     const s = store({ repos: [repo({ id: 'r1', path: 'C:\\r1' })] })
-    expect(resolveWorkspaceAgentDetectionHost(s, undefined)).toEqual({ kind: 'local' })
-    expect(resolveWorkspaceAgentDetectionHost(s, 'missing::C:\\x')).toEqual({ kind: 'local' })
-    expect(resolveWorkspaceAgentDetectionHost(s, FLOATING_TERMINAL_WORKTREE_ID)).toEqual({
-      kind: 'local'
-    })
+    expect(resolveFor(s, 'missing::C:\\x')).toEqual({ kind: 'local' })
+  })
+
+  it('routes by the worktree owner, not the first row sharing its repo id', () => {
+    const sshRow = repo({ id: 'r1', path: '/srv/r1', executionHostId: 'ssh:build-host' })
+    const localRow = repo({ id: 'r1', path: 'C:\\src\\r1', executionHostId: 'local' })
+    for (const repos of [
+      [sshRow, localRow],
+      [localRow, sshRow]
+    ]) {
+      const s = store({ repos })
+      expect(resolveFor(s, 'r1::C:\\src\\r1', 'local')).toEqual({
+        kind: 'local',
+        context: {
+          projectRuntime: {
+            status: 'resolved',
+            runtime: expect.objectContaining({ kind: 'windows-host' })
+          }
+        }
+      })
+      expect(resolveFor(s, 'r1::/srv/r1', 'ssh:build-host')).toEqual({
+        kind: 'ssh',
+        connectionId: 'build-host'
+      })
+      // Rival rows and no worktree host name no single owner: refuse rather than guess.
+      expect(() => resolveFor(s, 'r1::/srv/r1')).toThrow('worktree_execution_host_unresolved')
+    }
   })
 
   it('probes inside the distro of a WSL-share workspace with no saved runtime', () => {
     const s = store({ repos: [repo({ id: 'r1', path: WSL_REPO_PATH })] })
-    expect(resolveWorkspaceAgentDetectionHost(s, `r1::${WSL_REPO_PATH}`)).toEqual({
+    expect(resolveFor(s, `r1::${WSL_REPO_PATH}`)).toEqual({
       kind: 'local',
       context: wslContext('Ubuntu-24.04', 'r1', 'project-override')
     })
@@ -139,7 +182,7 @@ describe('resolveWorkspaceAgentDetectionHost on a Windows host', () => {
       projects: [project('p1', ['r1'])],
       globalDefault: { kind: 'wsl', distro: 'Ubuntu' }
     })
-    expect(resolveWorkspaceAgentDetectionHost(s, 'r1::C:\\src\\r1')).toEqual({
+    expect(resolveFor(s, 'r1::C:\\src\\r1')).toEqual({
       kind: 'local',
       context: wslContext('Ubuntu', 'p1', 'global-default')
     })
@@ -150,7 +193,7 @@ describe('resolveWorkspaceAgentDetectionHost on a Windows host', () => {
       repos: [repo({ id: 'r1', path: WSL_REPO_PATH })],
       projects: [project('p1', ['r1'], { kind: 'windows-host' })]
     })
-    expect(resolveWorkspaceAgentDetectionHost(s, `r1::${WSL_REPO_PATH}`)).toEqual({
+    expect(resolveFor(s, `r1::${WSL_REPO_PATH}`)).toEqual({
       kind: 'local',
       context: {
         projectRuntime: {
@@ -168,11 +211,11 @@ describe('resolveWorkspaceAgentDetectionHost on a Windows host', () => {
         repo({ id: 'unified', path: '/srv/b', executionHostId: 'ssh:ssh-b' })
       ]
     })
-    expect(resolveWorkspaceAgentDetectionHost(s, 'legacy::/srv/a')).toEqual({
+    expect(resolveFor(s, 'legacy::/srv/a')).toEqual({
       kind: 'ssh',
       connectionId: 'ssh-a'
     })
-    expect(resolveWorkspaceAgentDetectionHost(s, 'unified::/srv/b')).toEqual({
+    expect(resolveFor(s, 'unified::/srv/b')).toEqual({
       kind: 'ssh',
       connectionId: 'ssh-b'
     })
@@ -184,7 +227,7 @@ describe('resolveWorkspaceAgentDetectionHost on a Windows host', () => {
       projectGroups: [GROUP],
       folderWorkspaces: [FOLDER]
     })
-    expect(resolveWorkspaceAgentDetectionHost(s, folderWorkspaceKey('f1'))).toEqual({
+    expect(resolveFor(s, folderWorkspaceKey('f1'))).toEqual({
       kind: 'local',
       context: wslContext('Ubuntu-24.04', 'r1', 'project-override')
     })
@@ -204,8 +247,8 @@ describe('preflight.detectAgents resolves the workspace on the host', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these methods read only resolveAgentDetectionHost and getRuntimeId from the runtime.
     const runtime = {
       getRuntimeId: () => 'host',
-      resolveAgentDetectionHost: (worktreeId?: string) =>
-        resolveWorkspaceAgentDetectionHost(s, worktreeId)
+      resolveAgentDetectionHost: async (worktreeId?: string) =>
+        worktreeId ? resolveFor(s, worktreeId) : { kind: 'local' }
     } as unknown as OrcaRuntimeService
     return new RpcDispatcher({ runtime, methods: PREFLIGHT_METHODS })
   }

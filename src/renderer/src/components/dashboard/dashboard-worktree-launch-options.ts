@@ -47,6 +47,20 @@ function buildDashboardLaunchCatalog(state: DashboardLaunchOptionState): Dashboa
   }
 }
 
+// Why the host-default fallback: a card can render before any launch surface probed its workspace.
+function runtimeAgentsForWorkspace(
+  state: DashboardLaunchOptionState,
+  environmentId: string,
+  worktreeId: string
+): readonly TuiAgent[] {
+  const agents = state.runtimeDetectedAgentIds
+  return (
+    agents?.[getRuntimeAgentInventoryKey(environmentId, worktreeId)] ??
+    agents?.[environmentId] ??
+    []
+  )
+}
+
 function detectedAgentsForWorktree(
   state: DashboardLaunchOptionState,
   worktreeId: string,
@@ -59,11 +73,7 @@ function detectedAgentsForWorktree(
     const group = folder ? catalog.groupsById.get(folder.projectGroupId) : undefined
     const host = parseExecutionHostId(group?.executionHostId)
     if (host?.kind === 'runtime') {
-      return (
-        state.runtimeDetectedAgentIds?.[
-          getRuntimeAgentInventoryKey(host.environmentId, worktreeId)
-        ] ?? []
-      )
+      return runtimeAgentsForWorkspace(state, host.environmentId, worktreeId)
     }
     const connectionId = folder?.connectionId ?? group?.connectionId
     return connectionId ? (state.remoteDetectedAgentIds?.[connectionId] ?? []) : []
@@ -73,11 +83,7 @@ function detectedAgentsForWorktree(
   const repo = catalog.reposById.get(worktree?.repoId ?? repoId)
   const host = parseExecutionHostId(worktree?.hostId ?? repo?.executionHostId)
   if (host?.kind === 'runtime') {
-    return (
-      state.runtimeDetectedAgentIds?.[
-        getRuntimeAgentInventoryKey(host.environmentId, worktreeId)
-      ] ?? []
-    )
+    return runtimeAgentsForWorkspace(state, host.environmentId, worktreeId)
   }
   const connectionId = host?.kind === 'ssh' ? host.targetId : repo?.connectionId
   return connectionId
