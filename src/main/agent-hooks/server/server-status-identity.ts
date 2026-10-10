@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto'
-
 import type { AgentKind } from '../../../shared/telemetry-events'
 import {
   getAgentResumeArgv,
@@ -83,8 +81,4 @@ export function paneCacheKeyTabId(key: string): string | null {
 
 export function paneCacheKeyMatchesTab(key: string, tabId: string): boolean {
   return paneCacheKeyTabId(key) === tabId
-}
-
-export function hashLaunchToken(value: string): string {
-  return createHash('sha256').update(value).digest('hex')
 }

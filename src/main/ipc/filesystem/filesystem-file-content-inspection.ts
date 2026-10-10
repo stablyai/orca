@@ -89,14 +89,3 @@ export async function readLocalLogSnapshot(filePath: string): Promise<LocalFileC
     await handle.close()
   }
 }
-
-export function isDirectoryEntry(entry: {
-  isDirectory(): boolean
-  isSymbolicLink(): boolean
-}): boolean {
-  // Why: following a symlink in readDir can touch macOS TCC-protected containers; treat links as file-like until explicitly opened.
-  if (entry.isSymbolicLink()) {
-    return false
-  }
-  return entry.isDirectory()
-}

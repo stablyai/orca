@@ -89,10 +89,6 @@ export function setLeaf(
   return { ...workspace, leaves }
 }
 
-export function paneKeysOf(tab: LayoutTerminalTab): string[] {
-  return leafIdsOf(tab).map((leafId) => paneKeyOf(tab.entityId, leafId))
-}
-
 /** The terminal tab and pane a pane key names in this workspace. */
 export function locatePane(
   workspace: WorkspaceLayout,
