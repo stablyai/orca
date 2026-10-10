@@ -63,47 +63,6 @@ export async function markJournalPendingSubmissionsUnknown(
   return unresolved.map((entry) => entry.clientMessageId)
 }
 
-/** Settles as `rejected` every submission a child handed over and never echoed, when that child
- *  ended in its start: one that never answered initialize ran nothing, so each is safe to send
- *  again. A queued submission was never handed to that child; the delivery loop settles it. */
-export async function rejectJournalPendingSubmissions(
-  journal: AgentSessionJournal,
-  fence: number,
-  rejection: AgentJournalDispatchRejection
-): Promise<string[]> {
-  const unwritten = journalPendingSubmissionResolutions(journal.submissions(), fence, { rejection })
-  for (const resolution of unwritten) {
-    await journal.resolveDispatch(resolution)
-  }
-  return unwritten.map((entry) => entry.clientMessageId)
-}
-
-/** Rejects queued submissions — accepted, never handed over, so provably unwritten. */
-export async function rejectJournalQueuedSubmissions(
-  journal: AgentSessionJournal,
-  fence: number,
-  rejection: AgentJournalDispatchRejection,
-  which: (submission: AgentJournalSubmission) => boolean = () => true
-): Promise<string[]> {
-  const queued = journal
-    .submissions()
-    .filter((entry) => isQueuedAgentJournalSubmission(entry) && which(entry))
-  // Issued together, so the fold shows none of them queued once this call returns: a Stop decides
-  // whether anything is working from it without awaiting the withdrawal.
-  await Promise.all(
-    queued.map((entry) =>
-      journal.resolveDispatch({
-        clientMessageId: entry.clientMessageId,
-        state: 'rejected',
-        ...rejection,
-        fence,
-        recovered: true
-      })
-    )
-  )
-  return queued.map((entry) => entry.clientMessageId)
-}
-
 /** Rows rejecting every submission still queued, read from `state` when called: for an append
  *  that must carry them with what follows, in one transaction. */
 export function journalQueuedRejectionRowBuilders(

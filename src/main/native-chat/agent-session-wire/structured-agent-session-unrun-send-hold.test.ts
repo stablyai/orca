@@ -1,8 +1,8 @@
 // A message sent while the agent's start never answers provably never ran: the host hands a child
 // nothing until it proves its start. So when the chat ends then, the message is settled as a
-// queued one is for the same end (`journal-unsent-send-hold.ts`): a quit or a close keeps a
-// person's words as an ordinary card that waits for the chat's next turn, a person's Stop
-// withdraws it. Against the real host, store and journal, with an agent that stays starting.
+// queued one is for the same end (`journal-unsent-send-hold.ts`): a quit, a close or a person's
+// Stop keeps a person's words as an ordinary card, which waits out the pause in force. Against the
+// real host, store and journal, with an agent that stays starting.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
@@ -118,7 +118,7 @@ describe('a message held behind a start that never answered, then the chat ends'
     }
   )
 
-  it("is withdrawn by a person's Stop, as a queued one is, and kept as no card", async () => {
+  it("is a card after a person's Stop, rejected as stopped, held by the Stop until a turn", async () => {
     const id = await heldBehindHungStart('stopped')
 
     expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
@@ -126,9 +126,11 @@ describe('a message held behind a start that never answered, then the chat ends'
     await eventually(async () =>
       expect(await rig.submission(id)).toMatchObject({
         dispatchState: 'rejected',
-        ...words('cancelled')
+        ...words('cancelled'),
+        keptAsQueuedMessageId: id
       })
     )
-    expect(await rig.drafts()).toEqual([])
+    expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }])
+    expect(derivedPauses()).toEqual(['stopped'])
   })
 })

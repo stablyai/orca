@@ -16,6 +16,12 @@ import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD
 } from './structured-agent-session-host-test-data'
+import { stopWithdrawal } from './structured-agent-session-stop-withdrawal.test-fixture'
+
+vi.mock(
+  '../agent-session-journal/journal-unsent-send-hold',
+  () => import('./structured-agent-session-stop-withdrawal.test-fixture')
+)
 
 let host: StructuredAgentSessionHost
 let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
@@ -28,6 +34,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  stopWithdrawal.run = undefined
   vi.restoreAllMocks()
 })
 
@@ -91,10 +98,8 @@ describe.each([
   ['naming its turn', { turnId: 'turn-1' }]
 ])('a Stop %s', (_label, fields) => {
   it('interrupts when withdrawing the queued sends throws, and reports it', async () => {
-    const journal = await runningTurn()
-    vi.spyOn(journal, 'rejectQueuedSubmissions').mockImplementation(() => {
-      throw new Error(MALFORMED)
-    })
+    await runningTurn()
+    stopWithdrawal.run = () => Promise.reject(new Error(MALFORMED))
 
     expect(await stop(fields)).toMatchObject({ ok: true })
     expect(cancelTurn).toHaveBeenCalledOnce()
@@ -121,7 +126,7 @@ describe.each([
     const order: string[] = []
     const held = Promise.withResolvers<never>()
     if (step === 'withdrawing the queued sends') {
-      vi.spyOn(journal, 'rejectQueuedSubmissions').mockImplementation(() => held.promise)
+      stopWithdrawal.run = () => held.promise
     } else {
       vi.spyOn(journal, 'appendStopEvent').mockImplementation(() => held.promise)
     }
@@ -140,7 +145,8 @@ describe.each([
 
     expect(await stopping).toMatchObject({ ok: true })
     expect(order).toEqual(['interrupt', 'write fails'])
-    expectReported(failed)
+    // The answer never waits on the write, so its report may land after it.
+    await vi.waitFor(() => expectReported(failed))
   })
 
   it.each([
@@ -153,7 +159,7 @@ describe.each([
       const order: string[] = []
       const held = Promise.withResolvers<never>()
       if (step === 'withdrawing the queued sends') {
-        vi.spyOn(journal, 'rejectQueuedSubmissions').mockImplementation(() => held.promise)
+        stopWithdrawal.run = () => held.promise
       } else {
         vi.spyOn(journal, 'appendStopEvent').mockImplementation(() => held.promise)
       }
@@ -172,7 +178,7 @@ describe.each([
 
       expect(await stopping).toMatchObject({ ok: true, value: { cancelled: true } })
       expect(order).toEqual(['stop', 'write fails'])
-      expectReported(failed)
+      await vi.waitFor(() => expectReported(failed))
     }
   )
 
@@ -193,7 +199,7 @@ describe.each([
       Object.assign(host.deps.adapter, { stopEndsSession: () => true, closeSession })
       const held = Promise.withResolvers<never>()
       if (step === 'withdrawing the queued sends') {
-        vi.spyOn(journal, 'rejectQueuedSubmissions').mockImplementation(() => held.promise)
+        stopWithdrawal.run = () => held.promise
       } else {
         vi.spyOn(journal, 'appendStopEvent').mockImplementation(() => held.promise)
       }

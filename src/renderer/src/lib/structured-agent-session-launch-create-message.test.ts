@@ -59,7 +59,10 @@ import {
   findStructuredAgentSessionReadOwner,
   resetStructuredAgentSessionReadOwnersForTests
 } from '@/components/native-chat/structured-agent-session-read-owner'
-import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
+import {
+  resetStructuredAgentSessionSendsForTests,
+  settleStructuredAgentSessionSendsFromJournal
+} from '@/components/native-chat/structured-agent-session-message-sender'
 import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/structured-agent-session-pending-sends'
 import { structuredAgentSessionStopControl } from '@/components/native-chat/structured-agent-session-stop-control'
 import {
@@ -190,6 +193,32 @@ describe('the first message owned by create', () => {
     expect(stop).toHaveBeenCalledWith(null, expect.any(Function))
     expect(draft(launch.sessionId)).toBe('')
     expect(mocks.inventory).not.toHaveBeenCalled()
+    expect(mocks.call.mock.calls.map(([, method]) => method)).toEqual(['agentSession.create'])
+  })
+
+  // One surface: a host that keeps a Stopped first message as a card owns it; the composer stays
+  // empty even when create never answers.
+  it('leaves a first message a Stop kept as a card to the card, even when create never answers', async () => {
+    mocks.call.mockReturnValue(new Promise(() => {}))
+    const launch = start()
+    await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
+    const id = createParams().firstMessage?.clientMessageId ?? ''
+    settleStructuredAgentSessionSendsFromJournal(
+      launch.sessionId,
+      [
+        {
+          ...submission(id),
+          dispatchState: 'rejected',
+          rejection: { kind: 'cancelled' },
+          keptAsQueuedMessageId: id
+        }
+      ],
+      [id]
+    )
+    await expect(launch.promptDeliveryResult).resolves.toMatchObject({ delivered: true })
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(draft(launch.sessionId)).toBe('')
+    expect(getStructuredAgentSessionPendingSends(launch.sessionId)).toEqual([])
     expect(mocks.call.mock.calls.map(([, method]) => method)).toEqual(['agentSession.create'])
   })
 

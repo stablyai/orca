@@ -1,7 +1,6 @@
 // Append-only journal store for one agent session. It owns the chat's fold and write queue, and no
 // connection: every statement goes through the host's one journal database.
 
-import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import { randomUUID } from 'node:crypto'
 import type {
   AgentJournalAcceptanceReceipt,
@@ -29,11 +28,7 @@ import type { JournalReplacementItem } from './journal-epoch-replacement'
 import { readJournalSince } from './journal-cursor'
 import type { JournalHostDatabase } from './journal-host-database'
 import { journalRowsAfterReader, type JournalLoad } from './journal-open'
-import {
-  markJournalPendingSubmissionsUnknown,
-  rejectJournalPendingSubmissions,
-  rejectJournalQueuedSubmissions
-} from './journal-pending-submission-recovery'
+import { markJournalPendingSubmissionsUnknown } from './journal-pending-submission-recovery'
 import {
   applyJournalRow,
   createJournalReducerState,
@@ -358,23 +353,6 @@ export class AgentSessionJournal {
   /** Retire unanswered sends after their execution owner ended, without assuming delivery. */
   async markPendingSubmissionsUnknown(fence: number, reason?: string): Promise<string[]> {
     return markJournalPendingSubmissionsUnknown(this, fence, reason)
-  }
-
-  /** Reject sends a child that ended in its start was handed and never echoed: none ran. */
-  async rejectPendingSubmissions(
-    fence: number,
-    rejection: AgentJournalDispatchRejection
-  ): Promise<string[]> {
-    return rejectJournalPendingSubmissions(this, fence, rejection)
-  }
-
-  /** Reject sends accepted but never handed over, optionally only those `which` names. */
-  async rejectQueuedSubmissions(
-    fence: number,
-    rejection: AgentJournalDispatchRejection,
-    which?: (submission: AgentJournalSubmission) => boolean
-  ): Promise<string[]> {
-    return rejectJournalQueuedSubmissions(this, fence, rejection, which)
   }
 
   /** The escape hatch for a forked handle and an unreadable schema. It invalidates every cursor;

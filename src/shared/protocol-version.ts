@@ -240,17 +240,16 @@ export const AGENT_SESSION_SEND_ANSWERS_PROOF_RUNTIME_CAPABILITY =
 // Why: `agentSession.send`'s params are strict, so an older host rejects `delivery`; and only a
 // capable client can render the `queued` result arm. It gates `delivery: 'queue-if-active'` and
 // the client's queueing setting and chord, never the published draft list or its card actions: a
-// host without it still publishes a message it kept unsent across a restart or a close, and both
-// clients show that card and call its actions. DARK ON PURPOSE — not in RUNTIME_CAPABILITIES:
+// host without it still publishes a message it kept unsent across a restart, a close or a Stop,
+// and both clients show that card and call its actions. DARK ON PURPOSE — not in RUNTIME_CAPABILITIES:
 // advertising still requires the integrated Codex steer matrix (#21062) in the shipped host.
 // v1 includes `submission.queuedMessageId` on every draft hand-off: a client reads that link and
 // never compares a draft id with a submission id. It also publishes the queue's pause once, as
 // `queuePause` beside the list, lifted by `agentSession.queuedMessagesResume` or any turn sent
 // after it starting; while it is set every waiting card waits. `nextQueuedMessageId` beside the list
 // names the card the queue sends next once nothing runs, null while anything holds it; absent (an
-// older host) reads as null. A card carries a hold of its own when its conversion failed
-// (`send_failed`) or the host kept it unsent (`kept`). The host mechanism lands first; the constant
-// gates the rollout.
+// older host) reads as null. A card carries a hold of its own only when its conversion failed
+// (`send_failed`). The host mechanism lands first; the constant gates the rollout.
 export const AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY =
   'agent-session.queued-messages.v1' as const
 // Why: a host advertising this edits a queued card in place (`agentSession.queuedMessageUpdate`)

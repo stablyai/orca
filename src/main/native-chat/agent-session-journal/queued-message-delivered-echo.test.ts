@@ -16,6 +16,7 @@ import { agentSessionFailureWords } from '../../../shared/agent-session-failure-
 import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import { JournalQueuedMessages } from './journal-queued-messages'
 import type { AgentSessionJournal } from './journal-store'
+import { holdUnsentSends } from './journal-unsent-send-hold'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
@@ -103,7 +104,11 @@ async function handOffAndReject(
       fence: 0
     })
   } else {
-    await journal.rejectQueuedSubmissions(0, STOP_WITHDRAWAL)
+    await holdUnsentSends(journal, {
+      fence: 0,
+      hostInstance: 'proc-1',
+      hold: { cause: 'cancelled' }
+    })
   }
   expect(journal.queuedMessages.get('draft-1')).toMatchObject({
     state: 'waiting',

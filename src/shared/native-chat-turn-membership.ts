@@ -97,11 +97,13 @@ export function structuredAgentTurnAnchors(
   )
   // A send a Stop took back after its turn opened but before the provider echoed it: the record
   // still names the provider's key, and the host names the turn the send was answered into, or
-  // none (null). A rejection written before that field is placed by journal order instead.
+  // none (null). A rejection written before that field is placed by journal order instead. One
+  // kept as a card opened no turn.
   const takenBack = submissions.filter(
     (submission) =>
       !submission.providerItemId &&
       submission.queuedMessageId === undefined &&
+      submission.keptAsQueuedMessageId === undefined &&
       submission.resolvedAt !== null &&
       dispatchWasWithdrawn(submission)
   )

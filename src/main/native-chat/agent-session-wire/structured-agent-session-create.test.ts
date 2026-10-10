@@ -7,6 +7,7 @@ import {
 import {
   CREATE_TEST_CALLER as CALLER,
   createTestParams,
+  resumeCreatedChat,
   stopCreatedChat
 } from './structured-agent-session-create-test-fixture'
 import {
@@ -25,7 +26,6 @@ import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../shared/agent-session-wire'
 import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
-import { NATIVE_CHAT_STOPPED_BEFORE_START_TEXT } from '../../../shared/native-chat-stopped-before-start'
 
 let rig: RestTestRig
 beforeEach(async () => {
@@ -38,6 +38,42 @@ afterEach(async () => {
 
 function firstMessage() {
   return { clientMessageId: hostTestOperationId(), body: hostTestMessage('opening message') }
+}
+
+function dispatchedTexts(): string[] {
+  return rig.adapter.dispatch.mock.calls.map(([input]) =>
+    input.body.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('')
+  )
+}
+
+/** A Stop kept the first message, unsent, as a card at the head of the queue under the Stop's
+ *  pause, as it keeps any person's held send; neither client draws it in the conversation. */
+async function expectKeptAsCard(clientMessageId: string): Promise<void> {
+  expect(
+    (await rig.host.journalSnapshot(SESSION)).submissions.find(
+      (entry) => entry.clientMessageId === clientMessageId
+    )
+  ).toMatchObject({
+    dispatchState: 'rejected',
+    rejection: { kind: 'cancelled' },
+    keptAsQueuedMessageId: clientMessageId
+  })
+  const page = await rig.host.history({ sessionId: SESSION, direction: 'tail' })
+  if (!page.ok) {
+    throw new Error('history refused')
+  }
+  expect(page.page.queuedMessages?.map(({ messageId, state }) => ({ messageId, state }))).toEqual([
+    { messageId: clientMessageId, state: 'waiting' }
+  ])
+  expect(page.page.queuePause).toEqual({ reason: 'stopped' })
+  for (const rejectedInPlace of [true, false]) {
+    expect(
+      projectStructuredAgentSessionMessages(page.page.items, [], page.page.submissions, {
+        rejectedInPlace
+      })
+    ).toEqual([])
+  }
+  expect(rig.adapter.dispatch).not.toHaveBeenCalled()
 }
 
 function abortableAcquisition() {
@@ -161,7 +197,7 @@ it('keeps delivery behind runtime tab publication even after the message is comm
   await stopCreatedChat(rig.host)
 })
 
-it('an immediate Stop cancels the queued first message before acquire and replay never redelivers it', async () => {
+it('an immediate Stop keeps the queued first message as a card before acquire and replay never redelivers it', async () => {
   const first = firstMessage()
   const params = createTestParams(first)
   let stopping: ReturnType<typeof stopCreatedChat> | undefined
@@ -180,14 +216,20 @@ it('an immediate Stop cancels the queued first message before acquire and replay
     replayed: true,
     value: {
       page: {
-        submissions: [{ clientMessageId: first.clientMessageId, rejection: { kind: 'cancelled' } }]
+        submissions: [
+          {
+            clientMessageId: first.clientMessageId,
+            rejection: { kind: 'cancelled' },
+            keptAsQueuedMessageId: first.clientMessageId
+          }
+        ]
       }
     }
   })
   expect(
     rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal.stopMarks.latest()
   ).toMatchObject({ event: { reason: 'user-stop' } })
-  expect(rig.adapter.dispatch).not.toHaveBeenCalled()
+  await expectKeptAsCard(first.clientMessageId)
 })
 
 it('holds the created first message until the child proves its start, then hands it over once', async () => {
@@ -226,7 +268,7 @@ it('holds the created first message until the child proves its start, then hands
   expect(rig.adapter.dispatch).toHaveBeenCalledOnce()
 })
 
-it('Stop while the child proves its start withdraws the created first message once, unsent', async () => {
+it('Stop while the child proves its start keeps the created first message as a card, and Resume sends it once', async () => {
   const first = firstMessage()
   const spawn = rig.adapter.acquire.getMockImplementation()!
   rig.adapter.acquire.mockImplementationOnce(async (input) => ({
@@ -241,18 +283,17 @@ it('Stop while the child proves its start withdraws the created first message on
   expect(await stopCreatedChat(rig.host)).toMatchObject({ ok: true, value: { cancelled: true } })
 
   const submissions = (await rig.host.journalSnapshot(SESSION)).submissions
-  expect(submissions).toEqual([
-    expect.objectContaining({
-      clientMessageId: first.clientMessageId,
-      dispatchState: 'rejected',
-      rejection: expect.objectContaining({ kind: 'cancelled' })
-    })
-  ])
+  expect(submissions).toHaveLength(1)
   expect(submissions[0].handedOverAt).toBeUndefined()
-  expect(rig.adapter.dispatch).not.toHaveBeenCalled()
+  await expectKeptAsCard(first.clientMessageId)
+
+  expect(await resumeCreatedChat(rig.host)).toMatchObject({ ok: true, value: { resumed: true } })
+  await vi.waitFor(() => expect(dispatchedTexts()).toEqual(['opening message']))
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(dispatchedTexts()).toEqual(['opening message'])
 })
 
-it('Stop aborts a handshake outside the lane and the next send sends only its own text', async () => {
+it('Stop aborts a handshake outside the lane; the next send goes first, then the kept first message once', async () => {
   const first = firstMessage()
   const params = createTestParams(first)
   const entered = abortableAcquisition()
@@ -263,16 +304,21 @@ it('Stop aborts a handshake outside the lane and the next send sends only its ow
     ok: true,
     replayed: true
   })
+  await expectKeptAsCard(first.clientMessageId)
   const next = restTestSend('next message', rig.store.getRecord(SESSION)?.lease.runtimeFence)
   expect(await rig.host.send(CALLER, next)).toMatchObject({ ok: true })
-  await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledOnce())
-  expect(rig.adapter.dispatch).toHaveBeenCalledWith(expect.objectContaining({ body: next.body }))
-  const snapshot = await rig.host.journalSnapshot(SESSION)
-  expect(snapshot.submissions).toHaveLength(2)
+  // The next message's accepted turn lifts the Stop's pause; the card follows it, once.
+  await vi.waitFor(() => expect(dispatchedTexts()).toEqual(['next message', 'opening message']))
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(dispatchedTexts()).toEqual(['next message', 'opening message'])
   expect(
-    snapshot.submissions.find(({ clientMessageId }) => clientMessageId === first.clientMessageId)
-      ?.rejection
-  ).toMatchObject({ kind: 'cancelled' })
+    (await rig.host.journalSnapshot(SESSION)).submissions.find(
+      ({ clientMessageId }) => clientMessageId === first.clientMessageId
+    )
+  ).toMatchObject({
+    rejection: { kind: 'cancelled' },
+    keptAsQueuedMessageId: first.clientMessageId
+  })
 })
 
 it('replays the stopped first message even after its row falls outside the hydration page', async () => {
@@ -313,14 +359,15 @@ it('replays the stopped first message even after its row falls outside the hydra
   expect(replay.value.firstMessage).toMatchObject({
     clientMessageId: first.clientMessageId,
     dispatchState: 'rejected',
-    rejection: { kind: 'cancelled' }
+    rejection: { kind: 'cancelled' },
+    keptAsQueuedMessageId: first.clientMessageId
   })
   expect(append).not.toHaveBeenCalled()
   expect(rig.adapter.acquire).not.toHaveBeenCalled()
   expect(rig.adapter.dispatch).not.toHaveBeenCalled()
 })
 
-it('admits Stop with the create-returned fence after acquisition advances it and keeps the stopped row', async () => {
+it('admits Stop with the create-returned fence after acquisition advances it and keeps the first message as a card', async () => {
   const first = firstMessage()
   const entered = abortableAcquisition()
   const created = await rig.host.create(CALLER, createTestParams(first), { firstMessage: first })
@@ -337,22 +384,7 @@ it('admits Stop with the create-returned fence after acquisition advances it and
   })
   try {
     await vi.waitFor(() => expect(stopped).toMatchObject({ ok: true, value: { cancelled: true } }))
-    const snapshot = await rig.host.journalSnapshot(SESSION)
-    expect(snapshot.submissions).toMatchObject([
-      {
-        clientMessageId: first.clientMessageId,
-        dispatchState: 'rejected',
-        rejection: { kind: 'cancelled' }
-      }
-    ])
-    expect(
-      projectStructuredAgentSessionMessages(snapshot.items, [], snapshot.submissions, {
-        rejectedInPlace: true
-      })
-    ).toMatchObject([
-      { role: 'user', blocks: first.body.blocks },
-      { blocks: [{ type: 'text', text: NATIVE_CHAT_STOPPED_BEFORE_START_TEXT }] }
-    ])
+    await expectKeptAsCard(first.clientMessageId)
     expect(
       rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal.stopMarks.latest()
     ).toMatchObject({ event: { reason: 'user-stop' } })

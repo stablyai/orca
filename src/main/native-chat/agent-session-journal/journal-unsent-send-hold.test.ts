@@ -445,6 +445,68 @@ describe('a close of the chat', () => {
   })
 })
 
+describe("a person's Stop", () => {
+  const CANCELLED = agentSessionFailureWords(agentSessionFailureFact('cancelled'), {
+    surface: 'rejection'
+  })
+
+  it('keeps every queued text of a person by the same rule, ahead of the cards already queued', async () => {
+    const image: AgentJournalMessageItem = {
+      kind: 'message',
+      role: 'user',
+      blocks: [
+        { type: 'text', text: 'look' },
+        { type: 'image-ref', path: '/tmp/attachment.png' }
+      ]
+    }
+    const journal = await open()
+    await journal.queuedMessages.insert({
+      messageId: 'queued-card',
+      body: message('queued card'),
+      fingerprint: fingerprint(message('queued card')),
+      hostInstance: HOST
+    })
+    await accept(journal, 'first', { origin: 'client', source: USER_MESSAGE_SOURCE })
+    await accept(journal, 'mail', { origin: 'host', source: MAIL_SOURCE })
+    await accept(journal, 'compact', {
+      origin: 'client',
+      source: USER_MESSAGE_SOURCE,
+      body: structuredAgentSessionCompactBody()
+    })
+    await accept(journal, 'image', { origin: 'client', source: USER_MESSAGE_SOURCE, body: image })
+    await accept(journal, 'second', { origin: 'client', source: USER_MESSAGE_SOURCE })
+    await hold(journal, { cause: 'cancelled' })
+
+    expect(cardOrder(journal)).toEqual(['first', 'second', 'queued-card'])
+    for (const id of ['first', 'second']) {
+      expect(journal.submission(id)).toMatchObject({
+        dispatchState: 'rejected',
+        ...CANCELLED,
+        keptAsQueuedMessageId: id
+      })
+    }
+    for (const id of ['mail', 'compact', 'image']) {
+      expect(journal.submission(id)).toMatchObject({ dispatchState: 'rejected', ...CANCELLED })
+      expect(journal.submission(id)).not.toHaveProperty('keptAsQueuedMessageId')
+    }
+  })
+
+  // The Stop decides whether the agent still works from the fold, without awaiting the hold.
+  it('leaves none of them queued in the fold by the time the call returns', async () => {
+    const journal = await open()
+    await accept(journal, 'first', { origin: 'client', source: USER_MESSAGE_SOURCE })
+    await accept(journal, 'second', { origin: 'client', source: USER_MESSAGE_SOURCE })
+    const settled = hold(journal, { cause: 'cancelled' })
+
+    expect(journal.submissions().map((entry) => entry.dispatchState)).toEqual([
+      'rejected',
+      'rejected'
+    ])
+    await settled
+    expect(cardOrder(journal)).toEqual(['first', 'second'])
+  })
+})
+
 describe('the order kept cards stand in', () => {
   // Sequences restart with each epoch, so a card kept before a rewind has no sequence to compare.
   it('a card kept before the epoch rolled stays ahead of one kept after it', async () => {

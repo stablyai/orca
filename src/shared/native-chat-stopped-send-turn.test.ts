@@ -399,3 +399,25 @@ describe('a send a Stop took back on a page that starts inside the turn it opene
     ])
   })
 })
+
+describe('a send a Stop kept as a card', () => {
+  it('opens no turn, though it was held while the first send opened one and kept after', () => {
+    // The opener's fate is unknown once the Stop ended the agent, so nothing else names the turn.
+    const items = [
+      sent('opener', 1),
+      turn('t1', 3, 'codex:thread-1:t1:0'),
+      stopNote('t1', 4),
+      sent('kept', 5)
+    ]
+    const submissions = [
+      submission('opener', { dispatchState: 'unknown', submittedSequence: 1, resolvedAt: null }),
+      stopped('kept', { submittedSequence: 2, keptAsQueuedMessageId: 'kept' })
+    ]
+
+    expect(structuredAgentTurnAnchors(items, submissions).get('t1')).toBe('t1')
+    expect(drawn(items, submissions)).toEqual([
+      { id: key('opener'), turn: key('opener') },
+      { id: 'stop:t1', turn: 't1' }
+    ])
+  })
+})

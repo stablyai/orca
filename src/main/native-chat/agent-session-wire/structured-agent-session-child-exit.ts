@@ -69,7 +69,7 @@ export type StructuredAgentSessionChildExitContext<
   holdUnrunSends?: (
     sessionId: string,
     fence: number,
-    cause: 'chatClosed' | 'hostRestarted'
+    cause: 'chatClosed' | 'hostRestarted' | 'cancelled'
   ) => Promise<void>
   /** Lets the child's sink and the adapter's route for it go; absent leaves both to the next attach. */
   route?: {
@@ -129,21 +129,20 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
       ? agentSessionFailureFact('hostStopped')
       : undefined
     : exit.failure
-  // A send the child was handed and never echoed cannot have run when a person's Stop ended its
-  // start, or any close ended it before it answered its start: settled as the chat settles a queued
-  // send for the same end. A Stop withdraws it as cancelled; a quit or close keeps a person's
-  // message as a held card. A host stop fails the start (`startFailure`).
-  const unrunRejection =
-    startClose === 'user-stop' ? agentSessionFailureFact('cancelled') : undefined
+  // A send the child was handed and never echoed cannot have run when a close ended it before it
+  // answered its start: settled as the chat settles a queued send for the same end. A Stop, a quit
+  // or a close keeps a person's message as a held card. A host stop fails the start
+  // (`startFailure`).
   const unrunHold =
     expected &&
     exit.startupUnanswered &&
     close?.cause !== 'host-stop' &&
-    close?.cause !== 'user-stop' &&
     close?.cause !== 'context-clear'
-      ? close?.quit
-        ? ('hostRestarted' as const)
-        : ('chatClosed' as const)
+      ? close?.cause === 'user-stop'
+        ? ('cancelled' as const)
+        : close?.quit
+          ? ('hostRestarted' as const)
+          : ('chatClosed' as const)
       : undefined
   const endChild = (): void => {
     context.startupAttempts?.childEnded(sessionId, child)
@@ -220,8 +219,7 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
       ...(startFailed && child.generation
         ? { exitedDuringStartup: { generation: child.generation } }
         : {}),
-      exit: watched,
-      ...(unrunRejection ? { unrunRejection } : {})
+      exit: watched
     })
     if (!settled.ok) {
       logExitFailure(context, sessionId, 'exit-settlement', settled.error)

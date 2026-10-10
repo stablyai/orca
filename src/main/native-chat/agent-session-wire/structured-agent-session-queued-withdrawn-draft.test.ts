@@ -6,7 +6,6 @@
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
-import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
 import { holdDelivery } from './structured-agent-session-delivery-hold.test-fixture'
 import {
@@ -14,6 +13,12 @@ import {
   eventually,
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
+import { stopWithdrawal } from './structured-agent-session-stop-withdrawal.test-fixture'
+
+vi.mock(
+  '../agent-session-journal/journal-unsent-send-hold',
+  () => import('./structured-agent-session-stop-withdrawal.test-fixture')
+)
 
 let rig: QueuedMessageTestRig
 
@@ -99,26 +104,20 @@ it('Stop, then a user send: the withdrawn draft and the paused cards behind it d
   expect(await rig.drafts()).toEqual([])
 })
 
-// Bookkeeping never fails a Stop: a withdrawal that throws is reported and counts as nothing
-// withdrawn, so no pause holds the card it did send back, and that card sends again.
-it('a Stop whose withdrawal throws after landing still answers; the draft it released sends again under a fresh id', async () => {
+// Bookkeeping never fails a Stop: a withdrawal that throws is reported. The Stop's event was
+// issued with it, so the card it did send back waits under the pause until Resume sends it again.
+it('a Stop whose withdrawal throws after landing still answers; Resume sends the draft it released again under a fresh id', async () => {
   const working = await rig.workingSend()
   const a = await queuedDraft('A')
   const { release } = holdDelivery()
   await rig.settleAccepted(working, 'working')
   await eventually(async () => expect(await rig.handoff(a)).toBeDefined())
   const firstA = await rig.handoffId(a)
-  const withdraw = AgentSessionJournal.prototype.rejectQueuedSubmissions
-  const failing = vi
-    .spyOn(AgentSessionJournal.prototype, 'rejectQueuedSubmissions')
-    .mockImplementation(async function (this: AgentSessionJournal, ...args) {
-      const withdrawn = await withdraw.apply(this, args)
-      // Only the Stop's own withdrawal fails, after it landed; the delivery loop's pass through.
-      if (args[1].rejection.kind === 'cancelled') {
-        throw new Error('disk full')
-      }
-      return withdrawn
-    })
+  // Only the Stop's own withdrawal fails, after it landed; every other hold passes through.
+  stopWithdrawal.run = async (settle) => {
+    await settle()
+    throw new Error('disk full')
+  }
   const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
   try {
     const stopped = rig.stop()
@@ -129,12 +128,16 @@ it('a Stop whose withdrawal throws after landing still answers; the draft it rel
       expect.objectContaining({ step: 'withdrawal', error: new Error('disk full') })
     )
   } finally {
-    failing.mockRestore()
+    stopWithdrawal.run = undefined
     warned.mockRestore()
     release()
   }
   expect((await rig.submission(firstA))?.dispatchState).toBe('rejected')
   const before = new Set([working, firstA])
+  expect(await rig.drafts()).toEqual([{ messageId: a, state: 'waiting' }])
+  expect(await rig.queuePause()).toMatchObject({ reason: 'stopped' })
+  expect((await submissionIds()).filter((id) => !before.has(id))).toEqual([])
+  expect(await rig.resume()).toMatchObject({ ok: true })
   await eventually(async () => {
     expect((await submissionIds()).filter((id) => !before.has(id))).toHaveLength(1)
     expect(await rig.drafts()).toEqual([])

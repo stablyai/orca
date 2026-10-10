@@ -1,10 +1,10 @@
 // What becomes of a send the host accepted and can no longer hand over: an earlier host process
-// quit or crashed first (settled at the next open), or the chat is closing. Either way the agent
-// provably never got it. A person's message (typed, or a launch's first prompt) is kept as a card
-// at the head of the queue, an ordinary one: like every card the chat closed with, it waits for the
-// chat's next turn (`queued-message-pause.ts`). Everything else is rejected as before, because
-// something else re-derives it or the person re-runs it. The submission itself is always rejected,
-// so it is never handed over twice.
+// quit or crashed first (settled at the next open), the chat is closing, or a person's Stop took it
+// back. Either way the agent provably never got it. A person's message (typed, or a launch's first
+// prompt) is kept as a card at the head of the queue, an ordinary one: like every card, it waits
+// out the pause in force, the Stop's or the reopen's (`queued-message-pause.ts`). Everything else is
+// rejected as before, because something else re-derives it or the person re-runs it. The submission
+// itself is always rejected, so it is never handed over twice.
 
 import type {
   AgentJournalItemBody,
@@ -27,6 +27,8 @@ export type UnsentSendHold =
   | { cause: 'hostRestarted' }
   /** A close of the chat; `which` narrows it to what a close that did not complete closed. */
   | { cause: 'chatClosed'; which?: (submission: AgentJournalSubmission) => boolean }
+  /** A person's Stop: every send still queued. */
+  | { cause: 'cancelled' }
 
 /** The body an unsent send is kept with, or null when it is rejected instead:
  *  - a card's own hand-off: its rejection already returns the card (`rejectedDraftSettlement`);
@@ -98,7 +100,7 @@ export async function holdUnsentSends(
         : isQueuedAgentJournalSubmission(entry) &&
           (hold.cause === 'hostRestarted'
             ? journal.wroteBeforeOpen(entry.acceptedSequence)
-            : (hold.which?.(entry) ?? true))
+            : hold.cause === 'cancelled' || (hold.which?.(entry) ?? true))
     )
     .sort((a, b) => (a.acceptedSequence ?? 0) - (b.acceptedSequence ?? 0))
   if (unsent.length === 0) {
@@ -112,12 +114,13 @@ export async function holdUnsentSends(
       journal.itemBody(agentJournalSubmissionKey(submission.clientMessageId))
     )
   }))
-  const positions = headOfQueuePositions(journal, kept)
+  const positions = headOfQueuePositions(journal, kept, hold)
   const rejection = agentSessionFailureWords(agentSessionFailureFact(hold.cause), {
     surface: 'rejection'
   })
-  const failures: unknown[] = []
-  for (const [index, { submission, body }] of kept.entries()) {
+  // Issued together, so the fold shows none of them queued once this call returns: a Stop decides
+  // whether anything is working from it without awaiting the hold.
+  const settled = kept.map(async ({ submission, body }, index): Promise<unknown> => {
     const { clientMessageId } = submission
     const moves = [
       // The cards an earlier settlement kept move with the first row.
@@ -166,10 +169,10 @@ export async function holdUnsentSends(
         card ? { ...reject, keptAsQueuedMessageId: clientMessageId } : reject,
         keep
       )
+      return undefined
     } catch (error) {
       if (!keep) {
-        failures.push(error)
-        continue
+        return error
       }
       // Keeping it failed: rejected as before. That loses the message, as every build before this
       // one did; it is never left queued for a handover nothing will make.
@@ -179,9 +182,13 @@ export async function holdUnsentSends(
         cause: hold.cause,
         error: error instanceof Error ? error.message : String(error)
       })
-      await journal.resolveDispatch(reject).catch((fallback: unknown) => failures.push(fallback))
+      return journal.resolveDispatch(reject).then(
+        () => undefined,
+        (fallback: unknown) => fallback
+      )
     }
-  }
+  })
+  const failures = (await Promise.all(settled)).filter((failure) => failure !== undefined)
   if (failures.length > 0) {
     throw new AggregateError(failures, 'settling unsent sends failed')
   }
@@ -194,7 +201,8 @@ export async function holdUnsentSends(
  *  them: sequences restart with each epoch, and a returned hand-off's names its draft's time. */
 function headOfQueuePositions(
   journal: AgentSessionJournal,
-  batch: readonly { submission: AgentJournalSubmission; body: AgentJournalMessageItem | null }[]
+  batch: readonly { submission: AgentJournalSubmission; body: AgentJournalMessageItem | null }[],
+  hold: UnsentSendHold
 ): { placed: QueuedMessagePositionMove[]; earlier: QueuedMessagePositionMove[] } {
   const cards = journal.queuedMessages.list()
   const keptIds = new Set(
@@ -216,7 +224,9 @@ function headOfQueuePositions(
     if (body && !earlier.includes(clientMessageId)) {
       placed.push({ messageId: clientMessageId, position: 0 })
     } else if (
-      // Kept by its settlement (`rejectedDraftSettlement`): a Send the person asked for.
+      // Kept by its settlement (`rejectedDraftSettlement`): a Send the person asked for. A Stop
+      // returns it where it stood.
+      hold.cause !== 'cancelled' &&
       submission.origin === 'client' &&
       cards.some((card) => card.consumedAs === clientMessageId)
     ) {

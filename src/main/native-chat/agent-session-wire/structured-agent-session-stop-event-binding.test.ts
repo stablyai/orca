@@ -104,19 +104,22 @@ async function queuedDraft(text: string): Promise<string> {
   return queued.value.queued.messageId
 }
 
-/** A person's Stop of a start that never landed, whose send opens no turn. `held`: a card queued
- *  behind the start, which the Stop holds. */
-async function stopOfStart(options: { held?: true } = {}): Promise<string | undefined> {
+/** A person's Stop of a start that never landed, whose send opens no turn: it resolves that send,
+ *  which the Stop kept as a card at the head of the queue. `held`: a card queued behind the start,
+ *  which the Stop holds too. */
+async function stopOfStart(options: { held?: true } = {}): Promise<string> {
   rig = await createQueuedMessageTestRig({ starting: true, restartable: true })
   // Held for a child that never proves its start, so it is never handed over.
-  rig.send('work on this')
+  const work = rig.send('work on this')
   await eventually(() => expect(childPhase()).toBe('starting'))
-  const held = options.held ? await queuedDraft('queued behind the start') : undefined
+  if (options.held) {
+    await queuedDraft('queued behind the start')
+  }
   expect(await rig.stop()).toMatchObject({ ok: true })
   expect(stopEvents()).toEqual([expect.objectContaining({ reason: 'user-stop' })])
   expect(stopEvents()[0]).not.toHaveProperty('turnId')
   await eventually(() => expect(childPhase()).toBeUndefined())
-  return held
+  return work.id
 }
 
 /** Orchestration mail after the Stop starts a new child and its turn runs. */
@@ -200,7 +203,7 @@ describe('a Stop of a start that never landed binds no later turn', () => {
   })
 
   it("writes the host's event when it evicts the turn of a card the Stop held, which Resume sent", async () => {
-    const held = (await stopOfStart({ held: true }))!
+    const held = await stopOfStart({ held: true })
     expect(await rig.resume()).toMatchObject({ ok: true })
     await eventually(async () => expect(await rig.handoff(held)).toBeDefined())
     await turnOpenedBy(await rig.handoffId(held))

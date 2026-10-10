@@ -87,8 +87,6 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
   /** The exit, watched: what that child's own translator could only end `unverifiable` (its stream
    *  closed before the exit was proven) is revised in this batch. */
   exit?: StructuredAgentSessionWatchedExit
-  /** A person's Stop ended a starting child before what it was handed could run: each is rejected so. */
-  unrunRejection?: SubmissionRejectionFact
 }): Promise<StructuredAgentSessionDeadGenerationSettlement> {
   try {
     const hasUnfinishedWork = hasUnfinishedStructuredAgentSessionWork(input.journal, input.exit)
@@ -98,15 +96,11 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
     }
     // A queued message is the delivery loop's to settle: it was never handed to this child. A send
     // a child still starting was handed and never echoed did not run, and its root is gone: it is
-    // rejected, with the child's own diagnostic or as the Stop that ended it. A proven child's
-    // handed-over sends stay in doubt.
+    // rejected with the child's own diagnostic. A proven child's handed-over sends stay in doubt.
     const startupFailure = input.exitedDuringStartup
       ? structuredAgentSessionStartFailure({ exit: input.exitFailure }, input.failureTextContext)
       : null
-    const closed = input.unrunRejection
-    const unrun =
-      startupFailure ?? (closed && agentSessionFailureWords(closed, { surface: 'rejection' }))
-    const withdrawn = unrun ? [] : codexUnopenedSendResolutions(input.journal, input.fence)
+    const withdrawn = startupFailure ? [] : codexUnopenedSendResolutions(input.journal, input.fence)
     const withdrawnIds = new Set(withdrawn.map((entry) => entry.clientMessageId))
     const dispatches = [
       ...withdrawn,
@@ -115,7 +109,7 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
           (entry) => !withdrawnIds.has(entry.clientMessageId)
         ),
         input.fence,
-        unrun ? { rejection: unrun } : { reason: input.pendingSubmissionReason }
+        startupFailure ? { rejection: startupFailure } : { reason: input.pendingSubmissionReason }
       )
     ]
     const items = input.journal.snapshot().items

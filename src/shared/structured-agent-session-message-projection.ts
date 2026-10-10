@@ -109,11 +109,15 @@ export function projectStructuredAgentSessionMessages(
   projectItems = projectStructuredItemsToNativeChat
 ): NativeChatMessage[] {
   // A send a Stop took back before the agent started it stays where it was sent, as the
-  // conversation's own history. A queued card's hand-off is left out: the card holds its text.
+  // conversation's own history. A queued card's hand-off, and a send the Stop kept as a card, are
+  // left out: the card holds its text.
   const stoppedBeforeStart = new Map(
     submissions
       .filter(
-        (submission) => dispatchWasWithdrawn(submission) && submission.queuedMessageId === undefined
+        (submission) =>
+          dispatchWasWithdrawn(submission) &&
+          submission.queuedMessageId === undefined &&
+          submission.keptAsQueuedMessageId === undefined
       )
       .map((submission) => [agentJournalSubmissionKey(submission.clientMessageId), submission])
   )

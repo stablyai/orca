@@ -211,6 +211,28 @@ it.each(['user-close', 'evict'] as const)(
   }
 )
 
+// A person's Stop settles it as a close does: the words come back as a card the Stop holds.
+it("keeps a person's message held behind a start that never answered as a card when the Stop ends it", async () => {
+  const id = await sendHello(false)
+
+  expect(
+    await host.cancel(CALLER, { envelope: envelope('agentSession.cancel', {}) })
+  ).toMatchObject({ ok: true, value: { cancelled: true } })
+
+  await vi.waitFor(async () =>
+    expect(await submission(id)).toMatchObject({
+      dispatchState: 'rejected',
+      reason: DISPATCH_REJECTED_CANCELLED,
+      keptAsQueuedMessageId: id
+    })
+  )
+  expect(host['sessions'].get(SESSION)?.journal.queuedMessages.get(id)).toMatchObject({
+    state: 'waiting',
+    body: hostTestMessage('hello')
+  })
+  expect(await helloWritten()).toBe(false)
+})
+
 // Once it answered, the CLI may have taken the message without echoing it yet: a close leaves it in
 // doubt, as for any running child.
 it('leaves a message in doubt when the start answered and the chat closes before the echo', async () => {

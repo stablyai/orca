@@ -148,11 +148,13 @@ function comparable(merged: Drawn, fresh: Drawn): { merged: string[]; fresh: str
 }
 
 /** Every frame from each subscribe point in `starts`, `rowsPerFrame` rows at a time; with how many
- *  of those frames the merged state held only a window of the chat. */
+ *  of those frames the merged state held only a window of the chat. `kept`: the never-opened send
+ *  became a card, so from its rejection on neither list draws it nor its stop row. */
 function compareFrames(
   journal: StopJournal,
   starts: readonly number[],
-  rowsPerFrame: number
+  rowsPerFrame: number,
+  kept = false
 ): { differing: string[]; windowed: number } {
   const last = journal.rows.length
   const fresh = new Map<number, Drawn>()
@@ -165,15 +167,19 @@ function compareFrames(
     fresh.set(upTo, drawnThen)
     return drawnThen
   }
+  // Whether a list draws the never-opened send as the Stop left it: its stop row, or for a kept
+  // send, nothing of it at all.
+  const asStopped = (ids: readonly string[]): boolean =>
+    kept ? !ids.includes(STOP_ROW) && !ids.includes(`orca:${NEVER_OPENED}`) : ids.includes(STOP_ROW)
   const freshListing = new Map<number, boolean>()
   const freshListed = (upTo: number): boolean => {
     const cached = freshListing.get(upTo)
     if (cached !== undefined) {
       return cached
     }
-    const shown = listed(
-      apply(EMPTY_STRUCTURED_AGENT_SESSION, [journal.snapshotAt(upTo)])
-    ).includes(STOP_ROW)
+    const shown = asStopped(
+      listed(apply(EMPTY_STRUCTURED_AGENT_SESSION, [journal.snapshotAt(upTo)]))
+    )
     freshListing.set(upTo, shown)
     return shown
   }
@@ -191,7 +197,7 @@ function compareFrames(
       if (JSON.stringify(compared.merged) !== JSON.stringify(compared.fresh)) {
         differing.push(`subscribed at ${start}, frame through ${upTo}`)
       }
-      if (upTo >= journal.takenBack && !listed(merged).includes(STOP_ROW)) {
+      if (upTo >= journal.takenBack && !asStopped(listed(merged))) {
         differing.push(`subscribed at ${start}, no stop row in the list through ${upTo}`)
       }
       if (upTo >= journal.takenBack && !freshListed(upTo)) {
@@ -230,6 +236,29 @@ describe.each(['after-end', 'during-turn'] as const)(
     })
   }
 )
+
+// The same chat, but the never-opened send was still held by the host when the Stop came: the
+// card holds its words, so the phone draws no bubble and no stop row for it, from any frame, and the
+// desktop's transcript (which draws other refused sends in place) draws none either.
+describe('a short chat whose last send a Stop kept as a card: merged frames draw as a fresh snapshot does', () => {
+  const journal = stopJournal(8, 'after-end', 'kept')
+
+  it('draws nothing of the kept send on the phone or the desktop', () => {
+    const state = apply(EMPTY_STRUCTURED_AGENT_SESSION, [journal.snapshotAt(journal.rows.length)])
+    expect(drawn(state).rows.map((row) => row.id)).not.toContain(`orca:${NEVER_OPENED}`)
+    const desktop = projectStructuredAgentSessionMessages(state.items, [], state.submissions, {
+      rejectedInPlace: true
+    })
+    expect(desktop.map((message) => message.id)).not.toContain(`orca:${NEVER_OPENED}`)
+    expect(desktop.some((message) => message.stoppedBeforeStart)).toBe(false)
+  })
+
+  it.each([1, 2, 3])('from every subscribe point, %i row(s) per frame', (rowsPerFrame) => {
+    expect(
+      compareFrames(journal, range(2, journal.rows.length), rowsPerFrame, true).differing
+    ).toEqual([])
+  })
+})
 
 describe('a chat longer than the phone first loads', () => {
   const journal = stopJournal(70)

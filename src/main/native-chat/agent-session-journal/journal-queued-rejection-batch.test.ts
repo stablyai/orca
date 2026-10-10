@@ -14,6 +14,7 @@ import {
   type AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from './journal-store'
+import { holdUnsentSends } from './journal-unsent-send-hold'
 import {
   closeTestJournalHostDatabases,
   createTrackedJournalOpener
@@ -114,12 +115,8 @@ it('writes neither when the row cannot be written', async () => {
 // A Stop that reaches the lane first takes the message back; the failed start then failed no one.
 it('writes nothing when a Stop withdrew every queued message first', async () => {
   const journal = await openWithQueued('first')
-  const withdrawal = agentSessionFailureWords(agentSessionFailureFact('cancelled'), {
-    surface: 'rejection'
-  })
-
   await Promise.all([
-    journal.rejectQueuedSubmissions(0, withdrawal),
+    holdUnsentSends(journal, { fence: 0, hostInstance: 'proc-1', hold: { cause: 'cancelled' } }),
     journal.appendLifecycleBatch(startFailureBatch())
   ])
 

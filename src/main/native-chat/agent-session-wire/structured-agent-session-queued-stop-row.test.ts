@@ -134,6 +134,10 @@ describe("Stop's event", () => {
     await expectHeld('stopped', first)
     const person = rig.send('the person asks for a turn')
     await person.result
+    // Handed over, so the later Stop takes it back from the agent rather than keeping it as a card.
+    await eventually(async () =>
+      expect((await rig.submission(person.id))?.handedOverAt).toBeDefined()
+    )
     // A later Stop supersedes: the send made before it no longer lifts anything.
     await rig.stop()
     await rig.settleAccepted(person.id, 'person')

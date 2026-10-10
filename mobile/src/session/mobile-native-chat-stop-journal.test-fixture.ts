@@ -42,9 +42,14 @@ export type StopJournal = HostJournalFrames & {
  *  that holds sends while Stopping, as the QA journal shows), or while the turn still runs. */
 export type SendWhileStoppingWritten = 'after-end' | 'during-turn'
 
+/** The last send, never opened: handed over and taken back at the child's exit, or still held by
+ *  the host when the Stop came, which kept it as a card. */
+export type NeverOpenedSend = 'taken-back' | 'kept'
+
 export function stopJournal(
   historyTurns: number,
-  sendWhileStopping: SendWhileStoppingWritten = 'after-end'
+  sendWhileStopping: SendWhileStoppingWritten = 'after-end',
+  neverOpened: NeverOpenedSend = 'taken-back'
 ): StopJournal {
   const rows: JournalRow[] = []
   const stopping: StopJournalStopping[] = []
@@ -228,9 +233,13 @@ export function stopJournal(
   openTurn('sent-while-stopping', 't-sent-while-stopping')
   endTurn('sent-while-stopping', 't-sent-while-stopping', 'completed')
   // A send the provider never opened; a turn-less Stop ends the child, whose exit takes it back.
+  // One the host still held is kept as a card ahead of the Stop's event.
   const neverOpenedSent = submit(NEVER_OPENED)
-  handOver(NEVER_OPENED)
-  const stopNeverOpened = stopEvent()
+  const kept = neverOpened === 'kept'
+  if (!kept) {
+    handOver(NEVER_OPENED)
+  }
+  const stopNeverOpened = kept ? 0 : stopEvent()
   const takenBack = add({
     kind: 'dispatch',
     clientMessageId: NEVER_OPENED,
@@ -238,9 +247,14 @@ export function stopJournal(
     providerItemId: null,
     reason: DISPATCH_REJECTED_CANCELLED,
     rejection: { kind: 'cancelled' },
-    recovered: true
+    recovered: true,
+    ...(kept ? { keptAsQueuedMessageId: NEVER_OPENED } : {})
   })
-  stopping.push({ from: stopNeverOpened, until: takenBack - 1 })
+  if (kept) {
+    stopEvent()
+  } else {
+    stopping.push({ from: stopNeverOpened, until: takenBack - 1 })
+  }
   // The next send starts a new child under a new fence.
   fence = 2
   submit('recovery')

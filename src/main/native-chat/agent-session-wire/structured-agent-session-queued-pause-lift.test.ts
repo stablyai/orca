@@ -22,6 +22,12 @@ import {
 import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
 import { sameQueuePause } from './structured-agent-session-queued-publication'
 import { structuredQueuePauses } from './structured-agent-session-queued-pause'
+import { stopWithdrawal } from './structured-agent-session-stop-withdrawal.test-fixture'
+
+vi.mock(
+  '../agent-session-journal/journal-unsent-send-hold',
+  () => import('./structured-agent-session-stop-withdrawal.test-fixture')
+)
 
 let rig: QueuedMessageTestRig
 
@@ -467,9 +473,7 @@ describe('a failed Stop', () => {
   it('still takes effect when its withdrawal fails, and pauses the queue', async () => {
     await rig.workingSend()
     const draftId = await queuedDraft('queued before the stop')
-    const reject = vi
-      .spyOn(AgentSessionJournal.prototype, 'rejectQueuedSubmissions')
-      .mockRejectedValueOnce(new Error('disk full'))
+    stopWithdrawal.run = () => Promise.reject(new Error('disk full'))
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     try {
       expect(await rig.stop()).toMatchObject({ ok: true })
@@ -478,7 +482,7 @@ describe('a failed Stop', () => {
         expect.objectContaining({ step: 'withdrawal', error: new Error('disk full') })
       )
     } finally {
-      reject.mockRestore()
+      stopWithdrawal.run = undefined
       warned.mockRestore()
     }
     await expectPaused(draftId)

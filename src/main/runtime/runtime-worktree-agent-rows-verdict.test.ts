@@ -138,13 +138,16 @@ describe('a request that failed reads as failed through the feed, the ingest and
       fence: 1,
       handoverRecorded: true
     })
-    await journal.rejectQueuedSubmissions(
-      1,
-      agentSessionFailureWords(agentSessionFailureFact('notSignedIn'), {
+    await journal.resolveDispatch({
+      clientMessageId: 'first',
+      state: 'rejected',
+      ...agentSessionFailureWords(agentSessionFailureFact('notSignedIn'), {
         surface: 'rejection',
         agentName: 'Claude'
-      })
-    )
+      }),
+      fence: 1,
+      recovered: true
+    })
 
     const summary = publishedSummary(journal)
     expect(summary).toMatchObject({ status: 'idle', turnOutcome: 'failure', latestPrompt: 'hello' })
@@ -229,10 +232,13 @@ describe('a request that failed reads as failed through the feed, the ingest and
       fence: 1,
       handoverRecorded: true
     })
-    await journal.rejectQueuedSubmissions(
-      1,
-      agentSessionFailureWords(agentSessionFailureFact('cancelled'), { surface: 'rejection' })
-    )
+    await journal.resolveDispatch({
+      clientMessageId: 'first',
+      state: 'rejected',
+      ...agentSessionFailureWords(agentSessionFailureFact('cancelled'), { surface: 'rejection' }),
+      fence: 1,
+      recovered: true
+    })
 
     expect(publishedSummary(journal)).toMatchObject({ status: null })
     expect(ingest(publishedSummary(journal)).ps).toBeUndefined()

@@ -52,3 +52,18 @@ export function stopCreatedChat(
   }
   return host.cancel(CREATE_TEST_CALLER, { envelope })
 }
+
+export function resumeCreatedChat(host: StructuredAgentSessionHost, sessionId = HOST_TEST_SESSION) {
+  return host.queuedMessagesResume(CREATE_TEST_CALLER, {
+    envelope: {
+      sessionId,
+      clientOperationId: hostTestOperationId(),
+      expectedRuntimeFence: null,
+      payloadFingerprint: computeAgentSessionPayloadFingerprint({
+        method: 'agentSession.queuedMessagesResume',
+        sessionId,
+        fields: {}
+      })
+    }
+  })
+}

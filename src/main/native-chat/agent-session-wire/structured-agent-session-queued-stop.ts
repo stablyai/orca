@@ -104,17 +104,18 @@ export function sentSinceStop(
 }
 
 /** The Stop's withdrawal of every queued send, issued at once and never awaited ahead of the
- *  interrupt. Bookkeeping: one that fails is reported and withdrew nothing. */
+ *  interrupt; `withdraw` resolves whether it settled any. Bookkeeping: one that fails is reported
+ *  and withdrew nothing. */
 export function withdrawQueuedForStop(
   ctx: AgentSessionTurnContext,
-  withdraw: () => Promise<readonly string[]>
+  withdraw: () => Promise<boolean>
 ): Promise<boolean> {
   const failed = (error: unknown): boolean => {
     report(ctx, 'withdrawal', error)
     return false
   }
   try {
-    return withdraw().then((withdrawn) => withdrawn.length > 0, failed)
+    return withdraw().catch(failed)
   } catch (error) {
     return Promise.resolve(failed(error))
   }

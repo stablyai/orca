@@ -5,8 +5,6 @@
 // reachable only through `mutateWithChatStop`, which queues that step in the same synchronous call
 // as the mutation.
 
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import type {
   AgentSessionCancelResult,
@@ -18,6 +16,8 @@ import {
   type StructuredAgentSessionMutationContext
 } from './structured-agent-session-mutation-context'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
+import { holdUnsentSends } from '../agent-session-journal/journal-unsent-send-hold'
+import { structuredAgentSessionHostInstance } from './structured-agent-session-queued-pause'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
 import {
   runRecordedStop,
@@ -77,13 +77,15 @@ export function mutateWithChatStop<TValue>(
       async (tookEffect) => {
         // Read before the withdrawal it decides on is issued.
         const hadQueued = ctx.journal.submissions().some(isQueuedAgentJournalSubmission)
-        // Stop withdraws every queued SUBMISSION first, whatever the start or the child is doing.
-        // Issued, not awaited: the interrupt never waits on bookkeeping.
+        // Stop withdraws every queued SUBMISSION first, whatever the start or the child is doing,
+        // keeping a person's words as a card, as a close does. Issued, not awaited: the interrupt
+        // never waits on bookkeeping.
         const withdrew = withdrawQueuedForStop(ctx, () =>
-          ctx.journal.rejectQueuedSubmissions(
-            ctx.fence,
-            agentSessionFailureWords(agentSessionFailureFact('cancelled'), { surface: 'rejection' })
-          )
+          holdUnsentSends(ctx.journal, {
+            fence: ctx.fence,
+            hostInstance: structuredAgentSessionHostInstance(),
+            hold: { cause: 'cancelled' }
+          }).then((newest) => newest !== null)
         )
         const child = context.sessions.get(ctx.sessionId)?.child
         if (child?.close) {
@@ -103,7 +105,7 @@ export function mutateWithChatStop<TValue>(
         }
         if (child?.phase === 'starting') {
           // A start that may never land takes no interrupt, so Stop ends it; the chat stays. Its end
-          // settles what the child was handed as stopped (`unrunRejection`). The event is
+          // settles what the child was handed as a Stop's (`unrunHold`). The event is
           // issued first and lands behind the withdrawal, in the journal's queue order.
           const effect = tookEffect()
           try {
@@ -119,11 +121,11 @@ export function mutateWithChatStop<TValue>(
         const inFlight = turnId !== undefined || isMainAgentWorking(ctx)
         const record = context.deps.store.getRecord(ctx.sessionId)
         if (!child || !inFlight) {
-          // Nothing to interrupt, so the answer may wait for the withdrawal.
+          // Nothing to interrupt, so the answer may wait for the withdrawal. The event is issued in
+          // the hold's tick, so no frame publishes a kept card without its pause.
+          const effect = hadQueued ? tookEffect() : Promise.resolve()
           const withdrewAny = await withdrew
-          if (withdrewAny) {
-            await tookEffect()
-          }
+          await effect
           return { ok: true, value: { ...named, cancelled: withdrewAny } }
         }
         const reach = hadQueued ? 'unrecorded' : stopReachesUnrecordedWork(ctx, turnId)
