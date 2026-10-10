@@ -230,6 +230,9 @@ vi.mock('../computer-use-permissions', () => ({
 vi.mock('../settings', () => ({
   registerSettingsHandlers: registerSettingsHandlersMock
 }))
+vi.mock('../../omarchy-theme-watcher', () => ({
+  registerOmarchyThemeHandlers: vi.fn()
+}))
 
 vi.mock('../skills', () => ({
   registerSkillsHandlers: registerSkillsHandlersMock

@@ -1,7 +1,7 @@
 import type { TerminalColorOverrides } from './terminal-color-overrides'
 import { HEX_COLOR_RE } from './color-validation'
 
-export type TerminalCustomThemeSource = 'warp' | 'ghostty' | 'manual'
+export type TerminalCustomThemeSource = 'warp' | 'ghostty' | 'manual' | 'omarchy'
 export type TerminalCustomThemeMode = 'dark' | 'light' | 'unknown'
 
 export type TerminalCustomTheme = {
@@ -170,7 +170,9 @@ export function hasUsableTerminalThemeColors(terminal: TerminalColorOverrides): 
 }
 
 function normalizeSource(value: unknown): TerminalCustomThemeSource {
-  return value === 'warp' || value === 'ghostty' || value === 'manual' ? value : 'manual'
+  return value === 'warp' || value === 'ghostty' || value === 'manual' || value === 'omarchy'
+    ? value
+    : 'manual'
 }
 
 function normalizeMode(value: unknown): TerminalCustomThemeMode {

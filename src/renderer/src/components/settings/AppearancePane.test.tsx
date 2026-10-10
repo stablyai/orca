@@ -10,6 +10,12 @@ import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platfo
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { StatusBarItem } from '../../../../shared/ui-chrome-types'
+import {
+  deriveOmarchyPalette,
+  OMARCHY_SEED_COLOR_KEYS,
+  type OmarchyThemePalette,
+  type OmarchyThemeSeed
+} from '../../../../shared/omarchy-theme-palette'
 
 const mocks = vi.hoisted(() => ({
   state: {
@@ -29,8 +35,13 @@ const mocks = vi.hoisted(() => ({
     recordFeatureInteraction: vi.fn(),
     setWorktreeCardMode: vi.fn(),
     appearanceAccordionDeepLink: null as 'interface' | 'terminal' | 'window' | null,
-    clearAppearanceAccordionDeepLink: vi.fn()
+    clearAppearanceAccordionDeepLink: vi.fn(),
+    omarchyPalette: ((): OmarchyThemePalette | null => null)()
   }
+}))
+
+vi.mock('@/hooks/use-available-omarchy-theme', () => ({
+  useAvailableOmarchyTheme: () => mocks.state.omarchyPalette
 }))
 
 vi.mock('../../store', () => ({
@@ -207,6 +218,21 @@ function appearanceSectionToggle(
   )
 }
 
+function themeRadio(container: HTMLElement, label: string): HTMLButtonElement | undefined {
+  return Array.from(
+    container.querySelectorAll<HTMLButtonElement>('[role="radiogroup"][aria-label="Theme"] button')
+  ).find((button) => button.textContent === label)
+}
+
+function lightOmarchySeed(): OmarchyThemeSeed {
+  const seed: Record<string, string> = { mode: 'light' }
+  for (const key of OMARCHY_SEED_COLOR_KEYS) {
+    seed[key] = '#808080'
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every seed key is assigned above.
+  return seed as OmarchyThemeSeed
+}
+
 describe('AppearancePane', () => {
   afterEach(async () => {
     await act(async () => {
@@ -225,6 +251,7 @@ describe('AppearancePane', () => {
     mocks.state.settingsSearchQuery = 'automations'
     mocks.state.appearanceAccordionDeepLink = null
     mocks.state.usagePercentageDisplay = 'used'
+    mocks.state.omarchyPalette = null
     // UIZoomControl reads window.api.ui on mount; the inline-expansion pane can
     // render the full Interface section, so provide a minimal renderer bridge
     // without clobbering happy-dom's window.location.
@@ -242,6 +269,32 @@ describe('AppearancePane', () => {
 
   afterEach(() => {
     delete (window as unknown as { api?: unknown }).api
+  })
+
+  it('hides the Omarchy theme option when no Omarchy palette is rendered', async () => {
+    mocks.state.settingsSearchQuery = ''
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'))
+    expect(themeRadio(container, 'Dark')).toBeDefined()
+    expect(themeRadio(container, 'Omarchy')).toBeUndefined()
+  })
+
+  it('selects Omarchy with the palette mode and leaves it for a stock theme', async () => {
+    mocks.state.settingsSearchQuery = ''
+    mocks.state.omarchyPalette = deriveOmarchyPalette(lightOmarchySeed())
+    const updateSettings = vi.fn()
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'), updateSettings)
+
+    await act(async () => {
+      themeRadio(container, 'Omarchy')?.click()
+    })
+    expect(updateSettings).toHaveBeenLastCalledWith({ omarchyTheme: true, theme: 'light' })
+
+    await rerenderAppearancePane({
+      ...getDefaultSettings('/tmp'),
+      omarchyTheme: true,
+      theme: 'light'
+    })
+    expect(themeRadio(container, 'Omarchy')?.getAttribute('aria-checked')).toBe('true')
   })
 
   it('keeps chat appearance controls out of the Appearance pane', async () => {

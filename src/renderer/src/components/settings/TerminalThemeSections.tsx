@@ -20,6 +20,12 @@ import {
 } from '@/lib/terminal-theme'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import {
+  deriveOmarchyTerminalColors,
+  OMARCHY_TERMINAL_THEME_SELECTION,
+  upsertOmarchyTerminalTheme,
+  type OmarchyThemePalette
+} from '../../../../shared/omarchy-theme-palette'
 
 type TerminalThemeTarget = 'dark' | 'light'
 
@@ -74,6 +80,7 @@ type TerminalThemeCatalogSectionProps = {
   showThemeImport: boolean
   preferredTarget?: TerminalThemeTarget
   advancedContent?: ReactNode
+  omarchyPalette?: OmarchyThemePalette | null
 }
 
 export function TerminalThemeCatalogSection({
@@ -87,7 +94,8 @@ export function TerminalThemeCatalogSection({
   warpThemes,
   showThemeImport,
   preferredTarget,
-  advancedContent
+  advancedContent,
+  omarchyPalette = null
 }: TerminalThemeCatalogSectionProps): React.JSX.Element {
   const [target, setTargetState] = useState<TerminalThemeTarget>(() =>
     getInitialTerminalThemeTarget(settings, systemPrefersDark, preferredTarget)
@@ -97,6 +105,17 @@ export function TerminalThemeCatalogSection({
     setTargetState(nextTarget)
   }
   const themeOptions = getAvailableTerminalThemeOptions(settings)
+  // Offer Omarchy before its first selection has stored the live custom-theme entry.
+  if (omarchyPalette && !themeOptions.some((o) => o.value === OMARCHY_TERMINAL_THEME_SELECTION)) {
+    themeOptions.push({
+      value: OMARCHY_TERMINAL_THEME_SELECTION,
+      label: translate('settings.appearance.theme.omarchy', 'Omarchy'),
+      group: 'imported',
+      sourceLabel: 'Omarchy',
+      mode: omarchyPalette.seed.mode,
+      previewTheme: deriveOmarchyTerminalColors(omarchyPalette.seed)
+    })
+  }
   const isLightTarget = target === 'light'
   const matchDarkMode = !settings.terminalUseSeparateLightTheme
   const lightModeMatchesDark = isLightTarget && matchDarkMode
@@ -255,17 +274,21 @@ export function TerminalThemeCatalogSection({
                     // A selected theme must replace overrides or they mask the picker.
                     const hasColorOverrides =
                       Object.keys(settings.terminalColorOverrides ?? {}).length > 0
-                    updateSettings(
-                      isLightTarget
-                        ? {
-                            terminalThemeLight: theme,
-                            ...(hasColorOverrides ? { terminalColorOverrides: undefined } : {})
-                          }
-                        : {
-                            terminalThemeDark: theme,
-                            ...(hasColorOverrides ? { terminalColorOverrides: undefined } : {})
-                          }
-                    )
+                    // Main keeps this entry current after the first write.
+                    const omarchyThemes =
+                      theme === OMARCHY_TERMINAL_THEME_SELECTION && omarchyPalette
+                        ? upsertOmarchyTerminalTheme(
+                            settings.terminalCustomThemes,
+                            omarchyPalette.seed
+                          )
+                        : null
+                    updateSettings({
+                      ...(isLightTarget
+                        ? { terminalThemeLight: theme }
+                        : { terminalThemeDark: theme }),
+                      ...(hasColorOverrides ? { terminalColorOverrides: undefined } : {}),
+                      ...(omarchyThemes ? { terminalCustomThemes: omarchyThemes } : {})
+                    })
                   }}
                   importedHighlightSignal={importedHighlightSignal}
                 />

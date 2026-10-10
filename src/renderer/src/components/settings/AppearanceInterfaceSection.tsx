@@ -33,6 +33,7 @@ import { translate } from '@/i18n/i18n'
 import type { UiLanguage } from '../../../../shared/ui-language'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
 import { usePluginLanguagePacks } from '@/store/plugin-language-packs'
+import { useAvailableOmarchyTheme } from '@/hooks/use-available-omarchy-theme'
 
 type AppearanceInterfaceSectionProps = {
   settings: GlobalSettings
@@ -75,6 +76,8 @@ export function AppearanceInterfaceSection({
   ]
   const showAdvanced = !isSearching || matchesSettingsSearch(searchQuery, advancedEntries)
   const languageTitle = translate('settings.appearance.language.title', 'Language')
+  const omarchyPalette = useAvailableOmarchyTheme()
+  const showOmarchyOption = omarchyPalette !== null || settings.omarchyTheme === true
 
   return (
     <div className="divide-y divide-border/40">
@@ -89,9 +92,17 @@ export function AppearanceInterfaceSection({
           control={
             <SettingsSegmentedControl
               ariaLabel={themeLabel}
-              value={settings.theme}
+              value={settings.omarchyTheme === true ? 'omarchy' : settings.theme}
               onChange={(option) => {
-                updateSettings({ theme: option })
+                if (option === 'omarchy') {
+                  // `theme` mirrors the palette's mode so dark/light consumers keep working.
+                  const mode =
+                    omarchyPalette?.seed.mode ?? (settings.theme === 'light' ? 'light' : 'dark')
+                  updateSettings({ omarchyTheme: true, theme: mode })
+                  applyTheme(mode)
+                  return
+                }
+                updateSettings({ theme: option, omarchyTheme: false })
                 applyTheme(option)
               }}
               options={[
@@ -106,7 +117,15 @@ export function AppearanceInterfaceSection({
                 {
                   value: 'light',
                   label: translate('auto.components.settings.AppearancePane.fd89b5487c', 'Light')
-                }
+                },
+                ...(showOmarchyOption
+                  ? [
+                      {
+                        value: 'omarchy' as const,
+                        label: translate('settings.appearance.theme.omarchy', 'Omarchy')
+                      }
+                    ]
+                  : [])
               ]}
             />
           }

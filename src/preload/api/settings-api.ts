@@ -4,6 +4,7 @@ import type {
   WarpThemeImportSource
 } from '../../shared/terminal-custom-themes'
 import type { GhosttyImportPreview, GlobalSettings } from '../../shared/global-settings-types'
+import type { OmarchyThemePalette } from '../../shared/omarchy-theme-palette'
 
 export type SettingsApi = {
   get: () => Promise<GlobalSettings>
@@ -19,6 +20,9 @@ export type SettingsApi = {
   previewWarpThemeImport: (source: WarpThemeImportSource) => Promise<WarpThemeImportPreview>
   /** Subscribe to out-of-band settings updates (e.g. View > Appearance toggles) to stay in sync with main. */
   onChanged: (callback: (updates: Partial<GlobalSettings>) => void) => () => void
+  /** Local machine's rendered Omarchy palette; null off Linux or when absent/invalid. */
+  readOmarchyTheme: () => Promise<OmarchyThemePalette | null>
+  onOmarchyThemeChanged: (callback: (palette: OmarchyThemePalette) => void) => () => void
 }
 
 export type KeybindingsApi = {

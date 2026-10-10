@@ -99,7 +99,10 @@ export function createWebSettingsApi(): Partial<PreloadApi> {
       },
       updatePRBotAuthorOverride: (args) => updateRuntimePRBotAuthorOverride(args),
       listFonts: () => Promise.resolve([]),
-      onChanged: () => noopUnsubscribe
+      onChanged: () => noopUnsubscribe,
+      // Omarchy state is local-machine only; a web client never offers it.
+      readOmarchyTheme: () => Promise.resolve(null),
+      onOmarchyThemeChanged: () => noopUnsubscribe
     } satisfies Partial<WebSettingsApi> as unknown as WebSettingsApi,
     agentAwake: {
       getStatus: async () => {

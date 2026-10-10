@@ -17,6 +17,13 @@ import {
 export const BUILTIN_TERMINAL_THEME_NAMES = getThemeNames()
 
 export { DEFAULT_TERMINAL_THEME_DARK, DEFAULT_TERMINAL_THEME_LIGHT }
+const TERMINAL_THEME_SOURCE_LABELS: Record<TerminalCustomTheme['source'], string> = {
+  warp: 'Warp',
+  ghostty: 'Ghostty',
+  manual: 'Manual',
+  omarchy: 'Omarchy'
+}
+
 export const DEFAULT_TERMINAL_DIVIDER_DARK = '#3f3f46'
 const DEFAULT_TERMINAL_DIVIDER_LIGHT = '#d4d4d8'
 
@@ -84,8 +91,7 @@ export function getAvailableTerminalThemeOptions(
       value: makeCustomTerminalThemeSelection(theme.id),
       label: theme.name,
       group: 'imported' as const,
-      sourceLabel:
-        theme.source === 'warp' ? 'Warp' : theme.source === 'ghostty' ? 'Ghostty' : 'Manual',
+      sourceLabel: TERMINAL_THEME_SOURCE_LABELS[theme.source],
       mode: theme.mode,
       previewTheme: terminalCustomThemeToXtermTheme(theme)
     })
