@@ -5,6 +5,7 @@ import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { pruneHostedReviewLinkMutationGenerations } from '../metadata/hosted-review-link-mutation'
 import { collectWorktreePurgeDoomedIds } from './worktree-purge-doomed-ids'
 import { createWorktreePurgeOmitters } from './worktree-purge-omitters'
+import { omitSleepingAgentSessionsForWorktrees } from './sleeping-agent-session-omission'
 import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
 import { removeWorktreeVisitEntriesForTargets } from '@/lib/worktree-visit-recency'
 import { forgetAmbiguousOwnerWarnings } from '../listing/worktree-owner-settings'
@@ -134,6 +135,15 @@ export function buildWorktreePurgeState(
     return next
   })()
   const nextAgentStatusByPaneKey = omitByPaneKeyTabPrefix(s.agentStatusByPaneKey)
+  const tabPrefixedSleeping = {
+    sleepingAgentSessionsByPaneKey: omitByPaneKeyTabPrefix(s.sleepingAgentSessionsByPaneKey),
+    agentLaunchConfigByPaneKey: omitByPaneKeyTabPrefix(s.agentLaunchConfigByPaneKey)
+  }
+  // Why both: tab-prefix omission misses a sleeping record whose tab is already gone.
+  const nextSleeping = {
+    ...tabPrefixedSleeping,
+    ...omitSleepingAgentSessionsForWorktrees(tabPrefixedSleeping, worktreeIdSet)
+  }
 
   return {
     // Worktree-scoped terminal/tab state
@@ -178,12 +188,12 @@ export function buildWorktreePurgeState(
     ...(nextAgentStatusByPaneKey !== s.agentStatusByPaneKey
       ? { agentStatusEpoch: s.agentStatusEpoch + 1 }
       : {}),
-    agentLaunchConfigByPaneKey: omitByPaneKeyTabPrefix(s.agentLaunchConfigByPaneKey),
+    agentLaunchConfigByPaneKey: nextSleeping.agentLaunchConfigByPaneKey,
     acknowledgedAgentsByPaneKey: omitByPaneKeyTabPrefix(s.acknowledgedAgentsByPaneKey),
     activityClearedAtByPaneKey: omitByPaneKeyTabPrefix(s.activityClearedAtByPaneKey),
     manuallyUnreadTurnsByPaneKey: omitByPaneKeyTabPrefix(s.manuallyUnreadTurnsByPaneKey),
     paneForegroundAgentByPaneKey: omitByPaneKeyTabPrefix(s.paneForegroundAgentByPaneKey),
-    sleepingAgentSessionsByPaneKey: omitByPaneKeyTabPrefix(s.sleepingAgentSessionsByPaneKey),
+    sleepingAgentSessionsByPaneKey: nextSleeping.sleepingAgentSessionsByPaneKey,
     unreadTerminalTabs: omitByTabId(s.unreadTerminalTabs),
     unreadTerminalPanes: omitByPaneKeyTabPrefix(s.unreadTerminalPanes),
     unreadAgentCompletionPanes: omitByPaneKeyTabPrefix(s.unreadAgentCompletionPanes),
