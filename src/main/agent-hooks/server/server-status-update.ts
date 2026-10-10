@@ -181,8 +181,19 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       this.commitStatusRowMutation(rowBefore, previous)
       return previous
     }
-    const identityResolvedPayload =
-      identity.agentType === rootContextPreservingPayload.payload.agentType
+    const { model: _nestedModel, ...modelFencedPayload } = rootContextPreservingPayload.payload
+    const parentModel = previous?.payload.model
+    const identityResolvedPayload = identity.inheritedFromActivePane
+      ? {
+          ...rootContextPreservingPayload,
+          // Why: a nested child CLI's model would relabel the fenced parent row and outlive the child.
+          payload: {
+            ...modelFencedPayload,
+            agentType: identity.agentType,
+            ...(parentModel ? { model: parentModel } : {})
+          }
+        }
+      : identity.agentType === rootContextPreservingPayload.payload.agentType
         ? rootContextPreservingPayload
         : {
             ...rootContextPreservingPayload,
