@@ -4,6 +4,7 @@ import {
   ReserveAssignment,
   ReservePaceError,
   RESERVE_ROW_FLOOR_TTL_MS,
+  RESERVE_WRONG_CELL_ROW_READ_MS,
   RESERVE_STARTUP_GATE_MS
 } from './reserve-assignment.js'
 import { ReservePlacer, type ReserveAttempt } from './reserve-placement.js'
@@ -284,6 +285,16 @@ describe('reserve assignment on a director', () => {
       kind: 'answer',
       assignment: { assignmentEpoch: 8 }
     })
+    // A stalled database: the read gives up after its bound and places as before.
+    vi.useFakeTimers()
+    try {
+      const stalled = leftWrongCell(() => new Promise(() => undefined))
+      const plan = stalled.assignment.plan(HOST, { reconnect: true, region: US })
+      await vi.advanceTimersByTimeAsync(RESERVE_WRONG_CELL_ROW_READ_MS)
+      expect(await plan).toMatchObject({ kind: 'answer', assignment: { assignmentEpoch: 8 } })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('paces with Retry-After when every reserve cell is out of budget and no database cell exists', async () => {

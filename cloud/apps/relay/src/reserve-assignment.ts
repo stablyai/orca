@@ -54,6 +54,23 @@ export type ReservePlan =
 export const RESERVE_ROW_FLOOR_TTL_MS = 2 * 60 * 60_000
 const RESERVE_ROW_FLOOR_MAX = 100_000
 
+// The WRONG_CELL row read's bound: well under a database stall (5-7 s).
+export const RESERVE_WRONG_CELL_ROW_READ_MS = 1_000
+
+// Rejects after `ms`; the read itself still settles later, and its failure is swallowed.
+async function withinMs<T>(read: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error('row_read_timeout')), ms)
+  })
+  read.catch(() => undefined)
+  try {
+    return await Promise.race([read, timeout])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 export class ReserveAssignment {
   private summary: PlacementSummary = emptySummary()
   private summaryAt: number
@@ -145,7 +162,12 @@ export class ReserveAssignment {
     const leftWrongCell = left?.closeCode === RELAY_CLOSE_CODE.WRONG_CELL
     if (known.length === 0 || leftWrongCell) {
       try {
-        row = await this.input.readRow(identity)
+        // Only the never-seen host needs the row; for the WRONG_CELL one it is an optimisation,
+        // bounded so a database stall cannot hold the reconnect (the reconcile repairs a miss).
+        row =
+          known.length === 0
+            ? await this.input.readRow(identity)
+            : await withinMs(this.input.readRow(identity), RESERVE_WRONG_CELL_ROW_READ_MS)
       } catch {
         // A host the map never saw, with the database down: its epoch cannot be minted safely.
         // One the map knows places as it did before this read existed.
