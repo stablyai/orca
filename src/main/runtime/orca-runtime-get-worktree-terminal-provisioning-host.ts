@@ -11,7 +11,106 @@ import {
   type RuntimeNavigationTarget
 } from '../../shared/runtime-navigation'
 
+import type { TuiAgent } from '../../shared/tui-agent'
+import type { RuntimeTerminalWait } from '../../shared/runtime-terminal-contracts'
+import { waitForWorktreeStartupDraft } from './runtime-worktree-startup-readiness'
+import { readFreshComposerHold } from './launched-agent-composer-readiness'
+import { buildTerminalWaitText } from './terminal-wait-tail-state'
+import {
+  readLaunchedAgentForeground,
+  type LaunchedAgentForeground
+} from './launched-agent-foreground'
+
 export class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRuntimeWithActivateManagedWorktree {
+  /**
+   * Only for a newly launched agent, before its first input. Settles when the agent's composer
+   * signal fires on a screen with no startup dialog and no Codex provisional header; with
+   * `stopOnDialog`, a dialog ends the wait so the caller's idle wait can report it.
+   */
+  async waitForFreshWorkerComposer(
+    handle: string,
+    agent: TuiAgent,
+    timeoutMs: number,
+    {
+      requireComposerMarker = true,
+      stopOnDialog = false,
+      signal
+    }: { requireComposerMarker?: boolean; stopOnDialog?: boolean; signal?: AbortSignal } = {}
+  ): Promise<RuntimeTerminalWait> {
+    const initialPtyId =
+      this.getLivePtyForHandle(handle)?.pty.ptyId ?? this.getLiveLeafForHandle(handle).leaf.ptyId
+    const stop = new AbortController()
+    const onAbort = (): void => stop.abort()
+    signal?.addEventListener('abort', onAbort, { once: true })
+    const ptyId = await waitForWorktreeStartupDraft(
+      { ...this.getWorktreeStartupReadinessHost(), getPtyId: () => initialPtyId },
+      handle,
+      agent,
+      {
+        timeoutMs,
+        requireComposerMarker,
+        // Every caller pastes and then presses Enter: a worker brief or a launch prompt.
+        submit: true,
+        signal: stop.signal,
+        isShellInFront: async (ownerPtyId) =>
+          (await this.readLaunchedAgentForeground(ownerPtyId, agent)) === 'shell',
+        accept: (readyPtyId) => {
+          const pty = this.ptysById.get(readyPtyId)
+          const hold = pty
+            ? readFreshComposerHold(
+                buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview),
+                this.readLiveTerminalScreenLines(readyPtyId)
+              )
+            : null
+          if (hold === 'dialog' && stopOnDialog) {
+            stop.abort()
+          }
+          return hold === null
+        }
+      }
+    )
+    signal?.removeEventListener('abort', onAbort)
+    if (!ptyId) {
+      throw new Error(
+        signal?.aborted
+          ? 'request_aborted'
+          : stop.signal.aborted
+            ? 'agent_startup_dialog'
+            : 'timeout'
+      )
+    }
+    this.assertLiveTerminalHandleTargetsPty(handle, ptyId)
+    if (!this.ptysById.get(ptyId)?.connected) {
+      throw new Error('terminal_handle_stale')
+    }
+    return this.buildTuiIdleProbeResult(handle, null)
+  }
+
+  /** What holds the terminal a launch started its agent in, read fresh from the execution host. */
+  readLaunchedAgentForeground(ptyId: string, agent: TuiAgent): Promise<LaunchedAgentForeground> {
+    return readLaunchedAgentForeground(
+      this.ptyController,
+      this.launchedAgentHost(ptyId),
+      ptyId,
+      agent
+    )
+  }
+
+  /** Whether the pane's execution host can find a launched agent in front: a Windows one cannot. */
+  launchedAgentHostProvesAgent(ptyId: string): boolean {
+    return !this.launchedAgentHost(ptyId).windows
+  }
+
+  private launchedAgentHost(ptyId: string): { remote: boolean; windows: boolean } {
+    const pty = this.ptysById.get(ptyId)
+    const remote = !!pty?.connectionId
+    // A local WSL pane still runs on a Windows host, whose process reads cannot see into it.
+    return {
+      remote,
+      windows: remote ? this.pathFlavorForPty(pty) === 'win32' : process.platform === 'win32'
+    }
+  }
+
   protected shouldProvisionWorktreeInBackground(navigation?: RuntimeNavigationTarget): boolean {
     return (
       navigationTargetsHost(navigation ?? 'host') &&
