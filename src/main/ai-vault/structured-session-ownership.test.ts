@@ -264,6 +264,41 @@ describe('Session History ownership read from the agent registration', () => {
     }
   )
 
+  // A later `claude` path inside the command is an argument, so `--session-id` still cancels the fork.
+  it.each([
+    `claude --session-id ${PROVIDER_SESSION} --add-dir ~/src/claude --fork-session --resume ${PROVIDER_SESSION}`,
+    `claude --fork-session --resume=${PROVIDER_SESSION} --add-dir ~/x/claude --session-id ${PROVIDER_SESSION}`,
+    `claude --resume ${PROVIDER_SESSION} && claude --fork-session -p hi`
+  ])('refuses a writer whose own command names claude again: %s', async (command) => {
+    installOwnership({ provider: 'claude' })
+
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(command, async () => undefined)
+    ).rejects.toThrow('agent_session_conflict')
+  })
+
+  it.each(['\\', '`', '^'])('reads a command continued with %s as one', async (mark) => {
+    installOwnership({ provider: 'claude' })
+
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(
+        `claude ${mark}\n  --resume ${PROVIDER_SESSION}`,
+        async () => undefined
+      )
+    ).rejects.toThrow('agent_session_conflict')
+  })
+
+  it('allows a fork whose own command names claude again', async () => {
+    installOwnership({ provider: 'claude' })
+
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(
+        `claude --resume ${PROVIDER_SESSION} --add-dir ~/src/claude --fork-session`,
+        async () => undefined
+      )
+    ).resolves.toBeUndefined()
+  })
+
   it.each([
     `claude --model pi --resume ${OTHER_SESSION}`,
     `cd /Users/me/opencode && claude --resume ${OTHER_SESSION}`

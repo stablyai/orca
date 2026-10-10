@@ -56,16 +56,12 @@ export type StructuredAgentCliConversations =
       sessionHistory: StructuredAgentSessionHistory
     }
 
-/** Whether a command token names one of the agent's CLI binaries: by its path's last name, any
- *  case, with or without `.exe`. */
-export function isSessionHistoryBinary(
-  history: StructuredAgentSessionHistory,
-  token: string
-): boolean {
-  const name = token.split(/[\\/]/).at(-1)?.toLowerCase()
-  return history.rowAgents.some((agent) => {
+/** The command names that run the agent's CLI binaries, lower-case, with and without `.exe`: a
+ *  token names one when its path's last name does, in any case. */
+export function sessionHistoryBinaryNames(history: StructuredAgentSessionHistory): string[] {
+  return history.rowAgents.flatMap((agent) => {
     const binary = TUI_AGENT_CONFIG[agent].expectedProcess.toLowerCase()
-    return name === binary || name === `${binary}.exe`
+    return [binary, `${binary}.exe`]
   })
 }
 
@@ -92,35 +88,26 @@ function invocationAfter(
   return { target: candidate && !candidate.startsWith('-') ? candidate : null }
 }
 
-const SHELL_COMMAND_SEPARATORS = new Set(['&&', '||', ';', '|', '&'])
-
-/** The arguments that are this command's own: they stop at a shell operator, so `cd ~/pi && bash
- *  -c x` is no `pi -c`. */
-export function ownCommandArgs(args: readonly string[]): readonly string[] {
-  const end = args.findIndex((token) => SHELL_COMMAND_SEPARATORS.has(token))
-  return end === -1 ? args : args.slice(0, end)
-}
-
-/** Whether the command's own options include one of `flags`, matched exactly as a case-sensitive
+/** Whether the command's options include one of `flags`, matched exactly as a case-sensitive
  *  CLI reads them; after `--` a flag is prompt text. */
 export function ownOptionsInclude(args: readonly string[], flags: readonly string[]): boolean {
-  const own = ownCommandArgs(args)
-  const terminator = own.indexOf('--')
-  return (terminator === -1 ? own : own.slice(0, terminator)).some((token) => flags.includes(token))
+  const terminator = args.indexOf('--')
+  return (terminator === -1 ? args : args.slice(0, terminator)).some((token) =>
+    flags.includes(token)
+  )
 }
 
-/** The resume a command's own options ask for, matched exactly as a case-sensitive CLI reads them
+/** The resume a command's options ask for, matched exactly as a case-sensitive CLI reads them
  *  (`rg x src/pi -C 3` is no `pi -c`): a target-less flag may pick any conversation, a marker
  *  resumes its value (`--marker=value` too). */
 export function resumeInvocationFromOptions(
   args: readonly string[],
   options: { targetless: readonly string[]; markers: readonly string[] }
 ): StructuredAgentResumeInvocation | null {
-  const own = ownCommandArgs(args)
-  if (own.some((token) => options.targetless.includes(token))) {
+  if (args.some((token) => options.targetless.includes(token))) {
     return { target: null }
   }
-  const inline = own.find((token) =>
+  const inline = args.find((token) =>
     options.markers.some((marker) => token.startsWith(`${marker}=`))
   )
   if (inline !== undefined) {
@@ -128,8 +115,8 @@ export function resumeInvocationFromOptions(
     return { target: target.length > 0 ? target : null }
   }
   return invocationAfter(
-    own,
-    own.findIndex((token) => options.markers.includes(token))
+    args,
+    args.findIndex((token) => options.markers.includes(token))
   )
 }
 

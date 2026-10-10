@@ -249,6 +249,26 @@ describe('flags in another case', () => {
   })
 })
 
+describe('the agent named again inside its own command', () => {
+  it.each([
+    {
+      handle: acp('opencode', OPENCODE_ID),
+      command: `opencode -s ${OPENCODE_ID} ~/src/opencode --fork`
+    },
+    { handle: acp('grok', GROK_ID), command: `grok -r ${GROK_ID} --cwd ~/src/grok --fork-session` },
+    { handle: PI_HANDLE, command: `pi --session pi` }
+  ])('is an argument: $command', async ({ handle, command }) => {
+    installOwnership({ handle })
+    await allowed(command)
+  })
+
+  it('ends at a newline, which starts another command', async () => {
+    installOwnership({ handle: PI_HANDLE })
+    await allowed(`pi --session ${OTHER_UUID}\necho -c`)
+    await refused(`echo hi\npi --session ${PI_ID}`)
+  })
+})
+
 describe('another agent named in a command', () => {
   it.each([
     `echo pi && claude --resume ${PI_ID}`,
@@ -276,6 +296,21 @@ describe('parsing cost', () => {
     )
     const line = 'the claude agent said codex and pi and grok are fine; omp wrote opencode output\n'
     const text = line.repeat(2_000)
+    const tokenCount = text.split(/\s+/).filter(Boolean).length
+
+    await allowed(text)
+    const argsRead = parsedArgs
+      .flatMap((spy) => spy.mock.calls)
+      .reduce((sum, [args]) => sum + args.length, 0)
+    expect(argsRead).toBeLessThanOrEqual(tokenCount * parsedArgs.length)
+  })
+
+  it('reads one long command once per agent', async () => {
+    installOwnership({ handle: PI_HANDLE })
+    const parsedArgs = STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.flatMap(({ sessionHistory }) =>
+      sessionHistory ? [vi.spyOn(sessionHistory, 'parseResumeArgs')] : []
+    )
+    const text = `claude ${'pi codex grok ~/src/claude '.repeat(20_000)}`
     const tokenCount = text.split(/\s+/).filter(Boolean).length
 
     await allowed(text)

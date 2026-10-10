@@ -10,11 +10,14 @@ import type { StructuredProviderSessionOwnership } from '../native-chat/agent-se
 import { listStructuredSessionHistoryOwnership } from '../runtime/structured-agent-session-history-ownership'
 import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
 import {
-  isSessionHistoryBinary,
+  sessionHistoryBinaryNames,
   type StructuredAgentResumeInvocation,
   type StructuredAgentSessionHistory
 } from '../native-chat/structured-agent-cli-conversations'
-import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from '../runtime/structured-agent-runtime-registrations'
+import {
+  STRUCTURED_AGENT_RUNTIME_REGISTRATIONS,
+  type StructuredAgentRuntimeRegistration
+} from '../runtime/structured-agent-runtime-registrations'
 
 /** Whether the client a projection answers opens a chat of this agent from its history row. A row
  *  owned by a chat it cannot open is hidden from it: resuming that row in a terminal is refused. */
@@ -223,30 +226,57 @@ type ResumeInvocation = StructuredAgentResumeInvocation & {
   history: StructuredAgentSessionHistory
 }
 
+// A newline ends a shell command as `;` does, so the tokenizer keeps it as a token.
+const SHELL_COMMAND_SEPARATORS = new Set(['&&', '||', ';', '|', '&', '\n'])
+
 function parseResumeInvocations(command: string): ResumeInvocation[] {
   // Keep this deliberately conservative: shell quoting is normalized only
   // enough to identify executable/flag tokens; an unrecognized shape is not
   // treated as proof that a different session is being resumed.
-  const tokens = command.match(/"[^"\\]*(?:\\.[^"\\]*)*"|'[^']*'|[^\s]+/g) ?? []
+  const tokens = command.match(/"[^"\\]*(?:\\.[^"\\]*)*"|'[^']*'|\n|[^\s]+/g) ?? []
   const normalized = tokens.map((token) => token.replace(/^['"]|['"]$/g, ''))
-  // Each agent reads every token naming its own binary, so another agent's name earlier in the
-  // command (`cd ~/pi && claude -r x`, `claude --model pi`) never hides its resume. A mention reads
-  // its arguments up to that agent's next mention, which reads the rest: each token is parsed once.
-  return STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.flatMap(({ definition, sessionHistory }) => {
-    if (!sessionHistory) {
-      return []
+  const binaries = new Map<string, StructuredAgentRuntimeRegistration>()
+  for (const registration of STRUCTURED_AGENT_RUNTIME_REGISTRATIONS) {
+    for (const name of registration.sessionHistory
+      ? sessionHistoryBinaryNames(registration.sessionHistory)
+      : []) {
+      binaries.set(name, registration)
     }
-    const mentions = normalized.flatMap((token, index) =>
-      isSessionHistoryBinary(sessionHistory, token) ? [index] : []
-    )
-    return mentions.flatMap((mention, nth) => {
-      const args = normalized.slice(mention + 1, mentions[nth + 1] ?? normalized.length)
-      const invocation = sessionHistory.parseResumeArgs(args)
-      return invocation
-        ? [{ ...invocation, provider: definition.agent, history: sessionHistory }]
-        : []
-    })
-  })
+  }
+  // Each shell command is read alone: in it, each agent reads its arguments from its own first
+  // binary token, so another agent's name earlier (`claude --model pi -r x`) never hides it.
+  const invocations: ResumeInvocation[] = []
+  let firstMentions = new Map<StructuredAgentRuntimeRegistration, number>()
+  const readCommand = (end: number) => {
+    for (const [registration, mention] of firstMentions) {
+      const history = registration.sessionHistory
+      const invocation = history?.parseResumeArgs(normalized.slice(mention + 1, end))
+      if (history && invocation) {
+        invocations.push({ ...invocation, provider: registration.definition.agent, history })
+      }
+    }
+    firstMentions = new Map()
+  }
+  for (const [index, token] of normalized.entries()) {
+    // A quoted operator is an argument, so separators are read before quotes are stripped.
+    if (SHELL_COMMAND_SEPARATORS.has(tokens[index]!) && !continuesLine(tokens, index)) {
+      readCommand(index)
+      continue
+    }
+    const name = token.slice(Math.max(token.lastIndexOf('/'), token.lastIndexOf('\\')) + 1)
+    const registration = binaries.get(name.toLowerCase())
+    if (registration && !firstMentions.has(registration)) {
+      firstMentions.set(registration, index)
+    }
+  }
+  readCommand(tokens.length)
+  return invocations
+}
+
+/** A newline after a line-continuation mark (POSIX `\`, PowerShell `` ` ``, cmd `^`) is inside
+ *  one command. */
+function continuesLine(tokens: readonly string[], index: number): boolean {
+  return tokens[index] === '\n' && /[\\`^]$/.test(tokens[index - 1] ?? '')
 }
 
 function refuseLegacyWriter(ownership: StructuredProviderSessionOwnership): never {
