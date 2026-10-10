@@ -13,6 +13,7 @@ import {
 } from '../../../../shared/agent-session-host-status-rows'
 import type { NativeChatTextBlock } from '../../../../shared/native-chat-types'
 import { useNativeChatOrcaStopView } from './native-chat-orca-stop-context'
+import { NativeChatInterruptedContinueButton } from './NativeChatInterruptedContinue'
 import { nativeChatOrcaStopRowText } from './native-chat-orca-stop-words'
 import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../../../shared/agent-session-orca-stop'
 import { ProviderFrameRow } from './NativeChatTranscriptChrome'
@@ -113,6 +114,8 @@ export function NativeChatNoticeRow({
   const { orcaStop } = block
   const { hostLabel, remoteHost, continueAvailable } = orcaStopView
   const named = orcaStop !== undefined && hostLabel !== null
+  const continueOffered =
+    orcaStop?.turnItemId !== undefined && orcaStop.turnItemId === orcaStopView.offeredTurnItemId
   const failure = readWholeAgentSessionFailureFact(block.failure)
   // Only reword auth text fully described by its fact; host text may also carry command advice.
   const authSurface =
@@ -153,7 +156,10 @@ export function NativeChatNoticeRow({
     >
       <div className="flex items-start gap-2">
         {Icon ? <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> : null}
-        <p className="min-w-0 whitespace-pre-wrap break-words">{text}</p>
+        <p className="min-w-0 flex-1 whitespace-pre-wrap break-words">{text}</p>
+        {continueOffered ? (
+          <NativeChatInterruptedContinueButton onContinue={orcaStopView.continueNow} />
+        ) : null}
       </div>
       {claudeSignIn && isClaudeSignInFailureKind(block.failure?.kind) ? (
         <Button

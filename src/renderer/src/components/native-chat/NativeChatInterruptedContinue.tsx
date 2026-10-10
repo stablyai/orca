@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react'
+import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -21,14 +21,12 @@ import type { NativeChatComposerNoticeContent } from './native-chat-composer-not
 type ContinueAnswer = { outcome?: string }
 
 export type NativeChatInterruptedContinuation = {
-  /** Told to the chat's rows: the machine's name, whether it is remote, and if it can continue. */
+  /** Told to the chat's rows: the machine's name, whether it is remote, if it can continue, and the
+   *  cut row that carries Continue. */
   view: NativeChatOrcaStopView
-  /** The cut turn Continue is offered on right now, if any. */
-  offeredTurnItemId: string | null
   /** A Continue that did not go through, for the composer's notice card: shown while the chat
    *  still sits on that cut and gone once it is continued from anywhere. */
   continueError: (NativeChatComposerNoticeContent & { onDismiss: () => void }) | null
-  continueNow: () => void
 }
 
 /**
@@ -86,11 +84,23 @@ export function useNativeChatInterruptedContinuation(input: {
   }
   // Unknown counts as able: a host that writes cause rows has Continue, and the words stay put.
   const continueAvailable = capability !== 'unsupported'
-  // One object per change, so the chat's rows re-render only when what they show changes.
+  // One object per change, so the chat's rows re-render only when what they show changes; the rows
+  // get a stable handler that runs the latest continueNow.
+  const latestContinueNow = useRef(continueNow)
+  useLayoutEffect(() => {
+    latestContinueNow.current = continueNow
+  })
+  const stableContinueNow = useCallback(() => latestContinueNow.current(), [])
   const remoteHost = target.kind === 'environment'
   const view = useMemo(
-    () => ({ hostLabel, remoteHost, continueAvailable }),
-    [hostLabel, remoteHost, continueAvailable]
+    () => ({
+      hostLabel,
+      remoteHost,
+      continueAvailable,
+      offeredTurnItemId: offered,
+      continueNow: stableContinueNow
+    }),
+    [hostLabel, remoteHost, continueAvailable, offered, stableContinueNow]
   )
   const failedHere =
     failedOn !== null && cut?.turnItemId === failedOn
@@ -101,37 +111,33 @@ export function useNativeChatInterruptedContinuation(input: {
       : null
   return {
     view,
-    offeredTurnItemId: offered,
-    continueError: failedHere ? { text: failedHere, onDismiss: () => setFailedOn(null) } : null,
-    continueNow
+    continueError: failedHere ? { text: failedHere, onDismiss: () => setFailedOn(null) } : null
   }
 }
 
-export function NativeChatInterruptedContinue({
-  continuation
+/** Continue, on the row that says Orca stopped this reply: the one action that picks it back up. */
+export function NativeChatInterruptedContinueButton({
+  onContinue
 }: {
-  continuation: NativeChatInterruptedContinuation
-}): React.JSX.Element | null {
+  onContinue: () => void
+}): React.JSX.Element {
   const explanationId = useId()
-  if (continuation.offeredTurnItemId === null) {
-    return null
-  }
   const explanation = translate(
     'components.native-chat.interruptedContinue.explanation',
     'Continue, and the agent first checks whether its last step finished.'
   )
   return (
-    <div className="mx-auto flex w-full max-w-4xl items-center justify-end px-4 py-1">
+    <>
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
             type="button"
-            variant="ghost"
-            size="xs"
+            size="sm"
+            className="-my-1 shrink-0"
             aria-describedby={explanationId}
-            onClick={continuation.continueNow}
+            onClick={onContinue}
           >
-            <Play className="size-3" />
+            <Play />
             {translate('components.native-chat.interruptedContinue.continue', 'Continue')}
           </Button>
         </TooltipTrigger>
@@ -142,6 +148,6 @@ export function NativeChatInterruptedContinue({
       <span id={explanationId} className="sr-only">
         {explanation}
       </span>
-    </div>
+    </>
   )
 }

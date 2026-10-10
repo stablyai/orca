@@ -42,7 +42,7 @@ import type {
 } from '../../../../shared/agent-session-journal-types'
 import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import {
-  NativeChatInterruptedContinue,
+  NativeChatInterruptedContinueButton,
   useNativeChatInterruptedContinuation
 } from './NativeChatInterruptedContinue'
 
@@ -87,14 +87,17 @@ function Harness(props: Props): React.JSX.Element {
   })
   return (
     <TooltipProvider delayDuration={0}>
-      <span data-testid="offered">{continuation.offeredTurnItemId ?? 'none'}</span>
+      <span data-testid="offered">{continuation.view.offeredTurnItemId ?? 'none'}</span>
       <span data-testid="available">{String(continuation.view.continueAvailable)}</span>
       <span data-testid="remote">{String(continuation.view.remoteHost)}</span>
       <span data-testid="error">{composerError ?? continuation.continueError?.text ?? 'none'}</span>
       <button type="button" onClick={() => setComposerError(ATTACHMENTS)}>
         compose
       </button>
-      <NativeChatInterruptedContinue continuation={continuation} />
+      {/* As the cut's own row shows it. */}
+      {continuation.view.offeredTurnItemId === null ? null : (
+        <NativeChatInterruptedContinueButton onContinue={continuation.view.continueNow} />
+      )}
     </TooltipProvider>
   )
 }

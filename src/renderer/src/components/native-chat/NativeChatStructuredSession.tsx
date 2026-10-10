@@ -31,10 +31,7 @@ import { useStructuredNativeChatPaneCommands } from './use-structured-native-cha
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import { NativeChatStructuredSessionStatus } from './NativeChatStructuredSessionStatus'
 import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
-import {
-  NativeChatInterruptedContinue,
-  useNativeChatInterruptedContinuation
-} from './NativeChatInterruptedContinue'
+import { useNativeChatInterruptedContinuation } from './NativeChatInterruptedContinue'
 import { NativeChatOrcaStopContext } from './native-chat-orca-stop-context'
 import { structuredSessionNotices } from './native-chat-structured-session-notices'
 import { NativeChatPromptSlotNotices } from './NativeChatComposerNotices'
@@ -319,7 +316,6 @@ export function NativeChatStructuredSession(
       </div>
       {readFailedFinally ? null : (
         <>
-          <NativeChatInterruptedContinue continuation={continuation} />
           {/* Host-held drafts, never transcript rows. Above the status area, so running shells and agents sit next to the composer. */}
           <NativeChatQueuedMessageList
             controller={submits.queuedMessages}
