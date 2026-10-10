@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({
-  state: {} as Record<string, unknown>,
-  listeners: {} as Record<string, (...args: unknown[]) => void>
-}))
+const mocks = vi.hoisted(() => {
+  const state: Record<string, unknown> = {}
+  const listeners: Record<string, (...args: unknown[]) => void> = {}
+  return { state, listeners }
+})
 
 vi.mock('../../store', () => ({ useAppStore: { getState: () => mocks.state } }))
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
@@ -35,8 +36,8 @@ describe('registerTabLifecycleIpcBridge new terminal tab', () => {
     const ui = new Proxy(
       {},
       {
-        get: (_target, name: string) => (listener: (...args: unknown[]) => void) => {
-          mocks.listeners[name] = listener
+        get: (_target, name) => (listener: (...args: unknown[]) => void) => {
+          mocks.listeners[String(name)] = listener
           return () => {}
         }
       }

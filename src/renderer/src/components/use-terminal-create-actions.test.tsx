@@ -59,6 +59,7 @@ const WORKTREE_ID = 'repo-1::/repo/worktree'
 
 function renderActions() {
   return renderHook(() =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads only these controller fields.
     useTerminalCreateActions({
       activeWorktreeId: WORKTREE_ID,
       createBrowserTab: mocks.createBrowserTab,
