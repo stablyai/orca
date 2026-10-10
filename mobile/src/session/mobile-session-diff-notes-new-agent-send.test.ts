@@ -149,7 +149,7 @@ async function mountSessionScreen(client: RpcClient): Promise<void> {
       subscribeToTerminal: () => {},
       fetchSessionTabs: async () => {},
       createTabAgentLoadState: 'loaded',
-      createTabAgentOptions: [{ agent: 'codex', label: 'Codex' }],
+      createTabAgentOptions: [{ agent: 'codex', label: 'Codex', mode: 'terminal' }],
       setSessionContentRowWidth: () => {}
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scope carries every member these hooks read on the send path; a missing one throws on use.

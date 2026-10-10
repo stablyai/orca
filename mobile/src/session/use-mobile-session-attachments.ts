@@ -147,6 +147,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
       const options = await loadMobileNewTabAgentOptions({
         client,
         worktreeId,
+        hostCapabilities,
         hostRefusesOtherRuntime
       })
       if (stale) {

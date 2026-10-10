@@ -200,6 +200,20 @@ describe('the + menu', () => {
     expect(state.scheduleDelayedAction).not.toHaveBeenCalled()
   })
 
+  it('routes an explicit chat request through agent.launch when the host supports it', async () => {
+    const { client, sendRequest } = scriptedClient(
+      launchReply({ kind: 'structured', sessionId: 'claude_s1', handle: 'h' })
+    )
+
+    await create_(scope(client), 'claude', { mode: 'chat' })
+
+    expect(methods(sendRequest)).toEqual(['agent.launchReplay'])
+    expect(launchParams(sendRequest)).toMatchObject({
+      agent: 'claude',
+      target: { kind: 'existing', worktree: 'id:workspace-1' }
+    })
+  })
+
   it('asks a host that places tabs to put the new one after the tab the user is on', async () => {
     const { client, sendRequest } = scriptedClient(
       launchReply({ kind: 'terminal', handle: 'term_7' })

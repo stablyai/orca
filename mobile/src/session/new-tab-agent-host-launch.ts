@@ -16,6 +16,7 @@ import {
   withoutUnansweredLaunch,
   type PendingSessionSelection
 } from './pending-session-selection'
+import type { MobileNewTabAgentMode } from './mobile-new-tab-agent-options'
 
 const NOTES_NOT_SENT_MESSAGE = "The agent started, but the notes weren't sent."
 export const PROMPT_UNCONFIRMED_MESSAGE =
@@ -24,6 +25,7 @@ export const NOTES_UNCONFIRMED_MESSAGE =
   "The agent started, but couldn't confirm the notes were sent."
 
 export type NewTabAgentLaunchOptions = MobileQuickCommandLaunch['options'] & {
+  mode?: MobileNewTabAgentMode
   onPromptSent?: () => void
 }
 

@@ -7,7 +7,7 @@ import { sessionTabCreateTerminal } from './mobile-session-write-operations'
 import { triggerSuccess, triggerError } from '../platform/haptics'
 import { buildTerminalSendParams } from '../terminal/terminal-send-request'
 import { terminalRecordsEqual } from './mobile-terminal-records'
-import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
+import type { MobileNewTabAgentMode, MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
 import type { MobileSessionTab, Terminal } from './mobile-session-route-types'
 import type { MobileSessionAttachmentsModel } from './use-mobile-session-attachments'
@@ -57,6 +57,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
   async function handleCreateTerminal(
     agent?: MobileNewTabAgentOption['agent'],
     options?: MobileQuickCommandLaunch['options'] & {
+      mode?: MobileNewTabAgentMode
       onPromptSent?: () => void
       errorToast?: string
     }
@@ -85,7 +86,11 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
     }
 
     try {
+      // Why: an explicit terminal request skips agent.launch so the host cannot upgrade it to a
+      // structured chat session; the existing session.tabs.createTerminal path starts the agent in
+      // a PTY exactly as desktop's terminal-agent tab does.
       if (
+        options?.mode !== 'terminal' &&
         agent &&
         launchesThroughHost(options) &&
         (await launchNewTabAgentThroughHost({
@@ -108,7 +113,13 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
       }
       // COMPAT(agent.launch.v2): hosts before v1.4.206 keep the paths below; remove once none remain.
       // Bare structured-provider launches follow host createSupport; prompted launches keep their startup semantics.
-      if (isAgentSessionHandleProvider(agent) && options === undefined) {
+      if (
+        options?.mode !== 'terminal' &&
+        isAgentSessionHandleProvider(agent) &&
+        !options?.startupCommand &&
+        !options?.initialPrompt &&
+        !options?.agentPrompt
+      ) {
         // Armed before asking with nothing to match yet, so a tab picked meanwhile still wins.
         pendingSelectionRef.current = launchedSelection(clientMutationId, {}, null)
         const structured = await createMobileStructuredAgentSession(client, worktreeId, agent)

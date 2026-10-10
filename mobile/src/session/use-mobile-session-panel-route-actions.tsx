@@ -58,10 +58,11 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
       : createTabAgentOptions.length > 0
         ? createTabAgentOptions.map((option) => ({
             label: option.label,
+            hint: option.mode === 'chat' ? 'Chat' : undefined,
             renderIcon: () => <MobileAgentIcon agentId={option.agent} size={16} />,
             onPress: () => {
               setShowCreateTabDrawer(false)
-              void handleCreateTerminal(option.agent)
+              void handleCreateTerminal(option.agent, { mode: option.mode })
             }
           }))
         : createTabAgentLoadState === 'loaded'
