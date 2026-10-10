@@ -27,7 +27,7 @@ function send(
   draft: string,
   imagePaths: string[] = []
 ) {
-  const callbacks = { rejected: vi.fn(), unconfirmed: vi.fn() }
+  const callbacks = { rejected: vi.fn(), unconfirmed: vi.fn(), submitted: vi.fn() }
   const { result } = renderHook(() =>
     useNativeChatPtyComposerSend({
       agent,
@@ -40,10 +40,10 @@ function send(
       classifySend: () => classification,
       onOptimisticSend: () => 'pending-1',
       optimisticSendOutcome: { reject: callbacks.rejected, holdUnconfirmed: callbacks.unconfirmed },
+      onSubmitted: callbacks.submitted,
       sessionOptionsSurface: null,
       terminalTabId: 'tab',
       trackPendingSend: vi.fn(),
-      setHistory: vi.fn(),
       setDraft: vi.fn(),
       setCaret: vi.fn(),
       clearSkillOrigin: vi.fn(),
@@ -81,4 +81,17 @@ it.each([
 ] as const)('leaves a %s %s send on the unobserved write path', (agent, classification, draft) => {
   send(agent, classification, draft)
   expect(vi.mocked(sendNativeChatMessage).mock.calls[0]?.[3]?.onWriteRejected).toBeUndefined()
+})
+
+// The pane brings the latest into view on this, whatever the send was classified as.
+it.each([
+  ['chat', 'hello'],
+  ['command', '/compact'],
+  ['unknown-token', '$my-skill do the thing']
+] as const)('reports a %s send as submitted', (classification, draft) => {
+  expect(send('codex', classification, draft).submitted).toHaveBeenCalledOnce()
+})
+
+it('reports nothing for a blank draft', () => {
+  expect(send('codex', 'chat', '   ').submitted).not.toHaveBeenCalled()
 })

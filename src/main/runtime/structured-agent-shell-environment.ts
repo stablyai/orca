@@ -1,4 +1,5 @@
 import { resolveLoginShellEnvironment } from '../startup/login-shell-environment'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import {
   nativeChatShellEnvironmentPolicy,
   type NativeChatShellEnvironmentPolicy
@@ -73,6 +74,19 @@ export function structuredAgentBaseEnvironment(input: {
   )
 }
 
+/** The base env every local agent launch on this host starts from, read from current settings. */
+export async function resolveHostAgentBaseEnvironment(
+  settings: Pick<
+    GlobalSettings,
+    'nativeChatInheritShellEnvironment' | 'nativeChatShellEnvironmentVariables'
+  >
+): Promise<Record<string, string>> {
+  return structuredAgentBaseEnvironment({
+    shellEnv: await resolveLoginShellEnvironment(),
+    policy: nativeChatShellEnvironmentPolicy(settings)
+  })
+}
+
 export type StructuredAgentEnvironmentSources = {
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
   resolveShellEnvironmentPolicy?: () => NativeChatShellEnvironmentPolicy
@@ -91,6 +105,8 @@ export function createStructuredAgentEnvironmentResolvers(
 ): {
   resolveCodexEnvironment: () => Promise<NodeJS.ProcessEnv>
   resolveClaudeInheritedEnv: () => Promise<Record<string, string>>
+  /** The shared base every agent's child env starts from, before its own overlay. */
+  resolveBaseEnvironment: () => Promise<Record<string, string>>
 } {
   const shellEnvironment = (sources.resolveEnvironment ?? resolveLoginShellEnvironment)()
   const resolveBase = async (): Promise<Record<string, string>> =>
@@ -105,6 +121,7 @@ export function createStructuredAgentEnvironmentResolvers(
       ...(await sources.resolveLaunchEnvOverlay?.()),
       ...sources.resolveCodexOverrides?.()
     }),
-    resolveClaudeInheritedEnv: resolveBase
+    resolveClaudeInheritedEnv: resolveBase,
+    resolveBaseEnvironment: resolveBase
   }
 }

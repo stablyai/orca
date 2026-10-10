@@ -13,6 +13,7 @@ import { withoutRedundantGlobalFields } from '../../../shared/workspace-session-
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { readTerminalScrollbackSnapshotSync } from '../../terminal-scrollback-snapshots'
 import { preserveRuntimeAuthoredWorkspaceSessionFields } from '../runtime-authored-workspace-session-fields'
+import { dropClosedTerminalTabs } from '../closed-terminal-tab-write-fence'
 import { findWorktreeIdForTab } from '../restoring-sessions/pane-identity-migration'
 import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
 import {
@@ -78,6 +79,21 @@ export class SessionHostPartitionOperations {
       }
     }
     return [...hostIds]
+  }
+
+  /** Drops a removed host's whole session partition; local's session is never dropped. */
+  removeWorkspaceSessionHost(hostId: ExecutionHostId): void {
+    const runtime = this[sessionHostPartitionOperationsContext].runtime
+    const partitions = runtime.state.workspaceSessionsByHostId
+    if (hostId === LOCAL_EXECUTION_HOST_ID || partitions?.[hostId] === undefined) {
+      return
+    }
+    const { [hostId]: _removed, ...remaining } = partitions
+    runtime.state.workspaceSessionsByHostId = remaining
+    invalidateLocalWorktreeMetadataPruneInputs()
+    scheduleSave(this[sessionHostPartitionOperationsContext].scheduling, [
+      'workspaceSessionsByHostId'
+    ])
   }
 
   readTerminalScrollbackSnapshot(ref: string): string | null {
@@ -182,7 +198,7 @@ export function setHostWorkspaceSession(
     owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId?.[hostId]
   // Why here and not at the callers: the before-unload stage path writes the renderer's payload
   // straight through, so a per-caller guard leaves the quit write erasing runtime-authored rows.
-  session = preserveRuntimeAuthoredWorkspaceSessionFields(session, prior)
+  session = dropClosedTerminalTabs(preserveRuntimeAuthoredWorkspaceSessionFields(session, prior))
   // Why: each partition owns its topology fence; renderer writes omit it and must rebase locally.
   session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
   session = preserveMissingWorkspaceSessionTerminalBindings(
@@ -207,18 +223,23 @@ export function setHostWorkspaceSession(
   )
   owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId = {
     ...owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId,
-    [hostId]: pruned
+    [hostId]: withRequiredWorkspaceSessionMaps(pruned)
   }
   scheduleSave(owner[sessionHostPartitionOperationsContext].scheduling, [
     'workspaceSessionsByHostId'
   ])
 }
 
-export function installSessionHostPartitionOperationsContext(
-  target: SessionHostPartitionOperations,
-  source: SessionHostPartitionOperations
-): void {
-  Object.defineProperty(target, sessionHostPartitionOperationsContext, {
-    value: source[sessionHostPartitionOperationsContext]
-  })
+/**
+ * The renderer splits a full snapshot per host and leaves out maps a host has no rows in, so a
+ * host partition written as sent lacks maps the type requires and every reader iterates.
+ */
+export function withRequiredWorkspaceSessionMaps(
+  session: WorkspaceSessionState
+): WorkspaceSessionState {
+  return {
+    ...session,
+    tabsByWorktree: session.tabsByWorktree ?? {},
+    terminalLayoutsByTabId: session.terminalLayoutsByTabId ?? {}
+  }
 }

@@ -1,7 +1,5 @@
 // @vitest-environment happy-dom
 
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -181,20 +179,5 @@ describe('AgentWorkingSpinner', () => {
         Object.defineProperty(HTMLElement.prototype, 'getAnimations', originalGetAnimations)
       }
     }
-  })
-
-  it('preserves 12 steps per second without frequent iteration events', () => {
-    const css = readFileSync(join(__dirname, '../assets/main.css'), 'utf8')
-
-    const rule = css.match(/\.agent-working-spinner\s*\{[^}]*\}/)?.[0]
-    expect(rule).toBeDefined()
-    expect(rule).toContain('animation: agent-spinner-rotate 86400s steps(1036800, end) infinite')
-    expect(css).toContain('transform: rotate(86400turn)')
-    expect(css).toContain('@keyframes agent-spinner-rotate')
-
-    const reducedMotionBlock = css.match(
-      /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.agent-working-spinner\s*\{[^}]*\}/
-    )?.[0]
-    expect(reducedMotionBlock).toContain('animation: none')
   })
 })

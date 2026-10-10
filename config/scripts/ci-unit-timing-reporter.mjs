@@ -30,7 +30,8 @@ export default class UnitTimingReporter {
     )
     writeAssignment(process.env.ORCA_UNIT_TIMING_REPORT ?? 'ci-shards/unit-timings.json', {
       metric: 'module-duration-v1',
-      nodeVersion: process.versions.node,
+      nodeVersion: process.env.ORCA_TEST_NODE_VERSION ?? process.versions.node,
+      ...(process.versions.bun ? { bunVersion: process.versions.bun } : {}),
       shard: this.ctx.config.shard ?? { index: 1, count: 1 },
       status: reason,
       unhandledErrors: errors.length,

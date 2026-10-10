@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const { recordAgentSessionRuntimeEndMock } = vi.hoisted(() => ({
+  recordAgentSessionRuntimeEndMock: vi.fn()
+}))
+
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
@@ -13,6 +17,9 @@ vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harnes
 vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
+vi.mock('../runtime/agent-session-runtime-end-record', () => ({
+  recordAgentSessionRuntimeEnd: recordAgentSessionRuntimeEndMock
+}))
 
 import { createMainWindow } from './createMainWindow'
 import { ipcMain } from 'electron'
@@ -138,6 +145,17 @@ describe('createMainWindow', () => {
           data: expect.objectContaining({ reasons: '' })
         })
       ])
+    })
+
+    it("records the Orca runtime's end, since Windows emits no will-quit for it", () => {
+      setPlatform('win32')
+      recordAgentSessionRuntimeEndMock.mockClear()
+      const { windowHandlers } = setupCloseWindow()
+
+      createMainWindow(null)
+      windowHandlers['session-end']?.({ reasons: ['logoff'] })
+
+      expect(recordAgentSessionRuntimeEndMock).toHaveBeenCalledExactlyOnceWith('quit')
     })
 
     it.each(['darwin', 'linux'] as const)(

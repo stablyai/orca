@@ -4,7 +4,7 @@ import type {
   AiVaultPrepareSessionResumeResult,
   AiVaultSessionResumePreparation
 } from '../../shared/ai-vault-resume-preparation'
-import { parseExecutionHostId } from '../../shared/execution-host'
+import { isUnresolvedOwnerHostId, parseExecutionHostId } from '../../shared/execution-host'
 import { assertLegacyAiVaultResumeAllowed } from '../ai-vault/structured-session-ownership'
 
 export type AiVaultResumeHandlerOptions = {
@@ -30,7 +30,7 @@ export async function prepareAiVaultSessionResume(
   assertLegacyAiVaultResumeAllowed(args)
   const executionHost = parseExecutionHostId(args.executionHostId)
   if (executionHost?.kind === 'runtime') {
-    if (!options.prepareRuntimeSessionResume) {
+    if (!options.prepareRuntimeSessionResume || isUnresolvedOwnerHostId(executionHost.id)) {
       throw new Error('The session host is unavailable. Reconnect it and retry resume.')
     }
     return options.prepareRuntimeSessionResume(executionHost.environmentId, args)

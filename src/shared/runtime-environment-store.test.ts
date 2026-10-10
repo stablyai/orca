@@ -169,6 +169,7 @@ describe('runtime environment store', () => {
     expect(paired.pairedDeviceId).toBe('device-from-offer')
     markEnvironmentUsed(userDataPath, legacy.id, {
       pairedDeviceId: 'device-from-status',
+      pairingDeviceToken: legacy.endpoints[0]!.deviceToken,
       now: 2_000
     })
     expect(listEnvironments(userDataPath).find((entry) => entry.id === legacy.id)).toMatchObject({

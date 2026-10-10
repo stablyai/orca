@@ -68,6 +68,29 @@ async function startupTerminalOptions(startupPaneKey?: string): Promise<Record<s
 }
 
 describe('a remote managed create with a startup agent', () => {
+  it.each([false, true])(
+    'provisions SSH setup after renderer loss (during request=%s)',
+    async (duringRequest) => {
+      const { deps } = createDeps()
+      let rendererAvailable = duringRequest
+      deps.provisionInBackground = () => !rendererAvailable
+      const setup = { runnerScriptPath: '/remote/setup.sh', envVars: {} }
+      requestRuntimeRemoteWorktree.mockImplementationOnce(async () => {
+        rendererAvailable = false
+        return { worktree: { id: 'wt-remote', path: '/remote/wt' }, setup }
+      })
+      await createRuntimeRemoteManagedWorktree(repo, { name: 'headless', activate: true }, deps)
+      expect(deps.provision).toHaveBeenCalledWith(
+        expect.objectContaining({
+          worktreeSelector: 'path:/remote/wt',
+          setup,
+          surfaceOwner: false,
+          hasStartupTerminal: false
+        })
+      )
+    }
+  )
+
   it('creates the startup terminal under the pane the caller reserved', async () => {
     expect(await startupTerminalOptions(`${TAB_ID}:${LEAF_ID}`)).toMatchObject({
       tabId: TAB_ID,

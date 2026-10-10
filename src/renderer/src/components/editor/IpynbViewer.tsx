@@ -1,3 +1,4 @@
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import { useCallback, useMemo, useState } from 'react'
 import { AlertCircle, Save } from 'lucide-react'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
@@ -119,7 +120,12 @@ export default function IpynbViewer({
   ): void => {
     const mod = getShortcutPlatform() === 'darwin' ? event.metaKey : event.ctrlKey
     // Exactly one of Shift or Cmd/Ctrl.
-    if (event.key !== 'Enter' || event.altKey || event.shiftKey === mod) {
+    if (
+      isImeOwnedKeyboardEvent(event) ||
+      event.key !== 'Enter' ||
+      event.altKey ||
+      event.shiftKey === mod
+    ) {
       return
     }
     event.preventDefault()

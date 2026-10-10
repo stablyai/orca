@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { bindTabStripContentResizeObservers } from './tab-strip-content-resize-observers'
 import {
-  computeTabStripScrollMetrics,
-  sameTabStripScrollMetrics,
-  type TabStripScrollMetrics
+  computeTabStripOverflowState,
+  sameTabStripOverflowState,
+  type TabStripOverflowState
 } from './tab-strip-scroll-metrics'
 import { isTabStripPointerGestureActive } from './tab-strip-pointer-gesture'
 import {
@@ -44,12 +44,10 @@ function isTabStripScrolledToEnd(el: HTMLElement): boolean {
   return el.scrollLeft >= max - 2
 }
 
-const EMPTY_TAB_STRIP_OVERFLOW_STATE: TabStripScrollMetrics = {
+const EMPTY_TAB_STRIP_OVERFLOW_STATE: TabStripOverflowState = {
   hasOverflow: false,
   canScrollStart: false,
-  canScrollEnd: false,
-  thumbSizeFraction: 1,
-  thumbOffsetFraction: 0
+  canScrollEnd: false
 }
 
 export function useTabStripOverflowNavigation({
@@ -65,11 +63,13 @@ export function useTabStripOverflowNavigation({
   worktreeId: string
 }): {
   tabStripRef: RefObject<HTMLDivElement | null>
-  tabStripOverflowState: TabStripScrollMetrics
+  tabStripOverflowState: TabStripOverflowState
   activeTabDockSide: ActiveTabDockSide | null
   scrollTabStrip: (direction: 'start' | 'end', behavior?: ScrollBehavior) => void
+  subscribeToStripResize: (listener: () => void) => () => void
 } {
   const tabStripRef = useRef<HTMLDivElement>(null)
+  const stripResizeListenersRef = useRef<Set<() => void>>(new Set())
   const prevStripRef = useRef<{ worktreeId: string; tabIds: ReadonlySet<string> } | null>(null)
   const stickToEndRef = useRef(false)
   const tabClosedThisCommitRef = useRef(false)
@@ -79,7 +79,8 @@ export function useTabStripOverflowNavigation({
     activeTabId: string | null
     anchor: TabStripScrollAnchor | null
   } | null>(null)
-  const [tabStripOverflowState, setTabStripOverflowState] = useState<TabStripScrollMetrics>(
+  // Why no thumb position here: it changes every scroll frame, and every tab would re-render with it.
+  const [tabStripOverflowState, setTabStripOverflowState] = useState<TabStripOverflowState>(
     EMPTY_TAB_STRIP_OVERFLOW_STATE
   )
   const [activeTabDockSide, setActiveTabDockSide] = useState<ActiveTabDockSide | null>(null)
@@ -88,9 +89,9 @@ export function useTabStripOverflowNavigation({
     if (!el) {
       return
     }
-    const next = computeTabStripScrollMetrics(el)
+    const next = computeTabStripOverflowState(el)
     setTabStripOverflowState((previous) =>
-      sameTabStripScrollMetrics(previous, next) ? previous : next
+      sameTabStripOverflowState(previous, next) ? previous : next
     )
     setActiveTabDockSide(getActiveTabDockSide(el))
   }, [])
@@ -151,6 +152,9 @@ export function useTabStripOverflowNavigation({
         el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth)
       }
       recordScrollAnchor()
+      for (const listener of stripResizeListenersRef.current) {
+        listener()
+      }
     }
 
     const disconnectResizeObservers = bindTabStripContentResizeObservers(el, handleStripResize)
@@ -300,5 +304,19 @@ export function useTabStripOverflowNavigation({
     tabClosedThisCommitRef.current = false
   })
 
-  return { tabStripRef, tabStripOverflowState, activeTabDockSide, scrollTabStrip }
+  // Why share these observers: each one watches every tab, so a second set doubles that work.
+  const subscribeToStripResize = useCallback((listener: () => void): (() => void) => {
+    stripResizeListenersRef.current.add(listener)
+    return () => {
+      stripResizeListenersRef.current.delete(listener)
+    }
+  }, [])
+
+  return {
+    tabStripRef,
+    tabStripOverflowState,
+    activeTabDockSide,
+    scrollTabStrip,
+    subscribeToStripResize
+  }
 }

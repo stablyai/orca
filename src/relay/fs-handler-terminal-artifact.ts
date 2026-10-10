@@ -4,9 +4,9 @@ import { chmod, open, realpath, rename, rm, writeFile } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import { basename, dirname, extname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { isBinaryBuffer } from '../shared/binary-buffer'
 import {
   IMAGE_MIME_TYPES,
-  isBinaryBuffer,
   MAX_PREVIEWABLE_BINARY_SIZE,
   MAX_TEXT_FILE_SIZE
 } from './fs-handler-utils'

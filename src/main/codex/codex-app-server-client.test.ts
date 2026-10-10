@@ -12,6 +12,10 @@ import {
   type CodexHookTrustGrantRequest
 } from './codex-app-server-client'
 import { killCodexAppServerProcessTree } from './codex-app-server-process-tree-kill'
+import {
+  PROVIDER_SIGTERM_GRACE_MS,
+  PROVIDER_SUPERVISOR_MAX_STOP_MS
+} from '../provider-process/provider-process-supervisor'
 import { runCodexAppServerSession } from './codex-app-server-session'
 
 // Stub codex app-server speaking the same JSONL protocol: initialize →
@@ -19,6 +23,11 @@ import { runCodexAppServerSession } from './codex-app-server-session'
 // via STUB_CONFIG so each test controls listings, errors, and hangs.
 const STUB_SERVER_SOURCE = `
 const config = JSON.parse(process.env.STUB_CONFIG)
+// A wedged server ignores SIGTERM and its stdin end, so only SIGKILL ends it.
+if (config.scenario === 'wedged') {
+  process.on('SIGTERM', () => {})
+  setInterval(() => {}, 60000)
+}
 require('node:fs').writeFileSync(config.pidFile, String(process.pid))
 const trusted = new Set(config.hooks.filter(h => h.trustStatus === 'trusted').map(h => h.key))
 let buffer = ''
@@ -68,7 +77,7 @@ process.stdin.on('data', (chunk) => {
       continue
     }
     if (message.method === 'initialized') continue
-    if (config.scenario === 'hang') continue
+    if (config.scenario === 'hang' || config.scenario === 'wedged') continue
     if (message.method === 'hooks/list') {
       if (config.scenario === 'unknown-method') {
         send({ id: message.id, error: { code: -32601, message: 'Method not found' } })
@@ -88,7 +97,7 @@ process.stdin.on('data', (chunk) => {
     }
   }
 })
-process.stdin.on('end', () => process.exit(0))
+process.stdin.on('end', () => { if (config.scenario !== 'wedged') process.exit(0) })
 function writeFileSyncSafe(file, contents) { require('node:fs').writeFileSync(file, contents) }
 `
 
@@ -149,6 +158,9 @@ function createStubRequest(options: {
 }
 
 const MANAGED_COMMAND = "/bin/sh '/tmp/orca/codex-hook.sh'"
+// The deadline starts at spawn and the stub writes its pid only once it runs; on a loaded host the
+// supervisor and stub have taken over 2 s to start, so a shorter deadline can stop it first.
+const STUB_START_DEADLINE_MS = 8_000
 
 function managedHook(key: string, trustStatus = 'untrusted'): StubHook {
   return { key, command: MANAGED_COMMAND, currentHash: `sha256:hash-of-${key}`, trustStatus }
@@ -393,19 +405,44 @@ describe('runCodexHookTrustGrantSession', () => {
       hooks: keys.map((key) => managedHook(key)),
       expectedTrustKeys: keys,
       managedCommand: MANAGED_COMMAND,
-      timeoutMs: 500
+      timeoutMs: STUB_START_DEADLINE_MS
     })
 
     const startedAt = Date.now()
     await expect(runCodexHookTrustGrantSession(request)).rejects.toBeInstanceOf(
       CodexAppServerTimeoutError
     )
-    // Why: the reap path must not stack the grace periods on top of the
-    // deadline — a wedged server may ignore everything but SIGKILL.
-    expect(Date.now() - startedAt).toBeLessThan(5_000)
+    // Why: this stub exits on its stdin end and on SIGTERM, so the reap adds no grace on top of
+    // the deadline; a server that ignores both is the case below.
+    expect(Date.now() - startedAt - STUB_START_DEADLINE_MS).toBeLessThan(2_000)
     const childPid = Number(readFileSync(pidFile, 'utf8'))
     expect(() => process.kill(childPid, 0)).toThrow()
   })
+
+  it.runIf(process.platform !== 'win32')(
+    'stops a server that ignores its stdin end and SIGTERM after the SIGTERM grace',
+    async () => {
+      const keys = ['/home/a/.codex/hooks.json:session_start:0:0']
+      const { request, pidFile } = createStubRequest({
+        scenario: 'wedged',
+        hooks: keys.map((key) => managedHook(key)),
+        expectedTrustKeys: keys,
+        managedCommand: MANAGED_COMMAND,
+        timeoutMs: STUB_START_DEADLINE_MS
+      })
+
+      const startedAt = Date.now()
+      await expect(runCodexHookTrustGrantSession(request)).rejects.toBeInstanceOf(
+        CodexAppServerTimeoutError
+      )
+      // The supervisor SIGTERMs its group at the deadline and SIGKILLs it after the grace.
+      const pastDeadline = Date.now() - startedAt - STUB_START_DEADLINE_MS
+      expect(pastDeadline).toBeGreaterThanOrEqual(PROVIDER_SIGTERM_GRACE_MS - 100)
+      expect(pastDeadline).toBeLessThan(PROVIDER_SUPERVISOR_MAX_STOP_MS + 1_000)
+      const childPid = Number(readFileSync(pidFile, 'utf8'))
+      expect(() => process.kill(childPid, 0)).toThrow()
+    }
+  )
 
   it('bounds a callback that stalls between RPC requests', async () => {
     const { request, pidFile } = createStubRequest({
@@ -413,14 +450,14 @@ describe('runCodexHookTrustGrantSession', () => {
       hooks: [],
       expectedTrustKeys: [],
       managedCommand: MANAGED_COMMAND,
-      timeoutMs: 500
+      timeoutMs: STUB_START_DEADLINE_MS
     })
 
     const startedAt = Date.now()
     await expect(
       runCodexAppServerSession(request.invocation, async () => new Promise<never>(() => {}))
     ).rejects.toBeInstanceOf(CodexAppServerTimeoutError)
-    expect(Date.now() - startedAt).toBeLessThan(5_000)
+    expect(Date.now() - startedAt - STUB_START_DEADLINE_MS).toBeLessThan(2_000)
     const childPid = Number(readFileSync(pidFile, 'utf8'))
     expect(() => process.kill(childPid, 0)).toThrow()
   })

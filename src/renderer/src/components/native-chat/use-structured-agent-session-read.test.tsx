@@ -409,3 +409,66 @@ describe('useStructuredAgentSessionRead older page failures', () => {
     expect(result.current.olderHistoryGeneration).toBeGreaterThan(before)
   })
 })
+
+// A loaded chat that loses contact is the transport's to retry: only a refusal the host sent, or a
+// chat that never loaded, is owed the failure. A loaded chat with no messages yet would otherwise
+// trade its empty state for the full-pane error on every blip.
+describe('useStructuredAgentSessionRead stream failures', () => {
+  afterEach(cleanup)
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetStructuredAgentSessionReadOwnersForTests()
+    mocks.subscribe.mockResolvedValue({ unsubscribe: vi.fn() })
+  })
+
+  const journalRefusal = (details?: { reason: string }) => ({
+    code: 'runtime_error',
+    message: 'agent_session_journal_unreadable',
+    data: {
+      refusal: { code: 'agent_session_journal_unreadable', ...(details ? { details } : {}) }
+    }
+  })
+
+  async function loadedChatWithNoMessages() {
+    mocks.call.mockResolvedValueOnce({ ok: true, page: page('tail', [], false) })
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
+    )
+    await waitFor(() => expect(mocks.subscribe).toHaveBeenCalledTimes(1))
+    expect(result.current.state.status).toBe('ready')
+    return { result, onError: mocks.subscribe.mock.calls[0]?.[3] }
+  }
+
+  it('leaves a loaded chat as it was when the connection drops', async () => {
+    const { result, onError } = await loadedChatWithNoMessages()
+    act(() => onError?.({ code: 'runtime_error', message: 'connection lost' }))
+    expect(result.current.state.status).toBe('ready')
+    expect(result.current.state.error).toBeUndefined()
+    expect(result.current.state.readRefusal).toBeUndefined()
+  })
+
+  // A refusal whose reason this build doesn't know is still the host's answer, so it is owed too.
+  it.each([
+    ['with its reason', { reason: 'journalUnavailable' }],
+    ['without a reason', undefined]
+  ])('still reports a refusal the host sent on a loaded chat, %s', async (_case, details) => {
+    const { result, onError } = await loadedChatWithNoMessages()
+    act(() => onError?.(journalRefusal(details)))
+    expect(result.current.state.status).toBe('error')
+    expect(result.current.state.readRefusal).toEqual({
+      code: 'agent_session_journal_unreadable',
+      ...(details ? { details } : {})
+    })
+  })
+
+  it('still reports a failure that names nothing before the chat first loads', async () => {
+    mocks.call.mockRejectedValueOnce(new Error('journal read failed'))
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
+    )
+    await waitFor(() => expect(result.current.state.status).toBe('error'))
+    expect(result.current.state.error).toBe('journal read failed')
+    expect(result.current.state.epoch).toBeNull()
+  })
+})

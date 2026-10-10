@@ -29,7 +29,7 @@ import {
   WORKTREE_PATH,
   makeSession
 } from './__fixtures__/orca-runtime-terminal-close-continuity-state-fixture'
-import { advanceTerminalTopologyRevision } from './workspace-session-terminal-membership-authority'
+import { advanceTerminalTopologyRevision } from '../persistence/terminal-topology/terminal-topology-membership'
 
 const REPLACEMENT_PTY_ID = 'pty-close-continuity-replacement'
 const REPLACEMENT_INCARNATION_ID = '77777777-7777-4777-8777-777777777777'
@@ -82,7 +82,7 @@ function createHarness(opts: { lateProviderExit?: boolean; folder?: boolean } = 
     leafId: LEAF_ID,
     incarnationId: INCARNATION_ID
   })
-  ptyOwnership.set(PTY_ID, null)
+  ptyOwnership.set(PTY_ID, 'local')
   ptyIncarnationById.set(PTY_ID, INCARNATION_ID)
   let emitProviderExit:
     | ((payload: { id: string; code: number; incarnationId?: string }) => void)

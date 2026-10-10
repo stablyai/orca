@@ -1,8 +1,14 @@
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
+import type { HooksConfig } from '../agent-hooks/installer-utils'
 import { resolveHooksJsonWritePath } from '../agent-hooks/hook-config-write-path'
+import { isPlainObject, readHooksJsonWithRaw } from '../agent-hooks/hooks-json-read'
 import { getSystemCodexHomePath } from './codex-home-paths'
+import {
+  getCodexExplicitHomeHookSourcePath,
+  normalizeCodexHookSourcePath
+} from './config-toml-trust'
 
 /** The user's real `~/.codex` hook files, plus the guard and pristine backup
  *  the real-home lane needs before it is allowed to mutate them. */
@@ -10,13 +16,52 @@ export function getRealHomeHooksJsonPath(): string {
   return join(getSystemCodexHomePath(), 'hooks.json')
 }
 
-export function getRealHomeConfigTomlPath(): string {
-  return join(getSystemCodexHomePath(), 'config.toml')
+/**
+ * Every key Codex may give an entry in ~/.codex/hooks.json: as spelled when it
+ * runs on its default home, resolved when a pane's CODEX_HOME names it. They
+ * differ when ~/.codex or HOME is a symlink, and Orca approves under both.
+ */
+export function getRealHomeHookKeySourcePaths(): [string, ...string[]] {
+  const hooksJsonPath = getRealHomeHooksJsonPath()
+  const spelled = normalizeCodexHookSourcePath(hooksJsonPath)
+  const resolved = getCodexExplicitHomeHookSourcePath(hooksJsonPath)
+  return resolved === spelled ? [spelled] : [spelled, resolved]
 }
 
-/** Orca-side state dir; nothing extra is ever written into the user's ~/.codex. */
+/** Orca-side home of the pristine copy; the rolling hooks.json.bak beside the file is writeHooksJson's. */
 function getRealHomeHookStateDir(userDataPath: string): string {
   return join(userDataPath, 'codex-real-home-hooks')
+}
+
+/** Another process saved hooks.json between Orca's read and its write. */
+export class HooksJsonChangedError extends Error {
+  constructor() {
+    super('Codex hooks.json changed since Orca read it')
+    this.name = 'HooksJsonChangedError'
+  }
+}
+
+/** Why ~/.codex/hooks.json cannot take Orca's entry, read from the file now; null when it can. */
+export function readRealHomeHooksFileProblem(): string | null {
+  const hooksJsonPath = getRealHomeHooksJsonPath()
+  const { raw, config } = readHooksJsonWithRaw(hooksJsonPath)
+  if (raw === null) {
+    return null
+  }
+  return isAddableHooksFile(config)
+    ? null
+    : `Orca cannot add its hook to ${hooksJsonPath}, so Orca shows no status for ~/.codex`
+}
+
+// Why: an unparseable user file is never clobbered, and Codex skips a file with other root keys
+// or an event that is not a list, whose value Orca would otherwise replace.
+export function isAddableHooksFile(config: HooksConfig | null): config is HooksConfig {
+  return (
+    config !== null &&
+    Object.keys(config).every((key) => key === 'hooks' || key === 'description') &&
+    (config.hooks === undefined ||
+      (isPlainObject(config.hooks) && Object.values(config.hooks).every(Array.isArray)))
+  )
 }
 
 export function assertHooksJsonGeneration(
@@ -28,7 +73,7 @@ export function assertHooksJsonGeneration(
   if (currentRaw !== expectedRaw || resolveHooksJsonWritePath(hooksJsonPath) !== hooksWritePath) {
     // Why: another process may have saved since the read. Abort rather than
     // atomically replacing a newer file with the stale parsed snapshot.
-    throw new Error('Codex hooks.json changed since Orca read it')
+    throw new HooksJsonChangedError()
   }
 }
 

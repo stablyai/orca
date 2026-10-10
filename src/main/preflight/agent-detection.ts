@@ -16,11 +16,7 @@ import { getGiteaAuthStatus } from '../gitea/client'
 import { _resetKnownHostsCache } from '../gitlab/gl-utils'
 import { mergePersistedWindowsPathAsync } from '../pty/windows-environment-path'
 import { getActiveMultiplexer } from '../ssh/ssh-target-registry'
-import {
-  detectWslCommandsOnPath,
-  type WslPreflightTarget
-} from '../ipc/preflight-wsl-agent-detection'
-import { detectCommandsInInstallDirs } from '../ipc/local-agent-install-dir-detection'
+import type { WslPreflightTarget } from '../ipc/preflight-wsl-agent-detection'
 import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
@@ -33,7 +29,6 @@ import {
   execLocalPreflightCommandOrThrow,
   findRunnableLocalCommand,
   isCommandAvailable,
-  isCommandOnPath,
   shellQuote
 } from '../ipc/preflight-command-exec'
 import {
@@ -47,6 +42,8 @@ import {
 } from '../ipc/tui-agent-detection-commands'
 import { invalidateWslGuestEnvironment } from '../wsl/wsl-guest-environment'
 import { prunePreflightWslCache } from '../preflight-wsl-cache'
+import { detectAgentCommandsOnHost } from './agent-command-detection'
+export { detectAgentCommandsOnHost } from './agent-command-detection'
 
 export type PreflightStatus = {
   git: { installed: boolean }
@@ -148,38 +145,14 @@ async function detectCommandRuntime(
 }
 
 export async function detectInstalledAgents(context?: PreflightRuntimeContext): Promise<string[]> {
-  const wslTarget = getPreflightWslTarget(context)
-  if (wslTarget) {
-    const foundCommands = await detectWslCommandsOnPath(
-      wslTarget,
-      getTuiAgentDetectionProbeCommands(KNOWN_TUI_AGENT_DETECTION_COMMANDS, 'wsl')
-    )
-    return resolveDetectedTuiAgentIds(KNOWN_TUI_AGENT_DETECTION_COMMANDS, foundCommands, 'wsl')
-  }
-
-  const probeCommands = getTuiAgentDetectionProbeCommands(
+  const commands = getTuiAgentDetectionProbeCommands(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-    process.platform
-  )
-  const pathChecks = await Promise.all(
-    probeCommands.map(async (cmd) => ({
-      cmd,
-      installedOnPath: await isCommandOnPath(cmd)
-    }))
-  )
-  const missedCommands = pathChecks.filter((check) => !check.installedOnPath).map(({ cmd }) => cmd)
-  // Why: PATH may still be unhydrated on a cold GUI launch; bulk resolution
-  // computes user install dirs once instead of blocking once per missed CLI.
-  const installDirCommands = detectCommandsInInstallDirs(missedCommands)
-  const foundCommands = new Set(
-    pathChecks
-      .filter(({ cmd, installedOnPath }) => installedOnPath || installDirCommands.has(cmd))
-      .map(({ cmd }) => cmd)
+    getPreflightWslTarget(context) ? 'wsl' : process.platform
   )
   return resolveDetectedTuiAgentIds(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-    foundCommands,
-    process.platform
+    await detectAgentCommandsOnHost(commands, { context }),
+    getPreflightWslTarget(context) ? 'wsl' : process.platform
   )
 }
 
@@ -370,6 +343,8 @@ async function executePreflightCheck(
 ): Promise<PreflightStatus> {
   if (process.platform === 'win32' && !wslTarget) {
     await mergePersistedWindowsPathAsync(process.env, { forceRefresh: force })
+  } else if (process.platform !== 'win32') {
+    await hydrateShellPathForAgentDetection(context, force)
   }
 
   if (force) {
@@ -396,7 +371,7 @@ async function executePreflightCheck(
     getGiteaAuthStatus()
   ])
 
-  const result = {
+  return {
     git: { installed: gitProbe.installed },
     gh: { installed: ghProbe.installed, authenticated: ghAuthenticated },
     glab: { installed: glabProbe.installed, authenticated: glabAuthenticated },
@@ -404,6 +379,4 @@ async function executePreflightCheck(
     azureDevOps,
     gitea
   }
-
-  return result
 }

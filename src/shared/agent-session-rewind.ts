@@ -27,7 +27,11 @@ export type AgentSessionRewindParams = {
   itemId: string
   expectedEpoch: string
 }
-export type AgentSessionRewindResult = { itemId: string; epoch: string }
+export type AgentSessionRewindResult = {
+  itemId: string
+  epoch: string
+  sequence?: number
+}
 
 const Key = z.string().min(1).max(4096)
 export const AgentSessionRewindRecordSchema = z.object({
@@ -36,8 +40,11 @@ export const AgentSessionRewindRecordSchema = z.object({
   itemId: Key,
   providerItemId: Key.optional(),
   expectedEpoch: Key,
+  contextClearOperationId: Key.optional(),
+  contextClearSequence: z.number().int().positive().optional(),
   phase: z.enum(['prepared', 'provider-succeeded', 'completed', 'refused']),
   epoch: Key.optional(),
+  sequence: z.number().int().nonnegative().optional(),
   hydrationVerified: z.boolean().optional(),
   reason: z.string().min(1).max(512).optional(),
   retained: z

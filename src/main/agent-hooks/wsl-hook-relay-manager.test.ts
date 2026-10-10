@@ -293,6 +293,25 @@ describe('WslHookRelayManager', () => {
     manager.disposeAll()
   })
 
+  it('unbinds owner interrupt reconciliation when the WSL transport is retired', async () => {
+    const unbind = vi.fn()
+    const bind = vi.fn<NonNullable<WslHookRelayManagerDeps['bindInterruptReconciliation']>>(
+      (_mux, _connectionId, _isCurrent) => unbind
+    )
+    const { manager } = createManager({ bindInterruptReconciliation: bind })
+    manager.ensureForDistro('Ubuntu', codexHome)
+    try {
+      await vi.waitFor(() => expect(bind).toHaveBeenCalledOnce())
+      expect(bind.mock.lastCall?.[1]).toBe('wsl:Ubuntu')
+      expect(bind.mock.lastCall?.[2]()).toBe(true)
+      manager.disposeAll()
+      expect(unbind).toHaveBeenCalledOnce()
+      expect(bind.mock.lastCall?.[2]()).toBe(false)
+    } finally {
+      manager.disposeAll()
+    }
+  })
+
   it('waits for guest materialization when an explicit Pi or OMP launch needs it', async () => {
     const { manager } = createManager({})
     await expect(

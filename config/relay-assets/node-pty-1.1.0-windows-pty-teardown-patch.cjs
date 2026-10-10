@@ -97,23 +97,136 @@ const { join, resolve } = require('node:path')
 
 const EXPECTED_NODE_PTY_VERSION = '1.1.0'
 
+const WINDOWS_TERMINAL_TEARDOWN_REPLACEMENTS = [
+  [
+    '        var parsedEnv = _this._parseEnv(env);\n        // If the terminal is ready\n        _this._isReady = false;\n        // Functions that need to run after `ready` event is emitted.\n        _this._deferreds = [];\n        // Create new termal.\n',
+    '        var parsedEnv = _this._parseEnv(env);\n        // If the terminal is ready\n        _this._isReady = false;\n        _this._killRequested = false;\n        _this._killComplete = false;\n        _this._isPipeReady = false;\n        // Functions that need to run after `ready` event is emitted.\n        _this._deferreds = [];\n        // Create new termal.\n'
+  ],
+  [
+    "        _this._pid = _this._agent.innerPid;\n        _this._fd = _this._agent.fd;\n        _this._pty = _this._agent.pty;\n        // The forked windows terminal is not available until `ready` event is\n        // emitted.\n        _this._socket.on('ready_datapipe', function () {\n            // Run deferreds and set ready state once the first data event is received.\n            _this._socket.once('data', function () {\n                // Wait until the first data event is fired then we can run deferreds.\n                if (!_this._isReady) {\n                    // Terminal is now ready and we can avoid having to defer method\n                    // calls.\n                    _this._isReady = true;\n",
+    "        _this._pid = _this._agent.innerPid;\n        _this._fd = _this._agent.fd;\n        _this._pty = _this._agent.pty;\n        // A pre-output teardown must still publish the actual pipe close.\n        _this._socket.once('close', function () {\n            if (_this._isPipeReady) {\n                _this.emit('exit', _this._agent.exitCode);\n            }\n            _this._close();\n        });\n        // The forked windows terminal is not available until `ready` event is\n        // emitted.\n        _this._socket.on('ready_datapipe', function () {\n            _this._isPipeReady = true;\n            if (_this._killRequested) {\n                _this.kill();\n                return;\n            }\n            // Run deferreds and set ready state once the first data event is received.\n            _this._socket.once('data', function () {\n                // Wait until the first data event is fired then we can run deferreds.\n                if (!_this._isReady && !_this._killRequested) {\n                    // Terminal is now ready and we can avoid having to defer method\n                    // calls.\n                    _this._isReady = true;\n"
+  ],
+  [
+    "                    _this._deferreds = [];\n                }\n            });\n            // Cleanup after the socket is closed.\n            _this._socket.on('close', function () {\n                _this.emit('exit', _this._agent.exitCode);\n                _this._close();\n            });\n        });\n        _this._file = file;\n        _this._name = name;\n",
+    '                    _this._deferreds = [];\n                }\n            });\n        });\n        _this._file = file;\n        _this._name = name;\n'
+  ],
+  [
+    "        });\n    };\n    WindowsTerminal.prototype.destroy = function () {\n        var _this = this;\n        this._deferNoArgs(function () {\n            _this.kill();\n        });\n    };\n    WindowsTerminal.prototype.kill = function (signal) {\n        var _this = this;\n        this._deferNoArgs(function () {\n            if (signal) {\n                throw new Error('Signals not supported on windows.');\n            }\n            _this._close();\n            _this._agent.kill();\n        });\n    };\n    WindowsTerminal.prototype._deferNoArgs = function (deferredFn) {\n        var _this = this;\n        // If the terminal is ready, execute.\n        if (this._isReady) {\n",
+    "        });\n    };\n    WindowsTerminal.prototype.destroy = function () {\n        this.kill();\n    };\n    WindowsTerminal.prototype.kill = function (signal) {\n        if (signal) {\n            throw new Error('Signals not supported on windows.');\n        }\n        // Retire input now; native close requires the forwarding pipe, not first output.\n        this._killRequested = true;\n        this._deferreds = [];\n        this._close();\n        if (!this._isPipeReady || this._killComplete) {\n            return;\n        }\n        this._agent.kill();\n        this._killComplete = true;\n    };\n    WindowsTerminal.prototype._deferNoArgs = function (deferredFn) {\n        if (this._killRequested) {\n            return;\n        }\n        var _this = this;\n        // If the terminal is ready, execute.\n        if (this._isReady) {\n"
+  ],
+  [
+    '        });\n    };\n    WindowsTerminal.prototype._defer = function (deferredFn, arg) {\n        var _this = this;\n        // If the terminal is ready, execute.\n        if (this._isReady) {\n',
+    '        });\n    };\n    WindowsTerminal.prototype._defer = function (deferredFn, arg) {\n        if (this._killRequested) {\n            return;\n        }\n        var _this = this;\n        // If the terminal is ready, execute.\n        if (this._isReady) {\n'
+  ]
+]
+
+const PRECONNECT_AGENT_REPLACEMENTS = [
+  [
+    'var utils_1 = require("./utils");',
+    'var utils_1 = require("./utils");\nvar eventEmitter2_1 = require("./eventEmitter2");'
+  ],
+  [
+    '        this._innerPid = 0;',
+    '        this._innerPid = 0;\n        this._onProcessExit = new eventEmitter2_1.EventEmitter2();'
+  ],
+  [
+    '    WindowsPtyAgent.prototype.kill = function () {',
+    '    Object.defineProperty(WindowsPtyAgent.prototype, "onProcessExit", {\n        get: function () { return this._onProcessExit.event; },\n        enumerable: false,\n        configurable: true\n    });\n    Object.defineProperty(WindowsPtyAgent.prototype, "isConpty", {\n        get: function () { return this._useConpty === true; },\n        enumerable: false,\n        configurable: true\n    });\n    WindowsPtyAgent.prototype.killAfterOutputClosed = function () {\n        var _this = this;\n        return this._conoutSocketWorker.disposeImmediately().then(function () { return _this.kill(); });\n    };\n    WindowsPtyAgent.prototype.kill = function () {'
+  ],
+  [
+    "            this._outSocket.on('data', function () { return _this._flushDataAndCleanUp(); });\n        }\n    };",
+    "            this._outSocket.on('data', function () { return _this._flushDataAndCleanUp(); });\n        }\n        this._onProcessExit.fire(exitCode);\n    };"
+  ]
+]
+
+const PRECONNECT_TERMINAL_REPLACEMENTS = [
+  [
+    '        _this._isPipeReady = false;',
+    '        _this._isPipeReady = false;\n        _this._exitEmitted = false;\n        _this._preconnectCleanupRequested = false;'
+  ],
+  [
+    "        // A pre-output teardown must still publish the actual pipe close.\n        _this._socket.once('close', function () {\n            if (_this._isPipeReady) {\n                _this.emit('exit', _this._agent.exitCode);\n            }\n            _this._close();\n        });",
+    "        _this._agent.onProcessExit(function () {\n            if (_this._killRequested) _this._emitExit();\n        });\n        _this._socket.once('close', function () {\n            if (_this._isPipeReady && !_this._preconnectCleanupRequested && (!_this._killRequested || !_this._agent.isConpty || _this._agent.exitCode !== undefined)) _this._emitExit();\n            _this._close();\n            if (_this._killRequested && !_this._isPipeReady) _this._killAfterOutputClosed();\n        });"
+  ],
+  [
+    '        if (!this._isPipeReady || this._killComplete) {\n            return;\n        }',
+    '        if (this._killComplete || this._preconnectCleanup) return;\n        if (this._preconnectCleanupRequested || (!this._isPipeReady && this._socket.destroyed)) {\n            this._killAfterOutputClosed();\n            return;\n        }\n        if (!this._isPipeReady) return;'
+  ],
+  [
+    '    WindowsTerminal.prototype._deferNoArgs =',
+    "    WindowsTerminal.prototype._emitExit = function () {\n        if (this._exitEmitted) return;\n        this._exitEmitted = true;\n        this.emit('exit', this._agent.exitCode);\n    };\n    WindowsTerminal.prototype._killAfterOutputClosed = function () {\n        var _this = this;\n        if (!this._agent.isConpty || this._killComplete || this._preconnectCleanup) return;\n        this._preconnectCleanupRequested = true;\n        this._preconnectCleanup = this._agent.killAfterOutputClosed().then(function () {\n            _this._killComplete = true;\n            if (_this._agent.exitCode !== undefined) _this._emitExit();\n        }, function (error) {\n            _this._preconnectCleanup = undefined;\n            if (_this.listeners('error').length > 1) {\n                _this.emit('error', error);\n            }\n        });\n        if (this._agent.exitCode !== undefined) this._emitExit();\n    };\n    WindowsTerminal.prototype._deferNoArgs ="
+  ]
+]
+
+const PRECONNECT_CONOUT_REPLACEMENTS = [
+  [
+    '                case 1 /* READY */:\n                    _this._onReady.fire();',
+    '                case 1 /* READY */:\n                    if (_this._termination) return;\n                    _this._onReady.fire();'
+  ],
+  [
+    '    ConoutConnection.prototype.connectSocket = function (socket) {\n        socket.connect',
+    '    ConoutConnection.prototype.disposeImmediately = function () {\n        this._isDisposed = true;\n        if (this._drainTimeout) clearTimeout(this._drainTimeout);\n        return this._destroySocket();\n    };\n    ConoutConnection.prototype.connectSocket = function (socket) {\n        if (this._termination) return;\n        socket.connect'
+  ],
+  [
+    '    ConoutConnection.prototype._destroySocket = function () {\n        return __awaiter(this, void 0, void 0, function () {\n            return __generator(this, function (_a) {\n                switch (_a.label) {\n                    case 0: return [4 /*yield*/, this._worker.terminate()];\n                    case 1:\n                        _a.sent();\n                        return [2 /*return*/];\n                }\n            });\n        });\n    };\n',
+    '    ConoutConnection.prototype._destroySocket = function () {\n        if (!this._termination) {\n            this._termination = this._worker.terminate().then(function () { return undefined; });\n        }\n        return this._termination;\n    };\n'
+  ]
+]
+
 /** Each entry is one published file, its patched form, and the edits between them. */
-const PATCH_TARGETS = [
+const PREVIOUS_PATCH_TARGETS = [
+  {
+    relativePath: ['lib', 'windowsConoutConnection.js'],
+    originalSha256: '1440f70908fb1f55911ac8e936a1230f68a9c00c03096fcef6788eac6aad9d62',
+    patchedSha256: '37fab0688764326444509f7ffb24369f99fda4fbe29db72dccfad52c457ba244',
+    replacements: PRECONNECT_CONOUT_REPLACEMENTS
+  },
   {
     relativePath: ['lib', 'windowsPtyAgent.js'],
     originalSha256: '8636d16b38266112204061a22b135734177c242837982fd3a4055be726efa64a',
-    patchedSha256: '1e23ef480569e73706e3ab4f5482c7e553c76f51414ae8e7b0bdcc2fd75f7280',
+    patchedSha256: '3c14daf8d0ec2d1e2d66435caa5fb2b629b230e237873594e623e79e6a7d1223',
+    previousPatchedSha256: '1e23ef480569e73706e3ab4f5482c7e553c76f51414ae8e7b0bdcc2fd75f7280',
+    previousReplacements: PRECONNECT_AGENT_REPLACEMENTS,
     replacements: [
       [
         '                this._ptyNative.kill(this._pty, this._useConptyDll);\n                this._conoutSocketWorker.dispose();\n',
         '                this._ptyNative.kill(this._pty, this._useConptyDll);\n                this._conoutSocketWorker.dispose();\n                // Orca: released AFTER the console-list fork and the native kill, not before them.\n                // Destroying conin first aborts teardown partway -- measured on a Windows SSH relay\n                // as +2 File and +1 Process handles per terminal, against +1 File unpatched.\n                this._inSocket.destroy();\n'
-      ]
+      ],
+      ...PRECONNECT_AGENT_REPLACEMENTS
     ]
   },
   {
     relativePath: ['lib', 'windowsTerminal.js'],
     originalSha256: 'c3a65716f53fed0135a8a633373d5f9c2ab092544d651f27ef0a67096dd3bcd9',
-    patchedSha256: '8247ecd69be8b18257050fb026b290024612c5ffc6d492ff1d46f81e613be2cf',
+    patchedSha256: '5dfeb1dda46645e1d77964ad4d07072b34f0a897dfc7e785137cc39e755b4641',
+    additionalPreviousVariants: [
+      {
+        sha256: '3060c6514a8e9e3285f91b9b549930e7d25d59d4cf7e1ed3a25b9a680dd1ded5',
+        replacements: PRECONNECT_TERMINAL_REPLACEMENTS
+      },
+      {
+        sha256: '598755ee75307d041a72cd7c7c4e12ae4a4bbf35eee19da67b42b61fdae0d4d6',
+        replacements: [
+          [
+            "            _this._preconnectCleanup = undefined;\n            _this.emit('error', error);",
+            "            _this._preconnectCleanup = undefined;\n            if (_this.listeners('error').length > 1) {\n                _this.emit('error', error);\n            }"
+          ],
+          [
+            '            if (_this._preconnectCleanupRequested) _this._emitExit();',
+            '            if (_this._killRequested) _this._emitExit();'
+          ],
+          [
+            '            if (_this._isPipeReady && !_this._preconnectCleanupRequested) _this._emitExit();',
+            '            if (_this._isPipeReady && !_this._preconnectCleanupRequested && (!_this._killRequested || !_this._agent.isConpty || _this._agent.exitCode !== undefined)) _this._emitExit();'
+          ]
+        ]
+      }
+    ],
+    previousPatchedSha256: '8247ecd69be8b18257050fb026b290024612c5ffc6d492ff1d46f81e613be2cf',
+    previousReplacements: [
+      ...WINDOWS_TERMINAL_TEARDOWN_REPLACEMENTS,
+      ...PRECONNECT_TERMINAL_REPLACEMENTS
+    ],
     replacements: [
       [
         '        _this._agent = new windowsPtyAgent_1.WindowsPtyAgent(file, args, parsedEnv, cwd, _this._cols, _this._rows, false, opt.useConpty, opt.useConptyDll, opt.conptyInheritCursor);\n        _this._socket = _this._agent.outSocket;\n        // Not available until `ready` event emitted.\n        _this._pid = _this._agent.innerPid;',
@@ -130,10 +243,38 @@ const PATCH_TARGETS = [
       [
         'exports.WindowsTerminal = WindowsTerminal;\n//# sourceMappingURL=windowsTerminal.js.map',
         'exports.WindowsTerminal = WindowsTerminal;\n//# sourceMappingURL=windowsTerminal.js.map\n'
-      ]
+      ],
+      ...WINDOWS_TERMINAL_TEARDOWN_REPLACEMENTS,
+      ...PRECONNECT_TERMINAL_REPLACEMENTS
     ]
   }
 ]
+
+// Retire the entrypoint before removing the APIs it required.
+const PATCH_TARGETS = [
+  'windowsTerminal.js',
+  'windowsPtyAgent.js',
+  'windowsConoutConnection.js'
+].map((file) => {
+  const previous = PREVIOUS_PATCH_TARGETS.find((target) => target.relativePath.at(-1) === file)
+  const inverse = (replacements) => replacements.toReversed().map(([from, to]) => [to, from])
+  const isConout = file === 'windowsConoutConnection.js'
+  const retiredReplacements = isConout ? previous.replacements : previous.previousReplacements
+  return {
+    relativePath: previous.relativePath,
+    originalSha256: previous.originalSha256,
+    patchedSha256: isConout ? previous.originalSha256 : previous.previousPatchedSha256,
+    replacements: isConout
+      ? []
+      : previous.replacements.slice(0, previous.replacements.length - retiredReplacements.length),
+    previousPatchedSha256: previous.patchedSha256,
+    previousReplacements: inverse(retiredReplacements),
+    additionalPreviousVariants: previous.additionalPreviousVariants?.map((variant) => ({
+      sha256: variant.sha256,
+      replacements: [...variant.replacements, ...inverse(retiredReplacements)]
+    }))
+  }
+})
 
 function inspectTarget(relayDir, target) {
   const nodePtyDir = resolve(relayDir, 'node_modules', 'node-pty')
@@ -159,19 +300,27 @@ function assertPatchedNodePtyWindowsTeardown(relayDir = process.cwd()) {
 }
 
 function patchNodePtyWindowsTeardown(relayDir = process.cwd()) {
+  const pending = []
   for (const target of PATCH_TARGETS) {
     const inspected = inspectTarget(relayDir, target)
     const sourceHash = sourceSha256(inspected.source)
     if (sourceHash === target.patchedSha256) {
       continue
     }
-    if (sourceHash !== target.originalSha256) {
+    const replacements =
+      sourceHash === target.originalSha256
+        ? target.replacements
+        : sourceHash === target.previousPatchedSha256
+          ? target.previousReplacements
+          : target.additionalPreviousVariants?.find((entry) => entry.sha256 === sourceHash)
+              ?.replacements
+    if (!replacements) {
       throw new Error(
         `Refusing to patch unexpected node-pty source in ${target.relativePath.join('/')}`
       )
     }
     let patchedSource = inspected.source
-    for (const [from, to] of target.replacements) {
+    for (const [from, to] of replacements) {
       // Why the count check: an anchor that matched twice would patch the wrong site silently, and
       // the hash below would then reject a tree this script had already rewritten.
       if (patchedSource.split(from).length - 1 !== 1) {
@@ -179,11 +328,19 @@ function patchNodePtyWindowsTeardown(relayDir = process.cwd()) {
       }
       patchedSource = patchedSource.replace(from, to)
     }
-    const temporaryPath = `${inspected.filePath}.orca-patch-${process.pid}`
+    if (sourceSha256(patchedSource) !== target.patchedSha256) {
+      throw new Error(
+        `Refusing to install unexpected patched node-pty source in ${target.relativePath.join('/')}`
+      )
+    }
+    pending.push({ filePath: inspected.filePath, patchedSource })
+  }
+  for (const { filePath, patchedSource } of pending) {
+    const temporaryPath = `${filePath}.orca-patch-${process.pid}`
     // Why: a terminated remote install must leave either known source version recoverable on reconnect.
     try {
       writeFileSync(temporaryPath, patchedSource)
-      renameSync(temporaryPath, inspected.filePath)
+      renameSync(temporaryPath, filePath)
     } finally {
       rmSync(temporaryPath, { force: true })
     }

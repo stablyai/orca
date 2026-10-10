@@ -10,29 +10,30 @@ import {
   nativeChatComposerTargetIsRemote,
   type NativeChatResolvedTarget
 } from './native-chat-composer-target'
-import {
-  pushHistory,
-  type HistoryState,
-  type NativeChatPickerItem
-} from './native-chat-composer-state'
+import type { NativeChatPickerItem } from './native-chat-composer-state'
 import type { NativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
 import type { NativeChatPtySessionOptionsSurface } from './native-chat-pty-session-options'
+import {
+  answerNativeChatCommandInComposer,
+  type NativeChatLocalCommandAnswer
+} from './use-native-chat-local-command-answer'
 
 export function useNativeChatPickerCommandDispatch(args: {
   agent: AgentType
   disabled: boolean
   isDispatchingSessionOption: boolean
   resolveTarget: () => NativeChatResolvedTarget | null
-  onSlashCommand?: (command: string) => void
+  onSlashCommand?: (command: string, output?: string) => void
+  answerCommandLocally?: NativeChatLocalCommandAnswer
+  onSubmitted?: () => void
   sessionOptionsSurface: NativeChatPtySessionOptionsSurface | null
   trackPendingSend: NativeChatSendLifecycle['trackPendingSend']
-  setHistory: Dispatch<SetStateAction<HistoryState>>
   setDraft: (value: string) => void
   setCaret: Dispatch<SetStateAction<number>>
   setActiveSuggestion: Dispatch<SetStateAction<number>>
   clearSkillOrigin: () => void
   clearImageAttachments: () => void
-  setNotice: Dispatch<SetStateAction<string | null>>
+  setNotice: (notice: string | null) => void
 }): (command: Extract<NativeChatPickerItem, { kind: 'command' }>) => void {
   const {
     agent,
@@ -40,9 +41,10 @@ export function useNativeChatPickerCommandDispatch(args: {
     isDispatchingSessionOption,
     resolveTarget,
     onSlashCommand,
+    answerCommandLocally,
+    onSubmitted,
     sessionOptionsSurface,
     trackPendingSend,
-    setHistory,
     setDraft,
     setCaret,
     setActiveSuggestion,
@@ -55,6 +57,24 @@ export function useNativeChatPickerCommandDispatch(args: {
       const text = `/${command.name}`
       const target = resolveTarget()
       if (!target || disabled || isDispatchingSessionOption) {
+        return
+      }
+      if (
+        answerNativeChatCommandInComposer({
+          draft: text,
+          answerCommandLocally,
+          sessionOptionsSurface,
+          onSlashCommand,
+          onSubmitted,
+          setDraft,
+          setCaret,
+          clearSkillOrigin,
+          setNotice
+        })
+      ) {
+        emitNativeChatPickerItemAccepted({ agent, itemKind: 'command' })
+        emitNativeChatSendClassified({ agent, outcome: 'command' })
+        setActiveSuggestion(0)
         return
       }
       trackPendingSend(
@@ -73,7 +93,7 @@ export function useNativeChatPickerCommandDispatch(args: {
         agent,
         runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
       })
-      setHistory((previous) => pushHistory(previous, text))
+      onSubmitted?.()
       setDraft('')
       setCaret(0)
       setActiveSuggestion(0)
@@ -83,17 +103,18 @@ export function useNativeChatPickerCommandDispatch(args: {
     },
     [
       agent,
+      answerCommandLocally,
       clearImageAttachments,
       clearSkillOrigin,
       disabled,
       isDispatchingSessionOption,
       onSlashCommand,
+      onSubmitted,
       resolveTarget,
       sessionOptionsSurface,
       setActiveSuggestion,
       setCaret,
       setDraft,
-      setHistory,
       setNotice,
       trackPendingSend
     ]

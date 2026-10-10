@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 // `agentSession.hold` / `release` are kept answering for clients that still send them, and do
 // nothing else: a view never starts or keeps an agent.
 //
@@ -29,6 +30,10 @@ import { agentSessionFailureFact } from '../../../../shared/agent-session-failur
 import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
 import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+import { codexProviderHandle } from '../../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
+import { getDefaultPersistedState } from '../../../../shared/constants'
+import { RuntimeClientSettingsController } from '../../runtime-client-settings'
 
 const CONNECTION = 'connection-1'
 const CLIENT = {
@@ -69,7 +74,7 @@ beforeEach(async () => {
     process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
     link: {
       linkId: `link-${fence}`,
-      handle: { provider: 'codex' as const, threadId: THREAD },
+      handle: codexProviderHandle(THREAD),
       origin: store.getRecord(SESSION)?.providerHandleChain.length
         ? ('resumed' as const)
         : ('created' as const),
@@ -79,6 +84,7 @@ beforeEach(async () => {
   }))
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
@@ -105,12 +111,14 @@ beforeEach(async () => {
   setStructuredAgentSessionHost(host)
   runtime = new OrcaRuntimeService()
   // The structured surface is settings-gated for every caller, in-process included.
-  vi.spyOn(runtime, 'getClientSettings').mockImplementation(
-    () =>
-      ({ experimentalStructuredNativeChat: structuredNativeChatEnabled }) as ReturnType<
-        OrcaRuntimeService['getClientSettings']
-      >
-  )
+  const clientSettings = new RuntimeClientSettingsController({
+    getSettings: () => ({
+      ...getDefaultPersistedState(root).settings,
+      experimentalNativeChat: structuredNativeChatEnabled
+    }),
+    updateSettings: () => undefined
+  }).get()
+  vi.spyOn(runtime, 'getClientSettings').mockImplementation(() => clientSettings)
   dispatcher = new RpcDispatcher({ runtime, methods: STRUCTURED_AGENT_SESSION_METHODS })
   expect(await host.attach({ callerKey: 'client-1' }, hostTestAttachParams(null))).toMatchObject({
     ok: true

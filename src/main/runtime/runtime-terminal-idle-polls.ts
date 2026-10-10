@@ -131,7 +131,10 @@ export class RuntimeTerminalIdlePolls {
       const readWaitText = () =>
         buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
       return {
-        verdict: evaluateTuiIdle(ptyTuiIdleEvidence(this.deps, pty, readWaitText)),
+        verdict: evaluateTuiIdle({
+          ...ptyTuiIdleEvidence(this.deps, pty, readWaitText),
+          launchReadiness: entry.waiter.launchReadiness
+        }),
         ptyId: pty.ptyId,
         ready: () => buildPtyTerminalWaitResult(handle, 'tui-idle', pty),
         blocked: (reason) => buildPtyTerminalWaitBlockedResult(handle, 'tui-idle', pty, reason),
@@ -150,7 +153,10 @@ export class RuntimeTerminalIdlePolls {
       buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
     const live = () => this.deps.getLiveLeaf(entry.leaf)
     return {
-      verdict: evaluateTuiIdle(leafTuiIdleEvidence(this.deps, leaf, readWaitText)),
+      verdict: evaluateTuiIdle({
+        ...leafTuiIdleEvidence(this.deps, leaf, readWaitText),
+        launchReadiness: entry.waiter.launchReadiness
+      }),
       ptyId: leaf.ptyId,
       ready: () => buildTerminalWaitResult(handle, 'tui-idle', live()),
       blocked: (reason) => buildTerminalWaitBlockedResult(handle, 'tui-idle', live(), reason),

@@ -11,12 +11,25 @@ const TOOLCHAIN_FILES = new Set([
   '.github/workflows/pr.yml'
 ])
 
+function isIgnoredTestSource(path) {
+  if (!/\.(?:js|jsx|ts|tsx|mts|cts)$/.test(path)) {
+    return false
+  }
+  const segments = path.split('/')
+  const filename = segments.at(-1) ?? ''
+  return (
+    filename.includes('.test.') ||
+    filename.includes('.spec.') ||
+    segments.slice(0, -1).some((segment) => segment === '__tests__' || segment === '__snapshots__')
+  )
+}
+
 export function affectsLocalizationExtraction(paths) {
   return paths.some(
     (path) =>
       TOOLCHAIN_FILES.has(path) ||
-      // Include all source paths so catalog moves and future extractor inputs stay covered.
-      path.startsWith('src/') ||
+      // Keep catalogs and future source inputs; skip only configured test exclusions.
+      (path.startsWith('src/') && !isIgnoredTestSource(path)) ||
       path.startsWith('config/i18next.') ||
       path.startsWith('config/tsconfig') ||
       path.startsWith('config/patches/') ||

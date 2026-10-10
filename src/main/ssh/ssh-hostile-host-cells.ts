@@ -38,8 +38,6 @@ export type HostileHostExpectation =
       reason: RemoteRuntimeUnavailableReason
       refusals: readonly RungRefusal[]
     }
-  /** The ladder fell through to the host-npm path, which cannot run on this host either. */
-  | { outcome: 'legacy_failed'; refusals: readonly RungRefusal[] }
   /** The host opted out: the ladder never runs and nothing enters the pinned runtime store. */
   | { outcome: 'legacy_opt_out' }
 
@@ -47,7 +45,14 @@ export type HostileHostExpectation =
 export type HostileHostCellCore = {
   id: string
   expect: HostileHostExpectation
+  /** Also deploy managed orcad on a fresh host, on this runtime target. */
+  managed?: ManagedOrcadExpectation
 }
+
+export type ManagedOrcadExpectation =
+  | { outcome: 'activated'; runtime: NodeRuntimeTarget }
+  /** The candidate is refused with this deferral code, and the relay that follows settles on `relayRung`. */
+  | { outcome: 'refused'; runtime: NodeRuntimeTarget; code: string; relayRung: 'A' | 'B' }
 
 export type DockerHostileHostCell = HostileHostCellCore & {
   host?: 'docker'
@@ -131,7 +136,7 @@ export const HOSTILE_HOST_CELLS: readonly HostileHostCell[] = [
   },
   {
     // The musl Node links libstdc++, so its self-test proves the missing library; B has no
-    // compat runtime yet and C finds no host Node.
+    // compat runtime yet, C finds no host Node, and the host-Node fallback proves it has none.
     id: 'alpine-musl-no-libstdcxx',
     dockerfile: [`FROM ${ALPINE_3_20}`, ALPINE_SSHD],
     expect: {
@@ -140,12 +145,14 @@ export const HOSTILE_HOST_CELLS: readonly HostileHostCell[] = [
       refusals: [
         { step: 'A', reason: 'missing_lib' },
         { step: 'B', reason: 'runtime_unavailable' },
-        { step: 'C', reason: 'host_node_missing' }
+        { step: 'C', reason: 'host_node_missing' },
+        { step: 'legacy', reason: 'host_node_missing' }
       ]
     }
   },
   {
-    // A host Node 20 does not help: rung C would load its addons from the same noexec tree.
+    // A proved noexec skips B and C (same tree) for the host-Node fallback, which finds Node 20
+    // without npm; that answered "no Node" is the only way to D.
     id: 'ubuntu2204-node20-noexec-home',
     dockerfile: [
       `FROM ${NODE_20} AS host-node`,
@@ -159,7 +166,10 @@ export const HOSTILE_HOST_CELLS: readonly HostileHostCell[] = [
     expect: {
       outcome: 'unavailable',
       reason: 'home_noexec',
-      refusals: [{ step: 'A', reason: 'noexec' }]
+      refusals: [
+        { step: 'A', reason: 'noexec' },
+        { step: 'legacy', reason: 'host_node_missing' }
+      ]
     }
   },
   {
@@ -177,7 +187,9 @@ export const HOSTILE_HOST_CELLS: readonly HostileHostCell[] = [
       target: 'linux-x64-glibc',
       runtime: 'linux-x64-glibc217',
       refusals: [{ step: 'A', reason: 'libc_floor' }]
-    }
+    },
+    // Managed orcad runs on the same compat runtime and slot, so an empty CentOS 7 host is managed.
+    managed: { outcome: 'activated', runtime: 'linux-x64-glibc217' }
   },
   {
     // The client uploads the runtime over SSH, so a host that cannot reach nodejs.org still runs A.
@@ -245,7 +257,7 @@ export function selectHostileHostCells(
 }
 
 export type HostileHostObservation = {
-  /** The rung the ladder settled on, or null when it never settled (legacy failure). */
+  /** The rung the ladder settled on, or null when it never settled. */
   settledRung: SshRemoteRuntimeRung | null
   /** The server target of a launched relay, when the ladder resolved one. */
   target: ServerTarget | null
@@ -273,10 +285,11 @@ export function hostileHostCellViolations(
       `refusals ${describeRefusals(observed.refusals)}, expected ${describeRefusals(expectedRefusals)}`
     )
   }
-  // Why every ladder outcome: no rung reached before legacy may reach for npm or a compiler.
-  const legacy = expect.outcome === 'legacy_failed' || expect.outcome === 'legacy_opt_out'
-  if (!legacy && observed.forbiddenToolCalls.length > 0) {
-    violations.push(`toolchain invoked: ${observed.forbiddenToolCalls.join('; ')}`)
+  // Why every ladder outcome: nothing may install or compile. A version probe is read-only; the
+  // host-Node fallback asks `npm --version` before it settles D on a host with no usable npm.
+  const toolchainActions = observed.forbiddenToolCalls.filter((call) => !isReadOnlyToolProbe(call))
+  if (expect.outcome !== 'legacy_opt_out' && toolchainActions.length > 0) {
+    violations.push(`toolchain invoked: ${toolchainActions.join('; ')}`)
   }
   switch (expect.outcome) {
     case 'launched':
@@ -300,14 +313,6 @@ export function hostileHostCellViolations(
         )
       }
       break
-    case 'legacy_failed':
-      if (observed.settledRung !== null) {
-        violations.push(`settled on ${observed.settledRung}, expected the host-npm path to fail`)
-      }
-      if (!observed.deployError) {
-        violations.push('deploy succeeded on a host with no runnable runtime')
-      }
-      break
     case 'legacy_opt_out':
       // The host-Node path's own verdict depends on the host's Node, so only the ladder is judged.
       if (observed.settledRung !== null) {
@@ -316,6 +321,11 @@ export function hostileHostCellViolations(
       break
   }
   return violations
+}
+
+/** A shim call that only asks a tool its version, as `<tool> --version` or `<tool> -v`. */
+function isReadOnlyToolProbe(call: string): boolean {
+  return /^\S+ (?:--version|-v)$/.test(call.trim())
 }
 
 export function parseForbiddenToolLog(contents: string): string[] {

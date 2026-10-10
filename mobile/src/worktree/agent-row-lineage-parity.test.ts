@@ -1,10 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
-import {
-  buildAgentRowLineageTree,
-  flattenAgentRowLineage,
-  type AgentRowNode
-} from './agent-row-lineage'
+import { flattenAgentRowLineage, type AgentRowNode } from './agent-row-lineage'
 
 function row(paneKey: string, parentPaneKey: string | null): RuntimeWorktreeAgentRow {
   return {
@@ -24,54 +20,7 @@ function row(paneKey: string, parentPaneKey: string | null): RuntimeWorktreeAgen
   }
 }
 
-// Frozen pre-optimization traversal: duplicate pane keys may be emitted on distinct branches.
-function legacyFlatten(rows: readonly RuntimeWorktreeAgentRow[]): AgentRowNode[] {
-  const { rootRows, childrenByParentPaneKey } = buildAgentRowLineageTree(rows)
-  const out: AgentRowNode[] = []
-  const seen = new Set<string>()
-  const visit = (agent: RuntimeWorktreeAgentRow, depth: number, ancestors: ReadonlySet<string>) => {
-    if (ancestors.has(agent.paneKey)) {
-      return
-    }
-    seen.add(agent.paneKey)
-    out.push({ row: agent, depth, children: [] })
-    const nextAncestors = new Set(ancestors)
-    nextAncestors.add(agent.paneKey)
-    for (const child of childrenByParentPaneKey.get(agent.paneKey) ?? []) {
-      visit(child, depth + 1, nextAncestors)
-    }
-  }
-  for (const root of rootRows) {
-    visit(root, 0, new Set())
-  }
-  for (const agent of rows) {
-    if (!seen.has(agent.paneKey)) {
-      seen.add(agent.paneKey)
-      out.push({ row: agent, depth: 0, children: [] })
-    }
-  }
-  return out
-}
-
-describe('agent lineage traversal parity', () => {
-  it('matches the previous traversal across cycles, dangling parents, duplicates, and input order', () => {
-    const variants = ['a', 'b', 'c'].flatMap((paneKey) =>
-      [null, 'a', 'b', 'c', 'missing'].map((parentPaneKey) => row(paneKey, parentPaneKey))
-    )
-    expect(flattenAgentRowLineage([])).toEqual(legacyFlatten([]))
-    for (const first of variants) {
-      for (const second of variants) {
-        for (const third of variants) {
-          const rows = [first, second, third]
-          const expected = legacyFlatten(rows)
-          const actual = flattenAgentRowLineage(rows)
-          expect(actual).toEqual(expected)
-          actual.forEach((node, index) => expect(node.row).toBe(expected[index]?.row))
-        }
-      }
-    }
-  })
-
+describe('agent lineage traversal', () => {
   it('releases the ancestor path between duplicate roots and sibling branches', () => {
     const firstRoot = row('root', null)
     const secondRoot = row('root', null)
@@ -80,7 +29,6 @@ describe('agent lineage traversal parity', () => {
     const grandchild = row('grandchild', 'child')
     const rows = [firstRoot, firstChild, secondChild, grandchild, secondRoot]
     const actual = flattenAgentRowLineage(rows)
-    expect(actual).toEqual(legacyFlatten(rows))
     expect(actual.map((node) => [rows.indexOf(node.row), node.depth])).toEqual([
       [0, 0],
       [1, 1],

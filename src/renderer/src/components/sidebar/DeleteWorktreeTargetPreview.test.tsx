@@ -190,9 +190,6 @@ describe('DeleteWorktreeTargetPreview loaded paths', () => {
     })
     expect(trigger).toHaveAttribute('aria-expanded', 'false')
     expect(screen.queryByText('src/app.ts')).not.toBeInTheDocument()
-    expect(
-      screen.getByText('Deleting this workspace permanently removes these changes from disk.')
-    ).toBeVisible()
     fireEvent.click(trigger)
 
     expect(trigger).toHaveAttribute('aria-expanded', 'true')
@@ -222,7 +219,7 @@ describe('DeleteWorktreeTargetPreview loaded paths', () => {
     expect(screen.queryByText(/No files|clean|0 changes/)).not.toBeInTheDocument()
   })
 
-  it('expands each qualified batch target independently', () => {
+  it('opens the selected host preview and closes the previous preview', () => {
     const local = makeWorktree('same', 'collide', 'local')
     const runtime = makeWorktree('same', 'collide', 'runtime:runtime-7')
     const localKey = getWorktreeHostIdentity(local)
@@ -251,11 +248,12 @@ describe('DeleteWorktreeTargetPreview loaded paths', () => {
     const localRow = screen.getByRole('listitem', { name: /Local/ })
     const runtimeRow = screen.getByRole('listitem', { name: /Build Mac/ })
     fireEvent.click(within(localRow).getByRole('button'))
-    expect(within(localRow).getByText('local.ts')).toBeVisible()
+    expect(screen.getByText('local.ts')).toBeVisible()
     expect(within(runtimeRow).queryByText('runtime.ts')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('deleted')).toHaveTextContent('D')
     fireEvent.click(within(runtimeRow).getByRole('button'))
-    expect(within(runtimeRow).getByText('runtime.ts')).toBeVisible()
-    expect(within(localRow).getByLabelText('deleted')).toHaveTextContent('D')
-    expect(within(runtimeRow).getByLabelText('renamed')).toHaveTextContent('R')
+    expect(screen.getByText('runtime.ts')).toBeVisible()
+    expect(screen.queryByText('local.ts')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('renamed')).toHaveTextContent('R')
   })
 })

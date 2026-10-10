@@ -53,18 +53,19 @@ export async function invokeDispatcherUnaryMethod({
     request,
     compatibility.legacyCoordinatorAuthority
   )
-  const authenticatedCallerFingerprint =
+  // Why: a legacy coordinator's fingerprint outranks the transport's, so skip minting a local one.
+  const fallbackCallerFingerprint =
     context.authenticatedCallerFingerprint ??
-    legacyCoordinator?.mutationCallerFingerprint ??
-    (needsLocalCallerFingerprint(request, effectiveParams)
+    (!legacyCoordinator && needsLocalCallerFingerprint(request, effectiveParams)
       ? orchestrationMutations.getLocalAuthenticatedCallerFingerprint()
       : undefined)
+  const callerFingerprint =
+    legacyCoordinator?.mutationCallerFingerprint ?? fallbackCallerFingerprint
   const invoke = (mutation?: DurableMutationInvocation) => {
     const legacyCoordinatorRunId = legacyCoordinator?.revalidate()
     return method.handler(effectiveParams, {
       ...context,
-      authenticatedCallerFingerprint:
-        mutation?.identity.callerFingerprint ?? authenticatedCallerFingerprint,
+      authenticatedCallerFingerprint: mutation?.identity.callerFingerprint ?? callerFingerprint,
       recordMutationReceipt: mutation?.recordReceipt,
       markWorkerDoneMutationEffectFree: mutation?.markWorkerDoneEffectFree,
       markMutationEffectPossible: mutation?.markEffectPossible,
@@ -82,7 +83,7 @@ export async function invokeDispatcherUnaryMethod({
     request,
     effectiveParams,
     invoke,
-    legacyCoordinator?.mutationCallerFingerprint ?? authenticatedCallerFingerprint,
+    callerFingerprint,
     context.orchestrationCaller?.orcaSessionId
   )
   recordRuntimeFeatureInteraction(runtime, request.method, result, undefined, request.params)

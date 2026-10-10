@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { runProcess } from './child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import type { AgentProcessIdentity, AgentProcessVerdict } from './agent-process-presence'
 
 export type AgentProcessObservation =

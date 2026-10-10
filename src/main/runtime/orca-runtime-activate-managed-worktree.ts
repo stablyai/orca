@@ -1,7 +1,11 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithListManagedWorktrees } from './orca-runtime-list-managed-worktrees'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
-import { navigationTargetsClients, navigationTargetsHost } from '../../shared/runtime-navigation'
+import {
+  navigationTargetsClients,
+  navigationTargetsHost,
+  resolveRuntimeNavigationTarget
+} from '../../shared/runtime-navigation'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -13,7 +17,8 @@ import type {
 } from './runtime-worktree-agent-startup'
 import {
   buildWorktreeStartupForAgent,
-  buildWorktreeStartupForDraft
+  buildWorktreeStartupForDraft,
+  resolveWorktreeStartupDraftAgent
 } from './runtime-worktree-agent-startup'
 import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
 import type { Worktree } from '../../shared/worktree/types'
@@ -25,12 +30,19 @@ import type {
 } from '../../shared/worktree/lineage-types'
 import { recordCreatedWorktreeLineage as recordCreatedWorktreeLineageState } from './runtime-worktree-lineage-recording'
 import {
+  deliverWorktreeStartupFollowup,
   pasteWorktreeStartupDraftWhenReady,
   sendWorktreeStartupFollowupWhenReady,
   waitForWorktreeStartupDraft
 } from './runtime-worktree-startup-readiness'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import { provisionWorktreeTerminals } from './runtime-worktree-terminal-provisioning'
+import { readFreshComposerHold } from './launched-agent-composer-readiness'
+import { buildTerminalWaitText } from './terminal-wait-tail-state'
+import {
+  readLaunchedAgentForeground,
+  type LaunchedAgentForeground
+} from './launched-agent-foreground'
 
 export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListManagedWorktrees {
   async activateManagedWorktree(
@@ -55,7 +67,7 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
     if (!repo) {
       throw new Error('repo_not_found')
     }
-    const navigation = opts.navigation ?? (opts.notifyClients === false ? 'caller' : 'all')
+    const navigation = resolveRuntimeNavigationTarget({ ...opts, defaultTarget: 'host' })
     const targetsHost = navigationTargetsHost(navigation)
     const targetsClients = navigationTargetsClients(navigation)
 
@@ -75,7 +87,14 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
         this.notifyHostActivateWorktree(repo.id, worktree.id)
       }
       if (targetsClients) {
-        this.notifyClientsActivateWorktree(repo.id, worktree.id)
+        this.notifyClientsActivateWorktree(
+          repo.id,
+          worktree.id,
+          undefined,
+          undefined,
+          undefined,
+          navigation
+        )
       }
     }
     if (!targetsHost) {
@@ -114,6 +133,19 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
     return { repoId: repo.id, worktreeId: worktree.id, activated: true, sleepingAgentWake }
   }
 
+  /** The agent a create's linked draft starts, chosen as `buildStartupForDraft` chooses it, so a
+   *  launch can name the agent before the create runs. */
+  async resolveStartupDraftAgent(repo: Repo, requestedAgent?: TuiAgent): Promise<TuiAgent | null> {
+    if (!this.store) {
+      return null
+    }
+    return resolveWorktreeStartupDraftAgent({
+      repo,
+      settings: this.store.getSettings(),
+      ...(requestedAgent ? { requestedAgent } : {})
+    })
+  }
+
   protected async buildStartupForDraft(
     repo: Repo,
     draft: string,
@@ -144,7 +176,9 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
     launchPreferences?: AgentLaunchPreferences,
     launchInputs?: {
       agentArgs?: string | null
+      extraAgentArgs?: string
       launchSource?: string
+      onPromptCarry?: (carried: boolean) => void
     }
   ): { agent: TuiAgent; startup: WorktreeStartupLaunch; followup?: WorktreeStartupFollowup } {
     if (!this.store) {
@@ -156,7 +190,9 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
       ...(prompt !== undefined ? { prompt } : {}),
       ...(launchPreferences ? { launchPreferences } : {}),
       ...(launchInputs?.agentArgs !== undefined ? { agentArgs: launchInputs.agentArgs } : {}),
+      ...(launchInputs?.extraAgentArgs ? { extraAgentArgs: launchInputs.extraAgentArgs } : {}),
       ...(launchInputs?.launchSource ? { launchSource: launchInputs.launchSource } : {}),
+      ...(launchInputs?.onPromptCarry ? { onPromptCarry: launchInputs.onPromptCarry } : {}),
       settings: this.store.getSettings(),
       getLaunchPlatform: () => this.getAgentLaunchPlatformForRepo(repo),
       toSessionOptions: (preferences) => this.toAgentSessionOptions(preferences)
@@ -178,32 +214,102 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
     pasteWorktreeStartupDraftWhenReady(this.getWorktreeStartupReadinessHost(), handle, draft)
   }
 
-  /** Only for a newly launched worker, before its first dispatch input. */
+  /**
+   * Only for a newly launched agent, before its first input. Settles when the agent's composer
+   * signal fires on a screen with no startup dialog and no Codex provisional header; with
+   * `stopOnDialog`, a dialog ends the wait so the caller's idle wait can report it.
+   */
   async waitForFreshWorkerComposer(
     handle: string,
     agent: TuiAgent,
-    timeoutMs: number
+    timeoutMs: number,
+    {
+      requireComposerMarker = true,
+      stopOnDialog = false,
+      signal
+    }: { requireComposerMarker?: boolean; stopOnDialog?: boolean; signal?: AbortSignal } = {}
   ): Promise<RuntimeTerminalWait> {
     const initialPtyId =
       this.getLivePtyForHandle(handle)?.pty.ptyId ?? this.getLiveLeafForHandle(handle).leaf.ptyId
+    const stop = new AbortController()
+    const onAbort = (): void => stop.abort()
+    signal?.addEventListener('abort', onAbort, { once: true })
     const ptyId = await waitForWorktreeStartupDraft(
       { ...this.getWorktreeStartupReadinessHost(), getPtyId: () => initialPtyId },
       handle,
       agent,
-      { timeoutMs, requireComposerMarker: true }
+      {
+        timeoutMs,
+        requireComposerMarker,
+        // Every caller pastes and then presses Enter: a worker brief or a launch prompt.
+        submit: true,
+        signal: stop.signal,
+        isShellInFront: async (ownerPtyId) =>
+          (await this.readLaunchedAgentForeground(ownerPtyId, agent)) === 'shell',
+        accept: (readyPtyId) => {
+          const pty = this.ptysById.get(readyPtyId)
+          const hold = pty
+            ? readFreshComposerHold(
+                buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview),
+                this.readLiveTerminalScreenLines(readyPtyId)
+              )
+            : null
+          if (hold === 'dialog' && stopOnDialog) {
+            stop.abort()
+          }
+          return hold === null
+        }
+      }
     )
+    signal?.removeEventListener('abort', onAbort)
     if (!ptyId) {
-      throw new Error('timeout')
+      throw new Error(
+        signal?.aborted
+          ? 'request_aborted'
+          : stop.signal.aborted
+            ? 'agent_startup_dialog'
+            : 'timeout'
+      )
     }
     this.assertLiveTerminalHandleTargetsPty(handle, ptyId)
     if (!this.ptysById.get(ptyId)?.connected) {
       throw new Error('terminal_handle_stale')
     }
-    return { handle, condition: 'tui-idle', satisfied: true, status: 'running', exitCode: null }
+    return this.buildTuiIdleProbeResult(handle, null)
+  }
+
+  /** What holds the terminal a launch started its agent in, read fresh from the execution host. */
+  readLaunchedAgentForeground(ptyId: string, agent: TuiAgent): Promise<LaunchedAgentForeground> {
+    return readLaunchedAgentForeground(
+      this.ptyController,
+      this.launchedAgentHost(ptyId),
+      ptyId,
+      agent
+    )
+  }
+
+  /** Whether the pane's execution host can find a launched agent in front: a Windows one cannot. */
+  launchedAgentHostProvesAgent(ptyId: string): boolean {
+    return !this.launchedAgentHost(ptyId).windows
+  }
+
+  private launchedAgentHost(ptyId: string): { remote: boolean; windows: boolean } {
+    const pty = this.ptysById.get(ptyId)
+    const remote = !!pty?.connectionId
+    // A local WSL pane still runs on a Windows host, whose process reads cannot see into it.
+    return {
+      remote,
+      windows: remote ? this.pathFlavorForPty(pty) === 'win32' : process.platform === 'win32'
+    }
   }
 
   protected sendStartupFollowupWhenReady(handle: string, followup: WorktreeStartupFollowup): void {
     sendWorktreeStartupFollowupWhenReady(this.getWorktreeStartupReadinessHost(), handle, followup)
+  }
+
+  /** The same follow-up write, awaited: true once the prompt was typed into the agent. */
+  deliverStartupFollowup(handle: string, followup: WorktreeStartupFollowup): Promise<boolean> {
+    return deliverWorktreeStartupFollowup(this.getWorktreeStartupReadinessHost(), handle, followup)
   }
 
   protected async provisionManagedWorktreeTerminals(

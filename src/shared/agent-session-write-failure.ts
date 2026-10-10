@@ -2,11 +2,13 @@
 // Saved with a queued message, so it holds only what stays true after a reload; the words are
 // chosen from it when it is shown (`agent-session-refusal-notice.ts`).
 
+import type { AgentSessionAccountKind } from './agent-session-availability'
 import {
   readAgentSessionRefusalDetails,
   type AgentSessionRefusalReason
 } from './agent-session-refusal-details'
 import type { AgentSessionRewindReason } from './agent-session-rewind'
+import type { AgentSessionArgumentProblem } from './agent-session-argument-problem'
 import {
   isAgentSessionWireRefusalCode,
   readAgentSessionRefusalReference,
@@ -29,6 +31,9 @@ export type AgentSessionWriteKind =
   | 'answer'
   | 'option'
   | 'command'
+  /** A /clear or /compact: refused while the agent works, in words of its own. */
+  | 'clear'
+  | 'compact'
   | 'goal'
 
 /** The kind of write an `agentSession.*` call stands for. */
@@ -55,20 +60,30 @@ export function agentSessionWriteKindForMethod(
   if (fingerprintMethod === 'agentSession.threadGoal') {
     return 'goal'
   }
+  if (
+    fingerprintMethod === 'agentSession.conversationCommand' &&
+    (fields.command === 'clear' || fields.command === 'compact')
+  ) {
+    return fields.command
+  }
   return 'command'
 }
 
 /** What a saved refusal keeps beside its reason: facts about the refused operation that stay true
  *  after a reload. Never the fence, revision or resolution, which move, nor any provider text. */
 type DurableRefusalFacts = {
-  agent_session_operation_invalid: { rewindReason?: AgentSessionRewindReason }
+  agent_session_operation_invalid: {
+    rewindReason?: AgentSessionRewindReason
+    account?: AgentSessionAccountKind
+    argumentProblem?: AgentSessionArgumentProblem
+  }
   agent_session_operation_unknown: { rewindReason?: AgentSessionRewindReason }
   /** A snapshot from when it was refused; see `agentSessionOwnerVerdictAllowsFreshOperationId`. */
   agent_session_ownership_unknown: { ownerVerdict?: AgentSessionOwnerVerdict }
 }
 
 const DURABLE_FACT_KEYS: Partial<Record<AgentSessionWireRefusalCode, readonly string[]>> = {
-  agent_session_operation_invalid: ['rewindReason'],
+  agent_session_operation_invalid: ['rewindReason', 'account', 'argumentProblem'],
   agent_session_operation_unknown: ['rewindReason'],
   agent_session_ownership_unknown: ['ownerVerdict']
 } satisfies { [C in keyof DurableRefusalFacts]: readonly (keyof DurableRefusalFacts[C])[] }

@@ -188,7 +188,10 @@ describe('picks made while a chat launches', () => {
   it('applies them against the receipt fence before the first turn and before publishing', async () => {
     const created = deferred<{ sessionId: string; fence: number }>()
     mocks.launch.mockReturnValue(created.promise)
-    const launch = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { prompt: 'first turn' })
+    const launch = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
+      requestId: 'request-1',
+      prompt: 'first turn'
+    })
 
     const modelPick = holdStructuredAgentSessionLaunchOption(SESSION_ID, 'model', 'gpt-picked')
     holdStructuredAgentSessionLaunchOption(SESSION_ID, 'effort', 'high')
@@ -224,7 +227,7 @@ describe('picks made while a chat launches', () => {
 
   it('applies a pick made while the earlier ones are being applied', async () => {
     mocks.launch.mockResolvedValue({ sessionId: SESSION_ID, fence: 1 })
-    const launch = startStructuredAgentLaunch(WORKTREE_ID, 'codex')
+    const launch = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-2' })
     holdStructuredAgentSessionLaunchOption(SESSION_ID, 'model', 'gpt-picked')
     await settle()
     expect(setOptionReplies).toHaveLength(1)
@@ -241,7 +244,10 @@ describe('picks made while a chat launches', () => {
 
   it('reports a refused pick to its picker and publishes all the same', async () => {
     mocks.launch.mockResolvedValue({ sessionId: SESSION_ID, fence: 1 })
-    const launch = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { prompt: 'first turn' })
+    const launch = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
+      requestId: 'request-3',
+      prompt: 'first turn'
+    })
     const pick = holdStructuredAgentSessionLaunchOption(SESSION_ID, 'model', 'gpt-missing')
     await settle()
     setOptionReplies[0]!.resolve({
@@ -269,7 +275,7 @@ describe('picks made while a chat launches', () => {
 
   it('reports a refusal the host threw as its fact, never the bare code it carries as a message', async () => {
     mocks.launch.mockResolvedValue({ sessionId: SESSION_ID, fence: 1 })
-    startStructuredAgentLaunch(WORKTREE_ID, 'codex')
+    startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-4' })
     const pick = holdStructuredAgentSessionLaunchOption(SESSION_ID, 'model', 'gpt-missing')
     await settle()
     setOptionReplies[0]!.resolve(
@@ -306,7 +312,7 @@ describe('picks made while a chat launches', () => {
     mocks.launch
       .mockRejectedValueOnce(new StructuredAgentSessionCreateRefusalError('unsupported'))
       .mockResolvedValueOnce({ sessionId: SESSION_ID, fence: 2 })
-    startStructuredAgentLaunch(WORKTREE_ID, 'codex')
+    startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-5' })
     holdStructuredAgentSessionLaunchOption(SESSION_ID, 'model', 'gpt-picked')
     await settle()
     expect(lifecycle()).toBe('failed')
@@ -327,7 +333,7 @@ describe('picks made while a chat launches', () => {
   it('discards them when the tab closes before the launch publishes', async () => {
     const created = deferred<{ sessionId: string; fence: number }>()
     mocks.launch.mockReturnValue(created.promise)
-    startStructuredAgentLaunch(WORKTREE_ID, 'codex')
+    startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-6' })
     holdStructuredAgentSessionLaunchOption(SESSION_ID, 'model', 'gpt-picked')
 
     cancelStructuredAgentLaunch(WORKTREE_ID, SESSION_ID)
@@ -340,7 +346,7 @@ describe('picks made while a chat launches', () => {
 
   it('folds an accepted pick into what the launch reports it runs', async () => {
     mocks.launch.mockResolvedValue({ sessionId: SESSION_ID, fence: 1 })
-    startStructuredAgentLaunch(WORKTREE_ID, 'codex')
+    startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-7' })
     holdStructuredAgentSessionLaunchOption(SESSION_ID, 'effort', 'high')
     await settle()
     const seen: unknown[] = []

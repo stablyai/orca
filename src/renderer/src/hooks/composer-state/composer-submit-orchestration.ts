@@ -3,10 +3,6 @@ import type { ComposerExternalSyncState } from './composer-external-sync-contrac
 import type { ComposerSourceState } from './composer-source-state-contract'
 import type { ComposerSubmitState } from './composer-submit-state-contract'
 import { useFolderSubmitOrchestration } from './folder-submit-orchestration'
-import { useFullSubmitSourcePreparation } from './full-submit-source-preparation'
-import { useFullSubmitPreparation } from './full-submit-preparation'
-import { useFullCreationExecution } from './full-creation-execution'
-import { useFullSubmitOrchestration } from './full-submit-orchestration'
 import { useMultipleCreateReset } from './multiple-create-reset'
 import { useQuickSubmitSourcePreparation } from './quick-submit-source-preparation'
 import { useQuickSubmitPreparation } from './quick-submit-preparation'
@@ -25,7 +21,6 @@ export function useComposerSubmitOrchestration(
     disabledTuiAgents: target.workspaceIdentityState.disabledTuiAgents,
     folderCreateDisabled: source.composerNavigationActions.folderCreateDisabled,
     folderSourceRepos: target.runtimeTargetSelection.folderSourceRepos,
-    folderTargetConnectionId: target.runtimeTargetSelection.folderTargetConnectionId,
     folderTargetIsRemote: target.runtimeTargetSelection.folderTargetIsRemote,
     folderTargetRuntimeEnvironmentId:
       target.runtimeTargetSelection.folderTargetRuntimeEnvironmentId,
@@ -44,98 +39,6 @@ export function useComposerSubmitOrchestration(
     settings: target.composerTargetStore.settings,
     taskSourceContext: target.sourceContextState.taskSourceContext,
     telemetrySource: target.composerTargetStore.telemetrySource
-  })
-  const fullSubmitSourcePreparation = useFullSubmitSourcePreparation({
-    agentPrompt: target.sourceContextState.agentPrompt,
-    attachmentPaths: target.sourceContextState.attachmentPaths,
-    baseBranch: target.workspaceIdentityState.baseBranch,
-    branchNameOverride: target.workspaceIdentityState.branchNameOverride,
-    compareBaseRef: target.workspaceIdentityState.compareBaseRef,
-    decisions: target.composerTargetStore.decisions,
-    effectiveLinkedPR: target.derivedComposerState.effectiveLinkedPR,
-    enableIssueAutomation: target.composerTargetStore.enableIssueAutomation,
-    fallbackCreatureName: target.derivedComposerState.fallbackCreatureName,
-    hasLoadedIssueCommand: target.asyncComposerState.hasLoadedIssueCommand,
-    issueCommandTemplate: target.asyncComposerState.issueCommandTemplate,
-    lastAutoNameRef: target.asyncComposerState.lastAutoNameRef,
-    linkedGitLabMR: target.workspaceIdentityState.linkedGitLabMR,
-    linkedWorkItem: target.sourceContextState.linkedWorkItem,
-    name: target.sourceContextState.name,
-    parsedLinkedIssueNumber: target.derivedComposerState.parsedLinkedIssueNumber,
-    pushTarget: target.workspaceIdentityState.pushTarget,
-    workspaceSeedName: target.derivedComposerState.workspaceSeedName
-  })
-  const fullSubmitPreparation = useFullSubmitPreparation({
-    branchAutoNameRef: target.asyncComposerState.branchAutoNameRef,
-    branchNameOverridePreservesNameEdits:
-      target.workspaceIdentityState.branchNameOverridePreservesNameEdits,
-    currentIssueCommand: target.asyncComposerState.currentIssueCommand,
-    isSubmissionCancelled: target.composerTargetStore.isSubmissionCancelled,
-    issueCommandTemplate: target.asyncComposerState.issueCommandTemplate,
-    name: target.sourceContextState.name,
-    prepareFullSubmitSource: fullSubmitSourcePreparation.prepareFullSubmitSource,
-    repoId: target.initialTargetState.repoId,
-    resolvedSetupDecision: target.derivedComposerState.resolvedSetupDecision,
-    selectedRepo: target.runtimeTargetSelection.selectedRepo,
-    selectedRepoAgentLaunchPlatform: target.runtimeTargetSelection.selectedRepoAgentLaunchPlatform,
-    selectedRepoExecutionHostId: target.runtimeTargetSelection.selectedRepoExecutionHostId,
-    selectedRepoIsGit: target.runtimeTargetSelection.selectedRepoIsGit,
-    selectedRepoIsRemote: target.runtimeTargetSelection.selectedRepoIsRemote,
-    selectedRepoStartupShell: target.runtimeTargetSelection.selectedRepoStartupShell,
-    settings: target.composerTargetStore.settings,
-    smartNameMode: target.workspaceIdentityState.smartNameMode,
-    telemetrySource: target.composerTargetStore.telemetrySource,
-    tuiAgent: target.workspaceIdentityState.tuiAgent
-  })
-  const fullCreationExecution = useFullCreationExecution({
-    applyWorktreeMeta: source.composerNavigationActions.applyWorktreeMeta,
-    clearNewWorkspaceDraft: target.composerTargetStore.clearNewWorkspaceDraft,
-    createWorktree: target.composerTargetStore.createWorktree,
-    effectivePresetId: target.derivedComposerState.effectivePresetId,
-    isSubmissionCancelled: target.composerTargetStore.isSubmissionCancelled,
-    linkedGitLabIssue: target.workspaceIdentityState.linkedGitLabIssue,
-    linkedGitLabMR: target.workspaceIdentityState.linkedGitLabMR,
-    normalizedSparseDirectories: target.derivedComposerState.normalizedSparseDirectories,
-    note: target.sourceContextState.note,
-    onCreated: target.composerTargetStore.onCreated,
-    parentWorktreeId: target.workspaceIdentityState.parentWorktreeId,
-    persistDraft: target.composerTargetStore.persistDraft,
-    persistSetupAgentStartupPolicy: target.providerRuntimeSync.persistSetupAgentStartupPolicy,
-    prepareFullSubmit: fullSubmitPreparation.prepareFullSubmit,
-    resolvedInitialWorkspaceStatus: target.initialTargetState.resolvedInitialWorkspaceStatus,
-    selectedRepoExecutionHostId: target.runtimeTargetSelection.selectedRepoExecutionHostId,
-    selectedRepoIsGit: target.runtimeTargetSelection.selectedRepoIsGit,
-    setSidebarOpen: target.composerTargetStore.setSidebarOpen,
-    sparseEnabled: target.asyncComposerState.sparseEnabled,
-    taskSourceContext: target.sourceContextState.taskSourceContext,
-    telemetrySource: target.composerTargetStore.telemetrySource,
-    tuiAgent: target.workspaceIdentityState.tuiAgent
-  })
-  const fullSubmitOrchestration = useFullSubmitOrchestration({
-    disabledTuiAgents: target.workspaceIdentityState.disabledTuiAgents,
-    executeFullCreation: fullCreationExecution.executeFullCreation,
-    fallbackDefaultAgent: target.workspaceIdentityState.fallbackDefaultAgent,
-    isProjectGroupTarget: target.runtimeTargetSelection.isProjectGroupTarget,
-    isSubmissionCancelled: target.composerTargetStore.isSubmissionCancelled,
-    repoId: target.initialTargetState.repoId,
-    requiresExplicitSetupChoice: target.derivedComposerState.requiresExplicitSetupChoice,
-    resolvePendingSmartGitHubSubmit:
-      external.githubSubmitResolution.resolvePendingSmartGitHubSubmit,
-    selectedRepo: target.runtimeTargetSelection.selectedRepo,
-    selectedRepoRequiresConnection: target.runtimeTargetSelection.selectedRepoRequiresConnection,
-    setCreateError: target.asyncComposerState.setCreateError,
-    setCreating: target.asyncComposerState.setCreating,
-    setTuiAgent: target.workspaceIdentityState.setTuiAgent,
-    setupDecision: target.asyncComposerState.setupDecision,
-    shouldWaitForIssueAutomationCheck:
-      target.derivedComposerState.shouldWaitForIssueAutomationCheck,
-    shouldWaitForSetupCheck: target.derivedComposerState.shouldWaitForSetupCheck,
-    showProjectRequiredError: source.branchStartPointActions.showProjectRequiredError,
-    sourceIntentBlocksCreate: target.workspaceIdentityState.sourceIntentBlocksCreate,
-    sparseError: target.derivedComposerState.sparseError,
-    submitFolderTarget: folderSubmitOrchestration.submitFolderTarget,
-    tuiAgent: target.workspaceIdentityState.tuiAgent,
-    workspaceSeedName: target.derivedComposerState.workspaceSeedName
   })
   const multipleCreateReset = useMultipleCreateReset({
     handleClearSmartNameSelection: source.issueSourceActions.handleClearSmartNameSelection,
@@ -181,7 +84,6 @@ export function useComposerSubmitOrchestration(
     selectedRepoHookContextKey: target.runtimeTargetSelection.selectedRepoHookContextKey,
     selectedRepoIsGit: target.runtimeTargetSelection.selectedRepoIsGit,
     setAdvancedOpen: target.asyncComposerState.setAdvancedOpen,
-    setLoadedIssueCommand: target.asyncComposerState.setLoadedIssueCommand,
     settings: target.composerTargetStore.settings,
     setupConfig: target.derivedComposerState.setupConfig,
     setupDecision: target.asyncComposerState.setupDecision,
@@ -245,10 +147,6 @@ export function useComposerSubmitOrchestration(
   })
   return {
     folderSubmitOrchestration,
-    fullSubmitSourcePreparation,
-    fullSubmitPreparation,
-    fullCreationExecution,
-    fullSubmitOrchestration,
     multipleCreateReset,
     quickSubmitSourcePreparation,
     quickSubmitPreparation,

@@ -2,7 +2,6 @@
 // list and a send each see only the one that happened. Ticks are driven by hand.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import { readStructuredSessionGateFacts } from '../../runtime/orchestration/structured-mailbox-pointer-host'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
@@ -19,7 +18,6 @@ import {
   sweepOnce,
   type RestTestRig
 } from './structured-agent-session-rest-test-rig'
-import { StructuredAgentSessionIdleSweep } from './structured-agent-session-idle-sweep'
 import { hostTestAttachParams } from './structured-agent-session-host-test-data'
 
 let rig: RestTestRig
@@ -57,9 +55,8 @@ describe('a stop that fails', () => {
     rig.clock.now += IDLE_MS + 1
 
     await sweepOnce(rig.host)
-    expect(openSession()?.owesProviderChildWindDown).toMatchObject({
-      generation: expect.any(String)
-    })
+    // The child stays on record with its close unproven, and the next tick joins it.
+    expect(openSession()?.child?.close).toMatchObject({ cause: 'evict' })
     await sweepOnce(rig.host)
 
     expect(rig.adapter.closeSession).toHaveBeenCalledTimes(2)
@@ -67,23 +64,21 @@ describe('a stop that fails', () => {
     expect(statusRows().at(-1)?.hostExecutionOwned).toBeUndefined()
   })
 
-  it('finishes its wind-down on the next tick, whatever its own writes did to the clock (P2-11 b)', async () => {
+  it('re-derives a release its wind-down could not write before the handle closes (P2-11 b)', async () => {
     await foundRestTestChat(rig)
     rig.clock.now += IDLE_MS + 1
-    // The child is proven gone and its work settled, then handing the lease back fails.
+    // The child is proven gone and its work settled, then handing the lease back fails once.
     const transition = vi
       .spyOn(rig.store, 'transitionHandoff')
       .mockRejectedValueOnce(new Error('store unavailable'))
 
     await sweepOnce(rig.host)
-    expect(transition).toHaveBeenCalledOnce()
-    expect(rig.store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
-    // Five minutes later, not thirty.
-    rig.clock.now += 5 * 60_000
-    await sweepOnce(rig.host)
 
+    // Reported, never retried as a stop: the handle's close writes the release from the proof.
+    expect(transition).toHaveBeenCalledTimes(2)
     expect(rig.store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
     expect(rig.adapter.closeSession).toHaveBeenCalledOnce()
+    expect(rig.host.hasSession(SESSION)).toBe(false)
   })
 })
 
@@ -226,38 +221,23 @@ describe('the sweep and the lease (P2-20)', () => {
 })
 
 describe('a start that never finishes (P2-15)', () => {
-  it('is stopped by the sweep, and the delivery loop alone writes its one row and rejection', async () => {
+  it('is stopped by the sweep, and the message held for it carries its one row and rejection', async () => {
     const stopReason = 'Codex never finished starting, so Orca stopped it.'
-    const order: string[] = []
-    const started = Promise.withResolvers<void>()
-    rig.adapter.closeSession.mockImplementation(async () => {
-      order.push('stopped')
-      started.resolve()
-      return true
-    })
     const spawn = rig.adapter.acquire.getMockImplementation()!
     rig.adapter.acquire.mockImplementationOnce(async (input) => ({
       ...(await spawn(input)),
       providerChildPhase: 'starting' as const
     }))
-    Object.assign(rig.host.deps.adapter, { awaitStarted: () => started.promise })
-    const reject = AgentSessionJournal.prototype.rejectQueuedSubmissions
-    vi.spyOn(AgentSessionJournal.prototype, 'rejectQueuedSubmissions').mockImplementation(function (
-      this: AgentSessionJournal,
-      ...args
-    ) {
-      // Not the open's sweep of an earlier process's leftovers.
-      if (args[1].rejection.kind !== 'hostRestarted') {
-        order.push(`rejected: ${args[1].reason}`)
-      }
-      return reject.apply(this, args)
-    })
+    // Held for the starting child, which never proves its start.
     const reader = collectSubscriber()
     const attached = await rig.host.attach(CALLER, hostTestAttachParams(null))
     expect(attached.ok).toBe(true)
     await rig.host.subscribe({ id: 'reader', sessionId: SESSION, emit: reader.emit })
     const sent = await rig.host.send(CALLER, restTestSend('stuck behind the start', fence()))
     expect(sent.ok).toBe(true)
+    await vi.waitFor(() =>
+      expect(rig.host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('starting')
+    )
     rig.clock.now += IDLE_MS + 1
 
     await sweepOnce(rig.host)
@@ -267,8 +247,6 @@ describe('a start that never finishes (P2-15)', () => {
         expect.objectContaining({ dispatchState: 'rejected', reason: stopReason })
       )
     )
-    // One rejection, written after the stop by the loop, with the stop's own words.
-    expect(order).toEqual(['stopped', `rejected: ${stopReason}`])
     const errorRows = reader.events.flatMap((event) =>
       event.type === 'batch'
         ? event.batch.items.filter(
@@ -279,58 +257,11 @@ describe('a start that never finishes (P2-15)', () => {
     expect(errorRows.map((item) => (item.body.kind === 'status' ? item.body.text : null))).toEqual([
       stopReason
     ])
-    expect(rig.adapter.dispatch).not.toHaveBeenCalled()
 
     const again = await rig.host.send(CALLER, restTestSend('try again', fence()))
     expect(again.ok).toBe(true)
-    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledOnce(), COLD_START)
+    expect(rig.adapter.dispatch).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(1), COLD_START)
     await expect(sweepOnce(rig.host)).resolves.toBeUndefined()
-  })
-})
-
-describe('the wind-down retry with a message queued (P2-31)', () => {
-  it('waits for the delivery rather than rejecting a message accepted after the failed stop', async () => {
-    const queued = { clientMessageId: 'm', dispatchState: 'pending', handoverRecorded: true }
-    const session = {
-      journal: {
-        submissions: () => [queued],
-        pendingSubmissions: () => [queued],
-        snapshot: () => ({ items: [] })
-      },
-      child: null,
-      owesProviderChildWindDown: { generation: 'generation-1', fence: 1 }
-    }
-    const stopAgent = vi.fn(async () => undefined)
-    const finishOwedWindDown = vi.fn(async () => true)
-    const sweep = new StructuredAgentSessionIdleSweep({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a session fixture carrying only the journal and child facts the sweep reads.
-      sessions: Object.assign(new Map([[SESSION, session as never]]), {
-        lastActivityAt: () => 0,
-        touch: () => undefined
-      }),
-      serialize: (_id, task) => task(),
-      now: () => IDLE_MS + 1,
-      isDisposed: () => false,
-      deliveryActive: () => true,
-      childWork: () => undefined,
-      hasOpenDispatch: () => false,
-      providerHoldsDispatch: () => false,
-      stopAgent,
-      stopStartingAgent: stopAgent,
-      finishOwedWindDown,
-      closeConversation: vi.fn(async () => false),
-      // A failed step fails the test.
-      logger: {
-        warn: (_message, fields) => {
-          throw fields.error
-        },
-        error: (_message, fields) => {
-          throw fields.error
-        }
-      }
-    })
-    await sweep.tick()
-    expect(stopAgent).not.toHaveBeenCalled()
-    expect(finishOwedWindDown).not.toHaveBeenCalled()
   })
 })

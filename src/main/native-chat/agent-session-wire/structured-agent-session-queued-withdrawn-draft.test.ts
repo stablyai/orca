@@ -8,6 +8,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
+import { holdDelivery } from './structured-agent-session-delivery-hold.test-fixture'
 import {
   createQueuedMessageTestRig,
   eventually,
@@ -43,11 +44,8 @@ it('Stop, then a user send: the withdrawn draft and the paused cards behind it d
   const a = await queuedDraft('A')
   const b = await queuedDraft('B')
   const c = await queuedDraft('C')
-  // The turn ends and the drain consumes A; the agent's start is held, so A is not handed over.
-  let release: () => void = () => undefined
-  rig.awaitStarted.mockImplementationOnce(
-    () => new Promise<undefined>((resolve) => (release = () => resolve(undefined)))
-  )
+  // The turn ends and the drain consumes A; its delivery is held, so A is not handed over.
+  const { release } = holdDelivery()
   await rig.settleAccepted(working, 'working')
   await eventually(async () => expect(await rig.handoff(a)).toBeDefined())
   // Never under the draft's own id: the submission names A by its link.
@@ -55,8 +53,10 @@ it('Stop, then a user send: the withdrawn draft and the paused cards behind it d
   expect(firstA).not.toBe(a)
   expect((await rig.submission(firstA))?.handedOverAt).toBeUndefined()
 
-  expect(await rig.stop()).toMatchObject({ ok: true })
+  // The Stop runs once the held step returns, ahead of A's handover.
+  const stopped = rig.stop()
   release()
+  expect(await stopped).toMatchObject({ ok: true })
   // A is back in its place, behind the same queue pause as B and C: no returned card blocks them.
   const paused = [a, b, c].map((messageId) => ({ messageId, state: 'waiting' }))
   expect(await rig.drafts()).toEqual(paused)
@@ -104,10 +104,7 @@ it('Stop, then a user send: the withdrawn draft and the paused cards behind it d
 it('a Stop whose withdrawal throws after landing still answers; the draft it released sends again under a fresh id', async () => {
   const working = await rig.workingSend()
   const a = await queuedDraft('A')
-  let release: () => void = () => undefined
-  rig.awaitStarted.mockImplementationOnce(
-    () => new Promise<undefined>((resolve) => (release = () => resolve(undefined)))
-  )
+  const { release } = holdDelivery()
   await rig.settleAccepted(working, 'working')
   await eventually(async () => expect(await rig.handoff(a)).toBeDefined())
   const firstA = await rig.handoffId(a)
@@ -124,7 +121,9 @@ it('a Stop whose withdrawal throws after landing still answers; the draft it rel
     })
   const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
   try {
-    expect(await rig.stop()).toMatchObject({ ok: true })
+    const stopped = rig.stop()
+    release()
+    expect(await stopped).toMatchObject({ ok: true })
     expect(warned).toHaveBeenCalledWith(
       "[agent-session] stop-queued-bookkeeping: Stop's withdrawal failed",
       expect.objectContaining({ step: 'withdrawal', error: new Error('disk full') })
@@ -142,15 +141,12 @@ it('a Stop whose withdrawal throws after landing still answers; the draft it rel
   })
 })
 
-/** A consumed card whose delivery is held at the agent's start, so a Stop withdraws it;
- *  the settlement hook throws on that withdrawal's row, leaving the card owed a return. */
+/** A consumed card whose delivery is held, so a Stop withdraws it ahead of its handover; the
+ *  settlement hook throws on that withdrawal's row, leaving the card owed a return. */
 async function stopWithSkippedSettlement(): Promise<{ a: string; working: string }> {
   const working = await rig.workingSend()
   const a = await queuedDraft('A')
-  let release: () => void = () => undefined
-  rig.awaitStarted.mockImplementationOnce(
-    () => new Promise<undefined>((resolve) => (release = () => resolve(undefined)))
-  )
+  const { release } = holdDelivery()
   await rig.settleAccepted(working, 'working')
   await eventually(async () => expect(await rig.handoff(a)).toBeDefined())
   const settle = JournalQueuedMessages.prototype.onRowInTransaction
@@ -166,7 +162,9 @@ async function stopWithSkippedSettlement(): Promise<{ a: string; working: string
     })
   const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
   try {
-    expect(await rig.stop()).toMatchObject({ ok: true })
+    const stopped = rig.stop()
+    release()
+    expect(await stopped).toMatchObject({ ok: true })
   } finally {
     hook.mockRestore()
     warned.mockRestore()

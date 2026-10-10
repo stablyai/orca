@@ -13,6 +13,7 @@ import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalRow } from './journal-row-schema'
 import { JournalRowWriter } from './journal-row-writer'
 import { JournalWriteQueue } from './journal-write-queue'
+import { readJournalRowsAfter } from './journal-row-table'
 import {
   openTestJournalHostDatabase,
   readTestJournalRows,
@@ -71,8 +72,8 @@ describe('journal row writer', () => {
       highestFence: () => 0,
       nextSequence: () => sequence,
       commit: (committed) => {
-        committedRows.push(committed)
-        sequence = committed.seq + 1
+        committedRows.push(...committed)
+        sequence = committed.at(-1)!.seq + 1
       }
     })
     return { writer, committedRows }
@@ -93,4 +94,34 @@ describe('journal row writer', () => {
       kind: 'item'
     })
   })
+
+  it('writes several rows as one: a failure on the last leaves none', async () => {
+    const { writer, committedRows } = writerHarness()
+    // Sequence 2 is taken, so the second of the two rows violates the primary key.
+    insertTestJournalRow(database.db, SESSION_ID, row(2, 1))
+
+    await expect(writer.enqueueRows(() => [row, row])).rejects.toThrow()
+
+    expect(committedRows).toHaveLength(0)
+    expect(readTestJournalRows(database.db, SESSION_ID, EPOCH).map((stored) => stored.seq)).toEqual(
+      [2]
+    )
+  })
+
+  it.each(['single', 'batch'] as const)(
+    'keeps the save time separate from a pinned JSON timestamp in a %s write',
+    async (kind) => {
+      const { writer, committedRows } = writerHarness()
+      const pinned = (seq: number) => row(seq, 0)
+      await (kind === 'single'
+        ? writer.enqueue(pinned)
+        : writer.enqueueRows(() => [pinned, pinned]))
+
+      const saved = readJournalRowsAfter(database.db, SESSION_ID, EPOCH, 0)
+      expect(saved).toHaveLength(kind === 'single' ? 1 : 2)
+      expect(saved.map((entry) => entry.ts)).toEqual(saved.map(() => 1))
+      expect(saved.map((entry) => JSON.parse(entry.rowJson))).toEqual(committedRows)
+      expect(committedRows.map((entry) => entry.ts)).toEqual(saved.map(() => 0))
+    }
+  )
 })

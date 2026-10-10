@@ -2,6 +2,7 @@ import {
   TerminalStreamOpcode,
   encodeTerminalStreamJson
 } from '../../../shared/terminal-stream-protocol'
+import { TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS } from '../../../shared/terminal-multiplex-flow-control'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { RemoteRuntimeTerminalMultiplexerBase } from './remote-runtime-terminal-multiplexer-base'
 import {
@@ -11,13 +12,12 @@ import {
   REMOTE_TERMINAL_SNAPSHOT_REQUEST_TIMEOUT_MS,
   clearPendingSnapshotRequest,
   clearResyncTimer,
-  clearSnapshot,
-  discardOutputAcknowledgements,
-  rejectPendingSnapshotRequest,
+  disposeRemoteTerminalStreamState,
   retryWorthySnapshotOutcome
 } from './remote-runtime-terminal-snapshot-state'
 import type {
   RemoteRuntimeMultiplexedTerminalState,
+  RemoteRuntimeSnapshotImage,
   RemoteRuntimeSnapshotOutcome
 } from './remote-runtime-terminal-multiplexer-types'
 
@@ -72,7 +72,8 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
     const sent = this.sendFrame(
       stream.streamId,
       TerminalStreamOpcode.SnapshotRequest,
-      encodeTerminalStreamJson({ scrollbackRows: undefined })
+      // Why history: the gap lost output, so a screen-only answer would leave the pane no history to show.
+      encodeTerminalStreamJson({ scrollbackRows: TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS })
     )
     if (!sent) {
       // Transport is down; the reconnect path re-subscribes from scratch.
@@ -135,13 +136,7 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
   protected async requestSnapshot(
     stream: RemoteRuntimeMultiplexedTerminalState,
     opts?: { scrollbackRows?: number }
-  ): Promise<{
-    data: string
-    cols: number
-    rows: number
-    seq?: number
-    source?: 'headless' | 'renderer'
-  } | null> {
+  ): Promise<RemoteRuntimeSnapshotImage | null> {
     const outcome = await this.requestSnapshotOutcome(stream, opts)
     // Why: the concurrent-request guard used to reject before the outcome existed; keep that contract for legacy callers.
     if (
@@ -257,11 +252,7 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
     if (this.streams.get(stream.streamId) !== stream) {
       return
     }
-    stream.watchdog.dispose()
-    discardOutputAcknowledgements(stream)
-    clearSnapshot(stream)
-    clearResyncTimer(stream)
-    rejectPendingSnapshotRequest(stream, 'Remote terminal stream stopped responding.')
+    disposeRemoteTerminalStreamState(stream, 'Remote terminal stream stopped responding.')
     this.streams.delete(stream.streamId)
     this.sendFrame(stream.streamId, TerminalStreamOpcode.Unsubscribe)
     if (stream.callbacks.onTransportClose) {

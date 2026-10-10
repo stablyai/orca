@@ -1,15 +1,16 @@
 import {
   buildRegistry,
-  isRegistrationFencedUnsubscribe,
   isStreamingMethod,
   type RpcAnyMethodDeclaration,
   type RpcEnvelopeMeta,
+  type RpcMethod,
   type RpcRegistry,
   type RpcRequest,
-  type RpcResponse
+  type RpcResponse,
+  type RpcStreamingMethod
 } from './core'
 
-import { errorResponse, successResponse } from './errors'
+import { successResponse, errorResponse } from './errors'
 import { ALL_RPC_METHODS } from './methods'
 import { emulatorProbe, emulatorProbeError } from '../../emulator/emulator-probe'
 import type { OrcaRuntimeService } from '../orca-runtime'
@@ -17,25 +18,23 @@ import {
   getOrchestrationMutationExecutor,
   type OrchestrationMutationExecutor
 } from './orchestration-mutation-executor'
-import { orchestrationMigrationFence } from './orchestration-contract-fence'
 import { OrchestrationLegacyCompatibility } from './orchestration-legacy-compatibility'
-import type { RpcDispatchStreamingOptions } from './dispatcher-stream-options'
+import {
+  rpcContextFromTransport,
+  type RpcDispatchStreamingOptions
+} from './dispatcher-stream-options'
 import { mapDispatcherError } from './dispatcher-error-response'
-import { parseRpcRequestParams } from './dispatcher-request-parsing'
 import { RpcStreamingDispatcher } from './rpc-streaming-dispatcher'
 import { invokeDispatcherUnaryMethod } from './dispatcher-unary-method-invocation'
-import {
-  needsOrchestrationCallerResolution,
-  resolveOrchestrationSessionCaller,
-  type ResolvedOrchestrationRequest
-} from './orchestration-session-caller'
+import type { RpcCallerScope } from './rpc-caller-scope'
+import { admitRpcRequest } from './rpc-request-admission-prologue'
 
 export type DispatcherOptions = {
   runtime: OrcaRuntimeService
   methods?: readonly RpcAnyMethodDeclaration[]
+  /** Pins every call to this scope, for in-process bridges that relay a non-owner caller. */
+  callerScope?: RpcCallerScope
 }
-
-type DispatchCallOptions = RpcDispatchStreamingOptions
 
 export class RpcDispatcher {
   private readonly runtime: OrcaRuntimeService
@@ -43,9 +42,11 @@ export class RpcDispatcher {
   private readonly orchestrationMutations: OrchestrationMutationExecutor
   private readonly legacyOrchestration: OrchestrationLegacyCompatibility
   private readonly streamingDispatcher: RpcStreamingDispatcher
+  private readonly pinnedCallerScope: RpcCallerScope | undefined
 
-  constructor({ runtime, methods = ALL_RPC_METHODS }: DispatcherOptions) {
+  constructor({ runtime, methods = ALL_RPC_METHODS, callerScope }: DispatcherOptions) {
     this.runtime = runtime
+    this.pinnedCallerScope = callerScope
     this.registry = buildRegistry(methods)
     this.orchestrationMutations = getOrchestrationMutationExecutor(runtime)
     this.legacyOrchestration = new OrchestrationLegacyCompatibility(runtime)
@@ -54,47 +55,28 @@ export class RpcDispatcher {
       registry: this.registry,
       orchestrationMutations: this.orchestrationMutations,
       legacyOrchestration: this.legacyOrchestration,
-      meta: () => this.meta()
+      meta: () => this.meta(),
+      pinnedCallerScope: callerScope
     })
   }
 
-  async dispatch(request: RpcRequest, options?: DispatchCallOptions): Promise<RpcResponse> {
+  async dispatch(request: RpcRequest, options?: RpcDispatchStreamingOptions): Promise<RpcResponse> {
     const meta = this.meta()
-    const method = this.registry.get(request.method)
-    if (!method) {
-      return errorResponse(
-        request.id,
+    const pendingAdmission = admitRpcRequest(
+      {
+        runtime: this.runtime,
+        registry: this.registry,
         meta,
-        'method_not_found',
-        `Unknown method: ${request.method}`
-      )
-    }
-
-    const migrationFence = orchestrationMigrationFence(request, meta)
-    if (migrationFence) {
-      return migrationFence
-    }
-
-    let resolved: ResolvedOrchestrationRequest = { request }
-    if (needsOrchestrationCallerResolution(request)) {
-      try {
-        resolved = await resolveOrchestrationSessionCaller(this.runtime, request, options)
-      } catch (error) {
-        return mapDispatcherError(request, meta, error)
-      }
-    }
-    const parsedParams = parseRpcRequestParams(resolved.request, method, meta)
-    if (parsedParams.error) {
-      return parsedParams.error
-    }
-
-    if (isStreamingMethod(method)) {
-      return errorResponse(
-        request.id,
-        meta,
-        'method_not_supported',
-        `Method ${request.method} requires a streaming transport`
-      )
+        pinnedCallerScope: this.pinnedCallerScope
+      },
+      request,
+      options,
+      (method: RpcMethod | RpcStreamingMethod): method is RpcMethod => !isStreamingMethod(method)
+    )
+    const admission =
+      pendingAdmission instanceof Promise ? await pendingAdmission : pendingAdmission
+    if ('rejected' in admission) {
+      return admission.rejected
     }
 
     if (request.method.startsWith('emulator.')) {
@@ -103,32 +85,31 @@ export class RpcDispatcher {
     try {
       const result = await invokeDispatcherUnaryMethod({
         runtime: this.runtime,
-        request: resolved.request,
-        method,
-        params: parsedParams.value,
-        context: {
-          runtime: this.runtime,
-          signal: options?.signal,
-          connectionId: options?.connectionId,
-          // Session tabs always need this fence. COMPAT(terminal request-addressed unsubscribe): terminal only for phones without `requestId`.
-          subscriptionRegistrationVersion: isRegistrationFencedUnsubscribe(request.method)
-            ? this.runtime.getSubscriptionRegistrationVersion()
-            : undefined,
-          requestId: request.id,
-          clientId: options?.clientId,
-          clientKind: options?.clientKind,
-          clientCapabilities: options?.clientCapabilities,
-          updateClientCapabilities: options?.updateClientCapabilities,
-          authenticatedCallerFingerprint: options?.authenticatedCallerFingerprint,
-          orchestrationCaller: resolved.caller
-        },
+        request: admission.request,
+        method: admission.method,
+        params: admission.params,
+        context: rpcContextFromTransport(
+          this.runtime,
+          admission.request,
+          options,
+          admission.caller
+        ),
         orchestrationMutations: this.orchestrationMutations,
         legacyOrchestration: this.legacyOrchestration
       })
-      return successResponse(request.id, meta, result)
+      const filtered = admission.binding?.filterResult?.(result) ?? {
+        kind: 'allowed',
+        result
+      }
+      if (filtered.kind === 'denied') {
+        return errorResponse(request.id, meta, 'forbidden', filtered.message)
+      }
+      return successResponse(request.id, meta, filtered.result)
     } catch (error) {
       if (request.method.startsWith('emulator.')) {
-        emulatorProbeError(`rpc ${request.method}`, error, { params: request.params })
+        emulatorProbeError(`rpc ${request.method}`, error, {
+          params: request.params
+        })
       }
       return mapDispatcherError(request, meta, error)
     }

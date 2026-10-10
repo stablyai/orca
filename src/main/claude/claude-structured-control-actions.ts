@@ -97,6 +97,32 @@ export async function stopClaudeBackgroundTasks(
   return { cancelled }
 }
 
+/** Stops the tasks while `session` is still the one the host asked about, then publishes its child
+ *  work so the host's records follow every acknowledged stop. */
+export async function stopCurrentClaudeBackgroundTasks(input: {
+  sessions: ReadonlyMap<string, ClaudeSession>
+  session: ClaudeSession
+  sessionId: string
+  fence: number
+  taskIds: readonly string[]
+  timeoutMs: number | undefined
+  publishChildWork: (session: ClaudeSession) => void
+}): Promise<{ cancelled: boolean }> {
+  const { sessions, session, sessionId, fence } = input
+  const acquisitionGeneration = session.acquisitionGeneration
+  const isCurrent = () =>
+    sessions.get(sessionId) === session &&
+    session.fence === fence &&
+    session.acquisitionGeneration === acquisitionGeneration
+  try {
+    return await stopClaudeBackgroundTasks(session, input.timeoutMs, isCurrent, input.taskIds)
+  } finally {
+    if (isCurrent()) {
+      input.publishChildWork(session)
+    }
+  }
+}
+
 export async function answerClaudePrompt(
   session: ClaudeSession,
   claim: ClaudePromptClaim,

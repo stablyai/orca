@@ -12,7 +12,7 @@ import type {
 import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../shared/runtime-types'
 import { readRuntimeMetadata } from '../runtime/runtime-metadata'
-import { spawnProcess, type SpawnedProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { sendOrcadSidecarRequest } from './orcad-sidecar-runtime-client'
 import {
   ElectronSidecarTabRegistry,
@@ -97,18 +97,20 @@ function processIsLive(pid: number): boolean {
 }
 
 export class ElectronServeBrowserProcess {
-  private child: SpawnedProcess | null = null
+  private child: ReturnType<typeof spawnProcess> | null = null
   private metadata: RuntimeMetadata | null = null
   private readonly tabs = new ElectronSidecarTabRegistry()
   private sidecarDataPath: string | null = null
 
   constructor(private readonly executablePath: string) {}
 
-  async start(): Promise<void> {
+  async start(signal?: AbortSignal): Promise<void> {
+    signal?.throwIfAborted()
     const temporaryRoot = process.platform === 'win32' ? tmpdir() : '/tmp'
     const userDataPath = await mkdtemp(join(temporaryRoot, 'orcad-browser-'))
     this.sidecarDataPath = userDataPath
     const port = await reserveLoopbackPort()
+    signal?.throwIfAborted()
     const child = spawnProcess({
       program: this.executablePath,
       args: [
@@ -132,12 +134,14 @@ export class ElectronServeBrowserProcess {
     const deadline = Date.now() + START_TIMEOUT_MS
     let lastError: unknown = null
     while (Date.now() < deadline) {
+      signal?.throwIfAborted()
       const metadata = readRuntimeMetadata(userDataPath)
       if (metadata) {
         try {
           const status = RuntimeStatusResult.parse(
             await sendOrcadSidecarRequest(metadata, 'status.get', undefined, 5_000)
           )
+          signal?.throwIfAborted()
           if (status.capabilities?.includes('browser.headless.v1')) {
             this.metadata = metadata
             return
@@ -150,7 +154,7 @@ export class ElectronServeBrowserProcess {
       if (child.exitCode !== null || child.signalCode !== null) {
         break
       }
-      await delay(100)
+      await delay(100, undefined, { signal })
     }
     throw new Error(
       `Installed Electron browser provider did not become ready: ${
@@ -233,10 +237,7 @@ export class ElectronServeBrowserProcess {
         this.tabs.require(requestedPageId, worktreeId)
         return { browserPageId: requestedPageId }
       }
-      // Why drop `page`: the runtime advertises browser.tabCreate.known-id.v1, so web
-      // clients send a provisional id for a page that does not exist yet. The sidecar
-      // mints its own id and the caller's is adopted as the public one below; passing
-      // the unknown id through would make the generic branch require() a missing page.
+      // The sidecar mints its own tab id; adopt the caller's provisional id after creating it.
       delete params.page
     }
 

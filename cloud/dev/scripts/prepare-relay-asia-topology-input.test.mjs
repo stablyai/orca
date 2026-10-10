@@ -14,7 +14,8 @@ const productionCells = () => Object.fromEntries([
   [30, 'asia-east2-a'],
   [31, 'asia-east2-b'],
   [32, 'us-central1-a'],
-  [33, 'us-central1-b']
+  [33, 'us-central1-b'],
+  [34, 'asia-east2-c']
 ].map(([ordinal, zone]) => [`production-gce-c${ordinal}`, {
     hostname: `c${ordinal}`, region: zone.slice(0, -2), zone,
     machine_type: 'e2-standard-4', boot_disk_gb: 30,
@@ -55,6 +56,14 @@ test('accepts the additive C31 wave in the next zone of the rotation', () => {
     existingAdditionalRegions: additionalRegions, environment: 'production',
     cellIds: 'production-gce-c31', image })
   assert.equal(result.relay_gce_cells['production-gce-c31'].zone, 'asia-east2-b')
+})
+
+test('accepts the additive C34 spare wave in asia-east2-c at the Asia pool', () => {
+  const result = prepareRelayAsiaTopologyInput({ existingCells: productionCells(),
+    existingAdditionalRegions: additionalRegions, environment: 'production',
+    cellIds: 'production-gce-c34', image })
+  assert.equal(result.relay_gce_cells['production-gce-c34'].zone, 'asia-east2-c')
+  assert.equal(result.relay_gce_cells['production-gce-c34'].database_pool_max, 16)
 })
 
 test('accepts the additive US C32+C33 wave at the default pool only', () => {
@@ -103,7 +112,8 @@ test('matches every committed production Asia cell entry', () => {
     'production-gce-c27,production-gce-c28,production-gce-c29',
     'production-gce-c30',
     'production-gce-c31',
-    'production-gce-c32,production-gce-c33'
+    'production-gce-c32,production-gce-c33',
+    'production-gce-c34'
   ]) {
     const committedImage = committed[wave.split(',')[0]].image
     assert.doesNotThrow(() => prepareRelayAsiaTopologyInput({
@@ -116,8 +126,8 @@ test('matches every committed production Asia cell entry', () => {
     environment: 'production', cellIds: 'production-gce-c30',
     image
   }), /differs from the reviewed topology/)
-  // The US cells launch on the newest digest, the one C31 launched on.
-  for (const cellId of ['production-gce-c32', 'production-gce-c33']) {
+  // The US cells and the C34 spare launch on the newest cell digest, the one C31 launched on.
+  for (const cellId of ['production-gce-c32', 'production-gce-c33', 'production-gce-c34']) {
     assert.equal(committed[cellId].image, committed['production-gce-c31'].image, cellId)
   }
 })
@@ -152,7 +162,8 @@ test('rejects an uncommitted subnet or cell, partial wave, wrong image, and drif
     'production-gce-c30,production-gce-c31',
     'production-gce-c32',
     'production-gce-c33',
-    'production-gce-c34'
+    'production-gce-c33,production-gce-c34',
+    'production-gce-c35'
   ]) {
     assert.throws(() => prepareRelayAsiaTopologyInput({
       existingCells: productionCells(), existingAdditionalRegions: additionalRegions,

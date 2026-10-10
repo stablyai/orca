@@ -55,6 +55,7 @@ export function getOmpSessionOwnerHandlerSourceLines(): string[] {
     '  function onStatus(name, handler): void {',
     '    pi.on(name, (event, ctx) => {',
     '      if (!ownsSessionStatus(ctx)) return',
+    '      lifecycleState.ownsPane = true',
     '      return handler(event, ctx)',
     '    })',
     '  }',

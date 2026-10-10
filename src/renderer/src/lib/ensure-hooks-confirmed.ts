@@ -193,7 +193,7 @@ export type ConfirmedRuntimeIssueCommand = {
   trustDecision: 'run' | 'skip'
 }
 
-export function confirmRuntimeIssueCommandRead(
+function confirmRuntimeIssueCommandRead(
   state: AppState,
   repoId: string,
   hostId: ExecutionHostId,

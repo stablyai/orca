@@ -10,7 +10,7 @@ on:
       - 'src/main/startup/main-process-quit*'
       - 'src/main/window/main-window-state-lifecycle*'
       - 'src/main/window/dashboard-popout-window*'
-      - 'src/shared/child-process/**'
+      - 'src/packages/process-host/**'
       - 'src/shared/update-status-types.ts'
       - 'pnpm-lock.yaml'
   workflow_dispatch:
@@ -43,7 +43,6 @@ jobs:
           src/main/updater.mac-install.test.ts
           src/main/updater.headless-serve-install.test.ts
           src/main/updater-mac-quit-guard.test.ts
-          src/main/startup/desktop-startup-ordering.test.ts
           src/main/startup/main-process-quit-update-veto.test.ts
           src/main/window/main-window-state-lifecycle.test.ts
           src/main/window/dashboard-popout-window.test.ts

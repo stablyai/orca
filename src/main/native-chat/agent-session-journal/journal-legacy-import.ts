@@ -33,7 +33,6 @@ import { createLegacyIdentityTracker } from './journal-legacy-identity'
 import type { JournalReplacementItem } from './journal-epoch-replacement'
 import {
   boundInlineText,
-  boundPayload,
   boundToolInput,
   DEFAULT_JOURNAL_PAYLOAD_LIMITS,
   type JournalPayloadLimits
@@ -73,7 +72,7 @@ export async function importLegacyTranscriptIntoJournal(input: {
   if (!prepared.ok) {
     return prepared
   }
-  // An empty import must preserve any existing repair anchor and disclosure.
+  // An empty import leaves the epoch as it stands.
   if (prepared.items.length === 0) {
     const current = input.journal.cursor()
     return { ok: true, epoch: current.epoch, cursor: current, imported: 0, replaced: false }
@@ -218,16 +217,8 @@ function legacyItemBody(
       kind: 'tool-call',
       name: only.name,
       input: boundToolInput(only.input, limits),
+      ...(only.callId !== undefined ? { callId: only.callId } : {}),
       state: 'completed'
-    }
-  }
-  if (only?.type === 'tool-result') {
-    return {
-      kind: 'tool-call',
-      name: 'tool-result',
-      input: null,
-      state: only.isError ? 'failed' : 'completed',
-      output: boundPayload(only.output, limits)
     }
   }
   return {

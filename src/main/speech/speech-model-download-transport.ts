@@ -6,12 +6,11 @@ import {
   MAX_RETRY_AFTER_MS,
   MAX_TOTAL_DOWNLOAD_REQUESTS,
   describeInterruptedDownload,
-  isRetryableDownloadError,
-  sleepUnlessAborted,
-  type DownloadTotals,
-  type HttpStatusError
+  type DownloadTotals
 } from './speech-model-download-response'
+import { isRetryableDownloadError, type HttpStatusError } from '../network/transient-download-error'
 import { SpeechModelHttpDownload } from './speech-model-http-download'
+import { delayUnlessAborted } from '../../shared/abort-aware-delay'
 
 export abstract class SpeechModelDownloadTransport extends SpeechModelHttpDownload {
   protected getPartialDownloadBytes(filePath: string): number {
@@ -73,7 +72,7 @@ export abstract class SpeechModelDownloadTransport extends SpeechModelHttpDownlo
             `Model download exceeded its expected size (${receivedBytes} of ${totals.totalBytes} bytes)`
           )
         }
-        const incompleteResponse = new Error(
+        const incompleteResponse: HttpStatusError = new Error(
           `Model download response ended at ${receivedBytes} of ${totals.totalBytes} bytes`
         )
         if (receivedBytes > offset) {
@@ -81,9 +80,8 @@ export abstract class SpeechModelDownloadTransport extends SpeechModelHttpDownlo
           noProgressStreak = 0
           continue
         }
-        const retryableIncompleteResponse = incompleteResponse as HttpStatusError
-        retryableIncompleteResponse.retryable = true
-        throw retryableIncompleteResponse
+        incompleteResponse.retryable = true
+        throw incompleteResponse
       } catch (err) {
         if (isAborted() || signal.aborted) {
           throw err
@@ -100,11 +98,11 @@ export abstract class SpeechModelDownloadTransport extends SpeechModelHttpDownlo
         if (noProgressStreak >= MAX_NO_PROGRESS_ATTEMPTS) {
           throw describeInterruptedDownload(err, receivedBytes, totals.totalBytes, requestCount)
         }
-        const retryAfterMs = (err as HttpStatusError).retryAfterMs
+        const statusError: HttpStatusError | undefined = err instanceof Error ? err : undefined
+        const retryAfterMs = statusError?.retryAfterMs
         if (retryAfterMs !== undefined && retryAfterMs > MAX_RETRY_AFTER_MS) {
-          const statusCode = (err as HttpStatusError).httpStatusCode
           throw new Error(
-            `HTTP ${statusCode}; server requested retry after ${Math.ceil(retryAfterMs / 1_000)} seconds`
+            `HTTP ${statusError?.httpStatusCode}; server requested retry after ${Math.ceil(retryAfterMs / 1_000)} seconds`
           )
         }
         console.warn(
@@ -112,7 +110,7 @@ export abstract class SpeechModelDownloadTransport extends SpeechModelHttpDownlo
           modelId,
           err
         )
-        await sleepUnlessAborted(
+        await delayUnlessAborted(
           retryAfterMs ??
             DOWNLOAD_RETRY_DELAYS_MS[
               Math.min(Math.max(0, noProgressStreak - 1), DOWNLOAD_RETRY_DELAYS_MS.length - 1)

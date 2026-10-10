@@ -89,8 +89,7 @@ describe('PtyHandler', () => {
     expect(term.write).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(1)
-    const submit = process.platform === 'win32' ? '\r' : '\n'
-    expect(term.write).toHaveBeenCalledWith(`echo provider-owned${submit}`)
+    expect(term.write).toHaveBeenCalledWith('echo provider-owned\r')
     expect(handler.retainedStartupCommandCount).toBe(0)
   })
 
@@ -364,7 +363,7 @@ describe('PtyHandler', () => {
       expect(term.write).not.toHaveBeenCalled()
       vi.advanceTimersByTime(1)
 
-      expect(term.write).toHaveBeenCalledWith('echo after-ready\n')
+      expect(term.write).toHaveBeenCalledWith('echo after-ready\r')
       expect(handler.retainedStartupCommandCount).toBe(0)
       vi.advanceTimersByTime(8)
       expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
@@ -421,7 +420,7 @@ describe('PtyHandler', () => {
       promptOptions.onPromptReady()
       await vi.advanceTimersByTimeAsync(50)
 
-      expect(term.write).toHaveBeenCalledWith('echo after-exec\n')
+      expect(term.write).toHaveBeenCalledWith('echo after-exec\r')
       expect(handler.retainedStartupCommandCount).toBe(0)
     }
   )
@@ -635,7 +634,7 @@ describe('PtyHandler', () => {
       dataCallback?.('\x1b]777;orca-shell-ready')
       vi.advanceTimersByTime(1500)
 
-      expect(term.write).toHaveBeenCalledWith('echo fallback\n')
+      expect(term.write).toHaveBeenCalledWith('echo fallback\r')
       vi.advanceTimersByTime(8)
       expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
         id: PTY_1,

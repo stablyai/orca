@@ -1,6 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { SERVER_TARGETS, type ServerTarget } from '../../shared/node-runtime-pin'
+import {
+  isNodeRuntimeTarget,
+  type NodeRuntimeTarget,
+  type ServerTarget
+} from '../../shared/node-runtime-pin'
 import { ORCAD_SERVER_TARGET_FILENAME } from '../../shared/orcad-artifacts'
 import type { SshConnection } from './ssh-connection'
 import { execCommand } from './ssh-relay-deploy-helpers'
@@ -39,15 +43,6 @@ export function parseGlibcVersion(output: string): GlibcVersion | null {
   return match ? { major: Number(match[1]), minor: Number(match[2]) } : null
 }
 
-export async function resolveOrcadDeploymentTarget(options: {
-  conn: SshConnection
-  host: RemoteHostPlatform
-  signal?: AbortSignal
-  exec?: (command: string) => Promise<string>
-}): Promise<ServerTarget> {
-  return (await resolveOrcadDeploymentTargetFacts(options)).target
-}
-
 export async function resolveOrcadDeploymentTargetFacts(options: {
   conn: SshConnection
   host: RemoteHostPlatform
@@ -81,12 +76,11 @@ function linuxTargetFacts(host: RemoteHostPlatform, output: string): OrcadDeploy
   }
 }
 
-/** The server target an assembled bundle was built for. */
-export function readOrcadBundleTarget(localOrcadDir: string): ServerTarget {
+/** The runtime target an assembled bundle was built for, a compat one included. */
+export function readOrcadBundleTarget(localOrcadDir: string): NodeRuntimeTarget {
   const recorded = readFileSync(join(localOrcadDir, ORCAD_SERVER_TARGET_FILENAME), 'utf8').trim()
-  const target = SERVER_TARGETS.find((candidate) => candidate === recorded)
-  if (!target) {
+  if (!isNodeRuntimeTarget(recorded)) {
     throw new Error(`The orcad bundle names no known server target: ${recorded}`)
   }
-  return target
+  return recorded
 }

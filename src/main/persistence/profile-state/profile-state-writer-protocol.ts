@@ -19,7 +19,7 @@ export type ProfileStateWriterCommand =
       runPayloads: readonly string[]
     }
   | { command: 'assert-revision' | 'close' }
-  | { command: 'export-json' | 'export-latest' | 'export-compatibility'; targetPath: string }
+  | { command: 'export-json' | 'export-latest'; targetPath: string }
 
 export type ProfileStateWriterRequest = ProfileStateWriterCommand & { id: number }
 export type ProfileStateWriterFailureOutcome = 'known-failure' | 'indeterminate'
@@ -73,7 +73,6 @@ export function isProfileStateWriterRequest(value: unknown): value is ProfileSta
       return true
     case 'export-json':
     case 'export-latest':
-    case 'export-compatibility':
       return typeof value.targetPath === 'string' && value.targetPath.length > 0
     case 'write-complete':
     case 'write-domains':

@@ -8,6 +8,7 @@ import {
 } from './cell-admission-selector.js'
 import type { RelayCellConfig } from './config.js'
 import {
+  consumeRelayCellInventoryHold,
   openInMemoryRelayDatabase,
   type RelayDatabase,
   type RelayLockOptions,
@@ -363,6 +364,23 @@ describe('re-placing a host off a cell isolated for a roll', () => {
       expect(grant.cellId).toBe(first.cellId)
       expect(grant.assignmentEpoch).toBe(first.assignmentEpoch)
     }
+  })
+
+  // Why its own site: the drain-return lane's service time is either this lock or
+  // the inventory, and only a separate p99 can say which.
+  it('samples the regional target rows it locks under their own hold site', async () => {
+    const { store, database, isolateForRoll } = await setup()
+    const first = await store.assign(IDENTITY, 'us-central1')
+    await isolateForRoll(first.cellId)
+    consumeRelayCellInventoryHold(database)
+
+    await store.assign(IDENTITY, 'us-central1')
+
+    expect(consumeRelayCellInventoryHold(database)).toMatchObject({
+      cellInventoryHolds: 1,
+      cellInventoryHoldMaxSite: 'isolated-replacement',
+      isolatedReplacementHolds: 1
+    })
   })
 
   it('stops re-placing once restore clears the stamp', async () => {

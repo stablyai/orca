@@ -36,7 +36,8 @@ import type { ClaudeStructuredSessionEvent } from './claude-structured-session-s
 import {
   fakeClaude,
   identityFor,
-  PROVIDER_SESSION_ID
+  PROVIDER_SESSION_ID,
+  claudeStartupSettled
 } from './claude-structured-session-test-support'
 
 const SESSION = 'session-1'
@@ -222,7 +223,7 @@ async function pipeline() {
     spawnToken: 'spawn-9',
     events: deferred.sink
   })
-  await adapter.awaitStarted(SESSION)
+  await claudeStartupSettled(adapter, SESSION)
   const settle = async (): Promise<void> => {
     for (let round = 0; round < 3; round += 1) {
       expect(await deferred.drained()).toEqual({ ok: true })

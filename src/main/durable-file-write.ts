@@ -29,7 +29,8 @@ async function syncDirectory(directory: string): Promise<void> {
   }
 }
 
-function syncDirectorySync(directory: string): void {
+/** Sync variant of the best-effort directory fsync, for callers that publish by rename or link. */
+export function syncDirectoryDurablySync(directory: string): void {
   let fd: number | null = null
   try {
     fd = openSync(directory, 'r')
@@ -50,7 +51,7 @@ function syncDirectorySync(directory: string): void {
 /** Rename an already-fsynced file and make the containing directory durable. */
 export function renameDurableSync(tmpPath: string, finalPath: string): void {
   renameFileWithWindowsRetry(tmpPath, finalPath)
-  syncDirectorySync(dirname(finalPath))
+  syncDirectoryDurablySync(dirname(finalPath))
 }
 
 /** Publish an already-fsynced file without replacing a concurrently created destination. */
@@ -58,7 +59,7 @@ export function publishFileDurableSync(tmpPath: string, finalPath: string): bool
   if (!publishFileWithoutOverwrite(tmpPath, finalPath)) {
     return false
   }
-  syncDirectorySync(dirname(finalPath))
+  syncDirectoryDurablySync(dirname(finalPath))
   rmSync(tmpPath)
   return true
 }
@@ -166,29 +167,38 @@ export async function writeFileDurableIfCurrent(
 }
 
 /** Temp path for a durable write. Shared shape so `removeStaleDurableWriteTempFiles` can reclaim orphans. */
-export function durableWriteTempPath(finalPath: string): string {
-  return `${finalPath}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
+export function durableWriteTempPath(finalPath: string, owner?: string): string {
+  const ownerSuffix = owner === undefined ? '' : `.owner-${owner}`
+  return `${finalPath}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}${ownerSuffix}.tmp`
 }
 
 /**
  * Sweep temp files orphaned by a death between write and rename — for multi-MB payloads they would
  * otherwise accumulate forever. Callers can require a minimum age to spare another live instance's
- * write. This process's own temps are always skipped because deleting one would fail its rename.
+ * write. This process's own temps are skipped unless their owner is known to have exited.
  */
 export async function removeStaleDurableWriteTempFiles(
   finalPath: string,
-  options: { minimumAgeMs?: number } = {}
+  options: { minimumAgeMs?: number; retiredOwner?: string } = {}
 ): Promise<void> {
   const directory = dirname(finalPath)
   const prefix = `${basename(finalPath)}.`
   const ownPrefix = `${prefix}${process.pid}.`
+  const retiredOwnerSuffix =
+    options.retiredOwner === undefined ? null : `.owner-${options.retiredOwner}.tmp`
   try {
     const names = await readdir(directory)
     await Promise.all(
       names
-        .filter(
-          (name) => name.startsWith(prefix) && name.endsWith('.tmp') && !name.startsWith(ownPrefix)
-        )
+        .filter((name) => {
+          if (!name.startsWith(prefix) || !name.endsWith('.tmp')) {
+            return false
+          }
+          // The caller must await owner exit before reclaiming its current-process files.
+          return retiredOwnerSuffix === null
+            ? !name.startsWith(ownPrefix)
+            : name.startsWith(ownPrefix) && name.endsWith(retiredOwnerSuffix)
+        })
         .map(async (name) => {
           const path = join(directory, name)
           if (options.minimumAgeMs) {
@@ -209,12 +219,14 @@ export async function removeStaleDurableWriteTempFiles(
 export function writeFileDurableSync(
   tmpPath: string,
   finalPath: string,
-  payload: string | Uint8Array
+  payload: string | Uint8Array,
+  /** Creation mode for a new file, e.g. 0o600 for state other users must not read. */
+  mode?: number
 ): void {
   let renamed = false
   try {
     // A Uint8Array payload is written verbatim; a string still defaults to UTF-8.
-    writeFileSync(tmpPath, payload)
+    writeFileSync(tmpPath, payload, mode === undefined ? undefined : { mode })
     const fd = openSync(tmpPath, 'r+')
     try {
       fsyncSync(fd)

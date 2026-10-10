@@ -19,6 +19,7 @@ import {
   readAgentSessionHistory,
   readAgentSessionHydrationPage
 } from './agent-session-history-page'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 // A backward page windows over the session's own rows, and a subagent's rows in
 // that range ride along, so a burst cannot crowd the conversation off the page.
@@ -28,7 +29,7 @@ const IDENTITY: AgentSessionJournalIdentity = {
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 
 const child: AgentJournalProducerLinkage = { agentId: 'task-1', producerKind: 'agent' }

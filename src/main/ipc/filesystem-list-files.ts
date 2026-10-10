@@ -1,3 +1,7 @@
+import { FileInventoryBudget, FileInventoryCapacityError } from '../../shared/file-inventory-budget'
+import { quickOpenListingPathFilter } from '../../shared/quick-open-listing-path-filter'
+import { getQuickOpenRgOutputMode } from '../../shared/quick-open-ripgrep-output-mode'
+import { RipgrepFilenameDecoder, RipgrepFilenameError } from '../../shared/ripgrep-filename-decoder'
 import { sep } from 'node:path'
 import type { ChildProcess } from 'node:child_process'
 import type { Store } from '../persistence'
@@ -7,10 +11,7 @@ import { getLocalGitOptionsForRegisteredWorktree } from './local-worktree-runtim
 import {
   buildExcludePathPrefixes,
   buildRgArgsForQuickOpen,
-  normalizeQuickOpenRgLine,
-  type RgOutputMode,
-  shouldExcludeQuickOpenRelPath,
-  shouldIncludeQuickOpenPath
+  normalizeQuickOpenRgLine
 } from '../../shared/quick-open-filter'
 import {
   limitQuickOpenFilesBySerializedBytes,
@@ -39,7 +40,8 @@ export async function listQuickOpenFiles(
   maxResults?: number,
   maxSerializedBytes?: number,
   /** Applied before `maxResults`, so the cap counts matches rather than scanned files. */
-  pathFilter?: (relativePath: string) => boolean
+  pathFilter?: (relativePath: string) => boolean,
+  options: { includeIgnored?: boolean; followSymlinks?: boolean; candidatePaths?: string[] } = {}
 ): Promise<string[]> {
   const authorizedRootPath = await resolveAuthorizedPath(rootPath, store)
   const localGitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -52,33 +54,44 @@ export async function listQuickOpenFiles(
   // nested subdirectories. Without excluding them, rg/git lists files from
   // every worktree instead of just the active one. The shared helper
   // normalizes, validates, and root-relativizes every input.
-  const excludePathPrefixes = buildExcludePathPrefixes(authorizedRootPath, excludePaths)
+  const excludePathPrefixes = [
+    ...new Set([
+      ...buildExcludePathPrefixes(rootPath, excludePaths),
+      ...buildExcludePathPrefixes(authorizedRootPath, excludePaths)
+    ])
+  ]
+  const includePath = quickOpenListingPathFilter(excludePathPrefixes, options.candidatePaths)
   const wslDistroForOutput = parseWslPath(authorizedRootPath)?.distro ?? localGitOptions.wslDistro
 
+  const inventoryBudget =
+    maxResults === undefined && maxSerializedBytes === undefined ? new FileInventoryBudget() : null
   const files = new Set<string>()
   let serializedBytes = 2 // []
   const children: {
     child: ChildProcess
     isDone: () => boolean
-    finish: () => void
+    finish: (error?: Error) => void
   }[] = []
   // Why: WSL-routed rg can emit Linux-native absolute paths. UNC repos carry
   // their distro in the path; Windows-path repos carry it in project runtime.
-  const rgArgs = buildRgArgsForQuickOpen({
+  const { primary, ignoredPass } = buildRgArgsForQuickOpen({
     // Why: rg evaluates root-relative exclude globs against cwd only when the
     // search target is cwd-relative. With an absolute target, `!packages/app`
     // filters output after traversal but does not prune the nested worktree.
     searchRoot: '.',
+    followSymlinks: options.followSymlinks,
     excludePathPrefixes,
     // On Windows, rg outputs '\\'-separated paths; force '/'. Also force on
     // macOS/Linux for idempotence — it's a no-op there.
     forceSlashSeparator: sep === '\\'
   })
-  const primary = rgArgs.primary
-  const ignoredPass = rgArgs.ignoredPass
 
-  const runRg = (args: string[]): Promise<void> => {
-    return new Promise((resolve, reject) => {
+  const runRg = (args: string[]): Promise<void> =>
+    new Promise((resolve, reject) => {
+      const filenameDecoder = new RipgrepFilenameDecoder((error) => {
+        killSpawnedRipgrepProcess(child)
+        finish(error)
+      }, Boolean(wslDistroForOutput))
       let buf = ''
       let done = false
       let parseablePathCount = 0
@@ -98,13 +111,7 @@ export async function listQuickOpenFiles(
           return false
         }
         parseablePathCount++
-        if (!shouldIncludeQuickOpenPath(relPath)) {
-          return false
-        }
-        if (shouldExcludeQuickOpenRelPath(relPath, excludePathPrefixes)) {
-          return false
-        }
-        if (pathFilter && !pathFilter(relPath)) {
+        if (!includePath(relPath) || (pathFilter && !pathFilter(relPath))) {
           return false
         }
         if (files.has(relPath)) {
@@ -119,6 +126,14 @@ export async function listQuickOpenFiles(
             return true
           }
           serializedBytes += nextBytes
+        }
+        try {
+          inventoryBudget?.record(relPath)
+        } catch (error) {
+          buf = ''
+          files.clear()
+          killSurvivors(error instanceof Error ? error : new FileInventoryCapacityError())
+          return true
         }
         files.add(relPath)
         return maxResults !== undefined && files.size >= maxResults
@@ -138,18 +153,22 @@ export async function listQuickOpenFiles(
         return
       }
       let timer: ReturnType<typeof setTimeout>
-      const handleStdoutData = (chunk: string): void => {
-        buf += chunk
+      const handleStdoutData = (chunk: Buffer | string): void => {
+        const decoded = filenameDecoder.decode(chunk)
+        if (decoded === null) {
+          return
+        }
+        buf += decoded
         let start = 0
-        let newlineIdx = buf.indexOf('\n', start)
-        while (newlineIdx !== -1) {
-          if (processLine(buf.substring(start, newlineIdx))) {
+        let delimiterIdx = buf.indexOf('\0', start)
+        while (delimiterIdx !== -1) {
+          if (processLine(buf.substring(start, delimiterIdx))) {
             buf = ''
-            finishAtLimit()
+            killSurvivors()
             return
           }
-          start = newlineIdx + 1
-          newlineIdx = buf.indexOf('\n', start)
+          start = delimiterIdx + 1
+          delimiterIdx = buf.indexOf('\0', start)
         }
         buf = start < buf.length ? buf.substring(start) : ''
       }
@@ -211,14 +230,15 @@ export async function listQuickOpenFiles(
           finish(new Error(`rg killed by ${signal}`))
           return
         }
-        if (buf && processLine(buf)) {
-          buf = ''
-          finishAtLimit()
+        if (!filenameDecoder.finish()) {
           return
         }
-        if (code === 0 || code === 1) {
-          finish()
-        } else if (code === 2 && parseablePathCount > 0) {
+        if (buf && processLine(buf)) {
+          buf = ''
+          killSurvivors()
+          return
+        }
+        if (code === 0 || code === 1 || (code === 2 && parseablePathCount > 0)) {
           // rg can return 2 for unreadable subdirectories while still listing
           // usable files from the rest of the root.
           finish()
@@ -257,7 +277,6 @@ export async function listQuickOpenFiles(
 
       children.push({ child, isDone: () => done, finish })
 
-      child.stdout?.setEncoding('utf-8')
       child.stdout?.on('data', handleStdoutData)
       child.stderr?.on('data', handleStderrData)
       child.once('error', handleError)
@@ -274,35 +293,28 @@ export async function listQuickOpenFiles(
         handleAbort()
       }
     })
-  }
 
-  const killSurvivors = (): void => {
+  const killSurvivors = (error?: Error): void => {
     // Failed listings must release any process still walking the tree.
     for (const entry of children) {
       if (entry.isDone()) {
         continue
       }
-      entry.finish()
+      entry.finish(error)
       if (entry.child.exitCode === null && entry.child.signalCode === null) {
         killSpawnedRipgrepProcess(entry.child)
       }
     }
   }
 
-  function finishAtLimit(): void {
-    for (const entry of children) {
-      if (entry.isDone()) {
-        continue
-      }
-      entry.finish()
-      if (entry.child.exitCode === null && entry.child.signalCode === null) {
-        killSpawnedRipgrepProcess(entry.child)
-      }
-    }
-  }
   try {
-    if (maxResults === undefined && maxSerializedBytes === undefined) {
-      // The broader pass already includes source files; an unbounded listing needs only one scan.
+    if (options.includeIgnored === false) {
+      await runRg(primary)
+    } else if (
+      options.candidatePaths !== undefined ||
+      (maxResults === undefined && maxSerializedBytes === undefined)
+    ) {
+      // Candidate membership has no primary-first ordering, so one broader pass is enough.
       await runRg(ignoredPass)
     } else {
       // Why: ignored-file output can be much larger and faster than the primary pass; let source
@@ -314,7 +326,13 @@ export async function listQuickOpenFiles(
       ) {
         // Why: a filtered scan walks the whole tree; an ignored-pass timeout keeps primary matches.
         await runRg(ignoredPass).catch((err: unknown) => {
-          if (!pathFilter || signal?.aborted || err instanceof RipgrepUnavailableError) {
+          if (
+            !pathFilter ||
+            signal?.aborted ||
+            err instanceof RipgrepUnavailableError ||
+            err instanceof RipgrepFilenameError ||
+            err instanceof FileInventoryCapacityError
+          ) {
             throw err
           }
         })
@@ -328,20 +346,4 @@ export async function listQuickOpenFiles(
   return maxSerializedBytes === undefined
     ? result
     : limitQuickOpenFilesBySerializedBytes(result, maxSerializedBytes)
-}
-
-function getQuickOpenRgOutputMode(
-  rawLine: string,
-  translatedLine: string,
-  rootPath: string
-): RgOutputMode {
-  if (
-    translatedLine !== rawLine ||
-    rawLine.startsWith('/') ||
-    /^[A-Za-z]:[\\/]/.test(rawLine) ||
-    rawLine.startsWith('\\\\')
-  ) {
-    return { kind: 'absolute', rootPath }
-  }
-  return { kind: 'cwd-relative' }
 }

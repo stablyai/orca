@@ -13,18 +13,21 @@
 
 import { randomUUID } from 'node:crypto'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../../shared/agent-session-definitive-refusal'
+import type { AgentMessageSource } from '../../../../shared/agent-session-message-source'
 import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { mintAgentSessionOperationId } from '../../orchestration/structured-pointer-operation-id'
 import { structuredPointerCallerKey } from '../../orchestration/structured-mailbox-pointer-host'
 import { sendAgentTurn, type StructuredAgentTurnHost } from '../../orchestration/send-agent-turn'
 import { retireSettledStructuredWorkerTab } from '../../structured-agent-session-tab-retirement'
+import { structuredWorkerSession } from '../../structured-worker-authority'
 import {
   mintStructuredWorkerHandle,
   structuredWorkerHostScope,
@@ -49,31 +52,46 @@ const bindingsByDispatchId = new Map<string, StructuredWorkerBinding>()
  *
  * EVERY settlement has to reach this — stop, release AND abandon. A surviving subscription keeps
  * nudging a session no dispatch owns.
+ *
+ * Parked mail is forgotten on every session of the worker's `/clear` lineage, derived from
+ * `workerSessionId` when no binding survives (after a restart) — mail parks on whichever session
+ * ran the worker when it arrived.
  */
 export function releaseStructuredWorkerSession(
   dispatchId: string,
-  runtime?: Pick<OrcaRuntimeService, 'forgetStructuredSessionMail'>
+  runtime?: Pick<OrcaRuntimeService, 'forgetStructuredSessionMail'>,
+  workerSessionId?: string | null
 ): void {
   const binding = bindingsByDispatchId.get(dispatchId)
-  if (!binding) {
+  if (binding) {
+    bindingsByDispatchId.delete(dispatchId)
+    binding.disposeSubscription()
+    structuredWorkerIdentities.forget(binding.handle)
+  }
+  const rootSessionId = binding?.sessionId ?? workerSessionId
+  if (!rootSessionId || !runtime?.forgetStructuredSessionMail) {
     return
   }
-  bindingsByDispatchId.delete(dispatchId)
-  binding.disposeSubscription()
-  structuredWorkerIdentities.forget(binding.handle)
-  runtime?.forgetStructuredSessionMail?.(binding.sessionId)
+  for (const sessionId of structuredWorkerSession({ sessionId: rootSessionId }).lineage) {
+    runtime.forgetStructuredSessionMail(sessionId)
+  }
 }
 
 export async function createStructuredWorkerSession(args: {
   runtime: OrcaRuntimeService
   worktreeId: string
-  agent: 'claude' | 'codex'
+  agent: TuiAgent
   dispatchId: string
   /** The dispatch's own `--model`/`--effort`, already narrowed to the seedable string subset. */
   options?: Readonly<Record<string, string>>
   /** Retried whenever the session's journal moves, which is the structured idle edge. */
   onJournalActivity: (sessionId: string) => void
-}): Promise<{ identity: StructuredWorkerIdentity; host: StructuredAgentSessionHost }> {
+}): Promise<{
+  identity: StructuredWorkerIdentity
+  host: StructuredAgentSessionHost
+  /** The lease the create was admitted at. */
+  fence: number
+}> {
   const sessionId = randomUUID()
   // Registered BEFORE the session is created, because `attach` is what spawns the provider child
   // and the child's environment is read from this registry at spawn time. Registering afterwards
@@ -136,7 +154,7 @@ export async function createStructuredWorkerSession(args: {
       handle: identity.handle,
       disposeSubscription
     })
-    return { identity, host }
+    return { identity, host, fence: created.value.fence }
   } catch (error) {
     // A start that fails after the session exists would otherwise strand a live provider child
     // that no dispatch owns and that nothing else in the runtime will ever retire.
@@ -216,11 +234,14 @@ export async function sendStructuredWorkerPreamble(args: {
   sessionId: string
   dispatchId: string
   preamble: string
+  /** Who the task is from (`dispatchTaskSource`), shown on the worker's turn. */
+  from: AgentMessageSource
 }): Promise<'accepted' | 'pending'> {
   const body: AgentJournalMessageItem = {
     kind: 'message',
     role: 'user',
-    blocks: [{ type: 'text', text: args.preamble }]
+    blocks: [{ type: 'text', text: args.preamble }],
+    from: args.from
   }
   const fence = args.host.deps.store.getRecord(args.sessionId)?.lease.runtimeFence
   if (fence === undefined) {
@@ -249,7 +270,8 @@ export async function sendStructuredWorkerPreamble(args: {
   }
 }
 
-function preambleDispatchState(
+/** A sent preamble's verdict: acknowledged, or held for its agent; anything else throws. */
+export function preambleDispatchState(
   submission: AgentJournalSubmission | undefined
 ): 'accepted' | 'pending' {
   if (submission?.dispatchState === 'accepted' || submission?.dispatchState === 'pending') {

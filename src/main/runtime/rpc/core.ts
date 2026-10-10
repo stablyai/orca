@@ -11,6 +11,8 @@ import type {
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
 import type { OrchestrationSessionCaller } from '../orchestration/orchestration-caller-identity'
+import type { RpcCallerIdentity } from './rpc-caller-identity'
+import type { RpcMethodPermission } from './rpc-method-permission'
 
 export type PairingRpcContext = {
   getEndpoints(params: PairingGetEndpointsParams): Promise<PairingGetEndpointsResult>
@@ -75,6 +77,8 @@ export type RpcContext = {
   clientId?: string
   // Why: navigation is keyed by revocable device identity, never by the bearer credential or transient socket id.
   pairedDeviceId?: string
+  // Why: host-assigned from the transport (rpc-caller-identity.ts); absent when the transport could not name its caller.
+  caller?: RpcCallerIdentity
   // Why: lets handlers gate mobile payload truncation to phones only; undefined for in-process callers → treat as full-class (no clip).
   clientKind?: 'mobile' | 'runtime'
   // Why: negotiation is bound to the authenticated socket, never asserted by a destructive request.
@@ -121,8 +125,6 @@ export type RpcContext = {
   ) => () => void
 }
 
-export type RpcHandler<TParams, TResult> = (params: TParams, ctx: RpcContext) => TResult
-
 // Why: a schema-less method takes no params, so its handler must not be able to read the first argument.
 type RpcParsedParams<TSchema extends ZodType | null> = TSchema extends ZodType
   ? TSchema['_output']
@@ -131,86 +133,63 @@ type RpcParsedParams<TSchema extends ZodType | null> = TSchema extends ZodType
 // Why: the authored shape — literal name, params schema, and producer result all survive for compile-time contracts.
 export type RpcTypedMethod<TName extends string, TSchema extends ZodType | null, TResult> = {
   readonly name: TName
+  // Why: required so a new method cannot ship without deciding which callers may reach it.
+  readonly permission: RpcMethodPermission
   readonly params: TSchema
-  readonly handler: RpcHandler<RpcParsedParams<TSchema>, TResult>
+  readonly handler: (params: RpcParsedParams<TSchema>, ctx: RpcContext) => TResult
 }
 
 export function defineMethod<TName extends string, TSchema extends ZodType | null, TResult>(
   spec: RpcTypedMethod<TName, TSchema, TResult>
 ): RpcTypedMethod<TName, TSchema, TResult> {
-  return {
-    name: spec.name,
-    params: spec.params,
-    handler: spec.handler
-  }
+  return spec
 }
-
-export type RpcStreamingHandler<TParams> = (
-  params: TParams,
-  ctx: RpcContext,
-  emit: (result: unknown) => void
-) => Promise<void>
 
 // Why: emitted values stay `unknown` — the emit callback is an input, so there is no return position to infer them from.
 export type RpcTypedStreamingMethod<TName extends string, TSchema extends ZodType | null> = {
   readonly name: TName
+  readonly permission: RpcMethodPermission
   readonly params: TSchema
   readonly stream: true
-  readonly handler: RpcStreamingHandler<RpcParsedParams<TSchema>>
+  readonly handler: (
+    params: RpcParsedParams<TSchema>,
+    ctx: RpcContext,
+    emit: (result: unknown) => void
+  ) => Promise<void>
 }
 
 export function defineStreamingMethod<TName extends string, TSchema extends ZodType | null>(
   spec: Omit<RpcTypedStreamingMethod<TName, TSchema>, 'stream'>
 ): RpcTypedStreamingMethod<TName, TSchema> {
-  return {
-    name: spec.name,
-    params: spec.params,
-    stream: true,
-    handler: spec.handler
-  }
+  return { ...spec, stream: true }
+}
+
+type RpcMethodWithParams<P> = {
+  readonly name: string
+  readonly permission: RpcMethodPermission
+  readonly params: ZodType | null
+  readonly handler: (params: P, ctx: RpcContext) => unknown
+}
+
+type RpcStreamingMethodWithParams<P> = {
+  readonly name: string
+  readonly permission: RpcMethodPermission
+  readonly params: ZodType | null
+  readonly stream: true
+  readonly handler: (params: P, ctx: RpcContext, emit: (result: unknown) => void) => Promise<void>
 }
 
 // Why `never` params: it makes the declaration a supertype of every parsed-params handler, so typed methods
 // travel to the registry boundary — and only there get erased — without a cast in each methods module.
-export type RpcMethodDeclaration = {
-  readonly name: string
-  readonly params: ZodType | null
-  readonly handler: (params: never, ctx: RpcContext) => unknown
-}
-
-export type RpcStreamingMethodDeclaration = {
-  readonly name: string
-  readonly params: ZodType | null
-  readonly stream: true
-  readonly handler: (
-    params: never,
-    ctx: RpcContext,
-    emit: (result: unknown) => void
-  ) => Promise<void>
-}
-
+export type RpcMethodDeclaration = RpcMethodWithParams<never>
+type RpcStreamingMethodDeclaration = RpcStreamingMethodWithParams<never>
 export type RpcAnyMethodDeclaration = RpcMethodDeclaration | RpcStreamingMethodDeclaration
 
 // Why: RpcMethod is the registry's erased view; the dispatcher parses params itself and hands handlers `unknown`.
-export type RpcMethod = {
-  readonly name: string
-  readonly params: ZodType | null
-  readonly handler: (params: unknown, ctx: RpcContext) => unknown
-}
-
+export type RpcMethod = RpcMethodWithParams<unknown>
 // Why: the `stream` flag lets the dispatcher route these to the emit-based path instead of the one-shot Promise path.
-export type RpcStreamingMethod = {
-  readonly name: string
-  readonly params: ZodType | null
-  readonly stream: true
-  readonly handler: (
-    params: unknown,
-    ctx: RpcContext,
-    emit: (result: unknown) => void
-  ) => Promise<void>
-}
-
-export type RpcAnyMethod = RpcMethod | RpcStreamingMethod
+export type RpcStreamingMethod = RpcStreamingMethodWithParams<unknown>
+type RpcAnyMethod = RpcMethod | RpcStreamingMethod
 
 // Why the overloads: erasure drops the parsed-params type, not the one-shot/streaming split the dispatcher routes on.
 export function eraseRpcMethods(methods: readonly RpcMethodDeclaration[]): readonly RpcMethod[]

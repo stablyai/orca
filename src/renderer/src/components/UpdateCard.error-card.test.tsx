@@ -56,13 +56,13 @@ function mockReducedMotion(matches: boolean): void {
 
 beforeEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
-  openUrl.mockReset()
-  download.mockReset()
-  check.mockReset()
+  openUrl.mockReset().mockResolvedValue(undefined)
+  download.mockReset().mockResolvedValue(undefined)
+  check.mockReset().mockResolvedValue(undefined)
   quitAndInstall.mockReset().mockResolvedValue(undefined)
   showLinuxPackage.mockReset().mockResolvedValue(undefined)
   writeClipboardText.mockReset().mockResolvedValue(undefined)
-  relaunch.mockReset()
+  relaunch.mockReset().mockResolvedValue(undefined)
   setSettings.mockReset().mockResolvedValue(undefined)
   getInstructions.mockReset().mockResolvedValue({
     ok: true,

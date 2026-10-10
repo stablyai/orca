@@ -10,13 +10,18 @@ const selectorSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('json'), revision: positiveInteger }).strict(),
   z.object({ kind: z.literal('current-json') }).strict(),
   z.object({ kind: z.literal('current-sqlite') }).strict(),
+  z.object({ kind: z.literal('latest-json') }).strict(),
   z.object({ kind: z.literal('sqlite'), backupId: z.string().min(1) }).strict()
 ])
 
 export const profileStateRecoveryRequestSchema = z
   .object({
     userDataPath: z.string().min(1),
-    selector: selectorSchema
+    selector: selectorSchema,
+    profileId: z
+      .string()
+      .regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/)
+      .optional()
   })
   .strict()
 

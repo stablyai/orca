@@ -27,10 +27,7 @@ export const STRUCTURED_SEND_TIMEOUT_MS = 15_000
 export type StructuredAgentSessionMutationCallResult<TValue> =
   | { status: 'accepted'; value: TValue }
   | { status: 'refused'; code: AgentSessionWireRefusalCode; message: string }
-  /** `hostRejectedByRequestSchema`: the host's schema turned this request away before running
-   *  it, so the same request can never be accepted there. An auth refusal does not set it:
-   *  it says nothing about an earlier delivery of the same id. */
-  | { status: 'failed'; message: string; hostRejectedByRequestSchema?: true }
+  | { status: 'failed'; message: string }
   | { status: 'unknown' }
 
 export type StructuredAgentSessionMutationResult<TValue> =
@@ -55,13 +52,18 @@ class AgentSessionRpcResponseError extends Error {
   }
 }
 
+/** The refusal a failed read met, from a thrown error or a stream's error frame. */
+export function agentSessionReadFailureRefusal(failure: unknown) {
+  return readAgentSessionErrorRefusal(
+    typeof failure === 'object' && failure !== null && 'error' in failure ? failure.error : failure
+  )
+}
+
 /** A failed read of a chat's history as the pane shows it, from a thrown error or a stream's error
  *  frame (`{ message, error }`): a thrown refusal's message is its bare code, so its words come
  *  from the refusal in the error's data. */
 export function agentSessionReadFailureText(failure: unknown): string {
-  const refusal = readAgentSessionErrorRefusal(
-    typeof failure === 'object' && failure !== null && 'error' in failure ? failure.error : failure
-  )
+  const refusal = agentSessionReadFailureRefusal(failure)
   if (refusal) {
     return agentSessionWriteNoticeEnglish(
       agentSessionWriteNoticeParts(agentSessionRefusalFailure(refusal), 'read-history')
@@ -183,10 +185,7 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
         status: 'failed',
         message: agentSessionWriteNoticeEnglish(
           agentSessionWriteNoticeParts(answered, phoneWriteKind(fingerprintMethod, fields))
-        ),
-        ...(error instanceof AgentSessionRpcResponseError && error.code === 'invalid_argument'
-          ? { hostRejectedByRequestSchema: true }
-          : {})
+        )
       }
     }
     if (

@@ -90,6 +90,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   let store: {
     getSettings: () => { activeRuntimeEnvironmentId: string | null }
     updateSettings: ReturnType<typeof vi.fn>
+    removeWorkspaceSessionHost: ReturnType<typeof vi.fn>
   }
 
   beforeEach(() => {
@@ -97,6 +98,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     activeRuntimeEnvironmentId = null
     store = {
       getSettings: () => ({ activeRuntimeEnvironmentId }),
+      removeWorkspaceSessionHost: vi.fn(),
       updateSettings: vi.fn((updates: { activeRuntimeEnvironmentId: string | null }) => {
         activeRuntimeEnvironmentId = updates.activeRuntimeEnvironmentId
       })
@@ -108,6 +110,8 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     removeHandlerMock.mockReset()
     removeAllListenersMock.mockReset()
     sendRemoteRuntimeRequestMock.mockReset()
+    // An invalidation restarts status; left unanswered so it never settles mid-test.
+    sendRemoteRuntimeRequestMock.mockReturnValue(new Promise(() => {}))
     subscribeRemoteRuntimeRequestMock.mockReset()
     sendRemoteRuntimeConnectionRequestMock.mockReset()
     sendRemoteRuntimeSharedControlRequestMock.mockReset()
@@ -485,7 +489,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(deliveredCloses).toEqual([])
   })
 
-  it('suppresses stale payloads from a retired transport but never re-sends its close', async () => {
+  it('fences late payloads and duplicate close after full retirement', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
     let transportCallbacks: {
       onResponse: (response: Record<string, unknown>) => void
@@ -533,11 +537,16 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       }
     )
 
-    invalidateRuntimeEnvironmentTransport(added.environment.id)
+    await invalidateRuntimeEnvironmentTransport(added.environment.id)
     expect(retirePairedRuntimeBrowserClientHostEnvironmentMock).toHaveBeenCalledWith(
       added.environment.id,
       expect.objectContaining({ message: 'Runtime environment transport was invalidated' })
     )
+    expect(closeRemoteRuntimeRequestConnectionMock).toHaveBeenCalledWith(added.environment.id)
+    expect(senderSend).toHaveBeenCalledWith('runtimeEnvironments:subscriptionEvent', {
+      subscriptionId: 'multiplex-stale',
+      type: 'close'
+    })
     senderSend.mockClear()
     // A late frame from the retired socket must not reach the renderer...
     transportCallbacks!.onResponse({
@@ -549,5 +558,36 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     // ...and its late close must not re-fire after the retirement already sent one.
     transportCallbacks!.onClose()
     expect(senderSend).not.toHaveBeenCalled()
+  })
+
+  // P1-C: a rollback run from the CLI re-paired the server, and nothing told the renderer.
+  it('restarts status for a re-paired server so renderers see its new pairing', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    // As the real one: closing the transport drops the environment's status owner.
+    closeRemoteRuntimeRequestConnectionMock.mockImplementation(() =>
+      resetRuntimeEnvironmentStatusOwners()
+    )
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+    sendRemoteRuntimeRequestMock.mockClear()
+
+    await invalidateRuntimeEnvironmentTransport(added.environment.id)
+    expect(sendRemoteRuntimeRequestMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'status.get',
+      undefined,
+      15_000,
+      undefined,
+      expect.anything(),
+      expect.anything()
+    )
+
+    sendRemoteRuntimeRequestMock.mockClear()
+    const disconnect = handler<{ selector: string }, unknown>('runtimeEnvironments:disconnect')
+    await disconnect(null, { selector: added.environment.id })
+    expect(sendRemoteRuntimeRequestMock).not.toHaveBeenCalled()
   })
 })

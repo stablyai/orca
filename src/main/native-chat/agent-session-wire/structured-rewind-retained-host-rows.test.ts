@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalItemBody,
+  AgentJournalMessageItem
+} from '../../../shared/agent-session-journal-types'
 import {
   AgentSessionRewindRecordSchema,
   type AgentSessionRewindRecord
@@ -65,7 +68,8 @@ describe('rewind keeps each retained row attributed', () => {
       agentId: 'child-thread',
       parentAgentId: 'root',
       producerKind: 'agent',
-      observedAt: 2
+      // When the row was first seen, not when the rewind re-read it.
+      observedAt: 1
     })
   })
 
@@ -96,6 +100,30 @@ describe('rewind keeps each retained row attributed', () => {
     expect(merged.at(-1)?.turnScope).toEqual({ kind: 'turn', turnItemId: commandTurn })
   })
 
+  it("keeps a newer Orca's row after a row the provider still holds, whatever that row's kind", () => {
+    // A kind this build does not know, which the provider now returns in its own words.
+    const future: AgentJournalItemBody = JSON.parse('{"kind":"future-item"}')
+    const newer: AgentJournalItemBody = JSON.parse('{"kind":"plan-card","n":4}')
+    const merged = mergeRetainedHostLifecycleRows(
+      [
+        retained(codexKey('turn-a', 2), prose('ok')),
+        retained(codexKey('turn-a', 9), future),
+        retained(orcaKey('u4'), newer)
+      ],
+      [
+        providerItem(codexKey('turn-a', 2), prose('ok')),
+        providerItem(codexKey('turn-a', 9), prose('provider now renders it'))
+      ]
+    )
+
+    expect(merged.map((row) => row.itemId)).toEqual([
+      codexKey('turn-a', 2),
+      codexKey('turn-a', 9),
+      orcaKey('u4')
+    ])
+    expect(merged[2]?.body).toEqual(newer)
+  })
+
   it('places a provider item the old epoch never held in the turn record for its provider turn', () => {
     const commandTurn = orcaKey('command-turn:cmd-1')
     const reference = [
@@ -117,6 +145,44 @@ describe('rewind keeps each retained row attributed', () => {
     expect(scopeOf(codexKey('b', 1))).toEqual({ kind: 'turn', turnItemId: commandTurn })
     // No record to join: the rebuilt epoch places it by position.
     expect(scopeOf(codexKey('c', 1))).toBeUndefined()
+  })
+})
+
+describe("a rewind keeps another agent's messages its", () => {
+  const from = {
+    kind: 'agent' as const,
+    senders: [
+      {
+        party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null },
+        name: 'Worker'
+      }
+    ],
+    orchestration: null
+  }
+  const user = (text: string): AgentJournalMessageItem => ({
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text }]
+  })
+
+  it("puts the sender back on the provider's copy, which never carries it", () => {
+    const itemId = codexKey('turn-1', 0)
+    const merged = mergeRetainedHostLifecycleRows(
+      [retained(itemId, { ...user('You have 1 orchestration message.'), from })],
+      [providerItem(itemId, user('You have 1 orchestration message.'))]
+    )
+    expect(merged).toHaveLength(1)
+    expect(merged[0]?.body).toMatchObject({ from })
+  })
+
+  it("leaves the person's own message, and a provider row of another role, without one", () => {
+    const own = codexKey('turn-1', 0)
+    const answer = codexKey('turn-1', 1)
+    const merged = mergeRetainedHostLifecycleRows(
+      [retained(own, user('mine')), retained(answer, { ...user('hi'), from })],
+      [providerItem(own, user('mine')), providerItem(answer, prose('hi'))]
+    )
+    expect(merged.map((row) => 'from' in row.body)).toEqual([false, false])
   })
 })
 

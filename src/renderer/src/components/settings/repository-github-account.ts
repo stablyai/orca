@@ -32,7 +32,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
 /** Routes through RPC for remote environments and IPC locally; both read the repo's execution host. */
 export function listRepositoryGhBindableAccounts(
   runtimeTarget: RuntimeTarget,
-  repo: Repo,
+  repo: Pick<Repo, 'id' | 'path'>,
   options: { refreshCapability?: boolean } = {}
 ): Promise<GhAccountBindingInventory> {
   if (runtimeTarget.kind === 'environment') {

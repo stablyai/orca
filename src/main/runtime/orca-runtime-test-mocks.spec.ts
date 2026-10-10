@@ -106,7 +106,8 @@ export const makePaneKey = importedValues.exportedMakePaneKey
 export const mkdir = importedValues.exportedMkdir
 export const mkdirSync = importedValues.exportedMkdirSync
 export const mkdtemp = importedValues.exportedMkdtemp
-export const onTestFinished = importedValues.exportedOnTestFinished
+export const onTestFinished: typeof importedValues.exportedOnTestFinished =
+  importedValues.exportedOnTestFinished
 export const parseOrcaYaml = importedValues.exportedParseOrcaYaml
 export const performance = importedValues.exportedPerformance
 export const projectHostSetupProjectionFromRepos =

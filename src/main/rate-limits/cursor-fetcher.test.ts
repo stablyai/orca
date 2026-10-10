@@ -78,6 +78,7 @@ describe('fetchCursorRateLimits', () => {
     await fetchCursorRateLimits({ authReadResult: session() })
     const [url, init] = netFetchMock.mock.calls[0] ?? []
     expect(url).toBe('https://cursor.com/api/usage-summary')
+    expect(init?.credentials).toBe('omit')
     expect(init?.headers).toMatchObject({
       Origin: 'https://cursor.com',
       Referer: 'https://cursor.com/dashboard',

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ProcessResult } from '../../shared/child-process/run-process'
+
+import type { ProcessResult } from '@orca/process-host/process-spec'
 
 const { recordSelfInitiatedTreeKillMock, runProcessMock, runProcessSyncMock } = vi.hoisted(() => ({
   recordSelfInitiatedTreeKillMock: vi.fn(),
@@ -9,7 +10,7 @@ const { recordSelfInitiatedTreeKillMock, runProcessMock, runProcessSyncMock } = 
 vi.mock('../crash-reporting/self-initiated-tree-kill-log', () => ({
   recordSelfInitiatedTreeKill: recordSelfInitiatedTreeKillMock
 }))
-vi.mock('../../shared/child-process/run-process', () => ({
+vi.mock('@orca/process-host', () => ({
   runProcess: runProcessMock,
   runProcessSync: runProcessSyncMock
 }))

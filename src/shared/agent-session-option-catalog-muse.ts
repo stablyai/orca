@@ -21,7 +21,7 @@ const MUSE_EFFORT: CatalogOption = {
   },
   apply: {
     launchArgs: (value) => ['--reasoning-effort', String(value)],
-    removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['--reasoning-effort'])
+    removeAgentArgs: (tokens) => removeAgentArgOption('muse', tokens, ['--reasoning-effort'])
   }
 }
 
@@ -32,7 +32,7 @@ export const MUSE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   models: [],
   modelApply: {
     launchArgs: (value) => ['--model', String(value)],
-    removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['--model'])
+    removeAgentArgs: (tokens) => removeAgentArgOption('muse', tokens, ['--model'])
   },
   unknownModelOptions: [MUSE_EFFORT]
 }

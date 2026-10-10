@@ -32,6 +32,8 @@ export type AgentSessionDeltaSnapshot = {
 export type AgentSessionDeltaCoalescerDeps = {
   /** Called with the FULL text accumulated for the key, not the increment. */
   emit: (key: string, text: string, snapshot: AgentSessionDeltaSnapshot) => unknown
+  /** False accepts a skipped snapshot; sink refusal is reported by emit. */
+  shouldEmit?: (key: string, textLength: number) => boolean
   windowMs?: number
   maxRetainedBytes?: number
   maxTotalRetainedBytes?: number
@@ -56,6 +58,10 @@ export type AgentSessionDeltaCoalescer = {
   dispose: () => void
   /** Bounded last-known state for terminalizing a rejected completion. */
   snapshot: (key: string) => AgentSessionDeltaSnapshot | null
+  /** Streams with text not yet emitted, in arrival order, for a caller that writes them itself. */
+  dirty: () => { key: string; snapshot: AgentSessionDeltaSnapshot }[]
+  /** The caller wrote this stream's current text itself; nothing is owed until it grows. */
+  markFlushed: (key: string) => void
 }
 
 function defaultSchedule(run: () => void, ms: number): () => void {
@@ -78,6 +84,7 @@ export function createAgentSessionDeltaCoalescer(
     {
       chunks: string[]
       retainedBytes: number
+      textLength: number
       observedBytes: number
       truncated: boolean
       dirty: boolean
@@ -90,6 +97,10 @@ export function createAgentSessionDeltaCoalescer(
   const flushKey = (key: string): boolean => {
     const stream = streams.get(key)
     if (!stream?.dirty) {
+      return true
+    }
+    if (deps.shouldEmit?.(key, stream.textLength) === false) {
+      stream.dirty = false
       return true
     }
     const text = stream.chunks.join('')
@@ -155,6 +166,7 @@ export function createAgentSessionDeltaCoalescer(
         stream = {
           chunks: [],
           retainedBytes: 0,
+          textLength: 0,
           observedBytes: 0,
           truncated: false,
           dirty: false
@@ -178,6 +190,9 @@ export function createAgentSessionDeltaCoalescer(
           streamLimit
         )
         totalRetainedBytes += next.retainedBytes - stream.retainedBytes
+        stream.textLength = next.truncated
+          ? (next.chunks[0]?.length ?? 0)
+          : stream.textLength + delta.length
         stream.chunks = next.chunks
         stream.retainedBytes = next.retainedBytes
         stream.truncated = next.truncated
@@ -215,6 +230,27 @@ export function createAgentSessionDeltaCoalescer(
             truncated: stream.truncated
           }
         : null
+    },
+    dirty: () =>
+      [...streams].flatMap(([key, stream]) =>
+        stream.dirty
+          ? [
+              {
+                key,
+                snapshot: {
+                  text: stream.chunks.join(''),
+                  observedBytes: stream.observedBytes,
+                  truncated: stream.truncated
+                }
+              }
+            ]
+          : []
+      ),
+    markFlushed: (key) => {
+      const stream = streams.get(key)
+      if (stream) {
+        stream.dirty = false
+      }
     }
   }
 }

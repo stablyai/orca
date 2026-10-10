@@ -12,20 +12,23 @@ import {
   previewableBinaryByteLimit,
   readPreviewFileWithinCap
 } from './runtime-file-commands-mobile-file-list-limit'
-import { requireRuntimeFileProvider } from './runtime-file-command-target'
-import { open, stat } from 'node:fs/promises'
+import {
+  requireRuntimeFileProvider,
+  requireSshRuntimeFileProvider,
+  runtimeFileRouteForTarget
+} from './runtime-file-command-target'
+import { readLocalFileRange } from '../ipc/filesystem/local-file-range-read'
 import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
 import { extname } from 'node:path'
 import {
   NodeFileReadTooLargeError,
   readNodeFileWithinLimit
 } from '../../shared/node-bounded-file-reader'
-import { isBinaryBuffer } from './runtime-file-command-host'
+import { isBinaryBuffer } from '../../shared/binary-buffer'
 import type {
   DocPreviewFileAccessRequest,
   DocPreviewFileAccessResult
 } from '../../shared/doc-preview-file-access'
-import { readAuthorizedDocPreviewFile } from '../../shared/doc-preview-file-access'
 import { readSshFileExplorerChunk } from './ssh-file-explorer-chunk-read'
 
 export class RuntimeFileCommandsWithReadFileExplorerPreview extends RuntimeFileCommandsWithAssertRemoteTerminalFileGrantPathStillCanonical {
@@ -39,8 +42,10 @@ export class RuntimeFileCommandsWithReadFileExplorerPreview extends RuntimeFileC
         ? LOCAL_PREVIEWABLE_BINARY_MAX_BYTES
         : previewableBinaryByteLimit(maxContentBytes)
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
-    const provider = requireRuntimeFileProvider(target)
-    if (provider) {
+    const route = runtimeFileRouteForTarget(target)
+    // Why: the local arm sizes its read by extension instead of a stat round trip.
+    if (route.kind === 'ssh') {
+      const provider = requireSshRuntimeFileProvider(route)
       const fileStats = await provider.stat(target.path)
       if (fileStats.size > binaryMaxBytes) {
         throw new Error('file_too_large')
@@ -134,14 +139,14 @@ export class RuntimeFileCommandsWithReadFileExplorerPreview extends RuntimeFileC
       maxTextBytes: MOBILE_FILE_READ_MAX_BYTES,
       maxBinaryBytes: binaryMaxBytes
     }
-    const provider = requireRuntimeFileProvider(target)
-    if (provider && !provider.readDocPreviewFile) {
+    const provider = requireRuntimeFileProvider(target, this.host)
+    if (!provider.readDocPreviewFile) {
       throw new Error('Secure document previews require a newer SSH relay')
     }
-    const result = provider?.readDocPreviewFile
-      ? await provider.readDocPreviewFile(request)
-      : await readAuthorizedDocPreviewFile(request)
-    return assertPreviewWithinTransportBudget(result, maxContentBytes)
+    return assertPreviewWithinTransportBudget(
+      await provider.readDocPreviewFile(request),
+      maxContentBytes
+    )
   }
 
   async readFileExplorerChunk(
@@ -151,8 +156,9 @@ export class RuntimeFileCommandsWithReadFileExplorerPreview extends RuntimeFileC
     length: number
   ): Promise<RuntimeFileReadChunkResult> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
-    const provider = requireRuntimeFileProvider(target)
-    if (provider) {
+    const route = runtimeFileRouteForTarget(target)
+    if (route.kind === 'ssh') {
+      const provider = requireSshRuntimeFileProvider(route)
       const fileStat = await provider.stat(target.path)
       if (fileStat.type === 'directory') {
         throw new Error('Cannot download a directory')
@@ -161,22 +167,6 @@ export class RuntimeFileCommandsWithReadFileExplorerPreview extends RuntimeFileC
     }
 
     const filePath = await resolveAuthorizedPath(target.path, this.host.requireStore())
-    const fileStats = await stat(filePath)
-    if (fileStats.isDirectory()) {
-      throw new Error('Cannot download a directory')
-    }
-    const handle = await open(filePath, 'r')
-    try {
-      const buffer = Buffer.alloc(Math.min(length, Math.max(0, fileStats.size - offset)))
-      const { bytesRead } = await handle.read(buffer, 0, buffer.byteLength, offset)
-      const chunk = buffer.subarray(0, bytesRead)
-      return {
-        contentBase64: chunk.toString('base64'),
-        bytesRead,
-        eof: offset + bytesRead >= fileStats.size
-      }
-    } finally {
-      await handle.close()
-    }
+    return readLocalFileRange(filePath, offset, length)
   }
 }

@@ -50,6 +50,28 @@ describe('structured agent launch persistence', () => {
     })
   })
 
+  it("keeps a registered agent's launch across a reload and drops a record naming no agent", () => {
+    localStorage.setItem(
+      'orca:structuredAgentLaunches:v1',
+      JSON.stringify(
+        [
+          ['grok_session', 'grok'],
+          ['bogus_session', 'not-an-agent']
+        ].map(([sessionId, agent]) => ({
+          sessionId,
+          agent,
+          lifecycle: 'pending',
+          clientOperationId: `${sessionId}-op`,
+          payloadFingerprint: 'fingerprint',
+          expectedRuntimeFence: null
+        }))
+      )
+    )
+
+    expect(readStructuredAgentLaunchRecord('grok_session')?.agent).toBe('grok')
+    expect(readStructuredAgentLaunchRecord('bogus_session')).toBeUndefined()
+  })
+
   it('keeps the host a launch was created on across a reload', () => {
     writeStructuredAgentLaunchRecord({
       sessionId: 'claude_remote',
@@ -147,6 +169,38 @@ describe('structured agent launch persistence', () => {
     expect(raw).not.toContain('branch')
     expect(raw).not.toContain('path')
     expect(readStructuredAgentLaunchRecord('claude_session')?.clientOperationId).toBe('operation-2')
+  })
+
+  it('keeps when a failed launch failed across a reload, and still loads records without it', () => {
+    writeStructuredAgentLaunchRecord({
+      sessionId: 'claude_session',
+      executionHostId: 'local',
+      agent: 'claude',
+      lifecycle: 'failed',
+      clientOperationId: 'operation-3',
+      payloadFingerprint: 'fingerprint-3',
+      expectedRuntimeFence: null,
+      failedAt: 42_000
+    })
+    const stored = JSON.parse(localStorage.getItem('orca:structuredAgentLaunches:v1') ?? '[]')
+    localStorage.setItem(
+      'orca:structuredAgentLaunches:v1',
+      JSON.stringify([
+        ...stored,
+        // Written by a build that did not save the failure time.
+        { ...stored[0], sessionId: 'older_session', failedAt: undefined },
+        { ...stored[0], sessionId: 'corrupt_session', failedAt: 'yesterday' }
+      ])
+    )
+    resetStructuredAgentLaunchPersistenceForTests()
+
+    expect(readStructuredAgentLaunchRecord('claude_session')).toMatchObject({
+      lifecycle: 'failed',
+      failedAt: 42_000
+    })
+    expect(readStructuredAgentLaunchRecord('older_session')).toMatchObject({ lifecycle: 'failed' })
+    expect(readStructuredAgentLaunchRecord('older_session')?.failedAt).toBeUndefined()
+    expect(readStructuredAgentLaunchRecord('corrupt_session')).toBeUndefined()
   })
 
   it('persists cancellation tombstones by session id and retires them', () => {

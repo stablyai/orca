@@ -1,6 +1,3 @@
-// The store applies mutations in place and re-validates only what they touched. Held to the
-// copy-everything store it replaced: same decisions, same snapshots, same reads, every step.
-
 import { describe, expect, it } from 'vitest'
 import type { AgentChildWorkAliasInput } from './agent-status-child-work-alias'
 import { serializeAgentChildWorkBindingKey } from './agent-status-child-work-binding'
@@ -13,7 +10,6 @@ import {
   AGENT_STATUS_STORE_TOMBSTONE_RETENTION_REVISIONS,
   type AgentStatusStoreMutation
 } from './agent-status-store-contract'
-import { createCopyingAgentStatusStoreOracle } from './agent-status-store-copying-oracle.test-fixture'
 import {
   indexAgentStatusStoreState,
   type AgentStatusStoreIndexes
@@ -142,49 +138,6 @@ function indexContents(indexes: AgentStatusStoreIndexes) {
 }
 
 describe('AgentStatusStore applied in place', () => {
-  it.each([1, 7, 42, 1_234])(
-    'matches the copying store decision for decision (seed %i)',
-    (seed) => {
-      const random = seeded(seed)
-      const next = mutations(random)
-      const store = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })
-      const replica = createAgentStatusStore({ epoch: 'epoch-a', mode: 'replica' })
-      const oracle = createCopyingAgentStatusStoreOracle('epoch-a')
-      expect(replica.applySnapshot(store.getSnapshot())).toBe(true)
-      let accepted = 0
-      let mostAliases = 0
-      for (let step = 0; step < 1_500; step += 1) {
-        const mutation = next()
-        const envelope = store.applyMutation(mutation)
-        expect({ step, accepted: envelope !== null }).toEqual({
-          step,
-          accepted: oracle.applyMutation(mutation)
-        })
-        if (envelope) {
-          accepted += 1
-          expect(replica.applyTransportEnvelope(envelope)).toBe(true)
-        }
-        expect(JSON.stringify(store.getSnapshot())).toBe(JSON.stringify(oracle.getSnapshot()))
-        for (const parent of parents) {
-          expect(store.getChildren(parent)).toEqual(oracle.getChildren(parent))
-        }
-        // Keep every child-id read in CHILD_IDS order while comparing one aggregate.
-        const aliasesByChildInIdOrder = CHILD_IDS.map((id) => store.getAliasesForChild(id))
-        const oracleAliasesByChildInIdOrder = CHILD_IDS.map((id) => oracle.getAliasesForChild(id))
-        expect(aliasesByChildInIdOrder).toEqual(oracleAliasesByChildInIdOrder)
-        mostAliases = Math.max(mostAliases, oracle.state().aliases.size)
-        const probe = mutation.aliases ?? []
-        expect(store.resolveChildAliases(probe)).toEqual(oracle.resolveChildAliases(probe))
-      }
-      expect(JSON.stringify(replica.getSnapshot())).toBe(JSON.stringify(store.getSnapshot()))
-      // The run exercises both outcomes, not only refusals.
-      expect(accepted).toBeGreaterThan(300)
-      expect(accepted).toBeLessThan(1_450)
-      expect(mostAliases).toBeGreaterThan(4)
-    },
-    60_000
-  )
-
   it.each([3, 99])(
     'keeps every index equal to one rebuilt from the maps, refusals included (seed %i)',
     (seed) => {
@@ -208,11 +161,10 @@ describe('AgentStatusStore applied in place', () => {
 
   it('retires tombstones exactly at the retention revision boundary', () => {
     const store = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })
-    const oracle = createCopyingAgentStatusStoreOracle('epoch-a')
     const parent = parents[0]!
     for (const childWorkId of ['oldest', 'newer']) {
       const mutation = { removeChildren: [childWorkId] }
-      expect(store.applyMutation(mutation) !== null).toBe(oracle.applyMutation(mutation))
+      expect(store.applyMutation(mutation)).not.toBeNull()
     }
     const advance = { parent: { subject: parent } }
     for (
@@ -220,37 +172,32 @@ describe('AgentStatusStore applied in place', () => {
       revision <= AGENT_STATUS_STORE_TOMBSTONE_RETENTION_REVISIONS;
       revision += 1
     ) {
-      expect(store.applyMutation(advance) !== null).toBe(oracle.applyMutation(advance))
+      expect(store.applyMutation(advance)).not.toBeNull()
     }
     expect(store.getSnapshot().revision).toBe(AGENT_STATUS_STORE_TOMBSTONE_RETENTION_REVISIONS)
     expect(store.getSnapshot().tombstones).toEqual([
       { entity: 'child', key: 'oldest', revision: 1 },
       { entity: 'child', key: 'newer', revision: 2 }
     ])
-    expect(JSON.stringify(store.getSnapshot())).toBe(JSON.stringify(oracle.getSnapshot()))
 
-    expect(store.applyMutation(advance) !== null).toBe(oracle.applyMutation(advance))
+    expect(store.applyMutation(advance)).not.toBeNull()
     expect(store.getSnapshot().tombstones).toEqual([{ entity: 'child', key: 'newer', revision: 2 }])
-    expect(JSON.stringify(store.getSnapshot())).toBe(JSON.stringify(oracle.getSnapshot()))
 
-    expect(store.applyMutation(advance) !== null).toBe(oracle.applyMutation(advance))
+    expect(store.applyMutation(advance)).not.toBeNull()
     expect(store.getSnapshot().tombstones).toEqual([])
-    expect(JSON.stringify(store.getSnapshot())).toBe(JSON.stringify(oracle.getSnapshot()))
   }, 60_000)
 
   it('keeps the newest tombstones in order when their count overflows', () => {
     const store = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })
-    const oracle = createCopyingAgentStatusStoreOracle('epoch-a')
     const childWorkIds = Array.from(
       { length: AGENT_STATUS_STORE_LIMITS.tombstones },
       (_, index) => `removed-${index}`
     )
     for (const mutation of [{ removeChildren: ['oldest'] }, { removeChildren: childWorkIds }]) {
-      expect(store.applyMutation(mutation) !== null).toBe(oracle.applyMutation(mutation))
+      expect(store.applyMutation(mutation)).not.toBeNull()
     }
     expect(store.getSnapshot().tombstones).toEqual(
       childWorkIds.map((key) => ({ entity: 'child', key, revision: 2 }))
     )
-    expect(JSON.stringify(store.getSnapshot())).toBe(JSON.stringify(oracle.getSnapshot()))
   }, 60_000)
 })

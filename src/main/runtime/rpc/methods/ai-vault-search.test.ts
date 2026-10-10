@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault-types'
 import { RpcDispatcher } from '../dispatcher'
@@ -58,7 +59,7 @@ describe('session search runtime RPC', () => {
           limit: 20,
           filters: {
             agents: AI_VAULT_AGENTS.filter(
-              (agent) => !['codebuddy', 'zcode', 'qoder', 'jcode'].includes(agent)
+              (agent) => !['codebuddy', 'zcode', 'qoder', 'jcode', 'kiro'].includes(agent)
             )
           }
         },

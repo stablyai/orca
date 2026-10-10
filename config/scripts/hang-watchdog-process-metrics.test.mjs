@@ -1,12 +1,20 @@
-import childProcess from 'node:child_process'
-import { syncBuiltinESMExports } from 'node:module'
-import perfHooks from 'node:perf_hooks'
+import { execFileSync } from 'node:child_process'
+import { monitorEventLoopDelay } from 'node:perf_hooks'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   parsePhysicalFootprintBytes,
   parseProcessCpuTimeMs,
   sampleProductionPerformance
 } from './hang-watchdog-process-metrics.mjs'
+
+vi.mock('node:child_process', async (importOriginal) => ({
+  ...(await importOriginal()),
+  execFileSync: vi.fn()
+}))
+vi.mock('node:perf_hooks', async (importOriginal) => ({
+  ...(await importOriginal()),
+  monitorEventLoopDelay: vi.fn()
+}))
 
 const observations = { events: [], readCpu: null, histogram: null }
 
@@ -78,20 +86,18 @@ describe('production watchdog sample lifetime', () => {
       },
       max: 5_000_000
     }
-    vi.spyOn(childProcess, 'execFileSync').mockImplementation((command, args, options) => {
+    vi.mocked(execFileSync).mockImplementation((command, args, options) => {
       observations.events.push(['cpu', command, args, options])
       return observations.readCpu()
     })
-    vi.spyOn(perfHooks, 'monitorEventLoopDelay').mockImplementation((options) => {
+    vi.mocked(monitorEventLoopDelay).mockImplementation((options) => {
       observations.events.push(['monitor', options])
       return observations.histogram
     })
-    syncBuiltinESMExports()
   })
   afterEach(() => {
     vi.clearAllTimers()
     vi.restoreAllMocks()
-    syncBuiltinESMExports()
     vi.useRealTimers()
   })
 

@@ -43,6 +43,7 @@ export function BranchEntryRow({
       currentWorktreeId={currentWorktreeId}
       absolutePath={joinPath(worktreePath, entry.path)}
       relativePath={entry.path}
+      hasWorkingTreeFile={entry.status !== 'deleted'}
       connectionId={connectionId}
       onView={() => onOpen()}
       onRevealInExplorer={onRevealInExplorer}

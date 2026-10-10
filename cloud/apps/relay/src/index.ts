@@ -7,6 +7,13 @@ import { RelayAssignmentStore } from './assignment-store.js'
 import { loadRelayConfig } from './config.js'
 import { startCellHeartbeat } from './cell-heartbeat-client.js'
 import {
+  CELL_FLAG_DEFAULTS,
+  CELL_FLAGS_APPLIED_EVENT,
+  cellFlagObjectName,
+  cellFlagParser
+} from './cell-flags.js'
+import { startControlFlagChannel } from './relay-control-flag-channel.js'
+import {
   reconcileCellAdmissionAtStartup,
   roleOwnsAssignmentMaintenance
 } from './cell-admission-startup.js'
@@ -18,8 +25,10 @@ import {
 } from './database.js'
 import { runAssignmentCleanup } from './assignment-cleanup-steps.js'
 import { runRelayBackgroundOperation } from './relay-background-operation.js'
+import { readPostgresLockWaitSample } from './postgres-lock-wait-sample.js'
 import { jitteredSweepIntervalMs } from './relay-sweep-schedule.js'
 import { observedRelayRequests } from './relay-observability.js'
+import { handleRelayUnhandledRejection } from './relay-database-rejection-fence.js'
 import { startRegionalRehomeWorker } from './regional-rehome-worker.js'
 import { createRelayServer } from './relay-server.js'
 import {
@@ -27,14 +36,27 @@ import {
   readRegisteredMigrationInventory
 } from './registered-migration-inventory.js'
 
+// Before anything can start a database promise.
+process.on('unhandledRejection', handleRelayUnhandledRejection)
 const config = loadRelayConfig()
 const database = await openRelayDatabaseAtBoot({
   databaseUrl: config.databaseUrl,
   dataDir: config.dataDir,
   poolMax: config.databasePoolMax,
-  applicationName: `orca-relay/${config.role}/${config.cellId}`
+  applicationName: `orca-relay/${config.role}/${config.cellId}`,
+  appliesPostgresSchema: config.role !== 'cell'
 })
 await reconcileCellAdmissionAtStartup(config, new RelayAssignmentStore(database))
+// Never awaited: the cell listens on defaults (all off) until the first read lands.
+const cellFlagChannel =
+  config.role === 'cell'
+    ? startControlFlagChannel({
+        objectName: cellFlagObjectName(config.cellId),
+        defaults: CELL_FLAG_DEFAULTS,
+        parse: cellFlagParser(config.cellId),
+        appliedEvent: CELL_FLAGS_APPLIED_EVENT
+      })
+    : null
 const {
   server,
   sessions,
@@ -44,8 +66,9 @@ const {
   runtimeCounts,
   connectionSnapshot,
   ready,
-  cellIncarnation
-} = createRelayServer(config, database)
+  cellIncarnation,
+  shadowSeatPoller
+} = createRelayServer(config, database, { cellFlags: cellFlagChannel?.applied })
 // Same owner as the assignment sweep: the cleanup only expires credentials that every reader
 // already re-checks at read time, so running it in all 23 cells multiplied one table scan by 23
 // without changing any answer.
@@ -87,8 +110,23 @@ const migrationInventoryTimer = roleOwnsAssignmentMaintenance(config.role)
       }, '[orca-relay] migration inventory failed')
     }, 5 * 60_000)
   : null
+// Directors only: one role's view covers every backend, and cells roll separately.
+// Single-flight, so a slow database never stacks samples on the 3-slot pool.
+let lockWaitSampling = false
+const lockWaitSampleTimer = roleOwnsAssignmentMaintenance(config.role)
+  ? setInterval(() => {
+      if (database.dialect !== 'postgres' || lockWaitSampling) return
+      lockWaitSampling = true
+      void runRelayBackgroundOperation(async () => {
+        observability.recordDatabaseLockWaitSample(await readPostgresLockWaitSample(database))
+      }, '[orca-relay] lock wait sample failed').finally(() => {
+        lockWaitSampling = false
+      })
+    }, 5_000)
+  : null
 cleanupTimer?.unref()
 assignmentCleanupTimer?.unref()
+lockWaitSampleTimer?.unref()
 inventorySnapshotTimer?.unref()
 migrationInventoryTimer?.unref()
 observability.start(() => ({
@@ -137,11 +175,14 @@ const shutdown = (): void => {
   if (assignmentCleanupTimer) clearInterval(assignmentCleanupTimer)
   if (inventorySnapshotTimer) clearInterval(inventorySnapshotTimer)
   if (migrationInventoryTimer) clearInterval(migrationInventoryTimer)
+  if (lockWaitSampleTimer) clearInterval(lockWaitSampleTimer)
   observability.stop()
   heartbeat?.stop()
   regionalRehomeWorker?.stop()
+  shadowSeatPoller?.stop()
+  cellFlagChannel?.stop()
   sessions.drain(0)
-  server.close(() => void database.close())
+  server.close(() => void database.close().catch(() => undefined))
 }
 process.once('SIGTERM', shutdown)
 process.once('SIGINT', shutdown)

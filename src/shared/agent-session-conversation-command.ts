@@ -1,12 +1,19 @@
 import type { AgentSessionFailureFact } from './agent-session-failure'
 import type { AgentSessionFailureSentence } from './agent-session-failure-words'
+import type { AgentSessionQueuedSendReceipt } from './agent-session-wire'
 
 export type AgentSessionConversationCommand = 'clear' | 'compact'
+
+/** How long a client waits for a conversation command: the host may first start an agent at rest. */
+export const AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS = 195_000
 
 export type AgentSessionConversationCommandResult = {
   command: AgentSessionConversationCommand
   state: 'completed' | 'unknown'
   replacementSessionId?: string
+  /** A /compact the host holds as a card behind work in flight, with `state: 'completed'`: the
+   *  card is its one surface from here. Only clients that sent `delivery` receive it. */
+  queued?: AgentSessionQueuedSendReceipt
 } &
   /** `error`: a sentence for a person; released clients print it as it is. */
   (
@@ -57,7 +64,7 @@ export function isAgentSessionConversationCommandRecord(
   return (
     (row.phase === 'prepared' || row.phase === 'committed') &&
     (row.runtimeFence === undefined ||
-      (Number.isSafeInteger(row.runtimeFence) && row.runtimeFence > 0)) &&
+      (Number.isSafeInteger(row.runtimeFence) && row.runtimeFence >= 0)) &&
     typeof row.operationId === 'string' &&
     row.operationId.length > 0 &&
     row.operationId.length <= 512 &&

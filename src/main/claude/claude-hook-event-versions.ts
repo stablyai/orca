@@ -1,5 +1,5 @@
 import { hasReachedAppVersion, isValidAppVersion } from '../../shared/app-version'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import path from 'node:path'
 
 // Why: Claude 1.0.23 through 2.1.100 validate `hooks` against a closed event enum and discard the
@@ -60,7 +60,12 @@ export function claudeKnowsStatusLine(version: string | null | undefined): boole
   return claudeKnowsSince(version, CLAUDE_STATUS_LINE_FIRST_VERSION)
 }
 
-export async function probeClaudeCliVersion(executablePath: string): Promise<string | null> {
+/** `launch` runs the probe with the cwd and env a launch will spawn the CLI with, so a version
+ *  manager's shim picks the same CLI the launch will. */
+export async function probeClaudeCliVersion(
+  executablePath: string,
+  launch?: { cwd: string; env: Record<string, string>; timeoutMs?: number }
+): Promise<string | null> {
   try {
     const pathKey = process.platform === 'win32' && process.env.Path !== undefined ? 'Path' : 'PATH'
     const executableDir = path.dirname(executablePath)
@@ -70,17 +75,32 @@ export async function probeClaudeCliVersion(executablePath: string): Promise<str
       args: ['--version'],
       // Why: version-manager launchers often use `#!/usr/bin/env node`; the resolved CLI's sibling
       // runtime must remain reachable even when Electron started with a thinner PATH.
-      env: {
+      env: launch?.env ?? {
         ...process.env,
         [pathKey]: inheritedPath
           ? `${executableDir}${path.delimiter}${inheritedPath}`
           : executableDir
       },
-      timeoutMs: 5_000,
+      ...(launch ? { cwd: launch.cwd } : {}),
+      timeoutMs: launch?.timeoutMs ?? 5_000,
       maxOutputBytes: 4_096
     })
     return result.code === 0 ? parseClaudeCliVersion(`${result.stdout}\n${result.stderr}`) : null
   } catch {
     return null
   }
+}
+
+const RECENT_VERSION_MS = 5 * 60_000
+const recentVersions = new Map<string, { at: number; value: Promise<string | null> }>()
+
+/** Why remembered: account folders refresh before every launch, and a hook plan needs only a recent version. */
+export function probeRecentClaudeCliVersion(executablePath: string): Promise<string | null> {
+  const recent = recentVersions.get(executablePath)
+  if (recent && Date.now() - recent.at <= RECENT_VERSION_MS) {
+    return recent.value
+  }
+  const value = probeClaudeCliVersion(executablePath)
+  recentVersions.set(executablePath, { at: Date.now(), value })
+  return value
 }

@@ -17,7 +17,8 @@ function removeCodexAgentArgs(
   configKey: string
 ): string[] {
   return removeAgentArgOption(
-    removeAgentArgOption(tokens, flags),
+    'codex',
+    removeAgentArgOption('codex', tokens, flags),
     ['-c', '--config'],
     (value) => value?.startsWith(`${configKey}=`) === true
   )
@@ -53,7 +54,7 @@ function claudeEffortWithChoices(choices: typeof EXTENDED_EFFORT_CHOICES): Catal
     },
     apply: {
       launchArgs: (value) => ['--effort', String(value)],
-      removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['--effort']),
+      removeAgentArgs: (tokens) => removeAgentArgOption('claude', tokens, ['--effort']),
       midSession: { kind: 'command', build: (value) => `/effort ${String(value)}` }
     }
   }
@@ -130,7 +131,7 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   ],
   modelApply: {
     launchArgs: (value) => ['--model', String(value)],
-    removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['--model']),
+    removeAgentArgs: (tokens) => removeAgentArgOption('claude', tokens, ['--model']),
     midSession: {
       kind: 'command',
       build: (value) => `/model ${String(value)}`,
@@ -180,6 +181,7 @@ function codexEffort(ceiling: 'xhigh' | 'max' | 'ultra'): CatalogOption {
 
 export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   supportsWorkerLaunchPreferences: true,
+  hostListingNamesConfiguredModel: true,
   // Why: Codex model access depends on auth. Keep this seed short and allow
   // unknown persisted ids to pass through instead of claiming a complete list.
   models: [
@@ -200,5 +202,7 @@ export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     // command and let its own picker apply the account-supported model.
     midSession: { kind: 'agent-picker', command: '/model', delivery: 'type' }
   },
-  unknownModelOptions: [codexEffort('xhigh')]
+  // Why: models newer than this seed often support max/ultra; Codex falls back
+  // to the model's default effort rather than failing on an unsupported one.
+  unknownModelOptions: [codexEffort('ultra')]
 }

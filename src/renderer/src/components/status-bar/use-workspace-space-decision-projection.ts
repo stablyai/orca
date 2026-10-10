@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from 'react'
+import { groupWorkspaceSpaceDecisionInputs } from './workspace-space-decision-inputs'
 import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
 import {
   getWorkspaceDecisionDetails,
@@ -47,6 +48,23 @@ export function useWorkspaceSpaceDecisionProjection(bindings: WorkspaceSpaceMana
     }
     return counts
   }, [sourceRows])
+  const groupedInputs = useMemo(
+    () =>
+      groupWorkspaceSpaceDecisionInputs(sourceRows, tabsByWorktree, {
+        agentStatusByPaneKey,
+        migrationUnsupportedByPtyId,
+        retainedAgentsByPaneKey,
+        openFiles
+      }),
+    [
+      sourceRows,
+      tabsByWorktree,
+      agentStatusByPaneKey,
+      migrationUnsupportedByPtyId,
+      retainedAgentsByPaneKey,
+      openFiles
+    ]
+  )
   const decisionDetailsByWorktreeId = useMemo(() => {
     // Why: the epoch bumps when fresh hook entries cross the stale boundary so
     // delete readiness recomputes with the same wall-clock sample as the store.
@@ -77,12 +95,14 @@ export function useWorkspaceSpaceDecisionProjection(bindings: WorkspaceSpaceMana
           settings,
           activeWorktreeId,
           activeWorkspaceExecutionHostId,
+          ...groupedInputs.get(worktree.worktreeId),
           now: agentStatusNow
         })
       )
     }
     return details
   }, [
+    groupedInputs,
     activeWorktreeId,
     activeWorkspaceExecutionHostId,
     agentStatusEpoch,

@@ -3,19 +3,24 @@ import type { JSX } from 'react'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import { DeleteWorktreeDirtyChangeHint } from './DeleteWorktreeDirtyChangeHint'
-import type { DeleteWorktreeDirtyChangePreview } from './delete-worktree-dirty-change-counts'
+import type {
+  DeleteWorktreeChangeCheckState,
+  DeleteWorktreeDirtyChangePreview
+} from './delete-worktree-dirty-change-counts'
 import { translate } from '@/i18n/i18n'
 
 type DeleteWorktreeLineageNoticeProps = {
   descendants: readonly Worktree[]
   dirtyChangeCountsByWorktreeId: ReadonlyMap<string, number>
   dirtyChangePreviewsByWorktreeId: ReadonlyMap<string, DeleteWorktreeDirtyChangePreview>
+  changeCheckStatesByWorktreeId?: ReadonlyMap<string, DeleteWorktreeChangeCheckState>
 }
 
 export function DeleteWorktreeLineageNotice({
   descendants,
   dirtyChangeCountsByWorktreeId,
-  dirtyChangePreviewsByWorktreeId
+  dirtyChangePreviewsByWorktreeId,
+  changeCheckStatesByWorktreeId
 }: DeleteWorktreeLineageNoticeProps): JSX.Element | null {
   const childWorkspaceCount = descendants.length
   if (childWorkspaceCount === 0) {
@@ -53,6 +58,9 @@ export function DeleteWorktreeLineageNotice({
                 <div className="truncate font-medium text-foreground">{child.displayName}</div>
                 <div className="truncate text-muted-foreground">{child.path}</div>
                 <DeleteWorktreeDirtyChangeHint
+                  checkState={changeCheckStatesByWorktreeId?.get(
+                    child.hostId ? getWorktreeHostIdentity(child) : child.id
+                  )}
                   changeCount={dirtyChangeCountsByWorktreeId.get(
                     child.hostId ? getWorktreeHostIdentity(child) : child.id
                   )}

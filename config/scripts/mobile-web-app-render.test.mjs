@@ -317,6 +317,12 @@ describe('the shell policy this page is tested under', () => {
     ])
   })
 
+  it('admits only cached Blob URLs for media', () => {
+    expect(cspHeader.split('; ').filter((entry) => entry.startsWith('media-src'))).toEqual([
+      'media-src blob:'
+    ])
+  })
+
   it('still refuses inline script, which is the directive that matters', () => {
     expect(cspHeader).toContain("script-src 'self';")
     expect(cspHeader).not.toContain("script-src 'self' 'unsafe-inline'")

@@ -88,6 +88,70 @@ describe('filesystem-list-files', () => {
     )
   })
 
+  it.each(['invalid', 'incomplete'] as const)('rejects %s UTF-8 filename bytes', async (kind) => {
+    const child = createMockProcess()
+    spawnMock.mockReturnValue(child)
+    const store: Store = Object.create(null)
+    const promise = listQuickOpenFiles('/repo', store)
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+    child.stdout?.emit('data', Buffer.from(kind === 'invalid' ? [0xff] : [0xe2, 0x82]))
+    if (kind === 'incomplete') {
+      child.emit('close', 0, null)
+    }
+    await expect(promise).rejects.toThrow('not valid UTF-8')
+    if (kind === 'invalid') {
+      expect(child.kill).toHaveBeenCalled()
+    }
+  })
+
+  it('retains a late 25,002nd file in a complete inventory', async () => {
+    const child = createMockProcess()
+    spawnMock.mockReturnValue(child)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mocked authorization and runtime options do not read the store.
+    const result = listQuickOpenFiles('/mock/root', {} as unknown as Store)
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+    child.stdout?.emit(
+      'data',
+      Array.from({ length: 25002 }, (_, i) => `src/file-${i}.ts\0`).join('')
+    )
+    child.emit('close', 0, null)
+    const paths = await result
+    expect(paths).toHaveLength(25002)
+    expect(paths.at(-1)).toBe('src/file-25001.ts')
+  })
+
+  it('stops a full-inventory producer at its aggregate retained-byte ceiling', async () => {
+    const child = createMockProcess()
+    spawnMock.mockReturnValue(child)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mocked authorization and runtime options do not read the store.
+    const result = listQuickOpenFiles('/mock/root', {} as unknown as Store)
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+    const rejected = expect(result).rejects.toThrow('inventory is too large')
+    let produced = 0
+    while (child.stdout?.listenerCount('data') && produced < 100000) {
+      child.stdout.emit(
+        'data',
+        Array.from({ length: 100 }, () => `src/${'x'.repeat(1000)}-${produced++}.ts\0`).join('')
+      )
+    }
+    await rejected
+    expect(produced).toBeLessThan(40000)
+    expect(child.kill).toHaveBeenCalled()
+    expect(child.stdout?.listenerCount('data')).toBe(0)
+    expect(child.listenerCount('close')).toBe(0)
+  })
+
+  it('counts NUL-delimited filenames containing newlines as one result each', async () => {
+    const child = createMockProcess()
+    spawnMock.mockReturnValue(child)
+    const store: Store = Object.create(null)
+    const promise = listQuickOpenFiles('/repo', store, undefined, undefined, 2)
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+    child.stdout?.emit('data', 'first\nsecond.ts\0trailing\r\0third.ts\0')
+    await expect(promise).resolves.toEqual(['first\nsecond.ts', 'trailing\r'])
+    expect(child.kill).toHaveBeenCalled()
+  })
+
   it('rejects a synchronous launch failure before cleanup has been initialized', async () => {
     spawnMock.mockImplementationOnce(() => {
       throw Object.assign(new Error('spawn EMFILE'), { code: 'EMFILE' })
@@ -122,7 +186,7 @@ describe('filesystem-list-files', () => {
     )
 
     setTimeout(() => {
-      ;(p1.stdout as unknown as EventEmitter).emit('data', 'one.ts\ntwo.ts')
+      p1.stdout?.emit('data', 'one.ts\0two.ts')
       p1.emit('close', 0, null)
     }, 0)
     const result = await promise
@@ -154,12 +218,12 @@ describe('filesystem-list-files', () => {
     await flushMicrotasks()
     expect(spawnMock).toHaveBeenCalledTimes(1)
     expect(spawnMock.mock.calls[0]?.[1]).not.toContain('--no-ignore-vcs')
-    source.stdout?.emit('data', 'source.ts\n')
+    source.stdout?.emit('data', 'source.ts\0')
     source.emit('close', 0, null)
     await flushMicrotasks()
     expect(spawnMock).toHaveBeenCalledTimes(2)
     expect(spawnMock.mock.calls[1]?.[1]).toContain('--no-ignore-vcs')
-    broad.stdout?.emit('data', 'ignored-file.ts\n')
+    broad.stdout?.emit('data', 'ignored-file.ts\0')
     await expect(listing).resolves.toEqual(['source.ts'])
     expect(broad.kill).toHaveBeenCalledOnce()
   })
@@ -177,18 +241,18 @@ describe('filesystem-list-files', () => {
 
     // Simulate stdout output for normal files
     setTimeout(() => {
-      p1.stdout?.emit('data', 'file1.ts\n')
-      p1.stdout?.emit('data', 'node_modules/bad.js\n')
-      p1.stdout?.emit('data', '.git/config\n')
-      p1.stdout?.emit('data', '.github/workflows/ci.yml\n')
+      p1.stdout?.emit('data', 'file1.ts\0')
+      p1.stdout?.emit('data', 'node_modules/bad.js\0')
+      p1.stdout?.emit('data', '.git/config\0')
+      p1.stdout?.emit('data', '.github/workflows/ci.yml\0')
       p1.stdout?.emit('data', 'dir1/') // incomplete line
-      p1.stdout?.emit('data', 'file2.js\n')
+      p1.stdout?.emit('data', 'file2.js\0')
 
       // The broad pass includes ignored files too.
-      p1.stdout?.emit('data', '.env.local\n')
-      p1.stdout?.emit('data', 'dist/generated.js\n')
-      p1.stdout?.emit('data', 'file1.ts\n') // Duplicate
-      p1.stdout?.emit('data', 'node_modules/ignored.js\n')
+      p1.stdout?.emit('data', '.env.local\0')
+      p1.stdout?.emit('data', 'dist/generated.js\0')
+      p1.stdout?.emit('data', 'file1.ts\0') // Duplicate
+      p1.stdout?.emit('data', 'node_modules/ignored.js\0')
       p1.emit('close', 0, null)
     }, 10)
 
@@ -213,7 +277,7 @@ describe('filesystem-list-files', () => {
     const promise = listQuickOpenFiles('C:\\repo', storeMock)
 
     setTimeout(() => {
-      ;(p1.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\n')
+      p1.stdout?.emit('data', 'src/index.ts\0')
       p1.emit('close', 0, null)
     }, 10)
 
@@ -237,7 +301,7 @@ describe('filesystem-list-files', () => {
     const promise = listQuickOpenFiles('C:\\repo', storeMock)
 
     setTimeout(() => {
-      ;(p1.stdout as unknown as EventEmitter).emit('data', '/mnt/c/repo/src/index.ts\n')
+      p1.stdout?.emit('data', '/mnt/c/repo/src/index.ts\0')
       p1.emit('close', 0, null)
     }, 10)
 
@@ -310,7 +374,7 @@ describe('filesystem-list-files', () => {
     const promise = listQuickOpenFiles('/mock/root', storeMock)
 
     setTimeout(() => {
-      ;(p1.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\n')
+      p1.stdout?.emit('data', 'src/index.ts\0')
       p1.emit('close', 2, null)
     }, 10)
 
@@ -332,7 +396,7 @@ describe('filesystem-list-files', () => {
       await Promise.resolve()
       await Promise.resolve()
 
-      ;(p1.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\npartial')
+      p1.stdout?.emit('data', 'src/index.ts\0partial')
       const rejection = expect(promise).rejects.toThrow('rg list timed out')
 
       await vi.advanceTimersByTimeAsync(10000)
@@ -376,12 +440,12 @@ describe('filesystem-list-files', () => {
     const promise = listQuickOpenFiles('/mock/root', storeMock)
 
     setTimeout(() => {
-      ;(p1.stdout as unknown as EventEmitter).emit('data', '.next/cache/1.js\n')
-      ;(p1.stdout as unknown as EventEmitter).emit('data', '.cache/data.json\n')
-      ;(p1.stdout as unknown as EventEmitter).emit('data', '.stably/config.json\n')
-      ;(p1.stdout as unknown as EventEmitter).emit('data', '.vscode/settings.json\n')
-      ;(p1.stdout as unknown as EventEmitter).emit('data', '.idea/workspace.xml\n')
-      ;(p1.stdout as unknown as EventEmitter).emit('data', 'valid.ts\n')
+      p1.stdout?.emit('data', '.next/cache/1.js\0')
+      p1.stdout?.emit('data', '.cache/data.json\0')
+      p1.stdout?.emit('data', '.stably/config.json\0')
+      p1.stdout?.emit('data', '.vscode/settings.json\0')
+      p1.stdout?.emit('data', '.idea/workspace.xml\0')
+      p1.stdout?.emit('data', 'valid.ts\0')
       p1.emit('close', 0, null)
     }, 10)
 

@@ -167,7 +167,8 @@ export function createCodexJournalTranslator(
                   completedAt: event.observedAt ?? deps.now?.() ?? Date.now()
                 })
               : null,
-          attributionFor
+          attributionFor,
+          ...(deps.now ? { now: deps.now } : {})
         })
         if (!admission.accepted) {
           return admission

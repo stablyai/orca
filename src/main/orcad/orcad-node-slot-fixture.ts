@@ -1,11 +1,11 @@
 // Test fixture: a packaged Node slot whose runtime is the real pinned Node, laid out as shipped.
-import { existsSync } from 'node:fs'
+import { copyFileSync, existsSync, linkSync, mkdirSync, readdirSync } from 'node:fs'
 import { copyFile, link, mkdir, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import type * as NodePty from 'node-pty'
 import { join, resolve } from 'node:path'
 import { it } from 'vitest'
-import { runProcessSync } from '../../shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 import { NODE_RUNTIME_ASSETS, type ServerTarget } from '../../shared/node-runtime-pin'
 import {
   ORCAD_NODE_PTY_DIR,
@@ -70,6 +70,40 @@ export async function writeNodeSlotFixture(
   await mkdir(join(runtime, '..'), { recursive: true })
   // Why a hard link: the runtime is ~120 MB, and a copy per test would dominate the suite.
   await link(pinnedNode, runtime).catch(() => copyFile(pinnedNode, runtime))
+  return { slotDir, runtime }
+}
+
+/** Hard-links the built `out/orcad` slot under `<root>/orcad-test` with its pinned runtime beside it. */
+export function installPackagedOrcadSlotForTests(
+  root: string,
+  pinnedNode: string
+): { slotDir: string; runtime: string } {
+  const linkOrCopy = (from: string, to: string): void => {
+    try {
+      linkSync(from, to)
+    } catch {
+      copyFileSync(from, to)
+    }
+  }
+  const installTree = (source: string, destination: string): void => {
+    mkdirSync(destination, { recursive: true })
+    for (const entry of readdirSync(source, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        installTree(join(source, entry.name), join(destination, entry.name))
+      } else {
+        linkOrCopy(join(source, entry.name), join(destination, entry.name))
+      }
+    }
+  }
+  const slotDir = join(root, 'orcad-test')
+  installTree(resolve('out/orcad'), slotDir)
+  const target = hostServerTarget()
+  const runtime = resolve(
+    slotDir,
+    ...orcadNodeRuntimeRelativePath(target, NODE_RUNTIME_ASSETS[target].executableSha256)
+  )
+  mkdirSync(join(runtime, '..'), { recursive: true })
+  linkOrCopy(pinnedNode, runtime)
   return { slotDir, runtime }
 }
 

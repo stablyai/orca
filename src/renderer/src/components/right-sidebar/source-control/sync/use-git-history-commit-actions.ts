@@ -9,6 +9,7 @@ import {
 import { getConnectionId } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { resolveDefaultAgentForNewTab } from '@/lib/agent-tab-shortcuts'
 import { translate } from '@/i18n/i18n'
 import type { GitHistoryItem } from '../../../../../../shared/git-history'
@@ -280,6 +281,7 @@ export function useGitHistoryCommitActions({
         `Run \`git show --no-ext-diff ${item.id}\` to inspect the full diff, then summarize what changed and why at a high level, calling out the most important files and any risks.`
       ].join('\n')
       launchAgentInNewTab({
+        requestId: newAgentLaunchRequestId(),
         agent,
         worktreeId: activeWorktreeId,
         prompt: explainPrompt,

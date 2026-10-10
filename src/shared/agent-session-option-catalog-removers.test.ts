@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getAgentSessionOptionCatalog } from './agent-session-option-catalog'
-import { removeAgentArgOption } from './agent-session-option-agent-args'
+import { agentArgTerminatorIndex, removeAgentArgOption } from './agent-session-option-agent-args'
 import {
   removeOverriddenAgentSessionArgs,
   resolveAgentSessionOptionLaunch
@@ -52,10 +52,24 @@ describe('catalog removers', () => {
 
 describe('removeAgentArgOption', () => {
   it('consumes an empty value', () => {
-    expect(removeAgentArgOption(['--model', '', '--yolo'], ['--model'])).toEqual(['--yolo'])
+    expect(removeAgentArgOption('claude', ['--model', '', '--yolo'], ['--model'])).toEqual([
+      '--yolo'
+    ])
   })
 
   it('keeps a following flag', () => {
-    expect(removeAgentArgOption(['--model', '--yolo'], ['--model'])).toEqual(['--yolo'])
+    expect(removeAgentArgOption('claude', ['--model', '--yolo'], ['--model'])).toEqual(['--yolo'])
+  })
+
+  it('requires an exact terminator outside option values', () => {
+    expect(
+      agentArgTerminatorIndex('claude', [
+        '--append-system-prompt',
+        '--',
+        '--=literal',
+        '--',
+        'text'
+      ])
+    ).toBe(3)
   })
 })

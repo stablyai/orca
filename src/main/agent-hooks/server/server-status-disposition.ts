@@ -50,6 +50,8 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerSt
       isReplay?: boolean
       hasExplicitPrompt?: boolean
       launchToken?: string
+      /** Host/workspace provenance matched internally to a retained authority commitment. */
+      retainedLaunchTokenHash?: string
       /** A process-lifetime Working: a fresh command whose foreground argv proves a new agent run. */
       processNewTurn?: boolean
     }
@@ -89,16 +91,18 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerSt
       ) {
         const startedLaunchToken = event.launchToken?.trim()
         if (startedLaunchToken) {
-          this.restartedStatusLaunchTokenHashByPaneKey.set(
-            ownerPaneKey,
-            createHash('sha256').update(startedLaunchToken).digest('hex')
-          )
+          this.restartedStatusLaunchTokenHashByPaneKey.set(ownerPaneKey, {
+            hash: createHash('sha256').update(startedLaunchToken).digest('hex')
+          })
           return 'accept'
         }
       }
       if (event && event.processNewTurn !== true && tokenFence) {
         const launchToken = event.launchToken?.trim()
-        if (!launchToken || createHash('sha256').update(launchToken).digest('hex') !== tokenFence) {
+        const tokenHash =
+          event.retainedLaunchTokenHash ??
+          (launchToken ? createHash('sha256').update(launchToken).digest('hex') : undefined)
+        if (tokenHash !== tokenFence.hash) {
           return 'suppress'
         }
       }
@@ -144,10 +148,9 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerSt
       this.closedAgentStatusPaneKeys.delete(ownerPaneKey)
       const launchToken = event?.launchToken?.trim()
       if (launchToken) {
-        this.restartedStatusLaunchTokenHashByPaneKey.set(
-          ownerPaneKey,
-          createHash('sha256').update(launchToken).digest('hex')
-        )
+        this.restartedStatusLaunchTokenHashByPaneKey.set(ownerPaneKey, {
+          hash: createHash('sha256').update(launchToken).digest('hex')
+        })
       } else {
         this.restartedStatusLaunchTokenHashByPaneKey.delete(ownerPaneKey)
       }

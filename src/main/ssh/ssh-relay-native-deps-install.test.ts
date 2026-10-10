@@ -115,8 +115,11 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     execCallCountAtWrite: {}
   }
 
+  afterEach(() => vi.unstubAllEnvs())
   beforeEach(() => {
     vi.clearAllMocks()
+    // The host-npm path is opt-in; these cases cover it.
+    vi.stubEnv('ORCA_SSH_REMOTE_RUNTIME', 'legacy')
     // mockReset because clearAllMocks keeps queued mockResolvedValueOnce entries, so a leaked response would bleed into the next test.
     vi.mocked(execCommand).mockReset().mockResolvedValue('')
     vi.mocked(uploadDirectory).mockResolvedValue(undefined)
@@ -417,10 +420,13 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     feed([
       '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
       '/home/u',
-      { reject: 'Command "node -e ..." timed out after 30s' } // health probe never answered
+      { reject: 'Command "node -e ..." timed out after 30s' }, // health probe never answered
+      '', // launch namespace marker
+      'DEAD',
+      'READY'
     ])
 
-    await deployAndLaunchRelay(conn).catch(() => {})
+    const outcome = await deployAndLaunchRelay(conn).catch((error: Error) => error)
 
     const execCalls = vi.mocked(execCommand).mock.calls.map(([, c]) => c)
     expect(execCalls.some((c) => c.includes('npm install'))).toBe(false)
@@ -428,9 +434,19 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
 
     const warnMessages = warnSpy.mock.calls.map((args) => String(args[0] ?? ''))
     expect(warnMessages.some((m) => m.includes('Repairing missing native deps'))).toBe(false)
-    // Why no log assertion: the behavioural claim above is the real one. Asserting on warn text
-    // pinned wording that main's landed probe verdict does not use, and #18000 adds its own.
+    // Probe diagnostic wording changes independently of the repair contract.
     expect(execCalls.some((c) => c.includes("rm -rf 'node_modules/node-pty'"))).toBe(false)
+    expect(execCalls.filter((command) => command.includes('ORCA-NATIVE-DEPS-OK'))).toHaveLength(1)
+    const healthProbeIndex = execCalls.findIndex((command) =>
+      command.includes('ORCA-NATIVE-DEPS-OK')
+    )
+    await expect(vi.mocked(execCommand).mock.results[healthProbeIndex].value).rejects.toThrow(
+      'Command "node -e ..." timed out after 30s'
+    )
+    expect(
+      outcome,
+      'an unanswered health probe must still allow an intact relay to launch'
+    ).not.toBeInstanceOf(Error)
   })
 
   it('lets a probe SSH-channel failure bubble up rather than silently mapping to MISSING', async () => {

@@ -52,7 +52,7 @@ describe('relay list-files cancellation', () => {
     const promise = listFilesWithRg('/remote/root', [], { signal: controller.signal })
 
     // Partial output before the abort — must be discarded, not resolved.
-    ignoredProc.stdout?.emit('data', 'src/index.ts\n')
+    ignoredProc.stdout?.emit('data', 'src/index.ts\0')
     controller.abort()
 
     await expect(promise).rejects.toSatisfy(isFileListingCancellation)
@@ -73,6 +73,28 @@ describe('relay list-files cancellation', () => {
     expect(spawnMock).not.toHaveBeenCalled()
   })
 
+  it('listFilesWithRg does not start the ignored pass after cancellation between passes', async () => {
+    vi.useFakeTimers()
+    const primaryProc = createMockProcess()
+    spawnMock.mockReturnValue(primaryProc)
+    const controller = new AbortController()
+    const promise = listFilesWithRg('/remote/root', [], {
+      signal: controller.signal,
+      maxResults: 10
+    })
+    const rejected = expect(promise).rejects.toSatisfy(isFileListingCancellation)
+
+    primaryProc.stdout?.emit('data', 'src/index.ts\0')
+    primaryProc.emit('close', 0, null)
+    // Abort before the completed pass's promise continuation admits the broader scan.
+    controller.abort()
+
+    await rejected
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+    expect(primaryProc.kill).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('listFilesWithRg still resolves normally when a signal is provided but never aborted', async () => {
     const ignoredProc = createMockProcess()
     spawnMock.mockReturnValue(ignoredProc)
@@ -81,8 +103,8 @@ describe('relay list-files cancellation', () => {
     const promise = listFilesWithRg('/remote/root', [], { signal: controller.signal })
 
     setTimeout(() => {
-      ignoredProc.stdout?.emit('data', 'src/index.ts\n')
-      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/out.js\n')
+      ignoredProc.stdout?.emit('data', 'src/index.ts\0')
+      ignoredProc.stdout?.emit('data', 'dist/out.js\0')
       ignoredProc.emit('close', 0, null)
     }, 5)
 

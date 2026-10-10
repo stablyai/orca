@@ -65,9 +65,9 @@ export function resolveAiVaultSessionResumeInChatEligibility(args: {
   > & { structuredSession?: AiVaultSession['structuredSession'] }
   targetWorkspaceId: string | null
   targetWorkspacePath: string | null
-  /** The route the same (workspace, agent) pair would take for a fresh chat. Reused rather than
-   *  re-derived: it already encodes the settings flag, host capability, platform refusals and the
-   *  WSL/repair refusal, and a second copy of those conditions would drift from it. */
+  /** Whether the same (workspace, agent) pair can host a structured chat; the Chat UI switch does
+   *  not apply. Reused rather than re-derived: it already encodes host capability, platform refusals
+   *  and the WSL/repair refusal, and a second copy of those conditions would drift from it. */
   structuredRouteAvailable: boolean
 }): AiVaultResumeInChatEligibility {
   const { session } = args

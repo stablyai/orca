@@ -206,12 +206,16 @@ describe('folder repo git upgrade watch', () => {
       pollIntervalMs: POLL_MS,
       idlePollIntervalMs: IDLE_POLL_MS
     })
-    await tick()
-
-    expect(store.updateRepo).toHaveBeenCalledWith('folder-repo', {
-      kind: 'git',
-      folderUpgradeGitRootPath: join(root, 'symlinked-project').replaceAll('\\', '/')
-    })
+    // A fixed tick wait can finish before the marker stat resolves under load.
+    await vi.waitFor(
+      () => {
+        expect(store.updateRepo).toHaveBeenCalledWith('folder-repo', {
+          kind: 'git',
+          folderUpgradeGitRootPath: join(root, 'symlinked-project').replaceAll('\\', '/')
+        })
+      },
+      { timeout: 5_000, interval: POLL_MS }
+    )
   })
 
   it('retries after the last extra folder workspace is removed', async () => {

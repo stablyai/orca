@@ -81,33 +81,15 @@ export function hasExplicitIdleTitle(
 }
 
 /**
- * Tier 1, first-party: the agent's own hook says the turn ENDED.
- *
- * Why DSH needs its own lane: the other tiers all read the title, and DSH cannot carry idle
- * there. Its rest prefix is `✦`, which is Gemini's WORKING glyph, so the title detector
- * deliberately reports no status for a DSH pane at all (see agent-title-status.ts) — which
- * left `tui-idle` with nothing to settle on, and a supervised worker waiting on a ready
- * composer until its timeout.
- *
- * Why a hook `done` is trustworthy here where a title would not be: it is the agent's own
- * account of its own turn, and `normalizeDshEvent` drops SubagentStart/SubagentStop, so a
- * `done` row for a DSH pane is the LEAD's, never a child's finishing early.
- *
- * Scoped rather than general: for agents whose hooks do report child turns, a `done` row
- * can arrive mid-turn, and settling on it is exactly the #6011 class this file exists to
- * prevent.
- *
- * The second lane is narrower and agent-agnostic: a `sessionBoundary` row does not claim a
- * turn ended, it claims a NEW SESSION owns the pane and is waiting for its first input. That
- * cannot arrive mid-turn by construction — the producers only set it for a startup/resume/
- * reset boundary — so it carries no #6011 risk for any agent that emits it.
+ * Tier 1, first-party: a `sessionBoundary` row, which claims a NEW SESSION owns the pane and waits
+ * for its first input. Producers set it only for a startup/resume/reset boundary, so it cannot
+ * arrive mid-turn (#6011). An ordinary hook `done` decides only through the hook lane (tier 0).
  */
 export function hasFreshDoneFirstPartyStatus(
-  agent: TuiAgent | null | undefined,
   status: FirstPartyAgentStatus,
   staleAfterMs = AGENT_STATUS_STALE_AFTER_MS
 ): boolean {
-  if (status?.state !== 'done' || (agent !== 'dsh' && status.sessionBoundary !== true)) {
+  if (status?.state !== 'done' || status.sessionBoundary !== true) {
     return false
   }
   return Date.now() - status.updatedAt <= staleAfterMs
@@ -148,12 +130,15 @@ export function nameOnlyIdleNeedsCorroboration(
 export function hasSustainedTitleIdle(
   record: TuiIdleEvidenceRecord,
   agent: TuiAgent | null | undefined,
-  quiescenceMs: number
+  quiescenceMs: number,
+  launchReadiness = false
 ): boolean {
   if (record.lastAgentStatus !== 'idle') {
     return false
   }
-  if (!nameOnlyIdleNeedsCorroboration(agent, record.lastOscTitle)) {
+  // Why launch readiness always corroborates: a shell auto-title (`grok`, `gemini`) names the
+  // agent before its TUI mounts, and a paste then lands in a booting TUI or the shell itself.
+  if (!launchReadiness && !nameOnlyIdleNeedsCorroboration(agent, record.lastOscTitle)) {
     // The title is the only rest signal this agent emits, so there is nothing to wait for.
     return true
   }
@@ -214,6 +199,9 @@ export type TuiIdleEvaluationInput = {
   /** Tier 0: the hook server's fresh row for the pane, read only for an authoritative agent. */
   readHookTurn?: () => TuiIdleHookTurn | null
   quiescenceMs: number
+  /** Waiting for a just-launched agent to open its composer, where a name-only title proves
+   *  nothing until the stream goes quiet. */
+  launchReadiness?: boolean
 }
 
 export type TuiIdleVerdict =
@@ -296,7 +284,7 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
   }
   // Why beside the title lane, not after the veto: both are tier 1, and a first-party `done`
   // and a fresh `working` cannot both hold — the same row carries one state.
-  if (hasFreshDoneFirstPartyStatus(input.agent, input.firstPartyStatus)) {
+  if (hasFreshDoneFirstPartyStatus(input.firstPartyStatus)) {
     return READY_STRONG
   }
   if (hasFreshWorkingFirstPartyStatus(input.firstPartyStatus)) {
@@ -337,11 +325,11 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
   // refused, and an agent's own idle-title rule replaces the sustained-title lane below.
   const ruled = input.readAgentRuleVerdict()
   if (ruled !== null) {
-    return isSettledWeakIdle(ruled, input.record, input.quiescenceMs)
+    return isSettledWeakIdle(ruled, input.record, input.quiescenceMs, input.launchReadiness)
       ? READY_WEAK
       : { kind: 'pending', quietForeground: 'closed' }
   }
-  if (hasSustainedTitleIdle(input.record, input.agent, input.quiescenceMs)) {
+  if (hasSustainedTitleIdle(input.record, input.agent, input.quiescenceMs, input.launchReadiness)) {
     return READY_WEAK
   }
   return {
@@ -353,15 +341,18 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
   }
 }
 
+// Why launch readiness asks quiet of every weak idle: those rules read a name-only title, which a
+// shell auto-title writes before the TUI mounts, as in the sustained-title lane.
 function isSettledWeakIdle(
   verdict: AgentStateVerdict,
   record: TuiIdleEvidenceRecord,
-  quiescenceMs: number
+  quiescenceMs: number,
+  launchReadiness = false
 ): boolean {
   return (
     verdict.state === 'idle' &&
     verdict.strength === 'weak' &&
-    (!verdict.requiresQuiet || hasQuietOutput(record, quiescenceMs))
+    ((!verdict.requiresQuiet && !launchReadiness) || hasQuietOutput(record, quiescenceMs))
   )
 }
 

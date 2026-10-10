@@ -79,7 +79,9 @@ describe('OrcaRuntimeService', () => {
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This isolated recovery path reaches only the supplied planner and missing-terminal settlement methods.
     runtime.setOrchestrationDb({
+      reconcileMissingWorkerTerminal: vi.fn(),
       listLegacyWorkerTerminalRecoveryRows: () =>
         cases.map(({ name, leafId, terminalHandle }) => ({
           dispatch_id: `dispatch-${name}`,
@@ -134,10 +136,11 @@ describe('OrcaRuntimeService', () => {
         worktreeId: TEST_WORKTREE_ID
       }
     ])
+    const getForegroundProcess = vi.fn(async () => null)
     runtime.setPtyController({
       write: vi.fn(() => true),
       kill: vi.fn(() => true),
-      getForegroundProcess: async () => null,
+      getForegroundProcess,
       hasPty: (candidate) => candidate === 'pty-folder-legacy',
       listProcesses
     })
@@ -148,7 +151,10 @@ describe('OrcaRuntimeService', () => {
       deferredDispatchIds: ['dispatch-missing', 'dispatch-ambiguous']
     })
     expect(listProcesses).toHaveBeenCalledOnce()
-    expect(listProcesses).toHaveBeenCalledWith(null, LIST_PROVIDER_DEADLINE)
+    expect(listProcesses).toHaveBeenCalledWith('local', LIST_PROVIDER_DEADLINE)
+    expect(getForegroundProcess).not.toHaveBeenCalled()
+    await runtime.refreshPtyForegroundAgentFromController('pty-ambiguous')
+    expect(getForegroundProcess).toHaveBeenCalledExactlyOnceWith('pty-ambiguous')
     for (const { name, leafId } of cases.slice(0, 2)) {
       expect(
         getSession().sleepingAgentSessionsByPaneKey?.[`legacy-${name}:${leafId}`]
@@ -257,7 +263,7 @@ describe('OrcaRuntimeService', () => {
     )
     expect(getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeUndefined()
     expect(listProcesses).toHaveBeenCalledTimes(3)
-    expect(listProcesses).toHaveBeenCalledWith(null, LIST_PROVIDER_DEADLINE)
+    expect(listProcesses).toHaveBeenCalledWith('local', LIST_PROVIDER_DEADLINE)
     expect(revealTerminalSession).toHaveBeenCalledWith(TEST_FOLDER_WORKSPACE_KEY, {
       ptyId: 'pty-folder-legacy',
       title: 'Folder worker',
@@ -394,7 +400,7 @@ describe('OrcaRuntimeService', () => {
     expect(getWorkspaceSession).toHaveBeenCalledWith(`ssh:${connectionId}`)
     expect(setWorkspaceSession).toHaveBeenCalledWith(expect.any(Object), `ssh:${connectionId}`)
     expect(listProcesses).toHaveBeenCalledTimes(3)
-    expect(listProcesses).toHaveBeenCalledWith(connectionId, LIST_PROVIDER_DEADLINE)
+    expect(listProcesses).toHaveBeenCalledWith(`ssh:${connectionId}`, LIST_PROVIDER_DEADLINE)
     expect(sshSession.tabsByWorktree[TEST_FOLDER_WORKSPACE_KEY]).toContainEqual(
       expect.objectContaining({
         id: 'legacy-ssh-folder-worker',

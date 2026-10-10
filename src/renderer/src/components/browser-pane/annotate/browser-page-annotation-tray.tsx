@@ -1,3 +1,4 @@
+import { ImeTextarea } from '@/lib/ime-text-field'
 import { useEffect, useState } from 'react'
 import { CircleCheck, Copy, MessageSquarePlus, Pencil, Send, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -29,6 +30,7 @@ export function BrowserPageAnnotationTray({
   activeGroupId,
   browserAnnotationsPrompt,
   handleBrowserAnnotationsSentToAgent,
+  handleBrowserAnnotationsHandedOff,
   handleCopyBrowserAnnotations,
   browserAnnotationsCopied,
   handleClearBrowserAnnotations,
@@ -43,6 +45,7 @@ export function BrowserPageAnnotationTray({
   activeGroupId: string | undefined
   browserAnnotationsPrompt: string
   handleBrowserAnnotationsSentToAgent: () => void
+  handleBrowserAnnotationsHandedOff: (delivered: Promise<unknown>) => void
   handleCopyBrowserAnnotations: () => void
   browserAnnotationsCopied: boolean
   handleClearBrowserAnnotations: () => void
@@ -111,7 +114,12 @@ export function BrowserPageAnnotationTray({
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>
-                <Button size="xs" variant="outline" className="gap-1.5">
+                <Button
+                  size="xs"
+                  variant="outline"
+                  className="gap-1.5"
+                  disabled={!browserAnnotationsPrompt}
+                >
                   <Send className="size-3" />
                   {translate('auto.components.browser.pane.BrowserPane.ac39b9366b', 'Send')}
                 </Button>
@@ -135,6 +143,7 @@ export function BrowserPageAnnotationTray({
               groupId={activeGroupId ?? worktreeId}
               prompt={browserAnnotationsPrompt}
               onPromptDelivered={handleBrowserAnnotationsSentToAgent}
+              onPromptHandedOff={handleBrowserAnnotationsHandedOff}
             />
           </DropdownMenuContent>
         </DropdownMenu>
@@ -197,7 +206,7 @@ export function BrowserPageAnnotationTray({
                     }
                   }}
                 >
-                  <textarea
+                  <ImeTextarea
                     value={editComment}
                     onChange={(event) => setEditComment(event.target.value)}
                     maxLength={GRAB_BUDGET.annotationCommentMaxLength}

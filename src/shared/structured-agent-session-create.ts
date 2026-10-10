@@ -1,5 +1,7 @@
-import type { AgentSessionHandleProvider } from './agent-session-provider-handle'
+import type { StructuredAgentId } from './agent-session-provider-handle'
 import type { AgentSessionMutationEnvelope } from './agent-session-wire'
+import type { z } from 'zod'
+import type { SendBody } from './rpc-contract/structured-agent-session-message-params'
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionCreateFingerprint
@@ -21,16 +23,24 @@ export type StructuredAgentSessionResumeSource = {
 export type StructuredAgentSessionCreateParams = {
   envelope: AgentSessionMutationEnvelope
   worktree: string
-  agent: AgentSessionHandleProvider
+  agent: StructuredAgentId
   resumeFrom?: StructuredAgentSessionResumeSource
   /** Sent only to a host advertising `AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY`. */
   tabId?: string
+  /** Sent only to a host advertising `AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY`. */
+  firstMessage?: StructuredAgentSessionFirstMessage
+  options?: Readonly<Record<string, string>>
+}
+
+export type StructuredAgentSessionFirstMessage = {
+  clientMessageId: string
+  body: z.infer<typeof SendBody>
 }
 
 /** Provider-prefixed so a session id names its lane on sight, and underscore-only
  *  so the id stays a single token everywhere it is embedded (tab ids, log keys). */
 export function createStructuredAgentSessionId(
-  agent: AgentSessionHandleProvider,
+  agent: StructuredAgentId,
   randomUuid: () => string
 ): string {
   return `${agent}_${randomUuid().replaceAll('-', '_')}`
@@ -52,9 +62,11 @@ export function isStructuredAgentSessionIdFor(agent: string, sessionId: string):
 export function structuredAgentSessionCreateParams(args: {
   sessionId: string
   worktree: string
-  agent: AgentSessionHandleProvider
+  agent: StructuredAgentId
   resumeFrom?: StructuredAgentSessionResumeSource
   tabId?: string
+  firstMessage?: StructuredAgentSessionFirstMessage
+  options?: Readonly<Record<string, string>>
   randomUuid: () => string
   now?: number
 }): StructuredAgentSessionCreateParams {
@@ -62,7 +74,9 @@ export function structuredAgentSessionCreateParams(args: {
     worktree: args.worktree,
     agent: args.agent,
     ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
-    ...(args.tabId ? { tabId: args.tabId } : {})
+    ...(args.tabId ? { tabId: args.tabId } : {}),
+    ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
+    ...(args.options ? { options: args.options } : {})
   }
   return {
     envelope: {

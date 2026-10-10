@@ -20,13 +20,17 @@ import {
 } from '../agent-session-journal/journal-host-database-test-support'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import { readAgentSessionHistory } from './agent-session-history-page'
+import {
+  agentSessionJournalProviderHandle,
+  codexProviderHandle
+} from '../../../shared/agent-session-provider-handle-encoding'
 
 const identity: AgentSessionJournalIdentity = {
   sessionId: 'bounded-catch-up',
   workspaceId: 'folder-workspace',
   hostId: 'remote-host',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 const journals = createTrackedJournalOpener()
 let root: string | undefined
@@ -55,7 +59,7 @@ async function seedJournal(count: number) {
     kind: 'epoch',
     seq: 1,
     reason: 'session_created',
-    providerHandle: identity.providerHandle
+    providerHandle: agentSessionJournalProviderHandle(identity)
   })
   for (let index = 0; index < count; index += 1) {
     insertTestJournalRow(db, identity.sessionId, {

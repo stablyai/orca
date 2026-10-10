@@ -41,7 +41,9 @@ import {
 } from '../web-runtime-initial-terminal-bootstrap'
 import { dispatchWebRuntimeInitialTerminalBootstrap } from '../web-runtime-initial-terminal-bootstrap-dispatch'
 import { toRuntimeWorktreeSelector } from '../runtime-worktree-selector'
-import type { SessionTabsStreamEvent } from './state'
+import { isSessionTabsStreamEnd, type SessionTabsStreamEvent } from './state'
+import type { SessionTabsSnapshotHandler } from './visibility-resume-types'
+import { subscribeRuntimeEnvironment } from '../runtime-environment-pairing-refresh'
 
 type Ref<T> = { current: T }
 
@@ -51,30 +53,9 @@ export type ActiveSubscriptionArgs = {
   activeWorktreeRuntimeConnectionGeneration: number
   activeWorktreeRuntimePairingRevision: number | undefined
   workspaceSessionReady: boolean
-  visibilitySnapshotReceipt: Ref<
-    (
-      environmentId: string,
-      snapshot: RuntimeMobileSessionTabsResult,
-      receivedFrame: number,
-      runtimeId?: string
-    ) => void
-  >
-  visibilitySnapshotApply: Ref<
-    (
-      environmentId: string,
-      snapshot: RuntimeMobileSessionTabsResult,
-      receivedFrame: number,
-      runtimeId?: string
-    ) => boolean
-  >
-  visibilitySnapshotAccepted: Ref<
-    (
-      environmentId: string,
-      snapshot: RuntimeMobileSessionTabsResult,
-      receivedFrame: number,
-      runtimeId?: string
-    ) => void
-  >
+  visibilitySnapshotReceipt: Ref<SessionTabsSnapshotHandler<void>>
+  visibilitySnapshotApply: Ref<SessionTabsSnapshotHandler<boolean>>
+  visibilitySnapshotAccepted: Ref<SessionTabsSnapshotHandler<void>>
 }
 
 /** Install the selected-worktree stream, which resumes immediately on visibility changes. */
@@ -226,8 +207,8 @@ export function installActiveSessionTabsSubscription({
 
   return installWindowVisibilitySubscriptionParking([
     {
-      subscribe: (isCurrent) =>
-        window.api.runtimeEnvironments.subscribe(
+      subscribe: (isCurrent, { ended }) =>
+        subscribeRuntimeEnvironment(
           {
             selector: environmentId,
             method: 'session.tabs.subscribe',
@@ -246,6 +227,11 @@ export function installActiveSessionTabsSubscription({
               }
               if (response.ok === false) {
                 console.warn('[web-session-tabs-sync] subscription failed:', response.error.message)
+                ended()
+                return
+              }
+              if (isSessionTabsStreamEnd(response.result)) {
+                ended()
                 return
               }
               const event = response.result as SessionTabsStreamEvent
@@ -279,6 +265,11 @@ export function installActiveSessionTabsSubscription({
             onError: (error) => {
               if (isCurrent()) {
                 console.warn('[web-session-tabs-sync] subscription error:', error.message)
+              }
+            },
+            onClose: () => {
+              if (isCurrent()) {
+                ended()
               }
             }
           }

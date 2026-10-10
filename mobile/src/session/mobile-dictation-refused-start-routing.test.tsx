@@ -9,6 +9,7 @@ import { createElement, useRef } from 'react'
 import { act, create } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFakeRpcClient, type FakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
+import type * as NativeChatSendError from './use-mobile-native-chat-send-error'
 
 const seen = vi.hoisted(() => ({
   toasts: new Array<string>(),
@@ -39,11 +40,13 @@ vi.mock('../platform/haptics', () => ({
 
 // The native-chat surface this hook composes with. None of it is on the mic's path, and reaching
 // the real modules would pull the Expo runtime in behind them.
-vi.mock('./use-mobile-native-chat-send-error', () => ({
+vi.mock('./use-mobile-native-chat-send-error', async (importOriginal) => ({
+  ...(await importOriginal<typeof NativeChatSendError>()),
   useMobileNativeChatSendError: () => ({
     message: null,
     show: () => {},
     clear: () => {},
+    keepWhile: () => {},
     bannerMountedRef: { current: false }
   })
 }))
@@ -61,6 +64,7 @@ vi.mock('./use-mobile-native-chat-input-lease', () => ({
 }))
 vi.mock('./use-mobile-native-chat-controller', () => ({
   useMobileNativeChatController: () => ({
+    nativeChatSession: { messages: [] },
     toggleTabChatView: () => {},
     showNativeChat: false,
     showNativeChatRef: { current: false },

@@ -10,6 +10,7 @@ import {
 } from '@/runtime/web-runtime-session'
 import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
@@ -96,10 +97,12 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
         state.activeGroupIdByWorktree[activeWorktreeId] ??
         state.groupsByWorktree[activeWorktreeId]?.[0]?.id
       const result = launchAgentInNewTab({
+        requestId: newAgentLaunchRequestId(),
         agent,
         worktreeId: activeWorktreeId,
         groupId: targetGroupId,
-        launchSource: 'shortcut'
+        launchSource: 'shortcut',
+        freshNewTab: true
       })
       if (!result) {
         toast.error(

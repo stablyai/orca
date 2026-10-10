@@ -1,3 +1,4 @@
+import { prepareWorktreeCreationHooks } from '@/lib/worktree-creation-hook-preparation'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree, type ActivateAndRevealResult } from '@/lib/worktree-activation'
@@ -12,7 +13,6 @@ import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
 } from '@/lib/workspace-create-error-format'
-import { isAgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -49,7 +49,13 @@ export async function executeWorktreeCreation(
   creationId: string,
   request: WorktreeCreationRequest
 ): Promise<void> {
-  const preparedRequest = await prepareRequestForCreate(creationId, request)
+  const trustedRequest = request.hookPreparation
+    ? await prepareWorktreeCreationHooks(creationId, request)
+    : request
+  if (!trustedRequest) {
+    return
+  }
+  const preparedRequest = await prepareRequestForCreate(creationId, trustedRequest)
   if (!preparedRequest) {
     return
   }
@@ -89,6 +95,8 @@ export async function executeWorktreeCreation(
         preparedRequest.linkedGiteaPR,
         preparedRequest.compareBaseRef,
         {
+          executionHostId:
+            preparedRequest.workspaceRunContext?.hostId ?? preparedRequest.executionHostId,
           ...(preparedRequest.nameWasGenerated ? { nameWasGenerated: true } : {}),
           ...(preparedRequest.displayNameKind
             ? { displayNameKind: preparedRequest.displayNameKind }
@@ -274,11 +282,7 @@ export async function executeWorktreeCreation(
 
   let structuredLaunchAccepted = structuredLaunch
   const { agentLaunchRoute } = preparedRequest
-  const structuredAgent = preparedRequest.agent
-  if (
-    agentLaunchRoute === 'structured-native-chat' &&
-    isAgentSessionHandleProvider(structuredAgent)
-  ) {
+  if (agentLaunchRoute === 'structured-native-chat' && preparedRequest.agent) {
     let structuredSession: WorktreeCreationStructuredSessionResult | null = null
     try {
       structuredSession = await launchStructuredWorktreeSession({

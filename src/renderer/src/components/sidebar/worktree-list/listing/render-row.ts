@@ -1,4 +1,5 @@
 import type { HostSectionRow } from '../../host-section-rows'
+import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspace-worktree'
 
 type WorktreeItemRow = Extract<HostSectionRow, { type: 'item' }>
 export type RenderRow =
@@ -25,7 +26,7 @@ export function getRenderRowKey(row: RenderRow): string {
     return `pending:${row.creationId}`
   }
   if (row.type === 'folder-workspace') {
-    return `folder-workspace:${row.folderWorkspace.id}`
+    return `folder-workspace:${getFolderWorkspaceHostIdentity(row.folderWorkspace)}`
   }
   return `wt:${row.rowKey}`
 }

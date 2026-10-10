@@ -90,6 +90,23 @@ describe('buildWorkspaceSessionPatch', () => {
     expect(patch).toEqual({ activeTabId: 'tab-2' })
   })
 
+  it('writes a changed workspace key and host so a refocus replaces the persisted ones', () => {
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({
+        activeWorktreeId: 'wt-2',
+        activeWorkspaceKey: 'worktree:wt-2',
+        activeWorkspaceExecutionHostId: null
+      }),
+      ['activeWorktreeId', 'activeWorkspaceKey', 'activeWorkspaceExecutionHostId']
+    )
+
+    expect(patch).toEqual({
+      activeWorktreeId: 'wt-2',
+      activeWorkspaceKey: 'worktree:wt-2',
+      activeWorkspaceExecutionHostId: null
+    })
+  })
+
   it('derives only editor session keys for open file changes', () => {
     const patch = buildWorkspaceSessionPatch(createSnapshot(), ['openFiles'])
 

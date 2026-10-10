@@ -13,17 +13,23 @@ import { browserManager } from '../browser/browser-manager'
 import { loadAgentSessionClaimSigner } from '../runtime/agent-session-claim-identity'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { prepareCodexAiVaultSessionResume } from '../codex/codex-ai-vault-session-resume'
+import { prepareCodexPinnedLaunchHome } from './codex-session-resume-launch'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { getDaemonProvider } from '../daemon/daemon-init'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { OrchestrationEnvironmentTransport } from '../runtime/orchestration/environment-transport'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
+import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
 import { getPreferredPairingOffer } from '../../shared/runtime-environments'
 import { fingerprintOrchestrationPeer } from '../runtime/orchestration/environment-transport'
 import { callRuntimeEnvironment } from '../ipc/runtime-environment-transport-routing'
 import { mainProcessState as state } from './main-process-state'
-import { prepareCodexRuntimeHomeForLaunch } from './codex-launch-preparation'
+import {
+  codexStructuredLaunchHomeResolvers,
+  prepareCodexRuntimeHomeForLaunch
+} from './codex-launch-preparation'
+import { resolveHostAgentBaseEnvironment } from '../runtime/structured-agent-shell-environment'
 import type { RuntimeDesktopWindowStatus } from '../../shared/runtime-types'
 import { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
 import { SkillCloudService } from '../skills/skill-cloud-service'
@@ -87,6 +93,8 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     getSshProvider: (connectionId) => getSshPtyProvider(connectionId),
     onPtyStopped: clearProviderPtyState,
     onTerminalAgentStatus: (event) => agentHookServer.ingestTerminalStatus(event),
+    onClaudeTerminalEvidence: (paneKey, evidence) =>
+      agentHookServer.observeClaudeTerminalEvidence(paneKey, evidence),
     // Why: serve can be promoted in place, so wire the listener from startup; runtime enables desktop-only scanners only for a ready renderer.
     onTerminalSideEffects: (batch: TerminalSideEffectBatch) => {
       if (state.mainWindow && !state.mainWindow.isDestroyed()) {
@@ -97,6 +105,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     // Why: worktree.ps pulls hook-reported agent status (same source as the desktop sidebar) at query time so mobile shows the same agents.
     getAgentStatusSnapshot: () =>
       agentHookServer.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
+    getAgentStatusSnapshotForPane: (paneKey) => agentHookServer.getStatusSnapshotForPane(paneKey),
     // Why: structured chats have no hooks, so the host writes their projections here itself; the
     // snapshot above then lists them for the CLI and mobile without a second store.
     structuredAgentStatusSink: {
@@ -122,6 +131,8 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     checkHookAgentPresence: (paneKey) => agentHookServer.checkAgentPresence(paneKey),
     reconcileAgentStatusForEndedProcess: (paneKeys) =>
       agentHookServer.reconcileEndedProcessForPaneKeys(paneKeys),
+    dropAgentStatusForRemovedWorktree: (worktreeId, host) =>
+      agentHookServer.dropStatusEntriesForRemovedWorktree(worktreeId, host),
     canRecoverPersistentLocalPtys: () => getDaemonProvider() !== null,
     // Why: evaluated per call, not captured — the RPC server that owns the device registry is
     // constructed with this runtime and does not exist yet at this point.
@@ -133,19 +144,15 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     prepareAiVaultSessionResume: (args) =>
       prepareCodexAiVaultSessionResume(args, {
         runtimeHome: state.codexRuntimeHome,
-        systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings())
+        systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings()),
+        preparePinnedLaunchHome: (home) => prepareCodexPinnedLaunchHome(home)
       }),
-    prepareCodexStructuredLaunch: ({ launchEnv }) =>
-      prepareCodexRuntimeHomeForLaunch(undefined, launchEnv),
-    // Why throw like prepare does: a null from an uninitialized service would
-    // map to the system home and key a catalog read to the wrong account.
-    resolveCodexStructuredLaunchHome: ({ launchEnv }) => {
-      const runtimeHome = state.codexRuntimeHome
-      if (!runtimeHome) {
-        throw new Error('Codex runtime home service is not initialized')
-      }
-      return runtimeHome.resolveHostCodexHomePathForLaunchReadOnly(launchEnv)
-    },
+    ...codexStructuredLaunchHomeResolvers,
+    prepareCodexCatalogProbeHome: (homePath) =>
+      state.codexRuntimeHome?.prepareHostCodexHomeForReadOnlyAppServer(
+        homePath,
+        resolveTuiAgentLaunchEnv('codex', store.getSettings().agentDefaultEnv)
+      ),
     buildAgentHookPtyEnv: () =>
       isAgentStatusHooksEnabled(state.store?.getSettings()) ? agentHookServer.buildPtyEnv() : {},
     orchestrationEnvironmentTransport,
@@ -199,6 +206,7 @@ export function configureRuntimeServices(runtime: OrcaRuntimeService): void {
   runtime.setCommitMessageAgentEnvironmentResolvers({
     // Why: Codex hooks/auth live in Orca's managed runtime home even for the default path, so every launch must resolve CODEX_HOME via runtime-home.
     prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
-    prepareForClaudeLaunch: (target) => state.claudeRuntimeAuth!.prepareForClaudeLaunch(target)
+    prepareForClaudeLaunch: (target) => state.claudeRuntimeAuth!.prepareForClaudeLaunch(target),
+    resolveBaseEnvironment: () => resolveHostAgentBaseEnvironment(store.getSettings())
   })
 }

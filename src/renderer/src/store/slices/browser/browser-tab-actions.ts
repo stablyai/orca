@@ -18,6 +18,7 @@ import {
 import { getBrowserSessionProfileHostId } from './browser-host-state'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { admitBrowserPageMount } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
+import { ownsGlobalSelection } from '../../global-selection-owner'
 import {
   getRegisteredPairedBrowserTabCreator,
   loadPairedBrowserTabCreator
@@ -100,7 +101,7 @@ export function createBrowserTabActions(
         })()
 
         const shouldActivate = options?.activate ?? true
-        const shouldUpdateGlobalActiveSurface = shouldActivate && s.activeWorktreeId === worktreeId
+        const shouldUpdateGlobalActiveSurface = shouldActivate && ownsGlobalSelection(s, worktreeId)
         const shouldFocusFloatingTab =
           shouldActivate && worktreeId === FLOATING_TERMINAL_WORKTREE_ID
         const shouldFocusAddressBar =
@@ -224,7 +225,7 @@ export function createBrowserTabActions(
       get().createBrowserTab(worktreeId, defaultUrl, {
         title: translate('auto.store.slices.browser.d175274b6d', 'New Browser Tab'),
         focusAddressBar: true,
-        ...(runtimeEnvironmentId ? { browserRuntimeEnvironmentId: null } : {}),
+        browserRuntimeEnvironmentId: null,
         targetGroupId: groupId
       })
       get().recordFeatureInteraction('browser-tab-created')
@@ -267,7 +268,7 @@ export function createBrowserTabActions(
       get().createBrowserTab(worktreeId, url, {
         activate: true,
         sessionProfileId: profileId,
-        ...(runtimeEnvironmentId ? { browserRuntimeEnvironmentId: null } : {})
+        browserRuntimeEnvironmentId: null
       })
       return true
     }

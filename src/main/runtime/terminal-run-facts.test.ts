@@ -2,6 +2,21 @@ import { describe, expect, it } from 'vitest'
 import { TerminalRunFactsRegister } from './terminal-run-facts'
 
 describe('terminal run facts', () => {
+  it('keeps driving input before publication across the exact reserved commit', () => {
+    const facts = new TerminalRunFactsRegister()
+    facts.recordInput('pending', 'driving', 'x', 100)
+    facts.reserveSpawnCommit({ id: 'pending', incarnationId: 'inc-1' })
+    facts.recordSpawnCommit({ id: 'pending', incarnationId: 'inc-1' })
+    expect(facts.read('pending', 'inc-1').firstUserInputAt).toBe(100)
+    facts.reserveSpawnCommit({ id: 'pending', incarnationId: 'inc-2' })
+    facts.recordInput('pending', 'driving', 'x', 200)
+    facts.recordSpawnCommit({ id: 'pending', incarnationId: 'inc-2' })
+    expect(facts.read('pending', 'inc-2').firstUserInputAt).toBe(200)
+    facts.delete('pending')
+    facts.reserveSpawnCommit({ id: 'pending', incarnationId: 'inc-3' })
+    facts.recordSpawnCommit({ id: 'pending', incarnationId: 'inc-3' })
+    expect(facts.read('pending', 'inc-3').firstUserInputAt).toBeNull()
+  })
   it('reads a run main never saw committed as not fresh', () => {
     expect(new TerminalRunFactsRegister().read('pty-1', 'inc-1')).toEqual({
       freshSpawn: false,

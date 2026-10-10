@@ -8,18 +8,23 @@ import {
   RemoteNodeRuntimeSelfTestError,
   REMOTE_NODE_RUNTIME_READY
 } from './orcad-remote-node-runtime'
+import {
+  assertRemoteNodeRuntimePromoted,
+  REMOTE_NODE_RUNTIME_SELFTEST_FAILED
+} from './orcad-remote-node-runtime-report'
 import { withRuntimeStoreLock } from './remote-node-runtime-store-lock'
 import type { SshConnection } from './ssh-connection'
 import { shellEscape } from './ssh-connection-utils'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
+import { RelayHostAnsweredError } from './ssh-relay-host-answered-failure'
 import {
   isPinnedRuntimeRefusal,
   PinnedRelayFallbackError,
   pinnedRelayNodePath,
-  recordPinnedRuntimeRefusal,
   type PinnedRelayPlan
 } from './ssh-relay-pinned-node'
+import { recordPinnedRuntimeRefusal } from './ssh-relay-pinned-refusal-cache'
 import type { PrebuiltRelayPlan } from './ssh-relay-host-node-addons'
 import type { RelayRuntimeLadderRun } from './ssh-relay-runtime-resolution'
 import {
@@ -62,28 +67,34 @@ export function prebuiltRelayNodePath(context: {
 }
 
 /**
- * The warm path only checks the verified marker; hashing ~120 MiB on every reconnect would
- * spend the warm-reconnect budget (design D10 G2.6). A cold install verifies in full.
+ * The warm path checks the verified marker and runs `--version` in the same command; hashing
+ * ~120 MiB on every reconnect would spend the warm-reconnect budget (design D10 G2.6). A cold
+ * install verifies in full.
  */
 export async function ensurePinnedRelayRuntime(
   context: PinnedInstallContext & { plan: PinnedRelayPlan },
   relayAlreadyInstalled: boolean
 ): Promise<void> {
   const { conn, host, remoteRelayDir, plan, signal, run } = context
-  if (relayAlreadyInstalled) {
-    const runtimeDir = remoteNodeRuntimeDir(host, remoteRelayDir, plan.target)
-    const present = await execCommand(conn, remoteNodeRuntimePresentCommand(host, runtimeDir), {
-      signal,
-      wrapCommand: !isWindowsRemoteHost(host)
-    })
-    if (present.trim() === REMOTE_NODE_RUNTIME_READY) {
-      if (run && run.runtimeTransfer === 'none') {
-        run.runtimeTransfer = 'cached'
-      }
-      return
-    }
-  }
   try {
+    if (relayAlreadyInstalled) {
+      const runtimeDir = remoteNodeRuntimeDir(host, remoteRelayDir, plan.target)
+      // Why run it here: exec policy or a library can change after the install was verified.
+      const present = await execCommand(
+        conn,
+        remoteNodeRuntimePresentCommand(host, runtimeDir, true),
+        { signal, wrapCommand: !isWindowsRemoteHost(host) }
+      )
+      if (present.trim() === REMOTE_NODE_RUNTIME_READY) {
+        if (run && run.runtimeTransfer === 'none') {
+          run.runtimeTransfer = 'cached'
+        }
+        return
+      }
+      if (present.includes(REMOTE_NODE_RUNTIME_SELFTEST_FAILED)) {
+        assertRemoteNodeRuntimePromoted(present)
+      }
+    }
     const { transfer } = await ensureRemoteOrcadNodeRuntime({
       conn,
       host,
@@ -168,7 +179,7 @@ export async function verifyPinnedRelayInstall(context: PinnedInstallContext): P
     host,
     expectPinnedVersion: plan.kind === 'pinned-node'
   })
-  if (context.run && verdict.verdict !== 'unverifiable') {
+  if (context.run) {
     context.run.selfTest = verdict.verdict
   }
   switch (verdict.verdict) {
@@ -189,6 +200,8 @@ export async function verifyPinnedRelayInstall(context: PinnedInstallContext): P
         `The relay runtime self-test at ${remoteRelayDir} is unverifiable; retrying on the next connect: ${verdict.detail}`
       )
     case 'failed':
-      throw new Error(`The relay runtime self-test at ${remoteRelayDir} failed: ${verdict.detail}`)
+      throw new RelayHostAnsweredError(
+        `The relay runtime self-test at ${remoteRelayDir} failed: ${verdict.detail}`
+      )
   }
 }

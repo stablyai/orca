@@ -42,7 +42,21 @@ class FakeSftp extends EventEmitter {
     return node.kind === 'file' ? node.content.length : 0
   }
 
-  readdir(path: string, cb: Callback): void {
+  private directoryReads = new WeakSet<Buffer>()
+
+  opendir(path: string, cb: Callback): void {
+    cb(null, Buffer.from(path))
+  }
+  close(_handle: Buffer, cb: Callback): void {
+    cb(null)
+  }
+
+  readdir(handle: Buffer, cb: Callback): void {
+    if (this.directoryReads.has(handle)) {
+      return cb(null, false)
+    }
+    this.directoryReads.add(handle)
+    const path = handle.toString()
     const prefix = `${path}/`
     const entries = [...this.nodes]
       .filter(([p]) => p.startsWith(prefix) && !p.slice(prefix.length).includes('/'))
@@ -262,4 +276,58 @@ describe('SshSftpFilesystemProvider', () => {
     expect(sftp.end).toHaveBeenCalled()
     await expect(provider.stat('/x')).rejects.toThrow('not active')
   })
+})
+
+it('retires the persistent directory channel after failed CLOSE and reopens for the next read', async () => {
+  const first = new FakeSftp()
+  first.nodes.set('/dir/file.txt', { kind: 'file', content: Buffer.from('content') })
+  first.close = (_handle, callback) => callback(new Error('CLOSE rejected'))
+  const second = new FakeSftp()
+  second.nodes.set('/dir/file.txt', { kind: 'file', content: Buffer.from('content') })
+  const createSftp = vi.fn(async () => {
+    const next = createSftp.mock.calls.length === 1 ? first : second
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeSftp implements the directory operations and channel close event used by this provider.
+    return next as unknown as SFTPWrapper
+  })
+  const provider = new SshSftpFilesystemProvider('target-1', createSftp, MODE)
+  await expect(provider.readDir('/dir')).rejects.toThrow('CLOSE rejected')
+  expect(first.end).toHaveBeenCalledOnce()
+  await expect(provider.readDir('/dir')).resolves.toEqual([
+    { name: 'file.txt', isDirectory: false, isSymlink: false }
+  ])
+  expect(createSftp).toHaveBeenCalledTimes(2)
+  expect(second.end).not.toHaveBeenCalled()
+  first.emit('close')
+  await expect(provider.readDir('/dir')).resolves.toHaveLength(1)
+  expect(createSftp).toHaveBeenCalledTimes(2)
+  provider.dispose()
+})
+
+it('replaces a timed-out channel immediately without waiting for its close event', async () => {
+  vi.useFakeTimers()
+  try {
+    const first = new FakeSftp()
+    first.close = () => {}
+    const second = new FakeSftp()
+    const createSftp = vi.fn(async () => {
+      const next = createSftp.mock.calls.length === 1 ? first : second
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeSftp provides handle operations and channel lifecycle events used by the directory provider.
+      return next as unknown as SFTPWrapper
+    })
+    const provider = new SshSftpFilesystemProvider('target-1', createSftp, MODE)
+    const rejected = expect(provider.readDir('/dir')).rejects.toThrow('CLOSE timed out')
+    await vi.advanceTimersByTimeAsync(5000)
+    await rejected
+    expect(first.end).toHaveBeenCalledOnce()
+    const [a, b] = await Promise.all([provider.readDir('/dir'), provider.readDir('/dir')])
+    expect(a).toEqual([])
+    expect(b).toEqual([])
+    expect(createSftp).toHaveBeenCalledTimes(2)
+    first.emit('close')
+    await expect(provider.readDir('/dir')).resolves.toEqual([])
+    expect(createSftp).toHaveBeenCalledTimes(2)
+    provider.dispose()
+  } finally {
+    vi.useRealTimers()
+  }
 })

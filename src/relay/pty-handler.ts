@@ -4,6 +4,7 @@ import { resolveSynchronizedOutputSafeSplit } from '../shared/terminal-synchroni
 import { restoreManagedDataAccountEnvironment } from '../shared/managed-data-account-environment'
 import { createTerminalTitleTracker } from '../shared/terminal-output-side-effects'
 import { getDecorativeTitleGateKey } from '../shared/agent-decorative-title-signature'
+import type { ClaudeTerminalEvidence } from '../shared/claude-terminal-interrupt'
 import { FreebuffStatusProjection } from './freebuff-status-projection'
 import { probeOpenCodeLaunchCapabilities } from '../main/opencode/opencode-launch-capabilities'
 import type { OpenCodeCliCapabilities } from '../shared/opencode-cli-version'
@@ -35,6 +36,13 @@ import { RetiredPaneSurfaceRegistry } from './retired-pane-surfaces'
 import { applyScrubSafeAgentEnvAliases } from '../shared/agent-hook-scrub-safe-env'
 import { addWslEnvKeys } from '../shared/wsl-env'
 import {
+  OPENCODE_STARTUP_PROMPT_SHA256_ENV,
+  OPENCODE_STARTUP_PROMPT_NONCE_ENV,
+  OPENCODE_STARTUP_PROMPT_ENDPOINT_ENV,
+  OPENCODE_STARTUP_PROMPT_BODY_ENV,
+  OPENCODE_STARTUP_PROMPT_SHELL_ENV
+} from '../shared/opencode-startup-prompt'
+import {
   ORCA_IMAGE_PROTOCOL_ENV,
   ORCA_IMAGE_PROTOCOL_VALUE
 } from '../shared/terminal-image-protocol'
@@ -42,6 +50,12 @@ import { SHELL_STARTUP_FEATURE_ENV } from '../main/shell-startup-features'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { shouldUseShellReadyStartupDelivery } from '../shared/codex-startup-delivery'
 import { buildStartupCommandSubmission } from '../shared/startup-command-submission'
+import {
+  discardStagedStartupCommand,
+  stageStartupCommand,
+  startupStagingFailureNotice,
+  type StartupCommandStaging
+} from '../shared/startup-command-staging'
 import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
 import {
   isPathInsideOrEqual,
@@ -263,6 +277,8 @@ type ManagedPty = {
   gitCredentialPromptGuarded: boolean
   historyIsolationEnabled?: boolean
   startupCommand?: ManagedStartupCommand
+  /** Kept past delivery: the typed line may never run if the shell dies first. */
+  stagedStartupCommand?: StartupCommandStaging
   /** Whether this host armed the shell-ready marker for a renderer-delivered startup command.
    *  Kept off `startupCommand`, which is dropped once delivered; the client reads it from the
    *  spawn reply to skip waiting for a marker that will never come (fish, sh, Windows). */
@@ -297,7 +313,6 @@ type RelayAgentSessionCreateResult = {
 
 const AGENT_SESSION_CREATE_OPERATION_ID_PATTERN = /^[A-Za-z0-9_-]{43}$/
 const AGENT_SESSION_CREATE_OPERATION_RETENTION_MS = 24 * 60 * 60 * 1000
-const AGENT_SESSION_CREATE_OPERATION_LIMIT = 4_096
 
 type PendingPtyOutput = RelayPtySourceOutput & {
   data: string
@@ -343,6 +358,7 @@ function disposeManagedPty(managed: ManagedPty): void {
     return
   }
   managed.disposed = true
+  discardStagedStartupCommand(managed.stagedStartupCommand)
   // Why: clear the SIGKILL fallback timer so it can't fire pty.kill on an already-disposed instance.
   if (managed.killTimer) {
     clearTimeout(managed.killTimer)
@@ -746,6 +762,16 @@ export class PtyHandler {
     this.agentPresenceTrigger = listener
   }
 
+  private claudeTerminalEvidenceListener:
+    | ((paneKey: string, evidence: ClaudeTerminalEvidence) => void)
+    | null = null
+
+  setClaudeTerminalEvidenceListener(
+    listener: ((paneKey: string, evidence: ClaudeTerminalEvidence) => void) | null
+  ): void {
+    this.claudeTerminalEvidenceListener = listener
+  }
+
   /** Subscribe to PTY-exit events (relay-hook server uses this to evict per-paneKey caches). */
   setExitListener(listener: PtyExitListener | null): void {
     this.exitListener = listener
@@ -1018,12 +1044,11 @@ export class PtyHandler {
     if (heldBytes) {
       managed.startupIngress?.accept(heldBytes)
     }
-    const submit = process.platform === 'win32' ? '\r' : '\n'
     // Why: only the shell-ready wrapper arms bracketed-paste; other shells use raw submit so ESC[200~ markers aren't echoed.
-    const payload = buildStartupCommandSubmission(startup.command, {
-      submit,
-      bracketedPasteSafe: startup.waitForShellReady
-    })
+    const payload = buildStartupCommandSubmission(
+      managed.stagedStartupCommand?.command ?? startup.command,
+      { bracketedPasteSafe: startup.waitForShellReady }
+    )
     managed.startupCommand = undefined
     managed.pty.write(payload)
   }
@@ -1104,6 +1129,9 @@ export class PtyHandler {
     let lastTitleGateKey: string | null = null
     const presenceTriggers = createTerminalTitleTracker({
       onTitle: (normalizedTitle, rawTitle, meta) => {
+        if (managed.paneKey && !meta?.staleWorkingTitleClear) {
+          this.claudeTerminalEvidenceListener?.(managed.paneKey, { kind: 'title', title: rawTitle })
+        }
         // Why: spinner frames arrive several times a second; only a real title change re-checks.
         const gateKey = getDecorativeTitleGateKey(rawTitle, normalizedTitle)
         if (gateKey !== lastTitleGateKey && !meta?.staleWorkingTitleClear) {
@@ -1137,6 +1165,9 @@ export class PtyHandler {
     })
     managed.pty.onExit(({ exitCode }: { exitCode: number }) => {
       presenceTriggers.dispose()
+      if (managed.paneKey) {
+        this.claudeTerminalEvidenceListener?.(managed.paneKey, { kind: 'reset' })
+      }
       managed.physicalExit?.markExited()
       if (managed.disposed) {
         return
@@ -1846,9 +1877,6 @@ export class PtyHandler {
       const { sourceActivation: _staleActivation, ...stableResult } = result
       return { ...stableResult, ...(sourceActivation ? { sourceActivation } : {}) }
     }
-    if (this.agentSessionCreateOperations.size >= AGENT_SESSION_CREATE_OPERATION_LIMIT) {
-      throw new Error('agent_session_operation_capacity')
-    }
     const operation = this.spawnOnce(params, context)
     this.agentSessionCreateOperations.set(operationId, operation)
     try {
@@ -2043,6 +2071,16 @@ export class PtyHandler {
       envToDelete
     )
     delete spawnEnv.ORCA_OPENCODE_PLUGIN_API
+    // Relay input streams lack driving-input provenance, so native intent is unavailable.
+    for (const key of [
+      OPENCODE_STARTUP_PROMPT_SHA256_ENV,
+      OPENCODE_STARTUP_PROMPT_NONCE_ENV,
+      OPENCODE_STARTUP_PROMPT_ENDPOINT_ENV,
+      OPENCODE_STARTUP_PROMPT_BODY_ENV,
+      OPENCODE_STARTUP_PROMPT_SHELL_ENV
+    ]) {
+      delete spawnEnv[key]
+    }
     const openCodeCapabilities = await probeOpenCodeLaunchCapabilities({
       command,
       agent: launchAgent,
@@ -2214,11 +2252,28 @@ export class PtyHandler {
           }
         : {})
     }
+    if (managed.startupCommand?.providerDelivery && managed.startupCommand.command) {
+      managed.stagedStartupCommand = stageStartupCommand({
+        command: managed.startupCommand.command,
+        shellPath: shell,
+        orcaBuiltLine: launchAgent !== undefined
+      })
+      if (managed.stagedStartupCommand.failure) {
+        process.stderr.write(
+          `[pty-handler] Could not stage startup command for ${id}; typing it in full: ${managed.stagedStartupCommand.failure}\n`
+        )
+      }
+    }
     this.retiredIncarnations.delete(id)
     this.sourcePublication?.activate(id, managed.incarnationId, context)
     const sourceActivation =
       context && this.sourcePublication?.receivingActivation?.(id, context.clientId)
     this.wireAndStore(managed)
+    const stagingNotice =
+      managed.stagedStartupCommand && startupStagingFailureNotice(managed.stagedStartupCommand)
+    if (stagingNotice) {
+      managed.startupIngress?.accept(stagingNotice)
+    }
     if (context?.isStale() && !params.agentSessionEnsure && !params.agentSessionCreateOperationId) {
       // Why: if the client reconnected while pty.spawn was in flight, the
       // response is discarded and no renderer can own this PTY. Shut it down
@@ -2381,6 +2436,9 @@ export class PtyHandler {
         return
       }
       managed.pty.write(data)
+      if (managed.paneKey) {
+        this.claudeTerminalEvidenceListener?.(managed.paneKey, { kind: 'input', data })
+      }
     }
   }
 

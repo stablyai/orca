@@ -70,6 +70,7 @@ describe('structuredSessionChildIdentityEnv', () => {
       // For a CLI that predates the id, which refuses on it instead of guessing a sibling.
       ORCA_STRUCTURED_SESSION: '1',
       ORCA_CLI_COMMAND: join(SHIM_DIR, 'orca'),
+      ORCA_CLI_BIN_DIR: SHIM_DIR,
       // The instance that minted the id, so any current CLI dials it rather than the default.
       ORCA_USER_DATA_PATH: USER_DATA
     })
@@ -99,6 +100,22 @@ describe('structuredSessionChildIdentityEnv', () => {
   })
 
   describe.each(['chat', 'worker'] as const)("reaches this app's CLI as a %s", (kind) => {
+    it('reaches a headless host CLI without Electron resources', () => {
+      const launcher = join(USER_DATA, 'cli', 'bin', 'orca')
+      installFakeAppEnvironment({
+        isPackaged: () => true,
+        getPath: () => USER_DATA,
+        getCliLauncherPath: () => launcher
+      })
+      const env = structuredSessionChildIdentityEnv(SESSION_ID, {
+        PATH: '/usr/bin',
+        ORCA_USER_DATA_PATH: '/other/profile'
+      })
+      expect(env.ORCA_CLI_COMMAND).toBe(launcher)
+      expect(env.ORCA_USER_DATA_PATH).toBe(USER_DATA)
+      expect(env.ORCA_AGENT_SESSION_ID).toBe(SESSION_ID)
+      expect(env.PATH).toBe(`${join(USER_DATA, 'cli', 'bin')}:/usr/bin`)
+    })
     beforeEach(() => {
       if (kind === 'worker') {
         registerWorker()
@@ -131,6 +148,7 @@ describe('structuredSessionChildIdentityEnv', () => {
       expect(env.PATH).toBeUndefined()
       // The native launcher: `orca.cmd` refuses message bodies cmd.exe would mangle.
       expect(env.ORCA_CLI_COMMAND).toBe(join(RESOURCES, 'bin', 'orca.exe'))
+      expect(env.ORCA_CLI_BIN_DIR).toBeUndefined()
     })
 
     it('unpackaged, through the dev launcher dir', () => {

@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const shortcutLabelMock = vi.hoisted(() => vi.fn())
+const revealInFileManager = vi.hoisted(() => vi.fn())
+const storeSettings = vi.hoisted((): { activeRuntimeEnvironmentId?: string } => ({}))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: function DropdownMenu(props: { children?: unknown }) {
@@ -108,7 +110,7 @@ const useAppStoreMock = Object.assign(
     }) => unknown
   ) =>
     selector({
-      settings: {},
+      settings: storeSettings,
       unifiedTabsByWorktree: {
         'wt-1': [{ id: 'tab-1', groupId: 'group-1' }]
       },
@@ -118,7 +120,7 @@ const useAppStoreMock = Object.assign(
     }),
   {
     getState: () => ({
-      settings: {},
+      settings: storeSettings,
       unifiedTabsByWorktree: {
         'wt-1': [{ id: 'tab-1', groupId: 'group-1' }]
       },
@@ -133,12 +135,9 @@ vi.mock('@/store', () => ({
   useAppStore: useAppStoreMock
 }))
 
-vi.mock('@/lib/local-path-open-guard', () => ({
-  showLocalPathOpenBlockedToast: vi.fn()
-}))
-
-vi.mock('./editor-tab-local-open-guard', () => ({
-  shouldBlockEditorTabLocalOpen: () => false
+vi.mock(import('@/lib/reveal-in-file-manager'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  revealInFileManager
 }))
 
 type ReactElementLike = {
@@ -203,8 +202,16 @@ function extractText(node: unknown): string {
 }
 
 async function renderMenu(
-  overrides: { onActivate?: () => void; onOpenRenameInput?: () => void } = {}
+  overrides: {
+    onActivate?: () => void
+    onOpenRenameInput?: () => void
+    repoConnectionId?: string | null
+    runtimeEnvironmentId?: string | null
+    externalSshTargetId?: string
+    mode?: 'edit' | 'check-details' | 'chat-visual'
+  } = {}
 ): Promise<unknown> {
+  const { runtimeEnvironmentId, externalSshTargetId, mode = 'edit', ...props } = overrides
   const module = await import('./EditorFileTabContextMenu')
   return module.EditorFileTabContextMenu({
     open: true,
@@ -217,7 +224,9 @@ async function renderMenu(
       worktreeId: 'wt-1',
       language: 'typescript',
       isDirty: false,
-      mode: 'edit'
+      mode,
+      runtimeEnvironmentId,
+      externalSshTargetId
     },
     unifiedTabId: 'tab-1',
     groupId: 'group-1',
@@ -241,8 +250,17 @@ async function renderMenu(
     onCloseToRight: vi.fn(),
     onCloseToLeft: vi.fn(),
     onOpenMarkdownPreview: vi.fn(),
-    ...overrides
+    ...props
   })
+}
+
+async function renderRevealItem(
+  overrides?: Parameters<typeof renderMenu>[0]
+): Promise<ReactElementLike> {
+  const tree = expandNode(await renderMenu(overrides))
+  return findElementsByType(tree, 'DropdownMenuItem').find((item) =>
+    extractText(item.props.children).includes('Reveal in Finder')
+  )!
 }
 
 function assignedShortcutLabel(actionId: string): string | null {
@@ -343,4 +361,61 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
     expect(findElementsByType(closeAllItem, 'DropdownMenuShortcut')).toHaveLength(0)
     expect(findElementsByType(tree, 'DropdownMenuShortcut')).toHaveLength(0)
   })
+})
+
+describe('EditorFileTabContextMenu reveal in file manager', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    shortcutLabelMock.mockReturnValue(null)
+    revealInFileManager.mockReset()
+    delete storeSettings.activeRuntimeEnvironmentId
+    vi.stubGlobal('navigator', { userAgent: 'Mac' })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('reveals a local file through the shared reveal action', async () => {
+    const reveal = await renderRevealItem()
+
+    expect(reveal.props.disabled).toBe(false)
+    expect(extractText(reveal.props.children)).not.toContain('Local only')
+    const onSelect = reveal.props.onSelect
+    if (typeof onSelect !== 'function') {
+      throw new Error('Reveal item has no select handler')
+    }
+    onSelect()
+    expect(revealInFileManager).toHaveBeenCalledWith('/repo/foo.ts')
+  })
+
+  it.each([
+    ['on an SSH host', { repoConnectionId: 'ssh-1' }],
+    ['owned by a remote runtime', { runtimeEnvironmentId: 'env-1' }],
+    ['opened from an SSH host outside the workspace', { externalSshTargetId: 'ssh-1' }]
+  ])('disables reveal as local-only for a file %s', async (_owner, overrides) => {
+    const reveal = await renderRevealItem(overrides)
+
+    expect(reveal.props.disabled).toBe(true)
+    expect(extractText(reveal.props.children)).toContain('Local only')
+  })
+
+  it.each(['check-details', 'chat-visual'] as const)(
+    'offers no path actions and no trailing separator for a %s tab, which has no file on disk',
+    async (mode) => {
+      const tree = expandNode(await renderMenu({ mode }))
+      const labels = findElementsByType(tree, 'DropdownMenuItem').map((item) =>
+        extractText(item.props.children)
+      )
+
+      expect(
+        labels.filter((label) => /Copy Path|Copy Relative Path|Reveal in/.test(label))
+      ).toEqual([])
+      // The two separators that framed the path group go with it.
+      const fileTree = expandNode(await renderMenu())
+      expect(findElementsByType(tree, 'DropdownMenuSeparator')).toHaveLength(
+        findElementsByType(fileTree, 'DropdownMenuSeparator').length - 2
+      )
+    }
+  )
 })

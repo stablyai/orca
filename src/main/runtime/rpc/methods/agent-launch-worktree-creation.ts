@@ -22,7 +22,9 @@ import type { RpcContext } from '../core'
 import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
 import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
 import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-preferences'
-import type { AgentLaunchParams } from './agent-launch-schemas'
+import type { AgentLaunchParams } from '../../../../shared/rpc-contract/agent-launch-params'
+import { agentLaunchFolderWorkspaceCreator } from './agent-launch-folder-workspace-creation'
+import { agentLaunchMovesHostWindow } from './agent-launch-tab-publication'
 
 type WorktreeCreateParams = Extract<
   AgentLaunchParams['target'],
@@ -36,6 +38,7 @@ export function agentLaunchWorkspaceFactory(
   agent: TuiAgent
 ): AgentLaunchWorkspaceFactory {
   return {
+    createFolderWorkspace: agentLaunchFolderWorkspaceCreator(context, agent),
     createWorktree: async ({
       create,
       startupAgent,
@@ -47,6 +50,7 @@ export function agentLaunchWorkspaceFactory(
       options
     }) => {
       const startupLaunchPreferences = toAgentLaunchPreferences(options)
+      let promptRodeLaunchCommand = false
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: already validated by `AgentLaunch`; the executor only removed the reserved agent fields, so the rest of the payload is the parsed shape.
       const params = create as WorktreeCreateParams
       const { runtime } = context
@@ -62,11 +66,11 @@ export function agentLaunchWorkspaceFactory(
         const result = await runtime.createManagedWorktree({
           ...buildManagedWorktreeCreateArgs(
             {
-              ...params,
+              ...(agentLaunchMovesHostWindow(context) ? params : withoutHostActivation(params)),
               ...(startupAgent ? { startupAgent } : {}),
               // Only ever set alongside `startupAgent`, which is what the create requires; the
-              // executor sends it exclusively for an agent that takes its prompt on argv, so this
-              // is the startup command carrying the text rather than a second delivery path.
+              // executor offers it only to an agent that takes its prompt on argv, and it rides only
+              // when the typed line can carry it.
               ...(startupPrompt ? { startupPrompt } : {})
             },
             {
@@ -80,6 +84,13 @@ export function agentLaunchWorkspaceFactory(
             context.clientKind ? { clientKind: context.clientKind } : {}
           ),
           ...(agentArgs !== undefined ? { startupAgentArgs: agentArgs } : {}),
+          ...(startupPrompt
+            ? {
+                onStartupPromptCarry: (carried: boolean) => {
+                  promptRodeLaunchCommand = carried
+                }
+              }
+            : {}),
           ...(cwd ? { startupCwd: cwd } : {}),
           ...(launchSource ? { startupLaunchSource: launchSource } : {}),
           ...(paneKey ? { startupPaneKey: paneKey } : {}),
@@ -99,7 +110,9 @@ export function agentLaunchWorkspaceFactory(
         finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
         return {
           worktreeId: result.worktree.id,
+          connectionId: repo.connectionId ?? null,
           startupTerminalHandle: result.startupTerminal?.handle,
+          ...(promptRodeLaunchCommand ? { promptRodeLaunchCommand } : {}),
           ...(result.startupTerminal?.paneKey
             ? { startupTerminalPaneKey: result.startupTerminal.paneKey }
             : {}),
@@ -112,6 +125,21 @@ export function agentLaunchWorkspaceFactory(
         throw error
       }
     }
+  }
+}
+
+/**
+ * A paired device's create leaves the host window where it is, as the rest of its launch does:
+ * activating would switch the desktop to the new workspace and reveal the startup terminal there.
+ * Without it, setup and default tabs are provisioned in the background instead. `runHooks` means
+ * "run setup, and activate", so only its setup half is kept.
+ */
+function withoutHostActivation(params: WorktreeCreateParams): WorktreeCreateParams {
+  return {
+    ...params,
+    activate: false,
+    runHooks: false,
+    ...(params.runHooks === true ? { setupDecision: 'run' as const } : {})
   }
 }
 

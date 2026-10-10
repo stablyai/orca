@@ -79,7 +79,7 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
   }
 
   protected sameTerminalOwner(
-    previous: EnrichedAgentHookEventPayload,
+    previous: Pick<AgentHookEventPayload, 'connectionId' | 'worktreeId'>,
     incoming: Pick<AgentHookEventPayload, 'connectionId' | 'worktreeId'>
   ): boolean {
     if (
@@ -110,6 +110,20 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
       relayConnection === wslHookRelayConnectionId(previousDistro) &&
       worktreeIdsEqual(previous.worktreeId, incoming.worktreeId)
     )
+  }
+
+  protected retainedOwnerLaunchTokenHash(
+    paneKey: string,
+    incoming: Pick<AgentHookEventPayload, 'connectionId' | 'worktreeId'>
+  ): string | undefined {
+    const fence = this.restartedStatusLaunchTokenHashByPaneKey.get(paneKey)
+    const authority = this.persistedAuthorityCommitmentsByPaneKey.get(paneKey)
+    return fence?.allowRetainedOwner &&
+      authority?.worktreeId &&
+      incoming.worktreeId &&
+      this.sameTerminalOwner(authority, incoming)
+      ? authority.launchTokenHash
+      : undefined
   }
 
   protected commitStatusRowMutation(

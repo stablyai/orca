@@ -10,7 +10,7 @@ import { GROK_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-grok
 import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
 import { parseBuiltSessionOptionCommand } from './native-chat-session-option-commands'
 
-function grokEffortOption(modelId = 'grok-4.6'): CatalogOption {
+function grokEffortOption(modelId = 'grok-4.7'): CatalogOption {
   const model = GROK_SESSION_OPTION_CATALOG.models.find((candidate) => candidate.id === modelId)!
   return model.options.find((option) => option.id === 'effort')!
 }
@@ -32,7 +32,8 @@ describe('grok session option catalog', () => {
         isDefault
       }))
     ).toEqual([
-      { id: 'grok-4.6', label: 'Grok 4.6', isDefault: true },
+      { id: 'grok-4.7', label: 'Grok 4.7', isDefault: true },
+      { id: 'grok-4.6', label: 'Grok 4.6', isDefault: undefined },
       { id: 'grok-4.5', label: 'Grok 4.5', isDefault: undefined }
     ])
   })
@@ -50,6 +51,7 @@ describe('grok session option catalog', () => {
 
   it('offers each model only the tiers its own grok menu advertises', () => {
     // grok warns and ignores a tier the active model lacks, so 4.5 must not list xhigh.
+    expect(effortValues(grokEffortOption('grok-4.7'))).toEqual(['low', 'medium', 'high', 'xhigh'])
     expect(effortValues(grokEffortOption('grok-4.6'))).toEqual(['low', 'medium', 'high', 'xhigh'])
     expect(effortValues(grokEffortOption('grok-4.5'))).toEqual(['low', 'medium', 'high'])
   })
@@ -212,13 +214,13 @@ describe('grok agent-arg overrides', () => {
     expect(removeEffort(['--effortless'])).toEqual(['--effortless'])
   })
 
-  it('drops only the overridden key from the launch record', () => {
+  it('drops only the overridden key from the launch record and argv', () => {
     expect(
       resolveAgentSessionOptionLaunch('grok', { model: 'grok-4.5', effort: 'high' }, [
         '--reasoning-effort=low'
       ])
     ).toEqual({
-      args: ['-m', 'grok-4.5', '--reasoning-effort', 'high'],
+      args: ['-m', 'grok-4.5'],
       appliedValues: { model: 'grok-4.5' }
     })
   })
@@ -356,6 +358,7 @@ describe('mergeDiscoveredAuthoritativeModels', () => {
 
   it('drops the unmatched seed row the additive merge would have kept', () => {
     expect(mergeCatalogModels(seed, discovered('grok-build')).map(({ id }) => id)).toEqual([
+      'grok-4.7',
       'grok-4.6',
       'grok-4.5',
       'grok-build'

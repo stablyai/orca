@@ -41,7 +41,7 @@ export function compareNativeChatMessagesByTime(
 
 /** Rows the journal holds read in the journal's own order, never its clock: a
  *  batch shares one timestamp, and a row recovered after a crash carries an
- *  earlier one. A row not in the journal yet — a send still in the outbox — was
+ *  earlier one. A row not in the journal yet — a send still on its way — was
  *  made after everything the journal holds, so it follows them; only such rows,
  *  and terminal-backed transcripts, which have no journal, order by time. */
 export function compareNativeChatTranscriptMessages(

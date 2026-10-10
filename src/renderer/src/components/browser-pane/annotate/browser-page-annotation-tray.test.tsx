@@ -87,6 +87,7 @@ function renderTray(currentUrl?: string): {
         activeGroupId={undefined}
         browserAnnotationsPrompt="prompt"
         handleBrowserAnnotationsSentToAgent={vi.fn()}
+        handleBrowserAnnotationsHandedOff={vi.fn()}
         handleCopyBrowserAnnotations={vi.fn()}
         browserAnnotationsCopied={false}
         handleClearBrowserAnnotations={vi.fn()}

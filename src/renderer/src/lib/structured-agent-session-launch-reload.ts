@@ -33,7 +33,12 @@ export function restorePersistedStructuredLaunchState(
       payloadFingerprint: record.payloadFingerprint,
       expectedRuntimeFence: record.expectedRuntimeFence,
       ...(record.resumeFrom ? { resumeFrom: record.resumeFrom } : {}),
-      ...(record.seedOptions ? { seedOptions: record.seedOptions } : {})
+      ...(record.seedOptions ? { seedOptions: record.seedOptions } : {}),
+      ...(record.firstMessage ? { firstMessage: record.firstMessage } : {}),
+      ...(record.options ? { options: record.options } : {}),
+      ...(record.createMessageSupport === undefined
+        ? {}
+        : { createMessageSupport: record.createMessageSupport })
     })
   } catch (error) {
     // A record naming a host no runtime serves cannot be retried anywhere.
@@ -42,7 +47,8 @@ export function restorePersistedStructuredLaunchState(
     }
     throw error
   }
-  const callers: StructuredLaunchCallerGroup = createStructuredLaunchCallerGroup()
+  // Only a Retry or re-check restarts a restored launch.
+  const callers: StructuredLaunchCallerGroup = createStructuredLaunchCallerGroup({ kind: 'retry' })
   const state: StructuredLaunchState = {
     identity: structuredLaunchIdentity(worktreeId, record.agent, record.resumeFrom),
     intent,
@@ -55,6 +61,7 @@ export function restorePersistedStructuredLaunchState(
     selection: { seed: intent.seedOptions, held: {} }
   }
   callers.outcome = record.lifecycle === 'failed' ? 'failed' : 'unknown'
+  callers.failedAt = record.failedAt
   setStructuredLaunchState(state)
   return state
 }

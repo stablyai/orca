@@ -257,7 +257,12 @@ export function startParkedTerminalByteWatcher(
           onCommandCodeWorking: commandStatusPolicy.onCommandCodeWorking,
           onCommandCodeDone: commandStatusPolicy.onCommandCodeDone,
           onPrLink: (link) =>
-            useAppStore.getState().observeTerminalGitHubPullRequestLink(worktreeId, link)
+            useAppStore.getState().observeTerminalGitHubPullRequestLink(worktreeId, link, {
+              tabId,
+              paneKey,
+              ptyId,
+              executionHostId: workspaceOwner?.executionHostId ?? undefined
+            })
         },
         // Why: activation-deferred tabs can start a watcher before any pane restored the title; ordinary parked tabs avoid this IPC.
         restoreTitleOnRegister: options.restoreTitleOnRegister === true
@@ -278,7 +283,12 @@ export function startParkedTerminalByteWatcher(
     commandCodeOutputStatusDetector?.observe(data)
     if (observeTerminalGitHubPRLink) {
       for (const link of observeTerminalGitHubPRLink(data)) {
-        useAppStore.getState().observeTerminalGitHubPullRequestLink(worktreeId, link)
+        useAppStore.getState().observeTerminalGitHubPullRequestLink(worktreeId, link, {
+          tabId,
+          paneKey,
+          ptyId,
+          executionHostId: workspaceOwner?.executionHostId ?? undefined
+        })
       }
     }
   }

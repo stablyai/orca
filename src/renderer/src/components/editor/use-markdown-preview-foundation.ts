@@ -101,20 +101,16 @@ export function useMarkdownPreviewFoundation({
     () => markdownReviewNotes.filter((note) => !note.sentAt),
     [markdownReviewNotes]
   )
-  const unsentMarkdownReviewPrompt = useMemo(
-    () => formatMarkdownReviewNotes(unsentMarkdownReviewNotes, renderedContent),
-    [renderedContent, unsentMarkdownReviewNotes]
-  )
   const unsentMarkdownReviewScope = useMemo<NotesSendMenuScope<MarkdownReviewNote>[]>(
     () => [
       {
         id: 'all',
         label: translate('auto.components.editor.MarkdownPreview.ddf087d12e', 'All unsent notes'),
         notes: unsentMarkdownReviewNotes,
-        prompt: unsentMarkdownReviewPrompt
+        formatPrompt: (notes) => formatMarkdownReviewNotes(notes, renderedContent)
       }
     ],
-    [unsentMarkdownReviewNotes, unsentMarkdownReviewPrompt]
+    [renderedContent, unsentMarkdownReviewNotes]
   )
   const canShowReviewTools = Boolean(
     markdownAnnotationsEnabled && sourceWorktree && sourceRelativePath !== null
