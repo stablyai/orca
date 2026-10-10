@@ -103,8 +103,12 @@ function valueStatements(body) {
 const IMPORT_STATEMENT =
   /\bimport\s+(?:type\s+)?(?:[\w$]+\s*,\s*)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g
 const REEXPORT_STATEMENT = /\bexport\s+(?:type\s+)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g
-// `const { reader } = await import('…')` binds like a named import.
-const DYNAMIC_IMPORT_DESTRUCTURE = /\{([^{}]*)\}\s*=\s*await\s+import\(\s*['"]([^'"]+)['"]\s*\)/g
+// `const { reader } = (await import('…'))` and `import('…').then(({ reader }) =>` bind like a
+// named import; `{ reader: local }` renames like `as`.
+const DYNAMIC_IMPORT_DESTRUCTURE =
+  /\{([^{}]*)\}\s*=\s*\(?\s*await\s+import\(\s*['"]([^'"]+)['"]\s*\)(?:\s*\))?/g
+const DYNAMIC_IMPORT_THEN =
+  /\bimport\(\s*['"]([^'"]+)['"]\s*\)\s*\.then\(\s*(?:async\s*)?\(\s*\{([^{}]*)\}/g
 const STAR_REEXPORT_STATEMENT = /\bexport\s+\*\s+from\s*['"]([^'"]+)['"]/g
 const LOCAL_EXPORT_LIST = /\bexport\s+\{([^}]*)\}(?!\s*from)/g
 
@@ -114,7 +118,7 @@ function specifiers(list) {
     .map((part) => part.trim().replace(/^type\s+/, ''))
     .filter(Boolean)
     .map((part) => {
-      const [imported, local = imported] = part.split(/\s+as\s+/)
+      const [imported, local = imported] = part.split(/\s+as\s+|\s*:\s*/)
       return { imported: imported.trim(), local: local.trim() }
     })
 }
@@ -139,7 +143,8 @@ function parseModule(rel, text, files) {
   const imports = new Map()
   for (const [, list, spec] of [
     ...text.matchAll(IMPORT_STATEMENT),
-    ...text.matchAll(DYNAMIC_IMPORT_DESTRUCTURE)
+    ...text.matchAll(DYNAMIC_IMPORT_DESTRUCTURE),
+    ...[...text.matchAll(DYNAMIC_IMPORT_THEN)].map(([all, from, names]) => [all, names, from])
   ]) {
     const from = resolveModule(spec, rel, files)
     for (const { imported, local } of specifiers(list)) {
@@ -289,7 +294,11 @@ export function countFocusSettingReads(
   readerNames = new Set(SEED_FOCUS_READERS),
   memberNames = new Set()
 ) {
-  const body = sourceText.replace(IMPORT_EXPORT_LIST, '').replace(DYNAMIC_IMPORT_DESTRUCTURE, '')
+  const body = sourceText
+    .replace(IMPORT_EXPORT_LIST, '')
+    // A placeholder, so a dangling `const` does not read as a declaration of the next call.
+    .replace(DYNAMIC_IMPORT_DESTRUCTURE, 'dynamicImport')
+    .replace(DYNAMIC_IMPORT_THEN, 'dynamicImport')
   const pattern = readerUsePattern(readerNames)
   // `ns.reader(…)` through a namespace or dynamic import; names already counted bare are skipped.
   const members = [...body.matchAll(MEMBER_NAME)].filter(

@@ -159,6 +159,28 @@ describe('countFocusSettingReads', () => {
         readers.memberNames
       )
     ).toBe(1)
+    for (const [rel, text] of [
+      ['src/renderer/src/r1.ts', "const { focusedHostId: g } = await import('./routing')\ng(s)"],
+      [
+        'src/renderer/src/r2.ts',
+        "const { focusedHostId } = (await import('./routing'))\nfocusedHostId(s)"
+      ],
+      [
+        'src/renderer/src/r3.ts',
+        "void import('./routing').then(({ focusedHostId }) => focusedHostId(s))"
+      ]
+    ]) {
+      const withFile = discoverFocusReaders(
+        new Map([
+          [
+            'src/renderer/src/routing.ts',
+            'export function focusedHostId(s) {\n  return s.activeRuntimeEnvironmentId\n}\n'
+          ],
+          [rel, text]
+        ])
+      )
+      expect(countFocusSettingReads(text, withFile.namesFor(rel), withFile.memberNames)).toBe(1)
+    }
   })
 
   it('counts destructuring reads', () => {

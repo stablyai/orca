@@ -389,6 +389,8 @@
 1 src/renderer/src/hooks/editor-external-watch-disk-verification.ts
 2 src/renderer/src/hooks/editor-external-watch-targets.ts
 1 src/renderer/src/hooks/editor-runtime-file-watch.ts
+1 src/renderer/src/hooks/ipc-events-close-routing-test-harness.ts
+1 src/renderer/src/hooks/ipc-events-terminal-create-test-harness.ts
 6 src/renderer/src/hooks/ipc-events-test-harness.ts
 2 src/renderer/src/hooks/ipc-events/app-lifetime-ipc-bridge.ts
 1 src/renderer/src/hooks/ipc-events/browser-state-ipc-bridge.ts
