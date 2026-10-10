@@ -5,6 +5,10 @@ import { getTerminalLiveSpecialKeyDecision } from './terminal-live-text-commit'
 import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
+import {
+  mapTerminalLiveHardwareKeyEvent,
+  type TerminalLiveHardwareKeyEvent
+} from './terminal-live-hardware-key-mapping'
 import { normalizeTerminalTextInput } from './terminal-text-input-normalization'
 import { useTerminalLivePendingInputFlush } from './use-terminal-live-pending-input-flush'
 import {
@@ -48,7 +52,8 @@ type TerminalLiveInputCommitHandlers = {
   readonly handleLiveInputAccessoryBytes: (
     input: TerminalLiveAccessoryInput
   ) => Promise<TerminalLiveAccessoryInputCommitResult>
-  readonly handleLiveInputChange: (event: TerminalLiveInputChangeEvent) => void
+  readonly handleLiveInputChange: (event: TerminalLiveInputChangeEvent | string) => void
+  readonly handleLiveInputHardwareKey: (event: TerminalLiveHardwareKeyEvent) => void
   readonly handleLiveInputKeyPress: (event: TerminalLiveInputKeyPressEvent) => void
   readonly handleLiveInputSubmit: () => Promise<boolean>
 }
@@ -136,7 +141,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
   )
 
   const handleLiveInputChange = useCallback(
-    ({ nativeEvent }: TerminalLiveInputChangeEvent) => {
+    (event: TerminalLiveInputChangeEvent | string) => {
       if (!activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
         clearPendingLiveInputCommit()
         return
@@ -145,6 +150,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       // that differs from the native field text, so the controlled capture must
       // echo the field verbatim; only the PTY mirror sees normalized text.
       advanceLiveInputInteractionGeneration()
+      const nativeEvent = typeof event === 'string' ? { text: event } : event.nativeEvent
       setLiveInputCapture(nativeEvent.text)
       void applyLiveInputMirror(
         activeHandle,
@@ -229,6 +235,73 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     waitForPendingLiveInputFlush
   })
 
+  const handleLiveInputHardwareKey = useCallback(
+    (event: TerminalLiveHardwareKeyEvent) => {
+      if (
+        !connected ||
+        !activeHandle ||
+        activeHandleRef.current !== activeHandle ||
+        (activeSessionTabTypeRef.current != null &&
+          activeSessionTabTypeRef.current !== 'terminal') ||
+        !liveInputTerminalHandles.has(activeHandle)
+      ) {
+        return
+      }
+      const ownsPendingState = pendingLiveInputHandleRef.current === activeHandle
+      // Native key events can already be queued when the IME starts composing.
+      if (ownsPendingState && liveInputComposingRef.current === true) {
+        return
+      }
+      if (pendingLiveInputHandleRef.current && !ownsPendingState) {
+        clearPendingLiveInputCommit()
+      }
+      const decision = mapTerminalLiveHardwareKeyEvent(event, {
+        heldText: ownsPendingState ? heldLiveInputTextRef.current : '',
+        sentText: ownsPendingState ? sentLiveInputTextRef.current : ''
+      })
+      switch (decision.kind) {
+        case 'ignore':
+          return
+        case 'local-edit':
+          // Update the baseline now; the existing mirror queue orders the PTY erases.
+          void handleLiveInputAccessoryBytes({
+            bytes: '',
+            localEdit: decision.localEdit
+          })
+          return
+        case 'send-bytes':
+          advanceLiveInputInteractionGeneration()
+          void sendTerminalLiveControlAfterPendingFlush(waitForPendingLiveInputFlush, () =>
+            sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
+          )
+          return
+        case 'flush-field-then-send':
+          advanceLiveInputInteractionGeneration()
+          void sendTerminalLiveControlAfterPendingFlush(
+            () => flushPendingLiveInputText(activeHandle),
+            () => sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
+          )
+          return
+        default:
+          decision satisfies never
+      }
+    },
+    [
+      activeHandle,
+      activeHandleRef,
+      activeSessionTabTypeRef,
+      advanceLiveInputInteractionGeneration,
+      clearPendingLiveInputCommit,
+      connected,
+      flushPendingLiveInputText,
+      handleLiveInputAccessoryBytes,
+      liveInputComposingRef,
+      liveInputTerminalHandles,
+      sendLiveTerminalInputRef,
+      waitForPendingLiveInputFlush
+    ]
+  )
+
   const handleLiveInputSubmit = useCallback((): Promise<boolean> => {
     if (!activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
       return Promise.resolve(false)
@@ -252,6 +325,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     getLiveInputInteractionGeneration,
     handleLiveInputAccessoryBytes,
     handleLiveInputChange,
+    handleLiveInputHardwareKey,
     handleLiveInputKeyPress,
     handleLiveInputSubmit
   }
