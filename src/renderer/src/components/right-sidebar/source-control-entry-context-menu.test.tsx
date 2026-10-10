@@ -13,8 +13,10 @@ const storeState = vi.hoisted(
       openInApplications: OpenInApplication[]
       activeRuntimeEnvironmentId: string | null
     }
+    worktreesByRepo: Record<string, { id: string; repoId: string; hostId: 'local' }[]>
   } => ({
-    settings: { openInApplications: [], activeRuntimeEnvironmentId: null }
+    settings: { openInApplications: [], activeRuntimeEnvironmentId: null },
+    worktreesByRepo: { 'repo-1': [{ id: 'worktree-1', repoId: 'repo-1', hostId: 'local' }] }
   })
 )
 const ownerRuntime = vi.hoisted((): { environmentId: string | null } => ({ environmentId: null }))
@@ -68,11 +70,10 @@ vi.mock('@/components/sidebar/WorktreeOpenInMenu', async () => {
   return {
     getOpenInEntryAvailability: (
       entry: { command?: string },
-      settings: typeof storeState.settings,
       connectionId?: string | null,
       runtimeEnvironmentId?: string | null
     ) => ({
-      disabled: !getExternalEditorOpenCapability(settings, {
+      disabled: !getExternalEditorOpenCapability({
         command: entry.command,
         connectionId,
         runtimeEnvironmentId
@@ -158,7 +159,13 @@ describe('SourceControlEntryContextMenu', () => {
     expect(revealItem?.disabled).toBe(false)
     expect(showsLocalOnlyHint(revealItem)).toBe(false)
     revealItem?.onSelect?.()
-    expect(revealInFileManager).toHaveBeenCalledWith('/repo/src/example.ts')
+    expect(revealInFileManager).toHaveBeenCalledWith('/repo/src/example.ts', 'local')
+  })
+
+  it('reveals a local repo file while a remote server is focused', () => {
+    storeState.settings.activeRuntimeEnvironmentId = 'env-1'
+
+    expect(renderRevealItem()?.disabled).toBe(false)
   })
 
   it('offers the file manager once, outside the "Open in" apps', () => {

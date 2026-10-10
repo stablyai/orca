@@ -45,7 +45,7 @@ describe('resolveWorktreeRowOpenInRuntimeOwner', () => {
     )
     expect(owner).toEqual({ runtimeEnvironmentId: null, ownerUnresolved: true })
     const context = { connectionId: null, command: 'code', ...owner }
-    expect(getExternalEditorOpenCapability(rivalHubState.settings, context)).toEqual({
+    expect(getExternalEditorOpenCapability(context)).toEqual({
       allowed: false,
       reason: 'remote-runtime'
     })
