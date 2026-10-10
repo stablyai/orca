@@ -24,7 +24,8 @@ export class TerminalCommandPaint {
     }
   )
 
-  observe(data: string, normalizedText: string): void {
+  /** Returns whether the command's first paint landed in this chunk. */
+  observe(data: string, normalizedText: string): boolean {
     this.markerEndInChunk = -1
     this.scanner.scan(data)
     if (this.markerEndInChunk !== -1) {
@@ -32,11 +33,13 @@ export class TerminalCommandPaint {
       this.awaitingPaint = !hasVisibleText(
         normalizeTerminalChunk(data.slice(this.markerEndInChunk)).text
       )
-      return
+      return !this.awaitingPaint
     }
     if (this.awaitingPaint && hasVisibleText(normalizedText)) {
       this.awaitingPaint = false
+      return true
     }
+    return false
   }
 
   hasPainted(): boolean {
@@ -51,9 +54,9 @@ export function observeTerminalCommandPaint(
   record: TerminalCommandPaintRecord,
   data: string,
   normalizedText: string
-): void {
+): boolean {
   record.commandPaint ??= new TerminalCommandPaint()
-  record.commandPaint.observe(data, normalizedText)
+  return record.commandPaint.observe(data, normalizedText)
 }
 
 /**

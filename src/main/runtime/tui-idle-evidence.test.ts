@@ -184,6 +184,22 @@ describe('evaluateTuiIdle ranking', () => {
     expect(quietForegroundLaneForTerminalAgent('codex')).toBe('closed')
   })
 
+  // Why: Orca launched the command, so its silence before a paint is boot, not rest (STA-9412).
+  it('holds an unknown command Orca launched to its paint', () => {
+    expect(evaluateTuiIdle(input({ ...noMuse, agent: null, launchedCommand: true }))).toEqual({
+      kind: 'pending',
+      quietForeground: 'after-paint'
+    })
+    expect(evaluateTuiIdle(input({ ...noMuse, agent: null }))).toEqual({
+      kind: 'pending',
+      quietForeground: 'open'
+    })
+    expect(evaluateTuiIdle(input({ ...noMuse, agent: 'omp', launchedCommand: true }))).toEqual({
+      kind: 'pending',
+      quietForeground: 'closed'
+    })
+  })
+
   it('keeps the quiet-foreground lane for an agent with no other rest signal, after it paints', () => {
     for (const agent of ['amp', 'goose', 'crush', 'kimi', 'qwen-code', 'rovo', 'aug'] as const) {
       expect(evaluateTuiIdle(input({ ...noMuse, agent }))).toEqual({

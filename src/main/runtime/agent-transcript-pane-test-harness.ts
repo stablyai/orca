@@ -14,6 +14,8 @@ export type TranscriptPaneOptions = {
   foregroundProcess: string | null
   data: string
   launchAgent?: TuiAgent
+  /** The startup command the runtime spawns the pane with. */
+  command?: string
   /** Set for a pane whose PTY lives on an SSH host or WSL distro rather than locally. */
   connectionId?: string
   /** The remote host of a `connectionId` pane is Windows. */
@@ -57,7 +59,11 @@ export async function createTranscriptPane(
   })
   const processInspection = options.processInspection
   runtime.setPtyController({
-    spawn: vi.fn().mockResolvedValue({ id: TRANSCRIPT_PANE_PTY_ID, incarnationId: 'inc-1' }),
+    // The spawn commit notes the launch command, as the main-process spawn path does.
+    spawn: vi.fn(async (args: { command?: string }) => {
+      runtime.noteTerminalSpawnCommand(TRANSCRIPT_PANE_PTY_ID, args.command)
+      return { id: TRANSCRIPT_PANE_PTY_ID, incarnationId: 'inc-1' }
+    }),
     write: () => true,
     kill: () => true,
     getSize: () => options.size ?? null,
@@ -107,7 +113,8 @@ export async function createTranscriptPane(
   const terminal = await runtime.createTerminal(`id:${worktreeId}`, {
     tabId: TRANSCRIPT_PANE_TAB_ID,
     leafId: TRANSCRIPT_PANE_LEAF_ID,
-    title: 'Terminal'
+    title: 'Terminal',
+    ...(options.command ? { command: options.command } : {})
   })
   runtime.attachWindow(1)
   runtime.syncWindowGraph(1, {

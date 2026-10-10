@@ -160,17 +160,19 @@ function hasQuietOutput(record: TuiIdleEvidenceRecord, quiescenceMs: number): bo
  *   Resolving on it let `dispatch --inject` write into a TUI that had not yet attached
  *   its reader and silently lose the prompt (#9976).
  * - `after-paint`: Orca knows an agent runs here but it has no other rest signal, so this
- *   lane is its only one. A TUI that has painted nothing yet is still booting.
+ *   lane is its only one. A TUI that has painted nothing yet is still booting. So is any
+ *   command Orca itself launched: its silence before a paint is boot, not rest.
  * - `open`: nothing is known about the pane, so a missing output clock also counts as quiet
  *   (see isQuietForQuiescence).
  */
 export type QuietForegroundLane = 'closed' | 'after-paint' | 'open'
 
 export function quietForegroundLaneForTerminalAgent(
-  agent: TerminalAgent | null | undefined
+  agent: TerminalAgent | null | undefined,
+  launchedCommand = false
 ): QuietForegroundLane {
   if (!isTuiAgent(agent)) {
-    return 'open'
+    return launchedCommand ? 'after-paint' : 'open'
   }
   return getTuiAgentRestSignal(agent) === 'none' ? 'after-paint' : 'closed'
 }
@@ -195,6 +197,8 @@ export type TuiIdleEvaluationInput = {
   /** When the PTY's own current title was observed; null when it has none or no clock. */
   titleObservedAtEpochMs: number | null
   agent: TuiAgent | null | undefined
+  /** Orca spawned this pane with a startup command, so an unknown one still has to paint. */
+  launchedCommand?: boolean
   firstPartyStatus: FirstPartyAgentStatus
   /** Tier 0: the hook server's fresh row for the pane, read only for an authoritative agent. */
   readHookTurn?: () => TuiIdleHookTurn | null
@@ -336,7 +340,7 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
     kind: 'pending',
     quietForeground:
       input.record.lastAgentStatus === null
-        ? quietForegroundLaneForTerminalAgent(input.agent)
+        ? quietForegroundLaneForTerminalAgent(input.agent, input.launchedCommand)
         : 'closed'
   }
 }

@@ -26,6 +26,8 @@ export type TuiIdleEvidenceSource = {
   getTabTitle(tabId: string): string | null
   getAdoptedPtyIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null
   getPaneAgent(ptyId: string | null | undefined): TuiAgent | null
+  /** Whether the PTY was spawned with a startup command (see noteTerminalSpawnCommand). */
+  hasLaunchCommand?(ptyId: string | null | undefined): boolean
   getFirstPartyAgentStatus(ptyId: string | null | undefined): FirstPartyAgentStatus
   /** The hook server's fresh row for the pane's main agent; absent on a host with no store. */
   getHookTurn?(ptyId: string, agent: TuiAgent): TuiIdleHookTurn | null
@@ -116,6 +118,7 @@ export function leafTuiIdleEvidence(
     readScreenInputVeto: screenInputVetoReader(source, agent, leaf.ptyId),
     titleObservedAtEpochMs: source.getTitleObservedAtEpochMs?.(leaf.ptyId) ?? null,
     agent,
+    launchedCommand: source.hasLaunchCommand?.(leaf.ptyId) === true,
     firstPartyStatus: source.getFirstPartyAgentStatus(leaf.ptyId),
     readHookTurn: hookTurnReader(source, agent, leaf.ptyId),
     quiescenceMs: source.quiescenceMs
@@ -143,6 +146,7 @@ export function ptyTuiIdleEvidence(
     readScreenInputVeto: screenInputVetoReader(source, agent, pty.ptyId),
     titleObservedAtEpochMs: pty.lastOscTitleEpochMs,
     agent,
+    launchedCommand: source.hasLaunchCommand?.(pty.ptyId) === true,
     firstPartyStatus: source.getFirstPartyAgentStatus(pty.ptyId),
     readHookTurn: hookTurnReader(source, agent, pty.ptyId),
     quiescenceMs: source.quiescenceMs

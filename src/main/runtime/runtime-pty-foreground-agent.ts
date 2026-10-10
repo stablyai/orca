@@ -1,4 +1,9 @@
-import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
+import {
+  isAgentForegroundWrapperProcess,
+  recognizeAgentProcess,
+  recognizeAgentProcessFromCommandLine
+} from '../../shared/agent-process-recognition'
+import type { TerminalAgent } from '../../shared/terminal-agent'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type {
   PtyForegroundAgentRefresh,
@@ -12,6 +17,8 @@ type Dependencies = {
   getPty(ptyId: string): RuntimePtyWorktreeRecord | null
   touchSnapshot(ptyId: string): void
   finishDelayedSnapshot(ptyId: string, changed: boolean): void
+  /** The foreground command line, or null where this host cannot read it (SSH, WSL). */
+  readForegroundCommandLine(ptyId: string, foregroundProcess: string): Promise<string | null>
 }
 
 export class RuntimePtyForegroundAgent {
@@ -127,13 +134,30 @@ export class RuntimePtyForegroundAgent {
     if (!result || result.controller !== this.deps.getController() || !result.available) {
       return false
     }
-    const agent = result.process ? (recognizeAgentProcess(result.process)?.agent ?? null) : null
-    if (pty.foregroundAgent === agent) {
+    const agent = await this.recognize(ptyId, result.process)
+    if (result.controller !== this.deps.getController() || pty.foregroundAgent === agent) {
       return false
     }
     pty.foregroundAgent = agent
     this.deps.touchSnapshot(ptyId)
     return true
+  }
+
+  /** Why the command line: an agent hosted by a runtime (`node …/dsh-tui`) is named only there. */
+  private async recognize(ptyId: string, process: string | null): Promise<TerminalAgent | null> {
+    if (!process) {
+      return null
+    }
+    const direct = recognizeAgentProcess(process)?.agent ?? null
+    if (direct || !isAgentForegroundWrapperProcess(process)) {
+      return direct
+    }
+    try {
+      const commandLine = await this.deps.readForegroundCommandLine(ptyId, process)
+      return recognizeAgentProcessFromCommandLine(commandLine)?.agent ?? null
+    } catch {
+      return null
+    }
   }
 
   private deleteRead(ptyId: string, entry: PtyForegroundProcessReadEntry): void {

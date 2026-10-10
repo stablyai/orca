@@ -154,10 +154,20 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     listKnownHostIds: () => this.listKnownExecutionHostIds()
   })
 
+  protected isPtyForegroundLocallyReadable(ptyId: string): boolean {
+    const pty = this.ptysById.get(ptyId)
+    // Why: SSH and WSL foregrounds live on another host or in the guest.
+    return !!pty && !pty.connectionId && !pty.wslDistro && !this.wslDistroByPtyId.has(ptyId)
+  }
+
   protected readonly ptyForegroundAgent = new RuntimePtyForegroundAgent({
     getController: () => this.ptyController,
     getPty: (ptyId) => this.ptysById.get(ptyId) ?? null,
     touchSnapshot: (ptyId) => this.touchMobileSessionSnapshotsForPty(ptyId),
+    readForegroundCommandLine: async (ptyId, foregroundProcess) =>
+      this.isPtyForegroundLocallyReadable(ptyId)
+        ? readLocalPtyForegroundCommandLine(ptyId, foregroundProcess)
+        : null,
     finishDelayedSnapshot: (ptyId, changed) => {
       if (this.mobileSessionTabListeners.size > 0) {
         this.mobileSessionTabsAgentStatusHeartbeat.observeSemanticTitle(ptyId)
@@ -169,11 +179,7 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
   })
 
   protected readonly openCodeRunLifetime = new OpenCodeRunLifetimeStatus({
-    isObservablePty: (ptyId) => {
-      const pty = this.ptysById.get(ptyId)
-      // Why: SSH and WSL foregrounds live on another host or in the guest.
-      return !!pty && !pty.connectionId && !pty.wslDistro && !this.wslDistroByPtyId.has(ptyId)
-    },
+    isObservablePty: (ptyId) => this.isPtyForegroundLocallyReadable(ptyId),
     isStatusEnabled: (agent) =>
       isAgentStatusHooksEnabledForAgent(this.store?.getSettings?.(), agent),
     readForegroundProcessName: async (ptyId) => {

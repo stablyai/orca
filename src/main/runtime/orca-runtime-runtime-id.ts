@@ -341,6 +341,7 @@ export class OrcaRuntimeWithRuntimeId {
     getTabTitle: (tabId) => this.tabs.get(tabId)?.title ?? null,
     getAdoptedPtyIdleStatus: (pty) => this.getAdoptedPtyExplicitIdleStatus(pty),
     getPaneAgent: (ptyId) => this.getPaneAgentForTuiIdle(ptyId),
+    hasLaunchCommand: (ptyId) => Boolean(ptyId && this.terminalSpawnCommandsByPtyId.has(ptyId)),
     getFirstPartyAgentStatus: (ptyId) =>
       (ptyId ? this.ptysById.get(ptyId)?.lastExplicitAgentStatus : null) ?? null,
     getHookTurn: (ptyId, agent) => this.readTuiIdleHookTurnForPty(ptyId, agent),

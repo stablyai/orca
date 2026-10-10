@@ -6,8 +6,8 @@ import {
 } from './terminal-command-paint'
 import { normalizeTerminalChunk } from './terminal-ansi-normalization'
 
-function observe(record: TerminalCommandPaintRecord, data: string): void {
-  observeTerminalCommandPaint(record, data, normalizeTerminalChunk(data).text)
+function observe(record: TerminalCommandPaintRecord, data: string): boolean {
+  return observeTerminalCommandPaint(record, data, normalizeTerminalChunk(data).text)
 }
 
 describe('terminal command paint', () => {
@@ -25,6 +25,16 @@ describe('terminal command paint', () => {
     expect(hasTerminalCommandPainted(record)).toBe(false)
     observe(record, '\x1b[2;3H╭─ Amp')
     expect(hasTerminalCommandPainted(record)).toBe(true)
+  })
+
+  it('reports only the chunk where the command first paints', () => {
+    const record: TerminalCommandPaintRecord = {}
+    expect(observe(record, '~/repo % ')).toBe(false)
+    expect(observe(record, '\x1b]133;A\x07~/repo % amp\r\n\x1b]133;C\x07')).toBe(false)
+    expect(observe(record, '\x1b[?1049h\x1b[?25l\r\n')).toBe(false)
+    expect(observe(record, '\x1b[2;3H╭─ Amp')).toBe(true)
+    expect(observe(record, '│ > │')).toBe(false)
+    expect(observe(record, '\x1b]133;C\x1b\\LIVE-TUI')).toBe(true)
   })
 
   it('counts a paint that arrives in the same chunk as the marker', () => {
