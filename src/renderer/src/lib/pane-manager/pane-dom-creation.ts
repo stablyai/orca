@@ -15,6 +15,7 @@ import { ENABLE_WEBGL_RENDERER } from './pane-webgl-renderer'
 import { installGuardedLinkProviderRegistration } from './terminal-link-provider-guard'
 import { installWindowsCtrlAltChordRepair } from './terminal-windows-ctrl-alt-chord-classification'
 import { installTerminalMouseEncodingTracker } from './terminal-mouse-encoding-tracker'
+import { installNativeTerminalMirrorForPane } from './native-terminal/native-terminal-panes'
 
 function defaultLinkTooltipText(uri: string, openLinkHint: string): string {
   return `${uri} (${openLinkHint})`
@@ -46,6 +47,10 @@ export function createPaneDOM(
   }
 
   const terminal = new Terminal(terminalOpts)
+  // Why first: later wrappers (typing-latency instrumentation) chain onto terminal.write.
+  if (typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')) {
+    installNativeTerminalMirrorForPane(terminal)
+  }
   // Why: a synchronous throw inside any link provider's provideLinks (notably
   // xterm web-links' LinkComputer raising RangeError on a pathological wrapped
   // line) escapes to window.onerror and gets the renderer killed. Guard every

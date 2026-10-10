@@ -45,6 +45,10 @@ export function ExperimentalPane({
   const showTerminalAttention = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().terminalAttention
   ])
+  // Why macOS only: the native view is a Ghostty NSView overlay.
+  const showNativeTerminal =
+    navigator.userAgent.includes('Mac') &&
+    matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().nativeTerminal])
   const showAgentHibernation = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentHibernation
   ])
@@ -140,6 +144,50 @@ export function ExperimentalPane({
               onCheckedChange={(checked) =>
                 updateSettings({
                   experimentalTerminalAttention: checked
+                })
+              }
+            />
+          </div>
+        </SearchableSetting>
+      ) : null}
+
+      {showNativeTerminal ? (
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.ExperimentalPane.nativeTerminal.title',
+            'Native terminal'
+          )}
+          description={translate(
+            'auto.components.settings.ExperimentalPane.nativeTerminal.description',
+            'Draw terminals with a native Ghostty view on macOS.'
+          )}
+          keywords={getExperimentalSearchEntry().nativeTerminal.keywords}
+          className="space-y-3 py-2"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 shrink space-y-0.5">
+              <Label>
+                {translate(
+                  'auto.components.settings.ExperimentalPane.nativeTerminal.title',
+                  'Native terminal'
+                )}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.ExperimentalPane.nativeTerminal.copy',
+                  'Draws newly opened terminal panes with a native Ghostty view (Metal) instead of the web renderer. The web terminal stays underneath for search, copy and anything shown on top of the pane. Experimental while we close parity gaps.'
+                )}
+              </p>
+            </div>
+            <Switch
+              aria-label={translate(
+                'auto.components.settings.ExperimentalPane.nativeTerminal.title',
+                'Native terminal'
+              )}
+              checked={settings.experimentalNativeTerminal === true}
+              onCheckedChange={(checked) =>
+                updateSettings({
+                  experimentalNativeTerminal: checked
                 })
               }
             />

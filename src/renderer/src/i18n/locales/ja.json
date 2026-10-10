@@ -524,6 +524,15 @@
       }
     },
     "lib": {
+      "native": {
+        "terminal": {
+          "surface": {
+            "create": {
+              "accessibilityLabel": "ターミナル"
+            }
+          }
+        }
+      },
       "agent": {
         "catalog": {
           "5dff448636": "OpenClaw",
@@ -7211,6 +7220,11 @@
             "modeAriaLabel": "Agent ダッシュボードの開き方",
             "modeInWindow": "ウィンドウ内",
             "modePopout": "ポップアウト"
+          },
+          "nativeTerminal": {
+            "title": "ネイティブターミナル",
+            "description": "macOS でネイティブの Ghostty ビューを使ってターミナルを描画します。",
+            "copy": "新しく開いたターミナルペインを、Web レンダラーではなくネイティブの Ghostty ビュー（Metal）で描画します。検索、コピー、ペインの上に表示される要素のために、Web ターミナルは下に残ります。機能差を埋めるまでの実験的な機能です。"
           }
         },
         "FloatingWorkspacePane": {
@@ -9703,6 +9717,13 @@
               "board": "ボード",
               "inWindow": "窓内",
               "worktrees": "ワークツリー"
+            },
+            "nativeTerminal": {
+              "title": "ネイティブターミナル",
+              "description": "macOS でネイティブの Ghostty ビューを使ってターミナルを描画します。",
+              "ghostty": "ghostty",
+              "native": "ネイティブ",
+              "metal": "metal"
             }
           }
         },

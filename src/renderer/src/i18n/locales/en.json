@@ -692,6 +692,15 @@
       }
     },
     "lib": {
+      "native": {
+        "terminal": {
+          "surface": {
+            "create": {
+              "accessibilityLabel": "Terminal"
+            }
+          }
+        }
+      },
       "agent": {
         "catalog": {
           "5dff448636": "OpenClaw",
@@ -7464,6 +7473,11 @@
             "modeAriaLabel": "Agent Dashboard open mode",
             "modeInWindow": "In-window",
             "modePopout": "Pop-out"
+          },
+          "nativeTerminal": {
+            "title": "Native terminal",
+            "description": "Draw terminals with a native Ghostty view on macOS.",
+            "copy": "Draws newly opened terminal panes with a native Ghostty view (Metal) instead of the web renderer. The web terminal stays underneath for search, copy and anything shown on top of the pane. Experimental while we close parity gaps."
           }
         },
         "FloatingWorkspacePane": {
@@ -9971,6 +9985,13 @@
               "board": "board",
               "inWindow": "in-window",
               "worktrees": "worktrees"
+            },
+            "nativeTerminal": {
+              "title": "Native terminal",
+              "description": "Draw terminals with a native Ghostty view on macOS.",
+              "ghostty": "ghostty",
+              "native": "native",
+              "metal": "metal"
             }
           }
         },

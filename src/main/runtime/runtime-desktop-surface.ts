@@ -15,6 +15,18 @@ import type { BrowserWindow, IpcMainEvent } from 'electron'
  * runtime already routes to paired clients, which is the better destination anyway.
  */
 
+/** A PTY's headless model, as far as the desktop's native terminal views read it. */
+export type NativeTerminalFeedModel = {
+  emulator: {
+    getSnapshot: () => {
+      snapshotAnsi: string
+      scrollbackAnsi?: string
+      rehydrateSequences: string
+      pendingEscapeTailAnsi?: string
+    }
+  }
+}
+
 export type RuntimeDesktopSurface = {
   /** Headless hosts retain the formatter's English defaults. */
   translateNotification?(key: string, fallback: string): string
@@ -25,6 +37,10 @@ export type RuntimeDesktopSurface = {
   findWindowById(id: number): BrowserWindow | null
   onIpc(channel: string, listener: (event: IpcMainEvent, ...args: never[]) => void): void
   removeIpcListener(channel: string, listener: (...args: never[]) => void): void
+  /** On the PTY's write chain after `model` parsed `data`: native views bound to it take it. */
+  feedNativeTerminalPty?(ptyId: string, model: NativeTerminalFeedModel, data: string): void
+  /** On the write chain after main changed the model outside the byte stream (clear). */
+  reseedNativeTerminalPty?(ptyId: string, model: NativeTerminalFeedModel): void
 }
 
 const inertDesktopSurface: RuntimeDesktopSurface = {

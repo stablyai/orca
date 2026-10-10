@@ -17,6 +17,18 @@ export function windowDipToCssPx(dip: number): number {
   return dip / getUIZoomFactor()
 }
 
+/** Renderer CSS px -> window DIP, for native views placed over a DOM box. */
+export function cssPxToWindowDip(px: number): number {
+  return px * getUIZoomFactor()
+}
+
+export function getUIZoomFactorForNativeViews(): number {
+  return getUIZoomFactor()
+}
+
+/** Fired after the UI zoom changes, for native views that size themselves in window DIP. */
+export const UI_ZOOM_CHANGED_EVENT = 'orca:ui-zoom-changed'
+
 function publishZoomFactor(zoomFactor: number): void {
   document.documentElement.style.setProperty(UI_ZOOM_FACTOR_CSS_VAR, String(zoomFactor))
   if (isMac) {
@@ -32,6 +44,7 @@ function publishZoomFactor(zoomFactor: number): void {
 export function applyUIZoom(level: number): void {
   window.api.ui.setZoomLevel(level)
   publishZoomFactor(uiZoomFactorFromLevel(level))
+  window.dispatchEvent?.(new Event(UI_ZOOM_CHANGED_EVENT))
 }
 
 /**

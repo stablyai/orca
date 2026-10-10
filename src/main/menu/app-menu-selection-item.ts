@@ -1,4 +1,5 @@
 import { BrowserWindow, Menu, webContents } from 'electron'
+import { performNativeTerminalMenuAction } from '../native-terminal/ghostty-native-terminal-host'
 
 export type AppMenuSelectionAction = 'copy' | 'select-all'
 
@@ -24,6 +25,9 @@ export function createAppMenuSelectionItem({
           } else {
             focusedContents.selectAll()
           }
+          return
+        }
+        if (performNativeTerminalMenuAction(focusedWindow, action)) {
           return
         }
         focusedWindow.webContents.send('ui:appMenuSelectionAction', action)

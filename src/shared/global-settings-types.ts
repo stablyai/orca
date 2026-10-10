@@ -490,6 +490,8 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   experimentalActivityDefaultedOffForAllUsers?: boolean
   /** Experimental: persistent terminal-pane attention ring for bell + agent-completion events. Opt-in while tuning signal/noise. */
   experimentalTerminalAttention: boolean
+  /** macOS: draw terminals with a native Ghostty (Metal) view over each pane. */
+  experimentalNativeTerminal?: boolean
   /** Experimental: automatically sleep completed, resumable background agent terminals. */
   experimentalAgentHibernation?: boolean
   /** Milliseconds a completed agent must stay idle before hibernation can be considered. */

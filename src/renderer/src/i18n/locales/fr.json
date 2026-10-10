@@ -625,6 +625,15 @@
       }
     },
     "lib": {
+      "native": {
+        "terminal": {
+          "surface": {
+            "create": {
+              "accessibilityLabel": "Terminal"
+            }
+          }
+        }
+      },
       "agent": {
         "catalog": {
           "5dff448636": "OpenClaw",
@@ -7332,6 +7341,11 @@
             "modeAriaLabel": "Mode d'ouverture du tableau de bord des agents",
             "modeInWindow": "Dans la fenêtre",
             "modePopout": "Fenêtre indépendante"
+          },
+          "nativeTerminal": {
+            "title": "Terminal natif",
+            "description": "Dessine les terminaux avec une vue Ghostty native sur macOS.",
+            "copy": "Dessine les nouveaux volets de terminal avec une vue Ghostty native (Metal) plutôt qu’avec le moteur de rendu web. Le terminal web reste en dessous pour la recherche, la copie et tout ce qui s’affiche par-dessus le volet. Expérimental le temps de combler les écarts."
           }
         },
         "FloatingWorkspacePane": {
@@ -9829,6 +9843,13 @@
               "board": "conseil",
               "inWindow": "dans la fenêtre",
               "worktrees": "arbres de travail"
+            },
+            "nativeTerminal": {
+              "title": "Terminal natif",
+              "description": "Dessine les terminaux avec une vue Ghostty native sur macOS.",
+              "ghostty": "ghostty",
+              "native": "natif",
+              "metal": "metal"
             }
           }
         },

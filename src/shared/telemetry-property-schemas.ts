@@ -207,6 +207,7 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'experimentalActivity',
   'experimentalAgentDashboardPopout',
   'experimentalTerminalAttention',
+  'experimentalNativeTerminal',
   'experimentalAgentHibernation',
   'experimentalEphemeralVms',
   'geminiCliOAuthEnabled'

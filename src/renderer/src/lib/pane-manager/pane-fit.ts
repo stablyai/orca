@@ -36,6 +36,7 @@ import {
 import type { PendingSafeFitContinuation } from './pane-fit-continuation-registry'
 import { notifyPaneFitSucceeded } from './pane-fit-webgl-attach-signal'
 import { recordPaneFitClientSize } from './pane-fit-client-size'
+import { getNativeTerminalGrid } from './native-terminal/native-terminal-panes'
 
 export {
   canApplyPaneMetricOptions,
@@ -119,6 +120,15 @@ function performSafeFit(pane: ManagedPane): boolean {
         pane.terminal.resize(override.cols, override.rows)
       } else {
         resumePendingFitScrollRestoreAfterFit(pane.terminal)
+      }
+      return true
+    }
+
+    // Why: a native-backed pane's grid comes from Ghostty's cell metrics, not xterm's.
+    const nativeGrid = getNativeTerminalGrid(pane.terminal)
+    if (nativeGrid) {
+      if (pane.terminal.cols !== nativeGrid.cols || pane.terminal.rows !== nativeGrid.rows) {
+        pane.terminal.resize(nativeGrid.cols, nativeGrid.rows)
       }
       return true
     }

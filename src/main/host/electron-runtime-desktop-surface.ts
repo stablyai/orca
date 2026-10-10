@@ -2,6 +2,10 @@ import { BrowserWindow, ipcMain, Notification, powerMonitor } from 'electron'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import type { RuntimeDesktopSurface } from '../runtime/runtime-desktop-surface'
 import { translateMain } from '../i18n/main-i18n'
+import {
+  feedNativeTerminalPtyData,
+  reseedNativeTerminalPty
+} from '../native-terminal/ghostty-native-terminal-pty-feed'
 
 /** The desktop implementation of the runtime's optional desktop facilities. */
 export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
@@ -20,5 +24,7 @@ export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
   },
   removeIpcListener: (channel, listener) => {
     ipcMain.removeListener(channel, listener as Parameters<typeof ipcMain.removeListener>[1])
-  }
+  },
+  feedNativeTerminalPty: feedNativeTerminalPtyData,
+  reseedNativeTerminalPty
 }

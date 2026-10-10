@@ -17,6 +17,8 @@
  * never throws into a render frame.
  */
 
+import { isXtermPausedUnderNativeView } from './native-terminal/native-terminal-render-pause'
+
 type MaybeWebglRenderer = {
   renderRows?: (start: number, end: number) => void
 }
@@ -66,6 +68,9 @@ function releaseRenderPause(service: PausableRenderService): void {
 }
 
 function getRenderService(terminal: unknown): PausableRenderService | null {
+  if (isXtermPausedUnderNativeView(terminal)) {
+    return null
+  }
   const service = (terminal as TerminalWithRenderService | null)?._core?._renderService
   return service && typeof service.refreshRows === 'function'
     ? (service as PausableRenderService)

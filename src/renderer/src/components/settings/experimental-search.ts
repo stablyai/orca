@@ -145,6 +145,38 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
     },
     {
       title: translate(
+        'auto.components.settings.experimental.search.nativeTerminal.title',
+        'Native terminal'
+      ),
+      description: translate(
+        'auto.components.settings.experimental.search.nativeTerminal.description',
+        'Draw terminals with a native Ghostty view on macOS.'
+      ),
+      keywords: [
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.0d24759f14',
+          'experimental'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.9bb3bd5098',
+          'terminal'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.nativeTerminal.ghostty',
+          'ghostty'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.nativeTerminal.native',
+          'native'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.nativeTerminal.metal',
+          'metal'
+        )
+      ]
+    },
+    {
+      title: translate(
         'auto.components.settings.experimental.search.agentHibernation.title',
         'Agent sleep'
       ),
@@ -209,6 +241,12 @@ export function getExperimentalSearchEntry() {
     ),
     terminalAttention: findEntry(
       translate('auto.components.settings.experimental.search.9e4ddf776d', 'Terminal attention')
+    ),
+    nativeTerminal: findEntry(
+      translate(
+        'auto.components.settings.experimental.search.nativeTerminal.title',
+        'Native terminal'
+      )
     ),
     agentHibernation: findEntry(
       translate(

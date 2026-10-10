@@ -20,13 +20,23 @@ export function getProposedPaneDimensions(
   }
 }
 
+/** The pixel floor: below it a box is a hidden pane or a transient near-zero overlay. */
+export function isAbovePaneFitPixelFloor(width: number, height: number): boolean {
+  return width >= MIN_PANE_FIT_WIDTH_PX && height >= MIN_PANE_FIT_HEIGHT_PX
+}
+
+/** The grid floor: a smaller grid was measured in a near-zero box and pins the PTY at ~2 cols. */
+export function isAbovePaneFitGridFloor(cols: number, rows: number): boolean {
+  return cols >= MIN_PANE_FIT_COLS && rows >= MIN_PANE_FIT_ROWS
+}
+
 function hasPaneFitPixelBox(pane: ManagedPane): boolean {
   const measure = pane.container?.getBoundingClientRect
   if (typeof measure !== 'function') {
     return true
   }
   const rect = measure.call(pane.container)
-  return rect.width >= MIN_PANE_FIT_WIDTH_PX && rect.height >= MIN_PANE_FIT_HEIGHT_PX
+  return isAbovePaneFitPixelFloor(rect.width, rect.height)
 }
 
 export function canMeasurePaneForFit(pane: ManagedPane): boolean {
@@ -39,7 +49,7 @@ export function canMeasurePaneForFit(pane: ManagedPane): boolean {
   }
   // Why: worktree switches can briefly measure a near-zero overlay before
   // fallback positioning lands. Fitting there pins the PTY at ~2 cols.
-  return dims.cols >= MIN_PANE_FIT_COLS && dims.rows >= MIN_PANE_FIT_ROWS
+  return isAbovePaneFitGridFloor(dims.cols, dims.rows)
 }
 
 /** Why only the pixel box, not the fit floor: a pane held at the 50px divider

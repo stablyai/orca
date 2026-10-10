@@ -524,6 +524,15 @@
       }
     },
     "lib": {
+      "native": {
+        "terminal": {
+          "surface": {
+            "create": {
+              "accessibilityLabel": "터미널"
+            }
+          }
+        }
+      },
       "agent": {
         "catalog": {
           "5dff448636": "OpenClaw",
@@ -7211,6 +7220,11 @@
             "modeAriaLabel": "에이전트 대시보드 열기 모드",
             "modeInWindow": "윈도우 내",
             "modePopout": "팝업"
+          },
+          "nativeTerminal": {
+            "title": "네이티브 터미널",
+            "description": "macOS에서 네이티브 Ghostty 뷰로 터미널을 그립니다.",
+            "copy": "새로 여는 터미널 창을 웹 렌더러 대신 네이티브 Ghostty 뷰(Metal)로 그립니다. 검색, 복사, 창 위에 표시되는 요소를 위해 웹 터미널은 아래에 남아 있습니다. 기능 차이를 줄이는 동안 실험 기능입니다."
           }
         },
         "FloatingWorkspacePane": {
@@ -9666,6 +9680,13 @@
               "board": "판자",
               "inWindow": "창구 내",
               "worktrees": "작업 트리"
+            },
+            "nativeTerminal": {
+              "title": "네이티브 터미널",
+              "description": "macOS에서 네이티브 Ghostty 뷰로 터미널을 그립니다.",
+              "ghostty": "ghostty",
+              "native": "네이티브",
+              "metal": "metal"
             }
           }
         },

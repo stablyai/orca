@@ -16,6 +16,7 @@ import { isAgentProcessInspectionCostly } from '../agent-process-inspection-cost
 import { isRemoteExecutionHostPtyId } from '../remote-execution-host-pty'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+import { attachNativeTerminalForSession } from './native-terminal-session-host'
 
 /** Keydown intent, PTY fit binding, side-effect fact consumption, and the agent completion coordinator. */
 export function installTerminalKeydownFit(session: ConnectPanePtySession): void {
@@ -102,6 +103,7 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
       safeFit(session.pane)
     }
     session.claimPendingVisibleRemoteViewport()
+    attachNativeTerminalForSession(session, ptyId)
   }
   session.activePanePtyBinding = null
   // Why: bind time lets async liveness reconcile ignore a request started

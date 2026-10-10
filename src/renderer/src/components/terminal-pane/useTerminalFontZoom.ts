@@ -3,6 +3,7 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { overridePendingPaneMetricOptions } from '@/lib/pane-manager/pane-metric-options-deferral'
+import { setNativeTerminalFontSize } from '@/lib/pane-manager/native-terminal/native-terminal-surface-appearance'
 import { getPaneOwnedActiveHelperTextarea } from './regular-terminal-focus-ownership'
 
 type FontZoomDeps = {
@@ -63,6 +64,7 @@ export function useTerminalFontZoom({
       // unmeasurable. Fold the new size in; other parked keys still apply.
       overridePendingPaneMetricOptions(pane, { fontSize: nextSize })
       safeFit(pane)
+      setNativeTerminalFontSize(pane.terminal, nextSize)
 
       const percent = Math.round((nextSize / globalSize) * 100)
       dispatchZoomLevelChanged('terminal', percent)

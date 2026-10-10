@@ -7,6 +7,7 @@ import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
 import { getTerminalViewAttributes } from './terminal-view-attribute-store'
 import { PtyShellOwnershipMirror } from './pty-shell-ownership-mirror'
 import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal-mode-reset-profiles'
+import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 
 export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer {
   /** Shared factory for the per-PTY runtime emulators (seed, hydration, and
@@ -207,8 +208,30 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
     // Why: headless writes are queued to preserve xterm parser order. Clear
     // must join that same chain or an earlier PTY chunk can finish after the
     // clear request and repopulate mobile scrollback.
-    state.writeChain = state.writeChain.then(() => state.emulator.clearScrollback())
+    state.writeChain = state.writeChain.then(() => {
+      state.emulator.clearScrollback()
+      getRuntimeDesktopSurface().reseedNativeTerminalPty?.(ptyId, state)
+    })
     await state.writeChain
+  }
+
+  // Public: native surfaces fed from main seed from this PTY's model in stream order.
+  queueHeadlessTerminalTask(
+    ptyId: string,
+    task: (state: RuntimeHeadlessTerminal) => void
+  ): boolean {
+    const state = this.headlessTerminals.get(ptyId)
+    if (!state) {
+      return false
+    }
+    state.writeChain = state.writeChain
+      .then(() => {
+        if (this.headlessTerminals.get(ptyId) === state) {
+          task(state)
+        }
+      })
+      .catch(() => {})
+    return true
   }
 
   // Public: Reset Terminal must ground this model too; park/reveal and mobile restore from it.
@@ -222,7 +245,9 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
     }
     // Why on the chain: the ground must land after every PTY chunk already queued.
     const completion = state.writeChain.then(async () => {
-      await state.emulator.write(state.ownership.groundInputModes())
+      const ground = state.ownership.groundInputModes()
+      await state.emulator.write(ground)
+      getRuntimeDesktopSurface().feedNativeTerminalPty?.(ptyId, state, ground)
     })
     state.writeChain = completion.catch(() => {})
     await completion

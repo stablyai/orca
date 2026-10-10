@@ -11,6 +11,10 @@ import { assertClipboardTextWithinLimitWithYield } from '../../../../shared/clip
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
 import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
 import {
+  NATIVE_TERMINAL_PASTE_TEXT_EVENT,
+  readNativeTerminalPasteText
+} from '@/lib/pane-manager/native-terminal/native-terminal-paste-text'
+import {
   APP_MENU_SELECTION_ACTION_EVENT,
   type AppMenuSelectionAction
 } from '@/lib/app-menu-selection-actions'
@@ -196,6 +200,21 @@ export function registerTerminalPanePasteListeners({
     }).catch(() => setTerminalError('Paste failed.'))
   }
 
+  // A native view's Services result for one pane: the same paste as Edit > Paste.
+  const onNativeTerminalPasteText = (event: Event): void => {
+    const text = readNativeTerminalPasteText(event)
+    const pane = managerRef.current
+      ?.getPanes()
+      .find((candidate) => candidate.container === event.target)
+    if (text === null || !pane) {
+      return
+    }
+    event.stopPropagation()
+    void executePanePasteText(pane, 'app-menu', document.activeElement, text).catch(() =>
+      setTerminalError('Paste failed.')
+    )
+  }
+
   const onAppMenuSelectionAction = (event: Event): void => {
     const activeElement = document.activeElement
     if (
@@ -234,6 +253,7 @@ export function registerTerminalPanePasteListeners({
   container.addEventListener('paste', onPaste, { capture: true })
   window.addEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
   window.addEventListener(APP_MENU_SELECTION_ACTION_EVENT, onAppMenuSelectionAction)
+  container.addEventListener(NATIVE_TERMINAL_PASTE_TEXT_EVENT, onNativeTerminalPasteText)
   return () => {
     if (pasteSuppressionTimerId !== null) {
       window.clearTimeout(pasteSuppressionTimerId)
@@ -242,5 +262,6 @@ export function registerTerminalPanePasteListeners({
     container.removeEventListener('paste', onPaste, { capture: true })
     window.removeEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
     window.removeEventListener(APP_MENU_SELECTION_ACTION_EVENT, onAppMenuSelectionAction)
+    container.removeEventListener(NATIVE_TERMINAL_PASTE_TEXT_EVENT, onNativeTerminalPasteText)
   }
 }

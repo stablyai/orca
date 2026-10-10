@@ -97,6 +97,7 @@ import { callRuntimeSessionSearch } from '../../ai-vault/runtime-session-search-
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../../runtime/structured-agent-session-host-refusal'
 import type { PluginService } from '../../plugins/plugin-service'
 import type { PluginMarketplaceHandlerServices } from '../plugin-marketplaces'
+import { registerNativeTerminalHandlers } from '../native-terminal'
 
 let registered = false
 
@@ -184,6 +185,7 @@ export function registerCoreHandlers(
   registerDiagnosticsHandlers()
   registerTerminalRenderDesyncEvidenceHandler()
   registerComputerUsePermissionHandlers()
+  registerNativeTerminalHandlers(runtime)
   registerSettingsHandlers(store, agentAwakeService)
   registerSkillsHandlers(store, runtime)
   registerSkillDeleteIpcHandlers(store, runtime)

@@ -226,6 +226,9 @@ vi.mock('../developer-permissions', () => ({
 vi.mock('../computer-use-permissions', () => ({
   registerComputerUsePermissionHandlers: registerComputerUsePermissionHandlersMock
 }))
+vi.mock('../native-terminal', () => ({
+  registerNativeTerminalHandlers: vi.fn()
+}))
 
 vi.mock('../settings', () => ({
   registerSettingsHandlers: registerSettingsHandlersMock
