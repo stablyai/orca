@@ -217,6 +217,8 @@ describe('one router decision for every Claude launch', () => {
       'claude/claude-structured-child-env.ts':
         'chat child; its home comes from router.prepareLaunch',
       'claude/claude-stream-json-connection.ts': 'spawns the chat child with that launch env',
+      'claude/claude-structured-launch-resolution.ts':
+        "types the chat resolver it injects; the child's home comes from the router",
       'claude-accounts/claude-profile-router.ts': 'the router: a `--version` probe only',
       'claude-accounts/claude-command-process.ts': 'sign-in into a named account folder',
       'runtime/structured-claude-runtime-adapter.ts': 'wires the routed chat resolver',
