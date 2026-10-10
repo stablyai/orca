@@ -216,6 +216,8 @@ export type CellReserveAdmission = {
   dryRunEnabled: () => boolean
   // A real booking: a placing director is there (the dead-man's evidence).
   directorContact?: () => void
+  // The switch file's flip-back pace, when set.
+  reregisterInFlight?: () => number | undefined
   // The pool-pressure shed's condition: a hello memory cannot admit is shed, not queued.
   databaseShedding: () => boolean
   book: CellReserveBook
@@ -241,6 +243,9 @@ const REREGISTER_TICK_MS = 100
 // A row the ledger has not written yet gets this long; then the control is closed (4409).
 export const REREGISTER_MAX_ATTEMPTS = 20
 
+// `attempts` counts only wrong-assignment answers; `stalls` paces database retries.
+type ReregistrationEntry = { key: string; generation: number; attempts: number; stalls?: number; dueAt: number }
+
 export class HostSessionRegistry {
   private readonly sessions = new Map<string, HostSession>()
   private readonly activationQueues = new Map<string, Promise<void>>()
@@ -259,7 +264,7 @@ export class HostSessionRegistry {
   // that socket (close, rebind or a new join), so a later booking here is a fresh seat.
   private readonly demotedSeats = new Map<string, WebSocket>()
   private reregistration: {
-    queue: Array<{ key: string; generation: number; attempts: number; dueAt: number }>
+    queue: ReregistrationEntry[]
     // Sessions already queued, given up on, or done in this pass: the rescan skips them.
     seen: Set<string>
     inFlight: number
@@ -465,7 +470,9 @@ export class HostSessionRegistry {
     }
     this.flushReregistrationCellDelta(state)
     const now = this.now()
-    const maxInFlight = Math.max(1, Math.floor(this.config.databasePoolMax * REREGISTER_POOL_SHARE))
+    const maxInFlight =
+      this.reserveAdmission?.reregisterInFlight?.() ??
+      Math.max(1, Math.floor(this.config.databasePoolMax * REREGISTER_POOL_SHARE))
     while (state.inFlight < maxInFlight) {
       const index = state.queue.findIndex((entry) => entry.dueAt <= now)
       if (index < 0) break
@@ -500,7 +507,7 @@ export class HostSessionRegistry {
 
   private reregisterOne(
     state: NonNullable<HostSessionRegistry['reregistration']>,
-    entry: { key: string; generation: number; attempts: number; dueAt: number }
+    entry: ReregistrationEntry
   ): void {
     const session = this.sessions.get(entry.key)
     if (
@@ -556,8 +563,25 @@ export class HostSessionRegistry {
         session.activityRenewalDueAt = this.now() + RELAY_PROTOCOL_LIMITS.controlPingIntervalMs
       })
       .catch((error: unknown) => {
+        if (this.reregistration !== state) return
+        const socket = session.socket
+        const current =
+          this.sessions.get(entry.key) === session &&
+          session.generation === entry.generation &&
+          socket?.readyState === socket?.OPEN
+        // Only the row naming another seat counts toward giving up (it may still be the
+        // ledger's write on its way). A database stall is retried for as long as the control
+        // is open: a fleet-wide flip back must not close everyone over a slow database.
+        const wrongAssignment = error instanceof Error && error.message === 'wrong_assignment'
+        if (!wrongAssignment) {
+          if (!current) return
+          entry.stalls = (entry.stalls ?? 0) + 1
+          entry.dueAt = this.now() + Math.min(5_000, 250 * 2 ** Math.min(entry.stalls, 5))
+          state.queue.push(entry)
+          return
+        }
         entry.attempts += 1
-        if (entry.attempts < REREGISTER_MAX_ATTEMPTS && this.reregistration === state) {
+        if (entry.attempts < REREGISTER_MAX_ATTEMPTS) {
           entry.dueAt = this.now() + Math.min(5_000, 250 * 2 ** entry.attempts)
           state.queue.push(entry)
           return
@@ -571,11 +595,8 @@ export class HostSessionRegistry {
             reason: error instanceof Error ? error.message : 'unknown'
           })
         )
-        // Unleased on a database-mode cell, its row would expire under it: re-assign instead.
-        const socket = session.socket
-        if (this.sessions.get(entry.key) === session && session.generation === entry.generation && socket) {
-          socket.close(RELAY_CLOSE_CODE.WRONG_CELL, 'control could not re-register')
-        }
+        // Its row names another seat: re-assign instead of serving unleased.
+        if (current && socket) socket.close(RELAY_CLOSE_CODE.WRONG_CELL, 'control could not re-register')
       })
       .finally(() => {
         state.inFlight -= 1

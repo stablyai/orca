@@ -100,6 +100,52 @@ describe('flipping a reserve-mode cell back to the database', () => {
     expect((await reserve.controlLeases()).map((row) => row.relay_host_id)).toEqual([fine.identity.hostId])
   }, 30_000)
 
+  it('retries a stalled database for as long as the control is open, and closes nobody for it', async () => {
+    let now = Date.now()
+    const reserve = await cell(() => now)
+    const host = await reserve.bookedHost(5)
+    const real = reserve.relay.assignments.activateControlDeferringCell.bind(reserve.relay.assignments)
+    let stalls = 0
+    // Far more failures than the give-up count, as in a long fleet-wide database stall.
+    vi.spyOn(reserve.relay.assignments, 'activateControlDeferringCell').mockImplementation(async (...args) => {
+      if (stalls < 3 * REREGISTER_MAX_ATTEMPTS) {
+        stalls += 1
+        throw new Error('database_temporarily_unavailable')
+      }
+      return await real(...args)
+    })
+    reserve.setAdmitMode('db')
+    for (let step = 0; step < 6 * REREGISTER_MAX_ATTEMPTS && (await reserve.controlLeases()).length === 0; step += 1) {
+      now += 6_000
+      if (host.socket.readyState === WebSocket.OPEN) host.socket.send(JSON.stringify({ type: 'pong', t: now }))
+      await new Promise((resolve) => setTimeout(resolve, 120))
+    }
+    expect(stalls).toBe(3 * REREGISTER_MAX_ATTEMPTS)
+    expect(await reserve.controlLeases()).toHaveLength(1)
+    expect(host.socket.readyState).toBe(WebSocket.OPEN)
+  }, 60_000)
+
+  it('takes its flip-back pace from the switch file', async () => {
+    const reserve = await cell()
+    for (let index = 0; index < 4; index += 1) await reserve.bookedHost(5 + index)
+    const real = reserve.relay.assignments.activateControlDeferringCell.bind(reserve.relay.assignments)
+    let inFlight = 0
+    let peak = 0
+    vi.spyOn(reserve.relay.assignments, 'activateControlDeferringCell').mockImplementation(async (...args) => {
+      inFlight += 1
+      peak = Math.max(peak, inFlight)
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      try {
+        return await real(...args)
+      } finally {
+        inFlight -= 1
+      }
+    })
+    reserve.setAdmitMode('db', { reregisterInFlight: 1 })
+    await until(async () => (await reserve.controlLeases()).length === 4)
+    expect(peak).toBe(1)
+  }, 30_000)
+
   it('leases a control whose proof lands after the flip, though memory admitted its hello', async () => {
     const reserve = await cell()
     const identity = await reserve.host()

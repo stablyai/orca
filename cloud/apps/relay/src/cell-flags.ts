@@ -13,6 +13,8 @@ export type CellFlags = {
   intakePerSec?: number
   // Answers a director's dry-run booking check; off, the reserve endpoint is inert in db mode.
   reserveDryRun: boolean
+  // Flip-back leases in flight at once; absent is a third of the pool. Speeds up one cell.
+  reregisterInFlight?: number
 }
 
 export const CELL_FLAG_DEFAULTS: CellFlags = {
@@ -34,7 +36,8 @@ const CellFlagsSchema = z.object({
   ticketCheck: z.enum(['off', 'shadow', 'enforce']).default(CELL_FLAG_DEFAULTS.ticketCheck),
   admitMode: z.enum(['db', 'reserve']).default(CELL_FLAG_DEFAULTS.admitMode),
   intakePerSec: z.number().positive().max(1_000).optional(),
-  reserveDryRun: z.boolean().default(CELL_FLAG_DEFAULTS.reserveDryRun)
+  reserveDryRun: z.boolean().default(CELL_FLAG_DEFAULTS.reserveDryRun),
+  reregisterInFlight: z.number().int().min(1).max(16).optional()
 })
 
 export function cellFlagObjectName(cellId: string): string {

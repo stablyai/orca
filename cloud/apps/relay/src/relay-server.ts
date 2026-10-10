@@ -236,6 +236,7 @@ export function createRelayServer(
       ? {
           mode: effectiveAdmitMode,
           directorContact: () => reserveDeadMan?.contact(),
+          reregisterInFlight: () => options.cellFlags?.().flags.reregisterInFlight,
           ticketEnforce: () => options.cellFlags?.().flags.ticketCheck === 'enforce',
           dryRunEnabled: () => options.cellFlags?.().flags.reserveDryRun === true,
           databaseShedding: () => databaseShedding(),

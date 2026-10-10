@@ -210,8 +210,8 @@ export async function startReserveModeCell(input: {
     insertRow,
     bookedHost,
     controlLeases,
-    setAdmitMode: (admitMode: 'db' | 'reserve') => {
-      applied = { generation: applied.generation + 1, flags: { ...CELL_FLAG_DEFAULTS, admitMode } }
+    setAdmitMode: (admitMode: 'db' | 'reserve', flags: Partial<CellFlags> = {}) => {
+      applied = { generation: applied.generation + 1, flags: { ...CELL_FLAG_DEFAULTS, ...flags, admitMode } }
     }
   }
 }
