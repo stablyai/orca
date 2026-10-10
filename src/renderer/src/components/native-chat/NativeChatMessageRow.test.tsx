@@ -161,6 +161,36 @@ describe('MessageRow control visibility', () => {
       expect(screen.queryAllByRole('button')).toHaveLength(role === 'reasoning' ? 1 : 0)
     }
   )
+
+  it('holds the agent controls back until the turn stops working', () => {
+    const row = (activeTurnIsWorking: boolean) => (
+      <TooltipProvider>
+        <MessageRow
+          message={{
+            id: 'message',
+            role: 'assistant',
+            timestamp: 0,
+            source: 'transcript',
+            blocks: [{ type: 'text', text: 'Message text' }]
+          }}
+          expandSignal={false}
+          activeTurnIsWorking={activeTurnIsWorking}
+          trailingRun
+          onScrollMessageToTop={vi.fn()}
+        />
+      </TooltipProvider>
+    )
+    const { rerender } = render(row(true))
+    expect(screen.getByText('Message text')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Copy message' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Scroll this message to top' })).toBeNull()
+    expect(screen.queryByRole('time')).toBeNull()
+
+    rerender(row(false))
+    expect(screen.getByRole('button', { name: 'Copy message' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Scroll this message to top' })).toBeInTheDocument()
+    expect(screen.getByRole('time')).toBeInTheDocument()
+  })
 })
 
 describe('which messages can be quoted', () => {

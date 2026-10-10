@@ -3,6 +3,7 @@ import type { GlobalSettings } from '../shared/global-settings-types'
 import type { Project } from '../shared/project-types'
 import type { Repo } from '../shared/repo-types'
 import {
+  getWorkspaceRuntimePreference,
   resolveProjectExecutionRuntime,
   type ProjectExecutionRuntimeResolution
 } from '../shared/project-execution-runtime'
@@ -49,7 +50,7 @@ function canResolveProjectRuntimeForWorktreeId(
 
 function resolveLocalProjectRuntime(
   store: ResolvableStore,
-  project: Project,
+  project: Pick<Project, 'id' | 'localWindowsRuntimePreference'>,
   settings: ReturnType<ResolvableStore['getSettings']> = store.getSettings()
 ): ProjectExecutionRuntimeResolution {
   const wslAvailable = hasCachedWslAvailability()
@@ -81,6 +82,29 @@ export function resolveLocalProjectRuntimeForRepo(
     return undefined
   }
   return resolveLocalProjectRuntime(store, project)
+}
+
+/** Same choice the renderer makes for a workspace: the project's runtime, else the distro of a
+ *  WSL-share path, else the global default. Works for a repo with no project too. */
+export function resolveLocalWorkspaceRuntime(
+  store: ProjectRuntimeResolutionStore,
+  repo: Repo,
+  workspacePath: string | null | undefined
+): ProjectExecutionRuntimeResolution | undefined {
+  if (
+    getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID ||
+    !canResolveProjectRuntimeForRepo(store)
+  ) {
+    return undefined
+  }
+  const project = store.getProjects().find((entry) => entry.sourceRepoIds.includes(repo.id))
+  return resolveLocalProjectRuntime(store, {
+    id: project?.id ?? repo.id,
+    localWindowsRuntimePreference: getWorkspaceRuntimePreference(
+      project?.localWindowsRuntimePreference,
+      workspacePath
+    )
+  })
 }
 
 export function resolveLocalProjectRuntimesForRepos(

@@ -304,7 +304,7 @@ async function runSeed(seed: number): Promise<string[]> {
       options,
       requestedSession: store.getWorkspaceSession(),
       ownerMatches: () => true,
-      hostId: () => LOCAL_EXECUTION_HOST_ID,
+      hostIds: () => [LOCAL_EXECUTION_HOST_ID],
       getSession: (hostId) => store.getWorkspaceSession(hostId),
       setSession: (session, hostId) => store.setWorkspaceSession(session, hostId),
       onClosed: () => {}

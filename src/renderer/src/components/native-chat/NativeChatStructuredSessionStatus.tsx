@@ -3,6 +3,7 @@ import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStat
 import type { AgentSessionCancelResult } from '../../../../shared/agent-session-wire'
 import {
   structuredSessionConfirmedStopsStillListed,
+  structuredSessionListedTaskRun,
   type StructuredSessionBackgroundTasksView
 } from '../../../../shared/structured-session-background-tasks-view'
 import { useStructuredSessionChildRowContext } from './use-structured-session-child-row-context'
@@ -13,9 +14,11 @@ type StoppingBackgroundTasks = {
   all: boolean
 }
 
-type ConfirmedStops = { sessionId: string; taskIds: ReadonlySet<string> }
+/** Each confirmed Stop's task, with the run it was pressed on. */
+type ConfirmedStops = { sessionId: string; taskIds: ReadonlyMap<string, string> }
 
 const NO_STOPPING_TASKS: ReadonlySet<string> = new Set()
+const NO_CONFIRMED_STOPS: ReadonlyMap<string, string> = new Map()
 
 export function NativeChatStructuredSessionStatus(props: {
   sessionId: string
@@ -26,7 +29,8 @@ export function NativeChatStructuredSessionStatus(props: {
   stopBackgroundTask: (taskId?: string) => Promise<AgentSessionCancelResult | null>
 }): React.JSX.Element {
   const [stopping, setStopping] = useState<StoppingBackgroundTasks | null>(null)
-  // Stops the host confirmed: each row keeps its stopping button until it leaves the strip.
+  // Stops the host confirmed, with the run each was pressed on: each row keeps its stopping button
+  // until that run leaves the strip.
   const [confirmed, setConfirmed] = useState<ConfirmedStops | null>(null)
   const [expanded, setExpanded] = useState<{ sessionId: string; expanded: boolean } | null>(null)
   const activeStopping = stopping?.sessionId === props.sessionId ? stopping : null
@@ -41,12 +45,14 @@ export function NativeChatStructuredSessionStatus(props: {
     )
   }
   const stoppingTaskIds = confirmedListed?.size
-    ? new Set([...(activeStopping?.taskIds ?? NO_STOPPING_TASKS), ...confirmedListed])
+    ? new Set([...(activeStopping?.taskIds ?? NO_STOPPING_TASKS), ...confirmedListed.keys()])
     : (activeStopping?.taskIds ?? NO_STOPPING_TASKS)
   const childRowContext = useStructuredSessionChildRowContext(props.paneKey)
 
   const onStop = (taskId?: string) => {
     const sessionId = props.sessionId
+    // A provider may reuse the row's id for the task's next run, which this Stop did not end.
+    const run = taskId ? structuredSessionListedTaskRun(props.backgroundTasks, taskId) : null
     setStopping((current) => {
       const taskIds = new Set(
         current?.sessionId === sessionId ? current.taskIds : NO_STOPPING_TASKS
@@ -63,12 +69,12 @@ export function NativeChatStructuredSessionStatus(props: {
     void props
       .stopBackgroundTask(taskId)
       .then((result) => {
-        if (taskId && result?.cancelled) {
+        if (taskId && run !== null && result?.cancelled) {
           setConfirmed((current) => ({
             sessionId,
-            taskIds: new Set([
-              ...(current?.sessionId === sessionId ? current.taskIds : NO_STOPPING_TASKS),
-              taskId
+            taskIds: new Map([
+              ...(current?.sessionId === sessionId ? current.taskIds : NO_CONFIRMED_STOPS),
+              [taskId, run]
             ])
           }))
         }

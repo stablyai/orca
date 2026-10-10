@@ -3,6 +3,8 @@ import {
   ExecutionHostNotDispatchableError,
   requireFilesystemProviderForHost,
   requireGitProviderForHost,
+  requireReachableFilesystemRoute,
+  requireReachableGitRoute,
   resolveFilesystemRouteForHost,
   resolveGitRouteForHost,
   UnresolvableExecutionHostError
@@ -14,6 +16,7 @@ import {
   registerSshFilesystemProvider,
   unregisterSshFilesystemProvider
 } from './ssh-filesystem-dispatch'
+import { clearSshPlainSshMode, setSshPlainSshMode } from '../ssh/ssh-plain-ssh-mode'
 
 const connectionId = 'host-dispatch-target'
 const gitProvider = { listWorktrees: async () => [] } as never
@@ -112,4 +115,52 @@ describe('execution host provider dispatch', () => {
       expect(() => resolveFilesystemRouteForHost(hostId)).toThrow(UnresolvableExecutionHostError)
     }
   )
+
+  describe('reachable routes for work this process runs', () => {
+    it('keeps `local` explicit and returns a connected ssh host with its provider', () => {
+      expect(requireReachableGitRoute('local')).toMatchObject({ kind: 'local', hostId: 'local' })
+      expect(requireReachableFilesystemRoute('local')).toMatchObject({ kind: 'local' })
+
+      registerSshGitProvider(connectionId, gitProvider)
+      registerSshFilesystemProvider(connectionId, filesystemProvider)
+      expect(requireReachableGitRoute(`ssh:${connectionId}`)).toMatchObject({
+        kind: 'ssh',
+        connectionId,
+        provider: gitProvider
+      })
+      expect(requireReachableFilesystemRoute(`ssh:${connectionId}`)).toMatchObject({
+        kind: 'ssh',
+        provider: filesystemProvider
+      })
+    })
+
+    it('throws for an unreachable ssh host instead of running it here', () => {
+      expect(() => requireReachableGitRoute(`ssh:${connectionId}`)).toThrow(
+        /Remote connection dropped/
+      )
+      expect(() => requireReachableFilesystemRoute(`ssh:${connectionId}`)).toThrow(
+        /Remote connection dropped/
+      )
+    })
+
+    it('names a plain SSH host’s missing git as unsupported, not dropped', () => {
+      setSshPlainSshMode(connectionId, { reason: 'no_runtime', message: 'm' })
+      try {
+        expect(() => requireReachableGitRoute(`ssh:${connectionId}`)).toThrow(
+          'Git needs the Orca remote server'
+        )
+      } finally {
+        clearSshPlainSshMode(connectionId)
+      }
+    })
+
+    it('refuses a runtime host', () => {
+      expect(() => requireReachableGitRoute('runtime:env-7')).toThrow(
+        ExecutionHostNotDispatchableError
+      )
+      expect(() => requireReachableFilesystemRoute('runtime:env-7')).toThrow(
+        ExecutionHostNotDispatchableError
+      )
+    })
+  })
 })

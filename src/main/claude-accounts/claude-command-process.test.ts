@@ -8,7 +8,7 @@ const spawned = vi.hoisted(() => {
   return { specs }
 })
 
-vi.mock('../../shared/child-process/run-process', () => ({
+vi.mock('@orca/process-host', () => ({
   spawnProcess: (spec: SpawnSpec) => {
     spawned.specs.push(spec)
     const child = Object.assign(new EventEmitter(), {

@@ -282,8 +282,7 @@ describe('Claude effort default at rest', () => {
             { value: 'high', label: 'High' }
           ]
         }
-      ],
-      fastModeTierByModel: new Map<string, string>()
+      ]
     }
     store.recordSuccess(
       agentModelCatalogFingerprintForRecord(record),
@@ -298,7 +297,7 @@ describe('Claude effort default at rest', () => {
     const resting = await readAtRest(store, record)
     const live = composeCodexSessionOptionCatalog(listing, {
       current: { model: 'gpt-unlisted', effort: 'high' }
-    }).result
+    })
 
     expect(resting.models).toEqual(live.models)
     expect(live.models.find((entry) => entry.id === 'gpt-unlisted')).toMatchObject({ efforts: [] })
@@ -384,7 +383,6 @@ describe('Claude effort default at rest', () => {
             ]
           }
         ],
-        fastModeTierByModel: new Map(),
         origin: 'live-session'
       },
       'discovery'

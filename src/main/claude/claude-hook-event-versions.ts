@@ -1,5 +1,5 @@
 import { hasReachedAppVersion, isValidAppVersion } from '../../shared/app-version'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import path from 'node:path'
 
 // Why: Claude 1.0.23 through 2.1.100 validate `hooks` against a closed event enum and discard the

@@ -760,12 +760,12 @@
       "invariant": "Decoded stdout and stderr callback contents and order remain unchanged, final tails are the last capped run of raw output bytes with any leading partial UTF-8 sequence dropped, and success or failure releases capture storage without recapturing late output.",
       "oracle": "Compare byte-bounded tails against the old per-chunk model and an independent code-point model across compaction, growth, oversized chunks and mid-character splits. Feed split and malformed UTF-8 through actual stream decoding. Require at most 5 MiB moved through the capture for 4 MiB of output with zero encoding, collectible backing buffers after close and error, zero late capture work with preserved callbacks, one decode per stream, unchanged tails on forced cancellation or synchronous kill-close, and every capture limit clamped to a bounded byte count.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/shared/growing-byte-buffer.test.ts src/main/ephemeral-vm-recipe-runner.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/packages/process-host/src/growing-byte-buffer.test.ts src/main/ephemeral-vm-recipe-runner.test.ts"
       ],
       "testFiles": [
         "src/shared/ephemeral-vm-recipe-process.test.ts",
         "src/shared/ephemeral-vm-recipe-output-capture.test.ts",
-        "src/shared/growing-byte-buffer.test.ts",
+        "src/packages/process-host/src/growing-byte-buffer.test.ts",
         "src/main/ephemeral-vm-recipe-runner.test.ts"
       ],
       "assertionRefs": [
@@ -782,7 +782,7 @@
           ]
         },
         {
-          "file": "src/shared/growing-byte-buffer.test.ts",
+          "file": "src/packages/process-host/src/growing-byte-buffer.test.ts",
           "assertions": [
             "reads and writes correctly after the head offset has advanced",
             "keeps a bounded suffix stable across many small appends without unbounded growth"
@@ -794,7 +794,7 @@
           "date": "2026-09-26",
           "runner": "local",
           "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/shared/growing-byte-buffer.test.ts src/main/ephemeral-vm-recipe-runner.test.ts",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/packages/process-host/src/growing-byte-buffer.test.ts src/main/ephemeral-vm-recipe-runner.test.ts",
           "result": "passed",
           "durationSeconds": 0.48,
           "summary": "60 tests across four suites passed, including forced-GC lifetime, synchronous SIGKILL-close and the shared byte buffer's head-offset cases."
@@ -1616,7 +1616,7 @@
       "invariant": "An observed completed turn retains the same host-recorded duration and initiating user-message attribution through client reload, settlement retry and loading older history; older clients receive the compatible item carrier, and a host-recorded unknown duration suppresses local estimates.",
       "oracle": "Render a host-settled duration without observing completion locally; preserve an exit at 2000 through failed settlement at 60000 and later retry; retain a seven-second older turn beyond 256 submitted turns; prune aliases with removed user items and preserve alias identity during item-only streaming; render no completed duration for an unverifiable turn both before and after client reload.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/native-chat-unverifiable-turn-status.test.ts src/main/codex/codex-requested-close-turn-timing.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-unexpected-exit.test.ts src/shared/structured-agent-session-turn-timing-retention.test.ts src/shared/structured-agent-session-turn-timing.test.ts src/main/codex/codex-structured-journal-translation-turn-lifecycle.test.ts src/main/runtime/rpc/methods/structured-agent-session-turn-item-capability.test.ts src/renderer/src/components/native-chat/NativeChatMessageList.turn-timing.test.tsx"
+        "ORCA_BACKGROUND_LAUNCH=1 node config/scripts/run-vitest.mjs run --config config/vitest.config.ts src/shared/native-chat-unverifiable-turn-status.test.ts src/main/codex/codex-requested-close-turn-timing.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-unexpected-exit.test.ts src/shared/structured-agent-session-turn-timing-retention.test.ts src/shared/structured-agent-session-turn-timing.test.ts src/main/codex/codex-structured-journal-translation-turn-lifecycle.test.ts src/main/runtime/rpc/methods/structured-agent-session-turn-item-capability.test.ts src/renderer/src/components/native-chat/NativeChatMessageList.turn-membership.test.tsx --maxWorkers=4 --reporter=json --outputFile=notes/bun-migration/performance/ci-throughput-resume-20261009/next_capacity_wave_owner/reliability-path-correction/fresh-eight-root-stock-config.json"
       ],
       "testFiles": [
         "src/shared/native-chat-unverifiable-turn-status.test.ts",
@@ -1626,7 +1626,7 @@
         "src/shared/structured-agent-session-turn-timing.test.ts",
         "src/main/codex/codex-structured-journal-translation-turn-lifecycle.test.ts",
         "src/main/runtime/rpc/methods/structured-agent-session-turn-item-capability.test.ts",
-        "src/renderer/src/components/native-chat/NativeChatMessageList.turn-timing.test.tsx"
+        "src/renderer/src/components/native-chat/NativeChatMessageList.turn-membership.test.tsx"
       ],
       "assertionRefs": [
         {
@@ -1651,19 +1651,19 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/native-chat/NativeChatMessageList.turn-timing.test.tsx",
+          "file": "src/renderer/src/components/native-chat/NativeChatMessageList.turn-membership.test.tsx",
           "assertions": ["renders a host-settled duration without ever clocking the turn locally"]
         }
       ],
       "evidenceRuns": [
         {
-          "date": "2026-09-09",
+          "date": "2026-10-10",
           "runner": "local",
           "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/native-chat-unverifiable-turn-status.test.ts src/main/codex/codex-requested-close-turn-timing.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-unexpected-exit.test.ts src/shared/structured-agent-session-turn-timing-retention.test.ts src/shared/structured-agent-session-turn-timing.test.ts src/main/codex/codex-structured-journal-translation-turn-lifecycle.test.ts src/main/runtime/rpc/methods/structured-agent-session-turn-item-capability.test.ts src/renderer/src/components/native-chat/NativeChatMessageList.turn-timing.test.tsx",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 node config/scripts/run-vitest.mjs run --config config/vitest.config.ts src/shared/native-chat-unverifiable-turn-status.test.ts src/main/codex/codex-requested-close-turn-timing.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-unexpected-exit.test.ts src/shared/structured-agent-session-turn-timing-retention.test.ts src/shared/structured-agent-session-turn-timing.test.ts src/main/codex/codex-structured-journal-translation-turn-lifecycle.test.ts src/main/runtime/rpc/methods/structured-agent-session-turn-item-capability.test.ts src/renderer/src/components/native-chat/NativeChatMessageList.turn-membership.test.tsx --maxWorkers=4 --reporter=json --outputFile=notes/bun-migration/performance/ci-throughput-resume-20261009/next_capacity_wave_owner/reliability-path-correction/fresh-eight-root-stock-config.json",
           "result": "passed",
-          "durationSeconds": 4.65,
-          "summary": "58 tests passed across eight files at source commit 5acb404bf244cdc0bd3643c4e79beb189ce9a0cd; the following manifest-only commit records this run without changing tested source."
+          "durationSeconds": 5.688707999999999,
+          "summary": "87 tests passed across exactly eight current files at source commit aea00c5c02c3dccaa83aee3207ba6fcb586ffa5c using stock config/vitest.config.ts, Node 24.21.0, Bun 1.4.2 and four workers; no failures, skips or todo. Natural CLI close took 5.688708 seconds. The prior 2026-09-09 record (58 tests, 4.65 seconds, source 5acb404bf244cdc0bd3643c4e79beb189ce9a0cd) is preserved verbatim in Git history and notes/bun-migration/performance/ci-throughput-resume-20261009/next_capacity_wave_owner/reliability-path-correction/before.jsonc. This manifest-only change records the new run without changing tested source."
         }
       ],
       "runtimeBudget": {

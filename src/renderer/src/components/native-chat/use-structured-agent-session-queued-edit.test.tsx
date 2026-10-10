@@ -90,7 +90,7 @@ function harness(capable = true, initial: Props = { messages: [message] }) {
           write
         },
         messages: props.messages,
-        cards: projectQueuedMessageCards(props.messages, submissions, { hasPendingPrompt: true }),
+        cards: projectQueuedMessageCards(props.messages, submissions, {}),
         submissions,
         composerScopeKey: SCOPE,
         promptOpen: props.promptOpen ?? false

@@ -21,7 +21,8 @@ export async function describeClaudeUsageBenchmarkTooling() {
     'config/scripts/claude-usage-append-benchmark.mjs',
     'config/scripts/claude-usage-benchmark-scanner.mjs',
     'config/scripts/counterbalanced-benchmark-schedule.mjs',
-    'config/scripts/script-child-process.mjs'
+    'src/packages/process-host/src/run-process.ts',
+    'src/packages/process-host/dist/run-process.js'
   ]
   return {
     esbuildVersion: version,
@@ -40,7 +41,7 @@ export async function describeClaudeUsageBenchmarkTooling() {
 }
 
 export async function readClaudeUsageBenchmarkBaselineSources() {
-  const { runProcessSync } = await import('./script-child-process.mjs')
+  const { runProcessSync } = await import('@orca/process-host')
   const readGit = (args) => {
     const result = runProcessSync({
       program: 'git',
@@ -71,7 +72,7 @@ export async function loadClaudeUsageBenchmarkScanner(
   baselineCommit = null
 ) {
   const sourceFingerprints = {}
-  const { runProcessSync } = await import('./script-child-process.mjs')
+  const { runProcessSync } = await import('@orca/process-host')
   const result = await build({
     stdin: {
       contents: `export { scanClaudeUsageFiles } from './src/main/claude-usage/scanner';

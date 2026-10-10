@@ -150,8 +150,7 @@ const ORCAD_BROWSER_PREFIXES = [
 const MOBILE_WEB_APP_PREFIXES = [
   'config/scripts/build-mobile-web-app',
   'config/scripts/run-mobile-web-app-checks',
-  'config/scripts/script-child-process.mjs',
-  'src/shared/child-process/',
+  'src/packages/process-host/',
   'config/scripts/verify-mobile-web-app-bundle',
   'config/scripts/mobile-web-app-',
   'config/scripts/mobile-web-bundle-',
@@ -246,6 +245,9 @@ const CROSS_VERSION_WIRE_PREFIXES = [
 
 const MANAGED_HOOK_PREFIXES = [
   'config/scripts/smoke-managed-hook-runtime-node18',
+  'config/scripts/smoke-process-host-node18',
+  'config/scripts/packaged-process-host-fixture',
+  'src/packages/process-host/',
   'config/scripts/build-relay',
   'src/relay/',
   'src/shared/agent-hook',
@@ -321,7 +323,7 @@ const SHARED_PACKAGE_PREFIXES = [
 const LINUX_PACKAGE_PREFIXES = [
   ...SHARED_PACKAGE_PREFIXES,
   'config/scripts/package-linux-formats',
-  'config/scripts/script-child-process.mjs',
+  'config/scripts/process-failure-message.mjs',
   'config/scripts/space-sharing-copy.mjs',
   '.github/actions/prepare-linux-package-fixture/',
   'config/docker/cli-launch-contract/',
@@ -369,9 +371,9 @@ const WINDOWS_PACKAGE_TESTS = [
   'src/main/windows-registry-addon.test.ts',
   'src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts',
   'src/main/providers/pty-repaint-wide-char-buffer.node-pty.test.ts',
-  'src/shared/child-process/windows-command-line.win32.test.ts',
-  'src/shared/child-process/windows-cmd-shim-resolution.test.ts',
-  'src/shared/child-process/windows-cmd-shim-resolution.win32.test.ts',
+  'src/shared/__tests__/process-host/windows-command-line.win32.test.ts',
+  'src/shared/__tests__/process-host/windows-cmd-shim-resolution.test.ts',
+  'src/shared/__tests__/process-host/windows-cmd-shim-resolution.win32.test.ts',
   'src/main/agent-hooks/windows-hook-payload-delivery.test.ts',
   'src/main/jcode/hook-gate-script.test.ts',
   'src/main/agent-hooks/windows-direct-cmd-hook-command.test.ts',

@@ -61,6 +61,6 @@ export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentM
     if (models.length === 0) {
       throw new Error('pi listed no models')
     }
-    return { models, fastModeTierByModel: new Map(), origin: 'probe' }
+    return { models, origin: 'probe' }
   }
 }
