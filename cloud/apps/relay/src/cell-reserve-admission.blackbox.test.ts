@@ -92,7 +92,10 @@ describe('a reserve-mode cell admits from memory with its database wedged', () =
     vi.restoreAllMocks()
   })
 
-  async function startCell(flags: Partial<CellFlags>) {
+  async function startCell(
+    flags: Partial<CellFlags>,
+    connectionLedgerLimits?: { hardCap: number; controlReserve: number }
+  ) {
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const keys = await generateKeyPair('ES256')
@@ -120,7 +123,8 @@ describe('a reserve-mode cell admits from memory with its database wedged', () =
     }
     const port = await unusedPort()
     const relay = createRelayServer(cellConfig(port, issuer), database, {
-      cellFlags: () => applied
+      cellFlags: () => applied,
+      ...(connectionLedgerLimits ? { connectionLedgerLimits } : {})
     })
     relay.server.listen(port, '127.0.0.1')
     await new Promise<void>((resolve) => relay.server.once('listening', resolve))
@@ -182,6 +186,7 @@ describe('a reserve-mode cell admits from memory with its database wedged', () =
       )
       const challenge = await Promise.race([
         nextMessage(socket),
+        closeCode.then(() => null),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 500))
       ])
       if (!challenge || challenge.type !== 'host-challenge') return { status: 101, socket, closeCode }
@@ -355,4 +360,45 @@ describe('a reserve-mode cell admits from memory with its database wedged', () =
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect((await cell.connect(identity, 11)).ack).toMatchObject({ type: 'host-hello-ack' })
   })
+
+  it('never crosses the hard cap under seeded bookings, hellos, rebooks and closes', async () => {
+    const hardCap = 6
+    const cell = await startCell({ admitMode: 'reserve' }, { hardCap, controlReserve: 1 })
+    const hosts = await Promise.all(Array.from({ length: 12 }, () => cell.host()))
+    const epochs = new Map<string, number>()
+    const open: WebSocket[] = []
+    let seed = 7
+    const random = () => {
+      seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648
+      return seed / 2_147_483_648
+    }
+    let peak = 0
+    for (let step = 0; step < 240; step += 1) {
+      const identity = hosts[Math.floor(random() * hosts.length)]!
+      const roll = random()
+      if (roll < 0.4) {
+        // A director's fresh booking, or a re-book at a newer epoch.
+        const epoch = (epochs.get(identity.hostId) ?? 1) + (random() < 0.5 ? 0 : 1)
+        if (cell.book(identity, epoch)[0]?.outcome === 'ok') epochs.set(identity.hostId, epoch)
+      } else if (roll < 0.8) {
+        const reply = await cell.connect(identity, epochs.get(identity.hostId) ?? 1)
+        if (reply.ack?.type === 'host-hello-ack') open.push(reply.socket!)
+      } else if (open.length > 0) {
+        const socket = open.splice(Math.floor(random() * open.length), 1)[0]!
+        // A newer control for the same host may already have replaced it.
+        if (socket.readyState !== WebSocket.CLOSED) {
+          const closed = new Promise((resolve) => socket.once('close', resolve))
+          socket.close()
+          await closed
+        }
+      }
+      const counts = cell.relay.connectionSnapshot()!
+      peak = Math.max(peak, counts.physicalConnections)
+      expect(counts.physicalConnections).toBeLessThanOrEqual(hardCap)
+      expect(counts.enforcedConnectionUnits).toBeLessThanOrEqual(hardCap)
+    }
+    // The run did reach the cap, so the bound was exercised.
+    expect(peak).toBeGreaterThanOrEqual(hardCap - 1)
+  }, 60_000)
 })
+
