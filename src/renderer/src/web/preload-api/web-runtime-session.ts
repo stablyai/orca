@@ -60,7 +60,13 @@ export async function observeWebRuntimeStatus(
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)
   }
-  const existing = webRuntimeState.activeClient?.statusOwner
+  // Why: the snapshot belongs to the ACTIVE client — a selector naming a different
+  // environment must fall through to the transient call instead of answering the
+  // wrong environment's status.
+  const existing =
+    webRuntimeState.activeClientEnvironmentId === environment.id
+      ? webRuntimeState.activeClient?.statusOwner
+      : undefined
   if (existing) {
     return existing.refresh({ timeoutMs, observeOnly: true })
   }
@@ -97,9 +103,18 @@ export function getClientForEnvironment(
   }
   if (
     !webRuntimeState.activeClient ||
-    webRuntimeState.activeClientEnvironmentId !== environment.id
+    webRuntimeState.activeClientEnvironmentId !== environment.id ||
+    // Why: a client whose status owner was disposed only ever answers "disconnected or
+    // replaced" — a retired owner must be rebuilt, not served from the latch forever.
+    webRuntimeState.activeClient.statusOwner?.read().retired === true
   ) {
-    webRuntimeState.activeClient?.close()
+    // Why: clear the cache slot before constructing — a throw inside getPreferredWebPairingOffer
+    // or the WebRuntimeClient constructor must not leave the closed client cached as this
+    // environment's owner (it would then answer every status.get with the disposed latch).
+    const previous = webRuntimeState.activeClient
+    webRuntimeState.activeClient = null
+    webRuntimeState.activeClientEnvironmentId = null
+    previous?.close()
     webRuntimeState.activeClient = new WebRuntimeClient(getPreferredWebPairingOffer(environment), {
       status: {
         environmentId: environment.id,
