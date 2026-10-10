@@ -73,6 +73,14 @@ const IGNORED_NON_RECIPE_STDOUT = '[serve] ignored non-recipe stdout'
 const PROFILE = resolve('/profiles/serve')
 const PIN_PROFILE = `--user-data-dir=${PROFILE}`
 
+function restoreEnv(key: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[key]
+  } else {
+    process.env[key] = value
+  }
+}
+
 function startRecipeJsonServer() {
   const child = new FakeChildProcess()
   spawnMock.mockReturnValue(child)
@@ -106,6 +114,44 @@ describe('serveOrcaApp', () => {
     return Promise.all(
       temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true }))
     )
+  })
+
+  it('launches an isolated profile with the keychain mocked, so serve is not blocked on it', async () => {
+    const previousUserData = process.env.ORCA_E2E_USER_DATA_DIR
+    const previousHome = process.env.ORCA_E2E_HOME_DIR
+    process.env.ORCA_E2E_USER_DATA_DIR = '/tmp/orca-e2e-profile'
+    try {
+      const { child, result } = startRecipeJsonServer()
+      queueMicrotask(() => child.stdout.emit('data', `${RECIPE_JSON}\n`))
+      await expect(result).resolves.toBe(0)
+
+      const args = spawnMock.mock.calls[0]?.[1] as string[]
+      expect(args).toEqual(
+        expect.arrayContaining(['--password-store=basic', '--use-mock-keychain'])
+      )
+    } finally {
+      restoreEnv('ORCA_E2E_USER_DATA_DIR', previousUserData)
+      restoreEnv('ORCA_E2E_HOME_DIR', previousHome)
+    }
+  })
+
+  it('leaves a normal profile on the real keychain', async () => {
+    const previousUserData = process.env.ORCA_E2E_USER_DATA_DIR
+    const previousHome = process.env.ORCA_E2E_HOME_DIR
+    delete process.env.ORCA_E2E_USER_DATA_DIR
+    delete process.env.ORCA_E2E_HOME_DIR
+    try {
+      const { child, result } = startRecipeJsonServer()
+      queueMicrotask(() => child.stdout.emit('data', `${RECIPE_JSON}\n`))
+      await expect(result).resolves.toBe(0)
+
+      const args = spawnMock.mock.calls[0]?.[1] as string[]
+      expect(args).not.toContain('--use-mock-keychain')
+      expect(args).not.toContain('--password-store=basic')
+    } finally {
+      restoreEnv('ORCA_E2E_USER_DATA_DIR', previousUserData)
+      restoreEnv('ORCA_E2E_HOME_DIR', previousHome)
+    }
   })
 
   it.runIf(process.platform === 'darwin')(

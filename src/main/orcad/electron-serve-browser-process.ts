@@ -13,6 +13,7 @@ import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../shared/runtime-types'
 import { readRuntimeMetadata } from '../runtime/runtime-metadata'
 import { spawnProcess } from '@orca/process-host'
+import { electronIsolatedProfileSwitches } from '../../shared/electron-isolated-profile-switches'
 import { sendOrcadSidecarRequest } from './orcad-sidecar-runtime-client'
 import {
   ElectronSidecarTabRegistry,
@@ -119,9 +120,7 @@ export class ElectronServeBrowserProcess {
         String(port),
         '--serve-json',
         '--serve-no-pairing',
-        ...(process.env.ORCA_E2E_USER_DATA_DIR || process.env.ORCA_E2E_HOME_DIR
-          ? ['--password-store=basic', '--use-mock-keychain']
-          : []),
+        ...electronIsolatedProfileSwitches(process.env),
         `--user-data-dir=${userDataPath}`
       ],
       env: electronServeEnvironment(userDataPath)

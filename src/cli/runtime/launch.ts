@@ -11,6 +11,7 @@ import {
   pinServeUserDataPath,
   resolveLaunchUserDataPath
 } from './launch-user-data-path'
+import { electronIsolatedProfileSwitches } from '../../shared/electron-isolated-profile-switches'
 import { getMacAppBundlePath } from './mac-app-update-bundle'
 import { getPlatformUserDataPath } from './metadata'
 import { isSameUserDataPath } from '../../shared/serve-user-data-path'
@@ -153,7 +154,9 @@ function serveWithElectron(
   )
   const childArgs = pinned.args
   childArgs.push('--serve', ...serveOptionArgs(args, '--serve-'))
-
+  // Why: the isolated profile has no login keychain, and the probe that discovers this blocks the
+  // foreground process on the Keychain authorization prompt before it advertises readiness (#25453).
+  childArgs.push(...electronIsolatedProfileSwitches())
   const handoffPath =
     args.recipeJson !== true && getMacAppBundlePath(executable)
       ? getServeUpdateHandoffPath(userDataPath)
