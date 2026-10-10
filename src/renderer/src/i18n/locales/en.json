@@ -17861,6 +17861,10 @@
         "preloadApi": {
           "cursorAccounts": {
             "hostOnly": "Cursor sign-in details are only readable on the computer running Orca."
+          },
+          "accounts": {
+            "signInHostOnly": "Adding or re-signing an account is only available in the desktop app on the computer running Orca.",
+            "claudeWslDefaultUnavailable": "Switching a WSL lane back to the system default is only available in the desktop app."
           }
         }
       },
