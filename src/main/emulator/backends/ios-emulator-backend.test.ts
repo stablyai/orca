@@ -261,6 +261,20 @@ describe('IosEmulatorBackend', () => {
     expect(hideNativeSimulatorAppMock).toHaveBeenCalledTimes(1)
   })
 
+  it('rewrites raw dyld helper failures into an actionable error', async () => {
+    execServeSimCommandMock.mockRejectedValueOnce(
+      new EmulatorError(
+        'emulator_error',
+        'Helper failed: dyld[1]: Symbol not found: (_$s10Foundation)'
+      )
+    )
+    const backend = new IosEmulatorBackend({ waitForEndpointReady: async () => true })
+    await expect(backend.startSession('device-1')).rejects.toMatchObject({
+      code: 'emulator_helper_failed',
+      message: expect.stringContaining('Update macOS')
+    })
+  })
+
   it('recycles the device and retries when the helper finds no framebuffer', async () => {
     // The real-world failure: simctl reports Booted but the display IO ports
     // never came up, so serve-sim --detach dies with the framebuffer error.

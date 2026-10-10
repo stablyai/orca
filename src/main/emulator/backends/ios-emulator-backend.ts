@@ -24,6 +24,7 @@ import type { EmulatorBridgeOptions } from '../emulator-bridge-types'
 import { sendEmulatorGestureSequence, type EmulatorGesturePoint } from '../emulator-gesture-sender'
 import { parseServeSimDetachedSession } from '../serve-sim-detached-session'
 import { requestServeSimAccessibilityTree } from '../serve-sim-accessibility-tree'
+import { describeServeSimHelperFailure } from '../serve-sim-host-support'
 import { hideNativeSimulatorApp } from '../simulator-app-visibility'
 import type {
   BackendAvailability,
@@ -190,7 +191,14 @@ export class IosEmulatorBackend implements EmulatorBackend {
     const udid = await this.resolveDeviceId(deviceId)
     await ensureSimulatorBooted(udid)
     const startDetachedHelper = async (): Promise<EmulatorSessionInfo> => {
-      const raw = await this.execServeSim(['--detach', '-q', udid], { json: true })
+      let raw: unknown
+      try {
+        raw = await this.execServeSim(['--detach', '-q', udid], { json: true })
+      } catch (error) {
+        const described =
+          error instanceof Error ? describeServeSimHelperFailure(error.message) : null
+        throw described ? new EmulatorError('emulator_helper_failed', described) : error
+      }
       return parseServeSimDetachedSession(raw, udid)
     }
 
