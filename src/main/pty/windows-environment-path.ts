@@ -1,7 +1,7 @@
 import type { execFile, execFileSync } from 'node:child_process'
 import { expandWindowsEnvironmentVariables } from '../../shared/windows-environment-expansion'
 import { getRegExePath } from '../win32-utils'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { mergeWindowsPathSegments } from './windows-path-segment-merge'
 import {
   WindowsPathRegistryFallback,

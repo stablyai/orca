@@ -739,7 +739,7 @@ it('delivers the next message after a command whose child died and whose settlem
   expect(readAgentJournalTurn((await commandTurn(cmid))?.body)?.state).not.toBe('running')
 })
 
-it("ignores an older build's unconfirmed compaction record, and answers its operation without rerunning it (B15)", async () => {
+it('ignores a ledger-only compaction record with no command receipt (B15)', async () => {
   await attach()
   const older = compactParams()
   // An older build admitted this operation and died before recording its outcome.
@@ -780,13 +780,10 @@ it("ignores an older build's unconfirmed compaction record, and answers its oper
 
   await expect(state.host.conversationCommand(CALLER, older)).resolves.toMatchObject({
     ok: true,
-    value: {
-      state: 'unknown',
-      error: 'Compaction completion is unconfirmed.',
-      failure: { kind: 'compactionUnconfirmed' }
-    }
+    replayed: false,
+    value: { state: 'completed' }
   })
-  expect(compact).toHaveBeenCalledOnce()
+  expect(compact).toHaveBeenCalledTimes(2)
 })
 
 it('never lets a provider echo alias the command entry', async () => {

@@ -16,11 +16,11 @@ import { handedOffQueuedMessageIds } from '../../../../shared/structured-agent-s
 
 /** Why a card is not on its way right now; decides the caption under the text. */
 export type QueuedMessageCardHold =
+  /** Plainly queued, also behind an open question: the question already says the agent waits. */
   | 'turn'
   /** The whole queue is paused: the header row says why and offers Resume, so the card makes
    *  no promise about when it sends — not even after an answer, which does not drain it. */
   | 'queue-paused'
-  | 'awaiting-answer'
   | 'paused'
   | 'behind-returned'
   | 'returned'
@@ -61,7 +61,7 @@ function queuedMessageCardText(body: AgentSessionQueuedMessage['body']): string 
 export function projectQueuedMessageCards(
   queuedMessages: readonly AgentSessionQueuedMessage[] | null | undefined,
   submissions: readonly AgentJournalSubmission[],
-  session: { hasPendingPrompt: boolean; queuePaused?: boolean; agentWorking?: boolean }
+  session: { queuePaused?: boolean; agentWorking?: boolean }
 ): QueuedMessageCard[] {
   const handedOff = handedOffQueuedMessageIds(
     submissions.filter((submission) => submission.dispatchState !== 'rejected')
@@ -80,9 +80,7 @@ export function projectQueuedMessageCards(
             ? 'behind-returned'
             : session.queuePaused
               ? 'queue-paused'
-              : session.hasPendingPrompt
-                ? 'awaiting-answer'
-                : 'turn'
+              : 'turn'
     behindReturned = behindReturned || message.state === 'returned'
     const from = readAgentMessageSource(message.body.from)
     return {

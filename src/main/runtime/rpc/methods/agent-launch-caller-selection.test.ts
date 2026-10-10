@@ -1,6 +1,6 @@
 /**
  * A launch from a paired client moves that client's view to the new tab and nobody else's: the view
- * intent belongs to the connection that asked. In-process callers and workspace-creating launches
+ * intent belongs to the connection that asked. In-process callers and worktree-creating launches
  * keep today's behaviour.
  */
 
@@ -44,6 +44,10 @@ const EXISTING_LAUNCH = { agent: 'claude', target: { kind: 'existing', worktree:
 const CREATE_LAUNCH = {
   agent: 'claude',
   target: { kind: 'create-worktree', create: { repo: 'id:repo-1', name: 'task' } }
+}
+const FOLDER_LAUNCH = {
+  agent: 'claude',
+  target: { kind: 'create-folder-workspace', create: { projectGroupId: 'group-1' } }
 }
 const CALLER = 'device-1'
 const REVEAL_WARNING =
@@ -150,6 +154,21 @@ describe('a paired client launching into an existing workspace', () => {
     expect(result.warning).toBeUndefined()
   })
 
+  // A folder workspace has no setup for a host activation to run, so its create moves only the caller.
+  it('selects the chat in a folder workspace it creates without activating it on the host', async () => {
+    const runtime = selectionRuntime({ settings: STRUCTURED_PREFERENCE })
+
+    // A desktop client of a remote server; a phone may not create folder workspaces at all.
+    await launch(FOLDER_LAUNCH, runtime, { ...CAPABLE_CLIENT, clientKind: 'runtime' })
+
+    expect(chatActivation()).toBe(false)
+    expect(runtime.selectCreatedMobileSessionTabForClient).toHaveBeenCalledExactlyOnceWith(
+      'folder:fw-new',
+      { sessionId: 'sess-1' },
+      CALLER
+    )
+  })
+
   it('selects nothing when the runtime reported no pane for the terminal', async () => {
     const runtime = selectionRuntime({ settings: {} })
 
@@ -190,7 +209,7 @@ describe('launches that keep the host-wide behaviour', () => {
     expect(runtime.selectCreatedMobileSessionTabForClient).not.toHaveBeenCalled()
   })
 
-  it('a workspace-creating launch from a paired client keeps the create navigation', async () => {
+  it('a worktree-creating launch from a paired client keeps the create navigation', async () => {
     const runtime = selectionRuntime({ settings: STRUCTURED_PREFERENCE })
 
     await launch(CREATE_LAUNCH, runtime)

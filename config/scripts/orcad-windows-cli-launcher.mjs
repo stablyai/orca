@@ -2,7 +2,7 @@ import { copyFileSync, lstatSync, mkdirSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { ORCAD_WINDOWS_CLI_LAUNCHER_FILENAME } from '../../src/shared/orcad-artifacts.ts'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 
 const { PE_MACHINE, describePeMachine, readPeMachine } = createRequire(import.meta.url)(
   './windows-pe-machine.cjs'

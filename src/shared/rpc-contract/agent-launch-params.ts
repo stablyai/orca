@@ -18,6 +18,7 @@ import { isValidHostTerminalTabId } from '../terminal-tab-id'
 import { isTuiAgent } from '../tui-agent-config'
 import type { TuiAgent } from '../tui-agent'
 import { WorktreeCreate } from './worktree-create-params'
+import { FolderWorkspaceCreate } from './folder-workspace-params'
 import { LaunchSourceParam } from './launch-source-param'
 import { TerminalTabIdParam } from './agent-session-params'
 import { SessionId } from './structured-agent-session-params'
@@ -69,6 +70,11 @@ export const AgentLaunchFields = z.object({
       /** The `worktree.create` request verbatim, so a caller migrating to this method keeps its
        *  existing payload; the agent fields in it are stripped rather than honoured. */
       create: WorktreeCreate
+    }),
+    z.object({
+      kind: z.literal('create-folder-workspace'),
+      /** The `folderWorkspace.create` request verbatim; its `createdWithAgent` is the launch's own. */
+      create: FolderWorkspaceCreate
     })
   ]),
   prompt: z

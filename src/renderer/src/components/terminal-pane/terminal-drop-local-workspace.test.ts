@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { handleInternalTerminalFileDrop, handleTerminalFileDrop } from './terminal-drop-handler'
-import { encodeWorkspaceFilePaths, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
+import {
+  encodeWorkspaceFilePaths,
+  WORKSPACE_FILE_DRAG_SOURCE_MIME,
+  WORKSPACE_FILE_PATHS_MIME
+} from '@/lib/workspace-file-drag'
 
 const mocks = vi.hoisted(() => ({
   state: {
@@ -69,9 +73,11 @@ describe('local terminals without catalog workspaces', () => {
           paneLeafId: 'leaf-1',
           dataTransfer: {
             getData: (type) =>
-              type === WORKSPACE_FILE_PATHS_MIME
-                ? encodeWorkspaceFilePaths(['/local/file.txt'])
-                : ''
+              type === WORKSPACE_FILE_DRAG_SOURCE_MIME
+                ? JSON.stringify({ version: 1, workspaceId: 'wt-1', executionHostId: 'local' })
+                : type === WORKSPACE_FILE_PATHS_MIME
+                  ? encodeWorkspaceFilePaths(['/local/file.txt'])
+                  : ''
           }
         })
         expect(result).toEqual({ status: 'pasted', pathCount: 1 })

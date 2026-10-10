@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import * as loginShell from '../startup/login-shell-environment'
-import type * as runProcessModule from '../../shared/child-process/run-process'
+import type * as runProcessModule from '@orca/process-host'
 import { __resetPersistedWindowsPathCacheForTests } from '../pty/windows-environment-path'
 import { __setWindowsPathRegistryLoaderForTests } from '../pty/windows-path-registry-reader'
 import {
@@ -17,7 +17,7 @@ const { runProcessMock, spawnProcessMock } = vi.hoisted(() => ({
   spawnProcessMock: vi.fn()
 }))
 
-vi.mock('../../shared/child-process/run-process', async (importOriginal) => {
+vi.mock('@orca/process-host', async (importOriginal) => {
   const real = await importOriginal<typeof runProcessModule>()
   return {
     ...real,

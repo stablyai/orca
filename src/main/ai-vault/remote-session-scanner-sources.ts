@@ -32,8 +32,10 @@ import {
   remotePrimeAgentSessionsSegments
 } from './remote-session-scanner-source-parsers'
 import type { FileWithMtime } from './session-scanner-types'
+import { openClawSessionDirectoryPredicate } from './openclaw-session-layout'
 import { remoteCodexSources } from './remote-session-scanner-codex-sources'
 import { remoteClineSource } from './remote-session-scanner-cline-source'
+import { remoteKiroSource } from './remote-session-scanner-kiro-source'
 import { remoteDevinSource } from './remote-session-scanner-devin-source'
 import type {
   RemoteParserOptions,
@@ -53,7 +55,8 @@ type RemoteContentParser<T = string> = (
 export function remoteSessionSources(
   remoteHome: string,
   hostPlatform: RemoteHostPlatform,
-  includeAntigravityIdeSessions = false
+  includeAntigravityIdeSessions = false,
+  kiroHomeDir?: string
 ): RemoteSessionSource[] {
   return [
     ...remoteCodexSources(remoteHome, hostPlatform),
@@ -121,6 +124,7 @@ export function remoteSessionSources(
       (path) => remotePathSegments(path).includes('agent-transcripts')
     ),
     remoteClineSource(remoteHome, hostPlatform),
+    remoteKiroSource(remoteHome, hostPlatform, kiroHomeDir),
     source(
       'hermes',
       remoteHome,
@@ -261,16 +265,17 @@ function remoteOpenClawSources(
   remoteHome: string,
   hostPlatform: RemoteHostPlatform
 ): RemoteSessionSource[] {
-  return ['.openclaw', '.clawdbot'].map((rootName) =>
-    jsonlSource(
+  return ['.openclaw', '.clawdbot'].map((rootName) => ({
+    ...jsonlSource(
       'openclaw',
       remoteHome,
       hostPlatform,
       [rootName, 'agents'],
       openClawParser,
       (path) => remotePathSegments(path).includes('sessions')
-    )
-  )
+    ),
+    directoryPredicate: openClawSessionDirectoryPredicate
+  }))
 }
 
 function parserOptions(context: RemoteScannerContext): RemoteParserOptions {

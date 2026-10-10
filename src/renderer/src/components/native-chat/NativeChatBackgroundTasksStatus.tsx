@@ -231,7 +231,7 @@ export function NativeChatBackgroundTasksStatus(props: {
               </span>
               <ChevronDown
                 aria-hidden="true"
-                className={`size-3 transition-transform ${expanded ? 'rotate-180' : ''}`}
+                className={`size-3 transition-transform motion-reduce:transition-none ${expanded ? 'rotate-180' : ''}`}
               />
             </button>
           </div>

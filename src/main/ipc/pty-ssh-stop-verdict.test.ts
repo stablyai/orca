@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../shared/pty-liveness-verdict'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
+import { toSshExecutionHostId } from '../../shared/execution-host'
 import {
   registerPtyHandlers,
   deletePtyOwnership,
@@ -62,7 +63,7 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
   function installController(): {
     controller: {
       kill: (ptyId: string) => boolean
-      listProcesses: (connectionId?: string | null) => Promise<{ id: string }[]>
+      listProcesses: (hostId?: string) => Promise<{ id: string }[]>
       retireRejectedPty: (ptyId: string, stopConfirmed: boolean) => void
       stopAndWait: (ptyId: string, opts?: { deadlineMs?: number }) => Promise<boolean>
     }
@@ -88,7 +89,7 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
   }
 
   it('reports an unconfirmed stop instead of a fabricated kill', () => {
-    setPtyOwnership('ssh-detached-pty', 'ssh-dropped')
+    setPtyOwnership('ssh-detached-pty', 'ssh:ssh-dropped')
     const { controller, runtime } = installController()
 
     expect(controller.kill('ssh-detached-pty')).toBe(false)
@@ -102,7 +103,7 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
   })
 
   it('reports an unconfirmed exact stop instead of a fabricated teardown', async () => {
-    setPtyOwnership('ssh-detached-stop', 'ssh-dropped')
+    setPtyOwnership('ssh-detached-stop', 'ssh:ssh-dropped')
     const { controller, runtime } = installController()
 
     await expect(controller.stopAndWait('ssh-detached-stop')).resolves.toBe(false)
@@ -116,7 +117,7 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
 
   it('preserves lost-contact evidence for renderer IPC teardown', async () => {
     const ptyId = 'ssh-renderer-detached'
-    setPtyOwnership(ptyId, 'ssh-dropped')
+    setPtyOwnership(ptyId, 'ssh:ssh-dropped')
     const { runtime } = installController()
     try {
       await handlers.get('pty:kill')!(null, { id: ptyId })
@@ -133,7 +134,7 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
 
   it('retires a rejected split without asserting an unconfirmed exit', () => {
     const ptyId = 'ssh-rejected-split'
-    setPtyOwnership(ptyId, 'ssh-dropped')
+    setPtyOwnership(ptyId, 'ssh:ssh-dropped')
     const { controller, runtime } = installController()
     try {
       controller.retireRejectedPty(ptyId, false)
@@ -171,7 +172,7 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
       listProcesses: vi.fn(async () => [])
     }
     registerSshPtyProvider(connectionId, provider as never)
-    setPtyOwnership(ptyId, connectionId)
+    setPtyOwnership(ptyId, toSshExecutionHostId(connectionId))
     try {
       const { controller, runtime } = installController()
 
@@ -201,7 +202,7 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
       listProcesses: vi.fn(async () => [])
     }
     registerSshPtyProvider(connectionId, provider as never)
-    setPtyOwnership(ptyId, connectionId)
+    setPtyOwnership(ptyId, toSshExecutionHostId(connectionId))
     try {
       const { controller, runtime } = installController()
       let recordExit: (recorded: boolean) => void = () => {}
@@ -249,7 +250,7 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
       listProcesses: vi.fn(async () => [])
     }
     registerSshPtyProvider(connectionId, provider as never)
-    setPtyOwnership(ptyId, connectionId)
+    setPtyOwnership(ptyId, toSshExecutionHostId(connectionId))
     try {
       const { controller, runtime } = installController()
       const waitForPtyExitRecord = vi.fn(async (_ptyId: string, _timeoutMs: number) => false)
@@ -276,7 +277,7 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
       })
     }
     registerSshPtyProvider(connectionId, provider as never)
-    setPtyOwnership(ptyId, connectionId)
+    setPtyOwnership(ptyId, toSshExecutionHostId(connectionId))
     try {
       const { controller, runtime } = installController()
 
@@ -301,7 +302,7 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
       })
     }
     registerSshPtyProvider(connectionId, provider as never)
-    setPtyOwnership(ptyId, connectionId)
+    setPtyOwnership(ptyId, toSshExecutionHostId(connectionId))
     try {
       const { controller, runtime } = installController()
 
@@ -332,8 +333,8 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
     registerSshPtyProvider(healthyConnectionId, {
       listProcesses: vi.fn(async () => [{ id: healthyPtyId }])
     } as never)
-    setPtyOwnership(failedPtyId, failedConnectionId)
-    setPtyOwnership(healthyPtyId, healthyConnectionId)
+    setPtyOwnership(failedPtyId, toSshExecutionHostId(failedConnectionId))
+    setPtyOwnership(healthyPtyId, toSshExecutionHostId(healthyConnectionId))
     try {
       const { controller, runtime } = installController()
 
@@ -365,7 +366,7 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
       listProcesses: vi.fn(async () => [{ id: ptyId }])
     }
     registerSshPtyProvider(connectionId, provider as never)
-    setPtyOwnership(ptyId, connectionId)
+    setPtyOwnership(ptyId, toSshExecutionHostId(connectionId))
     try {
       const { controller, runtime } = installController()
 

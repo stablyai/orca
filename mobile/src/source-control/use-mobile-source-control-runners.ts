@@ -6,6 +6,7 @@ import { useMobileCommitMessageGeneration } from './use-mobile-commit-message-ge
 import { useMobileSourceControlCommitRunners } from './use-mobile-source-control-commit-runners'
 import { useMobileSourceControlActionSheetRunners } from './use-mobile-source-control-action-sheet-runners'
 import { useMobileCreatePrRunner } from './use-mobile-create-pr-runner'
+import { useMobileStageAllRunner } from './use-mobile-stage-all-runner'
 import type { RuntimeGitLocalBranches } from '../../../src/shared/runtime-types'
 import type { MobileGitStatusResult } from './mobile-git-status'
 import type { LoadStatusOptions } from './mobile-source-control-screen-state'
@@ -164,12 +165,12 @@ export function useMobileSourceControlRunners(params: Params) {
     [runGitSyncSteps, runGitWorkflow]
   )
 
-  const stageAll = useCallback(async () => {
-    if (stageablePaths.length === 0) {
-      return
-    }
-    await runGitAction('stage-all', 'git.bulkStage', { filePaths: stageablePaths })
-  }, [runGitAction, stageablePaths])
+  const stageAll = useMobileStageAllRunner({
+    status,
+    stageablePaths,
+    runGitWorkflow,
+    sendGitRequest
+  })
 
   const unstageAll = useCallback(async () => {
     if (unstageablePaths.length === 0) {

@@ -16,12 +16,30 @@ import type { AgentSessionRecordStore } from '../../runtime/agent-session-record
 import { journalOpenReadRefusal } from '../agent-session-journal/journal-open-failure'
 import type { StructuredAgentDefinition } from './structured-agent-definition'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
+import type { StructuredAgentSessionLiveOptions } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import { structuredAgentSessionOptionModels } from './structured-agent-session-option-models'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 
 type RestingOptions = Pick<AgentSessionOptionsResult, 'models' | 'fastModeSupport' | 'current'>
+
+/** Initial explicit picks follow the same rules as a pick made while the chat is at rest. */
+export function structuredAgentSessionOptionOverridesRefusal(
+  agents: Pick<StructuredAgentRegistry, 'definition'>,
+  provider: string,
+  options: Readonly<Record<string, string>>
+) {
+  const rules = agents.definition(provider)?.restingOptions
+  const key = Object.keys(options).find((key) => !rules?.acceptsKey(key))
+  return key === undefined
+    ? null
+    : refuse(
+        'agent_session_operation_invalid',
+        { reason: 'optionRejected' },
+        `${provider} has no session option named ${key}`
+      )
+}
 
 /** The at-rest rules of the record's agent, as this runtime registered it; null for any other. */
 function restingOptionRules(
@@ -70,7 +88,8 @@ async function readStructuredAgentSessionOptionsAtRest(
     current: {
       ...(model ? { model } : {}),
       ...(effort ? { effort } : {}),
-      ...(typeof fastMode === 'boolean' ? { fastMode } : {})
+      ...(typeof fastMode === 'boolean' ? { fastMode } : {}),
+      ...(saved.serviceTier ? { serviceTier: saved.serviceTier } : {})
     }
   }
 }
@@ -130,7 +149,7 @@ export async function readStructuredAgentSessionOptions(
       options: await adapter.readOptions({ sessionId, fence: child.fence })
     }
   })
-  const live =
+  const live: StructuredAgentSessionLiveOptions | null =
     started.kind === 'live'
       ? started.options
       : started.kind === 'prepared'
@@ -141,7 +160,17 @@ export async function readStructuredAgentSessionOptions(
             })
           )
         : null
-  const options = live ?? (await readStructuredAgentSessionOptionsAtRest(context.deps, sessionId))
+  let options: Omit<AgentSessionOptionsResult, 'rewind'>
+  if (live) {
+    const { catalogListing, ...answer } = live
+    if (catalogListing) {
+      // What a running child listed is its account's catalog too, so the next chat opens warm.
+      context.deps.modelCatalog?.recordLiveListing(sessionId, catalogListing)
+    }
+    options = answer
+  } else {
+    options = await readStructuredAgentSessionOptionsAtRest(context.deps, sessionId)
+  }
   // Re-acquired after the reads above: the handle they saw may have closed and reopened since.
   const session = await context.conversation(sessionId)
   const phase = store.getRecord(sessionId)?.rewind?.phase

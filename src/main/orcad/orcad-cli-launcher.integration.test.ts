@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { expect, it } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
-import { runProcess, spawnProcess } from '../../shared/child-process/run-process'
+import { runProcess, spawnProcess } from '@orca/process-host'
 import { structuredSessionChildIdentityEnv } from '../runtime/structured-session-child-identity-env'
 import { resolveBundledOrcadRuntime } from './orcad-bundled-runtime'
 import {

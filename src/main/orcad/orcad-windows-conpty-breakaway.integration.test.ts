@@ -10,7 +10,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { quoteWindowsArgument } from '../../shared/child-process/windows-command-line'
+import { quoteWindowsArgument } from '@orca/process-host/windows-command-line'
 import {
   ORCAD_NODE_PTY_DIR,
   ORCAD_WINDOWS_PROCESS_TREE_FILENAME

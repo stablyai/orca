@@ -12,10 +12,11 @@ import {
   provenancePathCandidate,
   resolveTerminalAbsolutePath
 } from './runtime-file-commands-terminal-file-paths'
-import { stat } from 'node:fs/promises'
-import { runtimeFileRouteForTarget } from './runtime-file-command-target'
+import {
+  requireRuntimeFileProvider,
+  runtimeFileRouteForTarget
+} from './runtime-file-command-target'
 import { isSafeMobileRelativePath } from './runtime-file-command-host'
-import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
 import { isENOENT } from '../ipc/filesystem-path-containment'
 import type { RuntimeFileStatLike } from './runtime-file-commands-mobile-file-list-limit'
 import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
@@ -31,7 +32,8 @@ export class RuntimeFileCommandsWithResolveTerminalPath extends RuntimeFileComma
     crossWorkspace?: boolean,
     nativeChatContext?: RuntimeNativeChatFileContext | null
   ): Promise<RuntimeTerminalPathResolution> {
-    const store = this.host.requireStore()
+    // Why: an absent store fails as runtime_unavailable before target resolution.
+    this.host.requireStore()
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const { worktree } = target
     const route = runtimeFileRouteForTarget(target)
@@ -87,17 +89,21 @@ export class RuntimeFileCommandsWithResolveTerminalPath extends RuntimeFileComma
         ownedRelativePath !== null &&
         (ownedRelativePath === '' || isSafeMobileRelativePath(ownedRelativePath))
       ) {
-        const stats =
-          ownedRoute.kind === 'ssh'
-            ? await this.statRemoteTerminalPath(absolutePath, ownedRoute.connectionId)
-            : await stat(await resolveAuthorizedPath(absolutePath, store))
+        const isDirectory =
+          (
+            await requireRuntimeFileProvider(
+              knownWorkspaceTarget ?? target,
+              this.host,
+              ownedRoute
+            ).stat(absolutePath)
+          ).type === 'directory'
         return {
           worktree: ownedWorktree.id,
           relativePath: ownedRelativePath,
           absolutePath,
           exists: true,
-          isDirectory: stats.isDirectory(),
-          openTarget: stats.isDirectory()
+          isDirectory,
+          openTarget: isDirectory
             ? undefined
             : {
                 kind: 'worktree-file',

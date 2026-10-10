@@ -41,7 +41,7 @@ type OpenFilePayload = {
   worktreeId: string
   filePath: string
   relativePath: string
-  runtimeEnvironmentId?: string
+  runtimeEnvironmentId?: string | null
   navigation?: RuntimeNavigationTarget
 }
 type OpenDiffPayload = OpenFilePayload & { staged: boolean }
@@ -400,5 +400,56 @@ describe('runtime file opens on the host desktop', () => {
     expect(state.activeWorktreeId).toBe(BACKGROUND)
     expect(state.openFiles.find((file) => file.id === state.activeFileId)?.mode).toBe('diff')
     expect(state.pendingRevealWorktree?.worktreeId).toBe(BACKGROUND)
+  })
+
+  describe('with another server focused', () => {
+    // A worktree the CLI just created, before this renderer's catalog lists it.
+    const FRESH = 'repo9::/repo9/fresh'
+    const FRESH_TS = { filePath: '/repo1/fresh/src/app.ts', relativePath: 'src/app.ts' }
+
+    function focusServer(store: TestStore): void {
+      store.setState({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: owner routing reads only these fields.
+        settings: { activeRuntimeEnvironmentId: 'srv-focused' } as never,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: owner routing reads only the saved id.
+        runtimeEnvironments: [{ id: 'srv-focused' } as never]
+      })
+    }
+
+    it('keeps a desktop-owned file open on this desktop', () => {
+      const { openFile, store } = setup('editor')
+      focusServer(store)
+
+      openFile({ worktreeId: FRESH, ...FRESH_TS, runtimeEnvironmentId: null, navigation: 'caller' })
+
+      const opened = store.getState().openFiles.find((file) => file.worktreeId === FRESH)
+      expect(opened?.runtimeEnvironmentId).toBeNull()
+    })
+
+    it('keeps a desktop-owned diff open on this desktop', () => {
+      const { openDiff, store } = setup('editor')
+      focusServer(store)
+
+      openDiff({
+        worktreeId: FRESH,
+        ...FRESH_TS,
+        staged: false,
+        runtimeEnvironmentId: null,
+        navigation: 'caller'
+      })
+
+      const opened = store.getState().openFiles.find((file) => file.worktreeId === FRESH)
+      expect(opened?.runtimeEnvironmentId).toBeNull()
+    })
+
+    it('an unnamed owner would hand the file to the focused server', () => {
+      const { openFile, store } = setup('editor')
+      focusServer(store)
+
+      openFile({ worktreeId: FRESH, ...FRESH_TS, navigation: 'caller' })
+
+      const opened = store.getState().openFiles.find((file) => file.worktreeId === FRESH)
+      expect(opened?.runtimeEnvironmentId).toBe('srv-focused')
+    })
   })
 })

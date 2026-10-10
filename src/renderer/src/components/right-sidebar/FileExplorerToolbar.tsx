@@ -18,6 +18,7 @@ type FileExplorerToolbarProps = {
   worktreePath: string
   connectionId?: string | null
   runtimeEnvironmentId?: string | null
+  ownerUnresolved?: boolean
   refresh: {
     isRefreshing: boolean
     showRefreshSpinner: boolean
@@ -39,6 +40,7 @@ export function FileExplorerToolbar({
   worktreePath,
   connectionId,
   runtimeEnvironmentId,
+  ownerUnresolved,
   refresh,
   canRefresh,
   canCollapseAll,
@@ -177,6 +179,7 @@ export function FileExplorerToolbar({
             worktreePath={worktreePath}
             connectionId={connectionId}
             runtimeEnvironmentId={runtimeEnvironmentId}
+            ownerUnresolved={ownerUnresolved}
             labelPrefix="Open in "
           />
         </DropdownMenuContent>

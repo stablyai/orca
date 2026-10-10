@@ -132,6 +132,16 @@ export class AcpSessionRuntime {
     return this.call('authenticate', { methodId }, AuthenticateResponseSchema)
   }
 
+  /** A vendor extension method, answered as the agent sent it. Core methods have typed calls here,
+   *  so a session-free caller can never create or touch a session through this. */
+  async requestSessionFreeExtension(method: string, params: unknown): Promise<unknown> {
+    if (!method.includes('/') || method.startsWith('session/')) {
+      throw new Error(`Not an ACP extension method: ${method}`)
+    }
+    await this.initialize()
+    return this.peer.request(method, params, { timeoutMs: null })
+  }
+
   start(options: AcpSessionStartOptions): Promise<AcpSessionStarted> {
     if (this.started) {
       return Promise.resolve(this.started)

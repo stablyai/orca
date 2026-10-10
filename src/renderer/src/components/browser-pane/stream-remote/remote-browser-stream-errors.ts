@@ -8,21 +8,11 @@ import {
   remoteBrowserServiceUnavailableNotice
 } from './remote-browser-stream-status'
 
-// Why: a runtime lacking browser.screencast.v1 will not grow it while this connection lives, so
-// retrying that failure is unbounded work with a visible error each round. Tagged rather than
-// message-matched so a reworded string cannot silently turn it back into an infinite retry.
-export const REMOTE_BROWSER_STREAM_UNSUPPORTED = 'remote_browser_stream_unsupported'
+// Why: a missing capability never appears mid-connection; tagged so a reworded message can't restore infinite retry.
+const REMOTE_BROWSER_STREAM_UNSUPPORTED = 'remote_browser_stream_unsupported'
 
-// Why: the runtime answers with these when the thing the stream is anchored to is gone from the
-// host (worktree deleted, repo unregistered, capability absent). Retrying cannot bring it back, so
-// they are permanent for this connection exactly like the capability tag above. Codes come from
-// src/main/runtime/rpc/errors.ts rather than being invented here.
-// Why `selector_not_found` is NOT here: it means "I could not resolve this right now", which is
-// UNKNOWN, not proof the target is gone. Its producer is a live worktree scan behind a 1s-TTL cache,
-// and the connectionId-gated fallback that shields SSH repos from scan lag does not cover purely
-// local ones — so a slow scan can surface it transiently. Treating that as permanent would strand
-// the pane forever, which is the exact bug this file exists to prevent. The three below are
-// unambiguous: the host is telling us the thing itself no longer exists.
+// Why: host says the anchor itself is gone (codes from src/main/runtime/rpc/errors.ts); retrying can't restore it.
+// selector_not_found is deliberately excluded: a slow 1s-TTL worktree scan can emit it transiently.
 const REMOTE_BROWSER_STREAM_TARGET_GONE_CODES: ReadonlySet<string> = new Set([
   'worktree_not_found_on_server',
   'repo_not_found',
@@ -80,18 +70,7 @@ export type RemoteBrowserStreamFailure = {
   logRawError: boolean
 }
 
-// Why the message is decided here rather than at the call site: whether a failure is permanent and
-// what the user should be told are the same judgement. A permanent failure is one we classified and
-// understand, so its own message says something true and specific ("The selected runtime does not
-// support remote browser streaming."); flattening that to "Lost connection" would be vaguer and
-// wrong, since nothing was lost. Everything else carries a raw transport string written for logs,
-// so the pane speaks for itself there and the raw text is left to the caller to log.
-//
-// Note what this deliberately does NOT decide: whether the user is offered a way back. Stopping
-// automatic retries and removing the user's only recovery are different things, and conflating them
-// is what stranded the pane in the first place. `selector_not_found` already had to be walked back
-// out of the permanent set once (08260a54bf) — proof this classification can be wrong — so a
-// misjudgement here must stay recoverable by hand.
+// Why: a classified permanent failure keeps its own specific message; others get a pane-authored notice and the raw error is logged. Whether to offer reconnect is decided by status, not here.
 export function resolveRemoteBrowserStreamFailure(
   error: unknown,
   phase: 'opening' | 'restart' = 'restart'

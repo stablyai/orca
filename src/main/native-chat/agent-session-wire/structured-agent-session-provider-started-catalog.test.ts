@@ -54,7 +54,13 @@ function startHost(phase: 'ready' | 'starting'): void {
       answerPrompt: vi.fn(async () => undefined),
       setOption: vi.fn(async () => undefined)
     },
-    modelCatalog: { read: vi.fn(), providerStarted },
+    modelCatalog: {
+      read: vi.fn(),
+      recordLiveListing: vi.fn(),
+      prewarm: vi.fn(async () => {}),
+      stop: vi.fn(),
+      providerStarted
+    },
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-1',

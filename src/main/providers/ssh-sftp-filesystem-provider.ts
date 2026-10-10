@@ -9,6 +9,7 @@ export { readSftpDirectory } from './ssh-sftp-directory-listing'
 import { extname } from 'node:path'
 import type { SFTPWrapper, Stats } from 'ssh2'
 import { IMAGE_FILE_MIME_TYPES } from '../../shared/image-file-extensions'
+import { isBinaryBuffer } from '../../shared/binary-buffer'
 import { capturePathExistence, type PathExistenceResult } from '../../shared/path-existence-batch'
 import type { SearchResult } from '../../shared/code-search-types'
 import type { DirEntry } from '../../shared/filesystem-entry-types'
@@ -23,10 +24,9 @@ import {
 import { fileStatFromSftpStats, lstatViaSftp, statViaSftp } from './ssh-filesystem-provider-sftp'
 import type { FileReadLimits, FileReadResult, FileStat, IFilesystemProvider } from './types'
 
-// Why: same caps and probe window as the relay's fs.readFile so previews behave identically.
+// Why: same caps as the relay's fs.readFile so previews behave identically.
 const MAX_TEXT_FILE_SIZE = 10 * 1024 * 1024
 const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024
-const BINARY_PROBE_BYTES = 8192
 const SFTP_NO_SUCH_FILE = 2
 const PREVIEW_MIME_TYPES: Record<string, string> = {
   ...IMAGE_FILE_MIME_TYPES,
@@ -53,10 +53,6 @@ function normalizeSftpError(error: unknown): Error {
     })
   }
   return err
-}
-
-function isBinaryBuffer(buffer: Buffer): boolean {
-  return buffer.subarray(0, BINARY_PROBE_BYTES).includes(0)
 }
 
 export class SshSftpFilesystemProvider implements IFilesystemProvider {

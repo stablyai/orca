@@ -28,7 +28,7 @@ export async function detectAgentSessionContinuationAgents(
   return connectionId
     ? state.ensureRemoteDetectedAgents(connectionId)
     : runtimeEnvironmentId
-      ? state.ensureRuntimeDetectedAgents(runtimeEnvironmentId)
+      ? state.ensureRuntimeDetectedAgents(runtimeEnvironmentId, worktreeId)
       : state.ensureDetectedAgents(worktreeId)
 }
 

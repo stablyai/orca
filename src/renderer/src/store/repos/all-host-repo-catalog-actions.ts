@@ -7,18 +7,21 @@ import { readRuntimeWorktreeVisibilitySnapshot } from '../slices/worktree-visibi
 import { getRepoHostIdentity } from '../slices/repo-host-identity'
 import { getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { isRemovedRuntimeHostId } from '../slices/stale-runtime-host-rows'
 import type { FetchedRepoCatalog } from './repo-catalog-merge'
 import type { LocalRepoCatalogFetchOutcome } from './repo-catalog-fencing'
 import type { RepoSlice } from './repo-state'
 import { arrayElementsUnchanged } from '../catalog-identity'
 import {
-  claimRepoCatalogGeneration,
-  isLatestRepoCatalogGeneration,
   latestAllHostRepoCatalogGenerationByStore,
   startLocalRepoCatalogFetch
 } from './repo-catalog-fencing'
+import {
+  claimHostCatalogFence,
+  isHostCatalogFenceCurrent,
+  type HostCatalogFence
+} from '../host-catalog-fencing'
 import {
   fetchRepoCatalogForTarget,
   filterSetupsForPrunedRepoRows,
@@ -46,15 +49,15 @@ export function createAllHostRepoCatalogActions(
         return { reposFetchGeneration: generation }
       })
       latestAllHostRepoCatalogGenerationByStore.set(get, generation)
-      claimRepoCatalogGeneration(get, LOCAL_EXECUTION_HOST_ID, generation)
+      const isCurrent = (fence: HostCatalogFence): boolean =>
+        latestAllHostRepoCatalogGenerationByStore.get(get) === generation &&
+        isHostCatalogFenceCurrent(get, fence)
       // Why: fetching only the active host hides every other host's repos ("my projects vanished"); load local + all runtime envs, each failing soft.
-      const applyCatalog = (catalog: FetchedRepoCatalog): void => {
-        // Why: a concurrent all-host refresh must not let the older catalog resurrect a migrated SSH owner.
-        if (
-          latestAllHostRepoCatalogGenerationByStore.get(get) !== generation ||
-          !isLatestRepoCatalogGeneration(get, catalog.hostId, generation)
-        ) {
-          return
+      // Returns false for a dropped catalog: a superseded fetch or replaced connection is not an answer.
+      const applyCatalog = (catalog: FetchedRepoCatalog, fence: HostCatalogFence): boolean => {
+        // Why: a concurrent refresh or a replaced connection must not let an older catalog resurrect a migrated SSH owner.
+        if (!isCurrent(fence)) {
+          return false
         }
         let hostRepos: Repo[] = []
         set((s) => {
@@ -100,6 +103,7 @@ export function createAllHostRepoCatalogActions(
         })
         // Why: keep the safe-auto fork sync (as fetchRepos does) so cold-start, which now routes here, still updates safe-auto forks.
         scheduleSafeAutoForkSync(get, hostRepos)
+        return true
       }
       const validateRepoScopedUi = (): void => {
         set((s) => {
@@ -121,8 +125,11 @@ export function createAllHostRepoCatalogActions(
       // Local first so local repos are present even if a remote fetch stalls.
       let failed = false
       let localCatalogOutcome: LocalRepoCatalogFetchOutcome = { status: 'fulfilled' }
+      const localFence = claimHostCatalogFence(get, 'repos', { kind: 'local' })
       try {
-        applyCatalog(await fetchRepoCatalogForTarget({ kind: 'local' }))
+        if (!applyCatalog(await fetchRepoCatalogForTarget({ kind: 'local' }), localFence)) {
+          failed = true
+        }
       } catch (err) {
         failed = true
         localCatalogOutcome = { status: 'rejected', reason: err }
@@ -139,6 +146,10 @@ export function createAllHostRepoCatalogActions(
       }
 
       const environments = await listRuntimeEnvironmentsForAllHostLoad()
+      // Why: a superseded load must not claim remote fences, or it would void the newer load's catalogs.
+      if (latestAllHostRepoCatalogGenerationByStore.get(get) !== generation) {
+        return
+      }
       // Why: unreachable remotes can spend the full connect timeout; merge each resolved host via the state updater so parallel loads don't clobber.
       await Promise.all(
         environments.map(async (environment) => {
@@ -146,7 +157,7 @@ export function createAllHostRepoCatalogActions(
             kind: 'environment' as const,
             environmentId: environment.id
           }
-          claimRepoCatalogGeneration(get, getRuntimeTargetHostId(target), generation)
+          const fence = claimHostCatalogFence(get, 'repos', target)
           const [catalogResult, visibilitySnapshot] = await Promise.all([
             fetchRepoCatalogForTarget(target).then(
               (catalog) => ({ ok: true as const, catalog }),
@@ -156,11 +167,7 @@ export function createAllHostRepoCatalogActions(
           ])
           const visibilityDefaults = visibilitySnapshot.defaults
           const hostId = getRuntimeTargetHostId(target)
-          if (
-            visibilityDefaults !== undefined &&
-            latestAllHostRepoCatalogGenerationByStore.get(get) === generation &&
-            isLatestRepoCatalogGeneration(get, hostId, generation)
-          ) {
+          if (visibilityDefaults !== undefined && isCurrent(fence)) {
             set((state) =>
               isRemovedRuntimeHostId(hostId, state.removedRuntimeEnvironmentIds)
                 ? state
@@ -180,7 +187,9 @@ export function createAllHostRepoCatalogActions(
             )
           }
           if (catalogResult.ok) {
-            applyCatalog(catalogResult.catalog)
+            if (!applyCatalog(catalogResult.catalog, fence)) {
+              failed = true
+            }
           } else {
             failed = true
             console.warn(

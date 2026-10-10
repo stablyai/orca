@@ -1,7 +1,6 @@
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import { getLegacyOpenCodeEnvKeysToDelete } from '../../../opencode/legacy-shared-config-dir'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import { CLAUDE_AUTH_ENV_VARS } from '../../../claude-accounts/environment'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../../pty/legacy-terminal-shim-dir'
 import { PI_PROCESS_OWNER_ENV_KEYS } from '../../../pty/pi-process-owner-env'
 import { CODEX_HOME_ENV_KEYS } from '../host-env/codex-home'
@@ -39,11 +38,7 @@ export async function buildPtyIpcSpawnOptions(
     ctx.preAllocatedHandle ? { ...ctx.env, ORCA_TERMINAL_HANDLE: ctx.preAllocatedHandle } : ctx.env,
     ctx.deps.getSettings?.()
   )
-  const envToDelete = ctx.claudeAuth?.stripAuthEnv
-    ? [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
-    : undefined
   ctx.combinedEnvToDelete = mergePtyEnvDeletions(
-    envToDelete,
     args.envToDelete ?? [],
     // Persistent daemons and older SSH hosts must not resurrect a parent Pi's ownership.
     PI_PROCESS_OWNER_ENV_KEYS,

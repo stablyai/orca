@@ -1,8 +1,8 @@
 import {
-  LOCAL_EXECUTION_HOST_ID,
+  getConnectionExecutionHostId,
   getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
@@ -10,6 +10,7 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { workspaceSessionPartitionHostId } from '../../shared/workspace-session-partition-owner'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import { workspaceSessionListsTerminalTab } from '../../shared/workspace-session-terminal-tab-close'
 import type { RuntimeStore } from './runtime-store-contract'
 
 type RuntimeWorkspaceSessionDependencies = {
@@ -43,8 +44,7 @@ export class RuntimeWorkspaceSessionController {
         }
         return parsedHostId
       }
-      const connectionId = this.deps.resolveFolderConnectionId(workspace)
-      return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+      return getConnectionExecutionHostId(this.deps.resolveFolderConnectionId(workspace))
     }
     const resolvedWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
     const repo = store?.getRepo?.(getRepoIdFromWorktreeId(resolvedWorktreeId))
@@ -102,6 +102,29 @@ export class RuntimeWorkspaceSessionController {
     return hostId
   }
 
+  /**
+   * The partitions holding this exact terminal tab, routed partition first; the routed one alone
+   * when none does, and none when the worktree is unroutable. Matches the tab id, never the
+   * worktree id: `repoId::path` repeats across hosts.
+   */
+  getHostIdsForTab(worktreeId: string, tabId: string): ExecutionHostId[] {
+    const routedHostId = this.tryGetHostId(worktreeId)
+    if (!routedHostId) {
+      return []
+    }
+    const store = this.deps.getStore()
+    if (!store?.getWorkspaceSession) {
+      return [routedHostId]
+    }
+    const holders = [
+      ...new Set([routedHostId, ...(store.getWorkspaceSessionHostIds?.() ?? [])])
+    ].filter((hostId) => {
+      const session = store.getWorkspaceSession!(hostId)
+      return session ? workspaceSessionListsTerminalTab(session, worktreeId, tabId) : false
+    })
+    return holders.length > 0 ? holders : [routedHostId]
+  }
+
   get(worktreeId: string): WorkspaceSessionState | null {
     const hostId = this.tryGetHostId(worktreeId)
     return hostId ? (this.deps.getStore()?.getWorkspaceSession?.(hostId) ?? null) : null
@@ -156,11 +179,7 @@ export class RuntimeWorkspaceSessionController {
             ? (parseExecutionHostId(workspace.executionHostId)?.id ?? null)
             : null
         const connectionId = explicitHostId ? null : this.deps.resolveFolderConnectionId(workspace)
-        return [
-          workspace.id,
-          explicitHostId ??
-            (connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID)
-        ] as const
+        return [workspace.id, explicitHostId ?? getConnectionExecutionHostId(connectionId)] as const
       })
     )
     const hostIds = new Set<ExecutionHostId>(['local'])

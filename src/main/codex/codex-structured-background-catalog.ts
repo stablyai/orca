@@ -1,10 +1,6 @@
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import {
-  fetchCodexModelCatalogListing,
-  type CodexModelCatalogListing
-} from './codex-structured-model-catalog'
+import { fetchCodexModelCatalogListing } from './codex-structured-model-catalog'
 import type { CodexSession } from './codex-structured-session-state'
-import { reconcileCodexFastModeOption } from './codex-structured-fast-mode'
 
 type BackgroundCatalogInput = {
   session: CodexSession
@@ -14,39 +10,16 @@ type BackgroundCatalogInput = {
   logger: StructuredAgentSessionLogger | undefined
 }
 
-/** Turns read tiers from the store; only a legacy saved tier needs migrating here. */
-function applyListing(session: CodexSession, listing: CodexModelCatalogListing): void {
-  if (!session.options.has('serviceTier')) {
-    return
-  }
-  const model =
-    session.options.get('model') ??
-    session.reportedOptions.model ??
-    listing.models.find((entry) => entry.isDefault)?.id ??
-    listing.models[0]?.id ??
-    ''
-  reconcileCodexFastModeOption(session, {
-    fastModeTierByModel: listing.fastModeTierByModel,
-    currentFastMode: undefined,
-    model,
-    modelFastModeSupport: undefined
-  })
-}
-
 async function refresh(input: BackgroundCatalogInput): Promise<void> {
   const { session, sessionId, sessions } = input
   const access = session.catalogAccess
   const store = access?.store
   const fingerprint = access?.fingerprint
   const prior = fingerprint ? store?.get(fingerprint) : undefined
-  const model = session.options.get('model') ?? session.reportedOptions.model
-  const needsTier =
-    (session.options.get('fastMode') === 'true' || session.options.has('serviceTier')) &&
-    (!model || !prior?.fastModeTierByModel[model])
   if (
     fingerprint &&
     store &&
-    (store.hasActiveFailure(fingerprint) || (prior && !store.isStale(prior) && !needsTier))
+    (store.hasActiveFailure(fingerprint) || (prior && !store.isStale(prior)))
   ) {
     return
   }
@@ -65,20 +38,20 @@ async function refresh(input: BackgroundCatalogInput): Promise<void> {
     }
     const latest = fingerprint ? store?.get(fingerprint) : undefined
     if (latest && latest !== prior) {
-      applyListing(session, {
-        models: latest.models,
-        fastModeTierByModel: new Map(Object.entries(latest.fastModeTierByModel))
-      })
       return
     }
     if (fingerprint && store) {
-      store.recordSuccess(fingerprint, 'codex', {
-        models: listing.models,
-        fastModeTierByModel: listing.fastModeTierByModel,
-        origin: 'live-session'
-      })
+      // `model/list` is Codex's account-level listing, the one its probe also runs.
+      store.recordSuccess(
+        fingerprint,
+        'codex',
+        {
+          models: listing.models,
+          origin: 'live-session'
+        },
+        'discovery'
+      )
     }
-    applyListing(session, listing)
   } catch (error) {
     if (!isCurrent()) {
       return

@@ -2,7 +2,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } fr
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { runProcess, runProcessSync } from './child-process/run-process'
+import { runProcess, runProcessSync } from '@orca/process-host'
 import { mayAttemptHardening } from './secure-path-hardening-retry-budget'
 import {
   __getSecureFileHardeningCacheStateForTests,
@@ -16,7 +16,7 @@ import {
 
 const posixModeIt = process.platform === 'win32' ? it.skip : it
 
-vi.mock('./child-process/run-process', () => ({
+vi.mock('@orca/process-host', () => ({
   runProcess: vi.fn(),
   runProcessSync: vi.fn()
 }))

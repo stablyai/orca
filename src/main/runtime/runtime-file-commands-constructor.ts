@@ -24,11 +24,14 @@ import {
 } from './runtime-file-commands-mobile-file-list-limit'
 import { rankRuntimeMobileFilePaths } from './runtime-mobile-file-path-search'
 import { searchQuickOpenFilePaths as searchHostQuickOpenFilePaths } from '../ipc/filesystem-search-file-paths'
-import { stat } from 'node:fs/promises'
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
-import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
 import { isENOENT } from '../ipc/filesystem-path-containment'
-import { runtimeFileRouteForTarget, type RuntimeFileRoute } from './runtime-file-command-target'
+import {
+  requireRuntimeFileProvider,
+  runtimeFileRouteForTarget
+} from './runtime-file-command-target'
+import { parseExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
+import type { FileStat } from '../providers/types'
 
 export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithActiveRuntimeTextSearches {
   constructor(private readonly host: RuntimeFileCommandHost) {
@@ -206,18 +209,25 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
     // Why: `kind` only describes the file; the desktop editor opens binaries (e.g. PDFs) like the File Explorer.
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
     // Why: CLI/agents treat opened:true as success; stat first so missing paths and directories fail the RPC instead of opening a ghost tab.
-    await this.assertOpenTargetIsFile(filePath, runtimeFileRouteForTarget(target))
-    // Why: the internal runtimeId isn't a valid env selector; pass undefined so openFile falls back to activeRuntimeEnvironmentId.
-    this.host.openFile(worktree.id, filePath, relativePath, undefined, navigation)
+    await this.assertOpenTargetIsFile(filePath, target)
+    this.host.openFile(
+      worktree.id,
+      filePath,
+      relativePath,
+      runtimeOwnerForTarget(target),
+      navigation
+    )
     return { worktree: worktree.id, relativePath, kind, opened: true }
   }
 
-  protected async assertOpenTargetIsFile(filePath: string, route: RuntimeFileRoute): Promise<void> {
-    let stats: { isDirectory: () => boolean }
+  protected async assertOpenTargetIsFile(
+    filePath: string,
+    target: { executionHostId: ExecutionHostId }
+  ): Promise<void> {
+    const route = runtimeFileRouteForTarget(target)
+    let stats: FileStat
     try {
-      stats = await (route.kind === 'ssh'
-        ? this.statRemoteTerminalPath(filePath, route.connectionId)
-        : stat(await resolveAuthorizedPath(filePath, this.host.requireStore())))
+      stats = await requireRuntimeFileProvider(target, this.host, route).stat(filePath)
     } catch (error) {
       if (
         isENOENT(error) ||
@@ -227,7 +237,7 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
       }
       throw error
     }
-    if (stats.isDirectory()) {
+    if (stats.type === 'directory') {
       throw new Error(`EISDIR: illegal operation on a directory, open '${filePath}'`)
     }
   }
@@ -238,7 +248,8 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
     staged: boolean,
     navigation?: RuntimeNavigationTarget
   ): Promise<RuntimeFileOpenResult> {
-    const { worktree } = await this.host.resolveRuntimeFileTarget(worktreeSelector)
+    const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
+    const { worktree } = target
     if (!isSafeMobileRelativePath(relativePath)) {
       throw new Error('invalid_relative_path')
     }
@@ -248,8 +259,20 @@ export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithA
         ? 'markdown'
         : 'text'
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    // Why: see openMobileFile; avoid stamping internal runtimeId as runtimeEnvironmentId.
-    this.host.openDiff(worktree.id, filePath, relativePath, staged, undefined, navigation)
+    this.host.openDiff(
+      worktree.id,
+      filePath,
+      relativePath,
+      staged,
+      runtimeOwnerForTarget(target),
+      navigation
+    )
     return { worktree: worktree.id, relativePath, kind, opened: true }
   }
+}
+
+// Why: name the resolved owner; undefined would let the renderer fall back to the focused server.
+function runtimeOwnerForTarget(target: { executionHostId: ExecutionHostId }): string | null {
+  const host = parseExecutionHostId(target.executionHostId)
+  return host?.kind === 'runtime' ? host.environmentId : null
 }

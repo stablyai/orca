@@ -15,7 +15,7 @@ import type * as DeployHelpers from './ssh-relay-deploy-helpers'
 
 // Every remote command runs in a real local shell, so the host-side checks are the real ones.
 vi.mock('./ssh-relay-deploy-helpers', async (importOriginal) => {
-  const { runProcess } = await import('../../shared/child-process/run-process')
+  const { runProcess } = await import('@orca/process-host')
   const { sshCommandExitError } = await import('./ssh-relay-exec-command')
   return {
     ...(await importOriginal<typeof DeployHelpers>()),
