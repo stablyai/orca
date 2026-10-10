@@ -113,7 +113,7 @@ describe.skipIf(process.platform !== 'win32')('Codex hook delivery through Power
               .map((payload) => invoke(getManagedCommand(scriptPath), payload))
           )
           for (const result of results) {
-            expect(result).toMatchObject({ code: 0, stdout: '', stderr: '', timedOut: false })
+            expect(result).toMatchObject({ code: 0, stdout: '{}\r\n', stderr: '', timedOut: false })
           }
         }
         expect(posts).toHaveLength(CODEX_EVENTS.length)
@@ -126,7 +126,7 @@ describe.skipIf(process.platform !== 'win32')('Codex hook delivery through Power
         await new Promise<void>((resolve) => server.close(() => resolve()))
         expect(await invoke(getManagedCommand(scriptPath), payloads[0])).toMatchObject({
           code: 0,
-          stdout: '',
+          stdout: '{}\r\n',
           stderr: '',
           timedOut: false
         })
