@@ -2,7 +2,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import { getProjectIdentityKey } from '../../../../shared/project-host-setup-projection'
 import { reconcileFetchedRepos } from '../slices/repo-identity-reconcile'
 import { getRepoHostIdentity } from '../slices/repo-host-identity'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoCatalogOwnerHostId } from '../projects/project-catalog-owner'
 import type { RepoSlice } from './repo-state'
 import { mergeFetchedProjectCompatibilityForHost } from '../projects/project-compatibility-host-merge'
 import { projectCompatibilityFromRepos } from '../projects/project-compatibility-core'
@@ -16,8 +16,8 @@ export function mergeFetchedReposForHost(
   const fetchedWithProjectGroups = applyInheritedProjectGroups(previous, fetched)
   const fetchedIdentities = new Set(fetchedWithProjectGroups.map(getRepoHostIdentity))
   const preserved = previous.filter((repo) => {
-    const existingHostId = getRepoExecutionHostId(repo)
-    return existingHostId !== hostId || fetchedIdentities.has(getRepoHostIdentity(repo))
+    const ownedByCatalog = getRepoCatalogOwnerHostId(repo) === hostId
+    return !ownedByCatalog || fetchedIdentities.has(getRepoHostIdentity(repo))
   })
   return reconcileFetchedRepos(
     previous,

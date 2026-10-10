@@ -46,7 +46,7 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
       args.startupLaunchPreferences
     )
 
-    const repo = await this.resolveRepoSelector(args.repoSelector)
+    const repo = await this.resolveRepoSelector(args.repoSelector, args.executionHostId)
     const createSettings = this.store.getSettings()
     const requestedAgent = args.startupAgent ?? args.createdWithAgent
     const requestedAgentEnabled =

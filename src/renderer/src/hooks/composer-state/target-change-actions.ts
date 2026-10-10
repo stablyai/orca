@@ -1,3 +1,4 @@
+import { getProjectHostSetupOwnerKey } from '../../store/projects/project-compatibility-core'
 import type { ComposerModel } from './composer-model'
 
 type TargetChangeActionsInput = Pick<
@@ -245,7 +246,14 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
               hosts: hostOptions
             }).find(
               (candidate): candidate is ReadyProjectHostSetupOption =>
-                candidate.id === setupId && candidate.kind === 'ready'
+                candidate.kind === 'ready' &&
+                (candidate.id === setupId ||
+                  useAppStore
+                    .getState()
+                    .projectHostSetups.some(
+                      (setup) =>
+                        setup.id === candidate.id && getProjectHostSetupOwnerKey(setup) === setupId
+                    ))
             )
       if (!target) {
         return

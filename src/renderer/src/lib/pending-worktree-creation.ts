@@ -32,6 +32,8 @@ export type WorktreeCreationRequest = {
   repoId: string
   /** Execution owner retained after script preparation, including retries. */
   executionHostId?: ExecutionHostId
+  /** Exact receiver-side execution owner captured with the selected setup. */
+  authoritativeExecutionHostId?: ExecutionHostId
   /** Source host/account that produced the linked task. Kept separate from the
    *  run context so Retry does not infer provider ownership from the run host. */
   taskSourceContext?: TaskSourceContext | null

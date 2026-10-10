@@ -12,6 +12,7 @@ import {
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { useAppStore } from '../../store'
+import { getProjectHostSetupOwnerKey } from '../../store/projects/project-compatibility-core'
 import { RepositoryHostSetupsSection } from './RepositoryHostSetupsSection'
 
 let container: HTMLDivElement
@@ -213,7 +214,15 @@ describe('RepositoryHostSetupsSection', () => {
     expect(setSettingsProjectHostSelection).toHaveBeenCalledWith(
       'github:stablyai/orca',
       toSshExecutionHostId('openclaw 2'),
-      'remote-repo'
+      getProjectHostSetupOwnerKey(
+        makeSetup({
+          id: 'remote-repo',
+          projectId: 'github:stablyai/orca',
+          repoId: 'remote-repo',
+          hostId: toSshExecutionHostId('openclaw 2'),
+          path: '/home/alice/orca'
+        })
+      )
     )
     expect(openSettingsPage).not.toHaveBeenCalled()
     expect(openSettingsTarget).not.toHaveBeenCalled()
@@ -224,7 +233,9 @@ describe('RepositoryHostSetupsSection', () => {
       id: 'remote-repo',
       displayName: 'Orca',
       path: '/srv/orca',
-      executionHostId: 'runtime:hub'
+      executionHostId: 'runtime:hub',
+      catalogOwnerHostId: 'runtime:hub',
+      authoritativeExecutionHostId: 'ssh:jump'
     })
     useAppStore.setState({
       repos: [remoteRepo],
@@ -236,6 +247,8 @@ describe('RepositoryHostSetupsSection', () => {
           repoId: 'remote-repo',
           hostId: 'runtime:hub',
           executionHostId: 'ssh:direct',
+          catalogOwnerHostId: 'runtime:hub',
+          authoritativeExecutionHostId: 'ssh:direct',
           runtimeOwnerEnvironmentId: 'hub',
           path: '/srv/orca'
         }),
@@ -245,6 +258,8 @@ describe('RepositoryHostSetupsSection', () => {
           repoId: 'remote-repo',
           hostId: 'runtime:hub',
           executionHostId: 'ssh:jump',
+          catalogOwnerHostId: 'runtime:hub',
+          authoritativeExecutionHostId: 'ssh:jump',
           runtimeOwnerEnvironmentId: 'hub',
           path: '/srv/orca'
         })
@@ -405,7 +420,15 @@ describe('RepositoryHostSetupsSection', () => {
       removeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    expect(deleteProjectHostSetup).toHaveBeenCalledWith({ setupId: 'gpu-setup' })
+    expect(deleteProjectHostSetup).toHaveBeenCalledWith({
+      setupId: 'gpu-setup',
+      owner: expect.objectContaining({
+        id: 'gpu-setup',
+        repoId: '',
+        hostId: 'runtime:gpu',
+        setupState: 'setting-up'
+      })
+    })
     expect(openSettingsPage).not.toHaveBeenCalled()
     expect(openSettingsTarget).not.toHaveBeenCalled()
   })

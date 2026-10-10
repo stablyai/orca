@@ -16,6 +16,7 @@ import {
 } from '../../../../shared/project-catalog-row-normalization'
 import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
+  PROJECT_HOST_SETUP_EXECUTION_HOST_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../shared/execution-host'
@@ -61,12 +62,16 @@ export function setupWithFetchedOwner(
   const adopted = normalizeProjectHostSetupRow(setup)
   const hostId = getRuntimeTargetHostId(target)
   if (target.kind !== 'environment') {
-    return adopted
+    return parseExecutionHostId(adopted.hostId)?.kind === 'runtime'
+      ? { ...adopted, catalogOwnerHostId: hostId, authoritativeExecutionHostId: adopted.hostId }
+      : adopted
   }
   const executionHostId = adopted.executionHostId ?? adopted.hostId
   return {
     ...adopted,
     hostId,
+    catalogOwnerHostId: hostId,
+    authoritativeExecutionHostId: adopted.authoritativeExecutionHostId ?? adopted.hostId,
     executionHostId: executionHostId === LOCAL_EXECUTION_HOST_ID ? hostId : executionHostId,
     runtimeOwnerEnvironmentId: target.environmentId,
     // Why: paired clients route through the HUB and must not treat its private SSH target as client-local configuration.
@@ -114,7 +119,9 @@ export async function fetchProjectHostSetupCompatibility(
       }
       return normalizeProjectCatalogProjection({
         projects: await projectsApi.list(),
-        setups: await projectsApi.listHostSetups()
+        setups: (await projectsApi.listHostSetups()).map((setup) =>
+          setupWithFetchedOwner(setup, target)
+        )
       })
     }
     await assertProjectHostSetupRuntimeCapability(target)
@@ -139,12 +146,21 @@ export async function fetchProjectHostSetupCompatibility(
 }
 
 export async function assertProjectHostSetupMutationRuntimeCapabilities(
-  target: RuntimeClientTarget
+  target: RuntimeClientTarget,
+  qualifiedMutation = false
 ): Promise<void> {
   if (target.kind !== 'environment') {
     return
   }
   await assertProjectHostSetupRuntimeCapability(target)
+  if (qualifiedMutation) {
+    await assertRuntimeEnvironmentCapability(
+      target.environmentId,
+      PROJECT_HOST_SETUP_EXECUTION_HOST_RUNTIME_CAPABILITY,
+      'Update Orca on the server to safely select a project setup execution host.',
+      15_000
+    )
+  }
   await assertRuntimeEnvironmentCapability(
     target.environmentId,
     WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY,

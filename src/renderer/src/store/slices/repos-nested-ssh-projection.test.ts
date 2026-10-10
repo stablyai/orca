@@ -153,6 +153,8 @@ it('prefers an authoritative paired-runtime setup over its repo-derived fallback
       hostId: 'runtime:env-1',
       executionHostId: 'runtime:env-1',
       runtimeOwnerEnvironmentId: 'env-1',
+      authoritativeExecutionHostId: 'local',
+      catalogOwnerHostId: 'runtime:env-1',
       connectionId: null
     }
   ])

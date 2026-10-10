@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
-import { PROJECT_HOST_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
+  WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
 import { createTestStore } from './store-test-helpers'
@@ -88,6 +91,34 @@ describe('repo slice project-host setup runtime capability', () => {
       params: undefined,
       timeoutMs: 15_000
     })
+  })
+
+  it('blocks qualified mutation before an older host can strip its safety field', async () => {
+    runtimeCapabilities = [
+      PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
+      WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
+    ]
+    const store = createTestStore()
+    store.setState({
+      projectHostSetups: [
+        {
+          id: 'dup',
+          projectId: 'project',
+          hostId: 'runtime:env-1',
+          authoritativeExecutionHostId: 'ssh:private',
+          repoId: 'dup',
+          path: '/remote',
+          displayName: 'SSH',
+          setupState: 'ready',
+          setupMethod: 'legacy-repo',
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
+    })
+    await expect(store.getState().deleteProjectHostSetup({ setupId: 'dup' })).resolves.toBeNull()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(store.getState().projectHostSetups).toHaveLength(1)
   })
 
   it('blocks runtime project setup when the server does not advertise support', async () => {

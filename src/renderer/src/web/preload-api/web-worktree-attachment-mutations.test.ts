@@ -144,4 +144,27 @@ describe('paired web attachment mutation compatibility', () => {
       comment: 'note'
     })
   })
+  it('keeps exact creation ownership and refuses a peer that would strip it', async () => {
+    const args = { repoId: 'same-id', name: 'selected', executionHostId: 'ssh:private-b' as const }
+    mocks.status.mockResolvedValue({ capabilities: [] })
+    await expect(createWorktreesApi().create(args)).rejects.toThrow(/Update Orca/)
+    expect(mocks.call).not.toHaveBeenCalled()
+    mocks.status.mockResolvedValue({ capabilities: ['worktree.create.execution-host.v1'] })
+    await createWorktreesApi().create(args)
+    expect(mocks.call).toHaveBeenCalledWith(
+      'worktree.create',
+      expect.objectContaining({ executionHostId: 'ssh:private-b' })
+    )
+    expect(mocks.assertEnvironment).toHaveBeenCalledWith('env')
+  })
+  it('refuses qualified creation after active pairing changes during the capability check', async () => {
+    mocks.status.mockResolvedValue({ capabilities: ['worktree.create.execution-host.v1'] })
+    mocks.assertEnvironment.mockImplementationOnce(() => {
+      throw new Error('host changed')
+    })
+    await expect(
+      createWorktreesApi().create({ repoId: 'same-id', name: 'selected', executionHostId: 'local' })
+    ).rejects.toThrow('host changed')
+    expect(mocks.call).not.toHaveBeenCalled()
+  })
 })

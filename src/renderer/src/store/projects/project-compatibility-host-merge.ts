@@ -1,11 +1,8 @@
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { reconcileCatalogRows } from '../slices/repo-identity-reconcile'
-import {
-  getRepoExecutionHostId,
-  LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId
-} from '../../../../shared/execution-host'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { getRepoCatalogOwnerHostId, getSetupCatalogOwnerHostId } from './project-catalog-owner'
 import type { RepoSlice } from '../repos/repo-state'
 import {
   getProjectHostSetupOwnerKey,
@@ -47,6 +44,38 @@ export function getExplicitProjectHostIds(
     }
   }
   return hostIds
+}
+
+function getExplicitProjectCatalogOwnerHostIds(
+  project: Project,
+  setups: readonly ProjectHostSetup[],
+  repos: readonly Repo[]
+): Set<string> {
+  const ownerIds = new Set<string>()
+  for (const setup of setups) {
+    if (setup.projectId === project.id) {
+      ownerIds.add(getSetupCatalogOwnerHostId(setup))
+    }
+  }
+  const sourceRepoIds = new Set(project.sourceRepoIds)
+  for (const repo of repos) {
+    if (sourceRepoIds.has(repo.id)) {
+      ownerIds.add(getRepoCatalogOwnerHostId(repo))
+    }
+  }
+  return ownerIds
+}
+
+function getProjectCatalogOwnerHostIds(
+  project: Project,
+  setups: readonly ProjectHostSetup[],
+  repos: readonly Repo[]
+): Set<string> {
+  const ownerIds = getExplicitProjectCatalogOwnerHostIds(project, setups, repos)
+  if (ownerIds.size === 0) {
+    ownerIds.add(LOCAL_EXECUTION_HOST_ID)
+  }
+  return ownerIds
 }
 
 export function indexProjectHostSetupsByProjectId(
@@ -135,14 +164,8 @@ export function mergeFetchedProjectCompatibilityForHost({
   repos: readonly Repo[]
   hostId: string
 }): Pick<RepoSlice, 'projects' | 'projectHostSetups'> {
-  const setupBelongsToFetchedCatalog = (setup: ProjectHostSetup): boolean => {
-    if (hostId !== LOCAL_EXECUTION_HOST_ID) {
-      return setup.hostId === hostId
-    }
-    const owner = parseExecutionHostId(setup.hostId)
-    // Why: desktop persistence owns local and direct-SSH setups; runtime setups stay authoritative on their remote Orca server.
-    return setup.hostId === LOCAL_EXECUTION_HOST_ID || owner?.kind === 'ssh'
-  }
+  const setupBelongsToFetchedCatalog = (setup: ProjectHostSetup): boolean =>
+    getSetupCatalogOwnerHostId(setup) === hostId
   const fetchedSetupsForHost = fetched.projectHostSetups.filter(setupBelongsToFetchedCatalog)
   const preservedSetups = previous.projectHostSetups.filter(
     (setup) => !setupBelongsToFetchedCatalog(setup)
@@ -154,17 +177,17 @@ export function mergeFetchedProjectCompatibilityForHost({
   const fetchedProjectHostIds = createProjectHostIdIndex(
     fetched.projectHostSetups,
     reposById,
-    getProjectHostIds
+    getProjectCatalogOwnerHostIds
   )
   const previousProjectHostIds = createProjectHostIdIndex(
     previous.projectHostSetups,
     reposById,
-    getProjectHostIds
+    getProjectCatalogOwnerHostIds
   )
   const currentProjectOwnerHostIds = createProjectHostIdIndex(
     projectHostSetups,
     reposById,
-    getExplicitProjectHostIds
+    getExplicitProjectCatalogOwnerHostIds
   )
   const projectHasCurrentOwnerOutsideHost = (project: Project): boolean => {
     for (const ownerHostId of currentProjectOwnerHostIds(project)) {

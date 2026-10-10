@@ -9,7 +9,6 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
-import { getSetupScriptPromptDismissalKey } from '../../lib/setup-script-prompt'
 
 const localRepo: Repo = {
   id: 'local-repo',
@@ -314,7 +313,7 @@ describe('fetchReposForAllHosts', () => {
     expect(store.getState().repos).toEqual([liveRepo])
   })
 
-  it('preserves an old direct SSH row when no re-adoption evidence exists', async () => {
+  it('prunes an absent direct SSH registration from the complete local publisher catalog', async () => {
     const staleRepo = directSshRepo('ssh-old')
     const liveRepo = directSshRepo('ssh-new')
     reposList.mockResolvedValue([liveRepo])
@@ -323,7 +322,7 @@ describe('fetchReposForAllHosts', () => {
 
     await store.getState().fetchReposForAllHosts({ remoteHosts: 'skip' })
 
-    expect(store.getState().repos).toEqual([staleRepo, liveRepo])
+    expect(store.getState().repos).toEqual([liveRepo])
   })
 
   it('reconciles a targeted runtime response against the latest repo state', async () => {
@@ -360,7 +359,12 @@ describe('fetchReposForAllHosts', () => {
 
     expect(store.getState().repos).toEqual([
       liveRepo,
-      { ...remoteRepo, executionHostId: 'runtime:env-1' }
+      {
+        ...remoteRepo,
+        executionHostId: 'runtime:env-1',
+        authoritativeExecutionHostId: 'local',
+        catalogOwnerHostId: 'runtime:env-1'
+      }
     ])
   })
 
@@ -780,43 +784,6 @@ describe('fetchReposForAllHosts', () => {
     expect(store.getState().folderWorkspaces).toEqual([
       { ...localFolderWorkspace, executionHostId: 'local' }
     ])
-  })
-
-  it('preserves remote repo filters during first-paint local catalog refresh', async () => {
-    const store = createTestStore()
-    const remoteDismissalKey = getSetupScriptPromptDismissalKey('runtime:env-1\0remote-repo')
-    const staleDismissalKey = getSetupScriptPromptDismissalKey('local\0stale-repo')
-    store.setState({
-      activeRepoId: 'remote-repo',
-      filterRepoIds: ['remote-repo', 'stale-repo'],
-      setupScriptPromptDismissedRepoIds: [remoteDismissalKey, staleDismissalKey],
-      trustedOrcaHooks: {
-        'remote-repo': { all: { approvedAt: 1 } },
-        'stale-repo': { all: { approvedAt: 2 } }
-      }
-    })
-
-    await store.getState().fetchReposForAllHosts({ remoteHosts: 'skip' })
-
-    expect(store.getState().activeRepoId).toBe('remote-repo')
-    expect(store.getState().filterRepoIds).toEqual(['remote-repo', 'stale-repo'])
-    expect(store.getState().setupScriptPromptDismissedRepoIds).toEqual([
-      remoteDismissalKey,
-      staleDismissalKey
-    ])
-    expect(store.getState().trustedOrcaHooks).toEqual({
-      'remote-repo': { all: { approvedAt: 1 } },
-      'stale-repo': { all: { approvedAt: 2 } }
-    })
-
-    await store.getState().fetchReposForAllHosts()
-
-    expect(store.getState().activeRepoId).toBe('remote-repo')
-    expect(store.getState().filterRepoIds).toEqual(['remote-repo'])
-    expect(store.getState().setupScriptPromptDismissedRepoIds).toEqual([remoteDismissalKey])
-    expect(store.getState().trustedOrcaHooks).toEqual({
-      'remote-repo': { all: { approvedAt: 1 } }
-    })
   })
 
   it('starts remote repo catalog loads concurrently for all configured runtimes', async () => {

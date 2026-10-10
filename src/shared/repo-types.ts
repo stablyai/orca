@@ -76,6 +76,9 @@ export type Repo = {
    * because they otherwise look identical to local repos (`connectionId: null`).
    */
   executionHostId?: 'local' | `ssh:${string}` | `runtime:${string}` | null
+  /** Renderer provenance before adopting a paired runtime transport. */
+  authoritativeExecutionHostId?: 'local' | `ssh:${string}` | `runtime:${string}`
+  catalogOwnerHostId?: 'local' | `ssh:${string}` | `runtime:${string}`
   /** Per-repo override for issue-source resolution. `undefined` is treated
    *  identically to `'auto'`; writers leave it undefined on creation so
    *  existing persisted records stay forward-compatible. */

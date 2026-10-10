@@ -1,4 +1,8 @@
-import { parseExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  toRuntimeExecutionHostId
+} from '../../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
@@ -96,7 +100,12 @@ export async function callRuntimeResultWithOwner<TResult>(
 }
 
 export function withRuntimeRepoOwner(repo: Repo, hostId: ExecutionHostId): Repo {
-  return { ...repo, executionHostId: hostId }
+  return {
+    ...repo,
+    executionHostId: hostId,
+    authoritativeExecutionHostId: repo.authoritativeExecutionHostId ?? getRepoExecutionHostId(repo),
+    catalogOwnerHostId: hostId
+  }
 }
 
 export function withRuntimeRepoMutationOwner(

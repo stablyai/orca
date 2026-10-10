@@ -1,3 +1,4 @@
+import { OptionalExecutionHostId } from './worktree-params'
 import { z } from 'zod'
 import { OptionalString, requiredString } from './rpc-param-primitives'
 import {
@@ -76,6 +77,7 @@ export const ProjectHostSetupCreate = z.object({
 })
 
 export const ProjectHostSetupUpdate = z.object({
+  executionHostId: OptionalExecutionHostId,
   setupId: requiredString('Missing setup ID'),
   updates: z.object({
     displayName: OptionalString,
@@ -91,5 +93,6 @@ export const ProjectHostSetupUpdate = z.object({
 })
 
 export const ProjectHostSetupDelete = z.object({
+  executionHostId: OptionalExecutionHostId,
   setupId: requiredString('Missing setup ID')
 })

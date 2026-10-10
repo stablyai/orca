@@ -4,7 +4,6 @@ import type { Repo } from '../../../../shared/repo-types'
 import { applyManualRepoOrder } from '../../../../shared/manual-repo-order'
 import { retainValidFilterRepoIds } from '../slices/repo-filter-selection'
 import { readRuntimeWorktreeVisibilitySnapshot } from '../slices/worktree-visibility-owner-settings'
-import { getRepoHostIdentity } from '../slices/repo-host-identity'
 import { getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
@@ -104,14 +103,13 @@ export function createAllHostRepoCatalogActions(
       const validateRepoScopedUi = (): void => {
         set((s) => {
           const validRepoIds = new Set(s.repos.map((repo) => repo.id))
-          const validRepoHostIdentities = new Set(s.repos.map(getRepoHostIdentity))
           return {
             activeRepoId:
               s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
             filterRepoIds: retainValidFilterRepoIds(s.filterRepoIds, validRepoIds),
             setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
               s.setupScriptPromptDismissedRepoIds,
-              validRepoHostIdentities
+              s.repos
             ),
             trustedOrcaHooks: filterTrustedOrcaHooksToValidRepos(s.trustedOrcaHooks, validRepoIds)
           }

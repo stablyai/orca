@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { makeWorktree } from './worktrees-slice-test-fixtures'
+import { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
 import {
   createTestStore,
   mockApi,
@@ -39,7 +39,7 @@ describe('background creation host capture', () => {
       })
       store.setState({
         settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-other' },
-        repos: [],
+        repos: [{ ...TEST_REPO, executionHostId }],
         worktreesByRepo: { repo1: [] }
       })
       const createWorktree = store.getState().createWorktree
@@ -72,7 +72,7 @@ describe('background creation host capture', () => {
     runtimeEnvironmentCall.mockReturnValue(response.promise)
     store.setState({
       settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-1' },
-      repos: [],
+      repos: [{ ...TEST_REPO, executionHostId: 'runtime:env-1' }],
       worktreesByRepo: { repo1: [] }
     })
     const createWorktree = store.getState().createWorktree

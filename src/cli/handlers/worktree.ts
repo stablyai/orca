@@ -1,4 +1,5 @@
 import type {
+  RuntimeStatus,
   RuntimeWorktreeListResult,
   RuntimeWorktreePsResult,
   RuntimeWorktreeRecord,
@@ -12,6 +13,7 @@ import {
   annotateOmittedHostScope,
   type WithAnnotatedHostScope
 } from '../omitted-host-scope-selectors'
+import { WORKTREE_CREATE_EXECUTION_HOST_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import { RuntimeClientError } from '../runtime-client'
 import {
   getOptionalPositiveIntegerFlag,
@@ -29,7 +31,7 @@ import { projectWorktreePsTerminalVerdict } from '../worktree-ps-terminal-verdic
 import {
   assertWorkspaceTargetFlagsCompatible,
   hasWorkspaceProjectTarget,
-  resolveProjectCreateRepoSelector
+  resolveProjectCreateTarget
 } from '../worktree-project-target'
 import {
   assertWorktreeParentFlagsCompatible,
@@ -102,12 +104,11 @@ function getRepoSelectorFromWorktreeSelector(selector: string | undefined): stri
   return `id:${worktreeId.slice(0, separatorIndex)}`
 }
 
-async function getCreateRepoSelector(
+function getCreateRepoSelector(
   flags: Map<string, string | boolean>,
   cwdParentWorktree: string | undefined,
-  client: Parameters<CommandHandler>[0]['client']
-): Promise<string> {
-  const projectRepoSelector = await resolveProjectCreateRepoSelector(flags, client)
+  projectRepoSelector?: string
+): string {
   if (projectRepoSelector) {
     return projectRepoSelector
   }
@@ -197,11 +198,24 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue')
     const activate = flags.get('activate') === true || flags.get('run-hooks') === true
     const name = getRequiredStringFlag(flags, 'name')
-    const repo = await getCreateRepoSelector(flags, cwdParentWorktree, client)
+    const projectTarget = await resolveProjectCreateTarget(flags, client)
+    if (projectTarget) {
+      const status = await client.call<RuntimeStatus>('status.get')
+      if (
+        !status.result.capabilities?.includes(WORKTREE_CREATE_EXECUTION_HOST_RUNTIME_CAPABILITY)
+      ) {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          'Update Orca on the server to safely create a workspace on its selected execution host.'
+        )
+      }
+    }
+    const repo = getCreateRepoSelector(flags, cwdParentWorktree, projectTarget?.repoSelector)
     await assertGitLabLinkFlagProjectsMatch(flags, client, { repo })
     const result = await withSetupDecisionRecovery(
       client.call<RuntimeWorktreeCreateResult>('worktree.create', {
         repo,
+        ...(projectTarget ? { executionHostId: projectTarget.setup.hostId } : {}),
         name,
         displayName: name,
         displayNameKind: 'user',

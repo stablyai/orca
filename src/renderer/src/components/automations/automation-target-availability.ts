@@ -9,7 +9,11 @@ import {
   RUNTIME_PROTOCOL_VERSION
 } from '../../../../shared/protocol-version'
 import type { AutomationHostTarget } from './automation-host-client'
-import { repoHostMatchesRunContext, setupHostMatchesRunContext } from './automation-run-context'
+import {
+  getRuntimeTargetHostId,
+  repoHostMatchesRunContext,
+  setupHostMatchesRunContext
+} from './automation-run-context'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
@@ -17,6 +21,10 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { TaskSourceHostAvailability } from '../task-source-context-summary'
+import {
+  getRepoCatalogOwnerHostId,
+  getSetupCatalogOwnerHostId
+} from '../../store/projects/project-catalog-owner'
 
 export type AutomationTargetAvailability =
   | {
@@ -71,8 +79,9 @@ export function getAutomationTargetAvailability({
     return unavailable('missing-project', 'The target project is no longer available.')
   }
 
-  if (automation.runContext) {
-    const parsedHost = parseExecutionHostId(automation.runContext.hostId)
+  const runContext = automation.runContext
+  if (runContext) {
+    const parsedHost = parseExecutionHostId(runContext.hostId)
     if (parsedHost?.kind === 'runtime') {
       const runtimeAvailability = getRuntimeAutomationAvailability(
         parsedHost.environmentId,
@@ -82,9 +91,28 @@ export function getAutomationTargetAvailability({
         return runtimeAvailability
       }
     }
-    const setup = projectHostSetups.find(
-      (candidate) => candidate.id === automation.runContext?.projectHostSetupId
+    const publisherHostId =
+      automationHostTarget?.kind === 'local'
+        ? 'local'
+        : (getRuntimeTargetHostId(automationHostTarget) ?? getRepoCatalogOwnerHostId(repo))
+    const namedSetups = projectHostSetups.filter(
+      (candidate) => candidate.id === runContext?.projectHostSetupId
     )
+    const matchingOwners = namedSetups.filter((candidate) =>
+      setupHostMatchesRunContext(
+        candidate.authoritativeExecutionHostId ?? candidate.hostId,
+        runContext.hostId,
+        automationHostTarget
+      )
+    )
+    const hasPublisherProvenance = namedSetups.some((candidate) => candidate.catalogOwnerHostId)
+    const matchingSetups = matchingOwners.filter(
+      (candidate) =>
+        getSetupCatalogOwnerHostId(candidate) === publisherHostId ||
+        // Legacy catalogs without publisher stamps can still identify one unique setup.
+        (!hasPublisherProvenance && matchingOwners.length === 1)
+    )
+    const setup = matchingSetups.length === 1 ? matchingSetups[0] : undefined
     if (!setup) {
       return unavailable(
         'missing-project-host-setup',
@@ -101,13 +129,17 @@ export function getAutomationTargetAvailability({
     // matching on it strands automations created before their repo's identity resolved.
     // Anchor on repoId/path/host instead — the durable, stable target identity.
     const setupMatchesContext =
-      setup.repoId === automation.runContext.repoId &&
-      setup.path === automation.runContext.path &&
-      setupHostMatchesRunContext(setup.hostId, automation.runContext.hostId, automationHostTarget)
+      setup.repoId === runContext.repoId &&
+      setup.path === runContext.path &&
+      setupHostMatchesRunContext(
+        setup.authoritativeExecutionHostId ?? setup.hostId,
+        runContext.hostId,
+        automationHostTarget
+      )
     const repoMatchesContext =
-      automation.runContext.repoId === repo.id &&
-      automation.runContext.path === repo.path &&
-      repoHostMatchesRunContext(repo, automation.runContext.hostId, automationHostTarget)
+      runContext.repoId === repo.id &&
+      runContext.path === repo.path &&
+      repoHostMatchesRunContext(repo, runContext.hostId, automationHostTarget)
     if (!setupMatchesContext || !repoMatchesContext) {
       return unavailable(
         'host-mismatch',

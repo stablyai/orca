@@ -263,7 +263,12 @@ describe('selected Add Project owner routing', () => {
     expect(store.getState().repos).toEqual(
       expect.arrayContaining([
         { ...localRepo, executionHostId: 'local' },
-        { ...runtimeRepo, executionHostId: 'runtime:env-1' }
+        {
+          ...runtimeRepo,
+          executionHostId: 'runtime:env-1',
+          authoritativeExecutionHostId: 'local',
+          catalogOwnerHostId: 'runtime:env-1'
+        }
       ])
     )
   })

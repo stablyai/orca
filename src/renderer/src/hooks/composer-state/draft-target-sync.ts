@@ -89,6 +89,11 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
           : selectedWorkspaceTarget.status === 'ready'
             ? selectedWorkspaceTarget.target.projectHostSetupId
             : null,
+      authoritativeExecutionHostId:
+        selectedProjectGroup === null && selectedWorkspaceTarget.status === 'ready'
+          ? (selectedWorkspaceTarget.target.setup.authoritativeExecutionHostId ??
+            selectedWorkspaceTarget.target.hostId)
+          : null,
       name,
       prompt: agentPrompt,
       note,

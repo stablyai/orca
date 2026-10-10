@@ -221,6 +221,7 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/runtime/rpc/methods/structured-agent-session-restart-unregistered-agent.test.ts',
   'src/main/runtime/rpc/methods/structured-agent-session-unsubscribe.test.ts',
   'src/main/runtime/rpc/methods/structured-chat-tab-table.test.ts',
+  'src/main/runtime/rpc/methods/worktree-create-owner-dispatch.test.ts',
   'src/main/runtime/runtime-managed-worktree-metadata-sweep.test.ts',
   'src/main/runtime/runtime-managed-worktree-metadata.test.ts',
   'src/main/runtime/runtime-worktree-metadata-admission.integration.test.ts',

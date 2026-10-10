@@ -5,6 +5,8 @@ import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getAutomationTargetAvailability } from './automation-target-availability'
+import { repoWithFetchedOwner } from '../../store/repos/owner-routing'
+import { setupWithFetchedOwner } from '../../store/projects/project-host-routing'
 
 function makeAutomation(overrides: Partial<Automation> = {}): Automation {
   return {
@@ -87,6 +89,71 @@ function makeRuntimeStatus(overrides: Partial<RuntimeStatus> = {}): RuntimeStatu
 }
 
 describe('automation target availability', () => {
+  it.each(['receiver', 'publisher'] as const)(
+    'refuses an explicitly different %s backing repo',
+    (mismatch) => {
+      const target = { kind: 'environment', environmentId: 'gpu' } as const
+      const setup = setupWithFetchedOwner(makeProjectHostSetup({ hostId: 'ssh:b' }), target)
+      const repo = repoWithFetchedOwner(
+        makeRepo({ executionHostId: mismatch === 'receiver' ? 'ssh:a' : 'ssh:b' }),
+        mismatch === 'publisher' ? { kind: 'environment', environmentId: 'other' } : target
+      )
+      expect(
+        getAutomationTargetAvailability({
+          automation: makeAutomation({
+            runContext: {
+              kind: 'workspace-run',
+              projectId: 'project-1',
+              hostId: 'ssh:b',
+              projectHostSetupId: 'setup-1',
+              repoId: repo.id,
+              path: repo.path
+            }
+          }),
+          repo,
+          workspace: makeWorkspace(),
+          projectHostSetups: [setup],
+          sshConnectionStates: new Map([['b', { status: 'connected' }]]),
+          automationHostTarget: target
+        }).reason
+      ).toBe('host-mismatch')
+    }
+  )
+  it.each(['local', 'ssh:devbox'] as const)(
+    'selects the captured publisher before raw host %s and setup ID',
+    (rawHost) => {
+      const targets = [
+        { kind: 'local' },
+        { kind: 'environment', environmentId: 'gpu' },
+        { kind: 'environment', environmentId: 'other' }
+      ] as const
+      const setups = targets.map((target) =>
+        setupWithFetchedOwner(makeProjectHostSetup({ hostId: rawHost }), target)
+      )
+      for (const target of targets) {
+        const repo = repoWithFetchedOwner(makeRepo({ executionHostId: rawHost }), target)
+        expect(
+          getAutomationTargetAvailability({
+            automation: makeAutomation({
+              runContext: {
+                kind: 'workspace-run',
+                projectId: 'project-1',
+                hostId: rawHost,
+                projectHostSetupId: 'setup-1',
+                repoId: repo.id,
+                path: repo.path
+              }
+            }),
+            repo,
+            workspace: makeWorkspace(),
+            projectHostSetups: setups,
+            sshConnectionStates: new Map([['devbox', { status: 'connected' }]]),
+            automationHostTarget: target
+          })
+        ).toEqual({ canRunNow: true, reason: 'available', message: null })
+      }
+    }
+  )
   it('allows local automations with an available existing workspace', () => {
     expect(
       getAutomationTargetAvailability({
@@ -139,7 +206,7 @@ describe('automation target availability', () => {
         projectHostSetups: [makeProjectHostSetup()],
         sshConnectionStates: new Map()
       }).reason
-    ).toBe('host-mismatch')
+    ).toBe('missing-project-host-setup')
   })
 
   it('allows a run context whose derived projectId tier drifted but repo/host/path still match', () => {

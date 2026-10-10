@@ -24,12 +24,22 @@ export function repoWithFetchedOwner(
   target: ReturnType<typeof getActiveRuntimeTarget>
 ): Repo {
   if (target.kind === 'environment') {
-    return { ...repo, executionHostId: getRuntimeTargetHostId(target) }
+    return {
+      ...repo,
+      executionHostId: getRuntimeTargetHostId(target),
+      authoritativeExecutionHostId:
+        repo.authoritativeExecutionHostId ?? getRepoExecutionHostId(repo),
+      catalogOwnerHostId: getRuntimeTargetHostId(target)
+    }
   }
   if (repo.connectionId) {
     return { ...repo, executionHostId: getRepoExecutionHostId(repo) }
   }
-  return repo.executionHostId ? repo : { ...repo, executionHostId: LOCAL_EXECUTION_HOST_ID }
+  return parseExecutionHostId(repo.executionHostId)?.kind === 'runtime'
+    ? { ...repo, catalogOwnerHostId: LOCAL_EXECUTION_HOST_ID }
+    : repo.executionHostId
+      ? repo
+      : { ...repo, executionHostId: LOCAL_EXECUTION_HOST_ID }
 }
 
 export function settingsForRepoOwner(

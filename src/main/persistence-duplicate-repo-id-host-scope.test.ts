@@ -148,20 +148,47 @@ describe('deleting one host copy of a repo id shared by two hosts', () => {
     expect(store.getRepos().map((repo) => repo.path)).toEqual(['/laptop/dup'])
   })
 
-  it('deleteProjectHostSetup drops only the row it reports, never the sibling host', async () => {
-    // Repo-derived setups reuse the repo id, so a duplicated id yields two setups with the
-    // same setup id and the lookup can only resolve one. Whichever it resolves, the other
-    // host's registration must survive.
+  it('refuses ambiguous legacy setup mutations without changing either host', async () => {
     const store = await createStoreWithDuplicateRepoId()
+    const before = store.getRepos()
+    expect(() => store.deleteProjectHostSetup({ setupId: 'dup' })).toThrow(/ambiguous/)
+    expect(() =>
+      store.updateProjectHostSetup({ setupId: 'dup', updates: { displayName: 'Wrong' } })
+    ).toThrow(/ambiguous/)
+    expect(store.getRepos()).toEqual(before)
+  })
 
-    const result = store.deleteProjectHostSetup({ setupId: 'dup' })
+  it.each(['local', 'ssh:ssh-1'] as const)(
+    'updates and deletes the qualified %s setup only',
+    async (host) => {
+      const store = await createStoreWithDuplicateRepoId()
+      const result = store.updateProjectHostSetup({
+        setupId: 'dup',
+        executionHostId: host,
+        updates: { displayName: 'Selected', worktreeBasePath: '/selected/worktrees' }
+      })
+      expect(result?.setup.hostId).toBe(host)
+      expect(result?.repo?.displayName).toBe('Selected')
+      expect(store.getRepos().filter((repo) => repo.displayName === 'Selected')).toHaveLength(1)
+      const deleted = store.deleteProjectHostSetup({ setupId: 'dup', executionHostId: host })
+      expect(deleted?.setup.hostId).toBe(host)
+      expect(store.getRepos()).toHaveLength(1)
+      expect(store.getRepos()[0].displayName).not.toBe('Selected')
+    }
+  )
 
-    expect(result?.repo?.path).toBeDefined()
-    expect(store.getRepos().map((repo) => repo.path)).toEqual(
-      duplicateIdRepos()
-        .map((repo) => repo.path)
-        .filter((path) => path !== result?.repo?.path)
-    )
+  it('refuses a missing qualified host and keeps unique legacy IDs compatible', async () => {
+    const store = await createStoreWithDuplicateRepoId()
+    expect(
+      store.deleteProjectHostSetup({ setupId: 'dup', executionHostId: 'ssh:missing' })
+    ).toBeNull()
+    expect(store.getRepos()).toHaveLength(2)
+    store.deleteProjectHostSetup({ setupId: 'dup', executionHostId: 'local' })
+    expect(
+      store.updateProjectHostSetup({ setupId: 'dup', updates: { displayName: 'Legacy' } })?.setup
+        .hostId
+    ).toBe('ssh:ssh-1')
+    expect(store.deleteProjectHostSetup({ setupId: 'dup' })?.setup.hostId).toBe('ssh:ssh-1')
   })
 
   it('setResolvedRepoGitUsername writes only the probed host row', async () => {

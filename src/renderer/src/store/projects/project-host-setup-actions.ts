@@ -9,10 +9,15 @@ import type {
 } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { omitSparsePresetsForRepos } from '../slices/sparse-presets'
-import { repoMatchesHostIdentity } from '../slices/repo-host-identity'
+import { getRepoHostIdentity } from '../slices/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import { getProjectHostSetupOwnerKey } from './project-compatibility-core'
+import {
+  resolveProjectHostSetupMutation,
+  upsertOwnedProjectHostSetup
+} from './project-host-setup-mutation'
 import { translate } from '@/i18n/i18n'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { RepoSlice } from '../repos/repo-state'
 import { ERROR_TOAST_DURATION } from '../repos/repo-state'
 import { repoWithFetchedOwner } from '../repos/owner-routing'
@@ -56,23 +61,20 @@ export function createProjectHostSetupActions(
                 )
               ).result
         const repo = repoWithFetchedOwner(result.repo, target)
-        const repoHostId = getRepoExecutionHostId(repo)
         const setup = setupWithFetchedOwner(result.setup, target)
         const project = normalizeProjectRow(result.project)
         set((s) => {
-          const nextRepos = s.repos.some((entry) =>
-            repoMatchesHostIdentity(entry, repo.id, repoHostId)
+          const nextRepos = s.repos.some(
+            (entry) => getRepoHostIdentity(entry) === getRepoHostIdentity(repo)
           )
             ? s.repos.map((entry) =>
-                repoMatchesHostIdentity(entry, repo.id, repoHostId) ? repo : entry
+                getRepoHostIdentity(entry) === getRepoHostIdentity(repo) ? repo : entry
               )
             : [...s.repos, repo]
           const nextProjects = s.projects.some((entry) => entry.id === project.id)
             ? s.projects.map((entry) => (entry.id === project.id ? project : entry))
             : [...s.projects, project]
-          const nextSetups = s.projectHostSetups.some((entry) => entry.id === setup.id)
-            ? s.projectHostSetups.map((entry) => (entry.id === setup.id ? setup : entry))
-            : [...s.projectHostSetups, setup]
+          const nextSetups = upsertOwnedProjectHostSetup(s.projectHostSetups, setup)
           return {
             repos: nextRepos,
             projects: nextProjects,
@@ -115,9 +117,7 @@ export function createProjectHostSetupActions(
           projects: s.projects.some((entry) => entry.id === project.id)
             ? s.projects.map((entry) => (entry.id === project.id ? project : entry))
             : [...s.projects, project],
-          projectHostSetups: s.projectHostSetups.some((entry) => entry.id === setup.id)
-            ? s.projectHostSetups.map((entry) => (entry.id === setup.id ? setup : entry))
-            : [...s.projectHostSetups, setup]
+          projectHostSetups: upsertOwnedProjectHostSetup(s.projectHostSetups, setup)
         }))
         return { project, setup }
       } catch (err) {
@@ -133,40 +133,41 @@ export function createProjectHostSetupActions(
 
     updateProjectHostSetup: async (args) => {
       try {
-        const currentSetup = get().projectHostSetups.find((setup) => setup.id === args.setupId)
-        const target = currentSetup
-          ? getProjectSetupRuntimeTarget(currentSetup.hostId)
-          : { kind: 'local' as const }
-        await assertProjectHostSetupMutationRuntimeCapabilities(target)
+        const currentSetup = resolveProjectHostSetupMutation(get().projectHostSetups, args)
+        const target = getProjectSetupRuntimeTarget(
+          currentSetup.catalogOwnerHostId ?? currentSetup.hostId
+        )
+        await assertProjectHostSetupMutationRuntimeCapabilities(target, true)
+        const mutationArgs = {
+          setupId: args.setupId,
+          executionHostId: currentSetup.authoritativeExecutionHostId ?? currentSetup.hostId
+        }
         const result =
           target.kind === 'local'
-            ? await window.api.projects.updateHostSetup(args)
+            ? await window.api.projects.updateHostSetup({ ...mutationArgs, updates: args.updates })
             : (
                 await callRuntimeRpc<{ result: ProjectHostSetupUpdateResult }>(
                   target,
                   'projectHostSetup.update',
-                  args,
+                  { ...mutationArgs, updates: args.updates },
                   { timeoutMs: 15_000 }
                 )
               ).result
         const setup = setupWithFetchedOwner(result.setup, target)
         const project = normalizeProjectRow(result.project)
         const repo = result.repo ? repoWithFetchedOwner(result.repo, target) : undefined
-        const repoHostId = repo ? getRepoExecutionHostId(repo) : null
         set((s) => ({
           repos: repo
-            ? s.repos.some((entry) => repoMatchesHostIdentity(entry, repo.id, repoHostId!))
+            ? s.repos.some((entry) => getRepoHostIdentity(entry) === getRepoHostIdentity(repo))
               ? s.repos.map((entry) =>
-                  repoMatchesHostIdentity(entry, repo.id, repoHostId!) ? repo : entry
+                  getRepoHostIdentity(entry) === getRepoHostIdentity(repo) ? repo : entry
                 )
               : [...s.repos, repo]
             : s.repos,
           projects: s.projects.some((entry) => entry.id === project.id)
             ? s.projects.map((entry) => (entry.id === project.id ? project : entry))
             : [...s.projects, project],
-          projectHostSetups: s.projectHostSetups.some((entry) => entry.id === setup.id)
-            ? s.projectHostSetups.map((entry) => (entry.id === setup.id ? setup : entry))
-            : [...s.projectHostSetups, setup]
+          projectHostSetups: upsertOwnedProjectHostSetup(s.projectHostSetups, setup, currentSetup)
         }))
         return { ...result, project, repo, setup }
       } catch (err) {
@@ -182,32 +183,35 @@ export function createProjectHostSetupActions(
 
     deleteProjectHostSetup: async (args) => {
       try {
-        const currentSetup = get().projectHostSetups.find((setup) => setup.id === args.setupId)
-        const target = currentSetup
-          ? getProjectSetupRuntimeTarget(currentSetup.hostId)
-          : { kind: 'local' as const }
-        await assertProjectHostSetupMutationRuntimeCapabilities(target)
+        const currentSetup = resolveProjectHostSetupMutation(get().projectHostSetups, args)
+        const target = getProjectSetupRuntimeTarget(
+          currentSetup.catalogOwnerHostId ?? currentSetup.hostId
+        )
+        await assertProjectHostSetupMutationRuntimeCapabilities(target, true)
+        const mutationArgs = {
+          setupId: args.setupId,
+          executionHostId: currentSetup.authoritativeExecutionHostId ?? currentSetup.hostId
+        }
         const result =
           target.kind === 'local'
-            ? await window.api.projects.deleteHostSetup(args)
+            ? await window.api.projects.deleteHostSetup(mutationArgs)
             : (
                 await callRuntimeRpc<{ result: ProjectHostSetupDeleteResult }>(
                   target,
                   'projectHostSetup.delete',
-                  args,
+                  mutationArgs,
                   { timeoutMs: 15_000 }
                 )
               ).result
         const repo = result.repo ? repoWithFetchedOwner(result.repo, target) : undefined
-        const repoHostId = repo ? getRepoExecutionHostId(repo) : null
         set((s) => {
           const projectHostSetups = s.projectHostSetups.filter(
-            (setup) => setup.id !== result.setup.id
+            (setup) =>
+              getProjectHostSetupOwnerKey(setup) !== getProjectHostSetupOwnerKey(currentSetup)
           )
-          const repos =
-            repo && repoHostId
-              ? s.repos.filter((entry) => !repoMatchesHostIdentity(entry, repo.id, repoHostId))
-              : s.repos
+          const repos = repo
+            ? s.repos.filter((entry) => getRepoHostIdentity(entry) !== getRepoHostIdentity(repo))
+            : s.repos
           const projects =
             repo && !projectHostSetups.some((setup) => setup.projectId === result.project.id)
               ? s.projects.filter((project) => project.id !== result.project.id)

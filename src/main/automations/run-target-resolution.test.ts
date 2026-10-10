@@ -95,8 +95,10 @@ function makeStore(
       return repo ? repo.connectionId?.trim() || null : undefined
     }
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies every Store method exercised by the resolver.
   return {
     getProjectHostSetups: () => setups,
+    getRepos: () => repos,
     getRepo: (id: string) => repos.find((repo) => repo.id === id),
     automationOwnerPrecondition: () =>
       projectedAutomation
@@ -132,6 +134,25 @@ describe('resolveAutomationRunTarget owner projection', () => {
       ok: true,
       cwd: '/repo'
     })
+  })
+})
+
+describe('duplicate setup and repo IDs on saved automation hosts', () => {
+  it.each([false, true])('resolves the saved SSH owner (SSH first: %s)', (sshFirst) => {
+    const localRepo = makeRepo()
+    const remoteRepo = makeRepo({ connectionId: 'ssh-1', path: '/remote' })
+    const localSetup = makeSetup()
+    const remoteSetup = makeSetup({ hostId: 'ssh:ssh-1', path: '/remote' })
+    const store = makeStore(
+      sshFirst ? [remoteSetup, localSetup] : [localSetup, remoteSetup],
+      sshFirst ? [remoteRepo, localRepo] : [localRepo, remoteRepo]
+    )
+    expect(
+      resolveAutomationRunTarget(
+        store,
+        makeAutomation(makeRunContext({ hostId: 'ssh:ssh-1', path: '/remote' }))
+      )
+    ).toMatchObject({ ok: true, cwd: '/remote', repo: remoteRepo, setup: remoteSetup })
   })
 })
 
@@ -173,7 +194,7 @@ describe('resolveAutomationRunTarget projectId drift', () => {
 
     expect(result).toMatchObject({
       ok: false,
-      error: 'Automation run target no longer matches the selected project host setup.'
+      error: 'Project is not set up on the selected automation host anymore.'
     })
   })
 
@@ -187,7 +208,7 @@ describe('resolveAutomationRunTarget projectId drift', () => {
 
     expect(result).toMatchObject({
       ok: false,
-      error: 'Repository is no longer attached to the selected automation host.'
+      error: 'Repository for the selected automation host is no longer available.'
     })
   })
 

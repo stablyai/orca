@@ -3,6 +3,13 @@
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { useDraftTargetSync, type DraftTargetSyncInput } from './draft-target-sync'
+import { createTestStore } from '../../store/slices/store-test-helpers'
+import { repoWithFetchedOwner } from '../../store/repos/owner-routing'
+import {
+  getProjectHostSetupOwnerKey,
+  projectCompatibilityFromRepos
+} from '../../store/projects/project-compatibility-core'
+import { resolveWorkspaceCreationTarget } from '../../lib/project-host-workspace-target'
 
 function createRepo(id: string): DraftTargetSyncInput['eligibleRepos'][number] {
   return {
@@ -109,6 +116,56 @@ describe('useDraftTargetSync', () => {
 
     expect(state.setNewWorkspaceDraft).not.toHaveBeenCalled()
     expect(state.setRepoId).not.toHaveBeenCalled()
+  })
+
+  it('stores the published setup ID and restores its private receiver owner rather than the picker token', () => {
+    const transport = { kind: 'environment', environmentId: 'paired' } as const
+    const repos = (['ssh:a', 'ssh:b'] as const).map((host) =>
+      repoWithFetchedOwner({ ...createRepo('same-id'), executionHostId: host }, transport)
+    )
+    const compatibility = projectCompatibilityFromRepos(repos)
+    const selectedWorkspaceTarget = resolveWorkspaceCreationTarget({
+      eligibleRepos: repos,
+      ...compatibility,
+      projectHostSetupId: getProjectHostSetupOwnerKey(compatibility.projectHostSetups[1])
+    })
+    if (selectedWorkspaceTarget.status !== 'ready') {
+      throw new Error('Missing selected private receiver setup')
+    }
+    const store = createTestStore()
+    renderHook(() =>
+      useDraftTargetSync(
+        createState({
+          eligibleRepos: repos,
+          repoId: 'same-id',
+          selectedWorkspaceTarget,
+          setNewWorkspaceDraft: store.getState().setNewWorkspaceDraft
+        })
+      )
+    )
+    const draft = structuredClone(store.getState().newWorkspaceDraft)
+    expect(draft).toMatchObject({
+      projectHostSetupId: 'same-id',
+      hostId: 'runtime:paired',
+      authoritativeExecutionHostId: 'ssh:b'
+    })
+    expect(
+      resolveWorkspaceCreationTarget({
+        eligibleRepos: repos,
+        ...compatibility,
+        projectHostSetupId: draft?.projectHostSetupId,
+        hostId: draft?.hostId,
+        authoritativeExecutionHostId: draft?.authoritativeExecutionHostId
+      })
+    ).toMatchObject({ status: 'ready', target: { projectHostSetupId: 'same-id', repo: repos[1] } })
+    expect(
+      resolveWorkspaceCreationTarget({
+        eligibleRepos: repos,
+        ...compatibility,
+        projectHostSetupId: draft?.projectHostSetupId,
+        hostId: draft?.hostId
+      })
+    ).toMatchObject({ status: 'unavailable' })
   })
 
   it('loads sparse presets only once for a local git repo', () => {

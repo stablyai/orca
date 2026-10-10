@@ -1,3 +1,4 @@
+import { getProjectHostSetupOwnerKey } from '../../store/projects/project-compatibility-core'
 import type { ComposerModel } from './composer-model'
 
 type ComposerInitialTargetStateInput = Pick<
@@ -84,6 +85,10 @@ export function useComposerInitialTargetState(input: ComposerInitialTargetStateI
     projectId: initialRunSeed.projectId,
     hostId: initialRunSeed.hostId,
     projectHostSetupId: initialRunSeed.projectHostSetupId,
+    authoritativeExecutionHostId:
+      persistDraft && draftProjectHostSetupId === initialRunSeed.projectHostSetupId
+        ? newWorkspaceDraft?.authoritativeExecutionHostId
+        : undefined,
     focusedHostScope: workspaceHostScope,
     actionableHostIds
   })
@@ -99,7 +104,11 @@ export function useComposerInitialTargetState(input: ComposerInitialTargetStateI
     string | null
   >(
     resolvedInitialWorkspaceTarget.status === 'ready'
-      ? resolvedInitialWorkspaceTarget.target.projectHostSetupId
+      ? projectHostSetups.filter(
+          (setup) => setup.id === resolvedInitialWorkspaceTarget.target.projectHostSetupId
+        ).length > 1
+        ? getProjectHostSetupOwnerKey(resolvedInitialWorkspaceTarget.target.setup)
+        : resolvedInitialWorkspaceTarget.target.projectHostSetupId
       : null
   )
 

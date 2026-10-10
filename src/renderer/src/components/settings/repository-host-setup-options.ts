@@ -4,6 +4,10 @@ import type { ProjectHostSetup, ProjectHostSetupState } from '../../../../shared
 import { translate } from '@/i18n/i18n'
 import { getHostSetupUnavailableDetail } from '@/lib/project-host-setup-options'
 import { pickerExecutionHosts } from '../../../../shared/managed-orcad-execution-host'
+import {
+  getProjectHostSetupExecutionOwnerKey,
+  getProjectHostSetupOwnerKey
+} from '../../store/projects/project-compatibility-core'
 
 export type SetupHostOption = {
   id: ExecutionHostId
@@ -80,12 +84,8 @@ export function setupsByOwnedExecutionHost(
 ): ProjectHostSetup[] {
   const byHost = new Map<string, ProjectHostSetup>()
   for (const setup of setups) {
-    const key = JSON.stringify([
-      setup.hostId,
-      setup.executionHostId ?? setup.hostId,
-      setup.runtimeOwnerEnvironmentId ?? null
-    ])
-    if (!byHost.has(key) || setup.id === selectedSetupId) {
+    const key = getProjectHostSetupExecutionOwnerKey(setup)
+    if (!byHost.has(key) || getProjectHostSetupOwnerKey(setup) === selectedSetupId) {
       byHost.set(key, setup)
     }
   }

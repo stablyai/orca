@@ -79,6 +79,7 @@ export type NewWorkspaceDraft = {
   projectId?: string | null
   projectGroupId?: string | null
   hostId?: ExecutionHostId | null
+  authoritativeExecutionHostId?: ExecutionHostId | null
   projectHostSetupId?: string | null
   name: string
   prompt: string

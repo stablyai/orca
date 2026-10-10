@@ -75,6 +75,7 @@ export type SettingsNavigationTarget = {
   pane: SettingsNavTarget
   repoId: string | null
   hostId?: ExecutionHostId
+  setupId?: string
   sectionId?: string
   intent?: (typeof SETTINGS_NAV_INTENTS)[number]
 }
@@ -91,6 +92,7 @@ export function isSettingsNavigationTarget(value: unknown): value is SettingsNav
     (target.hostId === undefined ||
       (typeof target.hostId === 'string' && parseExecutionHostId(target.hostId) !== null)) &&
     (target.sectionId === undefined || typeof target.sectionId === 'string') &&
+    (target.setupId === undefined || typeof target.setupId === 'string') &&
     (target.intent === undefined ||
       (typeof target.intent === 'string' && SETTINGS_NAV_INTENT_SET.has(target.intent)))
   )

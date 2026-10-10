@@ -19,6 +19,7 @@ export function buildManagedWorktreeCreateArgs(
 ): ManagedWorktreeCreateArgs {
   return {
     repoSelector: params.repo,
+    ...(params.executionHostId ? { executionHostId: params.executionHostId } : {}),
     name: params.name ?? '',
     // Absent means the user typed the name, which must never be retired.
     ...(params.nameWasGenerated === true ? { nameWasGenerated: true } : {}),

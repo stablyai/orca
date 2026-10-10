@@ -15,7 +15,6 @@ type ComposerSourceContextStateInput = Pick<
   | 'projects'
   | 'repoId'
   | 'selectedProjectGroup'
-  | 'selectedProjectHostSetupId'
   | 'selectedProjectId'
   | 'selectedRepo'
   | 'selectedRepoIsGit'
@@ -52,7 +51,6 @@ export function useComposerSourceContextState(input: ComposerSourceContextStateI
     projects,
     repoId,
     selectedProjectGroup,
-    selectedProjectHostSetupId,
     selectedProjectId,
     selectedRepo,
     selectedRepoIsGit,
@@ -204,7 +202,10 @@ export function useComposerSourceContextState(input: ComposerSourceContextStateI
         groupExecutionHostId: selectedProjectGroup?.executionHostId,
         groupConnectionId: selectedProjectGroup?.connectionId
       }),
-      projectHostSetupId: selectedProjectGroup ? null : selectedProjectHostSetupId,
+      projectHostSetupId:
+        selectedProjectGroup || selectedWorkspaceTarget.status !== 'ready'
+          ? null
+          : selectedWorkspaceTarget.target.projectHostSetupId,
       repoId: sourceRepo?.id ?? null,
       providerIdentity: null,
       accountLabel: null
@@ -214,7 +215,6 @@ export function useComposerSourceContextState(input: ComposerSourceContextStateI
     isProjectGroupTarget,
     repoId,
     selectedProjectGroup,
-    selectedProjectHostSetupId,
     selectedProjectId,
     selectedRepo,
     selectedWorkspaceTarget

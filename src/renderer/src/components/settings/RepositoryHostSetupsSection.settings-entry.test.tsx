@@ -7,6 +7,7 @@ import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { useAppStore } from '../../store'
+import { getProjectHostSetupOwnerKey } from '../../store/projects/project-compatibility-core'
 import { RepositoryHostSetupsSection } from './RepositoryHostSetupsSection'
 
 let container: HTMLDivElement
@@ -126,16 +127,17 @@ describe('RepositoryHostSetupsSection settings entry scope', () => {
       connectionId: 'openclaw 2'
     })
     const sshHostId = toSshExecutionHostId('openclaw 2')
+    const sshSetup = makeSetup({
+      id: 'clone-a-ssh',
+      repoId: 'clone-a',
+      hostId: sshHostId,
+      path: '/home/alice/orca'
+    })
     useAppStore.setState({
       repos: [cloneA, cloneATwin],
       projectHostSetups: [
         makeSetup({ id: 'clone-a', repoId: 'clone-a', hostId: 'local', path: '/work/orca' }),
-        makeSetup({
-          id: 'clone-a-ssh',
-          repoId: 'clone-a',
-          hostId: sshHostId,
-          path: '/home/alice/orca'
-        })
+        sshSetup
       ],
       sshTargetLabels: new Map([['openclaw 2', 'openclaw 2']]),
       setSettingsProjectHostSelection
@@ -160,7 +162,7 @@ describe('RepositoryHostSetupsSection settings entry scope', () => {
     expect(setSettingsProjectHostSelection).toHaveBeenCalledWith(
       `${projectId}::setup:clone-a`,
       sshHostId,
-      'clone-a-ssh'
+      getProjectHostSetupOwnerKey(sshSetup)
     )
   })
 })

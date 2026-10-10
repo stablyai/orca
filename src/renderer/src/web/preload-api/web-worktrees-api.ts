@@ -1,3 +1,4 @@
+import { WORKTREE_CREATE_EXECUTION_HOST_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { Worktree, WorkspaceAttachment } from '../../../../shared/worktree/types'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
 import { getLegacyWorkspaceReviewSelectionUpdates } from '../../../../shared/workspace-attachment-legacy'
@@ -61,12 +62,26 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
     listDetected: async ({ repoId }) => callRuntimeDetectedWorktrees(repoId),
     listAll: () => listAllRuntimeWorktrees(),
     create: async (args) => {
+      const qualifiedEnvironmentId =
+        args.executionHostId === undefined ? undefined : requireActiveEnvironment().id
+      if (args.executionHostId !== undefined) {
+        const status = await getRemoteRuntimeStatus()
+        if (!status.capabilities?.includes(WORKTREE_CREATE_EXECUTION_HOST_RUNTIME_CAPABILITY)) {
+          throw new Error(
+            'Update Orca on the server to safely create a workspace on its selected execution host.'
+          )
+        }
+      }
       if (args.linkedItems !== undefined) {
         await assertAttachmentWriteSupported(args)
+      }
+      if (qualifiedEnvironmentId) {
+        assertActiveEnvironment(qualifiedEnvironmentId)
       }
       invalidateRuntimeWorktreeCaches()
       const owned = await callRuntimeResultWithOwner<{ worktree: Worktree }>('worktree.create', {
         repo: args.repoId,
+        ...(args.executionHostId !== undefined ? { executionHostId: args.executionHostId } : {}),
         name: args.name,
         // Absent means user-typed, which is what the host must assume — so send it only when true.
         ...(args.nameWasGenerated ? { nameWasGenerated: true } : {}),

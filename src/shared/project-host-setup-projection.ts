@@ -1,4 +1,4 @@
-import { getRepoExecutionHostId } from './execution-host'
+import { getRepoExecutionHostId, parseExecutionHostId } from './execution-host'
 import {
   normalizeProjectHostSetupRow,
   normalizeProjectRow
@@ -283,6 +283,7 @@ function mergeProjectRepo(accumulator: ProjectAccumulator, repo: Repo): void {
 
 function createSetupFromRepo(repo: Repo, projectId: string): ProjectHostSetup {
   const hostId = getRepoExecutionHostId(repo)
+  const catalogOwner = parseExecutionHostId(repo.catalogOwnerHostId)
   const createdAt = catalogTimestampFromAddedAt(repo.addedAt)
   const setupMethod = repo.projectHostSetupMethod ?? 'legacy-repo'
   return {
@@ -295,6 +296,13 @@ function createSetupFromRepo(repo: Repo, projectId: string): ProjectHostSetup {
     ...(repo.kind ? { kind: repo.kind } : {}),
     ...(repo.connectionId !== undefined ? { connectionId: repo.connectionId } : {}),
     ...(repo.executionHostId !== undefined ? { executionHostId: repo.executionHostId } : {}),
+    ...(repo.authoritativeExecutionHostId
+      ? { authoritativeExecutionHostId: repo.authoritativeExecutionHostId }
+      : {}),
+    ...(repo.catalogOwnerHostId ? { catalogOwnerHostId: repo.catalogOwnerHostId } : {}),
+    ...(catalogOwner?.kind === 'runtime'
+      ? { runtimeOwnerEnvironmentId: catalogOwner.environmentId }
+      : {}),
     ...(repo.worktreeBasePath ? { worktreeBasePath: repo.worktreeBasePath } : {}),
     ...(repo.hookSettings ? { hookSettings: repo.hookSettings } : {}),
     ...(repo.gitUsername ? { gitUsername: repo.gitUsername } : {}),

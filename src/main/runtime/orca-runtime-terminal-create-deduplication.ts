@@ -7,7 +7,11 @@ import { withTimeoutResult } from './runtime-async-boundaries'
 import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from './orca-runtime-postlude'
 import { inferWorktreeIdFromPtyId } from './runtime-worktree-path-identity'
 import { getRegisteredSshState } from '../ssh/ssh-target-registry'
-import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../shared/execution-host'
 import { resolveWorktreeLaunchHost } from './worktree-launch-host-repo'
 import type { TuiAgent } from '../../shared/tui-agent'
 
@@ -192,12 +196,13 @@ export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithC
   dedupeWorktreeCreate<T>(
     repoSelector: string,
     clientMutationId: string | undefined,
-    run: () => Promise<T>
+    run: () => Promise<T>,
+    executionHostId?: ExecutionHostId
   ): Promise<T> {
     if (!clientMutationId) {
       return run()
     }
-    const key = `${repoSelector}\0${clientMutationId}`
+    const key = JSON.stringify([repoSelector, executionHostId ?? null, clientMutationId])
     const inflight = this.worktreeCreateByMutationId.get(key)
     if (inflight) {
       return inflight as Promise<T>

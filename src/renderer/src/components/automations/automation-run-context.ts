@@ -6,6 +6,7 @@ import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { AutomationHostTarget } from './automation-host-client'
+import { getRepoCatalogOwnerHostId } from '../../store/projects/project-catalog-owner'
 
 export function buildAutomationRunContextForRepo(args: {
   repoId: string
@@ -36,7 +37,9 @@ export function buildAutomationRunContextForRepo(args: {
   })
 }
 
-function getRuntimeTargetHostId(target: AutomationHostTarget | null | undefined): string | null {
+export function getRuntimeTargetHostId(
+  target: AutomationHostTarget | null | undefined
+): string | null {
   return target?.kind === 'environment'
     ? `runtime:${encodeURIComponent(target.environmentId)}`
     : null
@@ -61,6 +64,16 @@ export function repoHostMatchesRunContext(
   runHostId: string,
   target: AutomationHostTarget | null | undefined
 ): boolean {
+  const publisherHostId =
+    target?.kind === 'local'
+      ? 'local'
+      : (getRuntimeTargetHostId(target) ?? getRepoCatalogOwnerHostId(repo))
+  if (getRepoCatalogOwnerHostId(repo) !== publisherHostId) {
+    return false
+  }
+  if (repo.authoritativeExecutionHostId) {
+    return repo.authoritativeExecutionHostId === runHostId
+  }
   if (runHostId === getRepoExecutionHostId(repo)) {
     return true
   }

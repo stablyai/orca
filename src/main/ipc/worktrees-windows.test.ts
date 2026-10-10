@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GitUsernameModule from '../git/git-username'
+import { OrcaRuntimeService } from '../runtime/orca-runtime'
 
 const {
   handleMock,
@@ -164,6 +165,9 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     getProfileStorageDirectory: vi.fn(() => '/profile-a'),
     getRepos: vi.fn(),
     getRepo: vi.fn(),
+    addRepo: vi.fn(),
+    updateRepo: vi.fn(),
+    getGitHubCache: vi.fn(),
     getProjects: vi.fn(),
     getProjectHostSetups: vi.fn(),
     getSettings: vi.fn(),
@@ -176,6 +180,8 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     getRetiredWorktreeNameRegistry: vi.fn(),
     mergeRetiredWorktreeNames: vi.fn()
   }
+
+  let selectorRuntime: OrcaRuntimeService | undefined
 
   beforeEach(() => {
     handleMock.mockReset()
@@ -299,6 +305,10 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     // Why: createLocalWorktree routes `git fetch` through
     // `runtime.fetchRemoteWithCache` (§3.3 Lifecycle). Stub it for path tests.
     const runtimeStub = {
+      showRepo: vi.fn<OrcaRuntimeService['showRepo']>((selector, executionHostId) => {
+        selectorRuntime ??= new OrcaRuntimeService(store)
+        return selectorRuntime.showRepo(selector, executionHostId)
+      }),
       resolveRemoteTrackingBase: vi.fn().mockResolvedValue(null),
       hasRemoteTrackingRef: vi.fn().mockResolvedValue(false),
       getOrStartRemoteTrackingBaseRefresh: vi.fn().mockResolvedValue({ ok: true }),

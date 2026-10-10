@@ -5,7 +5,6 @@ import type { Repo } from '../../../../shared/repo-types'
 import { applyManualRepoOrder } from '../../../../shared/manual-repo-order'
 import { retainValidFilterRepoIds } from '../slices/repo-filter-selection'
 import { readRuntimeWorktreeVisibilitySnapshot } from '../slices/worktree-visibility-owner-settings'
-import { getRepoHostIdentity } from '../slices/repo-host-identity'
 import { getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
@@ -91,7 +90,6 @@ export function createRuntimeRepoCatalogActions(
           const reconciliation = reconcileSupersededSshRepos(result.repos, s)
           const finalizedRepos = applyManualRepoOrder(reconciliation.repos, s.manualRepoOrder)
           const validRepoIds = new Set(finalizedRepos.map((repo) => repo.id))
-          const validRepoHostIdentities = new Set(finalizedRepos.map(getRepoHostIdentity))
           const projectCompatibility = projectCompatibilityForReconciledRepos(
             finalizedRepos,
             catalog.projectHostSetupCompatibility
@@ -154,7 +152,7 @@ export function createRuntimeRepoCatalogActions(
             filterRepoIds: retainValidFilterRepoIds(s.filterRepoIds, validRepoIds),
             setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
               s.setupScriptPromptDismissedRepoIds,
-              validRepoHostIdentities
+              finalizedRepos
             )
           }
         })

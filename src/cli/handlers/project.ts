@@ -27,6 +27,7 @@ import {
   parseHostFlag,
   resolveHostFlagTarget
 } from '../execution-host-flag'
+import { resolveProjectSetupMutationHost } from '../project-setup-execution-host'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { resolveRepoPathArgument } from '../repo-path-arguments'
 import { RuntimeClientError, type RuntimeRpcSuccess } from '../runtime-client'
@@ -181,8 +182,11 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
   },
   'project setup-update': async ({ flags, client, cwd, json }) => {
     const path = getOptionalStringFlag(flags, 'path')
+    const setupId = getRequiredStringFlag(flags, 'setup')
+    const executionHostId = await resolveProjectSetupMutationHost(flags, client, setupId)
     const args: ProjectHostSetupUpdateArgs = {
-      setupId: getRequiredStringFlag(flags, 'setup'),
+      setupId,
+      ...(executionHostId ? { executionHostId } : {}),
       updates: {
         displayName: getOptionalStringFlag(flags, 'display-name'),
         path:
@@ -204,11 +208,14 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatProjectHostSetupUpdateResult)
   },
   'project setup-delete': async ({ flags, client, json }) => {
+    const setupId = getRequiredStringFlag(flags, 'setup')
+    const executionHostId = await resolveProjectSetupMutationHost(flags, client, setupId)
     const result = await callProjectHostSetup<{ result: ProjectHostSetupDeleteResult }>(
       client,
       'projectHostSetup.delete',
       {
-        setupId: getRequiredStringFlag(flags, 'setup')
+        setupId,
+        ...(executionHostId ? { executionHostId } : {})
       }
     )
     printResult(result, json, formatProjectHostSetupDeleteResult)

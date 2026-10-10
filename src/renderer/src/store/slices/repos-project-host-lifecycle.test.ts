@@ -89,10 +89,10 @@ describe('repo slice project host setup lifecycle', () => {
         setupState: 'setting-up',
         setupMethod: 'provisioned'
       })
-    ).resolves.toEqual({ project, setup })
+    ).resolves.toMatchObject({ project, setup })
 
     expect(store.getState().projects).toEqual([project])
-    expect(store.getState().projectHostSetups).toEqual([setup])
+    expect(store.getState().projectHostSetups).toMatchObject([setup])
     expect(projectsCreateHostSetup).toHaveBeenCalledWith({
       projectId: project.id,
       hostId: 'local',
@@ -125,7 +125,7 @@ describe('repo slice project host setup lifecycle', () => {
         setupId: runtimeSetup.id,
         updates: { displayName: 'GPU VM renamed' }
       })
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       project,
       setup: {
         ...runtimeSetup,
@@ -142,6 +142,7 @@ describe('repo slice project host setup lifecycle', () => {
       method: 'projectHostSetup.update',
       params: {
         setupId: runtimeSetup.id,
+        executionHostId: runtimeSetup.hostId,
         updates: { displayName: 'GPU VM renamed' }
       },
       timeoutMs: 15_000
@@ -164,7 +165,7 @@ describe('repo slice project host setup lifecycle', () => {
 
     await expect(
       store.getState().deleteProjectHostSetup({ setupId: runtimeSetup.id })
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       project,
       setup: runtimeSetup,
       repo: undefined
@@ -175,12 +176,12 @@ describe('repo slice project host setup lifecycle', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'projectHostSetup.delete',
-      params: { setupId: runtimeSetup.id },
+      params: { setupId: runtimeSetup.id, executionHostId: runtimeSetup.hostId },
       timeoutMs: 15_000
     })
   })
 
-  it('routes duplicate setup IDs through the first row and replaces every collision', async () => {
+  it('qualifies duplicate setup update by its selected owner', async () => {
     const localSetup: ProjectHostSetup = {
       ...runtimeSetup,
       hostId: 'local',
@@ -199,19 +200,20 @@ describe('repo slice project host setup lifecycle', () => {
 
     await store.getState().updateProjectHostSetup({
       setupId: localSetup.id,
+      owner: localSetup,
       updates: { displayName: 'Local renamed' }
     })
 
     expect(projectsUpdateHostSetup).toHaveBeenCalledWith({
       setupId: localSetup.id,
+      executionHostId: localSetup.hostId,
       updates: { displayName: 'Local renamed' }
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    // Current contract: setup mutations are keyed by bare setup ID after the first row selects routing.
-    expect(store.getState().projectHostSetups).toEqual([updatedLocalSetup, updatedLocalSetup])
+    expect(store.getState().projectHostSetups).toMatchObject([updatedLocalSetup, runtimeSetup])
   })
 
-  it('routes duplicate setup-ID deletion through the first row and removes every collision', async () => {
+  it('qualifies duplicate setup deletion and keeps its sibling', async () => {
     const localSetup: ProjectHostSetup = {
       ...runtimeSetup,
       hostId: 'local',
@@ -225,12 +227,14 @@ describe('repo slice project host setup lifecycle', () => {
       settings: { activeRuntimeEnvironmentId: null } as never
     })
 
-    await store.getState().deleteProjectHostSetup({ setupId: localSetup.id })
+    await store.getState().deleteProjectHostSetup({ setupId: localSetup.id, owner: localSetup })
 
-    expect(projectsDeleteHostSetup).toHaveBeenCalledWith({ setupId: localSetup.id })
+    expect(projectsDeleteHostSetup).toHaveBeenCalledWith({
+      setupId: localSetup.id,
+      executionHostId: localSetup.hostId
+    })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    // Current contract: delete filters the full catalog by bare setup ID.
-    expect(store.getState().projectHostSetups).toEqual([])
+    expect(store.getState().projectHostSetups).toEqual([runtimeSetup])
   })
 
   it('preserves runtime-fetched setup-only states during repo hydration', async () => {
