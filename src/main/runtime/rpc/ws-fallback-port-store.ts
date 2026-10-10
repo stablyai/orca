@@ -10,6 +10,9 @@ import { join } from 'node:path'
 
 const FALLBACK_PORT_FILE = 'mobile-ws-fallback-port.json'
 const FALLBACK_LADDER_SIZE = 31
+// `pnpm dev` pins 6769 beside packaged Orca (devWsPort in main-process-runtime-launch.ts);
+// no other instance's ladder may take it, or dev's paired phones lose their endpoint.
+const DEV_PINNED_WS_PORT = 6769
 
 // Deterministic rungs just above the preferred port. They sit below every OS
 // dynamic range, so a Windows Hyper-V/WSL reservation (redrawn on reboot in
@@ -19,7 +22,10 @@ export function wsFallbackPortLadder(preferredPort: number): number[] {
     return []
   }
   const last = Math.min(65535, preferredPort + FALLBACK_LADDER_SIZE)
-  return Array.from({ length: last - preferredPort }, (_, index) => preferredPort + 1 + index)
+  return Array.from(
+    { length: last - preferredPort },
+    (_, index) => preferredPort + 1 + index
+  ).filter((port) => port !== DEV_PINNED_WS_PORT)
 }
 
 function isValidPort(value: unknown): value is number {
