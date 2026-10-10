@@ -234,7 +234,8 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
           releaseDebugger()
         }
       },
-      { ensureSession: false }
+      // Why: unscoped keystrokes must not mutate another worktree’s globally active page.
+      { ensureSession: false, requireScopedTarget: true }
     )
   }
 

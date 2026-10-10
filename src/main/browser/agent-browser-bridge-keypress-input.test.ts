@@ -92,6 +92,64 @@ describe('AgentBrowserBridge keypress input', () => {
     webContentsFromIdMock.mockImplementation((id: number) => (id === 100 ? wc : null))
   })
 
+  /** Models two workspaces with the unrelated page globally active. */
+  function twoPageTargets() {
+    const target = mockWebContents(1)
+    const unrelated = mockWebContents(2)
+    target.debugger.sendCommand.mockResolvedValue({})
+    unrelated.debugger.sendCommand.mockResolvedValue({})
+    webContentsFromIdMock.mockImplementation((id: number) =>
+      id === 1 ? target : id === 2 ? unrelated : null
+    )
+    const tabs = new Map([
+      ['target', 1],
+      ['unrelated', 2]
+    ])
+    const worktrees = new Map([
+      ['target', 'wt-a'],
+      ['unrelated', 'wt-b']
+    ])
+    const routed = new AgentBrowserBridge(mockBrowserManager(tabs, worktrees))
+    routed.onTabChanged(2, 'wt-b')
+    return { routed, target, unrelated }
+  }
+
+  it.each(['a', 'MediaPlayPause'])(
+    'refuses ambiguous %s without touching the active page or helper',
+    async (key) => {
+      const { routed, target, unrelated } = twoPageTargets()
+      succeedWith({ pressed: key })
+      await expect(routed.keypress(key)).rejects.toMatchObject({ code: 'browser_target_ambiguous' })
+      expect(keyEventCalls(target)).toHaveLength(0)
+      expect(keyEventCalls(unrelated)).toHaveLength(0)
+      expect(execFileMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it('routes an explicit page independently of the globally active page', async () => {
+    const { routed, target, unrelated } = twoPageTargets()
+    await routed.keypress('a', undefined, 'target')
+    expect(keyEventCalls(target)).toHaveLength(2)
+    expect(keyEventCalls(unrelated)).toHaveLength(0)
+  })
+
+  it('routes a keypress to the specified worktree when no page is given', async () => {
+    const { routed, target, unrelated } = twoPageTargets()
+    await routed.keypress('a', 'wt-a')
+    expect(keyEventCalls(target)).toHaveLength(2)
+    expect(keyEventCalls(unrelated)).toHaveLength(0)
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects a page from another worktree without falling back to the active page', async () => {
+    const { routed, target, unrelated } = twoPageTargets()
+    await expect(routed.keypress('a', 'wt-b', 'target')).rejects.toMatchObject({
+      code: 'browser_tab_not_found'
+    })
+    expect(keyEventCalls(target)).toHaveLength(0)
+    expect(keyEventCalls(unrelated)).toHaveLength(0)
+  })
+
   it('dispatches a printable key over CDP without spawning agent-browser', async () => {
     await expect(bridge.keypress('a', undefined, 'tab-1')).resolves.toEqual({ pressed: 'a' })
 
