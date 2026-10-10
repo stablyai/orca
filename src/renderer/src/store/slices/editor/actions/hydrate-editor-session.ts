@@ -17,6 +17,7 @@ import {
   shouldHydrateWithOwnedEditorFileId
 } from '../file-ids/hydrated-editor-file-ids'
 
+/** Restores persisted editor files and reuses their stored IDs when available. */
 export function createHydrateEditorSession(
   set: EditorSet,
   _get: EditorGet
@@ -56,11 +57,13 @@ export function createHydrateEditorSession(
             const legacyId = legacyFileIndex.resolve(pf, worktreeId)
             // Why: floating/runtime-owned files need IDs that survive peers disappearing between restarts; collision-based IDs drift when the path is no longer open elsewhere.
             const ownedId = buildOwnedEditorFileId(pf.filePath, worktreeId, pf.runtimeEnvironmentId)
-            const id =
+            const computedId =
               shouldHydrateWithOwnedEditorFileId(worktreeId, pf.runtimeEnvironmentId) ||
               usedOpenFileIds.has(pf.filePath)
                 ? ownedId
                 : pf.filePath
+            // Why: reuse a persisted id so restart does not mint a new identity for the same path.
+            const id = pf.id || computedId
             // Why: the persisted schema allows repeated (path, worktree, runtime) tuples, and an owned id repeats verbatim — restoring both would put two files under one id.
             if (usedOpenFileIds.has(id)) {
               continue

@@ -112,6 +112,7 @@ void (true satisfies [_MissingSessionField] extends [never] ? true : never)
 
 /** Build the editor-file portion of the workspace session for persistence.
  *  Only edit-mode files are saved — diffs and conflict views are transient. */
+/** Builds the persisted editor slice while retaining each file's stable identity. */
 export function buildEditorSessionData(
   openFiles: OpenFile[],
   editorDrafts: Record<string, string>,
@@ -133,6 +134,7 @@ export function buildEditorSessionData(
     // Why: never persist a dirty draft for a read-only tab — restoring one would reintroduce writable/hot-exit state for an agent transcript.
     const dirtyDraftContent = f.isDirty && f.readOnly !== true ? editorDrafts[f.id] : undefined
     arr.push({
+      id: f.id,
       filePath: f.filePath,
       relativePath: f.relativePath,
       worktreeId: f.worktreeId,
