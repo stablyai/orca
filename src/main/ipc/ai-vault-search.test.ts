@@ -85,29 +85,6 @@ describe('desktop IPC and preload search boundary', () => {
     await expect(handlers.get('aiVault:searchSessions')!(null, { query: 1 })).rejects.toThrow()
     await expect(handlers.get('aiVault:searchStatus')!(null, 42)).rejects.toThrow()
   })
-  it('routes one SSH target without touching the local index and redacts received paths', async () => {
-    const local = fakeSearchService()
-    setSessionSearchService(local)
-    sshSearch.mockResolvedValue(searchResults())
-    const result = await aiVaultApi.searchSessions({ query: 'needle' }, 'ssh:ssh-host')
-    expect(sshSearch).toHaveBeenCalledWith('ssh-host', 'aiVault.searchSessions', {
-      query: 'needle',
-      limit: 20,
-      supportedAgents: [...AI_VAULT_AGENTS],
-      supportsQoderHistory: true,
-      supportsJcodeHistory: true
-    })
-    expect(result).toMatchObject({
-      hits: [{ executionHostId: 'ssh:ssh-host', source: { presence: 'present' } }]
-    })
-    expect(JSON.stringify(result)).not.toContain('resumeCommand')
-    expect(local.search).not.toHaveBeenCalled()
-    sshSearch.mockRejectedValue(new Error('SSH relay is not ready'))
-    await expect(aiVaultApi.searchSessions({ query: 'needle' }, 'ssh:ssh-host')).rejects.toThrow(
-      'SSH relay is not ready'
-    )
-    expect(local.search).not.toHaveBeenCalled()
-  })
   it('routes one runtime environment over its RPC and stamps the answering host', async () => {
     const local = fakeSearchService()
     setSessionSearchService(local)
@@ -129,7 +106,7 @@ describe('desktop IPC and preload search boundary', () => {
     expect(await aiVaultApi.searchStatus('runtime:env-1')).toEqual(unavailableSessionSearchStatus())
     expect(runtimeSearch).toHaveBeenLastCalledWith('env-1', 'aiVault.searchStatus', {})
   })
-  it.each(['ssh:ssh-host', 'runtime:env-1', 'all'] as const)(
+  it.each(['runtime:env-1'] as const)(
     'negotiates each actual remote leg once through preload scope %s',
     async (scope) => {
       const local = fakeSearchService()
@@ -157,7 +134,7 @@ describe('desktop IPC and preload search boundary', () => {
       expect(remoteHits).toMatchObject([{ agent: 'jcode', source: { presence: 'present' } }])
       expect(JSON.stringify(remoteHits)).not.toContain('/host/transcript')
       expect(JSON.stringify(remoteHits)).not.toContain('resumeCommand')
-      expect(local.search).toHaveBeenCalledTimes(scope === 'all' ? 1 : 0)
+      expect(local.search).not.toHaveBeenCalled()
       expect(scope === 'runtime:env-1' ? sshSearch : runtimeSearch).not.toHaveBeenCalled()
     }
   )
@@ -205,34 +182,6 @@ describe('desktop IPC and preload search boundary', () => {
     expect(local.status).not.toHaveBeenCalled()
     expect(sshSearch).not.toHaveBeenCalled()
     expect(runtimeSearch).not.toHaveBeenCalled()
-  })
-  it('merges every enumerated host under the all scope, and still refuses an all status', async () => {
-    setSessionSearchService(fakeSearchService())
-    sshHostInfos.mockReturnValue([{ targetId: 'box' }])
-    sshSearch.mockResolvedValue({
-      ...searchResults(),
-      hits: [{ ...searchHit(), sessionId: 'far' }]
-    })
-    const merged = await aiVaultApi.searchSessions({ query: 'needle' }, 'all')
-    expect(merged).toMatchObject({
-      kind: 'results',
-      hosts: [
-        { executionHostId: 'local', outcome: 'searched' },
-        { executionHostId: 'ssh:box', outcome: 'searched' }
-      ]
-    })
-    expect(
-      merged.kind === 'results'
-        ? merged.hits.map((hit) => [hit.executionHostId, hit.sessionId])
-        : null
-    ).toEqual([
-      ['local', 'host-session'],
-      ['ssh:box', 'far']
-    ])
-    // A merged status would have to reconcile six phases into one; it stays refused.
-    await expect(handlers.get('aiVault:searchStatus')!(null, 'all')).rejects.toThrow(
-      'not available for this execution host'
-    )
   })
 
   it('turns a paired runtime host on and answers with the status it reported', async () => {

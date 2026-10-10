@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fixture } from './profile-state-delayed-authority-fixture'
-import { removeSshPtyConsumerOwnerRecovery } from '../../ssh/ssh-pty-consumer-recovery'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
@@ -41,43 +40,6 @@ describe('reserved SSH persistence', () => {
     expect(ownerWrites).toHaveLength(2)
     expect(ownerWrites[0]?.payload).toContain('first-owner')
     expect(ownerWrites[1]?.payload).toContain('next-owner')
-  })
-
-  it('retries a failed consumer removal through durability even after memory is already empty', async () => {
-    const { store, authority, readState } = await fixture()
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    await store.upsertSshPtyConsumerRecovery(recovery)
-    const gate = authority.pause()
-    const removal = expect(
-      removeSshPtyConsumerOwnerRecovery(recovery.targetId, recovery.clientInstanceId, store)
-    ).rejects.toThrow('disk refused')
-    await gate.started.promise
-    gate.finish.reject(new Error('disk refused'))
-    await removal
-    expect(readState().sshPtyConsumerRecoveries).toHaveLength(1)
-    await removeSshPtyConsumerOwnerRecovery(recovery.targetId, recovery.clientInstanceId, store)
-    expect(readState().sshPtyConsumerRecoveries).toEqual([])
-  })
-
-  it('does not let an old consumer remove the newer owner ahead of it in the write queue', async () => {
-    const { store, authority, readState } = await fixture()
-    await store.upsertSshPtyConsumerRecovery(recovery)
-    const gate = authority.pause()
-    store.updateSettings({ theme: 'dark' })
-    const older = store.flushPendingOrThrowAsync()
-    await gate.started.promise
-    const replacement = store.upsertSshPtyConsumerRecovery({
-      ...recovery,
-      clientInstanceId: 'next-owner'
-    })
-    const removal = removeSshPtyConsumerOwnerRecovery(
-      recovery.targetId,
-      recovery.clientInstanceId,
-      store
-    )
-    gate.finish.resolve()
-    await Promise.all([older, replacement, removal])
-    expect(readState().sshPtyConsumerRecoveries[0]?.clientInstanceId).toBe('next-owner')
   })
 
   it('does not detach a newer replacement lease while waiting for the writer', async () => {

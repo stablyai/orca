@@ -53,30 +53,6 @@ describe('a connect cancelled during its server decision', () => {
     expect(publishHostServerDecisionFailure).toHaveBeenCalledWith('ssh-1', failure)
   })
 
-  it('publishes the setup failure when a failed setup kept the host fenced', async () => {
-    const target: SshTarget = {
-      id: 'ssh-1',
-      label: 'Server',
-      host: 'example.com',
-      port: 22,
-      username: 'deploy',
-      orcadFence: { environmentId: 'env-1' }
-    }
-    mockSshStore.getTarget.mockReturnValue(target)
-    vi.mocked(decideHostServer).mockResolvedValueOnce({
-      route: 'relay',
-      reason: 'failed',
-      detail: 'The destination could not stage the migration.'
-    })
-    await expect(handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })).rejects.toThrow(
-      'The destination could not stage the migration.'
-    )
-    expect(publishHostServerDecisionFailure).toHaveBeenCalledWith(
-      'ssh-1',
-      expect.objectContaining({ message: 'The destination could not stage the migration.' })
-    )
-  })
-
   it('closes a transport the cancelled decision opened after the user disconnected', async () => {
     const target: SshTarget = {
       id: 'ssh-1',
@@ -129,29 +105,6 @@ describe('a connect cancelled during its server decision', () => {
     expect(mockConnectionManager.disconnectConnection).toHaveBeenCalledWith('ssh-1', opened)
   })
 
-  it('closes the transport a fenced failed setup dialed before reporting it', async () => {
-    const target: SshTarget = {
-      id: 'ssh-1',
-      label: 'Server',
-      host: 'example.com',
-      port: 22,
-      username: 'deploy',
-      orcadFence: { environmentId: 'env-1' }
-    }
-    const opened = { id: 'conversion-transport' }
-    mockSshStore.getTarget.mockReturnValue(target)
-    mockConnectionManager.getConnection.mockReturnValue(undefined)
-    vi.mocked(decideHostServer).mockImplementationOnce(async () => {
-      await Promise.resolve()
-      recordSshConnectionOpened(asTransport(opened))
-      mockConnectionManager.getConnection.mockReturnValue(opened)
-      return { route: 'relay', reason: 'failed', detail: 'Staging failed.' }
-    })
-    await expect(
-      Promise.resolve(handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' }))
-    ).rejects.toThrow('Staging failed.')
-    expect(mockConnectionManager.disconnectConnection).toHaveBeenCalledWith('ssh-1', opened)
-  })
 })
 
 /** The stand-in transports these tests hand the mocked pool. */

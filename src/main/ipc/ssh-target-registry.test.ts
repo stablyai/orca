@@ -27,8 +27,6 @@ import { createSshIpcHarness } from './ssh-ipc-test-harness'
 const {
   mockSshStore,
   mockConnectionManager,
-  mockMux,
-  mockPortForwardManager,
   mockListConfigHosts,
   mockResolveConfigHost
 } = mocks
@@ -50,9 +48,9 @@ describe('SSH IPC handlers', () => {
     expect(channels).toContain('ssh:resolveConfigHost')
     expect(channels).toContain('ssh:connect')
     expect(channels).toContain('ssh:disconnect')
-    expect(channels).toContain('ssh:terminateSessions')
-    expect(channels).toContain('ssh:moveToManagedServer')
-    expect(channels).toContain('ssh:resetRelay')
+    expect(channels).not.toContain('ssh:terminateSessions')
+    expect(channels).not.toContain('ssh:moveToManagedServer')
+    expect(channels).not.toContain('ssh:resetRelay')
     expect(channels).toContain('ssh:getState')
     expect(channels).toContain('ssh:testConnection')
   })
@@ -149,36 +147,6 @@ describe('SSH IPC handlers', () => {
     } finally {
       warnSpy.mockRestore()
     }
-  })
-
-  it('ssh:removeTarget tears down an active relay before deleting the target', async () => {
-    const target: SshTarget = {
-      id: 'ssh-1',
-      label: 'Server',
-      host: 'example.com',
-      port: 22,
-      username: 'deploy'
-    }
-    mockSshStore.getTarget.mockReturnValue(target)
-    mockConnectionManager.connect.mockResolvedValue({})
-    mockConnectionManager.getState.mockReturnValue({
-      targetId: 'ssh-1',
-      status: 'connected',
-      error: null,
-      reconnectAttempt: 0
-    })
-    await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
-    mockPortForwardManager.removeAllForwards.mockClear()
-    mockConnectionManager.disconnect.mockClear().mockResolvedValue(undefined)
-
-    await handlers.get('ssh:removeTarget')!(null, { id: 'ssh-1' })
-
-    expect(mockPortForwardManager.removeAllForwards).toHaveBeenCalledWith('ssh-1')
-    expect(mockMux.dispose).toHaveBeenCalledWith('shutdown')
-    expect(mockStore.markSshRemotePtyLeasesAsync).toHaveBeenCalledWith('ssh-1', 'terminated')
-    expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
-    expect(mockStore.removeSshRemotePtyLeases).toHaveBeenCalledWith('ssh-1')
-    expect(mockSshStore.removeTarget).toHaveBeenCalledWith('ssh-1')
   })
 
   it('ssh:importConfig returns imported targets', async () => {

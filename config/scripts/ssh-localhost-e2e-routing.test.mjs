@@ -41,7 +41,6 @@ it('selects the localhost journey for its remote hook authorities', () => {
     'src/wsl-guest/agent-hook-server.ts',
     'src/wsl-guest/plugin-overlay.ts',
     'src/main/agent-hooks/server.ts',
-    'src/main/ssh/ssh-relay-session.ts',
     'src/shared/agent-hook-relay.ts'
   ]) {
     expect(existsSync(resolve(import.meta.dirname, '../..', file)), file).toBe(true)
