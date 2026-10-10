@@ -1093,7 +1093,8 @@
           "b2b1aa936d": "Paste your opencode.ai session cookie for rate limit fetching.",
           "b43e761fe5": "MiniMax cookie update failed.",
           "b8c2905c2b": "Could not load Codex accounts.",
-          "f5d8d2a6a1": "Open platform.minimax.io/console/usage in your browser and sign in."
+          "f5d8d2a6a1": "Open platform.minimax.io/console/usage in your browser and sign in.",
+          "remoteScopeLocalAccountsKept": "Accounts managed on this desktop are unchanged. Switch the default runtime back to Local desktop to view them."
         },
         "AdvancedNetworkSettingsSection": {
           "d93c7cd531": "Configure app-level network routing.",
