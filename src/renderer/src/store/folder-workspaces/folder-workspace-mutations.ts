@@ -19,13 +19,13 @@ import {
 import { FolderWorkspaceUpdateCoordinator } from '../slices/folder-workspace-update-coordinator'
 import type { FolderWorkspaceUpdates, RepoSlice } from '../repos/repo-state'
 import { getRuntimeTargetHostId } from '../runtime-target-host'
+import { adoptFromEndpoint } from '../adopt-from-endpoint'
 import {
   folderWorkspaceUpdateInvalidatesPathStatus,
   getFolderWorkspacePathStatusRouteSettings,
   mergeFolderWorkspaceUpdateResponse
 } from './folder-workspace-routing'
 import {
-  folderWorkspaceWithFetchedOwner,
   getFolderWorkspaceHostId,
   getFolderWorkspaceUpdateIdentity,
   reconcileFailedFolderWorkspaceUpdate
@@ -93,11 +93,12 @@ export function createFolderWorkspaceMutationActions(
                   { timeoutMs: 15_000 }
                 )
               ).folderWorkspace
-        const ownedWorkspace = folderWorkspaceWithFetchedOwner(
-          workspace,
-          target,
-          get().projectGroups
-        )
+        const { projectGroups } = get()
+        const ownedWorkspace = adoptFromEndpoint(target, {
+          kind: 'folderWorkspace',
+          row: workspace,
+          resolveOwnHostId: (row) => getFolderWorkspaceHostId(row, projectGroups)
+        })
         set((s) => ({
           folderWorkspaces: [ownedWorkspace, ...s.folderWorkspaces],
           folderWorkspacePathStatuses: {}

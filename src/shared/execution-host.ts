@@ -212,7 +212,7 @@ export function getSshTargetIdForExecutionHost(
 //     `contradictory`. Answering with it hands out an SSH connection for a row that declares
 //     itself local.
 //   - `runtime:<env>` is a different machine with its own SSH targets, and a nested one appears
-//     only in this field (`repoWithFetchedOwner` spreads it through). It is not dialable on its
+//     only in this field (`adoptFromEndpoint` spreads it through). It is not dialable on its
 //     own, but it is addressable as the pair (environmentId, targetId) — which is how the
 //     renderer reads it, recovering the environment from the worktree and looking the target up
 //     inside it (`selectRuntimeAwareSshStatus`). Dropping it makes a nested-SSH workspace read
