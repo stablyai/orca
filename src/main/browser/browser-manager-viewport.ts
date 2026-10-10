@@ -5,6 +5,7 @@ import {
   type BrowserAnnotationViewportBridgeOptions
 } from '../../shared/browser-annotation-viewport-bridge'
 import type { BrowserViewportOverride } from '../../shared/browser-workspace-types'
+import { installGuestDevToolsHoverRelay } from './browser-guest-devtools-hover-relay'
 import { BrowserManagerDownloadLifecycle } from './browser-manager-download-lifecycle'
 import { sendGuestCdpCommand } from './guest-cdp-command'
 
@@ -30,6 +31,15 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
     if (this.offscreenGuestIds.has(webContentsId)) {
       return false
     }
+    installGuestDevToolsHoverRelay({
+      browserTabId,
+      guest,
+      resolveRenderer: (tabId) => this.resolveRendererForBrowserTab(tabId),
+      isViewportEmulated: () => {
+        const state = this.viewportPresetByTabId.get(browserTabId)
+        return state?.guestWebContentsId === guest.id && state.requested !== null
+      }
+    })
     guest.openDevTools({ mode: 'detach' })
     return true
   }
