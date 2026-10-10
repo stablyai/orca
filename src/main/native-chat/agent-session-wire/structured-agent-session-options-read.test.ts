@@ -19,7 +19,7 @@ function restingRecord(): AgentSessionRecord {
   return {
     provider: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: '/homes/a' },
-    location: { wslDistro: null },
+    location: { executionHostId: 'local', wslDistro: null },
     options: {}
   } as unknown as AgentSessionRecord
 }
@@ -55,12 +55,17 @@ describe('options at rest', () => {
         conversation: async () => resting
       } as unknown as StructuredAgentSessionMutationContext
 
-      const result = await readStructuredAgentSessionOptions(context, SESSION)
+      const result = await readStructuredAgentSessionOptions(context, SESSION, {
+        readsWithoutModel: true
+      })
       expect(probe).toHaveBeenCalledTimes(provider === 'codex' ? 1 : 0)
       expect(result.models).toEqual([])
       expect(result.current).not.toHaveProperty('model')
       record.options = { model: 'later-model', effort: 'off' }
-      expect((await readStructuredAgentSessionOptions(context, SESSION)).current).toEqual({
+      expect(
+        (await readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true }))
+          .current
+      ).toEqual({
         model: 'later-model',
         effort: 'off'
       })
@@ -99,7 +104,7 @@ describe('live Codex option reads', () => {
       conversation: async () => live
     } as unknown as StructuredAgentSessionMutationContext
 
-    const reading = readStructuredAgentSessionOptions(context, SESSION)
+    const reading = readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
     await vi.waitFor(() =>
       expect(prepareReadOptions).toHaveBeenCalledWith({ sessionId: SESSION, fence: 7 })
     )
@@ -136,7 +141,9 @@ describe('live Codex option reads', () => {
       openConversation: async () => live
     } as unknown as StructuredAgentSessionMutationContext
 
-    await expect(readStructuredAgentSessionOptions(context, SESSION)).rejects.toBe(failure)
+    await expect(
+      readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
+    ).rejects.toBe(failure)
     await expect(queue.serialize(SESSION, async () => 'Stop can proceed')).resolves.toBe(
       'Stop can proceed'
     )
@@ -168,7 +175,7 @@ describe('live Codex option reads', () => {
       conversation: async () => live
     } as unknown as StructuredAgentSessionMutationContext
 
-    const reading = readStructuredAgentSessionOptions(context, SESSION)
+    const reading = readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
     await vi.waitFor(() => expect(prepareReadOptions).toHaveBeenCalledOnce())
     await queue.serialize(SESSION, async () => {
       live.child = { fence: 8 }

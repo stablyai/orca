@@ -4,6 +4,7 @@ import type {
   AgentSessionRecord
 } from '../../../shared/agent-session-record'
 import { isLegacyAgentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import { isNativeLocalLocation } from '../../../shared/execution-host'
 import {
   agentModelCatalogFingerprint,
   agentModelCatalogFingerprintForRecord
@@ -134,12 +135,13 @@ async function newChatCatalogKey(
   }
 }
 
-/** The local folder a session's agent runs in; null where this host cannot look into it. */
+/** The local folder a session's agent runs in; null where this host cannot look into it, as a new
+ *  chat's own read answers. */
 async function sessionWorkspacePath(
   deps: AgentModelCatalogServiceDeps,
   record: AgentSessionRecord
 ): Promise<string | null> {
-  if (record.location.wslDistro !== null || !deps.recordWorkspacePath) {
+  if (!isNativeLocalLocation(record.location) || !deps.recordWorkspacePath) {
     return null
   }
   return deps.recordWorkspacePath(record).catch(() => null)

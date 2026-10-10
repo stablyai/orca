@@ -104,7 +104,7 @@ function readOptions(journal: AgentSessionJournal, agents: StructuredAgentRegist
     openConversation: async () => running,
     conversation: async () => running
   } as unknown as StructuredAgentSessionMutationContext
-  return readStructuredAgentSessionOptions(context, SESSION)
+  return readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
 }
 
 function attachTail(journal: AgentSessionJournal, limit: number): StructuredAgentSessionState {

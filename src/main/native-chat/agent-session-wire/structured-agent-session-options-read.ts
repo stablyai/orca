@@ -7,6 +7,7 @@
 
 import {
   refuse,
+  type AgentSessionModelCatalogResult,
   type AgentSessionOptionResult,
   type AgentSessionOptionsResult
 } from '../../../shared/agent-session-wire'
@@ -24,8 +25,7 @@ import type { StructuredAgentSessionMutationContext } from './structured-agent-s
 
 type RestingOptions = Pick<AgentSessionOptionsResult, 'models' | 'fastModeSupport' | 'current'>
 
-/** What the asking client takes. One that reads an answer naming no model is answered for the
- *  chat's own folder, as its first frame is; any other keeps the account's default. */
+/** What the asking client takes: whether it reads an answer that names no model. */
 export type StructuredAgentSessionOptionsReader = { readsWithoutModel: boolean }
 
 /** Initial explicit picks follow the same rules as a pick made while the chat is at rest. */
@@ -63,17 +63,32 @@ async function readStructuredAgentSessionOptionsAtRest(
     throw new Error('agent_session_identity_required')
   }
   const rules = restingOptionRules(deps.agents, record)
-  const catalog = (await deps.modelCatalog
-    ?.read({
-      agent: record.provider,
-      sessionId,
-      ...(reader.readsWithoutModel ? { inSessionWorkspace: true as const } : {})
-    })
-    .catch(() => null)) ?? { origin: 'unknown' as const }
+  const readCatalog = async (
+    inSessionWorkspace: boolean
+  ): Promise<AgentSessionModelCatalogResult> =>
+    (await deps.modelCatalog
+      ?.read({
+        agent: record.provider,
+        sessionId,
+        ...(inSessionWorkspace ? { inSessionWorkspace: true as const } : {})
+      })
+      .catch(() => null)) ?? { origin: 'unknown' }
+  const saved = record.options ?? {}
+  // The chat's own folder decides its default, as its first frame did.
+  const scoped = await readCatalog(true)
+  const folderDefault =
+    scoped.origin === 'unknown' ? undefined : scoped.models.find((entry) => entry.isDefault)
+  // Where the folder names none, a client that needs a model keeps the account default it got before.
+  const catalog =
+    saved.model === undefined &&
+    !folderDefault &&
+    scoped.origin !== 'unknown' &&
+    !reader.readsWithoutModel
+      ? await readCatalog(false)
+      : scoped
   // With no catalog for the account, the list a running child of this agent falls back to.
   const listed = catalog.origin === 'unknown' ? (rules?.fallbackModels() ?? null) : catalog.models
   const models = listed ?? []
-  const saved = record.options ?? {}
   const fastMode =
     saved.fastMode === undefined
       ? null
@@ -83,11 +98,11 @@ async function readStructuredAgentSessionOptionsAtRest(
   const model =
     saved.model ??
     (catalog.origin === 'unknown' ? undefined : models.find((entry) => entry.isDefault)?.id)
-  // The pick, else the model's default where a live child reports that. With no model pick, the
-  // chat runs the catalog's default at its listed default effort, as its first frame showed.
+  // The pick, else the model's default where a live child reports that, or where the chat's folder
+  // names that model as what it runs, as its first frame showed.
   const effort =
     saved.effort ??
-    (rules?.effortDefaultsToModel || saved.model === undefined
+    (rules?.effortDefaultsToModel || (saved.model === undefined && folderDefault)
       ? models.find((entry) => entry.id === model)?.defaultEffort
       : undefined)
   return {
@@ -136,7 +151,7 @@ export async function readStructuredAgentSessionOptions(
     'deps' | 'serialize' | 'openConversation' | 'conversation'
   >,
   sessionId: string,
-  reader: StructuredAgentSessionOptionsReader = { readsWithoutModel: false }
+  reader: StructuredAgentSessionOptionsReader
 ): Promise<AgentSessionOptionsResult> {
   const { adapter, agents, store } = context.deps
   const started = await context.serialize(sessionId, async () => {

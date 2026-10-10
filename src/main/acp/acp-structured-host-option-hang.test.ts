@@ -73,7 +73,9 @@ describe('a Grok model pick Grok never answers', () => {
     await waitFor(() => expect(framesOf(rig.child(), 'session/set_config_option')).toHaveLength(1))
     expect(failed(await within(picking, 2_000))).toBe(true)
     // The chat's queue moved on: a later operation runs.
-    expect(await within(host.readOptions(SESSION), 1_000)).not.toBe('pending')
+    expect(await within(host.readOptions(SESSION, { readsWithoutModel: true }), 1_000)).not.toBe(
+      'pending'
+    )
     const [frame] = framesOf(rig.child(), 'session/set_config_option')
     rig.child().agent.reply(frame!, {
       configOptions: GROK_CONFIG_OPTIONS.map((option) =>
@@ -81,7 +83,9 @@ describe('a Grok model pick Grok never answers', () => {
       )
     })
     await waitFor(async () =>
-      expect((await host.readOptions(SESSION)).current).toMatchObject({ model: 'grok-4.6' })
+      expect((await host.readOptions(SESSION, { readsWithoutModel: true })).current).toMatchObject({
+        model: 'grok-4.6'
+      })
     )
     await host.close(SESSION, 'user-close')
   })

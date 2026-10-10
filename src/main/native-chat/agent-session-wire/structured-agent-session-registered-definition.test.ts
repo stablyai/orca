@@ -84,7 +84,7 @@ function readAtRest(agents: StructuredAgentRegistry) {
     openConversation: async () => resting,
     conversation: async () => resting
   } as unknown as StructuredAgentSessionMutationContext
-  return readStructuredAgentSessionOptions(context, RECORD.sessionId)
+  return readStructuredAgentSessionOptions(context, RECORD.sessionId, { readsWithoutModel: true })
 }
 
 describe('a registered definition', () => {

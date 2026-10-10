@@ -280,14 +280,21 @@ describe("a new chat's effort pill before its agent starts", () => {
     }
   )
 
-  it('keeps today’s answer, with its commands, for a client that needs a model', async () => {
+  it('keeps the account default model, with no effort, for a client that needs a model', async () => {
     const { atRest } = await newChatFrames('codex', {
       projectFiles: { '.codex/config.toml': 'model_reasoning_effort = "high"\n' },
       readsWithoutModel: false
     })
 
-    expect(atRest.current).toEqual({ model: 'gpt-5.5', effort: 'medium' })
+    // The account default is not what this repo runs, so its effort is never claimed.
+    expect(atRest.current).toEqual({ model: 'gpt-5.5' })
     expect(atRest.conversationCommands).toEqual(['clear', 'compact'])
+  })
+
+  it('names the folder’s default effort for a client that needs a model too', async () => {
+    const { atRest } = await newChatFrames('codex', { readsWithoutModel: false })
+
+    expect(atRest.current).toEqual({ model: 'gpt-5.5', effort: 'medium' })
   })
 
   it('keeps a saved effort over the default model’s', async () => {

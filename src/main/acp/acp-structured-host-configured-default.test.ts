@@ -149,7 +149,9 @@ describe('Grok’s default comes from what a chat with no pick runs', () => {
   it('names 4.6, the model a chat with no pick ran, never the listing’s 4.7', async () => {
     const { catalog, host } = await openGrokHost('grok-4.6')
     await catalog.read({ agent: 'grok', waitForListing: true })
-    expect((await host.readOptions(SESSION)).current).toMatchObject({ model: 'grok-4.6' })
+    expect((await host.readOptions(SESSION, { readsWithoutModel: true })).current).toMatchObject({
+      model: 'grok-4.6'
+    })
 
     // The next new chat, in any workspace: Grok reads no project config for its model.
     const answer = await catalog.read({ agent: 'grok', workspacePath: '/elsewhere' })
@@ -170,7 +172,9 @@ describe('Grok’s default comes from what a chat with no pick runs', () => {
     const prompt = await rig.frame('session/prompt')
     rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
 
-    expect((await host.readOptions(SESSION)).current).toMatchObject({ model: 'grok-4.6' })
+    expect((await host.readOptions(SESSION, { readsWithoutModel: true })).current).toMatchObject({
+      model: 'grok-4.6'
+    })
     const answer = await catalog.read({ agent: 'grok', workspacePath: '/elsewhere' })
     expect(answer).toMatchObject({ listingNamesConfiguredModel: true })
     expect(firstFrame(answer)).toEqual({ model: 'grok-4.6', effort: 'high' })

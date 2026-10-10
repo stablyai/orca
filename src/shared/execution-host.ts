@@ -10,6 +10,14 @@ export type ExecutionHostId = typeof LOCAL_EXECUTION_HOST_ID | `ssh:${string}` |
 
 export type ExecutionHostScope = typeof ALL_EXECUTION_HOSTS_SCOPE | ExecutionHostId
 
+/** Whether work at this location runs natively on this machine, in a folder this process can read. */
+export function isNativeLocalLocation(location: {
+  executionHostId: string
+  wslDistro: string | null
+}): boolean {
+  return location.executionHostId === LOCAL_EXECUTION_HOST_ID && !location.wslDistro
+}
+
 export type ParsedExecutionHost =
   | { kind: 'local'; id: typeof LOCAL_EXECUTION_HOST_ID }
   | { kind: 'ssh'; id: `ssh:${string}`; targetId: string }

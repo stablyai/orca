@@ -57,7 +57,9 @@ async function setOption(
 
 /** What the picker is handed: the value it shows, and which ones the CLI vouched for. */
 async function picker(host: StructuredAgentSessionHost) {
-  const { model, effort, confirmed } = (await host.readOptions(SESSION)).current
+  const { model, effort, confirmed } = (
+    await host.readOptions(SESSION, { readsWithoutModel: true })
+  ).current
   return { model, effort, confirmed }
 }
 

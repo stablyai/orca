@@ -245,7 +245,7 @@ export function structuredAgentSessionMutationDelegates(
       caller: StructuredAgentSessionCaller,
       params: Parameters<typeof changeStructuredAgentSessionThreadGoal>[2]
     ) => changeStructuredAgentSessionThreadGoal(context(), caller, params),
-    readOptions: (sessionId: string, reader?: StructuredAgentSessionOptionsReader) =>
+    readOptions: (sessionId: string, reader: StructuredAgentSessionOptionsReader) =>
       readStructuredAgentSessionOptions(context(), sessionId, reader)
   }
 }
