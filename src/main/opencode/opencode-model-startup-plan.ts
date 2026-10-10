@@ -10,7 +10,10 @@ import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resum
 import type { TuiAgent } from '../../shared/tui-agent'
 import { probeOpenCodeLaunchModelContext } from './opencode-launch-model-context'
 import { resolveOpenCodeLaunchModelConfig } from './opencode-launch-model-config'
-import { isVerifiedOpenCodeLegacyModelVersion } from './opencode-model-version-policy'
+import {
+  isVerifiedOpenCodeLegacyModelVersion,
+  VERIFIED_OPENCODE_MODEL_VERSIONS
+} from './opencode-model-version-policy'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { applyManagedDataAccountEnvironment } from '../managed-data-accounts/launch-environment'
 import { OrchestrationError } from '../runtime/orchestration/orchestration-error'
@@ -28,13 +31,14 @@ type StartupScope = {
   signal?: AbortSignal
 }
 
-function refuseModel(): never {
+function refuseModel(detail?: string): never {
   throw new OrchestrationError(
     'capability_unsupported',
-    'The execution host cannot verify this OpenCode model launch.'
+    detail ?? 'The execution host cannot verify this OpenCode model launch.'
   )
 }
 
+/** Validates a requested OpenCode model on the execution host: verified legacy CLIs only check the model catalog, 2.0.16 gets full launch-context verification, everything else fails closed. */
 export async function prepareOpenCodeModelStartupInputs(
   options: StartupScope
 ): Promise<{ inputs: AgentStartupPlanInputs; launchConfig?: SleepingAgentLaunchConfig }> {
@@ -90,9 +94,18 @@ export async function prepareOpenCodeModelStartupInputs(
     if (!(await probeOpenCodeModelAvailability({ command, model, cwd: options.cwd, env }))) {
       refuseModel()
     }
+    if (inputs.agentArgs?.trim()) {
+      refuseModel()
+    }
     return { inputs }
   }
-  if (capabilities?.version !== '2.0.16' || inputs.agentArgs?.trim()) {
+  if (capabilities?.version !== '2.0.16') {
+    refuseModel(
+      `OpenCode CLI version ${capabilities?.version ?? 'unknown'} cannot verify launch-time model selection. ` +
+        `Use a verified OpenCode CLI (${VERIFIED_OPENCODE_MODEL_VERSIONS}).`
+    )
+  }
+  if (inputs.agentArgs?.trim()) {
     refuseModel()
   }
   const before = await probeOpenCodeLaunchModelContext({
@@ -142,6 +155,7 @@ export async function prepareOpenCodeModelStartupInputs(
   }
 }
 
+/** Builds the OpenCode model startup plan after execution-host validation; refuses draft delivery for resume-capable launches. */
 export async function buildExecutionHostAgentStartupPlan(
   options: StartupScope & {
     prompt: string

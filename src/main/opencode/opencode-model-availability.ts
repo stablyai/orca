@@ -2,6 +2,7 @@ import { resolveStartupShell, tokenizeStartupCommand } from '../../shared/tui-ag
 import { runProcess } from '@orca/process-host'
 import { resolveCommandOnLocalPath } from '../ipc/command-path-resolver'
 
+/** Resolves the locally installed OpenCode executable behind a plain single-token launch command; null for indirect launches (shell spans, WSL, unknown cwd). */
 export async function resolveOpenCodeDirectModelExecutable(options: {
   command: string | undefined
   model: string
@@ -30,6 +31,7 @@ export async function resolveOpenCodeDirectModelExecutable(options: {
   })
 }
 
+/** Runs `opencode models` and accepts only a complete catalog listing the requested model verbatim; timeouts, truncation, and failures all count as unavailable. */
 export async function probeOpenCodeModelAvailability(
   options: Parameters<typeof resolveOpenCodeDirectModelExecutable>[0]
 ): Promise<boolean> {
