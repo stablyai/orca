@@ -75,7 +75,24 @@ describe('structured mailbox pointer host', () => {
     const items = [runningTurn(), ...transcript(500)]
     hostRef.current = {
       journalSnapshot: () => ({ items, submissions: [] }),
-      currentWork: () => null
+      currentWork: () => null,
+      deps: { store: { getRecord: () => null } }
+    }
+    expect(await readStructuredSessionGateFacts('s1')).toEqual({
+      turnRunning: true,
+      awaitingHuman: false
+    })
+  })
+
+  it.each([
+    { unreconciled: true, handoffStage: null },
+    { unreconciled: false, handoffStage: 'recovering' }
+  ])('never reads an owner no adjudication has concluded about as idle (%o)', async (lease) => {
+    // Nothing it left reads as current work, yet it may still run: `@idle` must not pick it.
+    hostRef.current = {
+      journalSnapshot: () => ({ items: [runningTurn()], submissions: [] }),
+      currentWork: () => ({ scope: { isCurrentItem: () => false, owesSend: () => false } }),
+      deps: { store: { getRecord: () => ({ lease }) } }
     }
     expect(await readStructuredSessionGateFacts('s1')).toEqual({
       turnRunning: true,

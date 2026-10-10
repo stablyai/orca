@@ -37,6 +37,8 @@ import {
   turnState
 } from './structured-agent-session-leftover-settlement.test-fixture'
 import { retryIdle } from './structured-agent-session-retry.test-fixture'
+import { structuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
+import { scanRecord } from './structured-agent-session-startup-scan.test-fixture'
 
 let rig: QueuedMessageTestRig | undefined
 
@@ -299,5 +301,29 @@ describe('a live owner', () => {
     expect(runningStructuredAgentSessionTurnId(view.chat())).toBe('unfinished')
     expect(view.answerable()).toBe(true)
     expect(view.listed()?.status).not.toBe('idle')
+  })
+})
+
+describe('an owner whose adjudication concludes with no row written', () => {
+  it('changes the published answer when it goes from unverifiable to released', () => {
+    const journal = {
+      runningTurn: () => null,
+      itemFence: () => undefined,
+      visitItems: () => undefined,
+      submissions: () => [],
+      wroteBeforeOpen: () => false
+    }
+    const record = scanRecord(SESSION, false)
+    const unverifiable = structuredAgentSessionCurrentWork(journal, {
+      record: { lease: { ...record.lease, unreconciled: true } },
+      child: null
+    })
+    const released = structuredAgentSessionCurrentWork(journal, {
+      record: scanRecord(SESSION, true),
+      child: null
+    })
+
+    expect(unverifiable.liveFence).toBe(released.liveFence)
+    expect(unverifiable.viewKey()).not.toBe(released.viewKey())
   })
 })

@@ -122,6 +122,16 @@ export function agentSessionLeaseOwnerVerdict(lease: AgentSessionLease): AgentSe
     : 'unverifiable'
 }
 
+/** No adjudication has concluded about the recorded owner yet: unreconciled since the restart, or
+ *  latched in recovery. It may still run, so nothing starts in its place (`evaluateAgentSession-
+ *  Acquisition` refuses both) and nothing is delivered to the chat until one concludes. */
+export function agentSessionOwnerUnadjudicated(
+  record: { lease: Pick<AgentSessionLease, 'unreconciled' | 'handoffStage'> } | null | undefined
+): boolean {
+  const lease = record?.lease
+  return lease !== undefined && (lease.unreconciled || lease.handoffStage === 'recovering')
+}
+
 /** Nothing holds this lease: released, no handoff in flight, and reconciled since the last restart. */
 export function agentSessionLeaseIsReleased(lease: AgentSessionLease): boolean {
   return !lease.unreconciled && lease.claimStatus === 'released' && lease.handoffStage === null

@@ -130,10 +130,8 @@ export function sendQueuedStructuredAgentMessage(
       // The one queue gate; Send-now's override set is exactly `working` (plus
       // FIFO order and the stored hold, which the consume below clears).
       const record = context.deps.store.getRecord(ctx.sessionId)
-      const hold = structuredQueueHold({
-        record,
-        work: contextStructuredAgentSessionCurrentWork(ctx)
-      })
+      const work = contextStructuredAgentSessionCurrentWork(ctx)
+      const hold = structuredQueueHold({ record, work })
       if (hold === 'blocked') {
         return structuredAgentSessionSendBlock(record) ?? invalid('This conversation cannot send.')
       }
@@ -156,7 +154,7 @@ export function sendQueuedStructuredAgentMessage(
       }
       // A command never steers: handed over mid-turn it would only be refused. Clients offer its
       // Send only while the agent is idle; this answers an older one that offers it mid-turn.
-      if (hold === 'working' && row.body.command) {
+      if (row.body.command && work.working()) {
         return invalid("A command can't be sent while the agent is working.")
       }
       const submissionId = operationId

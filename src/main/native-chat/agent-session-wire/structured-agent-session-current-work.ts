@@ -21,6 +21,7 @@ import {
   type AgentJournalTurnScope
 } from '../../../shared/agent-session-journal-types'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { agentSessionOwnerUnadjudicated } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionLatestTurn } from '../../../shared/agent-session-wire'
 import type { StructuredAgentSessionWorkScope } from '../../../shared/structured-agent-session-main-agent-working'
@@ -77,7 +78,8 @@ export function structuredAgentSessionLiveFence(
 function structuredAgentSessionOwnerUnverifiable(evidence: StructuredAgentSessionWorkEvidence) {
   const lease = evidence.record?.lease
   return (
-    (lease?.unreconciled === true || lease?.handoffStage === 'recovering') &&
+    lease !== undefined &&
+    agentSessionOwnerUnadjudicated(evidence.record) &&
     evidence.child !== undefined &&
     evidence.child?.fence !== lease.runtimeFence
   )
@@ -135,7 +137,7 @@ export class StructuredAgentSessionCurrentWork {
    *  generation, since every answer here is the journal read through it. Not the revision, which
    *  moves on every generation-end signal: an end that changed nothing is published once. */
   viewKey(): string {
-    return `${this.liveFence}`
+    return `${this.liveFence}${this.ownerUnverifiable ? ':unverifiable' : ''}`
   }
 
   /** Whether the live generation's execution produced this item. */

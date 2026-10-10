@@ -116,6 +116,7 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/native-chat/agent-session-wire/structured-agent-session-late-settlement.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-lease-renewer.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-leftover-settlement-scope.test.ts',
+  'src/main/native-chat/agent-session-wire/structured-agent-session-unadjudicated-owner-queue.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-leftover-settlement-triggers.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-reconciliation-retry.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-startup-scan.test.ts',
