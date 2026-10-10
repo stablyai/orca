@@ -171,6 +171,14 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+E'])
   },
   {
+    id: 'voice.control',
+    title: 'Full Voice Control',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'control', 'voice', 'speech', 'microphone', 'agent'],
+    defaultBindings: platformBindings(['Mod+Shift+V'])
+  },
+  {
     id: 'view.tasks',
     title: 'Open Tasks',
     group: 'Global',

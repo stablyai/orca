@@ -20,6 +20,30 @@ describe('keybindings', () => {
   })
 
   it.each(['darwin', 'linux', 'win32'] as const)(
+    'binds the voice control toggle to Mod+Shift+V on %s',
+    (platform) => {
+      const definition = getKeybindingDefinition('voice.control')
+      expect(definition?.group).toBe('Global')
+      expect(definition?.scope).toBe('global')
+      expect(getEffectiveKeybindingsForAction('voice.control', platform)).toEqual(['Mod+Shift+V'])
+      expect(
+        keybindingMatchesAction(
+          'voice.control',
+          {
+            key: 'v',
+            code: 'KeyV',
+            meta: platform === 'darwin',
+            control: platform !== 'darwin',
+            alt: false,
+            shift: true
+          },
+          platform
+        )
+      ).toBe(true)
+    }
+  )
+
+  it.each(['darwin', 'linux', 'win32'] as const)(
     'binds editor word wrap to Alt+Z on %s',
     (platform) => {
       expect(getEffectiveKeybindingsForAction('editor.toggleWordWrap', platform)).toEqual(['Alt+Z'])

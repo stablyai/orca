@@ -409,7 +409,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(shouldApplyWebSessionTabsSnapshot(snapshot, ENV)).toBe(true)
   })
 
-  it('ignores remote snapshots for the local floating workspace', () => {
+  const makeFloatingWorkspaceState = () => {
     const floatingTab: TerminalTab = {
       id: 'floating-tab-1',
       ptyId: 'pty-floating-1',
@@ -434,25 +434,32 @@ describe('applyWebSessionTabsSnapshot', () => {
       createdAt: NOW,
       isPreview: false
     }
-    const state = makeState({
-      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-      tabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [floatingTab] },
-      ptyIdsByTabId: { [floatingTab.id]: ['pty-floating-1'] },
-      unifiedTabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [floatingUnifiedTab] },
-      groupsByWorktree: {
-        [FLOATING_TERMINAL_WORKTREE_ID]: [
-          {
-            id: 'floating-group',
-            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-            activeTabId: floatingTab.id,
-            tabOrder: [floatingTab.id],
-            recentTabIds: [floatingTab.id]
-          }
-        ]
-      },
-      activeTabId: floatingTab.id,
-      activeTabIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: floatingTab.id }
-    })
+    return {
+      floatingTab,
+      state: makeState({
+        activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        tabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [floatingTab] },
+        ptyIdsByTabId: { [floatingTab.id]: ['pty-floating-1'] },
+        unifiedTabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [floatingUnifiedTab] },
+        groupsByWorktree: {
+          [FLOATING_TERMINAL_WORKTREE_ID]: [
+            {
+              id: 'floating-group',
+              worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+              activeTabId: floatingTab.id,
+              tabOrder: [floatingTab.id],
+              recentTabIds: [floatingTab.id]
+            }
+          ]
+        },
+        activeTabId: floatingTab.id,
+        activeTabIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: floatingTab.id }
+      })
+    }
+  }
+
+  it('ignores remote snapshots for the local floating workspace', () => {
+    const { state } = makeFloatingWorkspaceState()
 
     const patch = applyWebSessionTabsSnapshot(
       state,
@@ -466,6 +473,43 @@ describe('applyWebSessionTabsSnapshot', () => {
     )
 
     expect(patch).toBe(state)
+  })
+
+  it('applies agent-session-scoped frames for the floating workspace (host-created chats)', () => {
+    // The voice-control chief of staff is a host-created structured session bound to the
+    // floating workspace; the panel never creates chat tabs itself, so this lane is the
+    // only way one becomes visible. Non-agent tabs must stay untouched.
+    const { floatingTab, state } = makeFloatingWorkspaceState()
+    const agentTab = {
+      type: 'agent-session' as const,
+      id: 'agent-session:chief-1',
+      title: 'Claude Chat',
+      sessionId: 'chief-1',
+      agent: 'claude' as const,
+      isActive: false
+    }
+
+    const patch = applyWebSessionTabsSnapshot(
+      state,
+      makeSnapshot([agentTab], {
+        worktree: FLOATING_TERMINAL_WORKTREE_ID,
+        activeTabId: null,
+        activeTabType: null
+      }),
+      ENV,
+      NOW,
+      { contentScope: 'agent-session', preserveLocalLayout: true }
+    )
+
+    expect(patch).not.toBe(state)
+    expect(patch.unifiedTabsByWorktree?.[FLOATING_TERMINAL_WORKTREE_ID]).toContainEqual(
+      expect.objectContaining({ entityId: 'chief-1', contentType: 'agent-session' })
+    )
+    // The local terminal is retained, never reconciled away by the scoped frame.
+    expect(
+      (patch.tabsByWorktree?.[FLOATING_TERMINAL_WORKTREE_ID] ??
+        state.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]) satisfies TerminalTab[]
+    ).toEqual([floatingTab])
   })
 
   it('suppresses a tab the client is closing until the host confirms removal (no close flash)', () => {

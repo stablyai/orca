@@ -4,7 +4,7 @@ import type { CdpTabState } from './cdp-auxiliary-commands'
 import type { CdpCommandSender } from './snapshot-engine'
 import type { CdpBridgeState } from './cdp-bridge-state'
 import { createCdpDebuggerMessageListener } from './cdp-debugger-events'
-import { sendGuestCdpCommand } from './guest-cdp-command'
+import { sendGuestCdpCommandWithTimeout } from './guest-cdp-command'
 
 export class CdpDebuggerLifecycle {
   constructor(private readonly bridgeState: CdpBridgeState) {}
@@ -83,20 +83,7 @@ export class CdpDebuggerLifecycle {
   }
 
   makeCdpSender(guest: WebContents, sessionId?: string): CdpCommandSender {
-    return (method: string, params?: Record<string, unknown>) => {
-      const command = sendGuestCdpCommand(guest, method, params, sessionId)
-      // Why: Electron's CDP sendCommand can hang on a stale debugger session, so a 10s timeout bounds the RPC.
-      let timer: ReturnType<typeof setTimeout>
-      return Promise.race([
-        command.finally(() => clearTimeout(timer)),
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(
-            () =>
-              reject(new BrowserError('browser_cdp_error', `CDP command "${method}" timed out`)),
-            10_000
-          )
-        })
-      ])
-    }
+    return (method: string, params?: Record<string, unknown>) =>
+      sendGuestCdpCommandWithTimeout(guest, method, params, sessionId)
   }
 }

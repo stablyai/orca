@@ -3062,6 +3062,86 @@
           }
         }
       },
+      "voice": {
+        "control": {
+          "AgentSpeakingChips": {
+            "2f19979ffd": "Unknown agent",
+            "eb42999570": "Working…",
+            "d769377dd7": "Speaking"
+          },
+          "VoiceControlIndicator": {
+            "2457413612": "Stopping…",
+            "ba85f4e286": "OpenAI quota exceeded.",
+            "d32b4bb989": "A network filter is intercepting OpenAI traffic. Disable TLS inspection for api.openai.com.",
+            "5554f0b158": "Stop voice control",
+            "3c768d5d89": "Voice control hit an unexpected error.",
+            "29829ab1ed": "OpenAI API key was rejected. Check it in Settings > Voice.",
+            "704c2fd2df": "Dismiss",
+            "6247052b75": "OpenAI realtime is unavailable right now.",
+            "8cfbdf5630": "Talk to your agents",
+            "212c6ba9e2": "Open mic — talk to your agents",
+            "a566995efc": "Microphone access not granted.",
+            "2cfb53f520": "Network error reaching OpenAI.",
+            "64ad9dcc63": "Open Voice settings",
+            "ac60409b1f": "The audio connection failed. Check your network or VPN.",
+            "603efc130d": "Connecting…",
+            "337ecda30e": "Dismiss and reset",
+            "234fd0e2fd": "Listening",
+            "d5b8ea55f9": "Add an OpenAI API key in Settings > Voice to use full voice control.",
+            "d8993b9285": "The stored OpenAI key could not be read. Re-enter it in Settings > Voice.",
+            "de37e25e2e": "Show transcript",
+            "7423b7184a": "Hide transcript"
+          },
+          "VoiceControlController": {
+            "e34835dab1": "Microphone disconnected. Voice control stopped."
+          },
+          "VoiceControlStatusSegment": {
+            "5672a03f58": "Voice control is stopping.",
+            "12a1f27aee": "Live",
+            "aa984ca8c7": "Voice control error. Click to stop and reset.",
+            "ad8a798db4": "Stopping…",
+            "bfaf7efee4": "Voice control is connecting. Click to stop.",
+            "bcd842b147": "Voice control is live with the mic open. Click to stop.",
+            "68207f4bf7": "Connecting…",
+            "b5f29ae8d9": "Error"
+          },
+          "VoiceControlTranscriptPanel": {
+            "8aeb00a62d": "Voice transcript",
+            "510ef08415": "You:",
+            "6ccf1cddd4": "Close transcript",
+            "e992981744": "No transcript yet — say something.",
+            "ab8ecc45ba": "Type or paste a message…",
+            "a9a6d9904a": "Send message"
+          },
+          "voice": {
+            "control": {
+              "tool": {
+                "activity": {
+                  "label": {
+                    "3581471fab": "Checking the roster…",
+                    "6d91f4c490": "Waiting for {{name}} to reply…",
+                    "338fc6bad1": "Starting an agent in {{name}}…",
+                    "4b3f0ee5f7": "Broadcast sent — waiting for replies…",
+                    "ddab1ccae7": "Navigating to {{name}}…",
+                    "62508e1fd3": "Looking at your screen…",
+                    "6f1d8ef9ec": "Reading the screen…",
+                    "f255e4edc1": "Clicking {{name}}…",
+                    "971bbba281": "Typing into {{name}}…",
+                    "e3b08d6076": "Reading the terminal…",
+                    "1453ef8e54": "Running a command…",
+                    "245e6b241c": "Opening {{name}}…"
+                  }
+                }
+              },
+              "transcript": {
+                "toasts": {
+                  "b4a9a7f737": "You: {{text}}"
+                }
+              }
+            }
+          }
+        }
+      },
       "worktree": {
         "creation": {
           "WorktreeCreationPanel": {
@@ -9204,6 +9284,27 @@
         "UIZoomControl": {
           "c2c64b24d0": "Reset"
         },
+        "VoiceControlSettingsSection": {
+          "929f8f1e88": "Enable Full Voice Control",
+          "f6b7ed75c2": "Press {{shortcut}} to start or stop. Talk to your agents hands-free with an open mic.",
+          "bcc40a5cfc": "Coordinator voice",
+          "ce44817e26": "The voice the coordinator speaks with.",
+          "5c549e4dde": "Agent updates",
+          "8ec9e8d099": "A session's voice is locked once the first reply plays, so agents can't sound different. Choose whether the coordinator names the reporting agent when relaying updates.",
+          "96dc2a9896": "Name the reporting agent",
+          "fb987e9167": "Relay updates without naming agents",
+          "44af9d4285": "Max session length",
+          "87a0e3370b": "Voice control hangs up automatically at this limit. Choose Unlimited for no cap.",
+          "0e2029a54e": "Unlimited",
+          "f20cc19e9c": "15 minutes",
+          "5cb51b7dd9": "30 minutes",
+          "e6e8c4b5cc": "1 hour",
+          "38381e90a1": "2 hours",
+          "2ab4f49ef3": "Realtime audio is billed per minute of session time.",
+          "95d6edeaf0": "Custom instructions",
+          "6103f118f5": "Persona and style notes for the control, appended to its built-in rules. Applies to new sessions.",
+          "0173d1898d": "Example: keep every answer to one sentence."
+        },
         "VoicePane": {
           "6fa734ed95": "Delete {{value0}}",
           "68de13f72c": "Failed to delete model.",
@@ -11144,7 +11245,15 @@
               "micInput": "input",
               "micDevice": "device",
               "micAirpods": "airpods",
-              "micDefault": "system default"
+              "micDefault": "system default",
+              "37e26bbd94": "Voice control",
+              "797db8a2ad": "Talk to your agents hands-free with an open mic.",
+              "52216ee03b": "control",
+              "6df24eff92": "voice control",
+              "decb067e17": "hands-free",
+              "763dce1026": "hands free",
+              "a493d3131e": "open mic",
+              "cbcb82fd2e": "realtime"
             }
           }
         },
