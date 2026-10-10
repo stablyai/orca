@@ -2,6 +2,7 @@ import type { IBufferLine, IBufferRange } from '@xterm/xterm'
 import { extractTerminalFileLinkCandidates } from '@/lib/terminal-links'
 import { openDetectedFilePath } from './terminal-file-open-routing'
 import { resolveFileLinkTarget } from './terminal-file-link-target'
+import { peekTerminalPathExistsCache } from './terminal-path-exists-cache'
 import {
   buildHardWrappedPathLogicalLineCandidates,
   buildWrappedLogicalLine,
@@ -61,7 +62,9 @@ export function openFilePathLinkAtBufferPosition(
         line: target.line,
         column: target.column,
         pathText: parsed.pathText,
-        cachedExists: deps.pathExistsCache?.get(target.cacheKey),
+        cachedExists: deps.pathExistsCache
+          ? peekTerminalPathExistsCache(deps.pathExistsCache, target.cacheKey)
+          : undefined,
         isKnownWorktreeRoot: target.isKnownWorktreeRoot
       })
     }

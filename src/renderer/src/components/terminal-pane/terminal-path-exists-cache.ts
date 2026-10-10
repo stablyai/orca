@@ -1,5 +1,27 @@
 export const TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES = 1024
 
+// Why: an agent often prints a path before it writes the file (e.g. while it waits for
+// permission to create a file outside the project). A permanent "missing" answer would keep
+// that path unclickable for the life of the pane. Only boolean `false` answers expire; other
+// cached values (native chat stores objects here) are untouched.
+export const TERMINAL_PATH_MISSING_CACHE_TTL_MS = 3000
+
+const missingCheckedAt = new WeakMap<Map<string, unknown>, Map<string, number>>()
+
+function isExpiredMissingEntry(cache: Map<string, unknown>, key: string): boolean {
+  const checkedAt = missingCheckedAt.get(cache)?.get(key)
+  return checkedAt !== undefined && Date.now() - checkedAt >= TERMINAL_PATH_MISSING_CACHE_TTL_MS
+}
+
+/** Cached answer without touching LRU order; an expired "missing" answer reads as unknown. */
+export function peekTerminalPathExistsCache<T>(cache: Map<string, T>, key: string): T | undefined {
+  const value = cache.get(key)
+  if (value === false && isExpiredMissingEntry(cache, key)) {
+    return undefined
+  }
+  return value
+}
+
 // Why: POSIX-looking SSH paths are only meaningful inside their connection;
 // local/runtime keys keep the legacy scope so existing hover probes stay hot.
 export function getTerminalPathExistsCacheKey({
@@ -25,7 +47,7 @@ export function getTerminalPathExistsCacheKey({
 }
 
 export function readTerminalPathExistsCache<T>(cache: Map<string, T>, key: string): T | undefined {
-  const value = cache.get(key)
+  const value = peekTerminalPathExistsCache(cache, key)
   if (value !== undefined) {
     cache.delete(key)
     cache.set(key, value)
@@ -49,7 +71,18 @@ export function writeTerminalPathExistsCache<T>(
         break
       }
       cache.delete(oldestKey)
+      missingCheckedAt.get(cache)?.delete(oldestKey)
     }
   }
   cache.set(key, value)
+  let checkedAt = missingCheckedAt.get(cache)
+  if (value !== false) {
+    checkedAt?.delete(key)
+    return
+  }
+  if (!checkedAt) {
+    checkedAt = new Map()
+    missingCheckedAt.set(cache, checkedAt)
+  }
+  checkedAt.set(key, Date.now())
 }

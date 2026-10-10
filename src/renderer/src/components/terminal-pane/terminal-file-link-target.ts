@@ -129,9 +129,16 @@ export async function fileLinkTargetExists(
     // Why: no owner means no host to ask; a local stat would answer for the wrong machine.
     throw new Error('The terminal workspace host could not be determined')
   }
-  const exists =
-    readTerminalPathExistsCache(cache, target.cacheKey) ??
-    (await pathExists(target.fileContext, target.absolutePath, target.isRemoteRuntimePath))
+  const cached = readTerminalPathExistsCache(cache, target.cacheKey)
+  if (cached !== undefined) {
+    return cached
+  }
+  const exists = await pathExists(
+    target.fileContext,
+    target.absolutePath,
+    target.isRemoteRuntimePath
+  )
+  // Why: write only fresh probes so a hit cannot extend a "missing" entry's TTL.
   writeTerminalPathExistsCache(cache, target.cacheKey, exists)
   return exists
 }
