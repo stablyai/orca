@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { win32 as pathWin32 } from 'node:path'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { resolveWindowsShellStartupFamily } from '../../shared/windows-terminal-shell'
 import {
   resolveProfileLoadingFallbackShell,

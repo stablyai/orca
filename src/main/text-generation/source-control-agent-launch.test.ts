@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RunProcess from '../../shared/child-process/run-process'
-import type { ProcessSpec } from '../../shared/child-process/process-spec'
+import type * as RunProcess from '@orca/process-host'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { POSIX_PROVIDER_SUPERVISOR_SCRIPT } from '../provider-process/provider-process-supervisor'
 import { generateCommitMessageFromContext } from './commit-message-text-generation'
 import { withPlatform } from './commit-message-text-generation-test-harness'
@@ -12,7 +12,7 @@ import { spawnSourceControlAgent } from './source-control-agent-launch'
 
 const { spawnProcessMock } = vi.hoisted(() => ({ spawnProcessMock: vi.fn() }))
 
-vi.mock('../../shared/child-process/run-process', async (importOriginal) => {
+vi.mock('@orca/process-host', async (importOriginal) => {
   const actual = await importOriginal<typeof RunProcess>()
   spawnProcessMock.mockImplementation(actual.spawnProcess)
   return { ...actual, spawnProcess: spawnProcessMock }

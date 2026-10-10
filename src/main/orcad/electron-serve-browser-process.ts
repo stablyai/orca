@@ -12,7 +12,7 @@ import type {
 import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../shared/runtime-types'
 import { readRuntimeMetadata } from '../runtime/runtime-metadata'
-import { spawnProcess, type SpawnedProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { sendOrcadSidecarRequest } from './orcad-sidecar-runtime-client'
 import {
   ElectronSidecarTabRegistry,
@@ -97,7 +97,7 @@ function processIsLive(pid: number): boolean {
 }
 
 export class ElectronServeBrowserProcess {
-  private child: SpawnedProcess | null = null
+  private child: ReturnType<typeof spawnProcess> | null = null
   private metadata: RuntimeMetadata | null = null
   private readonly tabs = new ElectronSidecarTabRegistry()
   private sidecarDataPath: string | null = null
@@ -237,10 +237,7 @@ export class ElectronServeBrowserProcess {
         this.tabs.require(requestedPageId, worktreeId)
         return { browserPageId: requestedPageId }
       }
-      // Why drop `page`: the runtime advertises browser.tabCreate.known-id.v1, so web
-      // clients send a provisional id for a page that does not exist yet. The sidecar
-      // mints its own id and the caller's is adopted as the public one below; passing
-      // the unknown id through would make the generic branch require() a missing page.
+      // The sidecar mints its own tab id; adopt the caller's provisional id after creating it.
       delete params.page
     }
 

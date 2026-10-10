@@ -6,7 +6,7 @@ import {
 } from './agent-cli-version-probe'
 
 const { runProcess } = vi.hoisted(() => ({ runProcess: vi.fn() }))
-vi.mock('../shared/child-process/run-process', () => ({ runProcess }))
+vi.mock('@orca/process-host', () => ({ runProcess }))
 
 const INPUT = { program: '/opt/bin/agent', cwd: '/repo', env: { PATH: '/opt/bin' } }
 const anyVersion = (): boolean => true

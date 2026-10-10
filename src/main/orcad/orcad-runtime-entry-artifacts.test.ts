@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterAll, expect, it } from 'vitest'
-import { runProcessSync } from '../../shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 import { orcadArtifactFilenames } from '../../shared/orcad-artifacts'
 
 const REPO_ROOT = join(__dirname, '..', '..', '..')

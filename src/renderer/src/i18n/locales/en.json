@@ -18655,7 +18655,6 @@
       "visualOpenInNewTab": "Open in new tab",
       "queuedMessages": {
         "behindReturnedHold": "Waiting — a message ahead needs attention",
-        "awaitingAnswerHold": "Waiting for your answer",
         "steer": "Steer",
         "send": "Send",
         "steerHint": "Submit without interrupting the model",

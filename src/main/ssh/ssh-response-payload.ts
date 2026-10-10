@@ -1,4 +1,4 @@
-import { GrowingByteBuffer } from '../../shared/growing-byte-buffer'
+import { GrowingByteBuffer } from '@orca/process-host/growing-byte-buffer'
 
 export class SshResponsePayload {
   private readonly bytes = new GrowingByteBuffer()

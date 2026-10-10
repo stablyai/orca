@@ -320,6 +320,10 @@ export const WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY =
 // would re-show that row as a normal workspace, so the host leaves such rows out of its listings.
 export const WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY =
   'worktree.background-removal.v1' as const
+// Why: older hosts discard preflight.detectAgents params and probe their own PATH, so a client
+// must not read that answer as the workspace's (a WSL project on a Windows host differs).
+export const PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY =
+  'preflight.workspace-scoped.v1' as const
 // Hosts without this capability have no notifications.registerPush RPC.
 export const NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY = 'notifications.remote-push.v1' as const
 
@@ -425,6 +429,7 @@ export const RUNTIME_CAPABILITIES = [
   ...SKILL_RUNTIME_CAPABILITIES,
   ...AUTOMATION_RUNTIME_CAPABILITIES,
   NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY,
+  PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY,
   ...AGENT_LAUNCH_RUNTIME_CAPABILITIES
 ] as const
 

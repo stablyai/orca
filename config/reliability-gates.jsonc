@@ -760,12 +760,12 @@
       "invariant": "Decoded stdout and stderr callback contents and order remain unchanged, final tails are the last capped run of raw output bytes with any leading partial UTF-8 sequence dropped, and success or failure releases capture storage without recapturing late output.",
       "oracle": "Compare byte-bounded tails against the old per-chunk model and an independent code-point model across compaction, growth, oversized chunks and mid-character splits. Feed split and malformed UTF-8 through actual stream decoding. Require at most 5 MiB moved through the capture for 4 MiB of output with zero encoding, collectible backing buffers after close and error, zero late capture work with preserved callbacks, one decode per stream, unchanged tails on forced cancellation or synchronous kill-close, and every capture limit clamped to a bounded byte count.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/shared/growing-byte-buffer.test.ts src/main/ephemeral-vm-recipe-runner.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/packages/process-host/src/growing-byte-buffer.test.ts src/main/ephemeral-vm-recipe-runner.test.ts"
       ],
       "testFiles": [
         "src/shared/ephemeral-vm-recipe-process.test.ts",
         "src/shared/ephemeral-vm-recipe-output-capture.test.ts",
-        "src/shared/growing-byte-buffer.test.ts",
+        "src/packages/process-host/src/growing-byte-buffer.test.ts",
         "src/main/ephemeral-vm-recipe-runner.test.ts"
       ],
       "assertionRefs": [
@@ -782,7 +782,7 @@
           ]
         },
         {
-          "file": "src/shared/growing-byte-buffer.test.ts",
+          "file": "src/packages/process-host/src/growing-byte-buffer.test.ts",
           "assertions": [
             "reads and writes correctly after the head offset has advanced",
             "keeps a bounded suffix stable across many small appends without unbounded growth"
@@ -794,7 +794,7 @@
           "date": "2026-09-26",
           "runner": "local",
           "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/shared/growing-byte-buffer.test.ts src/main/ephemeral-vm-recipe-runner.test.ts",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/packages/process-host/src/growing-byte-buffer.test.ts src/main/ephemeral-vm-recipe-runner.test.ts",
           "result": "passed",
           "durationSeconds": 0.48,
           "summary": "60 tests across four suites passed, including forced-GC lifetime, synchronous SIGKILL-close and the shared byte buffer's head-offset cases."

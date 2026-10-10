@@ -12,7 +12,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { runProcessSync } from '../shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 import { runCodexAppServerSession } from './codex/codex-app-server-session'
 
 const testState = {

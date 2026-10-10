@@ -24,7 +24,7 @@ const PLATFORM_PREFIXES = [
   'src/main/orcad/',
   'src/main/daemon/',
   'src/main/wsl/',
-  'src/shared/child-process/'
+  'src/packages/process-host/'
 ]
 
 const PLATFORM_FAMILIES = [

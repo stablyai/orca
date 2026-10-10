@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { expect, it, vi } from 'vitest'
-import type { spawnProcess } from '../../shared/child-process/run-process'
+import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { spawnCodexAppServerConnection } from './codex-app-server-connection'
 import { initializeCodexAppServerConnection } from './codex-app-server-handshake'
 
@@ -17,7 +17,7 @@ it('publishes the transport after identity recording and sends initialize only w
   child.stdin.on('data', (chunk: Buffer) => written.push(chunk.toString('utf8')))
   child.stdin.on('finish', () => child.emit('exit', 0, null))
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The transport uses only this stub's pid, event emitter, streams and kill.
-  const spawnImpl = (() => child) as unknown as typeof spawnProcess
+  const spawnImpl = (() => child) as unknown as PipedProcessSpawner
   const identity = Promise.withResolvers<void>()
   const onSpawned = vi.fn(() => identity.promise)
   const opening = spawnCodexAppServerConnection(
