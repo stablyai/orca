@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import type { AgentSubjectReadIntent } from '@/attention/agent-subject-read-actions'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
@@ -30,13 +30,33 @@ const AGENT_BOARD_ESCAPE_BLOCKING_OVERLAY_SELECTOR = [
   '[role="listbox"][data-state="open"]'
 ].join(', ')
 
+function canReturnFocus(element: HTMLElement): boolean {
+  if (
+    !element.isConnected ||
+    element.ownerDocument !== document ||
+    element.matches(':disabled, [aria-disabled="true"]') ||
+    element.closest('[hidden], [inert], [aria-hidden="true"]') ||
+    getComputedStyle(element).visibility === 'hidden'
+  ) {
+    return false
+  }
+  for (let parent: HTMLElement | null = element; parent; parent = parent.parentElement) {
+    if (getComputedStyle(parent).display === 'none') {
+      return false
+    }
+  }
+  return true
+}
+
 /** The in-window Agent Dashboard body. Mounted only while open so the live
  *  snapshot derivation stays off the hot path when the drawer is closed. */
 function AgentDashboardDrawerBody({
   onClose,
+  onFocusHandoff,
   onMenuOpenChange
 }: {
   onClose: () => void
+  onFocusHandoff: () => void
   onMenuOpenChange: (open: boolean) => void
 }): React.JSX.Element {
   const snapshot = useLiveDashboardSnapshot()
@@ -48,18 +68,21 @@ function AgentDashboardDrawerBody({
   }, [])
   const handleRevealAgent = useCallback(
     (args: AgentRevealArgs) => {
-      revealDashboardAgent(args)
-      onClose()
+      if (revealDashboardAgent(args)) {
+        onFocusHandoff()
+      } else {
+        onClose()
+      }
     },
-    [onClose]
+    [onClose, onFocusHandoff]
   )
 
   // Switching to pop-out from the board hands the surface over rather than
   // leaving an in-window board that the setting says should be a window.
   const handleSwitchToPopout = useCallback(() => {
-    onClose()
+    onFocusHandoff()
     void window.api.dashboard.openPopout?.()
-  }, [onClose])
+  }, [onFocusHandoff])
 
   return (
     <AgentKanbanBoard
@@ -99,6 +122,60 @@ export function AgentDashboardDrawer({
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const [menuOpen, setMenuOpen] = useState(false)
+  const boardRef = useRef<HTMLDivElement | null>(null)
+  const openRef = useRef(false)
+  const focusReturnRef = useRef<{
+    opener: HTMLElement | null
+    content: Element | null
+    handoff: boolean
+  } | null>(null)
+
+  // A reopen during the exit animation reuses the Sheet without another open autofocus event.
+  useLayoutEffect(() => {
+    openRef.current = open
+    if (open) {
+      const content = boardRef.current?.closest('[data-slot="sheet-content"]') ?? null
+      const active = document.activeElement
+      focusReturnRef.current = {
+        opener: content?.contains(active)
+          ? (focusReturnRef.current?.opener ?? null)
+          : active instanceof HTMLElement &&
+              active !== document.body &&
+              active !== document.documentElement
+            ? active
+            : null,
+        content,
+        handoff: false
+      }
+    }
+    return () => {
+      openRef.current = false
+    }
+  }, [open])
+
+  const handleCloseAutoFocus = useCallback((event: Event) => {
+    event.preventDefault()
+    const captured = focusReturnRef.current
+    // An old, detached Sheet must not restore into a newer open/close cycle.
+    if (openRef.current || !captured?.content || event.target !== captured.content) {
+      return
+    }
+    focusReturnRef.current = null
+    const active = document.activeElement
+    if (
+      captured.handoff ||
+      (active &&
+        active !== document.body &&
+        active !== document.documentElement &&
+        active.isConnected &&
+        !captured.content.contains(active))
+    ) {
+      return
+    }
+    if (captured.opener && canReturnFocus(captured.opener)) {
+      captured.opener.focus({ preventScroll: true })
+    }
+  }, [])
   // Why: like closeWorkspaceBoard, reset the menu flag on close — Radix never
   // reports close for a menu unmounted with the sheet (e.g. the pop-out
   // hand-off), and a stale true would block outside-dismiss on reopen.
@@ -106,6 +183,20 @@ export function AgentDashboardDrawer({
     setMenuOpen(false)
     setOpen(false)
   }, [setOpen])
+  const closeForFocusHandoff = useCallback(() => {
+    if (focusReturnRef.current) {
+      focusReturnRef.current.handoff = true
+    }
+    close()
+  }, [close])
+  const handleOutsideOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      if (!nextOpen) {
+        closeForFocusHandoff()
+      }
+    },
+    [closeForFocusHandoff]
+  )
   // Why: sidebar collapse (Cmd+B) and workspace-board exclusivity close the
   // drawer through the store setter, bypassing close(); sync the flag so a
   // menu unmounted that way can't block outside-dismiss on the next open.
@@ -125,13 +216,11 @@ export function AgentDashboardDrawer({
     },
     [setOpen]
   )
-  const boardRef = useRef<HTMLDivElement | null>(null)
-
   useWorkspaceKanbanOutsideDismiss({
     open,
     boardRef,
     preserveOpenForMenu: menuOpen,
-    onOpenChange: setOpen
+    onOpenChange: handleOutsideOpenChange
   })
 
   useEffect(() => {
@@ -215,7 +304,11 @@ export function AgentDashboardDrawer({
           // Why: Radix focuses the first header button on open, which shows
           // hover-style affordances without hover and makes the drawer noisy.
           event.preventDefault()
+          if (focusReturnRef.current && event.target instanceof Element) {
+            focusReturnRef.current.content = event.target
+          }
         }}
+        onCloseAutoFocus={handleCloseAutoFocus}
         onPointerDownOutside={guardSidebarInteraction}
         onInteractOutside={guardSidebarInteraction}
       >
@@ -223,7 +316,11 @@ export function AgentDashboardDrawer({
         {/* Radix unmounts SheetContent while closed, so the live snapshot
             derivation in the body stays off the closed path. */}
         <div ref={boardRef} className="flex min-h-0 flex-1 flex-col">
-          <AgentDashboardDrawerBody onClose={close} onMenuOpenChange={setMenuOpen} />
+          <AgentDashboardDrawerBody
+            onClose={close}
+            onFocusHandoff={closeForFocusHandoff}
+            onMenuOpenChange={setMenuOpen}
+          />
         </div>
       </SheetContent>
     </Sheet>
