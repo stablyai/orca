@@ -10,8 +10,12 @@ import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace,
+  getNestedSshTargetIdForFolderWorkspace,
   getRuntimeEnvironmentIdForFolderWorkspace
 } from '@/lib/folder-workspace-runtime-owner'
+import { callHostRoute } from '@/runtime/host-route-call'
+import { hostRouteForAuthority } from '@/runtime/runtime-client-target'
+import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 
 export function normalizeDiffComment(comment: DiffComment): DiffComment {
@@ -65,21 +69,25 @@ async function persist(
       scope.folderWorkspaceId,
       executionHostId
     )
-    const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId })
-    const updated =
-      target.kind === 'local'
-        ? await window.api.folderWorkspaces.update({
-            folderWorkspaceId: scope.folderWorkspaceId,
-            updates: { diffComments }
-          })
-        : (
-            await callRuntimeRpc<{ folderWorkspace: FolderWorkspace | null }>(
-              target,
-              'folderWorkspace.update',
-              { folderWorkspaceId: scope.folderWorkspaceId, updates: { diffComments } },
-              { timeoutMs: 15_000 }
-            )
-          ).folderWorkspace
+    const nestedTargetId = runtimeEnvironmentId
+      ? getNestedSshTargetIdForFolderWorkspace(state, scope.folderWorkspaceId, executionHostId)
+      : null
+    const updated = runtimeEnvironmentId
+      ? (
+          await callHostRoute<{ folderWorkspace: FolderWorkspace | null }>(
+            hostRouteForAuthority({
+              endpoint: { kind: 'environment', environmentId: runtimeEnvironmentId },
+              at: nestedTargetId ? toSshExecutionHostId(nestedTargetId) : 'local'
+            }),
+            'folderWorkspace.update',
+            { folderWorkspaceId: scope.folderWorkspaceId, updates: { diffComments } },
+            { timeoutMs: 15_000 }
+          )
+        ).folderWorkspace
+      : await window.api.folderWorkspaces.update({
+          folderWorkspaceId: scope.folderWorkspaceId,
+          updates: { diffComments }
+        })
     if (!updated?.diffComments) {
       throw new Error('Failed to persist folder workspace review notes')
     }
