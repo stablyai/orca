@@ -76,7 +76,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
       const session = input.clientDelivery.readStopping(sessionId)
         ? undefined
         : sessions.get(sessionId)
-      await retireSignedOutStructuredAgentSessionChild(sessionId, session, {
+      await retireSignedOutStructuredAgentSessionChild(sessionId, session, startedFor, {
         work: {
           childWork: () => input.clientDelivery.readChildWork(sessionId),
           hasOpenDispatch: () => {

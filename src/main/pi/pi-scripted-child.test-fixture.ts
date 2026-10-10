@@ -28,7 +28,9 @@ class ScriptedPiConnection implements PiRpcConnection {
     private readonly received: string[],
     private readonly wire: string[],
     private readonly onClosed: () => void,
-    number: number
+    number: number,
+    /** A Pi with no login: it lists no model and fails every prompt as not signed in. */
+    private readonly signedOut = false
   ) {
     this.pid = 42_000 + number
     const sessionIndex = launch.args.indexOf('--session')
@@ -55,7 +57,7 @@ class ScriptedPiConnection implements PiRpcConnection {
       return this.state()
     }
     if (command === 'get_available_models') {
-      return { models: [this.model] }
+      return { models: this.signedOut ? [] : [this.model] }
     }
     if (command === 'get_commands') {
       return { commands: [] }
@@ -85,6 +87,15 @@ class ScriptedPiConnection implements PiRpcConnection {
     }
     this.received.push(frame.message)
     this.wire.push(`prompt:${frame.message}`)
+    if (this.signedOut) {
+      this.emit({
+        type: 'response',
+        command: 'prompt',
+        success: false,
+        error: 'No API key found for scripted'
+      })
+      return
+    }
     if (!this.streaming) {
       this.streaming = true
       this.emit({ type: 'agent_start' })
@@ -172,7 +183,7 @@ class ScriptedPiConnection implements PiRpcConnection {
   private state() {
     return {
       sessionFile: this.file,
-      model: this.model,
+      model: this.signedOut ? null : this.model,
       thinkingLevel: this.effort,
       isStreaming: this.streaming,
       isCompacting: false,
@@ -186,7 +197,7 @@ export type ScriptedPiChild = ScriptedAgentChild & {
   wire(): readonly string[]
 }
 
-export const piScriptedChild = (): ScriptedPiChild => {
+export const piScriptedChild = (options: { signedOut?: boolean } = {}): ScriptedPiChild => {
   const children: ScriptedPiConnection[] = []
   const received: string[] = []
   const wire: string[] = []
@@ -230,7 +241,8 @@ export const piScriptedChild = (): ScriptedPiChild => {
           () => {
             closed += 1
           },
-          children.length + 1
+          children.length + 1,
+          options.signedOut
         )
         children.push(child)
         return child
