@@ -136,9 +136,19 @@ type RelayAssignmentStoreOptions = {
   // Absent keeps the strict least-loaded pick (tests that assert exact cells).
   placementLoadBand?: PlacementLoadBand
   recordControlRenewal?: (durationMs: number, outcome: ControlRenewalOutcome) => void
+  // Step 5: cells whose applied admitMode is reserve keep host state in memory, not here, so
+  // every per-host sweep and reader below skips them. Null while the directory has not yet
+  // heard from every live cell: then nothing is known to be in database mode.
+  reserveModeCells?: () => ReadonlySet<string> | null
 }
 
 export type { ControlRenewalOutcome, ControlRenewalRequest }
+
+export class RelayCellInReserveModeError extends Error {
+  constructor(readonly cellId: string) {
+    super('cell_in_reserve_mode')
+  }
+}
 
 export type RelayAssignment = AssignmentIdentity & {
   cellId: string
@@ -570,6 +580,13 @@ const ABORTABLE_EXPIRED_MIGRATION = `(
   OR ${ABANDONED_REGISTERED_MIGRATION}
 )`
 
+const NO_RESERVE_MODE_CELLS: ReadonlySet<string> = new Set()
+
+// `cell_id NOT IN (...)` for the reserve-mode cells, or nothing when there are none.
+function excludeCellsSql(column: string, cellIds: readonly string[]): string {
+  return cellIds.length === 0 ? '' : ` AND ${column} NOT IN (${cellIds.map(() => '?').join(', ')})`
+}
+
 export class RelayAssignmentStore {
   private readonly regionalRehomeCohortPercent: number
   private readonly regionalRehomeDirectorRegion?: RelayRegion
@@ -584,6 +601,7 @@ export class RelayAssignmentStore {
     { failures: number; until: number }
   >()
   private readonly recordControlRenewal?: RelayAssignmentStoreOptions['recordControlRenewal']
+  private readonly reserveModeCells: () => ReadonlySet<string> | null
   private readonly placementLoadBand?: PlacementLoadBand
   private readonly admissionSelector: RelayCellAdmissionSelector
   private readonly migrationCellRegistrar: RelayMigrationCellRegistrar
@@ -611,9 +629,20 @@ export class RelayAssignmentStore {
     this.requireLiveCells = options.requireLiveCells ?? false
     this.heartbeatTtlMs = options.heartbeatTtlMs ?? 45_000
     this.recordControlRenewal = options.recordControlRenewal
+    this.reserveModeCells = options.reserveModeCells ?? (() => NO_RESERVE_MODE_CELLS)
     this.placementLoadBand = options.placementLoadBand
     this.admissionSelector = new RelayCellAdmissionSelector(database, now)
     this.migrationCellRegistrar = new RelayMigrationCellRegistrar(database, now)
+  }
+
+  // True when the cell may be in reserve mode: known to be, or the set is not yet known.
+  private mayBeReserveCell(cellId: string): boolean {
+    const cells = this.reserveModeCells()
+    return cells === null || cells.has(cellId)
+  }
+
+  private refuseReserveCell(cellId: string): void {
+    if (this.reserveModeCells()?.has(cellId)) throw new RelayCellInReserveModeError(cellId)
   }
 
   async reconcileCells(cells: RelayCellConfig[], disableMissing = true): Promise<void> {
@@ -862,7 +891,13 @@ export class RelayAssignmentStore {
       if (!existing) return null
       const activityLeases = await this.lockAssignmentActivities(transaction, identity, true)
       await this.recordRegionPreference(transaction, identity, preferredRegion, now)
-      if (mayNormallyReassign(activity(existing), now)) return null
+      // A reserve-mode cell's hosts hold no activity here, so idle is not evidence they left.
+      if (
+        !this.mayBeReserveCell(text(existing, 'cell_id')) &&
+        mayNormallyReassign(activity(existing), now)
+      ) {
+        return null
+      }
       const pinnedAdmission =
         text(existing, 'cell_id') === pinnedCellId
           ? unlockedAdmission
@@ -2322,6 +2357,8 @@ export class RelayAssignmentStore {
     traceValue: string
     plannedGraceMs: number
   }): Promise<CellDrainAttempt & { shouldSend: false }> {
+    // Rolling a switched-on cell needs a flip back first (design default 4).
+    this.refuseReserveCell(input.cellId)
     const now = this.now()
     return await this.database.transaction(async (transaction) => {
       await this.assertDrainCellGeneration(
@@ -2997,7 +3034,13 @@ export class RelayAssignmentStore {
   async evacuateDeadCells(limit = 100): Promise<number> {
     if (!this.requireLiveCells) return 0
     const cutoff = this.now() - this.heartbeatTtlMs
-    const cellIds = await this.deadCellEvacuationCandidates(cutoff)
+    const reserveCells = this.reserveModeCells()
+    if (reserveCells === null) return 0
+    // A reserve-mode cell that stops heartbeating is unverifiable, never gone: its hosts
+    // re-place themselves when their control drops.
+    const cellIds = (await this.deadCellEvacuationCandidates(cutoff)).filter(
+      (cellId) => !reserveCells.has(cellId)
+    )
     // Why: without a candidate cell the host query below walks every assignment by primary key to
     // return nothing (574 ms per call in production, from stale existing-only cells it can never act on).
     if (cellIds.length === 0) return 0
@@ -3217,6 +3260,8 @@ export class RelayAssignmentStore {
     targetCellId: string,
     limit: number
   ): Promise<number> {
+    this.refuseReserveCell(sourceCellId)
+    this.refuseReserveCell(targetCellId)
     const rows = await this.database.query(
       `SELECT user_id, relay_host_id FROM relay_assignments
        WHERE cell_id = ? AND
@@ -3241,6 +3286,8 @@ export class RelayAssignmentStore {
     sourceCellId: string,
     targetCellId: string
   ): Promise<CellEvacuationCapacity> {
+    this.refuseReserveCell(sourceCellId)
+    this.refuseReserveCell(targetCellId)
     const cells = await this.database.query(
       `SELECT * FROM relay_cells WHERE cell_id IN (?, ?) ORDER BY cell_id`,
       [sourceCellId, targetCellId]
@@ -3283,6 +3330,8 @@ export class RelayAssignmentStore {
     targetCellId: string,
     completeReady: boolean
   ): Promise<CellEvacuationStatus> {
+    this.refuseReserveCell(sourceCellId)
+    this.refuseReserveCell(targetCellId)
     let completed = 0
     let blocked = 0
     const sourceFenced = await this.cellHasActiveFence(sourceCellId)
@@ -3471,7 +3520,9 @@ export class RelayAssignmentStore {
     return completed
   }
 
+  // Its host counts here are stale for a reserve-mode cell, so tooling must not read it as empty.
   async cellDeploymentStatus(cellId: string): Promise<CellDeploymentStatus> {
+    this.refuseReserveCell(cellId)
     const cellRow = (
       await this.database.query(
         `WITH activity AS (
@@ -3845,7 +3896,13 @@ export class RelayAssignmentStore {
       selectionMs: performance.now() - startedAt,
       skippedOffRegionSourceCells: selection.skippedOffRegionSourceCells
     })
-    return selection.candidates
+    // Neither side of an idle rehome may be a reserve-mode cell: the commit moves rows here.
+    const reserveCells = this.reserveModeCells()
+    if (reserveCells === null) return []
+    return selection.candidates.filter(
+      (candidate) =>
+        !reserveCells.has(candidate.sourceCellId) && !reserveCells.has(candidate.targetCellId)
+    )
   }
 
   async commitIdleRegionalRehome(
@@ -4449,6 +4506,8 @@ export class RelayAssignmentStore {
         return migration(identity, existing)
       }
       if (sourceCellId === targetCellId) throw new Error('target_matches_source')
+      this.refuseReserveCell(sourceCellId)
+      this.refuseReserveCell(targetCellId)
       await this.lockAssignmentActivities(transaction, identity)
       await this.lockControlConnectionReservations(transaction, identity)
       const cells = await this.lockCellInventory(transaction, 'request')
@@ -5642,6 +5701,8 @@ export class RelayAssignmentStore {
       if (!mayNormallyReassign(activity(assignment), now)) throw new Error('assignment_active')
       const sourceCellId = text(assignment, 'cell_id')
       if (sourceCellId === targetCellId) throw new Error('target_matches_source')
+      this.refuseReserveCell(sourceCellId)
+      this.refuseReserveCell(targetCellId)
       await this.lockAssignmentActivities(transaction, identity)
       await this.lockControlConnectionReservations(transaction, identity)
       const cells = await this.lockCellInventory(transaction, 'request')
@@ -7339,6 +7400,8 @@ export class RelayAssignmentStore {
   }
 
   async releaseExpiredActivityLeases(): Promise<number> {
+    const reserveCells = this.reserveModeCells()
+    if (reserveCells === null) return 0
     const now = this.now()
     await this.database.query(
       `UPDATE relay_control_connection_reservations
@@ -7357,7 +7420,7 @@ export class RelayAssignmentStore {
     const candidates = await this.database.query(
       `SELECT user_id, relay_host_id, activity_id
        FROM relay_assignment_activity_leases lease
-       WHERE expires_at <= ?
+       WHERE expires_at <= ?${excludeCellsSql('lease.cell_id', [...reserveCells])}
          AND NOT EXISTS (
            SELECT 1 FROM relay_region_rehome_attempts rehome
            WHERE rehome.user_id = lease.user_id
@@ -7383,7 +7446,7 @@ export class RelayAssignmentStore {
                'migration:' || CAST(pin.assignment_epoch AS TEXT)
              )
          )`,
-      [now]
+      [now, ...reserveCells]
     )
     let released = 0
     for (const candidate of candidates) {
@@ -7418,13 +7481,18 @@ export class RelayAssignmentStore {
   }
 
   async releaseExpiredActivity(): Promise<number> {
+    const reserveCells = this.reserveModeCells()
+    if (reserveCells === null) return 0
     const now = this.now()
     try {
       return await this.database.transaction(async (transaction) => {
         // Only counters no lease backs. A host's leases can sit on more than
         // one cell, and the lease sweep takes each one's units off its own.
         const expired = await transaction.queryLocked(
-          `SELECT * FROM relay_assignments WHERE lease_expires_at <= ? AND
+          `SELECT * FROM relay_assignments WHERE lease_expires_at <= ?${excludeCellsSql(
+            'relay_assignments.cell_id',
+            [...reserveCells]
+          )} AND
            (reserved_controls > 0 OR reserved_splices > 0 OR reserved_invites > 0 OR
             pending_installs > 0 OR pending_confirmations > 0 OR migration_leases > 0)
            AND NOT EXISTS (
@@ -7450,7 +7518,7 @@ export class RelayAssignmentStore {
                AND migration.aborted_at IS NULL
            )
            ORDER BY user_id, relay_host_id`,
-          [now],
+          [now, ...reserveCells],
           { failIfUnavailable: true }
         )
         if (expired.length > 0) await this.lockCellInventory(transaction, 'nowait')
@@ -7810,9 +7878,12 @@ export class RelayAssignmentStore {
         )
       : null
     const connectionHeadroom = await this.connectionHeadroomByCell(database)
+    // The database pool: a reserve-mode cell takes only the bookings it admits itself.
+    const reserveCells = this.reserveModeCells() ?? NO_RESERVE_MODE_CELLS
     const candidates = rows.filter((row) => {
       const cellId = text(row, 'cell_id')
       return (
+        !reserveCells.has(cellId) &&
         admission.get(cellId) === 'general' &&
         integer(row, 'reserved_requests') < integer(row, 'capacity_requests') &&
         (!runtimeLoad || runtimeLoad.has(cellId)) &&

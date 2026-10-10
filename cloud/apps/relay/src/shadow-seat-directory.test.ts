@@ -3,6 +3,7 @@ import { RelayAssignmentStore } from './assignment-store.js'
 import { openInMemoryRelayDatabase } from './database.js'
 import {
   SHADOW_SEAT_RECENTLY_LEFT_MAX_HOSTS,
+  SHADOW_SEAT_STARTUP_GRACE_MS,
   ShadowSeatDirectory,
   startShadowSeatPoller,
   type SeatFeedCell,
@@ -207,6 +208,20 @@ describe('startShadowSeatPoller', () => {
     directory.apply('cell-a', feed({ seq: 10, changes: [] }), 12)
     expect(directory.since('cell-a')).toBeUndefined()
     expect(directory.cellState('cell-a')).toMatchObject({ lastFailure: 'cursor_gap' })
+  })
+
+  it('names the reserve-mode cells only once every live cell has answered, or after the grace', () => {
+    const directory = new ShadowSeatDirectory(0)
+    directory.setCells(['cell-a', 'cell-b'])
+    const reserve = { generation: 4, flags: { admitMode: 'reserve' } }
+    directory.apply('cell-a', feed({ seq: 1, full: [], flagsApplied: reserve }), 10)
+    expect(directory.reserveModeCells(10)).toBeNull()
+    expect(directory.reserveModeCells(SHADOW_SEAT_STARTUP_GRACE_MS)).toEqual(new Set(['cell-a']))
+    directory.apply('cell-b', feed({ cellId: 'cell-b', seq: 1, full: [] }), 11)
+    expect(directory.reserveModeCells(11)).toEqual(new Set(['cell-a']))
+    // Losing contact keeps the last applied switch: unverifiable, never assumed off.
+    directory.fail('cell-a', 'timeout')
+    expect(directory.reserveModeCells(12)).toEqual(new Set(['cell-a']))
   })
 
   it('checks the map against the cell seat count, with controls only as a cross-check', () => {
