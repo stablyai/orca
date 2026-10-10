@@ -45,7 +45,10 @@ export type ProcessTableCapture = {
 export type ProcessTableReader = (timeoutMs?: number) => Promise<ProcessTableCapture>
 export type SignalSender = (pid: number, signal: NodeJS.Signals) => void
 
-function readFreshProcessTable(
+/** Exported for callers that must not share a deadline with the coalescing reader below: a
+ *  background scan joining `readProcessTable` can hand its own longer timeout to a teardown that
+ *  lands in the same microtask turn. */
+export function readFreshProcessTable(
   timeoutMs = DESCENDANT_SNAPSHOT_TIMEOUT_MS
 ): Promise<ProcessTableCapture> {
   // Why: identity safety must use the boundary before ps starts. Stamping the
@@ -139,7 +142,7 @@ export function readProcessTableBeforeDeadline(
 
 export function collectDescendantRows(
   rootPid: number,
-  table: ProcessTableRow[],
+  table: readonly ProcessTableRow[],
   capturedAtMs = Date.now()
 ): DescendantSnapshot {
   const childrenByPpid = new Map<number, ProcessTableRow[]>()
