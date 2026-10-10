@@ -28,28 +28,9 @@ import {
   deleteWorkspaceChatDrafts
 } from '../slices/worktrees/teardown/removed-worktree-chat-drafts'
 
-export function worktreeBelongsToHost(worktree: { hostId?: string }, hostId: string): boolean {
-  return (worktree.hostId ?? LOCAL_EXECUTION_HOST_ID) === hostId
-}
+import { worktreeBelongsToHost, getKnownRepoWorktreeIds } from './repo-workspace-host-membership'
 
-export function getKnownRepoWorktreeIds(
-  state: AppState,
-  projectId: string,
-  hostId?: string
-): string[] {
-  const ids = new Set<string>()
-  for (const worktree of state.worktreesByRepo[projectId] ?? []) {
-    if (!hostId || worktreeBelongsToHost(worktree, hostId)) {
-      ids.add(worktree.id)
-    }
-  }
-  for (const worktree of state.detectedWorktreesByRepo[projectId]?.worktrees ?? []) {
-    if (!hostId || worktreeBelongsToHost(worktree, hostId)) {
-      ids.add(worktree.id)
-    }
-  }
-  return [...ids]
-}
+export { worktreeBelongsToHost, getKnownRepoWorktreeIds }
 
 export function createRepoRemovalActions(
   set: Parameters<StateCreator<AppState>>[0],
