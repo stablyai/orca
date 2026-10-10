@@ -8,8 +8,11 @@ import { WATCHER_IGNORE_DIRS, buildParcelWatcherIgnoreOptions } from './filesyst
 describe('filesystem watcher native ignores', () => {
   let root: string | null = null
   let subscription: AsyncSubscription | null = null
+  let worktreeSubscription: AsyncSubscription | null = null
 
   afterEach(async () => {
+    await worktreeSubscription?.unsubscribe()
+    worktreeSubscription = null
     await subscription?.unsubscribe()
     subscription = null
     if (root) {
@@ -22,9 +25,12 @@ describe('filesystem watcher native ignores', () => {
     root = await realpath(await mkdtemp(join(tmpdir(), 'orca-watch-ignore-')))
     const rootModules = join(root, 'node_modules')
     const nestedModules = join(root, 'packages', 'app', 'node_modules')
+    const rootWorktrees = join(root, '.worktrees', 'task', 'src')
+    const nestedWorktrees = join(root, 'packages', 'app', '.worktrees', 'task', 'src')
+    const ignoredDirectories = [rootModules, nestedModules, rootWorktrees, nestedWorktrees]
     const nestedSource = join(root, 'packages', 'app', 'src')
     await Promise.all(
-      [rootModules, nestedModules, nestedSource].map((directory) =>
+      [...ignoredDirectories, nestedSource].map((directory) =>
         mkdir(directory, { recursive: true })
       )
     )
@@ -47,7 +53,7 @@ describe('filesystem watcher native ignores', () => {
     if (process.platform !== 'win32') {
       generatedNames.push('generated\nnewline.js')
     }
-    const generatedFiles = [rootModules, nestedModules].flatMap((directory) =>
+    const generatedFiles = ignoredDirectories.flatMap((directory) =>
       generatedNames.map((name) => join(directory, name))
     )
     await Promise.all(generatedFiles.map((file) => writeFile(file, 'generated')))
@@ -70,5 +76,53 @@ describe('filesystem watcher native ignores', () => {
     expect(errors).toEqual([])
     const generatedPaths = new Set(generatedFiles)
     expect(events.filter((event) => generatedPaths.has(event.path))).toEqual([])
+  })
+
+  it('delivers nested worktree edits to its own watcher without waking the parent', async () => {
+    root = await realpath(await mkdtemp(join(tmpdir(), 'orca-watch-worktree-')))
+    const worktreeRoot = join(root, '.worktrees', 'task')
+    await mkdir(join(worktreeRoot, 'src'), { recursive: true })
+
+    const parentEvents: Event[] = []
+    const worktreeEvents: Event[] = []
+    const errors: Error[] = []
+    const options = buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)
+    subscription = await subscribe(
+      root,
+      (error, batch) => {
+        if (error) {
+          errors.push(error)
+        }
+        parentEvents.push(...batch)
+      },
+      options
+    )
+    worktreeSubscription = await subscribe(
+      worktreeRoot,
+      (error, batch) => {
+        if (error) {
+          errors.push(error)
+        }
+        worktreeEvents.push(...batch)
+      },
+      options
+    )
+
+    const parentSource = join(root, 'source.ts')
+    const worktreeSource = join(worktreeRoot, 'src', 'source.ts')
+    await Promise.all([
+      writeFile(parentSource, 'parent source'),
+      writeFile(worktreeSource, 'worktree source')
+    ])
+    await vi.waitFor(
+      () => {
+        expect(parentEvents.some((event) => event.path === parentSource)).toBe(true)
+        expect(worktreeEvents.some((event) => event.path === worktreeSource)).toBe(true)
+      },
+      { timeout: 8_000 }
+    )
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect(errors).toEqual([])
+    expect(parentEvents.filter((event) => event.path === worktreeSource)).toEqual([])
   })
 })
