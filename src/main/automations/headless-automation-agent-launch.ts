@@ -119,6 +119,7 @@ export async function launchHeadlessAutomationAgent(
       // Only fresh launches reach here: an automation never reuses a terminal.
       deliverTerminalPrompt: ({ handle, prompt }) =>
         runtime.deliverStartupFollowup(handle, {
+          agent,
           expectedProcess: TUI_AGENT_CONFIG[agent].expectedProcess,
           prompt: prompt.text
         })

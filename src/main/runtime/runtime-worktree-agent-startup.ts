@@ -19,7 +19,11 @@ import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 
 export type WorktreeStartupDraftPaste = { agent: TuiAgent; content: string }
-export type WorktreeStartupFollowup = { expectedProcess: string; prompt: string }
+export type WorktreeStartupFollowup = {
+  agent: TuiAgent
+  expectedProcess: string
+  prompt: string
+}
 
 /** A fresh agent the host builds always carries its `agent_started` record; dropping it fails to compile. */
 type AttributedWorktreeStartupLaunch = WorktreeStartupLaunch & {
@@ -199,6 +203,7 @@ export function buildWorktreeStartupForAgent(
     ...(startupPlan.followupPrompt
       ? {
           followup: {
+            agent,
             expectedProcess: startupPlan.expectedProcess,
             prompt: startupPlan.followupPrompt
           }

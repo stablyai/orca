@@ -241,13 +241,14 @@ describe('run facts: a created worktree’s startup writes', () => {
 
     pasteWorktreeStartupDraftWhenReady(host, run.handle, { agent: 'aider', content: 'plan it' })
     sendWorktreeStartupFollowupWhenReady(host, run.handle, {
+      agent: 'aider',
       expectedProcess: 'aider',
       prompt: 'and ship it'
     })
     await vi.runAllTimersAsync()
 
-    expect(run.kinds).toEqual(['launch', 'launch'])
-    expect(run.writes).toHaveLength(2)
+    expect(run.kinds).toEqual(['launch', 'launch', 'launch'])
+    expect(run.writes).toHaveLength(3)
     expect(run.firstUserInputAt()).toBeNull()
   })
 })

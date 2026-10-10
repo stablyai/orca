@@ -83,9 +83,22 @@ describe('OrcaRuntimeService', () => {
         worktreeId: result.worktree.id
       })
     )
-    await vi.waitFor(() => {
-      expect(write).toHaveBeenCalledWith('pty-cli-aider-startup', 'fix it\r', 'launch')
-    })
+    // The follow-up dispatches only after the composer-ready signal: DECSET 2004
+    // on the stream, then the quiet window. The prompt goes as one bracketed
+    // paste and the submit is a separate CR write — a raw prompt+Enter write
+    // lands while the TUI is still booting and reads as LF keystrokes.
+    runtime.onPtyData('pty-cli-aider-startup', '\x1b[?2004h', Date.now())
+    await vi.waitFor(
+      () => {
+        expect(write).toHaveBeenCalledWith(
+          'pty-cli-aider-startup',
+          '\x1b[200~fix it\x1b[201~',
+          'launch'
+        )
+        expect(write).toHaveBeenCalledWith('pty-cli-aider-startup', '\r', 'launch')
+      },
+      { timeout: 10_000 }
+    )
   })
 
   it('does not send stdin-after-start prompts into a shell when the agent never starts', async () => {
