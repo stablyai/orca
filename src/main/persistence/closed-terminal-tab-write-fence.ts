@@ -18,9 +18,19 @@ export function dropClosedTerminalTabs(
   }
   let next = session
   for (const [tabId, record] of Object.entries(records)) {
-    if (hasClosedTerminalTabRecord(records, tabId, undefined, now)) {
-      // Returns the same session when the tab is not listed there.
-      next = closeTerminalTabInWorkspaceSession(next, record.worktreeId, tabId, {
+    const { worktreeId } = record
+    // Why the guard: a host slice omits terminal maps when that host has no terminal rows.
+    const listed =
+      next.tabsByWorktree?.[worktreeId]?.some((tab) => tab.id === tabId) ||
+      next.unifiedTabs?.[worktreeId]?.some(
+        (tab) => tab.contentType === 'terminal' && (tab.entityId === tabId || tab.id === tabId)
+      )
+    if (listed && hasClosedTerminalTabRecord(records, tabId, undefined, now)) {
+      const required = {
+        tabsByWorktree: next.tabsByWorktree ?? {},
+        terminalLayoutsByTabId: next.terminalLayoutsByTabId ?? {}
+      }
+      next = closeTerminalTabInWorkspaceSession({ ...next, ...required }, worktreeId, tabId, {
         force: true
       }).session
     }
