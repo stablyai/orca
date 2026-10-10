@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 
 const workflow = parse(readFileSync('.github/workflows/node-server-tests.yml', 'utf8'))
 const steps = workflow.jobs.persistence.steps

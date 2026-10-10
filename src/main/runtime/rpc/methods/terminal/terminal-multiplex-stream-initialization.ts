@@ -8,9 +8,10 @@ import { TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES } from '../../../../
 import { createTerminalOutputBatcher } from './terminal-output-batcher'
 import { appendPendingMultiplexOutput } from './terminal-stream-replay'
 import { updateViewportForClient } from './terminal-viewport-update'
-import type {
-  MultiplexSubscribeRequest,
-  TerminalMultiplexConnection
+import {
+  isMultiplexStreamAttached,
+  type MultiplexSubscribeRequest,
+  type TerminalMultiplexConnection
 } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
 
@@ -101,7 +102,7 @@ export async function initializeMultiplexStream(
   onInstalled(stream)
 
   const unsubscribeStreamData = runtime.subscribeToTerminalData(ptyId, (data, meta) => {
-    if (state.closed || streams.get(request.streamId) !== stream) {
+    if (!isMultiplexStreamAttached(state, stream)) {
       return
     }
     if (stream.outputPaused) {
@@ -146,7 +147,7 @@ export async function initializeMultiplexStream(
       !stream.supportsDesktopViewportClaims
     )
   }
-  if (state.closed || streams.get(request.streamId) !== stream) {
+  if (!isMultiplexStreamAttached(state, stream)) {
     return null
   }
   return stream

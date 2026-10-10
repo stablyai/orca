@@ -4,9 +4,9 @@ import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import type * as PtyControllerContract from './runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import {
+  getConnectionExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId,
-  toSshExecutionHostId
+  parseExecutionHostId
 } from '../../shared/execution-host'
 import {
   PTY_CONTROLLER_LIST_PROVIDER_MARGIN_MS,
@@ -24,9 +24,11 @@ import {
 } from './runtime-worktree-path-identity'
 import {
   indexPersistedPtySurfaceBindings,
-  indexPersistedPtyWorktreeBindings
+  indexPersistedPtyWorktreeBindings,
+  type PersistedPtyBindingIndexes
 } from './runtime-worktree-binding-index'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
+import { indexFloatingSnapshotPtyBindings } from './floating-snapshot-pty-bindings'
 import { NO_OBSERVING_PROVIDER_REASON } from '../../shared/pty-liveness-verdict'
 import { buildControllerTerminalIdentities } from './orca-runtime-build-controller-terminal-identities'
 import { retireOrchestrationAuthorityAbsentFromInventory } from './runtime-restored-orchestration-authority-sweep'
@@ -55,7 +57,7 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
       return null
     }
     const inventoryGeneration = ++this.ptyControllerInventorySequence
-    const providerKey = connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+    const providerKey = getConnectionExecutionHostId(connectionId)
     const livenessObservationAtStart = this.ptyLivenessObservationSequence
     if (connectionId === undefined) {
       this.ptyControllerAggregateInventoryGeneration = inventoryGeneration
@@ -76,13 +78,9 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
     const processInventory =
       connectionId === undefined && this.ptyController.listProcessesWithHostScope
         ? this.ptyController.listProcessesWithHostScope(providerListOpts)
-        : this.ptyController.listProcesses(connectionId, providerListOpts).then((processes) => {
-            const hostId: ExecutionHostId =
-              connectionId === undefined || connectionId === null
-                ? LOCAL_EXECUTION_HOST_ID
-                : toSshExecutionHostId(connectionId)
-            return { processes, hostIds: [hostId] }
-          })
+        : this.ptyController
+            .listProcesses(connectionId === undefined ? undefined : providerKey, providerListOpts)
+            .then((processes) => ({ processes, hostIds: [providerKey] }))
     const sessionsResult = await withTimeoutResult(processInventory, listBudgetMs)
     if (!sessionsResult.ok) {
       return null
@@ -121,13 +119,7 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
     }
     const { controllerIdentityByPtyId } = buildControllerTerminalIdentities(sessions)
     const findResolvedWorktree = createIncrementalResolvedWorktreeLookup(resolvedWorktrees)
-    const persistedIndexesByHostId = new Map<
-      ExecutionHostId,
-      {
-        worktreeIdByPtyId: ReadonlyMap<string, string>
-        surfaceByPtyId: ReturnType<typeof indexPersistedPtySurfaceBindings>
-      }
-    >()
+    const persistedIndexesByHostId = new Map<ExecutionHostId, PersistedPtyBindingIndexes>()
     const getPersistedIndexes = (hostId: ExecutionHostId) => {
       const existing = persistedIndexesByHostId.get(hostId)
       if (existing) {
@@ -141,6 +133,10 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
       persistedIndexesByHostId.set(hostId, indexes)
       return indexes
     }
+    const floatingPtyBindings = indexFloatingSnapshotPtyBindings(
+      this.mobileSessionTabsByWorktree.get(FLOATING_TERMINAL_WORKTREE_ID),
+      (tab) => this.getMobileTerminalPaneKey(tab)
+    )
     const allLivePtyIds = new Set(sessions.map((session) => session.id))
     const selectedLivePtyIds = new Set<string>()
     for (const session of sessions) {
@@ -150,7 +146,7 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
         parseAppSshPtyId(session.id)?.connectionId ??
         (typeof connectionId === 'string' ? connectionId : null)
       const persistedIndexes = getPersistedIndexes(
-        sessionConnectionId ? toSshExecutionHostId(sessionConnectionId) : LOCAL_EXECUTION_HOST_ID
+        getConnectionExecutionHostId(sessionConnectionId)
       )
       const controllerIdentity = controllerIdentityByPtyId.get(session.id)
       const persistedWorktreeId = persistedIndexes.worktreeIdByPtyId.get(session.id)
@@ -161,6 +157,11 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
       const persistedWorktree = persistedWorktreeId
         ? findResolvedWorktree(persistedWorktreeId)
         : undefined
+      // Why: the floating sentinel never resolves as a worktree, so without this its cwd re-files it (#23428).
+      const recordedFloating =
+        persistedWorktreeId === FLOATING_TERMINAL_WORKTREE_ID ||
+        floatingPtyBindings.has(session.id) ||
+        this.ptysById.get(session.id)?.worktreeId === FLOATING_TERMINAL_WORKTREE_ID
       const hasMigrationEvidence =
         Boolean(session.worktreeId) &&
         !providerWorktree &&
@@ -174,6 +175,7 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
           ? (persistedWorktree?.id ?? null)
           : (session.worktreeId ??
             persistedWorktree?.id ??
+            (recordedFloating ? FLOATING_TERMINAL_WORKTREE_ID : undefined) ??
             inferredWorktreeId ??
             findResolvedWorktreeIdForPath(resolvedWorktrees, session.cwd, targetWorktreeId))
       const persistedSurface = persistedIndexes.surfaceByPtyId.get(session.id)
@@ -243,8 +245,7 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
       const ptyHostId =
         encodedHostId === 'foreign'
           ? null
-          : (encodedHostId ??
-            (pty.connectionId ? toSshExecutionHostId(pty.connectionId) : LOCAL_EXECUTION_HOST_ID))
+          : (encodedHostId ?? getConnectionExecutionHostId(pty.connectionId))
       if (!ptyHostId) {
         continue
       }

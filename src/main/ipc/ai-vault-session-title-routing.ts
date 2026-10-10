@@ -4,7 +4,7 @@ import type {
 } from '../../shared/ai-vault-session-title'
 import {
   LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId,
+  parseRoutableExecutionHostId,
   requestedExecutionHostScope
 } from '../../shared/execution-host'
 import { resolveLocalAiVaultSessionTitles } from '../ai-vault/session-title-resolver'
@@ -24,7 +24,7 @@ export async function resolveAiVaultSessionTitlesByHost(
   if (executionHostScope === LOCAL_EXECUTION_HOST_ID) {
     return resolveLocalAiVaultSessionTitles(args.requests)
   }
-  const parsed = parseExecutionHostId(executionHostScope)
+  const parsed = parseRoutableExecutionHostId(executionHostScope)
   if (parsed?.kind === 'ssh') {
     try {
       const result = await requestActiveSshAiVaultSessionTitles(parsed.targetId, {

@@ -5,7 +5,7 @@ import {
   includesQualifiedSearchRefs,
   projectRepoSearchRefsForClient
 } from './repo-search-ref-projection'
-import { RepoSelector } from './github-repo-target-schemas'
+import { RepoSelector } from '../../../../shared/rpc-contract/github-repo-target-params'
 import {
   projectRepoResultVisibilityForClient,
   projectRepoVisibilityForClient

@@ -123,9 +123,9 @@ export class AgentSessionJournal {
         this.adoptLoadedJournal(loaded)
         this.onCommitted?.()
       },
-      commit: (rows) => {
+      commit: (rows, savedAt) => {
         for (const row of rows) {
-          applyJournalRow(this.state, row)
+          applyJournalRow(this.state, row, savedAt)
         }
         this.onCommitted?.()
       },
@@ -181,6 +181,7 @@ export class AgentSessionJournal {
   /** Refuses every later write and resolves once the admitted ones have landed. Holds no
    *  connection, so there is nothing to release and nothing that can fail. */
   close(): Promise<void> {
+    this.queuedMessages.editLeases.dispose()
     this.queue.markClosed()
     return this.queue.drain()
   }
@@ -248,6 +249,10 @@ export class AgentSessionJournal {
 
   /** Fence of the writer that created the item, while it is in the timeline. */
   itemFence = (itemId: string): number | undefined => this.state.itemFences.get(itemId)
+
+  /** Latest saved output at this fence, excluding client actions and recovery bookkeeping. */
+  lastProviderActivityAt = (fence: number): number | undefined =>
+    this.state.providerActivityAt.get(fence)
 
   submissions = (): AgentJournalSubmission[] => [...this.state.submissions.values()]
 

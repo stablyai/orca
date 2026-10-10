@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { runProcess } from '../shared/child-process/run-process'
-import { windowsPowerShellPath } from '../shared/child-process/windows-system-binary'
+import { runProcess } from '@orca/process-host'
+import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
 import {
   WINDOWS_PORT_SCAN_SCRIPT,
   parseWindowsPowerShellPortRows,

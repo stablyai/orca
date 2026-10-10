@@ -20,7 +20,7 @@ import type { JournalRow } from './journal-row-schema'
 import { JournalRowWriter } from './journal-row-writer'
 import { JournalWriteQueue } from './journal-write-queue'
 import { insertCommandReceiptIfAbsent, readCommandReceipt } from './command-receipt-table'
-import { commandReceiptScope, type CommandReceiptResult } from './command-receipt-schema'
+import { commandReceiptScope } from './command-receipt-schema'
 import {
   commandReceiptFixture,
   writeCommandReceiptTestRecord
@@ -95,7 +95,6 @@ describe('command receipt transaction hook', () => {
   it('commits through the existing row writer with a pointer to the row it assigned', async () => {
     const queue = new JournalWriteQueue(identity.sessionId)
     const committed: JournalRow[] = []
-    let result: CommandReceiptResult = { kind: 'journal-row', epoch: 'epoch-0', sequence: 99 }
     const writer = new JournalRowWriter({
       sessionId: identity.sessionId,
       now: () => 1000,
@@ -108,10 +107,13 @@ describe('command receipt transaction hook', () => {
     })
     await writer.enqueue(
       epochRow,
-      (_db, row) => {
-        result = { kind: 'journal-row', epoch: row.epoch, sequence: row.seq }
-      },
-      buildCommandReceiptTransaction(scope, () => ({ ...receipt, result }))
+      undefined,
+      buildCommandReceiptTransaction(scope, (row) => {
+        if (!row) {
+          throw new Error('expected the committed journal row')
+        }
+        return { ...receipt, result: { kind: 'journal-row', epoch: row.epoch, sequence: row.seq } }
+      })
     )
     expect(committed).toHaveLength(1)
     expect(committed[0]).toEqual(epochRow(7, 1000))

@@ -17,8 +17,8 @@ import {
 } from './terminal-file-path-mapping'
 import {
   LOCAL_EXECUTION_HOST_ID,
+  getConnectionExecutionHostId,
   toRuntimeExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
@@ -173,7 +173,10 @@ export function openDetectedFilePath(
     if (openWithSystemDefault && canOpenWithSystemDefault) {
       // Why: Shift+Cmd/Ctrl mirrors URL links by escaping Orca and honoring the
       // user's OS file associations without adding editor-specific settings.
-      const openedWithSystemDefault = await window.api.shell.openFilePath(mappedFilePath)
+      const openedWithSystemDefault = await window.api.shell.openFilePath(
+        mappedFilePath,
+        LOCAL_EXECUTION_HOST_ID
+      )
       if (openedWithSystemDefault || statResult.isDirectory) {
         return
       }
@@ -181,7 +184,7 @@ export function openDetectedFilePath(
 
     if (statResult.isDirectory) {
       if (canOpenWithSystemDefault) {
-        await window.api.shell.openFilePath(mappedFilePath)
+        await window.api.shell.openFilePath(mappedFilePath, LOCAL_EXECUTION_HOST_ID)
       }
       return
     }
@@ -231,9 +234,7 @@ export function openDetectedFilePath(
       const runtimeOwnerId = fileContext.settings?.activeRuntimeEnvironmentId?.trim()
       const executionHostId = runtimeOwnerId
         ? toRuntimeExecutionHostId(runtimeOwnerId)
-        : fileContext.connectionId
-          ? toSshExecutionHostId(fileContext.connectionId)
-          : LOCAL_EXECUTION_HOST_ID
+        : getConnectionExecutionHostId(fileContext.connectionId)
       const siblingRoute = findWorkspaceFileRoute(store, executionHostId, mappedFilePath)
       if (siblingRoute) {
         targetWorktreeId = siblingRoute.worktreeId

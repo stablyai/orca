@@ -1,7 +1,7 @@
-import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { spawnProcess } from '../../shared/child-process/run-process'
+import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
 import { ROOT_ONLY_GRACEFUL_EXIT_MS } from '../provider-process/provider-process-close'
 import type { terminateProviderProcessTree } from '../provider-process/provider-process-teardown'
@@ -30,16 +30,15 @@ function fixture(
   behavior: { pid?: number | null; exitOnEnd?: boolean } = {}
 ) {
   const agent = new AcpScriptedAgent()
-  const child = Object.assign(new EventEmitter(), {
+  const child = Object.assign(createFakePipedChild(), {
     pid: behavior.pid === null ? undefined : (behavior.pid ?? 9_999_999),
     stdout: agent.stdout,
     stdin: agent.stdin,
     stderr: new PassThrough(),
     kill: vi.fn(() => true)
   })
-  const spawn = vi.fn<typeof spawnProcess>(() => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The supervised connection reads events, pid, piped stdio and kill; this fixture supplies each.
-    return child as unknown as ReturnType<typeof spawnProcess>
+  const spawn = vi.fn<PipedProcessSpawner>(() => {
+    return child
   })
   agent.on('initialize', (frame) => agent.reply(frame, { protocolVersion: 1 }))
   agent.on('session/new', (frame) => agent.reply(frame, { sessionId: 'session-1' }))
@@ -285,7 +284,7 @@ describe('ACP process-owning connection', () => {
   })
 
   it('rejects invalid peer options before starting any process', () => {
-    const spawn = vi.fn<typeof spawnProcess>()
+    const spawn = vi.fn<PipedProcessSpawner>()
     expect(() =>
       createAcpAgentConnection(
         { command: 'fixture', args: [] },

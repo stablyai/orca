@@ -2,10 +2,6 @@ import { ipcMain } from 'electron'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import { gitFastForward, gitPull, gitPullRebaseFromBase, gitPush } from '../../../git/remote'
 import { validateGitPushTarget } from '../../../git/push-target-validation'
-import {
-  getSshGitProvider,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
-} from '../../../providers/ssh-git-dispatch'
 import { resolveRegisteredWorktreePath } from '../../registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
 import { assertValidGitPushTarget } from '../../../../shared/git-push-target-validation'
@@ -14,6 +10,8 @@ import {
   materializeWorktreePushTargetRemoteSsh
 } from '../../worktree-remote'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
+import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 
 export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
@@ -33,18 +31,15 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
     ): Promise<void> => {
       // Why: coerce to strict boolean so a malformed payload (e.g. string 'false') can't enable --set-upstream; mirror in src/relay/git-handler.ts.
       const publish = args.publish === true
-      if (args.connectionId) {
+      const route = requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      if (route.kind === 'ssh') {
         if (args.pushTarget) {
           assertValidGitPushTarget(args.pushTarget)
-        }
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
         // Why: a fork remote deferred at create time (#17828) must exist before push.
         const materializedPushTarget = args.pushTarget
           ? await materializeWorktreePushTargetRemoteSsh(
-              provider,
+              route.provider,
               args.worktreePath,
               args.pushTarget,
               store,
@@ -52,7 +47,7 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
               args.worktreeId
             )
           : undefined
-        return provider.pushBranch(args.worktreePath, publish, materializedPushTarget, {
+        return route.provider.pushBranch(args.worktreePath, publish, materializedPushTarget, {
           forceWithLease: args.forceWithLease === true
         })
       }
@@ -97,17 +92,14 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
         pushTarget?: GitPushTarget
       }
     ): Promise<void> => {
-      if (args.connectionId) {
+      const route = requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      if (route.kind === 'ssh') {
         if (args.pushTarget) {
           assertValidGitPushTarget(args.pushTarget)
         }
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
         const materializedPushTarget = args.pushTarget
           ? await materializeWorktreePushTargetRemoteSsh(
-              provider,
+              route.provider,
               args.worktreePath,
               args.pushTarget,
               store,
@@ -115,7 +107,7 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
               args.worktreeId
             )
           : undefined
-        return provider.pullBranch(args.worktreePath, materializedPushTarget)
+        return route.provider.pullBranch(args.worktreePath, materializedPushTarget)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -157,17 +149,14 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
         pushTarget?: GitPushTarget
       }
     ): Promise<void> => {
-      if (args.connectionId) {
+      const route = requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      if (route.kind === 'ssh') {
         if (args.pushTarget) {
           assertValidGitPushTarget(args.pushTarget)
         }
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
         const materializedPushTarget = args.pushTarget
           ? await materializeWorktreePushTargetRemoteSsh(
-              provider,
+              route.provider,
               args.worktreePath,
               args.pushTarget,
               store,
@@ -175,7 +164,7 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
               args.worktreeId
             )
           : undefined
-        return provider.fastForwardBranch(args.worktreePath, materializedPushTarget)
+        return route.provider.fastForwardBranch(args.worktreePath, materializedPushTarget)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -212,12 +201,9 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
       _event,
       args: { worktreePath: string; baseRef: string; connectionId?: string }
     ): Promise<void> => {
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.rebaseFromBase(args.worktreePath, args.baseRef)
+      const route = requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      if (route.kind === 'ssh') {
+        return route.provider.rebaseFromBase(args.worktreePath, args.baseRef)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(

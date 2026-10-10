@@ -324,7 +324,7 @@ export function hostileHostCellViolations(
 }
 
 /** A shim call that only asks a tool its version, as `<tool> --version` or `<tool> -v`. */
-export function isReadOnlyToolProbe(call: string): boolean {
+function isReadOnlyToolProbe(call: string): boolean {
   return /^\S+ (?:--version|-v)$/.test(call.trim())
 }
 

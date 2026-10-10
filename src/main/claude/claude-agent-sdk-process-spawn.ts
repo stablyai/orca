@@ -1,19 +1,17 @@
+import type { PipedChildProcess, PipedProcessSpawner } from '@orca/process-host/process-spec'
 import type { SpawnOptions as ClaudeAgentSdkSpawnOptions } from '@anthropic-ai/claude-agent-sdk'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import {
   spawnManagedProviderProcess,
   type ManagedProviderProcess
 } from '../provider-process/managed-provider-process'
 import { claudeChildClosePolicy, claudeChildCloseProven } from './claude-child-exit-proof-ladder'
 
-/** Derived rather than imported: only src/shared/child-process may name node:child_process. */
-type ClaudeCodeChild = ReturnType<typeof spawnProcess>
-
 export type ClaudeCodeProcessSpawn = {
   /** Pass as the SDK's `spawnClaudeCodeProcess`; the SDK never learns the pid because it never owns it. */
-  spawn: (options: ClaudeAgentSdkSpawnOptions) => ClaudeCodeChild
+  spawn: (options: ClaudeAgentSdkSpawnOptions) => PipedChildProcess
   /** The retained child, so Orca keeps its own tree-kill and exit-proof ladder. Null until the SDK spawns. */
-  readonly child: ClaudeCodeChild | null
+  readonly child: PipedChildProcess | null
   readonly managed: ManagedProviderProcess | null
   /**
    * Ownership proof: the durable lease adjudicates on this pid plus start time plus the spawn
@@ -45,7 +43,7 @@ function definedEnv(env: Record<string, string | undefined>): Record<string, str
  * nobody watching. Windows has no supervisor and spawns Claude directly.
  */
 export function createClaudeCodeProcessSpawn(
-  spawnImpl: typeof spawnProcess = spawnProcess,
+  spawnImpl: PipedProcessSpawner = spawnProcess,
   platform: NodeJS.Platform = process.platform,
   onOutput?: () => void
 ): ClaudeCodeProcessSpawn {

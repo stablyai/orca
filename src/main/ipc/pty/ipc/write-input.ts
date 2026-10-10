@@ -9,6 +9,7 @@ import {
 } from '../../../../shared/terminal-input'
 import { ptyOwnership } from '../provider/ownership-state'
 import { tryGetProviderForPty } from '../provider/registry'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import { interactiveOutputCharsByPty, lastInputAtByPty } from '../delivery/visibility-state'
 import { isSettledWrite, type WriteSettlement } from '../../../../shared/pty-write-settlement'
@@ -216,7 +217,11 @@ export function createPtyWriteInput(deps: {
     verify = false
   ): boolean | Promise<boolean> => {
     const observe = (accepted: boolean): boolean => {
-      if (accepted && args.inputKind === 'driving' && ptyOwnership.get(args.id) === null) {
+      if (
+        accepted &&
+        args.inputKind === 'driving' &&
+        ptyOwnership.get(args.id) === LOCAL_EXECUTION_HOST_ID
+      ) {
         runtime?.observeClaudeTerminalEvidence?.(args.id, { kind: 'input', data: args.data })
       }
       return accepted
@@ -262,7 +267,7 @@ export function createPtyWriteInput(deps: {
       return writePtyInputSettled(args)
     }
     // Why: the ack infers Ctrl+C/Escape reached the local PTY; SSH providers are fire-and-forget relay notifications and can't truthfully acknowledge yet.
-    if (ptyOwnership.get(args.id) !== null) {
+    if (ptyOwnership.get(args.id) !== LOCAL_EXECUTION_HOST_ID) {
       return false
     }
     const provider = tryGetProviderForPty(args.id)

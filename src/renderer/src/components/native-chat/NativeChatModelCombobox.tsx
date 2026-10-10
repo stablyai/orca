@@ -70,7 +70,12 @@ export function NativeChatModelCombobox({
           }
         }}
       >
-        <Command label={searchLabel} filter={modelChoiceFilter} defaultValue={currentValue}>
+        <Command
+          density="menu"
+          label={searchLabel}
+          filter={modelChoiceFilter}
+          defaultValue={currentValue}
+        >
           <CommandInput placeholder={searchLabel} />
           {readOnly && readOnlyReason ? (
             <div className="px-3 py-1.5 text-xs text-muted-foreground">{readOnlyReason}</div>
@@ -98,8 +103,8 @@ export function NativeChatModelCombobox({
                     onSelect(choice.value)
                   }}
                 >
-                  <span className="flex size-4 shrink-0 items-center justify-center">
-                    {current ? <Check /> : null}
+                  <span className="flex size-3.5 shrink-0 items-center justify-center">
+                    {current ? <Check className="size-3.5" /> : null}
                   </span>
                   <NativeChatSessionOptionChoiceBody
                     label={label}

@@ -164,7 +164,7 @@ export abstract class AgentHookServerHydration extends AgentHookServerReaping {
       this.runStatusPersist()
     } else if (hydrated > 0) {
       // Why: prime dedup from raw bytes (not re-serialized) only when hydration was lossless.
-      this.lastWrittenJson = raw
+      this.primeStatusPersistBaseline(raw)
     }
   }
 }

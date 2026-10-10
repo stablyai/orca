@@ -39,7 +39,7 @@ function launch(options: {
     store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
     resolveWorkspacePath: async (id) => `/repos/${id}`,
     resolveCommand: () => '/usr/local/bin/claude',
-    resolveAuthPolicy: () => ({ stripAuthEnv: false }),
+    resolveAuthPolicy: () => ({ account: 'system' }),
     resolveLaunchArgs: () => options.launchArgs ?? [],
     resolveEnv: () => options.env ?? {},
     hasTranscript: async () => false,

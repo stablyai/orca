@@ -4,7 +4,7 @@ import {
   type SelfInitiatedTreeKillScope
 } from './crash-reporting/self-initiated-tree-kill-log'
 import { readOrcaChromiumProcessPids } from './orca-chromium-process-pids'
-import { setProcessTreeKillGate } from '../shared/child-process/process-tree-kill-gate'
+import { setProcessTreeKillGate } from '@orca/process-host/process-tree-kill-gate'
 
 /**
  * Gate every main-process tree-kill through one decision: refuse a pid-addressed

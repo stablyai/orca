@@ -1,7 +1,8 @@
-import type {
-  SessionOptionDescriptor,
-  SessionOptionDisabledReason,
-  SessionOptionSelectChoice
+import {
+  isDefaultServiceTier,
+  type SessionOptionDescriptor,
+  type SessionOptionDisabledReason,
+  type SessionOptionSelectChoice
 } from '../../../../shared/native-chat-session-options'
 import { translate } from '@/i18n/i18n'
 
@@ -13,6 +14,8 @@ export function nativeChatSessionOptionLabel(descriptor: SessionOptionDescriptor
       return translate('components.native-chat.composer.effort', descriptor.label)
     case 'fastMode':
       return translate('components.native-chat.composer.fastMode', 'Fast mode')
+    case 'serviceTier':
+      return translate('components.native-chat.composer.speed', 'Speed')
     case 'thinking':
       return translate('components.native-chat.composer.thinking', 'Thinking')
     default:
@@ -20,7 +23,14 @@ export function nativeChatSessionOptionLabel(descriptor: SessionOptionDescriptor
   }
 }
 
-export function nativeChatSessionChoiceLabel(choice: SessionOptionSelectChoice): string {
+export function nativeChatSessionChoiceLabel(
+  choice: SessionOptionSelectChoice,
+  optionId?: string
+): string {
+  // `default` is only Standard inside a speed choice; other selects may use the value.
+  if (optionId === 'serviceTier' && choice.value === 'default') {
+    return translate('components.native-chat.composer.optionValue.standard', 'Standard')
+  }
   switch (choice.value) {
     case 'minimal':
       return translate('components.native-chat.composer.optionValue.minimal', 'Minimal')
@@ -98,7 +108,7 @@ export function nativeChatOptionsPillLabel(
   const effort = descriptors.find((descriptor) => descriptor.id === 'effort')
   const labels: string[] = []
   for (const descriptor of descriptors) {
-    if (descriptor.valueSource === 'unknown') {
+    if (descriptor.valueSource === 'unknown' || isDefaultServiceTier(descriptor)) {
       continue
     }
     if (descriptor.kind.type === 'select' && descriptor.kind.currentValue) {

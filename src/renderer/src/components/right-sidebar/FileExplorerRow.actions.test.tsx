@@ -231,7 +231,7 @@ describe('FileExplorerRow collapse folder action', () => {
       | { onClick: () => void }
       | undefined
     action?.onClick()
-    expect(openPath).toHaveBeenCalledWith('/downloads/renamed\\entry.ts')
+    expect(openPath).toHaveBeenCalledWith('/downloads/renamed\\entry.ts', 'local')
     expect(toastErrorMock).not.toHaveBeenCalled()
   })
 

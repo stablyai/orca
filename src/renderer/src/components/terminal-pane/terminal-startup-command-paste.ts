@@ -1,12 +1,10 @@
 import type { PtyTransport } from './pty-transport'
-import { pasteTerminalText } from './terminal-bracketed-paste'
-import {
-  executeTerminalPastePlan,
-  planTerminalPasteWithYield,
-  type TerminalPasteExecutionResult,
-  type TerminalPasteRuntime
+import type { pasteTerminalText } from './terminal-bracketed-paste'
+import type {
+  TerminalPasteExecutionResult,
+  TerminalPasteRuntime
 } from './terminal-paste-coordinator'
-import { writeTerminalPastePtyInput } from './terminal-pty-paste-writer'
+import { pasteTextIntoTerminalPane } from './terminal-pane-paste-dispatch'
 
 type StartupCommandPane = {
   id: number
@@ -32,22 +30,14 @@ export async function executeTerminalStartupCommandPaste({
   isTargetCurrent
 }: ExecuteTerminalStartupCommandPasteArgs): Promise<TerminalPasteExecutionResult> {
   const isCurrent = (): boolean => isTargetCurrent?.(ptyId) ?? true
-  const plan = await planTerminalPasteWithYield({
+  return pasteTextIntoTerminalPane({
+    pane,
     text: command,
     source: 'programmatic',
-    target: {
-      kind: 'terminal',
-      paneId: pane.id,
-      leafId: pane.leafId,
-      ptyId,
-      runtime
-    },
-    terminalBracketedPasteMode: pane.terminal.modes?.bracketedPasteMode === true
-  })
-
-  return executeTerminalPastePlan(plan, {
-    pasteText: (text, options) => pasteTerminalText(pane.terminal, text, options),
-    writePty: (data, signal) => writeTerminalPastePtyInput(transport, data, 'launch', signal),
+    ptyId,
+    runtime,
+    transport,
+    inputKind: 'launch',
     isTargetCurrent: isCurrent,
     canContinue: isCurrent
   })

@@ -1,6 +1,6 @@
 import { appendFileSync, readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 import { collectUnitDependencyGraph } from './ci-unit-dependency-graph.mjs'
 import { discoverUnitFiles } from './ci-unit-files.mjs'
 import { FULL_SHARD_COUNT, planUnitSelection } from './ci-unit-selection.mjs'

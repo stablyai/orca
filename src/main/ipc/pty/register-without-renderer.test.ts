@@ -74,7 +74,7 @@ describe('PTY registration without renderer delivery', () => {
     const onData = vi.spyOn(runtime, 'onPtyData').mockReturnValue(6)
     const onExit = vi.spyOn(runtime, 'onPtyExit').mockImplementation(() => {})
     const onLifecycleExit = vi.fn()
-    setPtyOwnership('daemon-pty', null)
+    setPtyOwnership('daemon-pty', 'local')
     const initialTimerCount = vi.getTimerCount()
 
     await registerHeadlessPtyRuntime(
@@ -155,7 +155,7 @@ describe('PTY registration without renderer delivery', () => {
   it('rejects renderer input when no renderer owns the registration', async () => {
     const daemon = installObservableDaemonTestProvider()
     const runtime = new OrcaRuntimeService()
-    setPtyOwnership('daemon-pty', null)
+    setPtyOwnership('daemon-pty', 'local')
     await registerHeadlessPtyRuntime(runtime)
 
     getPtyWriteListener()(mainWindowIpcEvent, { id: 'daemon-pty', data: 'untrusted' })

@@ -1,4 +1,4 @@
-import type { ChildProcessHandle } from '../../shared/child-process/process-spec'
+import type { ChildProcessHandle } from '@orca/process-host/process-spec'
 import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
 import { RipgrepSearchDiagnostics } from '../../shared/ripgrep-search-diagnostics'
 import { SearchSubprocessLineAccumulator } from '../../shared/search-subprocess-lines'

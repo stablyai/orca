@@ -17,7 +17,8 @@ const { execFile } = await import('node:child_process')
 const execFileMock = vi.mocked(execFile)
 const { execFile: actualExecFile } =
   await vi.importActual<typeof NodeChildProcess>('node:child_process')
-const { installManagedHooks, resolveRelayGrokHome } = await import('./managed-hook-runtime')
+const { installManagedHooks, resolveRelayGrokHome, resolveRelayKiroHome } =
+  await import('./managed-hook-runtime')
 
 type ExecFileCallback = (error: Error | null, result?: { stdout: string; stderr: string }) => void
 
@@ -117,6 +118,25 @@ describe.runIf(process.platform !== 'win32')('resolveRelayGrokHome', () => {
     stubProbeFailure(Object.assign(new Error('spawn timed out'), { killed: true }))
 
     await expect(resolveRelayGrokHome('/home/orca')).resolves.toBe('/home/orca/.grok')
+  })
+})
+
+describe.runIf(process.platform !== 'win32')('resolveRelayKiroHome', () => {
+  it('reads KIRO_HOME from the login shell', async () => {
+    vi.stubEnv('SHELL', '/bin/sh')
+    stubProbeOutput('/srv/kiro/\n')
+
+    await expect(resolveRelayKiroHome('/home/orca')).resolves.toBe('/srv/kiro')
+    expect(execFileMock.mock.calls[0]?.[1]?.[1]).toContain('printenv KIRO_HOME')
+  })
+
+  it('falls back to ~/.kiro when KIRO_HOME is unset or the probe fails', async () => {
+    vi.stubEnv('SHELL', '/bin/sh')
+    stubProbeOutput('\n')
+    await expect(resolveRelayKiroHome('/home/orca')).resolves.toBe('/home/orca/.kiro')
+
+    stubProbeFailure(new Error('spawn failed'))
+    await expect(resolveRelayKiroHome('/home/orca')).resolves.toBe('/home/orca/.kiro')
   })
 })
 

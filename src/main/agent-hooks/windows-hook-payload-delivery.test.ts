@@ -5,7 +5,7 @@
 // through it, because none of them ever piped a payload. This suite pipes one and follows
 // it to the listener, so a launcher that takes stdin away from the hook fails here (#14818).
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { createServer, type Server } from 'node:http'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
