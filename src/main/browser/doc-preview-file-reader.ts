@@ -18,8 +18,7 @@ const DOC_PREVIEW_READ_TIMEOUT_MS = 15_000
 const DIRECT_SSH_DOC_PREVIEW_TEXT_MAX_BYTES = 10 * 1024 * 1024
 const DIRECT_SSH_DOC_PREVIEW_BINARY_MAX_BYTES = 10 * 1024 * 1024
 
-/** Why not "needs a newer server": the SSH read path only ever serves images and PDFs as bytes, so
- *  a font is refused there by design, not by version. Name the file type, not the host's age. */
+/** A host serves only the binary types it knows (older ones skip fonts), so name the file type. */
 const UNSERVABLE_ASSET_PREVIEW_MESSAGE = 'This workspace cannot send this file type to a preview.'
 
 /** `files.read` clamps text at the host's cap and reports it; serving the clamped bytes would
