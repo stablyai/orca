@@ -201,7 +201,7 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
             ...(automatic ? { refuseSleptWorktree: true } : {})
           })
         } catch (err) {
-          if (isWorktreeTerminalsSleepingError(err)) {
+          if (automatic && isWorktreeTerminalsSleepingError(err)) {
             // Why: the host slept the worktree while this probe waited for the spawn lock.
             return this.applyMobileSessionTabNavigation(
               this.getMobileSessionTabsForWorktree(worktreeId),
