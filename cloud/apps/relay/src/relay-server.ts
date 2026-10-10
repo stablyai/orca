@@ -184,6 +184,12 @@ export function createRelayServer(
     listCells: () => assignments.seatFeedCells(),
     reserver: () => placing.on
   })
+  if (shadowSeatPoller) {
+    const { directory } = shadowSeatPoller
+    assignments.setReserveCellAdmitsDatabase((cellId) =>
+      directory.admitsDatabaseNow(cellId, (options.now ?? Date.now)())
+    )
+  }
   const shadowCompare = shadowSeatPoller
     ? new ShadowDirectoryCompare(shadowSeatPoller.directory, options.now)
     : undefined

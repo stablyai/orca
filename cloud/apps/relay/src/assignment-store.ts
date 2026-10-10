@@ -614,6 +614,7 @@ export class RelayAssignmentStore {
   private readonly recordControlRenewal?: RelayAssignmentStoreOptions['recordControlRenewal']
   private reserveModeRead: { cells: ReadonlySet<string>; readAt: number } | null = null
   private reserveModeFailureLoggedAt = Number.NEGATIVE_INFINITY
+  private reserveCellAdmitsDatabase: (cellId: string) => boolean = () => false
   private readonly placementLoadBand?: PlacementLoadBand
   private readonly admissionSelector: RelayCellAdmissionSelector
   private readonly migrationCellRegistrar: RelayMigrationCellRegistrar
@@ -647,13 +648,16 @@ export class RelayAssignmentStore {
   }
 
   // Null when unreadable for a minute: callers then treat every cell as possibly reserve.
-  // Inside a transaction pass it: on SQLite a second connection would wait on it forever.
+  // Inside a transaction (any `database` but the pool) it answers from the last read and never
+  // runs a statement: a failed read there (57014) would abort the transaction, and the next
+  // statement's 25P02 is not retried. Callers read once before they begin.
   async reserveModeCells(
     database: Pick<RelayDatabase, 'query'> = this.database
   ): Promise<ReadonlySet<string> | null> {
     const at = performance.now()
-    if (this.reserveModeRead && at - this.reserveModeRead.readAt < RESERVE_MODE_CACHE_MS) {
-      return this.reserveModeRead.cells
+    const cached = this.reserveModeRead
+    if (database !== this.database || (cached && at - cached.readAt < RESERVE_MODE_CACHE_MS)) {
+      return cached && at - cached.readAt <= RESERVE_MODE_STALE_MS ? cached.cells : null
     }
     try {
       const rows = await database.query(
@@ -678,21 +682,33 @@ export class RelayAssignmentStore {
     return read && at - read.readAt <= RESERVE_MODE_STALE_MS ? read.cells : null
   }
 
+  // The director's seat map: a reserve cell whose current feed reports admitModeEffective=db.
+  setReserveCellAdmitsDatabase(check: (cellId: string) => boolean): void {
+    this.reserveCellAdmitsDatabase = check
+  }
+
   // Break glass flips only a cell that has stopped heartbeating, ready or not.
   async cellHeartbeatFresh(cellId: string): Promise<boolean> {
-    const rows = await this.database.query(
+    return await this.heartbeatFresh(this.database, cellId, this.now())
+  }
+
+  private async heartbeatFresh(database: Pick<RelayDatabase, 'query'>, cellId: string, now: number): Promise<boolean> {
+    const rows = await database.query(
       `SELECT cell_id FROM relay_cell_runtime WHERE cell_id = ? AND last_heartbeat_at > ?`,
-      [cellId, this.now() - this.heartbeatTtlMs]
+      [cellId, now - this.heartbeatTtlMs]
     )
     return rows.length === 1
   }
 
+  // A reserve cell still heartbeating holds its hosts in memory, ready or not (a database
+  // brownout drops ready): the same test as break glass, so neither re-places open sockets.
   private async liveReserveCell(
     cellId: string,
     database: RelayDatabase,
     now: number
   ): Promise<boolean> {
-    return (await this.mayBeReserveCell(cellId, database)) && (await this.cellIsLive(database, cellId, now))
+    if (!(await this.mayBeReserveCell(cellId, database))) return false
+    return !this.requireLiveCells || (await this.heartbeatFresh(database, cellId, now))
   }
 
   private async mayBeReserveCell(
@@ -993,6 +1009,7 @@ export class RelayAssignmentStore {
     preferredRegion?: RelayRegion
   ): Promise<RelayAssignment | null> {
     const now = this.now()
+    await this.reserveModeCells()
     return await this.database.transaction(async (transaction) => {
       // Why: the retry exists to take a cell row before the assignment row, the
       // order placement uses. It only ever needs the one cell this host is
@@ -1219,6 +1236,7 @@ export class RelayAssignmentStore {
     // so a lock timeout there must retry the same tier, not fall to 'all'.
     let retryScope: RetriedAssignmentInventoryScope =
       inventoryScope === 'none' ? 'general' : inventoryScope
+    await this.reserveModeCells()
     // Why the events ride back out rather than being written where they are
     // decided: everything below runs in one transaction, and a reservation or
     // lease write that fails after the decision rolls the placement back. A
@@ -4674,6 +4692,7 @@ export class RelayAssignmentStore {
     expectedSourceCellId?: string
   ): Promise<RelayAssignmentMigration | null> {
     const now = this.now()
+    await this.reserveModeCells()
     return await this.database.transaction(async (transaction) => {
       const assignment = await this.assignmentRow(transaction, identity)
       if (!assignment) throw new Error('assignment_not_found')
@@ -5789,6 +5808,7 @@ export class RelayAssignmentStore {
     assignmentEpoch: number
   ): Promise<void> {
     const now = this.now()
+    await this.reserveModeCells()
     await this.database.transaction(async (transaction) => {
       const assignment = await this.assignmentRow(transaction, identity)
       const row = (
@@ -5893,6 +5913,7 @@ export class RelayAssignmentStore {
     targetCellId: string
   ): Promise<RelayAssignment> {
     const now = this.now()
+    await this.reserveModeCells()
     return await this.database.transaction(async (transaction) => {
       const assignment = await this.assignmentRow(transaction, identity)
       if (!assignment) throw new Error('assignment_not_found')
@@ -8082,7 +8103,9 @@ export class RelayAssignmentStore {
     const candidates = rows.filter((row) => {
       const cellId = text(row, 'cell_id')
       return (
-        !reserveCells.has(cellId) &&
+        // A reserve cell whose own feed says it admits through the database again (its dead-man
+        // tripped, or a flip back finished) takes placements; the census sweeps still skip it.
+        (!reserveCells.has(cellId) || this.reserveCellAdmitsDatabase(cellId)) &&
         admission.get(cellId) === 'general' &&
         integer(row, 'reserved_requests') < integer(row, 'capacity_requests') &&
         (!runtimeLoad || runtimeLoad.has(cellId)) &&

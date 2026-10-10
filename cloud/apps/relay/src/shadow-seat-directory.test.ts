@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { RelayAssignmentStore } from './assignment-store.js'
 import { openInMemoryRelayDatabase } from './database.js'
 import {
+  SEAT_FEED_DB_ADMIT_FRESH_MS,
   SHADOW_SEAT_RECENTLY_LEFT_MAX_HOSTS,
   ShadowSeatDirectory,
   startShadowSeatPoller,
@@ -526,5 +527,37 @@ describe('RelayAssignmentStore.seatFeedCells', () => {
       ['cell-off', 135_000, true],
       ['cell-stale', 55_000, false]
     ])
+  })
+})
+
+describe('ShadowSeatDirectory.admitsDatabaseNow', () => {
+  const response = (admitModeEffective?: 'db' | 'reserve'): SeatFeedResponse => ({
+    v: 1,
+    cellId: 'cell-a',
+    incarnation: INCARNATION,
+    seq: 1,
+    at: 0,
+    counts: { seats: 0, controls: 0, bookings: 0, units: 0, ceiling: 500 },
+    intake: { perSec: 100, burst: 20, tokens: 20 },
+    flagsApplied: { generation: 3, flags: { admitMode: 'reserve' } },
+    full: [],
+    ...(admitModeEffective ? { admitModeEffective } : {})
+  })
+
+  // A tripped dead-man answers db under a reserve switch; only a fresh answer saying so counts.
+  it('is true only for a fresh live answer whose effective mode is db', () => {
+    const directory = new ShadowSeatDirectory()
+    directory.setCells(['cell-a'])
+    expect(directory.admitsDatabaseNow('cell-a', 1_000)).toBe(false)
+    directory.apply('cell-a', response('db'), 1_000, 1_000)
+    expect(directory.admitsDatabaseNow('cell-a', 1_000)).toBe(true)
+    expect(directory.admitsDatabaseNow('cell-a', 1_000 + SEAT_FEED_DB_ADMIT_FRESH_MS + 1)).toBe(false)
+    directory.apply('cell-a', response('reserve'), 2_000, 2_000)
+    expect(directory.admitsDatabaseNow('cell-a', 2_000)).toBe(false)
+    directory.apply('cell-a', response(), 3_000, 3_000)
+    expect(directory.admitsDatabaseNow('cell-a', 3_000)).toBe(false)
+    directory.apply('cell-a', response('db'), 4_000, 4_000)
+    directory.fail('cell-a', 'timeout')
+    expect(directory.admitsDatabaseNow('cell-a', 4_000)).toBe(false)
   })
 })
