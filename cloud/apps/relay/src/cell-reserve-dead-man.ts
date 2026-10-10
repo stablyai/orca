@@ -21,6 +21,7 @@ export class ReserveDeadMan {
   private trippedGeneration: number | null = null
 
   constructor(
+    private readonly cellId: string,
     private readonly now: () => number = Date.now,
     private readonly windowMs = RESERVE_DEAD_MAN_MS,
     private readonly log: (line: string) => void = (line) => console.error(line)
@@ -53,6 +54,7 @@ export class ReserveDeadMan {
     this.log(
       JSON.stringify({
         event: 'orca_relay_cell_reserve_dead_man_tripped',
+        cellId: this.cellId,
         generation: applied.generation,
         silentMs: now - this.lastContactAt
       })

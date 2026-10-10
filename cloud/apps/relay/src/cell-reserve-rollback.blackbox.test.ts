@@ -202,6 +202,12 @@ describe('flipping a reserve-mode cell back to the database', () => {
     expect(reserve.relay.sessions.inReserveMode()).toBe(true)
     now += 2_000
     expect(reserve.relay.sessions.inReserveMode()).toBe(false)
+    // The alert keys on this line and its cellId (relay-observability.tf).
+    const tripped = vi
+      .mocked(console.error)
+      .mock.calls.map(([line]) => String(line))
+      .filter((line) => line.includes('orca_relay_cell_reserve_dead_man_tripped'))
+    expect(tripped.map((line) => JSON.parse(line).cellId)).toEqual([reserve.config.cellId])
     await until(async () => (await reserve.controlLeases()).length === 2)
     expect(seated.socket.readyState).toBe(WebSocket.OPEN)
     // Latched for this switch generation: contact again does not bring reserve back.

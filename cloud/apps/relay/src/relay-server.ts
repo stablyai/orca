@@ -210,7 +210,7 @@ export function createRelayServer(
     readRelayDatabasePoolPressure(database).databasePoolWaiting >= config.databasePoolMax &&
     readRelayDatabasePoolOldestWaitMs(database) >= HOST_HELLO_SHED_OLDEST_WAIT_MS
   const reserveDeadMan = reserveBook
-    ? new ReserveDeadMan(options.now, reserveDeadManWindowMs(config.cellId))
+    ? new ReserveDeadMan(config.cellId, options.now, reserveDeadManWindowMs(config.cellId))
     : null
   // The switch file's admitMode, unless the dead-man has flipped this cell back.
   const effectiveAdmitMode = (): 'db' | 'reserve' => {
