@@ -41,14 +41,27 @@ export function installMonacoViewStateTracking(params: MonacoViewStateTrackingPa
 }
 
 export function restoreMonacoViewState(
-  editorInstance: editor.IStandaloneCodeEditor,
+  editorInstance: Pick<
+    editor.IStandaloneCodeEditor,
+    'setSelections' | 'setScrollTop' | 'focus' | 'onDidDispose'
+  >,
   viewStateKey: string
 ): void {
   const savedSelections = editorSelectionCache.get(viewStateKey)
   const savedScrollTop = scrollTopCache.get(viewStateKey)
   if (savedScrollTop !== undefined || savedSelections) {
+    let restoreFrame: number | null = null
+    const disposalSubscription = editorInstance.onDidDispose(() => {
+      if (restoreFrame !== null) {
+        cancelAnimationFrame(restoreFrame)
+        restoreFrame = null
+      }
+      disposalSubscription.dispose()
+    })
     // Why: Monaco renders synchronously so one RAF suffices; focus inside it to avoid a scroll-0 flash before restore.
-    requestAnimationFrame(() => {
+    restoreFrame = requestAnimationFrame(() => {
+      restoreFrame = null
+      disposalSubscription.dispose()
       if (savedSelections) {
         editorInstance.setSelections(savedSelections)
       }
