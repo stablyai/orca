@@ -5,6 +5,7 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../shared/terminal-tab-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { spawnSurfaceClaimSequence } from './pty-recorded-surface-topology'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 
 // #18191: a terminal whose pane the graph dropped kept reporting `orphaned: false` with a
 // `tabId` no tab has — "field-for-field identical to a healthy one", so an operator polling
@@ -97,10 +98,27 @@ function tab(tabId: string, activeLeafId: string) {
   return { tabId, worktreeId: WORKTREE_ID, title: '', activeLeafId, layout: null }
 }
 
+class RuntimeWithOwnedPty extends OrcaRuntimeService {
+  markReloading(): void {
+    this.graphStatus = 'reloading'
+  }
+  projectedPty(tabId: string, leafId: string): string | null | undefined {
+    return this.leaves.get(this.getLeafKey(tabId, leafId))?.ptyId
+  }
+
+  markRuntimeOwned(ptyId: string): void {
+    const pty = this.ptysById.get(ptyId)
+    if (!pty) {
+      throw new Error('Expected registered PTY')
+    }
+    pty.runtimeSessionOwned = true
+  }
+}
+
 /** Both PTYs stay live on the host throughout; only the graph changes. */
-function makeRuntime(session?: WorkspaceSessionState): OrcaRuntimeService {
+function makeRuntime(session?: WorkspaceSessionState): RuntimeWithOwnedPty {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: makeStore returns the repo and session reads this suite drives; the rest of Store is unreached.
-  const runtime = new OrcaRuntimeService(makeStore(session) as never)
+  const runtime = new RuntimeWithOwnedPty(makeStore(session) as never)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub carries the four controller members this suite drives; both PTYs stay live throughout.
   runtime.setPtyController({
     spawn: vi.fn(async () => ({ id: 'never' })),
@@ -251,5 +269,212 @@ describe('terminal inventory after a pane is dropped', () => {
     // Losing the graph must not retract an observation already made.
     expect(byPty.get(DROPPED_PTY)?.orphaned).toBe(true)
     expect(byPty.get(KEPT_PTY)?.orphaned).toBe(false)
+  })
+})
+
+describe('runtime-owned terminal projection gaps', () => {
+  it.each([false, true])(
+    'adopts the host binding before a bound graph leaf exists (empty leaf: %s)',
+    async (emptyLeaf) => {
+      const runtime = makeRuntime()
+      runtime.syncWindowGraph(1, {
+        tabs: [tab('tab-kept', KEPT_LEAF), tab('tab-dropped', DROPPED_LEAF)],
+        leaves: [
+          leaf('tab-kept', KEPT_LEAF, KEPT_PTY),
+          ...(emptyLeaf ? [{ ...leaf('tab-dropped', DROPPED_LEAF, DROPPED_PTY), ptyId: null }] : [])
+        ]
+      })
+      runtime.registerPty(DROPPED_PTY, WORKTREE_ID, null, {
+        tabId: 'tab-dropped',
+        leafId: DROPPED_LEAF,
+        incarnationId: DROPPED_INCARNATION
+      })
+      runtime.markRuntimeOwned(DROPPED_PTY)
+      const before = (await runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(
+        ({ ptyId }) => ptyId === DROPPED_PTY
+      )
+      runtime.syncWindowGraph(1, {
+        tabs: [tab('tab-kept', KEPT_LEAF), tab('tab-dropped', DROPPED_LEAF)],
+        leaves: [
+          leaf('tab-kept', KEPT_LEAF, KEPT_PTY),
+          { ...leaf('tab-dropped', DROPPED_LEAF, DROPPED_PTY), ptyId: null }
+        ]
+      })
+      const after = (await runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(
+        ({ ptyId }) => ptyId === DROPPED_PTY
+      )
+      expect(before).toBeDefined()
+      expect(after).toEqual(before)
+      expect(runtime.projectedPty('tab-dropped', DROPPED_LEAF)).toBe(DROPPED_PTY)
+    }
+  )
+
+  it('does not choose between two live host owners of the same pane', () => {
+    const runtime = makeRuntime()
+    runtime.markRuntimeOwned(DROPPED_PTY)
+    runtime.registerPty('competing-pty', WORKTREE_ID, null, {
+      tabId: 'tab-dropped',
+      leafId: DROPPED_LEAF,
+      incarnationId: 'competing-incarnation'
+    })
+    runtime.markRuntimeOwned('competing-pty')
+    runtime.syncWindowGraph(1, {
+      tabs: [tab('tab-dropped', DROPPED_LEAF)],
+      leaves: [{ ...leaf('tab-dropped', DROPPED_LEAF, DROPPED_PTY), ptyId: null }]
+    })
+    expect(runtime.projectedPty('tab-dropped', DROPPED_LEAF)).toBeNull()
+  })
+
+  it.each(['removed', 'replaced', 'moved'] as const)(
+    'retains a published unmounted pane until it is explicitly %s',
+    async (change) => {
+      const session = sessionStillHoldingBothPanes()
+      session.terminalLayoutsByTabId['tab-dropped'].root = { type: 'leaf', leafId: DROPPED_LEAF }
+      const runtime = makeRuntime(session)
+      runtime.markRuntimeOwned(DROPPED_PTY)
+      const before = await runtime.listTerminals(`id:${WORKTREE_ID}`)
+      const snapshot: RuntimeMobileSessionTabsSnapshot = {
+        worktree: WORKTREE_ID,
+        publicationEpoch: 'test',
+        snapshotVersion: 1,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null,
+        tabs: [
+          {
+            type: 'terminal',
+            id: 'mobile-dropped',
+            title: 'Setup',
+            parentTabId: 'tab-dropped',
+            leafId: DROPPED_LEAF,
+            ptyId: null,
+            isActive: false,
+            parentLayout: {
+              root: { type: 'leaf', leafId: DROPPED_LEAF },
+              activeLeafId: DROPPED_LEAF,
+              expandedLeafId: null
+            }
+          }
+        ]
+      }
+      const graph = {
+        tabs: [tab('tab-kept', KEPT_LEAF)],
+        leaves: [leaf('tab-kept', KEPT_LEAF, KEPT_PTY)]
+      }
+      runtime.syncWindowGraph(1, { ...graph, mobileSessionTabs: [snapshot] })
+      runtime.markRuntimeOwned(DROPPED_PTY)
+      expect((await runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals).toEqual(before.terminals)
+      runtime.syncWindowGraph(1, {
+        ...graph,
+        mobileSessionTabs: [],
+        unchangedMobileSessionWorktrees: [WORKTREE_ID]
+      })
+      expect((await runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals).toEqual(before.terminals)
+      runtime.syncWindowGraph(1, {
+        ...graph,
+        mobileSessionTabs: [
+          {
+            ...snapshot,
+            snapshotVersion: 2,
+            tabs:
+              change === 'removed'
+                ? []
+                : snapshot.tabs.map((surface) => ({
+                    ...surface,
+                    ptyId: change === 'replaced' ? 'replacement-pty' : DROPPED_PTY,
+                    ...(change === 'moved' ? { parentTabId: 'tab-moved', leafId: KEPT_LEAF } : {})
+                  }))
+          }
+        ]
+      })
+      expect(runtime.projectedPty('tab-dropped', DROPPED_LEAF)).toBeUndefined()
+      if (change === 'removed') {
+        const result = await runtime.listTerminals(`id:${WORKTREE_ID}`)
+        expect(result.terminals.find(({ ptyId }) => ptyId === DROPPED_PTY)?.orphaned).toBe(true)
+      }
+    }
+  )
+
+  it.each(['unverifiable', 'exited', 'different-workspace', 'replacement'] as const)(
+    'respects %s evidence while an existing pane publishes null',
+    async (scenario) => {
+      const runtime = makeRuntime()
+      runtime.markRuntimeOwned(DROPPED_PTY)
+      await runtime.listTerminals(`id:${WORKTREE_ID}`)
+      if (scenario === 'unverifiable') {
+        runtime.markPtyLivenessUnverifiable(DROPPED_PTY, 'host disconnected')
+      } else if (scenario === 'exited') {
+        await runtime.onPtyExit(DROPPED_PTY, 0, DROPPED_INCARNATION)
+      }
+      const worktreeId = scenario === 'different-workspace' ? 'folder:other' : WORKTREE_ID
+      const incomingPtyId = scenario === 'replacement' ? 'replacement-pty' : null
+      runtime.syncWindowGraph(1, {
+        tabs: [{ ...tab('tab-dropped', DROPPED_LEAF), worktreeId }],
+        leaves: [
+          { ...leaf('tab-dropped', DROPPED_LEAF, DROPPED_PTY), worktreeId, ptyId: incomingPtyId }
+        ]
+      })
+      expect(runtime.projectedPty('tab-dropped', DROPPED_LEAF)).toBe(
+        scenario === 'unverifiable' ? DROPPED_PTY : incomingPtyId
+      )
+    }
+  )
+
+  it('does not reuse a previous workspace binding during renderer reload', () => {
+    const runtime = makeRuntime()
+    runtime.markRuntimeOwned(DROPPED_PTY)
+    runtime.markReloading()
+    runtime.syncWindowGraph(1, {
+      tabs: [{ ...tab('tab-dropped', DROPPED_LEAF), worktreeId: 'folder:other' }],
+      leaves: [
+        {
+          ...leaf('tab-dropped', DROPPED_LEAF, DROPPED_PTY),
+          worktreeId: 'folder:other',
+          ptyId: null
+        }
+      ]
+    })
+    expect(runtime.projectedPty('tab-dropped', DROPPED_LEAF)).toBeNull()
+  })
+
+  it('retains the exact live handle and surface while an existing pane publishes null', async () => {
+    const runtime = makeRuntime()
+    runtime.markRuntimeOwned(DROPPED_PTY)
+    const before = await runtime.listTerminals(`id:${WORKTREE_ID}`)
+    runtime.syncWindowGraph(1, {
+      tabs: [tab('tab-kept', KEPT_LEAF), tab('tab-dropped', DROPPED_LEAF)],
+      leaves: [
+        leaf('tab-kept', KEPT_LEAF, KEPT_PTY),
+        { ...leaf('tab-dropped', DROPPED_LEAF, DROPPED_PTY), ptyId: null }
+      ]
+    })
+    const after = await runtime.listTerminals(`id:${WORKTREE_ID}`)
+    expect(after.terminals).toEqual(before.terminals)
+  })
+
+  it('still reports a removed runtime-owned pane as orphaned', async () => {
+    const runtime = makeRuntime()
+    runtime.markRuntimeOwned(DROPPED_PTY)
+    await runtime.listTerminals(`id:${WORKTREE_ID}`)
+    dropOnePane(runtime)
+    const result = await runtime.listTerminals(`id:${WORKTREE_ID}`)
+    expect(result.terminals.find(({ ptyId }) => ptyId === DROPPED_PTY)?.orphaned).toBe(true)
+  })
+
+  it('does not duplicate a runtime-owned PTY explicitly moved to another pane', async () => {
+    const runtime = makeRuntime()
+    runtime.markRuntimeOwned(DROPPED_PTY)
+    await runtime.listTerminals(`id:${WORKTREE_ID}`)
+    runtime.syncWindowGraph(1, {
+      tabs: [tab('tab-kept', KEPT_LEAF), tab('tab-dropped', DROPPED_LEAF)],
+      leaves: [
+        leaf('tab-kept', KEPT_LEAF, DROPPED_PTY),
+        { ...leaf('tab-dropped', DROPPED_LEAF, DROPPED_PTY), ptyId: null }
+      ]
+    })
+    const result = await runtime.listTerminals(`id:${WORKTREE_ID}`)
+    expect(result.terminals.filter(({ ptyId }) => ptyId === DROPPED_PTY)).toEqual([
+      expect.objectContaining({ tabId: 'tab-kept', leafId: KEPT_LEAF, orphaned: false })
+    ])
   })
 })

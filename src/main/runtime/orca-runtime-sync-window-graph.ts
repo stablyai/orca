@@ -9,6 +9,13 @@ import type {
 } from '../../shared/runtime-types'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-types'
 import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
+import {
+  collectRendererPublishedEmptyTerminalPanes,
+  createRuntimeOwnedPtyResolver,
+  chooseProjectedPtyId,
+  makeRuntimePaneIdentity,
+  shouldPreservePublishedRuntimePane
+} from './runtime-owned-terminal-projection'
 
 /** The runtime indexes graph tabs by bare id, so duplicate ids cannot be routed safely. */
 function assertUniqueRuntimeGraphTabIds(tabs: readonly RuntimeSyncedTab[]): void {
@@ -98,6 +105,17 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
     // Why: renderer reloads can briefly republish the same leaf with no ptyId;
     // keep live CLI handles usable while the UI graph rebuilds.
     const preserveLivePtysDuringReload = this.graphStatus === 'reloading'
+    const incomingPtyIds = new Set(lifecycleLeaves.map((leaf) => leaf.ptyId))
+    const published = collectRendererPublishedEmptyTerminalPanes(
+      graph,
+      this.mobileSessionTabsByWorktree,
+      this.acceptedRendererMobileSnapshotByWorktree
+    )
+    const retainedRuntimePtyId = createRuntimeOwnedPtyResolver(
+      this.ptysById.values(),
+      (ptyId) => this.getPtyLivenessVerdict(ptyId)?.status === 'exited',
+      incomingPtyIds
+    )
     for (const leaf of lifecycleLeaves) {
       if (leaf.ptyId) {
         if (leaf.parked) {
@@ -108,10 +126,13 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
       }
       const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
       const existing = this.leaves.get(leafKey)
-      const ptyId =
-        preserveLivePtysDuringReload && leaf.ptyId === null && existing?.ptyId
-          ? existing.ptyId
-          : leaf.ptyId
+      const ptyId = chooseProjectedPtyId(
+        leaf.ptyId,
+        existing?.worktreeId === leaf.worktreeId ? existing.ptyId : null,
+        preserveLivePtysDuringReload,
+        makeRuntimePaneIdentity(leaf, this.makeRuntimePaneKey(leaf)),
+        retainedRuntimePtyId
+      )
       const ptyGeneration =
         existing && existing.ptyId !== ptyId
           ? existing.ptyGeneration + 1
@@ -190,13 +211,25 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
         const retainedIncarnation = oldLeaf?.ptyId
           ? this.handleByPtyIncarnation.get(oldLeaf.ptyId)
           : undefined
+        // Inactive panes may lack transport leaves while the renderer still publishes their exact surface.
+        const preservePublishedRuntimePane =
+          oldLeaf?.ptyId !== null &&
+          oldLeaf?.ptyId !== undefined &&
+          shouldPreservePublishedRuntimePane(
+            makeRuntimePaneIdentity(oldLeaf, this.makeRuntimePaneKey(oldLeaf)),
+            oldLeaf.ptyId,
+            published.emptyPaneWorktrees.get(oldLeafKey),
+            published.boundPtyIds,
+            retainedRuntimePtyId
+          )
         if (
-          preserveLivePtysDuringReload &&
           oldLeaf?.ptyId &&
-          (this.handleByPtyId.has(oldLeaf.ptyId) ||
-            (retainedIncarnation &&
-              retainedIncarnation.incarnationId ===
-                this.ptysById.get(oldLeaf.ptyId)?.incarnationId)) &&
+          (preservePublishedRuntimePane ||
+            (preserveLivePtysDuringReload &&
+              (this.handleByPtyId.has(oldLeaf.ptyId) ||
+                (retainedIncarnation &&
+                  retainedIncarnation.incarnationId ===
+                    this.ptysById.get(oldLeaf.ptyId)?.incarnationId)))) &&
           !nextPtyIds.has(oldLeaf.ptyId)
         ) {
           // Why: a CLI-created agent keeps using its exported handle even if

@@ -85,18 +85,12 @@ const test = base.extend({
       ORCA_E2E_CANARY_LEDGER: canaryLedgerPath,
       ORCA_E2E_SIGNAL_LEDGER: signalLedgerPath
     },
-    { option: true }
+    { scope: 'test' }
   ]
 })
 
 function readSpawnLedger(): SpawnEvent[] {
-  if (!existsSync(spawnLedgerPath)) {
-    return []
-  }
-  return readFileSync(spawnLedgerPath, 'utf8')
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map((line) => JSON.parse(line) as SpawnEvent)
+  return readJsonLines<SpawnEvent>(spawnLedgerPath)
 }
 
 function readJsonLines<T>(filePath: string): T[] {
@@ -546,11 +540,14 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
           const state = window.__store?.getState()
           await state?.fetchRepos()
           const repo = window.__store?.getState().repos.find((candidate) => candidate.id === repoId)
-          if (!repo) {
+          if (!repo?.hookSettings) {
             return false
           }
           await window.__store?.getState().updateRepo(repoId, {
-            hookSettings: { ...repo.hookSettings, setupAgentStartupPolicy: 'start-immediately' }
+            hookSettings: {
+              ...repo.hookSettings,
+              setupAgentStartupPolicy: 'start-immediately'
+            }
           })
           await window.__store?.getState().updateSettings({
             agentCmdOverrides: { codex: command },
@@ -757,7 +754,7 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
   await expect
     .poll(() => orcaPage.evaluate(() => window.api.pty.getRendererDeliveryDebugSnapshot()))
     .toMatchObject(postReloadDelivery)
-  const remountAgentLiveMarker = `AGENT_LIVE_${randomUUID()}`
+  const remountAgentLiveMarker = `AGENT_LIVE_${randomUUID().slice(0, 8)}`
   await client.call('terminal.send', {
     terminal: agent!.handle,
     text: remountAgentLiveMarker,
@@ -771,7 +768,7 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
   expect(
     await orcaPage.evaluate(() => window.api.pty.getRendererDeliveryDebugSnapshot())
   ).toMatchObject(postReloadDelivery)
-  const remountAgentAcceptedMarker = `AGENT_ACCEPTED_${randomUUID()}`
+  const remountAgentAcceptedMarker = `AGENT_ACCEPTED_${randomUUID().slice(0, 8)}`
   expect(
     await orcaPage.evaluate(
       ({ marker, ptyId }) => window.api.pty.writeAccepted(ptyId, `${marker}\r`, 'driving'),
@@ -798,7 +795,7 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
   const remountedSetupPtyId = await waitForActivePanePtyId(orcaPage)
   expect(remountedSetupPtyId).toBe(setup!.ptyId)
   await enableTerminalAccessibility(orcaPage, setup!.tabId)
-  const remountSetupLiveMarker = `SETUP_LIVE_${randomUUID()}`
+  const remountSetupLiveMarker = `SETUP_LIVE_${randomUUID().slice(0, 8)}`
   await client.call('terminal.send', {
     terminal: setup!.handle,
     text: remountSetupLiveMarker,
