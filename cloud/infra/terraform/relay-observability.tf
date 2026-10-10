@@ -1540,6 +1540,74 @@ resource "google_monitoring_alert_policy" "relay_assignment_lease_bad_signature"
   depends_on = [google_logging_metric.relay_assignment_lease_shadow]
 }
 
+# relay-control-flag-channel.ts logs one line per change of cause, not per failed poll, and nothing
+# on recovery: a cell stuck unreadable writes exactly one line, so any count is the signal.
+resource "google_logging_metric" "relay_control_flags_unreadable" {
+  project     = var.project_id
+  name        = "orca_relay_control_flags_unreadable"
+  description = "Cells that started failing to read their switch file (cells/<cell>.json in the relay-control bucket). The cell keeps its last applied switches."
+  filter      = "resource.type=\"gce_instance\" AND jsonPayload.event=\"orca_relay_control_flags_unreadable\""
+  label_extractors = {
+    cell_id = "REGEXP_EXTRACT(jsonPayload.object, \"cells/([^.]+)\")"
+    failure = "EXTRACT(jsonPayload.failure)"
+  }
+
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "INT64"
+    unit        = "1"
+
+    labels {
+      key         = "cell_id"
+      value_type  = "STRING"
+      description = "Durable relay cell identifier."
+    }
+    labels {
+      key         = "failure"
+      value_type  = "STRING"
+      description = "metadata, not-found, http, network, malformed, or void (the object failed the parser)."
+    }
+  }
+}
+
+# Console only until the step-3/5 roll finishes: a single storage 5xx on one cell also writes a line.
+resource "google_monitoring_alert_policy" "relay_control_flags_unreadable" {
+  project               = var.project_id
+  display_name          = "Orca Relay: cell cannot read its switch file"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = []
+
+  conditions {
+    display_name = "Switch-file read failures on a cell"
+
+    condition_threshold {
+      filter          = "resource.type=\"gce_instance\" AND metric.type=\"logging.googleapis.com/user/orca_relay_control_flags_unreadable\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+      duration        = "0s"
+
+      aggregations {
+        alignment_period     = "300s"
+        per_series_aligner   = "ALIGN_SUM"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields      = ["metric.label.\"cell_id\""]
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  documentation {
+    content   = "A cell logged `orca_relay_control_flags_unreadable`: its read of `cells/<cell>.json` in `<project>-relay-control` failed, and it keeps its last applied switches (defaults, all off, if it never read one). The line is written once per change of cause and nothing marks recovery, so this incident closing does not mean the cell recovered: compare the object's generation with the cell's last `orca_relay_cell_flags_applied` line. `failure` says why: `not-found` (no object for this cell), `metadata` or `http` (token, IAM, or storage), `network`, `malformed` or `void` (the object is unparseable or failed the schema; fix the object). Many cells at once points to the bucket or its IAM. A one-off `http` or `network` that the next poll cleared needs nothing."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [google_logging_metric.relay_control_flags_unreadable]
+}
+
 # cell-reserve-dead-man.ts logs once per switch-file generation when it trips, so any count is the signal.
 resource "google_logging_metric" "relay_cell_reserve_dead_man_tripped" {
   project     = var.project_id
@@ -1598,4 +1666,196 @@ resource "google_monitoring_alert_policy" "relay_cell_reserve_dead_man_tripped" 
   }
 
   depends_on = [google_logging_metric.relay_cell_reserve_dead_man_tripped]
+}
+
+# host-session-registry.ts: a flip back closed a control it could not re-register (4409), after 20 refusals.
+resource "google_logging_metric" "relay_cell_reregistration_gave_up" {
+  project     = var.project_id
+  name        = "orca_relay_cell_reregistration_gave_up"
+  description = "Controls a cell closed with 4409 during a flip back to db, because the database kept refusing their lease."
+  filter      = "resource.type=\"gce_instance\" AND jsonPayload.event=\"orca_relay_cell_reregistration_gave_up\""
+  label_extractors = {
+    cell_id = "EXTRACT(jsonPayload.cellId)"
+    reason  = "EXTRACT(jsonPayload.reason)"
+  }
+
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "INT64"
+    unit        = "1"
+
+    labels {
+      key         = "cell_id"
+      value_type  = "STRING"
+      description = "Durable relay cell identifier."
+    }
+    labels {
+      key         = "reason"
+      value_type  = "STRING"
+      description = "The refusal: wrong_assignment (the row names another seat) or another database answer."
+    }
+  }
+}
+
+resource "google_monitoring_alert_policy" "relay_cell_reregistration_gave_up" {
+  project               = var.project_id
+  display_name          = "Orca Relay: flip back closed a desktop it could not re-register"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = var.relay_alert_notification_channels
+
+  conditions {
+    display_name = "A cell closed a control during its flip back"
+
+    condition_threshold {
+      filter          = "resource.type=\"gce_instance\" AND metric.type=\"logging.googleapis.com/user/orca_relay_cell_reregistration_gave_up\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+      duration        = "0s"
+
+      aggregations {
+        alignment_period     = "300s"
+        per_series_aligner   = "ALIGN_SUM"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields      = ["metric.label.\"cell_id\""]
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  documentation {
+    content   = "During a flip back to db, a cell asked the database for a control's lease 20 times and was refused each time, so it closed that desktop with 4409 and the desktop re-assigned. `reason` says why: `wrong_assignment` means the host's row names another seat (normally the ledger reconcile repairs that first); anything else is a database answer the lease path does not accept, which needs a code look. A handful on one flip is tolerable; a steady stream means the flip back is disconnecting desktops: stop flipping further cells."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [google_logging_metric.relay_cell_reregistration_gave_up]
+}
+
+# host-session-registry.ts: one line per 20 consecutive retries of a database that did not answer.
+resource "google_logging_metric" "relay_cell_reregistration_stalled" {
+  project     = var.project_id
+  name        = "orca_relay_cell_reregistration_stalled"
+  description = "Controls whose flip-back lease has failed 20 times in a row because the database did not answer."
+  filter      = "resource.type=\"gce_instance\" AND jsonPayload.event=\"orca_relay_cell_reregistration_stalled\""
+  label_extractors = {
+    cell_id = "EXTRACT(jsonPayload.cellId)"
+    reason  = "EXTRACT(jsonPayload.reason)"
+  }
+
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "INT64"
+    unit        = "1"
+
+    labels {
+      key         = "cell_id"
+      value_type  = "STRING"
+      description = "Durable relay cell identifier."
+    }
+    labels {
+      key         = "reason"
+      value_type  = "STRING"
+      description = "The last database error."
+    }
+  }
+}
+
+resource "google_monitoring_alert_policy" "relay_cell_reregistration_stalled" {
+  project               = var.project_id
+  display_name          = "Orca Relay: flip back stalled on the database"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = var.relay_alert_notification_channels
+
+  conditions {
+    display_name = "A cell keeps retrying flip-back leases against an unanswering database"
+
+    condition_threshold {
+      filter          = "resource.type=\"gce_instance\" AND metric.type=\"logging.googleapis.com/user/orca_relay_cell_reregistration_stalled\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+      duration        = "0s"
+
+      aggregations {
+        alignment_period     = "300s"
+        per_series_aligner   = "ALIGN_SUM"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields      = ["metric.label.\"cell_id\""]
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  documentation {
+    content   = "A cell flipping back to db has retried a control's lease 20 times in a row because the database did not answer (a stall, dropped connections, a busy lock). Nobody is disconnected: the cell keeps every control and retries for as long as it is open, and it reports `admitModeEffective=reserve` until it is done, so Postgres keeps reserve and sweeps stay off it. Look at Cloud SQL first. The flag workflow's wait may time out meanwhile; re-run it with `--set admitMode=db` once the database recovers."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [google_logging_metric.relay_cell_reregistration_stalled]
+}
+
+# relay-server.ts (director): placement is off while the map shows reserve cells; logged once a minute.
+resource "google_logging_metric" "relay_reserve_placement_off_with_reserve_cells" {
+  project     = var.project_id
+  name        = "orca_relay_reserve_placement_off_with_reserve_cells"
+  description = "Directors running with reserve placement off while some cells report reserve mode."
+  filter      = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${var.relay_cloud_run_service_name}\" AND jsonPayload.event=\"orca_relay_reserve_placement_off_with_reserve_cells\""
+  label_extractors = {
+    revision = "EXTRACT(resource.labels.revision_name)"
+  }
+
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "INT64"
+    unit        = "1"
+
+    labels {
+      key         = "revision"
+      value_type  = "STRING"
+      description = "Cloud Run revision of the director."
+    }
+  }
+}
+
+resource "google_monitoring_alert_policy" "relay_reserve_placement_off_with_reserve_cells" {
+  project               = var.project_id
+  display_name          = "Orca Relay: director placement off while cells are in reserve"
+  combiner              = "OR"
+  enabled               = true
+  notification_channels = var.relay_alert_notification_channels
+
+  conditions {
+    display_name = "A director cannot place onto reserve cells"
+
+    condition_threshold {
+      filter          = "resource.type=\"cloud_run_revision\" AND metric.type=\"logging.googleapis.com/user/orca_relay_reserve_placement_off_with_reserve_cells\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+      duration        = "0s"
+
+      aggregations {
+        alignment_period     = "300s"
+        per_series_aligner   = "ALIGN_SUM"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields      = ["metric.label.\"revision\""]
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  documentation {
+    content   = "A director has reserve placement off (`ORCA_RELAY_RESERVE_PLACEMENT`) while its map shows cells in reserve mode, so it books nothing there and leaves their hosts to the other directors. A director that predates step 5 logs nothing, so a rollback past it shows only as dead-man trips. If every director has placement off, each reserve cell's dead-man trips within 60-120 s (`Orca Relay: reserve cell lost its placing director`). If only some are (a partial rollback, or a manual traffic split), the rest keep the dead-man from tripping, and this alert is the only sign. Put every director on the step-5 revision with placement on, or flip the reserve cells to db (`cloud-operate-relay-production-cell-flags.yml --set admitMode=db`) before rolling the directors back."
+    mime_type = "text/markdown"
+  }
+
+  depends_on = [google_logging_metric.relay_reserve_placement_off_with_reserve_cells]
 }
