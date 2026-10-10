@@ -4,6 +4,7 @@ import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../quit-teardown-deadline'
 
 const settled = () => vi.fn(async () => {})
 const idle = () => vi.fn()
+const stopAgentHookServer = idle()
 
 // Every teardown member settles except the profile store, so only the writer can hold quit.
 const dependencies: Record<string, Record<string, unknown>> = {
@@ -13,7 +14,7 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../ipc/pty': { killAllPty: idle() },
   '../daemon/daemon-init': { disconnectDaemon: settled(), shutdownDaemon: settled() },
   '../ipc/ssh-shutdown-drain': { beginSshShutdown: settled() },
-  '../agent-hooks/server': { agentHookServer: { stop: idle() } },
+  '../agent-hooks/server': { agentHookServer: { stop: stopAgentHookServer } },
   '../agent-hooks/wsl-hook-relay-manager': { wslHookRelayManager: { disposeAll: idle() } },
   '../agent-hooks/managed-agent-hook-controls': {
     removeManagedAgentHooksAsync: vi.fn(async () => [])
@@ -104,4 +105,11 @@ it('releases admission only after the final flush and freeze complete', async ()
   expect(store.freezeWritesAsync).toHaveBeenCalledOnce()
   expect(admission.release).toHaveBeenCalledOnce()
   expect(app.quit).toHaveBeenCalledOnce()
+})
+
+// The chat teardown decides which chats to offer to resume from the hook server's status store,
+// and finishes after the hook server stops: that stop must leave the store readable.
+it('stops the hook server without clearing the status store the chat teardown reads', async () => {
+  await startQuit(async () => {})
+  expect(stopAgentHookServer).toHaveBeenCalledWith({ keepStatus: true })
 })

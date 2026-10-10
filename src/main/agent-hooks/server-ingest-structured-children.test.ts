@@ -116,6 +116,21 @@ describe('structured child-work ingest', () => {
     expect(server.getStructuredChildWork(SUBJECT)).toEqual([first])
   })
 
+  // A quit stops hook ingress before the chat teardown decides which chats to offer to resume,
+  // and that decision reads these records: a chat whose only work was a background command or a
+  // subagent was otherwise never offered.
+  it('keeps the children readable through a quit stop', () => {
+    const server = new AgentHookServer()
+    server.ingestStructuredStatus(summary(), SUBJECT)
+    server.ingestStructuredChildWork(SUBJECT, started, 'claude')
+    server.stop({ keepStatus: true })
+    expect(server.getStructuredChildWorkViews(SUBJECT)).toEqual([
+      expect.objectContaining({ description: 'Audit the build', state: 'working' })
+    ])
+    server.stop()
+    expect(server.getStructuredChildWorkViews(SUBJECT)).toEqual([])
+  })
+
   it('rejects an address that names no session', () => {
     const server = new AgentHookServer()
     expect(() =>
