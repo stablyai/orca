@@ -19,6 +19,8 @@ import {
   structuredAgentSessionFocusOwner
 } from './structured-agent-session-owner'
 import { clearWebSessionCloseIntent, recordWebSessionCloseIntent } from './web-session-close-intent'
+import type { WebSessionIntentOwner } from './web-session-intent-owner'
+import { captureWebSessionIntentOwner } from './web-runtime-session-environment'
 import { callRuntimeRpc, type RuntimeClientTarget } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
@@ -77,7 +79,11 @@ export function retireStructuredAgentSessionTab(args: {
 
 /** Re-reads one worktree from the host, including the version already applied, which the window's
  *  early removal left out of date. */
-function reacceptHostSessionTabs(target: RuntimeClientTarget, worktreeId: string): void {
+function reacceptHostSessionTabs(
+  target: RuntimeClientTarget,
+  worktreeId: string,
+  intentOwner: WebSessionIntentOwner
+): void {
   // Lazy imports: both refresh paths apply frames through this module.
   const reread =
     target.kind === 'environment'
@@ -85,7 +91,8 @@ function reacceptHostSessionTabs(target: RuntimeClientTarget, worktreeId: string
           refreshWebRuntimeSessionTabsSnapshot(target.environmentId, worktreeId, {
             acceptCurrentSnapshot: true,
             // A read that began before the close would still list the chat.
-            afterCurrentInFlight: true
+            afterCurrentInFlight: true,
+            expectedEnvironmentPairingRevision: intentOwner.pairingRevision
           })
         )
       : import('./local-structured-session-tabs-sync/inventory-refresh').then(
@@ -117,7 +124,10 @@ export function beginStructuredAgentSessionTabClose(args: {
     // the rest goes back to the conversation's draft.
     stopStructuredAgentSessionSends(args.sessionId)
   }
-  const intentOwner = structuredAgentSessionFocusOwner(args.target)
+  // Pinned to the pairing at close start, so a re-pair mid-close can't miss the clear.
+  const intentOwner = captureWebSessionIntentOwner(
+    structuredAgentSessionFocusOwner(args.target).environmentId
+  )
   const hostTabId = `agent-session:${args.sessionId}`
   // Why: a host frame sent before the host handles the close still lists the chat and would re-add
   // it at the end of the strip; the intent lifts once a host frame stops listing it. Floating-panel
@@ -136,7 +146,7 @@ export function beginStructuredAgentSessionTabClose(args: {
     // needs a read; a paired server's frames travel apart from its answer, so, as for its terminal
     // closes, every close is followed by a read.
     if (!hostTabClosed || args.target.kind === 'environment') {
-      reacceptHostSessionTabs(args.target, args.worktreeId)
+      reacceptHostSessionTabs(args.target, args.worktreeId, intentOwner)
     }
   })
 }

@@ -74,6 +74,7 @@ import {
 } from './web-session-close-intent'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from './local-structured-session-owner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 
 const target: RuntimeClientTarget = { kind: 'local' }
 
@@ -109,6 +110,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   resetStructuredAgentSessionReadOwnersForTests()
   resetWebSessionCloseIntentForTests()
+  replaceRuntimeEnvironmentRevisions([])
   mocks.closeSession.mockResolvedValue('closed')
   mocks.callRuntime.mockResolvedValue(undefined)
   mocks.hasTombstone.mockReturnValue(false)
@@ -293,6 +295,47 @@ describe('structured agent session tab retirement', () => {
     // Only a frame without the chat ends the hide.
     expect(closing('server-1')).toBe(true)
     expect(mocks.reacceptLocal).not.toHaveBeenCalled()
+  })
+
+  it('clears a paired close intent under the pairing it began with', async () => {
+    const paired = { kind: 'environment', environmentId: 'server-1' } as const
+    replaceRuntimeEnvironmentRevisions([{ id: 'server-1', createdAt: 0, pairingRevision: 3 }])
+    let failClose!: () => void
+    mocks.callRuntime.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          failClose = () => reject(new Error('runtime_unavailable'))
+        })
+    )
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    beginStructuredAgentSessionTabClose({
+      target: paired,
+      worktreeId: 'wt-1',
+      sessionId: 'session-1',
+      provisional: false
+    })
+    const pendingUnder = (pairingRevision: number): boolean =>
+      isWebSessionCloseIntentPending(
+        { environmentId: 'server-1', pairingRevision },
+        'wt-1',
+        'agent-session:session-1',
+        Date.now()
+      )
+    expect(pendingUnder(3)).toBe(true)
+
+    // Re-paired while the close is in flight.
+    replaceRuntimeEnvironmentRevisions([{ id: 'server-1', createdAt: 0, pairingRevision: 4 }])
+    await vi.waitFor(() => expect(mocks.callRuntime).toHaveBeenCalled())
+    failClose()
+    await vi.waitFor(() =>
+      expect(mocks.refreshPaired).toHaveBeenCalledWith('server-1', 'wt-1', {
+        acceptCurrentSnapshot: true,
+        afterCurrentInFlight: true,
+        expectedEnvironmentPairingRevision: 3
+      })
+    )
+    expect(pendingUnder(3)).toBe(false)
+    warn.mockRestore()
   })
 
   it('deduplicates concurrent host retirement', async () => {
