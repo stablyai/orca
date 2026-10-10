@@ -19,7 +19,8 @@ import {
   ASK_LONG_POLL_SHARE,
   BROWSER_HOST_LONG_POLL_SHARE,
   KEEPALIVE_INTERVAL_MS,
-  LONG_POLL_CAP,
+  configuredLongPollCap,
+  CHECK_LONG_POLL_SHARE,
   SPECIALIZED_LONG_POLL_SHARE
 } from './runtime-rpc-long-poll'
 import type {
@@ -54,6 +55,7 @@ export class RuntimeRpcState {
   protected readonly longPollCap: number
   protected readonly metadataOwnershipPollMs: number
   protected readonly askLongPollCap: number
+  protected readonly checkLongPollCap: number
   protected readonly browserHostLongPollCap: number
   protected readonly browserHostLongPollCapPerDevice: number
   protected readonly specializedLongPollCap: number
@@ -93,6 +95,7 @@ export class RuntimeRpcState {
   protected activeLongPolls = 0
   // Why: subset of activeLongPolls held by orchestration.ask, fenced by askLongPollCap.
   protected activeAskLongPolls = 0
+  protected activeCheckLongPolls = 0
   protected activeBrowserHostLongPolls = 0
   protected readonly activeBrowserHostLongPollsByDevice = new Map<string, number>()
   protected clientRequestsInFlight = 0
@@ -110,7 +113,7 @@ export class RuntimeRpcState {
     pinnedBindHost,
     webClientRoot,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
-    longPollCap = LONG_POLL_CAP,
+    longPollCap = configuredLongPollCap(),
     metadataOwnershipPollMs = RUNTIME_METADATA_OWNERSHIP_POLL_MS,
     methods
   }: OrcaRuntimeRpcServerOptions) {
@@ -130,6 +133,7 @@ export class RuntimeRpcState {
     this.metadataOwnershipPollMs = metadataOwnershipPollMs
     // Why: derived, not configurable — the reservation must hold for whatever cap a caller picks.
     this.askLongPollCap = Math.max(1, Math.floor(longPollCap * ASK_LONG_POLL_SHARE))
+    this.checkLongPollCap = Math.max(1, Math.floor(longPollCap * CHECK_LONG_POLL_SHARE))
     this.browserHostLongPollCap = Math.max(
       1,
       Math.floor(longPollCap * BROWSER_HOST_LONG_POLL_SHARE)

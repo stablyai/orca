@@ -46,8 +46,7 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
     }
   }
 
-  // Why: one fence for both transports — the total cap protects short RPCs, the ask
-  // sub-cap protects terminal.wait / check --wait from slow reply-blocked asks.
+  // Shared by both transports; long-lived callers cannot consume every launch/wait slot.
   // Returns the rejection message, or null once the slot is reserved.
   protected admitLongPoll(
     longPoll: RuntimeLongPollClass | null,
@@ -56,19 +55,22 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
     if (!longPoll) {
       return null
     }
+    const occupancy = `${this.activeLongPolls}/${this.longPollCap} in use; check=${this.activeCheckLongPolls}/${this.checkLongPollCap}, ask=${this.activeAskLongPolls}/${this.askLongPollCap}, browser-host=${this.activeBrowserHostLongPolls}/${this.browserHostLongPollCap}`
     if (this.activeLongPolls >= this.longPollCap) {
-      return 'long-poll capacity reached; retry with backoff'
+      return `long-poll capacity reached (${occupancy}); retry with backoff`
     }
     if (
-      (longPoll === 'ask' || longPoll === 'browser-host') &&
-      this.activeAskLongPolls + this.activeBrowserHostLongPolls >= this.specializedLongPollCap
+      (longPoll === 'ask' || longPoll === 'browser-host' || longPoll === 'check') &&
+      this.activeAskLongPolls + this.activeBrowserHostLongPolls + this.activeCheckLongPolls >=
+        this.specializedLongPollCap
     ) {
-      return longPoll === 'ask'
-        ? 'orchestration.ask capacity reached; retry with backoff'
-        : 'browser-host capacity reached; retry with backoff'
+      return `${longPoll === 'browser-host' ? longPoll : `orchestration.${longPoll}`} capacity reached (${occupancy}); retry with backoff`
+    }
+    if (longPoll === 'check' && this.activeCheckLongPolls >= this.checkLongPollCap) {
+      return `orchestration.check capacity reached (${occupancy}); retry with backoff`
     }
     if (longPoll === 'ask' && this.activeAskLongPolls >= this.askLongPollCap) {
-      return 'orchestration.ask capacity reached; retry with backoff'
+      return `orchestration.ask capacity reached (${occupancy}); retry with backoff`
     }
     if (
       longPoll === 'browser-host' &&
@@ -77,11 +79,13 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
           (this.activeBrowserHostLongPollsByDevice.get(pairedDeviceId) ?? 0) >=
             this.browserHostLongPollCapPerDevice))
     ) {
-      return 'browser-host capacity reached; retry with backoff'
+      return `browser-host capacity reached (${occupancy}); retry with backoff`
     }
     this.activeLongPolls += 1
     if (longPoll === 'ask') {
       this.activeAskLongPolls += 1
+    } else if (longPoll === 'check') {
+      this.activeCheckLongPolls += 1
     } else if (longPoll === 'browser-host') {
       this.activeBrowserHostLongPolls += 1
       if (pairedDeviceId !== undefined) {
@@ -101,6 +105,8 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
     this.activeLongPolls = Math.max(0, this.activeLongPolls - 1)
     if (longPoll === 'ask') {
       this.activeAskLongPolls = Math.max(0, this.activeAskLongPolls - 1)
+    } else if (longPoll === 'check') {
+      this.activeCheckLongPolls = Math.max(0, this.activeCheckLongPolls - 1)
     } else if (longPoll === 'browser-host') {
       this.activeBrowserHostLongPolls = Math.max(0, this.activeBrowserHostLongPolls - 1)
       if (pairedDeviceId !== undefined) {

@@ -459,7 +459,7 @@ describe('OrcaRuntimeRpcServer', () => {
         runtime,
         userDataPath,
         keepaliveIntervalMs: 1000,
-        longPollCap: 2
+        longPollCap: 4
       })
       await server.start()
 
@@ -467,7 +467,7 @@ describe('OrcaRuntimeRpcServer', () => {
         const metadata = readRuntimeMetadata(userDataPath)
         const endpoint = metadata!.transports[0]!.endpoint
 
-        // Fill the cap with two long waits (10s each — we'll kill them).
+        // Fill the check sub-cap with two waits (10s each — we'll kill them).
         const a = openFramedSession(endpoint, {
           id: 'req_a',
           authToken: metadata!.authToken,
@@ -483,6 +483,7 @@ describe('OrcaRuntimeRpcServer', () => {
         // Let the two waits land in the handler and increment the counter.
         await sleep(100)
         expect(server['activeLongPolls']).toBe(2)
+        expect(server['activeCheckLongPolls']).toBe(2)
 
         // Kill one client mid-wait; counter must drop to 1.
         a.socket.destroy()
@@ -490,6 +491,7 @@ describe('OrcaRuntimeRpcServer', () => {
         // Give Node one tick to fire the close event on the server socket.
         await sleep(50)
         expect(server['activeLongPolls']).toBe(1)
+        expect(server['activeCheckLongPolls']).toBe(1)
 
         // The freed slot must admit a new long-poll immediately.
         const c = openFramedSession(endpoint, {
@@ -725,7 +727,7 @@ describe('OrcaRuntimeRpcServer', () => {
       }
     })
 
-    it('keeps the full cap available to terminal.wait and check --wait', async () => {
+    it('caps check waits below the full long-poll budget', async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
       const runtime = new OrcaRuntimeService()
       const db = new OrchestrationDb(':memory:')
@@ -745,8 +747,7 @@ describe('OrcaRuntimeRpcServer', () => {
         const metadata = readRuntimeMetadata(userDataPath)
         const endpoint = metadata!.transports[0]!.endpoint
 
-        // The ask sub-cap must not narrow the budget for the reserved class.
-        for (let i = 0; i < 4; i++) {
+        for (let i = 0; i < 2; i++) {
           waits.push(
             openFramedSession(endpoint, {
               id: `req_wait_${i}`,
@@ -756,7 +757,7 @@ describe('OrcaRuntimeRpcServer', () => {
             })
           )
         }
-        await waitFor(() => server['activeLongPolls'] === 4)
+        await waitFor(() => server['activeLongPolls'] === 2)
         expect(server['activeAskLongPolls']).toBe(0)
 
         const overflow = await sendRequest(endpoint, {
@@ -765,7 +766,15 @@ describe('OrcaRuntimeRpcServer', () => {
           method: 'orchestration.check',
           params: { terminal: 'term_overflow', wait: true, timeoutMs: 5_000 }
         })
-        expect(overflow).toMatchObject({ ok: false, error: { code: 'runtime_busy' } })
+        expect(overflow).toMatchObject({
+          ok: false,
+          error: {
+            code: 'runtime_busy',
+            message: expect.stringContaining(
+              'orchestration.check capacity reached (2/4 in use; check=2/2'
+            )
+          }
+        })
       } finally {
         for (const wait of waits) {
           wait.socket.destroy()

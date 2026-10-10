@@ -174,7 +174,7 @@ describe('OrcaRuntimeRpcServer', () => {
           ok: false,
           error: expect.objectContaining({
             code: 'runtime_busy',
-            message: 'orchestration.ask capacity reached; retry with backoff'
+            message: expect.stringContaining('orchestration.ask capacity reached (')
           })
         })
       )

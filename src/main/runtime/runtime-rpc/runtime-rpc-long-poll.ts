@@ -6,6 +6,11 @@ export const KEEPALIVE_INTERVAL_MS = 10_000
 // Why: cap long-polls at half the 32-slot connection budget so they can't starve short RPCs; overflow → runtime_busy. See §7 risk #2.
 export const LONG_POLL_CAP = 16
 
+export function configuredLongPollCap(): number {
+  const configured = Number(process.env.ORCA_RPC_LONG_POLL_CAP)
+  return Number.isSafeInteger(configured) && configured > 0 ? configured : LONG_POLL_CAP
+}
+
 // Why: orchestration.ask blocks on a human/agent reply for minutes, an order of
 // magnitude longer than terminal.wait or check --wait, so a fleet of asking
 // workers would otherwise hold every slot and starve the mobile/web/CLI/relay
@@ -13,11 +18,12 @@ export const LONG_POLL_CAP = 16
 export const ASK_LONG_POLL_SHARE = 0.5
 // Why: eight host slots preserve four-host overlap for two independently paired desktops.
 export const BROWSER_HOST_LONG_POLL_SHARE = 0.5
-// Why: asks and permanent hosts together retain the prior quarter-budget reservation for waits.
+export const CHECK_LONG_POLL_SHARE = 0.5
+// Asks, permanent hosts, and repeated checks leave a quarter of the budget for launches and waits.
 export const SPECIALIZED_LONG_POLL_SHARE = 0.75
 
-// Why: 'ask' is metered separately from 'wait' — same keepalive/abort wiring, its own sub-cap.
-export type RuntimeLongPollClass = 'ask' | 'browser-host' | 'wait'
+// Classes share keepalive/abort wiring; long-lived callers have separate admission limits.
+export type RuntimeLongPollClass = 'ask' | 'browser-host' | 'check' | 'wait'
 
 // Why: single classifier for long-poll requests (handlers that block on an external event), shared by counter/abort/keepalive. See §3.1.
 export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollClass | null {
@@ -79,7 +85,7 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
   }
   if (request.method === 'orchestration.check') {
     const params = request.params as { wait?: unknown } | undefined
-    return params?.wait === true ? 'wait' : null
+    return params?.wait === true ? 'check' : null
   }
   return null
 }

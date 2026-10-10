@@ -22,7 +22,7 @@ describe('runtime RPC browser-host admission', () => {
     expect(classifyRuntimeLongPoll(request('browser.clientHost.attach'))).toBe('browser-host')
     expect(classifyRuntimeLongPoll(request('terminal.wait'))).toBe('wait')
     expect(classifyRuntimeLongPoll(request('orchestration.ask'))).toBe('ask')
-    expect(classifyRuntimeLongPoll(request('orchestration.check', { wait: true }))).toBe('wait')
+    expect(classifyRuntimeLongPoll(request('orchestration.check', { wait: true }))).toBe('check')
     expect(classifyRuntimeLongPoll(request('status.get'))).toBeNull()
   })
 
@@ -78,7 +78,7 @@ describe('runtime RPC browser-host admission', () => {
           id: 'host-overflow',
           ok: false,
           error: expect.objectContaining({
-            message: 'browser-host capacity reached; retry with backoff'
+            message: expect.stringContaining('browser-host capacity reached (')
           })
         })
       )
@@ -156,7 +156,7 @@ describe('runtime RPC browser-host admission', () => {
           id: 'host-a-overflow',
           ok: false,
           error: expect.objectContaining({
-            message: 'browser-host capacity reached; retry with backoff'
+            message: expect.stringContaining('browser-host capacity reached (')
           })
         })
       )
@@ -242,7 +242,7 @@ describe('runtime RPC browser-host admission', () => {
             id: 'host-b',
             ok: false,
             error: expect.objectContaining({
-              message: 'browser-host capacity reached; retry with backoff'
+              message: expect.stringContaining('browser-host capacity reached (')
             })
           })
         )

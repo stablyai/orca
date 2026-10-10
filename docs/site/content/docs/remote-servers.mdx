@@ -229,6 +229,12 @@ orca serve --pairing-address <reachable-tailscale-ip-or-hostname>
 
 Do not use a wildcard address or `127.0.0.1` for a remote client.
 
+### Long-poll capacity reached
+
+The error includes the occupied slots, total limit, and counts for waiting checks, questions, and browser hosts. This is a request-slot limit, not a CPU or memory measurement. Waiting checks use at most half the pool; checks, questions, and browser hosts together use at most three quarters, leaving room for worker startup and other waits (rounded down, with a minimum of one slot per limit).
+
+To change the default pool of 16, set `ORCA_RPC_LONG_POLL_CAP` to a positive integer in the server process's environment before starting Orca or `orca serve`. Restart the server to apply it. Invalid values use the default. The limits are shared by the local and paired-client transports on that server.
+
 ## Next steps
 
 - Compare every run mode in [Ways to run Orca](/docs/ways-to-run).
