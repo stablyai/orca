@@ -2949,6 +2949,86 @@
           }
         }
       },
+      "voice": {
+        "control": {
+          "AgentSpeakingChips": {
+            "2f19979ffd": "Agent inconnu",
+            "eb42999570": "En cours…",
+            "d769377dd7": "Parle"
+          },
+          "VoiceControlIndicator": {
+            "2457413612": "Arrêt…",
+            "ba85f4e286": "Quota OpenAI dépassé.",
+            "d32b4bb989": "Un filtre réseau intercepte le trafic OpenAI. Désactivez l’inspection TLS pour api.openai.com.",
+            "5554f0b158": "Arrêter le contrôle vocal",
+            "3c768d5d89": "Le contrôle vocal a rencontré une erreur inattendue.",
+            "29829ab1ed": "La clé API OpenAI a été rejetée. Vérifiez-la dans Réglages > Voix.",
+            "704c2fd2df": "Ignorer",
+            "6247052b75": "OpenAI realtime est indisponible pour le moment.",
+            "8cfbdf5630": "Parlez à vos agents",
+            "212c6ba9e2": "Micro ouvert — parlez à vos agents",
+            "a566995efc": "Accès au microphone non accordé.",
+            "2cfb53f520": "Erreur réseau lors de la connexion à OpenAI.",
+            "64ad9dcc63": "Ouvrir les réglages Voix",
+            "ac60409b1f": "La connexion audio a échoué. Vérifiez votre réseau ou votre VPN.",
+            "603efc130d": "Connexion…",
+            "337ecda30e": "Ignorer et réinitialiser",
+            "234fd0e2fd": "Écoute",
+            "d8993b9285": "La clé OpenAI enregistrée n'a pas pu être lue. Saisissez-la à nouveau dans Réglages > Voix.",
+            "d5b8ea55f9": "Ajoutez une clé API OpenAI dans Réglages > Voix pour utiliser le contrôle vocal complet.",
+            "de37e25e2e": "Afficher la transcription",
+            "7423b7184a": "Masquer la transcription"
+          },
+          "VoiceControlController": {
+            "e34835dab1": "Microphone déconnecté. Le contrôle vocal s’est arrêté."
+          },
+          "VoiceControlStatusSegment": {
+            "5672a03f58": "Le contrôle vocal s’arrête.",
+            "12a1f27aee": "En direct",
+            "aa984ca8c7": "Erreur du contrôle vocal. Cliquez pour arrêter et réinitialiser.",
+            "ad8a798db4": "Arrêt…",
+            "bfaf7efee4": "Le contrôle vocal se connecte. Cliquez pour arrêter.",
+            "bcd842b147": "Le contrôle vocal est en direct avec le micro ouvert. Cliquez pour arrêter.",
+            "68207f4bf7": "Connexion…",
+            "b5f29ae8d9": "Erreur"
+          },
+          "VoiceControlTranscriptPanel": {
+            "8aeb00a62d": "Transcription vocale",
+            "510ef08415": "Vous :",
+            "6ccf1cddd4": "Fermer la transcription",
+            "e992981744": "Pas encore de transcription — dites quelque chose.",
+            "ab8ecc45ba": "Écrivez ou collez un message…",
+            "a9a6d9904a": "Envoyer le message"
+          },
+          "voice": {
+            "control": {
+              "tool": {
+                "activity": {
+                  "label": {
+                    "3581471fab": "Vérification de la liste des agents…",
+                    "6d91f4c490": "En attente de la réponse de {{name}}…",
+                    "338fc6bad1": "Démarrage d'un agent dans {{name}}…",
+                    "4b3f0ee5f7": "Diffusion envoyée — en attente des réponses…",
+                    "ddab1ccae7": "Navigation vers {{name}}…",
+                    "62508e1fd3": "Je regarde votre écran…",
+                    "6f1d8ef9ec": "Lecture de l’écran…",
+                    "f255e4edc1": "Clic sur {{name}}…",
+                    "971bbba281": "Saisie dans {{name}}…",
+                    "e3b08d6076": "Lecture du terminal…",
+                    "1453ef8e54": "Exécution d'une commande…",
+                    "245e6b241c": "Ouverture de {{name}}…"
+                  }
+                }
+              },
+              "transcript": {
+                "toasts": {
+                  "b4a9a7f737": "Vous : {{text}}"
+                }
+              }
+            }
+          }
+        }
+      },
       "worktree": {
         "creation": {
           "WorktreeCreationPanel": {
@@ -9055,6 +9135,27 @@
         "UIZoomControl": {
           "c2c64b24d0": "Réinitialiser"
         },
+        "VoiceControlSettingsSection": {
+          "929f8f1e88": "Activer le contrôle vocal complet",
+          "f6b7ed75c2": "Appuyez sur {{shortcut}} pour démarrer ou arrêter. Parlez à vos agents en mains libres avec un micro ouvert.",
+          "bcc40a5cfc": "Voix du coordinateur",
+          "ce44817e26": "La voix avec laquelle parle le coordinateur.",
+          "5c549e4dde": "Mises à jour des agents",
+          "8ec9e8d099": "La voix d'une session est verrouillée dès que la première réponse est jouée : les agents ne peuvent pas sonner différemment. Choisissez si le coordinateur nomme l'agent qui rend compte lors du relais des mises à jour.",
+          "96dc2a9896": "Nommer l'agent qui rend compte",
+          "fb987e9167": "Relayer les mises à jour sans nommer les agents",
+          "44af9d4285": "Durée maximale de la session",
+          "87a0e3370b": "Le contrôle vocal raccroche automatiquement à cette limite. Choisissez Illimité pour aucun plafond.",
+          "0e2029a54e": "Illimité",
+          "f20cc19e9c": "15 min",
+          "5cb51b7dd9": "30 min",
+          "e6e8c4b5cc": "1 heure",
+          "38381e90a1": "2 heures",
+          "95d6edeaf0": "Instructions personnalisées",
+          "6103f118f5": "Notes de persona et de style pour le contrôle, ajoutées à la suite de ses règles intégrées. S’applique aux nouvelles sessions.",
+          "0173d1898d": "Exemple : limitez chaque réponse à une seule phrase.",
+          "2ab4f49ef3": "L'audio en temps réel est facturé à la minute de session."
+        },
         "VoicePane": {
           "6fa734ed95": "Supprimer {{value0}}",
           "68de13f72c": "Échec de la suppression du modèle.",
@@ -10994,7 +11095,15 @@
               "micInput": "entrée",
               "micDevice": "appareil",
               "micAirpods": "airpods",
-              "micDefault": "système par défaut"
+              "micDefault": "système par défaut",
+              "37e26bbd94": "Contrôle vocal",
+              "797db8a2ad": "Parlez à vos agents en mains libres avec un micro ouvert.",
+              "52216ee03b": "contrôle",
+              "6df24eff92": "contrôle vocal",
+              "decb067e17": "mains libres",
+              "763dce1026": "mains libres",
+              "a493d3131e": "micro ouvert",
+              "cbcb82fd2e": "temps réel"
             }
           }
         },

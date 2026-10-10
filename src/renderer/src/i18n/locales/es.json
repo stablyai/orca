@@ -2844,6 +2844,86 @@
           }
         }
       },
+      "voice": {
+        "control": {
+          "AgentSpeakingChips": {
+            "2f19979ffd": "Agente desconocido",
+            "eb42999570": "Trabajando…",
+            "d769377dd7": "Hablando"
+          },
+          "VoiceControlIndicator": {
+            "2457413612": "Deteniendo…",
+            "ba85f4e286": "Cuota de OpenAI superada.",
+            "d32b4bb989": "Un filtro de red está interceptando el tráfico de OpenAI. Desactiva la inspección TLS para api.openai.com.",
+            "5554f0b158": "Detener el control de voz",
+            "3c768d5d89": "El control de voz tuvo un error inesperado.",
+            "29829ab1ed": "La clave de API de OpenAI fue rechazada. Revísala en Configuración > Voz.",
+            "704c2fd2df": "Descartar",
+            "6247052b75": "OpenAI realtime no está disponible ahora mismo.",
+            "8cfbdf5630": "Habla con tus agentes",
+            "212c6ba9e2": "Micrófono abierto: habla con tus agentes",
+            "a566995efc": "No se concedió acceso al micrófono.",
+            "2cfb53f520": "Error de red al conectar con OpenAI.",
+            "64ad9dcc63": "Abrir la configuración de Voz",
+            "ac60409b1f": "La conexión de audio falló. Revisa tu red o VPN.",
+            "603efc130d": "Conectando…",
+            "337ecda30e": "Descartar y restablecer",
+            "234fd0e2fd": "Escuchando",
+            "d8993b9285": "No se pudo leer la clave de OpenAI guardada. Introdúcela de nuevo en Configuración > Voz.",
+            "d5b8ea55f9": "Añade una clave de API de OpenAI en Configuración > Voz para usar el control de voz completo.",
+            "de37e25e2e": "Mostrar transcripción",
+            "7423b7184a": "Ocultar transcripción"
+          },
+          "VoiceControlController": {
+            "e34835dab1": "Micrófono desconectado. El control de voz se detuvo."
+          },
+          "VoiceControlStatusSegment": {
+            "5672a03f58": "El control de voz se está deteniendo.",
+            "12a1f27aee": "En vivo",
+            "aa984ca8c7": "Error del control de voz. Haz clic para detenerlo y restablecerlo.",
+            "ad8a798db4": "Deteniendo…",
+            "bfaf7efee4": "El control de voz se está conectando. Haz clic para detenerlo.",
+            "bcd842b147": "El control de voz está en vivo con el micrófono abierto. Haz clic para detenerlo.",
+            "68207f4bf7": "Conectando…",
+            "b5f29ae8d9": "Fallo"
+          },
+          "VoiceControlTranscriptPanel": {
+            "8aeb00a62d": "Transcripción de voz",
+            "510ef08415": "Tú:",
+            "6ccf1cddd4": "Cerrar transcripción",
+            "e992981744": "Aún no hay transcripción — di algo.",
+            "ab8ecc45ba": "Escribe o pega un mensaje…",
+            "a9a6d9904a": "Enviar mensaje"
+          },
+          "voice": {
+            "control": {
+              "tool": {
+                "activity": {
+                  "label": {
+                    "3581471fab": "Consultando la lista de agentes…",
+                    "6d91f4c490": "Esperando la respuesta de {{name}}…",
+                    "338fc6bad1": "Iniciando un agente en {{name}}…",
+                    "4b3f0ee5f7": "Difusión enviada — esperando respuestas…",
+                    "ddab1ccae7": "Navegando a {{name}}…",
+                    "62508e1fd3": "Mirando tu pantalla…",
+                    "6f1d8ef9ec": "Leyendo la pantalla…",
+                    "f255e4edc1": "Haciendo clic en {{name}}…",
+                    "971bbba281": "Escribiendo en {{name}}…",
+                    "e3b08d6076": "Leyendo la terminal…",
+                    "1453ef8e54": "Ejecutando un comando…",
+                    "245e6b241c": "Abriendo {{name}}…"
+                  }
+                }
+              },
+              "transcript": {
+                "toasts": {
+                  "b4a9a7f737": "Tú: {{text}}"
+                }
+              }
+            }
+          }
+        }
+      },
       "worktree": {
         "creation": {
           "WorktreeCreationPanel": {
@@ -8907,6 +8987,27 @@
         "UIZoomControl": {
           "c2c64b24d0": "Restablecer"
         },
+        "VoiceControlSettingsSection": {
+          "929f8f1e88": "Activar el control de voz completo",
+          "f6b7ed75c2": "Pulsa {{shortcut}} para iniciar o detener. Habla con tus agentes con manos libres y el micrófono abierto.",
+          "bcc40a5cfc": "Voz del coordinador",
+          "ce44817e26": "La voz con la que habla el coordinador.",
+          "5c549e4dde": "Actualizaciones de agentes",
+          "8ec9e8d099": "La voz de una sesión se bloquea cuando suena la primera respuesta, así que los agentes no pueden sonar distintos. Elige si el coordinador nombra al agente que informa al transmitir las actualizaciones.",
+          "96dc2a9896": "Nombrar al agente que informa",
+          "fb987e9167": "Transmitir actualizaciones sin nombrar a los agentes",
+          "44af9d4285": "Duración máxima de la sesión",
+          "87a0e3370b": "El control de voz cuelga automáticamente al llegar a este límite. Elige Ilimitado para no tener tope.",
+          "0e2029a54e": "Ilimitado",
+          "f20cc19e9c": "15 minutos",
+          "5cb51b7dd9": "30 minutos",
+          "e6e8c4b5cc": "1 hora",
+          "38381e90a1": "2 horas",
+          "95d6edeaf0": "Instrucciones personalizadas",
+          "6103f118f5": "Notas de persona y estilo para el control, añadidas después de sus reglas integradas. Se aplica a las sesiones nuevas.",
+          "0173d1898d": "Ejemplo: que cada respuesta sea de una sola frase.",
+          "2ab4f49ef3": "El audio en tiempo real se factura por minuto de sesión."
+        },
         "VoicePane": {
           "68de13f72c": "No se pudo eliminar el modelo.",
           "1ba81c0ff0": "recomendado",
@@ -10849,7 +10950,15 @@
               "micInput": "aporte",
               "micDevice": "dispositivo",
               "micAirpods": "airpods",
-              "micDefault": "valor predeterminado del sistema"
+              "micDefault": "valor predeterminado del sistema",
+              "37e26bbd94": "Control de voz",
+              "797db8a2ad": "Habla con tus agentes en manos libres con el micrófono abierto.",
+              "52216ee03b": "control",
+              "6df24eff92": "control de voz",
+              "decb067e17": "manos libres",
+              "763dce1026": "manos libres",
+              "a493d3131e": "micrófono abierto",
+              "cbcb82fd2e": "tiempo real"
             }
           }
         },

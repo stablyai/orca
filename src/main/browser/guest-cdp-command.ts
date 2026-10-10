@@ -40,3 +40,26 @@ export function sendGuestCdpCommand(
       : guest.debugger.sendCommand(method, params, sessionId)
   )
 }
+
+/**
+ * The command bounded by a 10s clock: Electron's CDP sendCommand can hang on a stale
+ * debugger session, so every long-lived caller (the browser bridge's senders, the voice
+ * screen driver) races the transport against a timeout instead of hanging the RPC.
+ */
+export function sendGuestCdpCommandWithTimeout(
+  guest: GuestCdpTarget,
+  method: string,
+  params?: Record<string, unknown>,
+  sessionId?: string
+): Promise<unknown> {
+  let timer: ReturnType<typeof setTimeout>
+  return Promise.race([
+    sendGuestCdpCommand(guest, method, params, sessionId).finally(() => clearTimeout(timer)),
+    new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(
+        () => reject(new BrowserError('browser_cdp_error', `CDP command "${method}" timed out`)),
+        10_000
+      )
+    })
+  ])
+}

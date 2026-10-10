@@ -27,7 +27,13 @@ export function applyWebSessionTabsSnapshotWithContext(
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
   if (
     suppressE2eWebRuntimeBrowserSnapshot(rawSnapshot) ||
-    rawSnapshot.worktree === FLOATING_TERMINAL_WORKTREE_ID
+    // The floating workspace is desktop-local: remote frames must never reconcile it (an
+    // empty remote same-id snapshot would delete the user's local floating tabs). The
+    // agent-session scope is exempt — it leaves non-agent tabs untouched, and it is the
+    // ONLY lane that can surface a host-created chat there, which the floating panel never
+    // creates for itself.
+    (rawSnapshot.worktree === FLOATING_TERMINAL_WORKTREE_ID &&
+      options?.contentScope !== 'agent-session')
   ) {
     return state
   }
