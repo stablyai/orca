@@ -1,3 +1,4 @@
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
@@ -27,8 +28,7 @@ import { parseProjectInput } from './project-picker-input'
 import {
   getProjectPickerBrowseHost,
   listProjectViewsForRuntime,
-  resolveProjectRefForRuntime,
-  type ProjectSourceSettings
+  resolveProjectRefForRuntime
 } from './project-picker-runtime'
 import type { ProjectPickerChoice, ResolvedProjectSelection } from './project-picker-selection'
 import { useProjectPickerBrowse } from './useProjectPickerBrowse'
@@ -46,7 +46,7 @@ type Props = {
     title?: string
   } | null
   onSelect: (selection: ResolvedProjectSelection) => void
-  sourceSettings: ProjectSourceSettings
+  sourceTarget: RuntimeClientTarget
 }
 
 const EMPTY_PROJECT_SETTINGS: GitHubProjectSettings = {
@@ -59,7 +59,7 @@ const EMPTY_PROJECT_SETTINGS: GitHubProjectSettings = {
 export default function ProjectPicker({
   activeProject,
   onSelect,
-  sourceSettings
+  sourceTarget
 }: Props): React.JSX.Element {
   const settings = useAppStore((state) => state.settings)
   const updateSettings = useAppStore((state) => state.updateSettings)
@@ -77,7 +77,7 @@ export default function ProjectPicker({
   const [viewList, setViewList] = useState<GitHubProjectViewSummary[]>([])
   const [viewLoading, setViewLoading] = useState(false)
   const browseHost = getProjectPickerBrowseHost(activeProject ?? projectSettings.activeProject)
-  const browse = useProjectPickerBrowse(sourceSettings, browseHost)
+  const browse = useProjectPickerBrowse(sourceTarget, browseHost)
   const { loadBrowse } = browse
 
   useEffect(() => {
@@ -149,7 +149,7 @@ export default function ProjectPicker({
       setViewPickFor(selection)
       setViewLoading(true)
       try {
-        const result = await listProjectViewsForRuntime(sourceSettings, {
+        const result = await listProjectViewsForRuntime(sourceTarget, {
           owner: choice.owner,
           ownerType: choice.ownerType,
           projectNumber: choice.number,
@@ -185,7 +185,7 @@ export default function ProjectPicker({
         }
       }
     },
-    [commitSelection, mountedRef, projectSettings.lastViewByProject, sourceSettings]
+    [commitSelection, mountedRef, projectSettings.lastViewByProject, sourceTarget]
   )
 
   const handlePaste = useCallback(async () => {
@@ -202,7 +202,7 @@ export default function ProjectPicker({
     setPasteError(null)
     setPasteBusy(true)
     try {
-      const result = await resolveProjectRefForRuntime(sourceSettings, input, parsed.host)
+      const result = await resolveProjectRefForRuntime(sourceTarget, input, parsed.host)
       if (!mountedRef.current) {
         return
       }
@@ -224,7 +224,7 @@ export default function ProjectPicker({
         setPasteBusy(false)
       }
     }
-  }, [handleChooseProject, mountedRef, pasteInput, sourceSettings])
+  }, [handleChooseProject, mountedRef, pasteInput, sourceTarget])
 
   const filteredBrowse = useMemo(
     () =>

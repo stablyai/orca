@@ -1,4 +1,5 @@
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import type {
   GitHubAssignableUser,
   GitHubOwnerRepo
@@ -8,8 +9,8 @@ import { createMetadataRequestStore } from './metadata-request-cache'
 import { useMetadataListRequest, type MetadataListState } from './useMetadataListRequest'
 
 type GitHubMetadataOptions = {
-  runtimeEnvironmentId?: string | null
-  activeRuntimeEnvironmentId?: string | null
+  /** The repo owner's transport; absent reads through this app. */
+  target?: RuntimeClientTarget | null
   ownerRepo?: GitHubOwnerRepo | null
 }
 
@@ -22,7 +23,7 @@ export function useRepoLabels(
   options?: GitHubMetadataOptions
 ): MetadataListState<string> {
   const runtimeEnvironmentId =
-    options?.runtimeEnvironmentId?.trim() || options?.activeRuntimeEnvironmentId?.trim() || null
+    options?.target?.kind === 'environment' ? options.target.environmentId : null
   const repoSelector = repoId ?? repoPath ?? ''
   const ownerRepo = runtimeEnvironmentId ? null : options?.ownerRepo
   const repositoryKey = ownerRepo
@@ -61,7 +62,7 @@ export function useRepoAssignees(
   options?: GitHubMetadataOptions
 ): MetadataListState<GitHubAssignableUser> {
   const runtimeEnvironmentId =
-    options?.runtimeEnvironmentId?.trim() || options?.activeRuntimeEnvironmentId?.trim() || null
+    options?.target?.kind === 'environment' ? options.target.environmentId : null
   const repoSelector = repoId ?? repoPath ?? ''
   const ownerRepo = runtimeEnvironmentId ? null : options?.ownerRepo
   const repositoryKey = ownerRepo

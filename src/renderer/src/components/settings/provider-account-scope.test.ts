@@ -26,12 +26,14 @@ describe('getProviderAccountScope', () => {
   })
 
   it('describes provider API budgets as host-scoped', () => {
-    expect(getProviderRateLimitScope({ activeRuntimeEnvironmentId: null }, 'GitHub')).toEqual({
+    expect(getProviderRateLimitScope({ kind: 'local' }, 'GitHub')).toEqual({
       label: LOCAL_HOST_LABEL,
       description:
         'GitHub API budget is fetched from the CLI on this desktop client. Use Settings > Remote Orca Servers > Advanced to view server-owned budgets.'
     })
-    expect(getProviderRateLimitScope({ activeRuntimeEnvironmentId: ' env-1 ' }, 'GitLab')).toEqual({
+    expect(
+      getProviderRateLimitScope({ kind: 'environment', environmentId: 'env-1' }, 'GitLab')
+    ).toEqual({
       label: 'Remote server: env-1',
       description:
         'GitLab API budget is fetched from the CLI on this remote server. Use Settings > Remote Orca Servers > Advanced to view another default runtime budget.'

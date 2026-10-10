@@ -22,7 +22,7 @@ import {
   hostedReviewBranchLookupArgs,
   isFreshHostedReview,
   isStaleMergedGitHubReviewForHead,
-  settingsForHostedReviewActionOwner,
+  hostedReviewRepoOwnerTarget,
   settingsForHostedReviewRepoOwner,
   shouldRefetchForLinkedHint,
   shouldRefetchGitHubScopedResultForNoHint,
@@ -69,10 +69,8 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
   hostedReviewCache: {},
 
   getHostedReviewCreationEligibility: async (args) => {
-    const settings = get().settings
     const repo = findHostedReviewRepoByPath(get().repos, args.repoPath, args.repoId)
-    const ownerSettings = settingsForHostedReviewActionOwner(settings, repo)
-    const target = getActiveRuntimeTarget(ownerSettings)
+    const target = hostedReviewRepoOwnerTarget(repo)
     if (target.kind === 'environment') {
       const { repoPath: _repoPath, worktreePath, ...runtimeArgs } = args
       void _repoPath
@@ -97,10 +95,8 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
   },
 
   createHostedReview: async (repoPath, input) => {
-    const settings = get().settings
     const repo = findHostedReviewRepoByPath(get().repos, repoPath, input.repoId)
-    const ownerSettings = settingsForHostedReviewActionOwner(settings, repo)
-    const target = getActiveRuntimeTarget(ownerSettings)
+    const target = hostedReviewRepoOwnerTarget(repo)
     const { repoId: inputRepoId, ...hostedReviewInput } = input
     if (target.kind === 'environment') {
       const { worktreePath, ...runtimeInput } = hostedReviewInput
@@ -124,10 +120,8 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
   },
 
   createStackedHostedReview: async (repoPath, input) => {
-    const settings = get().settings
     const repo = findHostedReviewRepoByPath(get().repos, repoPath, input.repoId)
-    const ownerSettings = settingsForHostedReviewActionOwner(settings, repo)
-    const target = getActiveRuntimeTarget(ownerSettings)
+    const target = hostedReviewRepoOwnerTarget(repo)
     const { repoId: inputRepoId, ...hostedReviewInput } = input
     if (target.kind === 'environment') {
       const { worktreePath, ...runtimeInput } = hostedReviewInput

@@ -7,23 +7,23 @@
 // Files, Checks, and review-thread tabs hidden. This component is that
 // simplified surface; it also routes every write through slug-addressed
 // mutation helpers and patches the Project table cache on success.
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import React from 'react'
 import * as VisuallyHidden from 'radix-ui/visually-hidden'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import type { GitHubItemDialogProjectOrigin } from '@/components/GitHubItemDialog'
 import { SlugDialogBody } from './slug-dialog/SlugDialogBody'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 
 type Props = {
   projectOrigin: GitHubItemDialogProjectOrigin | null
-  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  sourceTarget: RuntimeClientTarget
   onClose: () => void
 }
 
 export default function ProjectItemSlugDialog({
   projectOrigin,
-  sourceSettings,
+  sourceTarget,
   onClose
 }: Props): React.JSX.Element {
   const open = projectOrigin !== null
@@ -55,7 +55,7 @@ export default function ProjectItemSlugDialog({
         {projectOrigin ? (
           <SlugDialogBody
             projectOrigin={projectOrigin}
-            sourceSettings={sourceSettings}
+            sourceTarget={sourceTarget}
             onClose={onClose}
           />
         ) : null}

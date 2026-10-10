@@ -15,16 +15,16 @@
 // process (`repoSlug` reads `.git/config`).
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { Repo } from '../../../shared/repo-types'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import {
   deleteRepoSlugCacheKey,
   nextRepoSlugFailureRetryDelay,
   readRepoSlugCache,
   rememberRepoSlug,
+  repoSlugCacheKey,
+  repoSlugOwnerTarget,
   repoUpstreamIdentityKey,
-  settingsForRepoOwner,
   slugByRepoId,
   slugCacheKey,
   type RepoSlugMatches,
@@ -72,11 +72,14 @@ export function clearRepoSlugCacheEntry(repoId: string): void {
   }
 }
 
-async function resolveRepoSlug(
-  repo: Repo,
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
-): Promise<string | null> {
-  const cacheKey = slugCacheKey(repo.id, settings)
+async function resolveRepoSlug(repo: Repo): Promise<string | null> {
+  // Why: the project slug index spans repos from multiple hosts; each repo's remote metadata
+  // must be read from its owner.
+  const target = repoSlugOwnerTarget(repo)
+  if (!target) {
+    return null
+  }
+  const cacheKey = slugCacheKey(repo.id, target)
   const cached = readRepoSlugCache(cacheKey)
   if (cached.hit) {
     return cached.value
@@ -99,7 +102,6 @@ async function resolveRepoSlug(
       return value
     }
     try {
-      const target = getActiveRuntimeTarget(settings)
       const result =
         target.kind === 'environment'
           ? await callRuntimeRpc<{ owner: string; repo: string; host?: string } | null>(
@@ -131,14 +133,13 @@ async function resolveRepoSlug(
 }
 
 async function buildIndex(
-  repos: readonly Repo[],
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  repos: readonly Repo[]
 ): Promise<{ index: SlugIndex; upstreamIndex: SlugIndex; retryDelayMs: number | null }> {
   // Why: evict cached entries for repos that no longer exist in state so
   // the cache cannot grow unbounded across long sessions where users add
   // and remove repos. Without this, every removed repo's id (and its
   // negative-cached null) lingers forever.
-  const liveKeys = new Set(repos.map((r) => slugCacheKey(r.id, settingsForRepoOwner(r, settings))))
+  const liveKeys = new Set(repos.flatMap((r) => repoSlugCacheKey(r) ?? []))
   for (const key of slugByRepoId.keys()) {
     if (!liveKeys.has(key)) {
       deleteRepoSlugCacheKey(key)
@@ -150,9 +151,7 @@ async function buildIndex(
   const results = await Promise.all(
     repos.map(async (r) => ({
       repo: r,
-      // Why: the project slug index spans repos from multiple hosts; each
-      // repo's remote metadata must be read from its owner.
-      slug: await resolveRepoSlug(r, settingsForRepoOwner(r, settings))
+      slug: await resolveRepoSlug(r)
     }))
   )
   for (const { repo, slug } of results) {
@@ -187,7 +186,6 @@ export type RepoSlugIndexState = {
  *  deep trees can treat it as referentially equal inside a single render cycle. */
 export function useRepoSlugIndex(): RepoSlugIndexState {
   const repos = useAppStore((s) => s.repos)
-  const settings = useAppStore((s) => s.settings)
   const [index, setIndex] = useState<SlugIndex>(() => new Map())
   const [upstreamIndex, setUpstreamIndex] = useState<SlugIndex>(() => new Map())
   const [ready, setReady] = useState(false)
@@ -204,7 +202,7 @@ export function useRepoSlugIndex(): RepoSlugIndexState {
     const gen = ++generationRef.current
     setReady(false)
     setRetryDelayMs(null)
-    void buildIndex(repos, settings).then(
+    void buildIndex(repos).then(
       ({ index: next, upstreamIndex: nextUpstream, retryDelayMs: nextRetryDelayMs }) => {
         if (gen !== generationRef.current) {
           return
@@ -218,7 +216,7 @@ export function useRepoSlugIndex(): RepoSlugIndexState {
     return () => {
       generationRef.current += 1
     }
-  }, [repos, retryGeneration, settings])
+  }, [repos, retryGeneration])
 
   useEffect(() => {
     if (retryDelayMs === null) {

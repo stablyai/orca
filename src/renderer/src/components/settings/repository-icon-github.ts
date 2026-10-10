@@ -2,9 +2,8 @@ import type { GitHubRepositoryIdentity } from '../../../../shared/github/pull-re
 import type { Repo } from '../../../../shared/repo-types'
 import { githubAvatarIcon, githubAvatarSlug, type RepoIcon } from '../../../../shared/repo-icon'
 import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
-import { callRuntimeRpc, type getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 
-type RuntimeTarget = ReturnType<typeof getActiveRuntimeTarget>
 type ResolveRepositoryGitHubAvatarOptions = {
   forceLive?: boolean
 }
@@ -15,7 +14,7 @@ export type RepositoryGitHubAvatarResolution = {
 }
 
 function resolveRepositoryIdentityLive(
-  runtimeTarget: RuntimeTarget,
+  runtimeTarget: RuntimeClientTarget,
   repo: Repo,
   method: 'github.repoUpstream' | 'github.repoSlug',
   localCall: (args: {
@@ -34,7 +33,7 @@ function resolveRepositoryIdentityLive(
 }
 
 export function resolveRepositoryUpstreamLive(
-  runtimeTarget: RuntimeTarget,
+  runtimeTarget: RuntimeClientTarget,
   repo: Repo
 ): Promise<GitHubRepositoryIdentity | null> {
   return resolveRepositoryIdentityLive(runtimeTarget, repo, 'github.repoUpstream', (args) =>
@@ -43,7 +42,7 @@ export function resolveRepositoryUpstreamLive(
 }
 
 function resolveRepositorySlugLive(
-  runtimeTarget: RuntimeTarget,
+  runtimeTarget: RuntimeClientTarget,
   repo: Repo
 ): Promise<GitHubRepositoryIdentity | null> {
   return resolveRepositoryIdentityLive(runtimeTarget, repo, 'github.repoSlug', (args) =>
@@ -52,7 +51,7 @@ function resolveRepositorySlugLive(
 }
 
 export async function resolveRepositoryGitHubAvatar(
-  runtimeTarget: RuntimeTarget,
+  runtimeTarget: RuntimeClientTarget,
   repo: Repo,
   options: ResolveRepositoryGitHubAvatarOptions = {}
 ): Promise<RepositoryGitHubAvatarResolution> {

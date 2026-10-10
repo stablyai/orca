@@ -1,3 +1,4 @@
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import React from 'react'
 import { TYPE_FIELD_DATA_TYPE } from './columns'
 import type {
@@ -6,7 +7,6 @@ import type {
   GitHubProjectFieldMutationValue,
   GitHubProjectRow
 } from '../../../../shared/github/project-types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 import { ProjectTitleCell, ProjectTypeCell } from './ProjectCellIdentity'
 import { ProjectAssigneesCell, ProjectLabelsCell } from './ProjectCellRepositoryEditors'
@@ -28,7 +28,7 @@ type Props = {
   onEditIssueType?: (issueType: GitHubIssueType | null) => void
   onOpenDialog?: () => void
   sourceHost?: string
-  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  sourceTarget: RuntimeClientTarget
 }
 
 export default function ProjectCell({
@@ -41,7 +41,7 @@ export default function ProjectCell({
   onEditIssueType,
   onOpenDialog,
   sourceHost,
-  sourceSettings
+  sourceTarget
 }: Props): React.JSX.Element {
   const value = row.fieldValuesByFieldId[field.id]
   const editableValue = editable && row.itemType !== 'REDACTED'
@@ -54,7 +54,7 @@ export default function ProjectCell({
         row={row}
         editable={editableValue && row.itemType === 'ISSUE'}
         sourceHost={sourceHost}
-        sourceSettings={sourceSettings}
+        sourceTarget={sourceTarget}
         onEditIssueType={onEditIssueType}
       />
     )
@@ -65,7 +65,7 @@ export default function ProjectCell({
         row={row}
         editable={editableValue && row.itemType !== 'DRAFT_ISSUE'}
         sourceHost={sourceHost}
-        sourceSettings={sourceSettings}
+        sourceTarget={sourceTarget}
         onEditAssignees={onEditAssignees}
       />
     )
@@ -76,7 +76,7 @@ export default function ProjectCell({
         row={row}
         editable={editableValue && row.itemType !== 'DRAFT_ISSUE'}
         sourceHost={sourceHost}
-        sourceSettings={sourceSettings}
+        sourceTarget={sourceTarget}
         onEditLabels={onEditLabels}
       />
     )

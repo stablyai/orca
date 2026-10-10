@@ -8,7 +8,7 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { useImmediateMutation, useRepoAssignees } from '@/hooks/useIssueMetadata'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
-import { getGitHubRepoRoutingSettings } from '@/lib/github-source-runtime-context'
+import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
 import {
   parseOwnerRepoFromItemUrl,
   resolvePullRequestRepo,
@@ -44,8 +44,8 @@ export function PRAssigneesPanel({
   }))
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
-  const sourceSettings = useAppStore(
-    useShallow((s) => getGitHubRepoRoutingSettings(s, item.repoId ?? null, sourceContext))
+  const ownerTarget = useAppStore(
+    useShallow((s) => getGitHubRepoRoutingTarget(s, item.repoId ?? null, sourceContext))
   )
   const { isPending, run } = useImmediateMutation()
 
@@ -77,10 +77,10 @@ export function PRAssigneesPanel({
     slugOwner,
     slugRepo,
     assigneeLogins,
-    sourceSettings,
+    ownerTarget,
     projectOrigin?.host ?? assigneeSlug?.host
   )
-  const repoAssigneesByPath = useRepoAssignees(repoPath, item.repoId, sourceSettings)
+  const repoAssigneesByPath = useRepoAssignees(repoPath, item.repoId, { target: ownerTarget })
   const repoAssignees = slugOwner && slugRepo ? repoAssigneesBySlug : repoAssigneesByPath
   const canEditAssignees = Boolean(projectOrigin || repoPath)
   const assigneesByLogin = useMemo(

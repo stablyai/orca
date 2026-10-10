@@ -5,11 +5,11 @@ import type { TaskSourceContext } from '../../../../../shared/task-source-contex
 import React, { useMemo, useState, useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
-import { getGitHubRepoRoutingSettings } from '@/lib/github-source-runtime-context'
+import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
 import { parseGitHubIssueOrPRLink } from '@/lib/github-links'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import { translate } from '@/i18n/i18n'
-import { getActiveRuntimeTarget, callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { githubProjectHost } from '../../../../../shared/github/project-identity'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
@@ -28,8 +28,8 @@ export function GHAssigneesCell({
   sourceContext?: TaskSourceContext | null
   workItemMutation: TaskPageGitHubWorkItemMutationRunner
 }): React.JSX.Element {
-  const sourceSettings = useAppStore(
-    useShallow((s) => getGitHubRepoRoutingSettings(s, repo?.id ?? null, sourceContext))
+  const ownerTarget = useAppStore(
+    useShallow((s) => getGitHubRepoRoutingTarget(s, repo?.id ?? null, sourceContext))
   )
   const [open, setOpen] = useState(false)
   const [pendingLogin, setPendingLogin] = useState<string | null>(null)
@@ -49,7 +49,7 @@ export function GHAssigneesCell({
     open ? owner : null,
     open ? repoName : null,
     seedLogins,
-    sourceSettings,
+    ownerTarget,
     parsed?.slug.host
   )
   const toggleAssignee = useCallback(
@@ -92,7 +92,7 @@ export function GHAssigneesCell({
               : {
                   addAssignees: [user.login]
                 }
-            const target = getActiveRuntimeTarget(sourceSettings)
+            const target = ownerTarget
             if (owner && repoName) {
               const args = {
                 owner,
@@ -161,7 +161,7 @@ export function GHAssigneesCell({
       repo,
       repoName,
       sourceContext,
-      sourceSettings,
+      ownerTarget,
       workItemMutation
     ]
   )

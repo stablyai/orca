@@ -6,7 +6,7 @@ import { useAppStore } from '@/store'
 import { useRepoAssignees } from '@/hooks/useIssueMetadata'
 import {
   canUseGitHubRepoContext,
-  getGitHubRepoRoutingSettings
+  getGitHubRepoRoutingTarget
 } from '@/lib/github-source-runtime-context'
 import { usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
 import {
@@ -103,10 +103,10 @@ export function ConversationTab({
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null)
   const bodyTextareaFocusFrameRef = useRef<number | null>(null)
   const canUseRepoMutationContext = canUseGitHubRepoContext(repoPath, sourceContext)
-  const sourceSettings = useAppStore(
-    useShallow((s) => getGitHubRepoRoutingSettings(s, item.repoId ?? repoId ?? null, sourceContext))
+  const ownerTarget = useAppStore(
+    useShallow((s) => getGitHubRepoRoutingTarget(s, item.repoId ?? repoId ?? null, sourceContext))
   )
-  const repoAssignees = useRepoAssignees(repoPath, item.repoId, sourceSettings)
+  const repoAssignees = useRepoAssignees(repoPath, item.repoId, { target: ownerTarget })
   const botAuthorOverrides = usePRBotAuthorOverrides()
   const commentCounts = useMemo(
     () => getPRCommentAudienceCounts(comments, botAuthorOverrides),

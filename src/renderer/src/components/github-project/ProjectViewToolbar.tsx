@@ -20,7 +20,7 @@ export function ProjectViewToolbar({ tableState }: { tableState: ProjectViewTabl
     viewId,
     doFetch,
     setAppliedQueryByView,
-    sourceSettings
+    sourceTarget
   } = tableState
   const selectedViewUrl = table
     ? `${table.project.url}/views/${table.selectedView.number ?? ''}`
@@ -59,7 +59,7 @@ export function ProjectViewToolbar({ tableState }: { tableState: ProjectViewTabl
             : null
         }
         onSelect={(selection) => void doFetch(selection, true)}
-        sourceSettings={sourceSettings}
+        sourceTarget={sourceTarget}
       />
       {currentProjectViewKey ? (
         <ProjectSearchInput

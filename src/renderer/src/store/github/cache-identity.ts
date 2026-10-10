@@ -12,7 +12,7 @@ import {
 } from '../../../../shared/execution-host'
 import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from '../slices/github-cache-key'
 import type { AppState } from '../types'
-import { getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../runtime/runtime-client-target'
 import type { CacheEntry } from './cache-model'
 
 function queryOverrideKeyPart(queryOverride: string | undefined): string {
@@ -49,21 +49,14 @@ export function projectViewRequestKey(args: GetProjectViewTableArgs, sourceScope
   return `${sourceScope}:${projectKey}:${selector}${queryOverrideKeyPart(args.queryOverride)}`
 }
 
-export function projectViewSourceScope(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
-): string {
-  const target = getActiveRuntimeTarget(settings)
+export function projectViewSourceScope(target: RuntimeClientTarget): string {
   return target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
 }
 
-export function settingsForProjectViewCacheKey(
-  settings: AppState['settings'],
-  cacheKey: string
-): Pick<NonNullable<AppState['settings']>, 'activeRuntimeEnvironmentId'> {
+/** The host a board row was loaded from, read back from the scope written into its cache key. */
+export function projectViewCacheKeyTarget(cacheKey: string): RuntimeClientTarget {
   const runtimeMatch = /^github-project:runtime:([^:]+):/.exec(cacheKey)
-  return runtimeMatch
-    ? { ...settings, activeRuntimeEnvironmentId: runtimeMatch[1] }
-    : { ...settings, activeRuntimeEnvironmentId: null }
+  return runtimeMatch ? { kind: 'environment', environmentId: runtimeMatch[1] } : { kind: 'local' }
 }
 
 export function workItemsCacheKey(

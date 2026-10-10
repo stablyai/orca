@@ -222,7 +222,7 @@ export function createObserveTerminalGitHubPullRequestLink(
         }
       }
       // Older hosts may omit exact head evidence; retain their branch-confirmation path.
-      const pr = await readHostedReviewForRepo(repo, get().settings, {
+      const pr = await readHostedReviewForRepo(repo, {
         branch,
         force: true,
         active: true,

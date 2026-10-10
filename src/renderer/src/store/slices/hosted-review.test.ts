@@ -53,6 +53,12 @@ function makeStore(settings: AppState['settings'] = null) {
   }))
 }
 
+function stampRepoOwner(store: ReturnType<typeof makeStore>, executionHostId: `runtime:${string}`) {
+  store.setState((state) => ({
+    repos: state.repos.map((repo) => ({ ...repo, executionHostId }))
+  }))
+}
+
 const review: HostedReviewInfo = {
   provider: 'gitlab',
   number: 5,
@@ -496,6 +502,7 @@ describe('hosted review slice', () => {
     const store = makeStore({
       activeRuntimeEnvironmentId: 'env-win'
     } as AppState['settings'])
+    stampRepoOwner(store, 'runtime:env-win')
 
     await store.getState().createHostedReview('/repo', {
       provider: 'github',
@@ -531,6 +538,7 @@ describe('hosted review slice', () => {
     const store = makeStore({
       activeRuntimeEnvironmentId: 'env-win'
     } as AppState['settings'])
+    stampRepoOwner(store, 'runtime:env-win')
 
     await store.getState().createStackedHostedReview('/repo', {
       provider: 'github',
@@ -553,6 +561,25 @@ describe('hosted review slice', () => {
     )
   })
 
+  it('creates a review for an unstamped local repo on this computer, not the focused server', async () => {
+    mockApi.hostedReview.create.mockResolvedValueOnce({ ok: true, number: 1, url: 'u' })
+    const focused = { activeRuntimeEnvironmentId: 'env-win' }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the slice reads only the focus field of settings.
+    const store = makeStore(focused as AppState['settings'])
+
+    await store.getState().createHostedReview('/repo', {
+      provider: 'github',
+      base: 'main',
+      head: 'feature/create-pr',
+      title: 'Create PR'
+    })
+
+    expect(runtimeRpc.callRuntimeRpc).not.toHaveBeenCalled()
+    expect(mockApi.hostedReview.create).toHaveBeenCalledWith(
+      expect.objectContaining({ repoPath: '/repo', repoId: 'repo-1' })
+    )
+  })
+
   it('uses the selected worktree selector for runtime pull request creation eligibility', async () => {
     runtimeRpc.callRuntimeRpc.mockResolvedValueOnce({
       provider: 'github',
@@ -564,6 +591,7 @@ describe('hosted review slice', () => {
     const store = makeStore({
       activeRuntimeEnvironmentId: 'env-win'
     } as AppState['settings'])
+    stampRepoOwner(store, 'runtime:env-win')
 
     await store.getState().getHostedReviewCreationEligibility({
       repoPath: '/repo',

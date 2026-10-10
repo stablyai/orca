@@ -61,7 +61,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     })
 
     const result = await store.getState().fetchProjectViewTable(
-      { activeRuntimeEnvironmentId: 'env-board' },
+      { kind: 'environment', environmentId: 'env-board' },
       {
         owner: 'acme',
         ownerType: 'organization',
@@ -123,7 +123,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     })
 
     await store.getState().fetchProjectViewTable(
-      { activeRuntimeEnvironmentId: 'env-1' },
+      { kind: 'environment', environmentId: 'env-1' },
       {
         owner: 'acme',
         ownerType: 'organization',
@@ -159,12 +159,15 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       }
     })
 
-    const localResult = await store.getState().fetchProjectViewTable(null, {
-      owner: 'acme',
-      ownerType: 'organization',
-      projectNumber: 1,
-      viewId: 'view-1'
-    })
+    const localResult = await store.getState().fetchProjectViewTable(
+      { kind: 'local' },
+      {
+        owner: 'acme',
+        ownerType: 'organization',
+        projectNumber: 1,
+        viewId: 'view-1'
+      }
+    )
 
     expect(localResult.ok).toBe(true)
     expect(mockApi.gh.getProjectViewTable).toHaveBeenCalledTimes(1)
@@ -210,13 +213,16 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       .mockResolvedValueOnce({ ok: true, data: makeTable('ghe.example', 'enterprise-project') })
 
     for (const host of ['github.com', 'ghe.example']) {
-      await store.getState().fetchProjectViewTable(null, {
-        owner: 'acme',
-        ownerType: 'organization',
-        projectNumber: 1,
-        viewId: 'view-1',
-        host
-      })
+      await store.getState().fetchProjectViewTable(
+        { kind: 'local' },
+        {
+          owner: 'acme',
+          ownerType: 'organization',
+          projectNumber: 1,
+          viewId: 'view-1',
+          host
+        }
+      )
     }
 
     expect(mockApi.gh.getProjectViewTable).toHaveBeenNthCalledWith(
@@ -517,7 +523,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       for (let i = 0; i <= 500; i++) {
         vi.setSystemTime(1_000 + i)
         await store.getState().fetchProjectViewTable(
-          null,
+          { kind: 'local' },
           {
             owner: 'acme',
             ownerType: 'organization',

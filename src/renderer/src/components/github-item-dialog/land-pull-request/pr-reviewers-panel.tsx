@@ -4,7 +4,6 @@ import { LoaderCircle, Pencil } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useAppStore } from '@/store'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useRepoAssignees } from '@/hooks/useIssueMetadata'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import { getGitHubPRReviewerRows } from '@/components/github-pr-reviewer-display'
@@ -16,7 +15,7 @@ import type { GitHubAssignableUser } from '../../../../../shared/github/pull-req
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
-import { getGitHubRepoRoutingSettings } from '@/lib/github-source-runtime-context'
+import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
 import { mergeReviewerSuggestions } from '@/components/github/work-item-state-presentation'
 import type { GitHubItemDialogProjectOrigin } from '../load-item-details/github-item-dialog-types'
@@ -55,8 +54,8 @@ export function PRReviewersPanel({
     reviewRequests: item.reviewRequests
   }))
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
-  const sourceSettings = useAppStore(
-    useShallow((s) => getGitHubRepoRoutingSettings(s, item.repoId ?? null, sourceContext))
+  const ownerTarget = useAppStore(
+    useShallow((s) => getGitHubRepoRoutingTarget(s, item.repoId ?? null, sourceContext))
   )
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
   const reviewerInputFocusFrameRef = useRef<number | null>(null)
@@ -134,13 +133,13 @@ export function PRReviewersPanel({
     open && reviewRepo ? reviewRepo.owner : null,
     open && reviewRepo ? reviewRepo.repo : null,
     reviewerSeedUsers.map((user) => user.login),
-    sourceSettings,
+    ownerTarget,
     reviewRepo?.host
   )
   const reviewerMetadataByPath = useRepoAssignees(
     open && !reviewRepo ? repoPath : null,
     open && !reviewRepo ? item.repoId : null,
-    sourceSettings
+    { target: ownerTarget }
   )
   const reviewerMetadata = reviewRepo ? reviewerMetadataBySlug : reviewerMetadataByPath
   const displayItem = { ...item, reviewRequests: localReviewRequests }
@@ -230,14 +229,13 @@ export function PRReviewersPanel({
     localReviewRequests.length > 0 ||
     item.reviewRequests !== undefined ||
     item.latestReviews !== undefined
-  const canRequestReview =
-    !!repoPath || getActiveRuntimeTarget(sourceSettings).kind === 'environment'
+  const canRequestReview = !!repoPath || ownerTarget.kind === 'environment'
 
   const actionArgs = {
     submitting,
     selectedReviewerLogins,
     localReviewRequests,
-    sourceSettings,
+    ownerTarget,
     repoPath,
     sourceContext,
     item,

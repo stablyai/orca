@@ -204,8 +204,7 @@ export function useComposerSourceState(
     setLinkedWorkItem: target.sourceContextState.setLinkedWorkItem,
     setName: target.sourceContextState.setName,
     setPushTarget: target.workspaceIdentityState.setPushTarget,
-    setStartFromResetHint: target.workspaceIdentityState.setStartFromResetHint,
-    settings: target.composerTargetStore.settings
+    setStartFromResetHint: target.workspaceIdentityState.setStartFromResetHint
   })
   const workItemSourceActions = useWorkItemSourceActions({
     branchAutoNameRef: target.asyncComposerState.branchAutoNameRef,

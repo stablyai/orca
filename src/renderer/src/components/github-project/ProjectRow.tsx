@@ -1,3 +1,4 @@
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import React from 'react'
 import { ExternalLink, Play } from 'lucide-react'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
@@ -12,7 +13,6 @@ import type {
   GitHubProjectFieldMutationValue,
   GitHubProjectRow as GitHubProjectRowType
 } from '../../../../shared/github/project-types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 
 const PROJECT_FROZEN_COLUMN_SURFACE_CLASS =
@@ -35,7 +35,7 @@ type Props = {
   onStartWork?: () => void
   onOpenInBrowser?: () => void
   sourceHost?: string
-  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  sourceTarget: RuntimeClientTarget
 }
 
 export default function ProjectRow({
@@ -53,7 +53,7 @@ export default function ProjectRow({
   onStartWork,
   onOpenInBrowser,
   sourceHost,
-  sourceSettings
+  sourceTarget
 }: Props): React.JSX.Element {
   const disabled = row.itemType === 'REDACTED'
   // Why: design doc §Row actions — draft-issue rows have no URL or number, so
@@ -103,7 +103,7 @@ export default function ProjectRow({
                 onEditIssueType={onEditIssueType}
                 onOpenDialog={f.dataType === 'TITLE' ? onOpenDialog : undefined}
                 sourceHost={sourceHost}
-                sourceSettings={sourceSettings}
+                sourceTarget={sourceTarget}
               />
             </div>
             {next ? (

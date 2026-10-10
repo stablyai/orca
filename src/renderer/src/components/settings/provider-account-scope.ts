@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 
 export type ProviderAccountScope = {
   label: string
@@ -63,11 +64,11 @@ export function getProviderAccountScope(
 }
 
 export function getProviderRateLimitScope(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+  target: RuntimeClientTarget,
   providerLabel: string
 ): ProviderRateLimitScope {
-  const runtimeId = settings?.activeRuntimeEnvironmentId?.trim()
-  if (runtimeId) {
+  if (target.kind === 'environment') {
+    const runtimeId = target.environmentId
     return {
       label: translate(
         'auto.components.settings.providerAccountScope.remoteServer',

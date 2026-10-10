@@ -9,7 +9,7 @@ import { useImmediateMutation, useRepoAssignees, useRepoLabels } from '@/hooks/u
 import { useRepoAssigneesBySlug, useRepoLabelsBySlug } from '@/hooks/useGitHubSlugMetadata'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import { getGitHubRepoRoutingSettings } from '@/lib/github-source-runtime-context'
+import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
 import { getStateLabel } from '@/components/github/work-item-state-presentation'
 import { translate } from '@/i18n/i18n'
 import type { PullRequestPageProjectOrigin } from '../page-types'
@@ -51,8 +51,8 @@ export function GHEditSection({
   const assigneesItemKey = `${item.repoId}\0${item.id}`
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
-  const sourceSettings = useAppStore(
-    useShallow((s) => getGitHubRepoRoutingSettings(s, item.repoId ?? repoId ?? null, sourceContext))
+  const ownerTarget = useAppStore(
+    useShallow((s) => getGitHubRepoRoutingTarget(s, item.repoId ?? repoId ?? null, sourceContext))
   )
   const { isPending, run } = useImmediateMutation()
   // Why: patchWorkItem only updates workItemsCache; Project-view rows also need projectViewCache patched or the table stays stale. See docs/design/github-project-view-tasks.md.
@@ -72,25 +72,25 @@ export function GHEditSection({
   const repoLabelsByPath = useRepoLabels(
     projectOrigin ? null : repoPath,
     projectOrigin ? null : repoId,
-    sourceSettings
+    { target: ownerTarget }
   )
   const repoLabelsBySlug = useRepoLabelsBySlug(
     slugOwner,
     slugRepo,
-    sourceSettings,
+    ownerTarget,
     projectOrigin?.host
   )
   const repoLabels = projectOrigin ? repoLabelsBySlug : repoLabelsByPath
   const repoAssigneesByPath = useRepoAssignees(
     projectOrigin ? null : repoPath,
     projectOrigin ? null : repoId,
-    sourceSettings
+    { target: ownerTarget }
   )
   const repoAssigneesBySlug = useRepoAssigneesBySlug(
     slugOwner,
     slugRepo,
     assignees,
-    sourceSettings,
+    ownerTarget,
     projectOrigin?.host
   )
   const repoAssignees = projectOrigin ? repoAssigneesBySlug : repoAssigneesByPath

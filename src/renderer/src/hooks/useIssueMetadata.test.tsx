@@ -174,8 +174,7 @@ describe('useIssueMetadata hooks', () => {
 
     function LabelsProbe(): null {
       labels = useRepoLabels('/local/repo', 'remote-repo-id', {
-        runtimeEnvironmentId: ' env-explicit ',
-        activeRuntimeEnvironmentId: 'env-active'
+        target: { kind: 'environment', environmentId: 'env-explicit' }
       }).data
       return null
     }

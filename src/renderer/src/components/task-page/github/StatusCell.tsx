@@ -10,7 +10,7 @@ import {
 } from '@/components/task-page-github-status-state'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
-import { getGitHubRepoRoutingSettings } from '@/lib/github-source-runtime-context'
+import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
 import { parseGitHubIssueOrPRLink } from '@/lib/github-links'
 import {
   getTaskPageGitHubDuplicateCandidates,
@@ -20,7 +20,7 @@ import {
   getTaskPageGitHubDuplicateTargetErrorMessage
 } from '@/components/task-page-github-status-actions'
 import { translate } from '@/i18n/i18n'
-import { getActiveRuntimeTarget, callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { githubProjectHost } from '../../../../../shared/github/project-identity'
 import { TaskPageGitHubWorkItemStateBadge } from '@/components/task-page-github-work-item-status-badge'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
@@ -50,8 +50,8 @@ export function GHStatusCell({
   const [duplicateSearch, setDuplicateSearch] = useState('')
   const [duplicateError, setDuplicateError] = useState<string | null>(null)
   const duplicateIssueCandidates = useGitHubDuplicateIssueCandidates(item, duplicatePickerOpen)
-  const sourceSettings = useAppStore(
-    useShallow((s) => getGitHubRepoRoutingSettings(s, repo?.id ?? null, sourceContext))
+  const ownerTarget = useAppStore(
+    useShallow((s) => getGitHubRepoRoutingTarget(s, repo?.id ?? null, sourceContext))
   )
   const parsedIssueLink = useMemo(() => parseGitHubIssueOrPRLink(item.url), [item.url])
   const filteredDuplicateCandidates = useMemo(
@@ -132,7 +132,7 @@ export function GHStatusCell({
           sourceContext,
           errorToast: translate('auto.components.TaskPage.1c893195ac', 'Failed to update state'),
           mutate: async () => {
-            const target = getActiveRuntimeTarget(sourceSettings)
+            const target = ownerTarget
             // Why: issue rows can be sourced by owner/repo URL instead of the local
             // repo context; slug-aware writes preserve close reasons and duplicates.
             if (parsedOwnerRepo) {
@@ -208,7 +208,7 @@ export function GHStatusCell({
       parsedIssueLink,
       repo,
       sourceContext,
-      sourceSettings,
+      ownerTarget,
       stateMutationPending,
       statusUpdating,
       updateLocalState,

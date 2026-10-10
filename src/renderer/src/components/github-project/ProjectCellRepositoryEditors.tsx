@@ -1,24 +1,24 @@
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import React, { useMemo, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useRepoAssigneesBySlug, useRepoLabelsBySlug } from '@/hooks/useGitHubSlugMetadata'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { GitHubProjectRow } from '../../../../shared/github/project-types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { EmptyProjectCell, ProjectLabelChip, ProjectUserChip } from './ProjectCellValueEditors'
 
 type RepositoryEditorProps = {
   row: GitHubProjectRow
   editable: boolean
   sourceHost?: string
-  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  sourceTarget: RuntimeClientTarget
 }
 
 export function ProjectAssigneesCell({
   row,
   editable,
   sourceHost,
-  sourceSettings,
+  sourceTarget,
   onEditAssignees
 }: RepositoryEditorProps & {
   onEditAssignees?: (add: string[], remove: string[]) => void
@@ -38,7 +38,7 @@ export function ProjectAssigneesCell({
     open ? owner : null,
     open ? repo : null,
     seedKey ? seedKey.split(',') : [],
-    sourceSettings,
+    sourceTarget,
     sourceHost
   )
   const content =
@@ -104,7 +104,7 @@ export function ProjectLabelsCell({
   row,
   editable,
   sourceHost,
-  sourceSettings,
+  sourceTarget,
   onEditLabels
 }: RepositoryEditorProps & {
   onEditLabels?: (add: string[], remove: string[]) => void
@@ -115,7 +115,7 @@ export function ProjectLabelsCell({
   const metadata = useRepoLabelsBySlug(
     open ? owner : null,
     open ? repo : null,
-    sourceSettings,
+    sourceTarget,
     sourceHost
   )
   const content =

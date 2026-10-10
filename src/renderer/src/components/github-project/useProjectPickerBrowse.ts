@@ -1,3 +1,4 @@
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { GitHubProjectSummary } from '../../../../shared/github/project-types'
@@ -9,12 +10,11 @@ import {
 } from './project-picker-browse-cache'
 import {
   getProjectPickerRuntimeScope,
-  listAccessibleProjectsForRuntime,
-  type ProjectSourceSettings
+  listAccessibleProjectsForRuntime
 } from './project-picker-runtime'
 
 export function useProjectPickerBrowse(
-  settings: ProjectSourceSettings,
+  settings: RuntimeClientTarget,
   browseHost: string
 ): {
   browseProjects: GitHubProjectSummary[]

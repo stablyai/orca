@@ -6,6 +6,7 @@ import {
   getRepoOwnerRoutedSettings,
   getRuntimeEnvironmentIdForRepo,
   getSettingsForRepoRuntimeOwner,
+  runtimeTargetForRepoOwner,
   releaseRepoRuntimeOwnerSettingsCache
 } from './repo-runtime-owner'
 
@@ -327,5 +328,41 @@ describe('getSettingsForRepoRuntimeOwner identity', () => {
       getSettingsForRepoRuntimeOwner(state, `repo-filler-${index}`)
     }
     expect(getSettingsForRepoRuntimeOwner(state, 'repo-evictable')).not.toBe(first)
+  })
+})
+
+describe('runtimeTargetForRepoOwner', () => {
+  const focused = { activeRuntimeEnvironmentId: 'focused-runtime' }
+
+  it('routes by the row, never by the focused server', () => {
+    expect(
+      runtimeTargetForRepoOwner(
+        {
+          settings: focused,
+          repos: [{ id: 'r', connectionId: null, executionHostId: 'runtime:owner' }]
+        },
+        'r'
+      )
+    ).toEqual({ kind: 'environment', environmentId: 'owner' })
+    expect(
+      runtimeTargetForRepoOwner(
+        { settings: focused, repos: [{ id: 'r', connectionId: 'box', executionHostId: null }] },
+        'r'
+      )
+    ).toEqual({ kind: 'local' })
+  })
+
+  it('treats a row with no owner stamp as local instead of the focused server (#6957)', () => {
+    expect(
+      runtimeTargetForRepoOwner(
+        { settings: focused, repos: [{ id: 'r', connectionId: null, executionHostId: null }] },
+        'r'
+      )
+    ).toEqual({ kind: 'local' })
+  })
+
+  it('has no transport for an unknown repo', () => {
+    expect(runtimeTargetForRepoOwner({ settings: focused, repos: [] }, 'r')).toBeNull()
+    expect(runtimeTargetForRepoOwner({ settings: focused, repos: [] }, null)).toBeNull()
   })
 })

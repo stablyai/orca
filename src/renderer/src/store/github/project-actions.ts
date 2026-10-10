@@ -2,7 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import type { GetProjectViewTableResult } from '../../../../shared/github/project-result-types'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import {
   projectViewCacheKey,
   projectViewRequestKey,
@@ -25,9 +25,8 @@ export const createProjectActions = (
   GitHubSlice,
   'fetchProjectViewTable' | 'updateProjectFieldValue' | 'clearProjectFieldValue'
 > => ({
-  fetchProjectViewTable: async (sourceSettings, args, options) => {
-    const target = getActiveRuntimeTarget(sourceSettings)
-    const sourceScope = projectViewSourceScope(sourceSettings)
+  fetchProjectViewTable: async (target, args, options) => {
+    const sourceScope = projectViewSourceScope(target)
     const requestKey = projectViewRequestKey(args, sourceScope)
 
     // Fast path: a caller-supplied `viewId` gives the resolved cache key up front, so serve a fresh entry directly.

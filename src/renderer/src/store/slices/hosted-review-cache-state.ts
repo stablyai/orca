@@ -8,6 +8,10 @@ import type {
 import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import type { AppState } from '../types'
+import {
+  runtimeTargetForOwnerHostId,
+  type RuntimeClientTarget
+} from '@/runtime/runtime-client-target'
 
 export type HostedReviewCacheEntry<T> = {
   data: T | null
@@ -229,14 +233,16 @@ export function settingsForHostedReviewRepoOwner(
     : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
 }
 
-export function settingsForHostedReviewActionOwner(
-  settings: AppState['settings'],
+/**
+ * Transport for a review on a known repo: a server's repo goes to that server; local and SSH repos
+ * run on this app's IPC. An unknown repo also stays on this app; focus never names an owner.
+ */
+export function hostedReviewRepoOwnerTarget(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined
-): AppState['settings'] {
-  if (!repo?.executionHostId && !repo?.connectionId) {
-    return settings
-  }
-  return settingsForHostedReviewRepoOwner(settings, repo)
+): RuntimeClientTarget {
+  return (
+    (repo ? runtimeTargetForOwnerHostId(getRepoExecutionHostId(repo)) : null) ?? { kind: 'local' }
+  )
 }
 
 export function hostedReviewBranchLookupArgs(

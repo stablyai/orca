@@ -2,10 +2,10 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
-import { getActiveRuntimeTarget } from '../runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../runtime/runtime-client-target'
 import {
   canUseGitHubRepoContext,
-  getGitHubRepoRoutingSettings,
+  getGitHubRepoRoutingTarget,
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost,
   getGitHubSourceRuntimeTarget
@@ -58,7 +58,7 @@ describe('GitHub source runtime context', () => {
   })
 })
 
-describe('getGitHubRepoRoutingSettings', () => {
+describe('getGitHubRepoRoutingTarget', () => {
   const runtimeOwnedRepo: RepoRuntimeOwnerState = {
     settings: { activeRuntimeEnvironmentId: null },
     repos: [{ id: 'repo-1', connectionId: null, executionHostId: 'runtime:owner-runtime' }]
@@ -68,8 +68,8 @@ describe('getGitHubRepoRoutingSettings', () => {
     state: RepoRuntimeOwnerState,
     repoId: string | null,
     sourceContext: TaskSourceContext | null
-  ): ReturnType<typeof getActiveRuntimeTarget> {
-    return getActiveRuntimeTarget(getGitHubRepoRoutingSettings(state, repoId, sourceContext))
+  ): RuntimeClientTarget {
+    return getGitHubRepoRoutingTarget(state, repoId, sourceContext)
   }
 
   it('routes a runtime-owned repo to its owner runtime when the source view is local (#6957)', () => {

@@ -1,3 +1,4 @@
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -18,7 +19,7 @@ import {
   githubProjectIdentityKey
 } from '../../../../shared/github/project-identity'
 import type { ResolvedProjectSelection } from './project-picker-selection'
-import { listProjectViewsForRuntime, type ProjectSourceSettings } from './project-picker-runtime'
+import { listProjectViewsForRuntime } from './project-picker-runtime'
 import { filterProjectTableRowsBySelectedRepos } from './project-row-filtering'
 import {
   getNextVisibleProjectTableCache,
@@ -30,7 +31,7 @@ import { useRepoSlugIndex } from '@/lib/repo-slug-index'
 
 export function useProjectViewTable(
   selectedRepoIds: ReadonlySet<string>,
-  sourceSettings: ProjectSourceSettings
+  sourceTarget: RuntimeClientTarget
 ) {
   const settings = useAppStore((state) => state.settings)
   const projectViewCache = useAppStore((state) => state.projectViewCache)
@@ -39,7 +40,7 @@ export function useProjectViewTable(
   const lastViewByProject = settings?.githubProjects?.lastViewByProject ?? {}
   const { lookupSlugMatches, ready: slugIndexReady } = useRepoSlugIndex()
   const mountedRef = useMountedRef()
-  const sourceScope = projectViewSourceScope(sourceSettings)
+  const sourceScope = projectViewSourceScope(sourceTarget)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<{ error: GitHubProjectViewError; totalCount?: number } | null>(
     null
@@ -58,7 +59,7 @@ export function useProjectViewTable(
       setError(null)
       try {
         const result: GetProjectViewTableResult = await fetchProjectViewTable(
-          sourceSettings,
+          sourceTarget,
           {
             owner: selection.owner,
             ownerType: selection.ownerType,
@@ -81,7 +82,7 @@ export function useProjectViewTable(
         }
       }
     },
-    [fetchProjectViewTable, mountedRef, sourceSettings]
+    [fetchProjectViewTable, mountedRef, sourceTarget]
   )
 
   const projectIdentity = activeProject ? githubProjectIdentityKey(activeProject) : null
@@ -131,7 +132,7 @@ export function useProjectViewTable(
       return
     }
     let cancelled = false
-    void listProjectViewsForRuntime(sourceSettings, {
+    void listProjectViewsForRuntime(sourceTarget, {
       owner: activeProject.owner,
       ownerType: activeProject.ownerType,
       projectNumber: activeProject.number,
@@ -152,7 +153,7 @@ export function useProjectViewTable(
     return () => {
       cancelled = true
     }
-  }, [activeProject, sourceSettings, sourceScope, viewListByProject])
+  }, [activeProject, sourceTarget, sourceScope, viewListByProject])
 
   const selectedRepoFingerprint = useMemo(
     () => getSelectedRepoFingerprint(selectedRepoIds),
@@ -235,7 +236,7 @@ export function useProjectViewTable(
   )
 
   return {
-    sourceSettings,
+    sourceTarget,
     activeProject,
     sourceScope,
     viewId,

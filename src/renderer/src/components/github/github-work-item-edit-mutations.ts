@@ -1,27 +1,35 @@
 import { useAppStore } from '@/store'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import {
-  getGitHubRepoRoutingSettings,
+  getGitHubRepoRoutingTarget,
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost
 } from '@/lib/github-source-runtime-context'
-import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
+import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
+import { projectViewCacheKeyTarget } from '@/store/github/cache-identity'
 import type { GitHubWorkItemProjectOrigin } from '@/components/github/github-work-item-identity'
 import { notifyWorkItemDetailsMutation } from '@/components/github/github-work-item-comment-mutations'
 import { githubProjectHost } from '../../../../shared/github/project-identity'
-import {
-  getTaskSourceRuntimeSettings,
-  type TaskSourceContext
-} from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 
 // Why: for a Project row whose repo differs from the active workspace, mutations must target the row's actual repo via slug-addressed IPCs, else edits silently apply to the workspace's repo.
 // Why: these edit IPCs return `{ ok, error }`; callers throw on `!ok` so useImmediateMutation (which expects throws on failure) works unchanged.
-export function getGitHubMutationSettings(repoId: string | null | undefined) {
-  const state = useAppStore.getState()
+export function getGitHubMutationTarget(
+  repoId: string | null | undefined,
+  projectOrigin: GitHubWorkItemProjectOrigin | undefined
+): RuntimeClientTarget {
   // Why: even slug-addressed project-origin mutations must run on the backing repo's owner host when its id is known.
-  return getSettingsForRepoRuntimeOwner(state, repoId ?? null)
+  const owner = runtimeTargetForRepoOwner(useAppStore.getState(), repoId)
+  if (owner) {
+    return owner
+  }
+  // Why: an untracked repo's Project row goes to the host that loaded the row; any other
+  // slug-addressed edit uses this computer's credentials, never the focused server.
+  return projectOrigin ? projectViewCacheKeyTarget(projectOrigin.cacheKey) : { kind: 'local' }
 }
 
 export async function runIssueUpdate(args: {
@@ -35,11 +43,10 @@ export async function runIssueUpdate(args: {
 }): Promise<void> {
   const issueRepo = args.projectOrigin
   if (issueRepo) {
-    const targetSettings =
+    const target =
       args.sourceContext?.provider === 'github'
-        ? getTaskSourceRuntimeSettings(args.sourceContext)
-        : getGitHubMutationSettings(args.repoId)
-    const target = getActiveRuntimeTarget(targetSettings)
+        ? taskSourceRuntimeTarget(args.sourceContext)
+        : getGitHubMutationTarget(args.repoId, args.projectOrigin)
     const updateArgs = {
       owner: issueRepo.owner,
       repo: issueRepo.repo,
@@ -132,11 +139,10 @@ export async function runWorkItemBodyUpdate(args: {
     if (!targetSlug) {
       throw new Error('No GitHub repository context available for this pull request.')
     }
-    const targetSettings =
+    const target =
       args.sourceContext?.provider === 'github'
-        ? getTaskSourceRuntimeSettings(args.sourceContext)
-        : getGitHubMutationSettings(args.item.repoId)
-    const target = getActiveRuntimeTarget(targetSettings)
+        ? taskSourceRuntimeTarget(args.sourceContext)
+        : getGitHubMutationTarget(args.item.repoId, args.projectOrigin)
     const updateArgs = {
       owner: targetSlug.owner,
       repo: targetSlug.repo,
@@ -194,11 +200,10 @@ export async function runPullRequestStateUpdate(args: {
   updates: { state: 'open' | 'closed' }
 }): Promise<void> {
   if (args.projectOrigin) {
-    const targetSettings =
+    const target =
       args.sourceContext?.provider === 'github'
-        ? getTaskSourceRuntimeSettings(args.sourceContext)
-        : getGitHubMutationSettings(args.repoId)
-    const target = getActiveRuntimeTarget(targetSettings)
+        ? taskSourceRuntimeTarget(args.sourceContext)
+        : getGitHubMutationTarget(args.repoId, args.projectOrigin)
     const updateArgs = {
       owner: args.projectOrigin.owner,
       repo: args.projectOrigin.repo,
@@ -235,9 +240,7 @@ export async function runPullRequestStateUpdate(args: {
     return
   }
   // Why: close/reopen must route by the repo owner host like merge (#6957).
-  const target = getActiveRuntimeTarget(
-    getGitHubRepoRoutingSettings(useAppStore.getState(), args.repoId, args.sourceContext)
-  )
+  const target = getGitHubRepoRoutingTarget(useAppStore.getState(), args.repoId, args.sourceContext)
   if (!args.repoPath && target.kind !== 'environment') {
     throw new Error('No repo context available for this pull request.')
   }

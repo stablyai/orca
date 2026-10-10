@@ -19,7 +19,7 @@ import type {
   GitHubAssignableUser,
   GitHubOwnerRepo
 } from '../../../../shared/github/pull-request-types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import type { ParsedTaskQuery } from '../../../../shared/task-query'
 import { translate } from '@/i18n/i18n'
 
@@ -31,7 +31,8 @@ type Props = {
   // Cross-repo filters can't enumerate every repo's labels in one popover —
   // GitHub's own PR list scopes the dropdown to a single repo too.
   primarySlug: GitHubOwnerRepo | null
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  /** Host that owns the repo the primary slug came from. */
+  ownerTarget?: RuntimeClientTarget | null
   onChange: (change: PRFilterChange) => void
 }
 
@@ -75,7 +76,7 @@ export default function PRFilterDropdowns({
   kind,
   authorLogins,
   primarySlug,
-  settings,
+  ownerTarget,
   onChange
 }: Props): React.JSX.Element {
   const [openSection, setOpenSection] = useState<SectionKey | null>(null)
@@ -86,14 +87,14 @@ export default function PRFilterDropdowns({
   const labelsState = useRepoLabelsBySlug(
     popoverOpen ? owner : null,
     popoverOpen ? repo : null,
-    settings,
+    ownerTarget,
     primarySlug?.host
   )
   const assigneesState = useRepoAssigneesBySlug(
     popoverOpen ? owner : null,
     popoverOpen ? repo : null,
     undefined,
-    settings,
+    ownerTarget,
     primarySlug?.host
   )
 

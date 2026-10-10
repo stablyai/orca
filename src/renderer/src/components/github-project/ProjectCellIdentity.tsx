@@ -1,8 +1,8 @@
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import React from 'react'
 import { FileText, GitPullRequest, Lock } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { GitHubIssueType, GitHubProjectRow } from '../../../../shared/github/project-types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { ProjectIssueTypeCell } from './ProjectCellIssueType'
 
 export function ProjectTitleCell({
@@ -51,13 +51,13 @@ export function ProjectTypeCell({
   row,
   editable,
   sourceHost,
-  sourceSettings,
+  sourceTarget,
   onEditIssueType
 }: {
   row: GitHubProjectRow
   editable: boolean
   sourceHost?: string
-  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  sourceTarget: RuntimeClientTarget
   onEditIssueType?: (issueType: GitHubIssueType | null) => void
 }): React.JSX.Element {
   if (row.itemType === 'ISSUE') {
@@ -66,7 +66,7 @@ export function ProjectTypeCell({
         row={row}
         editable={editable}
         sourceHost={sourceHost}
-        sourceSettings={sourceSettings}
+        sourceTarget={sourceTarget}
         onEditIssueType={onEditIssueType}
       />
     )

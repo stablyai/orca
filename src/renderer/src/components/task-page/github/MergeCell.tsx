@@ -6,14 +6,14 @@ import React, { useState } from 'react'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
-import { getGitHubRepoRoutingSettings } from '@/lib/github-source-runtime-context'
+import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
 import { translate } from '@/i18n/i18n'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import {
   resolveGitHubPRMergeMethods,
   GITHUB_PR_MERGE_METHOD_LABELS
 } from '../../../../../shared/github/pull-request-merge-methods'
-import { getActiveRuntimeTarget, callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -39,8 +39,8 @@ export function PRMergeCell({
 }): React.JSX.Element {
   const [merging, setMerging] = useState(false)
   const confirm = useConfirmationDialog()
-  const sourceSettings = useAppStore(
-    useShallow((s) => getGitHubRepoRoutingSettings(s, repo?.id ?? null, sourceContext))
+  const ownerTarget = useAppStore(
+    useShallow((s) => getGitHubRepoRoutingTarget(s, repo?.id ?? null, sourceContext))
   )
   if (item.type !== 'pr') {
     return (
@@ -104,7 +104,7 @@ export function PRMergeCell({
           'Failed to merge pull request'
         ),
         mutate: async () => {
-          const target = getActiveRuntimeTarget(sourceSettings)
+          const target = ownerTarget
           const runtimeRepoId =
             sourceContext?.provider === 'github' ? (sourceContext.repoId ?? repo.id) : repo.id
           return target.kind === 'environment'
@@ -159,7 +159,7 @@ export function PRMergeCell({
           ? translate('auto.components.TaskPage.a3318684bc', 'Failed to enable auto-merge')
           : translate('auto.components.TaskPage.1a9ea003dc', 'Failed to disable auto-merge'),
         mutate: async () => {
-          const target = getActiveRuntimeTarget(sourceSettings)
+          const target = ownerTarget
           const runtimeRepoId =
             sourceContext?.provider === 'github' ? (sourceContext.repoId ?? repo.id) : repo.id
           return target.kind === 'environment'
