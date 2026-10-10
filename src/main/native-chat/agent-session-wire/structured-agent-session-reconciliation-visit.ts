@@ -25,8 +25,10 @@ export type StructuredAgentSessionRetryContext = StructuredAgentSessionReconcili
   track: <T>(operation: Promise<T>) => Promise<T>
   /** Publishes what is current now and wakes the queued-card drain. */
   publishGenerationEnded: (sessionId: string, options?: { restate?: boolean }) => void
-  /** Startup's store-wide lease reconcile, as background bookkeeping: whether every lease settled,
-   *  or why not. */
+  /** Whether the store-wide step owes anything: a lease unreconciled, or the restart restore's
+   *  latched recovery its own write could not decide. */
+  reconcileOwed: () => boolean
+  /** That step, as background bookkeeping: whether it all settled, or why not. */
   reconcile: () => Promise<'settled' | 'contended' | 'failed'>
   /** The queue's automatic send of the chat's next card, inside the lane the visit holds, and an
    *  episode giving up on it (`StructuredAgentSessionQueuedMessageDrain.sendForRetry`, `.abandon`). */

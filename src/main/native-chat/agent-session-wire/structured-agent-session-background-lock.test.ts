@@ -124,6 +124,25 @@ describe('under another connection’s write lock', () => {
     })
   }, 20_000)
 
+  it('a relaunch under a lock longer than a minute of rounds still settles once it lifts, unasked', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    rig = await createQueuedMessageTestRig({ restartable: true })
+    const current = rig
+    await current.workingSend()
+    await leaveUnfinishedWork(current, { prompt: true })
+    let released: Promise<void> = Promise.resolve()
+
+    await current.crashRestartHostProcess(async () => {
+      released = (await holdWriteLock(current.root, 40_000)).released
+    })
+    await released
+    // Nothing else writes or reads: only the retry's own backoff, at most 2 s, comes back to it.
+    await vi.waitFor(() => expect(turnState(current)).toBe('unverifiable'), { timeout: 3_000 })
+    const page = await current.host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(page.ok && page.page.working).toBe(false)
+    expect(page.ok && page.page.latestTurn?.turn.state).not.toBe('running')
+  }, 60_000)
+
   it('a pending rewind the retry recovers ends its round at once, never holding the lane', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     rig = await createQueuedMessageTestRig({ restartable: true })

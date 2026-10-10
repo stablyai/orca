@@ -38,6 +38,8 @@ export type MobileQueuedMessageCard = {
   command?: true
   /** A command card while the agent works: it offers no send until the agent is idle. */
   waitsForAgent?: true
+  /** No turn runs, by the host's own answer, so there is nothing to steer into. */
+  agentIdle?: true
 }
 
 function queuedMessageBodyText(body: AgentSessionQueuedMessage['body']): string {
@@ -115,6 +117,8 @@ export function mobileQueuedMessageCards(
     pendingPrompt: boolean
     queuePaused?: boolean
     agentWorking?: boolean
+    /** The host said nothing runs; an older host never says, and its cards read as before. */
+    hostIdle?: boolean
     agentName?: string
     statedFailures?: readonly AgentSessionFailureFact[]
   }
@@ -162,6 +166,7 @@ export function mobileQueuedMessageCards(
         (paused && draft.pausedReason === QUEUED_MESSAGE_PAUSED_SEND_FAILED),
       caption,
       attribution: agentMessageAttribution('From', readAgentMessageSource(draft.body.from)),
+      ...(facts.hostIdle ? { agentIdle: true as const } : {}),
       ...(draft.body.command !== undefined
         ? {
             command: true as const,

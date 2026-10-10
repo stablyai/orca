@@ -151,14 +151,15 @@ describe('an episode the retry gives up', () => {
     const attempts = vi
       .spyOn(currentJournal(current), 'appendPlannedLifecycleBatch')
       .mockRejectedValue(locked())
-    for (let round = 0; round < 12; round += 1) {
-      await vi.advanceTimersByTimeAsync(31_000)
+    // Past the episode's budget of rounds failing in a row (`RECONCILIATION_GIVE_UP_MS`).
+    for (let round = 0; round < 100; round += 1) {
+      await vi.advanceTimersByTimeAsync(2_000)
       await settleTurns()
     }
     const given = attempts.mock.calls.length
     await vi.advanceTimersByTimeAsync(120_000)
     await settleTurns()
-    // Ten rounds, then no timer: the set is kept, and nothing retries on its own.
+    // Then no timer: the set is kept, and nothing retries on its own.
     expect(attempts.mock.calls.length).toBe(given)
     expect(retryOwes(current.host.collaboratorsForTests().reconciliation, SESSION)).toBe(true)
     attempts.mockRestore()
@@ -205,8 +206,9 @@ describe('a queued send the retry gives up on', () => {
     const hold = vi.spyOn(JournalQueuedMessages.prototype, 'hold').mockRejectedValue(locked())
 
     await current.settleAccepted(working, 'a')
-    for (let round = 0; round < 12; round += 1) {
-      await vi.advanceTimersByTimeAsync(31_000)
+    for (let round = 0; round < 100; round += 1) {
+      await vi.advanceTimersByTimeAsync(2_000)
+      await new Promise((resolve) => setImmediate(resolve))
     }
 
     expect(hold).toHaveBeenCalledTimes(1)

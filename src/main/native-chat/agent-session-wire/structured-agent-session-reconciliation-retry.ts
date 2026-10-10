@@ -9,16 +9,18 @@
 // card drain) and marks the chat owed. A round visits every owed chat: closed ones load side by
 // side in the few background slots, a reader's first, and each writes in its turn, one chat at a
 // time with a yield between (`inTurn`):
-// (a) the store-wide restart reconcile, once, while any lease is unreconciled; then per chat, in
+// (a) the store-wide restart reconcile and the restore's latched recovery, once, while either is
+// owed (`reconcileOwed`); then per chat, in
 // its lane, (b) release repair, (c) settlement and what an earlier
 // process left (`runStructuredAgentSessionReconciliationPass`), (d) the queue's next send. Every
 // write is background (`JournalWriteOptions`): another connection's lock fails it at once and ends
 // the round, since contention is connection-wide.
 //
-// A failed round backs off from 1 s to 30 s; ten in a row end the episode: the timer stops, the set
-// is kept, and a queue send still owed shows as not sent (`abandonSend`). A new signal, a reader's
-// open, or a commit on the connection after contention starts a fresh episode. A lease latched in
-// recovery is never decided here: its proofs wait in the set for its decision's signal.
+// A failed round backs off from 1 s to 2 s; about 3 minutes of them in a row end the episode
+// (`RECONCILIATION_GIVE_UP_MS`): the timer stops, the set is kept, and a queue send still owed
+// shows as not sent (`abandonSend`). A new signal, a reader's open, or a commit on the connection
+// after contention starts a fresh episode. A lease latched in recovery is decided in (a) only for a
+// chat the restart restore made readable; any other one's proofs wait in the set for its decision.
 
 import type { AgentSessionGenerationEnd } from '../../runtime/agent-session-generation-end'
 import { setImmediate as yieldToEvents } from 'node:timers/promises'
@@ -26,7 +28,7 @@ import type { AgentJournalCursor } from '../../../shared/agent-session-journal-t
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionExitSettlement } from './structured-agent-session-leftover-settlement'
 import {
-  RECONCILIATION_MAX_FAILED_ATTEMPTS,
+  RECONCILIATION_GIVE_UP_MS,
   reconciliationBackoffDelay
 } from './structured-agent-session-reconciliation-backoff'
 import { StructuredAgentSessionReconciliationSlots } from './structured-agent-session-reconciliation-slots'
@@ -65,8 +67,10 @@ export class StructuredAgentSessionRetry {
   private running = false
   /** A chat became due while a round ran: another follows at once. */
   private again = false
-  /** Consecutive failed rounds in this episode; at the budget the episode ends. */
+  /** Consecutive failed rounds in this episode, and the backoffs they waited out; at the budget
+   *  (`RECONCILIATION_GIVE_UP_MS`) the episode ends. */
   private failures = 0
+  private failingFor = 0
   /** The last round failed on another connection's lock, which a commit here proves gone. */
   private contended = false
   private disposed = false
@@ -135,7 +139,7 @@ export class StructuredAgentSessionRetry {
       this.slots.prioritize(chat)
       // Backing off after a failed round, it goes first in the next, which an open does not
       // hurry: a store that keeps refusing costs a write per round, never one per chat opened.
-      if (this.failures === 0 || this.failures >= RECONCILIATION_MAX_FAILED_ATTEMPTS) {
+      if (this.failures === 0 || this.failingFor >= RECONCILIATION_GIVE_UP_MS) {
         this.freshEpisode()
       }
     }
@@ -194,6 +198,7 @@ export class StructuredAgentSessionRetry {
       return
     }
     this.failures = 0
+    this.failingFor = 0
     this.contended = false
     if (!this.running && this.timer !== 'soon') {
       this.stopTimer()
@@ -227,9 +232,9 @@ export class StructuredAgentSessionRetry {
       this.stopped ||= visit === 'contended'
       this.again ||= visit === 'again'
     }
-    if (this.context.deps.store.listRecords().some((record) => record.lease.unreconciled)) {
-      // Store-wide: once a round, for every chat, never once per chat. No chat is visited while a
-      // lease is unreconciled.
+    if (this.context.reconcileOwed()) {
+      // Store-wide: once a round, for every chat, never once per chat. No chat is visited while it
+      // owes anything.
       const reconciled = await this.context.reconcile()
       if (reconciled !== 'settled') {
         end(reconciled)
@@ -259,6 +264,7 @@ export class StructuredAgentSessionRetry {
     }
     if (!failed) {
       this.failures = 0
+      this.failingFor = 0
       this.contended = false
       if (this.again && this.timer === null) {
         this.freshEpisode()
@@ -268,8 +274,10 @@ export class StructuredAgentSessionRetry {
     this.failures += 1
     this.contended = contended
     this.stopTimer()
-    if (this.failures < RECONCILIATION_MAX_FAILED_ATTEMPTS) {
-      const timer = setTimeout(() => void this.round(), reconciliationBackoffDelay(this.failures))
+    if (this.failingFor < RECONCILIATION_GIVE_UP_MS) {
+      const delay = reconciliationBackoffDelay(this.failures)
+      this.failingFor += delay
+      const timer = setTimeout(() => void this.round(), delay)
       // A backoff alone never keeps the process alive.
       timer.unref?.()
       this.timer = timer

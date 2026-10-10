@@ -209,6 +209,15 @@ describe('MobileNativeChatQueuedMessages', () => {
     expect(nodeTypes(rows[1]!)).toContain('CornerDownRight')
   })
 
+  it('reads Send, not Steer, on a waiting card while the host says nothing runs', async () => {
+    const mounted = await mount({
+      cards: [card({ messageId: 'waiting', agentIdle: true })],
+      onSend: vi.fn(async () => true)
+    })
+    expect(texts(mounted).filter((text) => text === 'Send' || text === 'Steer')).toEqual(['Send'])
+    expect(mounted.root.findByProps({ accessibilityLabel: 'Send this message' })).toBeTruthy()
+  })
+
   it('a command card never steers: Send only while the agent is idle, and no menu', async () => {
     const onSend = vi.fn(async () => true)
     const mounted = await mount({

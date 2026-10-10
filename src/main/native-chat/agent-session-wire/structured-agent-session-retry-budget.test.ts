@@ -49,6 +49,7 @@ it('ten chats whose automatic sends meet one lock cost one round, and send once 
     laneBusy: () => false,
     track: (operation: Promise<unknown>) => operation,
     publishGenerationEnded: vi.fn(),
+    reconcileOwed: () => false,
     reconcile: async () => 'settled' as const,
     sendQueued,
     abandonSend

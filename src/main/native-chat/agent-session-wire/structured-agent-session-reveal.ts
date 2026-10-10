@@ -65,10 +65,10 @@ export async function revealStructuredAgentSession(
   }
 }
 
-/** The host's startup and its reconciliation: reconcile, then hand every chat to its reconciliation
- *  worker in the background (no chat's tab or send waits on it), and the readable-restore sweep
- *  that resolves and opens each visible chat. Its lease bookkeeping is a reader's, which never fails a read
- *  or startup; startup shares it. */
+/** The host's startup and its reconciliation: reconcile, then hand every chat to the host's retry
+ *  in the background (no chat's tab or send waits on it), and the readable-restore sweep that
+ *  resolves and opens each visible chat. Its lease bookkeeping is a reader's, which never fails a
+ *  read or startup; startup shares it. */
 export function createStructuredAgentSessionHostRestore(
   deps: StructuredAgentSessionHostDeps,
   wiring: Omit<
@@ -105,6 +105,15 @@ export function createStructuredAgentSessionHostRestore(
     failures
   )
   const recoveryWrites = backgroundLeaseWrites(deps.store)
+  // The chats the restart restore was asked to make readable, the visible tabs: theirs is the one
+  // latched recovery startup owes. A chat a reader opened behind them never is: a read stops no one.
+  const restoreTargets = new Set<string>()
+  let restoresAll = false
+  const latchedTargets = () =>
+    (restoresAll
+      ? deps.store.listRecords().map((record) => record.sessionId)
+      : [...restoreTargets]
+    ).filter((sessionId) => deps.store.getRecord(sessionId)?.lease.handoffStage === 'recovering')
   const reconciliation = new StructuredAgentSessionRetry({
     deps,
     sessions: startup.sessions,
@@ -115,6 +124,9 @@ export function createStructuredAgentSessionHostRestore(
     track: (operation) => startup.tasks.trackAttach(operation),
     publishGenerationEnded: (sessionId, options) =>
       startup.clientDelivery.publishGenerationEnded(sessionId, options),
+    reconcileOwed: () =>
+      deps.store.listRecords().some((record) => record.lease.unreconciled) ||
+      latchedTargets().length > 0,
     reconcile: async () => {
       try {
         const refusal = await reconcileLeases(null, BACKGROUND_WRITE)
@@ -122,11 +134,9 @@ export function createStructuredAgentSessionHostRestore(
           failures.report(refusal)
           return 'failed'
         }
-        // What a restore whose own reconcile failed left latched: its open chats' recovery.
-        for (const { sessionId, lease } of deps.store.listRecords()) {
-          if (lease.handoffStage === 'recovering' && startup.sessions.has(sessionId)) {
-            await resolveRecovery(sessionId, recoveryWrites)
-          }
+        // The restore's own decision, wherever its reconcile or its write met a lock.
+        for (const sessionId of latchedTargets()) {
+          await resolveRecovery(sessionId, recoveryWrites)
         }
         failures.clear()
         return 'settled'
@@ -148,6 +158,8 @@ export function createStructuredAgentSessionHostRestore(
         () => true,
         (error: unknown) => {
           failures.report(error)
+          // The retry's round decides it instead (`reconcileOwed`).
+          reconciliation.signal(sessionId)
           return false
         }
       ),
@@ -160,7 +172,11 @@ export function createStructuredAgentSessionHostRestore(
       startupSettled = scanStructuredAgentSessionsAtStartup(deps.store, reconciliation)
     },
     startupSettled: () => startupSettled,
-    restoreReadableSessions: (sessionIds) => gate.run(() => restorer.restore(sessionIds)),
+    restoreReadableSessions: (sessionIds) => {
+      restoresAll ||= sessionIds === undefined
+      sessionIds?.forEach((sessionId) => restoreTargets.add(sessionId))
+      return gate.run(() => restorer.restore(sessionIds))
+    },
     reconciliation
   }
 }
